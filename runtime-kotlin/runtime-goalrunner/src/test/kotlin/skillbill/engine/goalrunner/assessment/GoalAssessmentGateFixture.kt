@@ -17,8 +17,6 @@ import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
-import skillbill.engine.goalrunner.qa.GoalPostChangeValidationResult
-import skillbill.engine.goalrunner.qa.GoalRunnerPostChangeValidation
 import skillbill.engine.work.EmptyOutcomeStore
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.infrastructure.workflow.featuretask.FileSystemPhaseInstructionFileSource
@@ -141,13 +139,6 @@ internal class GoalAssessmentGateFixture(
   val diagnostics = AssessmentDiagnostics()
   val calls = mutableListOf<AssessmentCall>()
   val prompts = mutableMapOf<AssessmentCall, String>()
-  var validationResult: GoalPostChangeValidationResult = GoalPostChangeValidationResult.Passed
-  var validations = 0
-  private val validation =
-    GoalRunnerPostChangeValidation { _, _, _ ->
-      validations++
-      validationResult
-    }
   val launcher =
     RuntimeRecordingLauncher { request ->
       val prompt = requireNotNull(request.skillRunRequest.promptOverride)
@@ -191,7 +182,6 @@ internal class GoalAssessmentGateFixture(
       testProjectStore,
       clock,
       testActivityStampWriter(),
-      validation,
       diagnostics,
     )
   }

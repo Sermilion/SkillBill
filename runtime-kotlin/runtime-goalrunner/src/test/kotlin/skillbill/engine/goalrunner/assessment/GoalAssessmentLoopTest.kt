@@ -17,6 +17,7 @@ import skillbill.goalrunner.assessment.model.GoalAssessmentVerification
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitIdentity
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitIdentityResult
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewSeverity
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -36,11 +37,11 @@ class GoalAssessmentLoopTest {
               "\nFinding: Minor src/Feature.kt:20 scenario The handler drops the second call"
           AssessmentCall.VERIFIER ->
             when (++verifications) {
-              1 -> "$CONFIRM_FIRST\n${verdict(2, "confirmed")}"
-              2, 3 -> CONFIRM_FIRST
-              4 -> REFUTE_FIRST
-              5, 6 -> verdict(2, "confirmed")
-              else -> verdict(2, "refuted")
+              1 -> "${verdict(1, "confirmed", 10 * verifications)}\n${verdict(2, "confirmed", 20 * verifications)}"
+              2, 3 -> verdict(1, "confirmed", 10 * verifications)
+              4 -> verdict(1, "refuted", 10 * verifications)
+              5, 6 -> verdict(2, "confirmed", 20 * verifications)
+              else -> verdict(2, "refuted", 20 * verifications)
             }
           AssessmentCall.PLAN -> "Repair the selected handler and its sibling production paths."
           AssessmentCall.FIX -> "fixed: src/Feature.kt handles the selected call"
@@ -65,6 +66,31 @@ class GoalAssessmentLoopTest {
     assertEquals(1, fixture.calls.count { it == AssessmentCall.CROSS_SUBTASK })
     assertEquals(emptyList(), record.openFindingRefs)
     assertTrue(record.rounds.flatMap { it.findings }.all { it.state == GoalAssessmentFindingState.FIXED })
+    val repairedRounds = record.rounds.filter { it.fix?.status == GoalAssessmentFixStatus.COMPLETED }
+    assertEquals(6, repairedRounds.size)
+    assertTrue(repairedRounds.all { it.fix?.validation == GoalAssessmentFixValidation.NOT_RUN })
+    assertTrue(repairedRounds.all { !it.fix?.commitSha.isNullOrBlank() })
+    assertTrue(repairedRounds.all { it.fix?.changedFiles == listOf("src/Feature.kt") })
+    assertEquals(
+      repairedRounds.map { "SKILL-442: goal assessment round ${it.round}" },
+      fixture.git.createCommitMessages,
+    )
+    assertEquals(
+      listOf("src/Feature.kt:10", "src/Feature.kt:20", "src/Feature.kt:30", "src/Feature.kt:40"),
+      fixture.store.persisted.flatMap { saved -> saved.rounds.flatMap { it.findings } }
+        .filter { it.findingRef == "GA-001" }
+        .map { it.verificationEvidence }
+        .filter(String::isNotBlank)
+        .distinct(),
+    )
+    assertEquals(
+      listOf("src/Feature.kt:20", "src/Feature.kt:100", "src/Feature.kt:120", "src/Feature.kt:140"),
+      fixture.store.persisted.flatMap { saved -> saved.rounds.flatMap { it.findings } }
+        .filter { it.findingRef == "GA-002" }
+        .map { it.verificationEvidence }
+        .filter(String::isNotBlank)
+        .distinct(),
+    )
     assertTrue(fixture.prompts.getValue(AssessmentCall.FIX).contains("Repair the selected handler"))
   }
 
@@ -150,7 +176,7 @@ class GoalAssessmentLoopTest {
   }
 
   @Test
-  fun `resume adopts a round commit that landed before its sha was recorded`() {
+  fun `resume adopts an unrecorded round commit with deferred validation`() {
     val fixture = unrecordedCommitFixture(parentSha = ASSESSMENT_HEAD_SHA, changedPaths = listOf("src/Feature.kt"))
 
     val record = fixture.gate().runRecord(fixture.state(), fixture.request())
@@ -158,7 +184,30 @@ class GoalAssessmentLoopTest {
     assertEquals(FIRST_FIX_SHA, record.rounds.first().fix?.commitSha)
     assertTrue(fixture.git.createCommitMessages.isEmpty())
     assertTrue(AssessmentCall.FIX !in fixture.calls)
+    assertEquals("GA-001", record.rounds.first().targetRef)
+    assertEquals("Repair the handler.", record.rounds.first().repairPlan)
+    assertEquals(GoalAssessmentFixValidation.NOT_RUN, record.rounds.first().fix?.validation)
     assertEquals(GoalAssessmentExitReason.CONVERGED, record.exitReason)
+  }
+
+  @Test
+  fun `resume preserves legacy validation facts without another round gate`() {
+    listOf(GoalAssessmentFixValidation.PASSED, GoalAssessmentFixValidation.FAILED).forEach { validation ->
+      val caseHome = Files.createDirectory(home.resolve(validation.wireValue))
+      val fixture =
+        unrecordedCommitFixture(
+          parentSha = ASSESSMENT_HEAD_SHA,
+          changedPaths = listOf("src/Feature.kt"),
+          home = caseHome,
+          validation = validation,
+        )
+
+      val record = fixture.gate().runRecord(fixture.state(), fixture.request())
+
+      assertEquals(validation, record.rounds.first().fix?.validation)
+      assertTrue(AssessmentCall.FIX !in fixture.calls)
+      assertEquals(GoalAssessmentExitReason.CONVERGED, record.exitReason)
+    }
   }
 
   @Test
@@ -219,18 +268,21 @@ class GoalAssessmentLoopTest {
   private fun verdict(
     number: Int,
     word: String,
-  ) = "Verify GA-00$number: $word evidence src/Feature.kt:${10 * number}"
+    line: Int = 10 * number,
+  ) = "Verify GA-00$number: $word evidence src/Feature.kt:$line"
 
   private fun unrecordedCommitFixture(
     parentSha: String,
     changedPaths: List<String>,
+    home: Path = this.home,
+    validation: GoalAssessmentFixValidation = GoalAssessmentFixValidation.NOT_RUN,
   ): GoalAssessmentGateFixture {
     val unrecorded =
       GoalAssessmentFix(
         GoalAssessmentFixStatus.COMPLETED,
         listOf("src/Feature.kt"),
         null,
-        GoalAssessmentFixValidation.PASSED,
+        validation,
       )
     val round =
       GoalAssessmentRound(
