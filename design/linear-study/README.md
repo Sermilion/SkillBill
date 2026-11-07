@@ -1,6 +1,6 @@
 # Skill Bill: Linear study
 
-An interactive HTML prototype of the Skill Bill desktop app redesigned in Linear's design language. It keeps the existing near-black and amber palette and shows only functionality that the desktop app (`desktop-tray`) or the runtime (`runtime-kotlin`) provides today, plus a config screen over existing runtime config keys.
+An interactive HTML prototype of the Skill Bill desktop app redesigned in Linear's design language. It keeps the app's near-black and amber palette. The desktop app in `desktop/` defines shared styling and behavior. Added mock functionality stays in the prototype for later implementation.
 
 [HANDOFF.md](HANDOFF.md) is the implementation handoff. Read it before planning work.
 
@@ -15,9 +15,10 @@ xdg-open design/linear-study/index.html    # Linux
 
 Inter and JetBrains Mono load from Google Fonts. Offline, the page falls back to system fonts and the layout stays intact.
 
-The top bar switches between three views:
+The top bar switches between four views:
 
 - **Prototype**: the app. Press `?` for shortcuts and `⌘K` / `Ctrl+K` for the command menu. Right-click a row for its actions.
+- **States**: a linked catalog of work lifecycles, result variants, chats, devices and specs. Open `index.html#states`. [STATE-COVERAGE.md](STATE-COVERAGE.md) records the source inventory and checks.
 - **Components**: every component with live examples. Each card's "Used in" list is computed at load from the screens that call it.
 - **Foundations**: principles, the source-of-truth table, tokens, status vocabulary, type, spacing, radius, elevation and icons.
 
@@ -31,9 +32,10 @@ The top bar switches between three views:
 | `app/data.js` | Sample data shaped like the desktop domain model and runtime config models. Example values only. |
 | `app/screens.js` | Screens composed from components and layout primitives only. |
 | `app/library.js` | The Components and Foundations pages, the tray popover and OS notification surfaces. |
+| `app/states.js` | State examples and the States catalog. Examples use the same detail renderers and stay out of the everyday board sample. |
 | `app/main.js` | State, actions, keyboard model, command menu, menus, dialogs, toasts, terminal tabs, live clocks. |
 | `index.html` | Page shell and documentation chrome styles. |
 
 ## Status
 
-Design reference only. Nothing here ships. The Compose implementation built to this design lives in `desktop/`, and the prototype describes that app as built (see the revision note in the handoff). `desktop-tray` stays the behavior reference, and the config write path belongs in `runtime-kotlin`.
+Design reference only. Nothing here ships. The Compose implementation built to this design lives in `desktop/`, and the prototype describes that app as built (see the revision note in the handoff). The current app in `desktop/` is the behavior reference. Design additions await implementation. Standalone mocks stay until the operator confirms their synced versions.
