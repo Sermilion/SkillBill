@@ -12,6 +12,7 @@ import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalAttemptLedgerEntryDraft
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
+import skillbill.engine.goalrunner.persist.quality.GoalQualityAdmissionRequest
 import skillbill.engine.goalrunner.persist.quality.toPersistenceWire
 import skillbill.engine.goalrunner.status.liveLease
 import skillbill.error.core.SkillBillRuntimeException
@@ -30,6 +31,7 @@ import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
 import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
+import skillbill.goalrunner.model.quality.GoalQualityPreQaBuildState
 import skillbill.goalrunner.model.quality.GoalQualityReadiness
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
@@ -116,7 +118,7 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
               modelMatrix = null,
               addons = emptyList(),
             ),
-          executionPlans = GoalQualityExecutionPlans("qa-plan", "validation-plan"),
+          executionPlans = GoalQualityExecutionPlans("build-plan", "qa-plan", "validation-plan"),
         ),
       )
     workflows.saveFeatureTaskWorkflow(
@@ -154,24 +156,26 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
     val admitted =
       store.admitGoalQualityExecution(
         "wfl-parent",
-        "baseline",
-        GoalQualityExecutionInputs(
-          issueKey = "SKILL-87.1",
-          intake = null,
-          repoRoot = "/repository",
-          invokedAgentId = "codex",
-          configuredAgentOverrideId = null,
-          timeoutMillis = null,
-          qaSelection = FeatureTaskRuntimeQaSelection.AUTO,
-          parentSpecPath = "spec.md",
-          acceptanceCriteria = emptyList(),
-          acceptanceCriteriaReadFailure = null,
-          branch = "feat/SKILL-87",
-          modelDirectives = emptyMap(),
-          modelMatrix = null,
-          addons = emptyList(),
+        GoalQualityAdmissionRequest(
+          "baseline",
+          GoalQualityExecutionInputs(
+            issueKey = "SKILL-87.1",
+            intake = null,
+            repoRoot = "/repository",
+            invokedAgentId = "codex",
+            configuredAgentOverrideId = null,
+            timeoutMillis = null,
+            qaSelection = FeatureTaskRuntimeQaSelection.AUTO,
+            parentSpecPath = "spec.md",
+            acceptanceCriteria = emptyList(),
+            acceptanceCriteriaReadFailure = null,
+            branch = "feat/SKILL-87",
+            modelDirectives = emptyMap(),
+            modelMatrix = null,
+            addons = emptyList(),
+          ),
+          GoalQualityExecutionPlans("build-plan", "qa-plan", "validation-plan"),
         ),
-        GoalQualityExecutionPlans("qa-plan", "validation-plan"),
       )
     val invocationId = requireNotNull(admitted.execution).invocationId
     val repair = GoalFinalRepairOutput("qa", invocationId, 1, "Interrupted QA output")
@@ -184,6 +188,49 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
     assertEquals(GoalQualityReadiness.ADMITTED, retired.readiness)
     assertEquals(GoalQualityExecutionStatus.RETIRED, retired.execution?.status)
     assertNull(store.goalFinalRepairContext("wfl-parent"))
+  }
+
+  @Test
+  fun `admitted quality accepts the initial build start on the stored record`() {
+    val workflows = InMemoryWorkflowStates()
+    seedCurrentParent(workflows, "wftr-child")
+    workflows.saveFeatureTaskWorkflow(taskRuntimeWorkflowRecord("wftr-child", "wfl-parent"), RUNTIME)
+    ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD_REVISION_5).seed(workflows, "wftr-child")
+    val store = testWorkflowGoalRunnerOutcomeStore(FakeDatabaseSessionFactory(workflows), testWorkflowSnapshotValidator)
+    val admitted =
+      store.admitGoalQualityExecution(
+        "wfl-parent",
+        GoalQualityAdmissionRequest(
+          "baseline",
+          GoalQualityExecutionInputs(
+            issueKey = "SKILL-87.1",
+            intake = null,
+            repoRoot = "/repository",
+            invokedAgentId = "codex",
+            configuredAgentOverrideId = null,
+            timeoutMillis = null,
+            qaSelection = FeatureTaskRuntimeQaSelection.AUTO,
+            parentSpecPath = "spec.md",
+            acceptanceCriteria = emptyList(),
+            acceptanceCriteriaReadFailure = null,
+            branch = "feat/SKILL-87",
+            modelDirectives = emptyMap(),
+            modelMatrix = null,
+            addons = emptyList(),
+          ),
+          GoalQualityExecutionPlans("build-plan", "qa-plan", "validation-plan"),
+        ),
+      )
+    val invocationId = requireNotNull(admitted.execution).invocationId
+    val started = admitted.startPreQaBuild()
+
+    assertTrue(
+      store.transitionGoalQualityExecution("wfl-parent", invocationId, admitted, started),
+    )
+    assertEquals(
+      GoalQualityPreQaBuildState.RUNNING,
+      store.goalQualityExecution("wfl-parent")?.execution?.preQaBuild,
+    )
   }
 
   @Test

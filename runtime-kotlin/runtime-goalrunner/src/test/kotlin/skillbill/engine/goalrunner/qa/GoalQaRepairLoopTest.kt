@@ -5,6 +5,7 @@ import skillbill.application.testProjectStore
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.model.execution.QaExpectedIdentity
 import skillbill.engine.featuretask.phaserun.PhaseRunEntryFixture
+import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.phaserun.phaseRunEntry
 import skillbill.engine.featuretask.phaserun.plans
@@ -30,15 +31,28 @@ import skillbill.engine.featuretask.runner.kotlinPackWithBuildGate
 import skillbill.engine.featuretask.runner.phaseIdFromPrompt
 import skillbill.engine.featuretask.runner.telemetryRunnerHarness
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goalrunner.InMemoryGoalManifestStore
+import skillbill.engine.goalrunner.RecordingGoalRunnerAssessmentGate
+import skillbill.engine.goalrunner.RecordingPullRequestPort
 import skillbill.engine.goalrunner.TestGoalQualityOutcomeStore
+import skillbill.engine.goalrunner.execution.core.GoalRunnerFinalHistoryWriter
+import skillbill.engine.goalrunner.execution.core.GoalRunnerFinalization
+import skillbill.engine.goalrunner.execution.core.GoalRunnerPauseBoundary
+import skillbill.engine.goalrunner.execution.core.GoalRunnerPullRequestWriter
+import skillbill.engine.goalrunner.execution.core.GoalRunnerPullRequests
+import skillbill.engine.goalrunner.execution.core.goalRunnerDefaultPhaseRecorder
 import skillbill.engine.goalrunner.execution.core.testActivityStampWriter
+import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.execution.support.toPullRequestRequest
 import skillbill.engine.goalrunner.model.GoalQaSummary
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.goalrunner.model.GoalRunnerRunReport
+import skillbill.goalrunner.model.quality.GoalQualityPreQaBuildState
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
@@ -47,6 +61,8 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
+import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
+import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
@@ -55,6 +71,7 @@ import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
+import skillbill.ports.workflow.specscratch.UnavailableSpecScratchStore
 import skillbill.scaffold.model.QaCapabilityDeclaration
 import skillbill.scaffold.model.QaTargetKind
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
@@ -88,9 +105,13 @@ class GoalQaRepairLoopTest {
         qaFixOutput = { "F-1: fixed: HomeScreen.kt now renders the signed-in user name." },
       )
 
-    val result = fixture.gate.run(fixture.state, fixture.request)
+    val result = fixture.finalizeAfterAssessment()
 
-    assertEquals(listOf("qa", "qa_fix", "build", "qa", "validate"), fixture.startedPhases(), result.toString())
+    assertEquals(
+      listOf("build", "qa", "qa_fix", "build", "qa", "validate"),
+      fixture.startedPhases(),
+      result.toString(),
+    )
     val repairPrompt = fixture.prompts("qa_fix").single()
     val evidence = "${qaTestEvidencePrefix("qa-1")}home-F-1.png"
     assertContains(
@@ -118,13 +139,13 @@ class GoalQaRepairLoopTest {
         verdicts = listOf(QaVerdict.FINDINGS_OPEN),
         onQaFix = { git -> git.repositoryFingerprintValue = REPAIRED_TREE },
         qaFixOutput = { "F-1: fixed: HomeScreen.kt now renders the signed-in user name." },
-        buildGateRunner = FailingBuildGateRunner,
+        buildGateRunner = InitialBuildThen(FailingBuildGateRunner),
       )
 
     val result = fixture.gate.run(fixture.state, fixture.request)
 
     val phases = fixture.startedPhases()
-    assertEquals(listOf("qa", "qa_fix", "build"), phases.take(3))
+    assertEquals(listOf("build", "qa", "qa_fix"), phases.take(3))
     assertEquals(1, phases.count { it == "qa" })
     assertEquals("validate", phases.last())
     assertEquals(3, fixture.launchedPhases().count { it == "build" }, result.toString())
@@ -146,10 +167,12 @@ class GoalQaRepairLoopTest {
         onQaFix = { git -> git.repositoryFingerprintValue = REPAIRED_TREE },
         qaFixOutput = { "F-1: fixed: HomeScreen.kt now renders the signed-in user name." },
         buildGateRunner =
-          ThrowingBuildGateRunner(
-            SkillBillRuntimeException(
-              FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION,
-              "Failed to launch process: No such file or directory",
+          InitialBuildThen(
+            ThrowingBuildGateRunner(
+              SkillBillRuntimeException(
+                FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION,
+                "Failed to launch process: No such file or directory",
+              ),
             ),
           ),
       )
@@ -285,7 +308,7 @@ class GoalQaRepairLoopTest {
 
     val result = fixture.gate.run(fixture.state, fixture.request)
 
-    assertEquals(listOf("qa"), fixture.launchedPhases())
+    assertEquals(listOf("qa", "validate"), fixture.launchedPhases())
     assertContains(assertIs<GoalQaGateResult.Warned>(result).reason, "QA agent wrote no report.md")
     val outcome = assertNotNull(fixture.storedOutcome())
     assertEquals(StandaloneQaOutcome.INCOMPLETE, outcome.outcome)
@@ -355,6 +378,8 @@ class GoalQaRepairLoopTest {
           val output =
             when (phase) {
               "qa" -> {
+                val quality = assertNotNull(progress.goalQualityExecution(PARENT)?.execution)
+                assertEquals(GoalQualityPreQaBuildState.PASSED, quality.preQaBuild)
                 qaVisits++
                 val identity =
                   QaExpectedIdentity(
@@ -443,18 +468,21 @@ class GoalQaRepairLoopTest {
           config.harnessGitOperations,
           database,
           clock,
-          harness.runLoopEntry.delegateTo(TestFeatureTaskRuntimeRunLoopEntry()),
+          harness.runLoopEntry.delegateTo(TestFeatureTaskRuntimeRunLoopEntry(gitOperations = git)),
         )
+      val phasePlans =
+        PhaseRunEntryFixture(
+          harness.strategies,
+          config.harnessGitOperations,
+          database,
+          clock,
+          qaManifests = listOf(pack),
+        ).plans()
+      val requests = GoalQualityPhaseRequests(progress, git, clock, testActivityStampWriter())
       gate =
         DefaultGoalRunnerQaGate(
           entry,
-          PhaseRunEntryFixture(
-            harness.strategies,
-            config.harnessGitOperations,
-            database,
-            clock,
-            qaManifests = listOf(pack),
-          ).plans(),
+          phasePlans,
           progress,
           git,
           object : FeatureTaskRuntimeRunInvariantsSource {
@@ -467,13 +495,58 @@ class GoalQaRepairLoopTest {
                 ),
               )
           },
-          clock,
-          testActivityStampWriter(),
+          requests,
+          GoalQualityBuildBoundary(entry, phasePlans, progress, git, requests, NoopRuntimeDiagnostics),
           outcomes,
           QaCapabilityResolver(git) { listOf(pack) },
           testProjectStore,
           NoopRuntimeDiagnostics,
         )
+    }
+
+    fun finalizeAfterAssessment(): GoalQaGateResult {
+      val events = mutableListOf<String>()
+      var qualityResult: GoalQaGateResult? = null
+      val cleanup = GoalSpecScratchCleanup(UnavailableSpecScratchStore, testProjectStore, NoopRuntimeDiagnostics)
+      val publication =
+        GoalRunnerPullRequests(
+          progress,
+          RecordingPullRequestPort(),
+          PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
+          cleanup,
+          null,
+          NoopRuntimeDiagnostics,
+          GoalRunnerPullRequestWriter { _, _, _ -> error("Publication must follow the history boundary.") },
+        )
+      val finalization =
+        GoalRunnerFinalization(
+          progress,
+          cleanup,
+          git,
+          NoopRuntimeDiagnostics,
+          goalRunnerDefaultPhaseRecorder(),
+          GoalRunnerCiMonitor { _, _ -> error("CI must follow the history boundary.") },
+          GoalRunnerQaGate { state, request ->
+            assertEquals(listOf("assessment"), events)
+            gate.run(state, request).also { qualityResult = it }
+          },
+          RecordingGoalRunnerAssessmentGate(events),
+          GoalRunnerPauseBoundary(InMemoryGoalManifestStore(state.manifest), clock),
+          GoalRunnerFinalHistoryWriter { _, _, _ ->
+            events += "history"
+            PhaseRunResult.Blocked("history", emptyList(), null, "write_history", "test history boundary")
+          },
+          publication,
+        )
+
+      val report = finalization.finalizePublication(state, request, listOf(1))
+
+      assertContains(
+        assertIs<GoalRunnerRunReport.Stopped>(report).stop.blockedReason.orEmpty(),
+        "The boundary history writer did not complete with accepted output.",
+      )
+      assertEquals(listOf("assessment", "history"), events)
+      return assertNotNull(qualityResult)
     }
 
     fun qaAgents(): List<String> =
@@ -502,6 +575,26 @@ class GoalQaRepairLoopTest {
     override fun recordProgressEvent(request: GoalRunnerProgressEventRecordRequest): Boolean {
       if (request.draft.eventKind == GoalProgressEventKind.PHASE_STARTED) startedPhases += request.draft.workflowPhase
       return true
+    }
+  }
+
+  private class InitialBuildThen(private val later: ValidationGateRunner) : ValidationGateRunner {
+    private var calls = 0
+
+    override fun run(request: ValidationGateRunRequest): ValidationGateRunResult {
+      if (calls++ == 0) {
+        return ValidationGateRunResult(
+          exitCode = 0,
+          durationMs = 1,
+          outcome = ValidationGateRunOutcome.PASSED,
+          cacheMode = request.cacheMode,
+          executedWorkUnits = 1,
+          executedCheckIdentities = emptyList(),
+          findings = emptyList(),
+          command = request.argv.joinToString(" "),
+        )
+      }
+      return later.run(request)
     }
   }
 

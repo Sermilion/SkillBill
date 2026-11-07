@@ -3,6 +3,11 @@ package skillbill.engine.goalrunner.qa
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 
+internal data class GoalQaSkipDecision(
+  val reason: GoalQaSkipReason,
+  val testedTreeIdentity: String? = null,
+)
+
 public fun interface GoalRunnerQaGate {
   public fun run(
     state: GoalRunnerManifestState,
@@ -24,6 +29,7 @@ public sealed interface GoalQaGateResult {
 }
 
 public enum class GoalQaSkipReason(internal val wireValue: String) {
+  DISABLED_POLICY("disabled_policy"),
   UNSUPPORTED_TARGET("unsupported_target"),
   SUBTASKS_ALREADY_RAN_QA("subtasks_already_ran_qa"),
   ALREADY_SETTLED_ON_TREE("already_settled_on_tree"),

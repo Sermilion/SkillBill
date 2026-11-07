@@ -4,9 +4,16 @@ import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.config.model.ExecutionMatrix
 import skillbill.config.model.ExecutionTier
 import skillbill.config.model.PhaseModelDirective
+import skillbill.contracts.review.ReviewVerificationSignalKeys
+import skillbill.contracts.workflow.goal.GOAL_QUALITY_EXECUTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
+import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.quality.GoalQualityAcceptedEnvelope
 import skillbill.goalrunner.model.quality.GoalQualityAcceptedOutput
+import skillbill.goalrunner.model.quality.GoalQualityAcceptedSourceObservation
+import skillbill.goalrunner.model.quality.GoalQualityAdoptionEvidence
 import skillbill.goalrunner.model.quality.GoalQualityExecution
 import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
 import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
@@ -15,8 +22,12 @@ import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.goalrunner.model.quality.GoalQualityHydratedAddonInput
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
+import skillbill.goalrunner.model.quality.GoalQualityPreQaBuildOccurrence
+import skillbill.goalrunner.model.quality.GoalQualityPreQaBuildState
+import skillbill.goalrunner.model.quality.GoalQualityQaSourceWitness
 import skillbill.goalrunner.model.quality.GoalQualityReadiness
 import skillbill.goalrunner.model.quality.GoalQualityValidationDisposition
+import skillbill.goalrunner.model.quality.GoalQualityValidationOccurrence
 import skillbill.install.model.SupportedAgent
 import skillbill.workflow.taskruntime.artifact.asQaRepairStateWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
@@ -27,13 +38,23 @@ import skillbill.workflow.taskruntime.artifact.decodeValidationGateProgressFromA
 import skillbill.workflow.taskruntime.artifact.decodeVerificationBoundaryHeadingProvenanceFromArtifact
 import skillbill.workflow.taskruntime.artifact.toQaRepairState
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRepairOutput
+import java.security.MessageDigest
 
 internal fun GoalQualityExecutionRecord.toPersistenceWire(): Map<String, Any?> =
   mapOf(
     GoalQualityExecutionPayloadKeys.CONTRACT_VERSION to contractVersion,
     GoalQualityExecutionPayloadKeys.READINESS to readiness.wireValue,
     GoalQualityExecutionPayloadKeys.EXECUTION to execution?.let { it.toPersistenceWire() },
+    GoalQualityExecutionPayloadKeys.ADOPTION_EVIDENCE to
+      adoptionEvidence?.let {
+        mapOf(
+          GoalQualityExecutionPayloadKeys.SOURCE_CONTRACT_VERSION to it.sourceContractVersion,
+          GoalQualityExecutionPayloadKeys.ORIGINAL_PAYLOAD_JSON to it.originalPayloadJson,
+        )
+      },
   )
 
 internal fun GoalQualityExecutionInputs.toPersistenceWire(): Map<String, Any?> {
@@ -89,7 +110,7 @@ private fun ExecutionMatrix.toPersistenceWire(): Map<String, Any?> {
   )
 }
 
-private fun decodeInputs(value: Any?): GoalQualityExecutionInputs? {
+internal fun decodeInputs(value: Any?): GoalQualityExecutionInputs? {
   val raw = value as? Map<*, *> ?: return null
   val keys = GoalQualityExecutionPayloadKeys
   val directives =
@@ -172,6 +193,7 @@ private fun GoalQualityExecution.toPersistenceWire(): Map<String, Any?> =
     GoalQualityExecutionPayloadKeys.EXECUTION_PLANS to
       executionPlans?.let {
         mapOf(
+          GoalQualityExecutionPayloadKeys.BUILD_PLAN to it.build,
           GoalQualityExecutionPayloadKeys.QA_PLAN to it.qa,
           GoalQualityExecutionPayloadKeys.VALIDATION_PLAN to it.validation,
           GoalQualityExecutionPayloadKeys.PLAN_FINGERPRINT to it.fingerprint,
@@ -182,9 +204,31 @@ private fun GoalQualityExecution.toPersistenceWire(): Map<String, Any?> =
     GoalQualityExecutionPayloadKeys.VALIDATION to validation.wireValue,
     GoalQualityExecutionPayloadKeys.WARNING to warning,
     GoalQualityExecutionPayloadKeys.SETTLED_CONTENT_FINGERPRINT to settledContentFingerprint,
+    GoalQualityExecutionPayloadKeys.FINAL_VALIDATION_CONTENT_FINGERPRINT to finalValidationContentFingerprint,
     GoalQualityExecutionPayloadKeys.POST_QA_CONTENT_FINGERPRINT to postQaContentFingerprint,
     GoalQualityExecutionPayloadKeys.QA_TESTED_TREE_IDENTITY to qaTestedTreeIdentity,
     GoalQualityExecutionPayloadKeys.SKIP_REASON to skipReason,
+    GoalQualityExecutionPayloadKeys.VALIDATION_OCCURRENCES to
+      validationOccurrences.map {
+        mapOf(
+          GoalQualityExecutionPayloadKeys.OCCURRENCE to it.occurrence,
+          GoalQualityExecutionPayloadKeys.STATUS to it.status.wireValue,
+          GoalQualityExecutionPayloadKeys.VALIDATION to it.validation.wireValue,
+          GoalQualityExecutionPayloadKeys.FINAL_VALIDATION_CONTENT_FINGERPRINT to it.finalValidationContentFingerprint,
+          GoalQualityExecutionPayloadKeys.PROGRESS to it.progress.toPersistenceWire(),
+        )
+      },
+    GoalQualityExecutionPayloadKeys.VALIDATION_OCCURRENCE to validationOccurrence,
+    GoalQualityExecutionPayloadKeys.PRE_QA_BUILD to preQaBuild.wireValue,
+    GoalQualityExecutionPayloadKeys.PRE_QA_BUILD_CONTENT_FINGERPRINT to preQaBuildContentFingerprint,
+    GoalQualityExecutionPayloadKeys.PRE_QA_BUILD_OCCURRENCES to
+      preQaBuildOccurrences.map {
+        mapOf(
+          GoalQualityExecutionPayloadKeys.PRE_QA_BUILD to it.state.wireValue,
+          GoalQualityExecutionPayloadKeys.CONTENT_FINGERPRINT to it.contentFingerprint,
+          GoalQualityExecutionPayloadKeys.BUILD_PROGRESS to it.progress.toPersistenceWire(),
+        )
+      },
   )
 
 internal fun GoalQualityExecutionRecord.Companion.fromPersistenceWire(
@@ -193,55 +237,108 @@ internal fun GoalQualityExecutionRecord.Companion.fromPersistenceWire(
     Any?,
   >,
 ): GoalQualityExecutionRecord {
+  if (payload[GoalQualityExecutionPayloadKeys.CONTRACT_VERSION] != GOAL_QUALITY_EXECUTION_CONTRACT_VERSION) {
+    throw SkillBillRuntimeException(
+      WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+      "Historical goal quality payloads must be read through the version-aware retained projection.",
+    )
+  }
   val executionMap = payload[GoalQualityExecutionPayloadKeys.EXECUTION] as? Map<*, *>
-  val execution =
-    executionMap?.let {
-      GoalQualityExecution(
-        parentWorkflowId = it[GoalQualityExecutionPayloadKeys.PARENT_WORKFLOW_ID] as String,
-        invocationId = it[GoalQualityExecutionPayloadKeys.INVOCATION_ID] as String,
-        baselineContentFingerprint = it[GoalQualityExecutionPayloadKeys.BASELINE_CONTENT_FINGERPRINT] as String,
-        selectionFingerprint = it[GoalQualityExecutionPayloadKeys.SELECTION_FINGERPRINT] as String?,
-        governingInputFingerprint = it[GoalQualityExecutionPayloadKeys.GOVERNING_INPUT_FINGERPRINT] as String?,
-        governingInputs = decodeInputs(it[GoalQualityExecutionPayloadKeys.GOVERNING_INPUTS]),
-        executionPlans =
-          (it[GoalQualityExecutionPayloadKeys.EXECUTION_PLANS] as? Map<*, *>)?.let { plans ->
-            GoalQualityExecutionPlans(
+  val execution = executionMap?.let(::decodePersistedExecution)
+  return persistedExecutionRecord(payload, execution)
+}
+
+private fun decodePersistedExecution(raw: Map<*, *>): GoalQualityExecution =
+  GoalQualityExecution(
+    parentWorkflowId = raw[GoalQualityExecutionPayloadKeys.PARENT_WORKFLOW_ID] as String,
+    invocationId = raw[GoalQualityExecutionPayloadKeys.INVOCATION_ID] as String,
+    baselineContentFingerprint = raw[GoalQualityExecutionPayloadKeys.BASELINE_CONTENT_FINGERPRINT] as String,
+    selectionFingerprint = raw[GoalQualityExecutionPayloadKeys.SELECTION_FINGERPRINT] as String?,
+    governingInputFingerprint = raw[GoalQualityExecutionPayloadKeys.GOVERNING_INPUT_FINGERPRINT] as String?,
+    governingInputs = decodeInputs(raw[GoalQualityExecutionPayloadKeys.GOVERNING_INPUTS]),
+    executionPlans =
+      (raw[GoalQualityExecutionPayloadKeys.EXECUTION_PLANS] as? Map<*, *>)?.let { plans ->
+        GoalQualityExecutionPlans(
+          plans[GoalQualityExecutionPayloadKeys.BUILD_PLAN] as String,
+          plans[GoalQualityExecutionPayloadKeys.QA_PLAN] as String,
+          plans[GoalQualityExecutionPayloadKeys.VALIDATION_PLAN] as String,
+          plans[GoalQualityExecutionPayloadKeys.PLAN_FINGERPRINT] as? String
+            ?: GoalQualityExecutionPlans(
+              plans[GoalQualityExecutionPayloadKeys.BUILD_PLAN] as String,
               plans[GoalQualityExecutionPayloadKeys.QA_PLAN] as String,
               plans[GoalQualityExecutionPayloadKeys.VALIDATION_PLAN] as String,
-              plans[GoalQualityExecutionPayloadKeys.PLAN_FINGERPRINT] as? String
-                ?: GoalQualityExecutionPlans(
-                  plans[GoalQualityExecutionPayloadKeys.QA_PLAN] as String,
-                  plans[GoalQualityExecutionPayloadKeys.VALIDATION_PLAN] as String,
-                ).fingerprint,
-            )
-          },
-        progress = (it[GoalQualityExecutionPayloadKeys.PROGRESS] as? Map<*, *>)?.let(::decodeProgress),
-        status = GoalQualityExecutionStatus.fromWire(it[GoalQualityExecutionPayloadKeys.STATUS] as String),
-        validation =
+            ).fingerprint,
+        )
+      },
+    progress = (raw[GoalQualityExecutionPayloadKeys.PROGRESS] as? Map<*, *>)?.let(::decodeProgress),
+    status = GoalQualityExecutionStatus.fromWire(raw[GoalQualityExecutionPayloadKeys.STATUS] as String),
+    validation =
+      GoalQualityValidationDisposition.fromWire(
+        raw[GoalQualityExecutionPayloadKeys.VALIDATION] as String,
+      ),
+    warning = raw[GoalQualityExecutionPayloadKeys.WARNING] as String?,
+    settledContentFingerprint = raw[GoalQualityExecutionPayloadKeys.SETTLED_CONTENT_FINGERPRINT] as String?,
+    finalValidationContentFingerprint =
+      raw[GoalQualityExecutionPayloadKeys.FINAL_VALIDATION_CONTENT_FINGERPRINT] as String?,
+    postQaContentFingerprint = raw[GoalQualityExecutionPayloadKeys.POST_QA_CONTENT_FINGERPRINT] as String?,
+    qaTestedTreeIdentity = raw[GoalQualityExecutionPayloadKeys.QA_TESTED_TREE_IDENTITY] as String?,
+    skipReason = raw[GoalQualityExecutionPayloadKeys.SKIP_REASON] as String?,
+    validationOccurrences =
+      (raw[GoalQualityExecutionPayloadKeys.VALIDATION_OCCURRENCES] as? List<*>)?.map { item ->
+        val occurrence = item as Map<*, *>
+        GoalQualityValidationOccurrence(
+          (occurrence[GoalQualityExecutionPayloadKeys.OCCURRENCE] as Number).toInt(),
+          GoalQualityExecutionStatus.fromWire(occurrence[GoalQualityExecutionPayloadKeys.STATUS] as String),
           GoalQualityValidationDisposition.fromWire(
-            it[GoalQualityExecutionPayloadKeys.VALIDATION] as String,
+            occurrence[GoalQualityExecutionPayloadKeys.VALIDATION] as String,
           ),
-        warning = it[GoalQualityExecutionPayloadKeys.WARNING] as String?,
-        settledContentFingerprint = it[GoalQualityExecutionPayloadKeys.SETTLED_CONTENT_FINGERPRINT] as String?,
-        postQaContentFingerprint = it[GoalQualityExecutionPayloadKeys.POST_QA_CONTENT_FINGERPRINT] as String?,
-        qaTestedTreeIdentity = it[GoalQualityExecutionPayloadKeys.QA_TESTED_TREE_IDENTITY] as String?,
-        skipReason = it[GoalQualityExecutionPayloadKeys.SKIP_REASON] as String?,
-      )
-    }
-  return GoalQualityExecutionRecord(
+          occurrence[GoalQualityExecutionPayloadKeys.FINAL_VALIDATION_CONTENT_FINGERPRINT] as String?,
+          decodePhaseProgress(occurrence[GoalQualityExecutionPayloadKeys.PROGRESS]),
+        )
+      }.orEmpty(),
+    validationOccurrence =
+      (raw[GoalQualityExecutionPayloadKeys.VALIDATION_OCCURRENCE] as? Number)?.toInt() ?: 0,
+    preQaBuild = GoalQualityPreQaBuildState.fromWire(raw[GoalQualityExecutionPayloadKeys.PRE_QA_BUILD] as String),
+    preQaBuildContentFingerprint = raw[GoalQualityExecutionPayloadKeys.PRE_QA_BUILD_CONTENT_FINGERPRINT] as String?,
+    preQaBuildOccurrences =
+      (raw[GoalQualityExecutionPayloadKeys.PRE_QA_BUILD_OCCURRENCES] as? List<*>)?.map { item ->
+        val occurrence = item as Map<*, *>
+        GoalQualityPreQaBuildOccurrence(
+          GoalQualityPreQaBuildState.fromWire(occurrence[GoalQualityExecutionPayloadKeys.PRE_QA_BUILD] as String),
+          occurrence[GoalQualityExecutionPayloadKeys.CONTENT_FINGERPRINT] as String,
+          decodePhaseProgress(occurrence[GoalQualityExecutionPayloadKeys.BUILD_PROGRESS]),
+        )
+      }.orEmpty(),
+  )
+
+private fun persistedExecutionRecord(
+  payload: Map<String, Any?>,
+  execution: GoalQualityExecution?,
+): GoalQualityExecutionRecord =
+  GoalQualityExecutionRecord(
     contractVersion = payload[GoalQualityExecutionPayloadKeys.CONTRACT_VERSION] as String,
     readiness = GoalQualityReadiness.fromWire(payload[GoalQualityExecutionPayloadKeys.READINESS] as String),
     execution = execution,
+    adoptionEvidence =
+      (payload[GoalQualityExecutionPayloadKeys.ADOPTION_EVIDENCE] as? Map<*, *>)?.let { evidence ->
+        GoalQualityAdoptionEvidence(
+          evidence[GoalQualityExecutionPayloadKeys.SOURCE_CONTRACT_VERSION] as String,
+          evidence[GoalQualityExecutionPayloadKeys.ORIGINAL_PAYLOAD_JSON] as String,
+        )
+      },
   )
-}
 
 private fun GoalQualityExecutionProgress.toPersistenceWire(): Map<String, Any?> =
   mapOf(
+    GoalQualityExecutionPayloadKeys.BUILD_PROGRESS to build.toPersistenceWire(),
     GoalQualityExecutionPayloadKeys.QA_PROGRESS to qa.toPersistenceWire(),
     GoalQualityExecutionPayloadKeys.VALIDATION_PROGRESS to validation.toPersistenceWire(),
   )
 
-private fun GoalQualityPhaseProgress.toPersistenceWire(): Map<String, Any?> =
+internal fun GoalQualityPhaseProgress.toPersistenceWire(): Map<String, Any?> =
+  phaseProgressCoreWire() + phaseProgressSourceWire()
+
+private fun GoalQualityPhaseProgress.phaseProgressCoreWire(): Map<String, Any?> =
   mapOf(
     GoalQualityExecutionPayloadKeys.PHASE_RECORDS to
       phaseRecords.mapValues { (_, record) ->
@@ -284,20 +381,70 @@ private fun GoalQualityPhaseProgress.toPersistenceWire(): Map<String, Any?> =
     GoalQualityExecutionPayloadKeys.REVISION to revision,
   )
 
+private fun GoalQualityPhaseProgress.phaseProgressSourceWire(): Map<String, Any?> =
+  mapOf(
+    GoalQualityExecutionPayloadKeys.ACCEPTED_SOURCE_OBSERVATIONS to
+      acceptedSourceObservations.map {
+        mapOf(
+          GoalQualityExecutionPayloadKeys.PHASE_ID to it.phaseId,
+          GoalQualityExecutionPayloadKeys.ATTEMPT to it.attempt,
+          GoalQualityExecutionPayloadKeys.CONTENT_FINGERPRINT to it.contentFingerprint,
+          GoalQualityExecutionPayloadKeys.COMPLETION_SEQUENCE_NUMBER to it.completionSequenceNumber,
+          GoalQualityExecutionPayloadKeys.PROGRESS_REVISION to it.progressRevision,
+          GoalQualityExecutionPayloadKeys.VALIDATION_OCCURRENCE to it.validationOccurrence,
+          GoalQualityExecutionPayloadKeys.ACCEPTED_OUTPUT_FINGERPRINT to it.acceptedOutputFingerprint,
+        )
+      },
+    GoalQualityExecutionPayloadKeys.ACCEPTED_QA_SOURCE_WITNESSES to
+      acceptedQaSourceWitnesses.map {
+        mapOf(
+          GoalQualityExecutionPayloadKeys.ADMITTED_QA_PLAN to it.admittedQaPlan,
+          GoalQualityExecutionPayloadKeys.PHASE_ID to it.phaseId,
+          GoalQualityExecutionPayloadKeys.ATTEMPT to it.attempt,
+          GoalQualityExecutionPayloadKeys.ACCEPTED_OUTPUT_FINGERPRINT to it.acceptedOutputFingerprint,
+          GoalQualityExecutionPayloadKeys.NESTED_PROGRESS_KEY to it.nestedProgressKey,
+          ValidationEvidencePayloadKeys.REPAIR_TURN to it.repairTurn,
+          ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT to it.repositoryCheckpoint,
+          GoalQualityExecutionPayloadKeys.CONTENT_FINGERPRINT to it.contentFingerprint,
+          GoalQualityExecutionPayloadKeys.PROGRESS_REVISION to it.progressRevision,
+        )
+      },
+    GoalQualityExecutionPayloadKeys.ATTEMPT_HIGH_WATER_MARKS to attemptHighWaterMarks,
+    GoalQualityExecutionPayloadKeys.LEDGER_SEQUENCE_HIGH_WATER_MARK to ledgerSequenceHighWaterMark,
+    GoalQualityExecutionPayloadKeys.CARRIED_VALIDATION_REPAIRS_USED to carriedValidationRepairsUsed,
+    GoalQualityExecutionPayloadKeys.CARRIED_VALIDATION_REPAIR_OUTPUTS to
+      carriedValidationRepairOutputs.map {
+        mapOf(
+          ValidationEvidencePayloadKeys.REPAIR_TURN to it.repairTurn,
+          ValidationEvidencePayloadKeys.REPAIR_OUTPUT to it.output,
+        )
+      },
+    GoalQualityExecutionPayloadKeys.CARRIED_BUILD_REPAIRS_USED to carriedBuildRepairsUsed,
+    GoalQualityExecutionPayloadKeys.CARRIED_BUILD_REPAIR_OUTPUTS to
+      carriedBuildRepairOutputs.map {
+        mapOf(
+          ValidationEvidencePayloadKeys.REPAIR_TURN to it.repairTurn,
+          ValidationEvidencePayloadKeys.REPAIR_OUTPUT to it.output,
+        )
+      },
+  )
+
 private fun decodeProgress(raw: Map<*, *>): GoalQualityExecutionProgress =
+  GoalQualityExecutionProgress(
+    build = decodePhaseProgress(raw[GoalQualityExecutionPayloadKeys.BUILD_PROGRESS]),
+    qa = decodePhaseProgress(raw[GoalQualityExecutionPayloadKeys.QA_PROGRESS]),
+    validation = decodePhaseProgress(raw[GoalQualityExecutionPayloadKeys.VALIDATION_PROGRESS]),
+  )
+
+internal fun decodeHistoricalProgress(raw: Map<*, *>): GoalQualityExecutionProgress =
   GoalQualityExecutionProgress(
     qa = decodePhaseProgress(raw[GoalQualityExecutionPayloadKeys.QA_PROGRESS]),
     validation = decodePhaseProgress(raw[GoalQualityExecutionPayloadKeys.VALIDATION_PROGRESS]),
   )
 
-private fun decodePhaseProgress(value: Any?): GoalQualityPhaseProgress {
+internal fun decodePhaseProgress(value: Any?): GoalQualityPhaseProgress {
   val raw = value as? Map<*, *> ?: error("Stored goal quality phase progress is not an object.")
   val keys = GoalQualityExecutionPayloadKeys
-  val phaseRecords =
-    (raw[keys.PHASE_RECORDS] as? Map<*, *>)?.entries?.associate { (phase, record) ->
-      val phaseId = phase as String
-      phaseId to requireNotNull(decodePhaseRecordFromArtifact(record))
-    }.orEmpty()
   val phaseLedger =
     (raw[keys.PHASE_LEDGER] as? List<*>)?.map {
       requireNotNull(decodePhaseLedgerEntryFromArtifact(it))
@@ -309,15 +456,6 @@ private fun decodePhaseProgress(value: Any?): GoalQualityPhaseProgress {
         entry[keys.PHASE_ID] as String,
         (entry[keys.OCCURRENCE] as Number).toInt(),
         entry[keys.OUTPUT] as String,
-      )
-    }.orEmpty()
-  val envelopes =
-    (raw[keys.ACCEPTED_ENVELOPES] as? List<*>)?.map { item ->
-      val entry = item as Map<*, *>
-      GoalQualityAcceptedEnvelope(
-        entry[keys.PHASE_ID] as String,
-        (entry[keys.ATTEMPT] as Number).toInt(),
-        FeatureTaskRuntimeWorkflowArtifactMap.from(entry[keys.ENVELOPE]),
       )
     }.orEmpty()
   val qaRepairState =
@@ -339,10 +477,10 @@ private fun decodePhaseProgress(value: Any?): GoalQualityPhaseProgress {
         }
     }
   return GoalQualityPhaseProgress(
-    phaseRecords = phaseRecords,
+    phaseRecords = decodeQualityPhaseRecords(raw),
     phaseLedger = phaseLedger,
     acceptedOutputs = outputs,
-    acceptedEnvelopes = envelopes,
+    acceptedEnvelopes = decodeAcceptedEnvelopes(raw),
     qaRepairState = qaRepairState,
     buildGateProgress = buildProgress,
     buildGateProgressKey = raw[keys.BUILD_GATE_PROGRESS_KEY] as String?,
@@ -352,7 +490,247 @@ private fun decodePhaseProgress(value: Any?): GoalQualityPhaseProgress {
     verificationBoundary = boundary,
     terminalBlockedStep = raw[keys.TERMINAL_BLOCKED_STEP] as String?,
     terminalBlockedReason = raw[keys.TERMINAL_BLOCKED_REASON] as String?,
-    terminalCompleted = raw[keys.TERMINAL_COMPLETED] as Boolean,
-    revision = (raw[keys.REVISION] as Number).toLong(),
+    terminalCompleted = raw[keys.TERMINAL_COMPLETED] as? Boolean ?: false,
+    revision = (raw[keys.REVISION] as? Number)?.toLong() ?: 0,
+    acceptedSourceObservations = decodeSourceObservations(raw),
+    acceptedQaSourceWitnesses = decodeQaSourceWitnesses(raw),
+    attemptHighWaterMarks = decodeAttemptHighWaterMarks(raw),
+    ledgerSequenceHighWaterMark = (raw[keys.LEDGER_SEQUENCE_HIGH_WATER_MARK] as? Number)?.toInt() ?: 0,
+    carriedValidationRepairsUsed = decodeRepairCount(raw, keys.CARRIED_VALIDATION_REPAIRS_USED),
+    carriedValidationRepairOutputs = decodeRepairOutputs(raw, keys.CARRIED_VALIDATION_REPAIR_OUTPUTS),
+    carriedBuildRepairsUsed = decodeRepairCount(raw, keys.CARRIED_BUILD_REPAIRS_USED),
+    carriedBuildRepairOutputs = decodeRepairOutputs(raw, keys.CARRIED_BUILD_REPAIR_OUTPUTS),
   )
 }
+
+private fun decodeAttemptHighWaterMarks(raw: Map<*, *>): Map<String, Int> {
+  val marks = raw[GoalQualityExecutionPayloadKeys.ATTEMPT_HIGH_WATER_MARKS] as? Map<*, *> ?: return emptyMap()
+  return marks.entries.associate { (phase, attempt) -> (phase as String) to (attempt as Number).toInt() }
+}
+
+private fun decodeRepairCount(
+  raw: Map<*, *>,
+  key: String,
+): Int = (raw[key] as? Number)?.toInt() ?: 0
+
+private fun decodeRepairOutputs(
+  raw: Map<*, *>,
+  key: String,
+): List<FeatureTaskRuntimeValidationGateRepairOutput> =
+  (raw[key] as? List<*>)?.map { item ->
+    val entry = item as Map<*, *>
+    FeatureTaskRuntimeValidationGateRepairOutput(
+      (entry[ValidationEvidencePayloadKeys.REPAIR_TURN] as Number).toInt(),
+      entry[ValidationEvidencePayloadKeys.REPAIR_OUTPUT] as String,
+    )
+  }.orEmpty()
+
+private fun decodeSourceObservations(raw: Map<*, *>): List<GoalQualityAcceptedSourceObservation> {
+  val keys = GoalQualityExecutionPayloadKeys
+  return (raw[keys.ACCEPTED_SOURCE_OBSERVATIONS] as? List<*>)?.map { item ->
+    val entry = item as Map<*, *>
+    GoalQualityAcceptedSourceObservation(
+      entry[keys.PHASE_ID] as String,
+      (entry[keys.ATTEMPT] as Number).toInt(),
+      entry[keys.CONTENT_FINGERPRINT] as String,
+      (entry[keys.COMPLETION_SEQUENCE_NUMBER] as? Number)?.toInt() ?: 0,
+      (entry[keys.PROGRESS_REVISION] as? Number)?.toLong() ?: 0,
+      (entry[keys.VALIDATION_OCCURRENCE] as? Number)?.toInt() ?: 0,
+      entry[keys.ACCEPTED_OUTPUT_FINGERPRINT] as String?,
+    )
+  }.orEmpty()
+}
+
+private fun decodeAcceptedEnvelopes(raw: Map<*, *>): List<GoalQualityAcceptedEnvelope> {
+  val keys = GoalQualityExecutionPayloadKeys
+  return (raw[keys.ACCEPTED_ENVELOPES] as? List<*>)?.map { item ->
+    val entry = item as Map<*, *>
+    GoalQualityAcceptedEnvelope(
+      entry[keys.PHASE_ID] as String,
+      (entry[keys.ATTEMPT] as Number).toInt(),
+      FeatureTaskRuntimeWorkflowArtifactMap.from(entry[keys.ENVELOPE]),
+    )
+  }.orEmpty()
+}
+
+private fun decodeQualityPhaseRecords(raw: Map<*, *>): Map<String, FeatureTaskRuntimePhaseRecord> {
+  val keys = GoalQualityExecutionPayloadKeys
+  return (raw[keys.PHASE_RECORDS] as? Map<*, *>)?.entries?.associate { (phase, record) ->
+    val phaseId = phase as String
+    phaseId to requireNotNull(decodePhaseRecordFromArtifact(record))
+  }.orEmpty()
+}
+
+private fun decodeQaSourceWitnesses(raw: Map<*, *>): List<GoalQualityQaSourceWitness> {
+  val keys = GoalQualityExecutionPayloadKeys
+  return (raw[keys.ACCEPTED_QA_SOURCE_WITNESSES] as? List<*>)?.map { item ->
+    val entry = item as Map<*, *>
+    GoalQualityQaSourceWitness(
+      admittedQaPlan = entry[keys.ADMITTED_QA_PLAN] as String,
+      phaseId = entry[keys.PHASE_ID] as String,
+      attempt = (entry[keys.ATTEMPT] as Number).toInt(),
+      completionSequenceNumber = 0,
+      acceptedOutputFingerprint = entry[keys.ACCEPTED_OUTPUT_FINGERPRINT] as String,
+      nestedProgressKey = entry[keys.NESTED_PROGRESS_KEY] as String,
+      repairTurn = (entry[ValidationEvidencePayloadKeys.REPAIR_TURN] as Number).toInt(),
+      repositoryCheckpoint = entry[ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT] as String,
+      contentFingerprint = entry[keys.CONTENT_FINGERPRINT] as String,
+      progressRevision = (entry[keys.PROGRESS_REVISION] as Number).toLong(),
+    )
+  }.orEmpty()
+}
+
+internal fun decodeLegacyQualityRead(
+  map: Map<String, Any?>,
+  sourceVersion: String,
+): GoalQualityExecutionRead {
+  val original = map.toMap()
+  val executionMap = map[GoalQualityExecutionPayloadKeys.EXECUTION] as? Map<*, *>
+  return if (executionMap == null) {
+    unstartedLegacyRead(map, sourceVersion, original)
+  } else {
+    executedLegacyRead(executionMap, sourceVersion, original)
+  }
+}
+
+private fun unstartedLegacyRead(
+  map: Map<String, Any?>,
+  sourceVersion: String,
+  original: Map<String, Any?>,
+): GoalQualityExecutionRead {
+  val readiness = GoalQualityReadiness.fromWire(map[GoalQualityExecutionPayloadKeys.READINESS] as String)
+  if (readiness != GoalQualityReadiness.CLEAN_UNSTARTED) {
+    return GoalQualityExecutionRead.Ambiguous(sourceVersion, original, null, false)
+  }
+  return GoalQualityExecutionRead.Historical(
+    sourceVersion,
+    original,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    false,
+    0,
+    null,
+  )
+}
+
+private data class LegacyIdentity(
+  val qaPlan: String?,
+  val validationPlan: String?,
+  val hasProgress: Boolean,
+  val inputs: GoalQualityExecutionInputs?,
+  val governingFingerprint: String?,
+  val invocationId: String?,
+  val oldFingerprint: String?,
+  val progress: GoalQualityExecutionProgress?,
+  val status: GoalQualityExecutionStatus?,
+)
+
+private fun executedLegacyRead(
+  executionMap: Map<*, *>,
+  sourceVersion: String,
+  original: Map<String, Any?>,
+): GoalQualityExecutionRead {
+  val keys = GoalQualityExecutionPayloadKeys
+  val plans = executionMap[keys.EXECUTION_PLANS] as? Map<*, *>
+  val qaPlan = plans?.get(keys.QA_PLAN) as? String
+  val validationPlan = plans?.get(keys.VALIDATION_PLAN) as? String
+  val oldFingerprint = plans?.get(keys.PLAN_FINGERPRINT) as? String
+  if (conflictingHistoricalPlans(
+      oldFingerprint,
+      qaPlan,
+      validationPlan,
+      legacyPlanFingerprint(qaPlan, validationPlan),
+    )
+  ) {
+    invalidLegacy("Stored historical quality plan fingerprint conflicts with its retained QA and validation plans.")
+  }
+  val progressMap = executionMap[keys.PROGRESS] as? Map<*, *>
+  val hasQa = progressMap?.get(keys.QA_PROGRESS) is Map<*, *>
+  val hasProgress = hasQa && progressMap.get(keys.VALIDATION_PROGRESS) is Map<*, *>
+  val identity =
+    LegacyIdentity(
+      qaPlan,
+      validationPlan,
+      hasProgress,
+      decodeInputs(executionMap[keys.GOVERNING_INPUTS]),
+      executionMap[keys.GOVERNING_INPUT_FINGERPRINT] as? String,
+      executionMap[keys.INVOCATION_ID] as? String,
+      oldFingerprint,
+      if (hasProgress) decodeHistoricalProgress(requireNotNull(progressMap)) else null,
+      (executionMap[keys.STATUS] as? String)?.let(GoalQualityExecutionStatus::fromWire),
+    )
+  val authoritative = legacyAuthoritative(identity, executionMap)
+  if (authoritative || identity.status == GoalQualityExecutionStatus.RETIRED) {
+    return historicalLegacyRead(executionMap, sourceVersion, original, identity, authoritative)
+  }
+  return GoalQualityExecutionRead.Ambiguous(sourceVersion, original, identity.invocationId, false)
+}
+
+private fun legacyAuthoritative(
+  identity: LegacyIdentity,
+  executionMap: Map<*, *>,
+): Boolean {
+  val plansReady = !identity.qaPlan.isNullOrBlank() && !identity.validationPlan.isNullOrBlank() && identity.hasProgress
+  val inputs = identity.inputs
+  val inputsMatch = inputs != null && identity.governingFingerprint == governingInputFingerprint(inputs)
+  val parent = executionMap[GoalQualityExecutionPayloadKeys.PARENT_WORKFLOW_ID] as? String
+  val parentReady = !parent.isNullOrBlank() && !identity.invocationId.isNullOrBlank()
+  val baseline = executionMap[GoalQualityExecutionPayloadKeys.BASELINE_CONTENT_FINGERPRINT] as? String
+  val selection = executionMap[GoalQualityExecutionPayloadKeys.SELECTION_FINGERPRINT] as? String
+  val fingerprints = !baseline.isNullOrBlank() && !selection.isNullOrBlank()
+  return plansReady && inputsMatch && parentReady && fingerprints
+}
+
+private fun historicalLegacyRead(
+  executionMap: Map<*, *>,
+  sourceVersion: String,
+  original: Map<String, Any?>,
+  identity: LegacyIdentity,
+  authoritative: Boolean,
+): GoalQualityExecutionRead {
+  val keys = GoalQualityExecutionPayloadKeys
+  return GoalQualityExecutionRead.Historical(
+    sourceVersion,
+    original,
+    executionMap[keys.PARENT_WORKFLOW_ID] as? String,
+    identity.invocationId,
+    executionMap[keys.BASELINE_CONTENT_FINGERPRINT] as? String,
+    executionMap[keys.SELECTION_FINGERPRINT] as? String,
+    identity.governingFingerprint,
+    identity.inputs,
+    identity.qaPlan,
+    identity.validationPlan,
+    identity.oldFingerprint,
+    identity.progress,
+    identity.status,
+    (executionMap[keys.VALIDATION] as? String)?.let(GoalQualityValidationDisposition::fromWire),
+    executionMap[keys.WARNING] as? String,
+    executionMap[keys.FINAL_VALIDATION_CONTENT_FINGERPRINT] as? String,
+    authoritative,
+    (executionMap[keys.VALIDATION_OCCURRENCE] as? Number)?.toInt() ?: 0,
+    executionMap[keys.SETTLED_CONTENT_FINGERPRINT] as? String,
+  )
+}
+
+private fun legacyPlanFingerprint(
+  qaPlan: String?,
+  validationPlan: String?,
+): String =
+  MessageDigest.getInstance("SHA-256")
+    .digest("${qaPlan.orEmpty()}\u0000${validationPlan.orEmpty()}".toByteArray(Charsets.UTF_8))
+    .joinToString("") { "%02x".format(it) }
+
+private fun invalidLegacy(reason: String): Nothing =
+  throw SkillBillRuntimeException(WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION, reason)

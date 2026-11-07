@@ -81,11 +81,14 @@ internal fun unresolvedGateOutcomeReason(
     "this quality execution and accept new cycles."
 }
 
-internal fun goalQaProviderLimitPause(result: PhaseRunResult): GoalQaGateResult.Paused? {
+internal fun goalQaProviderLimitPause(
+  result: PhaseRunResult,
+  nestedQaRepairBuild: Boolean = true,
+): GoalQaGateResult.Paused? {
   val blocked = result as? PhaseRunResult.Blocked ?: return null
   if (!FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(blocked.reason)) return null
   val stepId =
-    if (blocked.stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD) {
+    if (nestedQaRepairBuild && blocked.stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD) {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX
     } else {
       blocked.stepId
