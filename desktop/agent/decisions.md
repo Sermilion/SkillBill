@@ -1,3 +1,8 @@
+## [2026-11-07] Preserve work-area composition across panel branches
+Context: Extracting ContentPanel splits ShellFrame's work area between a frameless drawer Box and a framed panel at the drawer breakpoint.
+Decision: Remember movable content and invoke it from both branches.
+Reason: Separate direct content calls would give the work area different composition positions and reset remembered state on breakpoint crossings. The spec requires preserving that state.
+
 ## [2026-11-06] Save the chat width after a drag settles and flush it on window close
 Context: Dragging the chat divider changes the width many times per second. Writing each value to DataStore is wasteful, and a width changed just before quitting could be lost.
 Decision: ChatPaneWidth updates its state flow immediately and saves through AppSettingsRepository.setChatWidthDp after a 300 ms pause. Closing the window cancels the pending timer and writes the last value once, bounded by a one-second timeout. A rejected write is dropped, not retried. The width is clamped to 360 to 2000 dp on write and again on read.
