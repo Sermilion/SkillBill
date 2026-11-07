@@ -1,10 +1,12 @@
 package dev.skillbill.desktop.core.designsystem.detail
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,7 +20,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -32,13 +36,16 @@ import dev.skillbill.desktop.core.designsystem.tabular
 
 private val metricMinCellWidth = 140.dp
 
-/** [valueContent] replaces [value] when the value is live, for example a running clock; it should draw in [metricValueStyle]. */
+/** [lead] precedes the label, [tone] colors the label and cell fill, and [content] replaces the value row. [valueContent] replaces [value] when live and should use [metricValueStyle]. */
 @Immutable
 class MetricCell(
   val label: String,
   val value: String = "",
   val unit: String? = null,
   val note: String? = null,
+  val lead: (@Composable () -> Unit)? = null,
+  val tone: Color? = null,
+  val content: (@Composable ColumnScope.() -> Unit)? = null,
   val valueContent: (@Composable () -> Unit)? = null,
 )
 
@@ -74,22 +81,33 @@ fun MetricStrip(cells: List<MetricCell>, modifier: Modifier = Modifier) {
   }
 }
 
-/** `.sb-metric`: 12/14 padding, 6 between label, value and note; the label and note are 11.5 at the regular weight. */
+/** `.sb-metric`: 12 padding, 3 between label, value and note; the label and note are 11.5 at the regular weight. */
 @Composable
 private fun MetricCellView(cell: MetricCell, modifier: Modifier) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
-  val caption = type.tXs.copy(color = colors.fgFaint, fontWeight = FontWeight.Normal)
-  Column(modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    BasicText(cell.label, style = caption, maxLines = 1)
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-      val valueModifier = Modifier.alignByBaseline()
-      if (cell.valueContent != null) {
-        Box(valueModifier) { CompositionLocalProvider(LocalContentColor provides colors.fg) { cell.valueContent.invoke() } }
-      } else {
-        BasicText(cell.value, valueModifier, style = metricValueStyle(), maxLines = 1)
+  val caption = type.tXs.copy(color = cell.tone ?: colors.fgFaint, fontWeight = FontWeight.Normal)
+  Column(modifier.then(if (cell.tone != null) Modifier.background(cell.tone.copy(alpha = 0.06f)) else Modifier).padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    if (cell.lead != null) {
+      Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        cell.lead.invoke()
+        BasicText(cell.label, style = caption, maxLines = 1)
       }
-      cell.unit?.let { BasicText(it, Modifier.alignByBaseline(), style = type.tSm.copy(color = colors.fgFaint, lineHeight = 1.em), maxLines = 1) }
+    } else {
+      BasicText(cell.label, style = caption, maxLines = 1)
+    }
+    if (cell.content != null) {
+      cell.content.invoke(this)
+    } else {
+      Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        val valueModifier = Modifier.alignByBaseline()
+        if (cell.valueContent != null) {
+          Box(valueModifier) { CompositionLocalProvider(LocalContentColor provides colors.fg) { cell.valueContent.invoke() } }
+        } else {
+          BasicText(cell.value, valueModifier, style = metricValueStyle(), maxLines = 1)
+        }
+        cell.unit?.let { BasicText(it, Modifier.alignByBaseline(), style = type.tSm.copy(color = colors.fgFaint, lineHeight = 1.em), maxLines = 1) }
+      }
     }
     cell.note?.let { BasicText(it, style = caption) }
   }

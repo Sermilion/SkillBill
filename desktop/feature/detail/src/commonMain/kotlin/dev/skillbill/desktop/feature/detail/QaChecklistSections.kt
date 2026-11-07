@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,9 +42,10 @@ import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbClock
 import dev.skillbill.desktop.core.designsystem.component.SbSpinner
-import dev.skillbill.desktop.core.designsystem.component.SbDivider
 import dev.skillbill.desktop.core.designsystem.component.sbPulse
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
+import dev.skillbill.desktop.core.designsystem.detail.MetricCell
+import dev.skillbill.desktop.core.designsystem.detail.MetricStrip
 import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.metricValueStyle
 import dev.skillbill.desktop.core.designsystem.detail.relativeAge
@@ -57,7 +57,6 @@ import dev.skillbill.desktop.core.domain.model.ExecutionInstance
 import dev.skillbill.desktop.core.domain.model.QaTargetState
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
-import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import kotlinx.coroutines.launch
 
 internal const val QA_RESULTS_SECTION = "qa-results"
@@ -88,73 +87,55 @@ internal fun rememberQaFindingScroller(listState: LazyListState, collapse: Secti
 
 internal fun DetailSections.qaStatusStrip(item: WorkItem, run: ExecutionInstance?, view: QaChecklistView) {
   item(key = "qa-status-strip") {
-    QaStatusStrip(item, run, view, Modifier.padding(top = DocBlockGap))
+    MetricStrip(qaStripCells(item, run, view), Modifier.padding(top = DocBlockGap))
   }
 }
 
 @Composable
-private fun QaStatusStrip(item: WorkItem, run: ExecutionInstance?, view: QaChecklistView, modifier: Modifier = Modifier) {
-  val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(SkillBillRadius.lg)
-  val frame = Modifier.fillMaxWidth().border(1.dp, colors.borderSubtle, shape).clip(shape)
-  if (LocalShellLayout.current.drawerMode) {
-    Column(modifier.then(frame)) {
-      QaNowTestingCell(view, Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp))
-      StripDivider(vertical = false)
-      QaProgressCell(view, Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp))
-      StripDivider(vertical = false)
-      QaElapsedCell(item, run, view, Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp))
-    }
-  } else {
-    Row(modifier.then(frame).height(IntrinsicSize.Min)) {
-      QaNowTestingCell(view, Modifier.weight(1f).padding(horizontal = 22.dp, vertical = 18.dp))
-      StripDivider(vertical = true, modifier = Modifier.padding(vertical = 14.dp))
-      QaProgressCell(view, Modifier.weight(1f).padding(horizontal = 22.dp, vertical = 18.dp))
-      StripDivider(vertical = true, modifier = Modifier.padding(vertical = 14.dp))
-      QaElapsedCell(item, run, view, Modifier.weight(1f).padding(horizontal = 22.dp, vertical = 18.dp))
-    }
+@OptIn(kotlin.time.ExperimentalTime::class)
+private fun qaStripCells(item: WorkItem, run: ExecutionInstance?, view: QaChecklistView): List<MetricCell> {
+  val ticker = LocalUiTicker.current
+  DisposableEffect(ticker) { ticker.retain(); onDispose { ticker.release() } }
+  val now = ticker.now.value
+  val current = run == null || run.invocationId == item.control.invocationId
+  val duration = if (current) null else ((run.finishedAt ?: run.updatedAt) - run.startedAt).inWholeMilliseconds
+  val age = view.lastStepUpdateAt?.let { relativeAge(now - it) }
+  val elapsedNote = when {
+    view.live && age != null -> "ticking · last step update $age"
+    view.live -> "ticking"
+    age != null -> "last step update $age"
+    else -> null
   }
-}
-
-@Composable
-private fun StripDivider(vertical: Boolean, modifier: Modifier = Modifier) {
-  SbDivider(modifier, vertical = vertical, color = SkillBillTheme.colors.borderSubtle)
-}
-
-@Composable
-private fun QaNowTestingCell(view: QaChecklistView, modifier: Modifier) {
-  val colors = SkillBillTheme.colors
-  Column(modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    BasicText("Now testing", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
-    when (val now = view.nowTesting) {
-      is QaNowTesting.Step -> {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-          BasicText(now.caseId, Modifier.background(colors.stActive.copy(alpha = .15f), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp), style = SkillBillTheme.type.monoSm.copy(color = colors.stActive))
-          BasicText(now.caseTitle, style = SkillBillTheme.type.tMd.copy(color = colors.fg), maxLines = 2)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-          SbSpinner(contentDescription = null)
-          BasicText("Step ${now.stepNumber} of ${now.stepCount} · ${now.stepText}", style = SkillBillTheme.type.tSm.copy(color = colors.fg2), maxLines = 2)
-        }
-      }
-      is QaNowTesting.Idle -> BasicText(now.text, style = SkillBillTheme.type.tMd.copy(color = colors.fg))
-    }
-  }
-}
-
-@Composable
-private fun QaProgressCell(view: QaChecklistView, modifier: Modifier) {
   val progress = view.progress
-  Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    BasicText("Progress", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
-    if (progress == null) {
-      BasicText(view.planText.orEmpty(), style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
-    } else {
-      BasicText("${progress.done} of ${progress.total} steps", style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
-      QaProgressBar(progress)
-      BasicText(progress.summary, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 2)
-    }
-  }
+  return listOf(
+    MetricCell("Now testing", content = { Column(Modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+      when (val nowTesting = view.nowTesting) {
+        is QaNowTesting.Step -> {
+          Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            BasicText(nowTesting.caseId, Modifier.background(SkillBillTheme.colors.stActive.copy(alpha = .15f), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp), style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.stActive))
+            BasicText(nowTesting.caseTitle, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg), maxLines = 2)
+          }
+          Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            SbSpinner(contentDescription = null)
+            BasicText("Step ${nowTesting.stepNumber} of ${nowTesting.stepCount} · ${nowTesting.stepText}", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2), maxLines = 2)
+          }
+        }
+        is QaNowTesting.Idle -> BasicText(nowTesting.text, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
+      }
+    } }),
+    MetricCell("Progress", content = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      if (progress == null) {
+        BasicText(view.planText.orEmpty(), style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
+      } else {
+        BasicText("${progress.done} of ${progress.total} steps", style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
+        QaProgressBar(progress)
+        BasicText(progress.summary, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 2)
+      }
+    } }),
+    MetricCell("Phase elapsed", note = elapsedNote) {
+      SbClock(if (current) item.activeDurationMs else duration, if (current) item.activeDurationAsOf else null, live = current && view.live, showSeconds = true, style = metricValueStyle())
+    },
+  )
 }
 
 @Composable
@@ -174,25 +155,6 @@ private fun QaProgressBar(progress: QaProgressView) {
 @Composable
 private fun RowScope.ProgressSegment(count: Int, color: Color, pulse: Boolean = false) {
   if (count > 0) Box(Modifier.weight(count.toFloat()).fillMaxHeight().then(if (pulse) Modifier.sbPulse() else Modifier).background(color))
-}
-
-@Composable
-@OptIn(kotlin.time.ExperimentalTime::class)
-private fun QaElapsedCell(item: WorkItem, run: ExecutionInstance?, view: QaChecklistView, modifier: Modifier) {
-  val ticker = LocalUiTicker.current
-  DisposableEffect(ticker) { ticker.retain(); onDispose { ticker.release() } }
-  val now = ticker.now.value
-  val current = run == null || run.invocationId == item.control.invocationId
-  val duration = if (current) null else ((run.finishedAt ?: run.updatedAt) - run.startedAt).inWholeMilliseconds
-  Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    BasicText("Phase elapsed", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
-    CompositionLocalProvider(LocalContentColor provides SkillBillTheme.colors.fg) {
-      SbClock(if (current) item.activeDurationMs else duration, if (current) item.activeDurationAsOf else null, live = current && view.live, showSeconds = true, style = metricValueStyle())
-    }
-    val age = view.lastStepUpdateAt?.let { relativeAge(now - it) }
-    if (view.live) BasicText(if (age == null) "ticking" else "ticking · last step update $age", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
-    else if (age != null) BasicText("last step update $age", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
-  }
 }
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)

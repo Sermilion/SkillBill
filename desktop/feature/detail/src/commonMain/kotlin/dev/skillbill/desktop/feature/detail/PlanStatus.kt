@@ -1,27 +1,21 @@
 package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
 import dev.skillbill.desktop.core.designsystem.component.SbClock
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
+import dev.skillbill.desktop.core.designsystem.detail.MetricCell
+import dev.skillbill.desktop.core.designsystem.detail.MetricStrip
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.StandalonePlanProgress
 import dev.skillbill.desktop.core.domain.model.StandalonePlanStage
@@ -38,7 +32,7 @@ private val PLAN_STAGES = listOf(
 
 internal fun DetailSections.planStatus(item: WorkItem, detail: Detail) {
   this.item(key = "plan-stage-strip") {
-    PlanStageStrip(item, detail)
+    PlanStageStripContent(item, detail)
   }
   this.item(key = "plan-status") {
     PlanStatusLine(item, detail)
@@ -48,55 +42,47 @@ internal fun DetailSections.planStatus(item: WorkItem, detail: Detail) {
   }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PlanStageStrip(item: WorkItem, detail: Detail) {
+private fun PlanStageStripContent(item: WorkItem, detail: Detail) {
   val plan = detail.standalonePlan
   val stages = plan?.stages.orEmpty().associateBy(StandalonePlanStage::phaseId)
   val ticker = LocalUiTicker.current
   if (item.running) DisposableEffect(ticker) { ticker.retain(); onDispose { ticker.release() } }
   val now = if (item.running) ticker.now.value else detail.observedAt
-  Column(Modifier.fillMaxWidth().padding(top = DocBlockGap), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    Row(Modifier.fillMaxWidth().border(1.dp, SkillBillTheme.colors.border, RoundedCornerShape(SkillBillRadius.md))) {
-      PLAN_STAGES.forEach { label ->
-        val stage = stages[label.id]
-        val blocked = stage?.status == "blocked" || (label.id == "plan_subtasks" && hasBlockedSubtasks(plan))
-        val quiet = stage?.status == "running" && planQuietSince(item, detail) != null
-        val status = when {
-          blocked -> "blocked"
-          stage?.status == "running" && item.running -> "active"
-          stage?.status == "running" -> "paused"
-          stage?.status == "completed" -> "done"
-          stage?.status == "failed" -> "failed"
-          stage?.status == "paused" -> "paused"
-          else -> "queued"
-        }
-        val duration = when {
-          stage?.status == "running" -> elapsedTextOrNull(stage.firstStartedAt, now)
-          stage?.finishedAt != null -> stage.finishedAt?.let { elapsedTextOrNull(stage.firstStartedAt, it) }
-          !item.running -> elapsedTextOrNull(stage?.firstStartedAt, detail.updatedAt)
-          else -> null
-        }
-        Column(Modifier.weight(1f).background(if (blocked || quiet) SkillBillTheme.colors.stBlocked.copy(alpha = .06f) else if (status == "active") SkillBillTheme.colors.stActive.copy(alpha = .06f) else Color.Transparent).padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-          val statusColor = when {
-            blocked || quiet || status == "failed" -> SkillBillTheme.colors.stBlocked
-            status == "active" -> SkillBillTheme.colors.stActive
-            status == "done" -> SkillBillTheme.colors.fg2
-            else -> SkillBillTheme.colors.fgFaint
-          }
-          Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            PlanGlyph(if (blocked) "blocked" else if (status == "done") "saved" else if (status == "active") "writing" else "queued", statusColor)
-            BasicText(label.title, style = SkillBillTheme.type.tSmMedium.copy(color = statusColor))
-          }
-          FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            BasicText(label.id, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint))
-            duration?.let { BasicText(it, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted)) }
-          }
-        }
-      }
+  val cells = PLAN_STAGES.map { label ->
+    val stage = stages[label.id]
+    val blocked = stage?.status == "blocked" || (label.id == "plan_subtasks" && hasBlockedSubtasks(plan))
+    val quiet = stage?.status == "running" && planQuietSince(item, detail) != null
+    val status = when {
+      blocked -> "blocked"
+      stage?.status == "running" && item.running -> "active"
+      stage?.status == "running" -> "paused"
+      stage?.status == "completed" -> "done"
+      stage?.status == "failed" -> "failed"
+      stage?.status == "paused" -> "paused"
+      else -> "queued"
     }
-
+    val duration = when {
+      stage?.status == "running" -> elapsedTextOrNull(stage.firstStartedAt, now)
+      stage?.finishedAt != null -> stage.finishedAt?.let { elapsedTextOrNull(stage.firstStartedAt, it) }
+      !item.running -> elapsedTextOrNull(stage?.firstStartedAt, detail.updatedAt)
+      else -> null
+    }
+    val statusColor = when {
+      blocked || quiet || status == "failed" -> SkillBillTheme.colors.stBlocked
+      status == "active" -> SkillBillTheme.colors.stActive
+      status == "done" -> SkillBillTheme.colors.fg2
+      else -> SkillBillTheme.colors.fgFaint
+    }
+    MetricCell(
+      label = label.title,
+      value = duration.orEmpty(),
+      note = label.id,
+      lead = { PlanGlyph(if (blocked) "blocked" else if (status == "done") "saved" else if (status == "active") "writing" else "queued", statusColor) },
+      tone = when { blocked || quiet -> SkillBillTheme.colors.stBlocked; status == "active" -> SkillBillTheme.colors.stActive; else -> null },
+    )
   }
+  MetricStrip(cells, Modifier.padding(top = DocBlockGap))
 }
 
 @Composable
