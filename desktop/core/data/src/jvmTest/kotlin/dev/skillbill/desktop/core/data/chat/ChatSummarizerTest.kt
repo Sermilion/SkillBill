@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -72,7 +73,7 @@ class ChatSummarizerTest {
       val binary = expected.keys.first { it in command.argv }
       assertTrue(expected.getValue(binary) in command.argv, "${command.argv}")
       assertTrue(forbidden.none { it in command.argv }, "${command.argv}")
-      assertTrue(command.workingDirectory.endsWith(CHAT_SUMMARY_PATH))
+      assertEquals(File(host.userHome, CHAT_SUMMARY_PATH).path, command.workingDirectory)
     }
     assertTrue(listOf("--sandbox", "read-only", "--ephemeral").all { it in commands.first { "codex" in it.argv }.argv })
     assertTrue(listOf("--mode", "ask").all { it in commands.first { "agent" in it.argv }.argv })

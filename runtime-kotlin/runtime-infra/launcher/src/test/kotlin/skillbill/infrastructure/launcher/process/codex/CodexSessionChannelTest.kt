@@ -175,8 +175,12 @@ class CodexSessionChannelTest {
 
   @Test
   fun `an approved command that exits non-zero is a tool result and the turn still completes`() {
-    val outcome = approvedCommandTurn(ApprovalState.ALLOWED, """"status":"failed","exitCode":1,""" +
-      """"aggregatedOutput":"CONFLICT (content): Merge conflict in App.kt",""")
+    val outcome =
+      approvedCommandTurn(
+        ApprovalState.ALLOWED,
+        """"status":"failed","exitCode":1,""" +
+          """"aggregatedOutput":"CONFLICT (content): Merge conflict in App.kt",""",
+      )
 
     assertTrue(outcome.completed, outcome.failure)
     assertNull(outcome.failure)
