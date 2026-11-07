@@ -131,7 +131,7 @@ val runtime: RuntimeComponent = RuntimeComponent::class.create(
 )
 ```
 
-This is how `desktop-tray/core/data/src/jvmMain/.../runtime/RuntimeSessionProviders.kt` does it. The default database is `.skill-bill/review-metrics.db` under the user's home directory (`DatabasePaths.defaultDbPath`), overridden by the database path setting or `SKILL_BILL_DB`.
+This is how `desktop-tray/core/data/src/jvmMain/.../runtime/RuntimeSessionProviders.kt` does it. The default database is `.skill-bill/review-metrics.db` under the user's home directory (`DatabasePaths.defaultDbPath`), overridden by the database path setting or `SKILL_BILL_REVIEW_DB`.
 
 The app and the runtime are a matched pair. `install.sh` installs both; an upgrade of one without the other makes the app show the runtime-unavailable state.
 
