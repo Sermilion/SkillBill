@@ -8,6 +8,8 @@ import dev.skillbill.desktop.core.domain.settings.NotificationKind
 import dev.skillbill.desktop.core.domain.settings.TrayTab
 import dev.skillbill.desktop.core.domain.settings.CriterionMarkKey
 import dev.skillbill.desktop.core.domain.settings.CriterionMark
+import dev.skillbill.desktop.core.domain.qa.QaDevicePick
+import dev.skillbill.desktop.core.domain.qa.QaDevicePickKind
 
 /** Decodes tolerantly: an unknown or out-of-range stored value falls back to its default and is passed to [onUnsupported] as `key=raw`. */
 internal fun Preferences.toAppSettings(onUnsupported: (String) -> Unit): AppSettings {
@@ -27,6 +29,7 @@ internal fun Preferences.toAppSettings(onUnsupported: (String) -> Unit): AppSett
   val favoriteSpecs = this[AppPreferenceKeys.FAVORITE_SPECS].orEmpty().mapNotNull { encoded ->
     FavoriteSpecKeyEncoding.decode(encoded).also { if (it == null) onUnsupported("${AppPreferenceKeys.FAVORITE_SPECS.name}=$encoded") }
   }.toSet()
+  val qaDevice = qaDevice { onUnsupported(it) }
   return AppSettings(
     databasePath = this[AppPreferenceKeys.DATABASE_PATH],
     claudeConfigDir = this[AppPreferenceKeys.CLAUDE_CONFIG_DIR],
@@ -43,7 +46,22 @@ internal fun Preferences.toAppSettings(onUnsupported: (String) -> Unit): AppSett
     newTaskChatLayout = decode(AppPreferenceKeys.NEW_TASK_CHAT_LAYOUT, NewTaskChatLayout.DEFAULT) { raw ->
       NewTaskChatLayout.entries.firstOrNull { it.wireValue == raw }
     },
+    qaDevice = qaDevice,
   )
+}
+
+internal fun Preferences.qaDevice(onUnsupported: (String) -> Unit): QaDevicePick? {
+  val kind = this[AppPreferenceKeys.QA_DEVICE_KIND]
+  val value = this[AppPreferenceKeys.QA_DEVICE_VALUE]
+  val displayName = this[AppPreferenceKeys.QA_DEVICE_DISPLAY_NAME]
+  if (kind == null && value == null && displayName == null) return null
+  val decodedKind = QaDevicePickKind.entries.firstOrNull { it.wireValue == kind }
+  val pick = if (decodedKind != null && value != null && displayName != null) QaDevicePick(decodedKind, value, displayName) else null
+  if (pick == null || !pick.isValid) {
+    onUnsupported("qa_device_invalid")
+    return null
+  }
+  return pick
 }
 
 internal fun Preferences.criterionMarks(): Map<CriterionMarkKey, CriterionMark> =

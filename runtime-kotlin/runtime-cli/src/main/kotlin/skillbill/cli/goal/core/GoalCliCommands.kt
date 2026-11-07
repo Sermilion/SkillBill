@@ -43,6 +43,7 @@ import skillbill.cli.goal.run.resolveInvokedAgentId
 import skillbill.cli.goal.status.GoalStatusCommand
 import skillbill.cli.goal.status.GoalWatchCommand
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
+import skillbill.cli.kernel.agent.resolveRequestedQaDevice
 import skillbill.cli.kernel.agent.resolveRequestedQaSelection
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
@@ -58,6 +59,7 @@ import skillbill.cli.kernel.work.incidentTextLines
 import skillbill.cli.kernel.work.readGoalIncidentDetails
 import skillbill.cli.model.CliRunInputs
 import skillbill.cli.model.DEFAULT_GOAL_MAX_WALL_CLOCK_MINUTES
+import skillbill.contracts.qa.QaDeviceLaunchTokens.QA_DEVICE_FLAG
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.goalrunner.GoalRunner
@@ -156,6 +158,12 @@ class GoalRunCommand(
     FeatureTaskRuntimeGoalContinuationLaunchTokens.QA_SELECTION_FLAG,
     help = "QA policy for every new child: auto (default) or off. Resumed children keep their recorded policy.",
   ).multiple()
+  private val qaDevices by option(
+    QA_DEVICE_FLAG,
+    help =
+      "QA device for this launch's goal QA: serial:<serial> or avd:<name>. " +
+        "Not saved; a resumed goal without it lets QA choose.",
+  ).multiple()
   private val agentAddonSelectionJson by option(
     FeatureTaskRuntimeGoalContinuationLaunchTokens.AGENT_ADDON_SELECTION_JSON_FLAG,
     help = "Already-resolved ordered agent add-on selection JSON. Use --agent-addon for raw slugs.",
@@ -217,6 +225,7 @@ class GoalRunCommand(
     }
     val effectiveRepoRoot = resolveCliRepositoryRoot(repoRoot, inputs)
     val qaSelection = resolveRequestedQaSelection(qaSelections, inputs.environment)
+    val qaDevice = resolveRequestedQaDevice(qaDevices)
     val intake = intakeTokens.joinToString(" ")
     val runIssueKey = admittedIssueKey(intake, effectiveRepoRoot) ?: return
     val invokedAgentId = resolveInvokedAgentId(agent, inputs.environment)
@@ -265,7 +274,7 @@ class GoalRunCommand(
     presenter.emitStartupProvenance()
     val request =
       runRequest(runIssueKey, invokedAgentId, hydratedSelection, presenter, effectiveRepoRoot)
-        .copy(intake = intake, qaSelection = qaSelection)
+        .copy(intake = intake, qaSelection = qaSelection, qaDevice = qaDevice)
     val report = goalRunner.run(request)
     reportPresentation.complete(report)
   }

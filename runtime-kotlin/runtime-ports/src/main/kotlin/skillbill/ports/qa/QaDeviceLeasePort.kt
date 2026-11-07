@@ -1,6 +1,7 @@
 package skillbill.ports.qa
 
 import skillbill.ports.qa.model.QaDeviceLease
+import skillbill.ports.qa.model.QaDeviceLeaseSnapshot
 import skillbill.ports.qa.model.QaLeaseReleaseOutcome
 import skillbill.ports.qa.model.QaLeaseResult
 import java.nio.file.Path
@@ -11,6 +12,13 @@ import java.nio.file.Path
  * process is alive.
  */
 interface QaDeviceLeasePort {
+  /**
+   * Reads the currently live lease holders for [repoRoot] without changing lease records. Individual unreadable or
+   * malformed records may be skipped with diagnostics; unavailable storage is reported explicitly. This snapshot is
+   * advisory because a lease can change after the read.
+   */
+  fun liveHolders(repoRoot: Path): QaDeviceLeaseSnapshot
+
   /**
    * Takes the device for [invocationId]. A live or unverifiable foreign owner yields [QaLeaseResult.Contended] and
    * leaves its record untouched; an owner whose process is confirmed dead is reclaimed.

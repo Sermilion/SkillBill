@@ -65,6 +65,7 @@ fun ShellSidebar(
   onRemoveFavorite: (dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey) -> Unit,
   onRemoveSpecFavorite: (dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey) -> Unit,
   onOpenSpecFavorite: (projectId: String, path: String) -> Unit,
+  qaDeviceSwitcher: @Composable () -> Unit = {},
 ) {
   var boardExpanded by rememberSaveable { mutableStateOf(true) }
   Sidebar(
@@ -79,6 +80,7 @@ fun ShellSidebar(
       SidebarItem("Chats", onToggleChat, icon = LucideIcons.bot, on = chatOpen, tooltip = "Chat pane")
       SidebarItem("Settings", { onNavigate(SettingsRoute(SettingsPageId.App)) }, icon = LucideIcons.sliders, tooltip = "Settings", shortcut = "G ,")
       SidebarItem("Keyboard shortcuts", onShowShortcuts, icon = LucideIcons.keyboard, tooltip = "Keyboard shortcuts", shortcut = "?")
+      qaDeviceSwitcher()
     },
   ) {
     SidebarItem(

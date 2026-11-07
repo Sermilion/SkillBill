@@ -74,6 +74,7 @@ import skillbill.ports.idestatus.model.WorkDetailProblemCode
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.idestatus.model.WorkDetailResult
 import skillbill.ports.idestatus.model.WorkDetailRuntimeStatus
+import skillbill.ports.idestatus.model.WorkExecutionInstance
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.system.CheckedOutBranchSource
@@ -371,18 +372,15 @@ public class IdeStatusService(
     val projection = projector.project(candidate, context)
     val snapshot = projection.snapshot
     val incidentSet = detailIncidents(candidate, context, snapshot)
-    ideStatusValidator.validate(snapshot, "work-detail:${candidate.workflowId}")
     val standalone = candidate.standaloneStatus
     val completion = detailCompletion(snapshot, standalone, item, context.unitOfWork)
-    val goal = item?.takeIf { it.workflowKind == WorkItemKind.FEATURE_GOAL }
-    val goalRead = detailGoalPage(goal, context.unitOfWork.workList, request, position, completedOnly = false)
-    val validationRead = detailGoalPage(goal, context.unitOfWork.workList, request, position, completedOnly = true)
-    val goalStatus = goal?.let { work -> detailGoalStatus(work, validationRead?.page, goalRead?.page, context) }
-    val goalWorktree = goal?.let { workBoardItemProjection.goalWorktreeView(candidate.workflowId, context.unitOfWork) }
-    val dependencies = detailDependencies(goal, context.unitOfWork.workList, request, position)
-    val runtimeRead =
-      (goalStatus?.currentChildWorkflowId ?: item?.taskRuntimeWorkflowId())
-        ?.takeIf { standalone == null }?.let { detailRuntimeStatus(it, request, position) }
+    val goalReads = detailGoalReads(context, item, standalone, request, position)
+    val goalRead = goalReads.goalRead
+    val validationRead = goalReads.validationRead
+    val goalStatus = goalReads.goalStatus
+    val goalWorktree = goalReads.goalWorktree
+    val dependencies = goalReads.dependencies
+    val runtimeRead = goalReads.runtimeRead
     val history =
       detailExecutionHistory(
         candidate,
@@ -426,13 +424,7 @@ public class IdeStatusService(
         verifyRun = VerifyRunDetailsProjection.project(candidate, context.unitOfWork),
       ).withDerivedStatus().withPlanOutput(planOutput).withValidationBranchRuns(standalone, context.unitOfWork)
     val nextAnchors =
-      detailNextAnchors(
-        history.take(request.pageSize),
-        goalRead,
-        validationRead,
-        dependencies,
-        runtimeRead,
-      )
+      detailPageNextAnchors(history.take(request.pageSize), goalRead, validationRead, dependencies, runtimeRead)
     return withPlanOutputPage(
       ProjectedDetailItem(detailItem, nextAnchors),
       standalone,
@@ -441,6 +433,33 @@ public class IdeStatusService(
       position,
     )
   }
+
+  private fun detailGoalReads(
+    context: IdeStatusProjectionContext,
+    item: WorkItem?,
+    standalone: StandalonePhaseStatusRecord?,
+    request: WorkDetailRequest,
+    position: WorkDetailPagePosition,
+  ): DetailGoalReads {
+    val goal = item?.takeIf { it.workflowKind == WorkItemKind.FEATURE_GOAL }
+    val goalRead = detailGoalPage(goal, context.unitOfWork.workList, request, position, completedOnly = false)
+    val validationRead = detailGoalPage(goal, context.unitOfWork.workList, request, position, completedOnly = true)
+    val goalStatus = goal?.let { work -> detailGoalStatus(work, validationRead?.page, goalRead?.page, context) }
+    val goalWorktree = goal?.let { workBoardItemProjection.goalWorktreeView(it.workflowId, context.unitOfWork) }
+    val dependencies = detailDependencies(goal, context.unitOfWork.workList, request, position)
+    val runtimeRead =
+      (goalStatus?.currentChildWorkflowId ?: item?.taskRuntimeWorkflowId())
+        ?.takeIf { standalone == null }?.let { detailRuntimeStatus(it, request, position) }
+    return DetailGoalReads(goal, goalRead, validationRead, goalStatus, goalWorktree, dependencies, runtimeRead)
+  }
+
+  private fun detailPageNextAnchors(
+    history: List<WorkExecutionInstance>,
+    goalRead: GoalPageRead?,
+    validationRead: GoalPageRead?,
+    dependencies: WorkGoalDependencyPage?,
+    runtimeRead: RuntimePhasePageRead?,
+  ) = detailNextAnchors(history, goalRead, validationRead, dependencies, runtimeRead)
 
   private fun withPlanOutputPage(
     projection: ProjectedDetailItem,
@@ -579,8 +598,7 @@ public class IdeStatusService(
     position: WorkDetailPagePosition,
     current: WorkflowExecutionCurrentState,
   ) = if (request.includesDetailList(WorkDetailList.EXECUTIONS)) {
-    workExecutionHistory(
-      context.unitOfWork,
+    context.unitOfWork.workExecutionHistory(
       candidate.standaloneStatus,
       candidate.workflowId,
       position,
@@ -600,7 +618,7 @@ public class IdeStatusService(
     candidate.workflowId.takeIf { candidate.standaloneStatus == null },
     candidate.standaloneStatus?.invocationId,
     snapshot.lifecycleState == IdeStatusLifecycleState.BLOCKED,
-  )
+  ).also { ideStatusValidator.validate(snapshot, "work-detail:${candidate.workflowId}") }
 
   private fun detailDependencies(
     goal: WorkItem?,
@@ -785,6 +803,16 @@ public class IdeStatusService(
     )
   }
 }
+
+private data class DetailGoalReads(
+  val goal: WorkItem?,
+  val goalRead: GoalPageRead?,
+  val validationRead: GoalPageRead?,
+  val goalStatus: GoalRunnerStatusProjection?,
+  val goalWorktree: GoalWorktreeView?,
+  val dependencies: WorkGoalDependencyPage?,
+  val runtimeRead: RuntimePhasePageRead?,
+)
 
 internal val GOAL_FINISH_PIPELINE =
   listOf(

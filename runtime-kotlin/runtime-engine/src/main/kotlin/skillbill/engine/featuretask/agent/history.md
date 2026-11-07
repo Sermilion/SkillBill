@@ -1,3 +1,14 @@
+## [2026-11-07] SKILL-517 runtime QA device channel
+Areas: runtime-engine featuretask QA and work/control; runtime-cli phase and goal; runtime-goalrunner QA; runtime-contracts QA; desktop/core/data/control; docs/runtime-command-guidance
+- MEDIUM feature. Standalone QA and goal launches accept --qa-device with serial: or avd: values. Parsing rejects duplicate selectors, unknown prefixes, blank or oversized values, whitespace, control characters and leading dashes.
+- QaNamedDevice, its wire codec and optional launchArguments helper are reusable. QaDeviceLaunchTokens owns the shared CLI flag and prefixes.
+- Requests and execution context carry the device outside intake and acceptance criteria. QA prompts render it beside lease guidance, require the named target and describe skip behavior; stopped AVDs use the pack's boot steps.
+- WorkControlService start APIs carry the device to QA and goal argv. StandalonePhaseRequest groups phase and target. Work-board QA and goal relaunches replace saved selectors with the current launch selection; auto removes an old selector.
+- Goals read the device from the current launch without adding it to durable goal-quality inputs or continuation tokens. An absent selector lets QA choose. Non-QA standalone phases reject a selector.
+- Limits: Android targeting only; operation:verify and KMP pack content are unchanged. Callers must adopt the grouped standalone request signature, and device selection requires a runtime that recognizes the flag.
+Feature flag: N/A
+Acceptance criteria: 3/3 runtime-channel subtask criteria implemented, covering parent criterion 2
+
 ## [2026-11-06] SKILL-510 QA unblock guidance
 Areas: runtime-engine featuretask QA and standalone phase prompts; platform-packs/kmp/qa
 - MEDIUM feature. Every QA pack receives a shared final `## Unblock` report format for missing capabilities, with attempted setup, evidence, a remedy and a pasteable `.skill-bill/phases/qa.md` snippet.

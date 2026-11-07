@@ -94,21 +94,13 @@ internal fun supersededPhase(
 
 private const val DISPLAYED_PHASE_SCAN = 100
 
-/**
- * The workflow's live state, used for its current execution row.
- *
- * Workflow execution rows are written once at launch and never updated, so a row's stored lifecycle is
- * only its launch state. The current execution takes the workflow's projected lifecycle, and any earlier
- * execution ended when a later launch replaced it.
- */
 internal data class WorkflowExecutionCurrentState(
   val executionId: String?,
   val lifecycleState: IdeStatusLifecycleState,
   val finishedAt: Instant?,
 )
 
-internal fun workExecutionHistory(
-  unitOfWork: UnitOfWork,
+internal fun UnitOfWork.workExecutionHistory(
   standalone: StandalonePhaseStatusRecord?,
   workflowId: String,
   page: WorkDetailPagePosition,
@@ -118,7 +110,7 @@ internal fun workExecutionHistory(
   val anchor = (page.anchor as? WorkDetailAnchor.Execution)?.anchor
   val offset = if (anchor == null) page.offset else 0
   return if (standalone != null) {
-    unitOfWork.standalonePhaseStatuses.readPhaseExecutions(
+    standalonePhaseStatuses.readPhaseExecutions(
       StandalonePhaseExecutionQuery(
         standalone.repositoryIdentity,
         standalone.phaseId,
@@ -129,9 +121,9 @@ internal fun workExecutionHistory(
         anchor,
       ),
     )
-      .map { workExecutionInstance(it, standalone.invocationId, unitOfWork) }
+      .map { workExecutionInstance(it, standalone.invocationId, this) }
   } else {
-    unitOfWork.standalonePhaseStatuses
+    standalonePhaseStatuses
       .readWorkflowExecutions(workflowId, page.observedAt, offset, limit, anchor)
       .map { workflowExecutionInstance(it, current) }
   }

@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.core.domain.settings
 
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
+import dev.skillbill.desktop.core.domain.qa.QaDevicePick
 
 /**
  * The app's preferences. A null [databasePath] means the runtime default
@@ -19,6 +20,7 @@ data class AppSettings(
   val favoriteWork: Set<FavoriteWorkKey> = emptySet(),
   val favoriteSpecs: Set<FavoriteSpecKey> = emptySet(),
   val newTaskChatLayout: NewTaskChatLayout = NewTaskChatLayout.DEFAULT,
+  val qaDevice: QaDevicePick? = null,
 ) {
   companion object {
     const val TERMINAL_HEIGHT_DEFAULT_DP = 200
@@ -40,6 +42,7 @@ data class AppSettings(
       favoriteWork = emptySet(),
       favoriteSpecs = emptySet(),
       newTaskChatLayout = NewTaskChatLayout.DEFAULT,
+      qaDevice = null,
     )
   }
 }
