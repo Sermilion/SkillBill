@@ -105,7 +105,7 @@ internal class BuildCommandTap(
   private val clock: Clock,
   diagnostics: RuntimeDiagnostics,
 ) : AgentRunOutputSink, AgentRunOutputEndObserver {
-  private val decoder = ProviderActivityDecoder(agent, diagnostics)
+  private var decoder = ProviderActivityDecoder(agent, diagnostics)
   private val mapper = ObjectMapper()
   private val buffer = StringBuilder()
   private var droppingLongLine = false
@@ -133,7 +133,11 @@ internal class BuildCommandTap(
 
   @Synchronized
   override fun outputEnded(stream: AgentRunOutputStream) {
-    if (stream == AgentRunOutputStream.STDOUT) finish()
+    if (stream == AgentRunOutputStream.STDOUT) {
+      finish()
+      decoder = ProviderActivityDecoder(agent, diagnostics)
+    }
+    (delegate as? AgentRunOutputEndObserver)?.outputEnded(stream)
   }
 
   private fun append(text: String) {

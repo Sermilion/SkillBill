@@ -3,6 +3,7 @@ package skillbill.infrastructure.launcher.agentrun.display
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import skillbill.infrastructure.launcher.process.launch.AgentRunOutputEndObserver
 import skillbill.ports.agentrun.model.AgentRunActivityOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
@@ -12,7 +13,7 @@ internal class ReadableAgentOutputSink(
   private val agent: String,
   private val delegate: AgentRunOutputSink,
   private val diagnostics: RuntimeDiagnostics,
-) : AgentRunOutputSink {
+) : AgentRunOutputSink, AgentRunOutputEndObserver {
   private val pending = mutableMapOf<AgentRunOutputStream, StringBuilder>()
   private val dropping = mutableSetOf<AgentRunOutputStream>()
   private val emittedCodexCalls = linkedSetOf<String>()
@@ -25,7 +26,7 @@ internal class ReadableAgentOutputSink(
   private var toolTrackingOverflowReported = false
   private val mapper = ObjectMapper()
   private val activitySink = (delegate as? AgentRunActivityOutputSink)?.takeIf { it.capturesActivity }
-  private val activityDecoder = activitySink?.let { ProviderActivityDecoder(agent, diagnostics) }
+  private var activityDecoder = activitySink?.let { ProviderActivityDecoder(agent, diagnostics) }
 
   @Synchronized
   override fun write(
@@ -73,6 +74,17 @@ internal class ReadableAgentOutputSink(
   @Synchronized
   fun finish() {
     pending.keys.toList().forEach(::flushStream)
+  }
+
+  @Synchronized
+  override fun outputEnded(stream: AgentRunOutputStream) {
+    if (stream == AgentRunOutputStream.STDOUT) {
+      flushStream(stream)
+      activityDecoder = activitySink?.let { ProviderActivityDecoder(agent, diagnostics) }
+      emittedCodexCalls.clear()
+      toolTrackingOverflowReported = false
+    }
+    (delegate as? AgentRunOutputEndObserver)?.outputEnded(stream)
   }
 
   private fun flushStream(stream: AgentRunOutputStream) {
