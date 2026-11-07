@@ -226,7 +226,7 @@ private fun NewTaskHomeBody(
             style = type.tBase.copy(color = colors.fgMuted),
           )
         }
-        StepLine(progress, reducedMotion, preview)
+        StepLine(progress, preview)
         if (recent.isNotEmpty()) {
           RecentChatsSection(
             chats = recent,
