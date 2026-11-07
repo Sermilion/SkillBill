@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.domain.model.ActivityGroup
+import dev.skillbill.desktop.core.domain.model.ActivityPhase
 import dev.skillbill.desktop.core.domain.model.ActivityStatus
 import kotlin.time.Instant
 
@@ -36,9 +37,7 @@ internal fun ActivityStats(groups: List<ActivityGroup>, now: Instant) {
   val colors = SkillBillTheme.colors
   val waiting = remember(groups, now) { activityIdleMilliseconds(groups, now) }
   val phases = groups.flatMap { it.phases }
-  val models = phases.filter { it.model != null }.groupBy { it.model.orEmpty().removePrefix("claude-") }.entries.sortedByDescending { (_, phases) ->
-    phases.sumOf { phase -> phase.startedAt?.let { start -> ((phase.finishedAt ?: now) - start).inWholeMilliseconds } ?: 0 }
-  }.map { it.key }
+  val models = activityModelLabels(phases, now)
   val subtasks = groups.filter { it.subtaskId != null }.groupBy { it.subtaskId }
   val completed = subtasks.values.count { attempts -> attempts.last().status == ActivityStatus.COMPLETE }
   val blocks = groups.sumOf { it.blocks.size }
@@ -55,6 +54,19 @@ internal fun ActivityStats(groups: List<ActivityGroup>, now: Instant) {
       "${phases.size} phase${if (phases.size == 1) "" else "s"} · ${phases.count { it.phaseId.contains("fix") }} fixes", Modifier.weight(1f))
     ActivityStat("Models", models.firstOrNull() ?: "none", if (models.size > 1) "+ ${models.drop(1).joinToString(", ")}" else if (models.size == 1) "only model" else "", Modifier.weight(1f))
   }
+}
+
+internal fun activityModelLabels(phases: List<ActivityPhase>, now: Instant): List<String> {
+  val labeled = phases.mapNotNull { phase ->
+    phase.model?.removePrefix("claude-")?.takeIf(String::isNotEmpty)?.let { label -> label to phase }
+  }
+  val byDuration = labeled.groupBy({ it.first }, { it.second }).entries.sortedByDescending { (_, owned) ->
+    owned.sumOf { phase -> phase.startedAt?.let { start -> ((phase.finishedAt ?: now) - start).inWholeMilliseconds } ?: 0L }
+  }.map { it.key }
+  val current = labeled.filter { it.second.finishedAt == null }
+    .maxByOrNull { it.second.startedAt ?: Instant.DISTANT_PAST }
+    ?.first
+  return if (current == null) byDuration else listOf(current) + byDuration.filterNot { it == current }
 }
 
 @Composable

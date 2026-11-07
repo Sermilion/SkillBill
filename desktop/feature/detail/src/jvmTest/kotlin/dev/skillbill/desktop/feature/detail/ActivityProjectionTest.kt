@@ -63,6 +63,18 @@ class ActivityProjectionTest {
   }
 
   @Test
+  fun `the open phase model leads and a finished run still leads with the longest model`() {
+    val open = listOf(
+      ActivityPhase("implement", 1, at(0), at(80), "codex", "gpt-6.1-sol", "high", null, null),
+      ActivityPhase("simplify", 1, at(80), at(90), "codex", "gpt-6-luna", "high", null, null),
+      ActivityPhase("review", 1, at(90), null, "cursor", "grok-4.7-high-fast", null, null, null),
+    )
+    assertEquals(listOf("grok-4.7-high-fast", "gpt-6.1-sol", "gpt-6-luna"), activityModelLabels(open, at(100)))
+    val finished = open.dropLast(1)
+    assertEquals(listOf("gpt-6.1-sol", "gpt-6-luna"), activityModelLabels(finished, at(100)))
+  }
+
+  @Test
   fun `running phase stays outside folded completed attempts`() {
     val entries = activityEntries(group(listOf(phase("review", 0, 1), phase("review_fix", 2, null))))
     assertEquals(2, entries.size)
