@@ -1,6 +1,5 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -9,8 +8,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -22,7 +19,6 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -31,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.Kbd
+import dev.skillbill.desktop.core.designsystem.component.ViewTab
+import dev.skillbill.desktop.core.designsystem.component.ViewTabs
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 
 @Composable
@@ -46,33 +44,15 @@ internal fun inboxTextStyle(size: TextUnit = 13.sp, mono: Boolean = false): Text
 
 @Composable
 internal fun InboxFilterControl(selected: InboxFilter, needsCount: Int, savedCount: Int, onSelect: (InboxFilter) -> Unit) {
-  val colors = SkillBillTheme.colors
-  Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-    listOf(Triple(InboxFilter.All, "All", null), Triple(InboxFilter.NeedsYou, "Needs you", needsCount), Triple(InboxFilter.Chats, "Chats", savedCount)).forEach { (filter, label, count) ->
-      val active = selected == filter
-      val interaction = remember(filter) { MutableInteractionSource() }
-      val hovered by interaction.collectIsHoveredAsState()
-      val shape = RoundedCornerShape(4.dp)
-      Row(
-        Modifier.height(22.dp)
-          .then(if (active) Modifier.background(colors.bgActive, shape) else Modifier)
-          .pointerHoverIcon(PointerIcon.Hand)
-          .clickable(interaction, indication = null, role = Role.Tab, onClick = { onSelect(filter) })
-          .sbFocusRing(interaction, shape)
-          .semantics { this.selected = active; contentDescription = label }
-          .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-      ) {
-        val foreground = if (active) colors.fg else if (hovered) colors.fg2 else colors.fgFaint
-        BasicText(label, style = inboxTextStyle(12.sp).copy(color = foreground), maxLines = 1)
-        count?.let {
-          val countColor = if (filter == InboxFilter.NeedsYou && it > 0) colors.stBlocked else colors.fgFaint
-          BasicText(it.toString(), style = inboxTextStyle(10.5.sp).copy(color = countColor), maxLines = 1)
-        }
-      }
-    }
-  }
+  ViewTabs(
+    listOf(
+      ViewTab(InboxFilter.All, "All"),
+      ViewTab(InboxFilter.NeedsYou, "Needs you", count = needsCount, attention = needsCount > 0),
+      ViewTab(InboxFilter.Chats, "Chats", count = savedCount),
+    ),
+    selected,
+    onSelect,
+  )
 }
 
 @OptIn(ExperimentalLayoutApi::class)

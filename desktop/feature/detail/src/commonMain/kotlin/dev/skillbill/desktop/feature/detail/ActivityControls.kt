@@ -5,8 +5,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -22,8 +20,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,6 +28,8 @@ import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbDivider
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
+import dev.skillbill.desktop.core.designsystem.component.ViewTab
+import dev.skillbill.desktop.core.designsystem.component.ViewTabs
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.status.StatusDot
 import dev.skillbill.desktop.core.domain.model.ActivityStatus
@@ -64,18 +62,7 @@ internal fun ActivityAction(label: String, onClick: () -> Unit) {
 
 @Composable
 internal fun ActivityFilter(blocksOnly: Boolean, count: Int, onChange: (Boolean) -> Unit) {
-  val colors = SkillBillTheme.colors
-  Row(Modifier.border(1.dp, colors.borderStrong, RoundedCornerShape(7.dp))) {
-    listOf(false to "All", true to "Blocks $count").forEach { (blocks, label) ->
-      val source = remember { MutableInteractionSource() }
-      val active = blocksOnly == blocks
-      Box(Modifier.sbFocusRing(source, RoundedCornerShape(5.dp))
-        .background(if (active) colors.bgOverlay else Color.Transparent, RoundedCornerShape(5.dp))
-        .semantics { selected = active }.clickable(source, null, role = Role.Tab, onClick = { onChange(blocks) }).padding(horizontal = 9.dp, vertical = 4.dp)) {
-        ActivityText(label, sans = true, size = 11.5f, color = if (active) colors.fg else colors.fgMuted)
-      }
-    }
-  }
+  ViewTabs(listOf(ViewTab(false, "All"), ViewTab(true, "Blocks", count = count)), blocksOnly, onChange)
 }
 
 @Composable

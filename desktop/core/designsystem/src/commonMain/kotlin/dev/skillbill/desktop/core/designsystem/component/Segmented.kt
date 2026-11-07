@@ -41,7 +41,7 @@ import dev.skillbill.desktop.core.designsystem.status.StatusDot
 private val SEGMENT_HEIGHT = 22.dp
 private val TAB_HEIGHT = 24.dp
 
-data class SegmentedOption<T>(val value: T, val label: String, val icon: ImageVector? = null, val enabled: Boolean = true, val tooltip: String? = null)
+data class SegmentedOption<T>(val value: T, val label: String, val icon: ImageVector? = null, val enabled: Boolean = true, val tooltip: String? = null, val count: Int? = null, val lead: (@Composable () -> Unit)? = null)
 data class ViewTab<T>(val value: T, val label: String, val icon: ImageVector? = null, val count: Int? = null, val attention: Boolean = false)
 
 @Composable
@@ -71,8 +71,10 @@ fun <T> Segmented(options: List<SegmentedOption<T>>, selected: T, modifier: Modi
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
       ) {
         CompositionLocalProvider(LocalContentColor provides foreground) {
+          option.lead?.invoke()
           option.icon?.let { SbIcon(it, SbIconSize.Sm) }
           BasicText(option.label, style = SkillBillTheme.type.tSmMedium.copy(color = foreground, lineHeight = 1.em), maxLines = 1, softWrap = false)
+          option.count?.let { BasicText(it.toString(), style = SkillBillTheme.type.tSmMedium.tabular().copy(color = colors.fgFaint, lineHeight = 1.em), maxLines = 1) }
         }
       } }
       if (option.tooltip != null) SbTooltip(option.tooltip) { item() } else item()
@@ -80,10 +82,15 @@ fun <T> Segmented(options: List<SegmentedOption<T>>, selected: T, modifier: Modi
   }
 }
 
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun <T> ViewTabs(tabs: List<ViewTab<T>>, selected: T, onSelect: (T) -> Unit) {
-  FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+  ViewTabs(tabs = tabs, selected = selected, onSelect = onSelect, modifier = Modifier)
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun <T> ViewTabs(tabs: List<ViewTab<T>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
+  FlowRow(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
     tabs.forEach { tab ->
       val active = tab.value == selected
       val source = remember(tab.value) { MutableInteractionSource() }
