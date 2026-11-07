@@ -418,3 +418,8 @@ Reason: SwingPanel otherwise paints above Compose content regardless of composab
 Context: Review publishing needs a short success message tied to the comment bar and diff context.
 Decision: Render the review toast in the Changes diff pane and expire it after 2.6 seconds through the view-model coroutine delay.
 Reason: The application toast stack has a fixed 5-second lifetime and appears outside the review context.
+
+## [2026-11-07] Keep every chat free of app-imposed permission and workflow gates
+Context: Chat prompt rules made ordinary requests wait for action buttons, issue-key acceptance or a pause even though the chat transports expose the execution agent's tools.
+Decision: New-task and execution chat prompts carry repository or execution context and optional action-button formatting. They permit direct shell, CLI, MCP, Git, gh and file-edit requests without adding chat-specific approval steps, key-confirmation gates, execution-only scope limits or mode-dependent instructions. ReadOnly and Act remain UI coordination metadata for optional pause-and-act actions; transports no longer inject them into prompts or operator messages. Provider launch permissions and runtime command contracts retain their own owners.
+Reason: Conversation context and button formatting must not reduce what the operator can ask the chat agent to do. This supersedes earlier decisions that used chat mode to select prompt guidance or required button-only launches.

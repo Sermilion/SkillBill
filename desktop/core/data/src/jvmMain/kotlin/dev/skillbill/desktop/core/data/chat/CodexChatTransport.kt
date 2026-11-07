@@ -72,7 +72,7 @@ class CodexChatTransport(
       }
       try {
         val prompt = if (thread == null || request.scope is ChatScope.NewTask) {
-          withScope(scopeSystemPrompt(request.scope, request.mode), request.prompt)
+          withScope(scopeSystemPrompt(request.scope), request.prompt)
         } else {
           request.prompt
         }

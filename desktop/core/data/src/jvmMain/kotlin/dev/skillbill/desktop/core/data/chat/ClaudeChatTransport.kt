@@ -79,7 +79,7 @@ class ClaudeChatTransport internal constructor(
     sessions[request.sessionId]?.takeIf { it.binding != binding }?.let { stop(request.sessionId, it) }
     awaitStopped(request.sessionId)
     val session = registered(request, command, binding, uuid, sink)
-    session.send(uuid, claudeMessage(request), request.images)
+    session.send(uuid, request.prompt, request.images)
     var answered = false
     try {
       for (event in sink) {
@@ -211,11 +211,8 @@ internal fun claudeArguments(request: ChatTurnRequest): List<String> = buildList
   // undecided reach an approval card. A user or project default mode never applies.
   addAll(listOf("--permission-mode", if (request.mode == ChatPermissionMode.ReadOnly) "plan" else "auto"))
   addAll(listOf("--system-prompt-snapshot", "off"))
-  // The process outlives a mode change, so the mode travels with each message instead of the system prompt.
   addAll(listOf("--append-system-prompt", scopeSystemPrompt(request.scope)))
 }
-
-internal fun claudeMessage(request: ChatTurnRequest): String = listOfNotNull(modeNote(request.mode), request.prompt).joinToString("\n\n")
 
 /** An empty `CLAUDE_CONFIG_DIR` means the default account, which only works with the variable unset. */
 internal fun claudeEnvironment(variables: Map<String, String>, homes: Map<String, String>): Map<String, String> {

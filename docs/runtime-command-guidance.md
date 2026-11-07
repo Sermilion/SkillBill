@@ -300,6 +300,14 @@ runtime commit strategy and launches no agent. Details:
 
 ## Desktop new-task start
 
+New-task and execution chats add no tool restrictions, approval steps or
+workflow gates. Their prompts supply context and optional action-button
+formatting. The agent can carry out operator requests directly with its
+available tools, including shell commands and the skill-bill CLI. Button-only
+launches, issue-key acceptance in chat and pause-and-act are not prerequisites
+for direct tool use. Optional start buttons still use the desktop intake path
+below; runtime commands retain their own contracts.
+
 Issue-key allocation has two owners. The dispatcher prose in
 `skills/skill-bill/content.md` handles terminal intake, and
 `NewTaskIssueKeyAllocator` handles desktop intake. Both inspect local spec

@@ -72,7 +72,7 @@ class CursorChatTransport(
       return@flow
     }
     val prompt = if (saved == null || request.scope is ChatScope.NewTask) {
-      withScope(scopeSystemPrompt(request.scope, request.mode), request.prompt)
+      withScope(scopeSystemPrompt(request.scope), request.prompt)
     } else request.prompt
     val job = currentCoroutineContext()[Job]
     if (job != null) turns[request.sessionId] = job
