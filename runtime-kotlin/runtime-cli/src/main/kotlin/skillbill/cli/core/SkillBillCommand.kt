@@ -18,7 +18,7 @@ private const val GOAL_SUBCOMMAND = "goal"
 internal fun ParameterHolder.databasePathOption() =
   option(
     "--db",
-    help = "Optional SQLite path. Defaults to SKILL_BILL_DB or the standard local state path.",
+    help = "Optional SQLite path. Defaults to SKILL_BILL_REVIEW_DB or the standard local state path.",
   )
 
 internal fun ParameterHolder.userHomeOverrideOption() =

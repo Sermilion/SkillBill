@@ -13,6 +13,10 @@ import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
+import skillbill.engine.goalrunner.persist.quality.GoalQualityAdmissionRequest
+import skillbill.engine.goalrunner.persist.quality.GoalQualityBuildSourceProof
+import skillbill.engine.goalrunner.persist.quality.GoalQualityExecutionRead
+import skillbill.engine.goalrunner.persist.quality.GoalQualityPhaseProgressWrite
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
@@ -23,8 +27,6 @@ import skillbill.goalrunner.model.history.GoalFinalRepairContext
 import skillbill.goalrunner.model.history.GoalFinalRepairOutput
 import skillbill.goalrunner.model.history.GoalHistoryCompletion
 import skillbill.goalrunner.model.history.GoalHistoryWriterEntry
-import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
-import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
@@ -265,6 +267,9 @@ public interface GoalRunnerWorkflowLedgerWriteStore {
 public interface GoalRunnerQualityExecutionStore {
   public fun goalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRecord?
 
+  public fun retainedGoalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRead? =
+    goalQualityExecution(parentWorkflowId)?.let { GoalQualityExecutionRead.Current(it) }
+
   /**
    * Records the operator's choice to discard quality state the runtime cannot judge. Ambiguous
    * historical state becomes clean and unstarted; an unsettled admitted execution, such as one
@@ -289,9 +294,7 @@ public interface GoalRunnerQualityExecutionStore {
 
   public fun admitGoalQualityExecution(
     parentWorkflowId: String,
-    baselineContentFingerprint: String,
-    governingInputs: GoalQualityExecutionInputs,
-    executionPlans: GoalQualityExecutionPlans,
+    admission: GoalQualityAdmissionRequest,
   ): GoalQualityExecutionRecord
 
   public fun transitionGoalQualityExecution(
@@ -308,11 +311,7 @@ public interface GoalRunnerQualityExecutionStore {
     acceptedPlan: String,
   ): GoalQualityPhaseProgress
 
-  public fun persistGoalQualityPhaseProgress(
-    parentWorkflowId: String,
-    invocationId: String,
-    definitionId: String,
-    acceptedPlan: String,
-    progress: GoalQualityPhaseProgress,
-  ): Boolean
+  public fun persistGoalQualityPhaseProgress(write: GoalQualityPhaseProgressWrite): Boolean
+
+  public fun reenterGoalQualityBuild(proof: GoalQualityBuildSourceProof): GoalQualityExecutionRecord?
 }

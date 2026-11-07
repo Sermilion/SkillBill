@@ -6,7 +6,16 @@ additionalProperties: false
 required: [contract_version, readiness, execution]
 properties:
   contract_version:
-    enum: ["0.1", "0.2", "0.3", "0.4", "0.5"]
+    enum: ["0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7"]
+  adoption_evidence:
+    oneOf:
+      - type: "null"
+      - type: object
+        additionalProperties: false
+        required: [source_contract_version, original_payload_json]
+        properties:
+          source_contract_version: {enum: ["0.1", "0.2", "0.3", "0.4", "0.5", "0.6"]}
+          original_payload_json: {type: string, minLength: 2}
   readiness:
     enum: [clean_unstarted, admitted, historical_ambiguity]
   execution:
@@ -78,6 +87,7 @@ properties:
                 additionalProperties: false
                 required: [qa_plan, validation_plan]
                 properties:
+                  build_plan: {type: string, minLength: 1}
                   qa_plan: {type: string, minLength: 1}
                   validation_plan: {type: string, minLength: 1}
                   plan_fingerprint: {type: string, pattern: "^[0-9a-f]{64}$"}
@@ -88,6 +98,7 @@ properties:
                 additionalProperties: false
                 required: [qa_progress, validation_progress]
                 properties:
+                  build_progress: {$ref: "#/$defs/phase_progress"}
                   qa_progress: {$ref: "#/$defs/phase_progress"}
                   validation_progress: {$ref: "#/$defs/phase_progress"}
           status:
@@ -99,6 +110,11 @@ properties:
               - type: "null"
               - type: string
           settled_content_fingerprint:
+            oneOf:
+              - type: "null"
+              - type: string
+                minLength: 1
+          final_validation_content_fingerprint:
             oneOf:
               - type: "null"
               - type: string
@@ -116,7 +132,32 @@ properties:
           skip_reason:
             oneOf:
               - type: "null"
-              - enum: [unsupported_target, subtasks_already_ran_qa, already_settled_on_tree]
+              - enum: [unsupported_target, subtasks_already_ran_qa, already_settled_on_tree, disabled_policy]
+          validation_occurrences:
+            type: array
+            items:
+              type: object
+              additionalProperties: false
+              required: [occurrence, status, validation, final_validation_content_fingerprint, progress]
+              properties:
+                occurrence: {type: integer, minimum: 0}
+                status: {enum: [validation_running, validation_completed_pending_settlement, settled_passed, settled_skipped, settled_warned]}
+                validation: {enum: [running, not_required, completed, deliberately_warned]}
+                final_validation_content_fingerprint: {type: [string, "null"]}
+                progress: {$ref: "#/$defs/phase_progress"}
+          validation_occurrence: {type: integer, minimum: 0}
+          pre_qa_build: {enum: [pending, running, passed, warned]}
+          pre_qa_build_content_fingerprint: {type: [string, "null"], minLength: 1}
+          pre_qa_build_occurrences:
+            type: array
+            items:
+              type: object
+              additionalProperties: false
+              required: [pre_qa_build, content_fingerprint, build_progress]
+              properties:
+                pre_qa_build: {enum: [passed, warned]}
+                content_fingerprint: {type: string, minLength: 1}
+                build_progress: {$ref: "#/$defs/phase_progress"}
 allOf:
   - if:
       properties:
@@ -162,6 +203,71 @@ allOf:
                 execution_plans:
                   type: object
                   required: [qa_plan, validation_plan, plan_fingerprint]
+  - if:
+      properties:
+        contract_version: {const: "0.7"}
+    then:
+      properties:
+        execution:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [governing_input_fingerprint, governing_inputs, execution_plans, progress, final_validation_content_fingerprint, pre_qa_build, pre_qa_build_content_fingerprint]
+              properties:
+                execution_plans:
+                  type: object
+                  required: [build_plan, qa_plan, validation_plan, plan_fingerprint]
+                progress:
+                  type: object
+                  required: [build_progress, qa_progress, validation_progress]
+  - if:
+      properties:
+        contract_version: {const: "0.6"}
+    then:
+      properties:
+        execution:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [governing_input_fingerprint, governing_inputs, execution_plans, progress, final_validation_content_fingerprint]
+              properties:
+                execution_plans:
+                  type: object
+                  required: [qa_plan, validation_plan, plan_fingerprint]
+              allOf:
+                - not:
+                    properties:
+                      validation: {const: not_required}
+                - if:
+                    properties:
+                      status:
+                        enum: [validation_completed_pending_settlement, settled_passed, settled_skipped, settled_warned]
+                  then:
+                    properties:
+                      final_validation_content_fingerprint: {type: string, minLength: 1}
+                - if:
+                    properties:
+                      status: {const: validation_running}
+                      progress:
+                        properties:
+                          validation_progress:
+                            anyOf:
+                              - properties:
+                                  terminal_completed: {const: true}
+                                required: [terminal_completed]
+                              - properties:
+                                  terminal_blocked_step: {type: string, minLength: 1}
+                                required: [terminal_blocked_step]
+                  then:
+                    properties:
+                      final_validation_content_fingerprint: {type: string, minLength: 1}
+                - if:
+                    properties:
+                      status:
+                        enum: [qa_pending, validation_decision_pending, required_validation_pending]
+                  then:
+                    properties:
+                      final_validation_content_fingerprint: {type: "null"}
 $defs:
   validation_gate_progress:
     type: object
@@ -235,6 +341,58 @@ $defs:
       terminal_blocked_reason: {type: [string, "null"]}
       terminal_completed: {type: boolean}
       revision: {type: integer, minimum: 0}
+      accepted_source_observations:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [phase_id, attempt, content_fingerprint, completion_sequence_number, progress_revision, validation_occurrence, accepted_output_fingerprint]
+          properties:
+            phase_id: {type: string, minLength: 1}
+            attempt: {type: integer, minimum: 1}
+            content_fingerprint: {type: string, minLength: 1}
+            completion_sequence_number: {type: integer, minimum: 1}
+            progress_revision: {type: integer, minimum: 1}
+            validation_occurrence: {type: integer, minimum: 0}
+            accepted_output_fingerprint: {type: [string, "null"], pattern: "^[0-9a-f]{64}$"}
+      accepted_qa_source_witnesses:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [admitted_qa_plan, phase_id, attempt, accepted_output_fingerprint, nested_progress_key, repair_turn, repository_checkpoint, content_fingerprint, progress_revision]
+          properties:
+            admitted_qa_plan: {type: string, minLength: 1}
+            phase_id: {type: string, minLength: 1}
+            attempt: {type: integer, minimum: 1}
+            accepted_output_fingerprint: {type: string, pattern: "^[0-9a-f]{64}$"}
+            nested_progress_key: {type: string, minLength: 1}
+            repair_turn: {type: integer, minimum: 1}
+            repository_checkpoint: {type: string, minLength: 1}
+            content_fingerprint: {type: string, minLength: 1}
+            progress_revision: {type: integer, minimum: 0}
+      attempt_high_water_marks: {type: object, additionalProperties: {type: integer, minimum: 0}}
+      ledger_sequence_high_water_mark: {type: integer, minimum: 0}
+      carried_validation_repairs_used: {type: integer, minimum: 0}
+      carried_validation_repair_outputs:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repair_turn, repair_output]
+          properties:
+            repair_turn: {type: integer, minimum: 1}
+            repair_output: {type: string}
+      carried_build_repairs_used: {type: integer, minimum: 0}
+      carried_build_repair_outputs:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repair_turn, repair_output]
+          properties:
+            repair_turn: {type: integer, minimum: 1}
+            repair_output: {type: string}
   model_directive:
     type: object
     additionalProperties: false

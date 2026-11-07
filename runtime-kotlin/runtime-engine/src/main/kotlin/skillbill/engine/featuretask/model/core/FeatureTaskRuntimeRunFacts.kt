@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.goalrunner.model.history.GoalHistoryWriterInput
+import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
@@ -106,6 +107,8 @@ public interface FeatureTaskRuntimeRunFacts {
 
   public val goalHistoryWriterInput: GoalHistoryWriterInput?
 
+  public val goalQualityPhaseProgress: GoalQualityPhaseProgress?
+  public val goalQualityValidationOccurrence: Int
   public val goalQualityAutomaticRecovery: Boolean
 
   public val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan?

@@ -4,7 +4,8 @@ import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
 import dev.skillbill.desktop.core.domain.qa.QaDevicePick
 
 /**
- * The app's preferences. A null [databasePath] means the runtime default (`SKILL_BILL_DB`, then `~/.skill-bill/review-metrics.db`),
+ * The app's preferences. A null [databasePath] means the runtime default
+ * (`SKILL_BILL_REVIEW_DB`, then `~/.skill-bill/review-metrics.db`),
  * and a null [claudeConfigDir] leaves the agent's own default.
  */
 data class AppSettings(

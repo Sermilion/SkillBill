@@ -345,6 +345,11 @@ object LucideIcons {
       path("M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71")
     }
   }
+  val plug: ImageVector by lazy {
+    imageVector("plug") {
+      path("M9 3v4M15 3v4M7 7h10v4a5 5 0 0 1-10 0zM12 16v5")
+    }
+  }
   val repo: ImageVector by lazy {
     imageVector("repo") {
       path("M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z")

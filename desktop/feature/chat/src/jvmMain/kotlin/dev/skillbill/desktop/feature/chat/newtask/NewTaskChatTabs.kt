@@ -1,7 +1,6 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
@@ -12,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -38,8 +38,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.semantics.Role
@@ -136,7 +143,7 @@ internal fun NewTaskChatTabs(
   BoxWithConstraints(
     modifier.fillMaxWidth().height(36.dp).background(colors.bgFrame)
       .drawBehind { drawLine(colors.borderSubtle, Offset(0f, size.height - .5f), Offset(size.width, size.height - .5f), 1.dp.toPx()) }
-      .padding(horizontal = 8.dp, vertical = 4.dp),
+      .padding(horizontal = 8.dp),
   ) {
     val gapPx = with(density) { 2.dp.toPx().roundToInt() }
     val plusSlotPx = with(density) { 24.dp.toPx().roundToInt() } + gapPx
@@ -155,6 +162,9 @@ internal fun NewTaskChatTabs(
     val scrollRange = scroll.maxValue
     val contentWidthPx = (items.size * metrics.tabWidth.roundToInt() + (items.size - 1).coerceAtLeast(0) * gapPx).coerceAtLeast(0)
     val measuredRange = (contentWidthPx - viewportPx).coerceAtLeast(0)
+    // The overflow Row spaces four children (tabs, "+", spacer, chevron), so it spends one gap more than the slots count.
+    val reservedPx = plusSlotPx + if (metrics.overflow) moreSlotPx + gapPx else 0
+    val containerWidth = with(density) { contentWidthPx.coerceAtMost((availablePx - reservedPx).coerceAtLeast(0)).toDp() }
     val selectedIndex = items.indexOfFirst { it.draft === selected }
     LaunchedEffect(selected, selectedIndex, items.size, metrics, gapPx, viewportPx, scrollRange) {
       if (selectedIndex >= 0 && viewportPx > 0 && scrollRange != Int.MAX_VALUE && scrollRange == measuredRange) {
@@ -169,14 +179,16 @@ internal fun NewTaskChatTabs(
       derivedStateOf { hiddenActivity(statuses, metrics, gapPx.toFloat(), scroll.value, viewportPx) }
     }
     val gapDp = with(density) { gapPx.toDp() }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(gapDp)) {
+    Row(Modifier.fillMaxHeight(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(gapDp)) {
       Box(
-        Modifier.weight(1f).fillMaxHeight().verticalWheelScrollsHorizontally(scroll, scope, with(density) { WHEEL_STEP_DP.dp.toPx() })
+        Modifier.width(containerWidth).fillMaxHeight().padding(top = 4.dp).verticalWheelScrollsHorizontally(scroll, scope, with(density) { WHEEL_STEP_DP.dp.toPx() })
+          .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
           .drawWithContent {
             drawContent()
             val fade = 32.dp.toPx().coerceAtMost(size.width)
-            if (scroll.canScrollBackward) drawRect(Brush.horizontalGradient(listOf(colors.bgFrame, Color.Transparent), startX = 0f, endX = fade))
-            if (scroll.canScrollForward) drawRect(Brush.horizontalGradient(listOf(Color.Transparent, colors.bgFrame), startX = size.width - fade, endX = size.width))
+            // The gradients clamp to opaque black past the fade, so a full-size DstIn rect leaves the rest untouched.
+            if (scroll.canScrollBackward) drawRect(Brush.horizontalGradient(listOf(Color.Transparent, Color.Black), startX = 0f, endX = fade), blendMode = BlendMode.DstIn)
+            if (scroll.canScrollForward) drawRect(Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = size.width - fade, endX = size.width), blendMode = BlendMode.DstIn)
           }
       ) {
         Box(Modifier.fillMaxWidth().fillMaxHeight().horizontalScroll(scroll)) {
@@ -191,6 +203,7 @@ internal fun NewTaskChatTabs(
       }
       SbIconButton(LucideIcons.plus, EMPTY_CHAT_TITLE, onNew, size = SbControlSize.Small, shortcut = "$MOD_KEY T")
       if (metrics.overflow) {
+        Spacer(Modifier.weight(1f))
         Box {
           SbTooltip("All open chats") {
             OverflowButton(items.size, hasHiddenActivity, expanded, focusRequester) { expanded = !expanded }
@@ -227,19 +240,33 @@ private fun NewTaskChatTab(item: OpenChatItem, selected: Boolean, onClick: () ->
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val unread = item.status == NewTaskChatStatus.NewReply
-  val shape = RoundedCornerShape(SkillBillRadius.sm)
+  val shape = RoundedCornerShape(topStart = SkillBillRadius.sm, topEnd = SkillBillRadius.sm, bottomStart = 0.dp, bottomEnd = 0.dp)
   val interaction = remember { MutableInteractionSource() }
   val hovered by interaction.collectIsHoveredAsState()
+  val titleColor = when {
+    selected || unread -> colors.fg
+    hovered -> colors.fg2
+    else -> colors.fgMuted
+  }
   Row(
-    modifier.fillMaxHeight().background(if (selected) colors.bgPanel else Color.Transparent, shape)
-      .border(1.dp, if (selected) colors.borderSubtle else Color.Transparent, shape)
+    modifier.fillMaxHeight()
+      .drawBehind {
+        when {
+          selected -> {
+            drawOutline(shape.createOutline(size, layoutDirection, this), colors.bgPanel)
+            drawTopEdges(colors.borderSubtle, SkillBillRadius.sm.toPx(), 1.dp.toPx())
+          }
+          // Only the selected tab joins the content below, so the hover fill stops above the strip's 1dp hairline.
+          hovered -> drawOutline(shape.createOutline(size.copy(height = size.height - 1.dp.toPx()), layoutDirection, this), colors.bgHover)
+        }
+      }
       .hoverable(interaction).clickable(interaction, indication = null, onClick = onClick).sbFocusRing(interaction, shape)
-      .semantics { role = Role.Tab; this.selected = selected }.padding(horizontal = 8.dp),
+      .semantics { role = Role.Tab; this.selected = selected }.padding(start = 10.dp, end = 4.dp),
     horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically,
   ) {
     NewTaskChatMarker(item.status)
-    BasicText(item.title, Modifier.weight(1f, fill = false), style = if (unread) type.tSm.copy(color = colors.fg, fontWeight = FontWeight.Medium) else type.tSm.copy(color = if (selected) colors.fg else colors.fg2), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) { if (hovered || selected) TabCloseButton(item.title, onClose) }
+    BasicText(item.title, Modifier.weight(1f), style = type.tSm.copy(color = titleColor, fontWeight = if (unread) FontWeight.Medium else type.tSm.fontWeight), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) { if (hovered || selected) TabCloseButton(item.title, onClose) }
   }
 }
 
@@ -250,12 +277,27 @@ private fun TabCloseButton(title: String, onClose: () -> Unit) {
   val hovered by interaction.collectIsHoveredAsState()
   val shape = RoundedCornerShape(SkillBillRadius.sm)
   SbTooltip("Close", "$MOD_KEY W") {
-    Box(Modifier.size(16.dp).background(if (hovered) colors.bgHover else Color.Transparent, shape).hoverable(interaction)
+    Box(Modifier.size(20.dp).background(if (hovered) colors.bgHover else Color.Transparent, shape).hoverable(interaction)
       .clickable(interaction, indication = null, onClick = onClose).sbFocusRing(interaction, shape)
       .semantics { contentDescription = "Close $title"; role = Role.Button }, contentAlignment = Alignment.Center) {
       SbIcon(LucideIcons.x, SbIconSize.Xs)
     }
   }
+}
+
+/** Strokes the left, top and right edges along the rounded top corners, leaving the bottom open. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTopEdges(color: Color, radius: Float, stroke: Float) {
+  val inset = stroke / 2
+  val r = radius.coerceAtMost(size.width / 2)
+  val path = Path().apply {
+    moveTo(inset, size.height)
+    lineTo(inset, r)
+    arcTo(Rect(inset, inset, 2 * r - inset, 2 * r - inset), 180f, 90f, false)
+    lineTo(size.width - r, inset)
+    arcTo(Rect(size.width - 2 * r + inset, inset, size.width - inset, 2 * r - inset), 270f, 90f, false)
+    lineTo(size.width - inset, size.height)
+  }
+  drawPath(path, color, style = Stroke(stroke))
 }
 
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)

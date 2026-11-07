@@ -296,7 +296,7 @@ class NewTaskViewModelTest {
     val running = workItem("SKILL-1")
     board.state.value = loadedBoard(mapOf(BoardSectionKind.Goals to listOf(running)))
     advanceUntilIdle()
-    assertEquals(NewTaskHome.Returning(emptyList(), running = 0, finished = 0, runningItems = listOf(running)), model.state.value.home)
+    assertEquals(NewTaskHome.Returning(emptyList(), running = 0, finished = 0), model.state.value.home)
     model.viewModelScope.cancel()
   }
 

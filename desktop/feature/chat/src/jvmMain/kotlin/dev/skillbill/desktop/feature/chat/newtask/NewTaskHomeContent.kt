@@ -45,8 +45,6 @@ import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 private val CHIP_SHAPE = RoundedCornerShape(13.dp)
 private val SECTION_SPACING = 8.dp
 
-internal const val NEW_TASK_HISTORY_ROWS = 6
-
 private data class ExampleTask(val label: String, val kind: String, val fill: String)
 
 private val EXAMPLE_TASKS = listOf(

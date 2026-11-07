@@ -52,6 +52,7 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.feature.chat.ChatTranscript
 import dev.skillbill.desktop.feature.chat.chipText
+import dev.skillbill.desktop.feature.chat.resumableDrafts
 import kotlin.time.Instant
 
 private val CONTENT_MAX_WIDTH = 720.dp
@@ -204,6 +205,10 @@ private fun NewTaskHomeBody(
   val progress = if (!reducedMotion && preview == null) rememberIdleProgress() else null
   val homeAlpha by animateFloatAsState(if (preview != null) DIMMED_ALPHA else 1f, hoverSpec())
   val saved by draft.saved.collectAsState()
+  val openSessionIds by chats.openSessionIds.collectAsState()
+  val needsYouFocusRequester = remember { FocusRequester() }
+  val root = draft.repository?.root
+  val recent = remember(saved, root) { resumableDrafts(saved, root) }
   BoxWithConstraints(modifier.fillMaxWidth()) {
     Column(
       Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(24.dp),
@@ -211,8 +216,9 @@ private fun NewTaskHomeBody(
       horizontalAlignment = Alignment.CenterHorizontally,
     ) {
       val returning = state.home as? NewTaskHome.Returning
-      val hasInbox = returning != null || saved.isNotEmpty()
-      Column(Modifier.widthIn(max = CONTENT_MAX_WIDTH).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(if (hasInbox) 32.dp else 40.dp)) {
+      val hasNeedsYouCard = returning != null && returning.needsYou.isNotEmpty()
+      val hasSections = recent.isNotEmpty() || returning != null
+      Column(Modifier.widthIn(max = CONTENT_MAX_WIDTH).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(if (hasSections) 32.dp else 40.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
           BasicText("What should we ship?", Modifier.semantics { heading() }, style = type.t2xl.copy(color = colors.fg))
           BasicText(
@@ -221,23 +227,27 @@ private fun NewTaskHomeBody(
           )
         }
         StepLine(progress, reducedMotion, preview)
-        val shown = if (returning != null) saved else saved.take(NEW_TASK_HISTORY_ROWS)
-        if (hasInbox) {
-          InboxSection(
-            needsYou = returning?.needsYou.orEmpty(),
-            running = returning?.runningItems.orEmpty(),
-            chats = shown,
-            savedCount = saved.size,
-            selectedRoot = draft.repository?.root,
-            home = returning,
-            showAll = saved.size > shown.size,
+        if (recent.isNotEmpty()) {
+          RecentChatsSection(
+            chats = recent,
+            selectedRoot = root,
+            openSessionIds = openSessionIds,
             now = host.now,
-            onOpenRun = host.onOpenRun,
             onResume = { onAction(NewTaskAction.ResumeDraft(it)) },
             onDiscard = { onAction(NewTaskAction.DiscardDraft(it)) },
-            onShowAll = { onAction(NewTaskAction.ShowAllDrafts) },
-            onShowAllWork = host.onShowAllWork,
+            onSearch = { onAction(NewTaskAction.ShowAllDrafts) },
             modifier = Modifier.alpha(homeAlpha),
+            nextCardFocusRequester = if (hasNeedsYouCard) needsYouFocusRequester else FocusRequester.Default,
+          )
+        }
+        if (returning != null) {
+          NeedsYouSection(
+            returning,
+            host.now,
+            host.onOpenRun,
+            host.onShowAllWork,
+            Modifier.alpha(homeAlpha),
+            needsYouFocusRequester.takeIf { hasNeedsYouCard },
           )
         }
         if (state.home == NewTaskHome.FirstRun) {

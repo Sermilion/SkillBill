@@ -1,9 +1,12 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyItemScope
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
@@ -12,6 +15,8 @@ import androidx.compose.ui.unit.Dp
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.section as lazySection
+import dev.skillbill.desktop.core.designsystem.SkillBillSpace
+import androidx.compose.ui.Modifier
 
 internal class LazyKeyIndex {
   private val indexes = HashMap<Any, Int>()
@@ -39,6 +44,7 @@ internal class DetailSections(
   val scrollState: LazyListState,
   val assessmentOrder: MutableState<AssessmentOrder> = mutableStateOf(AssessmentOrder.Default),
   private val keys: LazyKeyIndex = LazyKeyIndex(),
+  val planScreenState: PlanScreenState? = null,
 ) : LazyListScope by scope {
   init { keys.reset() }
 
@@ -67,6 +73,25 @@ internal class DetailSections(
     countStyle: (@Composable () -> TextStyle)? = null,
     content: LazyListScope.() -> Unit,
   ) = lazySection(key, title, count, lead, actions, spaceBefore, collapse, collapsedByDefault, countStyle, content)
+
+  fun planSection(
+    key: String,
+    title: String,
+    count: String? = null,
+    tools: (@Composable RowScope.() -> Unit)? = null,
+    collapsedByDefault: Boolean = false,
+    content: LazyListScope.() -> Unit,
+  ) {
+    item(key = "$key-gap") { Spacer(Modifier.height(SkillBillSpace.s5)) }
+    val open = !collapse.isCollapsed(key, collapsedByDefault)
+    item(key = key) {
+      Column {
+        PlanSectionHeader(title, count, open, { this@DetailSections.collapse.toggle(key, collapsedByDefault) }, tools)
+        if (open) Spacer(Modifier.height(planSectionBodyGap))
+      }
+    }
+    if (open) content()
+  }
 
   fun indexOf(key: Any): Int? = keys.indexOf(key)
 }

@@ -86,6 +86,19 @@ Write few, high-value tests; name the realistic bug each would catch before auth
 
 No timing-based tests. Tests must not depend on wall-clock time or thread scheduling. Ban real sleeps (`Thread.sleep`, shell `sleep N`) racing timeouts, idle windows or poll intervals; elapsed-time or poll-count assertions; real-time deadline polling; latch or join timeouts; and real `delay` outside `runTest`. CI's loaded self-hosted runner makes these flaky, so do not widen sleeps or deadlines. Inject a clock and scheduler (fake `Clock`, `runTest` virtual time or code-signalled latches) to control every transition. Leave real-time-only behavior untested.
 
+## Desktop QA
+
+The desktop app refuses a runtime built from a different commit, and a dirty tree also needs the same `SKILL_BILL_INSTALL_RUN_ID` in both builds. Never point QA at the operator's `~/.skill-bill/runtime`. Run these from `desktop/` in the QA checkout, in order, with one exported run id. A single Gradle call for both tasks races, because `:app:run` can read the runtime record before `installDist` writes it.
+
+```sh
+export SKILL_BILL_INSTALL_RUN_ID=qa-<invocation id>
+./gradlew :runtime-kotlin:runtime-cli:installDist
+SKILL_BILL_STATE_DIR=<dir>/state SKILL_BILL_REVIEW_DB=<dir>/state/review-metrics.db ../runtime-kotlin/runtime-cli/build/install/runtime-cli/bin/runtime-cli stats
+SKILL_BILL_RUNTIME_DIR=$PWD/../runtime-kotlin/runtime-cli/build/install SKILL_BILL_STATE_DIR=<dir>/state SKILL_BILL_REVIEW_DB=<dir>/state/review-metrics.db JAVA_TOOL_OPTIONS="-Duser.home=<dir>/home -Djava.io.tmpdir=<dir>/tmp" ./gradlew :app:run
+```
+
+`stats` creates the empty isolated store; without it the board shows "The selected database does not exist". The database variable is `SKILL_BILL_REVIEW_DB`; `SKILL_BILL_DB` does nothing. With an isolated home the New task screen reports "Not ready: no agent found", which is expected.
+
 ## Comments
 
 Authored Kotlin under `runtime-kotlin` and

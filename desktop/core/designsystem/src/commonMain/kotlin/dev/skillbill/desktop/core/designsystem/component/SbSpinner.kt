@@ -30,16 +30,20 @@ fun SbSpinner(
   color: Color = SkillBillTheme.colors.stActive,
   contentDescription: String? = null,
   modifier: Modifier = Modifier,
+  durationMillis: Int = 1_000,
+  trackAlpha: Float = 0f,
+  arcSweep: Float = 270f,
 ) {
   val reducedMotion = LocalReducedMotion.current
   val rotation = if (reducedMotion) 0f else rememberInfiniteTransition().animateFloat(
     0f,
     360f,
-    infiniteRepeatable(tween(1_000, easing = LinearEasing), RepeatMode.Restart),
+    infiniteRepeatable(tween(durationMillis, easing = LinearEasing), RepeatMode.Restart),
   ).value
   val semantics = if (contentDescription == null) Modifier.clearAndSetSemantics {} else Modifier.semantics { this.contentDescription = contentDescription }
   Canvas(modifier.then(semantics).size(size).graphicsLayer { rotationZ = rotation }) {
-    drawArc(color, -45f, 270f, false, style = Stroke(this.size.width / 8f, cap = StrokeCap.Round))
+    if (trackAlpha > 0f) drawArc(color.copy(alpha = trackAlpha), 0f, 360f, false, style = Stroke(this.size.width / 8f))
+    drawArc(color, -45f, arcSweep, false, style = Stroke(this.size.width / 8f, cap = StrokeCap.Round))
   }
 }
 

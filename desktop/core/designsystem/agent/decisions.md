@@ -1,3 +1,8 @@
+## [2026-11-07] Extend SbSpinner without changing existing callers
+Context: The plan stage strip needs a track ring, a shorter arc and different turn durations. QA, validation and chat already use SbSpinner.
+Decision: Add durationMillis, trackAlpha and arcSweep with defaults of 1000 milliseconds, no track and a 270-degree arc. Plan callers supply their own values; reduced motion holds rotation at zero.
+Reason: These defaults preserve the previous drawing for existing callers while the plan strip matches its mock.
+
 ## [2026-10-30] Supply dialog text styles explicitly
 Context: Dialogs need muted body text while accepting composable content.
 Decision: Provide SbDialogText and SbDialogTextStyle alongside the composable body slot.

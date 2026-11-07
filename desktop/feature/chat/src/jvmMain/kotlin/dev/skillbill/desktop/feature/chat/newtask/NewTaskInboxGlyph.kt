@@ -8,7 +8,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -16,7 +15,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
 
-internal enum class InboxGlyphKind { Chat, Image, Blocked, Running, Close, Arrow }
+internal enum class InboxGlyphKind { Chat, Image, Blocked, Close, Arrow }
 
 private val CHAT_PATH = PathParser().parsePathString("M3 3.5h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H7l-3 2.5V11.5H3a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z").toPath()
 private val IMAGE_PATH = PathParser().parsePathString("M14 11l-3.5-3.5L4 13").toPath()
@@ -24,7 +23,6 @@ private val BLOCKED_PATH = PathParser().parsePathString("M8 5v3.5M8 11h.01").toP
 private val CLOSE_PATH = PathParser().parsePathString("M4.5 4.5l7 7M11.5 4.5l-7 7").toPath()
 private val ARROW_PATH = PathParser().parsePathString("M3 8h10M9 4l4 4-4 4").toPath()
 private val GLYPH_STROKE = Stroke(width = 1.75f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-private val RUNNING_STROKE = Stroke(width = 1.75f, cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(3f, 2.2f)))
 
 @Composable
 internal fun InboxGlyph(kind: InboxGlyphKind, color: Color) {
@@ -40,10 +38,6 @@ internal fun InboxGlyph(kind: InboxGlyphKind, color: Color) {
         InboxGlyphKind.Blocked -> {
           drawCircle(color, 6.2f, Offset(8f, 8f), style = GLYPH_STROKE)
           drawPath(BLOCKED_PATH, color, style = GLYPH_STROKE)
-        }
-        InboxGlyphKind.Running -> {
-          drawCircle(color, 6.2f, Offset(8f, 8f), style = RUNNING_STROKE)
-          drawCircle(color, 2f, Offset(8f, 8f))
         }
         InboxGlyphKind.Close -> drawPath(CLOSE_PATH, color, style = GLYPH_STROKE)
         InboxGlyphKind.Arrow -> drawPath(ARROW_PATH, color, style = GLYPH_STROKE)

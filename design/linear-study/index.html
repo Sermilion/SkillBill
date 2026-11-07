@@ -75,6 +75,18 @@
   .doc-status { grid-template-columns: 18px minmax(0, 1fr); } .doc-status > span:nth-child(3) { display: none; } .doc-status > span:last-child { grid-column: 2; }
   .doc-type { grid-template-columns: minmax(0, 1fr); gap: 4px; } .doc-type > span:nth-child(3) { display: none; }
 }
+.doc-states { width: min(1260px, 100%); margin: 16px auto; }
+.doc-states .doc-inner { max-width: 1260px; }
+.doc-state-table { overflow-x: auto; border: 1px solid var(--border-subtle); border-radius: var(--r-md); }
+.doc-state-table table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); text-align: left; }
+.doc-state-table caption { text-align: left; padding: 12px; color: var(--fg-muted); }
+.doc-state-table th, .doc-state-table td { padding: 10px 12px; border-top: 1px solid var(--border-subtle); vertical-align: top; }
+.doc-state-table thead th { background: var(--bg-raised); font-weight: 500; white-space: nowrap; }
+.doc-state-table tbody th { font-weight: 500; min-width: 120px; }
+.doc-state-table small { display: block; color: var(--fg-faint); font-size: var(--t-2xs); margin-top: 4px; white-space: nowrap; }
+.doc-state-table a { color: var(--accent-text); text-decoration: none; }
+.doc-state-table a:hover { text-decoration: underline; }
+.doc-state-table a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 </style>
 </head>
 <body>
@@ -85,6 +97,7 @@
 <script src="app/data.js"></script>
 <script src="app/screens.js"></script>
 <script src="app/library.js"></script>
+<script src="app/states.js"></script>
 <script src="app/main.js"></script>
 </body>
 </html>

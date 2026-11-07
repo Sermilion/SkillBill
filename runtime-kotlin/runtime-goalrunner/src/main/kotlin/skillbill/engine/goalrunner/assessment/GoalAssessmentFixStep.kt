@@ -8,8 +8,6 @@ import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.execution.support.isFeatureSpecPath
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
-import skillbill.engine.goalrunner.qa.GoalPostChangeValidationResult
-import skillbill.engine.goalrunner.qa.GoalRunnerPostChangeValidation
 import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
@@ -43,7 +41,6 @@ internal sealed interface GoalAssessmentFixOutcome {
 internal class GoalAssessmentFixStep(
   private val services: GoalAssessmentRunServices,
   private val gitOperations: WorkflowGitOperations,
-  private val validation: GoalRunnerPostChangeValidation,
 ) {
   fun run(
     state: GoalRunnerManifestState,
@@ -89,21 +86,9 @@ internal class GoalAssessmentFixStep(
   ): GoalAssessmentFixOutcome {
     val afterAgent = run.round().fix?.let { GoalAssessmentFixOutcome.Done(run.record) } ?: agentFix(run, fixSet)
     if (afterAgent is GoalAssessmentFixOutcome.ProviderPaused) return afterAgent
-    return commitValidatedFix(run)
-  }
-
-  private fun commitValidatedFix(run: FixRun): GoalAssessmentFixOutcome {
     val fix = run.round().fix ?: return GoalAssessmentFixOutcome.Done(run.record)
-    val afterValidation =
-      if (fix.status == GoalAssessmentFixStatus.COMPLETED && fix.validation == GoalAssessmentFixValidation.NOT_RUN) {
-        validated(run, fix)
-      } else {
-        GoalAssessmentFixOutcome.Done(run.record)
-      }
-    if (afterValidation is GoalAssessmentFixOutcome.ProviderPaused) return afterValidation
-    val validatedFix = requireNotNull(run.round().fix)
-    if (validatedFix.status == GoalAssessmentFixStatus.COMPLETED && validatedFix.commitSha == null) {
-      run.save(committed(run, validatedFix))
+    if (fix.status == GoalAssessmentFixStatus.COMPLETED && fix.commitSha == null) {
+      run.save(committed(run, fix))
     }
     return GoalAssessmentFixOutcome.Done(run.record)
   }
@@ -203,41 +188,6 @@ internal class GoalAssessmentFixStep(
     output.lineSequence().map(String::trim).filter { NOT_FIXED.matches(it) }.forEach {
       services.warn("the fix agent left a finding unfixed: $it")
     }
-  }
-
-  private fun validated(
-    run: FixRun,
-    fix: GoalAssessmentFix,
-  ): GoalAssessmentFixOutcome {
-    val phaseRequest = services.phaseRequest(run.state, run.request, SkeletonDefinition.VALIDATION, null)
-    val branch = services.branchOf(run.state)
-    val outcome =
-      catchingNonCancellation { validation.run(phaseRequest, run.state.parentWorkflowId, branch) }
-        .getOrElse { failure ->
-          val contained = containableFailure(failure)
-          services.warn("validation after the fix failed: ${contained.javaClass.simpleName}: ${contained.message}")
-          GoalPostChangeValidationResult.Stopped("validation", contained.message.orEmpty())
-        }
-    if (outcome is GoalPostChangeValidationResult.Stopped &&
-      FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(outcome.reason)
-    ) {
-      return GoalAssessmentFixOutcome.ProviderPaused(
-        run.record,
-        outcome.reason,
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT_FIX,
-      )
-    }
-    val passed = outcome is GoalPostChangeValidationResult.Passed
-    if (outcome is GoalPostChangeValidationResult.Stopped) {
-      services.warn("validation after the fix stopped at '${outcome.stepId}': ${outcome.reason}")
-    }
-    run.save(
-      fix.copy(
-        changedFiles = dirtyPaths(run) ?: fix.changedFiles,
-        validation = if (passed) GoalAssessmentFixValidation.PASSED else GoalAssessmentFixValidation.FAILED,
-      ),
-    )
-    return GoalAssessmentFixOutcome.Done(run.record)
   }
 
   private fun committed(

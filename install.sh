@@ -882,10 +882,13 @@ cleanup_retired_ide_plugins() {
 # Every install starts from a clean slate: removes agent symlinks, native
 # subagent symlinks, MCP registrations, runtime launchers, and clears the
 # regenerated install output under ~/.skill-bill/ (the installed-skills staging
-# cache and runtime binaries). This guarantees that generator changes — which
-# the staging-cache content hash does not see — actually land on the next
-# install. Runtime and user state (databases, QA workspaces, desktop settings,
-# copied-in source) stays so the app can still show it after reinstall.
+# cache). Live runtime-cli and runtime-mcp trees stay until
+# activate_staged_runtime_pair retires them, so a JVM that still has those JARs
+# mapped can load later classpath resources. This guarantees that generator
+# changes — which the staging-cache content hash does not see — actually land
+# on the next install. Runtime and user state (databases, QA workspaces,
+# desktop settings, copied-in source) stays so the app can still show it after
+# reinstall.
 #
 # Tests and dev iteration can opt out with SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1.
 run_pre_install_uninstall() {
@@ -906,9 +909,10 @@ run_pre_install_uninstall() {
   printf "${CYAN}━━━ Pre-install cleanup ━━━${NC}\n"
   echo ""
   info "Running uninstall.sh first so every install starts from a clean slate."
-  # This flag limits the wipe to regenerated install output (runtime/,
-  # installed-skills/, the native link inventory). Explicit uninstall still
-  # clears everything except databases and backups.
+  # This flag limits the wipe to regenerated install output (installed-skills/,
+  # the native link inventory). Live runtime trees stay until activation
+  # retires them. Explicit uninstall still clears everything except databases
+  # and backups.
   SKILL_BILL_PRESERVE_SOURCE_ON_WIPE=1 \
     SKILL_BILL_PRESERVE_DESKTOP_APP=1 \
     SKILL_BILL_STAGED_RUNTIME_CLI="$1/runtime-cli.tmp/bin/runtime-cli" \
@@ -1076,8 +1080,59 @@ report_unstaged_desktop_app() {
   err "  Desktop app: not staged ($DESKTOP_APP_INSTALL_RESULT)"
 }
 
+# Move a live runtime tree aside instead of unlinking it. Open JAR file
+# descriptors in running JVMs keep working after rename; rm -rf does not.
+retire_live_runtime_tree() {
+  local live="$1"
+  if [[ ! -e "$live" && ! -L "$live" ]]; then
+    return 0
+  fi
+  local retired_root dest
+  retired_root="$(dirname "$live")/retired"
+  mkdir -p "$retired_root" || return 1
+  dest="$retired_root/$(basename "$live").$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  if [[ -e "$dest" || -L "$dest" ]]; then
+    dest="${dest}.$RANDOM"
+  fi
+  mv "$live" "$dest" || return 1
+  printf '%s' "$dest"
+}
+
+replace_live_runtime_tree() {
+  local live="$1" staged="$2"
+  local retired=""
+  retired="$(retire_live_runtime_tree "$live")" || return 1
+  if ! mv "$staged" "$live"; then
+    if [[ -n "$retired" ]]; then
+      mv "$retired" "$live" || true
+    fi
+    return 1
+  fi
+}
+
+prune_retired_runtime_trees() {
+  local retired_root
+  retired_root="$(dirname "$RUNTIME_CLI_INSTALL_DIR")/retired"
+  [[ -d "$retired_root" ]] || return 0
+  local prefix listing newest path
+  for prefix in runtime-cli runtime-mcp; do
+    listing="$(find "$retired_root" -maxdepth 1 \( -type d -o -type l \) -name "$prefix.*" 2>/dev/null | sort -r)" || true
+    newest=""
+    while IFS= read -r path; do
+      [[ -n "$path" ]] || continue
+      if [[ -z "$newest" ]]; then
+        newest="$path"
+        continue
+      fi
+      rm -rf "$path"
+    done <<< "$listing"
+  done
+}
+
 # Replace the live runtime-cli and runtime-mcp with a pair that
 # install_packaged_runtime_pair staged and contract-checked under candidate_root.
+# The previous live trees are renamed into runtime/retired/ so in-flight JVMs
+# keep their mapped JARs. Only the newest retired copy of each tree is kept.
 activate_staged_runtime_pair() {
   local candidate_root="$1"
   local cli_target="$candidate_root/runtime-cli" mcp_target="$candidate_root/runtime-mcp"
@@ -1089,14 +1144,15 @@ activate_staged_runtime_pair() {
     rm -rf "$candidate_root"
     return 1
   fi
-  if ! rm -rf "$RUNTIME_CLI_INSTALL_DIR" || ! mv "$cli_target.tmp" "$RUNTIME_CLI_INSTALL_DIR"; then
+  if ! replace_live_runtime_tree "$RUNTIME_CLI_INSTALL_DIR" "$cli_target.tmp"; then
     rm -rf "$candidate_root"
     return 1
   fi
-  if ! rm -rf "$RUNTIME_MCP_INSTALL_DIR" || ! mv "$mcp_target.tmp" "$RUNTIME_MCP_INSTALL_DIR"; then
+  if ! replace_live_runtime_tree "$RUNTIME_MCP_INSTALL_DIR" "$mcp_target.tmp"; then
     rm -rf "$candidate_root"
     return 1
   fi
+  prune_retired_runtime_trees
   rm -rf "$candidate_root"
 }
 

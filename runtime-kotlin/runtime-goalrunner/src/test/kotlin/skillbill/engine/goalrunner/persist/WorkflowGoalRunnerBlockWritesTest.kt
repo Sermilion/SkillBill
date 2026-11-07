@@ -297,6 +297,38 @@ class WorkflowGoalRunnerBlockWritesTest {
   }
 
   @Test
+  fun `a goal-finish stage failure is recorded at that stage rather than the parent step`() {
+    saveRunning("wftr-parent", 1)
+
+    val result =
+      assertNotNull(
+        writes.markBlocked(
+          GoalRunnerBlockRequest(
+            "wftr-parent",
+            "Running initial build has incomplete or conflicting accepted terminal evidence.",
+            "build",
+            executionGeneration = 1,
+            stopReason = GoalRunnerStopReason.BLOCKED,
+            failureCode = "WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION",
+            failurePhaseEvidence = FailurePhaseEvidence("build"),
+          ),
+          workflows,
+          incidents,
+        ),
+      )
+    val incident = observeBlockIncidentForTest(incidents, clock, result.observation)
+
+    assertEquals("build", result.observation.phaseId)
+    assertEquals("build", incident.occurrence.phaseId)
+    assertEquals(
+      "build",
+      BlockIncidentIdentity.fromArtifacts(
+        requireNotNull(workflows.get(WorkflowFamily.TASK_RUNTIME, "wftr-parent")).artifacts,
+      )?.failurePhaseEvidence?.phaseId,
+    )
+  }
+
+  @Test
   fun `a later block without a recovery command clears the earlier one`() {
     saveRunning("wftr-parent", 1)
     writes.markBlocked(

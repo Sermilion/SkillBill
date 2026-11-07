@@ -80,6 +80,8 @@ public object SkeletonStrategyBindings {
           PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID),
           PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(PackBuildStrategy.ID),
         ),
+      SkeletonDefinition.GOAL_BUILD to
+        mapOf(PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(PackBuildStrategy.ID)),
       SkeletonDefinition.GOAL_ASSESSMENT to
         mapOf(PhaseSlot.GOAL_ASSESSMENT to PhaseStrategyBinding.Fixed(GoalAssessmentStrategy.ID)),
       SkeletonDefinition.GOAL_ASSESSMENT_FIX to
