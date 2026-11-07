@@ -123,6 +123,7 @@ internal class ClaudeLiveSession(
   }
 
   private fun line(text: String) {
+    if (synchronized(lock) { closed }) return
     // The login shell's profile can print to stdout before claude starts; only lines after the first JSON object are the stream.
     if (!streamStarted) {
       streamStarted = text.trimStart().startsWith("{")
@@ -153,11 +154,48 @@ internal class ClaudeLiveSession(
     }
     val events = decodeClaudeLine(text)
     if (events.isEmpty()) return
+    val malformed = events.filterIsInstance<ChatEvent.Failed>()
+      .firstOrNull { it.failure == ChatFailure.StreamMalformed }
+    if (malformed != null) {
+      failMalformedStream(malformed)
+      return
+    }
     if (target == null && !unpromptedOpen) {
       unpromptedOpen = true
       reply = ChatReplyStream(diagnostics)
     }
     events.forEach(::emit)
+  }
+
+  private fun failMalformedStream(failure: ChatEvent.Failed) {
+    val active: Pair<SendChannel<ChatEvent>?, ChatReplyStream?>
+    val waiting: List<SendChannel<ChatEvent>>
+    val reportUnprompted: Boolean
+    synchronized(lock) {
+      if (closed) return
+      closed = true
+      active = target to reply
+      reportUnprompted = target == null && pending.isEmpty()
+      waiting = pending.values.toList()
+      pending.clear()
+      target = null
+      reply = null
+      unpromptedOpen = false
+    }
+    input.cancel()
+    val (sink, stream) = active
+    val events = stream?.accept(failure) ?: listOf(failure)
+    if (sink != null) {
+      events.forEach { sink.trySend(it) }
+      sink.close()
+    } else if (reportUnprompted) {
+      events.forEach(unprompted)
+    }
+    waiting.forEach { channel ->
+      channel.trySend(failure)
+      channel.close()
+    }
+    approval?.stop("Claude emitted malformed stream output; its process was stopped.")
   }
 
   /**
