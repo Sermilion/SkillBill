@@ -1,3 +1,7 @@
+## [2026-11-07] Keep projection and quality-ledger rationale outside Kotlin comments
+Context: Validation found KDoc on runtime model and helper declarations outside interfaces.
+Decision: Keep their behavior unchanged and record the rationale here, as the source-comment rule requires.
+Reason: Workflow execution rows retain their launch lifecycle, so the current row uses the projected lifecycle and earlier rows become terminal after a later launch. A settled quality attempt records terminal actions through both phase settlement and observability. The accepted event is the latest matching terminal entry; conflicting COMPLETE and BLOCKED actions yield no accepted event. GoalRunnerStopReport.failurePhaseId identifies a failed goal-finish phase outside the blocked workflow's own steps.
 ## [2026-11-07] Compose desktop fixture generation in runtime-core
 Context: SKILL-514 needs real migrations and board projections, but runtime-core already depends on runtime-application.
 Decision: Keep the catalog and port-level writer in runtime-application test fixtures; compose RuntimeComponent in runtime-core test fixtures.

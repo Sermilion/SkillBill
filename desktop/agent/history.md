@@ -1,3 +1,15 @@
+## [2026-11-07] SKILL-521 live desktop QA preview
+Areas: desktop/core/data, desktop/core/domain, desktop/feature/detail, platform-packs/kmp/qa, runtime-kotlin/runtime-domain, runtime-kotlin/runtime-engine, runtime-kotlin/runtime-goalrunner
+- MEDIUM feature. The existing details pane shows a watch-only preview for the selected standalone desktop QA execution, with Waiting, Live and Ended states, invocation identity and accessible status text.
+- KMP QA guidance registers an owner-only live-preview child before private Xvfb capture. Registration refusal disables capture and retains limitation evidence. Cleanup stops registered producers before releasing the child through the existing resource registry.
+- QaPreviewRequest, QaPreviewFrame and the cold QaPreviewRepository flow are reusable domain components without filesystem or Compose types. JVM data owns snapshot reads and decoding; the detail feature owns image conversion.
+- QaPreviewSource confines read-only, no-follow opens of live-preview/Xvfb_screen0 through scoped SecureDirectoryStream handles. The bounded XWD v7 decoder checks offsets, masks, stride and allocation limits, accepts both pixel byte orders and returns opaque ARGB.
+- Each observer reads one bounded snapshot at a time and waits 250 milliseconds after an attempt. Degraded-reason transitions emit bounded diagnostic categories. Rejected frames clear the image; later valid frames can recover.
+- DetailViewModel keys observation by database session, work, selected invocation, directory and liveness. Mandatory route and pane visibility wiring cancels hidden collection; generation checks reject late frames. Terminal selections are Ended without source reads.
+- Limits: private file-backed Xvfb, SecureDirectoryStream support and the supported XWD format are required. Ambient displays, goal QA and legacy runs without that source supply no preview. Frames may tear during repaint. No database or command-contract change.
+- The latest frame fits the existing pane and preserves its aspect ratio. Localized labels and image descriptions identify the selected run. The panel has no recording, input, export or expanded-viewer controls.
+Feature flag: N/A
+Acceptance criteria: 1/1 implemented for the parent; 5/5 implemented for subtask 1
 ## [2026-11-07] SKILL-514 desktop source-run QA launch
 Areas: desktop/app, desktop/build-logic/convention, desktop/core/data, desktop/core/domain, desktop/core/testing, desktop/feature/detail, desktop/feature/specs, desktop/QA.md, AGENTS.md
 - QA launches with `cd desktop && ./gradlew :app:runFromSource`. The opt-in task builds same-checkout runtime-cli, stages runtime and app resources, and stamps both copied identity records with one fresh shared install run id per execution.
