@@ -1,16 +1,11 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -21,8 +16,10 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbClock
 import dev.skillbill.desktop.core.designsystem.component.rememberRuntimeText
+import dev.skillbill.desktop.core.designsystem.detail.BarSegment
 import dev.skillbill.desktop.core.designsystem.detail.MetricCell
 import dev.skillbill.desktop.core.designsystem.detail.MetricStrip
+import dev.skillbill.desktop.core.designsystem.detail.SegmentBar
 import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.Lifecycle
@@ -122,9 +119,7 @@ internal fun ValidationOutcomeCard(item: WorkItem, detail: Detail, shape: Valida
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
           BasicText(tallyText, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted))
         }
-        Row(Modifier.fillMaxWidth().height(5.dp).clip(CircleShape), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-          summary.rows.forEach { row -> Box(Modifier.weight(1f).height(5.dp).background(row.state.tone())) }
-        }
+        SegmentBar(summary.rows.map { BarSegment(1f, it.state.tone()) }, description = tallyText.text, gap = 2.dp)
       }
       MetricStrip(
         listOf(

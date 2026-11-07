@@ -8,10 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
@@ -25,8 +22,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -43,10 +38,11 @@ import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbClock
 import dev.skillbill.desktop.core.designsystem.component.SbSpinner
 import dev.skillbill.desktop.core.designsystem.component.SbTag
-import dev.skillbill.desktop.core.designsystem.component.sbPulse
+import dev.skillbill.desktop.core.designsystem.detail.BarSegment
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.designsystem.detail.MetricCell
 import dev.skillbill.desktop.core.designsystem.detail.MetricStrip
+import dev.skillbill.desktop.core.designsystem.detail.SegmentBar
 import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.metricValueStyle
 import dev.skillbill.desktop.core.designsystem.detail.relativeAge
@@ -129,7 +125,15 @@ private fun qaStripCells(item: WorkItem, run: ExecutionInstance?, view: QaCheckl
         BasicText(view.planText.orEmpty(), style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
       } else {
         BasicText("${progress.done} of ${progress.total} steps", style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
-        QaProgressBar(progress)
+        SegmentBar(
+          segments = if (progress.total > 0) listOf(
+            BarSegment(progress.passed.toFloat(), SkillBillTheme.colors.stDone),
+            BarSegment(progress.failed.toFloat(), SkillBillTheme.colors.stFailed),
+            BarSegment(progress.running.toFloat(), SkillBillTheme.colors.stActive, pulse = true),
+            BarSegment(progress.remaining.toFloat(), SkillBillTheme.colors.borderSubtle),
+          ) else emptyList(),
+          description = progress.description,
+        )
         BasicText(progress.summary, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 2)
       }
     } }),
@@ -137,25 +141,6 @@ private fun qaStripCells(item: WorkItem, run: ExecutionInstance?, view: QaCheckl
       SbClock(if (current) item.activeDurationMs else duration, if (current) item.activeDurationAsOf else null, live = current && view.live, showSeconds = true, style = metricValueStyle())
     },
   )
-}
-
-@Composable
-private fun QaProgressBar(progress: QaProgressView) {
-  val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(3.dp)
-  Row(Modifier.fillMaxWidth().height(6.dp).clip(shape).background(colors.borderSubtle).semantics { contentDescription = progress.description }) {
-    if (progress.total > 0) {
-      ProgressSegment(progress.passed, colors.stDone)
-      ProgressSegment(progress.failed, colors.stFailed)
-      ProgressSegment(progress.running, colors.stActive, pulse = true)
-      ProgressSegment(progress.remaining, colors.borderSubtle)
-    }
-  }
-}
-
-@Composable
-private fun RowScope.ProgressSegment(count: Int, color: Color, pulse: Boolean = false) {
-  if (count > 0) Box(Modifier.weight(count.toFloat()).fillMaxHeight().then(if (pulse) Modifier.sbPulse() else Modifier).background(color))
 }
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
