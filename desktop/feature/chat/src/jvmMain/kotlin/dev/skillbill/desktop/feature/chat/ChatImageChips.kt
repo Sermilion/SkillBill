@@ -23,8 +23,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
+import dev.skillbill.desktop.core.designsystem.component.SbControlSize
+import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.ChatImage
@@ -37,7 +38,7 @@ internal fun imageLabel(number: Int): String = "[Image #$number]"
 @Composable
 internal fun ImageChip(number: Int, onRemove: () -> Unit, modifier: Modifier = Modifier) {
   Row(modifier, horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-    ChatPill(imageLabel(number))
+    SbLabel(imageLabel(number))
     SbIconButton(LucideIcons.x, "Remove image $number", onRemove, size = SbControlSize.Small)
   }
 }
@@ -48,9 +49,9 @@ internal fun ImagePreviewChip(number: Int, image: ChatImage) {
   var open by remember { mutableStateOf(false) }
   val close = { open = false }
   Box {
-    ChatPill(
+    SbLabel(
       imageLabel(number),
-      Modifier.pointerHoverIcon(PointerIcon.Hand).clickable(role = Role.Button, onClickLabel = "Preview image $number") { open = true },
+      modifier = Modifier.pointerHoverIcon(PointerIcon.Hand).clickable(role = Role.Button, onClickLabel = "Preview image $number") { open = true },
     )
     if (open) {
       ShellLayer(close)

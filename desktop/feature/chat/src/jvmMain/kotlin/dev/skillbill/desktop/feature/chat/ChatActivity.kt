@@ -9,6 +9,9 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 
 /** The pill above a chat's input that says what the agent is doing now. */
 @Composable
@@ -17,7 +20,10 @@ internal fun ChatActivityPill(thread: ChatThread, gone: Boolean = false) {
   val agent by thread.agent.collectAsState()
   val transcript by thread.transcript.collectAsState()
   Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
-    ChatPill(chatActivityStatus(busy, agent, gone, transcript), dot = busy)
+    SbLabel(
+      chatActivityStatus(busy, agent, gone, transcript),
+      style = if (busy) SbLabelStyle.Dot(SkillBillTheme.colors.fg2) else SbLabelStyle.Plain,
+    )
   }
 }
 

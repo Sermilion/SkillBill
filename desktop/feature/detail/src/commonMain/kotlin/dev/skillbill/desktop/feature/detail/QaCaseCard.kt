@@ -38,6 +38,8 @@ import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbDivider
+import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.component.SbSpinner
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -66,7 +68,13 @@ internal fun QaCaseCard(case: QaCaseView, invocationDirectory: String?, onOpenFi
       CaseStatusIcon(case.status.label)
       BasicText(case.id, Modifier.width(56.dp), style = SkillBillTheme.type.monoSm.copy(color = colors.fgMuted))
       BasicText(case.title, Modifier.weight(1f), style = SkillBillTheme.type.tMd.copy(color = colors.fg), maxLines = 2)
-      CaseStatusPill(case.status.label)
+      val statusColor = when (case.status.label) {
+        "Failed" -> colors.stFailed
+        "Passed" -> colors.stDone
+        "Running" -> colors.stActive
+        else -> colors.fgMuted
+      }
+      SbLabel(case.status.label, style = SbLabelStyle.Tint(statusColor))
       BasicText("${case.done}/${case.total}", Modifier.width(40.dp), style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted), maxLines = 1)
       CompositionLocalProvider(LocalContentColor provides colors.fgFaint) {
         SbIcon(LucideIcons.chevronDown, 16.dp, modifier = Modifier.graphicsLayer { rotationZ = if (case.open) 180f else 0f })
@@ -90,21 +98,6 @@ private fun CaseStatusIcon(status: String) {
     "Stopped" -> StatusDescription("Stopped") { StatusIcon(StatusKind.Canceled, null, modifier = Modifier.size(20.dp)) }
     "Not run" -> StatusDescription("Not run") { StatusIcon(StatusKind.Skipped, null, modifier = Modifier.size(20.dp)) }
     else -> StatusDescription("Pending") { StatusIcon(StatusKind.Pending, null, modifier = Modifier.size(20.dp)) }
-  }
-}
-
-@Composable
-private fun CaseStatusPill(status: String) {
-  val colors = SkillBillTheme.colors
-  val color = when (status) {
-    "Failed" -> colors.stFailed
-    "Passed" -> colors.stDone
-    "Running" -> colors.stActive
-    else -> colors.fgMuted
-  }
-  val fill = if (status in setOf("Failed", "Passed", "Running")) color.copy(alpha = .15f) else colors.bgHover
-  Box(Modifier.background(fill, SkillBillRadius.full).padding(horizontal = 10.dp, vertical = 2.dp)) {
-    BasicText(status, style = SkillBillTheme.type.tSm.copy(color = color, fontWeight = FontWeight.SemiBold), maxLines = 1)
   }
 }
 

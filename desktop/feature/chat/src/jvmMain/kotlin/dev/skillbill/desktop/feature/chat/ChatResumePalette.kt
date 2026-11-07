@@ -66,6 +66,8 @@ import dev.skillbill.desktop.core.designsystem.component.Kbd
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
+import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
@@ -165,7 +167,13 @@ private fun FilterBar(query: String, scope: ResumeScope, onQuery: (String) -> Un
         }
       },
     )
-    scope.label?.let { ChatPill(it, icon = if (scope.worktree) LucideIcons.branch else LucideIcons.folder, mono = scope.worktree) }
+    scope.label?.let {
+      SbLabel(
+        it,
+        style = if (scope.worktree) SbLabelStyle.Mono else SbLabelStyle.Plain,
+        icon = if (scope.worktree) LucideIcons.branch else LucideIcons.folder,
+      )
+    }
   }
 }
 
@@ -294,7 +302,7 @@ private fun ResumePreview(entry: ChatHistoryEntry?, now: Instant, branchOf: (Cha
               val (paths, rest) = splitLeadingImages(line.text)
               Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 BasicText(if (line.role == ChatHistoryRole.Operator) "You" else agentName(entry.agent), style = type.tXs.copy(color = colors.fgMuted, fontWeight = FontWeight.Medium))
-                paths.forEach { ChatPill(it.substringAfterLast('/'), icon = LucideIcons.image) }
+                paths.forEach { SbLabel(it.substringAfterLast('/'), icon = LucideIcons.image) }
                 if (rest.isNotBlank()) BasicText(rest.trim(), style = type.tSm.copy(color = colors.fg), maxLines = 4, overflow = TextOverflow.Ellipsis)
               }
             }

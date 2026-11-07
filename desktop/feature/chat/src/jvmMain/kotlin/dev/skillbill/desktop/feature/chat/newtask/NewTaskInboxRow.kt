@@ -1,7 +1,6 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -42,6 +41,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.SbControlSize
+import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.component.dataColorFor
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.WorkItem
@@ -78,7 +80,7 @@ internal fun InboxRunRow(row: InboxItem.Run, now: Instant, selected: Boolean, sh
     middle = { highlighted ->
       InboxTitle(item.title, item.exactPauseReason ?: item.reason ?: item.summary.takeIf(String::isNotBlank), monoSecondary = false, highlighted = highlighted)
     },
-    badge = { InboxBadge(item.stepLabel) },
+    badge = { SbLabel(item.stepLabel, size = SbControlSize.Small) },
     trailing = { _ -> InboxTime(shortAgo(item.control.updatedAt, now)) },
   )
 }
@@ -93,25 +95,14 @@ internal fun InboxChatRow(row: InboxItem.Chat, now: Instant, selected: Boolean, 
     divider = divider,
     leading = { InboxGlyph(if (row.title.imageName != null) InboxGlyphKind.Image else InboxGlyphKind.Chat, if (row.title.imageName != null) colors.data2 else colors.fgFaint) },
     middle = { highlighted -> InboxTitle(row.title.title, row.title.imageName, monoSecondary = true, highlighted = highlighted) },
-    badge = row.repoLabel?.let { label -> { InboxBadge(label, colors.dataColorFor(label)) } },
+    badge = row.repoLabel?.let { label ->
+      { SbLabel(label, style = SbLabelStyle.Dot(colors.dataColorFor(label)), size = SbControlSize.Small) }
+    },
     trailing = { highlighted ->
       if (highlighted) InboxDiscard(row.title.title) { onDiscard(row.entry) }
       else InboxTime(shortAgo(row.entry.updatedAt, now))
     },
   )
-}
-
-@Composable
-private fun InboxBadge(text: String, swatch: Color? = null) {
-  val colors = SkillBillTheme.colors
-  Row(
-    Modifier.height(18.dp).border(1.dp, colors.border, RoundedCornerShape(50)).padding(horizontal = 7.dp),
-    horizontalArrangement = Arrangement.spacedBy(5.dp),
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    if (swatch != null) Box(Modifier.size(6.dp).background(swatch, RoundedCornerShape(2.dp)))
-    BasicText(text, style = inboxTextStyle(10.5.sp).copy(color = colors.fgMuted), maxLines = 1)
-  }
 }
 
 @Composable

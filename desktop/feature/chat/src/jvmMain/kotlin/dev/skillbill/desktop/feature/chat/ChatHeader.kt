@@ -18,6 +18,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 
 /** The execution the chat is about, as of the latest read: title, state, phase and branch. */
@@ -39,10 +41,10 @@ internal fun ChatHeader(session: ChatSession) {
       BasicText(rememberRuntimeText(item.title), Modifier.weight(1f), style = type.tBaseMedium.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-      ChatPill(state.name, tone = stateTone(state, colors), dot = true)
-      (item.phaseExecution?.phaseId ?: item.stepLabel).takeIf { it.isNotBlank() }?.let { ChatPill(it, mono = true) }
-      item.progress?.let { ChatPill("${it.done}/${it.total}", mono = true) }
-      item.branch?.let { ChatPill(it, mono = true, icon = LucideIcons.branch, maxWidth = 260.dp) }
+      SbLabel(state.name, style = SbLabelStyle.Tint(stateTone(state, colors)))
+      (item.phaseExecution?.phaseId ?: item.stepLabel).takeIf { it.isNotBlank() }?.let { SbLabel(it, style = SbLabelStyle.Mono) }
+      item.progress?.let { SbLabel("${it.done}/${it.total}", style = SbLabelStyle.Mono) }
+      item.branch?.let { SbLabel(it, style = SbLabelStyle.Mono, icon = LucideIcons.branch, maxWidth = 260.dp) }
     }
   }
 }
