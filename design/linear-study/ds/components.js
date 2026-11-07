@@ -99,6 +99,8 @@
     gap: '<circle cx="12" cy="12" r="8" stroke-dasharray="3 3.2"/>',
     /* QA results glyphs, drawn as design/qa-results draws them: an open finding, something left behind, a report or run
      * details row, and the check, file, image, copy and open marks on its rows and chips. */
+    video: '<path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
+    videoOff: '<path d="M10.66 6H14a2 2 0 0 1 2 2v2.5l5.248-3.062A.5.5 0 0 1 22 7.87v8.196"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><path d="m2 2 20 20"/>',
     qaBug: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5"/><path d="M12 16h.01"/>',
     qaLeft: '<path d="M12 4l9 16H3z"/><path d="M12 10v4"/><path d="M12 17h.01"/>',
     qaDoc: '<path d="M6 4h12v16H6z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
@@ -237,7 +239,7 @@
   /* ---------- Segmented, ViewTabs ---------- */
   function Segmented(o) {
     track('Segmented');
-    return `<div class="sb-seg" role="tablist">${o.items.map((it) => `<button type="button" role="tab" aria-selected="${it.id === o.value}" class="${it.id === o.value ? 'on' : ''}"${act(o.act, it.arg == null ? it.id : it.arg)}${it.disabled ? ' disabled' : ''}${tipAttrs(it.tip)}>${it.icon ? Icon(it.icon, 'sm') : ''}${esc(it.label)}</button>`).join('')}</div>`;
+    return `<div class="sb-seg" role="tablist">${o.items.map((it) => `<button type="button" role="tab" aria-selected="${it.id === o.value}" class="${it.id === o.value ? 'on' : ''}"${act(o.act, it.arg == null ? it.id : it.arg)}${it.disabled ? ' disabled' : ''}${tipAttrs(it.tip)}>${it.icon ? Icon(it.icon, 'sm') : ''}${it.dot ? '<span class="sb-qlive-dot" aria-hidden="true"></span>' : ''}${esc(it.label)}</button>`).join('')}</div>`;
   }
   function ViewTabs(o) {
     track('ViewTabs');
@@ -847,6 +849,72 @@
     const targets = (o.targets || []).map(([kind, word]) => `<span><b>${esc(kind)}</b> ${esc(word)}</span>`).join('<span>·</span>');
     return `<div class="sb-qa"><p class="sb-qa-st">${esc(o.sentence)}</p>${groups}${folds.length ? `<div class="sb-box sb-qfolds">${folds.join('')}</div>` : ''}${targets ? `<div class="sb-qa-tg">${targets}</div>` : ''}</div>`;
   }
+
+  /* ---------- QA live: goal QA while it runs ---------- */
+  /* Sample pixels standing in for a frame of the app under test: a sidebar, a header, rows and an amber button. `dim` for a
+   * frame that is no longer live (restarting, no capture, ended); `cursor` draws the pointer QA is driving. */
+  const qaFrame = (dim, cursor) => `<span class="${cx('sb-qframe', dim && 'is-dim')}" aria-hidden="true"><span class="sb"><i class="on"></i><i></i><i></i><i class="w"></i><i></i></span><span class="mn"><i class="h"></i><i class="r"></i><i></i><i class="r"></i><i class="btn"></i><i class="r"></i></span>${cursor ? '<span class="cur"></span>' : ''}</span>`;
+  /* The 16:10 preview box. Kinds: `later` (video icon, "Video starts at <stage>" and why), `waiting` (spinner, the display is
+   * up and nothing has drawn), `live` (frames, a LIVE badge, the criterion and display), `reconnect` (last frame dimmed under
+   * a spinner while QA restarts the display), `nocapture` (last frame dimmed, NO VIDEO and why), `none` (no display at
+   * all) and `ended` (the last frame as a still with its time). */
+  function QaPreview(o) {
+    track('QaPreview');
+    const empty = (lead, title, text) => `<div class="sb-qpv-empty">${lead}${title ? `<b>${esc(title)}</b>` : ''}${text ? `<p>${esc(text)}</p>` : ''}</div>`;
+    const spin = '<span class="sb-qpv-spin" aria-hidden="true"></span>';
+    const badge = (cls, html) => `<span class="${cx('sb-qpv-badge', cls)}">${html}</span>`;
+    let inner;
+    switch (o.kind) {
+      case 'later': inner = empty(Icon('video'), o.title, o.text); break;
+      case 'waiting': inner = empty(spin, o.title, o.text); break;
+      case 'live': inner = `${qaFrame(false, true)}${badge('is-live', '<i></i>LIVE')}<span class="sb-qpv-cap"><span>${esc(o.caption)}</span><span>${esc(o.info)}</span></span>`; break;
+      case 'reconnect': inner = `${qaFrame(true)}${badge('is-warn', `${Icon('warn', 'xs')}DISPLAY RESTARTING`)}<span class="sb-qpv-veil">${empty(spin, null, o.text)}</span>`; break;
+      case 'nocapture': inner = `${qaFrame(true)}${badge('is-warn', `${Icon('videoOff', 'xs')}NO VIDEO`)}<span class="sb-qpv-veil"><p>${esc(o.text)}</p></span>`; break;
+      case 'none': inner = empty(Icon('videoOff'), o.title, o.text); break;
+      case 'ended': inner = `${qaFrame(true)}${badge('is-ended', `LAST FRAME · ${esc(o.at)}`)}`; break;
+      default: inner = '';
+    }
+    return `<div class="sb-qpv" role="img" aria-label="${esc(o.label || 'QA live preview')}"${o.kind === 'live' ? '' : ' aria-live="polite"'}>${inner}</div>`;
+  }
+  /* The stages of one QA attempt. Each row: a check (done), a spinning ring (now), warn, a dash (skipped, struck through) or
+   * an empty ring (pending); the name with a `video` tag (red while the preview shows frames) or `headless`; the duration or
+   * "now"; and one detail `line` (HTML the caller escaped). `summary` replaces the list with one row after QA ends. */
+  function QaStageList(o) {
+    track('QaStageList');
+    if (o.summary) return `<button type="button" class="sb-qstages is-sum" aria-expanded="false"${act(o.act, o.arg)}>${Icon('check', 'sm')}<span>${esc(o.summary)}</span><span class="t">${esc(o.time || '')}</span></button>`;
+    const glyph = (k) => k === 'done' ? Icon('check', 'sm') : k === 'warn' ? Icon('warn', 'sm') : k === 'skip' ? Icon('minus', 'sm') : `<span class="${cx('ring', k === 'now' && 'is-now')}"></span>`;
+    const tag = (s) => s.tag === 'video' ? `<span class="${cx('sb-qtag', s.tagOn && 'is-on')}" title="The preview shows video during this stage">${Icon('video', 'xs')}video</span>` : s.tag === 'headless' ? '<span class="sb-qtag" title="Runs without a display">headless</span>' : '';
+    return `<ol class="sb-qstages" aria-label="QA stages">${o.stages.map((s) => `<li class="${cx('sb-qstage', 'is-' + s.state)}"><span class="g">${glyph(s.state)}</span><span class="nm">${esc(s.name)}${tag(s)}</span><span class="t">${esc(s.time || '')}</span>${s.line ? `<span class="ln">${s.line}</span>` : ''}</li>`).join('')}</ol>`;
+  }
+  /* Screenshots QA saved under evidence/, newest first, three across. `total` counts every file. */
+  function QaShots(o) {
+    track('QaShots');
+    if (!o.files || !o.files.length) return '';
+    return `<div class="sb-qshots"><div class="hd"><span>Screenshots · ${o.total}</span>${o.total > o.files.length ? '<span>newest first</span>' : ''}</div><div class="row">${o.files.map((f) => `<button type="button" class="sb-qshot"${act('open-file', 'evidence/' + f)}${tipAttrs('evidence/' + f)}><span class="th">${qaFrame(false, true)}</span><span class="cap">${esc(f)}</span></button>`).join('')}</div></div>`;
+  }
+  /* The goal QA fix loop as a strip: QA 1 with its findings, qa_fix, QA 2. */
+  function QaRounds(o) {
+    track('QaRounds');
+    return `<div class="sb-qrounds" aria-label="Goal QA rounds">${o.rounds.map((r) => `<span class="${cx('sb-qround', 'is-' + r.state)}">${r.icon ? Icon(r.icon, 'xs') : ''}${esc(r.label)}</span>`).join('<i></i>')}</div>`;
+  }
+  /* Goal QA while it runs, top down: the stage (or verdict) word with "stage N of 7 · elapsed", the round and invocation,
+   * target chips, the round strip, the preview, an optional hint (when an earlier run reached video), a callout, the
+   * screenshots and the stage list. */
+  function QaLive(o) {
+    track('QaLive');
+    const targets = (o.targets || []).map((t) => `<span class="sb-qtgt" style="--c:${QA_TONE[t.tone] || 'var(--st-active)'}"><i></i>${esc(t.label)}</span>`).join('');
+    return `<div class="sb-qlive">
+      <div class="sb-qlive-hd"><span class="w" style="--c:${QA_TONE[o.tone] || 'var(--st-active)'}"><i></i>${esc(o.word)}</span><span class="m">${esc(o.meta)}</span></div>
+      <p class="sb-qlive-sub">${o.sub}</p>
+      ${targets ? `<div class="sb-qtgts">${targets}</div>` : ''}
+      ${o.rounds ? QaRounds({ rounds: o.rounds }) : ''}
+      ${QaPreview(o.preview)}
+      ${o.hint ? `<p class="sb-qlive-hint">${Icon('clock', 'xs')}<span>${esc(o.hint)}</span></p>` : ''}
+      ${o.callout || ''}
+      ${o.shots ? QaShots(o.shots) : ''}
+      ${QaStageList(o.stages)}
+    </div>`;
+  }
   /* An agent report as text: headings, paragraphs, bullet and numbered lists (an item indented two or more spaces nests
    * under the one before; an indented plain line continues it), fenced blocks, `code` and **bold**. A path under a home or
    * temp directory shows as its file name, with the full path in the tooltip. Each plain line is its own paragraph. */
@@ -1377,7 +1445,7 @@
     ConfigRow, TrayPopover,
     ChatStatusMark, ChatTabs, SuggestionChip, ChatMessage, ChatTranscript, ChatPill, Composer, StepLine, NewTaskHome,
     InboxList, InboxRow, FilterBar, TargetPicker, QueuedRow, QueuePanel, ResumeRow, ResumePalette,
-    QaVerdict, QaChip, QaItem, QaFold, QaResults, ReportText, DeviceSwitcher, DeviceOption, DevicePanel,
+    QaVerdict, QaChip, QaItem, QaFold, QaResults, QaLive, QaPreview, QaStageList, QaShots, QaRounds, ReportText, DeviceSwitcher, DeviceOption, DevicePanel,
     SegmentBar, CheckTally, RunOutcome, CheckRow, StepTimeline, WorkSummary, SelectAll, SelectionBar,
     ValidationDoc, FlagStrip, Tag, LinkButton, BoxNote, ReportPart, BranchRun,
     VerifyDoc, VerifyHeader, Banner, Fold, Quote, VerifySection, Badge, CriterionRow, FieldText, MarkRow, FileChip, FileChips, RouteSwitch,

@@ -332,10 +332,46 @@
   function finishInspector(it) {
     return S.PhasePipeline(D.GOAL_FINISH.map((label) => ({ label, state: it.finishDone ? 'done' : '', goal: true })));
   }
+  /* Goal QA while it runs: `it.qaLive` names the stage, the preview state and the screenshots. Above
+   * the results on the QA tab; after QA ends the stage list folds to one row and the verdict heads the block. */
+  function qaLiveBlock(st, it) {
+    const q = it.qaLive, stages = D.QA_STAGES;
+    const atI = stages.findIndex((s) => s.id === q.at);
+    const stateOf = (s, i) => (q.states && q.states[s.id]) || (q.done || i < atI ? 'done' : i === atI ? 'now' : 'pending');
+    const p = q.preview, cur = stages[atI];
+    const videoNow = ['live', 'reconnect', 'waiting'].includes(p.kind);
+    const rows = stages.map((s, i) => {
+      const k = stateOf(s, i);
+      return { name: s.name, state: k, time: (q.times || {})[s.id] || (k === 'now' || k === 'warn' ? 'now' : ''), line: q.lines && q.lines[s.id] ? qaInline(q.lines[s.id]) : '',
+        tag: s.video ? 'video' : s.headless ? 'headless' : null, tagOn: !!s.video && (k === 'now' || k === 'warn') && videoNow };
+    });
+    let preview;
+    if (p.kind === 'later') {
+      const reach = stages.find((s) => s.id === p.reachAt), n = stages.indexOf(reach) - atI;
+      preview = { kind: 'later', title: `Video starts at ${reach.name}`, text: p.why || `QA is on ${cur.name}. ${n === 1 ? 'One stage' : `${n} stages`} to go before the app opens.` };
+    } else if (p.kind === 'waiting') preview = { kind: 'waiting', title: p.text, text: p.sub };
+    else if (p.kind === 'none') preview = { kind: 'none', title: 'No video for this run', text: p.text };
+    else preview = Object.assign({}, p);
+    preview.label = p.kind === 'live' ? `Live preview of the app under QA, ${p.caption}` : `QA preview: ${preview.title || preview.text || (p.kind === 'ended' ? `last frame at ${p.at}` : '')}`;
+    const v = q.done && it.goalQa ? qaView(it.goalQa, { fixLoop: true }) : null;
+    const warn = cur && stateOf(cur, atI) === 'warn';
+    const word = v ? v.word : cur.name, tone = v ? v.tone : warn ? 'blocked' : 'active';
+    return S.QaLive({
+      word, tone, meta: q.done ? `${q.elapsed} total` : `stage ${atI + 1} of ${stages.length} · ${q.elapsed}`,
+      sub: `${q.round ? `Round ${q.round} · ` : ''}Invocation <span class="mono">qa-7c1e</span>`,
+      targets: [{ label: 'desktop · :desktop:app', tone }],
+      rounds: q.rounds, preview, hint: q.hint,
+      callout: q.callout ? S.Callout({ tone: 'warn', body: qaInline(q.callout.text), actions: [S.QaChip(Object.assign({ act: q.callout.chip.mono ? 'open-file' : 'toast', arg: q.callout.chip.mono ? `qa-7c1e/${q.callout.chip.label}` : q.callout.chip.label }, q.callout.chip))] }) : '',
+      shots: q.shots ? { files: q.shots.slice(-3).reverse(), total: q.shots.length } : null,
+      stages: q.done ? { summary: `All ${stages.length} stages ran`, time: q.elapsed } : { stages: rows },
+    });
+  }
   function goalResultSection(st, it, tab) {
+    const live = tab === 'qa' && it.qaLive ? S.PaneSection({ body: qaLiveBlock(st, it) }) : '';
+    if (live && !it.goalQa) return live + S.PaneSection({ title: 'Goal QA', body: '<div class="sb-qlive-wait">Results appear here when QA writes its report.</div>' });
     if (tab === 'qa' && it.goalQa) {
       const r = qaResults(st, it.goalQa, { fixLoop: true, running: it.lifecycle === 'active' });
-      return secBlock(st, 'goal-qa', { id: 'sec-goal-qa', cls: 'sb-sec--qa', title: 'Goal QA', badge: r.verdict, body: r.body });
+      return live + secBlock(st, 'goal-qa', { id: 'sec-goal-qa', cls: 'sb-sec--qa', title: 'Goal QA', badge: r.verdict, body: r.body });
     }
     if (tab === 'assessment' && it.assessment) {
       const a = it.assessment;
@@ -345,8 +381,9 @@
     return S.PaneSection({ title, body: S.Box(`<div class="sb-result-missing">No ${tab === 'qa' ? 'QA' : 'assessment'} result is available for this run.</div>`) });
   }
   function finishResults(st, it) {
-    const tab = st.finishTab[it.id] || 'assessment';
-    return `<div class="sb-finish-results"><div class="sb-finish-tabs">${S.Segmented({ act: 'finish-tab', value: tab, items: [{ id: 'assessment', label: 'Assessment', arg: `${it.id}|assessment` }, { id: 'qa', label: 'QA', arg: `${it.id}|qa` }] })}</div>${S.PaneSection({ title: 'Goal finish', status: { state: it.finishDone ? 'done' : 'pending' }, body: finishInspector(it) })}${goalResultSection(st, it, tab)}</div>`;
+    const qaRunning = !!(it.qaLive && !it.qaLive.done);
+    const tab = st.finishTab[it.id] || (qaRunning ? 'qa' : 'assessment');
+    return `<div class="sb-finish-results"><div class="sb-finish-tabs">${S.Segmented({ act: 'finish-tab', value: tab, items: [{ id: 'assessment', label: 'Assessment', arg: `${it.id}|assessment` }, { id: 'qa', label: 'QA', arg: `${it.id}|qa`, dot: qaRunning, tip: qaRunning ? 'QA is running' : null }] })}</div>${S.PaneSection({ title: 'Goal finish', status: { state: it.finishDone ? 'done' : 'pending' }, body: finishInspector(it) })}${goalResultSection(st, it, tab)}</div>`;
   }
   function subtaskSection(st, it, inline) {
     const sel = selectedSub(st, it);
@@ -1385,7 +1422,7 @@
 
     const location = `<div class="l-row g-1 l-wrap">${S.Button({ label: r.path, icon: 'folder', size: 'sm', variant: 'ghost', act: 'toast', arg: `Opened ${r.path}` })}${it.branch ? S.Button({ label: it.branch, icon: 'branch', size: 'sm', variant: 'ghost', act: 'toast', arg: `Opened ${r.web}/tree/${it.branch}` }) : `<span class="t-faint" style="font-size:var(--t-sm)">no branch</span>`}</div>`;
     const metrics = S.MetricStrip([
-      goal ? (it.planning ? { label: 'Goal stage', value: 'Planning' } : finished ? { label: 'Subtasks', value: `${it.done || 0}`, unit: `/ ${it.total || 0}`, note: 'complete' } : { label: 'Subtask', value: `${it.current}`, unit: `/ ${it.total}`, note: `${it.done} complete · ${it.total - it.done - 1} pending` }) : { label: 'Step', value: `<span class="mono" style="font-size:var(--t-md)">${esc(it.step)}</span>`, note: it.exec ? esc(it.exec) : '&nbsp;' },
+      goal ? (it.planning ? { label: 'Goal stage', value: 'Planning' } : finished || it.current == null ? { label: 'Subtasks', value: `${it.done || 0}`, unit: `/ ${it.total || 0}`, note: 'complete' } : { label: 'Subtask', value: `${it.current}`, unit: `/ ${it.total}`, note: `${it.done} complete · ${it.total - it.done - 1} pending` }) : { label: 'Step', value: `<span class="mono" style="font-size:var(--t-md)">${esc(it.step)}</span>`, note: it.exec ? esc(it.exec) : '&nbsp;' },
       goal ? { label: 'Phase', value: esc(it.planning ? 'plan' : it.step), note: it.planning ? `${it.planned}/${it.total} plans saved` : esc(it.exec || ' ') } : null,
       finished ? { label: 'Total run time', value: S.fmtDur(it.goalMs), note: `finished ${esc(it.finishedAt || '')}` } : { label: goal ? 'Goal active' : it.kind === 'operation' ? 'Operation elapsed' : 'Phase elapsed', value: clock(it), note: it.live ? 'ticking' : 'last known duration' },
       goal && it.subMs != null && !finished ? { label: 'Subtask active', value: subClock(it), note: it.live ? 'ticking' : 'last known duration' } : null,
@@ -1934,7 +1971,7 @@
     statusIcon, stepText, clock, rowKey, repoOf, agentOf, LIFE, SECTIONS, resumable, controllable, pauseEligible, recoveryOffered,
     newTask, ntChat, chatLabel, chatStatus, chatEmpty, ntSendButton, pickerItems, targetPicker, targetPickerView, chatMenu, chatTabMenu, queuePanel,
     resumeListing, resumePalette, resumePaletteView,
-    qaView, qaResults, devicePanel, usageData,
+    qaView, qaResults, qaLiveBlock, devicePanel, usageData,
     isPlanRun, planStrip, planNow, planTeaser, planActivity, planBundle, planTranscript, planBriefing, PLAN_STAGES,
     specOf, specPath, specControl, specMenuItems, specPanelItems, specProject, specAgent, specBar, get specRows() { return specRows; },
     isValidationRun, shapeReport, validationCard, validationDoc, valDur, verifyOutcome, checkRow, valDefaultParts, valDefaultChecks, checkExpandable, verifyCtx, verifyState, fixItems, verifyFixText, verifyQaDemo, VSTEP, devicePanelView, deviceTrigger, deviceOptions, devicePickable, deviceList,

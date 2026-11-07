@@ -122,6 +122,17 @@
     if (!D.QA[key]) throw new Error(`Missing QA state example: ${key}`);
     extra('goal', 'terminal', `Goal QA, ${label}`, { goalQa: clone(D.QA[key]), catalogTab: 'qa' });
   });
+  /* Goal QA while it runs: one example per scenario. Subtasks are done and the goal sits in QA. */
+  Object.keys(D.QA_LIVE).forEach((key) => {
+    const q = D.QA_LIVE[key];
+    const live = extra('goal', q.done ? 'terminal' : 'active', `Goal QA live, ${q.label}`, { qaLive: clone(q), catalogTab: 'qa', step: q.round ? 'qa_fix' : 'qa', summary: q.done ? 'Goal QA finished with open findings.' : `goal QA: ${D.QA_STAGES.find((s) => s.id === q.at).name.toLowerCase()}` });
+    live.subtasks.forEach((s) => { if (s.status !== 'completed_no_change') { s.status = 'complete'; s.blocked = null; } });
+    live.done = live.total; live.current = null; live.finishDone = !!q.done;
+    live.exec = `round ${q.round || 1}`; delete live.subMs;
+    live.pipeline = { done: D.PHASE_ORDER.slice(), now: null };
+    if (q.done) live.goalQa = clone(D.QA.open); else delete live.goalQa;
+    delete live.assessment;
+  });
   const absent = extra('goal', 'terminal', 'Missing goal results', { catalogTab: 'assessment' });
   delete absent.goalQa; delete absent.assessment;
   const assessing = extra('goal', 'active', 'Assessment running', { assessment: clone(X.lookup('SKILL-416').assessment), catalogTab: 'assessment' });

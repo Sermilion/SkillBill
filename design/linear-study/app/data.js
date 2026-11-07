@@ -1002,7 +1002,58 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
     },
   };
 
+  /* Goal QA while it runs: the stage QA is on, the live preview and the screenshots it has saved.
+   * Stage names follow the desktop target in platform-packs/kmp/qa/kmp-qa.md. `video` marks the stages where the preview can
+   * show frames. The runtime does not report stages yet; see R6 in HANDOFF.md. Sample data modeled on the
+   * SKILL-516 QA runs of 2026-11-07. */
+  const QA_STAGES = [
+    { id: 'prepare', name: 'Prepare checkout' },
+    { id: 'uitests', name: 'Compose UI tests', headless: true },
+    { id: 'display', name: 'Start private display' },
+    { id: 'launch', name: 'Launch app', video: true },
+    { id: 'exercise', name: 'Exercise running app', video: true },
+    { id: 'report', name: 'Write report' },
+    { id: 'cleanup', name: 'Clean up' },
+  ];
+  const QA_LIVE_DONE = { prepare: '0:52', uitests: '7:31', display: '0:09', launch: '1:22' };
+  /* Each scenario: `at` (the stage QA is on), `states` overrides (warn, skip), `times` for finished stages, `lines` (one
+   * detail line per stage), `preview` (later, waiting, live, reconnect, nocapture, none, ended), `shots` (evidence/ file
+   * names, oldest first), `callout`, `hint` and `rounds` for the goal QA fix loop. */
+  const QA_LIVE = {
+    prepare: { label: 'Preparing the checkout', elapsed: '0:38', at: 'prepare',
+      lines: { prepare: 'Isolating app data under `qa-7c1e/home`' }, preview: { kind: 'later', reachAt: 'launch' } },
+    uitests: { label: 'Compose UI tests', elapsed: '5:12', at: 'uitests', times: { prepare: '0:52' },
+      lines: { uitests: 'Running `:feature:detail:jvmTest --rerun-tasks` · 3 of 6 test classes' },
+      preview: { kind: 'later', reachAt: 'launch', why: 'UI tests run without a display. Video starts when QA launches the app, after these tests and the display start.' },
+      hint: 'The last QA run on this repository reached Launch app 9m 40s in.' },
+    display: { label: 'Display up, app not drawn', elapsed: '10:05', at: 'launch', times: { prepare: '0:52', uitests: '7:31', display: '0:09' },
+      lines: { display: 'Display `:97` with capture · framebuffer protected', launch: 'Gradle is building `:desktop:app:run` · waiting for the window' },
+      preview: { kind: 'waiting', text: 'Display :97 is ready. Waiting for the app window.', sub: 'Frames appear when the app draws its first window.' } },
+    live: { label: 'Live', elapsed: '13:48', at: 'exercise', times: QA_LIVE_DONE,
+      lines: { exercise: 'Criterion 3 of 5 · clicking "QA" in the finish tabs' },
+      preview: { kind: 'live', caption: 'Criterion 3 of 5', info: ':97 · 1600×1000' }, shots: ['app-start.png', 'finish-tabs.png', 'qa-tab-open.png'] },
+    restart: { label: 'Display restarting', elapsed: '12:31', at: 'exercise', times: QA_LIVE_DONE, states: { exercise: 'warn' },
+      lines: { exercise: 'Display `:97` exited with SIGBUS at 21:59:40. QA is restarting it with capture.' },
+      preview: { kind: 'reconnect', text: 'The display crashed at 21:59:40. QA is restarting it. Video resumes when the app draws again.' }, shots: ['app-start.png', 'finish-tabs.png'] },
+    nocapture: { label: 'Restarted without capture', elapsed: '15:02', at: 'exercise', times: QA_LIVE_DONE, states: { exercise: 'warn' },
+      lines: { exercise: 'Running on display `:98` without capture · screenshots only' },
+      preview: { kind: 'nocapture', text: 'QA restarted the display without capture, so there is no video for the rest of this attempt. Screenshots below still update.' },
+      callout: { text: 'Display `:97` crashed at 21:30 with SIGBUS. QA restarted it as `:98` without `-fbdir`, which breaks the rule in kmp-qa.md. QA will record this as a live-preview limitation.', chip: { icon: 'qaFile', label: 'xvfb.log', mono: true } },
+      shots: ['app-start.png', 'finish-tabs.png', 'after-restart.png'] },
+    nodisplay: { label: 'No display', elapsed: '9:40', at: 'report', times: { prepare: '0:52', uitests: '7:31' }, states: { display: 'skip', launch: 'skip', exercise: 'skip' },
+      lines: { display: 'No Xvfb on this machine · listed under Unblock', report: 'Writing `report.md`' },
+      preview: { kind: 'none', text: 'QA could not start a private display. It ran the Compose UI tests only.' },
+      callout: { text: 'Install `xorg-server-xvfb` so QA can run the app on a private display. The report lists this under Unblock.', chip: { icon: 'qaOpen', label: 'Open Unblock' } } },
+    fixloop: { label: 'Round 2 after a fix', elapsed: '3:05', at: 'prepare', round: 2,
+      lines: { prepare: 'Reusing isolated data from round 1' }, preview: { kind: 'later', reachAt: 'launch' },
+      hint: 'Round 1 reached Launch app 9m 40s in.',
+      rounds: [{ icon: 'qaBug', label: 'QA 1 · 1 finding', state: 'done' }, { icon: 'check', label: 'qa_fix', state: 'done' }, { label: 'QA 2', state: 'now' }] },
+    ended: { label: 'Finished', elapsed: '18:22', done: true,
+      times: Object.assign({}, QA_LIVE_DONE, { exercise: '6:40', report: '1:20', cleanup: '0:28' }),
+      preview: { kind: 'ended', at: '22:05' }, shots: ['app-start.png', 'finish-tabs.png', 'qa-tab-open.png', 'preview-blank.png', 'resize-900.png'] },
+  };
+
   window.DATA = { T0, REPOS, AGENTS, AGENT_CHOICES, PHASE_ORDER, GOAL_FINISH, items, history, valRoutes, projects, specs, NOTIFICATIONS, CLAUDE_DIRS, PHASE_GROUPS, MATRIX, BUDGET,
     REPO_BRANCHES, LONG_BRANCH, CHAT_HISTORY, NEW_TASK_CHATS, NEW_TASK_SELECTED, CHAT_REPLIES, NEW_TASK_STEPS, QUICK_STARTS,
-    QA, QA_DEVICES, VAL, VERIFY, USAGE, BUILD };
+    QA, QA_DEVICES, QA_STAGES, QA_LIVE, VAL, VERIFY, USAGE, BUILD };
 })();

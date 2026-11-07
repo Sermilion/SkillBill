@@ -30,6 +30,8 @@ The lifecycle table has 70 linked cells. N/A cells explain why the runtime does 
 
 The catalog includes the existing plan, validation, QA and Verify scenarios. It adds CI running and failing, a PR opened, clean and finding-bearing reviews, approval, pending Verify and per-type stalled displays. Goal QA has direct links for review needed, passed, not tested, cleanup needed, skipped, unfinished and older reports. Goal assessment has missing, running and open-finding examples.
 
+Nine "Goal QA live" rows cover goal QA while it runs, one per scenario: preparing the checkout, Compose UI tests, display up with no window, live, display restarting, restarted without capture, no display, round 2 after a fix, and finished. Each opens Goal finish on the QA tab.
+
 Goal links ending in `/finish/qa` or `/finish/assessment` select Goal finish and its result tab. The wide pane shows the selected result before Execution, Runs and fixes, and spec files. The main document does not repeat it. When the pane is unavailable, the selected Goal finish row shows the same switch inline.
 
 The catalog also links chat tab counts and overflow, the close confirmation, queued messages, all repository-picker scenarios, saved and CLI chat resume, no matching or saved chats, more than 30 saved chats, all seven device lists, and every spec control state and project read state.
@@ -42,7 +44,7 @@ The catalog also links chat tab counts and overflow, the close confirmation, que
 - Validation uses the app's LIVE label and green completed tone. Its header keeps the lifecycle label unless reported checks provide an outcome.
 - Completed generic details drop the freshness pill. Key-value lists have explicit zero margins instead of browser defaults.
 - Confirm criteria, Stop, Resume, Discard, Adjust intake and the fix-routing controls remain available in the design. Chat remains a confirmation path.
-- The queue popup, device picker, process program name in QA leftovers and plan retry control remain design additions awaiting implementation where the app has no equivalent.
+- The queue popup, device picker, live goal QA stages and preview states, process program name in QA leftovers and plan retry control remain design additions awaiting implementation where the app has no equivalent.
 
 Standalone mocks remain in place. Delete each only after the operator confirms its synced version.
 
