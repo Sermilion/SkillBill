@@ -51,12 +51,38 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 private val INPUT_HEIGHT = 30.dp
 private val MULTILINE_MAX_HEIGHT = 120.dp
 
-/** A [multiline] input grows up to 120 dp; Enter submits and Shift+Enter inserts a newline. [visualTransformation] styles the shown text only. */
+/**
+ * A [multiline] input grows up to 120 dp; Enter submits and Shift+Enter inserts a newline. [visualTransformation] styles
+ * the shown text only. Focus requesters, focus callbacks, semantics, extra key handlers, and a larger minimum height go
+ * through [modifier].
+ */
 @Composable
 fun SbInput(
   value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier,
   placeholder: String? = null, leadingIcon: ImageVector? = null, mono: Boolean = false,
   isError: Boolean = false, enabled: Boolean = true, onSubmit: (() -> Unit)? = null, multiline: Boolean = false,
+  visualTransformation: VisualTransformation = VisualTransformation.None,
+) = SbInput(
+  value = value,
+  onValueChange = onValueChange,
+  modifier = modifier,
+  placeholder = placeholder,
+  leadingIcon = leadingIcon,
+  mono = mono,
+  isError = isError,
+  enabled = enabled,
+  readOnly = false,
+  onSubmit = onSubmit,
+  multiline = multiline,
+  visualTransformation = visualTransformation,
+)
+
+@Composable
+fun SbInput(
+  value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier,
+  placeholder: String? = null, leadingIcon: ImageVector? = null, mono: Boolean = false,
+  isError: Boolean = false, enabled: Boolean = true, readOnly: Boolean = false,
+  onSubmit: (() -> Unit)? = null, multiline: Boolean = false,
   visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
   val colors = SkillBillTheme.colors
@@ -79,6 +105,7 @@ fun SbInput(
     value = value,
     onValueChange = onValueChange,
     enabled = enabled,
+    readOnly = readOnly,
     singleLine = !multiline,
     visualTransformation = visualTransformation,
     textStyle = textStyle.copy(color = colors.fg),

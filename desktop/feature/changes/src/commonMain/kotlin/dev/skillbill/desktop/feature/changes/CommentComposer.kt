@@ -1,15 +1,12 @@
 package dev.skillbill.desktop.feature.changes
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -20,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -42,6 +38,7 @@ import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
+import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.ui.changes.changesSans
 
 @Composable
@@ -65,11 +62,10 @@ internal fun CommentComposer(
   val colors = SkillBillTheme.colors
   SbBox(modifier, fill = colors.bgPanel) {
     Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      BasicTextField(
-        value = text,
-        onValueChange = onText,
-        readOnly = saving,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).background(colors.bgInset, RoundedCornerShape(5.dp)).padding(8.dp)
+      SbInput(
+        text,
+        onText,
+        Modifier.fillMaxWidth().heightIn(min = 64.dp)
           .focusRequester(focus).onFocusChanged { onFocusChanged(it.isFocused) }
           .semantics {
             contentDescription = placeholder.ifEmpty { "Edit pending comment" }
@@ -81,12 +77,10 @@ internal fun CommentComposer(
               true
             } else false
           },
-        textStyle = changesSans(11.5f, FontWeight.Normal, colors.fg),
-        cursorBrush = SolidColor(colors.fg),
-        decorationBox = { inner ->
-          if (text.isEmpty() && placeholder.isNotEmpty()) BasicText(placeholder, style = changesSans(11.5f, FontWeight.Normal, colors.fgMuted))
-          inner()
-        },
+        placeholder = placeholder.ifEmpty { null },
+        multiline = true,
+        readOnly = saving,
+        onSubmit = null,
       )
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         BasicText(hint, Modifier.weight(1f), style = changesSans(10.5f, FontWeight.Normal, colors.fgFaint))

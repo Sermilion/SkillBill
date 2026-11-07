@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -45,7 +44,6 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
@@ -71,6 +69,7 @@ import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
 import dev.skillbill.desktop.core.designsystem.component.SbTag
+import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
 import dev.skillbill.desktop.core.domain.model.Comment
@@ -181,10 +180,10 @@ internal fun DiffCommentThread(
             )
           }
           if (ui.draft != null) {
-            BasicTextField(
-              value = ui.draft,
-              onValueChange = { onAction(ChangesWindowAction.EditReply(thread.id, it)) },
-              modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp).background(colors.bgInset, RoundedCornerShape(5.dp)).padding(8.dp)
+            SbInput(
+              ui.draft,
+              { onAction(ChangesWindowAction.EditReply(thread.id, it)) },
+              Modifier.fillMaxWidth().heightIn(min = 54.dp)
                 .focusRequester(focusRequester).onFocusChanged { onReplyFocusChanged(thread.id, it.isFocused) }
                 .onPreviewKeyEvent { event ->
                   if (event.type != KeyEventType.KeyDown) false
@@ -192,8 +191,8 @@ internal fun DiffCommentThread(
                   else if (event.key == Key.Enter && (event.isCtrlPressed || event.isMetaPressed)) { if (!ui.busy) onAction(ChangesWindowAction.SendReply(thread.id)); true }
                   else false
                 },
-              textStyle = changesSans(11.5f, FontWeight.Normal, colors.fg),
-              cursorBrush = SolidColor(colors.fg),
+              multiline = true,
+              onSubmit = null,
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
               ActionText("Send", colors.accentText, ui.busy) { onAction(ChangesWindowAction.SendReply(thread.id)) }
