@@ -13,6 +13,7 @@ import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.data.session.DatabaseSessionManager
+import dev.skillbill.desktop.core.data.usage.ProviderUsageRepository
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
@@ -51,6 +52,7 @@ abstract class AppComponent(
   abstract val workControlRepository: WorkControlRepository
   abstract val workDetailRepository: WorkDetailRepository
   abstract val usageRepository: UsageRepository
+  abstract val providerUsageRepository: ProviderUsageRepository
   abstract val changesWindows: ChangesWindows
   abstract val changesWindowViewModel: (WorkItem, ChangeScope) -> ChangesWindowViewModel
   abstract val specRepository: SpecRepository

@@ -26,18 +26,125 @@ import dev.skillbill.desktop.core.domain.usage.model.UsageValue
 import dev.skillbill.desktop.core.domain.usage.model.VerifiedUsageIdentity
 import dev.skillbill.desktop.core.domain.usage.model.VerifiedUsageSubject
 import dev.skillbill.desktop.core.domain.usage.model.UsageAuthMode
+import dev.skillbill.desktop.core.domain.usage.model.UsageDemand
+import dev.skillbill.desktop.core.domain.usage.model.UsageDemandResult
+import dev.skillbill.desktop.core.domain.usage.model.UsageRefreshCapability
+import dev.skillbill.desktop.core.domain.usage.model.UsageRefreshFamily
+import dev.skillbill.desktop.core.domain.usage.model.UsageRefreshResult
+import dev.skillbill.desktop.core.domain.usage.model.UsageRefreshAvailability
+import dev.skillbill.desktop.core.domain.usage.model.VerifiedUsageWorkspaceScope
+import dev.skillbill.desktop.core.data.usage.codex.CodexAcquisitionContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.time.Clock
 import kotlin.time.Instant
 
 class ProviderUsageRepositoryTest {
   @Test
+  fun `verified sign in recovery clears cached rejection and resumes periodic refresh`() = runTest {
+    val profiles = UsageProfileResolver(HostEnvironment(emptyMap(), "/home/operator", ""))
+    val request = UsageRequest(profiles.codex(null).lookup)
+    val pendingReads = Channel<Pair<CodexAcquisitionContext, CompletableDeferred<UsageResult>>>(Channel.UNLIMITED)
+    val reader = object : CodexUsageReader {
+      override val refreshCapability = UsageRefreshCapability.Pull(UsageRefreshFamily.CodexSnapshot)
+
+      override suspend fun read(context: CodexAcquisitionContext): UsageResult {
+        val result = CompletableDeferred<UsageResult>()
+        pendingReads.send(context to result)
+        return result.await()
+      }
+    }
+    val clock = object : Clock {
+      override fun now() = Instant.fromEpochMilliseconds(50_000) + testScheduler.currentTime.milliseconds
+    }
+    val repository = ProviderUsageRepository(profiles, FakeAppSettingsRepository(), reader, ApplicationCoroutineScope(backgroundScope), clock)
+    val publications = mutableListOf<UsageResult>()
+    repository.acquireDemand(UsageDemand("window", request, visible = true, active = true))
+    val observer = backgroundScope.launch { repository.observeDemand("window").collect { publications += it } }
+    try {
+      runCurrent()
+      pendingReads.tryReceive().getOrThrow().second.complete(
+        UsageResult.SignInRequired(UsageUnavailableReason(UsageUnavailableCode.ProfileUnverified)),
+      )
+      runCurrent()
+      assertIs<UsageResult.SignInRequired>(publications.last())
+      advanceTimeBy(10_000)
+      runCurrent()
+      assertIs<UsageRefreshResult.Started>(repository.recheckSignIn(request))
+      runCurrent()
+      val recheck = pendingReads.tryReceive().getOrThrow()
+      repository.acquireDemand(UsageDemand("second-window", request, visible = true, active = true))
+      val subject = VerifiedUsageSubject(
+        request.profile, VerifiedUsageIdentity("account", VerifiedUsageWorkspaceScope.VerifiedNonWorkspace), UsageAuthMode.Account,
+      )
+      recheck.second.complete(UsageResult.Snapshot(
+        UsageObservation(
+          subject = UsageObservationSubject.Account(subject),
+          collectionTime = clock.now(),
+          sourceObservationTime = null,
+          source = UsageSource(UsageProvider.Codex, UsageCapability.NumericSnapshot),
+          freshness = UsageFreshness.Current,
+          refreshState = UsageRefreshState.Complete,
+          meters = listOf(UsageMeter.create(
+            "standard", "Codex", UsageMeterScope.General, clock.now(), null, UsagePeriod.Unknown,
+            UsageValue.PercentageUsed.create(20.0)!!,
+          )!!),
+          requestPermission = RequestPermission.Allowed,
+        ),
+        OmissionSemantics.OmittedFieldsAreRemoved,
+        recheck.first.reservationId,
+      ))
+      runCurrent()
+      assertIs<UsageResult.Snapshot>(publications.last())
+      advanceTimeBy(10_000)
+      runCurrent()
+      assertIs<UsageRefreshAvailability.Ready>(repository.refreshAvailability(request).first())
+      assertIs<UsageRefreshResult.Started>(repository.refresh(request))
+      runCurrent()
+      val manual = pendingReads.tryReceive().getOrThrow()
+      manual.second.complete(UsageResult.EmptySuccess(
+        subject, UsageSource(UsageProvider.Codex, UsageCapability.NumericSnapshot), clock.now(),
+        OmissionSemantics.OmittedFieldsAreUnchanged, manual.first.reservationId,
+      ))
+      runCurrent()
+      advanceTimeBy(60_000)
+      runCurrent()
+      val periodic = pendingReads.tryReceive().getOrThrow()
+      assertTrue(periodic.second.isActive)
+      assertEquals(RequestPermission.Allowed, assertIs<UsageResult.Snapshot>(publications.last()).value.requestPermission)
+      repository.releaseDemand("window")
+      repository.releaseDemand("second-window")
+      runCurrent()
+      assertIs<UsageDemandResult.Rejected>(repository.updateDemand(UsageDemand("window", request, visible = true, active = true)))
+      advanceTimeBy(60_000)
+      runCurrent()
+      assertIs<UsageRefreshAvailability.Ready>(repository.refreshAvailability(request).first())
+    } finally {
+      observer.cancelAndJoin()
+      assertTrue(observer.isCancelled)
+      repository.releaseDemand("window")
+      repository.releaseDemand("second-window")
+      repository.closeUsage()
+      pendingReads.close()
+    }
+  }
+
+  @Test
   fun `Codex capability path blocks numeric collector snapshots without a verified identity contract`() = runTest {
     val host = HostEnvironment(emptyMap(), "/home/operator", "")
-    val profile = UsageProfileLookup(UsageProvider.Codex, null, 4)
+    val profiles = UsageProfileResolver(host)
+    val profile = profiles.codex(null).lookup
     val observedAt = Instant.fromEpochMilliseconds(1000)
     val numeric = UsageMeter.create(
       "standard",
@@ -61,19 +168,33 @@ class ProviderUsageRepositoryTest {
       ),
       OmissionSemantics.OmittedFieldsAreUnchanged,
     )
-    val reader = CodexUsageReader { _ -> snapshot }
-    val repository = ProviderUsageRepository(UsageProfileResolver(host), FakeAppSettingsRepository(), reader, ApplicationCoroutineScope(backgroundScope))
-
-    val result = repository.observe(UsageRequest(profile)).first()
-
-    assertEquals(UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.ProfileUnverified)), result)
+    val sourceReached = CompletableDeferred<Unit>()
+    val reader = CodexUsageReader { context ->
+      sourceReached.complete(Unit)
+      snapshot.copy(reservationId = context.reservationId)
+    }
+    val repository = ProviderUsageRepository(profiles, FakeAppSettingsRepository(), reader, ApplicationCoroutineScope(backgroundScope), fixedClock)
+    val publications = mutableListOf<UsageResult>()
+    repository.acquireDemand(UsageDemand("window", UsageRequest(profile), visible = true, active = true))
+    val observer = backgroundScope.launch { repository.observeDemand("window").collect { publications += it } }
+    try {
+      runCurrent()
+      assertTrue(sourceReached.isCompleted)
+      assertTrue(publications.none { it is UsageResult.Snapshot })
+      assertEquals(UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.ProfileUnverified)), publications.last())
+    } finally {
+      observer.cancelAndJoin()
+      assertTrue(observer.isCancelled)
+      repository.releaseDemand("window")
+      repository.closeUsage()
+    }
   }
 
   @Test
   fun `late status and close from a replaced Claude process cannot clear or replace its status`() = runTest {
     val host = HostEnvironment(emptyMap(), "/home/operator", "")
     val profiles = UsageProfileResolver(host)
-    val repository = ProviderUsageRepository(profiles, FakeAppSettingsRepository(), unusedCodexReader, ApplicationCoroutineScope(backgroundScope))
+    val repository = ProviderUsageRepository(profiles, FakeAppSettingsRepository(), unusedCodexReader, ApplicationCoroutineScope(backgroundScope), fixedClock)
     val original = UsageProfileLookup(UsageProvider.Claude, "/profile/one", 1)
     val replacement = UsageProfileLookup(UsageProvider.Claude, "/profile/two", 2)
     val request = UsageRequest(replacement, "logical-session")

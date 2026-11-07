@@ -20,22 +20,37 @@ internal data class EffectiveUsageProfile(
 @SingleIn(AppScope::class)
 class UsageProfileResolver(private val host: HostEnvironment) {
   private val generation = AtomicLong()
+  private val generations = mutableMapOf<Pair<UsageProvider, String?>, Long>()
+
+  private fun lookup(provider: UsageProvider, reference: String?): UsageProfileLookup = synchronized(generations) {
+    val key = provider to reference
+    UsageProfileLookup(provider, reference, generations.getOrPut(key) { generation.incrementAndGet() })
+  }
 
   internal fun codex(selectedProfile: String?): EffectiveUsageProfile {
+    val defaultHome = "${host.userHome}/.codex"
     val environment = codexEnvironment(host.variables, selectedProfile)
+    val effectiveHome = environment[AgentHomeEnvironmentKeys.CODEX_HOME] ?: defaultHome
     return EffectiveUsageProfile(
-      UsageProfileLookup(UsageProvider.Codex, environment[AgentHomeEnvironmentKeys.CODEX_HOME], generation.incrementAndGet()),
+      lookup(UsageProvider.Codex, effectiveHome),
       environment,
     )
   }
 
-  internal fun resolveCodex(profile: UsageProfileLookup): EffectiveUsageProfile =
-    EffectiveUsageProfile(profile, codexEnvironment(host.variables, profile.configurationReference))
+  internal fun resolveCodex(profile: UsageProfileLookup): EffectiveUsageProfile {
+    val defaultHome = "${host.userHome}/.codex"
+    val selector = profile.configurationReference?.takeUnless {
+      it == defaultHome && host.variables[AgentHomeEnvironmentKeys.CODEX_HOME].isNullOrEmpty()
+    }
+    val environment = codexEnvironment(host.variables, selector)
+    val effectiveHome = environment[AgentHomeEnvironmentKeys.CODEX_HOME] ?: defaultHome
+    return EffectiveUsageProfile(lookup(UsageProvider.Codex, effectiveHome), environment)
+  }
 
   internal fun cursor(selectedProfile: String?): EffectiveUsageProfile {
     val environment = cursorEnvironment(host.variables, selectedProfile)
     return EffectiveUsageProfile(
-      UsageProfileLookup(UsageProvider.Cursor, environment[CURSOR_CONFIG_DIR], generation.incrementAndGet()),
+      lookup(UsageProvider.Cursor, environment[CURSOR_CONFIG_DIR]),
       environment,
     )
   }
@@ -52,7 +67,7 @@ class UsageProfileResolver(private val host: HostEnvironment) {
         ?: "${host.userHome}/.claude"
     }
     return EffectiveUsageProfile(
-      UsageProfileLookup(UsageProvider.Claude, effectiveDirectory, generation.incrementAndGet()),
+      lookup(UsageProvider.Claude, effectiveDirectory),
       environment,
     )
   }

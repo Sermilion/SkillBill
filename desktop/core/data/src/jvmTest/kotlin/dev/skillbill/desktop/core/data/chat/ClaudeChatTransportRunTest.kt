@@ -52,6 +52,10 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 
 class ClaudeChatTransportRunTest {
+  private val usageClock = object : Clock {
+    override fun now() = Instant.fromEpochMilliseconds(10_000)
+  }
+
   private val unusedCodexReader = CodexUsageReader { _ ->
     UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.ProviderUnavailable))
   }
@@ -95,7 +99,7 @@ class ClaudeChatTransportRunTest {
         diagnostics,
         ApplicationCoroutineScope(backgroundScope),
         profiles,
-        ProviderUsageRepository(profiles, FakeAppSettingsRepository(), unusedCodexReader, ApplicationCoroutineScope(backgroundScope)),
+        ProviderUsageRepository(profiles, FakeAppSettingsRepository(), unusedCodexReader, ApplicationCoroutineScope(backgroundScope), usageClock),
         Clock.System,
       )
     }
@@ -108,7 +112,7 @@ class ClaudeChatTransportRunTest {
     val clock = object : Clock {
       override fun now() = Instant.fromEpochMilliseconds(10_000)
     }
-    val repository = ProviderUsageRepository(profiles, settings, unusedCodexReader, ApplicationCoroutineScope(backgroundScope))
+    val repository = ProviderUsageRepository(profiles, settings, unusedCodexReader, ApplicationCoroutineScope(backgroundScope), usageClock)
     val claude = FakeClaude()
     val diagnostics = RecordingDiagnostics()
     val transport = ClaudeChatTransport(
@@ -155,7 +159,7 @@ class ClaudeChatTransportRunTest {
     val host = HostEnvironment(emptyMap(), "/home/operator", "")
     val settings = FakeAppSettingsRepository()
     val profiles = UsageProfileResolver(host)
-    val repository = ProviderUsageRepository(profiles, settings, unusedCodexReader, ApplicationCoroutineScope(backgroundScope))
+    val repository = ProviderUsageRepository(profiles, settings, unusedCodexReader, ApplicationCoroutineScope(backgroundScope), usageClock)
     val appJob = Job(backgroundScope.coroutineContext[Job])
     val clock = object : Clock {
       override fun now() = Instant.fromEpochMilliseconds(10_000)

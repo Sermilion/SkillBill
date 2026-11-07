@@ -13,7 +13,12 @@ import dev.skillbill.desktop.core.domain.usage.model.UsageProfileLookup
 import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableCode
 import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableReason
 import dev.skillbill.desktop.core.domain.usage.model.UsageResult
+import dev.skillbill.desktop.core.domain.usage.model.UsageRefreshCapability
 import dev.skillbill.desktop.core.domain.usage.model.UsageProvider
+import dev.skillbill.desktop.core.data.usage.codex.model.CodexVerifiedSubjectConfirmation
+import dev.skillbill.desktop.core.data.usage.codex.model.CodexVerifiedUsageObservation
+import dev.skillbill.desktop.core.data.usage.UsageDiagnosticCategories
+import dev.skillbill.desktop.core.data.usage.UsageDiagnosticFields
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -44,6 +49,12 @@ data class CodexAcquisitionContext(
 sealed interface CodexAcquisitionEvent {
   val reservationId: String
   data class AccountInvalidated(override val reservationId: String) : CodexAcquisitionEvent
+  data class SubjectConfirmed(val evidence: CodexVerifiedSubjectConfirmation) : CodexAcquisitionEvent {
+    override val reservationId: String get() = evidence.reservationId
+  }
+  data class VerifiedObservation(val evidence: CodexVerifiedUsageObservation) : CodexAcquisitionEvent {
+    override val reservationId: String get() = evidence.reservationId
+  }
 }
 
 internal data class CodexRateLimitsCandidate(
@@ -53,6 +64,9 @@ internal data class CodexRateLimitsCandidate(
 
 fun interface CodexUsageReader {
   suspend fun read(context: CodexAcquisitionContext): UsageResult
+
+  val refreshCapability: UsageRefreshCapability
+    get() = UsageRefreshCapability.ProbeOnly
 }
 
 @Inject
@@ -66,7 +80,7 @@ class CodexUsageCollector(
 ) : CodexUsageReader {
   override suspend fun read(context: CodexAcquisitionContext): UsageResult = withContext(dispatchers.io) {
     val profile = context.profile
-    if (profile.provider != UsageProvider.Codex) return@withContext protocolUnsupported()
+    if (profile.provider != UsageProvider.Codex) return@withContext protocolUnsupported(1)
     var connection: BoundedProtocolConnection? = null
     try {
       val startup = withTimeoutOrNull(15.seconds) {
@@ -101,7 +115,7 @@ class CodexUsageCollector(
       when (startup) {
         StartupResult.Failed -> transient()
         StartupResult.Invalidated -> invalidated()
-        StartupResult.Unsupported -> protocolUnsupported()
+        StartupResult.Unsupported -> protocolUnsupported(2)
         is StartupResult.Ready -> readAccount(startup.connection, context)
       }
     } catch (cancelled: CancellationException) {
@@ -109,9 +123,17 @@ class CodexUsageCollector(
     } catch (_: IOException) {
       transient()
     } catch (_: Exception) {
-      protocolUnsupported()
+      protocolUnsupported(3)
     } finally {
-      connection?.close()
+      try {
+        connection?.close()
+      } catch (cancelled: CancellationException) {
+        throw cancelled
+      } catch (_: Exception) {
+        diagnostics.recordRequest(UsageDiagnosticCategories.SOURCE_CLEANUP_FAILED, mapOf(
+          UsageDiagnosticFields.REASON_CODE to 1,
+        ))
+      }
     }
   }
 
@@ -119,25 +141,25 @@ class CodexUsageCollector(
     var requestSequence = 1
     val account = readRequest(connection, "account/read", buildJsonObject { put("refreshToken", false) }, context) { ++requestSequence } ?: return transient()
     if (account == RpcResponse.Invalidated) return invalidated()
-    if (account.error != null) return protocolUnsupported()
-    val accountObject = account.result as? JsonObject ?: return protocolUnsupported()
-    val accountValue = accountObject["account"] ?: return protocolUnsupported()
+    if (account.error != null) return protocolUnsupported(4)
+    val accountObject = account.result as? JsonObject ?: return parseRejected(1)
+    val accountValue = accountObject["account"] ?: return parseRejected(2)
     if (accountValue == JsonNull) {
       diagnostics.record("usage.codex.sign_in_required")
       return UsageResult.SignInRequired(UsageUnavailableReason(UsageUnavailableCode.ProfileUnverified))
     }
-    val accountRecord = accountValue as? JsonObject ?: return protocolUnsupported()
+    val accountRecord = accountValue as? JsonObject ?: return parseRejected(3)
     val accountType = (accountRecord["type"] as? JsonPrimitive)?.takeIf { it.isString }?.content
     if (accountType == "apiKey") {
       diagnostics.record("usage.codex.api_key_unsupported")
       return UsageResult.Unsupported(UsageUnavailableReason(UsageUnavailableCode.UnsupportedPersonalSnapshot))
     }
-    if (accountType != "chatgpt") return protocolUnsupported()
+    if (accountType != "chatgpt") return protocolUnsupported(5)
 
     val limits = readRequest(connection, "account/rateLimits/read", buildJsonObject { }, context) { ++requestSequence } ?: return transient()
     if (limits == RpcResponse.Invalidated) return invalidated()
-    if (limits.error != null || limits.result == null) return protocolUnsupported()
-    if (CodexUsageProtocol.parseQuota(limits.result) !is CodexQuotaParse.Valid) return protocolUnsupported()
+    if (limits.error != null || limits.result == null) return protocolUnsupported(6)
+    if (CodexUsageProtocol.parseQuota(limits.result) !is CodexQuotaParse.Valid) return parseRejected(4)
     diagnostics.record("usage.codex.identity_unavailable")
     return UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.ProfileUnverified))
   }
@@ -163,11 +185,22 @@ class CodexUsageCollector(
       if (!connection.sendLine(requestLine(id, method, params))) return null
       while (true) {
         when (val input = connection.receive()) {
-          is BoundedProtocolInput.Failed -> return if (input.kind == BoundedProtocolInput.Kind.Transport) null else RpcResponse.Invalid
+          is BoundedProtocolInput.Failed -> {
+            if (input.kind == BoundedProtocolInput.Kind.Transport) return null
+            diagnostics.recordRequest(UsageDiagnosticCategories.INPUT_REJECTED, mapOf(
+              UsageDiagnosticFields.REASON_CODE to input.kind.ordinal,
+            ))
+            return RpcResponse.Invalid
+          }
           BoundedProtocolInput.Exited -> return null
           is BoundedProtocolInput.Line -> when (val frame = classify(input.text, id)) {
             is Frame.Response -> return frame.value
-            Frame.Invalid -> return RpcResponse.Invalid
+            is Frame.Invalid -> {
+              diagnostics.recordRequest(UsageDiagnosticCategories.PARSE_REJECTED, mapOf(
+                UsageDiagnosticFields.REASON_CODE to frame.reasonCode,
+              ))
+              return RpcResponse.Invalid
+            }
             is Frame.Notification -> when (frame.method) {
               "account/updated" -> {
                 context.emit(CodexAcquisitionEvent.AccountInvalidated(context.reservationId))
@@ -175,7 +208,12 @@ class CodexUsageCollector(
               }
               "account/rateLimits/updated" -> {
                 val candidate = frame.params?.let(CodexUsageProtocol::parseQuota)
-                if (candidate !is CodexQuotaParse.Valid) return RpcResponse.Invalid
+                if (candidate !is CodexQuotaParse.Valid) {
+                  diagnostics.recordRequest(UsageDiagnosticCategories.PARSE_REJECTED, mapOf(
+                    UsageDiagnosticFields.REASON_CODE to 5,
+                  ))
+                  return RpcResponse.Invalid
+                }
                 context.emit(CodexRateLimitsCandidate(context.reservationId, candidate.buckets))
               }
             }
@@ -188,28 +226,28 @@ class CodexUsageCollector(
   }
 
   private fun classify(line: String, pendingId: Int): Frame {
-    val envelope = CodexUsageProtocol.parseLine(line) ?: return Frame.Invalid
+    val envelope = CodexUsageProtocol.parseLine(line) ?: return Frame.Invalid(1)
     val version = envelope["jsonrpc"]
-    if (version != null && (version as? JsonPrimitive)?.content != "2.0") return Frame.Invalid
+    if (version != null && (version as? JsonPrimitive)?.content != "2.0") return Frame.Invalid(2)
     val id = envelope["id"]
     if (id != null) {
-      if (id != JsonPrimitive(pendingId) || "method" in envelope || "params" in envelope) return Frame.Invalid
+      if (id != JsonPrimitive(pendingId) || "method" in envelope || "params" in envelope) return Frame.Invalid(3)
       val hasResult = "result" in envelope
       val hasError = "error" in envelope
-      if (hasResult == hasError) return Frame.Invalid
+      if (hasResult == hasError) return Frame.Invalid(4)
       val error = envelope["error"]
       if (error != null && (error as? JsonObject)?.let {
           (it["code"] as? JsonPrimitive)?.takeUnless { code -> code.isString }?.intOrNull != null &&
             (it["message"] as? JsonPrimitive)?.isString == true
-        } != true) return Frame.Invalid
+        } != true) return Frame.Invalid(5)
       return Frame.Response(RpcResponse(envelope["result"], error))
     }
-    if ("result" in envelope || "error" in envelope) return Frame.Invalid
-    val method = (envelope["method"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return Frame.Invalid
+    if ("result" in envelope || "error" in envelope) return Frame.Invalid(6)
+    val method = (envelope["method"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return Frame.Invalid(7)
     val paramsElement = envelope["params"]
     val params = paramsElement as? JsonObject
-    if (paramsElement != null && params == null) return Frame.Invalid
-    if (method in setOf("account/updated", "account/rateLimits/updated") && params == null) return Frame.Invalid
+    if (paramsElement != null && params == null) return Frame.Invalid(8)
+    if (method in setOf("account/updated", "account/rateLimits/updated") && params == null) return Frame.Invalid(9)
     return Frame.Notification(method, params)
   }
 
@@ -235,8 +273,15 @@ class CodexUsageCollector(
     return UsageResult.TransientFailure(UsageUnavailableReason(UsageUnavailableCode.TransientFailure))
   }
 
-  private fun protocolUnsupported(): UsageResult {
+  private fun protocolUnsupported(reasonCode: Int): UsageResult {
     diagnostics.record("usage.codex.protocol_unavailable")
+    diagnostics.recordRequest(UsageDiagnosticCategories.SOURCE_UNSUPPORTED, mapOf(UsageDiagnosticFields.REASON_CODE to reasonCode))
+    return UsageResult.Unsupported(UsageUnavailableReason(UsageUnavailableCode.ProviderUnavailable))
+  }
+
+  private fun parseRejected(reasonCode: Int): UsageResult {
+    diagnostics.record("usage.codex.protocol_unavailable")
+    diagnostics.recordRequest(UsageDiagnosticCategories.PARSE_REJECTED, mapOf(UsageDiagnosticFields.REASON_CODE to reasonCode))
     return UsageResult.Unsupported(UsageUnavailableReason(UsageUnavailableCode.ProviderUnavailable))
   }
 
@@ -252,7 +297,7 @@ class CodexUsageCollector(
   private sealed interface Frame {
     data class Response(val value: RpcResponse) : Frame
     data class Notification(val method: String, val params: JsonObject?) : Frame
-    data object Invalid : Frame
+    data class Invalid(val reasonCode: Int) : Frame
   }
 
   private data class RpcResponse(val result: JsonElement?, val error: JsonElement?) {

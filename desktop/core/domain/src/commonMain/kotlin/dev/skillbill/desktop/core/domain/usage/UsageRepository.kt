@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.domain.usage.model.UsageProfileLookup
 import dev.skillbill.desktop.core.domain.usage.model.UsageProvider
 import dev.skillbill.desktop.core.domain.usage.model.RequestPermission
 import dev.skillbill.desktop.core.domain.usage.model.UsageRefreshResult
+import dev.skillbill.desktop.core.domain.usage.model.UsageRefreshAvailability
 import dev.skillbill.desktop.core.domain.usage.model.UsageRequest
 import dev.skillbill.desktop.core.domain.usage.model.UsageResult
 import dev.skillbill.desktop.core.domain.usage.model.UsageSessionStatus
@@ -13,7 +14,11 @@ import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
 
 interface UsageRepository {
-  suspend fun profileLookup(provider: UsageProvider, selectedProfile: String?): UsageProfileLookup
+  suspend fun profileLookup(
+    provider: UsageProvider,
+    selectedProfile: String?,
+    logicalSessionId: String? = null,
+  ): UsageProfileLookup
 
   fun observe(request: UsageRequest): Flow<UsageResult>
 
@@ -26,6 +31,14 @@ interface UsageRepository {
   fun releaseDemand(ownerId: String): UsageDemandResult
 
   fun refresh(request: UsageRequest): UsageRefreshResult
+
+  fun checkDue(ownerId: String): UsageRefreshResult
+
+  fun refreshAvailability(request: UsageRequest): Flow<UsageRefreshAvailability>
+
+  fun recheckSignInAvailability(request: UsageRequest): Flow<UsageRefreshAvailability>
+
+  fun recheckSignIn(request: UsageRequest): UsageRefreshResult
 
   fun sessionStatus(request: UsageRequest): UsageSessionStatus
 }

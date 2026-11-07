@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.core.domain.usage.model
 
 import kotlin.time.Instant
+import kotlin.time.Duration
 
 enum class UsageProvider { Codex, Claude, Cursor }
 
@@ -16,13 +17,32 @@ data class VerifiedUsageSubject(
   val authMode: UsageAuthMode,
 )
 
-data class VerifiedUsageIdentity(val value: String)
+data class VerifiedUsageIdentity(
+  val value: String,
+  val workspace: VerifiedUsageWorkspaceScope? = null,
+)
+
+sealed interface VerifiedUsageWorkspaceScope {
+  data class Workspace(val id: String) : VerifiedUsageWorkspaceScope
+  data object VerifiedNonWorkspace : VerifiedUsageWorkspaceScope
+}
 
 enum class UsageAuthMode { Account, ApiKey, Organization }
 
 data class SessionUsageScope(val logicalSessionId: String, val processGeneration: Long)
 
-data class UsageRequest(val profile: UsageProfileLookup, val logicalSessionId: String? = null)
+data class UsageRequest(
+  val profile: UsageProfileLookup,
+  val logicalSessionId: String? = null,
+  val modelSelection: UsageModelSelection? = null,
+)
+
+data class UsageModelSelection(val name: String, val provenance: ModelSelectionProvenance)
+enum class ModelSelectionProvenance { ActualExecution, Unknown }
+sealed interface UsageModelApplicability {
+  data object Unknown : UsageModelApplicability
+  data class Verified(val model: String) : UsageModelApplicability
+}
 
 data class UsageDemand(
   val ownerId: String,
@@ -41,7 +61,17 @@ data class UsageObservation(
   val meters: List<UsageMeter>,
   val requestPermission: RequestPermission,
   val sessionWarning: Boolean? = null,
+  val cardCandidates: List<UsageMeter> = emptyList(),
+  val popupMeters: List<UsageMeter> = meters,
+  val coverage: UsageCoverage = UsageCoverage.Unknown,
+  val refreshFailure: UsageUnavailableReason? = null,
+  val emptySuccess: Boolean = false,
+  val statusObservedAt: Instant? = null,
+  val requestGeneration: Long? = null,
+  val sourceFreshnessBasis: Duration? = null,
 )
+
+enum class UsageCoverage { Complete, Partial, Empty, Unknown }
 
 sealed interface UsageObservationSubject {
   data class Account(val value: VerifiedUsageSubject) : UsageObservationSubject
@@ -51,6 +81,20 @@ sealed interface UsageObservationSubject {
 data class UsageSource(val provider: UsageProvider, val capability: UsageCapability)
 
 enum class UsageCapability { NumericSnapshot, SessionStatusOnly, Unsupported, AwaitingReader, Unavailable }
+sealed interface UsageRefreshCapability {
+  data object ProbeOnly : UsageRefreshCapability
+  data object EventOnly : UsageRefreshCapability
+  data object Unsupported : UsageRefreshCapability
+  data class Pull(val family: UsageRefreshFamily, val minimumInterval: Duration = Duration.ZERO) : UsageRefreshCapability
+}
+enum class UsageRefreshFamily { CodexSnapshot, TeamSpend, AggregatedActivity }
+sealed interface UsageRefreshAvailability {
+  data object Ready : UsageRefreshAvailability
+  data object Checking : UsageRefreshAvailability
+  data class Deferred(val reason: UsageRefreshDeferredReason, val eligibleAt: Instant) : UsageRefreshAvailability
+  data class Disabled(val reason: UsageUnavailableReason) : UsageRefreshAvailability
+}
+enum class UsageRefreshDeferredReason { Cooldown, SourceFloor, Retry }
 enum class UsageFreshness { Current, Stale, Unknown }
 enum class UsageRefreshState { Idle, Loading, Complete, Failed, Throttled }
 enum class RequestPermission { Allowed, Rejected, Unknown }
@@ -63,6 +107,12 @@ data class UsageMeter private constructor(
   val resetAt: Instant?,
   val period: UsagePeriod,
   val value: UsageValue,
+  val modelApplicability: UsageModelApplicability = UsageModelApplicability.Unknown,
+  val expired: Boolean = false,
+  val comparableAllowanceGroup: String? = null,
+  val sourceOwner: UsageSource? = null,
+  val freshnessBasis: Duration? = null,
+  val stale: Boolean = false,
 ) {
   companion object {
     fun create(
@@ -73,9 +123,15 @@ data class UsageMeter private constructor(
       resetAt: Instant?,
       period: UsagePeriod,
       value: UsageValue,
+      modelApplicability: UsageModelApplicability = UsageModelApplicability.Unknown,
+      expired: Boolean = false,
+      comparableAllowanceGroup: String? = null,
+      sourceOwner: UsageSource? = null,
+      freshnessBasis: Duration? = null,
+      stale: Boolean = false,
     ): UsageMeter? =
       if (bucketIdentity.isBlank() || label.isBlank()) null
-      else UsageMeter(bucketIdentity, label, scope, observedAt, resetAt, period, value)
+      else UsageMeter(bucketIdentity, label, scope, observedAt, resetAt, period, value, modelApplicability, expired, comparableAllowanceGroup, sourceOwner, freshnessBasis, stale)
   }
 }
 
@@ -161,9 +217,29 @@ class DecimalQuantity private constructor(val unscaledDigits: String, val scale:
 }
 
 sealed interface UsageResult {
-  data class Snapshot(val value: UsageObservation, val omission: OmissionSemantics) : UsageResult
-  data class Partial(val fields: Map<String, PartialUsageField>) : UsageResult
-  data object EmptySuccess : UsageResult
+  data class Snapshot(
+    val value: UsageObservation,
+    val omission: OmissionSemantics,
+    val reservationId: String? = null,
+  ) : UsageResult
+  data class Partial(
+    val subject: VerifiedUsageSubject,
+    val source: UsageSource,
+    val collectionTime: Instant,
+    val reservationId: String,
+    val sourceObservationTime: Instant? = null,
+    val fields: Map<String, PartialUsageField>,
+    val requestPermission: RequestPermission? = null,
+    val sessionWarning: Boolean? = null,
+  ) : UsageResult
+  data class EmptySuccess(
+    val subject: VerifiedUsageSubject,
+    val source: UsageSource,
+    val collectionTime: Instant,
+    val omission: OmissionSemantics,
+    val reservationId: String,
+    val sourceObservationTime: Instant? = null,
+  ) : UsageResult
   data class Unavailable(val reason: UsageUnavailableReason) : UsageResult
   data class Unsupported(val reason: UsageUnavailableReason) : UsageResult
   data class SignInRequired(val reason: UsageUnavailableReason) : UsageResult
@@ -171,11 +247,11 @@ sealed interface UsageResult {
   data class Throttled(val reason: UsageUnavailableReason, val retryAt: VerifiedRetryInstant?) : UsageResult
 }
 
-enum class OmissionSemantics { OmittedFieldsAreUnchanged, OmittedFieldsAreRemoved }
+enum class OmissionSemantics { OmittedFieldsAreUnchanged, OmittedFieldsAreRemoved, Unknown }
 
 sealed interface PartialUsageField {
   data object Absent : PartialUsageField
-  data object Cleared : PartialUsageField
+  data class Cleared(val observedAt: Instant) : PartialUsageField
   data class Present(val value: UsageMeter) : PartialUsageField
 }
 
@@ -185,6 +261,9 @@ enum class UsageUnavailableCode { AwaitingCapabilityReader, UnsupportedPersonalS
 
 sealed interface UsageRefreshResult {
   data class Started(val request: UsageRequest) : UsageRefreshResult
+  data class Coalesced(val request: UsageRequest) : UsageRefreshResult
+  data class NotDue(val eligibleAt: Instant) : UsageRefreshResult
+  data class Deferred(val eligibleAt: Instant) : UsageRefreshResult
   data class Disabled(val reason: UsageUnavailableReason) : UsageRefreshResult
   data class Failed(val reason: UsageUnavailableReason) : UsageRefreshResult
 }
