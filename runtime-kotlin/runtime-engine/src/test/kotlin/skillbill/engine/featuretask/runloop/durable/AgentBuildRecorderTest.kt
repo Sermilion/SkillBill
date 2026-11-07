@@ -40,6 +40,7 @@ import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class AgentBuildRecorderTest {
   @TempDir lateinit var databaseHome: Path
@@ -67,6 +68,21 @@ class AgentBuildRecorderTest {
           startedAt = Instant.EPOCH,
         ),
       )
+      it.agentBuildRuns.start(
+        AgentBuildRunStart(
+          buildId = "abandoned-only",
+          runId = "abandoned-only-run",
+          parentRunId = null,
+          repositoryIdentity = "primary",
+          command = "old command",
+          shortCommand = "old",
+          tool = "cargo",
+          projectKind = "Rust",
+          pid = 11,
+          startedAt = Instant.EPOCH.plusSeconds(1),
+        ),
+      )
+      it.agentBuildRuns.abandonOpen("abandoned-only-run")
     }
     val observer = recorder(SessionAgentBuildRunRepository(database))
     val startedAt = Instant.parse("2026-11-07T11:59:58Z")
@@ -85,8 +101,9 @@ class AgentBuildRecorderTest {
       )
     }
 
-    val stale = assertNotNull(database.read { it.agentBuildRuns.latestForRun(setOf("run-1")) })
-    val recorded = assertNotNull(database.read { it.agentBuildRuns.latestForRun(setOf("goal-1")) })
+    val recorded = assertNotNull(database.read { it.agentBuildRuns.latestForRun(setOf("run-1")) })
+    val parentRecorded = assertNotNull(database.read { it.agentBuildRuns.latestForRun(setOf("goal-1")) })
+    val abandoned = assertNotNull(database.read { it.agentBuildRuns.latestForRun(setOf("abandoned-only-run")) })
     val history =
       database.read {
         it.agentBuildRuns.history(
@@ -95,14 +112,17 @@ class AgentBuildRecorderTest {
           endedAt.plusSeconds(1),
         )
       }
-    assertEquals("stale", stale.buildId)
-    assertEquals(AgentBuildOutcome.UNKNOWN, stale.outcome)
+    assertEquals(recorded, parentRecorded)
+    assertEquals(startedAt, recorded.startedAt)
     assertEquals("run-1", recorded.runId)
     assertEquals("goal-1", recorded.parentRunId)
     assertEquals("primary", recorded.repositoryIdentity)
     assertEquals(AgentBuildOutcome.FAILED, recorded.outcome)
     assertEquals(endedAt, recorded.endedAt)
     assertEquals(101, recorded.exitCode)
+    assertEquals("abandoned-only", abandoned.buildId)
+    assertEquals(AgentBuildOutcome.UNKNOWN, abandoned.outcome)
+    assertNull(abandoned.endedAt)
     assertEquals(AgentBuildOutcome.FAILED, history.previous?.outcome)
     assertEquals(endedAt, history.previous?.endedAt)
     assertEquals(3_000L, history.previous?.durationMs)

@@ -39,9 +39,9 @@ interface AgentBuildRunRepository {
   fun abandonOpen(runId: String): Int
 
   /**
-   * Returns the build for [runIds], matched against both run id and parent run id: the open row with the
-   * latest start if any, else the row with the latest start, else null. Abandoned rows have no end time
-   * and retain open-row priority.
+   * Returns the build for [runIds], matched against both run id and parent run id: the active row with the
+   * latest start if any, else the row with the latest start, else null. Abandoned rows remain eligible as
+   * observations but do not retain active-row priority.
    */
   fun latestForRun(runIds: Set<String>): AgentBuildRun?
 

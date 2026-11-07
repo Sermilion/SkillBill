@@ -59,7 +59,7 @@ internal const val HISTORY_SQL: String =
 internal fun latestForRunSql(count: Int): String {
   val placeholders = List(count) { "?" }.joinToString()
   return "SELECT * FROM $TABLE WHERE $RUN_ID IN ($placeholders) OR $PARENT_RUN_ID IN ($placeholders) " +
-    "ORDER BY ($ENDED_AT IS NULL) DESC, $STARTED_AT DESC, $BUILD_ID DESC LIMIT 1"
+    "ORDER BY ($ENDED_AT IS NULL AND $OUTCOME IS NULL) DESC, $STARTED_AT DESC, $BUILD_ID DESC LIMIT 1"
 }
 
 internal fun ResultSet.readBuildRun(): AgentBuildRun =

@@ -126,7 +126,33 @@ class AgentBuildRunStoreTest {
     val abandoned = read { it.latestForRun(setOf("sub")) }
     assertEquals(AgentBuildOutcome.UNKNOWN, abandoned?.outcome)
     assertNull(abandoned?.endedAt)
-    assertEquals(abandoned, read { it.latestForRun(setOf("goal")) })
+    assertEquals("own", read { it.latestForRun(setOf("goal")) }?.buildId)
     assertEquals(3_000L, read { it.history("repo", "./gradlew build", hour(10)).usualMs })
+  }
+
+  @Test
+  fun `latest for run selects a failed retry after abandonment for direct and parent identities`() {
+    write { store ->
+      store.start(startRow("abandoned", hour(1), runId = "sub", parentRunId = "goal"))
+      store.abandonOpen("sub")
+      store.settled(
+        startRow("retry", hour(2), runId = "sub", parentRunId = "goal").copy(repositoryIdentity = "retry-repo"),
+        3_000,
+        AgentBuildOutcome.FAILED,
+      )
+      store.start(startRow("abandoned-only", hour(3), runId = "only").copy(repositoryIdentity = "retry-repo"))
+      store.abandonOpen("only")
+    }
+
+    val retry = read { it.latestForRun(setOf("sub")) }
+    assertEquals("retry", retry?.buildId)
+    assertEquals(AgentBuildOutcome.FAILED, retry?.outcome)
+    assertEquals(retry, read { it.latestForRun(setOf("goal")) })
+
+    val abandoned = read { it.latestForRun(setOf("only")) }
+    assertEquals("abandoned-only", abandoned?.buildId)
+    assertEquals(AgentBuildOutcome.UNKNOWN, abandoned?.outcome)
+    assertNull(abandoned?.endedAt)
+    assertEquals(3_000L, read { it.history("retry-repo", "./gradlew build", hour(10)).usualMs })
   }
 }
