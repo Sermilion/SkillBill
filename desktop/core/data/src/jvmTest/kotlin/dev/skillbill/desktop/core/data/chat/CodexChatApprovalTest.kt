@@ -90,7 +90,7 @@ class CodexChatApprovalTest {
     var stopped = false
     val owner = Owner()
     val approval = CodexChatApproval({ frames += obj(it); true }, { stopped = true },
-      RecordingDiagnostics(), cards::add, "/checkout", "profile")
+      RecordingDiagnostics(), cards::add, "/checkout")
     init { approval.bind(owner); approval.bindTurn("thread", "turn"); owner.deliver = approval::deliver }
   }
 

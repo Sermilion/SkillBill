@@ -42,6 +42,28 @@ class CursorAcpSessionTest {
   }
 
   @Test
+  fun `Junie opens a session without login or mode selection and its cards carry its own provider`() {
+    val harness = Harness(dependency = CursorAcpMcpDependency.Unspecified, provider = AcpProvider.Junie)
+    harness.session.start()
+    harness.respond("""{"protocolVersion":1,"agentCapabilities":{},"authMethods":[{"id":"cursor_login"}]}""")
+    assertEquals(JsonPrimitive("session/new"), harness.frames.last()[CursorAcpKeys.METHOD])
+    harness.respond("""{"sessionId":"s"}""")
+    assertEquals(JsonPrimitive("session/prompt"), harness.frames.last()[CursorAcpKeys.METHOD])
+    assertTrue(harness.session.ready)
+
+    harness.permission("1", "a", "ls")
+    val card = harness.owner.requests.single().request
+    assertEquals("junie", card.provider)
+    assertTrue(card.approvalId.startsWith("junie:"))
+    assertEquals(
+      ApprovalDeliveryState.WRITTEN,
+      harness.session.deliver(card.copy(state = ApprovalState.ALLOWED, selectedOptionId = "once-a")),
+    )
+    assertContains(harness.frames.last().toString(), "once-a")
+    harness.session.close()
+  }
+
+  @Test
   fun `interleaved permissions preserve typed ids full content and original one time options`() {
     val harness = Harness()
     harness.open()
@@ -179,13 +201,22 @@ class CursorAcpSessionTest {
     saved: String? = null,
     model: String? = null,
     dependency: CursorAcpMcpDependency = CursorAcpMcpDependency.ProjectUserOnly,
+    provider: AcpProvider = AcpProvider.Cursor,
   ) {
     val frames = mutableListOf<JsonObject>()
     val events = mutableListOf<CursorAcpEvent>()
     val owner = Owner()
     val session =
       CursorAcpSession(
-        CursorAcpLaunch("/checkout", "scoped prompt", model, "agent", saved, mcpDependency = dependency),
+        CursorAcpLaunch(
+          "/checkout",
+          "scoped prompt",
+          model,
+          "agent".takeIf { provider == AcpProvider.Cursor },
+          saved,
+          mcpDependency = dependency,
+          provider = provider,
+        ),
         Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
         {
           frames += Json.parseToJsonElement(it).jsonObject

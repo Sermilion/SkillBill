@@ -19,16 +19,13 @@ class ClaudeChatTransportTest {
     assertEquals("high", first[first.indexOf("--effort") + 1])
     assertEquals("session-1", first[first.indexOf("--session-id") + 1])
     assertFalse("--resume" in first)
-    assertTrue(first.last().contains("only after the operator answers its approval card"))
 
     val readOnly = chatRequest(firstTurn = false, mode = ChatPermissionMode.ReadOnly)
     val next = claudeArguments(readOnly)
     assertFalse("--model" in next || "--effort" in next || "--session-id" in next)
     assertEquals("session-1", next[next.indexOf("--resume") + 1])
     assertFalse(next.last().contains("Pause and act"))
-    assertTrue(claudeMessage(readOnly).contains("Pause and act") && claudeMessage(readOnly).endsWith("operator prompt"))
-    assertEquals("operator prompt", claudeMessage(chatRequest()))
-    assertEquals("manual", first[first.indexOf("--permission-mode") + 1])
+    assertEquals("auto", first[first.indexOf("--permission-mode") + 1])
     assertEquals("plan", next[next.indexOf("--permission-mode") + 1])
     for (arguments in listOf(first, next)) {
       assertEquals("host", arguments[arguments.indexOf("--permission-prompts") + 1])

@@ -64,8 +64,8 @@ class ClaudeHostFramesTest {
     assertEquals(listOf("partial"), splitter.feed("ial\n"))
   }
 
-  private fun decode(bytes: ByteArray): JsonObject {
-    val text = bytes.toString(Charsets.UTF_8)
+  private fun decode(frame: JsonObject): JsonObject {
+    val text = frame.frameBytes().toString(Charsets.UTF_8)
     assertTrue(text.endsWith("\n"))
     return Json.parseToJsonElement(text).jsonObject
   }

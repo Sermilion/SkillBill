@@ -5,8 +5,6 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatImage
-import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
-import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.flow.Flow
@@ -37,35 +35,14 @@ class AgentChatTransportsTest {
   }
 
   @Test
-  fun `direct Junie calls refuse before launch regardless of mode history images or new task scope`() = runTest {
-    val launcher = NoLaunch()
-    store.saveExchanges("session", listOf(ChatExchange("Earlier operator text", "Historical Junie prose")))
-    for (mode in ChatPermissionMode.entries) {
-      for (first in listOf(true, false)) {
-        val request = chatRequest(agent = ChatAgent("junie", null, null), firstTurn = first).copy(
-          mode = mode,
-          scope = ChatScope.NewTask(host.userHome, "main"),
-          images = listOf(ChatImage(byteArrayOf(1), "image/png")),
-        )
-        val events = JunieChatTransport(host, launcher, store, RecordingDiagnostics()).run(request).toList()
-        val failure = assertIs<ChatEvent.Failed>(events.single())
-        assertEquals(ChatFailure.ApprovalUnsupported, failure.failure)
-        assertContains(failure.detail.orEmpty(), "Junie ACP exists")
-        assertContains(failure.detail.orEmpty(), "unverified")
-        assertTrue(launcher.commands.isEmpty())
-      }
-    }
-    assertEquals("Historical Junie prose", store.exchanges("session").single().agent)
-  }
-
-  @Test
-  fun `Codex and Cursor without an operator channel launch nothing and retain the saved conversation`() = runTest {
+  fun `ACP and app-server agents without an operator channel launch nothing and retain the saved conversation`() = runTest {
     val launcher = NoLaunch()
     val request = chatRequest(agent = ChatAgent("codex", null, null), firstTurn = false)
     store.saveAgentSession(request.sessionId, "saved-provider-thread")
     val transports = listOf(
       CodexChatTransport(host, launcher, store, RecordingDiagnostics()),
       CursorChatTransport(host, launcher, store, RecordingDiagnostics()),
+      JunieChatTransport(host, launcher, store, RecordingDiagnostics()),
     )
     for (transport in transports) {
       val failure = assertIs<ChatEvent.Failed>(transport.run(request.copy(
