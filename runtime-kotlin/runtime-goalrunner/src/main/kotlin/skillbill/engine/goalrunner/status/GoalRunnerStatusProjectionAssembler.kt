@@ -960,7 +960,13 @@ public class GoalRunnerStatusProjectionAssembler(
         val lease =
           manifestStore.executionLease(parentWorkflowId)
             ?: return@catchingNonCancellation ExecutionLiveness.IDLE
-        livenessOfLeaseOwner(lease.asWorkerOwnership(parentWorkflowId), durableRead)
+        val liveness = livenessOfLeaseOwner(lease.asWorkerOwnership(parentWorkflowId), durableRead)
+        // The runner reclaims an expired lease, so a reused pid on it no longer blocks a launch.
+        if (liveness == ExecutionLiveness.PID_REUSED && !lease.expiresAtInstant.isAfter(clock.instant())) {
+          ExecutionLiveness.IDLE
+        } else {
+          liveness
+        }
       }.getOrElse { error ->
         durableRead.recordDegradedRead(
           seam = "goal-status.parent_execution_liveness",
