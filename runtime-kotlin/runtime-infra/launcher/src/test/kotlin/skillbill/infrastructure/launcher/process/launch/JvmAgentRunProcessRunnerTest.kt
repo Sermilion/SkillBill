@@ -172,7 +172,6 @@ class JvmAgentRunProcessRunnerTest {
   fun `a sink that stalls delivery after the child exits does not cut the final stream event`() {
     val sinkEntered = CountDownLatch(1)
     val releaseSink = CountDownLatch(1)
-    val awaits = AtomicInteger()
     val drain =
       Utf8Drain(
         input = ChunkedInputStream(listOf("{\"type\":\"assistant\"}\n", "{\"type\":\"result\"}\n")),
@@ -185,18 +184,17 @@ class JvmAgentRunProcessRunnerTest {
             }
           },
         onChunkRead = {},
-        awaitWorker = { worker, _ ->
-          if (awaits.incrementAndGet() == 1) {
-            sinkEntered.await()
-          } else {
-            releaseSink.countDown()
-            worker.join()
-          }
-        },
       )
     drain.start()
 
-    assertFalse(drain.joinAndFreeze())
+    var incomplete = true
+    val freezer = Thread { incomplete = drain.joinAndFreeze() }
+    freezer.start()
+    sinkEntered.await()
+    releaseSink.countDown()
+    freezer.join()
+
+    assertFalse(incomplete)
     assertEquals("{\"type\":\"assistant\"}\n{\"type\":\"result\"}\n", drain.capture().text)
   }
 

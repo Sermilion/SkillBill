@@ -50,6 +50,8 @@ data class SkillRunRequest(
   val worktreeEditObserver: AgentRunWorktreeEditObserver = AgentRunWorktreeEditObserver.NONE,
   val approval: AgentRunApprovalRequirement = AgentRunApprovalRequirement.Unowned(),
   val cursorMcpDependency: CursorMcpDependencyRequirement = CursorMcpDependencyRequirement.Unspecified,
+  val validationCheckInvocationId: String? = null,
+  val captureDisplayOutput: Boolean = false,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
@@ -66,6 +68,9 @@ data class SkillRunRequest(
       -> Unit
     }
     promptOverride?.let { prompt -> require(prompt.isNotBlank()) { "promptOverride must be non-blank when provided." } }
+    validationCheckInvocationId?.let { id ->
+      require(id.isNotBlank()) { "validationCheckInvocationId must be non-blank when provided." }
+    }
     modelOverride?.let { model -> require(model.isNotBlank()) { "modelOverride must be non-blank when provided." } }
     effortOverride?.let { effort -> require(effort.isNotBlank()) { "effortOverride must be non-blank when provided." } }
     subtaskId?.let { id -> require(id > 0) { "subtaskId must be positive when provided." } }

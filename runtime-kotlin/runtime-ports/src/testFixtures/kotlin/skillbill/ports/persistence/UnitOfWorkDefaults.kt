@@ -39,18 +39,24 @@ import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
+import skillbill.ports.idestatus.model.LiveChecksWriteMode
 import skillbill.ports.idestatus.model.StandaloneEligiblePage
+import skillbill.ports.idestatus.model.StandaloneNarrowWriteResult
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
+import skillbill.ports.idestatus.model.StandalonePhaseOutputLine
+import skillbill.ports.idestatus.model.StandalonePhaseOutputSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
 import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandaloneQaChecklistWriteResult
+import skillbill.ports.idestatus.model.ValidationCheckEventRecord
 import skillbill.ports.idestatus.model.WorkBoardReadModelPage
 import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardReadModelRow
+import skillbill.ports.idestatus.model.WorkValidationBranchRun
 import skillbill.ports.operation.OperationCardRepository
 import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.operation.UnavailableOperationCardRepository
@@ -97,6 +103,8 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
 
       override fun readByInvocation(invocationId: String): StandalonePhaseStatusRecord? = null
 
+      override fun readValidationBranchRuns(invocationId: String): List<WorkValidationBranchRun> = emptyList()
+
       override fun latestStandaloneExecution(workflowId: String): StandalonePhaseStatusRecord? = null
 
       override fun requestCancellation(
@@ -121,6 +129,33 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
         invocationId: String,
         checklist: StandaloneQaChecklist,
       ): StandaloneQaChecklistWriteResult = StandaloneQaChecklistWriteResult.MISSING
+
+      override fun appendValidationCheckEvent(record: ValidationCheckEventRecord) = Unit
+
+      override fun readValidationCheckEvents(invocationId: String): List<ValidationCheckEventRecord> = emptyList()
+
+      override fun writeCurrentActivity(
+        invocationId: String,
+        activity: String,
+      ): StandaloneNarrowWriteResult = StandaloneNarrowWriteResult.MISSING
+
+      override fun writeLiveChecks(
+        invocationId: String,
+        mode: LiveChecksWriteMode,
+      ): StandaloneNarrowWriteResult = StandaloneNarrowWriteResult.MISSING
+
+      override fun writeOutputSnapshot(
+        executionId: String,
+        snapshot: StandalonePhaseOutputSnapshot,
+      ) = Unit
+
+      override fun readOutputLines(
+        executionId: String,
+        beforeSequence: Long?,
+        limit: Int,
+      ): List<StandalonePhaseOutputLine> = emptyList()
+
+      override fun readOutput(executionId: String): StandalonePhaseOutputSnapshot? = null
     }
   open override val rejectedOutputDiagnostics: RejectedOutputDiagnosticRepository =
     UnavailableRejectedOutputDiagnosticRepository

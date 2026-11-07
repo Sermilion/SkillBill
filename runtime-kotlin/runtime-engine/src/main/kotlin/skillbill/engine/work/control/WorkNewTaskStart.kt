@@ -10,6 +10,8 @@ import skillbill.contracts.operationcard.OperationCardStatus
 import skillbill.contracts.operationcard.OperationLaunchContext
 import skillbill.contracts.operationcard.OperationLaunchRetention
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.engine.featuretask.model.execution.launchArguments
 import skillbill.engine.goal.GoalNewWorkAdmission
 import skillbill.engine.goal.GoalNewWorkAdmissionPort
 import skillbill.engine.goal.GoalPreflightPort
@@ -27,6 +29,7 @@ import skillbill.engine.work.control.model.OperationCardDismissal
 import skillbill.engine.work.control.model.OperationStartRequest
 import skillbill.engine.work.control.model.OperatorConfirmation
 import skillbill.engine.work.control.model.StandaloneCheckout
+import skillbill.engine.work.control.model.StandalonePhaseRequest
 import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
@@ -156,6 +159,7 @@ public class WorkNewTaskStart(
     prepared: NewTaskPreparation.Ready,
     kind: NewTaskRunKind,
     agentId: String,
+    qaDevice: QaNamedDevice? = null,
   ): NewTaskStartResult {
     if (agentId !in SupportedAgent.supportedIds) {
       return NewTaskStartResult.Refused("Choose a supported agent before starting this run.")
@@ -199,25 +203,8 @@ public class WorkNewTaskStart(
         args = listOf("phase", "plan", prepared.intake, "--agent", agentId)
       }
     }
-    return database.transaction { unit ->
-      when (
-        val launched =
-          launcher.start(
-            WorkRunLaunchRequest(
-              repoRoot,
-              unit.dbPath,
-              ownership,
-              WorkRunLaunchKind.RuntimeCommand(args),
-              emptyMap(),
-            ),
-          )
-      ) {
-        is WorkRunLaunchResult.Refused -> NewTaskStartResult.Refused(launched.reason)
-        is WorkRunLaunchResult.Started -> NewTaskStartResult.Started
-        is WorkRunLaunchResult.AwaitingConfirmation ->
-          NewTaskStartResult.Refused("The runner exited before starting. See ${launched.logPath}")
-      }
-    }
+    val deviceArguments = if (kind == NewTaskRunKind.GOAL) qaDevice.launchArguments() else emptyList()
+    return launchRuntimeCommand(repoRoot, ownership, args + deviceArguments)
   }
 
   private fun startRefusal(
@@ -236,15 +223,26 @@ public class WorkNewTaskStart(
 
   public fun startStandalone(
     repoRoot: Path,
-    phaseId: String,
+    request: StandalonePhaseRequest,
     agentId: String,
-    target: String? = null,
     checkout: StandaloneCheckout = StandaloneCheckout(),
+    qaDevice: QaNamedDevice? = null,
   ): NewTaskStartResult {
+    val phaseId = request.phaseId
+    val target = request.target
+    if (qaDevice != null && phaseId != QA_PHASE) {
+      return NewTaskStartResult.Refused("A named QA device is only valid for the QA phase.")
+    }
     if (phaseId !in STANDALONE_PHASES) return NewTaskStartResult.Refused("Unsupported standalone phase '$phaseId'.")
     standaloneIntakeRefusal(target, phaseId)?.let { return it }
     val place = if (phaseId == MONITOR_PHASE) checkout.copy(branch = null) else checkout
-    val run = StandaloneRun("phase", phaseId, BranchWorktreeHolder(BranchWorktreeHolderKind.PHASE, phaseId))
+    val run =
+      StandaloneRun(
+        "phase",
+        phaseId,
+        BranchWorktreeHolder(BranchWorktreeHolderKind.PHASE, phaseId),
+        qaDevice = qaDevice.takeIf { phaseId == QA_PHASE },
+      )
     return launchStandaloneCommand(repoRoot, run, target, agentId, place)
   }
 
@@ -420,10 +418,13 @@ public class WorkNewTaskStart(
         is LaunchRetention.Refused -> return NewTaskStartResult.Refused(retained.reason)
       }
     val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
+    val ownedTarget = arguments.launchTarget.takeUnless { run.holder.id == QA_PHASE }
     val ownership =
-      listOfNotNull("$identity:${run.name}:standalone", arguments.launchTarget, branch?.let { "branch:$it" })
+      listOfNotNull("$identity:${run.holder.id}:standalone", ownedTarget, branch?.let { "branch:$it" })
         .joinToString(":")
-    val args = listOf(run.verb, run.name) + arguments.operation + listOf("--agent", agentId)
+    val args =
+      listOf(run.verb, run.name) + arguments.operation + listOf("--agent", agentId) +
+        run.qaDevice.launchArguments()
     if (run.launchId != null) {
       val context =
         OperationLaunchContext(
@@ -620,19 +621,33 @@ public class WorkNewTaskStart(
     intake: String?,
     phaseId: String,
   ): NewTaskStartResult.Refused? {
-    if (intake == null) return null
+    if (intake.isNullOrBlank()) return null
     val trimmed = intake.trim()
-    if (trimmed.isEmpty()) return null
-    return when {
-      phaseId != MONITOR_PHASE ->
-        NewTaskStartResult.Refused("Intake is supported only for standalone monitor runs.")
-      trimmed.contains(' ') || trimmed.any { it.isISOControl() } ->
+    return when (phaseId) {
+      MONITOR_PHASE -> monitorIntakeRefusal(trimmed)
+      QA_PHASE -> qaIntakeRefusal(trimmed)
+      else -> NewTaskStartResult.Refused("Intake is supported only for standalone monitor and QA runs.")
+    }
+  }
+
+  private fun monitorIntakeRefusal(intake: String): NewTaskStartResult.Refused? =
+    when {
+      intake.contains(' ') || intake.any { it.isISOControl() } ->
         NewTaskStartResult.Refused("Monitor intake must be a single token naming the target.")
-      trimmed.startsWith(MONITOR_INTAKE_MODE_PREFIX) || trimmed.startsWith(MONITOR_INTAKE_TARGET_PREFIX) ->
+      intake.startsWith(MONITOR_INTAKE_MODE_PREFIX) || intake.startsWith(MONITOR_INTAKE_TARGET_PREFIX) ->
         NewTaskStartResult.Refused("Monitor intake must name the target directly, not as a phase option.")
       else -> null
     }
-  }
+
+  private fun qaIntakeRefusal(intake: String): NewTaskStartResult.Refused? =
+    if (
+      intake.startsWith('-') || intake.startsWith(MONITOR_INTAKE_MODE_PREFIX) ||
+      intake.startsWith(MONITOR_INTAKE_TARGET_PREFIX)
+    ) {
+      NewTaskStartResult.Refused("QA instructions cannot begin with a CLI option or phase intake key.")
+    } else {
+      null
+    }
 
   private fun runFailure(
     exit: CompletionStage<WorkRunExit>,
@@ -724,6 +739,7 @@ public class WorkNewTaskStart(
     val holder: BranchWorktreeHolder,
     val launchId: String? = null,
     val profile: String? = null,
+    val qaDevice: QaNamedDevice? = null,
   )
 
   private data class OperationBinding(
@@ -787,7 +803,8 @@ public class WorkNewTaskStart(
     const val MAX_INTAKE_BYTES = 30_000
     const val MAX_REASON_CHARS = 500
     const val MONITOR_PHASE = "monitor"
-    val STANDALONE_PHASES = setOf("review", "validation", "qa", "pr", MONITOR_PHASE)
+    const val QA_PHASE = "qa"
+    val STANDALONE_PHASES = setOf("review", "validation", QA_PHASE, "pr", MONITOR_PHASE)
     val STANDALONE_OPERATIONS = setOf("verify", "pr-review-fix")
     const val MONITOR_INTAKE_MODE_PREFIX = "mode:"
     const val MONITOR_INTAKE_TARGET_PREFIX = "target:"

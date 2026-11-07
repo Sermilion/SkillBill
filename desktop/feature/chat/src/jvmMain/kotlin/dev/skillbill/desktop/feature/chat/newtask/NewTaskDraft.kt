@@ -17,7 +17,6 @@ import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
-import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.feedback.ToastMessage
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.feedback.ToastTone
@@ -40,8 +39,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import me.tatarka.inject.annotations.Inject
-import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.io.File
 import java.util.UUID
 import java.util.IdentityHashMap
@@ -64,9 +61,7 @@ private fun NewTaskKind.startName(): String =
   NewTaskActionKind.entries.firstOrNull { it.toNewTaskKind() == this }?.wire ?: name.lowercase()
 
 /** What the operator set up on New task, with its chat. It lives with the window, so navigation and session switches keep it. */
-@Inject
-@SingleIn(WindowScope::class)
-class NewTaskDraft(
+class NewTaskDraft internal constructor(
   private val chats: ExecutionChatRepository,
   private val workControls: WorkControlRepository,
   private val databaseSession: DatabaseSessionController,
@@ -74,6 +69,7 @@ class NewTaskDraft(
   windowScope: WindowCoroutineScope,
   private val clock: Clock,
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
+  private val savedChatActions: NewTaskSavedChats = NewTaskSavedChats(chats, windowScope.scope, toasts),
 ) {
   private val scope = windowScope.scope
   private val cardOwners = IdentityHashMap<ChatThread, NewTaskChat>()
@@ -102,9 +98,7 @@ class NewTaskDraft(
     synchronized(cardOwners) { cardOwners[thread] }?.persist()?.also { if (it) refreshSaved() } ?: false
   })
   private val chatState = MutableStateFlow<NewTaskChat?>(null)
-  private val savedState = MutableStateFlow<List<ChatHistoryEntry>>(emptyList())
   private val offerState = MutableStateFlow(NewTaskOffer())
-  private var savedRead: Job? = null
   private var closing = false
   private var offerKeyEdit: NewTaskOfferKeyEdit? = null
   private var lastOfferFieldValue: String? = null
@@ -126,7 +120,9 @@ class NewTaskDraft(
   internal var cursorMcpDependency by mutableStateOf(CursorMcpDependency.Unspecified)
 
   /** The selected repository's saved drafts, newest first, as of the latest [refreshSaved]. */
-  internal val saved: StateFlow<List<ChatHistoryEntry>> = savedState.asStateFlow()
+  internal val saved: StateFlow<List<ChatHistoryEntry>> = savedChatActions.saved
+
+  internal fun discardSaved(entry: ChatHistoryEntry) = savedChatActions.discardSaved(entry)
 
   internal fun canSend(): Boolean = canAdmitTurn(text)
 
@@ -287,6 +283,11 @@ class NewTaskDraft(
               if (ownsChat(current)) {
                 offerState.value = NewTaskOffer(started = message)
                 record(checkNotNull(current), ChatMessage.Notice("$message. $START_AGAIN_SUFFIX", confirmation = true))
+                outcome.awaitFailure?.let { awaitFailure ->
+                  scope.launch {
+                    awaitFailure()?.let { reason -> showStartProblem(current, kind, "$message failed. $reason") }
+                  }
+                }
               } else {
                 toasts.show(ToastMessage(ToastTone.Confirmation, message))
               }
@@ -320,9 +321,9 @@ class NewTaskDraft(
   }
 
   /** Ends the chat and deletes its saved draft; the selections and any typed text stay. */
-  internal fun discard() {
-    if (closing) return
-    val current = chatState.value ?: return
+  internal fun discard(): Boolean {
+    if (closing) return false
+    val current = chatState.value ?: return false
     val saveLock = saveLocks[current.sessionId]
     invalidDrafts += current.sessionId
     retainedThreads.remove(current.sessionId)
@@ -331,6 +332,7 @@ class NewTaskDraft(
     leave(current) {
       saveLock?.withLock { chats.deleteSavedChat(current.sessionId) } ?: chats.deleteSavedChat(current.sessionId)
     }
+    return true
   }
 
   /** Writes any running reply, then ends the chat's agent process and keeps its saved draft, for "New chat" and a window close. */
@@ -359,11 +361,27 @@ class NewTaskDraft(
     val branch = baseBranch.ifBlank { null }
     if (current.repositoryRoot == repo.root && current.baseBranch == branch && current.agent.agentId == agent.agentId) return
     val lines = current.thread.transcript.value
+    val replay = newTaskReplayPreamble(
+      NewTaskReplay(
+        current.replayAgentId ?: current.agent.agentId,
+        current.replayRepositoryRoot ?: current.repositoryRoot,
+        current.replayBaseBranch ?: current.baseBranch,
+        lines,
+      ),
+      repo.root,
+      branch,
+    )
     val previousId = current.sessionId
     current.end()
     val next = open(UUID.randomUUID().toString(), repo.root, branch, agent)
-    next.thread.replaceTranscript(lines + ChatMessage.Notice("Switched to ${chipText(agent)} in ${repo.name}."))
+    next.replayPreamble = replay
+    next.replayAgentId = current.replayAgentId ?: current.agent.agentId
+    next.replayRepositoryRoot = current.replayRepositoryRoot ?: current.repositoryRoot
+    next.replayBaseBranch = current.replayBaseBranch ?: current.baseBranch
     next.thread.showCapability(agent)
+    next.thread.replaceTranscript(
+      lines + ChatMessage.Notice("Switched to ${chipText(agent)} in ${repo.name}. It gets the earlier conversation with your next message."),
+    )
     scope.launch {
       current.job.join()
       if (!cards.hasOutstanding(current.thread)) {
@@ -385,10 +403,9 @@ class NewTaskDraft(
   }
 
   /** Reopens [entry] on its agent session, or with only Discard offered when its repository no longer exists. */
-  internal suspend fun resume(entry: ChatHistoryEntry): Boolean {
+  internal fun resume(entry: ChatHistoryEntry): Boolean {
     val context = entry.newTask ?: return false
-    if (entry.sessionId in invalidDrafts) return false
-    if (!close()) return false
+    if (entry.sessionId in invalidDrafts || chatState.value != null) return false
     repository = NewTaskRepository(context.repositoryRoot, File(context.repositoryRoot).name)
     baseBranch = context.baseBranch.orEmpty()
     agentId = entry.agent.agentId
@@ -414,9 +431,7 @@ class NewTaskDraft(
   }
 
   internal fun refreshSaved() {
-    val root = repository?.root
-    savedRead?.cancel()
-    savedRead = scope.launch { savedState.value = root?.let { chats.savedNewTaskDrafts(it) }.orEmpty() }
+    savedChatActions.refresh()
   }
 
   internal fun dispose() {
@@ -479,7 +494,10 @@ class NewTaskDraft(
   private suspend fun showStartProblem(current: NewTaskChat?, kind: NewTaskKind, message: String) {
     when {
       !ownsChat(current) -> toasts.show(ToastMessage(ToastTone.Problem, message))
-      kind in GOAL_KINDS -> record(checkNotNull(current), ChatMessage.Error(null, message))
+      kind in GOAL_KINDS -> {
+        offerState.value = offerState.value.copy(started = null)
+        record(checkNotNull(current), ChatMessage.Error(null, message))
+      }
       else -> checkNotNull(current).thread.append(ChatMessage.Notice(message))
     }
   }

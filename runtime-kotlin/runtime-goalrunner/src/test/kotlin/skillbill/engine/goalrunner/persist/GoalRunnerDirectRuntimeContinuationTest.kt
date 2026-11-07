@@ -12,6 +12,7 @@ import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
+import skillbill.ports.diagnostics.ChildFailureOutputStore
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.workflow.decomposition.withWorkflowId
 import java.nio.file.Path
@@ -38,6 +39,7 @@ class GoalRunnerDirectRuntimeContinuationTest {
         clock = testHarnessClock,
         diagnostics = NoopRuntimeDiagnostics,
         projectStore = testProjectStore,
+        childFailureOutputStore = ChildFailureOutputStore { _, _, _ -> "test.log" },
       )
 
     val launchRequest =
@@ -79,6 +81,7 @@ class GoalRunnerDirectRuntimeContinuationTest {
         clock = testHarnessClock,
         diagnostics = NoopRuntimeDiagnostics,
         projectStore = testProjectStore,
+        childFailureOutputStore = ChildFailureOutputStore { _, _, _ -> "test.log" },
       )
 
     val launchRequest =
@@ -120,6 +123,7 @@ class GoalRunnerDirectRuntimeContinuationTest {
         clock = testHarnessClock,
         diagnostics = NoopRuntimeDiagnostics,
         projectStore = testProjectStore,
+        childFailureOutputStore = ChildFailureOutputStore { _, _, _ -> "test.log" },
       )
 
     val launchRequest =
@@ -183,6 +187,7 @@ class GoalRunnerDirectRuntimeContinuationTest {
       clock = testHarnessClock,
       diagnostics = NoopRuntimeDiagnostics,
       projectStore = testProjectStore,
+      childFailureOutputStore = ChildFailureOutputStore { _, _, _ -> "test.log" },
     )
   }
 

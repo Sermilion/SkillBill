@@ -34,7 +34,7 @@
     nt: seedNewTask(), focusNext: null,
     /* QA device in the sidebar footer: which list the app found (data.js QA_DEVICES), the picked device ('auto' lets QA
      * choose), the popup's keyboard index and whether a refresh is running. qaOpen: open QA result rows and folds. */
-    qaDev: { list: D.QA_DEVICES.live, selected: 'auto', kb: 0, checking: false }, qaOpen: new Set(),
+    qaDev: { list: D.QA_DEVICES.live, selected: 'auto', kb: 0, checking: false }, build: Object.assign({}, D.BUILD.live), qaOpen: new Set(),
     usage: { provider: 'Codex', scenario: 'normal', refreshed: false },
     /* Validation runs: open report parts (indexes) and open checks (ids) per item, unset until the first toggle so the
      * defaults apply. Verify runs: open steps, criteria rows and folds ("<id>:s:<step>", "<id>:c:<n>"), the criteria filter,
@@ -59,6 +59,8 @@
   }
   /* #new-task opens the New task view; #new-task/queue, #new-task/picker and #new-task/resume also open that popup.
    * #detail/<id> opens a work item's detail (#detail/ph-sb-qa for QA results, #detail/ph-sb-plan for a plan run).
+   * #build/<state>/<type> opens SKILL-417 with its build in one of the build indicator scenarios (state: running, slow,
+   * passed, failed, first, idle; type: android, kotlin, ts, go, rust, ios, none).
    * #qa-device opens the QA device popup; #qa-device/<list> opens it over one of the sample device lists (mixed, one,
    * unauth, offline, avdOnly, none, noAdb), the scenarios of design/qa-device-picker. #specs opens the Specs pane over Work; #specs/<path> selects a bundle or a file
    * in it (#specs/SKILL-438, #specs/done/SKILL-446, #specs/SKILL-442/spec.md) and #specs/project/<id> picks a project. */
@@ -66,6 +68,7 @@
     const [page, open, ...rest] = (location.hash || '').replace('#', '').split('/');
     if (page === 'new-task') return { view: 'newtask', open: open === 'state' ? rest[0] === 'closing' ? 'closing' : null : open || null, scenario: open === 'state' ? rest[0] : null, variant: open === 'picker' || open === 'resume' ? rest[0] || null : null };
     if (page === 'detail' && open) return { view: 'detail', id: decodeURIComponent(open), open: null, inspector: rest[0], resultTab: rest[1] };
+    if (page === 'build') return { view: 'detail', id: D.BUILD.focus, open: null, build: { state: open || D.BUILD.live.state, type: rest[0] || D.BUILD.live.type } };
     if (page === 'qa-device') return { view: 'work', open: 'devices', devices: open && open in D.QA_DEVICES.lists ? open : null };
     if (page === 'usage') return { view: 'work', open: 'usage', usageScenario: open in D.USAGE.scenarios ? open : 'normal' };
     if (page === 'specs') return open === 'project' ? { view: 'work', specs: true, project: rest[0] } : { view: 'work', specs: true, sel: open ? decodeURIComponent([open, ...rest].join('/')) : null };
@@ -99,6 +102,7 @@
       st.finishTab[r.id] = r.resultTab === 'qa' ? 'qa' : 'assessment';
       st.propsOpen = true; st.specsOpen = false;
     }
+    if (r.build) st.build = r.build;
     if (r.devices) { st.qaDev.list = r.devices; st.qaDev.selected = 'auto'; }
     if (r.specs) {
       st.specsOpen = true;
@@ -287,6 +291,8 @@
   function tick() {
     const now = Date.now();
     document.querySelectorAll('[data-tick]').forEach((el) => { el.textContent = S.fmtDur(+el.dataset.ms + (now - +el.dataset.t0), el.hasAttribute('data-secs')); });
+    /* Build bars grow with their clocks: elapsed over the usual time (BuildStrip). */
+    document.querySelectorAll('[data-bar-of]').forEach((el) => { el.style.width = Math.min(100, ((+el.dataset.barMs + now - +el.dataset.barT0) / +el.dataset.barOf) * 100) + '%'; });
   }
   setInterval(tick, 1000);
 

@@ -3,8 +3,7 @@ package skillbill.engine.featuretask.slot
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopLaunch
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.state.PhaseLaunchState
-import skillbill.ports.agentrun.model.AgentRunOutputSink
+import skillbill.install.model.SupportedAgent
 
 internal fun PhaseRun.stepFacts(
   issueKey: String,
@@ -26,12 +25,12 @@ internal fun PhaseRun.stepFacts(
     observeLaunch = true,
     briefingText = "",
     approvalRunId = request.approvalRunId,
+    liveChecks =
+      request.validationCheckInvocationId?.let { invocationId ->
+        PhaseLiveChecksLaunch(
+          invocationId,
+          SupportedAgent.fromWireOrNull(resolvedAgent.resolvedAgentId)?.loadsRuntimeMcpHeadless == true,
+        )
+      },
   )
 }
-
-internal fun PhaseStepFacts.withLaunchSink(state: PhaseLaunchState): PhaseStepFacts =
-  if (state.launchOutputSink === AgentRunOutputSink.NONE) {
-    this
-  } else {
-    copy(outputSink = state.launchOutputSink, streamOutputForLiveness = true)
-  }

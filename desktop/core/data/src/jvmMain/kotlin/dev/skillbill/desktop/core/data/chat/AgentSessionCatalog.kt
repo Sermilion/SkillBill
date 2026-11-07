@@ -6,8 +6,11 @@ import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
+import dev.skillbill.desktop.core.domain.model.SessionMoveResult
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
@@ -35,6 +38,7 @@ class AgentSessionCatalog(
   private val diagnostics: Diagnostics,
 ) {
   private val listed = ConcurrentHashMap<String, AgentSession>()
+  private val moveLock = Mutex()
 
   internal suspend fun list(
     executionId: String,
@@ -76,17 +80,59 @@ class AgentSessionCatalog(
     }
   }
 
+  internal suspend fun move(fromRoot: String, toRoot: String): SessionMoveResult = moveLock.withLock {
+    val profiles = profiles()
+    var failed = 0
+    fun moveIn(profiles: List<File>, move: (File, String, String) -> StoreMove): Int = profiles.sumOf { profile ->
+      try {
+        move(profile, fromRoot, toRoot).also { failed += it.failed }.moved
+      } catch (_: IOException) {
+        failed++
+        0
+      } catch (_: SecurityException) {
+        failed++
+        0
+      }
+    }
+    val claudeMoved = moveIn(profiles.claude, ::moveClaudeSessions)
+    val codexMoved = moveIn(profiles.codex, ::rewriteCodexSessions)
+    relocateListed(fromRoot, toRoot)
+    if (failed > 0) diagnostics.record("chat.session_move_failed")
+    SessionMoveResult(claudeMoved, codexMoved, failed)
+  }
+
+  private fun relocateListed(fromRoot: String, toRoot: String) {
+    val source = "projects/${claudeProjectName(fromRoot)}"
+    val target = "projects/${claudeProjectName(toRoot)}"
+    listed.replaceAll { _, session ->
+      val file = session.file
+      if (session.agentId != "claude" || file == null || file.parentFile != File(session.profile, source) || file.isFile) {
+        return@replaceAll session
+      }
+      val moved = File(session.profile, "$target/${file.name}")
+      if (moved.isFile) session.copy(file = moved) else session
+    }
+  }
+
   private suspend fun sessionsIn(root: String): List<AgentSession> {
+    val profiles = profiles()
+    fun read(profiles: List<File>, sessions: (File, String) -> List<AgentSession>) =
+      profiles.flatMap { profile -> readSafely("chat.session_store_unreadable") { sessions(profile, root) } }
+    return read(profiles.claude, ::claudeSessions) + read(profiles.codex, ::codexSessions) + read(profiles.cursor, ::cursorSessions)
+  }
+
+  private class Profiles(val claude: List<File>, val codex: List<File>, val cursor: List<File>)
+
+  private suspend fun profiles(): Profiles {
     val home = File(host.userHome)
     val claudeSelected = settings.settings.first().claudeConfigDir
     val variables = host.variables
     val xdgCursor = variables["XDG_CONFIG_HOME"]?.takeIf(String::isNotBlank)?.let { File(it, "cursor").path }
-    val claude = agentProfiles(home, "claude", "projects", listOf(claudeSelected, variables[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR]))
-    val codex = agentProfiles(home, "codex", "sessions", listOf(variables[AgentHomeEnvironmentKeys.CODEX_HOME]))
-    val cursor = agentProfiles(home, "cursor", "chats", listOf(variables[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR], xdgCursor))
-    fun read(profiles: List<File>, sessions: (File, String) -> List<AgentSession>) =
-      profiles.flatMap { profile -> readSafely("chat.session_store_unreadable") { sessions(profile, root) } }
-    return read(claude, ::claudeSessions) + read(codex, ::codexSessions) + read(cursor, ::cursorSessions)
+    return Profiles(
+      claude = agentProfiles(home, "claude", "projects", listOf(claudeSelected, variables[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR])),
+      codex = agentProfiles(home, "codex", "sessions", listOf(variables[AgentHomeEnvironmentKeys.CODEX_HOME])),
+      cursor = agentProfiles(home, "cursor", "chats", listOf(variables[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR], xdgCursor)),
+    )
   }
 
   private fun <T> readSafely(category: String, read: () -> List<T>): List<T> = try {

@@ -4,7 +4,11 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.model.GoalRunnerProcessState
+import skillbill.infrastructure.host.jvm.AgentGradleUserHome
 import skillbill.infrastructure.host.jvm.GateJvmResolver
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
+import skillbill.infrastructure.host.scratch.AgentRunScratchRoot
+import skillbill.infrastructure.host.scratch.AgentRunScratchSpace
 import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalChannel
 import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalOpenResult
 import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionCapture
@@ -42,7 +46,7 @@ class JvmAgentRunProcessRunner(
   private val gateJvmResolver: GateJvmResolver,
   scratchRoot: AgentRunScratchRoot,
 ) : AgentRunProcessRunner {
-  private val scratchSpace = AgentRunScratchSpace(scratchRoot.path)
+  private val scratchSpace = AgentRunScratchSpace(scratchRoot.path, clock)
 
   override fun run(request: AgentRunProcessRequest): AgentRunProcessResult {
     request.review.reviewEvidenceEndpoint?.let(liveEndpoints::add)
@@ -56,12 +60,19 @@ class JvmAgentRunProcessRunner(
   }
 
   private fun AgentRunProcessRequest.withScratchDirectory(directory: Path?): AgentRunProcessRequest =
-    copy(
-      environmentFields =
-        environmentFields.copy(
-          environment = environmentFields.environment + scratchSpace.environment(directory),
-        ),
-    )
+    run {
+      val machine = JdkHostPlatformPort.resolveEnvironment()
+      val requested = environmentFields.environment
+      val inherited = if (environmentFields.inheritEnvironment) machine + requested else requested
+      copy(
+        environmentFields =
+          environmentFields.copy(
+            environment =
+              requested + scratchSpace.environment(directory, inherited) +
+                AgentGradleUserHome.environment(inherited, machine),
+          ),
+      )
+    }
 
   private fun runGoverned(request: AgentRunProcessRequest): AgentRunProcessResult {
     val approval =

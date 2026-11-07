@@ -154,14 +154,6 @@ private fun invalidArchivedBuild(
   return archivedBuildEvidenceConflicts(execution, occurrence)
 }
 
-/**
- * Returns the accepted terminal ledger event for one phase attempt.
- *
- * A settled attempt records its terminal action twice: once with the phase record and once from run
- * observability. The recorder rebinds the source observation to the later entry, so this read accepts
- * the latest one. An attempt whose terminal entries disagree on COMPLETE versus BLOCKED has no
- * accepted terminal event.
- */
 internal fun acceptedTerminalEvent(
   progress: GoalQualityPhaseProgress,
   phaseId: String,

@@ -33,6 +33,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.pruneWorktr
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaCriteriaSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaFindingsSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaOutcomes
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordQaDetails
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordQaFailureKind
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordQaReportText
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneMonitorTarget
@@ -41,6 +42,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStand
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaReport
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneReviewRunId
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.recordValidationCheckEvents
 import skillbill.infrastructure.sqlite.core.migration.area.operation.OperationProposalsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationConfirmationExecutions
 import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationLaunchRetention
@@ -985,36 +987,66 @@ internal val databaseMigrations: List<DatabaseMigration> =
     ) +
     DatabaseMigration(
       version = 102,
+      name = "record-qa-details",
+      operation = ::recordQaDetails,
+    ) +
+    DatabaseMigration(
+      version = 103,
+      name = "record-standalone-plan-output",
+      operation = { connection -> StandalonePhaseStatusMigration.createOutputCapture(connection) },
+    ) +
+    DatabaseMigration(
+      version = 104,
+      name = "record-standalone-plan-attributed-output-times",
+      operation = { connection -> StandalonePhaseStatusMigration.addAttributedOutputTimes(connection) },
+    ) +
+    DatabaseMigration(
+      version = 105,
+      name = "record-validation-check-events",
+      operation = ::recordValidationCheckEvents,
+    ) +
+    DatabaseMigration(
+      version = 106,
+      name = "record-standalone-plan-output-history",
+      operation = { connection -> StandalonePhaseStatusMigration.createOutputHistory(connection) },
+    ) +
+    DatabaseMigration(
+      version = 107,
+      name = "record-structured-plan-activity",
+      operation = { connection -> StandalonePhaseStatusMigration.createStructuredActivity(connection) },
+    ) +
+    DatabaseMigration(
+      version = 108,
       name = "add-operator-approval-records-and-rules",
       operation = ::addOperatorApprovalRecordsAndRules,
     ) +
     DatabaseMigration(
-      version = 103,
+      version = 109,
       name = "add-operator-approval-leases-and-grant-facts",
       operation = ::addOperatorApprovalLeasesAndGrantFacts,
     ) +
     DatabaseMigration(
-      version = 104,
+      version = 110,
       name = "add-operator-approval-owner-lease-expiry",
       operation = ::addOperatorApprovalOwnerLeaseExpiry,
     ) +
     DatabaseMigration(
-      version = 105,
+      version = 111,
       name = "add-operation-proposal-cards",
       operation = ::addOperationProposalCards,
     ) +
     DatabaseMigration(
-      version = 106,
+      version = 112,
       name = "add-operation-launch-retention",
       operation = ::addOperationLaunchRetention,
     ) +
     DatabaseMigration(
-      version = 107,
+      version = 113,
       name = "add-operation-confirmation-executions",
       operation = ::addOperationConfirmationExecutions,
     ) +
     DatabaseMigration(
-      version = 108,
+      version = 114,
       name = "add-approval-not-required-delivery",
       operation = ::addApprovalNotRequiredDelivery,
     )

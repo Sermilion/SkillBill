@@ -74,6 +74,7 @@ import skillbill.ports.idestatus.model.WorkDetailProblemCode
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.idestatus.model.WorkDetailResult
 import skillbill.ports.idestatus.model.WorkDetailRuntimeStatus
+import skillbill.ports.idestatus.model.WorkExecutionInstance
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.system.CheckedOutBranchSource
@@ -426,13 +427,7 @@ public class IdeStatusService(
         verifyRun = VerifyRunDetailsProjection.project(candidate, context.unitOfWork),
       ).withDerivedStatus().withPlanOutput(planOutput).withValidationBranchRuns(standalone, context.unitOfWork)
     val nextAnchors =
-      detailNextAnchors(
-        history.take(request.pageSize),
-        goalRead,
-        validationRead,
-        dependencies,
-        runtimeRead,
-      )
+      nextDetailAnchors(history.take(request.pageSize), goalRead, validationRead, dependencies, runtimeRead)
     return withPlanOutputPage(
       ProjectedDetailItem(detailItem, nextAnchors),
       standalone,
@@ -462,6 +457,14 @@ public class IdeStatusService(
       projection.nextAnchors + anchor,
     )
   }
+
+  private fun nextDetailAnchors(
+    history: List<WorkExecutionInstance>,
+    goalRead: GoalPageRead?,
+    validationRead: GoalPageRead?,
+    dependencies: WorkGoalDependencyPage?,
+    runtimeRead: RuntimePhasePageRead?,
+  ) = detailNextAnchors(history, goalRead, validationRead, dependencies, runtimeRead)
 
   private fun WorkDetailItem.withPlanOutput(output: StandalonePhaseOutputSnapshot): WorkDetailItem =
     copy(
@@ -583,9 +586,7 @@ public class IdeStatusService(
       context.unitOfWork,
       candidate.standaloneStatus,
       candidate.workflowId,
-      position,
-      request.pageSize + 1,
-      current,
+      WorkExecutionHistoryQuery(position, request.pageSize + 1, current),
     )
   } else {
     emptyList()

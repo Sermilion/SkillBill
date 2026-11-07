@@ -3,6 +3,8 @@ package skillbill.engine.featuretask.slot.qa
 import skillbill.engine.featuretask.model.execution.QaDeclaredTarget
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.engine.featuretask.model.execution.QaNamedDeviceKind
 import skillbill.engine.featuretask.model.execution.QaPolicy
 import skillbill.engine.featuretask.qa.report.qaTestExpected
 import skillbill.model.FileLocation
@@ -11,9 +13,48 @@ import skillbill.scaffold.model.QaTargetKind
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class QaPromptSectionsTest {
+  @Test
+  fun `named serial and avd rules follow the lease block while no selection adds no line`() {
+    val directory = Path.of("/tmp/qa-named-device")
+
+    fun supplement(device: QaNamedDevice?) =
+      QaPromptSections.supplement(
+        QaExecutionContext(
+          workspace = QaWorkspace("phr-qa-named", directory, directory.resolve("report.md"), "$directory/"),
+          expected = qaTestExpected(),
+          target =
+            QaExecutionTarget.Supported(
+              listOf(
+                QaDeclaredTarget("kmp", setOf(QaTargetKind("android")), FileLocation("/packs/kmp/qa.md")),
+              ),
+              Path.of("/tmp/qa-checkout"),
+            ),
+          namedDevice = device,
+        ),
+      )
+
+    val serial = supplement(QaNamedDevice(QaNamedDeviceKind.SERIAL, "R58M123"))
+    val shellSerial = supplement(QaNamedDevice(QaNamedDeviceKind.SERIAL, "R58M'\$USER"))
+    val avd = supplement(QaNamedDevice(QaNamedDeviceKind.AVD, "Pixel_8_API_35"))
+    val withoutDevice = supplement(null)
+
+    assertContains(serial, "Use it for `adb -s 'R58M123'`")
+    assertContains(shellSerial, "Use it for `adb -s 'R58M'\"'\"'\$USER'`")
+    assertContains(serial, "unauthorized, offline, or leased by another run")
+    assertContains(avd, "AVD `Pixel_8_API_35`")
+    assertContains(avd, "boot it by the pack's emulator-boot steps")
+    assertFalse("operator named" in withoutDevice)
+    listOf(serial, avd).forEach { selected ->
+      assertEquals(withoutDevice, selected.replace(Regex("\n- The operator named[^\n]*"), ""))
+      assertTrue(selected.indexOf("operator named") > selected.indexOf("qa lease release"))
+    }
+  }
+
   @Test
   fun `unblock and detached process guidance reaches every policy and target kind`() {
     val directory = Path.of("/tmp/qa-unblock")

@@ -202,7 +202,6 @@ data class GoalRunnerStopReport(
   val historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
   val failureCode: String? = null,
   val recoveryCommand: String? = null,
-  /** The goal-finish phase that failed, when it is not a step of the blocked workflow itself. */
   val failurePhaseId: String? = null,
 )
 

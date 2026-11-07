@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.core.data.chat
 
+import dev.skillbill.desktop.core.data.runtime.currentDesktopTempRoot
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import kotlinx.coroutines.Dispatchers
@@ -27,7 +28,7 @@ internal suspend fun codexAppServerCompatibility(
       return@withContext "The installed Codex CLI is incompatible with the supported 0.166.0 app-server protocol."
     }
     val directory = try {
-      Files.createTempDirectory("skill-bill-codex-schema-")
+      Files.createTempDirectory(currentDesktopTempRoot(), "skill-bill-codex-schema-")
     } catch (failure: IOException) {
       return@withContext "Could not inspect the installed Codex app-server protocol: ${failure.message.orEmpty()}"
     }

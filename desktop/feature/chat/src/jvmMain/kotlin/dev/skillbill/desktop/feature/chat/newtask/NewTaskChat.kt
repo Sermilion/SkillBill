@@ -86,6 +86,10 @@ internal class NewTaskChat(
   private var closing = false
   @Volatile
   private var started = initiallyStarted
+  internal var replayPreamble: String? = null
+  internal var replayAgentId: String? = null
+  internal var replayRepositoryRoot: String? = null
+  internal var replayBaseBranch: String? = null
   @Volatile
   private var pendingTurnLineIndex: Int? = initiallyPendingTurnLineIndex
   @Volatile
@@ -157,9 +161,17 @@ internal class NewTaskChat(
 
   private fun drainQueue() {
     if (closing || repositoryMissing || thread.busyState.value || turnJob != null || turnRunning) return
-    val next = thread.queuedState.value.firstOrNull() ?: return
-    thread.queuedState.value = thread.queuedState.value.drop(1)
-    startTurn(next.text, next.action, next.cursorMcpDependency, next.onRejected)
+    val queued = thread.queuedState.value
+    val next = queued.firstOrNull() ?: return
+    val batch = if (queued.size > 1 && queued.all { it.action == null && it.cursorMcpDependency == next.cursorMcpDependency }) queued else listOf(next)
+    val message = if (batch.size == 1) next else next.copy(
+      text = batch.joinToString("\n\n") { it.text },
+      onRejected = batch.mapNotNull { it.onRejected }.takeIf { it.isNotEmpty() }?.let { callbacks ->
+        { callbacks.forEach { callback -> callback() } }
+      },
+    )
+    thread.queuedState.value = queued.drop(batch.size)
+    startTurn(message.text, message.action, message.cursorMcpDependency, message.onRejected)
   }
 
   private fun startTurn(
@@ -302,7 +314,8 @@ internal class NewTaskChat(
     withContext(scope.coroutineContext.minusKey(Job)) { acceptPendingMessage() }
     var opened = false
     var seenEvent = false
-    chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, text, cursorMcpDependency = cursorMcpDependency)).collect { event ->
+    val prompt = listOfNotNull(replayPreamble, text).joinToString("\n\n")
+    chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, prompt, cursorMcpDependency = cursorMcpDependency)).collect { event ->
       coroutineContext.ensureActive()
       if (!seenEvent) {
         seenEvent = true
@@ -312,6 +325,7 @@ internal class NewTaskChat(
       if (opening) {
         opened = true
         started = true
+        replayPreamble = null
       }
       thread.show(agent, event)
       if (opening && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))

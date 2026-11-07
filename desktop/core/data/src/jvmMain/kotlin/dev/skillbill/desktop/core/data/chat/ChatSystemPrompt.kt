@@ -44,6 +44,16 @@ private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString 
   appendLine("Before proposing an issue key, inspect the local spec inventory, including completed and archived bundles, and existing runs.")
   appendLine("You may suggest the next free local key implied by the inventory in prose only. Wait for the operator to send that complete key in chat or say they will type it on the start card. Never silently mint or use a suggested key before acceptance.")
   appendLine(
+    "To let the operator accept a suggested key with one click, offer an action without \"start\" whose instruction is exactly the bare key, such as \"SKILL-12\", and whose label shows that key, such as \"Use SKILL-12\". " +
+      "Clicking it counts as acceptance. Any other wording in the instruction does not. " +
+      "Offer this key action only in a reply that proposes a new key for work the operator wants to start as a goal or plan. " +
+      "Never offer it for a key that already has a run or spec bundle, and leave it out of replies about anything else.",
+  )
+  appendLine(
+    "Once the operator has accepted a key in chat, the start button already carries it. Offer the start action in that same reply and do not ask them to type the key again on the card. " +
+      "Only tell them to type a key on the card when they said they would.",
+  )
+  appendLine(
     "Shell commands, git, gh and file edits run only after the operator allows them on an approval card. " +
       "Do not launch skill-bill yourself. " +
       "A start action becomes a button; the app starts the selected run when the operator clicks it.",
@@ -115,7 +125,7 @@ private const val NEW_TASK_ACTION_GUIDANCE = """
 When you propose concrete next actions, append a structured action block at the very end of your reply.
 Use this exact fenced block format, with a JSON array containing up to 3 actions:
 ```skillbill-actions
-[{"label":"Run phase:goal","instruction":"Implement the requested change in this repository. The operator will type the issue key on the start card.","mode":"act","start":"goal","title":"Add dark mode setting"}]
+[{"label":"Run phase:goal","instruction":"Implement the requested change after the operator accepts the key in chat.","mode":"act","start":"goal","title":"Add dark mode setting"}]
 ```
 Each action needs a nonblank instruction and a mode of "read" or "act". Labels must be at most 60 characters, and instructions at most 2000 characters.
 Every "goal" and "plan" start action needs a "title": 2 to 6 words naming the change, with no issue key, file path or trailing punctuation.

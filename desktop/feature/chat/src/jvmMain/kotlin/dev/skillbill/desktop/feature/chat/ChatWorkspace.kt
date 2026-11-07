@@ -32,7 +32,8 @@ import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.pane.ChatCommands
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
-import dev.skillbill.desktop.feature.chat.newtask.NewTaskDraft
+import dev.skillbill.desktop.feature.chat.newtask.NewTaskChats
+import dev.skillbill.desktop.feature.chat.newtask.NewTaskRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -116,13 +117,14 @@ class ChatWorkspace(
   private val clock: Clock,
   private val panes: ShellPanes,
   private val selection: SelectionHolder,
-  private val newTask: NewTaskDraft,
+  private val newTask: NewTaskChats,
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
 ) : ChatCommands {
   internal val cursorMcpDependencies = mutableStateMapOf<String, CursorMcpDependency>()
   private val scope = windowScope.scope
   private val approvalFlow = ChatApprovals(approvals)
-  override val newTaskDraftOpen: StateFlow<Boolean> = newTask.chat.map { it != null }.stateIn(scope, SharingStarted.Eagerly, false)
+  override val newTaskDraftOpen: StateFlow<Boolean> = newTask.anyChatOpen
+  override val newTaskOpenChats: StateFlow<Int> = newTask.openCount
   private val turns = ChatTurns(chat, details, clock)
   private val sessions = LinkedHashMap<String, ChatSession>()
   private val approvalTabs = LinkedHashMap<String, RepositoryApprovals>()
@@ -187,6 +189,21 @@ class ChatWorkspace(
 
   override fun runReviewAction(item: WorkItem, action: ReviewFindingsAction) {
     val instruction = reviewActionInstruction(item, action) ?: return
+    actOnItemChat(item, instruction)
+  }
+
+  override fun runVerifyFixes(item: WorkItem, brief: String) = actOnItemChat(item, brief)
+
+  override fun prefillGoalIntake(repoRoot: String, branch: String, text: String): Boolean {
+    val draft = newTask.selected.value
+    if (draft.chat.value != null || draft.text.isNotBlank()) return false
+    draft.text = text
+    draft.repository = NewTaskRepository(repoRoot, File(repoRoot).name)
+    draft.baseBranch = branch
+    return true
+  }
+
+  private fun actOnItemChat(item: WorkItem, instruction: String) {
     setPaneOpen(true)
     val existing = tabState.value.tabs.firstOrNull { it.executionId == item.id }
     val id = existing?.id ?: item.id
@@ -195,7 +212,7 @@ class ChatWorkspace(
   }
 
   override fun closeChats() {
-    newTask.dispose()
+    newTask.disposeAll()
     closeExecutionChats()
   }
 
@@ -280,7 +297,7 @@ class ChatWorkspace(
 
   /** Ends every chat, and the new-task chat's agent process with its saved draft kept. Resumes are cancelled first, so a quit mid-act leaves the execution paused rather than half resumed. */
   suspend fun closeAll(): Boolean {
-    if (!newTask.close()) return false
+    if (!newTask.closeAll()) return false
     closeExecutionChats()
     return true
   }
@@ -642,11 +659,18 @@ class ChatWorkspace(
 
   private fun drainQueue(session: ChatSession) {
     if (!session.job.isActive || session.busyState.value || session.turnJob != null || session.resumeJob != null || session.goneState.value) return
-    val next = session.queuedState.value.firstOrNull() ?: return
-    session.queuedState.value = session.queuedState.value.drop(1)
+    val queued = session.queuedState.value
+    val next = queued.firstOrNull() ?: return
+    val batch = if (queued.size > 1 && queued.all { it.action == null && it.pauseAndAct == next.pauseAndAct }) queued else listOf(next)
+    val message = if (batch.size == 1) next else next.copy(
+      text = batch.map { it.text }.filter(String::isNotBlank).joinToString("\n\n"),
+      images = batch.flatMap { it.images },
+      cursorMcpDependency = batch.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.Unspecified,
+    )
+    session.queuedState.value = queued.drop(batch.size)
     session.busyState.value = true
-    session.append(ChatMessage.Operator(next.text, next.action, next.images))
-    if (next.pauseAndAct) pauseAndAct(session, next.text, next.images, next.cursorMcpDependency) else send(session, next.text, next.images, next.cursorMcpDependency)
+    session.append(ChatMessage.Operator(message.text, message.action, message.images))
+    if (message.pauseAndAct) pauseAndAct(session, message.text, message.images, message.cursorMcpDependency) else send(session, message.text, message.images, message.cursorMcpDependency)
   }
 
   private fun launchTurn(session: ChatSession, block: suspend () -> Unit) {

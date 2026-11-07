@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.RunOptions
+import dev.skillbill.desktop.core.domain.model.SessionMoveResult
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
@@ -38,48 +39,35 @@ class AgentExecutionChatRepository(
   private val resolver = ChatAgentResolver(runtimeConfig::machineConfig, diagnostics)
 
   override suspend fun resolveAgent(item: WorkItem, detail: Detail?, runOptions: RunOptions?): ChatAgent? =
-    resolver.resolve(item, detail, runOptions)?.let(::withCapability)
+    resolver.resolve(item, detail, runOptions)
 
-  override suspend fun agentFor(agentId: String): ChatAgent = withCapability(resolver.forAgent(agentId))
+  override suspend fun agentFor(agentId: String): ChatAgent = resolver.forAgent(agentId)
 
   override fun agents(): List<String> = transports.map { it.agentId }.sorted()
 
-  override fun supports(agentId: String): Boolean = transports.any { it.agentId == agentId && it.approvalCapable }
+  override fun supports(agentId: String): Boolean = transports.any { it.agentId == agentId }
 
   override fun send(request: ChatTurnRequest): Flow<ChatEvent> = flow {
     val transport = transports.firstOrNull { it.agentId == request.agent.agentId }
     if (transport == null) {
       diagnostics.record("chat.agent_unsupported")
       emit(ChatEvent.Failed(ChatFailure.AgentUnsupported, request.agent.agentId))
-    } else if (!transport.approvalCapable) {
-      diagnostics.record("chat.approval_unavailable")
-      emit(
-        ChatEvent.Failed(
-          ChatFailure.ApprovalUnsupported,
-          transport.approvalUnavailableReason,
-        ),
-      )
     } else {
       emitAll(transport.run(request))
     }
   }.flowOn(Dispatchers.IO)
-
-  private fun withCapability(agent: ChatAgent): ChatAgent {
-    val transport = transports.firstOrNull { it.agentId == agent.agentId } ?: return agent
-    return agent.copy(approvalUnavailableReason = transport.approvalUnavailableReason.takeUnless { transport.approvalCapable })
-  }
 
   override fun unprompted(sessionId: String): Flow<ChatEvent> = transports.map { it.unprompted(sessionId) }.merge().flowOn(Dispatchers.IO)
 
   override fun end(sessionId: String) = transports.forEach { it.end(sessionId) }
 
   override suspend fun savedChats(executionId: String, repositoryRoot: String, currentSessionId: String): List<ChatHistoryEntry> =
-    withContext(Dispatchers.IO) {
-      catalog.list(executionId, repositoryRoot, currentSessionId, { withCapability(resolver.forAgent(it)) })
-        .map { entry -> entry.copy(agent = withCapability(entry.agent)) }
-    }
+    withContext(Dispatchers.IO) { catalog.list(executionId, repositoryRoot, currentSessionId, resolver::forAgent) }
 
   override suspend fun openSavedChat(entry: ChatHistoryEntry): List<ChatHistoryLine> = withContext(Dispatchers.IO) { catalog.open(entry) }
+
+  override suspend fun moveSessions(fromRoot: String, toRoot: String): SessionMoveResult =
+    withContext(Dispatchers.IO) { catalog.move(fromRoot, toRoot) }
 
   override suspend fun saveChat(entry: ChatHistoryEntry) {
     withContext(Dispatchers.IO) { store.saveChat(entry) }
@@ -87,8 +75,8 @@ class AgentExecutionChatRepository(
 
   override suspend fun saveNewTaskDraft(entry: ChatHistoryEntry): Boolean = withContext(Dispatchers.IO) { store.saveChat(entry) }
 
-  override suspend fun savedNewTaskDrafts(repositoryRoot: String): List<ChatHistoryEntry> =
-    withContext(Dispatchers.IO) { store.newTaskDrafts(repositoryRoot).map { it.copy(agent = withCapability(it.agent)) } }
+  override suspend fun savedNewTaskDrafts(limit: Int?): List<ChatHistoryEntry> =
+    withContext(Dispatchers.IO) { store.newTaskDrafts(limit) }
 
   override suspend fun deleteSavedChat(sessionId: String) = withContext(Dispatchers.IO) { store.delete(sessionId) }
 }

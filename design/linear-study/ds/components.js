@@ -1327,6 +1327,42 @@
     return `<button type="button" class="${cx('sb-ppill', o.need && 'is-need')}"${act(o.act, o.arg)} aria-haspopup="menu" aria-expanded="${!!o.expanded}" title="${esc(o.tip || '')}"${o.id ? ` id="${esc(o.id)}"` : ''}>${inner}${Icon('chevronDown', 'xs')}</button>`;
   }
 
+  /* ---------- Build indicator ----------
+   * A build is a build tool command the runtime found in the run's agent process tree, matched against the repository's
+   * platform pack: { state: running | passed | failed, cmd, short, kind, tool, ms, usual, t0, pid, started, exit, ago, prev }.
+   * `usual` is the median of the same command's last five runs in the repository; null before there is history. */
+  const buildSlow = (b) => b.state === 'running' && b.usual && b.ms > b.usual;
+  const buildTone = (b) => (b.state === 'failed' ? 'is-failed' : buildSlow(b) ? 'is-slow' : '');
+  const buildClock = (b) => (b.state === 'running' ? Clock({ ms: b.ms, t0: b.t0, live: true, secs: true }) : `<span class="tnum">${fmtDur(b.ms, true)}</span>`);
+  /* Work row meta: shows while a build runs (spinner, short command, ticking time) or after it failed. A passed build stays
+   * in the run document. Orange once the build runs past its usual time. */
+  function BuildChip(b) {
+    track('BuildChip');
+    if (b.state === 'failed') return `<span class="sb-build-chip is-failed" data-tip="${esc(b.cmd + ' exited ' + b.exit + ' after ' + fmtDur(b.ms, true))}">${Icon('x', 'xs')}${esc(b.short)}<span class="tnum">failed</span></span>`;
+    const tip = `${b.cmd} · ${b.kind}${b.usual ? ' · usually ' + fmtDur(b.usual, true) : ''}`;
+    return `<span class="${cx('sb-build-chip', buildTone(b))}" data-tip="${esc(tip)}"><span class="sb-build-spin" aria-hidden="true"></span>${esc(b.short)}${buildClock(b)}</span>`;
+  }
+  /* Run document, right under the header: Building, Build passed or Build failed, the full command, the time with the usual
+   * time or how far over it, a bar against the usual time while it runs, then project type, tool, pid, start, exit code and
+   * the previous build of the same command. */
+  function BuildStrip(b) {
+    track('BuildStrip');
+    const running = b.state === 'running';
+    const lead = running ? `<span class="sb-build-spin" role="img" aria-label="Running"></span>` : StatusIcon(b.state === 'passed' ? 'done' : 'failed');
+    const word = running ? 'Building' : b.state === 'passed' ? 'Build passed' : 'Build failed';
+    let sub;
+    if (running && b.usual) sub = buildSlow(b) ? `<small class="over">${fmtDur(b.ms - b.usual, true)} over usual</small>` : `<small>usually ${fmtDur(b.usual, true)}</small>`;
+    else if (running) sub = '<small>first run, no usual time yet</small>';
+    else sub = `<small>finished ${esc(b.ago)}</small>`;
+    const bar = running && b.usual ? `<div class="sb-build-track" aria-hidden="true"><i data-bar-ms="${b.ms}" data-bar-t0="${b.t0}" data-bar-of="${b.usual}" style="width:${Math.min(100, (b.ms / b.usual) * 100)}%"></i></div>` : '';
+    const meta = [`<b>${esc(b.kind)}</b>`, esc(b.tool), `pid ${esc(b.pid)}`, `started ${esc(b.started)}`];
+    if (!running) meta.push(`exit ${esc(b.exit)}`);
+    if (b.prev) meta.push(`previous ${StatusIcon(b.prev[0])} ${esc(b.prev[1])}, ${esc(b.prev[2])}`);
+    return `<div class="${cx('sb-build', buildTone(b))}" role="status" aria-live="polite">
+      <div class="sb-build-top">${lead}<span class="sb-build-word">${word}</span><code class="sb-build-cmd" title="${esc(b.cmd)}">${esc(b.cmd)}</code><span class="sb-build-time">${buildClock(b)}${sub}</span></div>
+      ${bar}<div class="sb-build-meta">${meta.join('<span>·</span>')}</div></div>`;
+  }
+
   window.SB = {
     esc, cx, join, fmtDur, fmtAgo, shortId, shortPath, SUB_VERB: VERB, track, inScope, usage, STATES, ICONS: Object.keys(P),
     Icon, BrandMark, StatusIcon, Kbd, Button, IconButton, Tooltip, IdTag, ShortId, StaleIndicator, Label, Avatar,
@@ -1345,5 +1381,6 @@
     VerifyDoc, VerifyHeader, Banner, Fold, Quote, VerifySection, Badge, CriterionRow, FieldText, MarkRow, FileChip, FileChips, RouteSwitch,
     ReceiptFinding, TestValueRow, BadgeGrid, MiniRule, KeyValues, CheckLines, DirBars, TextLink, VerifyQa,
     StageStrip, PlanNow, FeedFilter, PlanFeed, BoxHead, PlanBundle, Transcript, FactList, BriefFold, BriefBody, BriefingTeaser, SpecBar, PropPill,
+    BuildChip, BuildStrip,
   };
 })();

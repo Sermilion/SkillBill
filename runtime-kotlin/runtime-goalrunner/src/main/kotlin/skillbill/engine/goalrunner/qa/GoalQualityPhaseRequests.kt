@@ -51,6 +51,7 @@ public class GoalQualityPhaseRequests(
           ),
         modelAssignment = FeatureTaskRuntimeModelAssignment(inputs.modelDirectives, inputs.modelMatrix),
         qaSelection = inputs.qaSelection,
+        qaDevice = request.qaDevice.takeIf { definition == SkeletonDefinition.GOAL_QA },
         acceptanceCriteria = inputs.acceptanceCriteria,
         eventSink =
           FeatureTaskRuntimeRunEventSink { event ->

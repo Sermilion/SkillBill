@@ -3,6 +3,7 @@ package dev.skillbill.desktop.core.testing
 import dev.skillbill.desktop.core.domain.model.BoardQuery
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
+import dev.skillbill.desktop.core.domain.model.DecisionOutcome
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.DetailListOutcome
 import dev.skillbill.desktop.core.domain.model.DetailState
@@ -18,6 +19,7 @@ import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.OperationCardDismissOutcome
 import dev.skillbill.desktop.core.domain.model.OperationCardLookup
 import dev.skillbill.desktop.core.domain.model.OperationCardView
+import dev.skillbill.desktop.core.domain.model.OperatorDecision
 import dev.skillbill.desktop.core.domain.model.RecoveryOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryPreview
 import dev.skillbill.desktop.core.domain.model.RecoveryPreviewOutcome
@@ -150,6 +152,12 @@ class FakeWorkControlRepository(var outcome: ControlOutcome = ControlOutcome.Int
     dismissedCards += token
     return dismissOutcome
   }
+
+  override suspend fun recordOperatorDecision(
+    item: WorkItem,
+    decision: OperatorDecision,
+    instructions: String?,
+  ): DecisionOutcome = notFaked("recordOperatorDecision")
 
   override suspend fun recoveryPreview(item: WorkItem, confirmedPrerequisites: Set<IncidentPrerequisite>): RecoveryPreviewOutcome =
     notFaked("recoveryPreview")

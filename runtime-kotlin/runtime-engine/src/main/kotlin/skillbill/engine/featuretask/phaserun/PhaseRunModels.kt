@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.model.core.PhaseInstructions
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparation
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparationRequest
@@ -20,6 +21,7 @@ import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionP
 import skillbill.engine.featuretask.phaserun.qa.QaStandalonePhaseRun
 import skillbill.goalrunner.model.history.GoalHistoryWriterInput
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
+import skillbill.goalrunner.model.quality.GoalQualityQaSourceWitness
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
@@ -27,6 +29,7 @@ import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -52,16 +55,22 @@ public data class PhaseRunRequest(
   public val recoverStaleOwner: String? = null,
   public val qaExecution: QaExecutionContext? = null,
   public val qaSelection: FeatureTaskRuntimeQaSelection? = null,
+  public val qaDevice: QaNamedDevice? = null,
   public val acceptanceCriteria: List<String>? = null,
   public val recordedGoalQaOutcome: FeatureTaskQaOutcome? = null,
   public val goalHistoryWriterInput: GoalHistoryWriterInput? = null,
   internal val acceptedGoalRepairOutput: ((String, String, Int, String) -> Unit)? = null,
   public val goalQualityPhaseProgress: GoalQualityPhaseProgress? = null,
-  public val persistGoalQualityPhaseProgress: ((GoalQualityPhaseProgress) -> Boolean)? = null,
+  public val persistGoalQualityPhaseProgress: ((GoalQualityPhaseProgress, String?) -> Boolean)? = null,
+  public val terminalGoalQualityContentFingerprint: (() -> String)? = null,
+  public val acceptedGoalQualitySourceFingerprint: (() -> String)? = null,
+  public val acceptedGoalQualityQaSourceWitness: ((GoalQualityPhaseProgress) -> GoalQualityQaSourceWitness?)? = null,
+  public val goalQualityValidationOccurrence: Int = 0,
   internal val latestGoalQualityPhaseProgress: (() -> GoalQualityPhaseProgress)? = null,
   internal val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? = null,
   internal val goalQualityInvocationId: String? = null,
   internal val acceptedGoalQualityPlanText: String? = null,
+  public val acceptedGoalQualityAgentId: String? = null,
 ) {
   init {
     require(definitionId.isNotBlank()) { "PhaseRunRequest.definitionId is required." }
@@ -92,6 +101,7 @@ public sealed interface PhaseRunResult {
     public val qaReportText: String? = null,
     public override val identifiedCompletedOutputs: List<PhaseRunCompletedOutput> = emptyList(),
     public val reviewRunId: String? = null,
+    public val qaDetails: QaRunDetails? = null,
   ) : PhaseRunResult
 
   public data class Blocked(
@@ -139,6 +149,7 @@ public data class InMemoryPhaseRunFacts(
   override val workflowId: String = "",
   override val monitorExecution: MonitorExecutionContext? = null,
   val invocationId: String = "",
+  override val validationCheckInvocationId: String? = null,
 ) : FeatureTaskRuntimeRunFacts {
   override val admittedExecution: AdmittedFeatureTaskRuntimeExecution? = null
   override val activityParentWorkflowId: String? = null
@@ -147,6 +158,7 @@ public data class InMemoryPhaseRunFacts(
   override val stopAfterIntake: Boolean = false
   override val issueKey: String = intake.issueKey
   override val qaSelection: FeatureTaskRuntimeQaSelection? = request.qaSelection
+  override val qaDevice: QaNamedDevice? = request.qaDevice
   override val runInvariants: FeatureTaskRuntimeRunInvariants =
     request.acceptanceCriteria?.let { intake.runInvariants.copy(acceptanceCriteria = it) } ?: intake.runInvariants
   override val invokedAgentId: String = request.invokedAgentId
@@ -166,6 +178,8 @@ public data class InMemoryPhaseRunFacts(
   override val phaseInstructions: PhaseInstructions? = request.instructions
   override val qaExecution: QaExecutionContext? = request.qaExecution
   override val goalHistoryWriterInput: GoalHistoryWriterInput? = request.goalHistoryWriterInput
+  override val goalQualityPhaseProgress: GoalQualityPhaseProgress? = request.goalQualityPhaseProgress
+  override val goalQualityValidationOccurrence: Int = request.goalQualityValidationOccurrence
   override val goalQualityAutomaticRecovery: Boolean = request.goalQualityPhaseProgress != null
   override val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? = request.acceptedGoalQualityExecutionPlan
   override val qaOutcomeWorkflowId: String = request.goalQualityInvocationId?.let { "$workflowId:$it" } ?: workflowId

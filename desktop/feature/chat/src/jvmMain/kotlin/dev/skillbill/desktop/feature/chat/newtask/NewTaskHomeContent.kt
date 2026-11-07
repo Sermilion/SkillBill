@@ -34,6 +34,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
@@ -89,14 +91,14 @@ private fun ReadinessRow(line: ReadinessLine) {
 /** Pressing a chip reports its start kind and leaves the input text alone. A null [onStart] renders every chip disabled. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun NewTaskChips(onStart: ((String, String?) -> Unit)?, modifier: Modifier = Modifier) {
+internal fun NewTaskChips(onStart: ((String, String?) -> Unit)?, modifier: Modifier = Modifier, qaDeviceName: String? = null) {
   FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    START_CHIPS.forEach { (label, kind) -> StartChip(label, enabled = onStart != null) { onStart?.invoke(kind, null) } }
+    START_CHIPS.forEach { (label, kind) -> StartChip(label, enabled = onStart != null, suffix = if (kind == "qa") qaDeviceName else null) { onStart?.invoke(kind, null) } }
   }
 }
 
 @Composable
-private fun StartChip(label: String, enabled: Boolean, onClick: () -> Unit) {
+private fun StartChip(label: String, enabled: Boolean, suffix: String? = null, onClick: () -> Unit) {
   val colors = SkillBillTheme.colors
   val interaction = remember { MutableInteractionSource() }
   val hovered by interaction.collectIsHoveredAsState()
@@ -109,7 +111,11 @@ private fun StartChip(label: String, enabled: Boolean, onClick: () -> Unit) {
       .padding(horizontal = 10.dp),
     contentAlignment = Alignment.Center,
   ) {
-    BasicText(label, style = SkillBillTheme.type.tSm.copy(color = if (enabled) colors.fgMuted else colors.fgFaint), maxLines = 1)
+    val text = buildAnnotatedString {
+      append(label)
+      suffix?.let { withStyle(SkillBillTheme.type.tSm.copy(color = colors.fgFaint).toSpanStyle()) { append(" on $it") } }
+    }
+    BasicText(text, style = SkillBillTheme.type.tSm.copy(color = if (enabled) colors.fgMuted else colors.fgFaint), maxLines = 1)
   }
 }
 

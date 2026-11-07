@@ -1,4 +1,4 @@
-package skillbill.infrastructure.host
+package skillbill.infrastructure.host.scheduler
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.ports.approval.ApprovalDeadlineScheduler
