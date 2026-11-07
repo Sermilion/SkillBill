@@ -11,8 +11,26 @@ import skillbill.contracts.workflow.payload.WorkflowTimestampPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 
 const val IDE_STATUS_CONTRACT_VERSION: String = "0.6"
-const val WORK_BOARD_CONTRACT_VERSION: String = "1.2"
-const val WORK_DETAIL_CONTRACT_VERSION: String = "1.9"
+const val WORK_BOARD_CONTRACT_VERSION: String = "1.3"
+const val WORK_DETAIL_CONTRACT_VERSION: String = "1.10"
+
+object WorkBuildPayloadKeys {
+  const val BUILD = "build"
+  const val STATE = "state"
+  const val COMMAND = "command"
+  const val SHORT_COMMAND = "short_command"
+  const val TOOL = "tool"
+  const val PROJECT_KIND = "project_kind"
+  const val PID = "pid"
+  const val STARTED_AT = WorkflowWirePayloadKeys.STARTED_AT
+  const val ELAPSED_MS = "elapsed_ms"
+  const val ELAPSED_AS_OF = "elapsed_as_of"
+  const val USUAL_MS = "usual_ms"
+  const val EXIT_CODE = WorkDetailPayloadKeys.ACTIVITY_EXIT_CODE
+  const val FINISHED_AT = WorkflowWirePayloadKeys.FINISHED_AT
+  const val PREVIOUS = "previous"
+  const val DURATION_MS = WorkDetailPayloadKeys.ACTIVITY_DURATION_MS
+}
 
 object IdeStatusPayloadKeys {
   const val LIFECYCLE_STATE = "lifecycle_state"
@@ -34,6 +52,7 @@ object IdeStatusPayloadKeys {
 }
 
 object WorkBoardPayloadKeys {
+  const val BUILD = WorkBuildPayloadKeys.BUILD
   const val PAGE_SIZE = "page_size"
   const val NEXT_CURSOR = "next_cursor"
   const val ITEMS = "items"
@@ -52,6 +71,7 @@ object WorkBoardPayloadKeys {
 }
 
 object WorkDetailPayloadKeys {
+  const val BUILD = WorkBuildPayloadKeys.BUILD
   const val PAGE_SIZE = WorkBoardPayloadKeys.PAGE_SIZE
   const val NEXT_CURSOR = WorkBoardPayloadKeys.NEXT_CURSOR
   const val EXECUTION_HISTORY = "execution_history"

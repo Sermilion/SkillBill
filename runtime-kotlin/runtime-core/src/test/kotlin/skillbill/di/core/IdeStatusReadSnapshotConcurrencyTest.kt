@@ -18,6 +18,7 @@ import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.ensureTestDatabase
+import skillbill.infrastructure.sqlite.idestatus.SessionAgentBuildRunRepository
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
@@ -240,6 +241,7 @@ private class SnapshotFixture(
           NoopRuntimeDiagnostics,
           CanonicalRepositoryRoot,
           LocalGoalRuntimeStateFileStore(),
+          SessionAgentBuildRunRepository(database),
         ),
       diagnostics = NoopRuntimeDiagnostics,
       incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, Clock.fixed(observedAt, ZoneOffset.UTC)),

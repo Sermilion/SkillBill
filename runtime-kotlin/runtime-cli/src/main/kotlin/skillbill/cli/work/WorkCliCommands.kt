@@ -16,6 +16,7 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.DocumentedNoOpCliCommand
 import skillbill.cli.kernel.work.workBoardDiagnosticWireMap
+import skillbill.cli.kernel.work.workBuildWireMap
 import skillbill.cli.kernel.work.workDetailItemWireMap
 import skillbill.cli.model.CliFormat
 import skillbill.contracts.JsonCodec
@@ -78,6 +79,7 @@ class WorkBoardCommand(
               WorkBoardPayloadKeys.REPOSITORY_ROOT to item.repositoryRoot,
               WorkBoardPayloadKeys.FINISHED_AT to item.finishedAt?.toString(),
               WorkBoardPayloadKeys.FINISHED_AT_SOURCE to item.finishedAtSource?.wireValue,
+              WorkBoardPayloadKeys.BUILD to item.build?.let(::workBuildWireMap),
             )
           },
         WorkBoardPayloadKeys.OBSERVED_AT to result.observedAt.toString(),
