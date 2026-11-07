@@ -10,6 +10,19 @@ Areas: desktop/core/data, desktop/core/domain, desktop/feature/detail, platform-
 - The latest frame fits the existing pane and preserves its aspect ratio. Localized labels and image descriptions identify the selected run. The panel has no recording, input, export or expanded-viewer controls.
 Feature flag: N/A
 Acceptance criteria: 1/1 implemented for the parent; 5/5 implemented for subtask 1
+## [2026-11-07] SKILL-514 desktop source-run QA launch
+Areas: desktop/app, desktop/build-logic/convention, desktop/core/data, desktop/core/domain, desktop/core/testing, desktop/feature/detail, desktop/feature/specs, desktop/QA.md, AGENTS.md
+- QA launches with `cd desktop && ./gradlew :app:runFromSource`. The opt-in task builds same-checkout runtime-cli, stages runtime and app resources, and stamps both copied identity records with one fresh shared install run id per execution.
+- SourceRunStaging and SourceRunPreparation provide reusable staging and seeding. Missing identities, runtime JARs or fixture data stop launch; a missing fixture preserves the previous scratch home.
+- Each launch regenerates QAFIX database rows and spec bundles, then recreates and seeds `desktop/app/build/source-run/home`. The tasks remain outside normal check, build and assemble wiring.
+- JVM home, preferences, resources and temp paths, child-process temp variables, runtime, database and agent configuration all point into source-run outputs. Blank TERM becomes `dumb` to preserve launch overrides.
+- Preparation verifies Git worktree ownership and fixed checkout output paths, rejects redirected paths and linked entries, and protects operator state. QA output directories require exclusive task ownership.
+- Linux source runs select Skiko SOFTWARE_COMPAT through both the JVM property and SKIKO_RENDER_API, overriding an inherited renderer setting. QA-2 remains open after three repairs; these settings do not establish interactive launch success.
+- Specs carries the goal owner's checkout into purge requests. Runtime control projection disables ambiguous targets across a project's checkouts.
+- AGENTS.md and desktop/QA.md name the source-run command, scratch layout and fixture behavior. The scratch agent configuration does not inherit the operator's login.
+- Limits: fixture live states can change after the generator exits. macOS and Windows native behavior remains unverified. Gate rules and real-install behavior are unchanged.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented for the parent feature; QA-2 remains unresolved
 
 ## [2026-11-07] SKILL-517 QA device picker in sidebar
 Areas: desktop/app/shell/qadevice, desktop/core/data, desktop/core/domain, desktop/core/datastore, desktop/core/designsystem, desktop/feature/chat, desktop/feature/settings; runtime-engine, runtime-cli, runtime-goalrunner, runtime-contracts, runtime-ports, runtime-infra/workflow

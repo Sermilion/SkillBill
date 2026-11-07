@@ -1,4 +1,5 @@
 import org.gradle.api.tasks.Exec
+import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
@@ -152,5 +153,78 @@ tasks.register<Exec>("packagedDataSmoke") {
   doFirst {
     val python = if (System.getProperty("os.name").contains("windows", true)) "python" else "python3"
     commandLine(python, script.asFile.absolutePath, runtimeInstall.absolutePath)
+  }
+}
+
+// Compose registers run and prepareAppResources in its afterEvaluate callback.
+afterEvaluate {
+  val sourceRunRoot = layout.buildDirectory.dir("source-run")
+  val composeRun = tasks.named<JavaExec>("run")
+  val prepareAppResources = tasks.named("prepareAppResources")
+
+  val stageSourceRun = tasks.register<dev.skillbill.desktop.buildlogic.StageSourceRunTask>("stageSourceRun") {
+    dependsOn(gradle.includedBuild("runtime-kotlin").task(":runtime-cli:installDist"), prepareAppResources)
+    checkoutRoot.set(rootDir.parentFile)
+    runtimeInstall.set(rootDir.parentFile.resolve("runtime-kotlin/runtime-cli/build/install/runtime-cli"))
+    appResources.fileProvider(prepareAppResources.map { it.outputs.files.singleFile })
+    outputRoot.set(sourceRunRoot)
+  }
+
+  tasks.register<JavaExec>("runFromSource") {
+    // Opt-in QA launch: not wired into check, build or assemble.
+    group = "application"
+    description = "Runs the desktop app against a runtime built from this checkout, with all state under build/source-run."
+    dependsOn(stageSourceRun, gradle.includedBuild("runtime-kotlin").task(":runtime-core:writeDesktopFixtureDb"))
+    val run = composeRun.get()
+    mainClass.set(run.mainClass)
+    classpath = run.classpath
+    run.executable?.let { setExecutable(it) }
+    val root = sourceRunRoot.get().asFile
+    val home = root.resolve("home")
+    val state = home.resolve(".skill-bill")
+    environment("SKILL_BILL_RUNTIME_DIR", root.resolve("runtime").absolutePath)
+    environment("SKILL_BILL_STATE_DIR", state.absolutePath)
+    environment("SKILL_BILL_DB", state.resolve("review-metrics.db").absolutePath)
+    if (System.getProperty("os.name").contains("linux", true)) {
+      environment("SKIKO_RENDER_API", "SOFTWARE_COMPAT")
+    }
+    mapOf(
+      "HOME" to home,
+      "USERPROFILE" to home,
+      "TMPDIR" to home.resolve("tmp"),
+      "TEMP" to home.resolve("tmp"),
+      "TMP" to home.resolve("tmp"),
+      "APPDATA" to home.resolve("AppData/Roaming"),
+      "LOCALAPPDATA" to home.resolve("AppData/Local"),
+      "XDG_CONFIG_HOME" to home.resolve(".config"),
+      "XDG_CACHE_HOME" to home.resolve(".cache"),
+      "XDG_DATA_HOME" to home.resolve(".local/share"),
+      "XDG_STATE_HOME" to home.resolve(".local/state"),
+      "CLAUDE_CONFIG_DIR" to home.resolve(".claude"),
+      "CODEX_HOME" to home.resolve(".codex"),
+      "CURSOR_CONFIG_DIR" to home.resolve(".cursor"),
+    ).forEach { (name, directory) -> environment(name, directory.absolutePath) }
+    doFirst {
+      val fixtureState =
+        rootDir.parentFile.resolve("runtime-kotlin/runtime-core/build/desktop-fixture/home/.skill-bill")
+      dev.skillbill.desktop.buildlogic.SourceRunPreparation.seed(rootDir.parentFile, root, fixtureState)
+      listOf(home, state, home.resolve("preferences"), home.resolve("tmp")).forEach { directory ->
+        if (!directory.mkdirs() && !directory.isDirectory) {
+          throw GradleException("Could not create scratch directory: ${directory.absolutePath}")
+        }
+      }
+      // A blank TERM makes the app import the login shell's environment, which could replace the SKILL_BILL_* values.
+      if ((environment["TERM"] as? String).isNullOrBlank()) environment("TERM", "dumb")
+      jvmArgs = run.jvmArgs.orEmpty().filterNot { it.startsWith("-Dcompose.application.resources.dir=") } + listOf(
+        "-Dcompose.application.resources.dir=${root.resolve("app-resources").absolutePath}",
+        "-Duser.home=${home.absolutePath}",
+        "-Djava.util.prefs.userRoot=${home.resolve("preferences").absolutePath}",
+        "-Djava.io.tmpdir=${home.resolve("tmp").absolutePath}",
+      ) + if (System.getProperty("os.name").contains("linux", true)) {
+        listOf("-Dskiko.renderApi=SOFTWARE_COMPAT")
+      } else {
+        emptyList()
+      }
+    }
   }
 }
