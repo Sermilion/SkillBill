@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionP
 import skillbill.engine.featuretask.phaserun.qa.QaStandalonePhaseRun
 import skillbill.goalrunner.model.history.GoalHistoryWriterInput
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
+import skillbill.goalrunner.model.quality.GoalQualityQaSourceWitness
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
@@ -60,6 +61,8 @@ public data class PhaseRunRequest(
   public val goalQualityPhaseProgress: GoalQualityPhaseProgress? = null,
   public val persistGoalQualityPhaseProgress: ((GoalQualityPhaseProgress, String?) -> Boolean)? = null,
   public val terminalGoalQualityContentFingerprint: (() -> String)? = null,
+  public val acceptedGoalQualitySourceFingerprint: (() -> String)? = null,
+  public val acceptedGoalQualityQaSourceWitness: ((GoalQualityPhaseProgress) -> GoalQualityQaSourceWitness?)? = null,
   public val goalQualityValidationOccurrence: Int = 0,
   internal val latestGoalQualityPhaseProgress: (() -> GoalQualityPhaseProgress)? = null,
   internal val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? = null,

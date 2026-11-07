@@ -13,17 +13,16 @@ import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.execution.support.goalRunnerRepositoryContentIdentity
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.quality.GoalQualityAdmissionRequest
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.featuretask.qa.isQaFailure
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.history.accumulateGoalFinalRepairWarnings
 import skillbill.goalrunner.model.quality.GoalQualityExecution
-import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
-import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
-import skillbill.goalrunner.model.quality.GoalQualityReadiness
+import skillbill.goalrunner.model.quality.GoalQualityPreQaBuildState
 import skillbill.goalrunner.model.quality.GoalQualityValidationDisposition
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
@@ -33,6 +32,7 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
@@ -46,6 +46,7 @@ public class DefaultGoalRunnerQaGate(
   private val gitOperations: WorkflowGitOperations,
   private val invariantsSource: FeatureTaskRuntimeRunInvariantsSource,
   private val phaseRequests: GoalQualityPhaseRequests,
+  private val buildBoundary: GoalQualityBuildBoundary,
   private val qaOutcomes: FeatureTaskQaOutcomeRecorder,
   private val capabilities: QaCapabilityResolver,
   private val projectStore: ProjectStorePort,
@@ -87,26 +88,12 @@ public class DefaultGoalRunnerQaGate(
       }
     val quality = outcomeStore.goalQualityExecution(state.parentWorkflowId)
     val invocationId = expectedInvocationId
-    if (quality?.execution?.invocationId != invocationId) {
-      throw SkillBillRuntimeException(
-        WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
-        "Final QA failure belongs to a different or retired quality invocation.",
-        failure,
-      )
-    }
+    requireContainedInvocation(quality, invocationId, failure)
     requireResolvedActiveGateOutcome(outcomeStore, quality?.execution, failure)
-    if (invocationId != null &&
-      !outcomeStore.recordGoalFinalRepairWarning(
-        state.parentWorkflowId,
-        invocationId,
-        reason,
-      )
-    ) {
-      throw SkillBillRuntimeException(
-        WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY,
-        "Could not persist final QA warning for '${state.parentWorkflowId}'.",
-      )
+    if (quality?.execution?.preQaBuild == GoalQualityPreQaBuildState.RUNNING) {
+      throw failure
     }
+    persistContainedWarning(state, invocationId, reason)
     RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "goal_qa_gate: $reason", failure)
     recordBestEffort(state) {
       qaOutcomes.recordContainedFailure(
@@ -135,6 +122,32 @@ public class DefaultGoalRunnerQaGate(
     return GoalQaGateResult.Warned(reason)
   }
 
+  private fun requireContainedInvocation(
+    quality: GoalQualityExecutionRecord?,
+    invocationId: String?,
+    failure: Exception,
+  ) {
+    if (quality?.execution?.invocationId == invocationId) return
+    throw SkillBillRuntimeException(
+      WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+      "Final QA failure belongs to a different or retired quality invocation.",
+      failure,
+    )
+  }
+
+  private fun persistContainedWarning(
+    state: GoalRunnerManifestState,
+    invocationId: String?,
+    reason: String,
+  ) {
+    if (invocationId == null) return
+    if (outcomeStore.recordGoalFinalRepairWarning(state.parentWorkflowId, invocationId, reason)) return
+    throw SkillBillRuntimeException(
+      WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY,
+      "Could not persist final QA warning for '${state.parentWorkflowId}'.",
+    )
+  }
+
   private fun recordBestEffort(
     state: GoalRunnerManifestState,
     record: () -> Unit,
@@ -153,115 +166,87 @@ public class DefaultGoalRunnerQaGate(
     request: GoalRunnerRunRequest,
     admitted: (String) -> Unit,
   ): GoalQaGateResult {
-    val (quality, parentInvariants, currentTree) = prepareQuality(state, request)
-    val baseline = (currentTree as WorkflowGitOperationResult.Ok).value
+    val (quality, parentInvariants) = prepareQuality(state, request)
     val execution = requireNotNull(quality.execution)
     admitted(execution.invocationId)
-    when (execution.status) {
+    val paused = buildBoundary.run(state, request, quality)
+    if (paused != null) return paused
+    return continueAfterInitialBuild(state, request, quality, parentInvariants, execution.invocationId)
+  }
+
+  private fun continueAfterInitialBuild(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    quality: GoalQualityExecutionRecord,
+    parentInvariants: FeatureTaskRuntimeRunInvariantsRead,
+    invocationId: String,
+  ): GoalQaGateResult {
+    val currentQuality = requireLatestQuality(outcomeStore, state, quality)
+    val currentExecution = requireNotNull(currentQuality.execution)
+    val currentTree = goalRunnerRepositoryContentIdentity(gitOperations, request.repoRoot)
+    val unusableBuild =
+      currentExecution.preQaBuild == GoalQualityPreQaBuildState.WARNED &&
+        currentExecution.status == GoalQualityExecutionStatus.QA_PENDING
+    if (unusableBuild) return continueAfterUnusableBuild(state, request, currentQuality)
+    return when (currentExecution.status) {
       GoalQualityExecutionStatus.SETTLED_PASSED,
       GoalQualityExecutionStatus.SETTLED_SKIPPED,
       GoalQualityExecutionStatus.SETTLED_WARNED,
-      -> return reuseSettledQuality(state, request, quality, baseline)
+      -> reuseSettledQuality(state, request, currentQuality, buildBoundary.currentBaseline(currentTree))
       GoalQualityExecutionStatus.VALIDATION_DECISION_PENDING,
       GoalQualityExecutionStatus.REQUIRED_VALIDATION_PENDING,
       GoalQualityExecutionStatus.VALIDATION_RUNNING,
       GoalQualityExecutionStatus.VALIDATION_COMPLETED_PENDING_SETTLEMENT,
-      -> return resumeValidation(state, request, quality, parentInvariants)
+      -> resumeValidation(state, request, currentQuality, parentInvariants)
       GoalQualityExecutionStatus.RETIRED ->
         throw SkillBillRuntimeException(
           WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
-          "Final quality execution '${execution.invocationId}' was retired by a goal reset or replan.",
+          "Final quality execution '$invocationId' was retired by a goal reset or replan.",
         )
-      GoalQualityExecutionStatus.QA_PENDING -> Unit
+      GoalQualityExecutionStatus.QA_PENDING ->
+        runPendingQa(state, request, currentQuality, parentInvariants, currentTree)
     }
-    return runPendingQa(state, request, quality, parentInvariants, currentTree)
+  }
+
+  private fun continueAfterUnusableBuild(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    quality: GoalQualityExecutionRecord,
+  ): GoalQaGateResult {
+    val execution = requireNotNull(quality.execution)
+    val warning = execution.warning ?: "The initial build was unusable."
+    val current =
+      transitionQuality(
+        outcomeStore,
+        state,
+        quality,
+        quality.acceptQa(currentContentFingerprint(gitOperations, state, request), null, warning),
+      )
+    return when (
+      val validation =
+        validateAfterQa(
+          state,
+          request,
+          requireNotNull(execution.governingInputs).branch,
+          current,
+        )
+    ) {
+      is ValidationAfterQaStep.Paused -> validation.pause
+      is ValidationAfterQaStep.Settled -> validation.result
+      is ValidationAfterQaStep.Advance ->
+        settleAfterQaOutcome(state, request, validation.quality, listOfNotNull(warning) + validation.warnings)
+    }
   }
 
   private fun prepareQuality(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
-  ): Triple<GoalQualityExecutionRecord, FeatureTaskRuntimeRunInvariantsRead, WorkflowGitOperationResult> {
-    val currentTree = goalRunnerRepositoryContentIdentity(gitOperations, request.repoRoot)
-    val baseline =
-      (currentTree as? WorkflowGitOperationResult.Ok)?.value?.takeIf(String::isNotBlank)
-        ?: throw SkillBillRuntimeException(
-          WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
-          "Could not capture a repository baseline for final quality execution '${state.parentWorkflowId}'.",
-        )
-    val retainedRecord = outcomeStore.goalQualityExecution(state.parentWorkflowId)
-    if (retainedRecord?.readiness == GoalQualityReadiness.HISTORICAL_AMBIGUITY) {
-      throw SkillBillRuntimeException(
-        WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
-        "This parent has ambiguous historical quality state. Provide authoritative original evidence or explicitly " +
-          "choose a fresh quality execution with new cycles: " +
-          "skill-bill goal fresh-quality ${request.issueKey} --reason \"<why>\".",
-      )
-    }
-    val retainedExecution =
-      retainedRecord?.execution
-        ?.takeUnless { it.status == GoalQualityExecutionStatus.RETIRED }
-    val parentInvariants =
-      retainedExecution?.governingInputs?.let(::retainedParentInvariants)
-        ?: readParentInvariants(state, request)
-    val inputs = retainedExecution?.governingInputs ?: governingInputs(state, request, parentInvariants)
-    val retainedPlans =
-      retainedExecution
-        ?.takeUnless { it.status == GoalQualityExecutionStatus.RETIRED }
-        ?.executionPlans
-    val retainedValidationPlan =
-      retainedPlans?.let {
-        val acceptedAgentId = requireNotNull(retainedExecution.governingInputs).effectiveAgentId
-        phasePlans.validateGoalQualityExecutionPlan(it.qa, SkeletonDefinition.GOAL_QA.id, acceptedAgentId)
-        phasePlans.validateGoalQualityExecutionPlan(it.validation, SkeletonDefinition.VALIDATION.id, acceptedAgentId)
-      }
-    val executionPlans = retainedPlans ?: resolveQualityPlans(state, request, inputs)
-    val validationSourceProof =
-      retainedRecord?.let { retained ->
-        retained.execution?.takeUnless { it.status == GoalQualityExecutionStatus.RETIRED }?.let { execution ->
-          retainedValidationPlan?.let { plan ->
-            acceptedValidationSourceProof(
-              phasePlans,
-              retained,
-              plan,
-              baseline,
-              historyWriterOwnsCurrentContents(outcomeStore, phasePlans, state, execution, baseline),
-            )
-          }
-        }
-      }
-    val quality =
-      outcomeStore.admitGoalQualityExecution(
-        state.parentWorkflowId,
-        baseline,
-        inputs,
-        executionPlans,
-        validationSourceProof = validationSourceProof,
-      )
-    return Triple(quality, parentInvariants, currentTree)
-  }
-
-  private fun resolveQualityPlans(
-    state: GoalRunnerManifestState,
-    request: GoalRunnerRunRequest,
-    inputs: GoalQualityExecutionInputs,
-  ): GoalQualityExecutionPlans =
-    GoalQualityExecutionPlans(
-      phasePlans.resolveGoalQualityExecutionPlan(
-        phaseRequests.create(
-          GoalQualityPhaseInput(SkeletonDefinition.GOAL_QA, inputs),
-          state,
-          request,
-        ) { _, _, _, _ -> },
-        state.parentWorkflowId,
-      ),
-      phasePlans.resolveGoalQualityExecutionPlan(
-        phaseRequests.create(
-          GoalQualityPhaseInput(SkeletonDefinition.VALIDATION, inputs),
-          state,
-          request,
-        ) { _, _, _, _ -> },
-        state.parentWorkflowId,
-      ),
+  ): Pair<GoalQualityExecutionRecord, FeatureTaskRuntimeRunInvariantsRead> =
+    admitPreparedQuality(
+      PreparedQualityContext(diagnostics, phasePlans, phaseRequests, outcomeStore, this::readParentInvariants),
+      gitOperations,
+      state,
+      request,
     )
 
   private fun reuseSettledQuality(
@@ -339,6 +324,9 @@ public class DefaultGoalRunnerQaGate(
     val execution = requireNotNull(quality.execution)
     val hasAcceptedQaProgress = quality.execution?.progress?.qa?.let(::hasAcceptedPhaseProgress) == true
     if (!hasAcceptedQaProgress) {
+      if (requireNotNull(execution.governingInputs).qaSelection == FeatureTaskRuntimeQaSelection.OFF) {
+        return settleSkipped(state, request, quality, GoalQaSkipReason.DISABLED_POLICY)
+      }
       earlySkipReason(outcomeStore, gitOperations, capabilities, state, request)?.let {
         return settleSkipped(state, request, quality, it)
       }
@@ -444,7 +432,7 @@ public class DefaultGoalRunnerQaGate(
     run: GoalQaRun,
     quality: GoalQualityExecutionRecord,
   ): GoalQaGateResult {
-    goalQaProviderLimitPause(run.result)?.let { return it }
+    goalQaProviderLimitPause(run.result, nestedQaRepairBuild = true)?.let { return it }
     val buildWarning = buildAfterQaFixWarning(run.result)
     val qaWarning =
       buildWarning ?: (run.result as? PhaseRunResult.Blocked)?.let { "QA stopped at '${it.stepId}': ${it.reason}" }
@@ -612,6 +600,9 @@ public class DefaultGoalRunnerQaGate(
     }
     quality = requireNotNull(quality)
     requireResolvedActiveGateOutcome(outcomeStore, quality.execution, failure)
+    if (quality.execution?.preQaBuild == GoalQualityPreQaBuildState.RUNNING) {
+      throw failure
+    }
     var execution = requireNotNull(quality.execution)
     val warning =
       accumulateGoalFinalRepairWarnings(
@@ -1085,10 +1076,12 @@ public class DefaultGoalRunnerQaGate(
     val reconciled =
       outcomeStore.admitGoalQualityExecution(
         state.parentWorkflowId,
-        currentFingerprint,
-        inputs,
-        plans,
-        validationSourceProof = sourceProof,
+        GoalQualityAdmissionRequest(
+          currentFingerprint,
+          inputs,
+          plans,
+          validationSourceProof = sourceProof,
+        ),
       )
     val next = requireNotNull(reconciled.execution)
     if (next.validationOccurrence <= execution.validationOccurrence ||

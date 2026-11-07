@@ -7,6 +7,7 @@ import skillbill.engine.goalrunner.execution.support.goalRunnerRepositoryContent
 import skillbill.engine.goalrunner.history.goalHistoryFingerprint
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.quality.GoalQualityExecutionRead
 import skillbill.engine.goalrunner.persist.quality.GoalQualityValidationSourceProof
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
@@ -15,6 +16,7 @@ import skillbill.goalrunner.model.history.GoalHistoryWriterInput
 import skillbill.goalrunner.model.history.accumulateGoalFinalRepairWarnings
 import skillbill.goalrunner.model.quality.GoalQualityAcceptedSourceObservation
 import skillbill.goalrunner.model.quality.GoalQualityExecution
+import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
@@ -43,6 +45,127 @@ internal fun acceptedValidationSourceProof(
   val progress = requireNotNull(execution.progress).validation
   if (!phasePlans.hasAcceptedValidationBoundary(progress, plan)) return null
   return proofForAcceptedBoundary(phasePlans, record, plan, currentFingerprint, acceptedWriterContents)
+}
+
+internal fun acceptedHistoricalValidationSourceProof(
+  phasePlans: PhaseRunPlanResolver,
+  retained: GoalQualityExecutionRead.Historical,
+  plan: ResolvedPhaseExecutionPlan,
+  currentFingerprint: String,
+): GoalQualityValidationSourceProof? {
+  val context = historicalValidationContext(phasePlans, retained, plan) ?: return null
+  val terminal = historicalValidationTerminal(context.progress, plan) ?: return null
+  val observation = historicalValidationObservation(context.progress, terminal, retained.validationOccurrence)
+  val legacyFingerprint = retained.finalValidationContentFingerprint ?: retained.settledContentFingerprint
+  val observedContent = observation?.contentFingerprint ?: legacyFingerprint ?: return null
+  val oldFingerprint = retained.planFingerprint ?: historicalPlanFingerprint(retained.qaPlan, retained.validationPlan)
+  return GoalQualityValidationSourceProof(
+    sourceContractVersion = retained.sourceContractVersion,
+    parentWorkflowId = requireNotNull(retained.parentWorkflowId),
+    invocationId = requireNotNull(retained.invocationId),
+    acceptedPlanFingerprint = oldFingerprint,
+    validationOccurrence = retained.validationOccurrence,
+    executionStatus = requireNotNull(retained.status),
+    progressRevision = context.progress.revision,
+    phaseId = terminal.record.phaseId,
+    attempt = terminal.record.attemptCount,
+    ledgerSequenceNumber = terminal.event.sequenceNumber,
+    contentFingerprint = observedContent,
+    sourceIsCurrent =
+      historicalSourceIsCurrent(
+        phasePlans,
+        retained,
+        plan,
+        context,
+        HistoricalObservedSource(currentFingerprint, legacyFingerprint, observedContent),
+      ),
+    acceptedOutputFingerprint = observation?.acceptedOutputFingerprint,
+  )
+}
+
+private data class HistoricalValidationContext(
+  val inputs: GoalQualityExecutionInputs,
+  val progress: GoalQualityPhaseProgress,
+)
+
+private data class HistoricalValidationTerminal(
+  val record: FeatureTaskRuntimePhaseRecord,
+  val event: FeatureTaskRuntimePhaseLedgerEntry,
+)
+
+private fun historicalValidationContext(
+  phasePlans: PhaseRunPlanResolver,
+  retained: GoalQualityExecutionRead.Historical,
+  plan: ResolvedPhaseExecutionPlan,
+): HistoricalValidationContext? {
+  val plansReady = retained.hasAuthoritativePlansAndProgress && retained.status != null
+  val authoritative = plansReady && retained.validation != null
+  if (!authoritative) return null
+  val inputs = retained.governingInputs
+  val progress = retained.progress?.validation
+  if (inputs == null || progress == null) return null
+  if (!phasePlans.hasAcceptedValidationBoundary(progress, plan)) return null
+  return HistoricalValidationContext(inputs, progress)
+}
+
+private fun historicalValidationTerminal(
+  progress: GoalQualityPhaseProgress,
+  plan: ResolvedPhaseExecutionPlan,
+): HistoricalValidationTerminal? {
+  val record =
+    progress.phaseRecords.values.singleOrNull { it.status == WorkflowStepStatus.BLOCKED }
+      ?: plan.selectedStepIds.lastOrNull()?.let(progress.phaseRecords::get)
+      ?: return null
+  val event = terminalQualityEvent(progress, record) ?: return null
+  return HistoricalValidationTerminal(record, event)
+}
+
+private fun historicalValidationObservation(
+  progress: GoalQualityPhaseProgress,
+  terminal: HistoricalValidationTerminal,
+  validationOccurrence: Int,
+) = progress.acceptedSourceObservations.singleOrNull {
+  val sameStep = it.phaseId == terminal.record.phaseId && it.attempt == terminal.record.attemptCount
+  val sameEvent = it.completionSequenceNumber == terminal.event.sequenceNumber
+  sameStep && sameEvent && it.validationOccurrence == validationOccurrence
+}
+
+private data class HistoricalObservedSource(
+  val currentFingerprint: String,
+  val legacyFingerprint: String?,
+  val observedContent: String,
+)
+
+private fun historicalSourceIsCurrent(
+  phasePlans: PhaseRunPlanResolver,
+  retained: GoalQualityExecutionRead.Historical,
+  plan: ResolvedPhaseExecutionPlan,
+  context: HistoricalValidationContext,
+  observed: HistoricalObservedSource,
+): Boolean {
+  if (retained.validation == GoalQualityValidationDisposition.NOT_REQUIRED) return true
+  return observed.observedContent == observed.currentFingerprint &&
+    phasePlans.acceptedValidationSourceIsCurrent(
+      GoalQualityValidationSourceRequest(
+        context.progress,
+        plan,
+        "${retained.parentWorkflowId}:${retained.invocationId}",
+        Path.of(context.inputs.repoRoot),
+        observed.currentFingerprint,
+        observed.legacyFingerprint,
+        retained.validationOccurrence,
+      ),
+    )
+}
+
+private fun historicalPlanFingerprint(
+  qa: String?,
+  validation: String?,
+): String {
+  require(!qa.isNullOrBlank() && !validation.isNullOrBlank())
+  return MessageDigest.getInstance("SHA-256")
+    .digest("$qa\u0000$validation".toByteArray(Charsets.UTF_8))
+    .joinToString("") { "%02x".format(it) }
 }
 
 private fun proofForAcceptedBoundary(
@@ -236,6 +359,17 @@ internal fun currentContentFingerprint(
     ?: throw SkillBillRuntimeException(
       WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
       "Could not record settled repository contents for '${state.parentWorkflowId}'.",
+    )
+
+internal fun currentRepositoryCheckpoint(
+  gitOperations: WorkflowGitOperations,
+  request: GoalRunnerRunRequest,
+): String =
+  (gitOperations.repositoryFingerprint(request.repoRoot) as? WorkflowGitOperationResult.Ok)
+    ?.value?.takeIf(String::isNotBlank)
+    ?: throw SkillBillRuntimeException(
+      WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+      "Could not capture a repository checkpoint for retained QA source evidence.",
     )
 
 internal fun codeChangedAfterQa(

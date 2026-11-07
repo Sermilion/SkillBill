@@ -133,7 +133,6 @@ public data class ValidationGateCycleRequest(
   public val commandFamily: ValidationGateCommandFamily = ValidationGateCommandFamily.BUILD,
   public val repositoryCheckpointProvider: () -> String? = { repositoryCheckpoint },
   internal val preserveConsumedRepairTurns: Boolean = false,
-  internal val newValidationOccurrence: Boolean = false,
   internal val carriedRepairTurns: Int = 0,
   internal val carriedRepairOutputs: List<FeatureTaskRuntimeValidationGateRepairOutput> = emptyList(),
   internal val progressKey: String = request.workflowId,

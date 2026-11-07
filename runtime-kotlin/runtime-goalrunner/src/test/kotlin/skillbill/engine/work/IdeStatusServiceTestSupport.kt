@@ -39,8 +39,9 @@ import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.quality.GoalQualityAdmissionRequest
+import skillbill.engine.goalrunner.persist.quality.GoalQualityBuildSourceProof
 import skillbill.engine.goalrunner.persist.quality.GoalQualityPhaseProgressWrite
-import skillbill.engine.goalrunner.persist.quality.GoalQualityValidationSourceProof
 import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
@@ -61,8 +62,6 @@ import skillbill.goalrunner.model.history.GoalFinalRepairContext
 import skillbill.goalrunner.model.history.GoalFinalRepairOutput
 import skillbill.goalrunner.model.history.GoalHistoryCompletion
 import skillbill.goalrunner.model.history.GoalHistoryWriterEntry
-import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
-import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.ports.db.DatabaseSessionFactory
@@ -964,10 +963,7 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
 
   override fun admitGoalQualityExecution(
     parentWorkflowId: String,
-    baselineContentFingerprint: String,
-    governingInputs: GoalQualityExecutionInputs,
-    executionPlans: GoalQualityExecutionPlans,
-    validationSourceProof: GoalQualityValidationSourceProof?,
+    admission: GoalQualityAdmissionRequest,
   ): GoalQualityExecutionRecord = error("EmptyOutcomeStore does not persist goal quality execution.")
 
   override fun transitionGoalQualityExecution(
@@ -983,6 +979,8 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     definitionId: String,
     acceptedPlan: String,
   ): GoalQualityPhaseProgress = error("EmptyOutcomeStore does not persist goal quality phase progress.")
+
+  override fun reenterGoalQualityBuild(proof: GoalQualityBuildSourceProof): GoalQualityExecutionRecord? = null
 
   override fun persistGoalQualityPhaseProgress(write: GoalQualityPhaseProgressWrite): Boolean = false
 

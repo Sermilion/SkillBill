@@ -8,6 +8,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.history.GoalFinalRepairOutput
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRepairOutput
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.util.concurrent.atomic.AtomicReference
 
@@ -52,6 +53,10 @@ internal class GoalQualityRepairOutputs(private val outcomeStore: GoalRunnerWork
     definition: SkeletonDefinition,
     result: PhaseRunResult,
   ) {
+    if (definition == SkeletonDefinition.GOAL_BUILD) {
+      reconcileInitialBuild(state, result.invocationId)
+      return
+    }
     val validationRepairs =
       if (definition == SkeletonDefinition.VALIDATION) {
         outcomeStore.goalQualityExecution(state.parentWorkflowId)?.execution?.let { execution ->
@@ -115,6 +120,87 @@ internal class GoalQualityRepairOutputs(private val outcomeStore: GoalRunnerWork
         }
       }
   }
+
+  fun reconcileInitialBuild(
+    state: GoalRunnerManifestState,
+    invocationId: String,
+  ) {
+    val execution =
+      outcomeStore.goalQualityExecution(state.parentWorkflowId)?.execution
+        ?.takeIf { it.invocationId == invocationId } ?: return
+    val repairs =
+      (
+        execution.preQaBuildOccurrences.flatMap { it.progress.buildGateProgress?.acceptedRepairOutputs.orEmpty() } +
+          execution.preQaBuildOccurrences.flatMap { it.progress.carriedBuildRepairOutputs } +
+          execution.progress?.build?.carriedBuildRepairOutputs.orEmpty() +
+          execution.progress?.build?.buildGateProgress?.acceptedRepairOutputs.orEmpty()
+      )
+    val repairsByTurn = linkedMapOf<Int, FeatureTaskRuntimeValidationGateRepairOutput>()
+    repairs.forEach { repair ->
+      rememberUniqueRepair(repairsByTurn, repair, state.parentWorkflowId)
+    }
+    val reconciled = repairsByTurn.values.sortedBy { it.repairTurn }
+    val history = outcomeStore.goalFinalRepairContext(state.parentWorkflowId)?.outputs.orEmpty()
+    reconciled.forEach { repair ->
+      requireAgreedRepairHistory(history, invocationId, repair, state.parentWorkflowId)
+    }
+    reconciled.forEach { repair ->
+      if (!outcomeStore.recordGoalFinalRepairOutput(
+          state.parentWorkflowId,
+          invocationId,
+          GoalFinalRepairOutput(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
+            invocationId,
+            repair.repairTurn,
+            repair.output,
+          ),
+        )
+      ) {
+        throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY,
+          "Could not reconcile accepted initial build repair '${repair.repairTurn}' for '${state.parentWorkflowId}'.",
+        )
+      }
+    }
+  }
+
+  private fun rememberUniqueRepair(
+    repairsByTurn: MutableMap<Int, FeatureTaskRuntimeValidationGateRepairOutput>,
+    repair: FeatureTaskRuntimeValidationGateRepairOutput,
+    parentWorkflowId: String,
+  ) {
+    val prior = repairsByTurn.putIfAbsent(repair.repairTurn, repair)
+    if (prior != null && prior != repair) conflictingRepair(repair.repairTurn, parentWorkflowId)
+  }
+
+  private fun requireAgreedRepairHistory(
+    history: List<GoalFinalRepairOutput>,
+    invocationId: String,
+    repair: FeatureTaskRuntimeValidationGateRepairOutput,
+    parentWorkflowId: String,
+  ) {
+    val prior = history.filter { sameBuildRepair(it, invocationId, repair.repairTurn) }
+    val conflicting = prior.any { it.output != repair.output } || prior.map { it.output }.distinct().size > 1
+    if (conflicting) conflictingRepair(repair.repairTurn, parentWorkflowId)
+  }
+
+  private fun sameBuildRepair(
+    output: GoalFinalRepairOutput,
+    invocationId: String,
+    repairTurn: Int,
+  ): Boolean =
+    output.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD &&
+      output.invocationId == invocationId &&
+      output.occurrence == repairTurn
+
+  private fun conflictingRepair(
+    repairTurn: Int,
+    parentWorkflowId: String,
+  ): Nothing =
+    throw SkillBillRuntimeException(
+      WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY,
+      "Conflicting accepted initial build repair '$repairTurn' for '$parentWorkflowId'.",
+    )
 
   fun warning(
     parentWorkflowId: String,

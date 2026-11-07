@@ -9,4 +9,6 @@ public data class GoalQualityPhaseProgressWrite(
   val acceptedPlan: String,
   val progress: GoalQualityPhaseProgress,
   val finalValidationContentFingerprint: String? = null,
+  val preQaBuildContentFingerprint: String? = null,
+  val preQaBuildSourceProof: GoalQualityBuildSourceProof? = null,
 )

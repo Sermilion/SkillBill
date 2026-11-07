@@ -8,6 +8,7 @@ import skillbill.goalrunner.model.history.GoalFinalRepairContext
 import skillbill.goalrunner.model.quality.GoalQualityExecution
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
+import skillbill.goalrunner.model.quality.GoalQualityPreQaBuildState
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 internal fun requireResolvedNestedGateOutcome(
@@ -44,6 +45,17 @@ internal fun requireResolvedActiveGateOutcome(
   failure: Exception,
 ) {
   if (execution == null) return
+  if (execution.preQaBuild == GoalQualityPreQaBuildState.RUNNING) {
+    val plans = requireNotNull(execution.executionPlans)
+    requireResolvedNestedGateOutcome(
+      outcomeStore,
+      execution,
+      SkeletonDefinition.GOAL_BUILD,
+      plans.build,
+      failure,
+    )
+    return
+  }
   val definition =
     when (execution.status) {
       GoalQualityExecutionStatus.QA_PENDING -> SkeletonDefinition.GOAL_QA
@@ -79,7 +91,7 @@ internal fun transitionQuality(
       "Goal quality execution '${execution.invocationId}' changed before its transition was accepted.",
     )
   }
-  return next
+  return requireLatestQuality(outcomeStore, state, next)
 }
 
 internal fun requireLatestQuality(

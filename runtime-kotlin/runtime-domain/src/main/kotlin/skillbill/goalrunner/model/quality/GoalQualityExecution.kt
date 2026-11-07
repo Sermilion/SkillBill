@@ -71,6 +71,20 @@ enum class GoalQualityValidationDisposition {
   }
 }
 
+enum class GoalQualityPreQaBuildState(val wireValue: String) {
+  PENDING("pending"),
+  RUNNING("running"),
+  PASSED("passed"),
+  WARNED("warned"),
+  ;
+
+  companion object {
+    fun fromWire(value: String): GoalQualityPreQaBuildState =
+      entries.firstOrNull { it.wireValue == value }
+        ?: throw IllegalArgumentException("Unsupported pre-QA build state '$value'.")
+  }
+}
+
 data class GoalQualityExecutionAdmission(
   val parentWorkflowId: String,
   val invocationId: String,
@@ -82,23 +96,26 @@ data class GoalQualityExecutionAdmission(
 )
 
 data class GoalQualityExecutionPlans(
+  val build: String,
   val qa: String,
   val validation: String,
-  val fingerprint: String = canonicalFingerprint(qa, validation),
+  val fingerprint: String = canonicalFingerprint(build, qa, validation),
 ) {
   init {
+    require(build.isNotBlank())
     require(qa.isNotBlank())
     require(validation.isNotBlank())
-    require(fingerprint == canonicalFingerprint(qa, validation))
+    require(fingerprint == canonicalFingerprint(build, qa, validation))
   }
 
   companion object {
     private fun canonicalFingerprint(
+      build: String,
       qa: String,
       validation: String,
     ): String =
       MessageDigest.getInstance("SHA-256")
-        .digest("$qa\u0000$validation".toByteArray(Charsets.UTF_8))
+        .digest("$build\u0000$qa\u0000$validation".toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
   }
 }
@@ -133,6 +150,12 @@ data class GoalQualityValidationOccurrence(
   val progress: GoalQualityPhaseProgress,
 )
 
+data class GoalQualityPreQaBuildOccurrence(
+  val state: GoalQualityPreQaBuildState,
+  val contentFingerprint: String,
+  val progress: GoalQualityPhaseProgress,
+)
+
 data class GoalQualityAdoptionEvidence(
   val sourceContractVersion: String,
   val originalPayloadJson: String,
@@ -144,10 +167,13 @@ data class GoalQualityPhaseProgress(
   val acceptedOutputs: List<GoalQualityAcceptedOutput> = emptyList(),
   val acceptedEnvelopes: List<GoalQualityAcceptedEnvelope> = emptyList(),
   val acceptedSourceObservations: List<GoalQualityAcceptedSourceObservation> = emptyList(),
+  val acceptedQaSourceWitnesses: List<GoalQualityQaSourceWitness> = emptyList(),
   val attemptHighWaterMarks: Map<String, Int> = emptyMap(),
   val ledgerSequenceHighWaterMark: Int = 0,
   val carriedValidationRepairsUsed: Int = 0,
   val carriedValidationRepairOutputs: List<FeatureTaskRuntimeValidationGateRepairOutput> = emptyList(),
+  val carriedBuildRepairsUsed: Int = 0,
+  val carriedBuildRepairOutputs: List<FeatureTaskRuntimeValidationGateRepairOutput> = emptyList(),
   val qaRepairState: QaRepairState? = null,
   val buildGateProgress: FeatureTaskRuntimeValidationGateProgress? = null,
   val buildGateProgressKey: String? = null,
@@ -190,6 +216,7 @@ data class GoalQualityPhaseProgress(
 }
 
 data class GoalQualityExecutionProgress(
+  val build: GoalQualityPhaseProgress = GoalQualityPhaseProgress(),
   val qa: GoalQualityPhaseProgress = GoalQualityPhaseProgress(),
   val validation: GoalQualityPhaseProgress = GoalQualityPhaseProgress(),
 )
@@ -213,6 +240,9 @@ data class GoalQualityExecution(
   val skipReason: String? = null,
   val validationOccurrences: List<GoalQualityValidationOccurrence> = emptyList(),
   val validationOccurrence: Int = 0,
+  val preQaBuild: GoalQualityPreQaBuildState = GoalQualityPreQaBuildState.PENDING,
+  val preQaBuildContentFingerprint: String? = null,
+  val preQaBuildOccurrences: List<GoalQualityPreQaBuildOccurrence> = emptyList(),
 )
 
 data class GoalQualityExecutionRecord(
@@ -256,6 +286,81 @@ data class GoalQualityExecutionRecord(
     val current = execution ?: return this
     if (current.status == GoalQualityExecutionStatus.RETIRED) return this
     return copy(execution = current.copy(status = GoalQualityExecutionStatus.RETIRED))
+  }
+
+  fun startPreQaBuild(): GoalQualityExecutionRecord {
+    val current = requireNotNull(execution)
+    check(current.status != GoalQualityExecutionStatus.RETIRED)
+    check(current.preQaBuild == GoalQualityPreQaBuildState.PENDING)
+    return copy(execution = current.copy(preQaBuild = GoalQualityPreQaBuildState.RUNNING))
+  }
+
+  fun settlePreQaBuild(
+    passed: Boolean,
+    contentFingerprint: String,
+    warning: String? = null,
+  ): GoalQualityExecutionRecord {
+    val current = requireNotNull(execution)
+    check(current.status != GoalQualityExecutionStatus.RETIRED)
+    check(current.preQaBuild == GoalQualityPreQaBuildState.RUNNING)
+    require(contentFingerprint.isNotBlank())
+    require(warning?.isBlank() != true)
+    require(passed == (warning == null))
+    return copy(
+      execution =
+        current.copy(
+          preQaBuild = if (passed) GoalQualityPreQaBuildState.PASSED else GoalQualityPreQaBuildState.WARNED,
+          preQaBuildContentFingerprint = contentFingerprint,
+          warning = accumulateGoalFinalRepairWarnings(current.warning, warning),
+        ),
+    )
+  }
+
+  fun startNewPreQaBuildOccurrence(): GoalQualityExecutionRecord {
+    val current = requireNotNull(execution)
+    check(current.status == GoalQualityExecutionStatus.QA_PENDING)
+    check(current.preQaBuild in setOf(GoalQualityPreQaBuildState.PASSED, GoalQualityPreQaBuildState.WARNED))
+    val priorProgress = requireNotNull(current.progress).build
+    val fingerprint = requireNotNull(current.preQaBuildContentFingerprint)
+    val highWaterMarks = priorProgress.attemptHighWaterMarks.toMutableMap()
+    priorProgress.phaseRecords.forEach { (phase, record) ->
+      highWaterMarks[phase] = maxOf(highWaterMarks[phase] ?: 0, record.attemptCount)
+    }
+    priorProgress.phaseLedger.groupBy { it.phaseId }.forEach { (phase, entries) ->
+      highWaterMarks[phase] = maxOf(highWaterMarks[phase] ?: 0, entries.maxOf { it.attemptCount })
+    }
+    priorProgress.acceptedOutputs.groupBy { it.phaseId }.forEach { (phase, outputs) ->
+      highWaterMarks[phase] = maxOf(highWaterMarks[phase] ?: 0, outputs.maxOf { it.occurrence })
+    }
+    priorProgress.acceptedEnvelopes.groupBy { it.phaseId }.forEach { (phase, envelopes) ->
+      highWaterMarks[phase] = maxOf(highWaterMarks[phase] ?: 0, envelopes.maxOf { it.attempt })
+    }
+    priorProgress.acceptedSourceObservations.groupBy { it.phaseId }.forEach { (phase, observations) ->
+      highWaterMarks[phase] = maxOf(highWaterMarks[phase] ?: 0, observations.maxOf { it.attempt })
+    }
+    val archived = GoalQualityPreQaBuildOccurrence(current.preQaBuild, fingerprint, priorProgress)
+    val nextProgress =
+      GoalQualityPhaseProgress(
+        revision = priorProgress.revision + 1,
+        attemptHighWaterMarks = highWaterMarks,
+        ledgerSequenceHighWaterMark =
+          maxOf(
+            priorProgress.ledgerSequenceHighWaterMark,
+            priorProgress.phaseLedger.maxOfOrNull { it.sequenceNumber } ?: 0,
+          ),
+        carriedBuildRepairsUsed = priorProgress.buildGateProgress?.repairsUsed ?: priorProgress.carriedBuildRepairsUsed,
+        carriedBuildRepairOutputs =
+          priorProgress.buildGateProgress?.acceptedRepairOutputs ?: priorProgress.carriedBuildRepairOutputs,
+      )
+    return copy(
+      execution =
+        current.copy(
+          progress = requireNotNull(current.progress).copy(build = nextProgress),
+          preQaBuild = GoalQualityPreQaBuildState.PENDING,
+          preQaBuildContentFingerprint = null,
+          preQaBuildOccurrences = current.preQaBuildOccurrences + archived,
+        ),
+    )
   }
 
   fun startNewValidationOccurrence(): GoalQualityExecutionRecord {

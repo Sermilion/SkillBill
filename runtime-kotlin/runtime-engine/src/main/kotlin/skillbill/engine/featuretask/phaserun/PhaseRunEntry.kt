@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparationRequest
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
+import skillbill.engine.featuretask.runloop.qualitygate.goalBuildDefinitionId
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runloop.state.PhaseAttemptHistory
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
@@ -165,13 +166,14 @@ public class PhaseRunEntry(
       plans.invalidQualityPlan("Phase-run evidence rejected at 166.")
     }
     val retained = request.goalQualityPhaseProgress
+    val acceptedAgentId = requireNotNull(request.acceptedGoalQualityAgentId)
     val plan =
       plans.validateGoalQualityExecutionPlan(
         acceptedExecutionPlan,
         request.definitionId,
-        requireNotNull(request.acceptedGoalQualityAgentId),
+        acceptedAgentId,
       )
-    if (plans.requiresQualitySourceEvidence(plan) &&
+    if (plans.requiresTerminalQualitySourceEvidence(plan) &&
       request.terminalGoalQualityContentFingerprint == null
     ) {
       plans.invalidQualityPlan("Phase-run evidence rejected at 178.")
@@ -180,17 +182,23 @@ public class PhaseRunEntry(
       plans.validateNestedProgressKeys(it)
       plans.validateRetainedRunningPhases(it, plan, "$parentWorkflowId:$invocationId")
     }
-    reconcileGoalRepairOutputs(request, invocationId, retained)
-    retainedValidationResult(request, parentWorkflowId, invocationId, plan, retained)?.let { return it }
+    val boundRequest =
+      if (request.definitionId == goalBuildDefinitionId) {
+        request.copy(invokedAgentId = acceptedAgentId)
+      } else {
+        request
+      }
+    reconcileGoalRepairOutputs(boundRequest, invocationId, retained)
+    retainedValidationResult(boundRequest, parentWorkflowId, invocationId, plan, retained)?.let { return it }
     val result =
       runInternal(
-        request.copy(acceptedGoalQualityPlanText = acceptedExecutionPlan),
+        boundRequest.copy(acceptedGoalQualityPlanText = acceptedExecutionPlan),
         invocationId,
         parentWorkflowId,
         expectedBranch,
       )
-    reconcileGoalRepairOutputs(request, invocationId, request.goalQualityPhaseProgress)
-    persistQualityTerminal(request, invocationId, result)
+    reconcileGoalRepairOutputs(boundRequest, invocationId, boundRequest.goalQualityPhaseProgress)
+    persistQualityTerminal(boundRequest, invocationId, result)
     return result
   }
 
@@ -203,13 +211,13 @@ public class PhaseRunEntry(
   ): PhaseRunResult? {
     if (retained.terminalCompleted) {
       if (request.terminalGoalQualityContentFingerprint != null) {
-        requireCurrentValidationBoundary(request, parentWorkflowId, invocationId, plan, retained)
+        requireCurrentQualityBoundary(request, parentWorkflowId, invocationId, plan, retained)
       }
       return completedQualityResult(invocationId, retained)
     }
     if (retained.terminalBlockedStep != null) {
       if (request.terminalGoalQualityContentFingerprint != null) {
-        requireCurrentValidationBoundary(request, parentWorkflowId, invocationId, plan, retained)
+        requireCurrentQualityBoundary(request, parentWorkflowId, invocationId, plan, retained)
       }
       return blockedQualityResult(invocationId, retained)
     }
@@ -218,7 +226,7 @@ public class PhaseRunEntry(
       val blocked = retained.phaseRecords.values.singleOrNull { it.status == WorkflowStepStatus.BLOCKED }
       if (blocked != null) {
         val sourceFingerprint =
-          requireCurrentValidationBoundary(
+          requireCurrentQualityBoundary(
             request,
             parentWorkflowId,
             invocationId,
@@ -228,12 +236,12 @@ public class PhaseRunEntry(
         val reason =
           blocked.blockedReason?.takeIf(
             String::isNotBlank,
-          ) ?: plans.invalidQualityPlan("Retained validation block has no reason.")
+          ) ?: plans.invalidQualityPlan("Retained quality phase block has no reason.")
         val terminal = retained.copy(terminalBlockedStep = blocked.phaseId, terminalBlockedReason = reason)
         if (!requireNotNull(request.persistGoalQualityPhaseProgress)(terminal, sourceFingerprint)) {
           throw SkillBillRuntimeException(
             WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
-            "Could not persist recovered validation block for '$invocationId'.",
+            "Could not persist recovered quality phase block for '$invocationId'.",
           )
         }
         return blockedQualityResult(invocationId, terminal)
@@ -265,7 +273,7 @@ public class PhaseRunEntry(
       }
     val terminalFingerprint =
       terminal?.takeIf { request.terminalGoalQualityContentFingerprint != null }
-        ?.let { terminalValidationFingerprint(request, latest, result) }
+        ?.let { terminalQualityContentFingerprint(request, latest, result) }
     if (terminal != null && !sink(terminal, terminalFingerprint)) {
       throw SkillBillRuntimeException(
         WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
@@ -274,7 +282,7 @@ public class PhaseRunEntry(
     }
   }
 
-  private fun terminalValidationFingerprint(
+  private fun terminalQualityContentFingerprint(
     request: PhaseRunRequest,
     latest: GoalQualityPhaseProgress,
     result: PhaseRunResult,
@@ -283,7 +291,7 @@ public class PhaseRunEntry(
       when (result) {
         is PhaseRunResult.Completed ->
           result.completedStepIds.lastOrNull() ?: plans.invalidQualityPlan(
-            "Completed validation has no completed step.",
+            "Completed quality phase has no completed step.",
           )
         is PhaseRunResult.Blocked -> result.stepId
       }
@@ -299,16 +307,13 @@ public class PhaseRunEntry(
               it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE
           }.maxByOrNull { it.sequenceNumber }
         is PhaseRunResult.Blocked -> latest.acceptedBlockedValidationEvent(phaseId, attempt)
-      } ?: plans.invalidQualityPlan("Validation has no accepted terminal ledger event.")
-    return latest.acceptedSourceObservations.singleOrNull {
-      it.phaseId == phaseId && it.attempt == attempt &&
-        it.completionSequenceNumber == event.sequenceNumber &&
-        it.validationOccurrence == request.goalQualityValidationOccurrence
-    }?.contentFingerprint ?: plans.invalidQualityPlan(
-      "Missing source observation for $phaseId#$attempt " +
-        "event ${event.sequenceNumber}, occurrence ${request.goalQualityValidationOccurrence}: " +
-        "${latest.acceptedSourceObservations}.",
-    )
+      } ?: plans.invalidQualityPlan("Quality phase has no accepted terminal ledger event.")
+    return matchingSourceFingerprint(latest, SourceMatch(phaseId, attempt, event.sequenceNumber, null), request)
+      ?: plans.invalidQualityPlan(
+        "Missing source observation for $phaseId#$attempt " +
+          "event ${event.sequenceNumber}, occurrence ${request.goalQualityValidationOccurrence}: " +
+          "${latest.acceptedSourceObservations}.",
+      )
   }
 
   private fun reconcileGoalRepairOutputs(
@@ -322,7 +327,7 @@ public class PhaseRunEntry(
     }
   }
 
-  private fun requireCurrentValidationBoundary(
+  private fun requireCurrentQualityBoundary(
     request: PhaseRunRequest,
     parentWorkflowId: String,
     invocationId: String,
@@ -331,7 +336,7 @@ public class PhaseRunEntry(
   ): String {
     val currentFingerprint =
       request.terminalGoalQualityContentFingerprint?.invoke() ?: plans.invalidQualityPlan(
-        "Retained validation has no terminal source observer.",
+        "Retained quality phase has no terminal source observer.",
       )
     val repoRoot = request.repoRoot
     if (!plans.acceptedValidationSourceIsCurrent(
@@ -345,12 +350,12 @@ public class PhaseRunEntry(
         ),
       )
     ) {
-      plans.invalidQualityPlan("Retained validation source evidence is stale or inconsistent.")
+      plans.invalidQualityPlan("Retained quality phase source evidence is stale or inconsistent.")
     }
     val terminalRecord =
       progress.phaseRecords.values.singleOrNull { it.status == WorkflowStepStatus.BLOCKED }
         ?: plan.selectedStepIds.lastOrNull()?.let(progress.phaseRecords::get)
-        ?: plans.invalidQualityPlan("Retained validation has no terminal phase record.")
+        ?: plans.invalidQualityPlan("Retained quality phase has no terminal phase record.")
     val event =
       if (terminalRecord.status == WorkflowStepStatus.BLOCKED) {
         progress.acceptedBlockedValidationEvent(terminalRecord.phaseId, terminalRecord.attemptCount)
@@ -359,14 +364,39 @@ public class PhaseRunEntry(
           it.phaseId == terminalRecord.phaseId && it.attemptCount == terminalRecord.attemptCount &&
             it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE
         }.maxByOrNull { it.sequenceNumber }
-      } ?: plans.invalidQualityPlan("Retained validation has no accepted terminal event.")
-    return progress.acceptedSourceObservations.singleOrNull {
-      it.phaseId == terminalRecord.phaseId && it.attempt == terminalRecord.attemptCount &&
-        it.completionSequenceNumber == event.sequenceNumber &&
-        it.validationOccurrence == request.goalQualityValidationOccurrence &&
-        it.contentFingerprint == currentFingerprint
-    }?.contentFingerprint ?: plans.invalidQualityPlan("Retained validation has no matching source observation.")
+      } ?: plans.invalidQualityPlan("Retained quality phase has no accepted terminal event.")
+    return matchingSourceFingerprint(
+      progress,
+      SourceMatch(terminalRecord.phaseId, terminalRecord.attemptCount, event.sequenceNumber, currentFingerprint),
+      request,
+    ) ?: plans.invalidQualityPlan("Retained quality phase has no matching source observation.")
   }
+
+  private fun matchingSourceFingerprint(
+    progress: GoalQualityPhaseProgress,
+    match: SourceMatch,
+    request: PhaseRunRequest,
+  ): String? =
+    progress.acceptedSourceObservations.singleOrNull { observation ->
+      sourceIdentityMatches(observation, match, request) && fingerprintMatches(observation, match)
+    }?.contentFingerprint
+
+  private fun sourceIdentityMatches(
+    observation: GoalQualityAcceptedSourceObservation,
+    match: SourceMatch,
+    request: PhaseRunRequest,
+  ): Boolean {
+    val sameStep = observation.phaseId == match.phaseId && observation.attempt == match.attempt
+    val buildBoundary = request.definitionId == goalBuildDefinitionId
+    val occurrenceMatches =
+      buildBoundary || observation.validationOccurrence == request.goalQualityValidationOccurrence
+    return sameStep && observation.completionSequenceNumber == match.sequenceNumber && occurrenceMatches
+  }
+
+  private fun fingerprintMatches(
+    observation: GoalQualityAcceptedSourceObservation,
+    match: SourceMatch,
+  ): Boolean = match.requiredFingerprint == null || observation.contentFingerprint == match.requiredFingerprint
 
   private fun completedQualityResult(
     invocationId: String,
@@ -636,18 +666,20 @@ public class PhaseRunEntry(
           },
         )
       },
-      request.acceptedGoalRepairOutput,
-      invocationId,
+      request.acceptedGoalRepairOutput?.let { sink ->
+        { phase, attempt, output -> sink(phase, invocationId, attempt, output) }
+      },
       request.goalQualityPhaseProgress,
       request.persistGoalQualityPhaseProgress,
       workflowId,
+      qaSourceWitness = request.acceptedGoalQualityQaSourceWitness,
       qualitySourceObservation =
-        if (request.terminalGoalQualityContentFingerprint != null && request.goalQualityPhaseProgress != null) {
+        if (request.acceptedGoalQualitySourceFingerprint != null && request.goalQualityPhaseProgress != null) {
           { phaseId, attempt ->
             GoalQualityAcceptedSourceObservation(
               phaseId,
               attempt,
-              request.terminalGoalQualityContentFingerprint.invoke(),
+              request.acceptedGoalQualitySourceFingerprint.invoke(),
               validationOccurrence = request.goalQualityValidationOccurrence,
             )
           }
@@ -737,3 +769,10 @@ private fun qualityAttemptHistory(request: PhaseRunRequest): PhaseAttemptHistory
     request.goalQualityPhaseProgress?.phaseLedger.orEmpty(),
     request.goalQualityPhaseProgress?.attemptHighWaterMarks.orEmpty(),
   )
+
+private data class SourceMatch(
+  val phaseId: String,
+  val attempt: Int,
+  val sequenceNumber: Int,
+  val requiredFingerprint: String?,
+)

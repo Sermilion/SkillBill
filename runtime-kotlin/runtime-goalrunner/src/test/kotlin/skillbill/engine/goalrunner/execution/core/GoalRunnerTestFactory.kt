@@ -43,6 +43,7 @@ import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.monitoring.GoalWorktreeCompletionSettlement
 import skillbill.engine.goalrunner.persist.GoalRunnerNoChangeChildCloser
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.quality.GoalQualityExecutionRead
 import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 import skillbill.engine.goalrunner.planning.source.PREPARE_ALL_GOAL_PLANNING_SOURCE
 import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
@@ -594,6 +595,10 @@ private fun finalizationTestOutcomes(delegate: GoalRunnerWorkflowOutcomeStore): 
   return object : GoalRunnerWorkflowOutcomeStore by delegate {
     override fun goalQualityExecution(parentWorkflowId: String) =
       delegate.goalQualityExecution(parentWorkflowId) ?: fallback.goalQualityExecution(parentWorkflowId)
+
+    override fun retainedGoalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRead? =
+      delegate.retainedGoalQualityExecution(parentWorkflowId)
+        ?: fallback.goalQualityExecution(parentWorkflowId)?.let(GoalQualityExecutionRead::Current)
 
     override fun goalFinalRepairContext(parentWorkflowId: String) =
       delegate.goalFinalRepairContext(parentWorkflowId) ?: fallback.goalFinalRepairContext(parentWorkflowId)

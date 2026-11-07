@@ -19,26 +19,31 @@ internal fun recordGoalQaEvent(
   event: FeatureTaskRuntimeRunEvent,
 ) {
   val phaseId: String
+  val agentId: String
   val kind: GoalProgressEventKind
   val outcome: GoalProgressOutcome
   when (event) {
     is FeatureTaskRuntimeRunEvent.PhaseStarted -> {
       phaseId = event.phaseId
+      agentId = event.resolvedAgentId
       kind = GoalProgressEventKind.PHASE_STARTED
       outcome = GoalProgressOutcome.NONE
     }
     is FeatureTaskRuntimeRunEvent.PhaseCompleted -> {
       phaseId = event.phaseId
+      agentId = event.resolvedAgentId
       kind = GoalProgressEventKind.PHASE_COMPLETED
       outcome = GoalProgressOutcome.SUCCEEDED
     }
     is FeatureTaskRuntimeRunEvent.PhaseBlocked -> {
       phaseId = event.phaseId
+      agentId = event.resolvedAgentId
       kind = GoalProgressEventKind.PHASE_COMPLETED
       outcome = GoalProgressOutcome.FAILED
     }
     is FeatureTaskRuntimeRunEvent.PhasePaused -> {
       phaseId = event.phaseId
+      agentId = event.resolvedAgentId
       kind = GoalProgressEventKind.PHASE_COMPLETED
       outcome = GoalProgressOutcome.CANCELLED
     }
@@ -49,7 +54,7 @@ internal fun recordGoalQaEvent(
     outcomeStore,
     state,
     request,
-    clock.goalQaProgressDraft(state, request, phaseId, kind, outcome).copy(
+    clock.goalQaProgressDraft(state, agentId, phaseId, kind, outcome).copy(
       launchedModel = started?.model,
       effort = started?.effort,
     ),
@@ -57,22 +62,28 @@ internal fun recordGoalQaEvent(
   request.outputSink.write(AgentRunOutputStream.STDERR, "$phaseId: ${kind.wireValue}\n")
 }
 
+internal data class GoalQaActivity(
+  val agentId: String,
+  val phaseId: String,
+  val text: String,
+)
+
 internal fun recordGoalQaActivity(
   outcomeStore: GoalRunnerWorkflowOutcomeStore,
   clock: Clock,
   state: GoalRunnerManifestState,
   request: GoalRunnerRunRequest,
-  activity: Pair<String, String>,
+  activity: GoalQaActivity,
 ) {
-  val boundedActivity = activity.second.filterNot(Char::isISOControl).take(MAX_ACTIVITY_LENGTH)
+  val boundedActivity = activity.text.filterNot(Char::isISOControl).take(MAX_ACTIVITY_LENGTH)
   recordProgress(
     outcomeStore,
     state,
     request,
     clock.goalQaProgressDraft(
       state,
-      request,
-      activity.first,
+      activity.agentId,
+      activity.phaseId,
       GoalProgressEventKind.OPERATION_HEARTBEAT,
       GoalProgressOutcome.NONE,
     ).copy(

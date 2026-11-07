@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.persist
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
+import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.contracts.workflow.identity.status.WorkStatusArtifactKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
@@ -18,7 +19,6 @@ import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.history.GoalFinalizationHistoryPayloadKeys
 import skillbill.engine.goalrunner.persist.quality.GoalFinalizationHistoryMigration
-import skillbill.engine.goalrunner.persist.quality.fromPersistenceWire
 import skillbill.engine.workflow.support.workflowFamilyFor
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
@@ -51,8 +51,6 @@ import skillbill.goalrunner.model.history.GoalFinalizationHistoryRecord
 import skillbill.goalrunner.model.history.GoalHistoryCompletion
 import skillbill.goalrunner.model.history.GoalHistoryWriterEntry
 import skillbill.goalrunner.model.history.accumulateGoalFinalRepairWarnings
-import skillbill.goalrunner.model.quality.GoalQualityExecution
-import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.goalrunner.toPersistenceWire
 import skillbill.ports.db.DatabaseSessionFactory
@@ -153,6 +151,12 @@ public class WorkflowGoalRunnerProgressRecording(
   GoalRunnerWorkflowLedgerWriteStore,
   GoalRunnerGoalChildHistoryDraftStore,
   GoalRunnerAttemptLedgerStore {
+  private data class GoalQualityFinalizationFacts(
+    val invocationId: String,
+    val status: GoalQualityExecutionStatus,
+    val warning: String?,
+  )
+
   private val engine = WorkflowEngine()
 
   override fun progress(workflowId: String): GoalRunnerWorkflowProgress? =
@@ -441,7 +445,7 @@ public class WorkflowGoalRunnerProgressRecording(
   private fun updateGoalFinalizationHistory(
     parentWorkflowId: String,
     expectedInvocationId: String,
-    transform: (GoalFinalizationHistoryRecord, GoalQualityExecution) -> GoalFinalizationHistoryRecord,
+    transform: (GoalFinalizationHistoryRecord, GoalQualityFinalizationFacts) -> GoalFinalizationHistoryRecord,
   ): Boolean =
     database.transaction { unitOfWork ->
       val parent = draftParent(unitOfWork, parentWorkflowId)
@@ -456,9 +460,16 @@ public class WorkflowGoalRunnerProgressRecording(
         FeatureTaskRuntimeWorkflowArtifactMap.from(qualityMap),
         DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION.label(),
       )
-      val quality = GoalQualityExecutionRecord.fromPersistenceWire(qualityMap).execution
-      if (quality == null || quality.invocationId != expectedInvocationId ||
-        quality.status == GoalQualityExecutionStatus.RETIRED
+      val execution =
+        qualityMap[GoalQualityExecutionPayloadKeys.EXECUTION] as? Map<*, *>
+          ?: return@transaction false
+      val quality =
+        GoalQualityFinalizationFacts(
+          execution[GoalQualityExecutionPayloadKeys.INVOCATION_ID] as String,
+          GoalQualityExecutionStatus.fromWire(execution[GoalQualityExecutionPayloadKeys.STATUS] as String),
+          execution[GoalQualityExecutionPayloadKeys.WARNING] as String?,
+        )
+      if (quality.invocationId != expectedInvocationId || quality.status == GoalQualityExecutionStatus.RETIRED
       ) {
         return@transaction false
       }

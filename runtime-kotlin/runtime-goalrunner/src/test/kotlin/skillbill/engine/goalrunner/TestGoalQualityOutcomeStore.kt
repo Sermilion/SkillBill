@@ -1,8 +1,9 @@
 package skillbill.engine.goalrunner
 
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.quality.GoalQualityAdmissionRequest
+import skillbill.engine.goalrunner.persist.quality.GoalQualityExecutionRead
 import skillbill.engine.goalrunner.persist.quality.GoalQualityPhaseProgressWrite
-import skillbill.engine.goalrunner.persist.quality.GoalQualityValidationSourceProof
 import skillbill.engine.work.EmptyOutcomeStore
 import skillbill.goalrunner.model.history.GoalFinalRepairContext
 import skillbill.goalrunner.model.history.GoalFinalRepairOutput
@@ -10,8 +11,6 @@ import skillbill.goalrunner.model.history.GoalHistoryCompletion
 import skillbill.goalrunner.model.history.GoalHistoryWriterEntry
 import skillbill.goalrunner.model.quality.GoalQualityExecution
 import skillbill.goalrunner.model.quality.GoalQualityExecutionAdmission
-import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
-import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
 import skillbill.goalrunner.model.quality.GoalQualityExecutionProgress
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
@@ -39,6 +38,9 @@ internal open class TestGoalQualityOutcomeStore(private val settled: Boolean = f
       )
     }
 
+  override fun retainedGoalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRead? =
+    goalQualityExecution(parentWorkflowId)?.let(GoalQualityExecutionRead::Current)
+
   override fun goalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRecord? =
     records[parentWorkflowId] ?: if (settled) {
       GoalQualityExecutionRecord(
@@ -63,10 +65,7 @@ internal open class TestGoalQualityOutcomeStore(private val settled: Boolean = f
 
   override fun admitGoalQualityExecution(
     parentWorkflowId: String,
-    baselineContentFingerprint: String,
-    governingInputs: GoalQualityExecutionInputs,
-    executionPlans: GoalQualityExecutionPlans,
-    validationSourceProof: GoalQualityValidationSourceProof?,
+    admission: GoalQualityAdmissionRequest,
   ): GoalQualityExecutionRecord =
     records.getOrPut(parentWorkflowId) {
       contexts[parentWorkflowId] = GoalFinalRepairContext(emptyList())
@@ -74,11 +73,11 @@ internal open class TestGoalQualityOutcomeStore(private val settled: Boolean = f
         GoalQualityExecutionAdmission(
           parentWorkflowId,
           "test-quality",
-          baselineContentFingerprint,
+          admission.baselineContentFingerprint,
           "selection",
           "governing",
-          governingInputs,
-          executionPlans,
+          admission.governingInputs,
+          admission.executionPlans,
         ),
       )
     }
@@ -105,7 +104,11 @@ internal open class TestGoalQualityOutcomeStore(private val settled: Boolean = f
     acceptedPlan: String,
   ): GoalQualityPhaseProgress {
     val progress = requireNotNull(records[parentWorkflowId]?.execution?.progress)
-    return if (definitionId == SkeletonDefinition.GOAL_QA.id) progress.qa else progress.validation
+    return when (definitionId) {
+      SkeletonDefinition.GOAL_BUILD.id -> progress.build
+      SkeletonDefinition.GOAL_QA.id -> progress.qa
+      else -> progress.validation
+    }
   }
 
   override fun persistGoalQualityPhaseProgress(write: GoalQualityPhaseProgressWrite): Boolean {
@@ -121,12 +124,10 @@ internal open class TestGoalQualityOutcomeStore(private val settled: Boolean = f
     if (execution.invocationId != invocationId) return false
     val prior = requireNotNull(execution.progress)
     val next =
-      if (definitionId == SkeletonDefinition.GOAL_QA.id) {
-        prior.copy(
-          qa = progress,
-        )
-      } else {
-        prior.copy(validation = progress)
+      when (definitionId) {
+        SkeletonDefinition.GOAL_BUILD.id -> prior.copy(build = progress)
+        SkeletonDefinition.GOAL_QA.id -> prior.copy(qa = progress)
+        else -> prior.copy(validation = progress)
       }
     records[parentWorkflowId] =
       record.copy(
@@ -135,6 +136,8 @@ internal open class TestGoalQualityOutcomeStore(private val settled: Boolean = f
             progress = next,
             finalValidationContentFingerprint =
               finalValidationContentFingerprint ?: execution.finalValidationContentFingerprint,
+            preQaBuildContentFingerprint =
+              write.preQaBuildContentFingerprint ?: execution.preQaBuildContentFingerprint,
           ),
       )
     return true

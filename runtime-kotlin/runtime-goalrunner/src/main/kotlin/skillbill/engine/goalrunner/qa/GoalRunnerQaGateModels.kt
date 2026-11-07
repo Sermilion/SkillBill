@@ -24,6 +24,7 @@ public sealed interface GoalQaGateResult {
 }
 
 public enum class GoalQaSkipReason(internal val wireValue: String) {
+  DISABLED_POLICY("disabled_policy"),
   UNSUPPORTED_TARGET("unsupported_target"),
   SUBTASKS_ALREADY_RAN_QA("subtasks_already_ran_qa"),
   ALREADY_SETTLED_ON_TREE("already_settled_on_tree"),

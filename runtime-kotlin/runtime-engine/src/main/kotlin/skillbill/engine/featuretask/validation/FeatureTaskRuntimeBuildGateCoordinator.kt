@@ -134,7 +134,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
     cycle: ValidationGateCycleRequest,
     result: ValidationGateCycleResult,
   ): ValidationGateCycleResult {
-    if (cycle.commandFamily != ValidationGateCommandFamily.VALIDATION ||
+    if (cycle.commandFamily !in setOf(ValidationGateCommandFamily.BUILD, ValidationGateCommandFamily.VALIDATION) ||
       !cycle.request.goalQualityAutomaticRecovery
     ) {
       return result
@@ -147,7 +147,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
     val repairsUsed =
       maxOf(
         loaded?.repairsUsed ?: 0,
-        if (cycle.newValidationOccurrence) cycle.carriedRepairTurns else 0,
+        cycle.carriedRepairTurns,
       )
     val progress =
       FeatureTaskRuntimeValidationGateProgress(
@@ -180,21 +180,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
     cycle: ValidationGateCycleRequest,
     loaded: FeatureTaskRuntimeValidationGateProgress?,
   ): List<FeatureTaskRuntimeValidationGateRepairOutput> {
-    val carriedByTurn = cycle.carriedRepairOutputs.associateBy { it.repairTurn }
-    if (cycle.newValidationOccurrence &&
-      loaded?.acceptedRepairOutputs.orEmpty().any { retained ->
-        carriedByTurn[retained.repairTurn]?.output?.let { it != retained.output } == true
-      }
-    ) {
-      invalidRetainedTriage("A validation refusal conflicts with a retained repair receipt.")
-    }
-    val acceptedRepairOutputs =
-      (if (cycle.newValidationOccurrence) cycle.carriedRepairOutputs else emptyList()) +
-        loaded?.acceptedRepairOutputs.orEmpty()
-    return acceptedRepairOutputs
-      .associateBy { it.repairTurn }
-      .values
-      .sortedBy { it.repairTurn }
+    return mergeAcceptedRepairOutputs(cycle.carriedRepairOutputs, loaded?.acceptedRepairOutputs.orEmpty())
   }
 
   private fun recordedResolution(cycle: ValidationGateCycleRequest): ValidationGateResolution? {
@@ -211,8 +197,21 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
     }
   }
 
-  private fun carriedValidationRepairTurns(cycle: ValidationGateCycleRequest): Int =
-    if (cycle.newValidationOccurrence) cycle.carriedRepairTurns else 0
+  private fun carriedGateRepairTurns(cycle: ValidationGateCycleRequest): Int = cycle.carriedRepairTurns
+
+  private fun mergeAcceptedRepairOutputs(
+    carried: List<FeatureTaskRuntimeValidationGateRepairOutput>,
+    retained: List<FeatureTaskRuntimeValidationGateRepairOutput>,
+  ): List<FeatureTaskRuntimeValidationGateRepairOutput> {
+    val outputs = linkedMapOf<Int, FeatureTaskRuntimeValidationGateRepairOutput>()
+    (carried + retained).forEach { output ->
+      val prior = outputs.putIfAbsent(output.repairTurn, output)
+      if (prior != null && prior != output) {
+        invalidRetainedTriage("A retained gate record conflicts with a carried repair receipt.")
+      }
+    }
+    return outputs.values.sortedBy { it.repairTurn }
+  }
 
   private fun checkAndRepair(
     cycle: ValidationGateCycleRequest,
@@ -227,8 +226,16 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
         failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
       )
     }
-    val measurements = loaded?.gateRuns?.filterNot { it.legacyUnverified }?.toMutableList() ?: mutableListOf()
-    val terminalProgress = loaded.takeIf { cycle.preserveConsumedRepairTurns }
+    val resumed =
+      loaded?.takeIf { cycle.preserveConsumedRepairTurns && it.terminalOutcome == "paused" }?.copy(
+        terminalOutcome = null,
+        terminalReason = null,
+        terminalFailureDisposition = null,
+        terminalFailureCode = null,
+      )?.also { cycle.progressStore.persist(cycle.progressKey, it) }
+    val activeProgress = resumed ?: loaded
+    val measurements = activeProgress?.gateRuns?.filterNot { it.legacyUnverified }?.toMutableList() ?: mutableListOf()
+    val terminalProgress = activeProgress.takeIf { cycle.preserveConsumedRepairTurns }
     val state =
       BuildGateCycleState(
         cycle,
@@ -236,22 +243,21 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
         onGateRunCount,
         loaded?.lastAgentUnfixedCriteria.orEmpty(),
         (
-          loaded?.acceptedRepairOutputs
-            ?: if (cycle.newValidationOccurrence) cycle.carriedRepairOutputs else emptyList()
+          mergeAcceptedRepairOutputs(cycle.carriedRepairOutputs, activeProgress?.acceptedRepairOutputs.orEmpty())
         ).toMutableList(),
         terminalProgress?.terminalOutcome,
         terminalProgress?.terminalReason,
         terminalProgress?.terminalFailureDisposition,
         terminalProgress?.terminalFailureCode,
-        loaded?.triageDisposition ?: FeatureTaskRuntimeValidationGateTriageDisposition.UNKNOWN,
+        activeProgress?.triageDisposition ?: FeatureTaskRuntimeValidationGateTriageDisposition.UNKNOWN,
       )
 
-    if (cycle.preserveConsumedRepairTurns && loaded?.terminalOutcome != null) {
-      return retainedTerminalResult(loaded, measurements)
+    if (cycle.preserveConsumedRepairTurns && activeProgress?.terminalOutcome != null) {
+      return retainedTerminalResult(activeProgress, measurements)
     }
 
     return try {
-      resumeFindingsOrCompletion(state, declaration, loaded) ?: discoverFindings(state, declaration)
+      resumeFindingsOrCompletion(state, declaration, activeProgress) ?: discoverFindings(state, declaration)
     } catch (failure: SkillBillRuntimeException) {
       failure.rethrowUnless(failure.code == FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION)
       gateLaunchBlockedResult(state, failure)
@@ -313,8 +319,9 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
     val measurements = state.measurements
     if (loaded?.repairWindowPhase == FeatureTaskRuntimeValidationGateRepairWindowPhase.FINDINGS_OPEN) {
       val findings = decodeBuildPersistedFindings(loaded.completeFindings)
+      val consumedRepairTurns = maxOf(loaded.repairsUsed, carriedGateRepairTurns(cycle))
       val discoveryTriagePending =
-        loaded.gateRunCount == 1 && loaded.repairsUsed == 0 && loaded.acceptedRepairOutputs.isEmpty()
+        loaded.gateRunCount == 1 && consumedRepairTurns == 0 && state.acceptedRepairOutputs.isEmpty()
       val triagePlan =
         if (discoveryTriagePending) {
           when (val triage = runBuildTriageIfNeeded(state, findings)) {
@@ -331,7 +338,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
         openFindings = findings,
         initialRepairsUsed =
           if (cycle.preserveConsumedRepairTurns) {
-            loaded.repairsUsed
+            consumedRepairTurns
           } else {
             operatorResumeRepairTurns(
               loaded.repairsUsed,
@@ -364,7 +371,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
         repairWindowPhase = FeatureTaskRuntimeValidationGateRepairWindowPhase.NONE,
         remainingFindings = null,
         completeFindings = emptyList(),
-        repairsUsed = carriedValidationRepairTurns(cycle),
+        repairsUsed = carriedGateRepairTurns(cycle),
         capturedTriagePlan = null,
       ),
       pendingExternalOperation = commandIdentity(cycle, declaration, ValidationGateCyclePhase.INITIAL_DISCOVERY),
@@ -382,7 +389,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
           repairWindowPhase = repairWindowPhaseFor(discoveryFindings),
           remainingFindings = null,
           completeFindings = discoveryFindings,
-          repairsUsed = carriedValidationRepairTurns(cycle),
+          repairsUsed = carriedGateRepairTurns(cycle),
           capturedTriagePlan = null,
           triageDisposition =
             if (discoveryFindings.isEmpty() || !requiresUnparseableGateTriage(discoveryFindings)) {
@@ -404,7 +411,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
         state = state,
         declaration = declaration,
         openFindings = discoveryFindings,
-        initialRepairsUsed = carriedValidationRepairTurns(cycle),
+        initialRepairsUsed = carriedGateRepairTurns(cycle),
         triagePlan = triagePlan,
       )
     }

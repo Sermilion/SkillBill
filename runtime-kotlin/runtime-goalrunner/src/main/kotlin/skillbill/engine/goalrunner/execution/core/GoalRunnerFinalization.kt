@@ -34,6 +34,7 @@ import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.quality.GoalQualityExecutionRead
 import skillbill.engine.goalrunner.qa.GoalQaGateResult
 import skillbill.engine.goalrunner.qa.GoalQaSkipReason
 import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
@@ -199,7 +200,7 @@ public class GoalRunnerFinalization(
     }
     if (qaResult is GoalQaGateResult.Warned) warnQa(request, qaResult.reason)
     val invocationId =
-      outcomeStore.goalQualityExecution(finalState.parentWorkflowId)?.execution?.invocationId
+      currentQualityExecution(outcomeStore, finalState.parentWorkflowId)?.invocationId
         ?: return ValidatedPublicationPrep.Stopped(
           writeHistoryStopped(
             finalState,
@@ -320,7 +321,7 @@ public class GoalRunnerFinalization(
     expectedInvocationId: String,
   ): GoalRunnerRunReport? {
     val quality =
-      outcomeStore.goalQualityExecution(state.parentWorkflowId)?.execution
+      currentQualityExecution(outcomeStore, state.parentWorkflowId)
         ?.takeIf { it.invocationId == expectedInvocationId }
         ?: return writeHistoryStopped(
           state,
@@ -453,7 +454,7 @@ public class GoalRunnerFinalization(
     parentWorkflowId: String,
     expectedInvocationId: String,
   ): Boolean =
-    outcomeStore.goalQualityExecution(parentWorkflowId)?.execution?.let { execution ->
+    currentQualityExecution(outcomeStore, parentWorkflowId)?.let { execution ->
       execution.invocationId == expectedInvocationId && execution.status in
         setOf(
           GoalQualityExecutionStatus.SETTLED_PASSED,
@@ -1000,3 +1001,11 @@ private sealed interface ValidatedPublicationPrep {
 }
 
 private const val MAX_WARNING_REASON = 200
+
+private fun currentQualityExecution(
+  outcomeStore: GoalRunnerWorkflowOutcomeStore,
+  parentWorkflowId: String,
+) = when (val retained = outcomeStore.retainedGoalQualityExecution(parentWorkflowId)) {
+  is GoalQualityExecutionRead.Current -> retained.record.execution
+  is GoalQualityExecutionRead.Historical, is GoalQualityExecutionRead.Ambiguous, null -> null
+}
