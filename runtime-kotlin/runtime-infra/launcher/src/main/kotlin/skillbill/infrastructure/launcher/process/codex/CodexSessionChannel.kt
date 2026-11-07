@@ -221,8 +221,6 @@ internal class CodexSessionChannel(
 
   private fun itemCompleted(params: JsonObject) {
     val completed = params.obj(K.ITEM) ?: return
-    // A command that ran and failed (non-zero exit, merge conflict, red build) is an ordinary tool result the agent
-    // repairs; only a declined action or a provider/protocol failure ends the turn.
     val permissionControlled = approvals.itemCompleted(params, completed)
     if (completed.text(K.STATUS) == K.DECLINED) {
       providerFailure = "Codex declined the requested action: $completed"

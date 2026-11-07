@@ -242,6 +242,7 @@ internal class CodexAppServerRpc(
           val itemId = params.string("itemId")
           val delta = params.string("delta")
           if (itemId != null && delta != null) {
+            if (itemId !in streamedTextItems) emit(ChatEvent.MessageStarted)
             streamedTextItems.getOrPut(itemId) { StringBuilder() }.append(delta)
             emit(ChatEvent.TextDelta(delta))
           }
@@ -294,7 +295,10 @@ internal class CodexAppServerRpc(
       val finalText = item.string("text") ?: return
       val streamed = streamedTextItems[itemId]?.toString().orEmpty()
       when {
-        streamed.isEmpty() -> emit(ChatEvent.TextDelta(finalText))
+        streamed.isEmpty() -> {
+          emit(ChatEvent.MessageStarted)
+          emit(ChatEvent.TextDelta(finalText))
+        }
         finalText.startsWith(streamed) -> finalText.removePrefix(streamed).takeIf(String::isNotEmpty)?.let {
           emit(ChatEvent.TextDelta(it))
         }

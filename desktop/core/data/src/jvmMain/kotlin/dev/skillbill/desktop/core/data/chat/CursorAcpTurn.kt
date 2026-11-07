@@ -166,6 +166,8 @@ internal fun cursorAcpTurn(
       "No declared ${provider.name} executable supplies ACP stdio. The chat was not started."))
     return@channelFlow
   }
+  // ACP streams text chunks without message ids, so a text run after a tool call starts a new message.
+  var textOpen = false
   val protocol = CursorAcpSession(
     CursorAcpLaunch(
       cwd = request.scope.repositoryRoot,
@@ -192,8 +194,13 @@ internal fun cursorAcpTurn(
     },
     onEvent = { event ->
       when (event) {
-        is CursorAcpEvent.Text -> events.trySend(ChatEvent.TextDelta(event.text))
+        is CursorAcpEvent.Text -> {
+          if (!textOpen) events.trySend(ChatEvent.MessageStarted)
+          textOpen = true
+          events.trySend(ChatEvent.TextDelta(event.text))
+        }
         is CursorAcpEvent.Tool -> {
+          textOpen = false
           val tool = event.update
           val id = tool.string("toolCallId")
           if (id != null) {

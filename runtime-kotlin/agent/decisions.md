@@ -3626,3 +3626,9 @@ A7 preserves loud refusal; A8 keeps the fixture environment explicit. G3 retains
 rejection evidence, and G7 and P7 require this recorded contract correction. The checks assume
 exclusive use of the QA output directories during a task; they do not claim to defeat concurrent
 malicious replacement of ancestor directories.
+
+## [2026-11-07] Keep approved command failures inside the Codex turn
+
+Context: An approved command can exit non-zero while resolving a merge or repairing a build. Ending the turn on that result prevents the agent from completing its repair.
+
+Decision: Treat an executed command's failure as a tool result. A declined action or a provider or protocol failure can still end the turn. The Codex session-channel regression tests cover successful approval followed by a failed command.
