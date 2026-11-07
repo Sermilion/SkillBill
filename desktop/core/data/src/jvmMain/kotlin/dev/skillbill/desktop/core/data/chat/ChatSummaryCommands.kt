@@ -17,12 +17,14 @@ internal val summaryModels = mapOf("claude" to "haiku", "codex" to "gpt-6-luna",
 internal fun summaryArguments(agentId: String, directory: String, prompt: String): List<String>? {
   val model = summaryModels[agentId] ?: return null
   return when (agentId) {
-    "claude" -> listOf("-p", "--model", model, "--tools", "", "--no-session-persistence", "--output-format", "text")
+    "claude" -> listOf(
+      "-p", "--model", model, "--tools", "", "--no-session-persistence", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+    )
     "codex" -> listOf(
       "exec", "--json", "--model", model, "--sandbox", "read-only", "--ephemeral", "--skip-git-repo-check", "--cd", directory, "-",
     )
     "cursor" -> listOf(
-      "--print", "--output-format", "text", "--mode", "ask", "--trust", "--workspace", directory, "--model", model, prompt,
+      "--print", "--output-format", "stream-json", "--mode", "ask", "--trust", "--workspace", directory, "--model", model, prompt,
     )
     else -> null
   }
@@ -31,7 +33,14 @@ internal fun summaryArguments(agentId: String, directory: String, prompt: String
 /** Cursor takes the prompt as an argument; the others read it from stdin. */
 internal fun summaryStdin(agentId: String, prompt: String): String = if (agentId == "cursor") "" else prompt
 
-internal fun summaryDecoder(agentId: String): ChatLineDecoder = if (agentId == "codex") CodexStreamDecoder {} else JunieTextDecoder
+internal fun summaryDecoder(agentId: String): ChatLineDecoder = when (agentId) {
+  "claude" -> object : ChatLineDecoder {
+    override fun decode(line: String) = decodeClaudeLine(line)
+  }
+  "codex" -> CodexStreamDecoder {}
+  "cursor" -> CursorStreamDecoder {}
+  else -> error("Unsupported summary agent: $agentId")
+}
 
 /** Asks for one sentence about [lines], with the transcript fenced off as data. */
 internal fun summaryPrompt(lines: List<ChatHistoryLine>): String = """

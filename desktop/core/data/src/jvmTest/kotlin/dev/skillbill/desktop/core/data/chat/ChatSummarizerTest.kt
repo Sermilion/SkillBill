@@ -32,7 +32,7 @@ class ChatSummarizerTest {
   private val commands = mutableListOf<ChatCommand>()
 
   /** Answers every call with [reply]; [during] runs while the call is in flight. */
-  private var reply: (ChatCommand) -> List<ChatProcessOutput> = { textReply("About CI.") }
+  private var reply: (ChatCommand) -> List<ChatProcessOutput> = { claudeReply("About CI.") }
   private var during: suspend () -> Unit = {}
 
   private val launcher = ChatProcessLauncher { command ->
@@ -57,7 +57,7 @@ class ChatSummarizerTest {
   fun `each agent runs read-only on its cheap model in the summaries directory`() = runTest {
     val summarizer = summarizer()
     listOf("claude", "codex", "cursor").forEachIndexed { index, agent -> store.saveChat(entry(agent, agent, index + 1L)) }
-    reply = { command -> if ("codex" in command.argv) codexReply("About CI.") else textReply("About CI.") }
+    reply = { command -> agentReply(command, "About CI.") }
 
     listOf("claude", "codex", "cursor").forEach(summarizer::request)
     runCurrent()
@@ -77,6 +77,15 @@ class ChatSummarizerTest {
     assertTrue(listOf("--sandbox", "read-only", "--ephemeral").all { it in commands.first { "codex" in it.argv }.argv })
     assertTrue(listOf("--mode", "ask").all { it in commands.first { "agent" in it.argv }.argv })
     assertTrue(listOf("--tools", "", "--no-session-persistence").all { it in commands.first { "claude" in it.argv }.argv })
+    listOf("claude", "cursor").forEach { agent ->
+      val argv = commands.first { agent in it.argv || (agent == "cursor" && "agent" in it.argv) }.argv
+      val outputFormat = argv.indexOf("--output-format")
+      assertTrue(outputFormat >= 0 && argv.getOrNull(outputFormat + 1) == "stream-json", "$argv")
+    }
+    commands.forEach { command ->
+      val outputFormat = command.argv.indexOf("--output-format")
+      if (outputFormat >= 0) assertTrue(command.argv.getOrNull(outputFormat + 1) != "text", "${command.argv}")
+    }
   }
 
   // A multi-line or quoted reply makes an unreadable row, and stamping the newer save hides turns from re-summarizing.
@@ -84,7 +93,7 @@ class ChatSummarizerTest {
   fun `the first reply line becomes the summary stamped with the snapshot time`() = runTest {
     val summarizer = summarizer()
     store.saveChat(entry("s1", "claude", 1))
-    reply = { textReply("", "- \"Fixes the flaky upload test.\"", "More text") }
+    reply = { command -> agentReply(command, "\n- \"Fixes the flaky upload test.\"\nMore text") }
     during = { store.saveChat(entry("s1", "claude", 2)) }
     val updates = mutableListOf<String>()
     backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) { summarizer.updates.collect { updates += it } }
@@ -103,7 +112,7 @@ class ChatSummarizerTest {
     val summarizer = summarizer()
     store.saveChat(entry("fails", "claude", 1))
     store.saveChat(entry("junie", "junie", 2))
-    reply = { listOf(ChatProcessOutput.Line("Partial answer about"), ChatProcessOutput.Exited(1, "rate limited")) }
+    reply = { listOf(claudeDelta("Partial answer about"), ChatProcessOutput.Exited(1, "rate limited")) }
 
     summarizer.request("fails")
     summarizer.request("junie")
@@ -114,6 +123,21 @@ class ChatSummarizerTest {
     assertEquals(null, store.savedFor("junie")?.summary)
     assertTrue("chat.summary_failed" in diagnostics.categories)
     assertTrue("chat.summary_unsupported_agent" in diagnostics.categories)
+  }
+
+  @Test
+  fun `login shell output is skipped before every supported agent summary`() = runTest {
+    val summarizer = summarizer()
+    listOf("claude", "cursor", "codex").forEachIndexed { index, agent -> store.saveChat(entry(agent, agent, index + 1L)) }
+    reply = { command ->
+      listOf(ChatProcessOutput.Line("Now using node v22 (npm v10)"), ChatProcessOutput.Line("")) + agentReply(command, "About CI.")
+    }
+
+    listOf("claude", "cursor", "codex").forEach(summarizer::request)
+    runCurrent()
+
+    listOf("claude", "cursor", "codex").forEach { agent -> assertEquals("About CI.", store.savedFor(agent)?.summary) }
+    assertTrue("chat.login_output_skipped" in diagnostics.categories)
   }
 
   // A hung agent with no timeout, or one throwing call that ends the worker, leaves every later chat on its fallback title.
@@ -159,13 +183,36 @@ class ChatSummarizerTest {
     assertEquals(listOf("s1"), store.staleSummaries(20).map { it.sessionId })
   }
 
-  private fun textReply(vararg lines: String): List<ChatProcessOutput> =
-    lines.map { ChatProcessOutput.Line(it) } + ChatProcessOutput.Exited(0, "")
-
   private fun codexReply(text: String): List<ChatProcessOutput> = listOf(
     ChatProcessOutput.Line("""{"type":"item.completed","item":{"type":"agent_message","text":"$text"}}"""),
     ChatProcessOutput.Line("""{"type":"turn.completed"}"""),
     ChatProcessOutput.Exited(0, ""),
   )
+
+  private fun agentReply(command: ChatCommand, text: String): List<ChatProcessOutput> = when {
+    "codex" in command.argv -> codexReply(text)
+    "agent" in command.argv -> cursorReply(text)
+    else -> claudeReply(text)
+  }
+
+  private fun claudeReply(text: String): List<ChatProcessOutput> = listOf(
+    claudeDelta(text),
+    ChatProcessOutput.Line("""{"type":"result","is_error":false}"""),
+    ChatProcessOutput.Exited(0, ""),
+  )
+
+  private fun claudeDelta(text: String): ChatProcessOutput.Line {
+    val escaped = text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
+    return ChatProcessOutput.Line("""{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"$escaped"}}}""")
+  }
+
+  private fun cursorReply(text: String): List<ChatProcessOutput> {
+    val escaped = text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
+    return listOf(
+      ChatProcessOutput.Line("""{"type":"assistant","message":{"content":[{"type":"text","text":"$escaped"}]}}"""),
+      ChatProcessOutput.Line("""{"type":"result","is_error":false}"""),
+      ChatProcessOutput.Exited(0, ""),
+    )
+  }
 }
 
