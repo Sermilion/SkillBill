@@ -135,6 +135,16 @@ class CursorAgentRunCommandBuildersTest {
   }
 
   @Test
+  fun `cursor decoder harvests completed assistant text independently of partial deltas`() {
+    val jsonl = """{"type":"partial","delta":"draft"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"completed report"}]}}"""
+
+    val decoded = AgentRunOutputDecoder.CURSOR_STREAM_JSON.decode(jsonl)
+
+    assertEquals("completed report", decoded.text)
+  }
+
+  @Test
   fun `cursor decoder ignores camelCase usage keys`() {
     val usage = """{"inputTokens":28164,"cachedInputTokens":11,"outputTokens":0,"totalTokens":28175}"""
     val jsonl = """{"type":"result","result":"PLAN-OK","usage":$usage}"""

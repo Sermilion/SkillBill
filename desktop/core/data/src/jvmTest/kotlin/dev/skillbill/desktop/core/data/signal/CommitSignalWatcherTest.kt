@@ -15,7 +15,6 @@ import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 import kotlin.time.Clock
 
 // macOS's JDK WatchService polls internally, so the hang guard is generous.
@@ -38,7 +37,7 @@ class CommitSignalWatcherTest {
         replace(signal, "g2", revision = 2)
         val next = watcher.snapshots.first { it.generation == "g2" }
         assertEquals(2L, next.revisions[DesktopReadSchema.DIFF_COMMENTS_TOPIC])
-        assertTrue(next.resynchronize)
+        assertEquals(1L, next.resyncEpoch)
       }
       job.cancelAndJoin()
     }

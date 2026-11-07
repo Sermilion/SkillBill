@@ -33,8 +33,8 @@ internal fun previewRoute(text: String): NewTaskRoutePreview? {
 
 internal fun NewTaskRoutePreview.lights(step: String): Boolean = this == NewTaskRoutePreview.Goal || step == this.step
 
-internal fun routeCaption(preview: NewTaskRoutePreview?): String = when (preview) {
-  null -> "Every goal runs this path"
+internal fun routeCaption(preview: NewTaskRoutePreview?): String? = when (preview) {
+  null -> null
   NewTaskRoutePreview.Goal -> "Looks like a goal run, all 7 steps"
   NewTaskRoutePreview.Release -> "Looks like a release, which no button starts"
   else -> "Looks like a standalone ${preview.step}, just this step"

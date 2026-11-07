@@ -1,27 +1,83 @@
 package skillbill.engine.featuretask.slot.runner
 
+import org.junit.jupiter.api.io.TempDir
 import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
+import skillbill.engine.featuretask.slot.PhaseLiveChecksLaunch
 import skillbill.engine.featuretask.slot.PhaseStepFacts
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
+import skillbill.engine.featuretask.validation.check.ValidationLiveChecks
+import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
+import skillbill.ports.agentrun.model.AgentRunOutputSink
+import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
+import skillbill.ports.idestatus.model.LiveChecksAvailability
+import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.lang.reflect.Proxy
 import java.nio.file.Path
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotSame
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.fail
 
 class DefaultPhaseRunnerTest {
+  @TempDir lateinit var databaseHome: Path
+
+  @Test
+  fun `captured planning launches request provider output while uncaptured launches do not`() {
+    val requests = mutableListOf<GoalRunnerSubtaskLaunchRequest>()
+    val runner =
+      DefaultPhaseRunner(
+        GoalRunnerSubtaskLauncher { request ->
+          requests += request
+          agentRunLaunchFacts(SupportedAgent.CLAUDE)
+        },
+        NoopWorkflowGitOperations,
+      )
+    val outputSink = AgentRunOutputSink { _, _ -> }
+
+    listOf("preplan", "plan").forEach { stepName ->
+      runner.run(input(stepName), PrepareOnlyPhaseRunState, outputSink, true)
+      runner.run(input(stepName), PrepareOnlyPhaseRunState, outputSink, false)
+      runner.run(
+        input(stepName).let { it.copy(facts = it.facts.copy(streamOutputForLiveness = true)) },
+        PrepareOnlyPhaseRunState,
+        outputSink,
+        false,
+      )
+    }
+
+    assertEquals(
+      listOf(true, false, false, true, false, false),
+      requests.map { it.skillRunRequest.streamProviderOutput },
+    )
+    assertEquals(
+      listOf(true, false, false, true, false, false),
+      requests.map { it.skillRunRequest.captureDisplayOutput },
+    )
+    assertEquals(
+      listOf(true, false, true, true, false, true),
+      requests.map { it.skillRunRequest.streamOutputForLiveness },
+    )
+  }
+
   @Test
   fun `a step captures its stdout as process output without reading an envelope from it`() {
     val stdout =
@@ -203,6 +259,67 @@ class DefaultPhaseRunnerTest {
     assertEquals("", first.stdout.text)
     assertNull(second.launchFailure)
     assertEquals("launch 1", second.stdout.text)
+  }
+
+  @Test
+  fun `a standalone validation launch gates the live-checks tool on the agent capability`() {
+    val database =
+      sqliteDatabaseSessionFactory(
+        databaseHome,
+        environment = mapOf("TEST" to "1"),
+        diagnostics = NoopRuntimeDiagnostics,
+      )
+    val requests = mutableListOf<SkillRunRequest>()
+    val runner =
+      DefaultPhaseRunner(
+        GoalRunnerSubtaskLauncher { request ->
+          requests += request.skillRunRequest
+          agentRunLaunchFacts(SupportedAgent.CLAUDE, stdout = "Checks ran.")
+        },
+        NoopWorkflowGitOperations,
+        ValidationLiveChecks(database, NoopRuntimeDiagnostics),
+      )
+
+    fun launch(liveChecks: PhaseLiveChecksLaunch?): SkillRunRequest {
+      liveChecks?.let { registerValidationRow(database, it.invocationId) }
+      val input = input("validate").let { it.copy(facts = it.facts.copy(liveChecks = liveChecks)) }
+      runner.run(input, PrepareOnlyPhaseRunState)
+      return requests.last()
+    }
+
+    fun liveChecks(invocationId: String) =
+      database.read { it.standalonePhaseStatuses.readByInvocation(invocationId)?.liveChecks }
+
+    val capable = launch(PhaseLiveChecksLaunch("phr-claude", agentCapable = true))
+    assertEquals("phr-claude", capable.validationCheckInvocationId)
+    assertNotSame(AgentRunMcpStartupProbe.NONE, capable.mcpStartupProbe)
+    assertEquals(LiveChecksAvailability.UNAVAILABLE, liveChecks("phr-claude"))
+
+    val incapable = launch(PhaseLiveChecksLaunch("phr-junie", agentCapable = false))
+    assertNull(incapable.validationCheckInvocationId)
+    assertSame(AgentRunMcpStartupProbe.NONE, incapable.mcpStartupProbe)
+    assertEquals(LiveChecksAvailability.UNAVAILABLE, liveChecks("phr-junie"))
+
+    val other = launch(null)
+    assertNull(other.validationCheckInvocationId)
+    assertSame(AgentRunMcpStartupProbe.NONE, other.mcpStartupProbe)
+  }
+
+  private fun registerValidationRow(
+    database: DatabaseSessionFactory,
+    invocationId: String,
+  ) {
+    database.transaction {
+      it.standalonePhaseStatuses.register(
+        StandalonePhaseStatusRegistration(
+          repositoryIdentity = "repo", branchCorrelation = "main", issueKey = null, workflowId = null,
+          invocationId = invocationId, phaseId = SkeletonDefinition.VALIDATION.id,
+          executionId = "execution-$invocationId", lifecycleState = "active",
+          currentStep = SkeletonDefinition.VALIDATION.id, startedAt = Instant.EPOCH, leaseOwner = "owner",
+          leaseGeneration = 1, leaseExpiresAt = Instant.EPOCH.plusSeconds(3600),
+        ),
+      )
+    }
   }
 
   private fun launcher(stdout: String) =

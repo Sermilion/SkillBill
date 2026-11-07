@@ -15,6 +15,7 @@ import dev.skillbill.desktop.core.domain.model.OperationCardView
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlin.time.Clock
 
@@ -51,6 +52,17 @@ internal class ChatThread(private val clock: Clock) {
 
   val queuedState = MutableStateFlow<List<QueuedChatMessage>>(emptyList())
   val queued: StateFlow<List<QueuedChatMessage>> = queuedState.asStateFlow()
+
+  fun takeQueuedMessage(): QueuedChatMessage? {
+    val pending = queuedState.getAndUpdate { emptyList() }
+    val first = pending.firstOrNull() ?: return null
+    return first.copy(
+      text = pending.map { it.text }.filter { it.isNotBlank() }.joinToString("\n\n"),
+      action = pending.singleOrNull()?.action,
+      pauseAndAct = pending.any { it.pauseAndAct },
+      images = pending.flatMap { it.images },
+    )
+  }
 
   fun append(message: ChatMessage) = messages.update { it + message }
 
@@ -292,7 +304,7 @@ internal fun ChatThread.show(agent: ChatAgent?, event: ChatEvent) {
   }
 }
 
-private fun ChatMessage.Operator.savedText(): String =
+internal fun ChatMessage.Operator.savedText(): String =
   text.ifBlank { images.indices.joinToString(" ") { imageLabel(it + 1) } }
 
 /** The message a saved line shows as when a chat resumes. */

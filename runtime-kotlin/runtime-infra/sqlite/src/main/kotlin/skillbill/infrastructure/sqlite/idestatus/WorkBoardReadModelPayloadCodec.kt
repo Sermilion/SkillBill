@@ -80,6 +80,8 @@ internal object WorkBoardReadModelPayloadCodec {
               WorkBoardReadModelPayloadKeys.PLANNING_STATE to it.state.name,
               WorkBoardReadModelPayloadKeys.REASON to it.retentionReason,
               WorkBoardReadModelPayloadKeys.GOAL_WORKTREE_RETENTION_DETAIL to it.retentionDetail,
+              WorkBoardReadModelPayloadKeys.GOAL_WORKTREE_MAIN_CHECKOUT_OUTCOME to it.mainCheckoutOutcome?.name,
+              WorkBoardReadModelPayloadKeys.GOAL_WORKTREE_MAIN_CHECKOUT_DETAIL to it.mainCheckoutDetail,
             )
           },
         WorkBoardReadModelPayloadKeys.PAUSE_ELIGIBLE to row.item.pauseEligible,
@@ -141,16 +143,7 @@ internal object WorkBoardReadModelPayloadCodec {
         doneWithinDay = fields.boolean(WorkBoardReadModelPayloadKeys.DONE_WITHIN_DAY),
         membershipDeadline = fields.instant(WorkBoardReadModelPayloadKeys.MEMBERSHIP_DEADLINE),
         executingAgentId = fields.nullableText(WorkBoardReadModelPayloadKeys.EXECUTING_AGENT_ID),
-        goalWorktree =
-          fields.map(WorkBoardReadModelPayloadKeys.GOAL_WORKTREE)?.let {
-            GoalWorktreeView(
-              it.text(WorkBoardReadModelPayloadKeys.DB_PATH),
-              it.enumOrNull(WorkBoardReadModelPayloadKeys.PLANNING_STATE)
-                ?: error("Missing goal worktree state."),
-              it.nullableText(WorkBoardReadModelPayloadKeys.REASON),
-              it.nullableText(WorkBoardReadModelPayloadKeys.GOAL_WORKTREE_RETENTION_DETAIL),
-            )
-          },
+        goalWorktree = fields.map(WorkBoardReadModelPayloadKeys.GOAL_WORKTREE)?.let(::goalWorktreeFrom),
         databaseFileObservation =
           fields.map(WorkBoardReadModelPayloadKeys.DATABASE_FILE_OBSERVATION)?.let {
             DatabaseFileObservation(
@@ -497,6 +490,17 @@ internal object WorkBoardReadModelPayloadCodec {
       fields.text(WorkBoardReadModelPayloadKeys.LEASE_PROCESS_BIRTH_TOKEN),
       WorkBoardReadModelTime.parse(fields.text(WorkBoardReadModelPayloadKeys.LEASE_HEARTBEAT_AT)),
       WorkBoardReadModelTime.parse(fields.text(WorkBoardReadModelPayloadKeys.LEASE_EXPIRES_AT)),
+    )
+
+  private fun goalWorktreeFrom(fields: Map<String, Any?>): GoalWorktreeView =
+    GoalWorktreeView(
+      fields.text(WorkBoardReadModelPayloadKeys.DB_PATH),
+      fields.enumOrNull(WorkBoardReadModelPayloadKeys.PLANNING_STATE)
+        ?: error("Missing goal worktree state."),
+      fields.nullableText(WorkBoardReadModelPayloadKeys.REASON),
+      fields.nullableText(WorkBoardReadModelPayloadKeys.GOAL_WORKTREE_RETENTION_DETAIL),
+      fields.enumOrNull(WorkBoardReadModelPayloadKeys.GOAL_WORKTREE_MAIN_CHECKOUT_OUTCOME),
+      fields.nullableText(WorkBoardReadModelPayloadKeys.GOAL_WORKTREE_MAIN_CHECKOUT_DETAIL),
     )
 
   private fun <T> Map<String, Any?>.wireEnum(

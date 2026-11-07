@@ -14,3 +14,8 @@ Revisit when: the process runner can stream output without loading it fully, or 
 Context: The desktop shows list counts next to a patch it parses itself. User git config (diff.renames=copies, external diff, textconv, mnemonicPrefix, noprefix) can change statuses, rename pairing or patch headers.
 Decision: Both reads pin -c diff.renames=true, -M, --relative, --no-ext-diff, --no-textconv and --no-color. The patch read also pins --unified=3 and a/ b/ prefixes. Statuses and counts come from one --raw --numstat -z call, so they share a snapshot. A C record that still appears maps to ADDED with no oldPath.
 Reason: The same rename detection on both reads keeps a renamed file's patch matching its listed counts. --relative keeps tracked paths cwd-relative, which is how ls-files --others reports untracked paths.
+
+## [2026-11-06] Interrupted removal belongs to one checkout directory
+Context: A removal marker can survive successful deletion. A replacement checkout at the same path must not inherit permission to delete its new edits or unpublished commits.
+Decision: Removal markers retain the directory's filesystem key and creation identity. Recovery requires an exact match. Missing, legacy or mismatched identity uses ordinary retention checks and emits a diagnostic. Creation clears the prior marker before invoking Git and fails if that cleanup cannot finish. Removal refuses when the filesystem cannot identify the directory.
+Reason: A path identifies a location across checkout replacements. The directory identity binds recovery to the original partial deletion without changing when its children disappear.

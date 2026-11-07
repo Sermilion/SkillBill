@@ -13,4 +13,7 @@ interface FeatureVerifyLifecycleTelemetryRepository {
     record: FeatureVerifyFinishedRecord,
     level: String,
   )
+
+  /** Returns the stored stale reason for a Verify session, or null when there is none. */
+  fun featureVerifyStaleReason(sessionId: String): String?
 }

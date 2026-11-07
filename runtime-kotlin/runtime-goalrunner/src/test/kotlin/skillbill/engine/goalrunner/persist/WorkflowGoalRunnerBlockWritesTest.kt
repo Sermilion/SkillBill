@@ -6,6 +6,7 @@ import skillbill.contracts.workflow.goal.GoalBlockArtifactKeys
 import skillbill.engine.diagnostics.block.BlockIncidentAliases
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
+import skillbill.engine.diagnostics.block.FailurePhaseEvidence
 import skillbill.engine.diagnostics.block.boundTo
 import skillbill.engine.diagnostics.block.featureTaskPhaseAliasForTest
 import skillbill.engine.diagnostics.block.observeBlockIncidentForTest
@@ -51,6 +52,126 @@ class WorkflowGoalRunnerBlockWritesTest {
   private val workflows = InMemoryWorkflowStates()
   private val incidents = InMemoryBlockIncidentRepository(clock)
   private val writes = WorkflowGoalRunnerBlockWrites(clock)
+
+  @Test
+  fun `historical replay preserves known and unknown failure phase independently of the resume phase`() {
+    listOf("audit_plan_fix", null).forEachIndexed { index, failurePhase ->
+      val id = "wftr-replay-$index"
+      saveCompletedSimplify(id)
+      val original =
+        assertNotNull(
+          writes.markBlocked(
+            GoalRunnerBlockRequest(
+              id,
+              "child exited",
+              "audit",
+              stopReason = GoalRunnerStopReason.NO_TERMINAL_STORE_OUTCOME,
+              failurePhaseEvidence = FailurePhaseEvidence(failurePhase),
+            ),
+            workflows,
+            incidents,
+          ),
+        )
+
+      val replay =
+        assertNotNull(
+          writes.markBlocked(
+            GoalRunnerBlockRequest(
+              id,
+              "retained child failure",
+              "audit",
+              historicalBlockReference = original.acceptedBlockReference,
+            ),
+            workflows,
+            incidents,
+          ),
+        )
+
+      assertEquals(original.acceptedBlockReference.incidentToken, replay.acceptedBlockReference.incidentToken)
+      assertEquals("audit", replay.stepId)
+      assertEquals(failurePhase, replay.observation.phaseId)
+      assertNull(replay.observation.attempt)
+      val saved = assertNotNull(workflows.get(WorkflowFamily.TASK_RUNTIME, id))
+      val evidence = assertNotNull(BlockIncidentIdentity.fromArtifacts(saved.artifacts)?.failurePhaseEvidence)
+      assertEquals(failurePhase, evidence.phaseId)
+    }
+  }
+
+  @Test
+  fun `child exit retains observed failure phase separately from the resume step`() {
+    listOf("simplify", "audit_plan_fix").forEach { failurePhase ->
+      val id = "wftr-$failurePhase"
+      saveCompletedSimplify(id)
+      val result =
+        assertNotNull(
+          writes.markBlocked(
+            GoalRunnerBlockRequest(
+              id,
+              "child exited",
+              "audit",
+              stopReason = GoalRunnerStopReason.NO_TERMINAL_STORE_OUTCOME,
+              failurePhaseEvidence = FailurePhaseEvidence(failurePhase),
+            ),
+            workflows,
+            incidents,
+          ),
+        )
+      val saved = assertNotNull(workflows.get(WorkflowFamily.TASK_RUNTIME, id))
+      assertEquals("audit", result.stepId)
+      assertEquals("audit", saved.currentStepId)
+      assertEquals(failurePhase, result.observation.phaseId)
+      assertNull(result.observation.attempt)
+      assertEquals(
+        failurePhase,
+        assertNotNull(BlockIncidentIdentity.fromArtifacts(saved.artifacts)).failurePhaseEvidence?.phaseId,
+      )
+    }
+  }
+
+  @Test
+  fun `child exit without phase evidence does not attribute failure to the resume step`() {
+    saveCompletedSimplify("wftr-unknown")
+    val result =
+      assertNotNull(
+        writes.markBlocked(
+          GoalRunnerBlockRequest(
+            "wftr-unknown",
+            "child exited",
+            "audit",
+            stopReason = GoalRunnerStopReason.NO_TERMINAL_STORE_OUTCOME,
+            failurePhaseEvidence = FailurePhaseEvidence(null),
+          ),
+          workflows,
+          incidents,
+        ),
+      )
+    assertEquals("audit", result.stepId)
+    assertNull(result.observation.phaseId)
+    val saved = assertNotNull(workflows.get(WorkflowFamily.TASK_RUNTIME, "wftr-unknown"))
+    assertNull(assertNotNull(BlockIncidentIdentity.fromArtifacts(saved.artifacts)?.failurePhaseEvidence).phaseId)
+  }
+
+  private fun saveCompletedSimplify(id: String) {
+    val opened = engine.openRecord(WorkflowFamily.TASK_RUNTIME.definition, id, "session", "simplify")
+    val steps =
+      listOf("preplan", "plan", "plan_subtasks", "implement", "simplify").map {
+        mapOf("step_id" to it, "status" to "completed", "attempt_count" to 1)
+      }
+    workflows.save(
+      WorkflowFamily.TASK_RUNTIME,
+      engine.updateRecord(
+        WorkflowFamily.TASK_RUNTIME.definition,
+        opened,
+        WorkflowUpdateInput(
+          artifactsPatch = null,
+          sessionId = "session",
+          workflowStatus = WorkflowStatus.RUNNING,
+          currentStepId = "simplify",
+          stepUpdates = WorkflowStepUpdates.from(steps),
+        ),
+      ),
+    )
+  }
 
   @Test
   fun `parent retains the causal phase incident after worker release and child advancement`() {
@@ -173,6 +294,38 @@ class WorkflowGoalRunnerBlockWritesTest {
     assertNotEquals(validateIncident.occurrence.occurrenceToken, qualityIncident.occurrence.occurrenceToken)
     assertEquals("WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION", qualityIncident.occurrence.failureCode)
     assertEquals(qualityIncident.occurrence.occurrenceToken, qualityReplay.acceptedBlockReference.incidentToken)
+  }
+
+  @Test
+  fun `a goal-finish stage failure is recorded at that stage rather than the parent step`() {
+    saveRunning("wftr-parent", 1)
+
+    val result =
+      assertNotNull(
+        writes.markBlocked(
+          GoalRunnerBlockRequest(
+            "wftr-parent",
+            "Running initial build has incomplete or conflicting accepted terminal evidence.",
+            "build",
+            executionGeneration = 1,
+            stopReason = GoalRunnerStopReason.BLOCKED,
+            failureCode = "WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION",
+            failurePhaseEvidence = FailurePhaseEvidence("build"),
+          ),
+          workflows,
+          incidents,
+        ),
+      )
+    val incident = observeBlockIncidentForTest(incidents, clock, result.observation)
+
+    assertEquals("build", result.observation.phaseId)
+    assertEquals("build", incident.occurrence.phaseId)
+    assertEquals(
+      "build",
+      BlockIncidentIdentity.fromArtifacts(
+        requireNotNull(workflows.get(WorkflowFamily.TASK_RUNTIME, "wftr-parent")).artifacts,
+      )?.failurePhaseEvidence?.phaseId,
+    )
   }
 
   @Test

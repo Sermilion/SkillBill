@@ -25,6 +25,7 @@ import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.model.GoalUnknownScenario
 import skillbill.engine.goalrunner.persist.assessment.toTraceProbeCounts
+import skillbill.engine.goalrunner.persist.quality.GoalQualityExecutionRead
 import skillbill.engine.goalrunner.persist.quality.WorkflowGoalRunnerAssessmentRecording
 import skillbill.engine.goalrunner.persist.quality.WorkflowGoalRunnerQualityExecutionStore
 import skillbill.engine.workflow.support.workflowFamilyFor
@@ -216,28 +217,7 @@ public class WorkflowGoalRunnerOutcomeStore
     ): List<GoalHistoryWriterEntry> = progressRecording.goalHistoryWriterEntries(parentWorkflowId, expectedSelection)
 
     override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? {
-      val scopeSeparator = parentWorkflowId.lastIndexOf(":phr-")
-      val scopedInvocation =
-        scopeSeparator.takeIf { it >= 0 }?.let { separator ->
-          parentWorkflowId.substring(separator + 1)
-        }
-      val parentId = scopeSeparator.takeIf { it >= 0 }?.let { separator -> parentWorkflowId.substring(0, separator) }
-      val active =
-        parentId?.let(goalQualityExecution::goalQualityExecution)?.execution
-          ?: goalQualityExecution.goalQualityExecution(parentWorkflowId)?.execution
-      val outcomeId =
-        when {
-          scopedInvocation != null -> {
-            if (active?.invocationId != scopedInvocation || active.status == GoalQualityExecutionStatus.RETIRED) {
-              return null
-            }
-            parentWorkflowId
-          }
-          active != null && active.status != GoalQualityExecutionStatus.RETIRED -> {
-            "$parentWorkflowId:${active.invocationId}"
-          }
-          else -> parentWorkflowId
-        }
+      val outcomeId = goalQaOutcomeId(parentWorkflowId) ?: return null
       return database.read { unitOfWork ->
         unitOfWork.featureTaskQaOutcomes.find(outcomeId)
       }
@@ -397,6 +377,35 @@ public class WorkflowGoalRunnerOutcomeStore
       issueKey: String,
       subtaskIds: Set<Int>,
     ): GoalRunnerAttemptLedgerSummary = progressRecording.readAttemptLedgerSummaryForSubtasks(issueKey, subtaskIds)
+
+    private fun goalQaOutcomeId(parentWorkflowId: String): String? {
+      val scopeSeparator = parentWorkflowId.lastIndexOf(":phr-")
+      val scopedInvocation = scopeSeparator.takeIf { it >= 0 }?.let { parentWorkflowId.substring(it + 1) }
+      val parentId = scopeSeparator.takeIf { it >= 0 }?.let { parentWorkflowId.substring(0, it) }
+      val active = activeGoalQaInvocation(parentId, parentWorkflowId)
+      return if (scopedInvocation != null) {
+        scopedGoalQaOutcomeId(parentWorkflowId, scopedInvocation, active)
+      } else if (active != null && active.second != GoalQualityExecutionStatus.RETIRED) {
+        "$parentWorkflowId:${active.first}"
+      } else {
+        parentWorkflowId
+      }
+    }
+
+    private fun activeGoalQaInvocation(
+      parentId: String?,
+      parentWorkflowId: String,
+    ): Pair<String, GoalQualityExecutionStatus?>? {
+      val active =
+        parentId?.let(goalQualityExecution::retainedGoalQualityExecution)
+          ?: goalQualityExecution.retainedGoalQualityExecution(parentWorkflowId)
+      return when (active) {
+        is GoalQualityExecutionRead.Current -> active.record.execution?.let { it.invocationId to it.status }
+        is GoalQualityExecutionRead.Historical ->
+          if (active.hasAuthoritativePlansAndProgress) active.invocationId?.let { it to active.status } else null
+        is GoalQualityExecutionRead.Ambiguous, null -> null
+      }
+    }
   }
 
 internal class WorkflowGoalRunnerTerminalBridge(
@@ -778,6 +787,17 @@ private fun storedExecutionPlanComposesQa(artifacts: Map<String, Any?>?): Boolea
   return JsonCodec.anyToStringAnyMap(
     family.value(artifacts),
   )?.get(FeatureTaskRuntimeExecutionPlanKeys.QA_SELECTION) != null
+}
+
+private fun scopedGoalQaOutcomeId(
+  parentWorkflowId: String,
+  scopedInvocation: String,
+  active: Pair<String, GoalQualityExecutionStatus?>?,
+): String? {
+  val mismatch = active?.first != scopedInvocation
+  val retired = active?.second == GoalQualityExecutionStatus.RETIRED
+  if (mismatch || retired) return null
+  return parentWorkflowId
 }
 
 private fun storedExecutionPlanQualityGate(artifacts: Map<String, Any?>): FeatureTaskRuntimeQualityGateSelection? {

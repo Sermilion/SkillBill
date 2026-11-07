@@ -9,6 +9,10 @@ import java.util.logging.LogManager
 import java.util.logging.LogRecord
 import java.util.logging.Logger
 
+fun configureProcessTempRoot() {
+  System.setProperty("java.io.tmpdir", RuntimeBootstrapBindings.processTempRoot().toString())
+}
+
 fun verboseLoggingRequestedByEnvironment(environment: Map<String, String>): Boolean {
   val value = environment[ProcessLoggingEnvironmentKeys.SKILL_BILL_VERBOSE]?.trim() ?: return false
   return value == "1" || value.equals("true", ignoreCase = true)

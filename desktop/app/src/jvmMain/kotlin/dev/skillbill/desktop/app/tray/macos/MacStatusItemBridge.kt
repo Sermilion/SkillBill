@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.app.tray.macos
 
+import dev.skillbill.desktop.core.data.runtime.currentDesktopTempRoot
 import dev.skillbill.desktop.core.domain.model.TrayStatus
 import java.nio.file.Files
 
@@ -10,22 +11,40 @@ object MacStatusItemBridge {
   @Volatile private var loaded = false
 
   fun install(onPrimary: () -> Unit, onMenuAction: (Int) -> Unit, onAvailable: () -> Unit, onFailure: () -> Unit, onDismiss: () -> Unit) {
+    loaded = false
+    statusItemAnchor = null
     primaryAction = onPrimary
     menuAction = onMenuAction
     dismissAction = onDismiss
     try {
       val library = MacStatusItemBridge::class.java.getResourceAsStream("/macos/libskillbilltray.dylib")
         ?: error("native tray library unavailable")
-      val path = Files.createTempFile("skillbill-tray-", ".dylib")
+      val path = Files.createTempFile(currentDesktopTempRoot(), "skillbill-tray-", ".dylib")
       library.use { Files.copy(it, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING) }
       path.toFile().deleteOnExit()
       System.load(path.toAbsolutePath().toString())
       loaded = nativeInstall()
-      if (loaded) onAvailable() else { nativeDispose(); onFailure() }
+      if (loaded) onAvailable() else {
+        try {
+          nativeDispose()
+        } finally {
+          onFailure()
+        }
+      }
     } catch (_: Exception) {
-      onFailure()
+      try {
+        nativeDispose()
+      } finally {
+        loaded = false
+        onFailure()
+      }
     } catch (_: LinkageError) {
-      onFailure()
+      try {
+        nativeDispose()
+      } finally {
+        loaded = false
+        onFailure()
+      }
     }
   }
 
@@ -40,11 +59,15 @@ object MacStatusItemBridge {
   }
 
   fun dispose() {
-    if (loaded) nativeDispose()
-    loaded = false
-    primaryAction = null
-    menuAction = null
-    dismissAction = null
+    try {
+      if (loaded) nativeDispose()
+    } finally {
+      loaded = false
+      primaryAction = null
+      menuAction = null
+      dismissAction = null
+      statusItemAnchor = null
+    }
   }
 
   data class StatusItemAnchor(

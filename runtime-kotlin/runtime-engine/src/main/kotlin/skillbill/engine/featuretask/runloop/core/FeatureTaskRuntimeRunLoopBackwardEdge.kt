@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.slot.PhaseInFlightReentryRules
 import skillbill.engine.featuretask.slot.PhaseLoopCapability
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
 import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -231,6 +232,8 @@ internal object FeatureTaskRuntimeRunLoopBackwardEdge {
   internal fun runPhaseFor(
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,
+    outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
+    captureStreamOutput: Boolean = false,
   ): String? =
     with(context) {
       val briefingReentry = runState.coupledRunTransitions.consumeBriefingPendingReentry(phaseId)
@@ -246,6 +249,8 @@ internal object FeatureTaskRuntimeRunLoopBackwardEdge {
             specSource = specSource,
             reentry = reentry,
           ),
+          outputSink,
+          captureStreamOutput,
         )
       outcome.regenerationTargetPhaseId?.let {
         runState.coupledRunTransitions.markRecordRejectionSettlementPending()

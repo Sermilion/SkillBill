@@ -94,7 +94,7 @@ class ChangeObservationsTest {
   }
 
   @Test
-  fun `committed branch range reads once uses committed file diff and never opens the primary checkout file`() = runTest {
+  fun `committed branch range reads once uses committed file diff and does not open a file when the checkout branch is unreadable`() = runTest {
     val port = FakePort(files = 1)
     val launcher = RecordingLauncher(true)
     val changes = observations(port, launcher)
@@ -111,6 +111,24 @@ class ChangeObservationsTest {
     assertEquals(OpenOutcome.NotOpened, changes.open(baseline, file))
     assertTrue(launcher.launches.isEmpty())
     running.cancel()
+  }
+
+  // After the worktree is removed the committed range roots at the main checkout, whose files are the goal's only on the goal branch.
+  @Test
+  fun `committed branch range opens a file only while the main checkout is on the goal branch`() = runTest {
+    val launcher = RecordingLauncher(true)
+    val changes = observations(FakePort(files = 0), launcher)
+    val baseline = ChangeBaseline.CommittedBranchRange(root.toString(), "main", "goal")
+    val file = ChangedFile("src/A.kt", null, ChangeStatus.Modified, 1, 0)
+    val head = Files.createDirectories(root.resolve(".git")).resolve("HEAD")
+
+    Files.writeString(head, "ref: refs/heads/goal\n")
+    assertEquals(OpenOutcome.Opened, changes.open(baseline, file))
+    assertEquals(listOf(root.resolve("src/A.kt") to mapOf("PATH" to "p")), launcher.launches)
+
+    Files.writeString(head, "ref: refs/heads/main\n")
+    assertEquals(OpenOutcome.NotOpened, changes.open(baseline, file))
+    assertEquals(1, launcher.launches.size)
   }
 
   private fun TestScope.observations(port: WorkChangesPort, launcher: FileEditorLauncherPort) = ChangeObservations(

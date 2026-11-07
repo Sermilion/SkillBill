@@ -13,6 +13,7 @@ internal object AcceptanceCriterionRecheckParser {
   fun parse(
     prose: String,
     refs: List<String>,
+    outputRef: String?,
   ): AcceptanceCriterionRecheckParse {
     val source = prose.lines()
     val explicit = source.mapNotNull { LINE.find(it.trim()) }.map(::recheckLine)
@@ -28,7 +29,7 @@ internal object AcceptanceCriterionRecheckParser {
     return when {
       duplicated != null -> rejected("Recheck ${duplicated.key} appears more than once.")
       missing != null -> rejected("Recheck $missing has no line.")
-      else -> entriesOf(refs.map { ref -> lines.single { it.ref == ref } }, ignored, prose)
+      else -> entriesOf(refs.map { ref -> lines.single { it.ref == ref } }, ignored, prose, outputRef)
     }
   }
 
@@ -36,6 +37,7 @@ internal object AcceptanceCriterionRecheckParser {
     lines: List<RecheckLine>,
     ignoredRefs: List<String>,
     prose: String,
+    outputRef: String?,
   ): AcceptanceCriterionRecheckParse {
     val entries =
       lines.map { line ->
@@ -44,7 +46,8 @@ internal object AcceptanceCriterionRecheckParser {
           return rejected("Recheck ${line.ref} has malformed evidence citations.")
         }
         val evidenceRef =
-          citations ?: line.rest.removePrefix("evidence").trim().takeIf { it.isNotBlank() } ?: prose
+          citations ?: line.rest.removePrefix("evidence").trim().takeIf { it.isNotBlank() }
+            ?: outputRef?.let { "$it#recheck:${line.ref}" } ?: prose
         AcceptanceCriterionRecheckEntry(line.ref, line.verdict, evidenceRef)
       }
     return AcceptanceCriterionRecheckParse.Parsed(entries, ignoredRefs)

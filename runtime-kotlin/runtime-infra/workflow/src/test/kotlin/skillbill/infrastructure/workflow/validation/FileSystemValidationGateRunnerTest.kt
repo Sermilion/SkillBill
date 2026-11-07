@@ -10,6 +10,7 @@ import skillbill.infrastructure.host.jvm.GateJvmUnresolvedException
 import skillbill.infrastructure.host.jvm.applyTo
 import skillbill.infrastructure.host.jvm.hostPath
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
+import skillbill.infrastructure.host.scratch.testAgentRunScratchRoot
 import skillbill.ports.validation.model.ValidationGateFindingParseMode
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.scaffold.model.ValidationGateCompilerDiagnosticsFormat
@@ -29,6 +30,7 @@ import java.time.temporal.ChronoUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
@@ -38,7 +40,7 @@ class FileSystemValidationGateRunnerTest {
     val repo = Files.createTempDirectory("gate-collect-all")
     try {
       val script = writeGateScript(repo)
-      val runner = FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver())
+      val runner = FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot())
       val failFast =
         runner.run(
           request(
@@ -85,7 +87,7 @@ class FileSystemValidationGateRunnerTest {
         """.trimIndent(),
       )
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           request(
             repo,
             argv = listOf("sh", script.toString()),
@@ -113,7 +115,7 @@ class FileSystemValidationGateRunnerTest {
         """.trimIndent(),
       )
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           request(
             repo,
             argv = listOf("sh", script.toString()),
@@ -148,7 +150,7 @@ class FileSystemValidationGateRunnerTest {
         """.trimIndent(),
       )
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           request(
             repo,
             argv = listOf("sh", script.toString()),
@@ -187,7 +189,7 @@ class FileSystemValidationGateRunnerTest {
         """.trimIndent(),
       )
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           request(
             repo,
             argv = listOf("sh", script.toString()),
@@ -217,7 +219,7 @@ class FileSystemValidationGateRunnerTest {
         """.trimIndent(),
       )
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           request(
             repo,
             argv = listOf("sh", script.toString()),
@@ -248,7 +250,7 @@ class FileSystemValidationGateRunnerTest {
         """.trimIndent(),
       )
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           request(
             repo,
             argv = listOf("sh", script.toString()),
@@ -287,7 +289,7 @@ class FileSystemValidationGateRunnerTest {
         """.trimIndent(),
       )
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           request(
             repo,
             argv = listOf("sh", script.toString()),
@@ -327,7 +329,7 @@ class FileSystemValidationGateRunnerTest {
         """.trimIndent(),
       )
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           request(
             repo,
             argv = listOf("sh", script.toString()),
@@ -365,7 +367,7 @@ class FileSystemValidationGateRunnerTest {
         """.trimIndent(),
       )
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           request(
             repo,
             argv = listOf("sh", script.toString()),
@@ -398,7 +400,7 @@ class FileSystemValidationGateRunnerTest {
         """.trimIndent(),
       )
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           request(
             repo,
             argv = listOf("sh", script.toString()),
@@ -431,7 +433,7 @@ class FileSystemValidationGateRunnerTest {
         """.trimIndent(),
       )
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           request(
             repo,
             argv = listOf("sh", script.toString()),
@@ -460,7 +462,7 @@ class FileSystemValidationGateRunnerTest {
         """.trimIndent(),
       )
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           request(
             repo,
             argv = listOf("sh", script.toString()),
@@ -488,7 +490,7 @@ class FileSystemValidationGateRunnerTest {
         """.trimIndent(),
       )
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           request(
             repo,
             argv = listOf("sh", script.toString()),
@@ -524,7 +526,7 @@ class FileSystemValidationGateRunnerTest {
         """.trimIndent(),
       )
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           request(
             link,
             argv = listOf("sh", script.toString()),
@@ -585,7 +587,7 @@ class FileSystemValidationGateRunnerTest {
       )
 
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           request(
             repo,
             argv = listOf("sh", script.toString()),
@@ -646,7 +648,7 @@ class FileSystemValidationGateRunnerTest {
     try {
       val failure =
         assertFailsWith<SkillBillRuntimeException> {
-          FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+          FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
             request(
               repo,
               argv = listOf("./gradlew", "compileKotlin"),
@@ -671,7 +673,7 @@ class FileSystemValidationGateRunnerTest {
       writeWrapper(repo.resolve(".hidden"), calls)
 
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           request(
             repo,
             argv = listOf("./gradlew", "compileKotlin"),
@@ -699,7 +701,7 @@ class FileSystemValidationGateRunnerTest {
       val calls = repo.resolve("calls.log")
       writeWrapper(repo.resolve("desktop"), calls)
       writeWrapper(repo.resolve("runtime"), calls)
-      val runner = FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver())
+      val runner = FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot())
 
       runner.run(
         request(
@@ -787,7 +789,7 @@ class FileSystemValidationGateRunnerTest {
 
       val failure =
         assertFailsWith<GateJvmStartupFailureException> {
-          FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+          FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
             request(
               repo,
               argv = listOf("sh", script.toString()),
@@ -805,10 +807,57 @@ class FileSystemValidationGateRunnerTest {
     }
   }
 
+  @Test
+  fun `a gate command runs in its own scratch directory and nothing is left after it finishes`() {
+    val repo = Files.createTempDirectory("gate-scratch")
+    val stateDir = Files.createTempDirectory("gate-scratch-state")
+    try {
+      val observed = repo.resolve("observed.env")
+      val script = repo.resolve("gate.sh")
+      Files.writeString(
+        script,
+        "printf '%s\\n' \"\$SKILL_BILL_RUN_SCRATCH_DIR\" \"\$TMPDIR\" \"\$JAVA_TOOL_OPTIONS\" > '$observed'\n",
+      )
+
+      FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot(stateDir)).run(
+        request(repo, argv = listOf("sh", script.toString()), parseMode = ValidationGateFindingParseMode.COLLECT_ALL),
+      )
+
+      val (scratch, tmpDir, javaToolOptions) = Files.readAllLines(observed)
+      val scratchRoot = stateDir.resolve("scratch")
+      assertEquals(scratchRoot, Path.of(scratch).parent)
+      assertEquals(scratch, tmpDir)
+      assertTrue(javaToolOptions.endsWith("-Djava.io.tmpdir=${scratchRoot.resolve("jvm")}"), javaToolOptions)
+      assertTrue(Files.isDirectory(scratchRoot.resolve("jvm")))
+      assertFalse(Files.exists(Path.of(scratch)))
+    } finally {
+      listOf(repo, stateDir).forEach { it.toFile().deleteRecursively() }
+    }
+  }
+
+  @Test
+  fun `a gate command that cannot launch still removes its scratch directory`() {
+    val repo = Files.createTempDirectory("gate-scratch-throw")
+    val stateDir = Files.createTempDirectory("gate-scratch-throw-state")
+    try {
+      assertFailsWith<SkillBillRuntimeException> {
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot(stateDir)).run(
+          request(repo, argv = listOf("./missing-gate"), parseMode = ValidationGateFindingParseMode.COLLECT_ALL),
+        )
+      }
+
+      val leftovers =
+        Files.list(stateDir.resolve("scratch")).use { entries -> entries.map { it.fileName.toString() }.toList() }
+      assertEquals(listOf("jvm"), leftovers)
+    } finally {
+      listOf(repo, stateDir).forEach { it.toFile().deleteRecursively() }
+    }
+  }
+
   private fun runWithUnresolvedGateJvm(
     repo: Path,
     script: Path,
-  ) = FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+  ) = FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
     request(repo, argv = listOf("sh", script.toString()), parseMode = ValidationGateFindingParseMode.COLLECT_ALL),
     mutableMapOf(
       GateJvmEnvironmentKeys.JAVA_HOME to "/opt/skill-bill/runtime",

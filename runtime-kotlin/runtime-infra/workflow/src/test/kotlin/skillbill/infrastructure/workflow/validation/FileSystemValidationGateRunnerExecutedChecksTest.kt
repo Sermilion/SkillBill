@@ -2,6 +2,7 @@ package skillbill.infrastructure.workflow.validation
 
 import skillbill.contracts.time.JvmSystemClock
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
+import skillbill.infrastructure.host.scratch.testAgentRunScratchRoot
 import skillbill.ports.validation.model.ValidationGateFindingParseMode
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.scaffold.model.ValidationGateCompilerDiagnosticsFormat
@@ -39,7 +40,7 @@ class FileSystemValidationGateRunnerExecutedChecksTest {
         """.trimIndent(),
       )
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           ValidationGateRunRequest(
             repoRoot = repo,
             argv = listOf("sh", script.toString()),
@@ -86,7 +87,7 @@ class FileSystemValidationGateRunnerExecutedChecksTest {
         """.trimIndent(),
       )
       val result =
-        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           ValidationGateRunRequest(
             repoRoot = repo,
             argv = listOf("sh", script.toString()),

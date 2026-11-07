@@ -1,6 +1,63 @@
 ## [2026-11-07] SKILL-453 history pointer
 Cross-cutting approval broker, provider adapters, parked-operation cards and limits are recorded in the root [agent/history.md](../../agent/history.md#2026-11-07-skill-453-operator-approval-cards-and-provider-refusal-boundaries).
 
+## [2026-11-06] SKILL-513 docked, resizable chat pane with persisted width
+Areas: desktop/app, desktop/core/datastore, desktop/core/domain, desktop/core/testing, desktop/core/ui, desktop/feature/chat
+- Chat is a docked right pane in the work area, not a floating overlay. It takes the shared right slot while open outside Settings; otherwise the specs pane keeps its rule. WorkArea takes an optional right width.
+- DockedPane (reusable) clamps width between 360 dp and the work-area width minus a 420 dp main-column floor, and reports the clamped result. In drawer mode it covers the work area with no grip. Esc reaches it only while focus is inside it. No scrim or shadow.
+- PaneResizeGrip (reusable) is extracted from FloatingPane and shared by both panes; FloatingPane behaviour is unchanged.
+- The width is saved in app settings as chatWidthDp (default 560 dp, range 360 to 2000) via AppSettingsRepository.setChatWidthDp. A stored value outside the range decodes clamped and is reported unsupported; a missing one decodes to the default. The DataStore key is additive, so no migration.
+- ChatPaneWidth is window-scoped: drags update the on-screen width at once and save once, 300 ms after the last change; closing the window flushes a pending width within one second. Terminal height and floating-pane persistence are unchanged.
+- Validation also isolated tests from the host environment: installer harnesses and the install smoke script no longer inherit the skip-preinstall-uninstall variable, and the governed review evidence bridge test uses the short socket path helper. No production behaviour changed.
+- Limits: verified on macOS only; the agnix and agent-config script checks were not run in the headless validate session.
+Feature flag: N/A
+Acceptance criteria: 2/2 implemented (persistence subtask); the docked-layout subtask reported no count
+
+## [2026-11-06] SKILL-511 multiple New Task chats
+Areas: desktop/app, desktop/core/domain, desktop/core/datastore, desktop/core/testing, desktop/core/ui, desktop/feature/settings, desktop/feature/chat, design/new-task-chat-tabs
+- NewTaskChats owns an uncapped, window-scoped open set with independent repository, branch, agent, text, offer and session state. Selection leaves background streams running; the set always retains an empty draft after its last chat closes.
+- NewTaskSavedChats shares saved drafts across open chats and the home. Resume selects an open session, loads an empty selected draft or adds a chat without ending another. reusable
+- Close confirms a running reply, saves its partial transcript and offers Reopen using a fresh saved-chat read. Discard deletes the save; failed close keeps the chat open.
+- Tabs and Side list share OpenChatItem, OpenChatRow and reply markers. Background busy-to-idle transitions set unread state until selection. reusable
+- Tabs shrink to 112dp before scrolling, translate vertical wheel input, fade clipped edges and expose an overflow menu with filtering above eight chats. Ctrl/Cmd shortcuts create, close, cycle and select chats; the sidebar shows the open count above one.
+- Settings > General persists Open chats as newTaskChatLayout through the existing wire-value enum and DataStore pattern. Tabs is the default for missing or unknown values; layout changes preserve drafts, selection and sessions.
+- Async agent, repository and branch actions capture their target draft. Successful resume signals refresh composer context even when selection stays unchanged.
+- Rebound sessions replay operator and finished agent messages on the first turn, with a 24,000-character conversation budget. Replay stays off visible and saved operator lines, survives failure before output and does not stack across unsent switches.
+- Design references live in design/new-task-chat-tabs. Limits: open tabs are not restored after restart; closing and resuming an unsent rebound chat loses pending replay; layout changes may reset transcript scroll.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
+## [2026-11-06] SKILL-512 desktop follows a removed worktree to the main checkout
+Areas: desktop/core/data, desktop/core/domain, desktop/core/testing, desktop/feature/chat, desktop/feature/terminal, desktop/feature/changes, desktop/feature/detail
+- A goal worktree row reads as Removed when its directory is gone from disk, even if the runtime reports Active or Retained. The shared mapper keeps path, retention and main-checkout outcome fields, and the detail header explains removal by outcome.
+- Chat resolves its root from the work item: the worktree if it exists, else the repository root. A live session in a vanished worktree ends and resumes at the repository root; the Claude transport restarts a process whose directory changed. reusable
+- ExecutionChatRepository.moveSessions moves saved Claude session files and rewrites the first-line cwd of Codex sessions, returning claude, codex and failed counts. Started Claude or Codex chats keep their session id; Cursor, Junie and failed moves start fresh.
+- The chat notice names the main checkout and says whether the chat continues or restarts, plus a not-switched notice when the outcome was skipped or failed. Resume and the history picker follow the removal first.
+- The terminal opens at the repository root; the changes window opens committed-range files only while the main checkout is on the goal's branch.
+- Limits: existence is checked once per row at mapping time; Cursor and Junie sessions never move; the Codex scan stops at the existing limit; the terminal root has no test.
+Feature flag: N/A
+Acceptance criteria: 11/11 implemented
+
+## [2026-11-06] SKILL-507 New Task chat history list
+Areas: desktop/core/data, desktop/core/domain, desktop/core/testing, desktop/feature/chat
+- Saved New Task drafts now span repositories, newest first. The optional store limit applies after conversion to usable history entries.
+- The home shows up to six recent drafts with resume and discard controls. Show all opens the uncapped resume picker; the list uses the existing scroll area.
+- Draft refresh runs without a selected repository. Resuming restores the saved repository, branch and agent.
+- The repository draft-read interface replaces its repository argument with an optional limit. The chat storage format is unchanged.
+- QA or validation reported environment_unavailable.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
+## [2026-11-05] SKILL-503 Specs panel selection bar
+Areas: desktop/app, desktop/core/data, desktop/core/domain, desktop/core/ui, desktop/core/designsystem, desktop/feature/specs, runtime-kotlin/runtime-engine
+- A docked selection bar and panel header replace the old toolbar. File selection keeps its row highlight while its parent bundle owns controls, favorites and reservations.
+- SpecsMenuModel supplies ordered actions and disabled reasons to menus and the command palette. Keyboard navigation and shortcuts operate on the same bundle target. reusable
+- Runtime canDelete verdicts and launch reservations guard deletion; SpecBrowserService remains authoritative. Export enters the existing runtime preflight.
+- Shared confirmation dialogs focus the keep action. SbMenu supports disabled reasons and monospace detail; spec popover keyboard handling is opt-in. reusable
+- A pending start waits for an agent choice and remains bound to the selected bundle and current start verdict.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-11-04] SKILL-474: export and import goal archives
 Areas: desktop/app, desktop/core/data, desktop/core/domain, desktop/core/ui, desktop/feature/specs, desktop/feature/work, runtime-goalrunner
 - Specs and Work offer export and global import with native file selection. Live export opens a pause-first dialog before file selection.

@@ -50,10 +50,10 @@ class CommandCatalog(
   private val terminal: TerminalTriggers,
   private val scope: WindowCoroutineScope,
 ) {
-  fun sections(context: CommandContext, runOptions: RunOptions?, reservations: Set<String>): List<CommandSection> {
+  fun sections(context: CommandContext, runOptions: RunOptions?, reservations: Set<String>, specSection: CommandSection? = null): List<CommandSection> {
     val shellFirst = entries.filterIsInstance<ShellCommandsEntry>() + entries.filterNot { it is ShellCommandsEntry }
     return listOfNotNull(context.item?.let { itemSection(it, context, runOptions, reservations) }) +
-      shellFirst.flatMap { it.commands(context) }
+      listOfNotNull(specSection) + shellFirst.flatMap { it.commands(context) }
   }
 
   private fun itemSection(item: WorkItem, context: CommandContext, runOptions: RunOptions?, reservations: Set<String>): CommandSection {

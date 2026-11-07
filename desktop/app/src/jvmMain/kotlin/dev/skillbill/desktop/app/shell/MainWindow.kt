@@ -32,6 +32,7 @@ import dev.skillbill.desktop.app.keyboard.KeyPress
 import dev.skillbill.desktop.app.keyboard.ShellKey
 import dev.skillbill.desktop.app.keyboard.toKeyPress
 import dev.skillbill.desktop.core.designsystem.icon.skillBillIcon
+import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ToastStack
 import dev.skillbill.desktop.core.designsystem.navigation.LocalSidebarToggle
@@ -94,6 +95,7 @@ fun ApplicationScope.MainWindow(
       window.terminal.close()
       window.specsPane.close()
       window.chat.closeChats()
+      window.chatPaneWidth.close()
       window.scope.scope.cancel()
     }
   }
@@ -117,8 +119,15 @@ fun ApplicationScope.MainWindow(
         window.panes.specsOpen,
         window.input.specsTreeFocused,
         window.input.subtaskListFocused,
+        window.input.specsBarFocused,
+        window.input.layerOpen || window.menu.open,
+        window.input.editOpen,
+        window.specsPane.state.value.selectedPath != null,
       )
-      if (listNavigation)
+      if (listNavigation && press?.key == ShellKey.Escape) {
+        window.specsPane.onAction(dev.skillbill.desktop.feature.specs.SpecsAction.Deselect)
+        true
+      } else if (listNavigation)
         false
       else press?.let(keyboard::onKey) ?: false
     },
@@ -168,13 +177,22 @@ internal fun specsPaneOwnsNavigationKey(
   specsOpen: Boolean,
   specsTreeFocused: Boolean,
   subtaskListFocused: Boolean,
+  specsBarFocused: Boolean = false,
+  layerOpen: Boolean = false,
+  editOpen: Boolean = false,
+  hasSelection: Boolean = false,
 ): Boolean {
-  val navigationKey = when (press?.key) {
-    ShellKey.Up, ShellKey.Down, ShellKey.Enter -> true
-    else -> false
+  val noModifiers = press?.let { !it.ctrl && !it.meta && !it.alt } == true
+  val unmodified = press?.let { noModifiers && !it.shift } == true
+  val specsFocused = specsOpen && (specsTreeFocused || specsBarFocused)
+  if (specsFocused && noModifiers && !layerOpen && !editOpen) {
+    if (specsTreeFocused && press?.key == ShellKey.Escape) return hasSelection
+    if (specsTreeFocused && unmodified && press?.key in setOf(ShellKey.Up, ShellKey.Down, ShellKey.Enter)) return true
+    val char = (press?.key as? ShellKey.Char)?.char?.lowercaseChar()
+    if (unmodified && char != null && char in setOf('j', 'k', 'r', 'p', 'a', 'f')) return true
+    if (noModifiers && char == '/') return true
   }
-  val unmodified = press?.let { !it.ctrl && !it.meta && !it.shift && !it.alt } == true
-  return navigationKey && unmodified && (specsOpen && specsTreeFocused || subtaskListFocused)
+  return subtaskListFocused && unmodified && press?.key in setOf(ShellKey.Up, ShellKey.Down, ShellKey.Enter)
 }
 
 @Composable
@@ -186,10 +204,13 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
   val favorites by window.favorites.entries.collectAsState()
   val specFavorites by window.favorites.specEntries.collectAsState()
   val newTaskDraft by window.chat.newTaskDraftOpen.collectAsState()
+  val newTaskOpenChats by window.chat.newTaskOpenChats.collectAsState()
   val topRoute = navigator.top.route
   val contributions = window.entries.flatMap { it.panes }
+  val chatShown = panes.chatOpen && topRoute !is SettingsRoute
   val chat = contributions.firstOrNull { it.slot == PaneSlot.Chat }?.content
-  val right = contributions.firstOrNull { it.slot == PaneSlot.Right }?.takeIf { panes.specsOpen && topRoute !is SettingsRoute }?.content
+  val specs = contributions.firstOrNull { it.slot == PaneSlot.Right }?.takeIf { panes.specsOpen && topRoute !is SettingsRoute }?.content
+  val right = if (chatShown) chat else specs
   val bottom = contributions.firstOrNull { it.slot == PaneSlot.Bottom }?.takeIf { panes.terminalOpen && topRoute !is SettingsRoute }?.content
   val navigate: (AppRoute) -> Unit = { route ->
     panes.drawerOpen = false
@@ -206,6 +227,7 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
         terminalOpen = panes.terminalOpen,
         chatOpen = panes.chatOpen,
         newTaskDraft = newTaskDraft,
+        newTaskOpenChats = newTaskOpenChats,
         contributions = window.entries.flatMap { it.sidebarItems },
         onNavigate = navigate,
         onOpenCommandMenu = window.menu::toggle,
@@ -225,7 +247,7 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
     }
   }
   ShellFrame(sidebar, drawerMode, panes.drawerOpen, onDismissDrawer = { panes.drawerOpen = false }) {
-    WorkArea(drawerMode, right, bottom) {
+    WorkArea(drawerMode, right, bottom, rightWidth = if (chatShown) null else SkillBillSize.specsPane) {
       Box(Modifier.fillMaxSize()) {
         AppNavHost(navigator, window.entries, window.workImportRequests, shellProblem(session, board)) { problem ->
           ProblemStatePanel(
@@ -233,7 +255,6 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
             onRefresh = { if (problem is ShellProblem.SessionFailed) window.session.reopen() else window.boardRepository.refresh() },
           )
         }
-        if (topRoute !is SettingsRoute) chat?.invoke()
       }
     }
   }

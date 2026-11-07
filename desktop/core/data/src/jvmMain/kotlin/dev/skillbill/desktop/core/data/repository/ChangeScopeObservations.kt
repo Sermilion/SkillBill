@@ -87,7 +87,8 @@ class ChangeScopeObservations internal constructor(
     val resolved = resolveScope(target, scope)
     while (true) {
       emit(readScope(target, scope, resolved, lock, cache))
-      val followsHead = (resolved is ScopeRead.Baseline && resolved.baseline !is ChangeBaseline.CommittedBranchRange) ||
+      val followsHead = (resolved is ScopeRead.Baseline && resolved.baseline !is ChangeBaseline.CommittedBranchRange &&
+        resolved.baseline !is ChangeBaseline.CommittedRevisionRange) ||
         resolved == ScopeRead.Uncommitted ||
         (resolved is ScopeRead.PerCommit && runningWorkingBaseline(target, scope) != null)
       if (!running || !followsHead) break
@@ -346,10 +347,14 @@ class ChangeScopeObservations internal constructor(
   }
 
   private suspend fun readChanges(baseline: ChangeBaseline, lock: Mutex): Outcome<WorkChangeListResult, ReadProblem> {
-    val portBaseline = baseline.toPort()
     return readOrProblem(runtime, diagnostics) {
-      val read: suspend () -> WorkChangeListResult = { lock.withLock { withContext(io) { port.changes(portBaseline) } } }
-      if (baseline is ChangeBaseline.CommittedBranchRange) read() else workingTree.changes(portBaseline, read)
+      if (baseline is ChangeBaseline.CommittedRevisionRange) {
+        lock.withLock { withContext(io) { port.committedChanges(baseline.worktreeRoot, baseline.fromSha, baseline.toSha) } }
+      } else {
+        val portBaseline = baseline.toPort()
+        val read: suspend () -> WorkChangeListResult = { lock.withLock { withContext(io) { port.changes(portBaseline) } } }
+        if (baseline is ChangeBaseline.CommittedBranchRange) read() else workingTree.changes(portBaseline, read)
+      }
     }
   }
 
@@ -398,6 +403,7 @@ class ChangeScopeObservations internal constructor(
   private fun ChangeScopeTarget.targetBranch(): String? = when (val baseline = allBaseline) {
     is ChangeBaseline.TargetMergeBase -> baseline.targetBranch
     is ChangeBaseline.CommittedBranchRange -> baseline.targetBranch
+    is ChangeBaseline.CommittedRevisionRange -> null
     else -> null
   }
 }

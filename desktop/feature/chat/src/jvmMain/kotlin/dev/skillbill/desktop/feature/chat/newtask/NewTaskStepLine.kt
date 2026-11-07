@@ -87,11 +87,13 @@ internal fun StepLine(progress: State<Float>?, reducedMotion: Boolean, preview: 
         }
       }
     }
-    BasicText(
-      routeCaption(preview),
-      Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-      style = SkillBillTheme.type.tSm.copy(color = if (preview != null) colors.accentHover else colors.fgMuted),
-    )
+    routeCaption(preview)?.let { caption ->
+      BasicText(
+        caption,
+        Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        style = SkillBillTheme.type.tSm.copy(color = colors.accentHover),
+      )
+    }
   }
 }
 

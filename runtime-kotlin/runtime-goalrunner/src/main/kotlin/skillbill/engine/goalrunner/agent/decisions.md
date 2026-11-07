@@ -1,5 +1,15 @@
 # goalrunner boundary decisions
 
+## [2026-11-07] Keep the initial build separate from QA repair builds
+Context: Goal QA repair loops can build after edits, but that evidence does not establish that the candidate passed a build before QA admission.
+Decision: Persist the initial pre-QA build as an independent quality boundary with its own plan, progress, state and source fingerprint; keep later QA repair builds separate.
+Reason: Independent evidence preserves restart position and distinguishes the assessed candidate from later QA-owned edits.
+
+## [2026-11-07] Bind final validation evidence to its source
+Context: A crash or repository change can separate accepted validation progress from the source it checked.
+Decision: Persist the source observation with accepted terminal validation progress and reuse it only while current content matches; otherwise start a new validation occurrence and retain prior evidence.
+Reason: This prevents stale results from being relabeled as current while allowing resume without replaying accepted repairs or resetting consumed budgets.
+
 ## [2026-11-04] Keep archive coordination beside purge
 Context: Archive export shares the goalrunner ownership census with purge. A separate coordinator package introduced a dependency cycle.
 Decision: Keep GoalRunnerArchiveCoordinator beside purge and delegate archive work to import and export operations. Validate envelopes through a ports interface implemented by infra-contracts.

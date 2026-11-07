@@ -1,5 +1,6 @@
 package skillbill.infrastructure.workflow.process
 
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.process.BoundedExternalProcessOutput
 import skillbill.infrastructure.host.process.BoundedExternalProcessRequest
 import skillbill.infrastructure.host.process.BoundedExternalProcessRunner
@@ -27,7 +28,7 @@ internal fun captureGitStdout(
 ): GitStdoutCapture {
   val outputFile =
     try {
-      Files.createTempFile("skillbill-git", ".out")
+      Files.createTempFile(JdkHostPlatformPort.resolveTemporaryDirectory(), "skillbill-git", ".out")
     } catch (error: IOException) {
       return GitStdoutCapture.Failed("git output file could not be created: ${error.message}")
     }

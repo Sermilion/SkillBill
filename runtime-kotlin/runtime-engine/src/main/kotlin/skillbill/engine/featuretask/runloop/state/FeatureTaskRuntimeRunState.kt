@@ -38,7 +38,7 @@ import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
 public class FeatureTaskRuntimeRunState(
   initialRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
   transitions: FeatureTaskRuntimeTransitionDeclaration,
-  private val durableInitialLedger: List<FeatureTaskRuntimePhaseLedgerEntry> = emptyList(),
+  private val initialAttemptHistory: PhaseAttemptHistory = PhaseAttemptHistory(),
   private val initialRetainedOutputs: List<FeatureTaskRuntimePhaseOutput> = emptyList(),
   private val initialMonitorFailureEvidenceUnavailable: Boolean = false,
   private val initialMonitorRepairFailures: Map<Int, String> = emptyMap(),
@@ -48,6 +48,9 @@ public class FeatureTaskRuntimeRunState(
   private val workflowId: String? = null,
   initialQaRepairState: QaRepairState? = null,
 ) : FeatureTaskRuntimeProgressSnapshotAccess {
+  private val durableInitialLedger = initialAttemptHistory.ledger
+  private val initialAttemptHighWaterMarks = initialAttemptHistory.attemptHighWaterMarks
+
   private val durableQaRepairState =
     initialQaRepairState?.let { repairState ->
       repairState.copy(
@@ -77,7 +80,7 @@ public class FeatureTaskRuntimeRunState(
   private constructor(source: FeatureTaskRuntimeRunState) : this(
     source.durableInitialRecords,
     source.transitions,
-    source.durableInitialLedger,
+    source.initialAttemptHistory,
     source.initialRetainedOutputs,
     source.initialMonitorFailureEvidenceUnavailable,
     source.initialMonitorRepairFailures,
@@ -313,7 +316,8 @@ public class FeatureTaskRuntimeRunState(
     private set
 
   private val persistedAttemptCounts: MutableMap<String, Int> =
-    this.initialRecords.mapValues { (_, record) -> record.attemptCount }.toMutableMap()
+    (initialAttemptHighWaterMarks + this.initialRecords.mapValues { (_, record) -> record.attemptCount })
+      .toMutableMap()
 
   private val acknowledgedAttemptCounts: MutableMap<String, Int> = mutableMapOf()
 
@@ -696,7 +700,8 @@ public class FeatureTaskRuntimeRunState(
       laterPhaseIds.lastOrNull { phaseId ->
         (phaseId in priorRecords) || (phaseId in completedPhases)
       }
-    val resumePhaseId = furthestLater ?: laterPhaseIds.firstOrNull() ?: return null
+    val resumePhaseId =
+      furthestLater ?: laterPhaseIds.firstOrNull { it !in transitions.loopOnlyPhaseIds } ?: return null
     return ExplicitResumeStart(resumePhaseId, reopen = resumePhaseId !in completedPhases)
   }
 
@@ -768,3 +773,8 @@ private fun <T> MutableSet<T>.replaceFrom(source: Set<T>) {
   clear()
   addAll(source)
 }
+
+public data class PhaseAttemptHistory(
+  val ledger: List<FeatureTaskRuntimePhaseLedgerEntry> = emptyList(),
+  val attemptHighWaterMarks: Map<String, Int> = emptyMap(),
+)

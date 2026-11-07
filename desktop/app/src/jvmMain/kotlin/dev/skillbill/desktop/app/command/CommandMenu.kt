@@ -25,11 +25,14 @@ fun CommandMenu(window: WindowComponent) {
   val item by window.selection.item.collectAsState()
   val reservations by window.controls.reservations.collectAsState()
   val boardView by window.board.view.collectAsState()
+  val specsState by window.specsPane.state.collectAsState()
   var runOptions by remember(item?.id) { mutableStateOf<RunOptions?>(null) }
   LaunchedEffect(item?.id) { runOptions = item?.let { window.details.prefetch(it.id) } }
   val topRoute = window.navigator.top.route
-  val sections = remember(item, runOptions, reservations, boardView, topRoute, menu.query, window.panes.specsOpen, window.terminal.open) {
-    filterSections(window.catalog.sections(CommandContext(topRoute, item), runOptions, reservations), menu.query)
+  val specsAvailable = window.panes.specsOpen && !window.panes.chatOpen && topRoute !is dev.skillbill.desktop.core.ui.navigation.SettingsRoute
+  val specSection = if (specsAvailable) window.specsPane.commandSection(specsState) else null
+  val sections = remember(item, runOptions, reservations, boardView, topRoute, menu.query, window.panes.specsOpen, window.panes.chatOpen, window.terminal.open, specSection) {
+    filterSections(window.catalog.sections(CommandContext(topRoute, item), runOptions, reservations, specSection), menu.query)
   }
   val commands = remember(sections) {
     sections.mapIndexed { index, section -> section.commands.associateBy { "$index/${it.item.id}" } }

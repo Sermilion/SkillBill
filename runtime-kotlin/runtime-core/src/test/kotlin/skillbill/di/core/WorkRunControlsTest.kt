@@ -33,6 +33,7 @@ import skillbill.ports.work.model.WorkRunStopResult
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
 import java.nio.file.Files
 import java.nio.file.Path
@@ -165,6 +166,43 @@ class WorkRunControlsTest {
       assertEquals(2, board.items.count { it.liveSection != null })
       val history = assertNotNull(component.ideStatusService.detail(WorkDetailRequest("newest")).item)
       assertEquals(setOf("newest", "interrupted"), history.executionHistory.map { it.invocationId }.toSet())
+    }
+  }
+
+  @Test
+  fun `the QA details a phase run settled with reach its execution history`() {
+    establishTemporarySchemaReadiness("phase-qa-details").use { fixture ->
+      val component = component(fixture.tempDir, fixture.dbPath)
+      val details = QaRunDetails(reportPath = "/qa/report.md", skipReason = "empty_scope")
+      component.databaseSession.transaction {
+        val registered =
+          it.standalonePhaseStatuses.register(
+            registration(fixture.tempDir).copy(
+              phaseId = "qa",
+              lifecycleState = "active",
+              leaseExpiresAt = Instant.now().plusSeconds(3600),
+            ),
+          )
+        it.standalonePhaseStatuses.update(
+          StandalonePhaseStatusUpdate(
+            executionId = registered.executionId,
+            expectedRevision = registered.statusRevision,
+            leaseOwner = registered.leaseOwner,
+            leaseGeneration = registered.leaseGeneration,
+            lifecycleState = "terminal",
+            currentStep = "qa",
+            currentActivity = null,
+            updatedAt = Instant.now(),
+            finishedAt = Instant.now(),
+            terminalResult = "done",
+            qaDetails = details,
+          ),
+        )
+      }
+
+      val item = assertNotNull(component.ideStatusService.detail(WorkDetailRequest("interrupted")).item)
+
+      assertEquals(details, item.executionHistory.single { it.invocationId == "interrupted" }.qaDetails)
     }
   }
 

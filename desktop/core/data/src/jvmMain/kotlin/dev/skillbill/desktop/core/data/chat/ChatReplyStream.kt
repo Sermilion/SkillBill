@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -26,8 +27,13 @@ internal class ChatReplyStream(private val diagnostics: Diagnostics) {
         if (pending.isNotEmpty()) add(ChatEvent.TextDelta(pending))
       } else {
         val decoded = decodeActions(actions.toString(), diagnostics)
-        if (decoded == null) diagnostics.record("chat.actions_invalid")
-        else if (decoded.isNotEmpty()) add(ChatEvent.SuggestedActions(decoded))
+        if (decoded == null) {
+          diagnostics.record("chat.actions_invalid")
+          add(ChatEvent.TextDelta(droppedActionsNotice(listOf("the action block could not be read (bad JSON, more than 3 actions, or duplicate labels)"))))
+        } else {
+          if (decoded.dropped.isNotEmpty()) add(ChatEvent.TextDelta(droppedActionsNotice(decoded.dropped)))
+          if (decoded.actions.isNotEmpty()) add(ChatEvent.SuggestedActions(decoded.actions))
+        }
       }
       pending = ""
       add(event)
@@ -58,7 +64,17 @@ internal class ChatReplyStream(private val diagnostics: Diagnostics) {
   }
 }
 
-private fun decodeActions(source: String, diagnostics: Diagnostics): List<ChatSuggestedAction>? {
+private const val MAX_LABEL = 60
+private const val MAX_INSTRUCTION = 2000
+
+private class DecodedActions(val actions: List<ChatSuggestedAction>, val dropped: List<String>)
+
+private fun droppedActionsNotice(reasons: List<String>): String {
+  val count = if (reasons.size == 1) "a suggested action" else "${reasons.size} suggested actions"
+  return "\n\n_Skill Bill could not show $count: ${reasons.distinct().joinToString("; ")}. Ask the agent to send it again._"
+}
+
+private fun decodeActions(source: String, diagnostics: Diagnostics): DecodedActions? {
   val trimmed = source.trim()
   if (!trimmed.endsWith("```") || trimmed.length > 16000) return null
   val array = try {
@@ -67,27 +83,57 @@ private fun decodeActions(source: String, diagnostics: Diagnostics): List<ChatSu
     null
   } ?: return null
   if (array.size > 3) return null
+  val dropped = mutableListOf<String>()
   val actions = array.mapNotNull { element ->
-    val action = element as? JsonObject ?: return null
-    val label = action.actionString("label")?.trim()?.takeIf { it.isNotBlank() && it.length <= 60 && '\n' !in it && '\r' !in it } ?: return null
-    val instruction = action.actionString("instruction")?.trim()?.takeIf { it.isNotBlank() && it.length <= 2000 } ?: return null
-    val mode = when (action.actionString("mode")) {
-      "read" -> ChatPermissionMode.ReadOnly
-      "act" -> ChatPermissionMode.Act
-      else -> return null
-    }
-    val start = action["start"]?.let {
-      val wire = action.actionString("start")
-      NewTaskActionKind.entries.firstOrNull { it.wire == wire } ?: run {
-        diagnostics.record("chat.action_start_unknown")
-        return@mapNotNull null
+    when (val result = decodeAction(element, diagnostics)) {
+      is ActionResult.Ok -> result.action
+      is ActionResult.Dropped -> {
+        diagnostics.record(result.diagnostic)
+        dropped += result.reason
+        null
       }
     }
-    val target = optionalActionString(action, "target") ?: return@mapNotNull null
-    val branch = optionalActionString(action, "branch") ?: return@mapNotNull null
-    ChatSuggestedAction(label, instruction, mode, start, actionTitle(action, diagnostics), target.value, branch.value)
   }
-  return actions.takeIf { it.map(ChatSuggestedAction::label).distinct().size == it.size }
+  if (actions.map(ChatSuggestedAction::label).distinct().size != actions.size) return null
+  return DecodedActions(actions, dropped)
+}
+
+private sealed interface ActionResult {
+  class Ok(val action: ChatSuggestedAction) : ActionResult
+  class Dropped(val reason: String, val diagnostic: String = "chat.action_invalid") : ActionResult
+}
+
+private fun decodeAction(element: JsonElement, diagnostics: Diagnostics): ActionResult {
+  val action = element as? JsonObject ?: return ActionResult.Dropped("an entry is not a JSON object")
+  val rawLabel = action.actionString("label")?.trim()
+  val label = rawLabel?.takeIf { it.isNotBlank() && it.length <= MAX_LABEL && '\n' !in it && '\r' !in it }
+    ?: return ActionResult.Dropped(
+      if (rawLabel != null && rawLabel.length > MAX_LABEL) "label over $MAX_LABEL characters" else "missing or invalid label",
+    )
+  val rawInstruction = action.actionString("instruction")?.trim()
+  val instruction = rawInstruction?.takeIf { it.isNotBlank() && it.length <= MAX_INSTRUCTION }
+    ?: return ActionResult.Dropped(
+      if (rawInstruction != null && rawInstruction.length > MAX_INSTRUCTION) {
+        "\"$label\" has an instruction of ${rawInstruction.length} characters, over the $MAX_INSTRUCTION limit"
+      } else {
+        "\"$label\" has no instruction"
+      },
+    )
+  val mode = when (action.actionString("mode")) {
+    "read" -> ChatPermissionMode.ReadOnly
+    "act" -> ChatPermissionMode.Act
+    else -> return ActionResult.Dropped("\"$label\" has no valid mode")
+  }
+  val start = action["start"]?.let {
+    val wire = action.actionString("start")
+    NewTaskActionKind.entries.firstOrNull { it.wire == wire }
+      ?: return ActionResult.Dropped("\"$label\" has an unknown start", "chat.action_start_unknown")
+  }
+  val target = optionalActionString(action, "target") ?: return ActionResult.Dropped("\"$label\" has a non-string target")
+  val branch = optionalActionString(action, "branch") ?: return ActionResult.Dropped("\"$label\" has a non-string branch")
+  return ActionResult.Ok(
+    ChatSuggestedAction(label, instruction, mode, start, actionTitle(action, diagnostics), target.value, branch.value),
+  )
 }
 
 private fun actionTitle(action: JsonObject, diagnostics: Diagnostics): String? {

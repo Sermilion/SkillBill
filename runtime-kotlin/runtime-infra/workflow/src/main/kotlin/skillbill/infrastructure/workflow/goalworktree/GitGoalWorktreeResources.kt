@@ -1,7 +1,8 @@
 package skillbill.infrastructure.workflow.goalworktree
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.infrastructure.host.resolveTelemetryStateDir
+import skillbill.infrastructure.host.jvm.deleteRecursively
+import skillbill.infrastructure.host.jvm.resolveTelemetryStateDir
 import skillbill.infrastructure.workflow.monitor.GitRun
 import skillbill.infrastructure.workflow.monitor.NO_PROMPT_ENVIRONMENT
 import skillbill.infrastructure.workflow.monitor.monitorGit
@@ -19,6 +20,7 @@ import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.time.RuntimeTimingPort
 import skillbill.ports.time.model.RuntimeWaitResult
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
+import skillbill.ports.workflow.goalworktree.model.GoalBranchCheckout
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
@@ -26,10 +28,14 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption.CREATE_NEW
+import java.nio.file.StandardOpenOption.WRITE
+import java.nio.file.attribute.BasicFileAttributes
 import kotlin.time.Duration.Companion.seconds
 
 private const val GOALS_DIRECTORY = "goals"
 private const val CHECKOUT_DIRECTORY = "checkout"
+private const val REMOVAL_MARKER_SUFFIX = ".removing"
 private const val WORKTREE_FIELD_PREFIX = "worktree "
 private val GOAL_SEGMENT_UNSAFE = Regex("[^A-Za-z0-9._-]")
 private val UNUSABLE_GOAL_SEGMENTS = setOf("", ".", "..")
@@ -84,11 +90,17 @@ class GitGoalWorktreeResources(
       ?.let { field -> Path.of(field.removePrefix(WORKTREE_FIELD_PREFIX)) }
   }
 
+  override fun checkoutGoalBranch(
+    primaryRoot: Path,
+    branch: String,
+  ): GoalBranchCheckout = checkoutGoalBranchAt(primaryRoot, branch)
+
   override fun retentionVerdict(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained? {
     val path = request.worktreePath
     if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return null
-    return ownershipRetention(request) ?: worktreeDirtyRetention(path)?.let { retained(it.reason, path, it.detail) }
-      ?: publicationRetention(path)
+    val ownership = ownershipRetention(request)
+    if (ownership != null || removalInterrupted(path)) return ownership
+    return worktreeDirtyRetention(path)?.let { retained(it.reason, path, it.detail) } ?: publicationRetention(path)
   }
 
   private fun ownershipRetention(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained? {
@@ -188,13 +200,12 @@ class GitGoalWorktreeResources(
     if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
       val prune = worktreeGit(request.primaryRoot, "worktree", "prune")
       if (!prune.ok) diagnostics.warning("goal worktree prune failed: seam=goal_worktree.settle path=$path", null)
+      deleteQuietly(removalMarker(path))
       return GoalWorktreeSettlement.Absent
     }
     retentionVerdict(request)?.let { return it }
-    val removal = worktreeGit(request.primaryRoot, "worktree", "remove", "--force", path.toString())
-    if (!removal.ok) {
-      return retained(MonitorRetentionReason.CLEANUP_FAILED, path, "git worktree remove failed: ${removal.output}")
-    }
+    val failure = if (removalInterrupted(path)) finishInterruptedRemoval(path) else remove(request.primaryRoot, path)
+    if (failure != null) return failure
     val prune = worktreeGit(request.primaryRoot, "worktree", "prune")
     if (!prune.ok) {
       diagnostics.warning(
@@ -202,15 +213,87 @@ class GitGoalWorktreeResources(
         null,
       )
     }
-    try {
-      Files.deleteIfExists(path.parent)
-    } catch (failure: IOException) {
-      diagnostics.warning("goal worktree parent cleanup failed: seam=goal_worktree.settle path=${path.parent}", failure)
-    } catch (failure: SecurityException) {
-      diagnostics.warning("goal worktree parent cleanup failed: seam=goal_worktree.settle path=${path.parent}", failure)
-    }
+    deleteQuietly(removalMarker(path))
+    deleteQuietly(path.parent)
     return GoalWorktreeSettlement.Removed
   }
+
+  private fun remove(
+    primaryRoot: Path,
+    path: Path,
+  ): GoalWorktreeSettlement.Retained? {
+    val marker = removalMarker(path)
+    try {
+      val identity =
+        removalIdentity(path)
+          ?: return retained(
+            MonitorRetentionReason.CLEANUP_FAILED,
+            path,
+            "the removal directory identity is unavailable",
+          )
+      Files.deleteIfExists(marker)
+      Files.writeString(marker, identity, CREATE_NEW, WRITE)
+    } catch (failure: IOException) {
+      return retained(MonitorRetentionReason.CLEANUP_FAILED, path, "could not mark the removal: ${failure.message}")
+    }
+    val removal = worktreeGit(primaryRoot, "worktree", "remove", "--force", path.toString())
+    if (removal.ok) return null
+    if (!removal.timedOut) deleteQuietly(marker)
+    return retained(MonitorRetentionReason.CLEANUP_FAILED, path, "git worktree remove failed: ${removal.output}")
+  }
+
+  private fun finishInterruptedRemoval(path: Path): GoalWorktreeSettlement.Retained? {
+    diagnostics.warning(
+      "goal worktree removal was interrupted, finishing it: seam=goal_worktree.settle path=$path",
+      null,
+    )
+    return try {
+      deleteRecursively(path)
+      null
+    } catch (failure: IOException) {
+      retained(
+        MonitorRetentionReason.CLEANUP_FAILED,
+        path,
+        "could not finish the interrupted removal: ${failure.message}",
+      )
+    }
+  }
+
+  private fun deleteQuietly(target: Path) {
+    try {
+      Files.deleteIfExists(target)
+    } catch (failure: IOException) {
+      diagnostics.warning("goal worktree cleanup failed: seam=goal_worktree.settle path=$target", failure)
+    } catch (failure: SecurityException) {
+      diagnostics.warning("goal worktree cleanup failed: seam=goal_worktree.settle path=$target", failure)
+    }
+  }
+
+  private fun removalInterrupted(path: Path): Boolean {
+    val marker = removalMarker(path)
+    if (!Files.exists(marker, LinkOption.NOFOLLOW_LINKS)) return false
+    try {
+      val identity = removalIdentity(path)
+      if (identity != null && Files.isRegularFile(marker, LinkOption.NOFOLLOW_LINKS) &&
+        Files.readString(marker) == identity
+      ) {
+        return true
+      }
+      diagnostics.warning("goal worktree removal identity mismatch: seam=goal_worktree.settle path=$path", null)
+    } catch (failure: IOException) {
+      diagnostics.warning("goal worktree removal identity unavailable: seam=goal_worktree.settle path=$path", failure)
+    }
+    return false
+  }
+
+  private fun removalIdentity(path: Path): String? {
+    val attributes = Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+    if (!attributes.isDirectory) return null
+    val key = attributes.fileKey() ?: return null
+    return "$key\n${attributes.creationTime()}"
+  }
+
+  private fun removalMarker(path: Path): Path = path.resolveSibling("${path.fileName}$REMOVAL_MARKER_SUFFIX")
 
   private fun retained(
     reason: MonitorRetentionReason,
@@ -287,9 +370,24 @@ class GitGoalWorktreeResources(
       entry == WorktreeEntry.UNLISTED -> add(repoRoot, target, revision)
       !present -> pruneAndAdd(repoRoot, target, revision)
       !isRealDirectory(target) -> GoalWorktreeResult.Failed("the goal worktree path $target is not a directory.")
+      removalInterrupted(target) -> discardInterruptedRemoval(repoRoot, target, revision)
       entry == WorktreeEntry.FINISHED -> GoalWorktreeResult.Adopted(target)
       else -> awaitInitializing(repoRoot, target)
     }
+  }
+
+  private fun discardInterruptedRemoval(
+    repoRoot: Path,
+    target: Path,
+    revision: String,
+  ): GoalWorktreeResult {
+    diagnostics.warning(
+      "goal worktree removal was interrupted, recreating it: seam=goal_worktree path=$target",
+      null,
+    )
+    deleteRecursively(target)
+    Files.deleteIfExists(removalMarker(target))
+    return pruneAndAdd(repoRoot, target, revision)
   }
 
   private fun pruneAndAdd(
@@ -323,6 +421,7 @@ class GitGoalWorktreeResources(
       return GoalWorktreeResult.Failed("could not create the goal worktree at $target: invalid revision '$revision'.")
     }
     Files.createDirectories(target.parent)
+    Files.deleteIfExists(removalMarker(target))
     val added =
       invokeGitProcess(
         repoRoot,

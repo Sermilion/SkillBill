@@ -103,6 +103,7 @@ internal fun commitRangeText(target: ChangeScopeTarget, scope: ChangeScope): Str
     is ChangeBaseline.RunStart -> "${baseline.baseSha.take(7)}..HEAD"
     is ChangeBaseline.SubtaskStart -> "${baseline.baseSha.take(7)}..HEAD"
     is ChangeBaseline.CommittedBranchRange -> "${baseline.targetBranch}...${baseline.headBranch}"
+    is ChangeBaseline.CommittedRevisionRange -> "${baseline.fromSha.take(7)}..${baseline.toSha.take(7)}"
   }
   ChangeScope.Uncommitted -> ""
   ChangeScope.Operator -> target.timeline?.commits?.filter { it.operator }?.joinToString(", ") { it.sha.take(7) }.orEmpty()
@@ -116,7 +117,10 @@ internal fun commitRangeText(target: ChangeScopeTarget, scope: ChangeScope): Str
     val read = resolveScope(target, scope)
     val range = when (read) {
       is ScopeRead.Committed -> "${read.fromSha.take(7)}..${read.toSha.take(7)}"
-      is ScopeRead.Baseline -> "${(read.baseline as? ChangeBaseline.SubtaskStart)?.baseSha?.take(7).orEmpty()}..HEAD"
+      is ScopeRead.Baseline -> when (val baseline = read.baseline) {
+        is ChangeBaseline.CommittedRevisionRange -> "${baseline.fromSha.take(7)}..${baseline.toSha.take(7)}"
+        else -> "${(baseline as? ChangeBaseline.SubtaskStart)?.baseSha?.take(7).orEmpty()}..HEAD"
+      }
       is ScopeRead.Unavailable -> read.reason
       is ScopeRead.PerCommit -> read.commits.joinToString(", ") { it.sha.take(7) }
       else -> ""

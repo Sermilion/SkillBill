@@ -22,6 +22,10 @@ internal sealed interface WorkDetailAnchor {
     override val list = WorkDetailList.DEPENDENCIES
   }
 
+  data class Output(val beforeSequence: Long) : WorkDetailAnchor {
+    override val list = WorkDetailList.PLAN_OUTPUT
+  }
+
   data class Phase(val afterPhaseId: String) : WorkDetailAnchor {
     override val list = WorkDetailList.PHASES
   }
@@ -43,6 +47,7 @@ internal fun WorkDetailAnchor.encode(): String =
     is WorkDetailAnchor.Execution -> listOf(list.name, anchor.runSequence, anchor.invocationId)
     is WorkDetailAnchor.Subtask -> listOf(list.name, afterSubtaskId.toString())
     is WorkDetailAnchor.Dependency -> listOf(list.name, anchor.subtaskId.toString(), anchor.dependencyId.toString())
+    is WorkDetailAnchor.Output -> listOf(list.name, beforeSequence.toString())
     is WorkDetailAnchor.Phase -> listOf(list.name, afterPhaseId)
   }.joinToString(POSITION_SEPARATOR)
 
@@ -72,6 +77,10 @@ private fun anchorOf(
       pair?.mapNotNull(String::toIntOrNull)?.takeIf { it.size == 2 }?.let { (subtask, dependency) ->
         WorkDetailAnchor.Dependency(WorkGoalDependencyAnchor(subtask, dependency))
       }
+    WorkDetailList.PLAN_OUTPUT ->
+      fields.singleOrNull()?.toLongOrNull()?.takeIf { it > 0 }?.let(
+        WorkDetailAnchor::Output,
+      )
     WorkDetailList.PHASES -> fields.singleOrNull()?.let { WorkDetailAnchor.Phase(it) }
   }
 }

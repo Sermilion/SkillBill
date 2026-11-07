@@ -239,7 +239,11 @@ internal fun MutableMap<String, Any?>.putGoalLedgerCliEntries(projection: GoalRu
         GoalCliWorktreeStatusKeys.REMOVED_AT to worktree.removedAt,
         GoalCliWorktreeStatusKeys.RETENTION_REASON to worktree.retentionReason,
         GoalCliWorktreeStatusKeys.RETENTION_DETAIL to worktree.retentionDetail,
-      ),
+      ) +
+        listOfNotNull(
+          worktree.mainCheckoutOutcome?.let { GoalCliWorktreeStatusKeys.MAIN_CHECKOUT_OUTCOME to it },
+          worktree.mainCheckoutDetail?.let { GoalCliWorktreeStatusKeys.MAIN_CHECKOUT_DETAIL to it },
+        ),
     )
   }
   projection.launchWarning?.let { warning -> put("launch_warning", warning) }
@@ -259,6 +263,8 @@ internal object GoalCliWorktreeStatusKeys {
   const val REMOVED_AT = "removed_at"
   const val RETENTION_REASON = "retention_reason"
   const val RETENTION_DETAIL = "retention_detail"
+  const val MAIN_CHECKOUT_OUTCOME = "main_checkout_outcome"
+  const val MAIN_CHECKOUT_DETAIL = "main_checkout_detail"
 }
 
 internal fun List<GoalRunnerAcceptedSubtask>.toGoalAcceptanceCliList(): List<Map<String, Any?>>? =

@@ -79,6 +79,12 @@ const val GOAL_PAUSE_REASON_RUNNER_INTERRUPTED: String = "runner_interrupted"
 
 const val GOAL_PAUSE_REASON_IMPORTED: String = "imported"
 
+const val GOAL_MAIN_CHECKOUT_CHECKED_OUT: String = "checked_out"
+
+const val GOAL_MAIN_CHECKOUT_SKIPPED_UNCOMMITTED_CHANGES: String = "skipped_uncommitted_changes"
+
+const val GOAL_MAIN_CHECKOUT_FAILED: String = "failed"
+
 const val GOAL_ACTIVE_HEARTBEAT_GAP_LIMIT_MS: Long = 20_000
 
 data class GoalRunnerControlState(
@@ -107,6 +113,8 @@ data class GoalRunnerControlState(
   val executionWorktreeRemovedAt: String? = null,
   val executionWorktreeRetentionReason: String? = null,
   val executionWorktreeRetentionDetail: String? = null,
+  val executionMainCheckoutOutcome: String? = null,
+  val executionMainCheckoutDetail: String? = null,
   val launchWarning: String? = null,
   val archiveImportFingerprint: String? = null,
   val archiveImportSpecsPending: Boolean = false,
@@ -123,6 +131,12 @@ data class GoalRunnerControlState(
     }
     executionWorktreeRetentionDetail?.let {
       require(it.isNotBlank()) { "executionWorktreeRetentionDetail must not be blank when provided." }
+    }
+    executionMainCheckoutOutcome?.let {
+      require(it.isNotBlank()) { "executionMainCheckoutOutcome must not be blank when provided." }
+    }
+    executionMainCheckoutDetail?.let {
+      require(it.isNotBlank()) { "executionMainCheckoutDetail must not be blank when provided." }
     }
     launchWarning?.let { require(it.isNotBlank()) { "launchWarning must not be blank when provided." } }
     archiveImportFingerprint?.let {

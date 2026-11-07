@@ -46,5 +46,12 @@ internal fun decodeClaudeLine(line: String): List<ChatEvent> {
   }
 }
 
+internal fun JsonObject.startsClaudeTextBlock(): Boolean {
+  val event = obj("event") ?: return false
+  return string("type") == "stream_event" &&
+    event.string("type") == "content_block_start" &&
+    event.obj("content_block")?.string("type") == "text"
+}
+
 private fun JsonObject.contentBlocks(): List<JsonObject> =
   (obj("message")?.get("content") as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }

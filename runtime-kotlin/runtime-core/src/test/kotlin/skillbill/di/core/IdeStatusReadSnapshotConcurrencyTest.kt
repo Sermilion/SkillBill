@@ -206,6 +206,13 @@ private class SnapshotFixture(
           callbacks = OptionalCallbacks(),
         ),
       )
+    val planReports =
+      StandalonePlanReportBuilder(
+        EmptyManifestStore,
+        TestDecompositionManifestStore,
+        FixedProjectStorePort(home.resolve("project-store")),
+        NoopRuntimeDiagnostics,
+      )
     val projector =
       IdeStatusProjector(
         workflowSnapshotValidator = NoopSnapshotValidator,
@@ -214,13 +221,7 @@ private class SnapshotFixture(
         manifestStore = GoalRunnerManifestProjectionReader(EmptyManifestStore),
         diagnostics = NoopRuntimeDiagnostics,
         qaCapabilities = QaCapabilityResolver(RecordingWorkflowGitOperations()) { emptyList() },
-        planReports =
-          StandalonePlanReportBuilder(
-            EmptyManifestStore,
-            TestDecompositionManifestStore,
-            FixedProjectStorePort(home.resolve("project-store")),
-            NoopRuntimeDiagnostics,
-          ),
+        planReports = planReports,
       )
     return IdeStatusService(
       database = database,

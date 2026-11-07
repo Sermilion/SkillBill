@@ -19,6 +19,7 @@ dependencies {
   testImplementation(testFixtures(project(":runtime-infra:host")))
   testImplementation(testFixtures(project(":runtime-infra:skills")))
   testImplementation(libs.junit.jupiter)
+  testImplementation(libs.jimfs)
   testImplementation(libs.kotlin.test)
 }
 

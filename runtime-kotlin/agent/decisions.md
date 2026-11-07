@@ -18,6 +18,68 @@ Context: Chat history can outlive a card state change or process restart.
 Decision: Persist only card identity in chat history and re-read the card from the store on resume.
 Reason: The store remains the current source of truth, so resumed cards show current state and do not act on stale copies.
 
+## [2026-11-07] Keep live runtime trees across install replacement
+Context: A goal child JVM loads engine directive resources lazily. Pre-install `clear-state` and `activate_staged_runtime_pair` used `rm -rf` on `~/.skill-bill/runtime/runtime-cli`, which unlinked JARs still mapped by that JVM. A later `getResourceAsStream` then failed with `Missing directive resource`.
+Decision: Pre-install wipe no longer deletes `runtime/`. Activation renames each live tree into `runtime/retired/` before moving the staged tree into place, keeps the newest retired copy of each component, and restores the retired tree if the replacement `mv` fails.
+Reason: Rename keeps the old inodes readable through open JAR file descriptors. Unlink does not. New processes use the well-known live path; in-flight processes keep the generation they already opened.
+Alternatives considered: Eagerly loading every directive at startup still fails for later class loads after unlink. A current-symlink over generation directories is a larger launcher and desktop contract change.
+
+## [2026-11-06] Switch the main checkout to the goal branch after its worktree is removed
+Context: A goal's branch is checked out in its worktree. After removal the primary checkout can switch to it, but the operator may have uncommitted work or an operation in progress.
+Decision: Settlement runs a non-forcing checkout through GoalWorktreeResources.checkoutGoalBranch only for a removed or absent worktree. The adapter refuses on uncommitted tracked changes, an in-progress merge, rebase, am, cherry-pick or revert, or a missing local branch. The outcome and a capped detail are stored in the goal control payload; a refusal or failure is recorded, never raised, and never blocks the removal record.
+Reason: Switching only on a clean, idle checkout cannot lose operator work, and git refuses untracked-file collisions on its own. Recording outcome and removal in one update means status always explains why the checkout did or did not move. Extra keys in the JSON control state need no migration.
+Alternatives considered: A forced checkout or stash switches more often but can discard or hide operator changes; a retry loop adds background state for an advisory convenience.
+
+## [2026-11-06] Keep the main-checkout outcome optional in the work-board payload
+Context: The work-board read model is persisted and read by the desktop, and rows written earlier carry no outcome.
+Decision: Resolve the control-state string to a ports enum at projection using the shared wire constants, dropping outcome and detail when the value is unknown. Store the enum name and detail as optional goal_worktree keys, and validate an unknown name as an invalid row.
+Reason: Optional keys decode existing rows unchanged, so no migration or desktop read-schema bump is needed. One set of wire constants keeps one spelling, and validation keeps a bad row from crashing a read.
+## [2026-11-06] Purge validation events without counting or archiving them
+Context: Goal purge removes standalone status rows, while validation events are keyed by invocation. Counted tables must also appear in archive snapshots.
+Decision: Delete events with their status rows, but omit them from purge counts and archive snapshots.
+Reason: Events are a live progress log rather than goal state to restore. Omitting them from counts keeps dry-run and purge counts aligned without adding them to archives, while deletion prevents orphaned rows.
+
+## [2026-11-06] Let phase definitions opt into live checks
+Context: Phase entry and settlement need to identify validation runs without coupling phase execution to a specific definition.
+Decision: The phase definition exposes `reportsLiveChecks`, which validation enables.
+Reason: Phase execution remains definition-agnostic, and another definition can opt in without changing it.
+
+## [2026-11-06] Advertise validation checks through the started server
+Context: The validation prompt is composed before MCP startup can be observed.
+Decision: A capable standalone launch supplies its invocation identity only to the runtime MCP server. Server initialization marks live checks available and provides the tool protocol.
+Reason: A prompt mention would advertise the tool before startup is known. Server initialization tells the agent about it only when that server starts.
+
+## [2026-11-06] Derive validation outcomes from finished checks
+Context: A validation run can settle with skipped or unfinished checks and a status snapshot older than launch-time availability writes.
+Decision: Re-read availability during derivation and use the last finished event per check, excluding skipped checks. Leave the outcome null when no check counts.
+Reason: A skipped or unfinished check must not count as passed, and the registered snapshot cannot establish current availability.
+
+## [2026-11-06] Bound validation history to the recorded branch
+Context: Standalone validation detail needs peer runs without mixing repositories or branches.
+Decision: Read at most 50 validation runs with the same repository identity and non-null branch correlation. Return no peers for HEAD or missing correlation.
+Reason: A detached or unknown branch cannot identify a stable set of peer runs. The bound limits the detail read.
+
+## [2026-11-06] Capture structured planning activity beside the transcript
+Context: Readable output discards provider tool identities, completions and file metadata needed by the plan-activity design.
+Decision: Planning output sinks accept typed provider activity and raw lines. Claude, Codex and Cursor decoders correlate start and completion within each launch; unit sinks carry subtask identity. Migration 107 stores updatable events and distinguishes raw transcript lines. Keep the latest 128 events and one stream-provenance marker per phase. Work-detail 1.9 exposes these records. Plain text remains transcript content, without inferred tool actions.
+Reason: Stable identities let completions update their original rows, while per-launch identities avoid collisions between parallel writers. Model-only activity types remain independent of agent-run lifecycle ports to preserve package direction. Raw history and activity share execution ownership and snapshot transactions.
+
+## [2026-11-06] Page standalone planning output separately from its live tail
+Context: The plan detail's folded output needs earlier attributed lines; the four-line snapshot cannot supply them.
+Decision: Migration 106 adds execution-owned output history. Snapshot writes append stable entry identities in the same transaction, and work-detail 1.8 pages history by sequence. Deleting the owning execution removes its history. The desktop loads more only inside the expanded output view. Captured lines retain up to 8192 characters; at most 1000 unpersisted lines wait in memory, with a diagnostic if persistence failures exhaust that buffer. Existing runs retain their snapshots without fabricated history.
+Reason: Paging preserves the full recorded sequence without rewriting or loading an entire log on each heartbeat. Stable entry identities prevent duplicate rows when a write is retried.
+
+## [2026-11-06] Key standalone plan output by execution
+Context: A detached standalone plan and a separate detail reader need the same output after process exit. An issue key can identify multiple executions.
+Decision: Store bounded output snapshots under the standalone execution ID in SQLite. The status publisher owns capture and flushes pending output at settlement and close; the status row owns output cleanup.
+Reason: Both processes can resolve the same execution without conflating runs. Bounded snapshots limit retention, and status-linked cleanup avoids orphaned rows.
+
+## [2026-11-05] Set JVM temp roots at launch
+Context: The JDK snapshots java.io.tmpdir before main, so setting it in the CLI or MCP entry point does not redirect default-root JDK temp calls.
+Decision: Start scripts pass run scratch as a JVM option. JAVA_TOOL_OPTIONS and Linux wrappers name the shared state scratch root; test workers receive run scratch through their task configuration.
+Reason: Launch-time options reach JDK temp calls. A common shared root for Gradle clients and daemons avoids giving each run a different daemon temp setting. The in-process property still helps libraries that read it later.
+Alternatives considered: Setting the property only in main leaves default-root JDK temp calls on the original root.
+
 ## [2026-11-04] Keep review comment writes outside settlement
 Context: Review findings and repair receipts are authoritative workflow evidence; diff comments are an auxiliary projection.
 Decision: Write finding threads and outcome replies beside the owning review or receipt mutation, treating failures as best-effort and diagnostic.

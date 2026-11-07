@@ -1,7 +1,9 @@
 package skillbill.engine.featuretask.phaserun
 
+import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
+import skillbill.goalrunner.model.quality.GoalQualityAcceptedSourceObservation
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
@@ -17,10 +19,49 @@ class InMemoryGoalQualityPhasePersistTest {
   private val workflowId = "goal-parent:quality-invocation"
 
   @Test
+  fun `completion metadata retains the observed source on its latest accepted ledger event`() {
+    var observations = 0
+    var last: GoalQualityPhaseProgress? = null
+    val records =
+      InMemoryPhaseRunRecords(
+        clock,
+        null,
+        goalQualityPhaseProgress = GoalQualityPhaseProgress(),
+        persistGoalQualityPhaseProgress = { progress, _ ->
+          last = progress
+          true
+        },
+        goalQualityWorkflowId = workflowId,
+        qualitySourceObservation = { phase, attempt ->
+          observations++
+          GoalQualityAcceptedSourceObservation(phase, attempt, "validated-content", validationOccurrence = 2)
+        },
+      )
+    records.recordRequiredPhaseStart(runningStart("validate", 3))
+    records.recordCompletedPhase(phaseState("validate", "completed", 3))
+    records.appendLedgerEntry(
+      FeatureTaskRuntimePhaseLedgerRequest(
+        workflowId,
+        FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
+        "validate",
+        3,
+      ),
+    )
+
+    val progress = requireNotNull(last)
+    val observation = progress.acceptedSourceObservations.single()
+    assertEquals(progress.phaseLedger.last().sequenceNumber, observation.completionSequenceNumber)
+    assertEquals(progress.revision, observation.progressRevision)
+    assertEquals("validated-content", observation.contentFingerprint)
+    assertEquals(2, observation.validationOccurrence)
+    assertEquals(1, observations)
+  }
+
+  @Test
   fun `goal quality pause through recordPhaseState sinks paused not running`() {
     var last: GoalQualityPhaseProgress? = null
     val records =
-      goalQualityRecords { progress ->
+      goalQualityRecords { progress, _ ->
         last = progress
         true
       }
@@ -45,7 +86,7 @@ class InMemoryGoalQualityPhasePersistTest {
   fun `goal quality required start persists running and start ledger once`() {
     val revisions = mutableListOf<Long>()
     val records =
-      goalQualityRecords { progress ->
+      goalQualityRecords { progress, _ ->
         revisions += progress.revision
         true
       }
@@ -59,7 +100,7 @@ class InMemoryGoalQualityPhasePersistTest {
 
   @Test
   fun `sunk paused goal quality step is omitted from running admission filter`() {
-    val records = goalQualityRecords { true }
+    val records = goalQualityRecords { _, _ -> true }
     records.recordRequiredPhaseStart(runningStart("qa", 1))
     records.recordPhaseState(phaseState("qa", "paused", 1))
 
@@ -68,7 +109,7 @@ class InMemoryGoalQualityPhasePersistTest {
     assertTrue(running.isEmpty())
   }
 
-  private fun goalQualityRecords(sink: (GoalQualityPhaseProgress) -> Boolean): InMemoryPhaseRunRecords =
+  private fun goalQualityRecords(sink: (GoalQualityPhaseProgress, String?) -> Boolean): InMemoryPhaseRunRecords =
     InMemoryPhaseRunRecords(
       clock,
       null,

@@ -12,6 +12,7 @@ import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.idestatus.model.boundedIdeStatusActivity
+import skillbill.ports.idestatus.model.GoalMainCheckoutOutcome
 import skillbill.ports.idestatus.model.GoalWorktreeState
 import skillbill.ports.idestatus.model.IDE_STATUS_PAUSE_REASON_LABEL_MAX_LENGTH
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
@@ -344,7 +345,13 @@ internal object WorkBoardReadModelPayloadValidation {
               GoalWorktreeState.entries.map { it.name },
             ) &&
             optionalText(value, WorkBoardReadModelPayloadKeys.REASON) &&
-            optionalText(value, WorkBoardReadModelPayloadKeys.GOAL_WORKTREE_RETENTION_DETAIL)
+            optionalText(value, WorkBoardReadModelPayloadKeys.GOAL_WORKTREE_RETENTION_DETAIL) &&
+            optionalEnum(
+              value,
+              WorkBoardReadModelPayloadKeys.GOAL_WORKTREE_MAIN_CHECKOUT_OUTCOME,
+              GoalMainCheckoutOutcome.entries.map { it.name },
+            ) &&
+            optionalText(value, WorkBoardReadModelPayloadKeys.GOAL_WORKTREE_MAIN_CHECKOUT_DETAIL)
         }
 
     fun invalidFieldGroup7(fields: Map<String, Any?>): Boolean =

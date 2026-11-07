@@ -60,10 +60,14 @@ public class FeatureTaskRuntimeStatusService(
     return buildStatusProjection(request, records, decomposeTerminal, ledger, workflowCurrentStepId)
   }
 
-  internal fun phaseBriefingTexts(workflowId: String): Map<String, String> =
+  internal fun phaseBriefingTexts(
+    workflowId: String,
+    onFailure: ((SkillBillRuntimeException) -> Unit)? = null,
+  ): Map<String, String> =
     try {
       recorder.loadPhaseBriefings(workflowId)?.mapValues { it.value.briefingText }.orEmpty()
-    } catch (_: SkillBillRuntimeException) {
+    } catch (error: SkillBillRuntimeException) {
+      onFailure?.invoke(error)
       emptyMap()
     }
 

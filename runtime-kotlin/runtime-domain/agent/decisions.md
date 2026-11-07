@@ -1,3 +1,8 @@
+## [2026-11-06] Keep fence-parsing rationale outside Kotlin comments
+Context: Validation found non-interface KDoc on MarkdownFences and a line comment in PlanBundleSpecText, which the comment architecture guard rejects.
+Decision: Keep this rationale here and remove the source comments. Heading parsers ignore headings inside fenced examples. An unclosed fence marks every line as outside so it cannot hide the rest of a spec.
+Reason: The comment policy permits KDoc only on interfaces and their members. Parsing behavior stays unchanged.
+
 ## [2026-11-05] Tail-wide reset extraction with earliest match
 Context: Codex emits usage_limit_exceeded before try again at timestamps in the same tail.
 Decision: extractResetHint scans the full inspected tail for both reset and try again at patterns and keeps the earliest capture with existing trim and bounds.
@@ -135,3 +140,13 @@ Decision: (c) Retain `AttemptLedgerWorkflowDecoding.asLenientIntOrNull` as the s
 Evidence: `FeatureTaskRuntimePersistenceMapFieldsTest`, `ReviewRunLaneSegmentAccountingJsonTest`, `TypedParseBoundaryArchitectureTest`.
 
 Revisit when: SKILL-352 replaces any remaining engine-local readers or workflow status moves to closed enums at the engine boundary.
+
+## [2026-11-06] Governed spec section parsing ignores fenced headings
+
+Context: Specs quote example markdown, such as a fenced `## Unblock`, that heading-based section parsing read as a section boundary.
+
+Decision: `MarkdownFences.outsideFenceMask` returns one flag per spec line, true when the line sits outside every fence and is not a fence marker. Section parsers, including `PlanBundleSnapshots.detailsRange`, only match headings on those lines. An unclosed fence would swallow the rest of the spec, so in that case every line counts as outside.
+
+Evidence: `MarkdownFences`, `GovernedSpecSectionParser`, `PlanBundleSnapshots`.
+
+Revisit when: Specs move to a structured format or a markdown parser replaces line matching.

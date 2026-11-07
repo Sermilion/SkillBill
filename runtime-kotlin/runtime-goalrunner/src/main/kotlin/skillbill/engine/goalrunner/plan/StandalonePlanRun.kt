@@ -20,6 +20,7 @@ import skillbill.engine.goal.goalRepositoryIdentityCandidates
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
 import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.IdeStatusLaunchScope
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
@@ -102,35 +103,39 @@ public class StandalonePlanRun(
         phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
         launch = StandalonePlanLaunch(replan.agentId, IdeStatusLaunchScope.GOAL).forPhase(issueKey),
       )
-    return catchingNonCancellation {
-      if (!reopening.reopenWithRebasedBundle(replan)) {
-        return@catchingNonCancellation refused(
+    return try {
+      catchingNonCancellation {
+        if (!reopening.reopenWithRebasedBundle(replan)) {
+          return@catchingNonCancellation refused(
+            publisher,
+            "Plan workflow '$planWorkflowId' for $issueKey has no `plan_subtasks` step to re-plan.",
+            planWorkflowId,
+          )
+        }
+        val found =
+          planLookup.lookupSelected(
+            issueKey,
+            goalRepositoryIdentityCandidates(repoRoot, repositories),
+            planWorkflowId,
+          )
+        if (found !is FeatureTaskContinuationLookupResult.Resumable || found.candidate.workflowId != planWorkflowId) {
+          return@catchingNonCancellation refused(
+            publisher,
+            "Plan workflow '$planWorkflowId' for $issueKey could not be resumed after reopening `plan_subtasks`.",
+            planWorkflowId,
+          )
+        }
+        resume(
+          found.candidate,
+          null,
+          repoRoot,
+          { specPath -> withPublisher(inputFor(specPath).copy(inheritRecordedPlanningTimeout = true), publisher) },
           publisher,
-          "Plan workflow '$planWorkflowId' for $issueKey has no `plan_subtasks` step to re-plan.",
-          planWorkflowId,
         )
-      }
-      val found =
-        planLookup.lookupSelected(
-          issueKey,
-          goalRepositoryIdentityCandidates(repoRoot, repositories),
-          planWorkflowId,
-        )
-      if (found !is FeatureTaskContinuationLookupResult.Resumable || found.candidate.workflowId != planWorkflowId) {
-        return@catchingNonCancellation refused(
-          publisher,
-          "Plan workflow '$planWorkflowId' for $issueKey could not be resumed after reopening `plan_subtasks`.",
-          planWorkflowId,
-        )
-      }
-      resume(
-        found.candidate,
-        null,
-        repoRoot,
-        { specPath -> withPublisher(inputFor(specPath).copy(inheritRecordedPlanningTimeout = true), publisher) },
-        publisher,
-      )
-    }.onFailure(publisher::settleFailure).getOrThrow()
+      }.onFailure(publisher::settleFailure).getOrThrow()
+    } finally {
+      publisher.closeOutputCapture()
+    }
   }
 
   private fun withLivePlanReport(
@@ -166,17 +171,26 @@ public class StandalonePlanRun(
         phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
         launch = launch.forPhase(suppliedIntake ?: issueKey),
       )
-    return catchingNonCancellation {
-      runInternal(issueKey, suppliedIntake, repoRoot, publisher) { specPath ->
-        val input = inputFor(specPath)
-        withPublisher(
-          input.copy(
-            inheritRecordedPlanningTimeout = launch.scope == IdeStatusLaunchScope.GOAL || input.timeout == null,
-          ),
+    return try {
+      catchingNonCancellation {
+        runInternal(
+          issueKey,
+          suppliedIntake,
+          repoRoot,
           publisher,
-        )
-      }
-    }.onFailure(publisher::settleFailure).getOrThrow()
+        ) { specPath ->
+          val input = inputFor(specPath)
+          withPublisher(
+            input.copy(
+              inheritRecordedPlanningTimeout = launch.scope == IdeStatusLaunchScope.GOAL || input.timeout == null,
+            ),
+            publisher,
+          )
+        }
+      }.onFailure(publisher::settleFailure).getOrThrow()
+    } finally {
+      publisher.closeOutputCapture()
+    }
   }
 
   private fun runInternal(
@@ -205,7 +219,13 @@ public class StandalonePlanRun(
       if (found is FeatureTaskContinuationLookupResult.Resumable) {
         return resume(found.candidate, intake, repoRoot, inputFor, statusPublisher)
       }
-      return settleExistingManifest(issueKey, intake, repoRoot, statusPublisher, inputFor)
+      return settleExistingManifest(
+        issueKey,
+        intake,
+        repoRoot,
+        statusPublisher,
+        inputFor,
+      )
     }
     return when (found) {
       is FeatureTaskContinuationLookupResult.Resumable ->
@@ -258,7 +278,15 @@ public class StandalonePlanRun(
       }?.takeIf { (_, terminal) ->
         terminal == null || isLaunchedSpec(terminal.parentSpecPath, issueKey, intake, repoRoot)
       }
-    if (completed == null) return open(issueKey, intake, repoRoot, inputFor, statusPublisher)
+    if (completed == null) {
+      return open(
+        issueKey,
+        intake,
+        repoRoot,
+        inputFor,
+        statusPublisher,
+      )
+    }
     val (id, terminal) = completed
     if (terminal != null && intake == null) {
       val result =
@@ -360,13 +388,21 @@ public class StandalonePlanRun(
     repoRoot: Path,
     statusPublisher: StandalonePhaseStatusEventSink?,
   ): StandalonePlanResult {
+    val outputSink = statusPublisher?.planOutputSink ?: AgentRunOutputSink.NONE
+    val captureStreamOutput = outputSink !== AgentRunOutputSink.NONE
     val observed =
       statusPublisher?.let { publisher ->
         input.copy(eventSink = withLivePlanReport(input.eventSink, publisher, input.issueKey, repoRoot))
       } ?: input
     val report =
       catchingNonCancellation {
-        entry.run(observed) { error("Could not run plan workflow: ${it.error}") }
+        entry.run(
+          observed,
+          { error("Could not run plan workflow: ${it.error}") },
+          outputSink,
+          captureStreamOutput,
+          if (captureStreamOutput) statusPublisher?.let { it::flushOutputCapture } else null,
+        )
       }.onFailure { error ->
         statusPublisher?.settleFailure(error, input.explicitWorkflowId)
       }.getOrThrow()

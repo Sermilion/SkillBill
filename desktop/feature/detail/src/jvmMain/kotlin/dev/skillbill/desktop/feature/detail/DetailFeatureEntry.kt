@@ -17,6 +17,7 @@ import dev.skillbill.desktop.core.ui.input.ScreenKeyHandler
 import dev.skillbill.desktop.core.ui.navigation.AppNavigator
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
+import dev.skillbill.desktop.core.ui.navigation.NewTaskRoute
 import dev.skillbill.desktop.core.ui.navigation.FeatureEntry
 import dev.skillbill.desktop.core.ui.navigation.rememberEntryViewModel
 import dev.skillbill.desktop.core.ui.pane.CHAT_SHORTCUT
@@ -65,6 +66,12 @@ class DetailFeatureEntry(
           is DetailEffect.CopyToClipboard -> copy(effect.text)
           is DetailEffect.OpenChangesWindow -> changesWindows.open(effect.item, effect.scope)
           is DetailEffect.ReviewFindings -> chat.runReviewAction(effect.item, effect.action)
+          is DetailEffect.FixInChat -> chat.runVerifyFixes(effect.item, effect.brief)
+          is DetailEffect.PrefillGoalIntake -> {
+            val accepted = chat.prefillGoalIntake(effect.repoRoot, effect.branch, effect.text)
+            if (accepted) navigator.navigate(NewTaskRoute)
+            viewModel.onAction(DetailAction.GoalIntakeResult(effect.keys, accepted))
+          }
         }
       }
     }

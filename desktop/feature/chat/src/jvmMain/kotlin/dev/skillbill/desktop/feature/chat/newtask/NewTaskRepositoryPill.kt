@@ -41,9 +41,10 @@ internal sealed interface RepositoryPillMode {
   data object Interactive : RepositoryPillMode
 }
 
-internal fun repositoryPillMode(chat: NewTaskChat?, starting: Boolean, repository: NewTaskRepository?): RepositoryPillMode = when {
-  chat != null -> RepositoryPillMode.Static(PICKERS_DISABLED_MISSING_REPO.takeIf { chat.repositoryMissing })
+internal fun repositoryPillMode(chat: NewTaskChat?, busy: Boolean, starting: Boolean, repository: NewTaskRepository?): RepositoryPillMode = when {
+  chat?.repositoryMissing == true -> RepositoryPillMode.Static(PICKERS_DISABLED_MISSING_REPO)
   starting -> RepositoryPillMode.Starting
+  busy -> RepositoryPillMode.Static(PICKERS_DISABLED_BUSY)
   repository == null -> RepositoryPillMode.Choose
   else -> RepositoryPillMode.Interactive
 }

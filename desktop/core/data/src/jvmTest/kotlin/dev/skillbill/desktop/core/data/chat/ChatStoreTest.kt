@@ -69,7 +69,7 @@ class ChatStoreTest {
 
   // Sweeping a draft as an orphan silently loses the operator's conversation after a week away.
   @Test
-  fun `a new-task draft outlives the orphan sweep, lists by repository and goes when deleted`() {
+  fun `a new-task draft outlives the orphan sweep, is listed and goes when deleted`() {
     val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
     val draft = entry("draft", 1, execution = "unused").copy(executionId = null, newTask = ChatNewTaskContext("/work/app", "main"))
     store.saveChat(draft)
@@ -77,10 +77,26 @@ class ChatStoreTest {
 
     store.savedChats("wf-1")
 
-    assertEquals(listOf(draft), store.newTaskDrafts("/work/app"))
-    assertEquals(emptyList(), store.newTaskDrafts("/work/other"))
+    assertEquals(listOf(draft), store.newTaskDrafts())
     store.delete("draft")
-    assertEquals(emptyList(), store.newTaskDrafts("/work/app"))
+    assertEquals(emptyList(), store.newTaskDrafts())
+  }
+
+  // Capping before dropping unreadable drafts would let an operator-less draft take a slot and hide a real one.
+  @Test
+  fun `new-task drafts list every repository newest first and the cap skips drafts without an operator line`() {
+    val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    fun draft(session: String, at: Long, root: String, operator: Boolean = true) =
+      entry(session, at, operator = operator).copy(executionId = null, newTask = ChatNewTaskContext(root, "main"))
+    val app = draft("app", 1, "/work/app")
+    val other = draft("other", 2, "/work/other")
+    store.saveChat(app)
+    store.saveChat(other)
+    store.saveChat(draft("silent", 3, "/work/app", operator = false))
+    store.saveChat(entry("execution", 4))
+
+    assertEquals(listOf(other, app), store.newTaskDrafts())
+    assertEquals(listOf(other), store.newTaskDrafts(limit = 1))
   }
 
   @Test

@@ -25,8 +25,6 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitio
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseStepHooks
-import skillbill.engine.featuretask.slot.PhaseStepInput
-import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseQualityGateReporting
@@ -35,6 +33,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.featuretask.PhaseInstructionFileSource
@@ -397,14 +396,9 @@ public open class PhaseAttemptSettlementScope internal constructor(
   internal fun runAcceptedAttemptLoop(
     run: PhaseRun,
     call: PhaseStepCall,
-  ): PhaseOutcome = boundHost.runAcceptedAttemptLoop(run, call)
-
-  internal fun runPreparedStep(
-    run: PhaseRun,
-    call: PhaseStepCall,
-    input: PhaseStepInput,
-    launchState: PhaseLaunchState,
-  ): PhaseStepOutput = boundHost.runPreparedStep(run, call, input, launchState)
+    outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
+    captureStreamOutput: Boolean = false,
+  ): PhaseOutcome = boundHost.runAcceptedAttemptLoop(run, call, outputSink, captureStreamOutput)
 
   internal fun recordReviewRunForAcceptedStep(
     reviewRunId: String,

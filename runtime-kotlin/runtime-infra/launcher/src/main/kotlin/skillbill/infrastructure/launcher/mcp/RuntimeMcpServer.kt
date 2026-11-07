@@ -2,6 +2,7 @@ package skillbill.infrastructure.launcher.mcp
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
+import skillbill.contracts.persistence.RuntimeMcpEnvironmentKeys
 import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.model.EnvironmentContext
 import skillbill.ports.agentrun.model.SkillRunRequest
@@ -40,7 +41,7 @@ internal fun claudeRuntimeMcpArguments(
 ): List<String> =
   runtimeMcpBin
     ?.takeIf { attachesRuntimeMcp(request) }
-    ?.let { listOf("--mcp-config", claudeRuntimeMcpConfig(it, databasePath)) }
+    ?.let { listOf("--mcp-config", claudeRuntimeMcpConfig(it, databasePath, request.validationCheckInvocationId)) }
     .orEmpty()
 
 internal fun claudeRuntimeSettlementToolArguments(
@@ -66,7 +67,8 @@ internal fun codexRuntimeMcpArguments(
 ): List<String> =
   runtimeMcpBin
     ?.takeIf { attachesRuntimeMcp(request) }
-    ?.let { codexRuntimeMcpOverrides(it, databasePath).flatMap { override -> listOf("--config", override) } }
+    ?.let { codexRuntimeMcpOverrides(it, databasePath, request.validationCheckInvocationId) }
+    ?.flatMap { override -> listOf("--config", override) }
     .orEmpty()
 
 private fun attachesRuntimeMcp(request: SkillRunRequest): Boolean =
@@ -75,6 +77,7 @@ private fun attachesRuntimeMcp(request: SkillRunRequest): Boolean =
 private fun claudeRuntimeMcpConfig(
   runtimeMcpBin: Path,
   databasePath: Path?,
+  validationCheckInvocationId: String?,
 ): String =
   JsonCodec.mapToJsonString(
     mapOf(
@@ -85,7 +88,7 @@ private fun claudeRuntimeMcpConfig(
               "type" to "stdio",
               "command" to runtimeMcpBin.toString(),
               "args" to emptyList<String>(),
-              "env" to runtimeMcpServerEnvironment(databasePath),
+              "env" to runtimeMcpServerEnvironment(databasePath, validationCheckInvocationId),
             ),
         ),
     ),
@@ -94,9 +97,10 @@ private fun claudeRuntimeMcpConfig(
 private fun codexRuntimeMcpOverrides(
   runtimeMcpBin: Path,
   databasePath: Path?,
+  validationCheckInvocationId: String?,
 ): List<String> {
   val prefix = "mcp_servers.$RUNTIME_MCP_SERVER_NAME"
-  val environment = runtimeMcpServerEnvironment(databasePath)
+  val environment = runtimeMcpServerEnvironment(databasePath, validationCheckInvocationId)
   return buildList {
     add("$prefix.command=\"$runtimeMcpBin\"")
     add("$prefix.args=[]")
@@ -106,7 +110,11 @@ private fun codexRuntimeMcpOverrides(
   }
 }
 
-internal fun runtimeMcpServerEnvironment(databasePath: Path?): Map<String, String> =
-  databasePath
-    ?.let { mapOf(RuntimeDatabaseEnvironmentKeys.DATABASE_PATH to it.toAbsolutePath().normalize().toString()) }
-    .orEmpty()
+internal fun runtimeMcpServerEnvironment(
+  databasePath: Path?,
+  validationCheckInvocationId: String? = null,
+): Map<String, String> =
+  buildMap {
+    databasePath?.let { put(RuntimeDatabaseEnvironmentKeys.DATABASE_PATH, it.toAbsolutePath().normalize().toString()) }
+    validationCheckInvocationId?.let { put(RuntimeMcpEnvironmentKeys.VALIDATION_INVOCATION_ID, it) }
+  }

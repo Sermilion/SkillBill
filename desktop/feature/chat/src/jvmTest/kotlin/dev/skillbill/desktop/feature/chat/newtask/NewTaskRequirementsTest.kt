@@ -60,6 +60,19 @@ class NewTaskRequirementsTest {
   }
 
   @Test
+  fun `a clicked key chip counts only when it names the bare key on its label`() {
+    fun chip(label: String, instruction: String, start: NewTaskActionKind? = null) =
+      ChatMessage.Operator(instruction, ChatSuggestedAction(label, instruction, ChatPermissionMode.ReadOnly, start))
+
+    val transcript = listOf(ChatMessage.Operator("Fix the start flow"), chip("Use SKILL-509 for this work", "SKILL-509"))
+    assertEquals("SKILL-509", newTaskOperatorIdentity(transcript))
+    assertNull(newTaskOperatorIdentity(listOf(chip("Use this key", "SKILL-509"))))
+    assertNull(newTaskOperatorIdentity(listOf(chip("Use SKILL-509 for this work", "Use SKILL-509 for this work"))))
+    assertNull(newTaskOperatorIdentity(listOf(chip("Start SKILL-509", "SKILL-509", NewTaskActionKind.Goal))))
+    assertNull(newTaskOperatorIdentity(listOf(chip("Use SKILL-508", "SKILL-509"))))
+  }
+
+  @Test
   fun `reuse requires a typed complete key and reuse wording`() {
     val reuse = listOf(ChatMessage.Operator("Please reuse SKILL-470"))
 

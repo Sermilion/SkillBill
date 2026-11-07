@@ -19,6 +19,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -28,15 +29,20 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.runningFold
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import skillbill.contracts.persistence.DesktopReadSchema
 import java.util.concurrent.ConcurrentHashMap
 
 private const val PREFETCH_CAPACITY = 3
+private const val ACTIVE_PLAN_REFRESH_MS = 2_000L
 
 private val DETAIL_TOPICS = listOf(DesktopReadSchema.GOALS_TOPIC, DesktopReadSchema.PHASES_TOPIC, DesktopReadSchema.ACTIVITY_TOPIC)
 
@@ -48,6 +54,12 @@ class DetailObservations internal constructor(
   private val scope: CoroutineScope,
   private val signals: StateFlow<SignalSnapshot>,
   private val reads: DetailReads,
+  private val activePlanRefreshes: Flow<Unit> = flow {
+    while (true) {
+      delay(ACTIVE_PLAN_REFRESH_MS)
+      emit(Unit)
+    }
+  },
 ) {
   /** A first load and the signal snapshot captured before it ran, so a commit landing during the read still triggers. */
   private class Loaded(val read: DetailRead, val applied: SignalSnapshot)
@@ -71,7 +83,10 @@ class DetailObservations internal constructor(
     open.compute(item.id) { _, observers -> observers.orEmpty() + live }
     try {
       coroutineScope {
-        launch { refreshes(item, first.applied).collect { read -> live.update { previous -> previous.refreshedBy(read) } } }
+        launch {
+          refreshes(item, first.read.header() ?: item, first.applied)
+            .collect { read -> live.update { previous -> previous.refreshedBy(read) } }
+        }
         emitAll(live)
       }
     } finally {
@@ -86,22 +101,37 @@ class DetailObservations internal constructor(
    * Finishes each read before applying queued signals. Refresh requirements compare against that completed snapshot, so
    * activity cannot cancel a read or replace a pending full refresh.
    */
-  private fun refreshes(item: WorkItem, appliedAtLoad: SignalSnapshot): Flow<DetailRead> {
-    val ids = setOfNotNull(item.id, item.control.workflowId, item.control.invocationId)
+  private fun refreshes(item: WorkItem, loadedItem: WorkItem, appliedAtLoad: SignalSnapshot): Flow<DetailRead> {
+    var ids = setOfNotNull(loadedItem.id, loadedItem.control.workflowId, loadedItem.control.invocationId)
     var applied = appliedAtLoad
     var appliedRefresh = 0L
+    var appliedPlanRefresh = 0L
+    val currentItem = MutableStateFlow(loadedItem)
     val refreshRequests = requestedRefreshes.filter { it == item.id }.runningFold(0L) { revision, _ -> revision + 1 }
-    return combine(signals, refreshRequests) { snapshot, revision -> snapshot to revision }
+    val planRefreshes = currentItem.map(::isPollingStandalonePlan).distinctUntilChanged()
+      .flatMapLatest { active -> if (active) activePlanRefreshes else flowOf(Unit) }
+      .runningFold(0L) { revision, _ -> revision + 1 }
+    return combine(signals, refreshRequests, planRefreshes) { snapshot, revision, planRevision -> Triple(snapshot, revision, planRevision) }
       .conflate()
-      .mapNotNull { (snapshot, revision) ->
-        val kind = if (revision != appliedRefresh) DetailRefreshKind.FULL else refreshKind(snapshot, applied, ids)
+      .mapNotNull { (snapshot, revision, planRevision) ->
+        val planTick = planRevision != appliedPlanRefresh
+        val kind = when {
+          planTick && isPollingStandalonePlan(currentItem.value) -> DetailRefreshKind.FULL
+          revision != appliedRefresh -> DetailRefreshKind.FULL
+          else -> refreshKind(snapshot, applied, ids, currentItem.value)
+        }
         val read = when (kind) {
           DetailRefreshKind.FULL -> reads.refresh(item.id, extended[item.id].orEmpty())
           DetailRefreshKind.ACTIVITY -> reads.activity(item.id)
           null -> null
         }
+        if (read is DetailRead.Loaded) {
+          currentItem.value = read.header
+          ids = setOfNotNull(read.header.id, read.header.control.workflowId, read.header.control.invocationId)
+        }
         applied = snapshot
         appliedRefresh = revision
+        appliedPlanRefresh = planRevision
         read
       }
   }
@@ -131,7 +161,7 @@ class DetailObservations internal constructor(
   /** Runs the first load for [id] in the session scope, replacing an in-flight prefetch of another id. */
   suspend fun prefetch(id: String): RunOptions? {
     val cached = synchronized(lock) { cache[id] }
-    if (cached != null && !needsRefresh(signals.value, cached.applied, cached.read.detailIds(id))) return cached.read.runOptions()
+    if (cached != null && cached.read.header()?.let { needsRefresh(signals.value, cached.applied, cached.read.detailIds(id), it) } != true) return cached.read.runOptions()
     val pending = synchronized(lock) {
       inFlight?.takeIf { it.first == id }?.second ?: run {
         inFlight?.second?.cancel()
@@ -172,7 +202,12 @@ class DetailObservations internal constructor(
  */
 private enum class DetailRefreshKind { ACTIVITY, FULL }
 
-private fun refreshKind(snapshot: SignalSnapshot, applied: SignalSnapshot, ids: Set<String>): DetailRefreshKind? {
+private fun isPollingStandalonePlan(item: WorkItem): Boolean =
+  item.standaloneExecution && item.control.phaseId == "plan" &&
+    (item.lifecycle == dev.skillbill.desktop.core.domain.model.Lifecycle.Active ||
+      item.lifecycle == dev.skillbill.desktop.core.domain.model.Lifecycle.Blocked)
+
+private fun refreshKind(snapshot: SignalSnapshot, applied: SignalSnapshot, ids: Set<String>, item: WorkItem): DetailRefreshKind? {
   if (snapshot.resyncEpoch != applied.resyncEpoch || snapshot.generation != applied.generation) return DetailRefreshKind.FULL
   var activityChanged = false
   for (topic in DETAIL_TOPICS) {
@@ -187,11 +222,21 @@ private fun refreshKind(snapshot: SignalSnapshot, applied: SignalSnapshot, ids: 
       if (topic == DesktopReadSchema.ACTIVITY_TOPIC) activityChanged = true else return DetailRefreshKind.FULL
     }
   }
-  return if (activityChanged) DetailRefreshKind.ACTIVITY else null
+  return when {
+    activityChanged && isPollingStandalonePlan(item) -> DetailRefreshKind.FULL
+    activityChanged -> DetailRefreshKind.ACTIVITY
+    else -> null
+  }
 }
 
-private fun needsRefresh(snapshot: SignalSnapshot, applied: SignalSnapshot, ids: Set<String>): Boolean =
-  refreshKind(snapshot, applied, ids) != null
+private fun needsRefresh(snapshot: SignalSnapshot, applied: SignalSnapshot, ids: Set<String>, item: WorkItem): Boolean =
+  refreshKind(snapshot, applied, ids, item) != null
+
+private fun DetailRead.header(): WorkItem? = when (this) {
+  is DetailRead.Loaded -> header
+  is DetailRead.Activity -> header
+  DetailRead.Gone, is DetailRead.Failed -> null
+}
 
 private fun DetailRead.runOptions(): RunOptions? = (this as? DetailRead.Loaded)?.sections?.runOptions
 

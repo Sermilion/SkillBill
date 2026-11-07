@@ -84,6 +84,7 @@ import skillbill.engine.featuretask.slot.state.PhaseStandalonePublicationStepBin
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
@@ -97,6 +98,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.review.ReviewPassResolution
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 
 private abstract class FeatureTaskRuntimeRunLoopAgentStepBinding(
   protected val environment: PhaseAttemptLaunchCollaborationScope,
@@ -176,7 +178,17 @@ private abstract class FeatureTaskRuntimeRunLoopAgentStepBinding(
 
   override fun nextGateIteration(): Int =
     environment.progress.phase(run.phaseId).record
-      ?.takeIf { it.status == WorkflowStepStatus.RUNNING }
+      ?.takeIf { record ->
+        record.status == WorkflowStepStatus.RUNNING ||
+          (
+            environment.request.goalQualityAutomaticRecovery &&
+              (acceptedOwner.stepDescriptor(run.phaseId).family as? PhaseBindingFamily.QualityGate)?.operation is
+                PhaseQualityGateOperation.PackGate &&
+              record.status == WorkflowStepStatus.PAUSED &&
+              record.finishedAt == null &&
+              FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(record.blockedReason.orEmpty())
+          )
+      }
       ?.attemptCount
       ?: nextStepIteration()
 
@@ -284,9 +296,11 @@ private abstract class FeatureTaskRuntimeRunLoopLaunchingStepBinding(
   override fun runAcceptedAgentStep(
     run: PhaseRun,
     call: PhaseStepCall,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
   ): PhaseOutcome {
     requireAcceptedAttempt(run, call)
-    return environment.runAcceptedAttemptLoop(run, call)
+    return environment.runAcceptedAttemptLoop(run, call, outputSink, captureStreamOutput)
   }
 }
 

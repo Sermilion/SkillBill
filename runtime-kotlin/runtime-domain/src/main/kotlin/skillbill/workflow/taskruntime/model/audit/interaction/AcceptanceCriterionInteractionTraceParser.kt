@@ -20,6 +20,7 @@ object AcceptanceCriterionInteractionTraceParser {
     prose: String,
     targets: List<AcceptanceCriterionInteractionTarget>,
     recheckRefs: List<String> = emptyList(),
+    outputRef: String? = null,
   ): AcceptanceCriterionInteractionTraceParse {
     val wanted = targets.map { it.scenarioRef }.toSet()
     val source = prose.lines()
@@ -31,12 +32,12 @@ object AcceptanceCriterionInteractionTraceParser {
     val lines = explicit + natural
     val ignored = lines.map { it.ref }.filter { it !in wanted }.distinct()
     val entries =
-      when (val result = entriesFor(targets, lines.filter { it.ref in wanted }, prose)) {
+      when (val result = entriesFor(targets, lines.filter { it.ref in wanted }, prose, outputRef)) {
         is Checked.Ok -> result.value
         is Checked.Bad -> return malformed(result.reason)
       }
     val rechecks =
-      when (val result = AcceptanceCriterionRecheckParser.parse(prose, recheckRefs)) {
+      when (val result = AcceptanceCriterionRecheckParser.parse(prose, recheckRefs, outputRef)) {
         is AcceptanceCriterionRecheckParse.Parsed -> result
         is AcceptanceCriterionRecheckParse.Rejected -> return malformed(result.reason)
       }
@@ -51,6 +52,7 @@ object AcceptanceCriterionInteractionTraceParser {
     targets: List<AcceptanceCriterionInteractionTarget>,
     relevant: List<TraceLine>,
     prose: String,
+    outputRef: String?,
   ): Checked<List<AcceptanceCriterionInteractionEntry>> {
     val duplicated = relevant.groupingBy { it.ref }.eachCount().entries.firstOrNull { it.value > 1 }
     if (duplicated != null) return Checked.Bad("${duplicated.key} is traced more than once.")
@@ -58,7 +60,7 @@ object AcceptanceCriterionInteractionTraceParser {
     val entries = mutableListOf<AcceptanceCriterionInteractionEntry>()
     for (target in targets) {
       val line = byRef[target.scenarioRef] ?: return Checked.Bad("${target.scenarioRef} has no trace line.")
-      when (val result = entryFor(target, line, prose)) {
+      when (val result = entryFor(target, line, outputRef?.let { "$it#interaction:${target.scenarioRef}" } ?: prose)) {
         is Checked.Ok -> entries += result.value
         is Checked.Bad -> return result
       }

@@ -6,6 +6,7 @@ import skillbill.infrastructure.sqlite.approval.SqliteApprovalStore
 import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRecoveryRepository
 import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRepository
 import skillbill.infrastructure.sqlite.blockincident.SqliteProductReportRepository
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.VALIDATION_CHECK_EVENTS_TABLE
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.diagnostics.FileRejectedOutputDiagnosticPermissions
 import skillbill.infrastructure.sqlite.diagnostics.SqliteRejectedOutputDiagnosticRepository
@@ -160,6 +161,7 @@ internal class SQLiteUnitOfWork(
   override fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts {
     val scope = purgeScope(target)
     val counts = linkedMapOf<String, Int>()
+    deleteMatching(VALIDATION_CHECK_EVENTS_TABLE, validationCheckEventsFilter(scope))
     PURGE_WORKFLOW_KEYED_TABLES.forEach { table ->
       counts[table] = deleteWhereIn(table, "workflow_id", scope.workflowIds)
     }
@@ -403,6 +405,15 @@ private fun archiveBase64(bytes: ByteArray): String = Base64.getEncoder().encode
 
 private val ARCHIVE_BINARY_SQL_TYPES =
   setOf(Types.BLOB, Types.BINARY, Types.VARBINARY, Types.LONGVARBINARY)
+
+private fun validationCheckEventsFilter(scope: GoalPurgeScope): SqlFilter? =
+  scope.workflowIds.takeIf { it.isNotEmpty() }?.let { ids ->
+    SqlFilter(
+      "invocation_id IN (SELECT invocation_id FROM standalone_phase_status " +
+        "WHERE workflow_id IN (${placeholders(ids)}))",
+      ids,
+    )
+  }
 
 private fun goalRunSessionsFilter(scope: GoalPurgeScope): SqlFilter? {
   val segmentClauses =

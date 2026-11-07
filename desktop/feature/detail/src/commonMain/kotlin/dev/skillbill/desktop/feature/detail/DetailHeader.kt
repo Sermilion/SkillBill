@@ -21,6 +21,7 @@ import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.domain.model.Lifecycle
+import dev.skillbill.desktop.core.domain.model.MainCheckoutOutcome
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
@@ -39,17 +40,36 @@ internal fun DetailHeader(
   onRevealFolder: () -> Unit,
   onOpenBranch: () -> Unit,
   qa: QaHeaderFacts? = null,
+  validation: Boolean = false,
+  planReady: Boolean = false,
+  planBlocked: Boolean = false,
   actions: (@Composable () -> Unit)? = null,
 ) {
   val colors = SkillBillTheme.colors
   DocHeader(
-    title = if (qa != null) item.branch?.let { "QA on branch $it" } ?: item.title else item.title,
+    title = when {
+      validation -> item.branch?.let { "Validation on $it" } ?: item.title
+      qa != null -> item.branch?.let { "QA on branch $it" } ?: item.title
+      else -> item.title
+    },
     eyebrow = {
-      SbLabel(lifecycleLabel(item.lifecycle), SbLabelStyle.Tint(lifecycleColor(item.lifecycle)))
+      SbLabel(
+        when {
+          planBlocked -> "Blocked"
+          planReady -> "Plan ready"
+          item.isStandalonePlan() && item.running -> "Planning"
+          else -> lifecycleLabel(item.lifecycle)
+        },
+        SbLabelStyle.Tint(if (planBlocked) colors.stBlocked else lifecycleColor(item.lifecycle)),
+      )
       if (item.stalledSince != null) SbLabel("Stalled", SbLabelStyle.Tint(colors.stBlocked))
       IdTag(rowKey(item))
       if (item.kind != WorkKind.Goal && qa == null) item.issueKey?.let { IdTag(it) }
       SbLabel(kindWord(item.kind), SbLabelStyle.Plain)
+      if (item.isStandalonePlan()) {
+        val execution = listOfNotNull(item.model ?: item.agentId, item.effort?.let { "$it effort" }).joinToString(" · ")
+        if (execution.isNotBlank()) BasicText(execution, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted))
+      }
       // Freshness only means something while the run can still change; a completed item drops the pill.
       if (item.lifecycle != Lifecycle.Terminal) {
         val fresh = item.fresh && !sectionsStale
@@ -79,12 +99,21 @@ internal fun DetailHeader(
             BasicText("Criteria from $source", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
           }
         }
+        if (validation) item.agentId?.let { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted)) }
       }
       when (val worktree = item.goalWorktree) {
         null -> Unit
         else -> when (worktree.state) {
-          GoalWorktreeState.Removed ->
-            BasicText("The goal's worktree was removed. Its branch stays.", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
+          GoalWorktreeState.Removed -> {
+            val detail = worktree.mainCheckoutDetail?.let { ": $it" }.orEmpty()
+            val outcome = when (worktree.mainCheckout) {
+              MainCheckoutOutcome.CheckedOut -> "The main checkout is now on its branch."
+              MainCheckoutOutcome.SkippedUncommittedChanges -> "The main checkout was not switched to its branch because it has uncommitted changes$detail."
+              MainCheckoutOutcome.Failed -> "The main checkout could not be switched to its branch$detail."
+              null -> "Its branch stays."
+            }
+            BasicText("The goal's worktree was removed. $outcome", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
+          }
           GoalWorktreeState.Retained ->
             BasicText(
               "The goal's worktree stays at ${worktree.path}: ${worktree.retentionDetail ?: worktree.retentionReason.orEmpty()}.",

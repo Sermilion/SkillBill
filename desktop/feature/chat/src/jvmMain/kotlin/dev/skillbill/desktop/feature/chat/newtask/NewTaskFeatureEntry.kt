@@ -39,7 +39,7 @@ class NewTaskFeatureEntry(private val createViewModel: () -> NewTaskViewModel, p
         }
       },
     )
-    NewTaskScreen(state, viewModel.draft, host, viewModel::onAction)
+    NewTaskScreen(state, viewModel.chats, host, viewModel::onAction)
   }
 }
 

@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.slot.PhaseEntrySettlement
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.featureTaskRuntimePhaseOrderViolationMessage
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
@@ -298,6 +299,8 @@ internal object FeatureTaskRuntimeRunLoopDrive {
   internal fun advancePhaseReason(
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,
+    outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
+    captureStreamOutput: Boolean = false,
   ): String? =
     if (context.state.phase(phaseId).completed) {
       context.state.phase(phaseId).output?.let { output ->
@@ -312,6 +315,8 @@ internal object FeatureTaskRuntimeRunLoopDrive {
           ?: FeatureTaskRuntimeRunLoopBackwardEdge.runPhaseFor(
             context = context,
             phaseId = phaseId,
+            outputSink = outputSink,
+            captureStreamOutput = captureStreamOutput,
           )
       }
     }

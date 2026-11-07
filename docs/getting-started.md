@@ -358,6 +358,12 @@ are read-only, raw child output stays hidden unless debug output is requested,
 stale running children are reconciled against authoritative terminal outcomes,
 and the goal advances only after a durable child outcome is written.
 
+When a child exits nonzero, the runtime keeps bounded stdout and stderr excerpts
+in the project store under `run-evidence/<child-workflow-id>/`. The
+`worker_output_summary` event names the `child_failure_output` file. These
+owner-readable files can contain sensitive child output and are local run
+evidence. If retention fails, the runtime records a diagnostic warning.
+
 Run the goal normally to see compact progress while raw child output stays
 hidden:
 

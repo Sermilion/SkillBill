@@ -1,3 +1,41 @@
+## [2026-11-07] SKILL-515 match New Task tabs and home
+Areas: desktop/feature/chat newtask production and JVM tests
+- The 36dp strip has 8dp horizontal and 4dp top padding. Selected tabs join the panel over the hairline with rounded tops, square bottoms and a 1dp top-and-side border. Unselected hover fill stops 1dp above the hairline; offscreen DstIn masks fade tab content separately.
+- Explicit tab-container width puts New chat 2dp after fitting tabs. Overflow reserves the spacer's extra 2dp row gap to keep the chevron at the right edge. Existing markers, scrolling, hidden-activity indicator, overflow filtering and shortcuts remain.
+- The repaired title fills the space before the 20dp close control, keeping its trailing edge 4dp inside selected and hovered tabs. Its bounds test selects the original draft after newChat selects another, and measures the close control through unmerged semantics.
+- Recent chats precedes Needs you, replacing SKILL-512's merged inbox. It uses resumableDrafts for the selected repository, newest first, and hides without matches or a repository. Search chats opens the same scoped resume palette. Home width stays 720dp; block spacing is 32dp with sections and 40dp without.
+- Returning homes show every blocked run under Needs you, or All clear without a card. Running and finished-today counts link to all work. InboxItem, day groups, filters, the hint row, six-chat cap, runningItems and digit shortcuts are removed; rows retain their 34dp height, title helpers, blocked styling and 52dp time column.
+- HomeCard is reusable across both sections, with independent scroll and selection. Its viewport wraps up to five rows and caps at 172dp including borders; overflow uses 24dp inner DstIn fades that preserve the border and row tints. Both sections retain the shared short-time ticker.
+- Card focus resets selection to the first row. Up/Down and Enter act locally, with nearest-row scrolling and reduced motion support. Recent chats targets Needs you on Tab when its card exists. Collection and focused-selection semantics accompany the focus ring; row controls stay outside Tab traversal.
+- Delete discards only chats absent from openSessionIds. Open chats show an open badge, keep their time column and expose no discard control. ResumeDraft retains window-owned routing. No shared API or persistence contract changes; cards still compose every row. Native macOS and Windows validation remains unavailable, and QA did not rerun after the validation-phase test repair.
+Feature size: MEDIUM
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
+## [2026-11-06] SKILL-512 merge New Task home lists
+Areas: desktop/feature/chat newtask, desktop/core/designsystem
+- Recent chats and Needs you merge into one bordered "Pick up where you left off" card. Blocked runs precede running runs, then drafts grouped by local calendar date into Today, Yesterday and Earlier.
+- Rows use 34dp height, hairline dividers, status or chat/image glyphs, run stage badges and 52dp short-time columns. Hover or card selection replaces a chat's time with an accessible discard button.
+- InboxItem, inboxItems, chatTitle, chatRepoLabel and shortAgo separate derivation from Compose. Titles use plain text with path fallback and image-name suffixes; repository badges compare normalized roots. reusable
+- Returning homes show all saved drafts. Pending and first-run homes cap drafts at six and offer Show all through the existing repository-scoped resume palette. Drafts in the card remain cross-repository.
+- All, Needs you and Chats filters use blocked-run and full saved-chat counts. The focused card owns bounded selection, Up/Down, Enter, Delete and digits 1 through 9, skipping date headers and leaving composer input alone.
+- NewTaskSavedChats shares the saved list and pending discards across window drafts. Each discard hides its row immediately and owns a five-second Undo window; refresh excludes pending and deleting sessions, and expired Undo cannot cancel deletion. reusable
+- InboxSection retains one shared ticker to refresh both short times and date groups. The work-summary link and keyboard hints sit below the card. An idle step line has no caption node; typed-request captions remain.
+- Limits: filter selection does not persist, open-chat discard has no Undo, and window close does not flush pending discard timers. Cancelling a timer before deletion preserves the draft. No persistence or shared contract changes.
+- Verification limits: native macOS and Windows targets remain unverified; QA covered an earlier tree than the final source.
+Feature size: MEDIUM
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
+## [2026-11-06] SKILL-509 resume chat palette with preview
+Areas: desktop/feature/chat, desktop/core/designsystem
+- /resume opens a centered filterable palette with a chat preview in New Task and run-chat composers. New Task scopes drafts to the selected repository; run chats retain checkout-scoped choices. The Recent chats home list remains cross-repository.
+- ChatResumeListing handles title cleanup, local calendar-day groups, filtering and the 30-chat default limit. Leading image paths become attachment chips. reusable
+- The preview reads saved lines only; CLI sessions without lines show a message that content loads on resume. Arrow keys select, Enter or double-click resumes, and Esc closes and returns focus.
+- The palette uses a separate Dialog focus owner. LucideIcons.image is available to other UI. reusable
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-05] SKILL-482 two-column repository and branch picker
 Areas: desktop/feature/chat, desktop/core/domain, desktop/core/data, desktop/core/designsystem, desktop/build-logic, runtime-ports, runtime-infra/workflow, runtime-core
 - New Task uses a two-column repository and branch picker. The repository pill becomes static after chat starts; the agent picker retains its existing behavior.

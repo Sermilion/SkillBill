@@ -15,15 +15,20 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDispo
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionEntry
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTarget
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceParse
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceParser
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceSettlement
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionVerdict
+import skillbill.workflow.taskruntime.model.audit.interaction.recheckUpdateAfter
 import skillbill.workflow.taskruntime.model.audit.interaction.recordInteractionTrace
 import skillbill.workflow.taskruntime.model.audit.interaction.requireInteractionTrace
+import skillbill.workflow.taskruntime.model.audit.interaction.withRecheckUpdate
 import skillbill.workflow.taskruntime.model.audit.recordProseAudit
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
@@ -31,6 +36,44 @@ import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayload
 class AcceptanceCriterionRepairAuditAdmissionTest {
   private val admission = AcceptanceCriterionRepairAuditAdmission(featureTaskRuntimeWireArtifactValidatorForTest())
   private val scenario = AcceptanceCriterionInteractionTarget("IS-001", listOf("AC-001", "AC-002"))
+
+  @Test
+  fun `a report with six bare traces and repeated rechecks fits the admission contract`() {
+    val scenarios = (1..6).map { scenario.copy(scenarioRef = "IS-%03d".format(it)) }
+    val rechecks = listOf("AC-001", "AC-002")
+    val accepted = acceptedState()
+    val update = accepted.recheckUpdateAfter(listOf("src/Flow.kt")) { false }
+    val required = accepted.withRecheckUpdate(update).requireInteractionTrace(scenarios)
+    val prose =
+      "Source evidence. ".repeat(2000) + "\n" +
+        scenarios.joinToString("\n") { "Interaction ${it.scenarioRef}: holds" } + "\n" +
+        rechecks.joinToString("\n") { "Recheck $it: holds" }
+    val parsed =
+      assertIs<AcceptanceCriterionInteractionTraceParse.Parsed>(
+        AcceptanceCriterionInteractionTraceParser.parse(prose, scenarios, rechecks, "trace:1"),
+      )
+    val settlement =
+      AcceptanceCriterionInteractionTraceSettlement(
+        "trace:1",
+        "e".repeat(64),
+        "f".repeat(64),
+        "checkpoint:1",
+        parsed.entries,
+        parsed.rechecks,
+      )
+    val next = assertNotNull(required.recordInteractionTrace(settlement))
+    val wire = AcceptanceCriterionInteractionTraceRound.evidence(settlement, next)
+
+    assertTrue(
+      admission.matches(
+        next,
+        AcceptanceCriterionRepairMutation.InteractionTrace(settlement),
+        AcceptanceCriterionRepairAuditEvidence(wire),
+      ),
+    )
+    assertTrue(next.criteria.all { it.closureEvidenceRef == "trace:1#recheck:${it.canonicalRef}" })
+    assertNotNull(AcceptanceCriterionRepairState.restore(next))
+  }
 
   @Test
   fun `trace admission takes regressed refs and refuses edge changes while discovery refuses regressed refs`() {

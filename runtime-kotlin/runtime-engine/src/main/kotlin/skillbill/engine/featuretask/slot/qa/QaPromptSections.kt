@@ -89,13 +89,13 @@ internal object QaPromptSections {
     |${deviceLeaseLines(qa.workspace.invocationId)}
     |
     |${environmentResourceRules(qa.workspace.invocationId)}
-    |
     |$ENVIRONMENT_AND_ISOLATION_RULES
     |
     |$BACKEND_AND_WEB_FLOW_RULES
     |
     |$REPORT_RULES
     |
+    |$UNBLOCK_RULES
     |Rules:
     |
     |- QA may build and install the app artifact the pack guidance names, and may run device or instrumentation
@@ -124,8 +124,9 @@ internal object QaPromptSections {
     |- A simulator run cannot exercise a hardware-only flow; list it as untested.
     |- Never put raw device serials, credentials, or log bodies in the report. Reference evidence by path.
     |- Start every long-running process the run needs (local backend, API simulator, mock server, Metro or another
-    |  packager, log tailing) detached so the command returns:
-    |  `nohup <cmd> > ${qa.workspace.directory}/<name>.log 2>&1 &`. Record its PID, register it with
+    |  packager, log tailing) detached with `nohup` or `setsid nohup` so the command returns:
+    |  `nohup <cmd> > ${qa.workspace.directory}/<name>.log 2>&1 &` or
+    |  `setsid nohup <cmd> > ${qa.workspace.directory}/<name>.log 2>&1 < /dev/null &`. Record its PID, register it with
     |  `--kind process --identity <pid>`, and wait for readiness by polling a health URL or log line with a
     |  bounded timeout, never by running it in the foreground.
     |- Never run a command that does not end on its own in the foreground: servers, watch modes, `tail -f`, or
@@ -150,6 +151,7 @@ internal object QaPromptSections {
     |  not put every dependent app in scope. Explicit cross-platform behavior or regression criteria do.
     |- For an in-scope target, leave a flow untested only when the tools needed to perform QA are unavailable: no
     |  usable device, simulator, browser driver, toolchain, or environment. Name the missing tool and how to provide it.
+    |  Record it as an entry under `## Unblock`.
     |- When an acceptance criterion is only an issue key or a tracker URL, read that issue through a connected tracker
     |  and test its requirements and acceptance criteria. If no tracker tool can read it, settle `skipped` with
     |  reason `empty_scope` and name the reference you could not read.
@@ -217,6 +219,25 @@ internal object QaPromptSections {
 
   private val REASON_TOKENS: String = QaSkipReason.entries.joinToString(", ") { "`${it.wireValue}`" }
 
+  private val UNBLOCK_RULES: String =
+    """
+    |Unblock:
+    |
+    |- Write exactly one `## Unblock` section only when a target or assertion ends `incomplete` or `skipped` because
+    |  a capability is missing. Put it after the verdict and reason lines, and make it the report's last `##` section.
+    |- Write one entry per missing capability under `#### <capability>`. Use one snake_case token, such as `display`,
+    |  `input`, `app_startup_gate`, `device`, `backend`, or `credentials`.
+    |- Under each heading, write the labels in this order:
+    |  `- Target: <kind>`, `- Tried: <what was attempted and why it failed>`, `- Evidence: <comma-separated paths>`,
+    |  and `- Remedy: <install command, env var name, or setup step>`.
+    |  Evidence paths must start with the required evidence prefix.
+    |- Follow each entry with one fenced block opened by ```markdown containing text the operator can paste into
+    |  `.skill-bill/phases/qa.md` so the next QA run performs the step itself. Never start a line inside the block with
+    |  `#`, because the runtime reads headings even inside fences. Use prose or bullets instead.
+    |- Name environment variables, never their values. Existing report redaction rules still apply.
+    |- `## Unblock` adds to the `Reason:` token and the `## Coverage` line; it does not replace either one.
+    """.trimMargin()
+
   private val REPORT_RULES: String =
     """
     |Report:
@@ -226,18 +247,21 @@ internal object QaPromptSections {
     |- For a `skipped` or `incomplete` verdict, the second line is `Reason: <token>`, using one of these tokens:
     |  $REASON_TOKENS. Add any detail after the token or in the body.
     |- Write each finding under its own `### <id> <title>` heading, for example `### QA-1 Save button stays disabled`.
-    |  Under it give the steps, the expected result, the observed result, and evidence paths. Use `#` or `##` for
-    |  every other heading so a finding section ends where the next heading starts.
-    |- Describe the flows you exercised and the flows you left untested, with the reason, in your own words.
+    |  Under it write the labelled lines `Steps:`, `Expected:`, `Observed:` and `Evidence:`. Use `#` or `##` for
+    |  every other heading so a finding section ends where the next heading starts. The `####` entry headings
+    |  inside `## Unblock` are the only exception.
     |- Under a `## Coverage` heading, write one bullet per target kind listed in the QA run section, in the form
     |  `- <kind>: <passed|findings_open|skipped|incomplete> [reason: <token>] [backend: real|mocked|none]`. The
     |  `backend:` field is required on a `web` line.
-    |- Under a `## Assertions` heading, list each exercised assertion with its flow and outcome.
+    |- Under a `## Assertions` heading, write one bullet per assertion, including those you did not exercise, in the
+    |  form `- [passed|failed|not_exercised] <title>: <detail>. Evidence: <paths>`. A `failed` assertion must have a
+    |  finding. A `not_exercised` assertion names what you tried and why it failed.
     |- Under a `## Isolation` heading, record the selected environment or app defaults. For backend and web
     |  targets also state the disposable database or its absence, outbound substitutes, and rejected configuration.
     |  Never include secret values.
-    |- Under a `## Temporary edits` heading, list every file you changed in the QA checkout, what you changed, and
-    |  the flows the change made possible. Write `None.` when you changed nothing.
+    |- Under a `## Temporary edits` heading, write one bullet per file you changed in the QA checkout, in the form
+    |  `` - `<path>`: <what changed> ``, and name the flows the change made possible. Prefix a bullet with
+    |  `[not restored]` only when the edit outlives the QA checkout. Write `None.` when you changed nothing.
     """.trimMargin()
 
   private fun progressRules(qa: QaExecutionContext): String {

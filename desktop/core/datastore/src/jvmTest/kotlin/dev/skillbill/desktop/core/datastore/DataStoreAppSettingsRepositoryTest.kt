@@ -3,11 +3,15 @@ package dev.skillbill.desktop.core.datastore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.mutablePreferencesOf
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
 import dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey
 import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
+import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.core.domain.settings.SettingsRejection
+import dev.skillbill.desktop.core.domain.settings.CriterionMark
+import dev.skillbill.desktop.core.domain.settings.CriterionMarkKey
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -34,6 +38,30 @@ class DataStoreAppSettingsRepositoryTest {
     assertEquals(Outcome.Success(Unit), repository.setDatabasePath("/tmp/a.db"))
     assertEquals(Outcome.Failure(SettingsRejection.BlankDatabasePath), repository.setDatabasePath("   "))
     assertEquals("/tmp/a.db", repository.settings.first().databasePath)
+  }
+
+  @Test
+  fun `chat width round trips and clamps to the maximum`() = runTest {
+    val store = PreferenceDataStoreFactory.create(scope = backgroundScope) { File(directory, "chat-width.preferences_pb") }
+    val repository = DataStoreAppSettingsRepository(store, RecordingDiagnostics())
+
+    assertEquals(Outcome.Success(Unit), repository.setChatWidthDp(700))
+    assertEquals(700, repository.settings.first().chatWidthDp)
+    assertEquals(Outcome.Success(Unit), repository.setChatWidthDp(5000))
+    // The stored value itself is clamped, not only the decoded settings, which clamp on read too.
+    assertEquals(2000, store.data.first()[AppPreferenceKeys.CHAT_WIDTH_DP])
+    assertEquals(2000, repository.settings.first().chatWidthDp)
+  }
+
+  @Test
+  fun `a stored chat width out of range decodes clamped and is reported, and a missing one decodes to the default`() {
+    val reported = mutableListOf<String>()
+
+    val clamped = mutablePreferencesOf(AppPreferenceKeys.CHAT_WIDTH_DP to 120).toAppSettings { reported += it }
+
+    assertEquals(360, clamped.chatWidthDp)
+    assertEquals(listOf("chat_width_dp=120"), reported)
+    assertEquals(560, emptyPreferences().toAppSettings {}.chatWidthDp)
   }
 
   @Test
@@ -95,5 +123,30 @@ class DataStoreAppSettingsRepositoryTest {
     assertEquals(setOf(work), repository.settings.first().favoriteWork)
     assertTrue("unsupported-spec" in store.data.first()[AppPreferenceKeys.FAVORITE_SPECS].orEmpty())
     assertEquals(Outcome.Success(setOf(key)), repository.favoriteSpecs.first { it is Outcome.Success })
+  }
+
+  @Test
+  fun `criterion marks replace and clear persisted workflow criteria`() = runTest {
+    val store = PreferenceDataStoreFactory.create(scope = backgroundScope) { File(directory, "criterion-marks.preferences_pb") }
+    val repository = DataStoreAppSettingsRepository(store, RecordingDiagnostics())
+    val key = CriterionMarkKey("verify-1", 3)
+
+    assertEquals(Outcome.Success(Unit), repository.setCriterionMark(key, CriterionMark.NotInRepo))
+    assertEquals(mapOf(key to CriterionMark.NotInRepo), (repository.criterionMarks.first() as Outcome.Success).value)
+    assertEquals(Outcome.Success(Unit), repository.setCriterionMark(key, CriterionMark.SpecQuestion))
+    assertEquals(mapOf(key to CriterionMark.SpecQuestion), (repository.criterionMarks.first() as Outcome.Success).value)
+    assertEquals(Outcome.Success(Unit), repository.setCriterionMark(key, null))
+    assertEquals(emptyMap(), (repository.criterionMarks.first() as Outcome.Success).value)
+  }
+
+  @Test
+  fun `an unknown chat layout reads as Tabs and a written layout reads back`() = runTest {
+    val store = PreferenceDataStoreFactory.create(scope = backgroundScope) { File(directory, "chat-layout.preferences_pb") }
+    val repository = DataStoreAppSettingsRepository(store, RecordingDiagnostics())
+    store.edit { it[AppPreferenceKeys.NEW_TASK_CHAT_LAYOUT] = "grid" }
+
+    assertEquals(NewTaskChatLayout.Tabs, repository.settings.first().newTaskChatLayout)
+    assertEquals(Outcome.Success(Unit), repository.setNewTaskChatLayout(NewTaskChatLayout.SideList))
+    assertEquals(NewTaskChatLayout.SideList, repository.settings.first().newTaskChatLayout)
   }
 }

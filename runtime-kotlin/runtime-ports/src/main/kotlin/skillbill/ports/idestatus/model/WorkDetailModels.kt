@@ -10,6 +10,7 @@ import skillbill.ports.work.model.WorkStoreObservation
 import skillbill.review.model.ReviewFindingAction
 import skillbill.review.model.ReviewFindingStatus
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import java.time.Instant
 
 enum class WorkDetailProblemCode(val wireValue: String) {
@@ -19,7 +20,7 @@ enum class WorkDetailProblemCode(val wireValue: String) {
   INVALID_REPOSITORY_IDENTITY("invalid_repository_identity"),
 }
 
-enum class WorkDetailList { SUBTASKS, PHASES, VALIDATION, EXECUTIONS, DEPENDENCIES }
+enum class WorkDetailList { SUBTASKS, PHASES, VALIDATION, EXECUTIONS, DEPENDENCIES, PLAN_OUTPUT }
 
 data class WorkDetailRequest(
   val id: String,
@@ -64,6 +65,7 @@ data class WorkDetailItem(
   val runtimeStatus: WorkDetailRuntimeStatus? = null,
   val goalStatus: GoalRunnerStatusProjection? = null,
   val executionHistory: List<WorkExecutionInstance> = emptyList(),
+  val selectedExecution: WorkExecutionInstance? = null,
   val pageOffset: Int = 0,
   val pageSize: Int = WorkPaginationLimits.DEFAULT_PAGE_SIZE,
   val hasMore: Boolean = false,
@@ -86,6 +88,27 @@ data class WorkDetailItem(
   val incidentHistory: List<WorkIncidentProjection> = emptyList(),
   val changeBaseline: WorkChangeBaseline? = null,
   val goalWorktree: GoalWorktreeView? = null,
+  val validationBranchRuns: List<WorkValidationBranchRun> = emptyList(),
+  val selectedValidationResult: String? = null,
+  val planActivity: List<StandalonePlanActivity> = emptyList(),
+  val planOutputLines: List<StandalonePhaseOutputLine> = emptyList(),
+  val planOutputTail: List<String> = emptyList(),
+  val planOutputUpdatedAt: Instant? = null,
+  val planSubtaskLatestLines: Map<Int, String> = emptyMap(),
+  val standalonePlanProgress: StandalonePlanProgress? = null,
+  val verifyRun: VerifyRunDetails? = null,
+)
+
+data class WorkValidationBranchRun(
+  val invocationId: String,
+  val runSequence: String,
+  val lifecycleState: String,
+  val startedAt: Instant,
+  val finishedAt: Instant?,
+  val activeDurationMs: Long?,
+  val launchAgentId: String?,
+  val currentActivity: String?,
+  val result: String?,
 )
 
 data class WorkDetailRuntimeStatus(
@@ -129,6 +152,27 @@ data class WorkExecutionInstance(
   val reviewReport: StandaloneReviewReport? = null,
   val qaChecklist: StandaloneQaChecklist? = null,
   val qaFindings: List<WorkQaFinding> = emptyList(),
+  val qaDetails: QaRunDetails? = null,
+  val liveChecks: LiveChecksAvailability? = null,
+  val validationOutcome: StandaloneValidationOutcome? = null,
+  val validationChecks: List<WorkValidationCheck> = emptyList(),
+)
+
+data class WorkValidationCheck(
+  val checkId: String,
+  val name: String,
+  val command: String,
+  val workingDir: String,
+  val attempts: List<WorkValidationCheckAttempt>,
+)
+
+data class WorkValidationCheckAttempt(
+  val number: Int,
+  val startedAt: Instant?,
+  val finishedAt: Instant?,
+  val outcome: ValidationCheckOutcome?,
+  val exitCode: Int?,
+  val note: String?,
 )
 
 data class StandaloneReviewReport(

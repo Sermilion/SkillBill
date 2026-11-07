@@ -57,6 +57,28 @@ class RuntimeMcpServerTest {
   }
 
   @Test
+  fun `a validation launch passes its invocation id to the skill-bill server only`() {
+    val validation = request().copy(validationCheckInvocationId = "phr-validation")
+    val claude = ClaudeAgentRunCommandBuilder(databasePath = database, runtimeMcpBin = bin).build(validation)
+    val codex = CodexAgentRunCommandBuilder(databasePath = database, runtimeMcpBin = bin).build(validation)
+
+    val config = claude.command[claude.command.indexOf("--mcp-config") + 1]
+    val servers =
+      JsonCodec.anyToStringAnyMap(
+        JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(config))?.get("mcpServers"),
+      )
+    assertEquals(
+      mapOf("SKILL_BILL_REVIEW_DB" to database.toString(), VALIDATION_ENV to "phr-validation"),
+      JsonCodec.anyToStringAnyMap(servers?.get("skill-bill"))?.get("env"),
+    )
+    assertTrue(
+      "mcp_servers.skill-bill.env={SKILL_BILL_REVIEW_DB=\"$database\", $VALIDATION_ENV=\"phr-validation\"}" in
+        codex.command,
+    )
+    assertTrue(VALIDATION_ENV !in claude.environment && VALIDATION_ENV !in codex.environment)
+  }
+
+  @Test
   fun `no resolved runtime-mcp binary leaves the worker command unchanged`() {
     assertTrue(
       ClaudeAgentRunCommandBuilder(databasePath = database).build(request()).command.none { it == "--mcp-config" },
@@ -84,5 +106,9 @@ class RuntimeMcpServerTest {
     Files.writeString(configured, "#!/bin/sh\n")
     Files.setPosixFilePermissions(configured, PosixFilePermissions.fromString("rwx------"))
     assertEquals(configured, resolveRuntimeMcpBin(mapOf(RUNTIME_MCP_BIN_ENV to configured.toString()), home))
+  }
+
+  private companion object {
+    const val VALIDATION_ENV = "SKILL_BILL_VALIDATION_INVOCATION_ID"
   }
 }

@@ -154,9 +154,10 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
     chatsOf(executionId).mapNotNull(StoredChat::toEntry)
   }
 
-  internal fun newTaskDrafts(repositoryRoot: String): List<ChatHistoryEntry> = synchronized(lock) {
-    allFiles().mapNotNull(::readFile).filter { it.newTask?.repositoryRoot == repositoryRoot }
+  internal fun newTaskDrafts(limit: Int? = null): List<ChatHistoryEntry> = synchronized(lock) {
+    val drafts = allFiles().mapNotNull(::readFile).filter { it.newTask != null }
       .sortedByDescending { it.updatedAt ?: Instant.DISTANT_PAST }.mapNotNull(StoredChat::toEntry)
+    if (limit == null) drafts else drafts.take(limit)
   }
 
   internal fun delete(sessionId: String) {

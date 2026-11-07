@@ -29,6 +29,7 @@ internal object DatabaseSchema {
       "feature_verify_workflows",
       "ide_status_execution_registry",
       "standalone_phase_status",
+      "validation_check_events",
       "ide_status_workflow_execution",
       "goal_run_sessions",
       "goal_subtask_events",

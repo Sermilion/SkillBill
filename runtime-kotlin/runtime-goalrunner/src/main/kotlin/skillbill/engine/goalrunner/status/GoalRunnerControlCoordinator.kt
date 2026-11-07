@@ -231,6 +231,8 @@ internal fun reconcileControlStateForManifest(
         executionWorktreeRemovedAt = null,
         executionWorktreeRetentionReason = null,
         executionWorktreeRetentionDetail = null,
+        executionMainCheckoutOutcome = null,
+        executionMainCheckoutDetail = null,
       )
     } else {
       current

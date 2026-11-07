@@ -1,5 +1,6 @@
 package skillbill.infrastructure.workflow.monitor
 
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import java.io.IOException
 import java.io.UncheckedIOException
 import java.nio.file.Files
@@ -38,7 +39,12 @@ private val GUARD_SCRIPT =
 
 internal fun writeMonitorPrePushGuard(): Path {
   val ownerOnly = PosixFilePermissions.fromString("rwx------")
-  val directory = Files.createTempDirectory("skill-bill-prepush-", PosixFilePermissions.asFileAttribute(ownerOnly))
+  val directory =
+    Files.createTempDirectory(
+      JdkHostPlatformPort.resolveTemporaryDirectory(),
+      "skill-bill-prepush-",
+      PosixFilePermissions.asFileAttribute(ownerOnly),
+    )
   val hook = directory.resolve("pre-push")
   Files.writeString(hook, GUARD_SCRIPT)
   Files.setPosixFilePermissions(hook, ownerOnly)

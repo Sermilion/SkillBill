@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.review.specialists
 
 import skillbill.error.shellcontent.invalidReviewContextSchemaError
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.process.BoundedExternalProcessOutput
 import skillbill.infrastructure.host.process.BoundedExternalProcessRequest
 import skillbill.infrastructure.host.process.BoundedExternalProcessRunner
@@ -57,7 +58,7 @@ internal fun readImmutableReviewCommand(
   args: List<String>,
   maxBytes: Long,
 ): ByteArray {
-  val output = Files.createTempFile("skill-bill-evidence", ".blob")
+  val output = Files.createTempFile(JdkHostPlatformPort.resolveTemporaryDirectory(), "skill-bill-evidence", ".blob")
   try {
     val result =
       BoundedExternalProcessRunner.run(

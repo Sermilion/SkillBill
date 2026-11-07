@@ -11,6 +11,8 @@ import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRu
 import skillbill.workflow.taskruntime.model.qa.QaRepairAttempt
 import skillbill.workflow.taskruntime.model.qa.QaRepairAttemptOutcome
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails
+import skillbill.workflow.taskruntime.model.qa.QaRunRetainedResource
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -47,11 +49,101 @@ class FeatureTaskQaOutcomeRecordsTest {
           listOf("${expected.evidencePrefix}home-F-1.png"),
           "/qa/report.md",
           FeatureTaskQaFindingStatus.NOT_FIXED,
+          "the home screen stays blank.",
+          "the home screen shows the user name.",
+          "open the app, log in.",
         ),
       ),
       outcome.findings,
     )
+    assertEquals("/qa/report.md", outcome.details?.reportPath)
+    assertEquals(expected.evidencePrefix.removeSuffix("/"), outcome.details?.invocationDirectory)
   }
+
+  @Test
+  fun `an attempt keeps the stored details, and a later settle keeps retained resources and new assertions`() {
+    val retained = QaRunRetainedResource("process", "48213")
+    val first = outcome(emptyList()).copy(details = QaRunDetails(retainedResources = listOf(retained)))
+
+    val attempted = FeatureTaskQaOutcomeRecords.attempted(WORKFLOW_ID, first, recordedAt)
+    val settled = FeatureTaskQaOutcomeRecords.settled(passedRequest(), recordedAt, attempted)
+
+    assertEquals(first.details, attempted.details)
+    assertEquals(listOf(retained), settled?.details?.retainedResources)
+    assertEquals(listOf("login flow"), settled?.details?.assertions?.map { it.title })
+  }
+
+  @Test
+  fun `a finding that later reads as fixed keeps its observed fields`() {
+    val previous =
+      outcome(
+        listOf(finding("QA-1", FeatureTaskQaFindingStatus.NOT_FIXED).copy(observed = "blank", steps = "open")),
+      )
+
+    val finding = FeatureTaskQaOutcomeRecords.settled(passedRequest(), recordedAt, previous)?.findings?.single()
+
+    assertEquals(FeatureTaskQaFindingStatus.FIXED, finding?.status)
+    assertEquals("blank", finding?.observed)
+    assertEquals("open", finding?.steps)
+  }
+
+  @Test
+  fun `a settle with no report stores details only for a skip reason, and null keeps the row legacy`() {
+    val legacy = settledRequest(mapOf(QaPhaseOutputKeys.VERDICT to "incomplete", QaPhaseOutputKeys.REASON to "stopped"))
+    val skipped =
+      settledRequest(
+        mapOf(QaPhaseOutputKeys.VERDICT to "skipped", QaPhaseOutputKeys.REASON to "empty_scope: nothing changed"),
+      )
+
+    assertNull(assertNotNull(FeatureTaskQaOutcomeRecords.settled(legacy, recordedAt, null)).details)
+    assertEquals(
+      QaRunDetails(skipReason = "empty_scope"),
+      assertNotNull(FeatureTaskQaOutcomeRecords.settled(skipped, recordedAt, null)).details,
+    )
+  }
+
+  @Test
+  fun `a blank evidence prefix takes the invocation directory from the report path`() {
+    val request =
+      settledRequest(
+        mapOf(
+          QaPhaseOutputKeys.VERDICT to "passed",
+          QaPhaseOutputKeys.REPORT_TEXT to qaTestReport(QaVerdict.PASSED, expected),
+          QaPhaseOutputKeys.REPORT_REF to "/qa/run/report.md",
+        ),
+      )
+
+    val details = assertNotNull(FeatureTaskQaOutcomeRecords.settled(request, recordedAt, null)).details
+
+    assertEquals("/qa/run", details?.invocationDirectory)
+  }
+
+  @Test
+  fun `a carried finding keeps its evidence and report path, and a re-reported one replaces both`() {
+    val old =
+      finding("QA-1", FeatureTaskQaFindingStatus.NOT_FIXED)
+        .copy(evidencePaths = listOf("/qa/a/x.log"), reportPath = "/qa/a/report.md")
+    val reported = old.copy(evidencePaths = listOf("/qa/b/y.log"), reportPath = "/qa/b/report.md")
+
+    listOf(false, true).forEach { retestsFindings ->
+      val carried = FeatureTaskQaOutcomeRecords.mergedFindings(listOf(old), retestsFindings, emptyList()).single()
+      assertEquals(old.evidencePaths, carried.evidencePaths)
+      assertEquals(old.reportPath, carried.reportPath)
+    }
+    val replaced =
+      FeatureTaskQaOutcomeRecords.mergedFindings(listOf(old), retestsFindings = true, listOf(reported)).single()
+    assertEquals(reported.evidencePaths, replaced.evidencePaths)
+    assertEquals(reported.reportPath, replaced.reportPath)
+  }
+
+  private fun passedRequest(): FeatureTaskRuntimePhaseStateRequest =
+    settledRequest(
+      mapOf(
+        QaPhaseOutputKeys.VERDICT to "passed",
+        QaPhaseOutputKeys.REPORT_TEXT to qaTestReport(QaVerdict.PASSED, expected),
+        QaPhaseOutputKeys.EVIDENCE_PREFIX to expected.evidencePrefix,
+      ),
+    )
 
   @Test
   fun `a passed report marks every previously reported finding fixed and lists no new one`() {

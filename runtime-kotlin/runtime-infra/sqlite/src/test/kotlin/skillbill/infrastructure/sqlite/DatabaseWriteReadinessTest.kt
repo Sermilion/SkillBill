@@ -118,13 +118,12 @@ class DatabaseWriteReadinessTest {
   }
 
   @Test
-  fun `appending a migration changes identity and re-establishes readiness once`() {
+  fun `an older runtime refuses a newer migration without downgrading the store`() {
     var executions = 0
     val gate = CountingReadinessGate { executions += 1 }
     val tempDir = Files.createTempDirectory("skillbill-write-readiness-version")
     val dbPath = tempDir.resolve("metrics.db")
     gate.ensureReady(dbPath)
-    val afterInit = executions
     val initialIdentity = assertNotNull(DatabaseIdentity.read(dbPath))
     val appendedMigration =
       DatabaseMigration(
@@ -142,10 +141,21 @@ class DatabaseWriteReadinessTest {
 
     val appendedIdentity = assertNotNull(DatabaseIdentity.read(dbPath))
     assertTrue(appendedIdentity.userVersion > initialIdentity.userVersion)
-    gate.ensureReady(dbPath)
-    assertEquals(afterInit + 1, executions)
-    gate.ensureReady(dbPath)
-    assertEquals(afterInit + 1, executions)
+    repeat(2) {
+      val failure = assertFailsWith<SkillBillRuntimeException> { gate.ensureReady(dbPath) }
+      assertEquals(DatabaseFailureCode.INCOMPATIBLE_SCHEMA, failure.code)
+      assertEquals(appendedIdentity, DatabaseIdentity.read(dbPath))
+    }
+    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeQuery(
+          "SELECT version FROM schema_migrations WHERE name = '${appendedMigration.name}'",
+        ).use { rows ->
+          assertTrue(rows.next())
+          assertEquals(appendedMigration.version, rows.getInt(1))
+        }
+      }
+    }
   }
 
   @Test

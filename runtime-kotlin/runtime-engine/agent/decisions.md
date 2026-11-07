@@ -1,3 +1,8 @@
+## [2026-11-06] Replay an interrupted read-only goal-quality step
+Context: SKILL-507's final QA process died about a minute into `qa#1` and left a `running` record with no accepted envelope. Every resume then refused with "The outcome of goal-quality step 'qa#1' is unknown" until the operator ran `goal fresh-quality`.
+Decision: `validateRetainedRunningPhases` lets a retained running agent step through when the accepted plan's step policy is neither `mutating` nor `fileMutating`, its start history is consistent, and the ledger has no terminal action for that attempt. The run loop then starts the next attempt. `qa_fix`, pack gates and any step with a terminal ledger action keep the unknown-outcome block.
+Reason: A read-only step cannot leave edits for a replay to duplicate, so its lost outcome needs no operator decision.
+
 ## [2026-11-05] Classify direct review launches on stderr before generic exit messages
 Context: Application review runners call AgentRunLauncher without DefaultPhaseRunner PROVIDER_LIMIT classification.
 Decision: reviewLaunchProviderLimitPauseReason runs FeatureTaskRuntimeProviderLimitDetector on non-zero exits before agent exited with status or PROCESS_FAILURE copy.
@@ -472,3 +477,8 @@ Revisit when: Ownership written under the old `.git/skill-bill/standalone-monito
 Context: Review strategies that post diff comments must use the same `PhaseRunner` instance held by registry registrations.
 Decision: Provide review strategies through a factory and invoke it with the registry's runner.
 Reason: This preserves shared runner identity without adding a new scope or engine collaborator bag.
+
+## [2026-11-06] Tell agents to use the machine's build tool settings
+Context: The validate prompt told agents to reuse only caches the invocation is allowed to own. Codex read that as a reason to create a session-owned Gradle home, which skipped the machine's Gradle limits.
+Decision: The validate and build prompts tell agents to run build tools with the machine's settings and shared caches, and never to set GRADLE_USER_HOME, GRADLE_OPTS or JAVA_TOOL_OPTIONS, or pass `--gradle-user-home`. The rule against reusing another worktree's mutable state stays, and states that shared tool caches are not worktree state.
+Reason: Memory and worker limits are a machine decision kept in the machine's tool settings. The runtime pin covers only the inline variable, so the prompt has to cover the flags.

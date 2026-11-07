@@ -1,8 +1,10 @@
 package skillbill.engine.goalrunner.launch
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.agentoutput.headAndTailExcerpt
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.engine.agentoutput.stderrExcerpt
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.runloop.durable.WorktreeEditJournalWriter
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
@@ -23,6 +25,7 @@ import skillbill.engine.goalrunner.model.missingResultPrefixDiagnostics
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.review.effectiveAgentAddonSelection
 import skillbill.engine.goalrunner.telemetry.GoalRunnerProgressEventEmitter
+import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.GoalRunnerOutcomeReconciler
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.goalrunner.model.GoalRunnerLaunchFacts
@@ -41,6 +44,7 @@ import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.agentrun.model.SkillRunGoalContinuationContext
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
+import skillbill.ports.diagnostics.ChildFailureOutputStore
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.projectstore.ProjectStorePort
@@ -52,6 +56,8 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import java.nio.file.Path
 import java.time.Clock
 
+private const val CHILD_FAILURE_OUTPUT_EXCERPT_MAX_CHARS = 8192
+
 @Inject
 public class GoalRunnerLaunchReconciler(
   private val manifestStore: GoalRunnerManifestStore,
@@ -62,6 +68,7 @@ public class GoalRunnerLaunchReconciler(
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
   private val projectStore: ProjectStorePort,
+  private val childFailureOutputStore: ChildFailureOutputStore,
 ) {
   private data class SubtaskLaunchDependencies(
     val tickReader: GoalRunnerTickProgressReader,
@@ -233,6 +240,7 @@ public class GoalRunnerLaunchReconciler(
     val refreshed =
       manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
         ?: attemptedState
+    val childFailureOutput = retainFailedChildOutput(refreshed, subtaskId, request, launchOutcome)
     val launchFacts = launchOutcome.toGoalRunnerLaunchFacts()
     val reconciled =
       GoalRunnerOutcomeReconciler.reconcile(
@@ -241,6 +249,7 @@ public class GoalRunnerLaunchReconciler(
         storedOutcome = storedOutcome(refreshed, subtaskId, request),
       )
     return launchReconciliation(refreshed, reconciled, launchOutcome, subtaskId, request)
+      .copy(childFailureOutput = childFailureOutput)
   }
 
   private fun launchReconciliation(
@@ -265,6 +274,44 @@ public class GoalRunnerLaunchReconciler(
       launchOutcome = launchOutcome,
       diagnostics = recovery?.diagnostics ?: malformedResultJsonDiagnostics(reconciled, launchOutcome),
     )
+  }
+
+  private fun retainFailedChildOutput(
+    state: GoalRunnerManifestState,
+    subtaskId: Int,
+    request: GoalRunnerRunRequest,
+    outcome: AgentRunLaunchOutcome,
+  ): String? {
+    val facts = outcome as? AgentRunLaunchFacts ?: return null
+    val exit = (facts.termination as? AgentRunTermination.Exited)?.takeIf { it.code != 0 } ?: return null
+    val workflowId = state.manifest.workflowIdFor(subtaskId) ?: facts.liveness?.workflowId
+    if (workflowId.isNullOrBlank()) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "seam=child_failure_output value_expected=retained value_used=unavailable reason=missing_workflow_id",
+      )
+      return null
+    }
+    val output =
+      buildString {
+        append("exit_status=").append(exit.code).append('\n')
+        append("stdout_chars=").append(facts.stdout.length).append('\n')
+        append("stderr_chars=").append(facts.stderr.length).append('\n')
+        append("stdout (head and tail):\n")
+          .append(headAndTailExcerpt(facts.stdout, CHILD_FAILURE_OUTPUT_EXCERPT_MAX_CHARS).orEmpty())
+        append("\nstderr (head and tail):\n")
+          .append(headAndTailExcerpt(facts.stderr, CHILD_FAILURE_OUTPUT_EXCERPT_MAX_CHARS).orEmpty())
+        append('\n')
+      }
+    return catchingNonCancellation {
+      childFailureOutputStore.retain(projectStore.resolve(request.repoRoot).runEvidenceRoot, workflowId, output)
+    }.onFailure { failure ->
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "seam=child_failure_output value_expected=retained value_used=unavailable workflow_id=$workflowId",
+        failure,
+      )
+    }.getOrNull()
   }
 
   private fun missingResultPrefixRecovery(

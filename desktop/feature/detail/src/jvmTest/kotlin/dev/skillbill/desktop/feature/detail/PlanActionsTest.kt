@@ -3,10 +3,17 @@ package dev.skillbill.desktop.feature.detail
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -14,11 +21,18 @@ import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.ExecutionInstance
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.PlanRunReport
+import dev.skillbill.desktop.core.domain.model.PlannedSubtask
+import dev.skillbill.desktop.core.domain.model.StandalonePlanProgress
+import dev.skillbill.desktop.core.domain.model.StandalonePlanStage
+import dev.skillbill.desktop.core.domain.model.StandalonePlanUnit
+import dev.skillbill.desktop.core.domain.model.IncidentProgress
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
+import dev.skillbill.desktop.core.ui.input.LocalShellInput
+import dev.skillbill.desktop.core.ui.input.ShellInput
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -30,14 +44,129 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalTestApi::class)
 class PlanActionsTest {
   @Test
-  fun `Implement is visible but disabled during planning and enables after its report arrives`() = runComposeUiTest {
+  fun `goal detail keeps its existing document instead of selecting the plan document`() = runComposeUiTest {
+    val item = workItem("goal-1").copy(planningPrepared = false)
+    setContent { SkillBillTheme(reducedMotion = true) {
+      DetailScreen(DetailUiState(item, SectionsUi.Loaded(emptyDetail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {})) {}
+    } }
+
+    onNodeWithText("Goal stage").assertExists()
+    onNodeWithText("Reading the repo").assertDoesNotExist()
+  }
+
+  @Test
+  fun `saved plan unit opens its projected spec path`() = runComposeUiTest {
+    val report = completedReport()
+    val detail = emptyDetail.copy(executionHistory = listOf(planExecution(report)), standalonePlan = completedPlan(report))
     val base = workItem("plan-invocation", kind = WorkKind.Phase)
     val item = base.copy(issueKey = "OAC-86", standaloneExecution = true,
       control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"))
-    val report = PlanRunReport("OAC-86", "/specs/OAC-86/spec.md", emptyList(), emptyList())
-    val run = ExecutionInstance("plan-invocation", "execution", "terminal", epoch, epoch, epoch,
-      null, null, null, null, report)
-    val detail = emptyDetail.copy(executionHistory = listOf(run))
+    val actions = mutableListOf<DetailAction>()
+    setContent { SkillBillTheme(reducedMotion = true) {
+      DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}), actions::add)
+    } }
+
+    onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Detail view"))
+    onNodeWithText("Detail view").performClick()
+
+    runOnIdle { assertEquals(listOf<DetailAction>(DetailAction.OpenSpecFile("/specs/OAC-86/spec_subtask_1.md")), actions) }
+  }
+
+  @Test
+  fun `blocked plan row keeps its reason and routes through the existing incident decision`() = runComposeUiTest {
+    val report = completedReport()
+    val plan = completedPlan(report).copy(
+      blockedSubtaskId = 1,
+      blockedReason = "The subtask spec could not be reconciled",
+      stalledSince = epoch,
+      units = listOf(StandalonePlanUnit(1, "Detail view", "/specs/OAC-86/spec_subtask_1.md", emptyList(), "blocked", epoch, null, "The subtask spec could not be reconciled", null)),
+    )
+    val detail = emptyDetail.copy(standalonePlan = plan, incident = incident(IncidentProgress.DiagnosisComplete))
+    val base = workItem("plan-invocation", kind = WorkKind.Phase)
+    val item = base.copy(issueKey = "OAC-86", standaloneExecution = true, awaitsOperatorDecision = true, currentSubtaskId = "1",
+      control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"))
+    setContent { SkillBillTheme(reducedMotion = true) {
+      CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+        DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {})) {}
+      }
+    } }
+
+    onNodeWithText("Planning stopped at subtask 1", substring = true).assertExists()
+    onNodeWithText("Subtask 1 needs your decision").assertExists()
+    onNodeWithText("Blocked").assertExists()
+    onNodeWithText("Planning stopped at subtask 1. The subtask spec could not be reconciled").assertExists()
+    onNodeWithText("No output for ", substring = true).assertDoesNotExist()
+    onNodeWithText("Retry").assertDoesNotExist()
+    onNodeWithText("Retry subtask 1").assertDoesNotExist()
+    onNodeWithText(
+      "Subtask 1 finished with no code changes and is waiting for your decision.",
+      substring = true,
+    ).assertExists()
+    onNodeWithText("skill-bill goal operator-decision OAC-86 --subtask 1", substring = true).assertExists()
+  }
+
+  @Test
+  fun `blocked plan exposes recovery only when the incident offers it`() = runComposeUiTest {
+    val report = completedReport()
+    val plan = completedPlan(report).copy(
+      blockedSubtaskId = 1,
+      blockedReason = "Retry after setup",
+      units = listOf(StandalonePlanUnit(1, "Detail view", "/specs/OAC-86/spec_subtask_1.md", emptyList(), "blocked", epoch, null, "Retry after setup", null)),
+    )
+    val detail = emptyDetail.copy(standalonePlan = plan, incident = incident(IncidentProgress.RecoveryAvailable))
+    val base = workItem("plan-invocation", kind = WorkKind.Phase)
+    val item = base.copy(issueKey = "OAC-86", standaloneExecution = true,
+      control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"))
+    val actions = mutableListOf<DetailAction>()
+    setContent { SkillBillTheme(reducedMotion = true) {
+      DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}), actions::add)
+    } }
+
+    onNodeWithText("Retry subtask 1").assertIsEnabled().performClick()
+    runOnIdle { assertEquals(listOf<DetailAction>(ControlsAction.Recover), actions) }
+  }
+
+  @Test
+  fun `Implement stays disabled when a seeded spec has not been saved by its plan unit`() {
+    val base = workItem("plan-invocation", kind = WorkKind.Phase)
+    val item = base.copy(issueKey = "OAC-86", standaloneExecution = true, running = false, lifecycle = Lifecycle.Terminal,
+      control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"))
+    val report = completedReport()
+    val run = planExecution(report)
+    val plan = completedPlan(report).let { it.copy(units = it.units.map { unit -> unit.copy(state = "queued") }) }
+
+    assertFalse(planImplementationEnabled(item, emptyDetail.copy(executionHistory = listOf(run), standalonePlan = plan)))
+  }
+
+  @Test
+  fun `a goal's own plan step shows its live stages without offering Implement`() = runComposeUiTest {
+    val report = completedReport()
+    val base = workItem("plan-invocation", kind = WorkKind.Goal)
+    val item = base.copy(issueKey = "OAC-86", standaloneExecution = true, running = false, lifecycle = Lifecycle.Terminal,
+      finishedAt = epoch, control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"))
+    val plan = completedPlan(report).copy(stages = listOf(StandalonePlanStage("preplan", null, null, null, "completed")))
+    val detail = emptyDetail.copy(executionHistory = listOf(planExecution(report)), standalonePlan = plan)
+    val state = DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch)
+    setContent { SkillBillTheme(reducedMotion = true) {
+      DetailScreen(state, DetailScreenHost(false, "Ctrl I", {})) {}
+    } }
+
+    onAllNodesWithText("Reading the repo").assertCountEquals(2)
+    onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Detail view"))
+    onNodeWithText("Detail view").assertExists()
+    onNodeWithText("Implement").assertDoesNotExist()
+    onNodeWithText("Implement turns on when every spec is saved").assertDoesNotExist()
+    runOnIdle { assertFalse(planImplementationEnabled(item, detail)) }
+  }
+
+  @Test
+  fun `Implement is visible during planning and enables after every saved unit arrives`() = runComposeUiTest {
+    val base = workItem("plan-invocation", kind = WorkKind.Phase)
+    val item = base.copy(issueKey = "OAC-86", standaloneExecution = true,
+      control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"))
+    val report = completedReport()
+    val run = planExecution(report)
+    val detail = emptyDetail.copy(executionHistory = listOf(run), standalonePlan = completedPlan(report))
     val current = mutableStateOf(DetailUiState(item, SectionsUi.Loaded(emptyDetail, null, emptyMap(), emptySet()), false, epoch))
     val actions = mutableListOf<DetailAction>()
     setContent {
@@ -62,10 +191,9 @@ class PlanActionsTest {
     val base = workItem("plan-invocation", kind = WorkKind.Phase)
     val plan = base.copy(issueKey = "OAC-86", standaloneExecution = true,
       control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"))
-    val report = PlanRunReport("OAC-86", "/specs/OAC-86/spec.md", emptyList(), emptyList())
-    val run = ExecutionInstance("plan-invocation", "execution", "terminal", epoch, epoch, epoch,
-      null, null, null, null, report)
-    val detail = emptyDetail.copy(executionHistory = listOf(run))
+    val report = completedReport()
+    val run = planExecution(report)
+    val detail = emptyDetail.copy(executionHistory = listOf(run), standalonePlan = completedPlan(report))
     var current = DetailUiState(plan, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch)
     val requests = mutableListOf<Pair<String, String>>()
     val finish = CompletableDeferred<Unit>()
@@ -97,10 +225,10 @@ class PlanActionsTest {
     val plan = base.copy(issueKey = "OAC-86", standaloneExecution = true, running = false,
       lifecycle = Lifecycle.Terminal, finishedAt = epoch,
       control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"))
-    val report = PlanRunReport("OAC-86", "/specs/OAC-86/spec.md", emptyList(), emptyList())
+    val report = completedReport()
     val run = ExecutionInstance("plan-invocation", "execution", "terminal", epoch, epoch, epoch,
       null, null, null, null, report)
-    val current = DetailUiState(plan, SectionsUi.Loaded(emptyDetail.copy(executionHistory = listOf(run)), null, emptyMap(), emptySet()), false, epoch)
+    val current = DetailUiState(plan, SectionsUi.Loaded(emptyDetail.copy(executionHistory = listOf(run), standalonePlan = completedPlan(report)), null, emptyMap(), emptySet()), false, epoch)
     val fake = FakeWorkControlRepository()
     var requests = 0
     val repository = object : WorkControlRepository by fake {
@@ -122,4 +250,44 @@ class PlanActionsTest {
     assertEquals(2, requests)
   }
 
+  @Test
+  fun `a plan with units and no report opens the derived manifest path`() = runComposeUiTest {
+    val plan = StandalonePlanProgress(
+      null, emptyList(), 0, 1, 1, listOf(1), 5, null, null,
+      listOf(StandalonePlanUnit(1, "Detail view", "/specs/X/spec_subtask_1.md", emptyList(), "writing", epoch, null, null, null)),
+      null,
+    )
+    val detail = emptyDetail.copy(standalonePlan = plan)
+    val base = workItem("plan-invocation", kind = WorkKind.Phase)
+    val item = base.copy(
+      issueKey = "X",
+      standaloneExecution = true,
+      running = true,
+      control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"),
+    )
+    val actions = mutableListOf<DetailAction>()
+    setContent { SkillBillTheme(reducedMotion = true) {
+      DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}), actions::add)
+    } }
+
+    onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("decomposition-manifest.yaml"))
+    onNodeWithText("not yet").assertDoesNotExist()
+    onNodeWithText("decomposition-manifest.yaml").performClick()
+    runOnIdle { assertEquals(listOf<DetailAction>(DetailAction.OpenSpecFile("/specs/X/decomposition-manifest.yaml")), actions) }
+  }
+
 }
+
+private fun completedReport() = PlanRunReport(
+  "OAC-86", "/specs/OAC-86/spec.md", listOf(PlannedSubtask(1, "Detail view", "/specs/OAC-86/spec_subtask_1.md", emptyList())),
+  listOf("/specs/OAC-86/decomposition-manifest.yaml", "/specs/OAC-86/spec.md", "/specs/OAC-86/spec_subtask_1.md"),
+)
+
+private fun planExecution(report: PlanRunReport) = ExecutionInstance("plan-invocation", "execution", "terminal", epoch, epoch, epoch,
+  null, null, null, null, report)
+
+private fun completedPlan(report: PlanRunReport) = StandalonePlanProgress(
+  report, emptyList(), 1, 1, null, emptyList(), 3, null, null, listOf(
+    StandalonePlanUnit(1, "Detail view", "/specs/OAC-86/spec_subtask_1.md", emptyList(), "saved", epoch, epoch, null, null),
+  ), null,
+)

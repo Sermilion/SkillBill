@@ -39,6 +39,7 @@ import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.engine.featuretask.slot.state.runStep
 import skillbill.engine.featuretask.slot.state.step
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateRunRequest
@@ -299,6 +300,8 @@ class RequiredPhasePersistenceTest {
           (binding as PhaseAgentExecution).runAcceptedAgentStep(
             foreignRun,
             call,
+            AgentRunOutputSink.NONE,
+            false,
           )
         }
         assertFailsWith<IllegalStateException> { binding.launchState.recordTokenUsage("review", 1, 1) }

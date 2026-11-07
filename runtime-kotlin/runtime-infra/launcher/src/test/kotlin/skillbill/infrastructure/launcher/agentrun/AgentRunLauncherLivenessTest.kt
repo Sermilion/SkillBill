@@ -2,9 +2,9 @@ package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.contracts.time.JvmSystemClock
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
+import skillbill.infrastructure.host.scratch.testAgentRunScratchRoot
 import skillbill.infrastructure.launcher.process.launch.JvmAgentRunProcessRunner
 import skillbill.infrastructure.launcher.process.launch.testAgentRunProcessRequest
-import skillbill.infrastructure.launcher.process.launch.testAgentRunScratchRoot
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContains

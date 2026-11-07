@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.SessionMoveResult
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.test.runTest
@@ -61,6 +62,67 @@ class AgentSessionCatalogTest {
 
     assertEquals("t-1", store.agentSession(codex.sessionId))
     assertEquals("t-1", ChatStore(host, RecordingDiagnostics(), Clock.System).agentSession(codex.sessionId))
+  }
+
+  // Overwriting a session the repository root already holds, or moving a project's memory, loses the operator's history.
+  @Test
+  fun `moving claude sessions takes the session file and its folder, keeps an existing destination session and leaves memory`() = runTest {
+    val worktree = "/work/skill-bill-goal"
+    val source = "projects/${claudeProjectName(worktree)}"
+    val target = "projects/${claudeProjectName(root)}"
+    write(".claude/$source/A.jsonl", """{"type":"user"}""", modified = 1_000)
+    write(".claude/$source/A/subagents/s.jsonl", "sub", modified = 1_000)
+    write(".claude/$source/B.jsonl", "from worktree", modified = 1_000)
+    write(".claude/$source/memory/MEMORY.md", "notes", modified = 1_000)
+    write(".claude/$target/B.jsonl", "at root", modified = 1_000)
+
+    val result = catalog.move(worktree, root)
+
+    assertEquals(SessionMoveResult(claudeMoved = 1, codexMoved = 0, failed = 0), result)
+    assertEquals("""{"type":"user"}""", File(home, ".claude/$target/A.jsonl").readText())
+    assertEquals("sub", File(home, ".claude/$target/A/subagents/s.jsonl").readText())
+    assertEquals("at root", File(home, ".claude/$target/B.jsonl").readText())
+    assertEquals("from worktree", File(home, ".claude/$source/B.jsonl").readText())
+    assertEquals("notes", File(home, ".claude/$source/memory/MEMORY.md").readText())
+    assertEquals(0, catalog.move(worktree, root).claudeMoved)
+  }
+
+  // Corrupting a session's history, or rewriting another goal's session, breaks the chat the operator resumes.
+  @Test
+  fun `rewriting codex sessions changes only the first line of a session in the worktree and lists it at the root`() = runTest {
+    val worktree = "/work/skill-bill-goal"
+    val tail = "\n" + """{"type":"turn_context","payload":{"cwd":"$worktree"}}""" + "\n" + """{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"why?"}]}}"""
+    val mine = write(".codex/sessions/2026/10/31/rollout-a.jsonl", """{"type":"session_meta","payload":{"id":"t-1","cwd":"$worktree","cli":"x"}}$tail""", modified = 1_000)
+    val other = write(".codex/sessions/2026/10/31/rollout-b.jsonl", """{"type":"session_meta","payload":{"id":"t-2","cwd":"/elsewhere"}}$tail""", modified = 2_000)
+    val otherBefore = other.readBytes()
+
+    val result = catalog.move(worktree, root)
+
+    assertEquals(SessionMoveResult(claudeMoved = 0, codexMoved = 1, failed = 0), result)
+    val lines = mine.readText().lines()
+    assertEquals("""{"type":"session_meta","payload":{"id":"t-1","cwd":"$root","cli":"x"}}""", lines.first())
+    assertEquals(tail.removePrefix("\n"), lines.drop(1).joinToString("\n"))
+    assertEquals(1_000, mine.lastModified())
+    assertEquals(otherBefore.toList(), other.readBytes().toList())
+    assertEquals(2_000, other.lastModified())
+    assertEquals(listOf("rollout-a.jsonl", "rollout-b.jsonl"), mine.parentFile.list()!!.sorted())
+    assertEquals(listOf("t-1"), catalog.list("wf-1", root, "current", ::ChatAgentFor).map { it.sessionId })
+  }
+
+  // A resume picked from a listing made before the move must still show the session's earlier lines.
+  @Test
+  fun `a claude session listed in the worktree before the move still opens its lines after it`() = runTest {
+    val worktree = "/work/skill-bill-goal"
+    write(
+      ".claude/projects/${claudeProjectName(worktree)}/A.jsonl",
+      """{"type":"user","message":{"role":"user","content":"ship it"}}""",
+      modified = 1_000,
+    )
+    val entry = catalog.list("wf-1", worktree, "current", ::ChatAgentFor).single()
+
+    catalog.move(worktree, root)
+
+    assertEquals(listOf(ChatHistoryLine(ChatHistoryRole.Operator, "ship it")), catalog.open(entry))
   }
 
   @Suppress("FunctionName")

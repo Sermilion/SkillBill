@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPreparation
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 
@@ -22,6 +23,9 @@ public class FeatureTaskRuntimeRunner(
   internal fun run(
     request: FeatureTaskRuntimeRunRequest,
     repairWorker: AcquiredFeatureTaskRuntimeWorker? = null,
+    outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
+    captureStreamOutput: Boolean = false,
+    afterStepSettlement: (() -> Unit)? = null,
   ): FeatureTaskRuntimeRunReport {
     check(request.acceptanceCriterionRepair == null || repairWorker != null) {
       "Serial repair requires its acquired worker capability."
@@ -40,9 +44,11 @@ public class FeatureTaskRuntimeRunner(
       is FeatureTaskRuntimePreparation.PreparationBlocked -> prepared.report
       is FeatureTaskRuntimePreparation.Prepared ->
         execute.executePreparedRun(
-          prepared.request,
-          reconciliation,
+          prepared.copy(reconciliation = reconciliation),
           repairWorker,
+          outputSink,
+          captureStreamOutput,
+          afterStepSettlement,
         )
     }
   }

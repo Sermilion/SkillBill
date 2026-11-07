@@ -44,17 +44,19 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.isCooperativeCancellation
-import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.workflow.decomposition.model.SpecSource
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.io.IOException
 import java.nio.file.Path
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
@@ -70,8 +72,6 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
   private val unitStates = ConcurrentHashMap<Int, FeatureTaskRuntimeRunLoopPlanUnitState>()
   private var staging: PromotionRequest? = null
 
-  override val outputSink: AgentRunOutputSink get() = parent.launchOutputSink
-
   override fun pendingUnits(): PhaseFanOutUnits {
     val wave = parent.stepBinding.requireAuthorizedFanOutWave()
     staging =
@@ -81,7 +81,7 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
     val bundle =
       parent.records.loadPlanBundle(facts.workflowId)
         ?: return PhaseFanOutUnits.Stopped(PhaseOutcome.blocked(MISSING_BUNDLE_REASON))
-    snapshots.drift(facts.repoRoot, facts.issueKey, bundle)?.let { reason ->
+    snapshots.parentAndManifestDrift(facts.repoRoot, facts.issueKey, bundle)?.let { reason ->
       return PhaseFanOutUnits.Stopped(PhaseOutcome.blocked(reason))
     }
     val unitRecords = parent.records.loadPhaseRecords(facts.workflowId).orEmpty()
@@ -92,11 +92,20 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
     )
   }
 
+  override fun recordWave(
+    capacity: Int,
+    unitIds: List<Int>,
+  ): Boolean {
+    val phase = parent.records.loadPhaseRecords(facts.workflowId)?.get(stepId)
+    val attempt =
+      if (phase?.status == WorkflowStepStatus.RUNNING) phase.attemptCount else (phase?.attemptCount ?: 0) + 1
+    return parent.records.recordPlanFanOutWave(facts.workflowId, stepId, attempt, capacity, unitIds)
+  }
+
   override fun pauseBefore(unitId: Int): PhaseOutcome? = null
 
   override fun <B : PhaseAcceptedStepExecution> unitState(
     unitId: Int,
-    outputSink: AgentRunOutputSink,
     descriptor: PhaseStepDescriptor<B>,
   ): B {
     val run = parent.stepBinding.requireAuthorizedFanOutWave()
@@ -109,7 +118,7 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
         parent,
         facts,
         PlanUnit(facts.workflowId, stepId, unitId),
-        PlanUnitLaunch(outputSink, location?.toString(), staged != null),
+        PlanUnitLaunch(location?.toString(), staged != null),
         runLoopEntry,
       )
     unitStates[unitId] = unit
@@ -119,26 +128,116 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
   override fun settleUnit(
     unitId: Int,
     result: Result<PhaseOutcome>,
+  ): PhaseOutcome? = synchronized(parent.records) { settleUnitLocked(unitId, result) }
+
+  private fun settleUnitLocked(
+    unitId: Int,
+    result: Result<PhaseOutcome>,
   ): PhaseOutcome? {
     val outcome =
       result.getOrElse { error ->
         if (error.isCooperativeCancellation()) throw error
-        return PhaseOutcome.blocked("Planning subtask $unitId failed unexpectedly: ${error.message.orEmpty()}")
+        return blockUnit(unitId, "Planning subtask $unitId failed unexpectedly: ${error.message.orEmpty()}")
       }
+    if (outcome is PhaseOutcome.Blocked) return blockUnit(unitId, outcome.reason, outcome.failureCode)
     if (outcome !is PhaseOutcome.Completed) return outcome
-    val bundle =
-      parent.records.loadPlanBundle(facts.workflowId) ?: return PhaseOutcome.blocked(MISSING_BUNDLE_REASON)
-    stagedUnit(storeSubSpec(bundle, unitId))?.let { staged ->
-      PlanBundleStagingPromotion.promoteUnit(planner, parent.diagnostics, staged)
-    }
-    return when (val settled = snapshots.settleUnit(facts.repoRoot, facts.issueKey, bundle, unitId)) {
-      is PlanUnitSettlement.Rejected -> PhaseOutcome.blocked(settled.reason)
+    return settleCompletedUnit(unitId, outcome)
+  }
+
+  private fun settleCompletedUnit(
+    unitId: Int,
+    outcome: PhaseOutcome.Completed,
+  ): PhaseOutcome? {
+    val settled =
+      try {
+        val bundle =
+          parent.records.loadPlanBundle(facts.workflowId) ?: return blockUnit(unitId, MISSING_BUNDLE_REASON)
+        val staged = stagedUnit(storeSubSpec(bundle, unitId))
+        if (staged == null) {
+          snapshots.settleUnit(facts.repoRoot, facts.issueKey, bundle, unitId)
+        } else {
+          settleStagedUnit(unitId, bundle, staged)
+        }
+      } catch (error: SkillBillRuntimeException) {
+        return blockUnit(unitId, "Planning subtask $unitId failed unexpectedly: ${error.message.orEmpty()}")
+      } catch (error: IOException) {
+        return blockUnit(
+          unitId,
+          "Planning subtask $unitId could not be read or promoted: ${error.message.orEmpty()}",
+        )
+      }
+    return when (settled) {
+      is PlanUnitSettlement.Rejected -> blockUnit(unitId, settled.reason)
       is PlanUnitSettlement.Planned ->
         if (recordUnit(unitId, outcome, settled.bundle)) {
           null
         } else {
-          PhaseOutcome.blocked("Planning subtask $unitId could not be recorded.")
+          blockUnit(unitId, "Planning subtask $unitId could not be recorded.")
         }
+    }
+  }
+
+  private fun settleStagedUnit(
+    unitId: Int,
+    bundle: FeatureTaskRuntimePlanBundle,
+    staged: StagedUnit,
+  ): PlanUnitSettlement {
+    val stagedPath =
+      PlanBundleStagingPromotion.stagedUnitPath(parent.diagnostics, staged)
+        ?: return PlanUnitSettlement.Rejected("Planning subtask $unitId could not be read or promoted.")
+    return when (
+      val validation =
+        snapshots.settleStagedUnit(
+          facts.repoRoot,
+          facts.issueKey,
+          bundle,
+          unitId,
+          stagedPath,
+        )
+    ) {
+      is PlanUnitSettlement.Rejected -> validation
+      is PlanUnitSettlement.Planned ->
+        if (PlanBundleStagingPromotion.promoteUnit(planner, parent.diagnostics, staged)) {
+          validation
+        } else {
+          PlanUnitSettlement.Rejected("Planning subtask $unitId could not be promoted to the project store.")
+        }
+    }
+  }
+
+  private fun blockUnit(
+    unitId: Int,
+    reason: String,
+    failureCode: String? = null,
+  ): PhaseOutcome {
+    val bundle =
+      parent.records.loadPlanBundle(facts.workflowId)
+        ?: return PhaseOutcome.blocked(
+          "$reason The plan bundle is unavailable, so the blocked unit record could not be saved.",
+          failureCode,
+        )
+    val unit = PlanUnit(facts.workflowId, stepId, unitId)
+    val current =
+      parent.records.loadPhaseRecords(facts.workflowId)?.get(unitRecordId(unitId))
+        ?: unitStates[unitId]?.records?.loadPhaseRecords(facts.workflowId)?.get(stepId)
+    val blocked =
+      current?.let { PlanUnitRecords.blocked(it.copy(phaseId = unitRecordId(unitId)), reason) }
+        ?: PlanUnitRecords.blocked(
+          unit,
+          PlanUnitAttempt(
+            attemptCount = 1,
+            resolvedAgentId =
+              FeatureTaskRuntimeAgentResolver
+                .resolve(stepId, facts.agentAssignment, facts.invokedAgentId)
+                .resolvedAgentId,
+          ),
+          reason,
+          parent.clock.instant(),
+        )
+    return if (parent.records.recordPlanBundleWithUnits(facts.workflowId, bundle, mapOf(unitId to blocked))) {
+      PhaseOutcome.blocked(reason, failureCode)
+    } else {
+      PhaseOutcome.blocked("$reason The blocked unit record could not be saved.", failureCode)
     }
   }
 
@@ -205,6 +304,17 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
   }
 }
 
+internal fun persistPlanSubtaskProgress(
+  records: PhaseRunRecords,
+  workflowId: String,
+  subtaskId: Int,
+  record: FeatureTaskRuntimePhaseRecord,
+): Boolean {
+  if (record.status == WorkflowStepStatus.COMPLETED) return true
+  val bundle = records.loadPlanBundle(workflowId) ?: return false
+  return records.recordPlanBundleWithUnits(workflowId, bundle, mapOf(subtaskId to record))
+}
+
 internal fun planSubtaskLaunchContext(
   bundle: FeatureTaskRuntimePlanBundle?,
   unitId: Int,
@@ -222,7 +332,6 @@ private const val STAGED_SUB_SPEC_NOTE =
   "This is a checkout staging copy; write only this file, and the runtime promotes it into the project store.\n"
 
 private data class PlanUnitLaunch(
-  val outputSink: AgentRunOutputSink,
   val subSpecLocation: String?,
   val staged: Boolean,
 )
@@ -242,7 +351,6 @@ private class FeatureTaskRuntimeRunLoopPlanUnitState(
   private val launch: PlanUnitLaunch,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 ) : PhaseRunState {
-  override val launchOutputSink: AgentRunOutputSink get() = launch.outputSink
   override var implementationChecklistStore: FeatureTaskImplementationChecklistStore?
     get() = parent.implementationChecklistStore
     set(value) {
@@ -270,7 +378,12 @@ private class FeatureTaskRuntimeRunLoopPlanUnitState(
   override val session = FeatureTaskRuntimeRunLoopSession(operatorBlockRetry = null, initialPendingReentry = null)
   override val clock: Clock get() = parent.clock
   override val diagnostics: RuntimeDiagnostics get() = parent.diagnostics
-  override val records: PhaseRunRecords = InMemoryPhaseRunRecords(parent.clock, null)
+  override val records: PhaseRunRecords =
+    InMemoryPhaseRunRecords(parent.clock, null, phaseRecordSink = { record ->
+      synchronized(parent.records) {
+        persistPlanSubtaskProgress(parent.records, facts.workflowId, unit.subtaskId, record)
+      }
+    })
   override val specSource: SpecSource get() = parent.specSource
   override val transitions: FeatureTaskRuntimeTransitionDeclaration get() = parent.transitions
   override val telemetry: FeatureTaskRuntimeRunObservability =

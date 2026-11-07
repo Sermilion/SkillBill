@@ -32,6 +32,7 @@ data class SkeletonDefinition(
   val preparedExecutionOf: String? = null,
   val runHarness: PhaseRunHarness = PhaseRunHarness.NONE,
   val loopOnlyStepIds: Set<String> = emptySet(),
+  val reportsLiveChecks: Boolean = false,
 ) {
   init {
     val canonicalOrder = slots.zipWithNext().all { (previous, next) -> previous.ordinal < next.ordinal }
@@ -101,6 +102,7 @@ data class SkeletonDefinition(
         listOf(PhaseSlot.QUALITY_GATE),
         SkeletonRunStateKind.IN_MEMORY,
         standaloneInvocable = true,
+        reportsLiveChecks = true,
       )
     val QA: SkeletonDefinition =
       SkeletonDefinition(
@@ -124,6 +126,13 @@ data class SkeletonDefinition(
             FeatureTaskRuntimePhaseIds.BUILD,
           ),
         loopOnlyStepIds = setOf(FeatureTaskRuntimePhaseIds.BUILD),
+      )
+    val GOAL_BUILD: SkeletonDefinition =
+      SkeletonDefinition(
+        "goal-build",
+        listOf(PhaseSlot.QUALITY_GATE),
+        runStateKind = SkeletonRunStateKind.IN_MEMORY,
+        stepIds = listOf(FeatureTaskRuntimePhaseIds.BUILD),
       )
     val GOAL_ASSESSMENT: SkeletonDefinition =
       SkeletonDefinition(
@@ -187,6 +196,7 @@ data class SkeletonDefinition(
           VALIDATION,
           QA,
           GOAL_QA,
+          GOAL_BUILD,
           GOAL_ASSESSMENT,
           GOAL_ASSESSMENT_FIX,
           GOAL_HISTORY,
@@ -205,6 +215,8 @@ data class SkeletonDefinition(
 
     fun runHarnessOf(publicId: String): PhaseRunHarness =
       entries.firstOrNull { it.id == publicId }?.runHarness ?: PhaseRunHarness.NONE
+
+    fun reportsLiveChecksOf(publicId: String): Boolean = entries.any { it.id == publicId && it.reportsLiveChecks }
 
     fun byId(id: String): SkeletonDefinition =
       entries.filter { it.id == id }.maxByOrNull(SkeletonDefinition::semanticRevision)

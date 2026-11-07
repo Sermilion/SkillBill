@@ -23,6 +23,7 @@ import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRec
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -32,12 +33,20 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 
 /** Runs the attempts of one step call and settles the step, so a run state decides how its steps launch. */
 public fun interface PhaseStepAttempts {
-  /** Runs the attempts [call] makes for [run] and returns the step's outcome. */
   public fun run(
     run: PhaseRun,
     call: PhaseStepCall,
     context: PhaseRunLoopAttemptScope,
   ): PhaseOutcome
+
+  /** Runs the attempts [call] makes for [run] and returns the step's outcome. */
+  public fun run(
+    run: PhaseRun,
+    call: PhaseStepCall,
+    context: PhaseRunLoopAttemptScope,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
+  ): PhaseOutcome = run(run, call, context)
 }
 
 internal object PhaseAttemptLoop : PhaseStepAttempts {
@@ -45,9 +54,17 @@ internal object PhaseAttemptLoop : PhaseStepAttempts {
     run: PhaseRun,
     call: PhaseStepCall,
     context: PhaseRunLoopAttemptScope,
+  ): PhaseOutcome = run(run, call, context, AgentRunOutputSink.NONE, false)
+
+  override fun run(
+    run: PhaseRun,
+    call: PhaseStepCall,
+    context: PhaseRunLoopAttemptScope,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
   ): PhaseOutcome =
     with(PhaseAttemptSteps) {
-      context.runPhaseAttempts(run, call)
+      context.runPhaseAttempts(run, call, outputSink, captureStreamOutput)
     }
 }
 
@@ -67,6 +84,8 @@ internal object PhaseAttemptSteps {
   fun PhaseRunLoopAttemptScope.runPhaseAttempts(
     run: PhaseRun,
     call: PhaseStepCall,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
   ): PhaseOutcome {
     call.acceptedExecution.requireAcceptedAttempt(run, call)
     val agentId = run.resolvedAgent.resolvedAgentId
@@ -130,6 +149,8 @@ internal object PhaseAttemptSteps {
             agentId = agentId,
             call = call,
           ),
+          outputSink,
+          captureStreamOutput,
         )
     }
     return outcome
@@ -157,7 +178,11 @@ internal object PhaseAttemptSteps {
     nonOutputAttempts: Int,
   ): Int = (iteration - continuations - nonOutputAttempts).coerceAtLeast(1)
 
-  fun PhaseRunLoopAttemptScope.resolveFixLoopOutcome(args: FixLoopOutcomeArgs): PhaseOutcome? {
+  fun PhaseRunLoopAttemptScope.resolveFixLoopOutcome(
+    args: FixLoopOutcomeArgs,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
+  ): PhaseOutcome? {
     val run = args.context.attempt.run
     val state = args.context.attempt.state
     val observability = args.context.attempt.observability
@@ -178,6 +203,8 @@ internal object PhaseAttemptSteps {
           priorCorrection = loop.priorCorrection,
         ),
         requiredStartAlreadyAcknowledged = loop.requiredStartAcknowledged,
+        outputSink = outputSink,
+        captureStreamOutput = captureStreamOutput,
       )
     loop.requiredStartAcknowledged = false
     attempt.retryableOperatorReason?.let { reason ->

@@ -52,6 +52,8 @@ public data class BlockIncidentAcceptedChildCause(
   }
 }
 
+public data class FailurePhaseEvidence(public val phaseId: String?)
+
 public data class BlockIncidentIdentity(
   public val stepId: String,
   public val attempt: Int?,
@@ -63,6 +65,7 @@ public data class BlockIncidentIdentity(
   public val sourceAlias: BlockIncidentAlias? = null,
   public val failureFacts: BlockIncidentFailureFacts? = null,
   public val blockCause: String? = null,
+  public val failurePhaseEvidence: FailurePhaseEvidence? = null,
 ) {
   public val failureCode: String? get() = failureFacts?.failureCode
   public val failureDisposition: FeatureTaskRuntimeFailureDisposition? get() = failureFacts?.failureDisposition
@@ -98,6 +101,9 @@ public data class BlockIncidentIdentity(
       ).apply {
         failureFacts?.let { put(BlockIncidentIdentityKeys.FAILURE_FACTS, it.toArtifactMap()) }
         blockCause?.let { put(BlockIncidentIdentityKeys.BLOCK_CAUSE, it) }
+        failurePhaseEvidence?.let {
+          put(BlockIncidentIdentityKeys.FAILURE_PHASE_EVIDENCE, mapOf(SharedPayloadKeys.PHASE_ID to it.phaseId))
+        }
       },
     )
 
@@ -172,12 +178,24 @@ public data class BlockIncidentIdentity(
             value[BlockIncidentSpoolKeys.ALIAS_VALUE] as? String ?: invalidIdentity(),
           ),
         sourceAlias = sourceAlias(value),
+        failurePhaseEvidence = failurePhaseEvidence(value),
         failureFacts = failureFacts(value),
         blockCause =
           value[BlockIncidentIdentityKeys.BLOCK_CAUSE]?.let {
             (it as? String)?.takeIf(String::isNotBlank) ?: invalidIdentity()
           },
       )
+    }
+
+    private fun failurePhaseEvidence(value: Map<*, *>): FailurePhaseEvidence? {
+      if (!value.containsKey(BlockIncidentIdentityKeys.FAILURE_PHASE_EVIDENCE)) return null
+      val evidence = value[BlockIncidentIdentityKeys.FAILURE_PHASE_EVIDENCE] as? Map<*, *> ?: invalidIdentity()
+      if (evidence.keys != setOf(SharedPayloadKeys.PHASE_ID)) invalidIdentity()
+      val phaseId =
+        evidence[SharedPayloadKeys.PHASE_ID]?.let {
+          (it as? String)?.takeIf(String::isNotBlank) ?: invalidIdentity()
+        }
+      return FailurePhaseEvidence(phaseId)
     }
 
     private fun failureFacts(value: Map<*, *>): BlockIncidentFailureFacts? {
@@ -229,6 +247,7 @@ private object BlockIncidentIdentityKeys {
   const val INCIDENT_TOKEN = "incident_token"
   const val SOURCE_ALIAS_KIND = "source_alias_kind"
   const val SOURCE_ALIAS_VALUE = "source_alias_value"
+  const val FAILURE_PHASE_EVIDENCE = "failure_phase_evidence"
   const val FAILURE_FACTS = "failure_facts"
   const val FAILURE_CODE = "failure_code"
   const val FAILURE_DISPOSITION = "failure_disposition"

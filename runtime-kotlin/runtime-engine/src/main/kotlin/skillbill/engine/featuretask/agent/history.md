@@ -1,3 +1,22 @@
+## [2026-11-06] SKILL-510 QA unblock guidance
+Areas: runtime-engine featuretask QA and standalone phase prompts; platform-packs/kmp/qa
+- MEDIUM feature. Every QA pack receives a shared final `## Unblock` report format for missing capabilities, with attempted setup, evidence, a remedy and a pasteable `.skill-bill/phases/qa.md` snippet.
+- Entries use `####` capability headings and heading-free snippets so the existing runtime report parser remains unchanged. Coverage and reason tokens remain required.
+- KMP desktop guidance uses dynamically allocated Xvfb displays, detached sessions, registration of launcher and app JVM PIDs, and cleanup of owned processes. App-owned startup gates require an override search before an Unblock entry.
+- The shared Unblock prompt format is reusable. Standalone QA already injects repository phase instructions; a regression pin covers that existing path.
+- Limits: setup remains agent-executed and snippets require operator review and pasting. No runtime staging or desktop launcher build-gate changes.
+Feature flag: N/A
+Acceptance criteria: 4/4 subtask criteria implemented; 5/5 parent criteria implemented across runtime and desktop
+
+## [2026-11-05] SKILL-504 structured QA results
+Areas: runtime-engine featuretask QA and work history; runtime-domain QA and goalrunner; runtime-ports; runtime-infra/sqlite; runtime-goalrunner; runtime-contracts; desktop/core/data
+- QA reports parse tagged assertions, finding fields and temporary edits. A partly tagged assertion list yields no counts and a warning.
+- Migration 102 adds nullable `qa_details` to goal and standalone QA records. Finding fields persist across goal retests, and retained resources survive attempted and settled rewrites.
+- Goal status and standalone execution expose report paths, coverage, assertions, resources, edits and finding evidence. `QaRunDetails` and its goal and standalone mapping are reusable.
+- Legacy rows have null details and are not backfilled. A desktop reader must support schema 102 before opening a migrated database.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across runtime and desktop
+
 ## [2026-11-05] TWS-1 complete goals without CI
 Areas: runtime-engine featuretask monitor and goalrunner finalization; runtime command guidance; workflow playbook; skill-bill source
 - Goal and standalone PR monitors accept two successful empty check observations at least two minutes apart for the same PR and nonblank head, followed by fresh identity confirmation. Goal monitoring also matches a supplied published SHA.

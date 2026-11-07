@@ -3,11 +3,13 @@ package skillbill.cli.core
 import skillbill.cli.model.CliRuntimeContext
 import skillbill.di.core.PackagedContractComponent
 import skillbill.di.core.configureProcessLogging
+import skillbill.di.core.configureProcessTempRoot
 import skillbill.di.core.create
 import skillbill.error.core.SkillBillRuntimeException
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
+  configureProcessTempRoot()
   if (args.contentEquals(arrayOf("--check-packaged-contracts"))) {
     try {
       PackagedContractComponent::class.create().inspector.inspect()

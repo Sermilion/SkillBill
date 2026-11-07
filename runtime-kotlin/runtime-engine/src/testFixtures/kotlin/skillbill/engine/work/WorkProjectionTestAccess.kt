@@ -5,6 +5,7 @@ import skillbill.engine.work.control.WorkRunActions
 import skillbill.engine.work.control.goalStartRefusal
 import skillbill.engine.work.control.model.WorkRunTarget
 import skillbill.goalrunner.model.GoalRunnerAssessmentResult
+import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.persistence.UnitOfWork
@@ -22,6 +23,11 @@ fun WorkRunActions.optionsForTest(
   item: WorkDetailItem,
   unit: UnitOfWork,
 ) = options(item, unit)
+
+fun WorkBoardItemProjection.goalWorktreeViewForTest(
+  workflowId: String,
+  unit: UnitOfWork,
+): GoalWorktreeView? = goalWorktreeView(workflowId, unit)
 
 fun goalStartRefusalForTest(result: GoalPreflightResult): String? = goalStartRefusal(result)
 

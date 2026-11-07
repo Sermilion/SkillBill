@@ -12,6 +12,7 @@ import dev.skillbill.desktop.core.domain.model.WorkDisplayGroup
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.GoalWorktree
 import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
+import dev.skillbill.desktop.core.domain.model.MainCheckoutOutcome
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.WorkLiveSection
 import dev.skillbill.desktop.core.domain.model.WorkProgress
@@ -25,6 +26,7 @@ import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.WorkBoardItem
 import skillbill.ports.idestatus.model.WorkBoardCompletionSource
+import skillbill.ports.idestatus.model.GoalMainCheckoutOutcome
 import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.GoalWorktreeState as RuntimeGoalWorktreeState
 import skillbill.ports.idestatus.model.WorkDetailItem
@@ -32,6 +34,9 @@ import skillbill.ports.work.model.WorkStoreObservation
 import kotlin.time.toKotlinInstant
 import kotlin.time.Instant
 import skillbill.ports.idestatus.model.WorkLiveSection as RuntimeLiveSection
+import java.nio.file.Files
+import java.nio.file.InvalidPathException
+import java.nio.file.Path
 import java.time.Instant as JavaInstant
 
 /** The verdicts a board row and a detail item both carry beside their snapshot. */
@@ -146,17 +151,32 @@ internal fun IdeStatusSnapshot.toWorkItem(verdicts: ItemVerdicts): WorkItem {
     qaVerdict = execution?.qaOutcome?.toDomain(),
     workflowQaOutcome = workflowQaOutcome?.toDomain(),
     standaloneExecution = execution?.scope == IdeStatusExecutionScope.STANDALONE_PHASE,
-    goalWorktree = verdicts.goalWorktree?.let {
-      GoalWorktree(it.path, it.state.toDomain(), it.retentionReason, it.retentionDetail)
-    },
+    goalWorktree = verdicts.goalWorktree?.toDomainWorktree(),
   )
 }
 
-private fun RuntimeGoalWorktreeState.toDomain(): GoalWorktreeState = when (this) {
-  RuntimeGoalWorktreeState.ACTIVE -> GoalWorktreeState.Active
-  RuntimeGoalWorktreeState.RETAINED -> GoalWorktreeState.Retained
-  RuntimeGoalWorktreeState.REMOVED -> GoalWorktreeState.Removed
+internal fun GoalMainCheckoutOutcome.toDomain(): MainCheckoutOutcome = when (this) {
+  GoalMainCheckoutOutcome.CHECKED_OUT -> MainCheckoutOutcome.CheckedOut
+  GoalMainCheckoutOutcome.SKIPPED_UNCOMMITTED_CHANGES -> MainCheckoutOutcome.SkippedUncommittedChanges
+  GoalMainCheckoutOutcome.FAILED -> MainCheckoutOutcome.Failed
 }
+
+/** A worktree the runtime still reports as `ACTIVE` or `RETAINED` but whose directory is gone counts as removed. */
+internal fun GoalWorktreeView.toDomainWorktree(): GoalWorktree {
+  val mapped = when (state) {
+    RuntimeGoalWorktreeState.ACTIVE -> if (directoryExists(path)) GoalWorktreeState.Active else GoalWorktreeState.Removed
+    RuntimeGoalWorktreeState.RETAINED -> if (directoryExists(path)) GoalWorktreeState.Retained else GoalWorktreeState.Removed
+    RuntimeGoalWorktreeState.REMOVED -> GoalWorktreeState.Removed
+  }
+  return GoalWorktree(path, mapped, retentionReason, retentionDetail, mainCheckoutOutcome?.toDomain(), mainCheckoutDetail)
+}
+
+private fun directoryExists(path: String): Boolean =
+  path.isNotBlank() && try {
+    Files.isDirectory(Path.of(path))
+  } catch (_: InvalidPathException) {
+    false
+  }
 
 private fun WorkBoardCompletionSource.toDomain(): CompletionSource = when (this) {
   WorkBoardCompletionSource.STANDALONE_FINISHED_AT -> CompletionSource.StandaloneFinishedAt
@@ -187,7 +207,7 @@ private fun PhaseExecution.label(): String = when (kind) {
 private val acceptanceAuditPhases = setOf("audit", "audit_plan_fix", "audit_implement_fix")
 
 // Exhaustive on purpose: a runtime constant without a desktop counterpart must fail the build, not a read.
-private fun IdeStatusLifecycleState.toDomain(): Lifecycle = when (this) {
+internal fun IdeStatusLifecycleState.toDomain(): Lifecycle = when (this) {
   IdeStatusLifecycleState.ACTIVE -> Lifecycle.Active
   IdeStatusLifecycleState.PAUSED -> Lifecycle.Paused
   IdeStatusLifecycleState.BLOCKED -> Lifecycle.Blocked

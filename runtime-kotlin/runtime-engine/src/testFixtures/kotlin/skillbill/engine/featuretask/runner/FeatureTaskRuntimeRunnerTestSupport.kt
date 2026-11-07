@@ -144,6 +144,7 @@ import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.diff.DiffResolverPortDefaults
 import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.InMemoryFeatureTaskQaOutcomeRepository
+import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeCrashReconciliationCandidate
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerGenerationObservation
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
@@ -744,6 +745,7 @@ data class RuntimeHarnessConfig(
   val standaloneMonitorService: StandaloneMonitorService = UnavailableStandaloneMonitorService.service,
   val qaExecution: QaExecutionLifecycle = testQaExecutionLifecycle(),
   val qaReports: QaReportSettlement = unavailableQaReportSettlement(),
+  val phaseInstructionSource: PhaseInstructionFileSource? = null,
 ) {
   val harnessGitOperations: WorkflowGitOperations get() = gitOperationsOverride ?: branchSetup.gitOperations
 }
@@ -1389,6 +1391,7 @@ private fun harnessPhaseStrategies(
     standaloneMonitorService = runtimeConfig.standaloneMonitorService,
     qaExecution = runtimeConfig.qaExecution,
     qaReports = runtimeConfig.qaReports,
+    phaseInstructionSource = runtimeConfig.phaseInstructionSource,
     qaOutcomes = FeatureTaskQaOutcomeRecorder(database, testHarnessClock),
   )
 

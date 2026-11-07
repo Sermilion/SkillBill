@@ -4,6 +4,7 @@ import skillbill.application.decomposition.DECOMPOSITION_MANIFEST_FILENAME
 import skillbill.featurespec.model.FeatureSpecWriteResult
 import skillbill.review.spec.GovernedSpecSectionParser
 import skillbill.review.spec.GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX
+import skillbill.review.spec.MarkdownFences
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
@@ -36,10 +37,12 @@ internal object PlanBundleSpecText {
     GovernedSpecSectionParser.parseListSection(specText) { it.startsWith(ACCEPTANCE_CRITERIA_PREFIX) }
 
   private fun detailsRange(lines: List<String>): IntRange? {
-    val start = lines.indexOfFirst { IMPLEMENTATION_HEADING.matches(it.trim()) }
-    if (start < 0) return null
-    val next = lines.drop(start + 1).indexOfFirst { SECOND_LEVEL_HEADING.matches(it) }
-    return start..(if (next < 0) lines.lastIndex else start + next)
+    val outsideFence = MarkdownFences.outsideFenceMask(lines)
+    val start =
+      lines.indices.firstOrNull { outsideFence[it] && IMPLEMENTATION_HEADING.matches(lines[it].trim()) }
+        ?: return null
+    val next = (start + 1..lines.lastIndex).firstOrNull { outsideFence[it] && SECOND_LEVEL_HEADING.matches(lines[it]) }
+    return start..(next?.minus(1) ?: lines.lastIndex)
   }
 }
 
@@ -91,6 +94,17 @@ public class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecompos
     issueKey: String,
     bundle: FeatureTaskRuntimePlanBundle,
   ): String? {
+    parentAndManifestDrift(repoRoot, issueKey, bundle)?.let { return it }
+    return bundle.subtasks.firstNotNullOfOrNull { subtask ->
+      scopeDrift(repoRoot, subtask)
+    }
+  }
+
+  internal fun parentAndManifestDrift(
+    repoRoot: Path,
+    issueKey: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+  ): String? {
     val parent = planner.existingParentSpec(repoRoot, issueKey) ?: return "The parent spec is missing."
     if (readOrNull(parent)?.let(::sha256HexUtf8) != bundle.parentSpecSha256) {
       return "The parent spec changed while the subtasks were planned."
@@ -99,14 +113,7 @@ public class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecompos
     if (readOrNull(manifest)?.let(::sha256HexUtf8) != bundle.manifestSha256) {
       return "The decomposition manifest changed while the subtasks were planned."
     }
-    return bundle.subtasks.firstNotNullOfOrNull { subtask ->
-      val text = readOrNull(planner.bundlePath(repoRoot, subtask.specPath))
-      if (text != null && sha256HexUtf8(PlanBundleSpecText.scopeOf(text)) == subtask.scopeSha256) {
-        null
-      } else {
-        "The scope of subtask ${subtask.id} changed while the subtasks were planned."
-      }
-    }
+    return null
   }
 
   public fun rebase(
@@ -131,20 +138,39 @@ public class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecompos
     bundle: FeatureTaskRuntimePlanBundle,
     unitId: Int,
   ): PlanUnitSettlement {
-    drift(repoRoot, issueKey, bundle)?.let { return PlanUnitSettlement.Rejected(it) }
+    parentAndManifestDrift(repoRoot, issueKey, bundle)?.let { return PlanUnitSettlement.Rejected(it) }
     val subtask =
       bundle.subtask(unitId) ?: return PlanUnitSettlement.Rejected("Subtask $unitId is not in the plan bundle.")
-    return settleUnitDetails(repoRoot, bundle, subtask)
+    val path = planner.bundlePath(repoRoot, subtask.specPath)
+    scopeDrift(repoRoot, subtask)?.let { return PlanUnitSettlement.Rejected(it) }
+    return settleUnitDetails(bundle, subtask, path)
+  }
+
+  internal fun settleStagedUnit(
+    repoRoot: Path,
+    issueKey: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+    unitId: Int,
+    stagedPath: Path,
+  ): PlanUnitSettlement {
+    parentAndManifestDrift(repoRoot, issueKey, bundle)?.let { return PlanUnitSettlement.Rejected(it) }
+    val subtask =
+      bundle.subtask(unitId) ?: return PlanUnitSettlement.Rejected("Subtask $unitId is not in the plan bundle.")
+    return settleUnitDetails(bundle, subtask, stagedPath, requireUnchangedScope = true)
   }
 
   private fun settleUnitDetails(
-    repoRoot: Path,
     bundle: FeatureTaskRuntimePlanBundle,
     subtask: FeatureTaskRuntimePlanBundleSubtask,
+    path: Path,
+    requireUnchangedScope: Boolean = false,
   ): PlanUnitSettlement {
     val text =
-      readOrNull(planner.bundlePath(repoRoot, subtask.specPath))
+      readOrNull(path)
         ?: return PlanUnitSettlement.Rejected("The spec of subtask ${subtask.id} is no longer readable.")
+    if (requireUnchangedScope && sha256HexUtf8(PlanBundleSpecText.scopeOf(text)) != subtask.scopeSha256) {
+      return PlanUnitSettlement.Rejected("The scope of subtask ${subtask.id} changed while the subtasks were planned.")
+    }
     val details =
       PlanBundleSpecText.detailsOf(text)
         ?.takeIf { PlanBundleSpecText.governedSubSpecReady(text) }
@@ -154,6 +180,18 @@ public class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecompos
     return PlanUnitSettlement.Planned(
       bundle.withSubtask(subtask.copy(detailsSha256 = sha256HexUtf8(details), planText = details)),
     )
+  }
+
+  private fun scopeDrift(
+    repoRoot: Path,
+    subtask: FeatureTaskRuntimePlanBundleSubtask,
+  ): String? {
+    val text = readOrNull(planner.bundlePath(repoRoot, subtask.specPath))
+    return if (text != null && sha256HexUtf8(PlanBundleSpecText.scopeOf(text)) == subtask.scopeSha256) {
+      null
+    } else {
+      "The scope of subtask ${subtask.id} changed while the subtasks were planned."
+    }
   }
 
   private fun rebaseSubtask(

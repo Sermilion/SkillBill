@@ -124,6 +124,8 @@ class InstallerShellReuseLastSelectionTest {
           if (options.telemetryStatusFails) environment()["SKILL_BILL_TEST_TELEMETRY_STATUS_FAILS"] = "1"
           if (options.skipPreinstallUninstall) {
             environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
+          } else {
+            environment().remove("SKILL_BILL_SKIP_PREINSTALL_UNINSTALL")
           }
           environment().remove("DISPLAY")
           environment().remove("WAYLAND_DISPLAY")

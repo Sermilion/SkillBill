@@ -5,9 +5,11 @@ import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
-import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
+import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
@@ -21,21 +23,29 @@ import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
+import dev.skillbill.desktop.core.domain.model.SessionMoveResult
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.GoalWorktree
 import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
+import dev.skillbill.desktop.core.domain.model.MainCheckoutOutcome
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
 import dev.skillbill.desktop.core.testing.workItem
+import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.chat.newtask.testDatabaseSessionController
-import dev.skillbill.desktop.feature.chat.newtask.testNewTaskDraft
+import dev.skillbill.desktop.feature.chat.newtask.unconfinedNewTaskChats
+import dev.skillbill.desktop.feature.chat.newtask.NewTaskRepository
+import dev.skillbill.desktop.feature.chat.newtask.NewTaskChats
+import dev.skillbill.desktop.feature.chat.newtask.testNewTaskChats
+import kotlin.test.assertNotNull
+import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -52,6 +62,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -73,19 +85,187 @@ class ChatWorkspaceTest {
     override fun now() = epoch
   }
 
-  @AfterTest
-  fun tearDown() = Dispatchers.resetMain()
+  private val tempDirs = mutableListOf<Path>()
 
-  private fun TestScope.workspace(): ChatWorkspace {
+  @AfterTest
+  fun tearDown() {
+    Dispatchers.resetMain()
+    tempDirs.forEach { it.toFile().deleteRecursively() }
+  }
+
+  /** A real directory standing in for a goal worktree; `toRealPath` avoids the macOS `/var` symlink. */
+  private fun worktreeDir(): String = Files.createTempDirectory("chat-worktree").toRealPath().also(tempDirs::add).toString()
+
+  private fun TestScope.workspace(
+    chats: NewTaskChats = unconfinedNewTaskChats(),
+    repository: ExecutionChatRepository = chat,
+  ): ChatWorkspace {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    return ChatWorkspace(chat, details, controls, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, testNewTaskDraft())
+    return ChatWorkspace(repository, details, controls, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, chats)
+  }
+
+  // A window that closes while one New task chat could not be saved, or a retry that leaves the rest open.
+  @Test
+  fun `closing the window keeps it open while one New task chat fails to save, and the retry closes it`() = runTest {
+    var failing: String? = null
+    val flaky = object : ExecutionChatRepository by chat {
+      override suspend fun saveNewTaskDraft(entry: ChatHistoryEntry): Boolean {
+        if (entry.sessionId == failing) {
+          failing = null
+          return false
+        }
+        return chat.saveNewTaskDraft(entry)
+      }
+    }
+    val chats = testNewTaskChats(flaky)
+    chats.selected.value.apply {
+      repository = NewTaskRepository("/existing/repo", "repo")
+      baseBranch = "main"
+      agentId = "claude"
+      selectedAgent = ChatAgent("claude", null, null)
+    }
+    val drafts = List(3) { index ->
+      val draft = if (index == 0) chats.selected.value else chats.newChat()
+      draft.text = "task $index"
+      draft.send()
+      runCurrent()
+      draft
+    }
+    val workspace = workspace(chats)
+    failing = checkNotNull(drafts[1].chat.value).sessionId
+
+    assertFalse(workspace.closeAll())
+    runCurrent()
+    assertNotNull(drafts[1].chat.value)
+
+    assertTrue(workspace.closeAll())
+    runCurrent()
+    assertTrue(drafts.all { it.chat.value == null })
   }
 
   @Test
-  fun `removed worktree ends the old agent session and starts the next turn at the primary root`() = runTest {
+  fun `goal intake prefill keeps a nonblank draft and fills an empty draft`() = runTest {
+    val chats = unconfinedNewTaskChats()
+    val draft = chats.selected.value
+    val workspace = workspace(chats)
+    assertTrue(workspace.prefillGoalIntake("/verified/repo", "feature/verify", "Fix criterion 2"))
+    assertEquals("Fix criterion 2", draft.text)
+    assertEquals(NewTaskRepository("/verified/repo", "repo"), draft.repository)
+    assertEquals("feature/verify", draft.baseBranch)
+
+    draft.text = "operator draft"
+    assertFalse(workspace.prefillGoalIntake("/other", "other", "replacement"))
+    assertEquals("operator draft", draft.text)
+    assertEquals(NewTaskRepository("/verified/repo", "repo"), draft.repository)
+    assertEquals("feature/verify", draft.baseBranch)
+    workspace.closeAll()
+  }
+
+  @Test
+  fun `goal intake rejects an empty composer when a conversation exists for the same or another repository`() = runTest {
+    val chats = NewTaskChats(
+      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock,
+    )
+    val draft = chats.selected.value.apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      repository = NewTaskRepository("/existing/repo", "repo")
+      baseBranch = "existing-branch"
+      agentId = "claude"
+      selectedAgent = ChatAgent("claude", null, null)
+    }
+    val workspace = workspace(chats)
+    draft.text = "unrelated existing work"
+    draft.send()
+    runCurrent()
+    draft.text = ""
+    val conversation = draft.chat.value!!
+    val transcript = conversation.thread.transcript.value
+    val sessionId = conversation.sessionId
+
+    assertFalse(workspace.prefillGoalIntake("/existing/repo", "verify-branch", "Verify fixes"))
+    assertEquals("", draft.text)
+    assertEquals(NewTaskRepository("/existing/repo", "repo"), draft.repository)
+    assertEquals("existing-branch", draft.baseBranch)
+    assertEquals(sessionId, draft.chat.value?.sessionId)
+    assertEquals(transcript, conversation.thread.transcript.value)
+
+    assertFalse(workspace.prefillGoalIntake("/other/repo", "other-branch", "Verify fixes"))
+    assertEquals("", draft.text)
+    assertEquals(NewTaskRepository("/existing/repo", "repo"), draft.repository)
+    assertEquals("existing-branch", draft.baseBranch)
+    assertEquals(sessionId, draft.chat.value?.sessionId)
+    assertEquals(transcript, conversation.thread.transcript.value)
+    workspace.closeAll()
+  }
+
+  @Test
+  fun `goal intake rejects an empty composer while its conversation turn is active`() = runTest {
+    chat.events = { flow { awaitCancellation() } }
+    val chats = NewTaskChats(
+      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock,
+    )
+    val draft = chats.selected.value.apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      repository = NewTaskRepository("/existing/repo", "repo")
+      baseBranch = "existing-branch"
+      agentId = "claude"
+      selectedAgent = ChatAgent("claude", null, null)
+    }
+    val workspace = workspace(chats)
+    draft.text = "unrelated active work"
+    draft.send()
+    runCurrent()
+    draft.text = ""
+    val conversation = draft.chat.value!!
+    val transcript = conversation.thread.transcript.value
+    assertTrue(conversation.thread.busy.value)
+
+    assertFalse(workspace.prefillGoalIntake("/other/repo", "verify-branch", "Verify fixes"))
+    assertEquals("", draft.text)
+    assertEquals(NewTaskRepository("/existing/repo", "repo"), draft.repository)
+    assertEquals("existing-branch", draft.baseBranch)
+    assertEquals(transcript, conversation.thread.transcript.value)
+    assertTrue(conversation.thread.busy.value)
+    workspace.closeAll()
+  }
+
+  @Test
+  fun `goal intake rejects an empty composer when a conversation has been resumed`() = runTest {
+    val chats = NewTaskChats(
+      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock,
+    )
+    val draft = chats.selected.value.apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+    }
+    val workspace = workspace(chats)
+    val saved = ChatHistoryEntry(
+      sessionId = "resumed-session",
+      executionId = null,
+      agent = ChatAgent("claude", null, null),
+      updatedAt = clock.now(),
+      title = "Existing work",
+      lines = listOf(ChatHistoryLine(ChatHistoryRole.Operator, "unrelated existing work")),
+      newTask = ChatNewTaskContext(".", "existing-branch"),
+    )
+    assertTrue(draft.resume(saved))
+    val conversation = draft.chat.value!!
+    val transcript = conversation.thread.transcript.value
+
+    assertFalse(workspace.prefillGoalIntake("/other/repo", "verify-branch", "Verify fixes"))
+    assertEquals("", draft.text)
+    assertEquals(NewTaskRepository(".", "."), draft.repository)
+    assertEquals("existing-branch", draft.baseBranch)
+    assertEquals("resumed-session", draft.chat.value?.sessionId)
+    assertEquals(transcript, conversation.thread.transcript.value)
+    workspace.closeAll()
+  }
+
+  @Test
+  fun `removed worktree moves the sessions and a started claude session resumes at the primary root`() = runTest {
+    val worktree = worktreeDir()
     val active = workItem("SKILL-468").copy(
       repositoryRoot = "/repo",
-      goalWorktree = GoalWorktree("/repo/.skill-bill/worktrees/SKILL-468", GoalWorktreeState.Active, null, null),
+      goalWorktree = GoalWorktree(worktree, GoalWorktreeState.Active, null, null),
     )
     val detail = MutableStateFlow(loaded(active))
     details.details = mapOf(active.id to detail)
@@ -94,7 +274,7 @@ class ChatWorkspaceTest {
     runCurrent()
     val session = workspace.session(active.id)!!
     val firstSessionId = session.sessionId
-    assertEquals("/repo/.skill-bill/worktrees/SKILL-468", (chat.requests.single().scope as ChatScope.Execution).repositoryRoot)
+    assertEquals(worktree, (chat.requests.single().scope as ChatScope.Execution).repositoryRoot)
 
     val removed = active.copy(goalWorktree = active.goalWorktree?.copy(state = GoalWorktreeState.Removed))
     detail.value = loaded(removed)
@@ -103,11 +283,165 @@ class ChatWorkspaceTest {
     runCurrent()
 
     assertEquals(listOf(firstSessionId), chat.ended)
+    assertEquals(listOf(worktree to "/repo"), chat.moveCalls)
     assertEquals("/repo", (chat.requests.last().scope as ChatScope.Execution).repositoryRoot)
-    assertTrue(chat.requests.last().firstTurn)
+    assertFalse(chat.requests.last().firstTurn)
+    assertEquals(firstSessionId, chat.requests.last().sessionId)
     assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Notice>().count {
-      it.text == "$REMOVED_WORKTREE_CHAT_NOTICE /repo."
+      it.text == removedWorktreeNotice("/repo", SessionMoveResult(0, 0, 0))
     })
+    workspace.closeAll()
+  }
+
+  // Resuming a Claude session whose file stayed in the worktree's project directory would find no session in the repository root.
+  @Test
+  fun `a failed or throwing session move restarts a started claude session with a new id and says so`() = runTest {
+    for (outcome in listOf<suspend (String, String) -> SessionMoveResult>({ _, _ -> SessionMoveResult(0, 0, 1) }, { _, _ -> error("disk") })) {
+      val repository = FakeExecutionChatRepository().apply { moveResult = outcome }
+      val active = workItem("SKILL-512").copy(
+        repositoryRoot = "/repo",
+        goalWorktree = GoalWorktree(worktreeDir(), GoalWorktreeState.Active, null, null),
+      )
+      val detail = MutableStateFlow(loaded(active))
+      details.details = mapOf(active.id to detail)
+      val workspace = workspace(repository = repository)
+      workspace.open(active)
+      runCurrent()
+      val session = workspace.session(active.id)!!
+      val firstSessionId = session.sessionId
+
+      detail.value = loaded(active.copy(goalWorktree = active.goalWorktree?.copy(state = GoalWorktreeState.Removed)))
+      runCurrent()
+      workspace.send(active.id, "continue")
+      runCurrent()
+
+      assertEquals("/repo", (repository.requests.last().scope as ChatScope.Execution).repositoryRoot)
+      assertTrue(repository.requests.last().firstTurn)
+      assertTrue(repository.requests.last().sessionId != firstSessionId)
+      assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Notice>().count { it.text == "$REMOVED_WORKTREE_CHAT_NOTICE /repo. $MOVE_FAILED_SENTENCE" })
+      workspace.closeAll()
+    }
+  }
+
+  // Cursor chats are not moved, so a Cursor session still ends and restarts under a new id in the repository root.
+  @Test
+  fun `removed worktree restarts a cursor session with a new id at the primary root`() = runTest {
+    val cursor = FakeExecutionChatRepository(ChatAgent("cursor", null, null), setOf("cursor"))
+    val active = workItem("SKILL-512").copy(
+      repositoryRoot = "/repo",
+      goalWorktree = GoalWorktree(worktreeDir(), GoalWorktreeState.Active, null, null),
+    )
+    val detail = MutableStateFlow(loaded(active))
+    details.details = mapOf(active.id to detail)
+    val workspace = workspace(repository = cursor)
+    workspace.open(active)
+    runCurrent()
+    val session = workspace.session(active.id)!!
+    val firstSessionId = session.sessionId
+
+    detail.value = loaded(active.copy(goalWorktree = active.goalWorktree?.copy(state = GoalWorktreeState.Removed)))
+    runCurrent()
+    workspace.send(active.id, "continue")
+    runCurrent()
+
+    assertEquals("/repo", (cursor.requests.last().scope as ChatScope.Execution).repositoryRoot)
+    assertTrue(cursor.requests.last().firstTurn)
+    assertTrue(cursor.requests.last().sessionId != firstSessionId)
+    workspace.closeAll()
+  }
+
+  // The runtime row can still say Active after the worktree directory is deleted; the next turn must not run in the dead path.
+  @Test
+  fun `a deleted worktree directory under an Active row sends the next turn to the repository root`() = runTest {
+    val worktree = worktreeDir()
+    val active = workItem("SKILL-512").copy(
+      repositoryRoot = "/repo",
+      goalWorktree = GoalWorktree(worktree, GoalWorktreeState.Active, null, null),
+    )
+    details.details = mapOf(active.id to MutableStateFlow(loaded(active)))
+    val workspace = workspace()
+    workspace.open(active)
+    runCurrent()
+    val session = workspace.session(active.id)!!
+    val firstSessionId = session.sessionId
+    assertEquals(worktree, (chat.requests.single().scope as ChatScope.Execution).repositoryRoot)
+
+    Path.of(worktree).toFile().deleteRecursively()
+    workspace.send(active.id, "continue")
+    runCurrent()
+
+    assertEquals(listOf(firstSessionId), chat.ended)
+    assertEquals("/repo", (chat.requests.last().scope as ChatScope.Execution).repositoryRoot)
+    assertFalse(chat.requests.last().firstTurn)
+    assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Notice>().count { it.text.startsWith(REMOVED_WORKTREE_CHAT_NOTICE) })
+    workspace.closeAll()
+  }
+
+  @Test
+  fun `a removal and a failed main checkout in one refresh announce the removal first`() = runTest {
+    val active = workItem("SKILL-512").copy(
+      repositoryRoot = "/repo",
+      goalWorktree = GoalWorktree(worktreeDir(), GoalWorktreeState.Active, null, null),
+    )
+    val detail = MutableStateFlow(loaded(active))
+    details.details = mapOf(active.id to detail)
+    val workspace = workspace()
+    workspace.open(active)
+    runCurrent()
+    val session = workspace.session(active.id)!!
+
+    detail.value = loaded(
+      active.copy(
+        goalWorktree = active.goalWorktree?.copy(
+          state = GoalWorktreeState.Removed,
+          mainCheckout = MainCheckoutOutcome.Failed,
+          mainCheckoutDetail = "rebase in progress",
+        ),
+      ),
+    )
+    runCurrent()
+
+    val notices = session.transcript.value.filterIsInstance<ChatMessage.Notice>().map { it.text }
+    assertEquals(
+      listOf(removedWorktreeNotice("/repo", SessionMoveResult(0, 0, 0)), "$MAIN_CHECKOUT_NOT_SWITCHED_NOTICE: rebase in progress."),
+      notices.filter { it.startsWith(REMOVED_WORKTREE_CHAT_NOTICE) || it.startsWith(MAIN_CHECKOUT_NOT_SWITCHED_NOTICE) },
+    )
+    workspace.closeAll()
+  }
+
+  @Test
+  fun `a main checkout outcome delivered after the removal notice is announced once`() = runTest {
+    val active = workItem("SKILL-512").copy(
+      repositoryRoot = "/repo",
+      goalWorktree = GoalWorktree(worktreeDir(), GoalWorktreeState.Active, null, null),
+    )
+    val detail = MutableStateFlow(loaded(active))
+    details.details = mapOf(active.id to detail)
+    val workspace = workspace()
+    workspace.open(active)
+    runCurrent()
+    val session = workspace.session(active.id)!!
+
+    val removed = active.copy(goalWorktree = active.goalWorktree?.copy(state = GoalWorktreeState.Removed))
+    detail.value = loaded(removed)
+    runCurrent()
+    val skipped = removed.copy(
+      goalWorktree = removed.goalWorktree?.copy(
+        mainCheckout = MainCheckoutOutcome.SkippedUncommittedChanges,
+        mainCheckoutDetail = "app/build.gradle",
+      ),
+    )
+    detail.value = loaded(skipped)
+    runCurrent()
+    detail.value = loaded(skipped.copy(title = "refreshed"))
+    runCurrent()
+
+    val notices = session.transcript.value.filterIsInstance<ChatMessage.Notice>().map { it.text }
+    val expected = "$MAIN_CHECKOUT_NOT_SWITCHED_NOTICE: app/build.gradle."
+    assertEquals(1, notices.count { it == expected })
+    val removedNotice = notices.indexOf(removedWorktreeNotice("/repo", SessionMoveResult(0, 0, 0)))
+    assertTrue(removedNotice >= 0, "the removed-worktree notice is missing: $notices")
+    assertTrue(removedNotice < notices.indexOf(expected))
     workspace.closeAll()
   }
 
@@ -189,7 +523,7 @@ class ChatWorkspaceTest {
   }
 
   @Test
-  fun `messages queued during a reply run in order without splitting the streaming answer`() = runTest {
+  fun `queued messages and images send as one follow-up without splitting the streaming answer`() = runTest {
     val item = workItem("SKILL-1")
     details.details = mapOf(item.id to flowOf(loaded(item)))
     val replies = mutableListOf<Channel<ChatEvent>>()
@@ -205,27 +539,37 @@ class ChatWorkspaceTest {
     replies[0].send(ChatEvent.TextDelta("Before "))
     runCurrent()
 
-    workspace.send(item.id, "first question")
+    val firstImage = ChatImage(byteArrayOf(1), "image/png")
+    val secondImage = ChatImage(byteArrayOf(2), "image/png")
+    workspace.send(item.id, "first question", listOf(firstImage))
     workspace.send(item.id, "second question")
+    workspace.send(item.id, "", listOf(secondImage))
     runCurrent()
     assertEquals(1, chat.requests.size)
-    assertEquals(2, session.queued.value.size)
+    assertEquals(3, session.queued.value.size)
     replies[0].send(ChatEvent.TextDelta("after"))
     replies[0].send(ChatEvent.Completed)
     replies[0].close()
     runCurrent()
 
     assertEquals(2, chat.requests.size)
-    assertTrue(chat.requests[1].prompt.endsWith("first question"))
+    val combined = "first question\n\nsecond question"
+    assertTrue(chat.requests[1].prompt.endsWith(combined))
+    assertEquals(listOf(firstImage, secondImage), chat.requests[1].images)
     assertEquals("Before after", session.transcript.value.filterIsInstance<ChatMessage.Agent>().first().text)
-    assertEquals(listOf("first question"), session.transcript.value.filterIsInstance<ChatMessage.Operator>().map { it.text })
+    assertEquals(listOf(combined), session.transcript.value.filterIsInstance<ChatMessage.Operator>().map { it.text })
+    assertEquals(listOf(firstImage, secondImage), session.transcript.value.filterIsInstance<ChatMessage.Operator>().single().images)
+    assertTrue(session.queued.value.isEmpty())
+    workspace.send(item.id, "later question")
+    runCurrent()
+    assertEquals(2, chat.requests.size)
     assertEquals(1, session.queued.value.size)
     replies[1].send(ChatEvent.Failed(ChatFailure.BinaryMissing, null))
     replies[1].close()
     runCurrent()
 
     assertEquals(3, chat.requests.size)
-    assertTrue(chat.requests[2].prompt.endsWith("second question"))
+    assertTrue(chat.requests[2].prompt.endsWith("later question"))
     assertTrue(session.queued.value.isEmpty())
   }
 
@@ -936,10 +1280,11 @@ class ChatWorkspaceTest {
 
   @Test
   fun `start action on stopped execution runs in the goal worktree and names the main repository`() = runTest {
+    val worktree = worktreeDir()
     val item = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(
       running = false,
       repositoryRoot = "/work/repo",
-      goalWorktree = GoalWorktree("/work/goals/SKILL-1/checkout", GoalWorktreeState.Active, null, null),
+      goalWorktree = GoalWorktree(worktree, GoalWorktreeState.Active, null, null),
     )
     details.details = mapOf(item.id to flowOf(loaded(item)))
     controls.newTaskOutcome = NewTaskStartOutcome.Started("verify", NewTaskKind.Verify)
@@ -969,7 +1314,7 @@ class ChatWorkspaceTest {
     assertEquals(1, controls.newTaskRequests.size)
     with(controls.newTaskRequests.single()) {
       assertEquals("/work/repo", repoRoot)
-      assertEquals("/work/goals/SKILL-1/checkout", checkoutRoot)
+      assertEquals(worktree, checkoutRoot)
       assertEquals(NewTaskKind.Verify, kind)
       assertEquals("SKILL-1", target)
       assertEquals("feat/fp-5175", branch)
@@ -1021,7 +1366,7 @@ class ChatWorkspaceTest {
     }
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val workspace = ChatWorkspace(
-      chat, details, controls, closedDb, WindowCoroutineScope(backgroundScope), clock, panes, selection, testNewTaskDraft(),
+      chat, details, controls, closedDb, WindowCoroutineScope(backgroundScope), clock, panes, selection, unconfinedNewTaskChats(),
     )
     workspace.open(item)
     runCurrent()

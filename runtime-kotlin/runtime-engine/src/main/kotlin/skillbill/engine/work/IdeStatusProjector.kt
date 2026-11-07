@@ -96,6 +96,9 @@ public class IdeStatusProjector(
   private val qaCapabilities: QaCapabilityResolver,
   private val planReports: StandalonePlanReportPort,
 ) {
+  internal val standalonePlanProgressProjector =
+    StandalonePlanProgressProjector(planReports, featureTaskRuntimeStatusService, diagnostics)
+
   private val workflowEngine = WorkflowEngine()
 
   internal fun goalBranchCorrelation(

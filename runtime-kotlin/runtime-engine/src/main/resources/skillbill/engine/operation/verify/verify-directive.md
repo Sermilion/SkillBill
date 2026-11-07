@@ -234,12 +234,17 @@ FEATURE VERIFY: <feature name>
 --- UNIT TEST VALUE ---
 <unit test value result, or "N/A — no unit tests changed">
 
+--- SUMMARY ---
+<two or three sentences on what the change does, not the verdict>
+
 --- VERDICT ---
 <one of:>
   APPROVE — all criteria met, no blockers
   APPROVE WITH FIXES — all criteria met, but code issues need fixing [list P0/P1]
   REQUEST CHANGES — missing criteria or blockers [list what's missing/blocking]
 ```
+
+SUMMARY describes what the change does in two or three sentences and must not restate the verdict.
 
 After presenting the verdict, ask:
 > **Would you like me to leave this as a PR comment, or fix any of the issues?**

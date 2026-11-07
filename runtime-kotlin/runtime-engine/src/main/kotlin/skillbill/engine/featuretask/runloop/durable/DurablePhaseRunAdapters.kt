@@ -55,6 +55,7 @@ import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePaus
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanFanOutHistory
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
@@ -382,6 +383,22 @@ private class DurablePhasePlanRecords(
   override fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle? =
     decomposeTerminalRecorder.loadPlanBundle(workflowId)
 
+  override fun loadPlanFanOutHistory(workflowId: String): FeatureTaskRuntimePlanFanOutHistory? =
+    decomposeTerminalRecorder.loadPlanFanOutHistory(workflowId)
+
+  override fun recordPlanFanOutWave(
+    workflowId: String,
+    stepId: String,
+    attempt: Int,
+    capacity: Int,
+    unitIds: List<Int>,
+  ): Boolean =
+    admitted.ownedWrite({
+      decomposeTerminalRecorder.recordOwnedPlanFanOutWave(workflowId, stepId to attempt, capacity, unitIds, it)
+    }) {
+      decomposeTerminalRecorder.recordPlanFanOutWave(workflowId, stepId to attempt, capacity, unitIds)
+    }
+
   override fun recordPlanBundle(
     workflowId: String,
     bundle: FeatureTaskRuntimePlanBundle,
@@ -392,6 +409,12 @@ private class DurablePhasePlanRecords(
     bundle: FeatureTaskRuntimePlanBundle,
     unitRecords: Map<Int, FeatureTaskRuntimePhaseRecord>,
   ): Boolean = decomposeTerminalRecorder.recordPlanBundleWithUnits(workflowId, bundle, unitRecords)
+
+  override fun replacePlanBundleWithUnits(
+    workflowId: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+    unitRecords: Map<Int, FeatureTaskRuntimePhaseRecord>,
+  ): Boolean = decomposeTerminalRecorder.replacePlanBundleWithUnits(workflowId, bundle, unitRecords)
 
   override fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal? =
     decomposeTerminalRecorder.loadDecomposeTerminal(workflowId)

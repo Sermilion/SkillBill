@@ -1,11 +1,14 @@
 package skillbill.di.core
 
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.http.JdkHttpRemoteTransport
 import skillbill.model.EnvironmentContext
 import java.nio.file.Path
 
 internal object RuntimeBootstrapBindings {
+  fun processTempRoot(): Path = JdkHostPlatformPort.resolveTemporaryDirectory()
+
   fun runtimeContext(inputRuntimeContext: RuntimeContext): RuntimeContext {
     val inputEnvironment = inputRuntimeContext.environment
     val resolvedEnvironment =

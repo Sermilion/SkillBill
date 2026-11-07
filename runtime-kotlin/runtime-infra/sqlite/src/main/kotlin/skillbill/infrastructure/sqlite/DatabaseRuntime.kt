@@ -81,6 +81,7 @@ internal object DatabaseRuntime {
       DriverManager.getConnection("jdbc:sqlite:${path.toAbsolutePath().normalize()}").use { connection ->
         connection.closingOnFailure(diagnostics) {
           asTypedFailure(path, DatabaseAccessOperation.OPEN) {
+            DatabaseMigrations.requireSupportedVersion(connection)
             configureConnection(connection, enableWal = true)
             DatabaseSchema.createBaseSchema(connection)
             DatabaseMigrations.apply(connection, diagnostics)
@@ -193,41 +194,45 @@ internal object DatabaseRuntime {
     path: Path,
     diagnostics: RuntimeDiagnostics,
   ) {
-    val pending =
-      openReadOnlyDb(path, diagnostics).use { database ->
-        asTypedFailure(path, DatabaseAccessOperation.OPEN) {
-          val connection = database.connection
-          val ledger = MigrationLedger.readState(connection)
-          val migrations = DatabaseMigrations.migrations
-          val migrationNames = migrations.map { it.name }
-          val latestVersion = migrations.maxOf { it.version }
-          val version = schemaVersion(connection)
-          if (!ledger.tableExists || ledger.appliedNames.intersect(migrationNames.toSet()).isEmpty() ||
-            version > latestVersion
-          ) {
-            throw databaseIncompatible(path.toString(), DatabaseAccessOperation.OPEN)
-          }
-          val ledgerVersion =
-            connection.createStatement().use { statement ->
-              statement.executeQuery("SELECT MAX(version) FROM schema_migrations").use { rows ->
-                rows.next()
-                rows.getInt(1)
-              }
-            }
-          val desktopIdentityInstalled =
-            connection.createStatement().use { statement ->
-              statement.executeQuery(
-                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'room_master_table'",
-              ).use { it.next() }
-            }
-          if (ledgerVersion > latestVersion || desktopIdentityInstalled && !hasDesktopReadIdentity(connection)) {
-            throw databaseIncompatible(path.toString(), DatabaseAccessOperation.OPEN)
-          }
-          ledger.hasPendingWork(migrations)
-        }
-      }
-    if (pending) establishSchemaReadiness(path, diagnostics)
+    if (hasPendingMigrations(path, diagnostics)) establishSchemaReadiness(path, diagnostics)
   }
+
+  fun hasPendingMigrations(
+    path: Path,
+    diagnostics: RuntimeDiagnostics,
+  ): Boolean =
+    openReadOnlyDb(path, diagnostics).use { database ->
+      asTypedFailure(path, DatabaseAccessOperation.OPEN) {
+        val connection = database.connection
+        val ledger = MigrationLedger.readState(connection)
+        val migrations = DatabaseMigrations.migrations
+        val migrationNames = migrations.map { it.name }
+        val latestVersion = migrations.maxOf { it.version }
+        val version = schemaVersion(connection)
+        if (!ledger.tableExists || ledger.appliedNames.intersect(migrationNames.toSet()).isEmpty() ||
+          version > latestVersion
+        ) {
+          throw databaseIncompatible(path.toString(), DatabaseAccessOperation.OPEN)
+        }
+        val ledgerVersion =
+          connection.createStatement().use { statement ->
+            statement.executeQuery("SELECT MAX(version) FROM schema_migrations").use { rows ->
+              rows.next()
+              rows.getInt(1)
+            }
+          }
+        val desktopIdentityInstalled =
+          connection.createStatement().use { statement ->
+            statement.executeQuery(
+              "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'room_master_table'",
+            ).use { it.next() }
+          }
+        if (ledgerVersion > latestVersion || desktopIdentityInstalled && !hasDesktopReadIdentity(connection)) {
+          throw databaseIncompatible(path.toString(), DatabaseAccessOperation.OPEN)
+        }
+        ledger.hasPendingWork(migrations) || version != latestVersion
+      }
+    }
 
   private fun isSchemaless(dbPath: Path): Boolean =
     asTypedFailure(dbPath, DatabaseAccessOperation.READ) {

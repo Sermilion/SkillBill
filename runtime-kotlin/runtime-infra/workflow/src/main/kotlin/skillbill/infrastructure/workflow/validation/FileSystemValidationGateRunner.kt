@@ -12,6 +12,8 @@ import skillbill.infrastructure.host.jvm.applyTo
 import skillbill.infrastructure.host.process.BoundedExternalProcessOutput
 import skillbill.infrastructure.host.process.BoundedExternalProcessRequest
 import skillbill.infrastructure.host.process.BoundedExternalProcessRunner
+import skillbill.infrastructure.host.scratch.AgentRunScratchRoot
+import skillbill.infrastructure.host.scratch.AgentRunScratchSpace
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateRunRequest
@@ -29,10 +31,16 @@ import javax.xml.parsers.DocumentBuilderFactory
 class FileSystemValidationGateRunner(
   private val clock: Clock,
   private val gateJvmResolver: GateJvmResolver,
+  scratchRoot: AgentRunScratchRoot,
 ) : ValidationGateRunner {
+  private val scratchSpace = AgentRunScratchSpace(scratchRoot.path, clock)
+
   override fun run(request: ValidationGateRunRequest): ValidationGateRunResult {
     val baselineEnvironment = LinkedHashMap(JdkHostPlatformPort.resolveEnvironment())
-    return run(request, baselineEnvironment, gateJvmResolver.resolve(baselineEnvironment))
+    return scratchSpace.withScratch { directory ->
+      baselineEnvironment.putAll(scratchSpace.environment(directory, baselineEnvironment))
+      run(request, baselineEnvironment, gateJvmResolver.resolve(baselineEnvironment))
+    }
   }
 
   internal fun run(
@@ -53,7 +61,8 @@ class FileSystemValidationGateRunner(
   ): ValidationGateRunResult {
     val started = System.nanoTime()
     val artifactFloor = clock.instant().truncatedTo(ChronoUnit.SECONDS)
-    val outputFile = Files.createTempFile("skillbill-validation-gate", ".out")
+    val outputFile =
+      Files.createTempFile(JdkHostPlatformPort.resolveTemporaryDirectory(), "skillbill-validation-gate", ".out")
     return try {
       gateJvm.applyTo(baselineEnvironment)
       val processResult =

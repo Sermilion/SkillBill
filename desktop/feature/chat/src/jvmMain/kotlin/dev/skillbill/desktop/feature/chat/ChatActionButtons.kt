@@ -29,6 +29,7 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 
 /** The agent's suggested next steps; the first is the recommended one. Hovering a row shows the instruction it sends. */
 @Composable
@@ -72,8 +73,33 @@ private fun ActionRow(label: String, action: ChatSuggestedAction, pause: Boolean
     ) {
       val icon = if (action.mode == ChatPermissionMode.Act) LucideIcons.zap else LucideIcons.search
       CompositionLocalProvider(LocalContentColor provides if (primary) colors.accentText else colors.fgMuted) { SbIcon(icon, SbIconSize.Sm) }
-      BasicText(label, Modifier.weight(1f), style = SkillBillTheme.type.tSm.copy(color = if (primary) colors.fg else colors.fg2))
+      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        BasicText(label, style = SkillBillTheme.type.tSm.copy(color = if (primary) colors.fg else colors.fg2))
+        actionHint(action)?.let { hint ->
+          BasicText(hint, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted))
+        }
+      }
       ModeBadge(action.mode, pause)
     }
+  }
+}
+
+private fun actionHint(action: ChatSuggestedAction): String? = when (action.start) {
+  NewTaskActionKind.Goal -> "Plans and implements the work, then runs checks and prepares a pull request."
+  NewTaskActionKind.Plan -> "Creates a plan and spec for the work without implementing it."
+  NewTaskActionKind.Review -> "Reviews the current changes and reports verified findings."
+  NewTaskActionKind.Validation -> "Runs project checks and repairs failures."
+  NewTaskActionKind.Qa -> "Tests the requested behavior and reports findings."
+  NewTaskActionKind.Pr -> "Commits and pushes changes, opens or updates a pull request, and monitors CI."
+  NewTaskActionKind.Monitor -> "Watches CI and may repair and push failures or pull request conflicts."
+  NewTaskActionKind.Verify -> "Proposes acceptance criteria for confirmation, then audits them."
+  NewTaskActionKind.PrReviewFix -> "Proposes fixes for review comments, then applies selected fixes after confirmation."
+  null -> when (action.label.trim().lowercase()) {
+    "run operation:update-check" -> "Checks for skill-bill updates."
+    "run operation:unit-test-value-check" -> "Reviews the value of tests and reports findings."
+    "run operation:feature-guard" -> "Proposes a feature flag, then adds it after confirmation."
+    "run operation:feature-guard-cleanup" -> "Proposes flag removal, then removes it and runs validation after confirmation."
+    "run operation:release" -> "Proposes a release, then tags and pushes it after confirmation."
+    else -> null
   }
 }

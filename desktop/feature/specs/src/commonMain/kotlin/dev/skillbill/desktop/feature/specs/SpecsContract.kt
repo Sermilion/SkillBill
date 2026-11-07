@@ -11,7 +11,6 @@ data class SpecRow(val node: SpecNode, val depth: Int, val hasChildren: Boolean,
 
 sealed interface ToolbarSelection {
   data object None : ToolbarSelection
-  data class FileInBundle(val key: String) : ToolbarSelection
   data class Bundle(val path: String) : ToolbarSelection
 }
 
@@ -30,11 +29,16 @@ data class SpecsUiState(
   val selectedPath: String? = null,
   val projectMenuOpen: Boolean = false,
   val toolbar: SpecToolbarState = SpecToolbarState(),
+  val reservations: Set<String> = emptySet(),
   val filtersActive: Boolean = false,
   val rowMenuPath: String? = null,
+  val rowMenuAnchorPath: String? = null,
   val deleteTarget: SpecDeleteTarget? = null,
   val deleting: Boolean = false,
   val importDialog: ImportConfirmation? = null,
+  val panelMenuOpen: Boolean = false,
+  val barMenuOpen: Boolean = false,
+  val searchOpen: Boolean = false,
 )
 
 data class ImportConfirmation(
@@ -50,6 +54,8 @@ data class SpecToolbarState(
   val control: SpecControlState? = null,
   val bundleKey: String? = null,
   val bundleTitle: String? = null,
+  val subtasksDone: Int? = null,
+  val subtasksTotal: Int? = null,
   val chosenAgent: String? = null,
   val agentMenuOpen: Boolean = false,
   val confirmingCancel: Boolean = false,
@@ -75,9 +81,19 @@ sealed interface SpecsAction {
   data class Select(val path: String) : SpecsAction
   data class Activate(val path: String) : SpecsAction
   data class Click(val path: String) : SpecsAction
+  data object Deselect : SpecsAction
   data object CollapseAll : SpecsAction
   data object Retry : SpecsAction
   data object Reveal : SpecsAction
+  data object RevealBundle : SpecsAction
+  data object OpenPanelMenu : SpecsAction
+  data object DismissPanelMenu : SpecsAction
+  data object OpenBarMenu : SpecsAction
+  data object DismissBarMenu : SpecsAction
+  data object OpenSearch : SpecsAction
+  data object CloseSearch : SpecsAction
+  data object OpenSelectedSpec : SpecsAction
+  data object CopyBundleKey : SpecsAction
   data object OpenAgentMenu : SpecsAction
   data object DismissAgentMenu : SpecsAction
   data class ChooseAgent(val agentId: String) : SpecsAction
@@ -102,11 +118,11 @@ sealed interface SpecsAction {
   data object ToggleFavorite : SpecsAction
 }
 
-internal const val HINT_SELECT_FOLDER = "Select a spec folder to start, pause or cancel it."
 internal const val PAUSE_NOTICE = "Pause recorded. The goal stops after its current subtask."
 internal const val PURGE_DISABLED_TOOLTIP = "Pause or cancel the goal before purging"
 internal const val NO_CHECKOUT = "This project has no checkout on this machine."
 internal const val NO_WORK_ITEM = "This run has no work item."
+internal const val LOADING_SPECS = "Loading specs"
 internal const val NO_SPECS = "No specs yet"
 internal const val NO_SPECS_BODY = "Plan a feature with /skill-bill phase:plan and its bundle shows up here."
 internal const val NO_MATCH = "No specs match"
@@ -131,9 +147,9 @@ internal const val DELETE_INTRO = "This removes the spec folder and every file i
 internal const val DELETE_KEEPS = "Run history stays in the database. Use Purge to remove it."
 internal const val DELETE_WARNING = "This can’t be undone."
 internal const val DELETE_LAUNCHING = "A launch for this spec is in flight. Wait for it before deleting the files."
+internal const val DELETE_LIVE = "Pause or cancel the goal first"
 
-internal fun fileHint(key: String) = "Actions run a whole spec folder, not one subtask. Select $key to control it."
-internal fun cancelPrompt(key: String) = "Cancel $key? The run stops and the goal is marked canceled. Its branch and commits stay."
+internal fun cancelPrompt(key: String) = "Cancel $key?"
 internal fun purgeLabel(key: String) = "Purge $key run history"
 internal fun startFailure(summary: String) = "Couldn't start: $summary"
 internal fun purgeFailure(summary: String) = "Couldn't purge: $summary"

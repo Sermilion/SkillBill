@@ -29,6 +29,7 @@ public object FeatureTaskQaOutcomeRecords {
       previous?.findings.orEmpty(),
       previous?.reportText,
       failureKind = null,
+      details = previous?.details,
     )
 
   public fun settled(
@@ -57,6 +58,13 @@ public object FeatureTaskQaOutcomeRecords {
       mergedFindings(previous?.findings.orEmpty(), retestsFindings(report, verdict), reported),
       report?.text,
       FeatureTaskQaFailureKind.fromWire(produced[QaPhaseOutputKeys.FAILURE_KIND] as? String),
+      QaRunDetailsMapping.goal(
+        report,
+        reference,
+        produced[QaPhaseOutputKeys.EVIDENCE_PREFIX] as? String,
+        produced[QaPhaseOutputKeys.REASON] as? String,
+        previous?.details,
+      ),
     )
   }
 
@@ -124,6 +132,9 @@ public object FeatureTaskQaOutcomeRecords {
         finding.evidencePaths,
         reportPath,
         FeatureTaskQaFindingStatus.NOT_FIXED,
+        finding.observed,
+        finding.expected,
+        finding.steps,
       )
     }
 

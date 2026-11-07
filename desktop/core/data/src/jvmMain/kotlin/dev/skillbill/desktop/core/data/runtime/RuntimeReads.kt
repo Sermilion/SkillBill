@@ -28,6 +28,8 @@ class RuntimeReads(
   private val switch: DiagnosticsSwitch,
   private val diagnostics: Diagnostics,
 ) {
+  internal val ideStatusService by lazy { runtime.ideStatusService }
+
   suspend fun <T> read(name: String, block: (RuntimeComponent) -> T): T = execute("read", name, block)
 
   suspend fun <T> write(name: String, block: (RuntimeComponent) -> T): T = execute("write", name, block)

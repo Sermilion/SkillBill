@@ -1,5 +1,6 @@
 package skillbill.application
 
+import skillbill.application.install.InstallDatabasePreparation
 import skillbill.application.install.InstallService
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.databaseBusy
@@ -45,6 +46,8 @@ import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
 import skillbill.install.model.selectedPlatformSlugs
 import skillbill.ports.db.DatabaseSchemaPort
+import skillbill.ports.db.RuntimeWorkerLeaseQuery
+import skillbill.ports.db.model.RuntimeWorkerLease
 import skillbill.ports.install.InstallPlanWireValidator
 import skillbill.ports.install.apply.InstallApplyExecutionPort
 import skillbill.ports.install.apply.model.InstallApplyExecutionRequest
@@ -78,16 +81,24 @@ import skillbill.ports.install.selection.model.ReadLatestSuccessfulInstallSelect
 import skillbill.ports.install.selection.model.ReadLatestSuccessfulInstallSelectionResult
 import skillbill.ports.install.selection.model.WriteLatestSuccessfulInstallSelectionRequest
 import skillbill.ports.install.selection.model.WriteLatestSuccessfulInstallSelectionResult
+import skillbill.ports.monitor.MonitorProcessInspector
 import skillbill.ports.repository.toFileLocation
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.scaffold.model.DeclaredFiles
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.RoutingSignals
 import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class InstallServiceTest {
   @Test
@@ -109,7 +120,7 @@ class InstallServiceTest {
         skillLinkPort = UnsupportedSkillLinkPort,
         installSelectionPersistencePort = NoopInstallSelectionPersistencePort,
         installPlanWireValidator = testInstallPlanWireValidator,
-        databaseSchemaPort = UnsupportedDatabaseSchemaPort,
+        databasePreparation = databasePreparation(UnsupportedDatabaseSchemaPort),
       )
 
     service.planInstall(request)
@@ -327,7 +338,7 @@ class InstallServiceTest {
       serviceForApply(
         result = successfulApplyResult(plan, resolvedAgent = SupportedAgent.CODEX),
         selectionPort = RecordingInstallSelectionPersistencePort(),
-        schemaPort = schemaPort,
+        databasePreparation = databasePreparation(schemaPort),
       )
 
     val result = service.applyInstall(plan)
@@ -345,7 +356,7 @@ class InstallServiceTest {
       serviceForApply(
         result = failedApplyResult(plan),
         selectionPort = RecordingInstallSelectionPersistencePort(),
-        schemaPort = schemaPort,
+        databasePreparation = databasePreparation(schemaPort),
       )
 
     service.applyInstall(plan)
@@ -362,7 +373,8 @@ class InstallServiceTest {
       serviceForApply(
         result = successfulApplyResult(plan, resolvedAgent = SupportedAgent.CODEX),
         selectionPort = selectionPort,
-        schemaPort = FailingDatabaseSchemaPort(databaseBusy(IllegalStateException("database is locked"))),
+        databasePreparation =
+          databasePreparation(FailingDatabaseSchemaPort(databaseBusy(IllegalStateException("database is locked")))),
       )
 
     val result = service.applyInstall(plan)
@@ -371,6 +383,55 @@ class InstallServiceTest {
     assertEquals(InstallApplyIssueKind.DATABASE_MIGRATION_FAILED, result.warnings.single().kind)
     assertEquals(1, selectionPort.writeRequests.size)
   }
+
+  @Test
+  fun `apply install defers a pending migration while a recorded worker process is still running`() {
+    val home = Path.of("/tmp/skillbill-install-service-live-worker-home")
+    val plan = installPlan(request(Path.of("/tmp/skillbill-install-service-live-worker-repo"), home))
+    val schemaPort = RecordingDatabaseSchemaPort(pendingMigrations = true)
+    val service =
+      serviceForApply(
+        result = successfulApplyResult(plan, resolvedAgent = SupportedAgent.CODEX),
+        selectionPort = RecordingInstallSelectionPersistencePort(),
+        databasePreparation =
+          databasePreparation(
+            schemaPort,
+            FixedWorkerLeases(
+              listOf(workerLease("phase plan (plan-live)", pid = 101), workerLease("workflow wftr-exited", pid = 202)),
+            ),
+            FixedProcessInspector(
+              mapOf(
+                101L to FeatureTaskRuntimeProcessInspection.ExactLive,
+                202L to FeatureTaskRuntimeProcessInspection.NotRunning,
+              ),
+            ),
+          ),
+      )
+
+    val result = service.applyInstall(plan)
+
+    assertEquals(0, schemaPort.migrateCalls)
+    assertEquals(InstallApplyStatus.WARNING, result.status)
+    val warning = result.warnings.single()
+    assertEquals(InstallApplyIssueKind.DATABASE_MIGRATION_DEFERRED, warning.kind)
+    assertTrue("phase plan (plan-live)" in warning.message)
+    assertFalse("wftr-exited" in warning.message)
+  }
+
+  private fun workerLease(
+    holder: String,
+    pid: Long,
+  ): RuntimeWorkerLease =
+    RuntimeWorkerLease(
+      holder = holder,
+      process =
+        FeatureTaskRuntimeProcessIdentity(
+          hostIdentity = "host",
+          bootIdentity = "boot",
+          pid = pid,
+          processBirthToken = "birth-$pid",
+        ),
+    )
 
   private fun platformManifest(
     repoRoot: Path,
@@ -467,7 +528,7 @@ class InstallServiceTest {
     result: InstallApplyResult,
     selectionPort: InstallSelectionPersistencePort,
     wireValidator: InstallPlanWireValidator = testInstallPlanWireValidator,
-    schemaPort: DatabaseSchemaPort = RecordingDatabaseSchemaPort(),
+    databasePreparation: InstallDatabasePreparation = databasePreparation(RecordingDatabaseSchemaPort()),
   ): InstallService =
     InstallService(
       planningFactsPort = UnsupportedPlanningFactsPort,
@@ -480,8 +541,14 @@ class InstallServiceTest {
       skillLinkPort = UnsupportedSkillLinkPort,
       installSelectionPersistencePort = selectionPort,
       installPlanWireValidator = wireValidator,
-      databaseSchemaPort = schemaPort,
+      databasePreparation = databasePreparation,
     )
+
+  private fun databasePreparation(
+    schemaPort: DatabaseSchemaPort,
+    workerLeases: RuntimeWorkerLeaseQuery = FixedWorkerLeases(emptyList()),
+    processInspector: MonitorProcessInspector = FixedProcessInspector(emptyMap()),
+  ): InstallDatabasePreparation = InstallDatabasePreparation(schemaPort, workerLeases, processInspector, FIXED_CLOCK)
 
   private fun successfulApplyResult(
     plan: InstallPlan,
@@ -708,9 +775,13 @@ class InstallServiceTest {
     override fun ensureDatabaseReady(): Unit = error("ensureDatabaseReady is not part of this test")
 
     override fun migrateExistingDatabase(): Boolean = error("migrateExistingDatabase is not part of this test")
+
+    override fun hasPendingMigrations(): Boolean = error("hasPendingMigrations is not part of this test")
   }
 
-  private class RecordingDatabaseSchemaPort : DatabaseSchemaPort {
+  private class RecordingDatabaseSchemaPort(
+    private val pendingMigrations: Boolean = false,
+  ) : DatabaseSchemaPort {
     var migrateCalls = 0
 
     override fun ensureDatabaseReady() {
@@ -718,12 +789,29 @@ class InstallServiceTest {
     }
 
     override fun migrateExistingDatabase(): Boolean = error("migrateExistingDatabase is not part of this test")
+
+    override fun hasPendingMigrations(): Boolean = pendingMigrations
   }
 
   private class FailingDatabaseSchemaPort(private val failure: SkillBillRuntimeException) : DatabaseSchemaPort {
     override fun ensureDatabaseReady(): Unit = throw failure
 
     override fun migrateExistingDatabase(): Boolean = error("migrateExistingDatabase is not part of this test")
+
+    override fun hasPendingMigrations(): Boolean = false
+  }
+
+  private class FixedWorkerLeases(private val leases: List<RuntimeWorkerLease>) : RuntimeWorkerLeaseQuery {
+    override fun unexpiredLeases(now: Instant): List<RuntimeWorkerLease> = leases
+  }
+
+  private class FixedProcessInspector(
+    private val inspections: Map<Long, FeatureTaskRuntimeProcessInspection>,
+  ) : MonitorProcessInspector {
+    override fun currentProcess(): FeatureTaskRuntimeProcessIdentity = error("currentProcess is not part of this test")
+
+    override fun inspect(recorded: FeatureTaskRuntimeProcessIdentity): FeatureTaskRuntimeProcessInspection =
+      inspections.getValue(recorded.pid)
   }
 
   private object UnsupportedInstallReconcilePort : InstallReconcilePort {
@@ -743,5 +831,9 @@ class InstallServiceTest {
 
     override fun writeBaseline(request: WriteBaselineManifestRequest): WriteBaselineManifestResult =
       error("writeBaseline is not part of this test")
+  }
+
+  private companion object {
+    val FIXED_CLOCK: Clock = Clock.fixed(Instant.parse("2026-11-06T11:34:35Z"), ZoneOffset.UTC)
   }
 }

@@ -7,6 +7,7 @@ import skillbill.di.core.RuntimeContext
 import skillbill.di.core.TransportContext
 import skillbill.di.core.WorkflowOpsContext
 import skillbill.di.core.configureProcessLogging
+import skillbill.di.core.configureProcessTempRoot
 import skillbill.di.core.create
 import skillbill.di.core.verboseLoggingRequestedByEnvironment
 import skillbill.error.core.SkillBillRuntimeException
@@ -17,6 +18,7 @@ import skillbill.model.EnvironmentContext
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
+  configureProcessTempRoot()
   if (args.contentEquals(arrayOf("--check-packaged-contracts"))) {
     try {
       PackagedContractComponent::class.create().inspector.inspect()

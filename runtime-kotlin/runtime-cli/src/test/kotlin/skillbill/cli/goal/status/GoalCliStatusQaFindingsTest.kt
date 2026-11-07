@@ -19,8 +19,8 @@ class GoalCliStatusQaFindingsTest {
         recordedAt = Instant.parse("2026-10-20T10:15:30Z"),
         findings =
           listOf(
-            GoalRunnerQaFinding("F-1", "Login button does nothing.", "/qa/F-1.png", fixed = true),
-            GoalRunnerQaFinding("F-2", "Home screen stays blank.", "/qa/F-2.png", fixed = false),
+            GoalRunnerQaFinding("F-1", "Login button does nothing.", fixed = true, listOf("/qa/F-1.png")),
+            GoalRunnerQaFinding("F-2", "Home screen stays blank.", fixed = false, listOf("/qa/F-2.png")),
           ),
       )
 

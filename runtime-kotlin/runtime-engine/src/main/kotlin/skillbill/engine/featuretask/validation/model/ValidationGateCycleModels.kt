@@ -9,6 +9,7 @@ import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRepairOutput
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRepairWindowPhase
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateTriageDisposition
@@ -132,5 +133,7 @@ public data class ValidationGateCycleRequest(
   public val commandFamily: ValidationGateCommandFamily = ValidationGateCommandFamily.BUILD,
   public val repositoryCheckpointProvider: () -> String? = { repositoryCheckpoint },
   internal val preserveConsumedRepairTurns: Boolean = false,
+  internal val carriedRepairTurns: Int = 0,
+  internal val carriedRepairOutputs: List<FeatureTaskRuntimeValidationGateRepairOutput> = emptyList(),
   internal val progressKey: String = request.workflowId,
 )

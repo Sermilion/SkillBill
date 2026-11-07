@@ -135,6 +135,7 @@ class IdeStatusServiceGoalProjectionTest {
       assertTrue(detail.running)
       assertNull(detail.finishedAt)
       assertNull(detail.finishedAtSource)
+      assertNull(detail.standalonePlanProgress)
     }
   }
 

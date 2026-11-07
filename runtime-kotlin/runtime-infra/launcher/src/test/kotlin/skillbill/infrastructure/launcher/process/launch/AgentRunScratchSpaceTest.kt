@@ -2,15 +2,17 @@ package skillbill.infrastructure.launcher.process.launch
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.time.JvmSystemClock
+import skillbill.infrastructure.host.jvm.AgentGradleUserHome
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
+import skillbill.infrastructure.host.scratch.AgentRunScratchSpace
+import skillbill.infrastructure.host.scratch.testAgentRunScratchRoot
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.listDirectoryEntries
-import kotlin.io.path.writeText
 
 class AgentRunScratchSpaceTest {
   @Test
@@ -32,22 +34,23 @@ class AgentRunScratchSpaceTest {
     assertEquals(3, result.exitStatus)
     assertEquals(root, scratch.parent)
     assertFalse(Files.exists(scratch))
-    assertEquals(emptyList<Path>(), root.listDirectoryEntries())
+    assertEquals(listOf(root.resolve(AgentRunScratchSpace.JVM_DIRECTORY)), root.listDirectoryEntries())
   }
 
   @Test
-  fun `a new run sweeps scratch left by a dead owner and keeps a live owner's`(
-    @TempDir root: Path,
+  fun `an isolated agent launch still carries the machine's Gradle user home pin`(
+    @TempDir stateDir: Path,
   ) {
-    val abandoned = Files.createDirectories(root.resolve("${AgentRunScratchSpace.DIRECTORY_PREFIX}abandoned"))
-    abandoned.resolve(AgentRunScratchSpace.OWNER_FILE).writeText("101")
-    val live = Files.createDirectories(root.resolve("${AgentRunScratchSpace.DIRECTORY_PREFIX}live"))
-    live.resolve(AgentRunScratchSpace.OWNER_FILE).writeText("202")
-    val space = AgentRunScratchSpace(root, ownerPid = 1, isProcessAlive = { pid -> pid == 202L })
+    val runner = JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot(stateDir))
 
-    space.withScratch { }
+    val result =
+      runner.run(
+        testAgentRunProcessRequest(listOf("sh", "-c", "printf %s \"\$GRADLE_OPTS\""), Path.of(".")) {
+          inheritEnvironment = false
+        },
+      )
 
-    assertFalse(Files.exists(abandoned))
-    assertTrue(Files.exists(live))
+    val machine = JdkHostPlatformPort.resolveEnvironment()
+    assertEquals(AgentGradleUserHome.environment(emptyMap(), machine)[AgentGradleUserHome.GRADLE_OPTS], result.stdout)
   }
 }

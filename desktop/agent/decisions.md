@@ -1,3 +1,81 @@
+## [2026-11-06] Save the chat width after a drag settles and flush it on window close
+Context: Dragging the chat divider changes the width many times per second. Writing each value to DataStore is wasteful, and a width changed just before quitting could be lost.
+Decision: ChatPaneWidth updates its state flow immediately and saves through AppSettingsRepository.setChatWidthDp after a 300 ms pause. Closing the window cancels the pending timer and writes the last value once, bounded by a one-second timeout. A rejected write is dropped, not retried. The width is clamped to 360 to 2000 dp on write and again on read.
+Reason: One write per drag keeps settings storage quiet, and the close flush keeps the last width. Clamping on both sides stops an unclamped writer from being hidden by the reader. The timeout stops a stuck store from delaying window shutdown.
+Revisit when: Settings writes become cheap enough to save on every change, or window close gains an asynchronous shutdown hook that replaces the blocking flush.
+
+## [2026-11-06] Dock chat in the shared right pane slot and clamp it to a main-column floor
+Context: Chat floated over the work area as an overlay, covering the main column and competing with the specs pane for Esc and focus.
+Decision: Chat renders through WorkArea's right slot and replaces the specs pane while open outside Settings. DockedPane clamps width to at least 360 dp and at most the work-area width minus 420 dp, and every resize reports the clamped result. In drawer mode it covers the work area without a grip. Esc is routed to the pane only while focus is inside it.
+Reason: A docked pane keeps the main column usable and avoids a scrim that blocks it. Clamping at the pane, from the rendered width, keeps stored widths valid after a window shrink.
+Revisit when: Chat and specs need to be visible together, or the main column floor needs a per-route value.
+
+## [2026-11-06] Keep New Task chat ownership independent of layout
+Context: The Open chats setting switches live between Tabs and Side list while chats may be replying or hold unsent text.
+Decision: Window-scoped NewTaskChats owns open drafts and selection outside the screen view model. Both layouts read the same OpenChatItem projection; shortcuts and busy-close confirmation stay outside the layout branch.
+Reason: A presentation change must preserve drafts, sessions, order and selection. Keeping ownership in the window also preserves the existing navigation and database-session lifetime contract.
+Revisit when: Transcript scroll must survive layout changes. The current spec permits it to reset.
+
+## [2026-11-06] Keep the open New Task chat set in memory
+Context: Saved New Task drafts already return through Recent chats and the resume picker, and restoring the open set after restart is out of scope.
+Decision: Persist saved conversations through the existing chat store, but keep open-chat membership and order in window memory only.
+Reason: Saved drafts provide recovery. Persisting the open set would add another store for those chats beyond the requested scope.
+Revisit when: Operators need their open tabs restored after restart.
+
+## [2026-11-06] Desktop treats a missing worktree directory as Removed, whatever the runtime reports
+Context: The runtime can lag the disk. A goal worktree deleted externally stayed Active, so chat and terminal started agents in a directory that no longer existed (WE-5187).
+Decision: The mapper downgrades Active or Retained to Removed when the worktree path is blank, invalid or not an existing directory. Chat, terminal and the changes window resolve their root at use time: the checkout root if it exists, else the repository root. The changes window opens committed-range files only while the main checkout is on the goal's branch.
+Reason: The directory on disk is the only fact an agent launch depends on; trusting runtime state alone leaves a window of launches into a failing path.
+Alternatives considered: A runtime-only fix leaves stale state between refreshes; a path watcher is more machinery than an existence check.
+Revisit when: The runtime reports worktree liveness itself or the desktop gets a change feed that makes the per-row check unnecessary.
+
+## [2026-11-06] Continue a chat in the main checkout by moving agent session files
+Context: After removal, saved Claude and Codex sessions still live under the worktree path, so opening the chat at the main checkout started a fresh session and lost the conversation.
+Decision: End the agent process, then move or rewrite saved sessions to the main checkout path once per chat session under a lock. Keep the session id only for Claude or Codex when the move reported no failures; otherwise start fresh and say so. Claude files move without overwriting a destination; Codex files get only the first-line cwd rewritten through a same-directory temporary file and atomic replace.
+Reason: Moving the files is the only way to keep the agent's own history, the no-failure condition prevents resuming a half-moved session, and not overwriting protects sessions already at the main checkout.
+Revisit when: Cursor or Junie expose a relocatable session store, or Claude and Codex resume by id regardless of directory.
+
+## [2026-11-06] Refresh observed standalone plans on a bounded pulse
+Context: Plan output snapshots have no change revision, so database signals alone do not guarantee a full detail refresh when output changes.
+Decision: Refresh full detail every two seconds while an observed standalone plan is active or blocked. Stop when a full read reports it idle or the observer closes.
+Reason: The pulse makes persisted progress visible without changing producer or persistence ownership.
+Revisit when: Output writes provide a reliable change signal.
+
+## [2026-11-06] Require saved plan units before implementation
+Context: Seeded spec files and a saved report do not establish that every plan unit finished writing its spec.
+Decision: Enable Implement only for a finished standalone plan with a saved report and all projected units in the saved state.
+Reason: File existence alone can admit an incomplete plan.
+## [2026-11-06] Drop only the invalid suggested action and say why in the reply
+Context: An instruction over 2000 characters made decodeActions drop the whole skillbill-actions block. Only a chat.actions_invalid diagnostic recorded it, so the agent told the operator to click a start button that never appeared.
+Decision: Each action is checked on its own. An invalid one is dropped, records chat.action_invalid (or chat.action_start_unknown), and appends one visible notice to the reply naming the label and reason. Valid siblings still become buttons. A block that does not parse, has more than 3 actions, or repeats a label still drops as a whole, with chat.actions_invalid and the same visible notice.
+Reason: The operator is the only one who can see the app's verdict on a reply. Without the notice, a missing button looks like a UI bug and neither side knows to ask for a shorter instruction.
+
+## [2026-11-05] List New task chats from every repository on the home
+Context: The home showed one Continue row for the selected repository's newest draft.
+Decision: The home lists up to 6 saved New Task drafts from every repository with resume and discard per row. "Show all" opens the /resume picker when more drafts exist. `refreshSaved` and the picker read every repository's drafts, and the list stays a plain capped column with no nested scroll.
+Reason: Drafts in other repositories stayed hidden until the operator switched repository.
+Superseded by: Scope the New Task resume palette to the picked repository (2026-11-06), for the picker only. The cross-repository home list decision stands.
+
+## [2026-11-05] Keep spec deletion refusal in the runtime
+Context: Desktop control facts and the runtime board projection can disagree while a goal changes state.
+Decision: Guard desktop deletion with matching loaded canDelete verdicts and launch reservations, while allowing requests without loaded control. SpecBrowserService.deleteBundle retains the final refusal.
+Reason: Desktop facts can be stale or absent, so they cannot replace the runtime check for a live goal or errors.
+
+## [2026-11-05] Share bundle targets and Specs actions across surfaces
+Context: A selected file needs its own tree highlight, while controls, favorites and reservations belong to its bundle. Menus and the command palette expose the same actions.
+Decision: Resolve the parent bundle for controls and derive menu and palette entries from SpecsMenuModel. Keep extended popover keyboard handling opt-in and retain control identity when selection moves within a bundle.
+Reason: A shared target prevents actions from operating on a file path and avoids reloading control within a bundle. A shared action source keeps order and availability aligned without changing other popovers.
+
+## [2026-11-05] Admit Specs export through its preflight
+Context: Export is offered when a bundle has an issue key and checkout, including while run control loads.
+Decision: Send export to the existing runtime preflight without waiting for a control verdict, and check session and bundle identity across asynchronous steps.
+Reason: Preflight owns export admission, including live-work refusal. Waiting for a separate control read would hide an action that preflight can assess.
+
+## [2026-11-05] Bind a pending start to the selected bundle
+Context: Starting without an agent requires a choice, while selection or the runtime verdict can change with the picker open.
+Decision: Bind the pending start to selection identity and clear it on dismissal, selection change or loss of canStart. An ordinary agent choice does not start a bundle.
+Reason: An agent choice must not launch a different bundle or bypass a changed runtime verdict.
+
 ## [2026-11-04] Keep archive admission and inspection in the runtime
 Context: Desktop needs to refuse live export before file selection and show archive identity before import confirmation.
 Decision: Delegate preflight and inspection through WorkControlRepository. Recheck export admission and bind import to the inspected fingerprint and selected database observation.
@@ -33,6 +111,11 @@ Context: A remote-only branch may require its origin/ prefix for checkout, while
 Decision: The picker passes the displayed remote name as the base branch, matching the previous typed input.
 Reason: Stripping the prefix can make checkout fail. Run and merge handling do not yet share a branch representation.
 Revisit when: Remote base branches share a representation across checkout and merge paths.
+
+## [2026-11-05] Pass app-owned icon files to NativeTray
+Context: Compose tray icon renderers and the path-based Tray API create temporary files outside the desktop temp authority.
+Decision: Render PNG and ICO files under the desktop temp root and pass their paths directly to NativeTray. Retain the current and previous icon for each tray instance and render outside the availability gate.
+Reason: Direct updates avoid the library's temp-file copy. Retaining the previous icon protects a path the native tray may still use, and rendering outside the gate permits recovery after failure.
 
 ## [2026-11-04] Keep spec favorite reveals pending through project loading
 Context: Selecting a bundle immediately after switching projects can be dropped while the new tree loads. A favorite can also refer to a project other than the one currently followed.
@@ -84,6 +167,7 @@ Revisit when: Codex, Cursor or Junie accept inline image input, or an agent cann
 Context: A removed goal worktree cannot supply working-tree changes, but its branch commits remain accessible from the primary checkout.
 Decision: Read the goal branch range from the primary checkout and hide Uncommitted and Outside scopes. Keep All available and prevent opening files from the removed worktree.
 Reason: Committed refs preserve the goal's recorded changes without attributing the primary checkout's working files to that goal. Outside does not accept a goal head ref, so it could report the wrong data.
+Superseded by: Desktop treats a missing worktree directory as Removed, whatever the runtime reports (2026-11-06)
 
 ## [2026-11-02] Queue New task messages while a turn runs
 Context: Execution chat queues Send while a reply streams. New task disabled Send because canAdmitTurn required the thread not to be busy, so follow-up messages were dropped until the turn ended.

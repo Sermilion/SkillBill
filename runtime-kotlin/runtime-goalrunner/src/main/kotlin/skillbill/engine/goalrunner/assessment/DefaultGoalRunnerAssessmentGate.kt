@@ -8,7 +8,6 @@ import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
-import skillbill.engine.goalrunner.qa.GoalRunnerPostChangeValidation
 import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.assessment.GoalAssessmentLoopRules
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
@@ -29,7 +28,6 @@ public class DefaultGoalRunnerAssessmentGate(
   projectStore: ProjectStorePort,
   clock: Clock,
   activityStampWriter: AgentActivityStampWriter,
-  validation: GoalRunnerPostChangeValidation,
   diagnostics: RuntimeDiagnostics,
 ) : GoalRunnerAssessmentGate {
   private val assembler = GoalAssessmentInputAssembler(gitOperations, fileStore, projectStore, diagnostics)
@@ -42,7 +40,7 @@ public class DefaultGoalRunnerAssessmentGate(
       diagnostics,
     )
   private val loop =
-    GoalAssessmentLoop(services, GoalAssessmentFixStep(services, gitOperations, validation), this::runRound)
+    GoalAssessmentLoop(services, GoalAssessmentFixStep(services, gitOperations), this::runRound)
 
   override fun run(
     state: GoalRunnerManifestState,

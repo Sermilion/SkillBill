@@ -3,7 +3,9 @@ package dev.skillbill.desktop.feature.chat.newtask
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.ChatScope
@@ -22,6 +24,7 @@ import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatWorkspace
 import dev.skillbill.desktop.feature.chat.STOPPED_NOTICE
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -36,6 +39,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlin.coroutines.coroutineContext
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
@@ -45,6 +49,9 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.time.Instant
+
+private const val REPLAY_NOTICE = "It gets the earlier conversation with your next message."
 
 /** A draft for tests that never send. */
 internal fun testDatabaseSessionController(sessionId: Long? = 1L): DatabaseSessionController = object : DatabaseSessionController {
@@ -88,6 +95,90 @@ class NewTaskDraftTest {
     assertFalse(draft.canSend())
     draft.send()
     assertTrue(chat.requests.isEmpty())
+  }
+
+  @Test
+  fun `saved chat discard hides immediately and each undo window settles independently`() = runTest {
+    val toasts = ToastQueue()
+    val first = ChatHistoryEntry(
+      "first-discard", null, requireNotNull(chat.agent), Instant.fromEpochSeconds(1), "Fix header",
+      listOf(ChatHistoryLine(ChatHistoryRole.Operator, "Fix header")), ChatNewTaskContext(root, "main"),
+    )
+    val second = first.copy(sessionId = "second-discard", title = "Fix footer")
+    chat.saved[first.sessionId] = first
+    chat.saved[second.sessionId] = second
+    val draft = NewTaskDraft(chat, FakeWorkControlRepository(), testDatabaseSessionController(), toasts, WindowCoroutineScope(backgroundScope), Clock.System)
+
+    draft.refreshSaved()
+    runCurrent()
+    assertEquals(listOf(first, second), draft.saved.value)
+    draft.discardSaved(first)
+    draft.discardSaved(second)
+    draft.discardSaved(first)
+    runCurrent()
+    draft.refreshSaved()
+    runCurrent()
+
+    assertTrue(first.sessionId in chat.saved)
+    assertTrue(second.sessionId in chat.saved)
+    assertTrue(draft.saved.value.isEmpty())
+    assertEquals(2, toasts.host.toasts.size)
+    assertEquals("Discarded Fix footer", toasts.host.toasts.last().data.title)
+    advanceTimeBy(4_999)
+    runCurrent()
+    assertTrue(first.sessionId in chat.saved)
+    assertTrue(second.sessionId in chat.saved)
+    toasts.host.toasts.last().data.actions.single().onClick()
+    runCurrent()
+    assertEquals(listOf(second), draft.saved.value)
+
+    advanceTimeBy(1)
+    runCurrent()
+
+    assertTrue(first.sessionId !in chat.saved)
+    assertTrue(second.sessionId in chat.saved)
+    assertEquals(listOf(second), draft.saved.value)
+  }
+
+  @Test
+  fun `refresh cannot restore a discard while its delete is suspended and expired undo cannot cancel it`() = runTest {
+    val entry = ChatHistoryEntry(
+      "deleting-discard", null, requireNotNull(chat.agent), Instant.fromEpochSeconds(1), "Fix header",
+      listOf(ChatHistoryLine(ChatHistoryRole.Operator, "Fix header")), ChatNewTaskContext(root, "main"),
+    )
+    chat.saved[entry.sessionId] = entry
+    val deleting = CompletableDeferred<Unit>()
+    val completeDelete = CompletableDeferred<Unit>()
+    val repository = object : ExecutionChatRepository by chat {
+      override suspend fun deleteSavedChat(sessionId: String) {
+        deleting.complete(Unit)
+        completeDelete.await()
+        chat.deleteSavedChat(sessionId)
+      }
+    }
+    val toasts = ToastQueue()
+    val draft = NewTaskDraft(repository, FakeWorkControlRepository(), testDatabaseSessionController(), toasts, WindowCoroutineScope(backgroundScope), Clock.System)
+    draft.refreshSaved()
+    runCurrent()
+    assertEquals(listOf(entry), draft.saved.value)
+
+    draft.discardSaved(entry)
+    runCurrent()
+    advanceTimeBy(5_000)
+    runCurrent()
+    assertTrue(deleting.isCompleted)
+    draft.refreshSaved()
+    runCurrent()
+    assertTrue(draft.saved.value.isEmpty())
+    assertTrue(entry.sessionId in chat.saved)
+
+    toasts.host.toasts.single().data.actions.single().onClick()
+    runCurrent()
+    assertTrue(draft.saved.value.isEmpty())
+    completeDelete.complete(Unit)
+    runCurrent()
+    assertTrue(entry.sessionId !in chat.saved)
+    assertTrue(draft.saved.value.isEmpty())
   }
 
   // Reusing ChatTurns.freshRead would mark a chat with no execution gone.
@@ -269,9 +360,15 @@ class NewTaskDraftTest {
   @Test
   fun `closeAll ends the new-task chat, keeps its save and never lists it as a tab`() = runTest {
     chat.events = { flowOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed) }
-    val draft = draft()
+    val chats = testNewTaskChats(chat)
+    val draft = chats.selected.value.apply {
+      repository = NewTaskRepository(root, "repo")
+      baseBranch = "main"
+      agentId = "claude"
+      selectedAgent = this@NewTaskDraftTest.chat.agent
+    }
     val workspace = ChatWorkspace(
-      chat, FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(), draft,
+      chat, FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(), chats,
     )
     draft.say("add export")
     runCurrent()
@@ -353,10 +450,106 @@ class NewTaskDraftTest {
     val rebound = checkNotNull(draft.chat.value)
     assertNotEquals(firstSession, rebound.sessionId)
     assertEquals("codex", rebound.agent.agentId)
+    assertTrue((rebound.thread.transcript.value.last() as ChatMessage.Notice).text.endsWith(REPLAY_NOTICE))
     draft.say("continue")
     runCurrent()
-    assertEquals("codex", chat.requests.last().agent.agentId)
-    assertTrue(chat.requests.last().firstTurn)
+    val first = chat.requests.last()
+    assertEquals("codex", first.agent.agentId)
+    assertTrue(first.firstTurn)
+    assertTrue(first.prompt.startsWith("Earlier in this chat you were talking with claude."))
+    assertTrue("Operator: add export\n\nAgent: ok" in first.prompt)
+    assertTrue(first.prompt.endsWith("Continue from here.\n\ncontinue"))
+
+    draft.say("and tests")
+    runCurrent()
+    assertEquals("and tests", chat.requests.last().prompt)
+    val operatorTexts = listOf("add export", "continue", "and tests")
+    assertEquals(operatorTexts, rebound.thread.transcript.value.filterIsInstance<ChatMessage.Operator>().map { it.text })
+    assertEquals(operatorTexts, chat.saved.getValue(rebound.sessionId).lines.filter { it.role == ChatHistoryRole.Operator }.map { it.text })
+    draft.close()
+  }
+
+  @Test
+  fun `switching twice without sending replays once and names the agent that ran`() = runTest {
+    chat.events = { flowOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed) }
+    val draft = draft()
+    draft.say("add export")
+    runCurrent()
+    val otherRoot = createTempDirectory("other-repo").toString()
+
+    draft.agentId = "codex"
+    draft.selectedAgent = chat.agentFor("codex")
+    draft.rebindChat()
+    runCurrent()
+    draft.agentId = "gemini"
+    draft.selectedAgent = chat.agentFor("gemini")
+    draft.repository = NewTaskRepository(otherRoot, "other")
+    draft.rebindChat()
+    runCurrent()
+    val rebound = checkNotNull(draft.chat.value)
+    assertTrue((rebound.thread.transcript.value.last() as ChatMessage.Notice).text.endsWith(REPLAY_NOTICE))
+    draft.say("continue")
+    runCurrent()
+
+    val request = chat.requests.last()
+    assertEquals("gemini", request.agent.agentId)
+    assertEquals(1, request.prompt.split("Earlier in this chat").size - 1)
+    assertTrue(request.prompt.startsWith("Earlier in this chat you were talking with claude."))
+    assertTrue("The repository changed from $root to $otherRoot." in request.prompt)
+    assertTrue(request.prompt.endsWith("\n\ncontinue"))
+    draft.close()
+  }
+
+  // Clearing the replay on send instead of on the first output would lose it to a failed first turn.
+  @Test
+  fun `a failed first turn after a switch retries with the earlier conversation`() = runTest {
+    chat.events = { flowOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed) }
+    val draft = draft()
+    draft.say("add export")
+    runCurrent()
+    draft.agentId = "codex"
+    draft.selectedAgent = chat.agentFor("codex")
+    draft.rebindChat()
+    runCurrent()
+
+    chat.events = { flowOf(ChatEvent.Failed(ChatFailure.BinaryMissing, null)) }
+    draft.say("continue")
+    runCurrent()
+    chat.events = { flowOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed) }
+    draft.say("again")
+    runCurrent()
+    draft.say("more")
+    runCurrent()
+
+    val rebound = chat.requests.drop(1)
+    assertEquals(listOf(true, true, false), rebound.map { it.firstTurn })
+    assertTrue(rebound[0].prompt.startsWith("Earlier in this chat you were talking with claude."))
+    assertTrue(rebound[0].prompt.endsWith("\n\ncontinue"))
+    assertTrue(rebound[1].prompt.startsWith("Earlier in this chat you were talking with claude."))
+    assertTrue(rebound[1].prompt.endsWith("\n\nagain"))
+    assertEquals("more", rebound[2].prompt)
+    draft.close()
+  }
+
+  @Test
+  fun `a model change on the same agent keeps the session and replays nothing`() = runTest {
+    chat.events = { flowOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed) }
+    val draft = draft()
+    draft.say("add export")
+    runCurrent()
+    val sessionId = chat.requests.single().sessionId
+
+    draft.selectedAgent = checkNotNull(chat.agent).copy(model = "other")
+    draft.rebindChat()
+    runCurrent()
+    draft.say("continue")
+    runCurrent()
+
+    assertEquals(sessionId, draft.chat.value?.sessionId)
+    assertTrue(chat.ended.isEmpty())
+    assertTrue(checkNotNull(draft.chat.value).thread.transcript.value.none { it is ChatMessage.Notice })
+    assertFalse(chat.requests.last().firstTurn)
+    assertEquals("continue", chat.requests.last().prompt)
     draft.close()
   }
 
@@ -377,7 +570,7 @@ class NewTaskDraftTest {
   }
 
   @Test
-  fun `messages queued during a reply run in order without splitting the streaming answer`() = runTest {
+  fun `messages queued during a reply send as one follow-up without splitting the streaming answer`() = runTest {
     val replies = mutableListOf<Channel<ChatEvent>>()
     chat.events = {
       val reply = Channel<ChatEvent>(Channel.UNLIMITED)
@@ -391,11 +584,12 @@ class NewTaskDraftTest {
     runCurrent()
     draft.say("second")
     draft.say("third")
+    draft.say("fourth")
     runCurrent()
 
     val thread = checkNotNull(draft.chat.value).thread
     assertEquals(1, chat.requests.size)
-    assertEquals(2, thread.queued.value.size)
+    assertEquals(3, thread.queued.value.size)
     replies[0].send(ChatEvent.TextDelta("after"))
     replies[0].send(ChatEvent.Completed)
     replies[0].close()
@@ -403,15 +597,21 @@ class NewTaskDraftTest {
 
     assertEquals(2, chat.requests.size)
     assertEquals("first", (thread.transcript.value.filterIsInstance<ChatMessage.Operator>()[0]).text)
-    assertEquals("second", (thread.transcript.value.filterIsInstance<ChatMessage.Operator>()[1]).text)
+    val combined = "second\n\nthird\n\nfourth"
+    assertEquals(combined, chat.requests[1].prompt)
+    assertEquals(combined, (thread.transcript.value.filterIsInstance<ChatMessage.Operator>()[1]).text)
     assertEquals("Before after", thread.transcript.value.filterIsInstance<ChatMessage.Agent>().first().text)
-    assertEquals(1, thread.queued.value.size)
+    assertTrue(thread.queued.value.isEmpty())
+    draft.say("later")
+    runCurrent()
+    assertEquals(2, chat.requests.size)
     replies[1].send(ChatEvent.Completed)
     replies[1].close()
     runCurrent()
 
     assertEquals(3, chat.requests.size)
-    assertEquals("third", thread.transcript.value.filterIsInstance<ChatMessage.Operator>().last().text)
+    assertEquals("later", chat.requests[2].prompt)
+    assertEquals("later", thread.transcript.value.filterIsInstance<ChatMessage.Operator>().last().text)
     assertTrue(thread.queued.value.isEmpty())
     draft.close()
   }
@@ -579,7 +779,7 @@ class NewTaskDraftTest {
   }
 
   @Test
-  fun `send now stops the running reply and sends queued messages in order`() = runTest {
+  fun `send now stops the running reply and sends queued messages as one follow-up`() = runTest {
     val replies = mutableListOf<Channel<ChatEvent>>()
     chat.events = {
       val reply = Channel<ChatEvent>(Channel.UNLIMITED)
@@ -599,14 +799,12 @@ class NewTaskDraftTest {
     replies[1].send(ChatEvent.Completed)
     replies[1].close()
     runCurrent()
-    replies[2].send(ChatEvent.Completed)
-    replies[2].close()
-    runCurrent()
     val transcript = checkNotNull(draft.chat.value).thread.transcript.value
     val stoppedAt = transcript.indexOfFirst { it is ChatMessage.Notice && it.text == STOPPED_NOTICE }
-    val secondOperator = transcript.indexOfFirst { it is ChatMessage.Operator && it.text == "second" }
+    val secondOperator = transcript.indexOfFirst { it is ChatMessage.Operator && it.text == "second\n\nthird" }
     assertTrue(stoppedAt >= 0 && secondOperator > stoppedAt)
-    assertEquals(listOf("first", "second", "third"), chat.requests.map { it.prompt })
+    assertEquals(listOf("first", "second\n\nthird"), chat.requests.map { it.prompt })
+    assertTrue(checkNotNull(draft.chat.value).thread.queued.value.isEmpty())
     draft.close()
   }
 

@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.core.schema
 
 import skillbill.contracts.persistence.DesktopReadSchema
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.sql.Connection
 import java.sql.Statement
 import java.util.UUID
@@ -300,6 +301,7 @@ private val LEASE_IDENTITY_COLUMNS = listOf("lease_state", "owner_token", "pid",
 private val LEASE_HEARTBEAT_COLUMNS = listOf("heartbeat_at", "expires_at")
 private val GOAL_SPEC_TOPICS = listOf(DesktopReadSchema.GOALS_TOPIC, DesktopReadSchema.SPECS_TOPIC)
 private val PHASE_TOPICS = listOf(DesktopReadSchema.PHASES_TOPIC)
+private val VALIDATION_PHASE_ID = SkeletonDefinition.VALIDATION.id
 
 private val DESKTOP_CHANGE_TABLES =
   listOf(
@@ -343,6 +345,13 @@ private val DESKTOP_CHANGE_TABLES =
       "diff_comments",
       listOf(DesktopReadSchema.DIFF_COMMENTS_TOPIC),
       keys = column("thread_id"),
+      installedLater = true,
+    ),
+    DesktopChangeTable(
+      "validation_check_events",
+      PHASE_TOPICS,
+      insertOnly = true,
+      keys = column("invocation_id"),
       installedLater = true,
     ),
   )
@@ -486,6 +495,7 @@ private fun relatedKeys(
       listOf(
         "SELECT $row.workflow_id AS k",
         standaloneGroupPeers(row),
+        validationBranchPeers(row),
         standaloneForWorkflow("$row.workflow_id"),
         parentsForWorkflow("$row.workflow_id"),
         "SELECT workflow_id AS k FROM feature_verify_workflows " +
@@ -519,6 +529,12 @@ private fun parentsForWorkflow(workflow: String): String =
 
 private fun standaloneForWorkflow(workflow: String): String =
   "SELECT invocation_id AS k FROM standalone_phase_status WHERE workflow_id = $workflow"
+
+private fun validationBranchPeers(row: String): String =
+  "SELECT peer.invocation_id AS k FROM standalone_phase_status peer WHERE " +
+    "$row.phase_id = '$VALIDATION_PHASE_ID' AND peer.phase_id = '$VALIDATION_PHASE_ID' AND " +
+    "peer.repository_identity = $row.repository_identity AND $row.branch_correlation IS NOT NULL AND " +
+    "peer.branch_correlation = $row.branch_correlation"
 
 private fun standaloneGroupPeers(row: String): String =
   "SELECT peer.invocation_id AS k FROM standalone_phase_status peer WHERE " +

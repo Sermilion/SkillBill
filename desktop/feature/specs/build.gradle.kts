@@ -14,6 +14,7 @@ kotlin {
   }
   sourceSets.jvmTest.dependencies {
     implementation(projects.core.testing)
+    implementation(libs.compose.ui.test)
     implementation(libs.kotlinx.coroutines.test)
     implementation(libs.kotlin.test)
     implementation(libs.junit.jupiter)

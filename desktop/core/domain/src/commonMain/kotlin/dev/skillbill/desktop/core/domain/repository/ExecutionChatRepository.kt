@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.RunOptions
+import dev.skillbill.desktop.core.domain.model.SessionMoveResult
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlinx.coroutines.flow.Flow
 
@@ -49,6 +50,13 @@ interface ExecutionChatRepository {
   /** The latest lines of [entry] to show again; it also records what the agent needs so the next turn continues that session. */
   suspend fun openSavedChat(entry: ChatHistoryEntry): List<ChatHistoryLine>
 
+  /**
+   * Moves the Claude session files of [fromRoot] to [toRoot] and rewrites the cwd of its Codex sessions to [toRoot], in every
+   * agent profile, so those chats resume from [toRoot]. Idempotent: a repeat moves nothing. A session that cannot be moved is
+   * counted in [SessionMoveResult.failed], never thrown.
+   */
+  suspend fun moveSessions(fromRoot: String, toRoot: String): SessionMoveResult
+
   /** Saves [entry] over any earlier save of its session. */
   suspend fun saveChat(entry: ChatHistoryEntry)
 
@@ -58,8 +66,8 @@ interface ExecutionChatRepository {
     return true
   }
 
-  /** The saved new-task drafts of [repositoryRoot], newest first. */
-  suspend fun savedNewTaskDrafts(repositoryRoot: String): List<ChatHistoryEntry>
+  /** Every repository's saved new-task drafts, newest first, at most [limit] when one is given. */
+  suspend fun savedNewTaskDrafts(limit: Int? = null): List<ChatHistoryEntry>
 
   /** Deletes the saved chat of [sessionId] with its resume state. */
   suspend fun deleteSavedChat(sessionId: String)

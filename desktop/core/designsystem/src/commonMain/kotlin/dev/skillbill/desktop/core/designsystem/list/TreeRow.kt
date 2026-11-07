@@ -29,9 +29,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
@@ -88,6 +92,8 @@ fun TreeRow(
   lead: @Composable () -> Unit = {},
   id: String? = null,
   meta: @Composable RowScope.() -> Unit = {},
+  chevron: (@Composable () -> Unit)? = null,
+  rowAction: (@Composable RowScope.() -> Unit)? = null,
   inPane: Boolean = false,
   onContextMenu: ((Offset) -> Unit)? = null,
 ) {
@@ -97,6 +103,7 @@ fun TreeRow(
   val hovered = interaction.collectIsHoveredAsState().value
   val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
   var rowSize by remember { mutableStateOf(IntSize.Zero) }
+  var focusedWithin by remember { mutableStateOf(false) }
   val menu = if (onContextMenu == null) Modifier else Modifier
     .pointerInput(onContextMenu) {
       awaitPointerEventScope {
@@ -130,7 +137,16 @@ fun TreeRow(
         if (focused) colors.bgActive else if (hovered) colors.bgHover else Color.Transparent,
         if (inPane) RoundedCornerShape(SkillBillRadius.sm) else RectangleShape,
       ).focusBar(focused)
-      .onSizeChanged { rowSize = it }.hoverable(interaction).then(menu).clickable(interaction, indication = null, role = Role.Button, onClick = onClick).pointerHoverIcon(PointerIcon.Hand)
+      .onSizeChanged { rowSize = it }.onFocusChanged { focusedWithin = it.hasFocus }.hoverable(interaction).then(menu)
+      .onPreviewKeyEvent {
+        val activationKey = when (it.key) {
+          Key.Enter, Key.NumPadEnter, Key.Spacebar -> true
+          else -> false
+        }
+        val modifiedActivation = activationKey &&
+          (it.isCtrlPressed || it.isMetaPressed || it.isAltPressed || it.isShiftPressed)
+        modifiedActivation
+      }.clickable(interaction, indication = null, role = Role.Button, onClick = onClick).pointerHoverIcon(PointerIcon.Hand)
       .then(if (expandable) Modifier.expandSemantics(expanded) else Modifier)
       .padding(start = if (inPane) paneBleed else treeBasePadding + treeIndent * level, end = if (inPane) paneBleed else 16.dp),
     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -139,7 +155,7 @@ fun TreeRow(
     CompositionLocalProvider(LocalContentColor provides baseColor) {
       if (!inPane) {
         Box(Modifier.size(14.dp), contentAlignment = Alignment.Center) {
-          if (expandable) CompositionLocalProvider(LocalContentColor provides colors.fgFaint) {
+          if (chevron != null) chevron() else if (expandable) CompositionLocalProvider(LocalContentColor provides colors.fgFaint) {
             SbIcon(LucideIcons.chevronRight, SbIconSize.Xs, modifier = Modifier.rotate(rotation))
           }
         }
@@ -149,7 +165,7 @@ fun TreeRow(
       id?.let { IdTag(it) }
       BasicText(title, Modifier.weight(1f), style = titleStyle, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
       // `join(o.meta)` puts each meta item straight into the row, so an empty meta adds no 8 px gap after the title.
-      meta()
+      if (rowAction != null && (hovered || focusedWithin || focused)) rowAction() else meta()
     }
   }
 }

@@ -15,6 +15,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
 import kotlin.time.Clock
 
 internal data class QueuedChatMessage(
@@ -60,6 +61,13 @@ class ChatSession internal constructor(
   internal var started: Boolean = false
   internal var startedRoot: String? = null
   internal var worktreeRemovedNoticed: Boolean = false
+
+  /**
+   * Held while the removed worktree's sessions move, so this session's refresh, resume listing and turn move them and post the
+   * notice once. Other windows hold their own sessions; the catalog serializes their moves.
+   */
+  internal val worktreeMoveLock = Mutex()
+  internal var mainCheckoutNoticed: Boolean = false
   internal var turnJob: Job? = null
   internal var resumeJob: Job? = null
   internal var stoppedTurn: Job? = null

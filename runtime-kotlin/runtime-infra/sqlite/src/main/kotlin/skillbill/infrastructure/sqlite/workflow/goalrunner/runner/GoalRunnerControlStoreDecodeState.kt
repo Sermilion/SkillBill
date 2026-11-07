@@ -64,6 +64,10 @@ internal fun decodeControlState(raw: String): GoalRunnerControlState {
       state.nullableString(GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_REASON),
     executionWorktreeRetentionDetail =
       state.nullableString(GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_DETAIL),
+    executionMainCheckoutOutcome =
+      state.nullableString(GoalRunnerControlPayloadKeys.EXECUTION_MAIN_CHECKOUT_OUTCOME),
+    executionMainCheckoutDetail =
+      state.nullableString(GoalRunnerControlPayloadKeys.EXECUTION_MAIN_CHECKOUT_DETAIL),
     launchWarning = state.nullableString(GoalRunnerControlPayloadKeys.LAUNCH_WARNING),
     archiveImportFingerprint = state.nullableString(GoalRunnerControlPayloadKeys.ARCHIVE_IMPORT_FINGERPRINT),
     archiveImportSpecsPending =
@@ -98,6 +102,8 @@ private val allowedControlKeys =
     GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_REMOVED_AT,
     GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_REASON,
     GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_DETAIL,
+    GoalRunnerControlPayloadKeys.EXECUTION_MAIN_CHECKOUT_OUTCOME,
+    GoalRunnerControlPayloadKeys.EXECUTION_MAIN_CHECKOUT_DETAIL,
     GoalRunnerControlPayloadKeys.LAUNCH_WARNING,
     GoalRunnerControlPayloadKeys.ARCHIVE_IMPORT_FINGERPRINT,
     GoalRunnerControlPayloadKeys.ARCHIVE_IMPORT_SPECS_PENDING,

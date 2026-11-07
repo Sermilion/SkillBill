@@ -39,6 +39,7 @@ import java.awt.KeyEventDispatcher
 import java.awt.KeyboardFocusManager
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
+import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.nio.file.Files
 import java.util.concurrent.ConcurrentHashMap
@@ -267,10 +268,18 @@ class TerminalWorkspace(
 
   private fun WorkItem.toSelectedRoot(): SelectedRoot.Work {
     val worktree = goalWorktree
-    val notice = if (worktree?.state == GoalWorktreeState.Removed) {
-      "This goal's worktree was removed. This terminal is in $repositoryRoot."
-    } else null
-    return SelectedRoot.Work(Path.of(checkoutRoot), goalWorktree?.let { Path.of(repositoryRoot) }, notice)
+    val missing = worktree != null && !isDirectory(checkoutRoot)
+    if (worktree?.state == GoalWorktreeState.Removed || missing) {
+      val root = Path.of(repositoryRoot)
+      return SelectedRoot.Work(root, root, "This goal's worktree was removed. This terminal is in $repositoryRoot.")
+    }
+    return SelectedRoot.Work(Path.of(checkoutRoot), worktree?.let { Path.of(repositoryRoot) }, null)
+  }
+
+  private fun isDirectory(path: String): Boolean = try {
+    Files.isDirectory(Path.of(path))
+  } catch (_: InvalidPathException) {
+    false
   }
 
   private fun update(next: TerminalTabsState) {

@@ -43,6 +43,7 @@ import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.monitoring.GoalWorktreeCompletionSettlement
 import skillbill.engine.goalrunner.persist.GoalRunnerNoChangeChildCloser
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.quality.GoalQualityExecutionRead
 import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 import skillbill.engine.goalrunner.planning.source.PREPARE_ALL_GOAL_PLANNING_SOURCE
 import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
@@ -58,6 +59,7 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.DatabaseCheckpointResult
 import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
+import skillbill.ports.diagnostics.ChildFailureOutputStore
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
@@ -213,6 +215,7 @@ internal data class GoalRunnerTestInputs(
   val assessmentGate: GoalRunnerAssessmentGate = NoopGoalRunnerAssessmentGate,
   val goalWorktrees: GoalWorktreeResources = InPlaceGoalWorktreeResources,
   val pullRequestWriter: GoalRunnerPullRequestWriter = NoPullRequestWriter,
+  val diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
 ) {
   fun toWiring(): GoalRunnerTestWiring =
     GoalRunnerTestWiring(
@@ -229,7 +232,7 @@ internal data class GoalRunnerTestInputs(
       unaddressedFindingsLedgerService = unaddressedFindingsLedgerService,
       executionCoordinator = executionCoordinator,
       phaseQuery = phaseRecorder.phaseQuery,
-      diagnostics = NoopRuntimeDiagnostics,
+      diagnostics = diagnostics,
       phaseRecorder = phaseRecorder,
       childWorkflowDatabase = childWorkflowDatabase,
       ciMonitor = ciMonitor,
@@ -393,6 +396,7 @@ private fun testGoalRunnerLoopAssembler(
       wiring.clock,
       wiring.diagnostics,
       testProjectStore,
+      ChildFailureOutputStore { _, _, _ -> "test.log" },
     )
   val launchPrepare =
     GoalRunnerSubtaskLaunchPrepare(
@@ -591,6 +595,10 @@ private fun finalizationTestOutcomes(delegate: GoalRunnerWorkflowOutcomeStore): 
   return object : GoalRunnerWorkflowOutcomeStore by delegate {
     override fun goalQualityExecution(parentWorkflowId: String) =
       delegate.goalQualityExecution(parentWorkflowId) ?: fallback.goalQualityExecution(parentWorkflowId)
+
+    override fun retainedGoalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRead? =
+      delegate.retainedGoalQualityExecution(parentWorkflowId)
+        ?: fallback.goalQualityExecution(parentWorkflowId)?.let(GoalQualityExecutionRead::Current)
 
     override fun goalFinalRepairContext(parentWorkflowId: String) =
       delegate.goalFinalRepairContext(parentWorkflowId) ?: fallback.goalFinalRepairContext(parentWorkflowId)

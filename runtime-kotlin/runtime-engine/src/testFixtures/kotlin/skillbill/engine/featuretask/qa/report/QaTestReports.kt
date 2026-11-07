@@ -40,7 +40,7 @@ fun qaTestReport(
     if (verdict == QaVerdict.PASSED) {
       appendLine()
       appendLine("## Assertions")
-      appendLine("- login flow: the home screen shows the user name: passed")
+      appendLine("- [passed] login flow: the home screen shows the user name.")
       appendLine()
       appendLine("## Isolation")
       appendLine("Disposable emulator profile; no database; outbound calls stubbed.")

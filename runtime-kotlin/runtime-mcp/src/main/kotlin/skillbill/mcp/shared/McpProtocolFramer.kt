@@ -28,17 +28,21 @@ internal object McpProtocolFramer {
   const val SCHEMA_DEFS_KEY: String = "\$defs"
   const val SCHEMA_REF_KEY: String = "\$ref"
   const val SCHEMA_CONST_KEY: String = "const"
+  const val INSTRUCTIONS_KEY: String = "instructions"
   const val MCP_PROTOCOL_VERSION: String = "2025-11-25"
   const val PARSE_ERROR: Int = -32700
   const val METHOD_NOT_FOUND: Int = -32601
   const val INTERNAL_ERROR: Int = -32603
 
-  fun initialize(serverName: String): Map<String, Any?> =
-    linkedMapOf(
+  fun initialize(
+    serverName: String,
+    instructions: String? = null,
+  ): Map<String, Any?> =
+    linkedMapOf<String, Any?>(
       PROTOCOL_VERSION_KEY to MCP_PROTOCOL_VERSION,
       CAPABILITIES_KEY to mapOf(TOOLS_KEY to mapOf(LIST_CHANGED_KEY to false)),
       SERVER_INFO_KEY to mapOf(NAME_KEY to serverName, VERSION_KEY to SkillBillVersion.VALUE),
-    )
+    ).apply { instructions?.let { put(INSTRUCTIONS_KEY, it) } }
 
   fun toolsList(tools: List<Map<String, Any?>>): Map<String, Any?> = mapOf(TOOLS_KEY to tools)
 

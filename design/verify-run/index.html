@@ -1,0 +1,2003 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verify run detail</title>
+<!-- Design reference only. Colors, type and spacing come from the Linear study tokens, which match SkillBillColors. Four scenarios use real feature_verify_workflows rows with home directories anonymized; "Running" is derived from a real row and "Approve with fixes" is sample data. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../linear-study/ds/tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg-frame); color: var(--fg); font: 400 var(--t-base)/1.45 var(--font-sans); display: flex; flex-direction: column; }
+  button, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  svg { display: block; flex: none; }
+  .ico { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+  .ico.sm { width: 12px; height: 12px; }
+  :focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 1px; }
+  code, .mono { font: 400 var(--t-xs) var(--font-mono); }
+  code { color: var(--fg-2); background: var(--bg-active); padding: 1px 4px; border-radius: var(--r-xs); overflow-wrap: anywhere; }
+
+  /* Review chrome: not part of the design */
+  .chrome { flex: none; display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; padding: var(--sp-3) var(--sp-4); border-bottom: 1px dashed var(--border-strong); }
+  .designs { display: flex; gap: 2px; padding: 2px; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--r-md); }
+  .designs button { height: 26px; padding: 0 var(--sp-3); border: 0; border-radius: var(--r-sm); background: transparent; color: var(--fg-muted); font-size: var(--t-sm); }
+  .designs button:hover { color: var(--fg); }
+  .designs button[aria-pressed="true"] { background: var(--bg-overlay); color: var(--fg); }
+  .scenario { display: flex; align-items: center; gap: var(--sp-2); color: var(--fg-muted); font-size: var(--t-sm); }
+  .scenario select { height: 30px; padding: 0 var(--sp-2); background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--r-sm); }
+  .chrome-btn { height: 30px; padding: 0 var(--sp-3); background: transparent; border: 1px solid var(--border); border-radius: var(--r-sm); color: var(--fg-muted); font-size: var(--t-sm); }
+  .chrome-btn:hover { color: var(--fg); background: var(--bg-hover); }
+
+  .stage { flex: 1; min-height: 0; display: flex; gap: var(--sp-6); padding: var(--sp-3) var(--sp-4) var(--sp-4); overflow: auto; }
+  .column { flex: none; width: 640px; display: flex; flex-direction: column; gap: 6px; min-height: 640px; }
+  .column-label { flex: none; font-size: var(--t-xs); font-weight: 500; color: var(--fg-faint); }
+  .notes { flex: 1 1 380px; min-width: 320px; max-width: 520px; overflow: auto; padding: 18px var(--sp-1) 0; font-size: var(--t-sm); color: var(--fg-muted); }
+  .notes h2 { margin: 0 0 var(--sp-2); font-size: var(--t-sm); font-weight: 500; color: var(--fg); }
+  .notes section + section { margin-top: var(--sp-5); }
+  .notes ul { margin: 0; padding: 0 0 0 var(--sp-4); display: flex; flex-direction: column; gap: 6px; }
+  .notes p { margin: 0 0 var(--sp-2); }
+  .notes b { color: var(--fg-2); font-weight: 500; }
+  .src { width: 100%; border-collapse: collapse; font-size: var(--t-xs); }
+  .src td { padding: 5px 6px 5px 0; vertical-align: top; border-top: 1px solid var(--border-subtle); }
+  .src td:first-child { color: var(--fg-2); white-space: nowrap; }
+  .tag { display: inline-block; padding: 0 5px; border-radius: var(--r-xs); font-size: var(--t-2xs); line-height: 16px; background: var(--bg-active); color: var(--fg-muted); white-space: nowrap; }
+  .tag.stored { background: rgba(63, 185, 80, 0.12); color: var(--st-done); }
+  .tag.new { background: var(--accent-tint); color: var(--accent-text); }
+  .tag.missing { background: rgba(248, 81, 73, 0.12); color: var(--st-failed); }
+
+  /* Details pane */
+  .pane { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: var(--r-lg); overflow: hidden; }
+  .head { flex: none; height: var(--header-h); display: flex; align-items: center; padding: 0 var(--sp-2) 0 var(--sp-4); border-bottom: 1px solid var(--border-subtle); }
+  .head h1 { margin: 0; font-size: var(--t-base); font-weight: 500; flex: 1; }
+  .iconbtn { width: 26px; height: 26px; display: grid; place-items: center; padding: 0; background: transparent; border: 0; border-radius: var(--r-sm); color: var(--fg-muted); }
+  .iconbtn:hover { background: var(--bg-active); color: var(--fg); }
+  .scroll { flex: 1; min-height: 0; overflow: auto; padding: var(--sp-4) var(--sp-4) var(--sp-8); }
+
+  /* Document header */
+  .chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: var(--sp-2); }
+  .pill { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--r-full); font-size: var(--t-xs); color: var(--fg-2); }
+  .pill .dot { width: 7px; height: 7px; }
+  .keytxt { font: 500 var(--t-xs) var(--font-mono); color: var(--fg-muted); }
+  .title { margin: 0 0 6px; font-size: var(--t-xl); font-weight: 600; letter-spacing: -0.01em; }
+  .meta { display: flex; flex-wrap: wrap; gap: 4px var(--sp-4); font-size: var(--t-sm); color: var(--fg-muted); margin-bottom: var(--sp-3); }
+  .meta span { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+  .meta .mono { color: var(--fg-2); }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .btn { height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--r-sm); font-size: var(--t-sm); color: var(--fg-2); }
+  .btn:hover { background: var(--bg-overlay); color: var(--fg); border-color: var(--border-strong); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 500; }
+  .btn.primary:hover { background: var(--accent-hover); }
+  .btn[disabled] { opacity: .45; cursor: not-allowed; }
+  .chip { height: 22px; display: inline-flex; align-items: center; gap: 4px; padding: 0 7px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--r-sm); font: 400 var(--t-2xs) var(--font-mono); color: var(--fg-2); }
+  .chip:hover { border-color: var(--border-strong); color: var(--fg); }
+  .link { background: none; border: 0; padding: 0; color: var(--accent-text); font-size: inherit; }
+  .link:hover { text-decoration: underline; }
+  .st-body .link { align-self: flex-start; }
+
+  .banner { display: flex; gap: var(--sp-2); align-items: flex-start; padding: 10px var(--sp-3); border-radius: var(--r-md); font-size: var(--t-sm); margin: var(--sp-3) 0 0; border: 1px solid; }
+  .banner.info { background: var(--accent-tint); border-color: rgba(113, 112, 255, 0.35); color: var(--fg-2); }
+  .banner.warn { background: rgba(210, 153, 34, 0.08); border-color: rgba(210, 153, 34, 0.35); color: var(--fg-2); }
+  .banner .ico { margin-top: 2px; }
+  .banner b { color: var(--fg); font-weight: 500; }
+  .banner .grow { flex: 1; }
+
+  /* Outcome card */
+  .outcome { margin-top: var(--sp-5); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--bg-raised); overflow: hidden; }
+  .outcome-top { display: flex; gap: var(--sp-3); padding: var(--sp-4); border-left: 3px solid var(--tone, var(--fg-faint)); }
+  .outcome-icon { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--tone) 16%, transparent); color: var(--tone); }
+  .outcome-icon .ico { width: 18px; height: 18px; stroke-width: 2; }
+  .outcome-main { flex: 1; min-width: 0; }
+  .outcome-label { font-size: var(--t-xs); color: var(--fg-faint); margin-bottom: 1px; }
+  .outcome-verdict { font-size: var(--t-lg); font-weight: 600; color: var(--tone); letter-spacing: 0.01em; }
+  .outcome-when { font-size: var(--t-xs); color: var(--fg-faint); text-align: right; white-space: nowrap; }
+  .outcome-when b { display: block; font-size: var(--t-sm); color: var(--fg-2); font-weight: 500; }
+  .outcome-text { margin: var(--sp-2) 0 0; color: var(--fg-2); font-size: var(--t-sm); line-height: 1.5; }
+  .score { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--border-subtle); }
+  .score-cell { padding: 10px var(--sp-3); min-width: 0; background: transparent; border: 0; border-right: 1px solid var(--border-subtle); text-align: left; color: inherit; }
+  .score-cell:last-child { border-right: 0; }
+  .score-cell:hover { background: var(--bg-hover); }
+  .score-k { font-size: var(--t-2xs); text-transform: uppercase; letter-spacing: .06em; color: var(--fg-faint); font-family: var(--font-mono); }
+  .score-v { font-size: var(--t-md); font-weight: 600; margin: 2px 0 4px; font-variant-numeric: tabular-nums; }
+  .score-v small { font-size: var(--t-sm); font-weight: 400; color: var(--fg-muted); }
+  .score-s { font-size: var(--t-xs); color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar { display: flex; height: 4px; gap: 2px; border-radius: 2px; overflow: hidden; margin-top: 4px; }
+  .bar i { display: block; height: 100%; min-width: 3px; }
+  .bar.empty { background: var(--bg-inset); }
+
+  .tone-done { --tone: var(--st-done); color: var(--st-done); }
+  .tone-failed { --tone: var(--st-failed); color: var(--st-failed); }
+  .tone-blocked { --tone: var(--st-blocked); color: var(--st-blocked); }
+  .tone-active { --tone: var(--st-active); color: var(--st-active); }
+  .tone-accent { --tone: var(--accent-text); color: var(--accent-text); }
+  .tone-faint { --tone: var(--fg-faint); color: var(--fg-muted); }
+  .bg-done { background: var(--st-done); } .bg-failed { background: var(--st-failed); } .bg-blocked { background: var(--st-blocked); } .bg-faint { background: var(--border-strong); } .bg-accent { background: var(--accent); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; display: inline-block; }
+
+  /* Sections */
+  .sec { margin-top: var(--sp-6); }
+  .sec-head { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+  .sec-head h2 { margin: 0; font-size: var(--t-base); font-weight: 500; }
+  .sec-head .n { color: var(--fg-faint); font-size: var(--t-sm); font-variant-numeric: tabular-nums; }
+  .sec-head .end { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--r-md); }
+  .seg button { height: 22px; padding: 0 8px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--fg-muted); font-size: var(--t-xs); }
+  .seg button[aria-pressed="true"] { background: var(--bg-overlay); color: var(--fg); }
+  .sec-sub { font-size: var(--t-sm); color: var(--fg-muted); margin: -2px 0 var(--sp-3); }
+  .box { border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
+  .row + .row { border-top: 1px solid var(--border-subtle); }
+  .row-head { width: 100%; display: grid; grid-template-columns: 22px 1fr auto; gap: 2px var(--sp-2); padding: 9px var(--sp-3); background: transparent; border: 0; text-align: left; align-items: start; }
+  .row-head:hover { background: var(--bg-hover); }
+  .row-head:focus-visible { outline-offset: -2px; }
+  .row-title { min-width: 0; color: var(--fg); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .row-head[aria-expanded="true"] .row-title { display: block; }
+  .row-side { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-xs); white-space: nowrap; padding-top: 2px; }
+  .row-side .chev { color: var(--fg-faint); transition: transform var(--dur-fast) var(--ease); }
+  .row-head[aria-expanded="true"] .chev { transform: rotate(90deg); }
+  .row-body { padding: 0 var(--sp-3) var(--sp-3) 44px; font-size: var(--t-sm); color: var(--fg-2); display: flex; flex-direction: column; gap: var(--sp-2); }
+  .row-body[hidden] { display: none; }
+  .num { font: 500 var(--t-xs) var(--font-mono); color: var(--fg-faint); padding-top: 2px; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border-radius: var(--r-xs); font: 500 var(--t-2xs) var(--font-mono); letter-spacing: .03em; text-transform: uppercase; background: color-mix(in srgb, var(--tone) 14%, transparent); color: var(--tone); }
+  .field-label { font-size: var(--t-xs); color: var(--fg-faint); margin-bottom: 2px; }
+  .evid { display: flex; flex-wrap: wrap; gap: 4px; }
+  .muted { color: var(--fg-muted); }
+  .faint { color: var(--fg-faint); }
+  .fold { margin-top: var(--sp-2); }
+  .fold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 6px 0; font-size: var(--t-sm); color: var(--fg-muted); }
+  .fold > summary::-webkit-details-marker { display: none; }
+  .fold > summary .chev { transition: transform var(--dur-fast) var(--ease); color: var(--fg-faint); }
+  .fold[open] > summary .chev { transform: rotate(90deg); }
+  .fold ul { margin: 0 0 var(--sp-2); padding-left: 26px; display: flex; flex-direction: column; gap: 4px; font-size: var(--t-sm); color: var(--fg-2); }
+
+  /* Steps timeline */
+  .steps { position: relative; }
+  .st { position: relative; display: grid; grid-template-columns: 28px 1fr; }
+  .st-rail { position: relative; display: flex; justify-content: center; }
+  .st-rail::after { content: ""; position: absolute; top: 26px; bottom: -2px; width: 1px; background: var(--border); }
+  .st:last-child .st-rail::after { display: none; }
+  .st-node { position: relative; z-index: 1; margin-top: 9px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--bg-panel); }
+  .st-node .ico { width: 12px; height: 12px; stroke-width: 2.25; }
+  .st-node.done { background: color-mix(in srgb, var(--st-done) 18%, var(--bg-panel)); color: var(--st-done); }
+  .st-node.warn { background: color-mix(in srgb, var(--st-blocked) 18%, var(--bg-panel)); color: var(--st-blocked); }
+  .st-node.bad { background: color-mix(in srgb, var(--st-failed) 18%, var(--bg-panel)); color: var(--st-failed); }
+  .st-node.skip { border: 1.5px dashed var(--fg-faint); color: var(--fg-faint); }
+  .st-node.pend { border: 1.5px solid var(--border-strong); }
+  .st-node.run { border: 2px solid var(--st-active); }
+  .st-node.run::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid rgba(63,185,80,.35); animation: pulse 1.6s var(--ease) infinite; }
+  .st-node.wait { background: var(--accent-tint); color: var(--accent-text); }
+  .st-node.stop { background: color-mix(in srgb, var(--st-blocked) 18%, var(--bg-panel)); color: var(--st-blocked); }
+  @keyframes pulse { 0% { transform: scale(.8); opacity: 1; } 100% { transform: scale(1.3); opacity: 0; } }
+  .st-card { min-width: 0; margin: 2px 0 6px; border: 1px solid transparent; border-radius: var(--r-md); }
+  .st-card.open { border-color: var(--border); background: var(--bg-raised); }
+  .st-head { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 1px var(--sp-2); padding: 7px var(--sp-2); background: transparent; border: 0; border-radius: var(--r-md); text-align: left; }
+  .st-head:hover { background: var(--bg-hover); }
+  .st-head[disabled] { cursor: default; }
+  .st-head[disabled]:hover { background: transparent; }
+  .st-name { font-weight: 500; display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .st-name .idx { font: 400 var(--t-2xs) var(--font-mono); color: var(--fg-faint); }
+  .st-sum { grid-column: 1 / 3; font-size: var(--t-sm); color: var(--fg-muted); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+  .st-side { font-size: var(--t-xs); color: var(--fg-faint); display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
+  .st-side .chev { transition: transform var(--dur-fast) var(--ease); }
+  .st-head[aria-expanded="true"] .chev { transform: rotate(90deg); }
+  .st-body { padding: 2px var(--sp-3) var(--sp-3); font-size: var(--t-sm); color: var(--fg-2); display: flex; flex-direction: column; gap: var(--sp-3); }
+  .st-body[hidden] { display: none; }
+  .st.pending .st-name { color: var(--fg-faint); font-weight: 400; }
+  .kv { display: grid; grid-template-columns: 112px 1fr; gap: 5px var(--sp-3); font-size: var(--t-sm); }
+  .kv dt { color: var(--fg-faint); }
+  .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .checks { display: flex; flex-direction: column; gap: 3px; }
+  .check { display: flex; gap: 8px; align-items: center; }
+  .dirs { display: flex; flex-direction: column; gap: 3px; }
+  .dir { display: grid; grid-template-columns: minmax(0, 1fr) 120px 28px; gap: var(--sp-2); align-items: center; font-size: var(--t-xs); }
+  .dir .p { font-family: var(--font-mono); color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dir .track { height: 6px; background: var(--bg-inset); border-radius: 3px; overflow: hidden; }
+  .dir .track i { display: block; height: 100%; background: var(--data-1); border-radius: 3px; }
+  .dir .c { text-align: right; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+  .finding { display: grid; grid-template-columns: auto 1fr; gap: 2px var(--sp-2); padding: 8px 0; }
+  .finding + .finding { border-top: 1px solid var(--border-subtle); }
+  .finding .loc { font: 400 var(--t-2xs) var(--font-mono); color: var(--fg-muted); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .finding .desc { grid-column: 2; color: var(--fg-2); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; cursor: pointer; }
+  .finding .desc.full { display: block; }
+  .tests { display: flex; flex-direction: column; }
+  .test { display: grid; grid-template-columns: 74px 1fr; gap: 2px var(--sp-2); padding: 7px 0; }
+  .test + .test { border-top: 1px solid var(--border-subtle); }
+  .test .what { color: var(--fg); font-weight: 500; }
+  .test .why { grid-column: 2; color: var(--fg-muted); font-size: var(--t-xs); }
+  .test .act { grid-column: 2; font-size: var(--t-xs); color: var(--fg-2); }
+  .plan { display: grid; grid-template-columns: 74px 1fr; gap: 6px var(--sp-2); font-size: var(--t-sm); }
+  .quote { margin: 0; padding: 8px var(--sp-3); border-left: 2px solid var(--border-strong); background: var(--bg-inset); border-radius: 0 var(--r-sm) var(--r-sm) 0; color: var(--fg-2); font-size: var(--t-sm); white-space: pre-wrap; }
+  .mini-rule { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--t-xs); color: var(--fg-faint); }
+  .mini-rule::after { content: ""; flex: 1; height: 1px; background: var(--border-subtle); }
+
+  /* Today view */
+  .today .chips .pill { border-radius: var(--r-full); }
+  .t-metrics { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: var(--r-md); margin-top: var(--sp-5); }
+  .t-metrics > div { padding: var(--sp-3); }
+  .t-metrics > div + div { border-left: 1px solid var(--border); }
+  .t-grid { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border); border-radius: var(--r-md); margin-top: var(--sp-2); font-family: var(--font-mono); font-size: var(--t-xs); }
+  .t-grid > div { padding: 10px; }
+  .t-grid > div + div { border-left: 1px solid var(--border); }
+  .t-warn { display: flex; gap: 6px; align-items: center; color: var(--fg-2); font-size: var(--t-sm); margin-top: var(--sp-2); }
+  .t-warn .ico { color: var(--st-blocked); }
+  /* Inline QA results: same look as design/qa-results */
+  .qa { display: flex; flex-direction: column; gap: var(--sp-3); }
+  .qa .q-head { display: flex; align-items: center; gap: var(--sp-2); }
+  .qa .verdict { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); font-weight: 500; }
+  .qa .sentence { margin: 0; font-size: var(--t-base); line-height: 1.45; color: var(--fg); }
+  .qa .group-label { display: flex; align-items: baseline; gap: 6px; margin: 0 0 6px; font-size: var(--t-xs); font-weight: 500; color: var(--fg-muted); }
+  .qa .group-label .n { color: var(--fg-faint); font-variant-numeric: tabular-nums; font-weight: 400; }
+  .qa .box { background: var(--bg-panel); }
+  .qa .item + .item { border-top: 1px solid var(--border-subtle); }
+  .qa .item-head { width: 100%; display: grid; grid-template-columns: 16px 1fr auto; gap: 2px var(--sp-2); padding: 10px var(--sp-3); background: transparent; border: 0; text-align: left; }
+  .qa button.item-head:hover { background: var(--bg-hover); }
+  .qa .item-head .glyph { padding-top: 2px; }
+  .qa .item-title { font-weight: 500; color: var(--fg); min-width: 0; }
+  .qa .item-title .ref { font: 400 var(--t-sm) var(--font-mono); color: var(--st-failed); margin-right: 6px; }
+  .qa .item-state { font-size: var(--t-xs); white-space: nowrap; padding-top: 1px; display: inline-flex; align-items: center; gap: 6px; }
+  .qa .item-state .ico { color: var(--fg-faint); transition: transform var(--dur-fast) var(--ease); }
+  .qa .item-head[aria-expanded="true"] .item-state .ico { transform: rotate(90deg); }
+  .qa .item-line { grid-column: 2 / 4; color: var(--fg-muted); font-size: var(--t-sm); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .qa .item-head[aria-expanded="true"] .item-line { display: block; }
+  .qa .item-body { padding: 0 var(--sp-3) var(--sp-3) 36px; font-size: var(--t-sm); color: var(--fg-2); display: flex; flex-direction: column; gap: var(--sp-3); }
+  .qa .q-fold { width: 100%; display: grid; grid-template-columns: 16px auto minmax(0, 1fr) 14px; align-items: center; gap: var(--sp-2); padding: 9px var(--sp-3); background: transparent; border: 0; text-align: left; }
+  .qa .q-fold:hover { background: var(--bg-hover); }
+  .qa .q-fold .label { font-weight: 500; color: var(--fg-2); white-space: nowrap; }
+  .qa .q-fold .preview { color: var(--fg-faint); font-size: var(--t-sm); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .qa .q-fold .ico.chev { color: var(--fg-faint); transition: transform var(--dur-fast) var(--ease); }
+  .qa .q-fold[aria-expanded="true"] .ico.chev { transform: rotate(90deg); }
+  .qa .q-fold[aria-expanded="true"] .preview { visibility: hidden; }
+  .qa .sublist { border-top: 1px solid var(--border-subtle); padding: var(--sp-1) 0; }
+  .qa .sub { padding: 6px var(--sp-3) 6px 36px; font-size: var(--t-sm); color: var(--fg-muted); }
+  .qa .sub b { display: block; font-weight: 500; color: var(--fg-2); }
+  .qa .sub .evid { margin-top: 6px; }
+  .qa .quiet { display: flex; flex-wrap: wrap; gap: 2px var(--sp-2); font-size: var(--t-sm); color: var(--fg-faint); }
+  .qa .quiet b { font-weight: 400; color: var(--fg-muted); }
+  .qa .report { padding: var(--sp-3) var(--sp-4) var(--sp-4); border-top: 1px solid var(--border-subtle); font-size: var(--t-sm); color: var(--fg-2); }
+  .qa .report h3 { margin: var(--sp-4) 0 var(--sp-2); font-size: var(--t-sm); font-weight: 500; color: var(--fg); }
+  .qa .report h3:first-child, .qa .report p:first-child { margin-top: 0; }
+  .qa .report p { margin: 0 0 var(--sp-2); }
+  .qa .report ul { margin: 0 0 var(--sp-2); padding-left: var(--sp-4); display: flex; flex-direction: column; gap: 6px; }
+  .qa .chip.file { cursor: default; }
+  /* Selection for fixes */
+  .srow { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: start; }
+  .srow > .row-head, .qa .srow > .item-head { padding-left: 2px; }
+  .srow > .row-body { grid-column: 2 / 4; padding-left: 32px; }
+  .qa .srow > .item-body { grid-column: 2 / 4; padding-left: 26px; }
+  .sel-col { padding: 11px 0 0 12px; }
+  .route-col { padding: 8px 10px 0 0; min-width: 104px; display: flex; justify-content: flex-end; }
+  .cb { width: 16px; height: 16px; padding: 0; display: grid; place-items: center; border: 1.5px solid var(--border-strong); border-radius: 4px; background: transparent; color: var(--accent-fg); }
+  .cb:hover { border-color: var(--fg-muted); }
+  .cb[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+  .cb .ico { width: 11px; height: 11px; stroke-width: 2.75; }
+  .cb.off { border-style: dashed; color: var(--fg-faint); cursor: default; }
+  .route { display: inline-flex; gap: 1px; padding: 1px; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--r-sm); }
+  .route button { height: 18px; padding: 0 6px; border: 0; border-radius: 3px; background: transparent; color: var(--fg-faint); font-size: var(--t-2xs); }
+  .route button[aria-pressed="true"] { background: var(--bg-overlay); color: var(--fg); }
+  .overlap { grid-column: 2 / 4; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 3px; font-size: var(--t-xs); color: var(--accent-text); }
+  .overlap code { color: var(--accent-text); }
+  .finding.pick { grid-template-columns: 22px auto 1fr; }
+  .finding.pick .desc, .finding.pick .overlap { grid-column: 3; }
+  .finding .cb { margin-top: 1px; }
+  .test.pick { grid-template-columns: 22px 74px 1fr; }
+  .test.pick .why, .test.pick .act, .test.pick .overlap { grid-column: 3; }
+  .test .what-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .selall { display: inline-flex; align-items: center; gap: 8px; height: 24px; padding: 0 8px 0 0; background: transparent; border: 0; color: var(--fg-muted); font-size: var(--t-xs); }
+  .selall:hover { color: var(--fg); }
+  .selall:hover .cb { border-color: var(--fg-muted); }
+  .selall .n { color: var(--fg-faint); font-variant-numeric: tabular-nums; }
+  .selall-row { display: flex; align-items: center; gap: var(--sp-2); padding: 2px 0 0; }
+  .selall-row.boxed { padding: 6px 12px; border-bottom: 1px solid var(--border-subtle); }
+  .finding-list .selall-row, .tests .selall-row { border-bottom: 1px solid var(--border-subtle); padding-bottom: 6px; }
+  .cb[aria-checked="mixed"], .selall[aria-checked="mixed"] .cb, .selall[aria-checked="true"] .cb { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+  .btn.sm { height: 22px; padding: 0 8px; font-size: var(--t-xs); }
+  .marks { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: var(--t-xs); color: var(--fg-faint); }
+  .selbar { position: sticky; bottom: 0; z-index: 2; margin-top: var(--sp-6); display: flex; align-items: center; gap: var(--sp-3); padding: 10px var(--sp-3); background: var(--bg-overlay); border: 1px solid var(--border-strong); border-radius: var(--r-md); box-shadow: var(--shadow-pop); }
+  .selbar-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--t-sm); }
+  .selbar-main b { font-weight: 500; }
+  .selbar-main .faint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--t-xs); }
+  .selbar-note { display: flex; gap: 5px; align-items: flex-start; font-size: var(--t-xs); color: var(--accent-text); }
+  .selbar-note .ico { margin-top: 2px; }
+  .selbar-note code { color: var(--accent-text); }
+  /* Work summary */
+  .summary { margin-top: var(--sp-5); padding: var(--sp-3) var(--sp-4) var(--sp-4); border: 1px solid var(--border-subtle); border-radius: var(--r-lg); background: color-mix(in srgb, var(--bg-raised) 55%, transparent); }
+  .sum-label { display: flex; align-items: baseline; gap: 6px; font-size: var(--t-xs); font-weight: 500; color: var(--fg-muted); margin-bottom: 6px; }
+  .sum-label .faint { font-weight: 400; }
+  .sum-text { margin: 0; font-size: var(--t-base); line-height: 1.55; color: var(--fg); }
+  .sum-text.one { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sum-foot { margin-top: 6px; font-size: var(--t-xs); color: var(--fg-faint); }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; padding: 8px 14px; background: var(--bg-overlay); border: 1px solid var(--border-strong); border-radius: var(--r-md); font-size: var(--t-sm); transition: all var(--dur) var(--ease); pointer-events: none; }
+  .toast.on { opacity: 1; transform: translateX(-50%); }
+</style>
+</head>
+<body>
+<div class="chrome">
+  <div class="designs" role="group" aria-label="Design">
+    <button type="button" data-view="new" aria-pressed="true">Redesign</button>
+    <button type="button" data-view="today" aria-pressed="false">Today</button>
+  </div>
+  <label class="scenario">Scenario
+    <select id="scenario"></select>
+  </label>
+  <button type="button" class="chrome-btn" id="expand">Expand all steps</button>
+</div>
+<div class="stage">
+  <div class="column">
+    <div class="column-label" id="source"></div>
+    <div class="pane">
+      <div class="head">
+        <h1>Details</h1>
+        <button type="button" class="iconbtn" aria-label="Close details"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="scroll" id="pane"></div>
+    </div>
+  </div>
+  <aside class="notes" id="notes"></aside>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const RUNS = {
+"wfv-20261029-080637-eh4f": {
+"issue_key": "0AC-85",
+"status": "completed",
+"current": "finish",
+"steps": [
+{
+"step_id": "collect_inputs",
+"status": "completed",
+"attempt_count": 1
+},
+{
+"step_id": "extract_criteria",
+"status": "completed",
+"attempt_count": 1
+},
+{
+"step_id": "gather_diff",
+"status": "completed",
+"attempt_count": 1
+},
+{
+"step_id": "feature_flag_audit",
+"status": "skipped",
+"attempt_count": 1
+},
+{
+"step_id": "code_review",
+"status": "completed",
+"attempt_count": 1
+},
+{
+"step_id": "unit_test_value_check",
+"status": "completed",
+"attempt_count": 1
+},
+{
+"step_id": "completeness_audit",
+"status": "completed",
+"attempt_count": 1
+},
+{
+"step_id": "qa",
+"status": "skipped",
+"attempt_count": 1
+},
+{
+"step_id": "verdict",
+"status": "completed",
+"attempt_count": 1
+},
+{
+"step_id": "finish",
+"status": "completed",
+"attempt_count": 1
+}
+],
+"artifacts": {
+"input_context": {
+"repo_root": "~/StudioProjects/ZeroAccount-pr-168",
+"intake": "https://linear.app/0account/issue/0AC-85/contacts-whatsapp-style-phone-discovery-friends-are-mutual-address",
+"target": "HEAD",
+"base_revision": "ef198ee7f052d8e02b31fde9b6862337bc15468f",
+"head_revision": "6e2dd0915aed624cfe72a2a2fb19d800d0db5f1b",
+"comparison_scope": "ef198ee7f052d8e02b31fde9b6862337bc15468f..6e2dd0915aed624cfe72a2a2fb19d800d0db5f1b",
+"review_mode": "inline",
+"qa_selection": "off",
+"issue_key": "0AC-85"
+},
+"criteria_summary": {
+"acceptance_criteria": "1. On the first visit to contacts, prompt users without a phone on their profile to enter one and confirm that it is correct. A prefilled profile number must not be registered automatically.\n2. Request contacts permission, read the address book, normalize and hash numbers on the device, and sync them. The sync response populates the contacts screen.\n3. Show two users as contacts only when each has the other's phone number in their uploaded address book. If either removes the other's number and syncs again, the friendship disappears for both.\n4. Reject `POST /contacts/sync` with HTTP 400 when the caller has no phone on file. With a phone, each sync replaces the caller's complete uploaded hash set and is idempotent. An empty sync clears the set.\n5. Provide `GET /contacts` to reopen the same derived contacts view without uploading. Expose only profile ID, first name, and profile image for each match. The list must be available to viewer limiting in 0AC-52.\n6. Support saving, replacing, and deleting the user's phone. Saving or replacing it must update its hash atomically, remove the old hash on replacement, and make the user undiscoverable on deletion.\n7. Include `hasPhone` in the profile DTO. Keep self-asserted phone numbers unverified in v1.\n8. Cover mutual matching and removal, full replacement, phone and hash transactions, duplicate hash handling, soft deletion, and normalization and hash determinism in tests.",
+"non_goals": "- Friend requests, pending states, acceptance, decline, and a request inbox.\n- Email-hash discovery, stable public handles, and QR-based adding.\n- SMS verification, blocking, and new-contact push notifications in v1.\n- A stored or pre-materialized friendship graph.\n- A separate endpoint for adding a contact by typing a phone number.",
+"rollout_expectation": "",
+"technical_constraints": "- Normalize phone numbers to E.164 using libphonenumber with SIM or region context on the client and equivalent defensive normalization on the server.\n- Compute `HMAC-SHA256(salt, e164_bytes)` on the device. The salt is environment-specific and shipped with the matching client build. Release builds require the production `CONTACT_HASH_SALT` secret.\n- Store the user's own phone in plaintext, but never send other people's plaintext numbers to the server. Persist uploaded address-book hashes with a unique `(profile_id, hash)` pair and delete them when the profile is deleted.\n- Derive friendship on read through mutual hash matches. Limit phone updates and contact sync per account, and cap sync uploads at approximately 5,000 hashes.\n- Use one migration for `phones` and `contact_book_hashes`. Enforce one active phone per profile and exclude soft-deleted rows.\n- The backend contacts module follows the standard five-file layout. Handlers require Swagger annotations, context as the first parameter, wrapped errors, and embedded-PostgreSQL repository tests that assert stored rows.\n- The issue contains conflicting statements about unmatched contacts. Its data model requires storing the full hashed address book, while its privacy section says unmatched hashes are discarded and its done criteria say a non-member leaves no server-side residue. It also says mutual removal dissolves the friendship for both users, while a privacy note says the other user retains their view until they also delete the number."
+},
+"qa_outcome": {
+"contract_version": "0.1",
+"outcome": "skipped",
+"reason": "disabled_policy"
+},
+"diff_projection": {
+"checkpoint": "2db1bd2308942ae783f1e9ed5f3bf6ffca5aebbd498874ad53ff9bddbb744225",
+"comparison_scope": "ef198ee7f052d8e02b31fde9b6862337bc15468f..6e2dd0915aed624cfe72a2a2fb19d800d0db5f1b",
+"changed_files": [
+".github/workflows/android-production-release.yml",
+".github/workflows/desktop-production-release.yml",
+".github/workflows/ios-production-release.yml",
+"androidApp/build.gradle.kts",
+"androidApp/src/main/AndroidManifest.xml",
+"composeApp/build.gradle.kts",
+"core/data/build.gradle.kts",
+"core/data/src/androidMain/kotlin/com/zeroaccount/core/data/contacts/addressbook/AndroidAddressBookReader.kt",
+"core/data/src/androidMain/kotlin/com/zeroaccount/core/data/contacts/config/AndroidContactHashSaltProvider.kt",
+"core/data/src/androidMain/kotlin/com/zeroaccount/core/data/contacts/invite/AndroidContactInviteSharer.kt",
+"core/data/src/androidMain/kotlin/com/zeroaccount/core/data/contacts/phone/AndroidDeviceRegion.kt",
+"core/data/src/androidMain/kotlin/com/zeroaccount/core/data/di/AndroidPlatformModule.kt",
+"core/data/src/commonMain/kotlin/com/zeroaccount/core/data/contacts/addressbook/AddressBookReader.kt",
+"core/data/src/commonMain/kotlin/com/zeroaccount/core/data/contacts/config/ContactHashSaltProvider.kt",
+"core/data/src/commonMain/kotlin/com/zeroaccount/core/data/contacts/datasource/ContactsRemoteDataSource.kt",
+"core/data/src/commonMain/kotlin/com/zeroaccount/core/data/contacts/di/ContactsModule.kt",
+"core/data/src/commonMain/kotlin/com/zeroaccount/core/data/contacts/hashing/ContactBookHasher.kt",
+"core/data/src/commonMain/kotlin/com/zeroaccount/core/data/contacts/mapper/ContactMapper.kt",
+"core/data/src/commonMain/kotlin/com/zeroaccount/core/data/contacts/model/ContactsDataModels.kt",
+"core/data/src/commonMain/kotlin/com/zeroaccount/core/data/contacts/phone/PhoneNormalizer.kt",
+"core/data/src/commonMain/kotlin/com/zeroaccount/core/data/contacts/repository/ZeroContactsRepository.kt",
+"core/data/src/commonMain/kotlin/com/zeroaccount/core/data/profile/model/ProfileResponseDataModel.kt",
+"core/data/src/iosMain/kotlin/com/zeroaccount/core/data/contacts/addressbook/IosAddressBookReader.kt",
+"core/data/src/iosMain/kotlin/com/zeroaccount/core/data/contacts/config/IosContactHashSaltProvider.kt",
+"core/data/src/iosMain/kotlin/com/zeroaccount/core/data/contacts/invite/IosContactInviteSharer.kt",
+"core/data/src/iosMain/kotlin/com/zeroaccount/core/data/contacts/phone/IosDeviceRegion.kt",
+"core/data/src/iosMain/kotlin/com/zeroaccount/core/data/di/IOSPlatformModule.kt",
+"core/data/src/jvmMain/kotlin/com/zeroaccount/core/data/contacts/addressbook/JvmAddressBookReader.kt",
+"core/data/src/jvmMain/kotlin/com/zeroaccount/core/data/contacts/config/JvmContactHashSaltProvider.kt",
+"core/data/src/jvmMain/kotlin/com/zeroaccount/core/data/contacts/invite/JvmContactInviteSharer.kt",
+"core/data/src/jvmMain/kotlin/com/zeroaccount/core/data/contacts/phone/JvmDeviceRegion.kt",
+"core/data/src/jvmMain/kotlin/com/zeroaccount/core/data/di/JVMPlatformModule.kt",
+"core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/ContactBookHasherTest.kt",
+"core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/PhoneNormalizerTest.kt",
+"core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/datasource/ContactsRemoteDataSourceTest.kt",
+"core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/repository/ZeroContactsRepositoryTest.kt",
+"core/domain/src/commonMain/kotlin/com/zeroaccount/core/domain/contacts/invite/ContactInviteSharer.kt",
+"core/domain/src/commonMain/kotlin/com/zeroaccount/core/domain/contacts/model/Contact.kt",
+"core/domain/src/commonMain/kotlin/com/zeroaccount/core/domain/contacts/model/ContactsError.kt",
+"core/domain/src/commonMain/kotlin/com/zeroaccount/core/domain/contacts/model/ContactsResults.kt",
+"core/domain/src/commonMain/kotlin/com/zeroaccount/core/domain/contacts/repository/ContactsRepository.kt",
+"feature/overview/src/androidMain/kotlin/com/zeroaccount/feature/overview/contacts/ui/ContactsPermissionHandler.kt",
+"feature/overview/src/androidMain/kotlin/com/zeroaccount/feature/overview/overview/ui/PlatformOverviewScreen.kt",
+"feature/overview/src/commonMain/composeResources/values-ar/strings.xml",
+"feature/overview/src/commonMain/composeResources/values-bn/strings.xml",
+"feature/overview/src/commonMain/composeResources/values-es/strings.xml",
+"feature/overview/src/commonMain/composeResources/values-fr/strings.xml",
+"feature/overview/src/commonMain/composeResources/values-hi/strings.xml",
+"feature/overview/src/commonMain/composeResources/values-id/strings.xml",
+"feature/overview/src/commonMain/composeResources/values-pt/strings.xml",
+"feature/overview/src/commonMain/composeResources/values-ru/strings.xml",
+"feature/overview/src/commonMain/composeResources/values-zh/strings.xml",
+"feature/overview/src/commonMain/composeResources/values/strings.xml",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/contacts/ContactsContract.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModel.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/contacts/ui/ContactsPermissionHandler.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/contacts/ui/ContactsScreen.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/navigation/OverviewNavigation.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/navigation/OverviewRoutes.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/overview/OverviewContract.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/overview/OverviewViewModel.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/overview/ui/OverviewNavigation.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/overview/ui/OverviewScreen.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/overview/ui/composables/SharedOverviewComponents.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/overview/ui/composables/overviewSideEffectsHandler.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/overview/ui/model/OverviewMenuItem.kt",
+"feature/overview/src/iosMain/kotlin/com/zeroaccount/feature/overview/contacts/ui/ContactsPermissionHandler.kt",
+"feature/overview/src/iosMain/kotlin/com/zeroaccount/feature/overview/overview/ui/PlatformOverviewScreen.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/contacts/ui/ContactsPermissionHandler.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/DesktopOverviewScreen.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/ContactsDetailContent.kt",
+"feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModelTest.kt",
+"feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/overview/ui/model/OverviewMenuItemTest.kt",
+"gradle/libs.versions.toml",
+"iosApp/Configuration/Config.xcconfig",
+"iosApp/iosApp.xcodeproj/project.pbxproj",
+"iosApp/iosApp/Info.plist"
+]
+},
+"feature_flag_audit_receipt": {
+"contract_version": "0.1",
+"verdict": "skipped",
+"findings": [
+"The criteria do not require a feature-flagged rollout, the diff contains no feature flag, and the provided repository policy does not require one."
+]
+},
+"code_review_receipt": {
+"contract_version": "0.1",
+"verdict": "changes_requested",
+"findings": [
+"- [F-001] Major | High | core/data/src/commonMain/kotlin/com/zeroaccount/core/data/contacts/repository/ZeroContactsRepository.kt:87 | When a permitted address book becomes empty, sync performs a GET instead of uploading an empty hash set. The server retains the previous hashes, so removing the last contact leaves the friendship visible to both users. Distinguish an empty successful read from an unavailable or unauthorized read, and upload the former.",
+"- [F-002] Major | High | core/data/src/commonMain/kotlin/com/zeroaccount/core/data/contacts/repository/ZeroContactsRepository.kt:150 | The confirmed contacts response exposes profile ID, first name, and image, so `hash` defaults to empty for every returned contact. `friendHashes` is consequently empty and existing friends also appear as invite candidates. Do not rely on an unprovided response field to identify invitees.",
+"- [F-003] Major | High | feature/overview/src/iosMain/kotlin/com/zeroaccount/feature/overview/contacts/ui/ContactsPermissionHandler.kt:31 | iOS limited contacts access falls into the denial branch. The address-book reader also accepts only full authorization, so users who grant access to selected contacts cannot sync those contacts. Handle limited authorization in both places.",
+"- [F-004] Major | High | feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/contacts/ui/ContactsScreen.kt:826 | The sync menu dispatches `SyncContacts` directly and bypasses the permission handler. After a user denies access, choosing sync does not request or explain permission; it reads an empty book and displays the old server list as though sync succeeded. Route this action through the permission flow.",
+"- [F-005] Major | High | feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModel.kt:256 | `PhoneSaved` requests permission before `refreshStatus()` changes the screen to `HasPhone`. If permission is already granted, its callback can dispatch sync while the screen is still in setup, and line 289 discards it. After removing and re-adding a phone, the one-time content effect has already run, so no automatic retry follows. Start sync after the content state is ready.",
+"- [F-006] Major | High | iosApp/iosApp.xcodeproj/project.pbxproj:264 | The permission prompt says contacts are not stored or uploaded, but sync uploads and retains hashes of the address-book numbers. That statement gives users a false description of the data sent to the server. Describe the hashed upload and storage in both build configurations.",
+"- [F-007] Minor | High | feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModel.kt:59 | bill-kmp-code-review-code-quality: Related setup and content values live in separate mutable flows and are updated together in several transitions. This forces maintainers to trace each field and permits intermediate combinations during `combine` emissions. Store each related group in a state data class and update it as one transition."
+]
+},
+"unit_test_value_receipt": {
+"contract_version": "0.1",
+"verdict": "reported",
+"findings": [
+"**Overall verdict:** Mixed",
+"**Scope reviewed:** `ef198ee7f052d8e02b31fde9b6862337bc15468f..6e2dd0915aed624cfe72a2a2fb19d800d0db5f1b`, limited to the six listed test files.",
+"The suite has useful coverage for hash compatibility, phone opt-in, normalization, and sync error handling. Some tests duplicate behavior or pin unrelated menu details. The empty-address-book test also enforces behavior that conflicts with the supplied acceptance criteria.",
+"| Test or Area | Verdict | Confidence | Evidence | Why it adds or lacks value | Better test or action |",
+"|---|---|---|---|---|---|",
+"| Menu item lists | Weak | High | [OverviewMenuItemTest.kt:15](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/overview/ui/model/OverviewMenuItemTest.kt:15), [line 26](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/overview/ui/model/OverviewMenuItemTest.kt:26) | Both tests pin the entire menu order to check a feature flag. Adding or reordering an unrelated item breaks them. This is non-critical menu glue. | Delete both. |",
+"| Request contracts | Weak | High | [ContactsRemoteDataSourceTest.kt:57](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/datasource/ContactsRemoteDataSourceTest.kt:57), [line 84](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/datasource/ContactsRemoteDataSourceTest.kt:84), [line 104](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/datasource/ContactsRemoteDataSourceTest.kt:104), [line 143](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/datasource/ContactsRemoteDataSourceTest.kt:143) | They check paths and profile IDs but not HTTP methods. Request bodies are decoded with the same DTO used to serialize them, so an accidental wire-field rename can pass. | Rewrite these contract assertions to check the method and literal JSON field names at the HTTP boundary. |",
+"| Empty address book | Weak | High for the conflict; medium for intended product behavior | [ZeroContactsRepositoryTest.kt:168](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/repository/ZeroContactsRepositoryTest.kt:168) | The test requires an empty read to fetch the list without uploading. The supplied criteria require an empty sync to clear the uploaded set. The test cannot distinguish an unavailable address book from a genuinely empty one. | Delete this assertion of the conflicting behavior. Clarify how the reader signals unavailable versus empty before adding a clearing test. |",
+"| Sync result shown to users | Weak | High | [ContactsViewModelTest.kt:525](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModelTest.kt:525) | It checks only that one contact appears. A wrong contact would pass, despite the requirement that the sync response populate the screen. | Rewrite the assertion to check the returned contact’s identity and visible fields. |",
+"| Normalizer examples | Weak | High | [PhoneNormalizerTest.kt:23](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/PhoneNormalizerTest.kt:23), [line 35](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/PhoneNormalizerTest.kt:35) | The US national-number case repeats the region fallback covered at line 17. The whitespace example mostly pins library parsing behavior rather than a distinct business rule. | Delete these two examples; retain the region, explicit prefix, and invalid-input cases. |",
+"| Empty setup | Weak | Medium | [ContactsViewModelTest.kt:186](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModelTest.kt:186) | It repeats the empty setup outcome already checked at line 147. It uses a profile with an empty phone list rather than a missing profile, but neither test demonstrates a distinct user-facing rule for that difference. | Delete. |",
+"| Hash and address-book processing | Valuable | High | [ContactBookHasherTest.kt:11](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/ContactBookHasherTest.kt:11), [ZeroContactsRepositoryTest.kt:151](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/repository/ZeroContactsRepositoryTest.kt:151) | Fixed vectors catch incompatible HMAC encoding. The repository test catches duplicate or invalid numbers entering the upload. | Keep. |",
+"| Phone consent and recovery | Valuable | High | [ContactsViewModelTest.kt:164](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModelTest.kt:164), [line 248](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModelTest.kt:248), [line 550](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModelTest.kt:550) | These catch automatic registration of a prefilled number and failures to recover after status errors or a phone removed elsewhere. | Keep. |",
+"**Keep:** The fixed HMAC vectors, normalization and invalid-input checks, deduplication and hash-limit checks, phone consent and removal flows, and sync failure recovery.",
+"**Rewrite:** The four HTTP request contract tests to assert methods and wire JSON; the sync-result UI test to assert the actual contact.",
+"**Delete:** [OverviewMenuItemTest.kt:15](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/overview/ui/model/OverviewMenuItemTest.kt:15), [line 26](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/overview/ui/model/OverviewMenuItemTest.kt:26); [PhoneNormalizerTest.kt:23](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/PhoneNormalizerTest.kt:23), [line 35](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/PhoneNormalizerTest.kt:35); [ContactsViewModelTest.kt:186](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModelTest.kt:186); [ZeroContactsRepositoryTest.kt:168](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/repository/ZeroContactsRepositoryTest.kt:168), subject to resolving the stated behavior conflict.",
+"**Missing high-value cases:** A genuinely empty address book clearing the remote set, once it can be distinguished from an unavailable read; cancellation propagating through the remote request instead of becoming a network failure; and decoding the returned match hash used to exclude contacts from invitations."
+]
+},
+"completeness_audit_receipt": {
+"contract_version": "0.1",
+"verdict": "had_gaps",
+"findings": [
+"COMPLETENESS AUDIT",
+"Acceptance criteria: 8",
+"Implemented:         0",
+"Missing:             2",
+"Partial:             6",
+"---",
+"[PARTIAL] #1: On the first visit to contacts, prompt users without a phone on their profile to enter one and confirm that it is correct. A prefilled profile number must not be registered automatically.",
+"  Evidence: `ContactsViewModel.kt:176`, `ContactsViewModel.kt:200`, `ContactsScreen.kt:475`.",
+"  Missing: The unsaved-changes guard can call `ConfirmPhone` directly when the user saves while leaving, bypassing the confirmation dialog (`ContactsScreen.kt:147`).",
+"[PARTIAL] #2: Request contacts permission, read the address book, normalize and hash numbers on the device, and sync them. The sync response populates the contacts screen.",
+"  Evidence: `ContactsScreen.kt:167`, `ContactsPermissionHandler.kt:24`, `PhoneNormalizer.kt:20`, `ContactBookHasher.kt:28`, `ZeroContactsRepository.kt:74`, `ContactsViewModel.kt:287`.",
+"  Missing: An empty address book is not uploaded. The client loads the existing view instead, so removing the last number cannot clear the uploaded set (`ZeroContactsRepository.kt:87`).",
+"[FAIL] #3: Show two users as contacts only when each has the other's phone number in their uploaded address book. If either removes the other's number and syncs again, the friendship disappears for both.",
+"  Not found: The diff contains no server-side mutual matching or removal implementation. The client also skips an empty sync, preventing removal of the last uploaded number (`ZeroContactsRepository.kt:87`).",
+"[FAIL] #4: Reject `POST /contacts/sync` with HTTP 400 when the caller has no phone on file. With a phone, each sync replaces the caller's complete uploaded hash set and is idempotent. An empty sync clears the set.",
+"  Not found: The diff adds a client POST and maps a 400 response, but contains no server handler or persistence implementation establishing rejection, replacement, idempotency, or clearing (`ContactsRemoteDataSource.kt:48`, `ZeroContactsRepository.kt:108`). The client does not send empty syncs (`ZeroContactsRepository.kt:87`).",
+"[PARTIAL] #5: Provide `GET /contacts` to reopen the same derived contacts view without uploading. Expose only profile ID, first name, and profile image for each match. The list must be available to viewer limiting in 0AC-52.",
+"  Evidence: The client calls `GET /contacts` and loads its response (`ContactsRemoteDataSource.kt:57`, `ZeroContactsRepository.kt:120`).",
+"  Missing: The diff contains no server implementation or viewer-limiting integration. The client response model also accepts a `hash` field beyond the three specified fields (`ContactsDataModels.kt:17`).",
+"[PARTIAL] #6: Support saving, replacing, and deleting the user's phone. Saving or replacing it must update its hash atomically, remove the old hash on replacement, and make the user undiscoverable on deletion.",
+"  Evidence: The client sends phone updates and deletions (`ContactsRemoteDataSource.kt:33`, `ContactsRemoteDataSource.kt:42`), and the screen supports saving and removing a phone (`ContactsViewModel.kt:250`, `ContactsViewModel.kt:271`).",
+"  Missing: The diff contains no server-side phone and hash transaction, replacement, or discoverability implementation. The contacts screen has no replacement flow while a phone is present.",
+"[PARTIAL] #7: Include `hasPhone` in the profile DTO. Keep self-asserted phone numbers unverified in v1.",
+"  Evidence: The client profile DTO adds `hasPhone` (`ProfileResponseDataModel.kt:15`).",
+"  Missing: The diff contains no server DTO or phone verification state implementation to establish the unverified behavior.",
+"[PARTIAL] #8: Cover mutual matching and removal, full replacement, phone and hash transactions, duplicate hash handling, soft deletion, and normalization and hash determinism in tests.",
+"  Evidence: Client tests cover normalization, HMAC vectors, and deduplication (`PhoneNormalizerTest.kt:17`, `ContactBookHasherTest.kt:11`, `ZeroContactsRepositoryTest.kt:151`).",
+"  Missing: The diff contains no server repository tests for mutual matching and removal, full replacement, phone and hash transactions, stored duplicate hashes, or soft deletion. The empty-book client test instead asserts read-only behavior (`ZeroContactsRepositoryTest.kt:168`)."
+]
+},
+"qa_report": {
+"contract_version": "0.1",
+"verdict": "skipped",
+"outcome": "skipped",
+"reason": "disabled_policy",
+"report_text": "QA is off for this verify run.",
+"cleanup": null,
+"warnings": []
+},
+"verdict_result": {
+"contract_version": "0.1",
+"verdict": "REQUEST CHANGES",
+"findings": [
+"**REQUEST CHANGES** — Criteria 3 and 4 are missing from the supplied diff, and the other six criteria are partial. The major blockers include empty-set clearing, mutual matching and removal, server-side sync and phone persistence guarantees, permission and sync failures, and inaccurate iOS permission wording."
+]
+}
+},
+"started_at": "2026-10-29 08:06:37",
+"finished_at": "2026-10-29T08:11:29.988Z"
+},
+"wfv-20261102-214452-unmf": {
+"issue_key": "0AC-86",
+"status": "abandoned",
+"current": "extract_criteria",
+"steps": [
+{
+"step_id": "collect_inputs",
+"status": "completed",
+"attempt_count": 1
+},
+{
+"step_id": "extract_criteria",
+"status": "pending",
+"attempt_count": 1
+},
+{
+"step_id": "gather_diff",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "feature_flag_audit",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "code_review",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "unit_test_value_check",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "completeness_audit",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "qa",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "verdict",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "finish",
+"status": "pending",
+"attempt_count": 0
+}
+],
+"artifacts": {
+"input_context": {
+"repo_root": "~/workspaces/StudioProjects/ZeroAccount-pr-168",
+"intake": "0AC-86 Acceptance criterion: the JVM desktop app follows the new desktop design in ~/workspaces/StudioProjects/ZeroAccount-pr-168/design/desktop (248 sidebar, split Sessions/Apps, dialogs and menus instead of sheets, pointer density, 1280x800 default and 1000x640 minimum). Out of scope: Android/iOS/WASM and unclaimed proposals (profile-switcher menu, QR drag-and-drop/paste, Contacts without Sync).",
+"target": "feat/0AC-86-implement-the-new-desktop-ui",
+"base_revision": "96364d51de71eb34e2162f020366add13caffafa",
+"head_revision": "42d8a8d6dad5a927bb3de14735de3b61d4989e6d",
+"comparison_scope": "96364d51de71eb34e2162f020366add13caffafa..42d8a8d6dad5a927bb3de14735de3b61d4989e6d",
+"review_mode": "inline",
+"qa_selection": "on",
+"issue_key": "0AC-86"
+},
+"criteria_summary": {
+"acceptance_criteria": "1. The JVM target draws through `ZeroPresentation.Desktop` with mobile colors, the desktop type scale, and pointer density from `design/desktop/desktop.css` (rows 40 / 56, controls 36, body 14). Android and iOS tokens stay at their current values.\n2. On Desktop, form sheets render as a 480 dialog with a footer (main action last; Esc closes; Enter submits); confirmations render as a 400 dialog; action sheets and short pickers render as a menu at the pointer. Public overlay contracts stay usable by existing callers.\n3. The desktop window opens at 1280 × 800 with a 1000 × 640 minimum. One 248 sidebar in the Overview host replaces `ZeroNavigationRail` and `DesktopSidebar`, and reaches Personal data, ID verification behind `KmpKycEnabled`, Wallet, Contacts, Active sessions, Linked devices, Profiles, Apps, and Settings. Every selection passes through the existing unsaved-changes guard.\n4. Active sessions and Apps render as a split view (300 list plus detail pane) in the Overview host, without pushing a route to view detail. The list stays visible; an empty list collapses to one centered state; list and detail stay consistent after a session is terminated.\n5. Signed-in panes, onboarding, QR import, and the data request use the `design/desktop` mockup layouts on Desktop. Mobile width branches keep working. Docs describe JVM as drawing through Desktop. None of the five unconfirmed proposals is claimed as approved.",
+"non_goals": "- Android, iOS, and WASM UI changes. WASM stays on the `Legacy` presentation.\n- Unclaimed proposals: sidebar profile-switcher menu (`profiles-switcher.html`); QR import drag-and-drop and paste; Contacts without Sync (phone note, “Copy invite link”, and their strings).\n- Treating “Overview stops being a page” or “data request full window” as approved product decisions; those stay unconfirmed.\n- Fixing the missing WASM actual for `shouldShowBottomNavigation`.\n- Deleting the 900 dp `BoxWithConstraints` width branches used by tablets and large phones.\n- Changing `isSelectedTopLevelDestinationRouteId` or the mobile bottom bar.\n- Data, API, or backend changes.",
+"rollout_expectation": "No guarded rollout. The spec requires no new feature flag. Existing `KmpKycEnabled` continues to gate ID verification visibility.",
+"technical_constraints": "- Presentation is chosen by expect/actual; every 36 dp desktop target stays gated on `ZeroPresentation.Desktop`.\n- Feature modules do not depend on each other. `feature/overview` reaches Profiles through a slot supplied by `composeApp`.\n- The sidebar lives in the Overview host, not in `ZeroApp`, because the host already owns selection, the personal-data leave guard, QR entry, profile info, sync status, and the Settings ViewModel lifetime.\n- Overlay public contracts stay caller-usable; other presentations keep drawing sheets.\n- Identity-row baseline: avatar, name, and primary email open the Profiles pane, with no chevron or menu; switching stays on Profiles.\n- QR import baseline: Select Image only.\n- Contacts baseline: Sync stays and keeps the existing Unsupported error dialog.\n- Title bar stays native."
+},
+"session_notes": {
+"superseded_by": "wfv-20261102-215213-grld"
+}
+},
+"started_at": "2026-11-02 21:44:52",
+"finished_at": "2026-11-02T21:54:23.398Z"
+},
+"wfv-20261102-215213-grld": {
+"issue_key": "0AC-86",
+"status": "abandoned",
+"current": "unit_test_value_check",
+"steps": [
+{
+"step_id": "collect_inputs",
+"status": "completed",
+"attempt_count": 1
+},
+{
+"step_id": "extract_criteria",
+"status": "completed",
+"attempt_count": 1
+},
+{
+"step_id": "gather_diff",
+"status": "completed",
+"attempt_count": 1
+},
+{
+"step_id": "feature_flag_audit",
+"status": "completed",
+"attempt_count": 1
+},
+{
+"step_id": "code_review",
+"status": "completed",
+"attempt_count": 1
+},
+{
+"step_id": "unit_test_value_check",
+"status": "running",
+"attempt_count": 1
+},
+{
+"step_id": "completeness_audit",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "qa",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "verdict",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "finish",
+"status": "pending",
+"attempt_count": 0
+}
+],
+"artifacts": {
+"input_context": {
+"repo_root": "~/workspaces/StudioProjects/ZeroAccount-pr-168",
+"intake": "0AC-86 Acceptance criterion: the JVM desktop app follows the new desktop design in ~/workspaces/StudioProjects/ZeroAccount-pr-168/design/desktop (248 sidebar, split Sessions/Apps, dialogs and menus instead of sheets, pointer density, 1280x800 default and 1000x640 minimum). Out of scope: Android/iOS/WASM and unclaimed proposals (profile-switcher menu, QR drag-and-drop/paste, Contacts without Sync). most important - the app should look like the new designs look visually",
+"target": "feat/0AC-86-implement-the-new-desktop-ui",
+"base_revision": "96364d51de71eb34e2162f020366add13caffafa",
+"head_revision": "42d8a8d6dad5a927bb3de14735de3b61d4989e6d",
+"comparison_scope": "96364d51de71eb34e2162f020366add13caffafa..42d8a8d6dad5a927bb3de14735de3b61d4989e6d",
+"review_mode": "inline",
+"qa_selection": "on",
+"issue_key": "0AC-86"
+},
+"criteria_summary": {
+"acceptance_criteria": "1. The JVM desktop app visually matches the new desktop design in `design/desktop` (same layout, density, chrome, and overlay treatment as the mockups).\n2. The JVM target draws through `ZeroPresentation.Desktop` with mobile colors, the desktop type scale, and pointer density from `design/desktop/desktop.css` (rows 40 / 56, controls 36, body 14). Android and iOS tokens stay at their current values, and WASM stays `Legacy`.\n3. On Desktop, form sheets render as a 480 dialog with a footer (main action last; Esc closes; Enter submits); confirmations and `ZeroDialog` render as a 400 dialog; action sheets and short pickers render as a menu at the pointer. Public overlay contracts stay usable by existing callers; other presentations keep drawing sheets.\n4. The desktop window opens at 1280 × 800 with a 1000 × 640 minimum. One 248 sidebar in the Overview host replaces `ZeroNavigationRail` and `DesktopSidebar`, and reaches Personal data, ID verification behind `KmpKycEnabled`, Wallet, Contacts, Active sessions, Linked devices, Profiles, Apps, and Settings. Every selection passes through the existing unsaved-changes guard.\n5. Active sessions and Apps render as a 300 list plus detail pane in the Overview host, without pushing a route to view detail. After a session is terminated, the list and detail stay consistent; an empty list collapses to one centered state.\n6. Signed-in panes, onboarding, QR import, and the data request use the mockup layouts on Desktop while mobile width branches keep working. Docs describe JVM as drawing through `Desktop`. None of the five unconfirmed proposals is claimed as approved.",
+"non_goals": "- Android, iOS, and WASM redesign.\n- Unclaimed proposal work: sidebar profile-switcher menu (`profiles-switcher.html`); QR import drag-and-drop and paste (and the strings “Drop an image here” / “or paste a screenshot”); Contacts without Sync (phone note, “Copy invite link”, and their three strings).\n- Treating “Overview stops being a page” or “data request full window” as approved product decisions.\n- Fixing the missing WASM actual for `shouldShowBottomNavigation`.\n- Deleting shared-screen width branches used by tablets and large phones.\n- Changing `isSelectedTopLevelDestinationRouteId` or the mobile bottom bar.\n- Data, API, or backend changes.",
+"rollout_expectation": "No guarded rollout. No new feature flag. Existing `KmpKycEnabled` continues to hide ID verification.",
+"technical_constraints": "- JVM only. Presentation is chosen by expect/actual; every 36 dp target stays gated on `ZeroPresentation.Desktop`.\n- WASM remains `Legacy`, so legacy color schemes and renderers stay in the tree.\n- Feature modules do not depend on each other. `feature/overview` reaches Profiles through a `composeApp` slot.\n- The sidebar lives in the Overview host, not in `ZeroApp`, because the host already owns selection, leave guards, QR entry, profile info, sync status, and Settings lifetime.\n- Ship the recorded baselines: open on Personal data with no Overview rail item; identity row (avatar, name, primary email) opens Profiles with no chevron or menu; QR dialog is Select Image only; Contacts Sync stays and keeps the Unsupported error dialog.\n- Reuse existing Zero components and MVI contracts. Title bar stays native.\n- Color roles, semantic status colors, cards, grouped lists, fields, badges, copy, approve-only, one QR entry, blurred phrase words, and no device linking carry over from the mobile redesign."
+},
+"qa_outcome": {
+"contract_version": "0.1",
+"outcome": "attempted",
+"reason": null
+},
+"diff_projection": {
+"checkpoint": "4e1f352659496adc1487221d585cf2cb12ade4502327a28824557ff5a53fae1c",
+"comparison_scope": "96364d51de71eb34e2162f020366add13caffafa..42d8a8d6dad5a927bb3de14735de3b61d4989e6d",
+"changed_files": [
+"composeApp/src/commonMain/kotlin/com/zeroaccount/zeroaccount/deeplink/DeepLinkBridge.kt",
+"composeApp/src/commonMain/kotlin/com/zeroaccount/zeroaccount/navigation/ZeroEntryProvider.kt",
+"composeApp/src/commonMain/kotlin/com/zeroaccount/zeroaccount/navigation/state/ZeroNavigator.kt",
+"composeApp/src/commonMain/kotlin/com/zeroaccount/zeroaccount/ui/GlobalBottomNavigationBar.kt",
+"composeApp/src/commonMain/kotlin/com/zeroaccount/zeroaccount/ui/app/ZeroApp.kt",
+"composeApp/src/commonMain/kotlin/com/zeroaccount/zeroaccount/ui/app/ZeroAppState.kt",
+"composeApp/src/jvmMain/kotlin/com/zeroaccount/zeroaccount/display/DesktopUiScale.kt",
+"composeApp/src/jvmMain/kotlin/com/zeroaccount/zeroaccount/main.kt",
+"composeApp/src/jvmTest/kotlin/com/zeroaccount/zeroaccount/deeplink/DeepLinkBridgeTest.kt",
+"composeApp/src/jvmTest/kotlin/com/zeroaccount/zeroaccount/display/DesktopUiScaleTest.kt",
+"composeApp/src/jvmTest/kotlin/com/zeroaccount/zeroaccount/navigation/NavigationOwnershipIntegrationTest.kt",
+"composeApp/src/jvmTest/kotlin/com/zeroaccount/zeroaccount/navigation/ZeroNavigatorTest.kt",
+"composeApp/src/jvmTest/kotlin/com/zeroaccount/zeroaccount/ui/app/NavigationVisibilityTest.kt",
+"composeApp/src/jvmTest/kotlin/com/zeroaccount/zeroaccount/ui/app/ZeroAppLaunchTest.kt",
+"config/detekt/detekt.yml",
+"core/presentation/designsystem/agent/decisions.md",
+"core/presentation/designsystem/agent/history.md",
+"core/presentation/designsystem/src/androidMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroMenuPosition.android.kt",
+"core/presentation/designsystem/src/androidMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/internal/ZeroDialogProperties.android.kt",
+"core/presentation/designsystem/src/commonMain/composeResources/values-ar/strings.xml",
+"core/presentation/designsystem/src/commonMain/composeResources/values-bn/strings.xml",
+"core/presentation/designsystem/src/commonMain/composeResources/values-es/strings.xml",
+"core/presentation/designsystem/src/commonMain/composeResources/values-fr/strings.xml",
+"core/presentation/designsystem/src/commonMain/composeResources/values-hi/strings.xml",
+"core/presentation/designsystem/src/commonMain/composeResources/values-id/strings.xml",
+"core/presentation/designsystem/src/commonMain/composeResources/values-pt/strings.xml",
+"core/presentation/designsystem/src/commonMain/composeResources/values-ru/strings.xml",
+"core/presentation/designsystem/src/commonMain/composeResources/values-zh/strings.xml",
+"core/presentation/designsystem/src/commonMain/composeResources/values/strings.xml",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/Buttons.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ClickableModifiers.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroActionSheet.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroBottomActionBar.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroCheckbox.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroCompactButton.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroConfirmationBottomSheet.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroDesktopDialog.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroDialog.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroFeedbackBanner.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroIconButton.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroMenu.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroMenuPosition.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroModalSheet.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroOptionRow.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroPickerField.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroPointerStateLayer.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroProgressIndicator.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroSegmentedSelector.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroSettingsRow.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroStatusBadge.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroSurface.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroSwitch.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroTabBar.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroTextField.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroToastHost.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroTopBar.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/internal/ZeroDialogProperties.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/internal/ZeroFieldRenderers.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/gallery/ZeroComponentGalleryEntry.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/platform/ZeroPresentation.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/theme/Typography.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/theme/ZeroDesktopMetrics.kt",
+"core/presentation/designsystem/src/commonMain/kotlin/com/zeroaccount/core/presentation/designsystem/theme/ZeroThemeTokens.kt",
+"core/presentation/designsystem/src/iosMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroMenuPosition.ios.kt",
+"core/presentation/designsystem/src/iosMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/internal/ZeroDialogProperties.ios.kt",
+"core/presentation/designsystem/src/jvmMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroMenuPosition.jvm.kt",
+"core/presentation/designsystem/src/jvmMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/internal/ZeroDialogProperties.jvm.kt",
+"core/presentation/designsystem/src/jvmMain/kotlin/com/zeroaccount/core/presentation/designsystem/platform/ZeroPresentation.jvm.kt",
+"core/presentation/designsystem/src/jvmTest/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroOverlayFocusTest.kt",
+"core/presentation/designsystem/src/jvmTest/kotlin/com/zeroaccount/core/presentation/designsystem/gallery/ZeroComponentGalleryHostTest.kt",
+"core/presentation/designsystem/src/jvmTest/kotlin/com/zeroaccount/core/presentation/designsystem/theme/ZeroThemeContrastTest.kt",
+"core/presentation/designsystem/src/wasmJsMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/ZeroMenuPosition.wasm.kt",
+"core/presentation/designsystem/src/wasmJsMain/kotlin/com/zeroaccount/core/presentation/designsystem/components/internal/ZeroDialogProperties.wasm.kt",
+"core/presentation/ui/src/commonMain/kotlin/com/zeroaccount/core/presentation/ui/composables/PickerBottomSheet.kt",
+"core/presentation/ui/src/commonMain/kotlin/com/zeroaccount/core/presentation/ui/composables/SettingsFacades.kt",
+"core/presentation/ui/src/commonMain/kotlin/com/zeroaccount/core/presentation/ui/composables/desktop/DesktopLayoutPrimitives.kt",
+"core/presentation/ui/src/commonMain/kotlin/com/zeroaccount/core/presentation/ui/unsavedchanges/ExternalLeaveRequestCoordinator.kt",
+"core/presentation/ui/src/commonMain/kotlin/com/zeroaccount/core/presentation/ui/unsavedchanges/UnsavedChangesGuard.kt",
+"core/presentation/ui/src/commonMain/kotlin/com/zeroaccount/core/presentation/ui/unsavedchanges/UnsavedChangesLeaveController.kt",
+"core/presentation/ui/src/commonMain/kotlin/com/zeroaccount/core/presentation/ui/unsavedchanges/UnsavedChangesPrompt.kt",
+"core/presentation/ui/src/jvmMain/kotlin/com/zeroaccount/core/presentation/ui/composables/desktop/DesktopSplitView.kt",
+"core/presentation/ui/src/jvmTest/kotlin/com/zeroaccount/core/presentation/ui/composables/ZeroTextFieldTest.kt",
+"core/presentation/ui/src/jvmTest/kotlin/com/zeroaccount/core/presentation/ui/composables/desktop/DesktopLayoutPrimitivesTest.kt",
+"core/presentation/ui/src/jvmTest/kotlin/com/zeroaccount/core/presentation/ui/composables/desktop/DesktopSplitViewTest.kt",
+"core/presentation/ui/src/jvmTest/kotlin/com/zeroaccount/core/presentation/ui/unsavedchanges/UnsavedChangesLeaveControllerTest.kt",
+"design/desktop/README.md",
+"design/desktop/desktop.css",
+"design/desktop/index.html",
+"design/desktop/screens/apps-empty.html",
+"design/desktop/screens/apps-error.html",
+"design/desktop/screens/apps.html",
+"design/desktop/screens/contacts-setup.html",
+"design/desktop/screens/contacts.html",
+"design/desktop/screens/devices-remove.html",
+"design/desktop/screens/devices.html",
+"design/desktop/screens/email.html",
+"design/desktop/screens/loading.html",
+"design/desktop/screens/login.html",
+"design/desktop/screens/personal-data-gender.html",
+"design/desktop/screens/personal-data-saved.html",
+"design/desktop/screens/personal-data-unsaved.html",
+"design/desktop/screens/personal-data.html",
+"design/desktop/screens/phone-country.html",
+"design/desktop/screens/phone.html",
+"design/desktop/screens/phrase-confirm.html",
+"design/desktop/screens/phrase-display.html",
+"design/desktop/screens/profiles-create.html",
+"design/desktop/screens/profiles-switcher.html",
+"design/desktop/screens/profiles.html",
+"design/desktop/screens/qr-import-error.html",
+"design/desktop/screens/qr-import.html",
+"design/desktop/screens/request-success.html",
+"design/desktop/screens/request.html",
+"design/desktop/screens/sessions-empty.html",
+"design/desktop/screens/sessions-terminate.html",
+"design/desktop/screens/sessions.html",
+"design/desktop/screens/settings-logout.html",
+"design/desktop/screens/settings.html",
+"design/desktop/screens/verification.html",
+"design/desktop/screens/wallet-add-card.html",
+"design/desktop/screens/wallet-delete.html",
+"design/desktop/screens/wallet-empty.html",
+"design/desktop/screens/wallet-menu.html",
+"design/desktop/screens/wallet.html",
+"design/desktop/screens/welcome.html",
+"design/desktop/scripts/build.mjs",
+"design/redesign/mapping.md",
+"docs/architecture.md",
+"docs/navigation3-lifecycle-ownership.md",
+"docs/theme-colors.md",
+"feature/accounts/src/commonMain/kotlin/com/zeroaccount/feature/accounts/overview/ui/AddProfileSheet.kt",
+"feature/accounts/src/commonMain/kotlin/com/zeroaccount/feature/accounts/overview/ui/ProfilesList.kt",
+"feature/accounts/src/commonMain/kotlin/com/zeroaccount/feature/accounts/overview/ui/ProfilesScreen.kt",
+"feature/accounts/src/commonMain/kotlin/com/zeroaccount/feature/accounts/overview/ui/ProfilesTestTags.kt",
+"feature/accounts/src/jvmTest/kotlin/com/zeroaccount/feature/accounts/overview/ui/ProfilesAddActionTest.kt",
+"feature/apps/src/commonMain/kotlin/com/zeroaccount/feature/apps/apps/ui/AppsScreen.kt",
+"feature/apps/src/commonMain/kotlin/com/zeroaccount/feature/apps/detail/ui/AppDetailScreen.kt",
+"feature/onboarding/agent/decisions.md",
+"feature/onboarding/agent/history.md",
+"feature/onboarding/src/commonMain/composeResources/values-ar/strings.xml",
+"feature/onboarding/src/commonMain/composeResources/values-bn/strings.xml",
+"feature/onboarding/src/commonMain/composeResources/values-es/strings.xml",
+"feature/onboarding/src/commonMain/composeResources/values-fr/strings.xml",
+"feature/onboarding/src/commonMain/composeResources/values-hi/strings.xml",
+"feature/onboarding/src/commonMain/composeResources/values-id/strings.xml",
+"feature/onboarding/src/commonMain/composeResources/values-pt/strings.xml",
+"feature/onboarding/src/commonMain/composeResources/values-ru/strings.xml",
+"feature/onboarding/src/commonMain/composeResources/values-zh/strings.xml",
+"feature/onboarding/src/commonMain/composeResources/values/strings.xml",
+"feature/onboarding/src/commonMain/kotlin/com/zeroaccount/feature/onboarding/linking/ui/LinkingQrDisplayScreen.kt",
+"feature/onboarding/src/commonMain/kotlin/com/zeroaccount/feature/onboarding/linking/ui/LinkingScanScreen.kt",
+"feature/onboarding/src/commonMain/kotlin/com/zeroaccount/feature/onboarding/login/ui/MnemonicInputScreen.kt",
+"feature/onboarding/src/commonMain/kotlin/com/zeroaccount/feature/onboarding/profilesetup/ui/ProfileSetupScreen.kt",
+"feature/onboarding/src/commonMain/kotlin/com/zeroaccount/feature/onboarding/registration/ui/MnemonicConfirmScreen.kt",
+"feature/onboarding/src/commonMain/kotlin/com/zeroaccount/feature/onboarding/registration/ui/MnemonicDisplayScreen.kt",
+"feature/onboarding/src/commonMain/kotlin/com/zeroaccount/feature/onboarding/registration/ui/MnemonicPhraseCard.kt",
+"feature/onboarding/src/commonMain/kotlin/com/zeroaccount/feature/onboarding/registration/ui/MnemonicWordChip.kt",
+"feature/onboarding/src/commonMain/kotlin/com/zeroaccount/feature/onboarding/ui/OnboardingWideLayout.kt",
+"feature/onboarding/src/commonMain/kotlin/com/zeroaccount/feature/onboarding/welcome/ui/WelcomeScreen.kt",
+"feature/overview/agent/decisions.md",
+"feature/overview/agent/history.md",
+"feature/overview/src/commonMain/composeResources/values-ar/strings.xml",
+"feature/overview/src/commonMain/composeResources/values-bn/strings.xml",
+"feature/overview/src/commonMain/composeResources/values-es/strings.xml",
+"feature/overview/src/commonMain/composeResources/values-fr/strings.xml",
+"feature/overview/src/commonMain/composeResources/values-hi/strings.xml",
+"feature/overview/src/commonMain/composeResources/values-id/strings.xml",
+"feature/overview/src/commonMain/composeResources/values-pt/strings.xml",
+"feature/overview/src/commonMain/composeResources/values-ru/strings.xml",
+"feature/overview/src/commonMain/composeResources/values-zh/strings.xml",
+"feature/overview/src/commonMain/composeResources/values/strings.xml",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/appdatarequest/ui/AppDataRequestChrome.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/appdatarequest/ui/AppDataRequestResultContent.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/appdatarequest/ui/AppDataRequestScreen.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/contacts/ui/ContactRows.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/contacts/ui/ContactsContent.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/contacts/ui/ContactsDesktopSide.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/contacts/ui/ContactsFriendsContent.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/contacts/ui/ContactsTopBar.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/email/ui/EmailManagementScreen.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/email/ui/composables/EmailItemComponent.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/email/verification/ui/EmailVerificationScreen.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/linkeddevices/ui/LinkedDevicesList.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/linkeddevices/ui/LinkedDevicesScreen.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/navigation/OverviewNavigation.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/overview/OverviewContract.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/overview/OverviewViewModel.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/overview/ui/OverviewNavigation.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/overview/ui/VerificationStatusContent.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/overview/ui/composables/SharedOverviewComponents.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/overview/ui/model/OverviewMenuItem.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/personaldata/ui/PersonalDataScreen.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/phone/ui/CountryCodePickerScreen.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/phone/ui/PhoneNumberManagementScreen.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/phone/ui/composables/PhoneNumberItemComponent.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/sessions/activesessions/ui/ActiveSessionsScreen.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/sessions/detail/ui/DesktopSessionsList.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/sessions/detail/ui/SessionDetailScreen.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/settings/ui/SettingsScreen.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/wallet/ui/AddCardDialog.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/wallet/ui/CreditCardItem.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/wallet/ui/WalletContent.kt",
+"feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/wallet/ui/WalletScreen.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/DesktopAppSidebar.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/DesktopAvatarAction.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/DesktopOverviewBindings.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/DesktopOverviewScreen.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/DesktopSidebar.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/ActiveSessionsDetailContent.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/AppsDetailContent.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/ContactsDetailContent.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/CountryCodePickerDialog.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/DetailDialogConstants.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/DetailDialogContainer.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/PersonalDataDetailContent.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/QrImportDialog.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/SettingsDetailContent.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/SplitSelection.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/model/DesktopOverviewContentConfig.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/model/DesktopSidebarGroup.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/model/DesktopSidebarGroups.kt",
+"feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/personaldata/ui/DesktopPersonalDataScreen.kt",
+"feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/contacts/ui/ContactsScreenTest.kt",
+"feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/linkeddevices/ui/LinkedDevicesScreenTest.kt",
+"feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/navigation/OverviewNavigationActionsTest.kt",
+"feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/overview/OverviewViewModelTest.kt",
+"feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/overview/ui/DesktopOverviewUiLogicTest.kt",
+"feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/DetailDialogKeyboardTest.kt",
+"feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/PersonalDataSubPageHostTest.kt",
+"feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/SplitSelectionTest.kt",
+"feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/overview/ui/model/DesktopSidebarGroupsTest.kt",
+"feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/personaldata/ui/DesktopPersonalDataScreenTest.kt",
+"feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/wallet/ui/AddCardDialogKeyboardTest.kt",
+"feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/wallet/ui/WalletScreenTest.kt"
+]
+},
+"feature_flag_audit_receipt": {
+"contract_version": "0.1",
+"verdict": "pass",
+"findings": [
+"I'll audit the range against the feature-flag policy: first confirm rollout expectation, then scan the diff and repo for any flags.The first pass missed flag hits in the piped diff. I’ll search the range directly for `FeatureFlag`, `KmpKycEnabled`, and related names.A flag does appear in the range, so I’ll inspect `KmpKycEnabled` usage and whether any new flag is added.FEATURE FLAG AUDIT",
+"Flag name: KmpKycEnabled",
+"Pattern: Simple Conditional",
+"[ PASS ] Flag defined in codebase",
+"[ PASS ] Rollback safe (flag OFF = identical old behavior)",
+"[ PASS ] Minimal flag checks (not scattered)",
+"[ PASS ] Legacy code untouched (if applicable)",
+"[ PASS ] No hybrid states",
+"[ PASS ] Default value is false",
+"Issues: None"
+]
+},
+"code_review_receipt": {
+"contract_version": "0.1",
+"verdict": "changes_requested",
+"findings": [
+"- [F-001] Major | High | feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/QrImportDialog.kt:76 | **bill-kmp-code-review-architecture:** `QrScannerDialog` constructs `ZeroQrCodeParser` from `core.data` inside the composable instead of the injected domain `QrCodeParser`. Deep-link handling already uses the DI parser; this path uses a second instance with `Clock.System`. A parse-rule or clock change in one path will not apply to the other, and tests cannot substitute the parser. Concrete failure: an expired QR that the injected parser would reject can still navigate from the file-picker path, or the reverse.",
+"- [F-002] Major | High | feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/QrImportDialog.kt:151 | **bill-kmp-code-review-platform-correctness:** `selectAndDecodeQrImage` shows a blocking `JFileChooser` on the Swing EDT and only skips `resume` after Compose cancellation. Dismissing the QR sheet cancels `rememberCoroutineScope` but leaves the chooser open. Choosing a file then does nothing (`continuation.isActive` is false), and a second QR click can open another chooser. Concrete failure: user closes the overlay, picks a file in the leftover dialog, and import never runs.",
+"- [F-003] Major | High | composeApp/src/commonMain/kotlin/com/zeroaccount/zeroaccount/deeplink/DeepLinkBridge.kt:428 | **bill-kmp-code-review-reliability:** While a link is `AwaitingDecision`, `drain` skips it and dispatches the next pending URL. That second dispatch calls `requestExternalLeave`, which `cancel()`s the first prompt and reports `false`, dropping the first link. Concrete failure: dirty Personal data, first approval URL shows the unsaved-changes prompt, a second forwarded URL arrives, the first URL is discarded, and the second navigates after a fresh prompt. Two queued approvals while signed in are enough to trigger this.",
+"- [F-004] Major | High | core/presentation/ui/src/commonMain/kotlin/com/zeroaccount/core/presentation/ui/unsavedchanges/UnsavedChangesPrompt.kt:93 | **bill-kmp-code-review-ui:** The desktop unsaved-changes prompt uses `ZeroDesktopDialog` without `onEnter`. `ZeroDialog` and non-destructive `ZeroConfirmationBottomSheet` submit on Enter; this prompt is the one sidebar and deep-link leave both use. Focus starts on the title, so the first Enter does nothing and the pending leave stays blocked until the user clicks Save or Discard.",
+"- [F-005] Major | High | feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/DesktopAvatarAction.kt:112 | **bill-kmp-code-review-ux-accessibility:** The camera control that updates the portrait is a 24dp `Surface`. Desktop tokens set a 36dp minimum, and when a portrait already exists the 80dp avatar opens preview instead of update. Pointer and assistive users miss or cannot reliably activate the only update control.",
+"- [F-006] Major | High | composeApp/src/jvmTest/kotlin/com/zeroaccount/zeroaccount/deeplink/DeepLinkBridgeTest.kt:43 | **bill-kotlin-code-review-testing:** The new `AwaitingDecision` / `requestExternalLeave` disposition has no test. Existing tests mock `dispatchAcceptedDeepLink` as always `Consumed` or use a clean form that accepts immediately. The second-link drop in F-003 and a cancelled leave both stay green.",
+"- [F-007] Minor | High | feature/overview/src/jvmMain/kotlin/com/zeroaccount/feature/overview/overview/ui/detail/ActiveSessionsDetailContent.kt:67 | **bill-kmp-code-review-code-quality:** Apps selection uses parent-scoped `rememberSplitSelection`; sessions keep `selectedId` in a local `remember`. The two desktop split panes now own selection differently, so a later restore or terminate fix has to be applied twice."
+]
+}
+},
+"started_at": "2026-11-02 21:52:14",
+"finished_at": "2026-11-03T11:53:21.220Z"
+},
+"wfv-20261103-115223-xwef": {
+"issue_key": "FP-5175",
+"status": "pending",
+"current": "extract_criteria",
+"steps": [
+{
+"step_id": "collect_inputs",
+"status": "completed",
+"attempt_count": 1
+},
+{
+"step_id": "extract_criteria",
+"status": "pending",
+"attempt_count": 1
+},
+{
+"step_id": "gather_diff",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "feature_flag_audit",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "code_review",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "unit_test_value_check",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "completeness_audit",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "qa",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "verdict",
+"status": "pending",
+"attempt_count": 0
+},
+{
+"step_id": "finish",
+"status": "pending",
+"attempt_count": 0
+}
+],
+"artifacts": {
+"input_context": {
+"repo_root": "~/workspaces/IdeaProjects/SkillBill-qa-desktop-scope",
+"intake": "https://linear.app/capmo/issue/FP-5175/android-numeric-keyboard-overlays-mfa-screen",
+"target": "HEAD",
+"base_revision": "9ccc5f24997d3adea39fb7a817966fad8b79ebeb",
+"head_revision": "e06081224def7d04ae34e2271031a72d9df79c3c",
+"comparison_scope": "9ccc5f24997d3adea39fb7a817966fad8b79ebeb..e06081224def7d04ae34e2271031a72d9df79c3c",
+"review_mode": "inline",
+"qa_selection": "off",
+"issue_key": "FP-5175"
+},
+"criteria_summary": {
+"acceptance_criteria": "Unable to extract criteria. Both connected Linear tools returned \"Could not find referenced Issue\" for [FP-5175](https://linear.app/capmo/issue/FP-5175/android-numeric-keyboard-overlays-mfa-screen), so its description and comments were unavailable.",
+"non_goals": "",
+"rollout_expectation": "",
+"technical_constraints": ""
+}
+},
+"started_at": "2026-11-03 11:52:23",
+"finished_at": null
+}
+};
+
+
+// ---------- icons ----------
+const I = {
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  minus: '<path d="M6 12h12"/>',
+  alert: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.01"/>',
+  pause: '<path d="M9 6v12M15 6v12"/>',
+  hand: '<path d="M12 8v4M12 16v.01"/><circle cx="12" cy="12" r="9"/>',
+  chev: '<path d="M9 6l6 6-6 6"/>',
+  folder: '<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',
+  branch: '<circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 8v8M18 10c0 4-6 3-10 6"/>',
+  commit: '<circle cx="12" cy="12" r="3"/><path d="M3 12h6M15 12h6"/>',
+  play: '<path d="M7 5l12 7-12 7z"/>',
+  diff: '<path d="M8 4v10M3 9h10M11 20h10"/>',
+  copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/>',
+  link: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.01"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+  resume: '<path d="M4 12a8 8 0 1014-5.3"/><path d="M18 3v4h-4"/>',
+  agent: '<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4M9 13v1M15 13v1"/>',
+  file: '<path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/>',
+  bug: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5"/><path d="M12 16h.01"/>',
+  gap: '<circle cx="12" cy="12" r="8" stroke-dasharray="3 3.2"/>',
+  doc: '<path d="M6 4h12v16H6z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
+  image: '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M20 16l-5-5-8 8"/>',
+};
+const ico = (n, cls = '') => `<svg class="ico ${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[n]}</svg>`;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const inline = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+const short = sha => (sha || '').slice(0, 7);
+const base = p => p.split('/').pop();
+
+// ---------- parsing the stored artifacts ----------
+function listItems(text, numbered) {
+  const out = [];
+  (text || '').split('\n').forEach(line => {
+    const m = numbered ? line.match(/^\s*(\d+)[.)]\s+(.*)$/) : line.match(/^\s*[-*]\s+(.*)$/);
+    if (m) out.push(numbered ? { n: +m[1], text: m[2] } : { text: m[1] });
+    else if (line.trim() && out.length) out[out.length - 1].text += ' ' + line.trim();
+  });
+  return out;
+}
+
+function parseAudit(receipt) {
+  if (!receipt) return null;
+  const lines = receipt.findings;
+  const res = { verdict: receipt.verdict, items: {} };
+  let cur = null;
+  lines.forEach(l => {
+    const m = l.match(/^\[(PASS|PARTIAL|FAIL)\]\s*#(\d+):?\s*(.*)$/);
+    if (m) { cur = { status: m[1], n: +m[2], evidence: [], missing: '', notFound: '' }; res.items[cur.n] = cur; return; }
+    if (!cur) return;
+    const t = l.trim();
+    let k;
+    if ((k = t.match(/^Evidence:\s*(.*)$/))) cur.evidence = [...k[1].matchAll(/`([^`]+)`/g)].map(x => x[1]).concat(k[1].includes('`') ? [] : k[1].split(/,\s*/));
+    else if ((k = t.match(/^Missing[:—\s-]+(.*)$/))) cur.missing = k[1];
+    else if ((k = t.match(/^Not found[:—\s-]+(.*)$/))) cur.notFound = k[1];
+  });
+  return res;
+}
+
+function parseFindings(receipt) {
+  if (!receipt) return [];
+  return receipt.findings.map(l => {
+    const m = l.match(/^- \[(F-\d+)\]\s*(\w+)\s*\|\s*(\w+)\s*\|\s*([^|]+?)\s*\|\s*(.*)$/);
+    if (!m) return null;
+    let desc = m[5], specialist = '';
+    const sp = desc.match(/\|\s*specialist=(.*)$/);
+    if (sp) { specialist = sp[1]; desc = desc.slice(0, sp.index).trim(); }
+    const pre = desc.match(/^\*{0,2}(bill-[a-z0-9-]+):\*{0,2}\s*/);
+    if (pre) { specialist = specialist || pre[1]; desc = desc.slice(pre[0].length); }
+    return { ref: m[1], severity: m[2], confidence: m[3], loc: m[4], desc, specialist: specialist.replace(/^bill-[a-z]+-code-review-/, '') };
+  }).filter(Boolean);
+}
+
+function parseFlag(receipt) {
+  if (!receipt) return null;
+  if (receipt.verdict === 'skipped') return { verdict: 'skipped', reason: receipt.findings[0] };
+  const joined = receipt.findings.join('\n');
+  const at = joined.indexOf('FEATURE FLAG AUDIT');
+  const body = (at >= 0 ? joined.slice(at) : joined).split('\n');
+  const chatter = at > 0;
+  const get = k => (body.find(l => l.startsWith(k)) || '').slice(k.length).trim();
+  const checks = body.map(l => l.match(/^\[\s*(PASS|FAIL)\s*\]\s*(.*)$/)).filter(Boolean).map(m => ({ ok: m[1] === 'PASS', text: m[2] }));
+  return { verdict: receipt.verdict, flag: get('Flag name:'), pattern: get('Pattern:'), issues: get('Issues:'), checks, chatter };
+}
+
+function parseTests(receipt) {
+  if (!receipt) return null;
+  if (receipt.verdict === 'skipped') return { skipped: receipt.findings[0] };
+  const lines = receipt.findings;
+  const field = k => { const l = lines.find(x => x.startsWith(`**${k}:**`)); return l ? l.slice(k.length + 5).trim() : ''; };
+  const rows = lines.filter(l => l.startsWith('|') && !/^\|\s*-/.test(l) && !/^\|\s*Test or Area/.test(l)).map(l => {
+    const c = l.split('|').slice(1, -1).map(s => s.trim());
+    const files = [...c[3].matchAll(/\[([^\]]+)\]\(/g)].map(m => m[1]);
+    return { area: c[0], verdict: c[1], confidence: c[2], files, why: c[4], action: c[5] };
+  });
+  const summary = lines.find(l => !l.startsWith('**') && !l.startsWith('|')) || '';
+  const strip = s => s.replace(/\[([^\]]+)\]\([^)]+\)/g, '`$1`');
+  return { overall: field('Overall verdict'), summary, rows, keep: strip(field('Keep')), rewrite: strip(field('Rewrite')), del: strip(field('Delete')), missing: strip(field('Missing high-value cases')) };
+}
+
+function parseQaReport(text) {
+  if (!text) return null;
+  const lines = text.split('\n');
+  const verdict = ((lines.find(l => /^Verdict:/i.test(l)) || '').split(':')[1] || '').trim();
+  const sectionOf = name => {
+    const at = lines.findIndex(l => new RegExp(`^##\\s*${name}\\s*$`, 'i').test(l.trim()));
+    if (at < 0) return [];
+    const out = [];
+    for (let i = at + 1; i < lines.length && !/^#{1,3}\s/.test(lines[i]); i++) out.push(lines[i]);
+    return out;
+  };
+  const evidence = s => (s.match(/Evidence:\s*(.*)$/i) || [, ''])[1].split(/,\s*/).filter(Boolean);
+  const noEvidence = s => s.replace(/\s*Evidence:.*$/i, '').trim();
+  const coverage = sectionOf('Coverage').map(l => l.match(/^[-*]\s*([a-z][a-z0-9-]*)\s*:\s*(\w+)(?:.*reason:\s*([a-z_]+))?/)).filter(Boolean).map(m => ({ kind: m[1], verdict: m[2], reason: m[3] }));
+  const assertions = sectionOf('Assertions').map(l => l.match(/^[-*]\s*\[(passed|failed|not_exercised)\]\s*([^:]+):\s*(.*)$/)).filter(Boolean)
+    .map(m => ({ tag: m[1], title: m[2].trim(), detail: noEvidence(m[3]), evidence: evidence(m[3]) }));
+  const findings = [];
+  lines.forEach((l, i) => {
+    const m = l.match(/^###\s+(QA-\d+)\s+(.*)$/);
+    if (!m) return;
+    const body = [];
+    for (let j = i + 1; j < lines.length && !/^#{1,3}\s/.test(lines[j]); j++) body.push(lines[j]);
+    const field = name => { const x = body.find(b => new RegExp(`^${name}:`, 'i').test(b.trim())); return x ? x.trim().slice(name.length + 1).trim() : ''; };
+    findings.push({ id: m[1], title: m[2], steps: field('Steps'), expected: field('Expected'), observed: noEvidence(field('Observed')), evidence: evidence(field('Observed')) });
+  });
+  return { verdict, coverage, assertions, findings, text };
+}
+
+function groupDirs(files) {
+  const g = {};
+  files.forEach(f => {
+    const parts = f.split('/');
+    const key = parts.length > 2 ? parts.slice(0, 2).join('/') : parts.length > 1 ? parts[0] : '(root)';
+    g[key] = (g[key] || 0) + 1;
+  });
+  return Object.entries(g).sort((a, b) => b[1] - a[1]);
+}
+const isTest = f => /(^|\/)(test|jvmTest|commonTest|androidTest|iosTest|androidUnitTest)\//.test(f) || /Tests?\.(kt|swift|py|ts)$/.test(f);
+
+// ---------- scenario model ----------
+const STEP_NAMES = {
+  collect_inputs: 'Collect inputs', extract_criteria: 'Extract criteria', gather_diff: 'Gather diff',
+  feature_flag_audit: 'Feature flag audit', code_review: 'Code review', unit_test_value_check: 'Unit test value',
+  completeness_audit: 'Completeness audit', qa: 'QA', verdict: 'Verdict',
+};
+
+function fromRow(id, overrides = {}) {
+  const r = JSON.parse(JSON.stringify(RUNS[id]));
+  return Object.assign({ id, ...r }, overrides);
+}
+
+const QA_DIR = '~/.skill-bill/qa/ZeroAccount-3be1/qa-7c21d9e4/';
+const SAMPLE_QA_REPORT = `Verdict: findings_open
+
+I ran the desktop app from the verify checkout with an isolated home and a 20-second idle timeout from remote config, then let sessions expire with and without an open form.
+
+## Coverage
+
+- desktop: findings_open
+- android: skipped [reason: empty_scope]
+- backend: skipped [reason: empty_scope] [backend: none]
+
+## Assertions
+
+- [passed] Idle sign-out: With no input the app signed out at 20 s and returned to the sign-in screen. Evidence: ${QA_DIR}idle-signout.png
+- [passed] Stay signed in: Choosing Stay signed in on the warning dialog restarted the timer, and sign-out came 20 s later. Evidence: ${QA_DIR}stay-signed-in.log
+- [passed] Draft restore: A half-filled contact form came back after signing in again. Evidence: ${QA_DIR}draft-restore.png
+- [failed] Warning dialog focus: Typing in a text field when the warning opened lost the typed character. See QA-1.
+- [not_exercised] Remote config floor: The QA config service rejected values below 10 s, so the 1-minute floor could not be driven from config.
+
+### QA-1 Warning dialog takes focus from the field being typed in
+
+Steps: Open Personal data, start typing in First name, and stop until the warning dialog opens at 10 s, then type one more character.
+
+Expected: The field keeps focus or the typed character reaches it; the dialog does not swallow input.
+
+Observed: The dialog took focus and the character was lost. Closing the dialog left the field without focus. Evidence: ${QA_DIR}focus-steal.mp4, ${QA_DIR}focus-steal.log
+
+## Isolation
+
+Desktop module \`:composeApp\`, run from the verify checkout at 8f20b7e with home ${QA_DIR}home. Remote config came from a local stub serving \`session_timeout_seconds=20\`.
+
+## Temporary edits
+
+None.
+
+## Cleanup
+
+Stopped the desktop app and the config stub. No resources retained.`;
+
+// Written by hand from the real 0AC-85 receipts: what the verdict step's --- SUMMARY --- block would hold.
+const SUMMARY_085 = {
+  summary: 'This change adds WhatsApp-style phone discovery to the KMP client: a phone setup flow on the contacts screen, on-device E.164 normalization and HMAC hashing of the address book, and calls to the contacts sync and list endpoints. It touches 77 files, mostly `core/data` and `feature/overview`, and contains no server code.'
+};
+const SUMMARY_091 = {
+  summary: 'This change signs users out after 15 minutes without input on every platform, warns 60 seconds before with a dialog that keeps the session alive, and restores unsaved form drafts after signing in again. The timeout comes from remote config behind `SessionTimeoutEnabled`, which defaults to off.'
+};
+function withSummary(r, s) { r.artifacts.verdict_result = { ...r.artifacts.verdict_result, ...s }; return r; }
+
+function sampleApprove() {
+  const r = fromRow('wfv-20261029-080637-eh4f');
+  r.id = 'sample';
+  r.issue_key = '0AC-91';
+  r.started_at = '2026-11-04 14:02:10'; r.finished_at = '2026-11-04T14:09:41Z';
+  r.steps.forEach(s => { if (s.step_id === 'qa') s.status = 'completed'; if (s.step_id === 'feature_flag_audit') s.status = 'completed'; });
+  const a = r.artifacts;
+  a.input_context = { ...a.input_context, intake: 'spec:.skill-bill/specs/0AC-91/spec.md', target: 'feat/0AC-91-session-timeout', base_revision: '1c4e9a0d', head_revision: '8f20b7e1', qa_selection: 'on', issue_key: '0AC-91' };
+  a.criteria_summary = {
+    acceptance_criteria: '1. Sign the user out after 15 minutes without input on every platform.\n2. Warn 60 seconds before sign-out with a dialog that keeps the session alive.\n3. Keep unsaved form drafts across the forced sign-out.\n4. Read the timeout from remote config, falling back to 15 minutes.\n5. Cover the timer, the warning and the draft restore in tests.',
+    non_goals: '- Server-side session revocation.\n- Per-screen timeout overrides.', rollout_expectation: 'Behind `SessionTimeoutEnabled`, default off.', technical_constraints: '- Reuse the existing `IdleTracker`.',
+  };
+  a.diff_projection = { checkpoint: 'a1', comparison_scope: '1c4e9a0d..8f20b7e1', changed_files: ['core/session/src/commonMain/kotlin/IdleTimeout.kt', 'core/session/src/commonMain/kotlin/SessionTimeoutConfig.kt', 'core/session/src/commonTest/kotlin/IdleTimeoutTest.kt', 'feature/overview/src/commonMain/kotlin/TimeoutWarningDialog.kt', 'feature/overview/src/commonMain/kotlin/OverviewViewModel.kt', 'feature/overview/src/jvmTest/kotlin/OverviewViewModelTest.kt', 'core/data/src/commonMain/kotlin/DraftStore.kt', 'core/data/src/jvmTest/kotlin/DraftStoreTest.kt', 'core/config/src/commonMain/kotlin/RemoteFlags.kt'] };
+  a.feature_flag_audit_receipt = { verdict: 'pass', findings: ['FEATURE FLAG AUDIT', 'Flag name: SessionTimeoutEnabled', 'Pattern: Simple Conditional', '[ PASS ] Flag defined in codebase', '[ PASS ] Rollback safe (flag OFF = identical old behavior)', '[ PASS ] Minimal flag checks (not scattered)', '[ PASS ] Default value is false', 'Issues: None'] };
+  a.code_review_receipt = { verdict: 'approved_with_fixes', findings: [
+    '- [F-001] Minor | High | feature/overview/src/commonMain/kotlin/TimeoutWarningDialog.kt:41 | bill-kmp-code-review-ux-accessibility: The countdown text updates every second without a live-region politeness setting, so screen readers announce all 60 updates. Announce only the first warning and the last 10 seconds.',
+    '- [F-002] Minor | Medium | core/session/src/commonMain/kotlin/IdleTimeout.kt:73 | bill-kotlin-code-review-code-quality: `restart()` and `reset()` do the same work under two names. Keep one.'] };
+  a.unit_test_value_receipt = { verdict: 'reported', findings: ['**Overall verdict:** Valuable', 'Three focused tests that each catch a realistic regression.', '| Test or Area | Verdict | Confidence | Evidence | Why it adds or lacks value | Better test or action |', '|---|---|---|---|---|---|',
+    '| Idle timer | Valuable | High | [IdleTimeoutTest.kt:12](x) | Uses virtual time to prove sign-out fires at exactly 15 minutes and not before. | Keep. |',
+    '| Draft restore | Valuable | High | [DraftStoreTest.kt:30](x) | Catches drafts lost across a forced sign-out. | Keep. |',
+    '| Warning dialog state | Weak | Medium | [OverviewViewModelTest.kt:88](x) | Asserts a boolean flips but not that "Stay signed in" resets the timer. | Rewrite to assert the timer restarts. |',
+    '**Keep:** Idle timer and draft restore tests.', '**Rewrite:** The warning dialog state test.', '**Delete:** None.', '**Missing high-value cases:** Remote config value below the 1-minute floor.'] };
+  a.completeness_audit_receipt = { verdict: 'all_pass', findings: ['COMPLETENESS AUDIT', 'Acceptance criteria: 5', 'Implemented:         5', 'Missing:             0', 'Partial:             0', '---',
+    '[PASS] #1: Sign the user out after 15 minutes without input on every platform.', '  Evidence: `IdleTimeout.kt:40`, `IdleTimeoutTest.kt:12`.',
+    '[PASS] #2: Warn 60 seconds before sign-out.', '  Evidence: `TimeoutWarningDialog.kt:22`, `OverviewViewModel.kt:118`.',
+    '[PASS] #3: Keep unsaved form drafts across the forced sign-out.', '  Evidence: `DraftStore.kt:51`, `DraftStoreTest.kt:30`.',
+    '[PASS] #4: Read the timeout from remote config.', '  Evidence: `SessionTimeoutConfig.kt:9`, `RemoteFlags.kt:64`.',
+    '[PASS] #5: Cover the timer, the warning and the draft restore in tests.', '  Evidence: `IdleTimeoutTest.kt:12`, `OverviewViewModelTest.kt:88`, `DraftStoreTest.kt:30`.'] };
+  a.qa_outcome = { outcome: 'findings', reason: null };
+  a.qa_report = { verdict: 'findings_open', outcome: 'findings', reason: null, warnings: [], cleanup: null, report_text: SAMPLE_QA_REPORT };
+  a.verdict_result = { ...SUMMARY_091, verdict: 'APPROVE WITH FIXES', findings: ['**APPROVE WITH FIXES** — All five criteria are met with file evidence. Two minor review findings and one open QA finding remain; none blocks the criteria.', 'Warning: the verdict said APPROVE while the QA report has open findings; recorded APPROVE WITH FIXES so the QA findings stay in the consolidated findings.'] };
+  return r;
+}
+
+function runningFromInterrupted() {
+  const r = fromRow('wfv-20261102-215213-grld');
+  r.status = 'running'; r.current = 'code_review'; r.finished_at = null; r.live = true;
+  r.steps.forEach(s => {
+    if (s.step_id === 'code_review') { s.status = 'running'; }
+    else if (['unit_test_value_check'].includes(s.step_id)) { s.status = 'pending'; s.attempt_count = 0; }
+  });
+  delete r.artifacts.code_review_receipt;
+  return r;
+}
+
+const SCENARIOS = [
+  { key: 'done', label: 'Finished: request changes (0AC-85, real)', run: () => withSummary(fromRow('wfv-20261029-080637-eh4f'), SUMMARY_085),
+    source: 'Real row wfv-20261029-080637-eh4f, finished 29 Oct', today: { step: 'Step 10: Finish', total: '—', finished: 'finished 29 Oct 08:11', status: 'Done' } },
+  { key: 'running', label: 'Running: code review (0AC-86, derived)', run: runningFromInterrupted,
+    source: 'Derived from wfv-20261102-215213-grld with the review receipt removed', today: { step: 'Step 5: Code Review', total: '4m 12s', finished: 'running', status: 'Running' } },
+  { key: 'stopped', label: 'Stopped at unit test value (0AC-86, real)', run: () => fromRow('wfv-20261102-215213-grld'),
+    source: 'Real row wfv-20261102-215213-grld, abandoned as stale', today: { step: 'Step 6: Unit Test Value Check', total: '—', finished: 'finished 3 Nov 11:53', status: 'Canceled' } },
+  { key: 'superseded', label: 'Superseded at extract criteria (0AC-86, real)', run: () => fromRow('wfv-20261102-214452-unmf'),
+    source: 'Real row wfv-20261102-214452-unmf, the screenshot', today: { step: 'Step 2: Extract Acceptance Criteria', total: '—', finished: 'finished 2 Nov 22:54', status: 'Canceled' } },
+  { key: 'parked', label: 'Awaiting confirmation, no criteria (FP-5175, real)', run: () => fromRow('wfv-20261103-115223-xwef'),
+    source: 'Real row wfv-20261103-115223-xwef, parked at extract_criteria', today: { step: 'Step 2: Extract Acceptance Criteria', total: '—', finished: 'awaiting', status: 'Awaiting' } },
+  { key: 'approve', label: 'Finished: approve with fixes, QA on (sample)', run: sampleApprove,
+    source: 'Sample data shaped like the 0AC-85 artifacts', today: { step: 'Step 10: Finish', total: '—', finished: 'finished 4 Nov 14:09', status: 'Done' } },
+];
+
+// ---------- derived view model ----------
+function view(r) {
+  const a = r.artifacts, ic = a.input_context || {};
+  const crit = a.criteria_summary || {};
+  const criteria = listItems(crit.acceptance_criteria, true);
+  const criteriaRaw = criteria.length ? '' : (crit.acceptance_criteria || '');
+  const audit = parseAudit(a.completeness_audit_receipt);
+  const findings = parseFindings(a.code_review_receipt);
+  const flag = parseFlag(a.feature_flag_audit_receipt);
+  const tests = parseTests(a.unit_test_value_receipt);
+  const files = (a.diff_projection || {}).changed_files || [];
+  const verdict = a.verdict_result;
+  const qa = a.qa_report && a.qa_report.report_text && a.qa_report.verdict !== 'skipped' ? parseQaReport(a.qa_report.report_text) : null;
+  const superseded = (a.session_notes || {}).superseded_by;
+  const stepMap = Object.fromEntries(r.steps.map(s => [s.step_id, s]));
+  const qaOn = ic.qa_selection === 'on';
+  const steps = r.steps.filter(s => s.step_id !== 'finish');
+  const parked = r.status === 'pending' && r.current === 'extract_criteria';
+  const stopped = r.status === 'abandoned' || r.status === 'failed';
+  const stopStep = stopped ? r.steps.find(s => s.status === 'running' || s.status === 'pending' && s.attempt_count > 0 || s.status === 'failed') : null;
+  return { qa, r, a, ic, crit, criteria, criteriaRaw, audit, findings, flag, tests, files, verdict, superseded, stepMap, qaOn, steps, parked, stopped, stopStep };
+}
+
+const VERDICT_TONE = { 'REQUEST CHANGES': 'tone-failed', 'APPROVE WITH FIXES': 'tone-blocked', 'APPROVE': 'tone-done' };
+const AUDIT = { PASS: ['Met', 'tone-done', 'bg-done'], PARTIAL: ['Partial', 'tone-blocked', 'bg-blocked'], FAIL: ['Missing', 'tone-failed', 'bg-failed'] };
+const SEV = { Blocker: 'tone-failed', Major: 'tone-failed', Minor: 'tone-blocked', Nit: 'tone-faint' };
+
+function fmtTime(s) {
+  if (!s) return '';
+  const d = new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z');
+  return d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+}
+function dur(a, b) {
+  const p = s => new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z');
+  const sec = Math.round((p(b) - p(a)) / 1000);
+  if (sec >= 3600) return `${Math.floor(sec / 3600)}h ${Math.floor(sec % 3600 / 60)}m`;
+  return `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`;
+}
+
+// ---------- rendering ----------
+let state = { scenario: 'done', viewMode: 'new', open: new Set(), allOpen: false, critFilter: 'all', sel: new Map(), marks: new Map() };
+let current = null;
+
+// Starting selection per scenario, so the review shows the bar in use.
+function preset(key) {
+  state.sel.clear(); state.marks.clear();
+  if (key === 'done') {
+    state.marks.set('c:3', 'repo'); state.marks.set('c:4', 'repo');
+    [['f:F-001', 'chat'], ['c:2', 'chat'], ['t:empty-address-book', 'chat'], ['c:6', 'goal']].forEach(([k, r]) => state.sel.set(k, r));
+  }
+}
+
+function header(v) {
+  const r = v.r, ic = v.ic;
+  const status = v.r.live ? ['Running', 'tone-active'] : v.parked ? ['Awaiting you', 'tone-accent'] : v.superseded ? ['Superseded', 'tone-faint'] : v.stopped ? ['Stopped', 'tone-blocked'] : ['Finished', 'tone-done'];
+  const intake = ic.intake || '';
+  const isUrl = /^https?:\/\//.test(intake);
+  const isSpec = intake.startsWith('spec:');
+  const intakeLabel = isUrl ? intake.replace(/^https?:\/\/(www\.)?/, '').split('/').slice(0, 1)[0] + ' · ' + (intake.match(/\/issue\/([A-Z0-9]+-\d+)/) || [, ''])[1] : isSpec ? intake.slice(5) : 'Free-text intake';
+  return `
+    <div class="chips">
+      <span class="pill ${status[1]}"><span class="dot"></span><span style="color:var(--fg-2)">${status[0]}</span></span>
+      <span class="keytxt">${esc(r.issue_key || 'No issue key')}</span>
+      <span class="pill">Verify</span>
+    </div>
+    <h2 class="title">Verify ${esc(r.issue_key || 'run')}</h2>
+    <div class="meta">
+      <span title="${esc(ic.repo_root)}">${ico('folder', 'sm')}<span class="mono">${esc(base(ic.repo_root || ''))}</span></span>
+      <span>${ico('branch', 'sm')}<span class="mono">${esc(ic.target)}</span></span>
+      <span>${ico('commit', 'sm')}<span class="mono">${short(ic.base_revision)}..${short(ic.head_revision)}</span></span>
+      <span>${ico(isUrl ? 'link' : 'file', 'sm')}${isUrl ? `<button class="link" data-toast="Opens ${esc(intake)}">${esc(intakeLabel)}</button>` : `<span>${esc(intakeLabel)}</span>`}</span>
+    </div>
+    <div class="actions">${headerActions(v)}</div>
+    ${v.superseded ? `<div class="banner info">${ico('info')}<div class="grow"><b>A newer verify run replaced this one.</b> Starting verify again for the same repository abandoned this run before you confirmed its criteria.</div><button class="btn" data-toast="Opens ${esc(v.superseded)}">Open newer run</button></div>` : ''}
+    ${!v.parked && !isUrl && !isSpec && intake ? `<details class="fold"><summary>${ico('chev', 'chev sm')}Intake</summary><p class="quote">${esc(intake)}</p></details>` : ''}`;
+}
+
+function headerActions(v) {
+  const changes = v.files.length ? `<button class="btn" data-toast="Opens the Changes window on ${short(v.ic.base_revision)}..${short(v.ic.head_revision)}">${ico('diff', 'sm')}Open changes <span class="faint">${v.files.length}</span></button>` : '';
+  if (v.r.live) return `<button class="btn">${ico('stop', 'sm')}Stop</button>${changes}`;
+  if (v.parked) return `<button class="btn primary" ${v.criteria.length ? '' : 'disabled title="No numbered criteria to audit"'}>${ico('check', 'sm')}Confirm criteria and run</button><button class="btn">${ico('edit', 'sm')}Adjust intake</button><button class="btn">${ico('x', 'sm')}Discard</button>`;
+  if (v.superseded) return `<button class="btn">${ico('play', 'sm')}Run again</button>`;
+  if (v.stopped) return `<button class="btn primary">${ico('resume', 'sm')}Resume from ${STEP_NAMES[v.stopStep?.step_id] || 'last step'}</button><button class="btn">${ico('play', 'sm')}Run again</button>${changes}`;
+  return `<button class="btn">${ico('copy', 'sm')}Copy report</button>${changes}<button class="btn" data-toast="Starts a new Verify run on the same target and criteria, after fixes land">${ico('resume', 'sm')}Verify again</button>`;
+}
+
+function auditCounts(v) {
+  const c = { PASS: 0, PARTIAL: 0, FAIL: 0 };
+  if (v.audit) Object.values(v.audit.items).forEach(i => c[i.status]++);
+  return c;
+}
+
+// One rule for every bar: green fine, amber needs a look, red blocking, in that order.
+function scoreBar(parts) {
+  const segs = parts.filter(([n]) => n > 0);
+  if (!segs.length) return '<div class="bar empty"></div>';
+  return `<div class="bar">${segs.map(([n, cls]) => `<i class="${cls}" style="flex:${n}"></i>`).join('')}</div>`;
+}
+
+function scoreCells(v) {
+  const n = v.criteria.length;
+  const c = auditCounts(v);
+  const sev = v.findings.reduce((m, f) => (m[f.severity] = (m[f.severity] || 0) + 1, m), {});
+  const tv = v.tests;
+  const tcount = tv && tv.rows ? tv.rows.reduce((m, r) => (m[r.verdict] = (m[r.verdict] || 0) + 1, m), {}) : {};
+  const cells = [];
+  cells.push(`<button class="score-cell" data-jump="criteria"><div class="score-k">Criteria</div>
+    <div class="score-v">${v.audit ? `${c.PASS}<small> / ${n} met</small>` : `${n}<small> extracted</small>`}</div>
+    <div class="score-s">${v.audit ? [c.PARTIAL && `${c.PARTIAL} partial`, c.FAIL && `${c.FAIL} missing`].filter(Boolean).join(' · ') || 'all met' : 'not audited'}</div>
+    ${scoreBar(v.audit ? [[c.PASS, 'bg-done'], [c.PARTIAL, 'bg-blocked'], [c.FAIL, 'bg-failed']] : [])}</button>`);
+  cells.push(`<button class="score-cell" data-jump="code_review"><div class="score-k">Review</div>
+    <div class="score-v">${v.a.code_review_receipt ? `${v.findings.length}<small> findings</small>` : '<small>—</small>'}</div>
+    <div class="score-s">${v.a.code_review_receipt ? ['Nit', 'Minor', 'Major', 'Blocker'].filter(k => sev[k]).map(k => `${sev[k]} ${k.toLowerCase()}`).join(' · ') || 'clean' : v.stepMap.code_review?.status === 'running' ? '<span class="tone-active">running</span>' : 'not run'}</div>
+    ${scoreBar(!v.a.code_review_receipt ? [] : v.findings.length ? [[sev.Nit || 0, 'bg-faint'], [sev.Minor || 0, 'bg-blocked'], [(sev.Major || 0) + (sev.Blocker || 0), 'bg-failed']] : [[1, 'bg-done']])}</button>`);
+  cells.push(`<button class="score-cell" data-jump="unit_test_value_check"><div class="score-k">Tests</div>
+    <div class="score-v">${tv ? tv.skipped ? '<small>skipped</small>' : `<small style="color:var(--fg)">${esc(tv.overall)}</small>` : '<small>—</small>'}</div>
+    <div class="score-s">${tv && tv.rows ? ['Valuable', 'Weak', 'Harmful'].filter(k => tcount[k]).map(k => `${tcount[k]} ${k.toLowerCase()}`).join(' · ') : tv && tv.skipped ? 'no tests changed' : 'not run'}</div>
+    ${scoreBar(tv && tv.rows ? [[tcount.Valuable || 0, 'bg-done'], [tcount.Weak || 0, 'bg-blocked'], [tcount.Harmful || 0, 'bg-failed']] : [])}</button>`);
+  cells.push(`<button class="score-cell" data-jump="${v.qaOn ? 'qa' : 'feature_flag_audit'}"><div class="score-k">${v.qaOn ? 'QA' : 'Flag audit'}</div>
+    <div class="score-v">${v.qaOn ? (v.qa ? (v.qa.findings.length ? `${v.qa.findings.length}<small> open</small>` : '<small style="color:var(--fg)">passed</small>') : '<small style="color:var(--fg)">pending</small>') : `<small style="color:var(--fg)">${v.flag ? (v.flag.verdict === 'skipped' ? 'skipped' : v.flag.verdict) : '—'}</small>`}</div>
+    <div class="score-s">${v.qaOn ? (v.qa ? `${v.qa.assertions.filter(x => x.tag === 'passed').length} of ${v.qa.assertions.length} checks passed` : 'not run') : v.flag && v.flag.flag ? esc(v.flag.flag) : v.flag ? 'no flag required' : 'not run'}</div>
+    ${scoreBar(v.qaOn
+      ? (v.qa ? [['passed', 'bg-done'], ['not_exercised', 'bg-blocked'], ['failed', 'bg-failed']].map(([tag, cls]) => [v.qa.assertions.filter(x => x.tag === tag).length, cls]) : [])
+      : (v.flag && v.flag.checks ? [[v.flag.checks.filter(x => x.ok).length, 'bg-done'], [v.flag.checks.filter(x => !x.ok).length, 'bg-failed']] : []))}</button>`);
+  return `<div class="score">${cells.join('')}</div>`;
+}
+
+function outcome(v) {
+  const r = v.r;
+  if (r.live) {
+    const step = r.steps.find(s => s.status === 'running');
+    const idx = v.steps.indexOf(step) + 1;
+    return `<div class="outcome"><div class="outcome-top tone-active"><div class="outcome-icon">${ico('play')}</div><div class="outcome-main">
+      <div class="outcome-label">Step ${idx} of ${v.steps.length}</div><div class="outcome-verdict">${STEP_NAMES[step.step_id]}</div>
+      <p class="outcome-text">Specialist reviewers are reading ${v.files.length} changed files. Results from earlier steps are below.</p></div>
+      <div class="outcome-when"><b>4m 12s</b>running</div></div>${scoreCells(v)}</div>`;
+  }
+  if (v.parked) {
+    const ok = v.criteria.length > 0;
+    return `<div class="outcome"><div class="outcome-top ${ok ? 'tone-accent' : 'tone-blocked'}"><div class="outcome-icon">${ico(ok ? 'hand' : 'alert')}</div><div class="outcome-main">
+      <div class="outcome-label">Step 2 of ${v.steps.length} · waiting for you</div><div class="outcome-verdict">${ok ? 'Confirm the criteria' : 'No criteria to audit'}</div>
+      <p class="outcome-text">${ok ? `Verify extracted ${v.criteria.length} acceptance criteria. Check them before the review and audit start; the audit grades the code against exactly this list.` : 'Criteria extraction found no numbered acceptance criteria, so a confirmed run would audit nothing. Adjust the intake with the criteria pasted in, or point it at a spec file.'}</p></div>
+      <div class="outcome-when"><b>${fmtTime(r.started_at)}</b>parked</div></div></div>`;
+  }
+  if (v.superseded || v.stopped) {
+    const st = v.superseded ? v.stepMap.extract_criteria : v.stopStep;
+    const idx = v.steps.findIndex(s => s.step_id === st.step_id) + 1;
+    return `<div class="outcome"><div class="outcome-top tone-faint"><div class="outcome-icon">${ico(v.superseded ? 'x' : 'pause')}</div><div class="outcome-main">
+      <div class="outcome-label">No verdict · stopped at step ${idx} of ${v.steps.length}</div><div class="outcome-verdict" style="color:var(--fg)">${STEP_NAMES[st.step_id]}</div>
+      <p class="outcome-text">${v.superseded ? 'Abandoned while the criteria were waiting for confirmation.' : 'The run made no progress for 14 hours and was marked stale. Steps 1 to 5 finished and their results are kept below; resuming starts again at unit test value.'}</p></div>
+      <div class="outcome-when"><b>${fmtTime(r.finished_at)}</b>${dur(r.started_at, r.finished_at)} after start</div></div>${v.superseded ? '' : scoreCells(v)}</div>`;
+  }
+  const vd = v.verdict;
+  const tone = VERDICT_TONE[vd.verdict] || 'tone-faint';
+  const text = vd.findings.filter(f => !f.startsWith('Warning:')).map(f => f.replace(/^\*\*[A-Z ]+\*\*\s*[—-]\s*/, '')).join(' ');
+  const warn = vd.findings.find(f => f.startsWith('Warning:'));
+  return `<div class="outcome"><div class="outcome-top ${tone}"><div class="outcome-icon">${ico(vd.verdict === 'APPROVE' ? 'check' : vd.verdict === 'REQUEST CHANGES' ? 'x' : 'alert')}</div><div class="outcome-main">
+    <div class="outcome-label">Verdict</div><div class="outcome-verdict">${esc(vd.verdict)}</div>
+    <p class="outcome-text">${inline(text)}</p>
+    ${warn ? `<p class="outcome-text faint" style="font-size:var(--t-xs);display:flex;gap:6px;align-items:center">${ico('info', 'sm')} QA had open findings, so the runtime lowered APPROVE to APPROVE WITH FIXES.</p>` : ''}</div>
+    <div class="outcome-when"><b>${dur(r.started_at, r.finished_at)}</b>${fmtTime(r.finished_at)}</div></div>${scoreCells(v)}</div>`;
+}
+
+// ---------- fix selection ----------
+const LOC_RE = /([A-Za-z0-9_.-]+\.(?:kt|kts|swift|ts|tsx|py|java|xml|pbxproj|gradle)):(\d+)/g;
+const locsIn = s => [...String(s || '').matchAll(LOC_RE)].map(m => `${m[1]}:${m[2]}`);
+const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+const canSelect = v => !v.r.live && !v.parked && !v.superseded;
+
+function fixables(v) {
+  const out = [];
+  v.findings.forEach(f => out.push({ key: 'f:' + f.ref, label: f.ref, kind: 'finding', route: 'chat', locs: locsIn(base(f.loc)) }));
+  if (v.audit) v.criteria.forEach(it => {
+    const au = v.audit.items[it.n];
+    if (au && au.status !== 'PASS') out.push({ key: 'c:' + it.n, label: '#' + it.n, kind: 'criterion', route: au.status === 'FAIL' ? 'goal' : 'chat', locs: locsIn(au.missing + ' ' + au.notFound) });
+  });
+  if (v.tests && v.tests.rows) v.tests.rows.forEach(r => {
+    if (!/^keep\.?$/i.test(r.action.trim())) out.push({ key: 't:' + slug(r.area), label: r.area, kind: 'test', route: 'chat', locs: r.files.flatMap(locsIn) });
+  });
+  if (v.qa) v.qa.findings.forEach(f => out.push({ key: 'qa:' + f.id, label: f.id, kind: 'qa', route: 'chat', locs: locsIn(f.observed + ' ' + f.steps) }));
+  return out;
+}
+
+function shared(v, key) {
+  const me = v.fix.find(x => x.key === key);
+  if (!me) return null;
+  for (const loc of me.locs) {
+    const others = v.fix.filter(x => x.key !== key && x.locs.includes(loc));
+    if (others.length) return { loc, others };
+  }
+  return null;
+}
+function overlapHint(v, key) {
+  const h = shared(v, key);
+  return h ? `<span class="overlap">${ico('link', 'sm')}Same code as ${esc(h.others.map(o => o.label).join(', '))} · <code>${esc(h.loc)}</code></span>` : '';
+}
+function cb(v, key, label) {
+  if (!canSelect(v)) return '';
+  if (state.marks.has(key)) return `<span class="cb off" title="Marked, so it is left out of fixes">${ico('minus')}</span>`;
+  const on = state.sel.has(key);
+  return `<button class="cb" role="checkbox" aria-checked="${on}" aria-label="Select ${esc(label)}" data-sel="${esc(key)}">${on ? ico('check') : ''}</button>`;
+}
+function routeSeg(key) {
+  if (!state.sel.has(key)) return '';
+  const r = state.sel.get(key);
+  return `<span class="route" role="group" aria-label="Fix with"><button data-route="${key}|chat" aria-pressed="${r === 'chat'}">Chat</button><button data-route="${key}|goal" aria-pressed="${r === 'goal'}">Goal</button></span>`;
+}
+
+function selectAll(v, kind) {
+  if (!canSelect(v)) return '';
+  const keys = v.fix.filter(x => x.kind === kind && !state.marks.has(x.key)).map(x => x.key);
+  if (!keys.length) return '';
+  const n = keys.filter(k => state.sel.has(k)).length;
+  const st = n === 0 ? 'false' : n === keys.length ? 'true' : 'mixed';
+  return `<button class="selall" role="checkbox" aria-checked="${st}" data-selectall="${kind}"><span class="cb">${st === 'true' ? ico('check') : st === 'mixed' ? ico('minus') : ''}</span>Select all <span class="n">${keys.length}</span></button>`;
+}
+
+function actionBar(v) {
+  if (!canSelect(v) || !state.sel.size) return '';
+  const items = v.fix.filter(x => state.sel.has(x.key));
+  if (!items.length) return '';
+  const chat = items.filter(x => state.sel.get(x.key) === 'chat');
+  const goal = items.filter(x => state.sel.get(x.key) === 'goal');
+  const counts = {};
+  items.forEach(x => new Set(x.locs).forEach(l => { counts[l] = (counts[l] || 0) + 1; }));
+  const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  const note = top && top[1] > 1 ? `${top[1]} of them touch <code>${esc(top[0])}</code>, so one agent gets them together` : '';
+  return `<div class="selbar" role="region" aria-label="Selected for fixing">
+    <div class="selbar-main"><b>${items.length} selected</b><span class="faint">${esc(items.map(x => x.label).join(', '))}</span>${note ? `<span class="selbar-note">${ico('link', 'sm')}<span>${note}</span></span>` : ''}</div>
+    <div class="actions">${chat.length ? `<button class="btn primary" data-bar="chat">${ico('agent', 'sm')}Fix ${chat.length} in chat</button>` : ''}${goal.length ? `<button class="btn" data-bar="goal">${ico('play', 'sm')}Start goal with ${goal.length}</button>` : ''}<button class="btn" data-bar="clear">Clear</button></div></div>`;
+}
+
+function criteriaSection(v) {
+  if (!v.criteria.length && !v.criteriaRaw) return '';
+  if (!v.criteria.length) {
+    return `<section class="sec" id="sec-criteria"><div class="sec-head"><h2>Acceptance criteria</h2><span class="n">0</span></div>
+      <p class="quote">${inline(v.criteriaRaw)}</p></section>`;
+  }
+  const c = auditCounts(v);
+  const filt = state.critFilter;
+  const items = v.criteria.filter(it => {
+    if (!v.audit || filt === 'all') return true;
+    const st = v.audit.items[it.n]?.status;
+    return filt === 'gaps' ? st !== 'PASS' : st === 'PASS';
+  });
+  const grid = canSelect(v) && !!v.audit;
+  const rows = items.map(it => {
+    const au = v.audit ? v.audit.items[it.n] : null;
+    const sk = 'c:' + it.n;
+    const gap = au && au.status !== 'PASS';
+    const mark = state.marks.get(sk);
+    const [label, tone] = mark ? [mark === 'repo' ? 'Not in this repo' : 'Spec question', 'tone-faint'] : au ? AUDIT[au.status] : [v.parked ? 'To confirm' : 'Not audited', 'tone-faint'];
+    const key = 'c' + it.n;
+    const open = state.open.has(key);
+    const marks = grid && gap ? `<div class="marks">${mark
+      ? `<span>${mark === 'repo' ? 'Left out of fixes: the work lives in another repository.' : 'Left out of fixes until the spec is settled.'}</span><button class="btn sm" data-mark="${sk}|none">Clear mark</button>`
+      : `<span>Not a code gap here?</span><button class="btn sm" data-mark="${sk}|repo">Not in this repo</button><button class="btn sm" data-mark="${sk}|spec">Spec question</button>`}</div>` : '';
+    const body = au ? `
+      ${au.evidence.length ? `<div><div class="field-label">Evidence</div><div class="evid">${au.evidence.map(e => `<button class="chip" data-toast="Opens ${esc(e)} in the Changes window">${esc(e)}</button>`).join('')}</div></div>` : ''}
+      ${au.missing ? `<div><div class="field-label">What's missing</div>${inline(au.missing)}</div>` : ''}
+      ${au.notFound ? `<div><div class="field-label">Not found</div>${inline(au.notFound)}</div>` : ''}${marks}` : `<div class="muted">${v.parked ? 'The audit runs after you confirm.' : 'The completeness audit has not run yet.'}</div>`;
+    return `<div class="row ${grid ? 'srow' : ''}" id="crit-${it.n}">${grid ? `<div class="sel-col">${gap ? cb(v, sk, '#' + it.n) : ''}</div>` : ''}<button class="row-head" aria-expanded="${open}" data-toggle="${key}">
+      <span class="num">${it.n}</span><span class="row-title">${inline(it.text)}</span>
+      <span class="row-side"><span class="badge ${tone}">${label}</span>${ico('chev', 'chev sm')}</span>${gap && grid ? overlapHint(v, sk) : ''}</button>
+      ${grid ? `<div class="route-col">${routeSeg(sk)}</div>` : ''}
+      <div class="row-body" ${open ? '' : 'hidden'}>${body}</div></div>`;
+  }).join('');
+  const ng = listItems(v.crit.non_goals), tc = listItems(v.crit.technical_constraints);
+  return `<section class="sec" id="sec-criteria"><div class="sec-head"><h2>Acceptance criteria</h2><span class="n">${v.criteria.length}</span>
+    ${v.audit ? `<div class="end"><div class="seg" role="group" aria-label="Filter criteria">
+      <button data-filter="all" aria-pressed="${filt === 'all'}">All</button>
+      <button data-filter="gaps" aria-pressed="${filt === 'gaps'}">Gaps ${c.PARTIAL + c.FAIL}</button>
+      <button data-filter="met" aria-pressed="${filt === 'met'}">Met ${c.PASS}</button></div></div>` : ''}</div>
+    ${v.audit ? '' : `<p class="sec-sub">${v.parked ? 'Extracted from the intake. The audit grades the code against this list once you confirm.' : v.superseded ? 'Extracted but never confirmed. The newer run extracted its own list.' : 'Extracted and confirmed. Grades appear after the completeness audit.'}</p>`}
+    <div class="box">${grid && selectAll(v, 'criterion') ? `<div class="selall-row boxed">${selectAll(v, 'criterion')}</div>` : ''}${rows || '<div class="row"><div class="row-head"><span></span><span class="muted">Nothing in this filter.</span></div></div>'}</div>
+    ${ng.length ? `<details class="fold"><summary>${ico('chev', 'chev sm')}Non-goals <span class="faint">${ng.length}</span></summary><ul>${ng.map(x => `<li>${inline(x.text)}</li>`).join('')}</ul></details>` : ''}
+    ${tc.length ? `<details class="fold" style="margin-top:0"><summary>${ico('chev', 'chev sm')}Technical constraints <span class="faint">${tc.length}</span></summary><ul>${tc.map(x => `<li>${inline(x.text)}</li>`).join('')}</ul></details>` : ''}
+    ${v.crit.rollout_expectation ? `<details class="fold" style="margin-top:0"><summary>${ico('chev', 'chev sm')}Rollout</summary><ul><li>${inline(v.crit.rollout_expectation)}</li></ul></details>` : ''}
+  </section>`;
+}
+
+// ---- per-step summary and body ----
+function stepInfo(v, s) {
+  const a = v.a, ic = v.ic;
+  const id = s.step_id;
+  const pending = s.status === 'pending' && !(v.stopStep === s) && !(v.parked && id === 'extract_criteria');
+  if (pending) return { sum: id === 'qa' && !v.qaOn ? 'Off for this run' : 'Not started', body: '' };
+  switch (id) {
+    case 'collect_inputs': return {
+      sum: `<span>${esc(/^https?:/.test(ic.intake) ? 'Linear issue' : ic.intake?.startsWith('spec:') ? 'Spec file' : 'Free-text intake')}</span><span class="mono">${esc(ic.target)}</span><span>review ${esc(ic.review_mode)}</span><span>QA ${esc(ic.qa_selection)}</span>`,
+      body: `<dl class="kv"><dt>Intake</dt><dd>${esc(ic.intake)}</dd><dt>Repository</dt><dd class="mono">${esc(ic.repo_root)}</dd><dt>Target</dt><dd class="mono">${esc(ic.target)}</dd>
+        <dt>Range</dt><dd class="mono">${short(ic.base_revision)}..${short(ic.head_revision)}</dd><dt>Review mode</dt><dd>${esc(ic.review_mode)}</dd><dt>QA</dt><dd>${esc(ic.qa_selection)}</dd></dl>` };
+    case 'extract_criteria': {
+      const n = v.criteria.length, ng = listItems(v.crit.non_goals).length, tc = listItems(v.crit.technical_constraints).length;
+      return { sum: n ? `<span>${n} criteria</span><span>${ng} non-goals</span><span>${tc} ${tc === 1 ? 'constraint' : 'constraints'}</span>${v.parked ? '<span class="tone-accent">waiting for your confirmation</span>' : ''}` : '<span class="tone-blocked">No numbered criteria found</span>',
+        body: `<button class="link" data-jump="criteria">Show the criteria</button>` };
+    }
+    case 'gather_diff': {
+      const dirs = groupDirs(v.files), max = dirs[0]?.[1] || 1, tests = v.files.filter(isTest).length;
+      return { sum: `<span>${v.files.length} files</span><span>${tests} test files</span><span class="mono">${esc(a.diff_projection.comparison_scope.split('..').map(short).join('..'))}</span>`,
+        body: `<div class="dirs">${dirs.slice(0, 7).map(([d, n]) => `<div class="dir"><span class="p">${esc(d)}</span><span class="track"><i style="width:${n / max * 100}%"></i></span><span class="c">${n}</span></div>`).join('')}
+          ${dirs.length > 7 ? `<div class="dir"><span class="p faint">${dirs.length - 7} more directories</span><span></span><span class="c">${dirs.slice(7).reduce((t, d) => t + d[1], 0)}</span></div>` : ''}</div>
+          <div class="actions"><button class="btn" data-toast="Opens the Changes window">${ico('diff', 'sm')}Open changes</button></div>` };
+    }
+    case 'feature_flag_audit': {
+      const f = v.flag;
+      if (f.verdict === 'skipped') return { sum: `<span>Skipped</span><span class="faint">${esc(f.reason)}</span>`, body: '', noBody: true };
+      return { sum: `<span class="${f.verdict === 'pass' ? 'tone-done' : 'tone-failed'}">${f.verdict === 'pass' ? 'Passed' : 'Failed'}</span><span class="mono">${esc(f.flag)}</span><span>${f.checks.filter(c => c.ok).length}/${f.checks.length} checks</span>`,
+        body: `<dl class="kv"><dt>Flag</dt><dd class="mono">${esc(f.flag)}</dd><dt>Pattern</dt><dd>${esc(f.pattern)}</dd><dt>Issues</dt><dd>${esc(f.issues)}</dd></dl>
+          <div class="checks">${f.checks.map(c => `<div class="check"><span class="${c.ok ? 'tone-done' : 'tone-failed'}">${ico(c.ok ? 'check' : 'x', 'sm')}</span>${esc(c.text)}</div>`).join('')}</div>` };
+    }
+    case 'code_review': {
+      if (s.status === 'running') return { sum: '<span class="tone-active">Reviewing</span><span>specialists run in parallel</span>', body: '', noBody: true };
+      const fs = v.findings;
+      const sev = fs.reduce((m, f) => (m[f.severity] = (m[f.severity] || 0) + 1, m), {});
+      const vd = a.code_review_receipt.verdict.replace(/_/g, ' ');
+      return { sum: `<span class="${vd.includes('changes') ? 'tone-failed' : 'tone-blocked'}">${esc(vd[0].toUpperCase() + vd.slice(1))}</span>${Object.entries(sev).map(([k, n]) => `<span>${n} ${k.toLowerCase()}</span>`).join('')}`,
+        body: `<div class="finding-list">${canSelect(v) ? `<div class="selall-row">${selectAll(v, 'finding')}</div>` : ''}${fs.map(f => { const k = 'f:' + f.ref; const pick = canSelect(v); return `<div class="finding ${pick ? 'pick' : ''}" id="find-${esc(f.ref)}">${pick ? `<span>${cb(v, k, f.ref)}</span>` : ''}<span class="badge ${SEV[f.severity] || 'tone-faint'}">${esc(f.severity)}</span>
+          <div class="loc"><span style="color:var(--fg-2)">${esc(f.ref)}</span><button class="chip" data-toast="Opens ${esc(f.loc)}">${esc(base(f.loc))}</button>${f.specialist ? `<span>${esc(f.specialist)}</span>` : ''}<span>${esc(f.confidence)} confidence</span>${routeSeg(k) ? `<span style="margin-left:auto">${routeSeg(k)}</span>` : ''}</div>
+          <div class="desc" data-clamp>${inline(f.desc)}</div>${pick ? overlapHint(v, k) : ''}</div>`; }).join('')}</div>
+          <div class="actions"><button class="btn" data-toast="Checks the code and records confirmed fixes without changing code">Verify findings</button></div>` };
+    }
+    case 'unit_test_value_check': {
+      if (v.stopStep === s) return { sum: '<span class="tone-blocked">Stopped here</span><span>no receipt recorded</span>', body: '', noBody: true };
+      const t = v.tests;
+      if (t.skipped) return { sum: `<span>Skipped</span><span class="faint">${esc(t.skipped)}</span>`, body: '', noBody: true };
+      const cnt = t.rows.reduce((m, r) => (m[r.verdict] = (m[r.verdict] || 0) + 1, m), {});
+      const tone = { Valuable: 'tone-done', Weak: 'tone-blocked', Harmful: 'tone-failed' };
+      return { sum: `<span style="color:var(--fg-2)">${esc(t.overall)}</span>${Object.entries(cnt).map(([k, n]) => `<span>${n} ${k.toLowerCase()}</span>`).join('')}`,
+        body: `<div class="muted">${inline(t.summary)}</div>
+          <div class="tests">${canSelect(v) ? `<div class="selall-row">${selectAll(v, 'test')}<span class="faint" style="font-size:var(--t-xs)">Keep rows are left out</span></div>` : ''}${t.rows.map(r => { const k = 't:' + slug(r.area); const pick = canSelect(v); const fixable = v.fix.some(x => x.key === k); return `<div class="test ${pick ? 'pick' : ''}">${pick ? `<span style="padding-top:1px">${fixable ? cb(v, k, r.area) : ''}</span>` : ''}<span><span class="badge ${tone[r.verdict] || 'tone-faint'}">${esc(r.verdict)}</span></span>
+            <div class="what-line"><span class="what">${esc(r.area)}</span><span class="evid" style="display:inline-flex">${r.files.slice(0, 2).map(f => `<span class="chip">${esc(f)}</span>`).join('')}${r.files.length > 2 ? `<span class="faint" style="font-size:var(--t-2xs)">+${r.files.length - 2}</span>` : ''}</span>${routeSeg(k) ? `<span style="margin-left:auto">${routeSeg(k)}</span>` : ''}</div>
+            <div class="why">${inline(r.why)}</div><div class="act">→ ${inline(r.action)}</div>${pick && fixable ? overlapHint(v, k) : ''}</div>`; }).join('')}</div>
+          <div class="mini-rule">Plan</div>
+          <div class="plan">${t.keep ? `<span class="badge tone-done">Keep</span><span>${inline(t.keep)}</span>` : ''}${t.rewrite ? `<span class="badge tone-blocked">Rewrite</span><span>${inline(t.rewrite)}</span>` : ''}${t.del && t.del !== 'None.' ? `<span class="badge tone-failed">Delete</span><span>${inline(t.del)}</span>` : ''}${t.missing ? `<span class="badge tone-accent">Add</span><span>${inline(t.missing)}</span>` : ''}</div>` };
+    }
+    case 'completeness_audit': {
+      const c = auditCounts(v);
+      return { sum: `<span class="tone-done">${c.PASS} met</span>${c.PARTIAL ? `<span class="tone-blocked">${c.PARTIAL} partial</span>` : ''}${c.FAIL ? `<span class="tone-failed">${c.FAIL} missing</span>` : ''}`,
+        body: `<button class="link" data-jump="criteria">Show the graded criteria</button>` };
+    }
+    case 'qa': {
+      const q = a.qa_report;
+      if (!v.qaOn || q?.outcome === 'skipped') return { sum: '<span>Off for this run</span>', body: '', noBody: true };
+      const r = v.qa;
+      const passed = r.assertions.filter(x => x.tag === 'passed'), gaps = r.assertions.filter(x => x.tag === 'not_exercised');
+      return { sum: `${r.findings.length ? `<span class="tone-failed">${r.findings.length} open finding${r.findings.length > 1 ? 's' : ''}</span>` : '<span class="tone-done">Passed</span>'}<span>${passed.length} of ${r.assertions.length} checks passed</span>${gaps.length ? `<span class="tone-blocked">${gaps.length} not tested</span>` : ''}`,
+        body: qaResults(r, v) };
+    }
+    case 'verdict': {
+      const vd = v.verdict;
+      return { sum: `<span class="${VERDICT_TONE[vd.verdict]}">${esc(vd.verdict)}</span>`, body: '', noBody: true };
+    }
+  }
+  return { sum: '', body: '' };
+}
+
+const QA_WORD = { passed: ['Passed', 'tone-done'], findings_open: ['Needs your review', 'tone-failed'], incomplete: ['Incomplete', 'tone-blocked'], skipped: ['Skipped', 'tone-faint'] };
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+function qaEvidence(paths) {
+  return paths.length ? `<div class="evid">${paths.map(p => `<span class="chip file" title="${esc(p)}">${ico(/\.(png|jpe?g|mp4)$/.test(p) ? 'image' : 'file', 'sm')}${esc(base(p))}</span>`).join('')}</div>` : '';
+}
+
+function qaReportHtml(text) {
+  const out = [];
+  let list = null;
+  const flush = () => { if (list) { out.push(`<ul>${list.join('')}</ul>`); list = null; } };
+  const paths = h => h.replace(/~\/\.skill-bill\/qa\/[^\s,<]+/g, p => `<code>${esc(base(p))}</code>`);
+  text.split('\n').forEach(raw => {
+    const line = raw.trim();
+    if (!line) { flush(); return; }
+    if (line.startsWith('#')) { flush(); out.push(`<h3>${inline(line.replace(/^#+\s*/, ''))}</h3>`); return; }
+    if (line.startsWith('- ')) { (list = list || []).push(`<li>${paths(inline(line.slice(2)))}</li>`); return; }
+    flush(); out.push(`<p>${paths(inline(line))}</p>`);
+  });
+  flush();
+  return out.join('');
+}
+
+function qaResults(r, v) {
+  const pick = canSelect(v);
+  const [word, tone] = QA_WORD[r.verdict] || ['Unknown', 'tone-faint'];
+  const passed = r.assertions.filter(x => x.tag === 'passed');
+  const gaps = r.assertions.filter(x => x.tag === 'not_exercised');
+  const bits = [r.findings.length && `QA found ${plural(r.findings.length, 'problem', 'problems')}`, gaps.length && `could not test ${plural(gaps.length, 'thing', 'things')}`].filter(Boolean);
+  const sentence = (bits.length ? bits.join(' and ') + '. ' : '') + (passed.length === r.assertions.length ? `All ${passed.length} checks passed.` : `${passed.length} ${passed.length === 1 ? 'check' : 'checks'} passed.`);
+  const isOpen = k => state.open.has(k);
+  const finding = f => {
+    const k = 'q:' + f.id, o = isOpen(k), sk = 'qa:' + f.id;
+    return `<div class="item ${pick ? 'srow' : ''}" id="qaf-${esc(f.id)}">${pick ? `<div class="sel-col">${cb(v, sk, f.id)}</div>` : ''}<button class="item-head" aria-expanded="${o}" data-toggle="${k}">
+      <span class="glyph tone-failed">${ico('bug')}</span>
+      <span class="item-title"><span class="ref">${esc(f.id)}</span>${esc(f.title)}</span>
+      <span class="item-state tone-failed">Open${ico('chev', 'sm')}</span>
+      ${f.observed ? `<span class="item-line">${inline(f.observed)}</span>` : ''}</button>
+      ${pick ? `<div class="route-col">${routeSeg(sk)}</div>` : ''}
+      ${o ? `<div class="item-body">
+        ${f.expected ? `<div><div class="field-label">Expected</div>${inline(f.expected)}</div>` : ''}
+        ${f.steps ? `<div><div class="field-label">Steps</div>${inline(f.steps)}</div>` : ''}
+        ${qaEvidence(f.evidence)}</div>` : ''}</div>`;
+  };
+  const gap = g => `<div class="item"><div class="item-head"><span class="glyph tone-blocked">${ico('gap')}</span><span class="item-title">${esc(g.title)}</span><span></span><span class="item-line" style="display:block">${inline(g.detail)}</span></div></div>`;
+  const fold = (k, glyph, label, preview, inner) => `<button class="q-fold" aria-expanded="${isOpen(k)}" data-toggle="${k}">${glyph}<span class="label">${esc(label)}</span><span class="preview">${esc(preview)}</span>${ico('chev', 'chev sm')}</button>${isOpen(k) ? inner : ''}`;
+  const group = (label, n, inner) => `<div><div class="group-label">${esc(label)}<span class="n">${n}</span></div><div class="box">${inner}</div></div>`;
+  const parts = [`<div class="q-head"><span class="verdict ${tone}"><span class="dot"></span>${esc(word)}</span></div><p class="sentence">${esc(sentence)}</p>`];
+  if (r.findings.length) parts.push(`<div><div class="group-label">Needs you<span class="n">${r.findings.length}</span></div><div class="box">${pick ? `<div class="selall-row boxed">${selectAll(v, 'qa')}</div>` : ''}${r.findings.map(finding).join('')}</div></div>`);
+  if (gaps.length) parts.push(group('Not tested', gaps.length, gaps.map(gap).join('')));
+  const folds = [];
+  if (passed.length) folds.push(`<div class="item">${fold('q:passed', `<span class="tone-done">${ico('check')}</span>`, `Passed · ${passed.length}`, passed.map(p => p.title).join(', '),
+    `<div class="sublist">${passed.map(p => `<div class="sub"><b>${esc(p.title)}</b>${inline(p.detail)}${qaEvidence(p.evidence)}</div>`).join('')}</div>`)}</div>`);
+  folds.push(`<div class="item">${fold('q:report', `<span class="faint">${ico('doc')}</span>`, 'Full report', "Isolation, cleanup and the agent's notes", `<div class="report">${qaReportHtml(r.text)}</div>`)}</div>`);
+  parts.push(`<div class="box">${folds.join('')}</div>`);
+  const cov = r.coverage.map(c => `<span><b>${esc(c.kind[0].toUpperCase() + c.kind.slice(1))}</b> ${c.verdict === 'skipped' ? (c.reason === 'empty_scope' ? 'not in scope' : 'skipped') : 'tested'}</span>`);
+  if (cov.length) parts.push(`<div class="quiet">${cov.join('<span>·</span>')}</div>`);
+  return `<div class="qa">${parts.join('')}</div>`;
+}
+
+function stepNode(v, s) {
+  if (v.r.live && s.status === 'running') return ['run', ''];
+  if (v.parked && s.step_id === 'extract_criteria') return ['wait', ico('hand')];
+  if (v.stopStep === s && !v.superseded) return ['stop', ico('pause')];
+  if (v.superseded && s.step_id === 'extract_criteria') return ['skip', ico('x')];
+  if (s.status === 'skipped') return ['skip', ico('minus')];
+  if (s.status === 'failed') return ['bad', ico('x')];
+  if (s.status === 'completed') {
+    const warnIds = { qa: !!(v.qa && (v.qa.findings.length || v.qa.assertions.some(x => x.tag === 'not_exercised'))), code_review: v.findings.length > 0, unit_test_value_check: !!(v.tests && v.tests.rows && v.tests.rows.some(r => r.verdict !== 'Valuable')), feature_flag_audit: v.flag && v.flag.verdict === 'fail', completeness_audit: v.audit && v.audit.verdict === 'had_gaps', verdict: v.verdict && v.verdict.verdict !== 'APPROVE' };
+    if (s.step_id === 'verdict' && v.verdict?.verdict === 'REQUEST CHANGES') return ['bad', ico('x')];
+    if (s.step_id === 'completeness_audit' && auditCounts(v).FAIL) return ['bad', ico('x')];
+    return warnIds[s.step_id] ? ['warn', ico('alert')] : ['done', ico('check')];
+  }
+  return ['pend', ''];
+}
+
+function stepsSection(v) {
+  const rows = v.steps.map((s, i) => {
+    const info = stepInfo(v, s);
+    const [node, glyph] = stepNode(v, s);
+    const hasBody = info.body && !info.noBody;
+    const open = hasBody && (state.allOpen || state.open.has('s-' + s.step_id));
+    const pending = node === 'pend';
+    return `<div class="st ${pending ? 'pending' : ''}" id="st-${s.step_id}"><div class="st-rail"><div class="st-node ${node}">${glyph}</div></div>
+      <div class="st-card ${open ? 'open' : ''}"><button class="st-head" ${hasBody ? `aria-expanded="${open}" data-toggle="s-${s.step_id}"` : 'disabled'}>
+        <span class="st-name"><span class="idx">${i + 1}</span>${STEP_NAMES[s.step_id]}</span>
+        <span class="st-side">${s.attempt_count > 1 ? `attempt ${s.attempt_count}` : ''}${hasBody ? ico('chev', 'chev sm') : ''}</span>
+        <span class="st-sum">${info.sum}</span></button>
+        <div class="st-body" ${open ? '' : 'hidden'}>${info.body}</div></div></div>`;
+  }).join('');
+  return `<section class="sec" id="sec-steps"><div class="sec-head"><h2>Steps</h2><span class="n">${v.steps.filter(s => s.status === 'completed' || s.status === 'skipped').length} of ${v.steps.length}</span></div><div class="steps">${rows}</div></section>`;
+}
+
+function activityStub(v) {
+  return `<section class="sec"><details class="fold"><summary>${ico('chev', 'chev sm')}<span style="color:var(--fg);font-weight:500">Activity</span> <span class="faint">agent output and tool calls, as today</span></summary>
+    <div class="muted" style="padding:6px 0 0 20px">The existing Activity feed stays here, collapsed by default.</div></details></section>`;
+}
+
+function summarySection(v) {
+  const vr = v.verdict;
+  if (vr && !v.r.live && !v.stopped && !v.parked) {
+    if (!vr.summary) return '';
+    return `<section class="summary" aria-label="What this work does"><div class="sum-label">What this work does</div>
+      <p class="sum-text">${inline(vr.summary)}</p></section>`;
+  }
+  if ((v.r.live || v.stopped || v.parked) && !v.superseded && v.criteria.length) {
+    const first = v.criteria[0];
+    return `<section class="summary" aria-label="What this work is meant to do"><div class="sum-label">What this work is meant to do <span class="faint">· from the extracted criteria</span></div>
+      <p class="sum-text one" title="${esc(first.text)}">${inline(first.text)}</p>
+      <div class="sum-foot">${v.criteria.length > 1 ? `${v.criteria.length - 1} more criteria below. ` : ''}${v.parked ? 'A summary of the change comes with the verdict, after you confirm.' : 'A summary of the change comes with the verdict.'}</div></section>`;
+  }
+  return '';
+}
+
+function renderNew(v) {
+  return header(v) + summarySection(v) + outcome(v) + criteriaSection(v) + stepsSection(v) + activityStub(v) + actionBar(v);
+}
+
+function renderToday(v, sc) {
+  const t = sc.today;
+  return `<div class="today"><div class="chips"><span class="pill">${t.status}</span><span class="keytxt">${esc(v.r.issue_key || '')} ${esc(v.r.issue_key || '')}</span><span class="pill">operation</span>${t.status === 'Canceled' ? '<span class="pill"><span class="dot faint"></span>stale</span>' : ''}</div>
+    <h2 class="title">Verify for ${esc(v.r.issue_key || '')}</h2>
+    <div class="meta"><span>${ico('folder', 'sm')}${esc(v.ic.repo_root)}</span><span>${ico('branch', 'sm')}${esc(v.ic.target)}</span></div>
+    <div class="actions"><button class="btn">${ico('play', 'sm')}Run again</button><button class="btn">${ico('agent', 'sm')}Choose agent</button></div>
+    <div class="t-warn">${ico('alert')}This older entry has no complete launch details.</div>
+    <div class="t-metrics"><div><div class="faint" style="font-size:var(--t-sm)">Step</div><div class="mono" style="font-size:var(--t-md);color:var(--fg);margin-top:6px">${t.step}</div></div>
+      <div><div class="faint" style="font-size:var(--t-sm)">Total run time</div><div style="font-size:var(--t-md);margin-top:6px">${t.total}</div><div class="faint" style="font-size:var(--t-sm);margin-top:6px">${t.finished}</div></div></div>
+    <div class="sec-head" style="margin-top:var(--sp-6)"><h2>Activity</h2><span class="n">1</span></div>
+    <div class="t-grid"><div><div class="faint">PHASE TIME</div><div style="font-size:var(--t-md);margin:6px 0">&lt;1s</div><div class="faint">no long gaps</div></div><div><div class="faint">BLOCKS</div><div style="font-size:var(--t-md);margin:6px 0">0</div><div class="faint">none</div></div><div><div class="faint">RUNS</div><div style="font-size:var(--t-md);margin:6px 0">1</div><div class="faint">1 phase · 0 fixes</div></div><div><div class="faint">MODELS</div><div style="font-size:var(--t-md);margin:6px 0">none</div></div></div>
+    <div class="box" style="margin-top:var(--sp-3)"><div class="row-head"><span class="tone-done"><span class="dot"></span></span><span class="mono">${esc(v.r.current)}</span><span></span></div></div></div>`;
+}
+
+// ---------- notes ----------
+function notes(v, sc) {
+  if (state.viewMode === 'today') return `<section><h2>What the screen shows today</h2><p>Every Verify run renders through the generic operation document. The runtime stores criteria, receipts and a verdict for each run, and none of it reaches this screen.</p>
+    <ul><li>The issue key appears twice and the run is labelled "operation".</li><li>The step tile names one step with no position in the sequence.</li><li>Total run time shows a dash on finished runs that have <code>started_at</code> and <code>finished_at</code>.</li><li>Activity metrics use goal wording: "1 phase · 0 fixes".</li><li>A superseded run looks like a plain cancel; <code>session_notes.superseded_by</code> is never read.</li></ul></section>`;
+  const T = (k, t) => `<span class="tag ${k}">${t}</span>`;
+  return `
+  <section><h2>Reading order</h2><p>The outcome card answers "can this merge?" first. The verdict sits next to four counts; each count jumps to its evidence. The criteria come next because they are what Verify grades. The steps list shows how the run reached the verdict, and each step opens to show its own receipt.</p></section>
+  <section><h2>What this work does</h2>
+    <p>Finished runs open with two or three sentences on what the change does. They come from a new <code>--- SUMMARY ---</code> block in the verdict step's output, next to the existing <code>--- VERDICT ---</code> block, stored as <code>verdict_result.summary</code>. The verdict step already reads the criteria, the diff projection and every receipt, so this adds no agent call and no extra wait.</p>
+    <ul>
+      <li><b>It describes the work, not the verdict.</b> The outcome card says whether the change is good, and the criteria and findings below say where it falls short. The summary is the one thing the page lacked: what the change is. A list of critical points was tried and dropped because it repeated the verdict sentence and the gaps.</li>
+      <li><b>Unfinished runs</b> show one line of intent taken from the first extracted criterion. A later step could have <code>extract_criteria</code> write that line itself. Superseded runs, and finished runs recorded before the block existed, show no summary.</li>
+      <li>The 0AC-85 summary here is a draft written by hand from that run's real receipts, not generated output.</li>
+    </ul></section>
+  <section><h2>Fixing from Verify</h2>
+    <p>Fixes go through one selection and one action bar, not a Fix button per section. In 0AC-85, review finding F-001 and criteria #2, #3 and #4 all point at <code>ZeroContactsRepository.kt:87</code>, and the Empty address book test row shares <code>ZeroContactsRepositoryTest.kt:168</code> with criterion #8. A button per section would start several agents on the same line. The bar sends every selected item in one brief, and the "Same code as" hints are derived from the <code>file:line</code> references the receipts already contain.</p>
+    <ul>
+      <li><b>Default route per item.</b> A Missing criterion defaults to a goal, because new work needs a plan, review and QA. Partial criteria, review findings, QA findings and test rows default to chat. The Chat or Goal switch on a selected item overrides it. In this scenario #6 is switched to a goal: its gap is a phone replacement flow that does not exist yet.</li>
+      <li><b>Not in this repo, Spec question.</b> These marks take a criterion out of the selection. Here #3 and #4 are marked because the server lives in another repository. Without the mark, Fix would send an agent to build a backend in the mobile app.</li>
+      <li><b>Outcome bars.</b> All four count cells carry a bar with one colour rule: green fine, amber needs a look, red blocking, left to right. Review splits minor from major and blocker, tests split valuable, weak and harmful, QA splits passed, not tested and failed, and the flag audit splits passed and failed checks. A skipped or unrun step shows an empty track so the four bars stay aligned.</li>
+      <li><b>Select all per section.</b> Criteria, code review, unit test value and QA each have a Select all checkbox with a count, always as the first row of the list with its checkbox in the same column as the item checkboxes. It shows mixed when part of the section is selected, and a second click clears the section. It skips marked criteria and Keep rows in the test table.</li>
+      <li><b>Verify stays report-only.</b> The runtime decision log keeps edits out of every Verify step. Fix in chat and Start goal launch separate work on the verified branch and never resume this run. Verify again re-runs the audit once fixes land.</li>
+      <li><b>The goal intake</b> lists the selected criteria with their evidence and missing text, and names the verified branch as the base. The operator types the issue key on the start card.</li>
+    </ul></section>
+  <section><h2>Where each part comes from</h2>
+    <p>Every value below already sits in <code>feature_verify_workflows</code>. None of it reaches the desktop: <code>WorkDetailItem</code> has no Verify projection, so the runtime needs a <code>VerifyRunDetails</code> projection like <code>QaRunDetails</code>.</p>
+    <table class="src">
+      <tr><td>Verdict and sentence</td><td><code>verdict_result.verdict</code>, <code>.findings</code></td><td>${T('stored', 'stored')}</td></tr>
+      <tr><td>Work summary</td><td><code>verdict_result.summary</code> from a new verdict-step block</td><td>${T('missing', 'not stored')}</td></tr>
+      <tr><td>Intake, range, mode</td><td><code>input_context</code></td><td>${T('stored', 'stored')}</td></tr>
+      <tr><td>Criteria list</td><td><code>criteria_summary.acceptance_criteria</code>, split on numbered lines</td><td>${T('stored', 'stored')}</td></tr>
+      <tr><td>Per-criterion grade</td><td><code>completeness_audit_receipt.findings</code>: <code>[PASS|PARTIAL|FAIL] #n</code>, then <code>Evidence</code>, <code>Missing</code> or <code>Not found</code></td><td>${T('new', 'parse')}</td></tr>
+      <tr><td>Review findings</td><td><code>code_review_receipt.findings</code> in the register line format</td><td>${T('new', 'parse')}</td></tr>
+      <tr><td>Flag audit checks</td><td><code>feature_flag_audit_receipt.findings</code>, <code>[ PASS ]</code> lines</td><td>${T('new', 'parse')}</td></tr>
+      <tr><td>Test value table</td><td><code>unit_test_value_receipt.findings</code>, a Markdown table plus Keep, Rewrite, Delete and Missing lines</td><td>${T('new', 'parse')}</td></tr>
+      <tr><td>Changed files</td><td><code>diff_projection.changed_files</code></td><td>${T('stored', 'stored')}</td></tr>
+      <tr><td>QA verdict</td><td><code>qa_outcome</code>, <code>qa_report.verdict</code></td><td>${T('stored', 'stored')}</td></tr>
+      <tr><td>QA findings and checks</td><td><code>qa_report.report_text</code> re-parsed with <code>QaReportParser</code></td><td>${T('new', 'parse')}</td></tr>
+      <tr><td>QA evidence files</td><td>Invocation directory not stored</td><td>${T('missing', 'not stored')}</td></tr>
+      <tr><td>Step status, attempts</td><td><code>steps_json</code></td><td>${T('stored', 'stored')}</td></tr>
+      <tr><td>Superseded link</td><td><code>session_notes.superseded_by</code></td><td>${T('stored', 'stored')}</td></tr>
+      <tr><td>Stale reason</td><td><code>feature_verify_sessions.stale_reason</code></td><td>${T('stored', 'stored')}</td></tr>
+      <tr><td>Per-step time</td><td>No start or finish per step</td><td>${T('missing', 'not stored')}</td></tr>
+      <tr><td>Shared code hints</td><td><code>file:line</code> references in review, audit and test receipts</td><td>${T('new', 'derived')}</td></tr>
+      <tr><td>Item marks</td><td>Not in this repo, Spec question</td><td>${T('missing', 'not stored')}</td></tr>
+      <tr><td>Criterion to finding link</td><td>No mapping between review findings and criteria</td><td>${T('missing', 'not stored')}</td></tr>
+    </table></section>
+  <section><h2>Data problems this turned up</h2><ul>
+    <li><b>Agent narration in receipts.</b> The 0AC-86 flag audit receipt starts with "I'll audit the range…" before <code>FEATURE FLAG AUDIT</code>. The mock trims at that heading; the runtime should store only the report.</li>
+    <li><b>Prose receipts.</b> Four receipts are lines of text, so the desktop would be parsing LLM output. Parsing in the runtime projection keeps that in one tested place. A structured receipt contract is better still.</li>
+    <li><b>Failed extraction parks normally.</b> FP-5175 parked with "Unable to extract criteria…" as its only criterion. The mock disables Confirm when no numbered criteria exist.</li>
+    <li><b>QA has no run of its own.</b> Verify runs QA inline as a step (<code>VerifyQaStep</code>), not as a standalone QA phase, so there is no QA work item and no <code>QaRunDetails</code> to link to. <code>qa_report</code> keeps only the verdict, outcome, reason, <code>report_text</code>, cleanup and warnings; the parsed findings and checks are dropped. The projection re-parses <code>qa_report.report_text</code> with <code>QaReportParser</code> and maps it with <code>QaRunDetailsMapping</code>, so the QA step renders the same results block as the QA view. Evidence shows as file names only: the QA invocation directory is not stored, so the chips cannot open files.</li>
+    <li><b>No step timing.</b> The steps list shows status and attempt only. Per-step durations need <code>started_at</code> and <code>finished_at</code> on each <code>steps_json</code> entry.</li>
+  </ul></section>
+  <section><h2>This scenario</h2><p>${esc(sc.source)}.</p></section>`;
+}
+
+// ---------- wiring ----------
+const sel = document.getElementById('scenario');
+SCENARIOS.forEach(s => sel.insertAdjacentHTML('beforeend', `<option value="${s.key}">${esc(s.label)}</option>`));
+function render() {
+  const sc = SCENARIOS.find(s => s.key === state.scenario);
+  const v = view(sc.run());
+  v.fix = fixables(v);
+  current = v;
+  document.getElementById('source').textContent = state.viewMode === 'today' ? 'Today: generic operation document' : 'Redesign: Verify run document';
+  document.getElementById('pane').innerHTML = state.viewMode === 'today' ? renderToday(v, sc) : renderNew(v);
+  document.getElementById('notes').innerHTML = notes(v, sc);
+  document.getElementById('expand').textContent = state.allOpen ? 'Collapse all steps' : 'Expand all steps';
+}
+sel.addEventListener('change', () => { state.scenario = sel.value; state.open.clear(); state.critFilter = 'all'; preset(state.scenario); render(); });
+document.querySelectorAll('.designs button').forEach(b => b.addEventListener('click', () => {
+  state.viewMode = b.dataset.view;
+  document.querySelectorAll('.designs button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  render();
+}));
+document.getElementById('expand').addEventListener('click', () => { state.allOpen = !state.allOpen; if (!state.allOpen) [...state.open].filter(k => k.startsWith('s-')).forEach(k => state.open.delete(k)); render(); });
+let toastT;
+function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 1800); }
+document.getElementById('pane').addEventListener('click', e => {
+  const tg = e.target.closest('[data-toggle]');
+  const jump = e.target.closest('[data-jump]');
+  const filt = e.target.closest('[data-filter]');
+  const tst = e.target.closest('[data-toast]:not([data-sel])');
+  const clamp = e.target.closest('[data-clamp]');
+  if (tst) { toast(tst.dataset.toast); return; }
+  const pickEl = e.target.closest('[data-sel]');
+  const routeEl = e.target.closest('[data-route]');
+  const markEl = e.target.closest('[data-mark]');
+  const allEl = e.target.closest('[data-selectall]');
+  const barEl = e.target.closest('[data-bar]');
+  const fixOf = k => current.fix.find(x => x.key === k);
+  if (pickEl) { const k = pickEl.dataset.sel; state.sel.has(k) ? state.sel.delete(k) : state.sel.set(k, fixOf(k).route); render(); return; }
+  if (routeEl) { const [k, r] = routeEl.dataset.route.split('|'); state.sel.set(k, r); render(); return; }
+  if (markEl) { const [k, m] = markEl.dataset.mark.split('|'); if (m === 'none') state.marks.delete(k); else { state.marks.set(k, m); state.sel.delete(k); } render(); return; }
+  if (allEl) {
+    const items = current.fix.filter(x => x.kind === allEl.dataset.selectall && !state.marks.has(x.key));
+    const all = items.every(x => state.sel.has(x.key));
+    items.forEach(x => all ? state.sel.delete(x.key) : (!state.sel.has(x.key) && state.sel.set(x.key, x.route)));
+    render(); return;
+  }
+  if (barEl) {
+    const items = current.fix.filter(x => state.sel.has(x.key));
+    const by = r => items.filter(x => state.sel.get(x.key) === r).map(x => x.label).join(', ');
+    const target = current.ic.target;
+    if (barEl.dataset.bar === 'clear') { state.sel.clear(); render(); return; }
+    toast(barEl.dataset.bar === 'chat'
+      ? `Opens agent chat on ${target} with one brief: ${by('chat')}. This Verify run stays as it is.`
+      : `Opens the New task card: goal intake lists ${by('goal')} with their evidence, base ${target}. You type the issue key.`);
+    return;
+  }
+  if (clamp) { clamp.classList.toggle('full'); return; }
+  if (filt) { state.critFilter = filt.dataset.filter; render(); return; }
+  if (jump) {
+    const id = jump.dataset.jump;
+    if (id !== 'criteria') { state.open.add('s-' + id); render(); }
+    const el = document.getElementById(id === 'criteria' ? 'sec-criteria' : 'st-' + id);
+    el && el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  if (tg) {
+    const k = tg.dataset.toggle;
+    if (state.allOpen && k.startsWith('s-')) { state.allOpen = false; document.querySelectorAll('[data-toggle^="s-"][aria-expanded="true"]').forEach(x => state.open.add(x.dataset.toggle)); }
+    state.open.has(k) ? state.open.delete(k) : state.open.add(k);
+    render();
+  }
+});
+const qs = new URLSearchParams(location.search);
+if (qs.get('scenario')) { state.scenario = qs.get('scenario'); sel.value = state.scenario; }
+if (qs.get('view')) { state.viewMode = qs.get('view'); document.querySelectorAll('.designs button').forEach(x => x.setAttribute('aria-pressed', x.dataset.view === state.viewMode)); }
+preset(state.scenario);
+if (qs.get('open') === 'all') state.allOpen = true;
+(qs.get('keys') || '').split(',').filter(Boolean).forEach(k => state.open.add(k));
+render();
+</script>
+</body>
+</html>

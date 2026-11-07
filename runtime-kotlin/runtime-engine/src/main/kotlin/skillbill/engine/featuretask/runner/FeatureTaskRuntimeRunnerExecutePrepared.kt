@@ -15,15 +15,18 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.MonitorRepairAccounting
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.prepare.FeatureTaskRuntimeSpecGate
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopDrive
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.PhaseAttemptHistory
 import skillbill.engine.featuretask.slot.AcceptanceRepairCapability
 import skillbill.engine.featuretask.slot.MonitorRepairCapability
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.shellcontent.featureTaskRuntimeOperatorDecisionRejected
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.SpecSource
@@ -49,15 +52,24 @@ public class FeatureTaskRuntimeRunnerExecutePrepared(
     }.distinct().singleOrNull()
   }
 
-  internal fun driveExecutePreparedRunLoop(
+  internal fun createRunLoopContext(
     runRequest: FeatureTaskRuntimeRunRequest,
     specSource: SpecSource,
     executionPlan: ResolvedPhaseExecutionPlan,
     observability: FeatureTaskRuntimeRunObservability,
     state: FeatureTaskRuntimeRunState,
-  ): FeatureTaskRuntimeRunReport {
+  ): FeatureTaskRuntimeRunLoopContext {
     val runState = durableRuns.create(runRequest, specSource, executionPlan, observability, state)
-    val context = runLoopEntry.context(runRequest, runState)
+    return runLoopEntry.context(runRequest, runState)
+  }
+
+  internal fun driveExecutePreparedRunLoop(
+    runRequest: FeatureTaskRuntimeRunRequest,
+    context: FeatureTaskRuntimeRunLoopContext,
+    outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
+    captureStreamOutput: Boolean = false,
+    afterStepSettlement: (() -> Unit)? = null,
+  ): FeatureTaskRuntimeRunReport {
     if (isGoalContinuationRun(runRequest)) {
       when (
         val remediation =
@@ -72,19 +84,25 @@ public class FeatureTaskRuntimeRunnerExecutePrepared(
           return remediationBaseCoherenceBlockedReport(
             runRequest,
             remediation.operatorGuidance,
-            executionPlan.traversal.forwardPhaseIds.first(),
+            context.transitions.forwardPhaseIds.first(),
           )
         is RemediationBaseCoherent -> Unit
       }
     }
     FeatureTaskRuntimeRunLoopDrive.reopenStaleSettledSteps(context)
-    return runLoopEntry.run(context) { loop ->
-      runRequest.operatorDecision?.let { decision ->
-        loop.applyOperatorDecision()?.let { rejection ->
-          throw featureTaskRuntimeOperatorDecisionRejected(runRequest.workflowId, decision.wireValue, rejection)
+    return runLoopEntry.run(
+      context = context,
+      beforeDrive = { loop ->
+        runRequest.operatorDecision?.let { decision ->
+          loop.applyOperatorDecision()?.let { rejection ->
+            throw featureTaskRuntimeOperatorDecisionRejected(runRequest.workflowId, decision.wireValue, rejection)
+          }
         }
-      }
-    }
+      },
+      outputSink = outputSink,
+      captureStreamOutput = captureStreamOutput,
+      afterStepSettlement = afterStepSettlement,
+    )
   }
 
   internal fun createExecutePreparedRunState(
@@ -117,7 +135,7 @@ public class FeatureTaskRuntimeRunnerExecutePrepared(
     return FeatureTaskRuntimeRunState(
       initialRecords = records,
       transitions = executionPlan.phaseTraversal(),
-      durableInitialLedger = ledger,
+      initialAttemptHistory = PhaseAttemptHistory(ledger),
       initialRetainedOutputs =
         history.outputs +
           listOfNotNull(

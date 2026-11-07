@@ -48,18 +48,17 @@ object GovernedSpecSectionParser {
     headingMatches: (String) -> Boolean,
   ): String? {
     val lines = specText.lines()
+    val outsideFence = MarkdownFences.outsideFenceMask(lines)
     val startIndex =
-      lines.indexOfFirst { line ->
-        val title = line.headingTitle()?.lowercase() ?: return@indexOfFirst false
-        headingMatches(title)
-      }
-    if (startIndex < 0) {
-      return null
-    }
-    val remaining = lines.drop(startIndex + 1)
-    val endOffset = remaining.indexOfFirst { line -> line.headingTitle() != null }
-    val sectionLines = if (endOffset < 0) remaining else remaining.take(endOffset)
-    return sectionLines.joinToString(separator = "\n")
+      lines.indices.firstOrNull { index ->
+        val title = lines[index].takeIf { outsideFence[index] }?.headingTitle()?.lowercase()
+        title != null && headingMatches(title)
+      } ?: return null
+    val endIndex =
+      (startIndex + 1..lines.lastIndex).firstOrNull { index ->
+        outsideFence[index] && lines[index].headingTitle() != null
+      } ?: lines.size
+    return lines.subList(startIndex + 1, endIndex).joinToString(separator = "\n")
   }
 
   fun String.headingTitle(): String? = HEADING.find(this)?.groupValues?.get(1)?.trim()

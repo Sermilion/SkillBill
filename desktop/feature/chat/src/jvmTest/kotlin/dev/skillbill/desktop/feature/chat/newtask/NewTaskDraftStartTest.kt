@@ -384,6 +384,31 @@ class NewTaskDraftStartTest {
   }
 
   @Test
+  fun `goal and plan failures clear the started claim and retain the accepted identity for retry`() = runTest {
+    for (kind in listOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)) {
+      val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+      val controls = FakeWorkControlRepository()
+      val failure = CompletableDeferred<String?>()
+      val draft = draftWithFinishedTurn(chats, controls, "SKILL-514")
+      controls.newTaskOutcome = NewTaskStartOutcome.Started("SKILL-514", kind) { failure.await() }
+
+      draft.start(kind)
+      runCurrent()
+      assertNotNull(draft.offer.value.started)
+      failure.complete("Database schema is incompatible. Full log: new-task.log")
+      runCurrent()
+
+      assertNull(draft.offer.value.started)
+      val chat = assertNotNull(draft.chat.value)
+      assertTrue(chat.thread.transcript.value.any { it is ChatMessage.Error && it.text.contains("Database schema is incompatible.") })
+      controls.newTaskOutcome = NewTaskStartOutcome.Started("SKILL-514", kind)
+      draft.start(kind)
+      runCurrent()
+      assertEquals(listOf("SKILL-514", "SKILL-514"), controls.newTaskRequests.map { it.keyChoice })
+    }
+  }
+
+  @Test
   fun `standalone start reports in the chat and a later failure explains itself`() = runTest {
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository()

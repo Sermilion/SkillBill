@@ -4,11 +4,15 @@ import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.CommentAuthor
 import dev.skillbill.desktop.core.domain.model.CommentState
 import dev.skillbill.desktop.core.domain.model.DiffCommentsState
+import dev.skillbill.desktop.core.domain.model.CommentRejection
 import dev.skillbill.desktop.core.domain.repository.DiffCommentRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 internal class DiffCommentAuthoringActions(
   private val scope: CoroutineScope,
@@ -99,10 +103,10 @@ internal class DiffCommentAuthoringActions(
     val snapshot = current.comments as? DiffCommentsState.Available ?: return
     val branch = snapshot.branch
     if (snapshot.threads.none { it.state == CommentState.Pending } || current.review.submitting) return
-    val submitting = ReviewBarUi(submitting = true)
+    val submitting = ReviewBarUi(inFlight = ReviewWrite.Submit)
     update { it.copy(review = submitting) }
     scope.launch {
-      val result = comments.submitReview(baseline, branch)
+      val result = boundedWrite("Adding the review") { comments.submitReview(baseline, branch) }
       if (state().review !== submitting) return@launch
       when (result) {
         is Outcome.Success -> {
@@ -122,11 +126,11 @@ internal class DiffCommentAuthoringActions(
     val snapshot = current.comments as? DiffCommentsState.Available ?: return
     val branch = snapshot.branch
     if (current.review.submitting || !current.review.confirmingDiscard) return
-    val discarding = ReviewBarUi(submitting = true)
+    val discarding = ReviewBarUi(inFlight = ReviewWrite.Discard)
     val editing = current.editing
     update { it.copy(review = discarding) }
     scope.launch {
-      val result = comments.discardPending(baseline, branch)
+      val result = boundedWrite("Discarding the pending comments") { comments.discardPending(baseline, branch) }
       if (state().review !== discarding) return@launch
       when (result) {
         is Outcome.Success -> update { it.copy(review = ReviewBarUi(), editing = it.editing?.takeUnless { edit -> edit === editing }) }
@@ -134,6 +138,26 @@ internal class DiffCommentAuthoringActions(
       }
     }
   }
+
+  private suspend fun <T> boundedWrite(
+    what: String,
+    write: suspend () -> Outcome<T, CommentRejection>,
+  ): Outcome<T, CommentRejection> {
+    val call = scope.async { write() }
+    return try {
+      val result = withTimeoutOrNull(REVIEW_WRITE_TIMEOUT_MS) { call.await() }
+      if (result != null) result else {
+        call.cancel()
+        Outcome.Failure(CommentRejection("$what timed out. Try again."))
+      }
+    } catch (failure: CancellationException) {
+      call.cancel()
+      throw failure
+    } catch (failure: Throwable) {
+      Outcome.Failure(CommentRejection("$what failed: ${failure.message ?: failure::class.simpleName}"))
+    }
+  }
 }
 
 private const val REVIEW_TOAST_MS = 2_600L
+private const val REVIEW_WRITE_TIMEOUT_MS = 20_000L

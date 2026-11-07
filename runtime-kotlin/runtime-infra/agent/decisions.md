@@ -1,3 +1,14 @@
+## [2026-11-05] Pass temp-root inputs through the host port
+Context: Runtime temp resolution needs the configured JVM directory, environment and user home, while ambient property reads are governed at the host boundary.
+Decision: JdkHostPlatformPort passes those inputs to resolveRuntimeTempRoot. If creating state scratch fails, the resolver logs a warning and returns the configured path, or /tmp when it is blank.
+Reason: Explicit inputs make the branches testable without changing process state or adding an ambient-read baseline. A read-only state directory should not stop a command that can still use the configured path.
+Revisit when: A shared temp path other than /tmp must be treated as shared.
+
+## [2026-11-05] Keep state path helpers in host.jvm
+Context: Runtime temp resolution needs the state path helpers, while the host package already depends on host.jvm.
+Decision: Move resolveTelemetryStateDir and expandAndNormalizeTelemetryPath to host.jvm without forwarding functions in host.
+Reason: The move avoids a host to host.jvm package cycle. A forwarder would keep two names for the same function.
+
 # Boundary decisions
 
 ## [2026-11-03] Cursor review harvest keeps a present verdict and never synthesizes one
@@ -75,3 +86,14 @@ Reason: The prefix is part of emitted diagnostic bytes. Replacing exception-base
 Context: Installation migrates the default runtime store, but desktop selection can reach an older restored or separately selected store. A cached current user_version can also hide a missing migration ledger entry.
 Decision: The existing schema port checks the ledger, user_version, and any installed Room identity through a read-only connection. It rejects newer or unrecognized stores. When supported migrations are pending, it establishes schema readiness directly rather than trusting the routine-write cache. The desktop consumes this same port through the pinned composition API; installation remains its other consumer.
 Reason: An explicit upgrade must settle the observed pending ledger before a read-only consumer connects. Routine reads keep their schema checks and never perform this upgrade themselves.
+
+## [2026-11-06] Defer install migration while a worker lease is live
+Context: An install applied migrations 103 and 104 while a goal worker started on the previous runtime was still running. The worker then refused the newer schema on its next read and recorded the plan invocation as failed.
+Decision: Install apply first asks the schema port whether migrations are pending. If they are, it lists unexpired standalone phase, goal runner execution, and feature-task worker leases through a plain read-only connection and inspects each recorded process. Any lease whose process is not confirmed dead defers the migration with a DATABASE_MIGRATION_DEFERRED warning. The lease query checks table columns first, so it reads stores older than the installing runtime.
+Reason: A running JVM keeps the classes it started with, so migrating under it moves the schema ahead of that worker's code. Process inspection, not lease expiry alone, separates live workers from stale rows, because standalone phase leases last a day. The routine-write migration and the desktop connection upgrade are unchanged.
+
+## [2026-11-06] Pin agent Gradle runs to the machine's Gradle user home
+Context: Codex validate agents set `GRADLE_USER_HOME="$TMPDIR/gradle"` inline on their `./gradlew` commands. That skipped the machine's global Gradle properties, so its heap and worker limits did not apply, and each run started private daemons with cold caches. A goal run peaked at 33G and systemd-oomd killed it.
+Decision: Agent launches add `-Dgradle.user.home=<machine home>` to GRADLE_OPTS. The machine home is the runtime's GRADLE_USER_HOME, or `$HOME/.gradle` when that is unset. The runtime sets no Gradle values of its own. An operator GRADLE_OPTS that already sets `gradle.user.home` is left alone, and a home containing a quote or backslash is not pinned. The validation gate runs the pack argv itself and is not changed.
+Reason: Gradle resolves `gradle.user.home` ahead of the GRADLE_USER_HOME variable in both the wrapper and the build, so an inline variable cannot move a build off the machine's settings. A command-line `--gradle-user-home` or a replaced GRADLE_OPTS still can; the agent prompts forbid both.
+Revisit when: A supported pack needs agents to run Gradle with a different user home.

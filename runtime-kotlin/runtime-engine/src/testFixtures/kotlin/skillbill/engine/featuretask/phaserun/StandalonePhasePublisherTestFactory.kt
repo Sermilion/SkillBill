@@ -17,15 +17,23 @@ fun testStandalonePhasePublisher(
 ): StandalonePhaseStatusPublisherFactory =
   StandalonePhaseStatusPublisherFactory(
     database,
-    StandalonePhaseRegistrationFactory(
-      TestRepositoryEnclosingRoot,
-      CheckedOutBranchSource { "main" },
-      clock,
-      NoopFeatureTaskRuntimeWorkerSupervisor,
-      diagnostics,
-      environment,
-    ),
+    testStandalonePhaseRegistration(clock, diagnostics, environment),
     clock,
     diagnostics,
     testBlockIncidentCapture(database, clock, diagnostics),
+    null,
+  )
+
+fun testStandalonePhaseRegistration(
+  clock: Clock,
+  diagnostics: RuntimeDiagnostics,
+  environment: EnvironmentContext = EnvironmentContext(environment = emptyMap()),
+): StandalonePhaseRegistrationFactory =
+  StandalonePhaseRegistrationFactory(
+    TestRepositoryEnclosingRoot,
+    CheckedOutBranchSource { "main" },
+    clock,
+    NoopFeatureTaskRuntimeWorkerSupervisor,
+    diagnostics,
+    environment,
   )

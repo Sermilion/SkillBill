@@ -9,7 +9,8 @@ internal object ValidateProbePrompt {
 
   const val INSTRUCTIONS: String =
     "Test probes: after every required check passes, probe at most ${ValidationTestProbeShape.MAX_PROBES} " +
-      "tests this subtask added or changed: first tests covering a listed broken-then-repaired scenario, then " +
+      "tests this subtask added or changed: first tests covering a listed broken-then-repaired scenario or " +
+      "same-file criterion pair, then " +
       "one test per listed required criterion, then the remaining changed tests in diff order. For each test, " +
       "name the production line or branch it guards. Copy the current checkout, uncommitted changes included, " +
       "to a new directory under ${'$'}TMPDIR, apply there the smallest change that removes " +
@@ -20,7 +21,9 @@ internal object ValidateProbePrompt {
       "keeping setup alive through the assertion, then re-probe it once and report repaired yes only when " +
       "that re-probe kills it. Never change production code to make a probe pass, and never weaken an " +
       "assertion. Every listed repaired scenario needs one probed test that drives its entry point; write " +
-      "one when none exists. When no copy can be made or no targeted test command exists, record every " +
+      "one when none exists. Every listed repaired same-file pair needs one probed test that exercises both " +
+      "criteria together through a production entry point that reaches the shared files; write one when none exists. " +
+      "When no copy can be made or no targeted test command exists, record every " +
       "probe as not_run with the reason and finish on the normal checks; when no test was added or changed, " +
       "record one not_run probe that says so."
 
@@ -31,6 +34,7 @@ internal object ValidateProbePrompt {
 
   fun directive(scope: ValidateProbeScope): String =
     "$INSTRUCTIONS\n\nBroken-then-repaired scenarios: ${scenarios(scope)}\n" +
+      "Broken-then-repaired same-file criterion pairs: ${pairs(scope)}\n" +
       "Required criteria: ${criteria(scope)}\n${ValidationTestProbeParser.LINE_GRAMMAR}"
 
   private fun scenarios(scope: ValidateProbeScope): String =
@@ -40,4 +44,9 @@ internal object ValidateProbePrompt {
 
   private fun criteria(scope: ValidateProbeScope): String =
     scope.requiredCriteria.joinToString("; ") { "${it.criterionRef}: ${it.text}" }.ifEmpty { NONE }
+
+  private fun pairs(scope: ValidateProbeScope): String =
+    scope.repairedPairs
+      .joinToString("; ") { "${it.pairRef} (shared production files ${it.sharedPaths.joinToString(", ")})" }
+      .ifEmpty { NONE }
 }

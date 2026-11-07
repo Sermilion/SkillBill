@@ -13,6 +13,9 @@ interface AppSettingsRepository {
   /** The persisted spec-bundle favorite membership, with read failures kept distinct from an empty set. */
   val favoriteSpecs: Flow<Outcome<Set<FavoriteSpecKey>, SettingsRejection>>
 
+  /** The persisted marks on Verify criteria. */
+  val criterionMarks: Flow<Outcome<Map<CriterionMarkKey, CriterionMark>, SettingsRejection>>
+
   /** Null or empty restores the runtime default; a path of only spaces is refused with [SettingsRejection.BlankDatabasePath]. */
   suspend fun setDatabasePath(path: String?): Outcome<Unit, SettingsRejection>
 
@@ -28,11 +31,19 @@ interface AppSettingsRepository {
   /** Clamps to [AppSettings.TERMINAL_HEIGHT_MIN_DP]..[AppSettings.TERMINAL_HEIGHT_MAX_DP]. */
   suspend fun setTerminalHeightDp(heightDp: Int): Outcome<Unit, SettingsRejection>
 
+  /** Clamps to [AppSettings.CHAT_WIDTH_MIN_DP]..[AppSettings.CHAT_WIDTH_MAX_DP]. */
+  suspend fun setChatWidthDp(widthDp: Int): Outcome<Unit, SettingsRejection>
+
   suspend fun setTrayLastTab(tab: TrayTab): Outcome<Unit, SettingsRejection>
+
+  suspend fun setNewTaskChatLayout(layout: NewTaskChatLayout): Outcome<Unit, SettingsRejection>
 
   suspend fun setFavorite(key: FavoriteWorkKey, favorite: Boolean): Outcome<Unit, SettingsRejection>
 
   suspend fun setSpecFavorite(key: FavoriteSpecKey, favorite: Boolean): Outcome<Unit, SettingsRejection>
+
+  /** Sets or clears a mark on one Verify criterion. */
+  suspend fun setCriterionMark(key: CriterionMarkKey, mark: CriterionMark?): Outcome<Unit, SettingsRejection>
 }
 
 sealed interface SettingsRejection {

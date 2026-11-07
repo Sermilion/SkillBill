@@ -35,6 +35,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactK
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 
 internal class PackBuildGateCycle(
@@ -104,6 +105,16 @@ internal class PackBuildGateCycle(
             ?.validationDepth ?: ValidationDepth.DEFAULT,
       commandFamily = commandFamily,
       preserveConsumedRepairTurns = run.request.goalQualityAutomaticRecovery,
+      carriedRepairTurns = carriedRepairTurns(run),
+      carriedRepairOutputs =
+        when {
+          commandFamily == ValidationGateCommandFamily.BUILD ->
+            run.request.goalQualityPhaseProgress?.carriedBuildRepairOutputs.orEmpty()
+          commandFamily == ValidationGateCommandFamily.VALIDATION &&
+            run.request.goalQualityValidationOccurrence > 0 ->
+            run.request.goalQualityPhaseProgress?.carriedValidationRepairOutputs.orEmpty()
+          else -> emptyList()
+        },
       progressKey =
         if (!run.request.goalQualityAutomaticRecovery) {
           run.request.workflowId
@@ -128,6 +139,17 @@ internal class PackBuildGateCycle(
       progressStore = progressStore,
       agentTriageLauncher = ValidationGateAgentTriageLauncher { findings -> launchTriage(run, iteration, findings) },
     )
+
+  private fun carriedRepairTurns(run: PhaseRun): Int =
+    when {
+      commandFamily == ValidationGateCommandFamily.BUILD ->
+        run.request.goalQualityPhaseProgress?.carriedBuildRepairsUsed ?: 0
+      carriedValidationRepairs(run) -> run.request.goalQualityPhaseProgress?.carriedValidationRepairsUsed ?: 0
+      else -> 0
+    }
+
+  private fun carriedValidationRepairs(run: PhaseRun): Boolean =
+    commandFamily == ValidationGateCommandFamily.VALIDATION && run.request.goalQualityValidationOccurrence > 0
 
   private inner class QualityCheckReportingStore(
     private val run: PhaseRun,
@@ -271,6 +293,10 @@ internal class PackBuildGateCycle(
     )
   }
 }
+
+internal val goalBuildDefinitionId: String = SkeletonDefinition.GOAL_BUILD.id
+
+internal val validationDefinitionId: String = SkeletonDefinition.VALIDATION.id
 
 internal fun packBuildGateProgressKey(
   parentWorkflowId: String,

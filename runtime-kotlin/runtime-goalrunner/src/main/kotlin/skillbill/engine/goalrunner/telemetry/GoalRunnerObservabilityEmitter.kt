@@ -24,12 +24,13 @@ public class GoalRunnerObservabilityEmitter(
     action: String,
     progress: GoalRunnerWorkflowProgress?,
     launchOutcome: AgentRunLaunchOutcome,
+    childFailureOutput: String? = null,
   ) {
     recordStart(subject, action, progress)
     progress?.let { child -> recordProgress(subject, child) }
     (launchOutcome as? AgentRunLaunchFacts)?.let { facts ->
       facts.liveness?.let { recordLiveness(subject, progress, facts) }
-      recordOutputSummary(subject, progress, facts)
+      recordOutputSummary(subject, progress, facts, childFailureOutput)
     }
   }
 
@@ -147,6 +148,7 @@ public class GoalRunnerObservabilityEmitter(
     subject: GoalRunnerObservabilitySubject,
     progress: GoalRunnerWorkflowProgress?,
     facts: AgentRunLaunchFacts,
+    childFailureOutput: String?,
   ) {
     val stderrDetail =
       stderrExcerpt(facts.stderr, GoalRunnerLaunchFacts.STDERR_EXCERPT_MAX_CHARS)
@@ -160,7 +162,8 @@ public class GoalRunnerObservabilityEmitter(
           livenessClass = GoalRunnerObservabilityLivenessClass.WORKER_OUTPUT_SUMMARY,
           activitySummary =
             "stdout_chars=${facts.stdout.length}; stderr_chars=${facts.stderr.length}; " +
-              "exit_status=${facts.termination.exitCode ?: "none"}$stderrDetail",
+              "exit_status=${facts.termination.exitCode ?: "none"}$stderrDetail" +
+              (childFailureOutput?.let { "; child_failure_output=$it" } ?: ""),
         ),
     )
   }

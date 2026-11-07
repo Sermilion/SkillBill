@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.lifecycle.core.featureTaskRuntimePhaseStrate
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCrashReconciliationResult
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFindingVerificationTelemetry
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFinishedTelemetryContext
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePreparation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRegenerationTelemetry
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
@@ -29,6 +30,7 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.error.core.catchingNonCancellation
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -93,25 +95,24 @@ public class FeatureTaskRuntimeRunnerExecute(
   }
 
   public fun executePreparedRun(
-    runRequest: FeatureTaskRuntimeRunRequest,
-    reconciliation: FeatureTaskRuntimeCrashReconciliationResult,
+    prepared: FeatureTaskRuntimePreparation.Prepared,
     repairWorker: AcquiredFeatureTaskRuntimeWorker? = null,
+    outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
+    captureStreamOutput: Boolean = false,
+    afterStepSettlement: (() -> Unit)? = null,
   ): FeatureTaskRuntimeRunReport {
+    val runRequest = prepared.request
+    val reconciliation = prepared.reconciliation
     val specSource =
       specSourceResolver.resolve(
         repoRoot = runRequest.repoRoot,
         specReference = runRequest.runInvariants.specReference,
         isGoalContinuation = isGoalContinuationRun(runRequest),
       )
-    if (runRequest.stopAfterIntake) return executeIntakeOnlyPass(runRequest, specSource)
-    emitFeatureTaskRuntimeEventSafely(
-      diagnostics = diagnostics,
-      seam = "RunStarted event-sink emission",
-    ) {
-      runRequest.eventSink.emit(
-        FeatureTaskRuntimeRunEvent.RunStarted(runRequest.workflowId, runRequest.runInvariants.featureSize.name),
-      )
+    if (runRequest.stopAfterIntake) {
+      return executeIntakeOnlyPass(runRequest, specSource, outputSink, captureStreamOutput, afterStepSettlement)
     }
+    emitRunStarted(runRequest)
     val telemetrySessionId = lifecycleTelemetry.started(runRequest)
     val repairSession = repairSession(runRequest, repairWorker)
     val observability =
@@ -138,12 +139,20 @@ public class FeatureTaskRuntimeRunnerExecute(
     val report =
       try {
         catchingNonCancellation {
+          val context =
+            executePrepared.createRunLoopContext(
+              runRequest,
+              specSource,
+              executionPlan,
+              observability,
+              state,
+            )
           executePrepared.driveExecutePreparedRunLoop(
             runRequest,
-            specSource,
-            executionPlan,
-            observability,
-            state,
+            context,
+            outputSink,
+            captureStreamOutput,
+            afterStepSettlement,
           )
         }.onFailure { error ->
           lifecycleTelemetry.finishedError(telemetryContext, error)
@@ -160,9 +169,23 @@ public class FeatureTaskRuntimeRunnerExecute(
     return terminalReport
   }
 
+  private fun emitRunStarted(runRequest: FeatureTaskRuntimeRunRequest) {
+    emitFeatureTaskRuntimeEventSafely(
+      diagnostics = diagnostics,
+      seam = "RunStarted event-sink emission",
+    ) {
+      runRequest.eventSink.emit(
+        FeatureTaskRuntimeRunEvent.RunStarted(runRequest.workflowId, runRequest.runInvariants.featureSize.name),
+      )
+    }
+  }
+
   private fun executeIntakeOnlyPass(
     runRequest: FeatureTaskRuntimeRunRequest,
     specSource: SpecSource,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
+    afterStepSettlement: (() -> Unit)?,
   ): FeatureTaskRuntimeRunReport {
     val executionPlan = admittedPlan(runRequest)
     val observability =
@@ -172,7 +195,15 @@ public class FeatureTaskRuntimeRunnerExecute(
         diagnostics,
       )
     val state = executePrepared.createExecutePreparedRunState(runRequest, executionPlan, diagnostics)
-    return executePrepared.driveExecutePreparedRunLoop(runRequest, specSource, executionPlan, observability, state)
+    val context =
+      executePrepared.createRunLoopContext(runRequest, specSource, executionPlan, observability, state)
+    return executePrepared.driveExecutePreparedRunLoop(
+      runRequest,
+      context,
+      outputSink,
+      captureStreamOutput,
+      afterStepSettlement,
+    )
   }
 
   private fun admittedPlan(runRequest: FeatureTaskRuntimeRunRequest): ResolvedPhaseExecutionPlan =

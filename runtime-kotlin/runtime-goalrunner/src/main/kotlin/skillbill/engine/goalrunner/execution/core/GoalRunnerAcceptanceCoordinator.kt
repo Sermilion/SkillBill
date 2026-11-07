@@ -120,7 +120,7 @@ public class GoalRunnerAcceptanceCoordinator(
       }
     val completedAt = clock.instant().atOffset(ZoneOffset.UTC).toString()
     val saved = manifestStore.saveOperatorGoalCompletion(loaded, commitSha, request.reason, completedAt)
-    worktreeSettlement.settle(saved.parentWorkflowId)
+    worktreeSettlement.settle(saved)
     return GoalRunnerCompleteResult.Completed(
       issueKey = saved.manifest.issueKey,
       parentWorkflowId = saved.parentWorkflowId,

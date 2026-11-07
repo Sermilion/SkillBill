@@ -1,6 +1,9 @@
 package skillbill.engine.featuretask.qa.report
 
 import skillbill.scaffold.model.QaTargetKind
+import skillbill.workflow.taskruntime.model.qa.QaAssertionOutcome
+import skillbill.workflow.taskruntime.model.qa.QaRunAssertion
+import skillbill.workflow.taskruntime.model.qa.QaRunTemporaryEdit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -61,7 +64,7 @@ class QaReportParserTest {
         appendLine("Verdict: passed")
         appendLine()
         appendLine("## Assertions")
-        appendLine("- login: home shows the user name: passed")
+        appendLine("- [passed] login: home shows the user name.")
         appendLine("## Isolation")
         appendLine("Disposable emulator profile.")
         appendLine()
@@ -202,6 +205,141 @@ class QaReportParserTest {
     )
     assertEquals(report.warnings, report.coverageWarnings)
     assertFalse(report.retestsFindings)
+  }
+
+  @Test
+  fun `tagged assertions parse into outcome title detail and evidence`() {
+    val report =
+      QaReportParser.parse(
+        """
+        |Verdict: findings_open
+        |## Assertions
+        |- [PASSED] `a: b` login: home shows
+        |  the user name. Evidence: ${prefix}home.png
+        |- [failed] Save
+        |- [not_exercised] Offline: airplane mode failed to engage.
+        |### QA-1 Save fails
+        |Steps: tap save.
+        """.trimMargin(),
+        prefix,
+      )
+
+    assertEquals(
+      listOf(
+        QaRunAssertion(
+          QaAssertionOutcome.PASSED,
+          "`a: b` login",
+          "home shows the user name.",
+          listOf("${prefix}home.png"),
+        ),
+        QaRunAssertion(QaAssertionOutcome.FAILED, "Save", "", emptyList()),
+        QaRunAssertion(QaAssertionOutcome.NOT_EXERCISED, "Offline", "airplane mode failed to engage.", emptyList()),
+      ),
+      report.assertions,
+    )
+    assertTrue(report.warnings.isEmpty())
+  }
+
+  @Test
+  fun `an assertion with evidence but no detail keeps a clean title and a blank title counts as untagged`() {
+    val clean =
+      QaReportParser.parse("Verdict: passed\n## Assertions\n- [passed] Login: Evidence: ${prefix}home.png\n", prefix)
+    val blank = QaReportParser.parse("Verdict: passed\n## Assertions\n- [passed]: it worked\n", prefix)
+
+    assertEquals(
+      listOf(QaRunAssertion(QaAssertionOutcome.PASSED, "Login", "", listOf("${prefix}home.png"))),
+      clean.assertions,
+    )
+    assertTrue(blank.assertions.isEmpty())
+    assertTrue("QA report has untagged assertions; its checks are not counted" in blank.warnings)
+  }
+
+  @Test
+  fun `one untagged bullet discards the assertions with a warning outside coverage warnings`() {
+    val message = "QA report has untagged assertions; its checks are not counted"
+    val report =
+      QaReportParser.parse(
+        "Verdict: passed\n## Assertions\n- [passed] One: ok\n1. Two was fine\n- [passed] Three: ok\n",
+        prefix,
+      )
+
+    assertEquals(QaVerdict.PASSED, report.verdict)
+    assertTrue(report.assertions.isEmpty())
+    assertTrue(message in report.warnings)
+    assertFalse(message in report.coverageWarnings)
+  }
+
+  @Test
+  fun `a failed tag with no finding warns outside coverage warnings`() {
+    val message = "QA report tags a failed assertion but lists no finding"
+    val report = QaReportParser.parse("Verdict: findings_open\n## Assertions\n- [failed] Save: broke\n", prefix)
+
+    assertTrue(message in report.warnings)
+    assertFalse(message in report.coverageWarnings)
+  }
+
+  @Test
+  fun `tag lines are not verdict words`() {
+    val report = QaReportParser.parse("## Assertions\n- [passed] Login: ok\n- [failed] Findings row: broke\n", prefix)
+
+    assertEquals(QaVerdict.INCOMPLETE, report.verdict)
+  }
+
+  @Test
+  fun `finding labels fill fields without evidence paths and an unlabelled section yields nulls`() {
+    val labelled =
+      QaReportParser.parse(
+        """
+        |Verdict: findings_open
+        |### QA-1 Save fails
+        |- **Steps:** open the form
+        |  then tap save.
+        |**Expected**: the form closes. Evidence: ${prefix}expected.png
+        |observed: it stays open.
+        |Evidence: ${prefix}form.png
+        |### QA-2 Other
+        |It broke somehow.
+        """.trimMargin(),
+        prefix,
+      )
+
+    val first = labelled.findings.first()
+    assertEquals("open the form then tap save.", first.steps)
+    assertEquals("the form closes.", first.expected)
+    assertEquals("it stays open.", first.observed)
+    assertEquals(listOf("${prefix}expected.png", "${prefix}form.png"), first.evidencePaths)
+    val second = labelled.findings.last()
+    assertNull(second.steps)
+    assertNull(second.expected)
+    assertNull(second.observed)
+  }
+
+  @Test
+  fun `temporary edits count only tagged edits as left behind and None means no edits`() {
+    val none = QaReportParser.parse("Verdict: passed\n## Temporary edits\nNone.\n", prefix)
+    val edits =
+      QaReportParser.parse(
+        """
+        |Verdict: passed
+        |## Temporary edits
+        |- `src/App.kt`: forced an error
+        |- [NOT RESTORED] `.env`: changed the port
+        |- build.gradle: shortened a timeout
+        |- changed a mock
+        """.trimMargin(),
+        prefix,
+      )
+
+    assertTrue(none.temporaryEdits.isEmpty())
+    assertEquals(
+      listOf(
+        QaRunTemporaryEdit("src/App.kt", "forced an error", false),
+        QaRunTemporaryEdit(".env", "changed the port", true),
+        QaRunTemporaryEdit("build.gradle", "shortened a timeout", false),
+        QaRunTemporaryEdit(null, "changed a mock", false),
+      ),
+      edits.temporaryEdits,
+    )
   }
 
   private companion object {

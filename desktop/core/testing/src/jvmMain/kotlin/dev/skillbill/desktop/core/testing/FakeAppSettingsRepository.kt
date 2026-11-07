@@ -6,9 +6,12 @@ import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
 import dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey
 import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
+import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.core.domain.settings.NotificationKind
 import dev.skillbill.desktop.core.domain.settings.SettingsRejection
 import dev.skillbill.desktop.core.domain.settings.TrayTab
+import dev.skillbill.desktop.core.domain.settings.CriterionMark
+import dev.skillbill.desktop.core.domain.settings.CriterionMarkKey
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
@@ -18,6 +21,9 @@ class FakeAppSettingsRepository(initial: AppSettings = AppSettings.DEFAULT) : Ap
   override val settings = MutableStateFlow(initial)
   private val favoriteReadFailureState = MutableStateFlow(false)
   private val specFavoriteReadFailureState = MutableStateFlow(false)
+  private val mutableCriterionMarks = MutableStateFlow<Outcome<Map<CriterionMarkKey, CriterionMark>, SettingsRejection>>(Outcome.Success(emptyMap()))
+  override val criterionMarks = mutableCriterionMarks
+  var criterionMarkRejection: SettingsRejection? = null
   override val favoriteWork = combine(settings, favoriteReadFailureState) { current, readFailure ->
     val result: Outcome<Set<FavoriteWorkKey>, SettingsRejection> =
       if (readFailure) Outcome.Failure(SettingsRejection.ReadFailed) else Outcome.Success(current.favoriteWork)
@@ -47,6 +53,8 @@ class FakeAppSettingsRepository(initial: AppSettings = AppSettings.DEFAULT) : Ap
 
   override suspend fun setHistoryWindow(window: HistoryWindow) = change { it.copy(historyWindow = window) }
 
+  override suspend fun setNewTaskChatLayout(layout: NewTaskChatLayout) = change { it.copy(newTaskChatLayout = layout) }
+
   override suspend fun setNotification(kind: NotificationKind, enabled: Boolean) =
     change { it.copy(notifications = it.notifications + (kind to enabled)) }
 
@@ -54,6 +62,10 @@ class FakeAppSettingsRepository(initial: AppSettings = AppSettings.DEFAULT) : Ap
 
   override suspend fun setTerminalHeightDp(heightDp: Int) = change {
     it.copy(terminalHeightDp = heightDp.coerceIn(AppSettings.TERMINAL_HEIGHT_MIN_DP, AppSettings.TERMINAL_HEIGHT_MAX_DP))
+  }
+
+  override suspend fun setChatWidthDp(widthDp: Int) = change {
+    it.copy(chatWidthDp = widthDp.coerceIn(AppSettings.CHAT_WIDTH_MIN_DP, AppSettings.CHAT_WIDTH_MAX_DP))
   }
 
   override suspend fun setTrayLastTab(tab: TrayTab) = change { it.copy(trayLastTab = tab) }
@@ -65,6 +77,13 @@ class FakeAppSettingsRepository(initial: AppSettings = AppSettings.DEFAULT) : Ap
   override suspend fun setSpecFavorite(key: FavoriteSpecKey, favorite: Boolean) = if (specFavoriteWriteFailure) {
     Outcome.Failure(SettingsRejection.WriteFailed)
   } else change { it.copy(favoriteSpecs = if (favorite) it.favoriteSpecs + key else it.favoriteSpecs - key) }
+
+  override suspend fun setCriterionMark(key: CriterionMarkKey, mark: CriterionMark?): Outcome<Unit, SettingsRejection> {
+    criterionMarkRejection?.let { return Outcome.Failure(it) }
+    val current = (mutableCriterionMarks.value as? Outcome.Success)?.value.orEmpty()
+    mutableCriterionMarks.value = Outcome.Success(if (mark == null) current - key else current + (key to mark))
+    return Outcome.Success(Unit)
+  }
 
   private fun change(transform: (AppSettings) -> AppSettings): Outcome<Unit, SettingsRejection> {
     settings.update(transform)

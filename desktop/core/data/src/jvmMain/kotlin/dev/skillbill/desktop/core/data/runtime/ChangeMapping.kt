@@ -19,6 +19,7 @@ internal fun ChangeBaseline.toPort(): WorkChangeBaseline = when (this) {
   is ChangeBaseline.RunStart -> WorkChangeBaseline.RunStart(worktreeRoot, baseSha, excludedUntrackedPaths)
   is ChangeBaseline.TargetMergeBase -> WorkChangeBaseline.TargetMergeBase(worktreeRoot, targetBranch)
   is ChangeBaseline.CommittedBranchRange -> WorkChangeBaseline.CommittedBranchRange(worktreeRoot, targetBranch, headBranch)
+  is ChangeBaseline.CommittedRevisionRange -> error("Committed revision ranges require committed Git reads.")
 }
 
 internal fun WorkChangedFile.toDomain(): ChangedFile = ChangedFile(path, oldPath, status.toDomain(), insertions, deletions)

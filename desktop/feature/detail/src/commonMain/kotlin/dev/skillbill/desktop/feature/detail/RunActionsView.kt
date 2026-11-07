@@ -1,12 +1,10 @@
 package dev.skillbill.desktop.feature.detail
 
 import dev.skillbill.desktop.core.designsystem.component.ChecklistItem
-import dev.skillbill.desktop.core.domain.model.DecisionOutcome
 import dev.skillbill.desktop.core.domain.model.Incident
 import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
 import dev.skillbill.desktop.core.domain.model.IncidentProgress
 import dev.skillbill.desktop.core.domain.model.Lifecycle
-import dev.skillbill.desktop.core.domain.model.OperatorDecision
 import dev.skillbill.desktop.core.domain.model.WorkKind
 
 internal const val REFRESH_BEFORE_CONTROLS = "Refresh the detail before using run controls."
@@ -37,9 +35,9 @@ internal data class RunActionsView(
   val confirmed: Set<IncidentPrerequisite>,
   val checklist: List<ChecklistItem>?,
   val checklistEnabled: Boolean,
-  val decision: DecisionDraft?,
-  val recordEnabled: Boolean,
+  val decision: OperatorDecisionNeeded?,
   val implement: ControlButton? = null,
+  val implementationNote: Boolean = false,
 )
 
 /** HANDOFF 9.2 items 4, 5 and 7 as rules D-A to D-F: presence, labels and enablement only; nothing is sorted or timed. */
@@ -61,7 +59,8 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
   ).takeIf { goal }
   val pauseNow = ControlButton(label(InFlightControl.PauseNow, "Pause"), ready && item.controlEligible, "Stops the goal runner now").takeIf { goal }
 
-  val resumable = item.lifecycle != Lifecycle.Active && item.lifecycle != Lifecycle.Terminal
+  val resumable = item.lifecycle != Lifecycle.Active &&
+    (item.lifecycle != Lifecycle.Terminal || isStandaloneValidation(item))
   val launchable = ready && options?.canLaunch == true && (item.issueKey ?: item.id) !in controls.reservations
   val agentId = controls.chosenAgent ?: options?.agentId
   val launch = ControlButton(label(InFlightControl.Launch, options?.launchLabel?.ifBlank { null } ?: "Resume"), launchable).takeIf { resumable }
@@ -85,8 +84,7 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
   val checklist = incident?.takeIf { it.progress in RECOVER_ALLOWED && it.prerequisites.isNotEmpty() }?.prerequisites
     ?.map { ChecklistItem(id = it.kind, text = it.instruction, checked = prerequisiteOf(it.kind) in confirmed) }
 
-  val decision = if (item.awaitsOperatorDecision) decisionDraft(state) else null
-  val retryBlank = decision?.decision == OperatorDecision.RETRY_FIX && decision.instructions.isBlank()
+  val decision = if (item.awaitsOperatorDecision) operatorDecisionNeeded(item.issueKey, item.currentSubtaskId) else null
 
   return RunActionsView(
     usable = usable,
@@ -105,11 +103,11 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
     checklist = checklist,
     checklistEnabled = ready,
     decision = decision,
-    recordEnabled = decision != null && decision.recorded == null && ready && !retryBlank,
     implement = ControlButton(
       label(InFlightControl.Launch, "Implement"),
       ready && !controls.implementationStarted && planImplementationEnabled(item, loaded.detail) && item.issueKey !in controls.reservations,
-    ).takeIf { item.isStandalonePlan() },
+    ).takeIf { item.offersPlanImplementation() },
+    implementationNote = item.offersPlanImplementation() && !planFinished(item, loaded?.detail),
   )
 }
 
@@ -125,21 +123,19 @@ internal fun confirmedPrerequisites(state: DetailUiState, incident: Incident?): 
   return if (matches) confirmation.confirmed else emptySet()
 }
 
-/** The draft for the header's current subtask, or a fresh Retry fix draft when the item or subtask changed (D-F). */
-internal fun decisionDraft(state: DetailUiState): DecisionDraft {
-  val item = state.header
-  return state.controls.decision?.takeIf { it.itemId == item.id && it.subtaskId == item.currentSubtaskId }
-    ?: DecisionDraft(item.id, item.currentSubtaskId)
-}
+/** What a no-change pause asks of the operator: [text] explains it and [command] records the decision from a shell. */
+internal data class OperatorDecisionNeeded(val text: String, val command: String)
 
-internal fun OperatorDecision.label(): String = when (this) {
-  OperatorDecision.RETRY_FIX -> "Retry fix"
-  OperatorDecision.ACCEPT_AND_ADVANCE -> "Accept and advance"
-  OperatorDecision.ABANDON_SUBTASK -> "Abandon subtask"
+/** A missing issue key or subtask shows as a placeholder in the command rather than hiding the notice. */
+internal fun operatorDecisionNeeded(issueKey: String?, subtaskId: String?): OperatorDecisionNeeded {
+  val subject = subtaskId?.let { "Subtask $it" } ?: "The current subtask"
+  return OperatorDecisionNeeded(
+    text = "$subject finished with no code changes and is waiting for your decision. Settle it in chat, or run this " +
+      "command and then resume the goal. Pass --instructions with retry_fix.",
+    command = "skill-bill goal operator-decision ${issueKey ?: "<issue-key>"} --subtask ${subtaskId ?: "<subtask>"} " +
+      "--decision retry_fix|accept_and_advance|abandon_subtask",
+  )
 }
-
-internal fun recordedText(recorded: DecisionOutcome.Recorded): String =
-  "Decision recorded for subtask ${recorded.subtaskId}: ${recorded.decision.label().lowercase()}. Resume the goal to apply it."
 
 /** `IncidentPanel.kt`'s status labels. */
 internal fun IncidentProgress.label(): String = when (this) {

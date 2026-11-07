@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordQaFailureKind
 import skillbill.infrastructure.sqlite.core.schema.DatabaseSchema
 import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
@@ -7,11 +8,19 @@ import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.workflow.taskruntime.model.qa.QaAssertionOutcome
+import skillbill.workflow.taskruntime.model.qa.QaRunAssertion
+import skillbill.workflow.taskruntime.model.qa.QaRunCoverage
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails
+import skillbill.workflow.taskruntime.model.qa.QaRunFinding
+import skillbill.workflow.taskruntime.model.qa.QaRunRetainedResource
+import skillbill.workflow.taskruntime.model.qa.QaRunTemporaryEdit
 import java.nio.file.Files
 import java.sql.Connection
 import java.sql.DriverManager
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -65,7 +74,7 @@ class SqliteFeatureTaskQaOutcomeStoreTest {
       store.upsert(legacy.copy(findings = findings))
 
       assertEquals(legacy.copy(findings = findings), store.find("wfl-goal"))
-      assertEquals("/qa/run-4/report.md", store.find("wfl-goal")?.notFixedFindings?.single()?.evidencePath)
+      assertEquals("/qa/run-4/report.md", store.find("wfl-goal")?.notFixedFindings?.single()?.reportPath)
     }
   }
 
@@ -200,6 +209,84 @@ class SqliteFeatureTaskQaOutcomeStoreTest {
         it.getInt(1)
       }
     }
+
+  @Test
+  fun `details and finding fields round trip, and a finding stored without the new keys keeps its title`() {
+    val dbPath = Files.createTempDirectory("skillbill-qa-details").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).close()
+    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+      val store = SqliteFeatureTaskQaOutcomeStore(connection)
+      val outcome =
+        FeatureTaskQaOutcome(
+          "wfl-details",
+          StandaloneQaOutcome.FINDINGS,
+          null,
+          0,
+          null,
+          "2026-10-20T10:15:30Z",
+          listOf(
+            FeatureTaskQaFinding(
+              "QA-1",
+              "Save fails",
+              listOf("/qa/a.png"),
+              "/qa/report.md",
+              FeatureTaskQaFindingStatus.NOT_FIXED,
+              "stays open",
+              "closes",
+              "tap save",
+            ),
+          ),
+          details =
+            QaRunDetails(
+              reportPath = "/qa/report.md",
+              invocationDirectory = "/qa",
+              skipReason = "empty_scope",
+              assertions =
+                listOf(QaRunAssertion(QaAssertionOutcome.NOT_EXERCISED, "Offline", "failed", listOf("/qa/b.png"))),
+              coverage = listOf(QaRunCoverage("web", "skipped", "empty_scope", "mocked")),
+              retainedResources = listOf(QaRunRetainedResource("process", "48213")),
+              temporaryEdits = listOf(QaRunTemporaryEdit(null, "changed", true)),
+              findings =
+                listOf(QaRunFinding("QA-1", "Save fails", "stays open", null, "tap save", listOf("/qa/a.png"))),
+            ),
+        )
+
+      store.upsert(outcome)
+      assertEquals(outcome, store.find("wfl-details"))
+
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "UPDATE feature_task_qa_outcomes SET findings_summary = " +
+            "'[{\"id\":\"QA-1\",\"observed\":\"Old title\",\"status\":\"not_fixed\"}]'",
+        )
+      }
+      val legacy = assertNotNull(store.find("wfl-details")).findings.single()
+      assertEquals("Old title", legacy.title)
+      assertNull(legacy.observed)
+      assertNull(legacy.expected)
+      assertNull(legacy.steps)
+    }
+  }
+
+  @Test
+  fun `an unknown assertion outcome in stored details throws from the store`() {
+    val dbPath = Files.createTempDirectory("skillbill-qa-details-bad").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).close()
+    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+      val store = SqliteFeatureTaskQaOutcomeStore(connection)
+      store.upsert(
+        FeatureTaskQaOutcome("wfl-bad", StandaloneQaOutcome.PASSED, null, 0, null, "2026-10-20T10:15:30Z"),
+      )
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "UPDATE feature_task_qa_outcomes SET qa_details = " +
+            "'{\"assertions\":[{\"outcome\":\"bogus\",\"title\":\"t\",\"detail\":\"\"}]}'",
+        )
+      }
+
+      assertFailsWith<SkillBillRuntimeException> { store.find("wfl-bad") }
+    }
+  }
 
   private fun hasColumn(
     connection: Connection,

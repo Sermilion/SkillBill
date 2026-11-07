@@ -9,7 +9,11 @@ import dev.skillbill.desktop.core.domain.model.sectionSize
 /** Which content the home shows under the step line, decided by the board. */
 sealed interface NewTaskHome {
   data object Pending : NewTaskHome
-  data class Returning(val needsYou: List<WorkItem>, val running: Int, val finished: Int) : NewTaskHome
+  data class Returning(
+    val needsYou: List<WorkItem>,
+    val running: Int,
+    val finished: Int,
+  ) : NewTaskHome
   data object FirstRun : NewTaskHome
 }
 
@@ -19,8 +23,9 @@ internal fun newTaskHome(board: BoardState): NewTaskHome = when (board) {
     if (board.sections.all { it.items.isEmpty() } && board.counts.running == 0) {
       NewTaskHome.FirstRun
     } else {
+      val needsYou = board.sections.firstOrNull { it.kind == BoardSectionKind.NeedsYou }?.items.orEmpty()
       NewTaskHome.Returning(
-        needsYou = board.sections.firstOrNull { it.kind == BoardSectionKind.NeedsYou }?.items.orEmpty(),
+        needsYou = needsYou,
         running = board.counts.running,
         finished = board.sectionSize(BoardSectionKind.Finished),
       )

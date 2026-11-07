@@ -23,6 +23,7 @@ import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Instant
 import kotlin.test.Test
@@ -149,6 +150,7 @@ class GoalRunnerValidationEvidenceProjectionTest {
             recordedAt = "2026-10-20T10:15:30Z",
             findings = storedQaFindings,
             reportText = storedQaReportText,
+            details = storedQaDetails,
           )
       }
     val result =
@@ -176,6 +178,7 @@ class GoalRunnerValidationEvidenceProjectionTest {
         Instant.parse("2026-10-20T10:15:30Z"),
         projectedQaFindings,
         storedQaReportText,
+        details = storedQaDetails,
       ),
       result.goalQaResult,
     )
@@ -281,15 +284,34 @@ class GoalRunnerValidationEvidenceProjectionTest {
 
   private val storedQaFindings =
     listOf(
-      FeatureTaskQaFinding("F-1", "Login fails.", listOf("/qa/1.png"), null, FIXED),
-      FeatureTaskQaFinding("F-2", "Home is blank.", emptyList(), "/qa/r.json", NOT_FIXED),
+      FeatureTaskQaFinding("F-1", "Login fails.", listOf("/qa/1.png", "/qa/2.png"), null, FIXED),
+      FeatureTaskQaFinding(
+        "F-2",
+        "Home is blank.",
+        emptyList(),
+        "/qa/r.json",
+        NOT_FIXED,
+        observed = "stays blank",
+        expected = "shows name",
+        steps = "log in",
+      ),
     )
 
   private val projectedQaFindings =
     listOf(
-      GoalRunnerQaFinding("F-1", "Login fails.", "/qa/1.png", fixed = true),
-      GoalRunnerQaFinding("F-2", "Home is blank.", "/qa/r.json", fixed = false),
+      GoalRunnerQaFinding("F-1", "Login fails.", fixed = true, listOf("/qa/1.png", "/qa/2.png")),
+      GoalRunnerQaFinding(
+        "F-2",
+        "Home is blank.",
+        fixed = false,
+        reportPath = "/qa/r.json",
+        observed = "stays blank",
+        expected = "shows name",
+        steps = "log in",
+      ),
     )
+
+  private val storedQaDetails = QaRunDetails(reportPath = "/qa/r.json", skipReason = "empty_scope")
 
   private val storedQaReportText =
     """

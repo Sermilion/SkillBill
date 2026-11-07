@@ -40,10 +40,15 @@ import dev.skillbill.desktop.core.ui.input.ShellInput
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
-import dev.skillbill.desktop.core.ui.shell.FloatingPane
+import dev.skillbill.desktop.core.ui.shell.DockedPane
 import dev.skillbill.desktop.feature.chat.newtask.NewTaskDraft
 import dev.skillbill.desktop.feature.chat.newtask.testDatabaseSessionController
-import dev.skillbill.desktop.feature.chat.newtask.testNewTaskDraft
+import dev.skillbill.desktop.feature.chat.newtask.unconfinedNewTaskChats
+import androidx.compose.ui.test.hasText
+import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
+import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import java.awt.image.BufferedImage
 import kotlin.coroutines.EmptyCoroutineContext
@@ -60,7 +65,7 @@ class ChatComposerTest {
     val workspace = ChatWorkspace(
       FakeExecutionChatRepository(), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),
       WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
-      testNewTaskDraft(),
+      unconfinedNewTaskChats(),
     )
     val item = workItem("SKILL-1")
     workspace.open(item)
@@ -73,7 +78,7 @@ class ChatComposerTest {
         SkillBillTheme(reducedMotion = true) {
           CompositionLocalProvider(LocalShellInput provides input) {
             focusManager = LocalFocusManager.current
-            FloatingPane(open.value, "Chat", onDismiss = { open.value = false }) {
+            if (open.value) DockedPane("Chat", 560, onResize = {}, onDismiss = { open.value = false }) {
               ChatComposer(session, workspace)
             }
           }
@@ -130,7 +135,7 @@ class ChatComposerTest {
     val workspace = ChatWorkspace(
       FakeExecutionChatRepository(), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),
       WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
-      testNewTaskDraft(),
+      unconfinedNewTaskChats(),
     )
     val item = workItem("SKILL-469")
     workspace.open(item)
@@ -168,7 +173,7 @@ class ChatComposerTest {
     val workspace = ChatWorkspace(
       FakeExecutionChatRepository(supported = setOf("claude")), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),
       WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
-      testNewTaskDraft(),
+      unconfinedNewTaskChats(),
     )
     val item = workItem("SKILL-450")
     workspace.open(item)
@@ -209,6 +214,41 @@ class ChatComposerTest {
       onNodeWithText("[Image #1]").assertDoesNotExist()
       runOnIdle { assertEquals("typed", workspace.drafts[item.id]) }
     }
+  }
+
+  // Arrow keys must reach the palette's filter, and a CLI session with no saved lines must explain why its preview is empty.
+  @Test
+  fun `the resume palette moves with Down, previews a CLI session, and resumes it on Enter`() = runTest {
+    val workspace = ChatWorkspace(
+      FakeExecutionChatRepository(), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),
+      WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
+      unconfinedNewTaskChats(),
+    )
+    val item = workItem("SKILL-1")
+    workspace.open(item)
+    val session = workspace.session(item.id)!!
+    val now = Clock.System.now()
+    val saved = ChatHistoryEntry(
+      "saved-session", item.id, ChatAgent("claude", null, null), now, "fix the list",
+      listOf(ChatHistoryLine(ChatHistoryRole.Operator, "fix the list"), ChatHistoryLine(ChatHistoryRole.Agent, "done")),
+    )
+    val cli = ChatHistoryEntry("cli-session", null, ChatAgent("codex", null, null), now, "from the terminal", emptyList())
+    session.resumeChoicesState.value = listOf(saved, cli)
+    runComposeUiTest {
+      setContent {
+        SkillBillTheme(reducedMotion = true) {
+          CompositionLocalProvider(LocalShellInput provides ShellInput()) { ChatComposer(session, workspace) }
+        }
+      }
+      val filter = onNode(hasSetTextAction() and hasText("Filter chats in this worktree"))
+      filter.assertIsFocused()
+      filter.performKeyInput { pressKey(Key.DirectionDown) }
+      onNodeWithText("This session lives in the codex CLI. Its messages load when you resume it.").assertExists()
+      filter.performKeyInput { pressKey(Key.Enter) }
+      runOnIdle { assertNull(session.resumeChoices.value) }
+    }
+    runCurrent()
+    assertEquals(cli.sessionId, session.sessionId)
   }
 }
 

@@ -1,0 +1,107 @@
+{
+  "criteria_summary_0ac85": {
+    "acceptance_criteria": "1. On the first visit to contacts, prompt users without a phone on their profile to enter one and confirm that it is correct. A prefilled profile number must not be registered automatically.\n2. Request contacts permission, read the address book, normalize and hash numbers on the device, and sync them. The sync response populates the contacts screen.\n3. Show two users as contacts only when each has the other's phone number in their uploaded address book. If either removes the other's number and syncs again, the friendship disappears for both.\n4. Reject `POST /contacts/sync` with HTTP 400 when the caller has no phone on file. With a phone, each sync replaces the caller's complete uploaded hash set and is idempotent. An empty sync clears the set.\n5. Provide `GET /contacts` to reopen the same derived contacts view without uploading. Expose only profile ID, first name, and profile image for each match. The list must be available to viewer limiting in 0AC-52.\n6. Support saving, replacing, and deleting the user's phone. Saving or replacing it must update its hash atomically, remove the old hash on replacement, and make the user undiscoverable on deletion.\n7. Include `hasPhone` in the profile DTO. Keep self-asserted phone numbers unverified in v1.\n8. Cover mutual matching and removal, full replacement, phone and hash transactions, duplicate hash handling, soft deletion, and normalization and hash determinism in tests.",
+    "non_goals": "- Friend requests, pending states, acceptance, decline, and a request inbox.\n- Email-hash discovery, stable public handles, and QR-based adding.\n- SMS verification, blocking, and new-contact push notifications in v1.\n- A stored or pre-materialized friendship graph.\n- A separate endpoint for adding a contact by typing a phone number.",
+    "rollout_expectation": "",
+    "technical_constraints": "- Normalize phone numbers to E.164 using libphonenumber with SIM or region context on the client and equivalent defensive normalization on the server.\n- Compute `HMAC-SHA256(salt, e164_bytes)` on the device. The salt is environment-specific and shipped with the matching client build. Release builds require the production `CONTACT_HASH_SALT` secret.\n- Store the user's own phone in plaintext, but never send other people's plaintext numbers to the server. Persist uploaded address-book hashes with a unique `(profile_id, hash)` pair and delete them when the profile is deleted.\n- Derive friendship on read through mutual hash matches. Limit phone updates and contact sync per account, and cap sync uploads at approximately 5,000 hashes.\n- Use one migration for `phones` and `contact_book_hashes`. Enforce one active phone per profile and exclude soft-deleted rows.\n- The backend contacts module follows the standard five-file layout. Handlers require Swagger annotations, context as the first parameter, wrapped errors, and embedded-PostgreSQL repository tests that assert stored rows.\n- The issue contains conflicting statements about unmatched contacts. Its data model requires storing the full hashed address book, while its privacy section says unmatched hashes are discarded and its done criteria say a non-member leaves no server-side residue. It also says mutual removal dissolves the friendship for both users, while a privacy note says the other user retains their view until they also delete the number."
+  },
+  "completeness_audit_receipt_0ac85": {
+    "contract_version": "0.1",
+    "verdict": "had_gaps",
+    "findings": [
+      "COMPLETENESS AUDIT",
+      "Acceptance criteria: 8",
+      "Implemented:         0",
+      "Missing:             2",
+      "Partial:             6",
+      "---",
+      "[PARTIAL] #1: On the first visit to contacts, prompt users without a phone on their profile to enter one and confirm that it is correct. A prefilled profile number must not be registered automatically.",
+      "  Evidence: `ContactsViewModel.kt:176`, `ContactsViewModel.kt:200`, `ContactsScreen.kt:475`.",
+      "  Missing: The unsaved-changes guard can call `ConfirmPhone` directly when the user saves while leaving, bypassing the confirmation dialog (`ContactsScreen.kt:147`).",
+      "[PARTIAL] #2: Request contacts permission, read the address book, normalize and hash numbers on the device, and sync them. The sync response populates the contacts screen.",
+      "  Evidence: `ContactsScreen.kt:167`, `ContactsPermissionHandler.kt:24`, `PhoneNormalizer.kt:20`, `ContactBookHasher.kt:28`, `ZeroContactsRepository.kt:74`, `ContactsViewModel.kt:287`.",
+      "  Missing: An empty address book is not uploaded. The client loads the existing view instead, so removing the last number cannot clear the uploaded set (`ZeroContactsRepository.kt:87`).",
+      "[FAIL] #3: Show two users as contacts only when each has the other's phone number in their uploaded address book. If either removes the other's number and syncs again, the friendship disappears for both.",
+      "  Not found: The diff contains no server-side mutual matching or removal implementation. The client also skips an empty sync, preventing removal of the last uploaded number (`ZeroContactsRepository.kt:87`).",
+      "[FAIL] #4: Reject `POST /contacts/sync` with HTTP 400 when the caller has no phone on file. With a phone, each sync replaces the caller's complete uploaded hash set and is idempotent. An empty sync clears the set.",
+      "  Not found: The diff adds a client POST and maps a 400 response, but contains no server handler or persistence implementation establishing rejection, replacement, idempotency, or clearing (`ContactsRemoteDataSource.kt:48`, `ZeroContactsRepository.kt:108`). The client does not send empty syncs (`ZeroContactsRepository.kt:87`).",
+      "[PARTIAL] #5: Provide `GET /contacts` to reopen the same derived contacts view without uploading. Expose only profile ID, first name, and profile image for each match. The list must be available to viewer limiting in 0AC-52.",
+      "  Evidence: The client calls `GET /contacts` and loads its response (`ContactsRemoteDataSource.kt:57`, `ZeroContactsRepository.kt:120`).",
+      "  Missing: The diff contains no server implementation or viewer-limiting integration. The client response model also accepts a `hash` field beyond the three specified fields (`ContactsDataModels.kt:17`).",
+      "[PARTIAL] #6: Support saving, replacing, and deleting the user's phone. Saving or replacing it must update its hash atomically, remove the old hash on replacement, and make the user undiscoverable on deletion.",
+      "  Evidence: The client sends phone updates and deletions (`ContactsRemoteDataSource.kt:33`, `ContactsRemoteDataSource.kt:42`), and the screen supports saving and removing a phone (`ContactsViewModel.kt:250`, `ContactsViewModel.kt:271`).",
+      "  Missing: The diff contains no server-side phone and hash transaction, replacement, or discoverability implementation. The contacts screen has no replacement flow while a phone is present.",
+      "[PARTIAL] #7: Include `hasPhone` in the profile DTO. Keep self-asserted phone numbers unverified in v1.",
+      "  Evidence: The client profile DTO adds `hasPhone` (`ProfileResponseDataModel.kt:15`).",
+      "  Missing: The diff contains no server DTO or phone verification state implementation to establish the unverified behavior.",
+      "[PARTIAL] #8: Cover mutual matching and removal, full replacement, phone and hash transactions, duplicate hash handling, soft deletion, and normalization and hash determinism in tests.",
+      "  Evidence: Client tests cover normalization, HMAC vectors, and deduplication (`PhoneNormalizerTest.kt:17`, `ContactBookHasherTest.kt:11`, `ZeroContactsRepositoryTest.kt:151`).",
+      "  Missing: The diff contains no server repository tests for mutual matching and removal, full replacement, phone and hash transactions, stored duplicate hashes, or soft deletion. The empty-book client test instead asserts read-only behavior (`ZeroContactsRepositoryTest.kt:168`)."
+    ]
+  },
+  "code_review_receipt_0ac85": {
+    "contract_version": "0.1",
+    "verdict": "changes_requested",
+    "findings": [
+      "- [F-001] Major | High | core/data/src/commonMain/kotlin/com/zeroaccount/core/data/contacts/repository/ZeroContactsRepository.kt:87 | When a permitted address book becomes empty, sync performs a GET instead of uploading an empty hash set. The server retains the previous hashes, so removing the last contact leaves the friendship visible to both users. Distinguish an empty successful read from an unavailable or unauthorized read, and upload the former.",
+      "- [F-002] Major | High | core/data/src/commonMain/kotlin/com/zeroaccount/core/data/contacts/repository/ZeroContactsRepository.kt:150 | The confirmed contacts response exposes profile ID, first name, and image, so `hash` defaults to empty for every returned contact. `friendHashes` is consequently empty and existing friends also appear as invite candidates. Do not rely on an unprovided response field to identify invitees.",
+      "- [F-003] Major | High | feature/overview/src/iosMain/kotlin/com/zeroaccount/feature/overview/contacts/ui/ContactsPermissionHandler.kt:31 | iOS limited contacts access falls into the denial branch. The address-book reader also accepts only full authorization, so users who grant access to selected contacts cannot sync those contacts. Handle limited authorization in both places.",
+      "- [F-004] Major | High | feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/contacts/ui/ContactsScreen.kt:826 | The sync menu dispatches `SyncContacts` directly and bypasses the permission handler. After a user denies access, choosing sync does not request or explain permission; it reads an empty book and displays the old server list as though sync succeeded. Route this action through the permission flow.",
+      "- [F-005] Major | High | feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModel.kt:256 | `PhoneSaved` requests permission before `refreshStatus()` changes the screen to `HasPhone`. If permission is already granted, its callback can dispatch sync while the screen is still in setup, and line 289 discards it. After removing and re-adding a phone, the one-time content effect has already run, so no automatic retry follows. Start sync after the content state is ready.",
+      "- [F-006] Major | High | iosApp/iosApp.xcodeproj/project.pbxproj:264 | The permission prompt says contacts are not stored or uploaded, but sync uploads and retains hashes of the address-book numbers. That statement gives users a false description of the data sent to the server. Describe the hashed upload and storage in both build configurations.",
+      "- [F-007] Minor | High | feature/overview/src/commonMain/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModel.kt:59 | bill-kmp-code-review-code-quality: Related setup and content values live in separate mutable flows and are updated together in several transitions. This forces maintainers to trace each field and permits intermediate combinations during `combine` emissions. Store each related group in a state data class and update it as one transition."
+    ]
+  },
+  "unit_test_value_receipt_0ac85": {
+    "contract_version": "0.1",
+    "verdict": "reported",
+    "findings": [
+      "**Overall verdict:** Mixed",
+      "**Scope reviewed:** `ef198ee7f052d8e02b31fde9b6862337bc15468f..6e2dd0915aed624cfe72a2a2fb19d800d0db5f1b`, limited to the six listed test files.",
+      "The suite has useful coverage for hash compatibility, phone opt-in, normalization, and sync error handling. Some tests duplicate behavior or pin unrelated menu details. The empty-address-book test also enforces behavior that conflicts with the supplied acceptance criteria.",
+      "| Test or Area | Verdict | Confidence | Evidence | Why it adds or lacks value | Better test or action |",
+      "|---|---|---|---|---|---|",
+      "| Menu item lists | Weak | High | [OverviewMenuItemTest.kt:15](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/overview/ui/model/OverviewMenuItemTest.kt:15), [line 26](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/overview/ui/model/OverviewMenuItemTest.kt:26) | Both tests pin the entire menu order to check a feature flag. Adding or reordering an unrelated item breaks them. This is non-critical menu glue. | Delete both. |",
+      "| Request contracts | Weak | High | [ContactsRemoteDataSourceTest.kt:57](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/datasource/ContactsRemoteDataSourceTest.kt:57), [line 84](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/datasource/ContactsRemoteDataSourceTest.kt:84), [line 104](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/datasource/ContactsRemoteDataSourceTest.kt:104), [line 143](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/datasource/ContactsRemoteDataSourceTest.kt:143) | They check paths and profile IDs but not HTTP methods. Request bodies are decoded with the same DTO used to serialize them, so an accidental wire-field rename can pass. | Rewrite these contract assertions to check the method and literal JSON field names at the HTTP boundary. |",
+      "| Empty address book | Weak | High for the conflict; medium for intended product behavior | [ZeroContactsRepositoryTest.kt:168](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/repository/ZeroContactsRepositoryTest.kt:168) | The test requires an empty read to fetch the list without uploading. The supplied criteria require an empty sync to clear the uploaded set. The test cannot distinguish an unavailable address book from a genuinely empty one. | Delete this assertion of the conflicting behavior. Clarify how the reader signals unavailable versus empty before adding a clearing test. |",
+      "| Sync result shown to users | Weak | High | [ContactsViewModelTest.kt:525](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModelTest.kt:525) | It checks only that one contact appears. A wrong contact would pass, despite the requirement that the sync response populate the screen. | Rewrite the assertion to check the returned contact’s identity and visible fields. |",
+      "| Normalizer examples | Weak | High | [PhoneNormalizerTest.kt:23](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/PhoneNormalizerTest.kt:23), [line 35](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/PhoneNormalizerTest.kt:35) | The US national-number case repeats the region fallback covered at line 17. The whitespace example mostly pins library parsing behavior rather than a distinct business rule. | Delete these two examples; retain the region, explicit prefix, and invalid-input cases. |",
+      "| Empty setup | Weak | Medium | [ContactsViewModelTest.kt:186](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModelTest.kt:186) | It repeats the empty setup outcome already checked at line 147. It uses a profile with an empty phone list rather than a missing profile, but neither test demonstrates a distinct user-facing rule for that difference. | Delete. |",
+      "| Hash and address-book processing | Valuable | High | [ContactBookHasherTest.kt:11](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/ContactBookHasherTest.kt:11), [ZeroContactsRepositoryTest.kt:151](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/repository/ZeroContactsRepositoryTest.kt:151) | Fixed vectors catch incompatible HMAC encoding. The repository test catches duplicate or invalid numbers entering the upload. | Keep. |",
+      "| Phone consent and recovery | Valuable | High | [ContactsViewModelTest.kt:164](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModelTest.kt:164), [line 248](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModelTest.kt:248), [line 550](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModelTest.kt:550) | These catch automatic registration of a prefilled number and failures to recover after status errors or a phone removed elsewhere. | Keep. |",
+      "**Keep:** The fixed HMAC vectors, normalization and invalid-input checks, deduplication and hash-limit checks, phone consent and removal flows, and sync failure recovery.",
+      "**Rewrite:** The four HTTP request contract tests to assert methods and wire JSON; the sync-result UI test to assert the actual contact.",
+      "**Delete:** [OverviewMenuItemTest.kt:15](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/overview/ui/model/OverviewMenuItemTest.kt:15), [line 26](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/overview/ui/model/OverviewMenuItemTest.kt:26); [PhoneNormalizerTest.kt:23](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/PhoneNormalizerTest.kt:23), [line 35](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/PhoneNormalizerTest.kt:35); [ContactsViewModelTest.kt:186](~/StudioProjects/ZeroAccount-pr-168/feature/overview/src/jvmTest/kotlin/com/zeroaccount/feature/overview/contacts/ContactsViewModelTest.kt:186); [ZeroContactsRepositoryTest.kt:168](~/StudioProjects/ZeroAccount-pr-168/core/data/src/jvmTest/kotlin/com/zeroaccount/core/data/contacts/repository/ZeroContactsRepositoryTest.kt:168), subject to resolving the stated behavior conflict.",
+      "**Missing high-value cases:** A genuinely empty address book clearing the remote set, once it can be distinguished from an unavailable read; cancellation propagating through the remote request instead of becoming a network failure; and decoding the returned match hash used to exclude contacts from invitations."
+    ]
+  },
+  "feature_flag_audit_receipt_0ac85_skipped": {
+    "contract_version": "0.1",
+    "verdict": "skipped",
+    "findings": [
+      "The criteria do not require a feature-flagged rollout, the diff contains no feature flag, and the provided repository policy does not require one."
+    ]
+  },
+  "feature_flag_audit_receipt_0ac86": {
+    "contract_version": "0.1",
+    "verdict": "pass",
+    "findings": [
+      "I'll audit the range against the feature-flag policy: first confirm rollout expectation, then scan the diff and repo for any flags.The first pass missed flag hits in the piped diff. I’ll search the range directly for `FeatureFlag`, `KmpKycEnabled`, and related names.A flag does appear in the range, so I’ll inspect `KmpKycEnabled` usage and whether any new flag is added.FEATURE FLAG AUDIT",
+      "Flag name: KmpKycEnabled",
+      "Pattern: Simple Conditional",
+      "[ PASS ] Flag defined in codebase",
+      "[ PASS ] Rollback safe (flag OFF = identical old behavior)",
+      "[ PASS ] Minimal flag checks (not scattered)",
+      "[ PASS ] Legacy code untouched (if applicable)",
+      "[ PASS ] No hybrid states",
+      "[ PASS ] Default value is false",
+      "Issues: None"
+    ]
+  },
+  "criteria_summary_fp5175": {
+    "acceptance_criteria": "Unable to extract criteria. Both connected Linear tools returned \"Could not find referenced Issue\" for [FP-5175](https://linear.app/capmo/issue/FP-5175/android-numeric-keyboard-overlays-mfa-screen), so its description and comments were unavailable.",
+    "non_goals": "",
+    "rollout_expectation": "",
+    "technical_constraints": ""
+  }
+}

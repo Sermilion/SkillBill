@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.persist.blockincident
 import skillbill.engine.diagnostics.block.BlockIncidentAliases
 import skillbill.engine.diagnostics.block.BlockIncidentAliases.withBlockCause
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
+import skillbill.engine.diagnostics.block.FailurePhaseEvidence
 import skillbill.engine.goalrunner.model.GoalRunnerBlockWrite
 import skillbill.engine.goalrunner.model.GoalRunnerBlockWriteResult
 import skillbill.error.core.SkillBillRuntimeException
@@ -21,6 +22,7 @@ internal object WorkflowGoalRunnerHistoricalBlockObservation {
     reference: GoalRunnerAcceptedBlockReference,
     sourceAlias: BlockIncidentAlias?,
     acceptedCause: GoalRunnerAcceptedBlockReference?,
+    failurePhaseEvidence: FailurePhaseEvidence?,
   ): GoalRunnerBlockWriteResult {
     val goalAlias =
       BlockIncidentAliases.goal(
@@ -31,14 +33,20 @@ internal object WorkflowGoalRunnerHistoricalBlockObservation {
         reference.childIncidentToken,
       ).withBlockCause(reference.blockCause)
     val childToken = reference.childIncidentToken
+    val phaseId =
+      when {
+        write.family != WorkflowFamily.TASK_RUNTIME -> null
+        acceptedCause != null -> acceptedCause.blockedStepId
+        failurePhaseEvidence != null -> failurePhaseEvidence.phaseId
+        else -> reference.blockedStepId
+      }
+    val incidentAttempt = reference.attempt.takeIf { phaseId == reference.blockedStepId }
     val observation =
       BlockIncidentObservation(
         workflowId = reference.sourceWorkflowId,
         parentWorkflowId = write.goalParentWorkflowId(),
-        phaseId =
-          (acceptedCause?.blockedStepId ?: reference.blockedStepId)
-            .takeIf { write.family == WorkflowFamily.TASK_RUNTIME },
-        attempt = reference.attempt,
+        phaseId = phaseId,
+        attempt = incidentAttempt,
         reason = write.blockedReason,
         alias = goalAlias,
         linkOccurrenceToken = reference.incidentToken,
@@ -51,7 +59,7 @@ internal object WorkflowGoalRunnerHistoricalBlockObservation {
         exitCode = write.failureExitCode,
         throwableType = write.failureThrowableType,
         exitBehavior = write.blockExitBehavior(),
-        unavailableFields = historicalUnavailableFields(write, reference),
+        unavailableFields = historicalUnavailableFields(write, reference, phaseId, incidentAttempt),
       )
     return GoalRunnerBlockWriteResult(
       reference.blockedStepId,
@@ -68,12 +76,18 @@ internal object WorkflowGoalRunnerHistoricalBlockObservation {
   private fun historicalUnavailableFields(
     write: GoalRunnerBlockWrite,
     reference: GoalRunnerAcceptedBlockReference,
+    phaseId: String?,
+    attempt: Int?,
   ): Map<BlockIncidentCorrelatedField, BlockIncidentFieldAvailability> {
-    val taskRuntime = write.family == WorkflowFamily.TASK_RUNTIME
     return mapOf(
-      BlockIncidentCorrelatedField.PHASE_ID to availableWhen(taskRuntime),
+      BlockIncidentCorrelatedField.PHASE_ID to
+        if (write.family == WorkflowFamily.TASK_RUNTIME && phaseId == null) {
+          BlockIncidentFieldAvailability.NOT_CAPTURED
+        } else {
+          availableWhen(phaseId != null)
+        },
       BlockIncidentCorrelatedField.PHASE_RUN_ID to BlockIncidentFieldAvailability.NOT_APPLICABLE,
-      BlockIncidentCorrelatedField.ATTEMPT to availableWhen(taskRuntime && reference.attempt != null),
+      BlockIncidentCorrelatedField.ATTEMPT to availableWhen(phaseId != null && attempt != null),
       BlockIncidentCorrelatedField.THROWABLE_TYPE to availableWhen(write.failureThrowableType != null),
       BlockIncidentCorrelatedField.EXIT_CODE to availableWhen(write.failureExitCode != null),
       BlockIncidentCorrelatedField.FAILURE_CODE to

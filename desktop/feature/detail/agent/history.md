@@ -1,3 +1,57 @@
+## [2026-11-07] SKILL-518 match plan detail design
+Areas: desktop/feature/detail, desktop/core/designsystem
+- MEDIUM feature. Standalone plans follow the mock's stage strip, merged Now block or blocked callout, Activity, Spec bundle, Transcript and Briefing order. Plan-local headers and the Blocked badge leave other run types unchanged.
+- PlanText provides reusable pure stage, output, path and Activity-summary derivations. Fan-out uses units, waves and activity when its stage record is pending; status copy uses recorded saved/total counts.
+- Activity has counted filters, Follow, sticky reached-stage headers, folded reads, expandable notes and retained file-opening targets. Stage clicks pause Follow and jump to the group; quiet or blocked runs omit the working tail.
+- Spec bundle combines parent files and subtask specs with wave labels and live writing, quiet, blocked and saved states. Parent paths resolve from the report, write activity or the first unit spec's directory.
+- Transcript replaces the output tail and Activity button with a newest-pinned three-line preview and expandable browsing. It prefers readable lines, falls back to raw lines, copies their original text and loads older pages only while expanded.
+- PlanBriefing is a reusable commonMain parser for saved setup, the digest handed to plan and per-stage UTF-8 sizes. Briefing opens as a teaser, retains exact raw text and falls back to raw rows when setup parsing fails.
+- Run-keyed PlanScreenState owns feed, filters, folds and navigation above the lazy list. Activity briefing links expand and scroll to the matching raw row through a screen-owned, replaceable reveal job.
+- SbSpinner gains reusable duration, track-alpha and arc-sweep options with existing defaults preserved; the design system adds a plug icon. Live clocks use the UI ticker, and animations respect reduced motion.
+- Runtime contracts and event sources are unchanged. Older runs cannot gain historical tool events; digest headings remain heuristic, and paths outside known roots remain absolute.
+- Not-started stage cells remain unclickable because the app has no generic toast action. The Now block uses the recorded agent id because no per-stage model name is available.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
+## [2026-11-06] SKILL-510 desktop QA Unblock card
+Areas: desktop/feature/detail; desktop/core/domain; desktop/core/data; runtime-engine work/verify; runtime-ports idestatus models; design/qa-results
+- MEDIUM feature. Goal, standalone and Verify QA results show capability remedies, attempted setup and evidence after untested work and before result folds. Entries appear for incomplete or skipped runs, or recorded untested work.
+- The reusable desktop Unblock parser respects Markdown fences, preserves snippet bodies for copying and shortens displayed tried/remedy paths.
+- Copy for qa.md copies the snippet verbatim. Open qa.md uses the repository-contained default-app opener for `.skill-bill/phases/qa.md`; failure shows a toast, and the app never creates or edits the file.
+- Verify carries the selected saved QA report through runtime ports and desktop models, including skipped runs without parsed QA details. QA_REPORT selection and QA_RECEIPT compatibility remain unchanged.
+- Verify evidence stays names-only while both qa.md actions remain available. Unblock parsing stays in the desktop view, with no report persistence changes.
+- The static QA results mock includes display and app_startup_gate remedies and both actions. The operator must create a missing qa.md file before opening it.
+Feature flag: N/A
+Acceptance criteria: 4/4 subtask criteria implemented; 5/5 parent criteria implemented across runtime and desktop
+
+## [2026-11-06] SKILL-508 validation page with live checks
+Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data, runtime-engine, runtime-ports, runtime-infra
+- Standalone validation detail shows an outcome card, foldable report parts, flagged links and runs on the same branch while retaining activity and run controls.
+- Report shaping and invocation-scoped fold state support expanding and scrolling to flagged parts. reusable
+- Available live checks show progress, outcomes and expandable attempts for the current invocation. Unavailable and older runs retain the report-only layout.
+- Peer runs require matching repository and non-null branch correlation; detached HEAD and missing correlation yield no peers. Other phase layouts and the CLI detail schema remain unchanged.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across runtime and desktop
+
+## [2026-11-06] SKILL-506 Verify run detail and actions
+Areas: desktop/feature/detail, desktop/feature/changes, desktop/feature/chat, desktop/core/domain, desktop/core/data, desktop/core/datastore, desktop/core/ui
+- A Verify document displays run state, outcome, criteria filters, expandable receipts and inline QA. It opens a superseding run and the recorded revision range.
+- Fixable findings and criteria route to a combined chat brief or goal intake. Marks persist per workflow and criterion; marked criteria are excluded from selection.
+- Verify again starts a separate request for the original intake and verified branch. Verify remains report-only and an existing nonblank goal draft is preserved.
+- The reusable QA results view displays Verify evidence as names without file-opening actions because Verify has no QA invocation directory.
+- Parked runs keep existing controls; adjusting intake and discarding are out of scope. QA and validation reported capability_absent.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across runtime and desktop
+
+## [2026-11-05] SKILL-504 QA results view
+Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data; runtime QA results projection
+- Goal and standalone QA share a results section with an app-derived verdict, open findings, retained resources, untested work, folds and target coverage. Live standalone results retain the finding navigation target.
+- Reusable `qaResultsView` projects recorded details into rows and verdicts. Evidence chips use file names, report text shortens supported paths, and fold state is scoped to the run.
+- Untagged and legacy reports show no check counts. Settled standalone result text remains available in Run details when no report exists.
+- Evidence chips require an invocation directory. Path shortening covers the supported roots and stops at whitespace; checklist-only findings may lack observed, expected and steps fields.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across runtime and desktop
+
 ## [2026-11-02] SKILL-457 QA live checklist in desktop detail
 Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data, desktop/core/designsystem, runtime-engine, runtime-ports
 - Standalone QA detail shows recorded targets, plan, step progress, findings, activity and report, with a pager for earlier runs. Runs without a plan show no invented cases or steps.
@@ -51,4 +105,3 @@ Areas: desktop/feature/detail, desktop/core/ui, desktop/app
 - RepositoryWebPages is reusable and reads git configuration without launching git. URL insteadOf rewrites are not resolved.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented
-

@@ -3,12 +3,16 @@ package skillbill.contracts.workflow.identity.status
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
+import skillbill.contracts.persistence.WorkBoardReadModelPayloadKeys
+import skillbill.contracts.work.WorkIncidentWireKeys
 import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
+import skillbill.contracts.workflow.identity.blockincident.BlockIncidentReportKeys
+import skillbill.contracts.workflow.payload.WorkflowTimestampPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 
 const val IDE_STATUS_CONTRACT_VERSION: String = "0.6"
 const val WORK_BOARD_CONTRACT_VERSION: String = "1.2"
-const val WORK_DETAIL_CONTRACT_VERSION: String = "1.3"
+const val WORK_DETAIL_CONTRACT_VERSION: String = "1.9"
 
 object IdeStatusPayloadKeys {
   const val LIFECYCLE_STATE = "lifecycle_state"
@@ -93,6 +97,48 @@ object WorkDetailPayloadKeys {
   const val COMPLETE_COUNT = "complete_count"
   const val PENDING_COUNT = "pending_count"
   const val BLOCKED_COUNT = "blocked_count"
+  const val PLAN_ACTIVITY = "plan_activity"
+  const val OUTPUT_RAW = "raw"
+  const val ACTIVITY_KIND = "kind"
+  const val ACTIVITY_AGENT = "agent_id"
+  const val ACTIVITY_PATH = "path"
+  const val ACTIVITY_DURATION_MS = "duration_ms"
+  const val ACTIVITY_EXIT_CODE = "exit_code"
+  const val PLAN_OUTPUT_LINES = "plan_output_lines"
+  const val OUTPUT_ID = "id"
+  const val OUTPUT_TEXT = "text"
+  const val OUTPUT_AT = "at"
+  const val OUTPUT_SEQUENCE = "sequence"
+  const val PLANNING_WAVES = "waves"
+  const val WAVE_NUMBER = "number"
+  const val WAVE_SUBTASK_IDS = "subtask_ids"
+  const val PLAN_OUTPUT_TAIL = "plan_output_tail"
+  const val PLAN_OUTPUT_UPDATED_AT = "plan_output_updated_at"
+  const val PLANNING_WAVE_NUMBER = "planning_wave_number"
+  const val PLANNING_WAVE_CAPACITY = "planning_wave_capacity"
+  const val PLANNING_WAVE_HISTORY_COMPLETE = "planning_wave_history_complete"
+  const val PLAN_SUBTASK_LATEST_LINES = "plan_subtask_latest_lines"
+  const val STANDALONE_PLAN_PROGRESS = "standalone_plan_progress"
+  const val FEATURE_NAME = DecompositionManifestPayloadKeys.FEATURE_NAME
+  const val PARENT_SPEC_PATH = DecompositionPlanningPayloadKeys.PARENT_SPEC_PATH
+  const val BUNDLE_FILES = "bundle_files"
+  const val PLAN_REPORT = WorkIncidentWireKeys.REPORT
+  const val PLAN_STAGES = "stages"
+  const val PLANNED_SUBTASK_COUNT = DecompositionPlanningPayloadKeys.PLANNED_SUBTASK_COUNT
+  const val TOTAL_SUBTASK_COUNT = DecompositionPlanningPayloadKeys.TOTAL_SUBTASK_COUNT
+  const val CURRENT_PLANNING_SUBTASK_ID = WorkBoardReadModelPayloadKeys.PLANNING_CURRENT_SUBTASK_ID
+  const val PLANNING_WAVE_SUBTASK_IDS = WorkBoardReadModelPayloadKeys.PLANNING_WAVE_SUBTASK_IDS
+  const val BLOCKED_SUBTASK_ID = "blocked_subtask_id"
+  const val STALLED_SINCE = IdeStatusPayloadKeys.STALLED_SINCE
+  const val PLAN_UNITS = "units"
+  const val UNIT_STATE = "state"
+  const val SPEC_PATH = DecompositionPlanningPayloadKeys.SPEC_PATH
+  const val DEPENDS_ON = DecompositionPlanningPayloadKeys.DEPENDS_ON
+  const val STARTED_AT = WorkflowWirePayloadKeys.STARTED_AT
+  const val FIRST_STARTED_AT = WorkflowTimestampPayloadKeys.FIRST_STARTED_AT
+  const val BRIEFING_TEXT = BlockIncidentReportKeys.BRIEFING_TEXT
+  const val LATEST_OUTPUT = "latest_output"
+  const val LATEST_OUTPUT_AT = "latest_output_at"
 }
 
 const val GOAL_PLANNING_WAVE_CAP: Int = 5

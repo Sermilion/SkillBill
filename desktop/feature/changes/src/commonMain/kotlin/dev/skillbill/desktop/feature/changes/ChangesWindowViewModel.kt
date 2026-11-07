@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
+import dev.skillbill.desktop.core.domain.model.ChangeBaseline
 import dev.skillbill.desktop.core.domain.model.ChangeStatus
 import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.CommentAuthor
@@ -192,7 +193,18 @@ class ChangesWindowViewModel(
   private fun DetailState.detailOrNull(): Detail? = (sections as? DetailSections.Loaded)?.detail
 
   private fun setExecutionTarget(detailState: DetailState) {
-    val target = detailState.detailOrNull()?.changeBaseline?.let { executionScopeTarget(detailState.header.id, it) }
+    val detail = detailState.detailOrNull()
+    val verifyRun = detail?.verifyRun
+    val target = if (verifyRun != null) {
+      val root = verifyRun.repoRoot?.takeIf(String::isNotBlank)
+      val base = verifyRun.baseRevision?.takeIf(String::isNotBlank)
+      val head = verifyRun.headRevision?.takeIf(String::isNotBlank)
+      if (root != null && base != null && head != null) {
+        executionScopeTarget(detailState.header.id, ChangeBaseline.CommittedRevisionRange(root, base, head)).copy(committedOnly = true)
+      } else null
+    } else {
+      detail?.changeBaseline?.let { executionScopeTarget(detailState.header.id, it) }
+    }
     if (target == null) clearReads(WindowContent.NoBaseline) else setTarget(target)
   }
 
@@ -245,6 +257,8 @@ class ChangesWindowViewModel(
           editing = if (targetChanged) null else old.editing,
           review = if (targetChanged) ReviewBarUi() else old.review,
           reviewToast = if (targetChanged) null else old.reviewToast,
+          comments = if (targetChanged) DiffCommentsState.Loading else old.comments,
+          threadUi = if (targetChanged) emptyMap() else old.threadUi,
         ),
         list = if (old.scope == effective) old.list else ScopeListUi.Loading,
       )
@@ -692,6 +706,10 @@ class ChangesWindowViewModel(
     val current = state.value
     val file = current.selectedFile ?: return
     val target = current.target ?: return
+    if (target.allBaseline is ChangeBaseline.CommittedRevisionRange) {
+      mutableState.update { if (it.selectedPath == file.path) it.copy(openProblem = HISTORICAL_FILE_NOT_OPENED) else it }
+      return
+    }
     if (file.status == ChangeStatus.Deleted && !target.committedOnly) return
     viewModelScope.launch {
       if (changes.open(target.allBaseline, file) == OpenOutcome.NotOpened) {
@@ -730,7 +748,8 @@ private fun DiffCommentsState.thread(id: String) = (this as? DiffCommentsState.A
 private data class GoalObservationKey(val id: String, val running: Boolean, val goalWorktree: dev.skillbill.desktop.core.domain.model.GoalWorktree?)
 
 internal const val FILE_NOT_OPENED = "Could not open the file. Check that it still exists."
-internal const val REMOVED_WORKTREE_FILE_NOT_OPENED = "The goal's worktree was removed, so this file cannot be opened."
+internal const val REMOVED_WORKTREE_FILE_NOT_OPENED = "The goal's worktree was removed and the main checkout is not on its branch, so this file cannot be opened."
+private const val HISTORICAL_FILE_NOT_OPENED = "This file belongs to a historical revision and is not opened from the current checkout."
 
 private data class QuickKey(val target: ChangeScopeTarget, val running: Boolean)
 

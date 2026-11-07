@@ -49,6 +49,7 @@ import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.feature.chat.newtask.IssuePrefixPicker
+import java.io.File
 import java.io.IOException
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
@@ -57,7 +58,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * The active chat's input. Enter sends and Shift+Enter starts a new line; "Pause and act" shows only while the execution runs.
- * Stop ends the running reply and returns queued messages to the draft; Send now ends the reply and sends the first queued message.
+ * Stop ends the running reply and returns queued messages to the draft; Send now ends the reply and sends the queue as one turn.
  * The input stays editable while a turn runs. Submitting queues a message until the current turn ends.
  * A draft of `/resume` or `/clear` is a command: it shows highlighted and runs even while a turn runs. `/resume` opens the
  * saved-chat picker; `/clear` ends the running turn and starts a new conversation.
@@ -161,7 +162,10 @@ internal fun ChatComposer(
         visualTransformation = CommandHighlight(SkillBillTheme.colors),
       )
       choices?.let { saved ->
-        ResumePicker(saved, workspace.now(), { workspace.resume(id, it) }, { workspace.dismissResume(id) })
+        ResumePalette(
+          saved, workspace.now(), ResumeScope(session.item.branch ?: File(session.item.workingRoot()).name, worktree = true),
+          { session.item.branch }, focus, { workspace.resume(id, it) }, { workspace.dismissResume(id) },
+        )
       }
     }
     if (images.isNotEmpty()) {

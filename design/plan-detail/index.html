@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan detail: unified design</title>
+<!-- Design reference only. Merges design/plan-run (base) with design/plan-activity. Tokens come from the Linear study, which match SkillBillColors. Every scenario is sample data. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../linear-study/ds/tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg-frame); color: var(--fg); font: 400 var(--t-base)/1.45 var(--font-sans); display: flex; flex-direction: column; font-feature-settings: "cv11", "ss01"; }
+  button, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: default; }
+  svg { display: block; flex: none; }
+  .ico { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+  .ico.sm { width: 12px; height: 12px; }
+  :focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 1px; }
+  code { font: 400 var(--t-xs) var(--font-mono); }
+
+  /* Review chrome: not part of the design */
+  .chrome { flex: none; display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; padding: var(--sp-3) var(--sp-4); border-bottom: 1px dashed var(--border-strong); color: var(--fg-muted); font-size: var(--t-sm); }
+  .chrome label { display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; }
+  .chrome select { height: 30px; padding: 0 var(--sp-2); background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--r-sm); }
+
+  .stage { flex: 1; min-height: 0; display: flex; gap: var(--sp-6); padding: var(--sp-3) var(--sp-4) var(--sp-4); overflow: auto; }
+  .column { flex: none; width: 640px; display: flex; flex-direction: column; gap: 6px; min-height: 720px; }
+  .column-label { flex: none; font-size: var(--t-xs); font-weight: 500; color: var(--fg-faint); }
+  .notes { flex: 1 1 380px; min-width: 320px; max-width: 520px; overflow: auto; padding: 18px var(--sp-1) 0; font-size: var(--t-sm); color: var(--fg-muted); }
+  .notes h2 { margin: 0 0 var(--sp-2); font-size: var(--t-sm); font-weight: 500; color: var(--fg); }
+  .notes section + section { margin-top: var(--sp-5); }
+  .notes ul { margin: 0; padding: 0 0 0 var(--sp-4); display: flex; flex-direction: column; gap: 6px; }
+  .notes p { margin: 0 0 var(--sp-2); }
+  .notes code { color: var(--fg-2); }
+  .notes b { color: var(--fg-2); font-weight: 500; }
+
+  /* Details pane */
+  .pane { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: var(--r-lg); overflow: hidden; }
+  .head { flex: none; height: var(--header-h); display: flex; align-items: center; padding: 0 var(--sp-2) 0 var(--sp-4); }
+  .head h1 { margin: 0; font-size: var(--t-base); font-weight: 500; flex: 1; }
+  .iconbtn { width: 26px; height: 26px; display: grid; place-items: center; padding: 0; background: transparent; border: 0; border-radius: var(--r-sm); color: var(--fg-muted); }
+  .iconbtn:hover { background: var(--bg-active); color: var(--fg); }
+  .scroll { flex: 1; min-height: 0; overflow: auto; padding: var(--sp-1) var(--sp-4) var(--sp-6); }
+
+  /* Title and run actions */
+  .title { margin-bottom: var(--sp-4); }
+  .title .key { font: 400 var(--t-xs) var(--font-mono); color: var(--fg-faint); }
+  .title h2 { margin: 2px 0 6px; font-size: var(--t-md); font-weight: 500; }
+  .badges { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--t-xs); color: var(--fg-muted); }
+  .badge { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: var(--r-xs); background: var(--bg-active); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+  .tone-active { color: var(--st-active); }
+  .tone-planning { color: var(--st-planning); }
+  .tone-blocked { color: var(--st-blocked); }
+  .tone-done { color: var(--st-done); }
+  .runbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); }
+  .runbar-note { margin-top: 6px; font-size: var(--t-xs); color: var(--fg-faint); }
+  .kbd { font: 400 var(--t-2xs) var(--font-mono); color: var(--fg-faint); margin-left: 2px; }
+  .btn { height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 var(--sp-3); border-radius: var(--r-sm); font-size: var(--t-sm); border: 1px solid var(--border); background: var(--bg-raised); color: var(--fg-2); }
+  .btn:hover:not(:disabled) { background: var(--bg-overlay); color: var(--fg); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 500; }
+  .btn.primary:hover:not(:disabled) { background: var(--accent-hover); color: var(--accent-fg); }
+  .btn.danger { color: var(--st-failed); }
+  .btn.danger:hover:not(:disabled) { color: var(--st-failed); background: rgba(240, 85, 91, 0.08); }
+  .btn:disabled { opacity: 0.45; }
+
+  /* Stage strip */
+  .stages { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; margin-bottom: var(--sp-3); }
+  .stage-cell { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; background: transparent; border: 0; text-align: left; }
+  .stage-cell:hover { background: var(--bg-hover); }
+  .stage-cell + .stage-cell { border-left: 1px solid var(--border-subtle); }
+  .stage-cell .top { display: flex; align-items: center; gap: 6px; font-size: var(--t-sm); font-weight: 500; color: var(--fg-faint); }
+  .stage-cell .bottom { display: flex; align-items: baseline; gap: 6px; font: 400 var(--t-2xs) var(--font-mono); color: var(--fg-faint); }
+  .stage-cell .bottom .time { margin-left: auto; font-family: var(--font-sans); font-size: var(--t-xs); font-variant-numeric: tabular-nums; }
+  .stage-cell.done .top { color: var(--fg-2); }
+  .stage-cell.done .top .ico { color: var(--st-done); }
+  .stage-cell.now { background: rgba(63, 185, 80, 0.06); }
+  .stage-cell.now .top { color: var(--st-active); }
+  .stage-cell.now .time { color: var(--fg); }
+  .stage-cell.stuck { background: rgba(226, 112, 60, 0.07); }
+  .stage-cell.stuck .top { color: var(--st-blocked); }
+  .ring { width: 11px; height: 11px; border-radius: 50%; border: 1.5px dashed var(--fg-faint); flex: none; }
+  .spin { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid rgba(63, 185, 80, 0.25); border-top-color: var(--st-active); animation: spin 0.9s linear infinite; flex: none; }
+  .spin.stuck { border-color: rgba(226, 112, 60, 0.25); border-top-color: var(--st-blocked); animation-duration: 2.4s; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Now: status sentence, current step and heartbeat in one block */
+  .nowblock { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; margin-bottom: var(--sp-5); border: 1px solid rgba(63,185,80,.22); border-radius: var(--r-md); background: linear-gradient(90deg, rgba(63,185,80,.06), transparent 60%); }
+  .nowblock.quiet { border-color: rgba(226,112,60,.3); background: linear-gradient(90deg, rgba(226,112,60,.07), transparent 60%); }
+  .nowblock.plain { border: 0; background: none; padding: 0; }
+  .nowblock .sentence { font-size: var(--t-md); color: var(--fg); }
+  .nowblock .step { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .nowblock .g { width: 24px; height: 24px; border-radius: var(--r-sm); display: grid; place-items: center; flex: none; background: rgba(63,185,80,.12); color: var(--st-active); }
+  .nowblock.quiet .g { background: rgba(226,112,60,.12); color: var(--st-blocked); }
+  .nowblock .what { flex: 1; min-width: 0; color: var(--fg-2); font-size: var(--t-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nowblock .what code { color: var(--accent-text); }
+  .nowblock .what .sub { color: var(--fg-faint); }
+  .pulse { display: flex; align-items: center; flex-wrap: wrap; gap: 4px var(--sp-3); font-size: var(--t-sm); color: var(--fg-faint); }
+  .pulse .live { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-muted); }
+  .pulse .live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--st-active); box-shadow: 0 0 0 3px rgba(63,185,80,.14); animation: breathe 2.4s ease-in-out infinite; }
+  .pulse .live.stuck { color: var(--st-blocked); font-weight: 500; }
+  .pulse .live.stuck::before { background: var(--st-blocked); box-shadow: none; animation: none; }
+  @keyframes breathe { 50% { box-shadow: 0 0 0 5px rgba(63,185,80,.04); } }
+  .num { font-variant-numeric: tabular-nums; }
+  .pulse .v { color: var(--fg); }
+
+  /* Blocked callout, replaces the Now block */
+  .callout { border: 1px solid rgba(226, 112, 60, 0.4); background: rgba(226, 112, 60, 0.06); border-radius: var(--r-md); padding: 10px var(--sp-3); margin-bottom: var(--sp-5); font-size: var(--t-sm); color: var(--fg-2); }
+  .callout b { display: flex; align-items: center; gap: 6px; font-weight: 500; color: var(--st-blocked); margin-bottom: 4px; }
+  .callout .actions { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .callout code { color: var(--fg); }
+
+  /* Sections */
+  .sec { margin-bottom: var(--sp-5); }
+  .sec-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .sec-head { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; min-height: 26px; margin: 0; padding: 0; background: transparent; border: 0; text-align: left; }
+  .sec-head .chev { color: var(--fg-faint); transition: transform var(--dur-fast) var(--ease); }
+  .sec-head[aria-expanded="false"] .chev { transform: rotate(-90deg); }
+  .sec-head .t { font-size: var(--t-sm); font-weight: 500; color: var(--fg-muted); }
+  .sec-head .c { font-size: var(--t-xs); color: var(--fg-faint); font-variant-numeric: tabular-nums; }
+  .sec-head .sp { flex: 1; }
+  .sec-head:hover .t { color: var(--fg-2); }
+  .tools { display: flex; align-items: center; gap: 2px; }
+  .seg { display: flex; gap: 2px; }
+  .seg button, .ghost { height: 22px; padding: 0 7px; border: 0; border-radius: var(--r-xs); background: transparent; color: var(--fg-faint); font-size: var(--t-xs); display: inline-flex; gap: 5px; align-items: center; }
+  .seg button:hover, .ghost:hover { color: var(--fg-2); background: var(--bg-hover); }
+  .seg button[aria-pressed="true"] { background: var(--bg-active); color: var(--fg); }
+  .seg button .n { color: var(--fg-faint); }
+  .ghost[aria-pressed="true"] { color: var(--st-active); }
+  .box { border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
+
+  /* Activity feed: fixed window, scrolls inside */
+  .feedwrap { position: relative; }
+  .feed { position: relative; --row: 28px; height: calc(var(--row) * 10 + 2px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; border: 1px solid var(--border-subtle); border-radius: var(--r-md); background: rgba(255,255,255,.012); }
+  .jump { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); height: 24px; padding: 0 10px; display: none; align-items: center; gap: 6px; border: 0; border-radius: var(--r-full); background: var(--bg-overlay); box-shadow: var(--shadow-pop); color: var(--fg-2); font-size: var(--t-xs); }
+  .jump.on { display: inline-flex; }
+  .grp { position: sticky; top: 0; z-index: 1; width: 100%; display: flex; align-items: center; gap: 8px; height: var(--row); padding: 0 12px; background: var(--bg-panel); border: 0; border-bottom: 1px solid var(--border-subtle); font-size: var(--t-sm); text-align: left; }
+  .grp .name { color: var(--fg-2); font-weight: 500; }
+  .grp .id { font: 400 var(--t-xs) var(--font-mono); color: var(--fg-faint); }
+  .grp .sum { margin-left: auto; font-size: var(--t-xs); color: var(--fg-faint); }
+  .grp .chev { color: var(--fg-faint); transition: transform var(--dur-fast) var(--ease); }
+  .grp.shut .chev { transform: rotate(-90deg); }
+  .ev { display: grid; grid-template-columns: 62px 16px 1fr auto; align-items: start; gap: 8px; min-height: var(--row); padding: 4px 12px; font-size: var(--t-sm); box-shadow: inset 0 1px 0 var(--border-subtle); }
+  .grp + .ev { box-shadow: none; }
+  .ev:hover { background: var(--bg-hover); }
+  .ev .ts { font: 400 var(--t-xs)/20px var(--font-mono); color: var(--fg-faint); }
+  .ev .k { height: 20px; display: grid; place-items: center; color: var(--fg-faint); }
+  .ev .k.write { color: var(--st-done); }
+  .ev .k.cmd { color: var(--data-3); }
+  .ev .k.mcp { color: var(--data-2); }
+  .ev .k.phase { color: var(--st-active); }
+  .ev .k.err { color: var(--st-blocked); }
+  .ev .x { min-width: 0; line-height: 20px; color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ev.open .x { white-space: normal; }
+  .ev.note, .ev[data-kids] { cursor: pointer; }
+  .ev .x .verb { color: var(--fg-muted); }
+  .ev .x .unit { font: 400 var(--t-xs) var(--font-mono); color: var(--fg-faint); margin-right: 4px; }
+  .ev .x code { color: var(--fg-2); background: var(--bg-inset); padding: 1px 4px; border-radius: 3px; overflow-wrap: anywhere; }
+  .ev .x a { color: var(--accent-text); text-decoration: none; font: 400 var(--t-xs) var(--font-mono); }
+  .ev .x a:hover { text-decoration: underline; }
+  .ev .x .prose { color: var(--fg-2); border-left: 2px solid var(--border); padding-left: 8px; }
+  .ev .x .more { color: var(--fg-faint); font-size: var(--t-xs); }
+  .ev .x .kids { display: none; flex-direction: column; align-items: flex-start; gap: 2px; margin-top: 4px; }
+  .ev.open .x .kids { display: flex; }
+  .ev .dur { font: 400 var(--t-xs)/20px var(--font-mono); color: var(--fg-faint); }
+  .ev.err .x { color: var(--st-blocked); }
+  .ev.phase .x { color: var(--fg-muted); }
+  .ev.live .ts { color: var(--st-active); }
+  .tailrow { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: var(--t-xs); color: var(--fg-faint); box-shadow: inset 0 1px 0 var(--border-subtle); }
+  .tailrow .dots span { display: inline-block; width: 3px; height: 3px; margin-right: 3px; border-radius: 50%; background: var(--st-active); animation: dotp 1.2s infinite; }
+  .tailrow .dots span:nth-child(2) { animation-delay: .2s; } .tailrow .dots span:nth-child(3) { animation-delay: .4s; }
+  @keyframes dotp { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+
+  /* Spec bundle: parent files, then one row per subtask spec */
+  .item + .item { border-top: 1px solid var(--border-subtle); }
+  .row { width: 100%; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 2px var(--sp-2); padding: 8px var(--sp-3); background: transparent; border: 0; text-align: left; color: inherit; }
+  button.row:hover { background: var(--bg-hover); }
+  button.row:focus-visible { outline-offset: -2px; }
+  .row .glyph { padding-top: 3px; display: grid; place-items: start center; }
+  .row-title { font-weight: 500; color: var(--fg-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-title .ref { font: 400 var(--t-sm) var(--font-mono); color: var(--fg-faint); margin-right: 6px; }
+  .row.queued .row-title { color: var(--fg-muted); font-weight: 400; }
+  .row.file .row-title { font: 400 var(--t-xs)/20px var(--font-mono); color: var(--fg-2); }
+  .row.file.pending .row-title { color: var(--fg-faint); }
+  .row-state { font-size: var(--t-xs); white-space: nowrap; padding-top: 1px; display: inline-flex; align-items: center; gap: 6px; color: var(--fg-faint); font-variant-numeric: tabular-nums; }
+  .row-line { grid-column: 2 / 4; display: flex; gap: var(--sp-2); min-width: 0; font-size: var(--t-xs); color: var(--fg-faint); }
+  .row-line .out { font: 400 var(--t-2xs)/18px var(--font-mono); color: var(--fg-muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
+  .row-line .why { color: var(--st-blocked); }
+  .row.writing { background: rgba(63, 185, 80, 0.03); }
+  .row.blocked { background: rgba(226, 112, 60, 0.05); }
+  .divider { padding: 6px var(--sp-3); font-size: var(--t-2xs); font-weight: 500; letter-spacing: .02em; color: var(--fg-faint); background: var(--bg-inset); border-top: 1px solid var(--border-subtle); }
+  .hint { padding: 12px var(--sp-3); font-size: var(--t-sm); color: var(--fg-faint); display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border-subtle); }
+  .ghostbar { height: 10px; border-radius: var(--r-xs); background: var(--bg-active); }
+
+  /* Transcript: collapsed preview, expands in place */
+  .transcript { background: var(--bg-inset); font: 400 var(--t-2xs)/1.75 var(--font-mono); color: var(--fg-muted); padding: 8px var(--sp-3) 10px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  .transcript.short { height: calc(1.75em * 3 + 18px); }
+  .transcript.long { height: 340px; }
+  .transcript div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .transcript.long div { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .transcript .t { color: var(--fg-faint); margin-right: 8px; }
+  .transcript div:last-child { color: var(--fg-2); }
+  .expand { width: 100%; height: 28px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-top: 1px solid var(--border-subtle); background: transparent; color: var(--fg-faint); font-size: var(--t-xs); }
+  .expand:hover { background: var(--bg-hover); color: var(--fg-2); }
+
+  /* Briefing */
+  .bpart { padding: 10px var(--sp-3) 12px; }
+  .kv { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 6px var(--sp-3); margin: 0; font-size: var(--t-sm); }
+  .kv dt { color: var(--fg-faint); }
+  .kv dd { margin: 0; color: var(--fg-2); min-width: 0; }
+  .kv dd .sep { color: var(--fg-faint); margin: 0 6px; }
+  .kv dd.faint { color: var(--fg-faint); }
+  .kv a, .link { color: var(--accent-text); text-decoration: none; font: 400 var(--t-xs) var(--font-mono); background: none; border: 0; padding: 0; }
+  .kv a:hover, .link:hover { text-decoration: underline; }
+  .acs { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .acs li { display: grid; grid-template-columns: 52px 1fr; gap: 6px; }
+  .acs .id { font: 400 var(--t-xs)/20px var(--font-mono); color: var(--fg-faint); }
+  .bfold { width: 100%; display: grid; grid-template-columns: 14px auto minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); padding: 8px var(--sp-3); background: transparent; border: 0; border-top: 1px solid var(--border-subtle); text-align: left; font-size: var(--t-sm); }
+  .bfold:hover { background: var(--bg-hover); }
+  .bfold .chev { color: var(--fg-faint); transition: transform var(--dur-fast) var(--ease); transform: rotate(-90deg); }
+  .bfold[aria-expanded="true"] .chev { transform: none; }
+  .bfold .name { color: var(--fg-2); font-weight: 500; white-space: nowrap; }
+  .bfold .name.mono { font: 400 var(--t-xs) var(--font-mono); }
+  .bfold .preview { color: var(--fg-faint); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .bfold[aria-expanded="true"] .preview { visibility: hidden; }
+  .bfold .meta { color: var(--fg-faint); font-size: var(--t-xs); font-variant-numeric: tabular-nums; }
+  .bfold.off { cursor: default; }
+  .bfold.off:hover { background: transparent; }
+  .bfold.off .name { color: var(--fg-faint); font-weight: 400; }
+  .bbody { padding: 0 var(--sp-3) 10px 34px; font-size: var(--t-sm); color: var(--fg-2); }
+  .bbody p { margin: 0 0 6px; }
+  .bbody ul { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 3px; }
+  .bbody code { color: var(--fg-2); background: var(--bg-inset); padding: 1px 4px; border-radius: 3px; }
+  .raw { margin: 0 var(--sp-3) 10px; border: 1px solid var(--border-subtle); border-radius: var(--r-sm); }
+  .raw .transcript { height: 220px; white-space: pre; }
+  .raw .transcript div { white-space: pre; overflow: visible; }
+  .raw-bar { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-top: 1px solid var(--border-subtle); }
+  .raw-bar .note { flex: 1; font-size: var(--t-xs); color: var(--fg-faint); padding-left: 4px; }
+  .ev .x .blink { margin-left: 6px; }
+
+  /* Briefing teaser: the collapsed state */
+  .bteaser { position: relative; width: 100%; display: flex; flex-direction: column; gap: 12px; padding: 12px var(--sp-3) 34px; border: 1px solid var(--border); border-radius: var(--r-md); background: linear-gradient(180deg, rgba(130,140,255,.05), transparent 70%); text-align: left; overflow: hidden; max-height: 236px; }
+  .bteaser:hover { border-color: var(--border-strong); }
+  .bteaser:hover .cta { color: var(--fg); }
+  .flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .flow .st { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .flow .st .lab { display: flex; align-items: baseline; gap: 6px; font: 400 var(--t-xs) var(--font-mono); color: var(--fg-2); }
+  .flow .st .lab .kb { margin-left: auto; font-family: var(--font-sans); color: var(--fg-faint); font-variant-numeric: tabular-nums; }
+  .flow .st.none .lab { color: var(--fg-faint); }
+  .bar { height: 6px; display: flex; gap: 2px; border-radius: 3px; background: var(--bg-inset); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 3px; }
+  .bar .setup { background: var(--fg-faint); opacity: .55; }
+  .bar .dig { background: var(--st-done); }
+  .bar.empty { background: repeating-linear-gradient(90deg, var(--border) 0 4px, transparent 4px 8px); }
+  .legend { display: flex; gap: var(--sp-3); font-size: var(--t-2xs); color: var(--fg-faint); }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend i { width: 8px; height: 4px; border-radius: 2px; display: block; }
+  .facts { display: flex; flex-direction: column; gap: 6px; font-size: var(--t-sm); color: var(--fg-2); }
+  .facts .f { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; align-items: start; }
+  .facts .f .ico { margin-top: 3px; color: var(--fg-faint); }
+  .facts .f.risk .ico { color: var(--st-blocked); }
+  .facts .f.code .ico { color: var(--st-done); }
+  .facts .f .k { color: var(--fg-faint); }
+  .facts code { background: var(--bg-inset); padding: 1px 4px; border-radius: 3px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 5px; }
+  .pill { height: 20px; padding: 0 7px; display: inline-flex; align-items: center; border-radius: var(--r-xs); background: var(--bg-active); color: var(--fg-muted); font-size: var(--t-2xs); }
+  .pill.strong { color: var(--fg-2); }
+  .bteaser .fade { position: absolute; left: 0; right: 0; bottom: 0; height: 52px; background: linear-gradient(180deg, transparent, var(--bg-panel) 70%); pointer-events: none; }
+  .bteaser .cta { position: absolute; left: var(--sp-3); bottom: 9px; display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-xs); color: var(--fg-muted); }
+
+  .toast { position: fixed; right: var(--sp-5); bottom: var(--sp-5); max-width: 420px; padding: var(--sp-2) var(--sp-3); background: var(--bg-overlay); border: 1px solid var(--border-strong); border-radius: var(--r-md); box-shadow: var(--shadow-pop); font-size: var(--t-sm); color: var(--fg-2); overflow-wrap: anywhere; opacity: 0; pointer-events: none; transition: opacity var(--dur) var(--ease); }
+  .toast.on { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .spin, .pulse .live::before, .tailrow .dots span { animation: none; } }
+</style>
+</head>
+<body>
+<div class="chrome">
+  <label>Scenario <select id="scenario"></select></label>
+  <label><input type="checkbox" id="nostream"> Agent without a structured stream</label>
+</div>
+<div class="stage">
+  <div class="column">
+    <div class="column-label" id="source">Unified · sample data</div>
+    <div class="pane">
+      <div class="head">
+        <h1>Details</h1>
+        <button type="button" class="iconbtn" aria-label="Close details"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="scroll" id="pane"></div>
+    </div>
+  </div>
+  <aside class="notes" id="notes"></aside>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const PATHS = {
+  chev: '<path d="M6 9l6 6 6-6"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
+  read: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+  write: '<path d="M15.5 4.5l4 4L9 19H5v-4z"/>',
+  search: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
+  cmd: '<path d="M5 7l5 5-5 5M12 18h7"/>',
+  note: '<path d="M4 5h16v11H10l-4 3.5V16H4z"/>',
+  mcp: '<path d="M9 3v4M15 3v4M7 7h10v4a5 5 0 0 1-10 0zM12 16v5"/>',
+  phase: '<path d="M7 5l12 7-12 7z"/>',
+  warn: '<path d="M12 4l9 16H3z"/><path d="M12 10v4"/><path d="M12 17h.01"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
+  open: '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
+  copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+  play: '<path d="M7 5l12 7-12 7z"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+};
+const icon = (name, cls = '') => `<svg class="ico ${cls}" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name]}</svg>`;
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const inline = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+
+const BUNDLE = 'specs/DEMO-7-live-plan-progress/';
+const START = 14 * 3600 + 1 * 60 + 43; /* 14:01:43 */
+const STAGES = [
+  { id: 'preplan', label: 'Reading the repo', agent: 'claude · sonnet' },
+  { id: 'plan', label: 'Splitting the work', agent: 'claude · opus' },
+  { id: 'plan_subtasks', label: 'Writing subtask specs', agent: 'claude · opus' },
+];
+const SUBTASKS = [
+  { id: 1, name: 'Project the planning snapshot for standalone plan runs', slug: 'planning-snapshot' },
+  { id: 2, name: 'Expose the decomposition manifest once plan settles', slug: 'manifest-read' },
+  { id: 3, name: 'Keep the latest output line per planning unit', slug: 'unit-output-line' },
+  { id: 4, name: 'Map planning stages and units into the desktop model', slug: 'desktop-model' },
+  { id: 5, name: 'Render the stage strip and live status line', slug: 'stage-strip' },
+  { id: 6, name: 'Render the spec bundle with per-unit states', slug: 'bundle-rows' },
+  { id: 7, name: 'Open saved specs and implement from the bundle', slug: 'open-and-implement' },
+];
+const specPath = (id) => `${BUNDLE}spec_subtask_${id}_${SUBTASKS[id - 1].slug}.md`;
+/* Briefing data follows the real launch briefing layout: layer 1 run invariants (identical in every stage),
+   layer 2 upstream projections (for plan: the preplan digest), layer 3 derived context. */
+const RUN = {
+  size: 'MEDIUM',
+  ceremony: ['preplan full', 'review branch diff', 'audit per criterion'],
+  mandates: [],
+  acs: [
+    'The detail screen shows the current planning stage, with the time spent in each stage.',
+    'While a plan runs, the screen shows the latest agent step and how long ago the agent last produced output.',
+    'Each subtask spec appears with its state (queued, writing, saved, blocked) as soon as the manifest is saved.',
+    'Saved specs open from the detail screen, and Implement turns on when every spec is saved.',
+  ],
+};
+const DIGEST = [
+  ['Mode and sizing', 'MEDIUM, decomposed. One intake covers four outcomes across runtime, contracts and desktop.', ['Runtime: project the planning snapshot for standalone plans and keep the latest line per unit.', 'Contracts: expose stage times, the manifest and unit states on the work detail read.', 'Desktop: map the new fields and render them. Specs must stay independent of each other.']],
+  ['Current code (verified by reading)', '7 files read: PlanFanOutStrategy, UnitAttributedOutputSink, GoalPlanningStatusSnapshot, DetailScreen, …', ['`PlanFanOutStrategy` runs subtask specs in waves of 5.', '`UnitAttributedOutputSink` already prefixes each line with `[subtask N]`.', 'Standalone plan runs get `planning = null`, so the desktop sees nothing until the report lands.']],
+  ['Risks', 'Subtasks 2 and 4 both touch the planning fields in RuntimeWorkMapper.', ['Two subtasks may rewrite the same mapper fields. Keep the field list in subtask 4 only.', 'A new column needs a named migration and a DesktopReadSchema bump.']],
+  ['Not read', 'ChatComposer, ShellFrame and the terminal resize UI were not opened.', ['No tracker tools were called.', 'The plan may need one targeted read of RuntimeWorkMapper to settle field ownership.']],
+];
+const BRIEFS = [
+  { stage: 'preplan', size: '3.4 KB', from: 0, layers: 'run setup only' },
+  { stage: 'plan', size: '19.6 KB', from: 1, layers: 'run setup + preplan digest' },
+  { stage: 'plan_subtasks', size: null, from: 2, layers: 'the runtime did not save one' },
+];
+function rawBriefing(stage) {
+  const lines = ['# Feature-task-runtime phase briefing', `phase: ${stage}`, '', '## Run invariants (layer 1, unconditional)', `spec_reference: ${BUNDLE}spec.md`, `feature_size: ${RUN.size}`, 'ceremony_scaling:', '  preplan_ceremony: full', '  review_scope: branch_diff', '  audit_ceremony: full_per_criterion', 'acceptance_criteria:', ...RUN.acs.map((a, i) => `  AC-00${i + 1}. ${a}`), 'mandates_and_overrides:', '  (none)', ''];
+  if (stage === 'plan') {
+    lines.push('## Upstream projections (layer 2, declared and validated)', '### from: preplan', 'value:', '```', 'PREPLAN DIGEST DEMO-7 (Live plan progress on the detail screen).');
+    DIGEST.forEach(([h, , items]) => { lines.push('', h.toUpperCase(), ...items.map((x) => '- ' + x.replace(/`/g, ''))); });
+    lines.push('```', '### run_invariant_spec_reference …', '(repeats layer 1)', '');
+  }
+  lines.push('## Derived context (layer 3, declared)', '(none)');
+  return lines;
+}
+
+/* Events: [offset s, stage, kind, verb, text, subtask, dur, kids]. Each maps to one stream-json tool_use, assistant text block or runtime phase event. */
+const BASE = [
+  [0, 0, 'phase', 'Phase started', ''],
+  [6, 0, 'read', 'Read', 'intake/DEMO-7-live-plan-progress.md', null, '0.1s'],
+  [19, 0, 'search', 'Searched', '"planningProgress" in desktop/core · 9 matches', null, '0.4s'],
+  [31, 0, 'read', 'Read', 'desktop/feature/detail/…/DetailScreen.kt', null, '0.1s', ['desktop/feature/detail/…/RunActions.kt', 'desktop/feature/detail/…/PlanStatus.kt', 'desktop/core/data/…/RuntimeWorkMapper.kt']],
+  [58, 0, 'read', 'Read', 'runtime-engine/…/plan/PlanFanOutStrategy.kt', null, '0.1s'],
+  [95, 0, 'cmd', 'Ran', 'git log --oneline -8 -- runtime-engine/…/plan', null, '0.3s'],
+  [124, 0, 'read', 'Read', 'runtime-domain/…/GoalPlanningStatusSnapshot.kt', null, '0.1s'],
+  [150, 0, 'note', '', 'Standalone plan runs get planning = null today, so the desktop has nothing to show until the report lands. The snapshot, the manifest and the [subtask N] prefix can each be read on their own.'],
+  [182, 0, 'mcp', 'Settled', 'feature_task_phase_complete · decomposed', null, '0.2s'],
+  [184, 0, 'phase', 'Phase finished', ''],
+  [185, 1, 'phase', 'Phase started', ''],
+  [201, 1, 'read', 'Read', 'memory/specs-must-be-independent.md', null, '0.1s'],
+  [262, 1, 'read', 'Read', 'runtime-infra/…/UnitAttributedOutputSink.kt', null, '0.1s'],
+  [407, 1, 'note', '', 'Draft: 7 subtasks, 3 of them independent of the rest of the plan.'],
+  [432, 1, 'write', 'Wrote', BUNDLE + 'spec.md', null, '0.1s'],
+  [446, 1, 'search', 'Searched', '"bundleFiles" in desktop · 4 matches', null, '0.3s'],
+  [492, 1, 'write', 'Wrote', BUNDLE + 'decomposition-manifest.yaml', null, '0.1s'],
+  [520, 1, 'note', '', 'Subtask 4 maps the new fields; 5 to 7 render them. Each spec stands on the current tree.'],
+  [536, 1, 'phase', 'Phase finished', ''],
+  [537, 2, 'phase', 'Phase started', 'wave 1 · subtasks 1 to 5'],
+  [545, 2, 'read', 'Read', 'runtime-domain/…/GoalPlanningStatusSnapshot.kt', 1, '0.1s'],
+  [560, 2, 'read', 'Read', 'runtime-engine/…/DecompositionManifestReader.kt', 2, '0.1s'],
+  [571, 2, 'read', 'Read', 'runtime-infra/…/UnitAttributedOutputSink.kt', 3, '0.1s'],
+  [580, 2, 'read', 'Read', 'core/data/…/RuntimeWorkMapper.kt', 4, '0.1s'],
+  [592, 2, 'read', 'Read', 'feature/detail/…/PlanStatus.kt', 5, '0.1s'],
+  [645, 2, 'write', 'Wrote', specPath(1), 1, '0.1s'],
+  [661, 2, 'cmd', 'Ran', './gradlew :desktop:core:data:compileKotlinJvm --dry-run', 3, '4.1s'],
+  [678, 2, 'write', 'Wrote', specPath(2), 2, '0.1s'],
+  [690, 2, 'note', '', 'Draft: stage strip replaces the pipeline pills', 5],
+  [695, 2, 'note', '', 'Write acceptance criteria for the [subtask N] line buffer', 3],
+  [722, 2, 'write', 'Wrote', specPath(3), 3, '0.1s'],
+];
+const AFTER_BLOCKED = [
+  [760, 2, 'write', 'Wrote', specPath(5), 5, '0.1s'],
+  [801, 2, 'search', 'Searched', '"planningFields" in core/data · 3 matches', 4, '0.2s'],
+  [880, 2, 'note', '', 'Subtasks 2 and 4 both rewrite the planning fields in RuntimeWorkMapper. The manifest says 4 depends only on 1, 2 and 3.', 4],
+  [916, 2, 'err', 'Blocked', 'overlaps subtask 2 on RuntimeWorkMapper planning fields', 4],
+];
+const AFTER_DONE = [
+  [757, 2, 'write', 'Wrote', specPath(4), 4, '0.1s'],
+  [760, 2, 'write', 'Wrote', specPath(5), 5, '0.1s'],
+  [761, 2, 'phase', 'Wave started', 'wave 2 · subtasks 6 and 7'],
+  [770, 2, 'read', 'Read', 'feature/detail/…/PlanDocument.kt', 6, '0.1s'],
+  [776, 2, 'read', 'Read', 'feature/detail/…/RunActions.kt', 7, '0.1s'],
+  [872, 2, 'write', 'Wrote', specPath(7), 7, '0.1s'],
+  [890, 2, 'write', 'Wrote', specPath(6), 6, '0.1s'],
+  [1066, 2, 'mcp', 'Settled', 'feature_task_phase_complete · 7 specs saved', null, '0.2s'],
+  [1068, 2, 'phase', 'Phase finished', ''],
+];
+
+/* states: q queued, w writing, s saved, b blocked */
+const SCENARIOS = [
+  { id: 'preplan', label: '2 min in: reading the repo', stage: 0, times: [128, null, null], elapsed: 128, running: true, events: BASE, states: null, wave: null },
+  { id: 'plan', label: '7 min in: splitting the work', stage: 1, times: [184, 236, null], elapsed: 420, running: true, events: BASE, states: null, wave: null },
+  { id: 'wave', label: '11 min in: first wave writing', stage: 2, times: [184, 352, 162], elapsed: 698, running: true, events: BASE, states: 'sswwwqq', wave: 'wave 1 of 2' },
+  { id: 'stalled', label: 'Agent went quiet', stage: 2, times: [184, 352, 540], elapsed: 1076, running: true, stuck: true, events: BASE, states: 'ssswwqq', wave: 'wave 1 of 2' },
+  { id: 'blocked', label: 'A subtask is blocked', stage: 2, times: [184, 352, 380], elapsed: 916, running: false, blocked: true, events: BASE.concat(AFTER_BLOCKED), states: 'sssbsqq', wave: 'wave 2 waits' },
+  { id: 'done', label: 'Finished: plan ready', stage: 3, times: [184, 352, 532], elapsed: 1068, running: false, events: BASE.concat(AFTER_DONE), states: 'sssssss', wave: null },
+];
+
+const state = { scenario: SCENARIOS[2], tick: 0, filter: 'all', follow: true, shut: new Set(), open: new Set(['activity', 'bundle', 'transcript']), transcriptLong: false, feedScroll: 0 };
+
+function clock(sec) { const m = Math.floor(sec / 60), s = sec % 60; return m ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`; }
+function at(off) { const t = START + off; const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = t % 60; return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':'); }
+function fileName(path) { return path.slice(path.lastIndexOf('/') + 1); }
+function tick(base, s, prefix = '') { return s.running ? `<span data-live="${base}" data-prefix="${esc(prefix)}">${esc(prefix)}${clock(base + state.tick)}</span>` : esc(prefix) + clock(base); }
+function events(s) { return s.events.filter((e) => e[0] <= s.elapsed); }
+function nostream() { return document.getElementById('nostream').checked; }
+function visible(e) { return !nostream() || e[2] === 'phase' || e[2] === 'write' || e[2] === 'err'; }
+function lastOutput(s) { const ev = events(s); return ev.length ? ev[ev.length - 1][0] : 0; }
+function quietFor(s) { return s.elapsed - lastOutput(s); }
+function units(s) { return s.states ? SUBTASKS.map((t, i) => ({ ...t, state: s.states[i] })) : null; }
+function unitEvents(s, id) { return events(s).filter((e) => e[5] === id); }
+
+function titleBlock(s) {
+  let badge = '<span class="badge tone-planning"><span class="dot"></span>Planning</span>';
+  if (s.blocked) badge = '<span class="badge tone-blocked"><span class="dot"></span>Blocked</span>';
+  else if (s.stage === 3) badge = '<span class="badge tone-done"><span class="dot"></span>Plan ready</span>';
+  const ready = s.stage === 3;
+  const buttons = [];
+  if (s.blocked) {
+    buttons.push(`<button type="button" class="btn" data-act="toast" data-arg="Resumes the plan run">${icon('play', 'sm')}Resume<span class="kbd">R</span></button>`);
+    buttons.push('<button type="button" class="btn" data-act="toast" data-arg="Opens the agent menu">Agent: claude</button>');
+  }
+  buttons.push(`<button type="button" class="btn ${ready ? 'primary' : ''}" ${ready ? '' : 'disabled'} data-act="toast" data-arg="Starts the goal from this plan">${icon('play', 'sm')}Implement</button>`);
+  if (!ready) buttons.push(`<button type="button" class="btn danger" data-act="toast" data-arg="Cancels the plan run">${icon('x', 'sm')}Cancel</button>`);
+  return `<div class="title">
+    <div class="key">DEMO-7 · plan</div>
+    <h2>Live plan progress on the detail screen</h2>
+    <div class="badges">${badge}<span>Opus 5.5 · high effort</span></div>
+    <div class="runbar">${buttons.join('')}</div>${ready ? '' : '<div class="runbar-note">Implement turns on when every spec is saved</div>'}
+  </div>`;
+}
+
+/* The strip owns stage status and time. Clicking a cell scrolls the feed to that stage. */
+function stageStrip(s) {
+  return `<div class="stages">${STAGES.map((st, i) => {
+    const done = i < s.stage, now = i === s.stage, stuck = now && (s.stuck || s.blocked);
+    let glyph = '<span class="ring"></span>';
+    if (done) glyph = icon('check');
+    else if (now && s.blocked) glyph = `<span class="tone-blocked">${icon('warn', 'sm')}</span>`;
+    else if (now) glyph = `<span class="spin ${s.stuck ? 'stuck' : ''}"></span>`;
+    const t = s.times[i];
+    const time = t == null ? '' : now ? tick(t, s) : clock(t);
+    return `<button type="button" class="stage-cell ${done ? 'done' : ''} ${now && !stuck ? 'now' : ''} ${stuck ? 'stuck' : ''}" data-act="stage" data-arg="${st.id}" title="Show ${esc(st.label)} in Activity">
+      <span class="top">${glyph}${esc(st.label)}</span>
+      <span class="bottom">${esc(st.id)}<span class="time">${time}</span></span>
+    </button>`;
+  }).join('')}</div>`;
+}
+
+function sentence(s) {
+  const u = units(s);
+  if (s.stage === 0) return 'Reading the repository and the intake before it splits the work.';
+  if (s.stage === 1) return 'Splitting the work into subtasks. Their specs appear in the bundle once the manifest is saved.';
+  const saved = u.filter((t) => t.state === 's').length;
+  if (s.stage === 3) return `Plan ready. ${u.length} subtasks, all specs saved.`;
+  const writing = u.filter((t) => t.state === 'w').map((t) => t.id);
+  const range = writing.length > 1 ? `subtasks ${writing[0]} to ${writing[writing.length - 1]}` : `subtask ${writing[0]}`;
+  return `Writing specs for ${range}. ${saved} of ${u.length} saved.`;
+}
+
+/* One block answers "what now" and "is it alive": status sentence, latest step, heartbeat and elapsed. */
+function nowBlock(s) {
+  if (s.blocked) {
+    return `<div class="callout"><b>${icon('warn', 'sm')}Subtask 4 needs your decision</b>${inline('Planning stopped at subtask 4. Subtasks 2 and 4 both rewrite the planning fields in `RuntimeWorkMapper`, and the manifest says 4 depends only on 1, 2 and 3.')}
+      <div class="actions"><button type="button" class="btn" data-act="toast" data-arg="Reruns the spec writer for subtask 4">Retry subtask 4</button><button type="button" class="btn" data-act="toast" data-arg="Opens the incident with recovery options">Open incident</button></div></div>`;
+  }
+  if (s.stage === 3) {
+    return `<div class="nowblock plain"><div class="sentence">${esc(sentence(s))}</div><div class="pulse"><span>Total <span class="v num">${clock(s.elapsed)}</span></span><span>finished 14:19</span></div></div>`;
+  }
+  const quiet = s.stuck;
+  const ev = events(s).filter(visible).filter((e) => e[2] !== 'phase');
+  const last = ev[ev.length - 1];
+  let step;
+  if (quiet) step = `<span class="g">${icon('clock', 'sm')}</span><span class="what">Last step ${last[5] ? `<span class="sub">#${last[5]} ·</span> ` : ''}${esc(last[3].toLowerCase())} <code>${esc(fileName(last[4]))}</code> <span class="sub">at ${at(last[0])}</span></span>`;
+  else if (nostream()) step = `<span class="g">${icon('clock', 'sm')}</span><span class="what">This agent does not stream its steps. Saved files appear as they land.</span>`;
+  else {
+    const what = last[2] === 'note' ? esc(last[4]) : `${esc(last[3])} <code>${esc(last[2] === 'write' || last[2] === 'read' ? fileName(last[4]) : last[4])}</code>`;
+    step = `<span class="g">${icon(last[2] === 'err' ? 'warn' : last[2], 'sm')}</span><span class="what">${last[5] ? `<span class="sub">#${last[5]} ·</span> ` : ''}${what}</span>`;
+  }
+  const beat = quiet
+    ? `<span class="live stuck">No output for ${clock(quietFor(s) + state.tick)}</span>`
+    : `<span class="live">Last output ${clock(quietFor(s) % 15)} ago</span>`;
+  return `<div class="nowblock ${quiet ? 'quiet' : ''}">
+    <div class="sentence">${esc(sentence(s))}</div>
+    <div class="step">${step}</div>
+    <div class="pulse">${beat}<span>Elapsed <span class="v num">${tick(s.elapsed, s)}</span></span><span>${STAGES[Math.min(s.stage, 2)].agent}</span></div>
+  </div>`;
+}
+
+function secHead(key, title, count, tools = '') {
+  const open = state.open.has(key);
+  return `<div class="sec-bar"><button type="button" class="sec-head" aria-expanded="${open}" data-act="sec" data-arg="${key}">${icon('chev', 'sm chev')}<span class="t">${esc(title)}</span><span class="c">${esc(count)}</span><span class="sp"></span></button>${open ? tools : ''}</div>`;
+}
+
+function evRow(e, s) {
+  const [off, , kind, verb, text, sub, dur, kids] = e;
+  const f = state.filter;
+  if (f === 'files' && !['read', 'write', 'search'].includes(kind)) return '';
+  if (f === 'cmds' && !['cmd', 'mcp'].includes(kind)) return '';
+  if (f === 'notes' && kind !== 'note') return '';
+  if (!visible(e)) return '';
+  const unit = sub ? `<span class="unit">#${sub}</span>` : '';
+  let body;
+  if (kind === 'note') body = `${unit}<span class="prose">${esc(text)}</span>`;
+  else if (kind === 'phase') {
+    const brief = verb === 'Phase started' && BRIEFS[e[1]].size;
+    body = `${esc(verb)}${text ? ` <span class="verb">· ${esc(text)}</span>` : ''}${brief ? `<button type="button" class="link blink" data-act="brief" data-arg="${STAGES[e[1]].id}">briefing</button>` : ''}`;
+  }
+  else if (kind === 'write') body = `${unit}<span class="verb">${esc(verb)}</span> <a href="#" data-act="file" data-arg="${esc(text)}">${esc(fileName(text))}</a>`;
+  else if (kind === 'err') body = `${unit}${esc(verb)} <span class="verb">· ${esc(text)}</span>`;
+  else body = `${unit}<span class="verb">${esc(verb)}</span> <code>${esc(text)}</code>`;
+  if (kids) body += ` <span class="more">+${kids.length} more files</span><span class="kids">${kids.map((k) => `<code>${esc(k)}</code>`).join('')}</span>`;
+  const isLast = s.running && off === lastOutput(s);
+  const glyph = kind === 'search' ? 'search' : kind === 'err' ? 'warn' : kind;
+  return `<div class="ev ${kind}${kind === 'err' ? ' err' : ''}${isLast ? ' live' : ''}"${kids ? ' data-kids' : ''}><span class="ts">${at(off)}</span><span class="k ${kind === 'search' ? '' : kind}">${icon(glyph, 'sm')}</span><span class="x">${body}</span><span class="dur">${dur || ''}</span></div>`;
+}
+
+function summary(list) {
+  const c = (k) => list.filter((e) => e[2] === k).reduce((n, e) => n + 1 + (e[7] ? e[7].length : 0), 0);
+  const parts = [];
+  if (c('read')) parts.push(`${c('read')} read`);
+  if (c('search')) parts.push(`${c('search')} searched`);
+  if (c('write')) parts.push(`${c('write')} written`);
+  if (c('cmd') + c('mcp')) parts.push(`${c('cmd') + c('mcp')} commands`);
+  return parts.join(' · ');
+}
+
+/* Group headers carry only name, id and counts. Status and time live in the strip above. */
+function activity(s) {
+  const all = events(s).filter(visible);
+  const count = (pred) => all.filter(pred).length;
+  const tools = `<div class="tools">
+    <div class="seg" role="group" aria-label="Filter">
+      <button type="button" data-act="filter" data-arg="all" aria-pressed="${state.filter === 'all'}">All</button>
+      <button type="button" data-act="filter" data-arg="files" aria-pressed="${state.filter === 'files'}">Files <span class="n">${count((e) => ['read', 'write', 'search'].includes(e[2]))}</span></button>
+      <button type="button" data-act="filter" data-arg="cmds" aria-pressed="${state.filter === 'cmds'}">Commands <span class="n">${count((e) => ['cmd', 'mcp'].includes(e[2]))}</span></button>
+      <button type="button" data-act="filter" data-arg="notes" aria-pressed="${state.filter === 'notes'}">Notes <span class="n">${count((e) => e[2] === 'note')}</span></button>
+    </div>
+    <button type="button" class="ghost" data-act="follow" aria-pressed="${state.follow}">${icon('down', 'sm')}Follow</button>
+  </div>`;
+  const reached = STAGES.filter((_, i) => i <= Math.min(s.stage, 2));
+  const groups = reached.map((st, i) => {
+    const list = all.filter((e) => e[1] === i);
+    const shut = state.shut.has(st.id);
+    return `<div id="anc-${st.id}"></div><button type="button" class="grp${shut ? ' shut' : ''}" data-act="grp" data-arg="${st.id}">${icon('chev', 'sm chev')}<span class="name">${esc(st.label)}</span><span class="id">${st.id}</span><span class="sum">${nostream() ? '' : summary(list)}</span></button>${shut ? '' : list.map((e) => evRow(e, s)).join('')}`;
+  }).join('');
+  const tail = s.running && !s.stuck ? '<div class="tailrow"><span class="dots"><span></span><span></span><span></span></span>Agent is working</div>' : '';
+  const body = state.open.has('activity')
+    ? `<div class="feedwrap"><div class="feed" id="feed">${groups}${tail}</div><button type="button" class="jump" id="jump" data-act="jump">${icon('down', 'sm')}Jump to latest</button></div>`
+    : '';
+  return `<div class="sec">${secHead('activity', 'Activity', `${all.length} events`, tools)}${body}</div>`;
+}
+
+/* One section for every file the plan writes. Subtask rows carry the live state that used to live in a separate Subtasks section. */
+function bundle(s) {
+  const ev = events(s);
+  const wrote = (name) => ev.some((e) => e[2] === 'write' && fileName(e[4]) === name);
+  const parent = ['spec.md', 'decomposition-manifest.yaml'].map((name) => {
+    const saved = wrote(name);
+    const inner = `<span class="glyph">${saved ? `<span class="tone-done">${icon('check', 'sm')}</span>` : '<span class="ring"></span>'}</span>
+      <span class="row-title">${esc(name)}</span><span class="row-state">${saved ? icon('open', 'sm') : 'not yet'}</span>`;
+    return saved
+      ? `<div class="item"><button type="button" class="row file" data-act="file" data-arg="${esc(BUNDLE + name)}">${inner}</button></div>`
+      : `<div class="item"><div class="row file pending">${inner}</div></div>`;
+  }).join('');
+  const u = units(s);
+  let rows;
+  if (!u) {
+    rows = `<div class="hint"><span>Subtask specs appear here when the work is split.</span><div class="ghostbar" style="width:72%"></div><div class="ghostbar" style="width:58%"></div></div>`;
+  } else {
+    rows = `<div class="divider">SUBTASK SPECS${s.wave ? ` · ${esc(s.wave.toUpperCase())}` : ''}</div>` + u.map((t) => {
+      const mine = unitEvents(s, t.id).filter(visible);
+      const lastEv = mine[mine.length - 1];
+      const savedEv = mine.find((e) => e[2] === 'write');
+      const firstEv = unitEvents(s, t.id)[0];
+      let glyph = '<span class="ring"></span>', stateText = s.blocked ? 'Not started' : 'Queued', line = '', cls = 'queued';
+      if (t.state === 's') { glyph = `<span class="tone-done">${icon('check', 'sm')}</span>`; stateText = `${clock(savedEv[0] - firstEv[0])} ${icon('open', 'sm')}`; cls = ''; }
+      if (t.state === 'w') {
+        const quiet = s.elapsed - (lastEv ? lastEv[0] : s.elapsed);
+        const stuck = s.stuck && quiet > 120;
+        glyph = `<span class="spin ${stuck ? 'stuck' : ''}"></span>`;
+        stateText = stuck ? `<span class="tone-blocked">quiet ${clock(quiet + state.tick)}</span>` : tick(s.elapsed - 537, s, 'Writing · ');
+        if (lastEv && !nostream()) line = `<span class="out">${esc(lastEv[2] === 'note' ? lastEv[4] : `${lastEv[3]} ${lastEv[4]}`)}</span>`;
+        cls = 'writing';
+      }
+      if (t.state === 'b') { glyph = `<span class="tone-blocked">${icon('warn', 'sm')}</span>`; stateText = '<span class="tone-blocked">Blocked</span>'; line = '<span class="why">Overlaps subtask 2 on RuntimeWorkMapper planning fields</span>'; cls = 'blocked'; }
+      const inner = `<span class="glyph">${glyph}</span><span class="row-title"><span class="ref">${t.id}</span>${esc(t.name)}</span><span class="row-state">${stateText}</span>${line ? `<span class="row-line">${line}</span>` : ''}`;
+      return t.state === 's'
+        ? `<div class="item"><button type="button" class="row" data-act="file" data-arg="${esc(specPath(t.id))}" title="Open ${esc(fileName(specPath(t.id)))}">${inner}</button></div>`
+        : `<div class="item"><div class="row ${cls}">${inner}</div></div>`;
+    }).join('');
+  }
+  const savedCount = u ? u.filter((t) => t.state === 's').length : 0;
+  const count = u ? `${savedCount}/${u.length} subtask specs saved` : `${['spec.md', 'decomposition-manifest.yaml'].filter(wrote).length} of 2 files`;
+  return `<div class="sec">${secHead('bundle', 'Spec bundle', count)}${state.open.has('bundle') ? `<div class="box">${parent}${rows}</div>` : ''}</div>`;
+}
+
+/* Raw agent output. Visible by default as a three-line preview; expands in place into a scrolling window. */
+function transcript(s) {
+  const lines = events(s).map((e) => {
+    const [off, , kind, verb, text, sub] = e;
+    const pre = sub ? `[subtask ${sub}] ` : '';
+    if (kind === 'phase') return [at(off), `── ${STAGES[e[1]].id}: ${verb.toLowerCase()}${text ? ` (${text})` : ''}`];
+    if (kind === 'note') return [at(off), pre + text];
+    if (kind === 'write') return [at(off), `${pre}${verb === 'Wrote' ? 'Write' : verb}(${text})`];
+    if (kind === 'read') return [at(off), `${pre}Read(${text})`];
+    if (kind === 'search') return [at(off), `${pre}Grep(${text.split(' · ')[0]})`];
+    if (kind === 'cmd') return [at(off), `${pre}Bash(${text})`];
+    if (kind === 'mcp') return [at(off), `${pre}mcp__skill-bill__${text.split(' · ')[0]}`];
+    return [at(off), `${pre}${verb}: ${text}`];
+  });
+  const long = state.transcriptLong;
+  const tools = `<div class="tools"><button type="button" class="ghost" data-act="toast" data-arg="Copies the full transcript">${icon('copy', 'sm')}Copy</button></div>`;
+  const body = state.open.has('transcript')
+    ? `<div class="box"><div class="transcript ${long ? 'long' : 'short'}" id="tx">${lines.map(([t, l]) => `<div><span class="t">${t}</span>${esc(l)}</div>`).join('')}</div>
+       <button type="button" class="expand" data-act="tx">${icon('chev', 'sm')}${long ? 'Show less' : 'Expand'}</button></div>`
+    : '';
+  return `<div class="sec">${secHead('transcript', 'Transcript', `${lines.length} lines`, tools)}${body}</div>`;
+}
+
+/* Collapsed state: how the context grew from stage to stage, the most telling lines of the digest, and the run setup as pills.
+   The whole card expands the section. */
+function teaser(s) {
+  const reached = Math.min(s.stage, 2);
+  const MAX = 19.6, SETUP = 3.4;
+  const flow = BRIEFS.map((b) => {
+    const started = b.from <= reached;
+    const kb = parseFloat(b.size);
+    if (!started || !b.size) {
+      return `<div class="st none"><span class="lab">${b.stage}<span class="kb">${started ? 'not saved' : '—'}</span></span><div class="bar empty"></div></div>`;
+    }
+    const dig = Math.max(0, kb - SETUP);
+    return `<div class="st"><span class="lab">${b.stage}<span class="kb">${b.size}</span></span>
+      <div class="bar"><i class="setup" style="width:${(SETUP / MAX) * 100}%"></i>${dig ? `<i class="dig" style="width:${(dig / MAX) * 100}%"></i>` : ''}</div></div>`;
+  }).join('');
+  const facts = s.stage < 1
+    ? `<div class="f">${icon('clock', 'sm')}<span>Preplan is reading the repo. Its digest lands here and becomes most of what the plan stage reads.</span></div>`
+    : `<div class="f code">${icon('read', 'sm')}<span><span class="k">Verified by reading:</span> ${inline(DIGEST[1][2][0])}</span></div>
+       <div class="f risk">${icon('warn', 'sm')}<span><span class="k">Risk:</span> ${inline(DIGEST[2][2][0])}</span></div>
+       <div class="f">${icon('search', 'sm')}<span><span class="k">Not read:</span> ${inline(DIGEST[3][1])}</span></div>`;
+  const pills = [RUN.size, `${RUN.acs.length} criteria`, ...RUN.ceremony, RUN.mandates.length ? `${RUN.mandates.length} mandates` : 'no mandates'];
+  return `<button type="button" class="bteaser" data-act="sec" data-arg="briefing" aria-label="Expand briefing">
+    <div class="flow">${flow}</div>
+    <div class="legend"><span><i style="background:var(--fg-faint);opacity:.55"></i>run setup</span>${s.stage >= 1 ? '<span><i style="background:var(--st-done)"></i>preplan digest</span>' : ''}</div>
+    <div class="facts">${facts}</div>
+    <div class="pills">${pills.map((p, i) => `<span class="pill ${i < 2 ? 'strong' : ''}">${esc(p)}</span>`).join('')}</div>
+    <span class="fade"></span><span class="cta">${icon('chev', 'sm')}Read what each stage was told</span>
+  </button>`;
+}
+
+/* What each stage was given. Run setup is shown once because it is identical in every briefing.
+   The preplan digest is the real handoff, so it reads as a document. The raw briefings stay one click away. */
+function briefing(s) {
+  const reached = Math.min(s.stage, 2);
+  const bodyOpen = state.open.has('briefing');
+  const f = (key) => state.open.has(key);
+  const setup = `<div class="bpart"><dl class="kv">
+      <dt>Spec</dt><dd><a href="#" data-act="file" data-arg="${esc(BUNDLE)}spec.md">spec.md</a></dd>
+      <dt>Size</dt><dd>${esc(RUN.size)}</dd>
+      <dt>Ceremony</dt><dd>${RUN.ceremony.map(esc).join('<span class="sep">·</span>')}</dd>
+      <dt>Mandates</dt><dd class="${RUN.mandates.length ? '' : 'faint'}">${RUN.mandates.length ? RUN.mandates.map(esc).join(', ') : 'none'}</dd>
+      <dt>Criteria</dt><dd><ol class="acs">${RUN.acs.map((a, i) => `<li><span class="id">AC-00${i + 1}</span><span>${esc(a)}</span></li>`).join('')}</ol></dd>
+    </dl></div>`;
+  const digest = s.stage < 1
+    ? '<div class="hint">The preplan digest appears here when preplan finishes. It is what the plan stage reads first.</div>'
+    : DIGEST.map(([h, preview, items], i) => {
+        const key = 'digest-' + i;
+        return `<button type="button" class="bfold" aria-expanded="${f(key)}" data-act="sec" data-arg="${key}">${icon('chev', 'sm chev')}<span class="name">${esc(h)}</span><span class="preview">${esc(preview)}</span><span></span></button>
+          ${f(key) ? `<div class="bbody"><ul>${items.map((x) => `<li>${inline(x)}</li>`).join('')}</ul></div>` : ''}`;
+      }).join('');
+  const raws = BRIEFS.map((b) => {
+    const key = 'raw-' + b.stage;
+    const started = b.from <= reached;
+    if (!started || !b.size) {
+      return `<div class="bfold off"><span></span><span class="name mono">${b.stage}</span><span class="preview">${started ? esc(b.layers) : 'not started'}</span><span class="meta"></span></div>`;
+    }
+    return `<button type="button" class="bfold" id="brief-${b.stage}" aria-expanded="${f(key)}" data-act="sec" data-arg="${key}">${icon('chev', 'sm chev')}<span class="name mono">${b.stage}</span><span class="preview">${esc(b.layers)}</span><span class="meta">${b.size}</span></button>
+      ${f(key) ? `<div class="raw"><div class="transcript long">${rawBriefing(b.stage).map((l) => `<div>${esc(l) || ' '}</div>`).join('')}</div>
+        <div class="raw-bar"><span class="note">Exactly what the agent received</span><button type="button" class="ghost" data-act="toast" data-arg="Copies the ${b.stage} briefing">${icon('copy', 'sm')}Copy</button></div></div>` : ''}`;
+  }).join('');
+  const count = `${BRIEFS.filter((b) => b.size && b.from <= reached).length} saved`;
+  if (!bodyOpen) return `<div class="sec" id="sec-briefing">${secHead('briefing', 'Briefing', count)}${teaser(s)}</div>`;
+  return `<div class="sec" id="sec-briefing">${secHead('briefing', 'Briefing', count)}${bodyOpen ? `<div class="box">
+      <div class="divider" style="border-top:0">RUN SETUP · SAME IN EVERY STAGE</div>${setup}
+      <div class="divider">HANDED TO PLAN · PREPLAN DIGEST</div>${digest}
+      <div class="divider">RAW BRIEFINGS</div>${raws}
+    </div>` : ''}</div>`;
+}
+
+function render() {
+  const s = state.scenario;
+  document.getElementById('pane').innerHTML = [titleBlock(s), stageStrip(s), nowBlock(s), activity(s), bundle(s), transcript(s), briefing(s)].join('');
+  document.getElementById('notes').innerHTML = NOTES;
+  const feed = document.getElementById('feed');
+  if (feed) {
+    feed.scrollTop = state.follow ? feed.scrollHeight : state.feedScroll;
+    feed.addEventListener('scroll', () => {
+      state.feedScroll = feed.scrollTop;
+      const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 4;
+      if (atBottom !== state.follow) { state.follow = atBottom; document.querySelector('[data-act="follow"]').setAttribute('aria-pressed', String(atBottom)); }
+      document.getElementById('jump').classList.toggle('on', !atBottom);
+    });
+  }
+  const tx = document.getElementById('tx');
+  if (tx) tx.scrollTop = tx.scrollHeight;
+}
+
+const NOTES = `
+<section><h2>What this merges</h2>
+<p><b>Base:</b> <code>design/plan-run</code>: title, run actions, stage strip and the blocked callout.
+<b>From</b> <code>design/plan-activity</code>: the Now card and the Activity feed with filters, Follow and Jump to latest.</p></section>
+<section><h2>Order of the screen</h2><ul>
+<li>Title and run actions.</li>
+<li>Stage strip. It is the only place that shows stage status and time. Clicking a cell scrolls Activity to that stage.</li>
+<li>Now. One block holds the sentence, the latest step and the heartbeat. A blocked run shows the callout in its place.</li>
+<li>Activity, open while running.</li>
+<li>Spec bundle: spec.md and the manifest, then one row per subtask spec with its live state.</li>
+<li>Transcript, open as a three-line window that holds the whole log, scrolls, and starts at the newest line. "Expand" makes it taller in place.</li>
+<li>Briefing, collapsed.</li>
+</ul></section>
+<section><h2>Briefing</h2>
+<p>A saved briefing is the launch document for one stage. It has three layers: run invariants, upstream projections and derived context. Today each one is dumped as a single block of text, so the same run invariants show up to three times, and the 19 KB plan briefing hides the one useful part, the preplan digest.</p><ul>
+<li><b>Run setup</b> is shown once: spec, size, ceremony, mandates and acceptance criteria. It is the same in every briefing, including the <code>run_invariant_*</code> copies inside layer 2.</li>
+<li><b>Preplan digest</b> is the handoff from preplan to plan. It reads as a document folded by its own headings (MODE AND SIZING, CURRENT CODE, …), so you see what the planner was told about the code without opening 19 KB.</li>
+<li><b>Raw briefings</b>: one row per stage with its size, opening the exact text plus Copy. If a stage has no saved briefing, the row says so instead of being left out. <code>plan_subtasks</code> is <code>null</code> on SKILL-513.</li>
+<li>Each "Phase started" row in Activity links to that stage's raw briefing.</li>
+<li><b>Collapsed teaser:</b> one bar per stage, scaled by briefing size and split into run setup and preplan digest, so you can see how much context each stage got. Below the bars sit three digest lines (verified code, top risk, what was not read) and the run setup as pills. The card fades out at the bottom, and clicking anywhere on it expands the section.</li>
+<li>Data: all of it comes from <code>stages[].briefing_text</code>. Run setup and digest headings are parsed from the fixed briefing layout, and nothing new is needed from the runtime. If parsing fails, only the raw rows are shown.</li>
+</ul></section>
+<section><h2>Removed as duplicates</h2><ul>
+<li><b>Subtasks section.</b> Its rows now live in the Spec bundle, because a saved subtask is a spec file. The wave label sits on the divider.</li>
+<li><b>Separate status sentence, heartbeat line and Now card.</b> These are now one block. "Writing subtask spec 2 of 3", "Active" and the Now card's own subtask line used to say the same thing three times.</li>
+<li><b>Status labels and durations on Activity group headers.</b> The strip already shows them.</li>
+<li><b>Agent output tail</b> (latest 4 lines before the split). The Transcript preview replaces it.</li>
+<li><b>Transcript button in the Activity header.</b> Transcript is its own section now.</li>
+<li><b>Spec chips.</b> Files are rows in the bundle, so each spec is listed once.</li>
+</ul></section>
+<section><h2>Green, so the build matches</h2><ul>
+<li>Active stage cell: green tint and a spinner. Done cells get a check.</li>
+<li>Now block: green border and a left-to-right gradient. Its icon tile uses a 12% green fill, and the "Last output" dot breathes.</li>
+<li>Writing spec rows: faint green row tint and a spinner.</li>
+<li>Activity: the newest row's timestamp is green, and "Agent is working" shows green dots.</li>
+<li>When the agent goes quiet, the same places turn orange (<code>st-blocked</code>).</li>
+</ul></section>
+<section><h2>Mapping to the current Compose code</h2><ul>
+<li><code>PlanStatusLine</code> + <code>PlanHeartbeat</code> + <code>PlanNowCard</code> → one Now block.</li>
+<li><code>planOutputTail</code> and <code>planOutput</code> ("Full agent output") → Transcript section built from <code>PlanOutputLog(raw = true)</code>.</li>
+<li><code>planRows</code> + <code>planBundle</code> → one Spec bundle section. <code>PlanSubtasksPending</code> moves into it.</li>
+<li><code>PlanActivityPanel</code>: drop the Transcript button and the <code>SbLabel</code> status in <code>PlanActivityGroup</code>.</li>
+</ul></section>
+<section><h2>Open questions</h2><ul>
+<li>Should Activity collapse by default once the plan is ready? Here it stays open.</li>
+<li>The SKILL-513 briefing's acceptance criteria are the raw intake as one item, a known plan-phase defect. Should Briefing flag a single criterion longer than ~300 characters?</li>
+<li>Is the preplan digest better placed under the preplan stage as its output, rather than under Briefing as plan's input?</li>
+<li>Without a structured stream, the Transcript is the only live signal. Should it open expanded in that case?</li>
+</ul></section>`;
+
+let toastTimer;
+function toast(text) {
+  const el = document.getElementById('toast');
+  el.textContent = text; el.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('on'), 2200);
+}
+
+const select = document.getElementById('scenario');
+select.innerHTML = SCENARIOS.map((s) => `<option value="${s.id}">${esc(s.label)}</option>`).join('');
+select.value = state.scenario.id;
+select.addEventListener('change', () => { state.scenario = SCENARIOS.find((s) => s.id === select.value); state.tick = 0; state.follow = true; state.shut.clear(); render(); });
+document.getElementById('nostream').addEventListener('change', render);
+document.getElementById('pane').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]');
+  if (!el) {
+    const row = e.target.closest('.ev.note, .ev[data-kids]');
+    if (row) row.classList.toggle('open');
+    return;
+  }
+  if (el.disabled) return;
+  e.preventDefault();
+  const { act, arg } = el.dataset;
+  if (act === 'sec') { state.open.has(arg) ? state.open.delete(arg) : state.open.add(arg); render(); }
+  if (act === 'grp') { state.shut.has(arg) ? state.shut.delete(arg) : state.shut.add(arg); render(); }
+  if (act === 'filter') { state.filter = arg; render(); }
+  if (act === 'follow') { state.follow = !state.follow; render(); }
+  if (act === 'jump') { state.follow = true; render(); }
+  if (act === 'tx') { state.transcriptLong = !state.transcriptLong; render(); }
+  if (act === 'stage') {
+    state.open.add('activity'); state.shut.delete(arg); state.follow = false; render();
+    const feed = document.getElementById('feed'), g = document.getElementById('anc-' + arg);
+    if (feed && g) { feed.scrollTop = g.offsetTop; state.feedScroll = feed.scrollTop; document.getElementById('jump').classList.add('on'); }
+    else toast('This stage has not started yet');
+  }
+  if (act === 'brief') {
+    state.open.add('briefing'); state.open.add('raw-' + arg); render();
+    document.getElementById('brief-' + arg).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  if (act === 'file') toast('Opens ' + arg + ' in its default app');
+  if (act === 'toast') toast(arg);
+});
+setInterval(() => {
+  if (!state.scenario.running) return;
+  state.tick += 1;
+  document.querySelectorAll('[data-live]').forEach((el) => { el.textContent = el.dataset.prefix + clock(Number(el.dataset.live) + state.tick); });
+}, 1000);
+render();
+</script>
+</body>
+</html>

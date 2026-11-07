@@ -1,3 +1,98 @@
+## [2026-11-07] Fill the tab title so the close control keeps the trailing inset
+Context: A short tab title that does not fill leftover width stays at its text width, so the 20dp close control follows the title instead of the tab's trailing edge.
+Decision: The title fills the space between the marker and the close slot. The row stays padded 10dp at the start and 4dp at the end.
+Reason: The design grows the label, which pins the close control's trailing edge on that 4dp inset for a selected tab and on hover.
+
+## [2026-11-07] Mask home card content inside the border
+Context: Home cards need overflow fades while retaining their border and the blocked-run and selected-row tints.
+Decision: Apply 24dp vertical gradients with DstIn blending on an offscreen layer around the inner scrolling column, inside the card's border padding. Cards with five or fewer rows draw no fade.
+Reason: An alpha mask fades the existing row content without painting a solid panel color over its tints or fading the border. This follows the tab strip's masking technique.
+
+## [2026-11-07] Keep home card keys local and pass through digits and open-chat Delete
+Context: Recent chats and Needs you each own selection. The brief has Up, Down, Enter and Delete inside a focused card, and neither the brief nor the mock has digit shortcuts.
+Decision: The card consumes Up, Down and Enter, and consumes Delete only for a chat absent from the open sessions. Digits, Ctrl, Meta, Alt, open-chat Delete and run Delete pass through. Row and discard controls stay outside Tab traversal, and Recent chats targets Needs you when that card exists.
+Reason: Digit keys are not row shortcuts. Delete discards only a saved chat that is not already open. An open chat resumes onto its tab, and a run has no discard.
+
+## [2026-11-07] List Recent chats with the resume palette's repository filter
+Context: The home listed saved chats across repositories, while the resume palette was already limited to the picked repository.
+Decision: Recent chats uses resumableDrafts for the selected chat's repository root and hides when that list is empty, including when no repository is selected. Search chats still opens that scoped palette.
+Reason: The brief's Recent chats section is every saved chat for that chat's repository, using the same filter as the palette.
+
+## [2026-11-07] Drop InboxItem and keep pure chat title helpers
+Context: The merged inbox, its filters and its day groups are gone, so a home row is either a blocked run or a saved chat.
+Decision: Run rows take WorkItem and chat rows take ChatHistoryEntry. chatTitle, chatRepoLabel and shortAgo stay free of Compose, and saved-chat contracts stay unchanged.
+Reason: Filters, day groups and the merged list are removed, so rows no longer share an InboxItem wrapper. The helpers still format titles, repository badges and short times without a UI harness.
+
+## [2026-11-06] Reserve the overflow spacer's row gap
+Context: The overflow row contains tabs, New chat, a weighted spacer and the chevron. Row spacing adds three gaps, while the existing button-slot reservations account for two.
+Decision: Keep row spacing and subtract one additional 2dp gap from the available tab-container width when overflowing.
+Reason: Without that reservation the fixed children exceed the available width by 2dp and displace the chevron. Explicit tab width also keeps New chat beside fitting tabs.
+
+## [2026-11-06] Keep the strip hairline outside tab fade masks
+Context: Only the selected tab should join the content below. Painted frame-color fades and full-height unselected hover fills can hide the strip hairline.
+Decision: Keep the hairline on the parent strip, apply offscreen DstIn masks to tab content, and stop unselected hover fill 1dp above the bottom. Selected fill reaches the bottom and uses an open top-and-side border.
+Reason: The parent hairline remains visible through faded content and under hovered unselected tabs. The selected tab alone covers it to form the panel join.
+
+## [2026-11-06] Keep home inbox derivation separate from saved chat data
+Context: The home combines work rows and saved drafts, with filtering, keyboard selection and deferred discard layered onto the same list.
+Decision: Keep InboxItem and its derivation helpers free of Compose. Derive plain titles, image names, repository badges and short times for the card without changing saved-chat contracts or resume-palette formatting.
+Reason: The interaction layer can use the inbox model without changing saved-chat data. Pure helpers also allow fixed-clock and explicit-zone tests without a UI harness.
+Superseded by: Drop InboxItem and keep pure chat title helpers (2026-11-07)
+
+## [2026-11-06] Keep inbox navigation on the focused card
+Context: Inbox rows share a screen with the composer. Existing shell routing allows unmodified navigation keys through when no screen handler is registered.
+Decision: The card handles navigation, opening and chat Delete on key-down. Rows and discard buttons stay outside Tab traversal, and Ctrl, Meta and Alt combinations pass through.
+Reason: Card-local handling keeps composer digits as text and prevents row controls from also handling the same key. No shell or screen-level handler is needed.
+Superseded by: Keep home card keys local and pass through digits and open-chat Delete (2026-11-07)
+
+## [2026-11-06] Let each saved-chat discard own its undo window
+Context: Home-list discard must hide a chat immediately and allow five seconds to undo. Several chats can be discarded before their windows expire.
+Decision: The window's shared NewTaskSavedChats tracks Undoable and Deleting states per session. Each job starts deletion after five seconds; Undo cancels only Undoable. Refreshes exclude both states, and window close does not flush timers.
+Reason: Independent jobs preserve each chat's undo window. Keeping Deleting prevents refresh from restoring a row during suspended deletion and prevents expired Undo from cancelling deletion. Cancellation before deletion preserves the saved draft as the intended safe outcome.
+
+## [2026-11-06] Bind New Task async results to their originating draft
+Context: Operators can select another open chat while agent resolution, a branch read or a repository path check is suspended.
+Decision: Capture the target draft once per action and write results only into it. Update shared composer UI only while that draft is selected; selection refreshes agent and branches and closes both pickers.
+Reason: Reading the selected draft after suspension could rebind or overwrite a different chat. Per-draft agent reads also keep a choice in one chat from cancelling another chat's resolution.
+
+## [2026-11-06] Detect background replies from the busy-to-idle transition
+Context: Both prompted and unprompted replies need the same unread marker when they finish in an unselected chat.
+Decision: NewTaskChats watches each draft's chat busy state, flags an unselected chat when that same chat transitions to idle, and clears the flag on selection. Removing a draft cancels its watcher.
+Reason: NewTaskChat sets busy for both kinds of reply, so the transition covers both without comparing transcript contents.
+Revisit when: Replies can arrive without setting busy.
+
+## [2026-11-06] Resolve Reopen from the saved chat after close
+Context: Closing flushes a running turn, which can rotate its session id. The operator may delete the saved chat before clicking Reopen.
+Decision: Capture the session id after close succeeds and read saved drafts afresh when Reopen is clicked. Resume only a matching entry; otherwise show the missing-chat toast.
+Reason: A pre-close id can point to the replaced session, and the cached saved list can retain a deleted entry.
+
+## [2026-11-06] Share resume routing in the window's chat holder
+Context: Recent chats, /resume and the close toast must open a saved chat without ending another conversation.
+Decision: NewTaskChats selects an existing session, loads an empty selected draft or adds a draft. NewTaskDraft.resume only loads an empty draft; a failed added-draft load removes it and restores selection.
+Reason: The window holder owns the open set and selection. The former draft-level close before resume would end another chat.
+
+## [2026-11-06] Signal saved-chat loads separately from selection
+Context: Reopen bypasses the view-model action, and loading an empty selected draft causes no selection change.
+Decision: NewTaskChats emits successful loads through resumed. For a selected loaded draft, the view model cancels its pending agent read and refreshes its agent and branches.
+Reason: Observing selection alone misses this load and can leave the composer showing the previous agent or branches.
+
+## [2026-11-06] Replay the transcript in the first prompt after a context switch
+Context: Rebinding the agent, repository or base branch opens a fresh session that has not seen the transcript still visible in the chat.
+Decision: Prefix the first prompt with operator and finished agent messages, retaining the newest conversation within 24,000 characters. Clear pending replay on the first non-Failed event, pass it unchanged through unsent rebinds, and keep it out of transcript storage.
+Reason: Reusing the app transcript avoids an extra agent turn for a handoff summary. Clearing replay where started flips preserves retries before output without resending it on later turns. Persisting pending replay would require ChatNewTaskContext and ChatStore changes outside scope.
+Revisit when: Pending replay must survive saved-chat resume, or the conversation budget needs to change.
+
+## [2026-11-06] Scope the New Task resume palette to the picked repository
+Context: The home lists drafts across repositories, while the resume palette identifies a single repository with its scope chip.
+Decision: New Task passes only drafts for the picked repository to the palette, or none if no repository is picked. The home list remains cross-repository; its Show all opens the scoped palette.
+Reason: A cross-repository result under a single repository label could switch repositories without warning. The home list still offers drafts from other repositories.
+Superseded by: List Recent chats with the resume palette's repository filter (2026-11-07)
+
+## [2026-11-06] Count a bare-key chip click as key acceptance
+Context: The prompt offers a "Use SKILL-n" chip, but newTaskOperatorIdentity skipped every operator message sent from a suggested action, so clicking it did nothing and the operator had to type the key.
+Decision: A chip message counts as identity only when the action has no start, its instruction is exactly one complete key, and its label contains that key as a whitespace token. Every other chip message stays excluded, as before.
+Reason: A click on a chip whose label shows the key is the operator accepting it. Requiring the key on the label stops a model-written chip from binding a key the operator never saw, so the 2026-11-04 rule against agent-suggested keys still holds.
+
 ## [2026-11-04] Bind only desktop-resolved identity on desktop Goal/Plan start
 Context: Desktop already resolved identity from the offer field or dedicated operator tokens. Re-running admission on composed chat requirements would bind an in-sentence key or an agent-suggested key that leaked into the transcript.
 Decision: Desktop prepare uses identity policy RESOLVED_DESKTOP_IDENTITY and binds only keyChoice. REQUIREMENTS_FIRST remains the default for other callers.

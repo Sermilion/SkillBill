@@ -15,8 +15,11 @@ interface ChatCommands {
   /** The execution id whose chat the pane shows, or null when the pane is hidden or has no tab. */
   val shownChatId: StateFlow<String?>
 
-  /** True while a new-task chat exists. */
+  /** True while any open New task chat has a conversation. */
   val newTaskDraftOpen: StateFlow<Boolean>
+
+  /** How many New task chats are open, counting empty ones. */
+  val newTaskOpenChats: StateFlow<Int>
 
   /** Hides the pane when it shows [item]'s chat, or any chat when [item] is null; otherwise opens [item]'s chat, or only shows the pane. */
   fun toggleChat(item: WorkItem?)
@@ -27,6 +30,12 @@ interface ChatCommands {
   fun openChat(item: WorkItem)
 
   fun runReviewAction(item: WorkItem, action: ReviewFindingsAction)
+
+  /** Opens the verify item's chat and sends one combined fix brief through pause-and-act. */
+  fun runVerifyFixes(item: WorkItem, brief: String)
+
+  /** Prefills the New task draft when it is empty; leaves any operator text untouched. */
+  fun prefillGoalIntake(repoRoot: String, branch: String, text: String): Boolean
 
   /** Ends every chat of the window; the window calls it when it is disposed. */
   fun closeChats()

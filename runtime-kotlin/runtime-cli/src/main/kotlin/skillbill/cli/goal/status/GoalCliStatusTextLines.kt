@@ -4,12 +4,25 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.goalrunner.assessment.model.GoalAssessmentVerification
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 
+private fun mainCheckoutSuffix(
+  outcome: String?,
+  detail: String?,
+): String =
+  if (outcome == null) {
+    ""
+  } else {
+    " main_checkout=${outcome.goalCliToken()} main_checkout_detail=${detail.orEmpty().goalCliToken()}"
+  }
+
 internal fun StringBuilder.appendOperatorSurfaceLines(projection: GoalRunnerStatusProjection) {
   projection.goalWorktree?.let { worktree ->
     val removedAt = worktree.removedAt
     val retentionReason = worktree.retentionReason
     if (removedAt != null) {
-      appendLine("worktree: removed path=${worktree.path.goalCliToken()} at=${removedAt.goalCliToken()}")
+      appendLine(
+        "worktree: removed path=${worktree.path.goalCliToken()} at=${removedAt.goalCliToken()}" +
+          mainCheckoutSuffix(worktree.mainCheckoutOutcome, worktree.mainCheckoutDetail),
+      )
     } else if (retentionReason != null) {
       appendLine(
         "worktree: retained path=${worktree.path.goalCliToken()} reason=${retentionReason.goalCliToken()} " +
@@ -126,7 +139,13 @@ internal fun StringBuilder.appendOperatorSurfaceLines(payload: Map<*, *>) {
     val removedAt = worktree[GoalCliWorktreeStatusKeys.REMOVED_AT]?.toString()
     val reason = worktree[GoalCliWorktreeStatusKeys.RETENTION_REASON]?.toString()
     if (removedAt != null) {
-      appendLine("worktree: removed path=${path.goalCliToken()} at=${removedAt.goalCliToken()}")
+      appendLine(
+        "worktree: removed path=${path.goalCliToken()} at=${removedAt.goalCliToken()}" +
+          mainCheckoutSuffix(
+            worktree[GoalCliWorktreeStatusKeys.MAIN_CHECKOUT_OUTCOME]?.toString(),
+            worktree[GoalCliWorktreeStatusKeys.MAIN_CHECKOUT_DETAIL]?.toString(),
+          ),
+      )
     } else if (reason != null) {
       appendLine(
         "worktree: retained path=${path.goalCliToken()} reason=${reason.goalCliToken()} " +

@@ -87,6 +87,23 @@ class QaChecklistViewTest {
   }
 
   @Test
+  fun `selected QA execution supplies checklist and case state outside history page`() {
+    val checklist = QaChecklist(null, null, null, null, emptyList(), null, listOf(
+      QaChecklistCase("C1", "Selected case", listOf(QaChecklistStep("stopped", QaStepState.Running, null, null, emptyList(), instant(2)))),
+    ), emptyList(), null)
+    val selected = run("old", 1, checklist, 4, "canceled")
+    val item = workItem("QA", kind = WorkKind.Phase).copy(control = workItem("QA").control.copy(invocationId = "old"))
+    val detail = emptyDetail.copy(executionHistory = listOf(run("new", 8)), selectedExecution = selected)
+
+    val view = qaChecklistView(item, detail, "old", emptyMap())
+
+    assertEquals("old", view.invocationId)
+    assertEquals("Selected case", view.cases.single().title)
+    assertEquals(false, qaCaseIsOpen(item, detail, view.cases.single().key, emptyMap()))
+    assertEquals(true, qaCaseIsOpen(item, detail, view.cases.single().key, mapOf(view.cases.single().key to true)))
+  }
+
+  @Test
   fun `findings merge report order and recorded timestamps while feed is newest first`() {
     val checklist = QaChecklist(null, null, null, null, emptyList(), null, emptyList(), listOf(
       QaChecklistFinding("F-2", "Recorded title", instant(3)), QaChecklistFinding("F-1", "Only recorded", instant(4)),

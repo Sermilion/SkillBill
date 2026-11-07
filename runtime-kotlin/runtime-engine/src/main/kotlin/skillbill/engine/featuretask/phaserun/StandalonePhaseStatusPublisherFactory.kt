@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.phaserun
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.incident.BlockIncidentCapture
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
@@ -9,6 +10,7 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.idestatus.StandaloneOutputCaptureScheduler
 import java.nio.file.Path
 import java.time.Clock
 import java.util.UUID
@@ -19,12 +21,14 @@ public data class StandalonePhaseLaunch(
   public val scope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
 )
 
+@Inject
 public class StandalonePhaseStatusPublisherFactory(
-  public val database: DatabaseSessionFactory,
-  public val registrations: StandalonePhaseRegistrationFactory,
-  public val clock: Clock,
-  public val diagnostics: RuntimeDiagnostics,
-  public val blockIncidentCapture: BlockIncidentCapture,
+  private val database: DatabaseSessionFactory,
+  private val registrations: StandalonePhaseRegistrationFactory,
+  private val clock: Clock,
+  private val diagnostics: RuntimeDiagnostics,
+  private val blockIncidentCapture: BlockIncidentCapture,
+  private val outputScheduler: StandaloneOutputCaptureScheduler?,
 ) {
   public fun forPhase(
     repoRoot: Path,
@@ -74,6 +78,8 @@ public class StandalonePhaseStatusPublisherFactory(
       clock,
       diagnostics,
       blockIncidentCapture,
+      outputScheduler,
+      capturePlanOutput = true,
     )
   }
 

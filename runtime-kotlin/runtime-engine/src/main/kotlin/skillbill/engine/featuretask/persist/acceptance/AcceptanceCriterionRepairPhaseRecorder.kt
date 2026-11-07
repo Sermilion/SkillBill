@@ -50,6 +50,7 @@ import skillbill.workflow.taskruntime.model.audit.interaction.recordInteractionT
 import skillbill.workflow.taskruntime.model.audit.originalAcceptanceCriterionAlias
 import skillbill.workflow.taskruntime.model.audit.qaReauditRefs
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionBudget
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
 import java.nio.file.Path
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
@@ -278,7 +279,15 @@ public class AcceptanceCriterionRepairPhaseRecorder(
     val targets = AcceptanceCriterionInteractionTargets.pending(state, requireNotNull(session.accounting.binding))
     val rechecks = state.interactionTrace.pendingRechecks
     val parsed =
-      when (val result = AcceptanceCriterionInteractionTraceParser.parse(prose, targets, rechecks)) {
+      when (
+        val result =
+          AcceptanceCriterionInteractionTraceParser.parse(
+            prose,
+            targets,
+            rechecks,
+            outputRef = outputId,
+          )
+      ) {
         is AcceptanceCriterionInteractionTraceParse.Parsed -> result
         is AcceptanceCriterionInteractionTraceParse.Malformed ->
           degradedTrace(session, phase, state, targets, result)
@@ -308,17 +317,25 @@ public class AcceptanceCriterionRepairPhaseRecorder(
         ),
       )
     }
-    return commit(
-      session,
-      phase,
-      AcceptanceCriterionRepairMutation.InteractionTrace(settlement),
-      CommitContext(
-        AcceptanceCriterionRepairAuditEvidence(
-          AcceptanceCriterionInteractionTraceRound.evidence(settlement, predicted),
+    val evidence = AcceptanceCriterionInteractionTraceRound.evidence(settlement, predicted)
+    val used = JsonCodec.valueToJsonString(evidence).toByteArray(Charsets.UTF_8).size
+    val limit = FeatureTaskRuntimeHandoffProjectionBudget.PLANNING_PROJECTION.maxUtf8Bytes
+    return if (used > limit) {
+      rejected(
+        phase,
+        "Interaction trace evidence uses $used UTF-8 bytes; limit is $limit. Use concise references.",
+      )
+    } else {
+      commit(
+        session,
+        phase,
+        AcceptanceCriterionRepairMutation.InteractionTrace(settlement),
+        CommitContext(
+          AcceptanceCriterionRepairAuditEvidence(evidence),
+          expectedState = state,
         ),
-        expectedState = state,
-      ),
-    )
+      )
+    }
   }
 
   private fun degradedTrace(

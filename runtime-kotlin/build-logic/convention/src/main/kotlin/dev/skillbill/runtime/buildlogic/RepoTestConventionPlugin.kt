@@ -57,7 +57,7 @@ private fun Project.configureRepoTestSourceSet() {
   }
 }
 
-private fun Project.governedRepositorySources(): FileCollection {
+internal fun Project.governedRepositorySources(): FileCollection {
   val repoRoot = rootProject.layout.projectDirectory.dir("..")
   return files(
     repoRoot.dir(".github"),
@@ -72,5 +72,11 @@ private fun Project.governedRepositorySources(): FileCollection {
     repoRoot.file("LICENSE"),
     repoRoot.file("install.sh"),
     repoRoot.file("uninstall.sh"),
+    rootProject.layout.projectDirectory.file("gradlew"),
+    rootProject.layout.projectDirectory.file("build-logic/convention/build.gradle.kts"),
+    rootProject.layout.projectDirectory.file(
+      "build-logic/convention/src/main/kotlin/dev/skillbill/runtime/buildlogic/Jvm.kt",
+    ),
+    rootProject.subprojects.map { module -> module.layout.projectDirectory.dir("src/main/kotlin") },
   )
 }

@@ -5,7 +5,6 @@ import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
-import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import kotlin.coroutines.cancellation.CancellationException
@@ -56,15 +55,17 @@ class PlanFanOutWaveTest {
 
   private fun recordingFanOut(settled: MutableList<Int>): PhaseRunFanOut =
     object : PhaseRunFanOut {
-      override val outputSink = AgentRunOutputSink.NONE
-
       override fun pendingUnits() = error("The wave already has its units")
+
+      override fun recordWave(
+        capacity: Int,
+        unitIds: List<Int>,
+      ): Boolean = true
 
       override fun pauseBefore(unitId: Int): PhaseOutcome? = null
 
       override fun <B : PhaseAcceptedStepExecution> unitState(
         unitId: Int,
-        outputSink: AgentRunOutputSink,
         descriptor: PhaseStepDescriptor<B>,
       ): B = error("The test supplies planner execution")
 

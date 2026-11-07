@@ -3,7 +3,7 @@ package dev.skillbill.desktop.core.domain.model
 import kotlin.time.Instant
 
 /** The detail lists that page on their own, one to one with the runtime's lists. */
-enum class DetailList { Subtasks, Phases, Validation, Executions, Dependencies }
+enum class DetailList { Subtasks, Phases, Validation, Executions, Dependencies, PlanOutput }
 
 /** What the runtime allows for running one item again; the app renders it and decides nothing. */
 data class RunOptions(
@@ -98,6 +98,29 @@ data class Detail(
   val currentSubtaskId: Int? = null,
   val goalWorktree: GoalWorktree? = null,
   val launchWarning: String? = null,
+  val currentActivity: String? = null,
+  val validationBranchRuns: List<ValidationBranchRun> = emptyList(),
+  val selectedValidationResult: String? = null,
+  val selectedExecution: ExecutionInstance? = null,
+  val planActivity: List<PlanAgentActivity> = emptyList(),
+  val planOutputLines: List<PlanOutputLine> = emptyList(),
+  val planOutputTail: List<String> = emptyList(),
+  val planOutputUpdatedAt: Instant? = null,
+  val planSubtaskLatestLines: Map<Int, String> = emptyMap(),
+  val standalonePlan: StandalonePlanProgress? = null,
+  val verifyRun: VerifyRunDetails? = null,
+)
+
+data class ValidationBranchRun(
+  val invocationId: String,
+  val runSequence: String,
+  val lifecycle: Lifecycle,
+  val startedAt: Instant,
+  val finishedAt: Instant?,
+  val activeDurationMs: Long?,
+  val agent: String?,
+  val currentActivity: String?,
+  val result: String?,
 )
 
 data class WorkSubtask(
@@ -207,10 +230,20 @@ data class GoalQaResult(
   val findings: List<GoalQaFinding>,
   val reportText: String?,
   val failureKind: String?,
+  val details: QaRunDetails?,
 )
 
 /** One finding goal QA reported; [fixed] is true when a later QA run no longer saw it. */
-data class GoalQaFinding(val id: String, val title: String, val evidencePath: String?, val fixed: Boolean)
+data class GoalQaFinding(
+  val id: String,
+  val title: String,
+  val fixed: Boolean,
+  val evidencePaths: List<String> = emptyList(),
+  val reportPath: String? = null,
+  val observed: String? = null,
+  val expected: String? = null,
+  val steps: String? = null,
+)
 
 enum class GoalAssessmentState { Pending, Running, Blocked, Completed, Skipped }
 
@@ -262,6 +295,31 @@ data class ExecutionInstance(
   val reviewReport: ReviewReport? = null,
   val qaChecklist: QaChecklist? = null,
   val qaFindings: List<QaChecklistFinding> = emptyList(),
+  val qaDetails: QaRunDetails? = null,
+  val liveChecks: Boolean = false,
+  val validationOutcome: ValidationOutcome? = null,
+  val validationChecks: List<ValidationCheck> = emptyList(),
+)
+
+enum class ValidationOutcome { Passed, Failed, Blocked }
+
+enum class ValidationCheckResult { Passed, Failed, Blocked, Skipped }
+
+data class ValidationCheck(
+  val checkId: String,
+  val name: String,
+  val command: String,
+  val workingDir: String,
+  val attempts: List<ValidationCheckAttempt>,
+)
+
+data class ValidationCheckAttempt(
+  val number: Int,
+  val startedAt: Instant?,
+  val finishedAt: Instant?,
+  val result: ValidationCheckResult?,
+  val exitCode: Int?,
+  val note: String?,
 )
 
 /**
@@ -293,6 +351,45 @@ data class PlanRunReport(
 )
 
 data class PlannedSubtask(val id: Int, val name: String, val specPath: String, val dependsOn: List<Int>)
+
+data class StandalonePlanProgress(
+  val report: PlanRunReport?,
+  val stages: List<StandalonePlanStage>,
+  val plannedSubtaskCount: Int,
+  val totalSubtaskCount: Int,
+  val currentPlanningSubtaskId: Int?,
+  val planningWaveSubtaskIds: List<Int>,
+  val planningWaveCapacity: Int?,
+  val blockedSubtaskId: Int?,
+  val blockedReason: String?,
+  val units: List<StandalonePlanUnit>,
+  val stalledSince: Instant?,
+  val planningWaveNumber: Int? = null,
+  val planningWaveHistoryComplete: Boolean = false,
+  val blockedSubtaskIds: List<Int> = emptyList(),
+  val waves: List<PlanWave> = emptyList(),
+)
+
+data class StandalonePlanStage(
+  val phaseId: String,
+  val firstStartedAt: Instant?,
+  val finishedAt: Instant?,
+  val briefingText: String?,
+  val status: String? = null,
+)
+
+data class StandalonePlanUnit(
+  val subtaskId: Int,
+  val name: String,
+  val specPath: String,
+  val dependsOn: List<Int>,
+  val state: String,
+  val startedAt: Instant?,
+  val finishedAt: Instant?,
+  val blockedReason: String?,
+  val latestOutput: String?,
+  val latestOutputAt: Instant? = null,
+)
 
 enum class IncidentProgress {
   InvestigationPending, Investigating, DiagnosisComplete, DiagnosisPartial, DiagnosisFailed,
@@ -360,3 +457,10 @@ data class Incident(
   val observedAt: Instant,
   val settledAt: Instant?,
 )
+
+data class PlanOutputLine(val id: String, val text: String, val at: Instant, val subtaskId: Int?, val sequence: Long, val isRaw: Boolean = false)
+data class PlanWave(val number: Int?, val subtaskIds: List<Int>, val startedAt: Instant?)
+
+data class PlanAgentActivity(val id: String, val phaseId: String, val kind: String, val text: String,
+  val at: Instant, val updatedAt: Instant, val agentId: String, val path: String?, val state: String,
+  val durationMs: Long?, val exitCode: Int?, val subtaskId: Int?)

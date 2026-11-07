@@ -177,6 +177,17 @@ class GovernedReviewEvidenceEndpointTest {
     assertFalse(Files.exists(cursorConfig))
   }
 
+  @Test
+  fun `closing the endpoint removes its directory when a Cursor CLI config is present`() {
+    val endpoint = GovernedReviewEvidenceEndpoint.bind("architecture", RecordingBroker(), listOf("/bin/true"))
+    val cursorConfig = GovernedReviewMcpConfigWriter.cursorProjectConfigPath(endpoint.descriptor.mcpConfigPath)
+    Files.writeString(cursorConfig.resolveSibling("cli.json"), "{}")
+
+    endpoint.close()
+
+    assertFalse(Files.exists(endpoint.descriptor.mcpConfigPath.parent))
+  }
+
   private class Client(private val channel: SocketChannel) : AutoCloseable {
     private val reader = Channels.newInputStream(channel).bufferedReader()
     private val writer = Channels.newOutputStream(channel).bufferedWriter()

@@ -60,6 +60,9 @@ class DiffCommentObservations internal constructor(
     .distinctUntilChanged()
 
   private suspend fun list(baseline: ChangeBaseline): DiffCommentsState {
+    if (baseline is ChangeBaseline.CommittedRevisionRange) {
+      return unavailable("Comments are unavailable for a fixed historical revision range.")
+    }
     val branchRange = baseline as? ChangeBaseline.CommittedBranchRange
     val result = readOrProblem(runtime, diagnostics) {
       reads.read("diff_comments_list") { component ->
@@ -105,19 +108,22 @@ class DiffCommentObservations internal constructor(
     ::deleteWriteOutcome,
   )
 
-  suspend fun addPending(baseline: ChangeBaseline, branch: String, path: String, side: CommentSide?, line: Int?, body: String): Outcome<Unit, CommentRejection> = write(
-    "add_pending",
-    {
-      it.diffCommentService.addPending(
-        Path.of(baseline.worktreeRoot),
-        DiffCommentPendingThreadRequest(
-          path, side?.toRuntime() ?: RuntimeSide.NEW, line, body,
-          expectedBranch = branch,
-        ),
-      )
-    },
-    ::threadWriteOutcome,
-  )
+  suspend fun addPending(baseline: ChangeBaseline, branch: String, path: String, side: CommentSide?, line: Int?, body: String): Outcome<Unit, CommentRejection> {
+    if (baseline is ChangeBaseline.CommittedRevisionRange) return rejected("Comments are unavailable for a fixed historical revision range.")
+    return write(
+      "add_pending",
+      {
+        it.diffCommentService.addPending(
+          Path.of(baseline.worktreeRoot),
+          DiffCommentPendingThreadRequest(
+            path, side?.toRuntime() ?: RuntimeSide.NEW, line, body,
+            expectedBranch = branch,
+          ),
+        )
+      },
+      ::threadWriteOutcome,
+    )
+  }
 
   suspend fun editComment(commentId: String, body: String): Outcome<Unit, CommentRejection> = write(
     "edit",
@@ -125,27 +131,33 @@ class DiffCommentObservations internal constructor(
     ::threadWriteOutcome,
   )
 
-  suspend fun submitReview(baseline: ChangeBaseline, branch: String): Outcome<Int, CommentRejection> = write(
-    "submit_review",
-    {
-      it.diffCommentService.submitReview(
-        Path.of(baseline.worktreeRoot),
-        branch = branch,
-      )
-    },
-    ::countWriteOutcome,
-  )
+  suspend fun submitReview(baseline: ChangeBaseline, branch: String): Outcome<Int, CommentRejection> {
+    if (baseline is ChangeBaseline.CommittedRevisionRange) return rejected("Comments are unavailable for a fixed historical revision range.")
+    return write(
+      "submit_review",
+      {
+        it.diffCommentService.submitReview(
+          Path.of(baseline.worktreeRoot),
+          branch = branch,
+        )
+      },
+      ::countWriteOutcome,
+    )
+  }
 
-  suspend fun discardPending(baseline: ChangeBaseline, branch: String): Outcome<Int, CommentRejection> = write(
-    "discard_pending",
-    {
-      it.diffCommentService.discardPending(
-        Path.of(baseline.worktreeRoot),
-        branch = branch,
-      )
-    },
-    ::countWriteOutcome,
-  )
+  suspend fun discardPending(baseline: ChangeBaseline, branch: String): Outcome<Int, CommentRejection> {
+    if (baseline is ChangeBaseline.CommittedRevisionRange) return rejected("Comments are unavailable for a fixed historical revision range.")
+    return write(
+      "discard_pending",
+      {
+        it.diffCommentService.discardPending(
+          Path.of(baseline.worktreeRoot),
+          branch = branch,
+        )
+      },
+      ::countWriteOutcome,
+    )
+  }
 
   private suspend fun <T, R> write(
     operation: String,

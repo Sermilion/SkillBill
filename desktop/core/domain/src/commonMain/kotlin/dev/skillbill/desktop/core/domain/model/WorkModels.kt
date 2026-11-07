@@ -16,11 +16,16 @@ enum class WorkLiveSection { NeedsYou, Goals, Phases, Operations }
 
 enum class GoalWorktreeState { Active, Retained, Removed }
 
+/** What happened to the main checkout when the goal's worktree was removed. */
+enum class MainCheckoutOutcome { CheckedOut, SkippedUncommittedChanges, Failed }
+
 data class GoalWorktree(
   val path: String,
   val state: GoalWorktreeState,
   val retentionReason: String?,
   val retentionDetail: String?,
+  val mainCheckout: MainCheckoutOutcome? = null,
+  val mainCheckoutDetail: String? = null,
 )
 
 data class WorkProgress(val done: Int, val total: Int)

@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
@@ -171,16 +172,22 @@ private fun FindingChip(id: String, onOpen: (String) -> Unit) {
 }
 
 @Composable
-private fun EvidenceChip(path: String, onOpen: () -> Unit) {
-  val colors = SkillBillTheme.colors
+internal fun EvidenceChip(path: String, onOpen: () -> Unit) {
   val name = fileName(path)
+  QaChip(name, LucideIcons.file, "Open evidence $name", mono = true, onClick = onOpen)
+}
+
+@Composable
+internal fun QaChip(label: String, icon: ImageVector, description: String = label, mono: Boolean = false, onClick: () -> Unit) {
+  val colors = SkillBillTheme.colors
+  val type = SkillBillTheme.type
   Row(
     Modifier.background(colors.bgRaised, RoundedCornerShape(SkillBillRadius.xs)).border(1.dp, colors.border, RoundedCornerShape(SkillBillRadius.xs))
-      .clickable(role = Role.Button, onClick = onOpen).semantics { contentDescription = "Open evidence $name" }
+      .clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = description }
       .padding(horizontal = 8.dp, vertical = 2.dp),
     horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically,
   ) {
-    SbIcon(LucideIcons.file, 12.dp)
-    BasicText(name, style = SkillBillTheme.type.monoSm.copy(color = colors.fg2))
+    SbIcon(icon, 12.dp)
+    BasicText(label, style = (if (mono) type.monoSm else type.tSm).copy(color = colors.fg2))
   }
 }

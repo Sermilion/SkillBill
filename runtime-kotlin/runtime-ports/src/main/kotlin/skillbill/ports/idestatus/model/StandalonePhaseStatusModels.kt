@@ -3,6 +3,7 @@ package skillbill.ports.idestatus.model
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import java.time.Instant
 
 data class IdeStatusWorkflowRegistration(
@@ -135,6 +136,8 @@ data class StandalonePhaseStatusUpdate(
   val qaReportText: String? = null,
   val planReport: StandalonePlanReport? = null,
   val reviewRunId: String? = null,
+  val qaDetails: QaRunDetails? = null,
+  val validationOutcome: StandaloneValidationOutcome? = null,
 )
 
 enum class StandalonePhaseStatusUpdateResult {
@@ -182,9 +185,13 @@ data class StandalonePhaseStatusRecord(
   val planReport: StandalonePlanReport? = null,
   val reviewRunId: String? = null,
   val qaChecklist: StandaloneQaChecklist? = null,
+  val qaDetails: QaRunDetails? = null,
+  val liveChecks: LiveChecksAvailability? = null,
+  val validationOutcome: StandaloneValidationOutcome? = null,
 )
 
 const val STANDALONE_ELIGIBLE_PAGE_LIMIT: Int = 500
+const val VALIDATION_BRANCH_RUN_LIMIT: Int = 50
 
 enum class StandaloneEligibleSlice { LIVE, SETTLED }
 

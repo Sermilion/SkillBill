@@ -19,6 +19,7 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutco
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanFanOutHistory
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
@@ -114,6 +115,16 @@ public interface PhasePlanRecords {
   /** The bundle snapshot planning recorded for [workflowId], with the settled plan of each subtask. */
   public fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle?
 
+  public fun loadPlanFanOutHistory(workflowId: String): FeatureTaskRuntimePlanFanOutHistory?
+
+  public fun recordPlanFanOutWave(
+    workflowId: String,
+    stepId: String,
+    attempt: Int,
+    capacity: Int,
+    unitIds: List<Int>,
+  ): Boolean
+
   /** Records the plan [bundle] snapshot. Returns false when the write did not apply. */
   public fun recordPlanBundle(
     workflowId: String,
@@ -125,6 +136,12 @@ public interface PhasePlanRecords {
    * [unitRecords], keyed by subtask id, in one write. Returns false when the write did not apply.
    */
   public fun recordPlanBundleWithUnits(
+    workflowId: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+    unitRecords: Map<Int, FeatureTaskRuntimePhaseRecord>,
+  ): Boolean
+
+  public fun replacePlanBundleWithUnits(
     workflowId: String,
     bundle: FeatureTaskRuntimePlanBundle,
     unitRecords: Map<Int, FeatureTaskRuntimePhaseRecord>,

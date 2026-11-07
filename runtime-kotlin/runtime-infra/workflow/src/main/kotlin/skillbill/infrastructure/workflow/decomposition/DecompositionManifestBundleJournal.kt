@@ -5,7 +5,9 @@ import skillbill.contracts.decomposition.BUNDLE_JOURNAL_CONTRACT_VERSION
 import skillbill.contracts.projectstore.ProjectStoreLayout
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
+import skillbill.infrastructure.host.jvm.RuntimeTempEnvironmentKeys
 import skillbill.infrastructure.host.jvm.atomicWriteString
+import skillbill.infrastructure.host.jvm.resolveTelemetryStateDir
 import skillbill.ports.system.HostPlatformPort
 import java.nio.channels.FileChannel
 import java.nio.file.Files
@@ -90,9 +92,13 @@ private fun decompositionManifestLockPath(
 ): Path {
   val owner = lockOwner(parent)
   val digest = sha256Hex(owner.toString().toByteArray(Charsets.UTF_8))
-  return hostPlatform.resolveTemporaryDirectory()
-    .resolve(LOCK_DIRECTORY_NAME)
-    .resolve("$digest$LOCK_FILE_SUFFIX")
+  val environment = hostPlatform.resolveEnvironment()
+  val lockRoot =
+    environment[RuntimeTempEnvironmentKeys.SKILL_BILL_LOCK_DIR]?.takeIf(String::isNotBlank)?.let { Path.of(it) }
+      ?: resolveTelemetryStateDir(environment, hostPlatform.resolveUserHome())
+        .resolve("locks")
+        .resolve(LOCK_DIRECTORY_NAME)
+  return lockRoot.resolve("$digest$LOCK_FILE_SUFFIX")
 }
 
 internal fun cleanupValidatedBundleJournal(transaction: DecompositionManifestBundleTransaction) =

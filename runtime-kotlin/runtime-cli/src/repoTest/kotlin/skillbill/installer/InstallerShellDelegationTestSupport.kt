@@ -334,6 +334,8 @@ internal fun runPrebuiltInstaller(
   builder.environment().installDesktopUnder(home)
   if (options.skipPreinstallUninstall) {
     builder.environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
+  } else {
+    builder.environment().remove("SKILL_BILL_SKIP_PREINSTALL_UNINSTALL")
   }
   if (options.seedPriorInstall) {
     Files.createDirectories(home.resolve(".skill-bill"))
@@ -473,11 +475,11 @@ internal object InstallerShellFixtures {
     |  "install migrate-legacy-config") exit 0 ;;
     |  "install clear-state")
     |    state_root="${'$'}{SKILL_BILL_STATE_DIR:-${'$'}home/.skill-bill}"
-    |    rm -rf "${'$'}state_root/runtime" "${'$'}state_root/installed-skills" \
+    |    rm -rf "${'$'}state_root/installed-skills" \
     |      "${'$'}state_root/.candidate-source" "${'$'}state_root/native-agent-link-inventory.json" \
     |      "${'$'}state_root/native-agent-link-inventory.json.lock"
     |    if [[ "${'$'}{SKILL_BILL_PRESERVE_SOURCE_ON_WIPE:-}" != 1 ]]; then
-    |      rm -rf "${'$'}state_root/skills" "${'$'}state_root/platform-packs" \
+    |      rm -rf "${'$'}state_root/runtime" "${'$'}state_root/skills" "${'$'}state_root/platform-packs" \
     |        "${'$'}state_root/orchestration" "${'$'}state_root/agent-addons" \
     |        "${'$'}state_root/baseline-manifest.json"
     |    fi

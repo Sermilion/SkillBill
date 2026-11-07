@@ -22,8 +22,8 @@ import me.tatarka.inject.annotations.Provides
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
 import software.amazon.lastmile.kotlin.inject.anvil.MergeComponent
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
+import java.nio.file.Files
 import java.nio.file.Path
-import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
@@ -43,7 +43,7 @@ abstract class BenchmarkComponent(
 }
 
 internal suspend fun BenchmarkComponent.closeSession() {
-  val closingPath = Path.of(host.userHome).resolve("benchmark-closed-${UUID.randomUUID()}.db").toString()
+  val closingPath = Files.createTempDirectory(Path.of(host.userHome), "benchmark-closed-").toString()
   when (val result = appSettingsRepository.setDatabasePath(closingPath)) {
     is Outcome.Success -> Unit
     is Outcome.Failure -> error("Could not select a closing database path: ${result.error}.")

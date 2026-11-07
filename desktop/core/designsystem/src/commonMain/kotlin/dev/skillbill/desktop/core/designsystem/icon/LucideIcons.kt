@@ -68,6 +68,12 @@ object LucideIcons {
       path("M12 7v5l4 2")
     }
   }
+  val reset: ImageVector by lazy {
+    imageVector("reset") {
+      path("M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8")
+      path("M3 3v5h5")
+    }
+  }
   val sliders: ImageVector by lazy {
     imageVector("sliders") {
       path("M20 7h-9")
@@ -163,6 +169,18 @@ object LucideIcons {
     imageVector("terminal") {
       poly("4 17 10 11 4 5", false)
       line(12.0f, 19.0f, 20.0f, 19.0f)
+    }
+  }
+  val image: ImageVector by lazy {
+    imageVector("image") {
+      rect(3f, 3f, 18f, 18f, 2f)
+      circle(9f, 9f, 2f)
+      path("m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21")
+    }
+  }
+  val messageSquare: ImageVector by lazy {
+    imageVector("message-square") {
+      path("M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z")
     }
   }
   val pause: ImageVector by lazy {
@@ -325,6 +343,11 @@ object LucideIcons {
     imageVector("link") {
       path("M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71")
       path("M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71")
+    }
+  }
+  val plug: ImageVector by lazy {
+    imageVector("plug") {
+      path("M9 3v4M15 3v4M7 7h10v4a5 5 0 0 1-10 0zM12 16v5")
     }
   }
   val repo: ImageVector by lazy {

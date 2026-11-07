@@ -22,6 +22,7 @@ public data class SpecBundleControl(
   val canPause: Boolean,
   val pauseRequested: Boolean,
   val canCancel: Boolean,
+  val canDelete: Boolean,
   val purgeVisible: Boolean,
   val canPurge: Boolean,
   val agentId: String?,

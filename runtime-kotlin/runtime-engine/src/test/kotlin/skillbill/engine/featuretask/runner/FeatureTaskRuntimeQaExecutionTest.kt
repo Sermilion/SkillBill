@@ -28,6 +28,7 @@ import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.process.IdentifierGeneratorPort
+import skillbill.ports.qa.model.QaLeaseReleaseOutcome
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.scaffold.model.QaCapabilityDeclaration
 import skillbill.scaffold.model.QaTargetKind
@@ -38,6 +39,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRu
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.qa.QaOpenFinding
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
+import skillbill.workflow.taskruntime.model.qa.QaRunRetainedResource
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
@@ -157,7 +159,7 @@ class FeatureTaskRuntimeQaExecutionTest {
           }
           if (phase == "audit" && pauseAudit) throw CancellationException("restart after the completed repair")
         },
-        identifiers = IdentifierGeneratorPort { "test-invocation-${qaVisits + 1}" },
+        ports = QaFixturePorts(identifiers = IdentifierGeneratorPort { "test-invocation-${qaVisits + 1}" }),
       )
     repeat(3) {
       assertRepairRelaunch(fixture, it + 1)
@@ -231,7 +233,7 @@ class FeatureTaskRuntimeQaExecutionTest {
             fixture.git.repositoryFingerprintValue = (fixes + 3).toString().repeat(64)
           }
         },
-        identifiers = IdentifierGeneratorPort { "test-invocation-${qaVisits + 1}" },
+        ports = QaFixturePorts(identifiers = IdentifierGeneratorPort { "test-invocation-${qaVisits + 1}" }),
       )
 
     val report = fixture.harness.runner.run(fixture.harness.request)
@@ -277,6 +279,25 @@ class FeatureTaskRuntimeQaExecutionTest {
     val stored = assertNotNull(fixture.storedQaOutcome())
     assertEquals(StandaloneQaOutcome.INCOMPLETE, stored.outcome)
     assertContains(assertNotNull(stored.reason), "QA agent wrote no report.md")
+  }
+
+  @Test
+  fun `a device lease the goal QA run could not release is stored on the outcome`() {
+    val fixture =
+      fixture(
+        QaVerdict.PASSED,
+        ports =
+          QaFixturePorts(
+            leases = RecordingQaLeases(listOf(QaLeaseReleaseOutcome.Failed("device-1", "adb offline"))),
+          ),
+      )
+
+    fixture.harness.runner.run(fixture.harness.request)
+
+    assertEquals(
+      listOf(QaRunRetainedResource("device_lease", "device-1")),
+      assertNotNull(fixture.storedQaOutcome()).details?.retainedResources,
+    )
   }
 
   @Test
@@ -457,7 +478,7 @@ class FeatureTaskRuntimeQaExecutionTest {
             fixture.git.repositoryFingerprintValue = "7".repeat(64)
           }
         },
-        identifiers = IdentifierGeneratorPort { "test-invocation-${qaVisits + 1}" },
+        ports = QaFixturePorts(identifiers = IdentifierGeneratorPort { "test-invocation-${qaVisits + 1}" }),
       )
 
     val report = fixture.harness.runner.run(fixture.harness.request)
@@ -491,7 +512,7 @@ class FeatureTaskRuntimeQaExecutionTest {
             throw CancellationException("restart inside the second QA invalidation")
           }
         },
-        identifiers = IdentifierGeneratorPort { "test-invocation-${qaVisits + 1}" },
+        ports = QaFixturePorts(identifiers = IdentifierGeneratorPort { "test-invocation-${qaVisits + 1}" }),
       )
 
     assertFailsWith<CancellationException> { fixture.harness.runner.run(fixture.harness.request) }
@@ -604,8 +625,9 @@ class FeatureTaskRuntimeQaExecutionTest {
     onPhase: (String) -> Unit = { phase ->
       if (phase == "qa_fix") throw CancellationException("stop after proving QA repair routing")
     },
-    identifiers: IdentifierGeneratorPort = IdentifierGeneratorPort { "test-invocation" },
+    ports: QaFixturePorts = QaFixturePorts(),
   ): Fixture {
+    val leases = ports.leases
     val branch = committedRepoBranchSetup()
     val git = branch.gitOperations
     git.currentBranchValue = "feat/qa-execution"
@@ -615,7 +637,6 @@ class FeatureTaskRuntimeQaExecutionTest {
     val workspaces = InMemoryQaWorkspaces()
     val diagnostics = RecordingQaDiagnostics()
     val runDiagnostics = RecordingQaDiagnostics()
-    val leases = RecordingQaLeases()
     val expected = QaExpectedIdentity(QA_TEST_HEAD, QA_TEST_TREE, qaTestEvidencePrefix("qa-test-invocation"))
     val pack =
       kotlinPackWithValidationGate().copy(
@@ -631,7 +652,7 @@ class FeatureTaskRuntimeQaExecutionTest {
           capabilityReads++
           listOf(pack)
         },
-        identifiers,
+        ports.identifiers,
       )
     var visit = 0
     val launcher =
@@ -694,6 +715,11 @@ class FeatureTaskRuntimeQaExecutionTest {
       "produced_outputs": {"blocking_reasons": ["$reason"]}
     }
     """.trimIndent()
+
+  private class QaFixturePorts(
+    val identifiers: IdentifierGeneratorPort = IdentifierGeneratorPort { "test-invocation" },
+    val leases: RecordingQaLeases = RecordingQaLeases(),
+  )
 
   private data class Fixture(
     val harness: TelemetryRunnerHarness,

@@ -130,18 +130,6 @@ internal fun goalFinishSteps(item: WorkItem, detail: Detail): List<PipelineStep>
   }
 }
 
-/** screens.js Goal QA: "QA found 3 findings; all fixed after 2 fix attempts." or "QA could not fix 1 finding. Review them yourself." */
-internal fun qaFindingsSummary(total: Int, notFixed: Int, attempts: Int): String {
-  val after = when (attempts) { 0 -> ""; 1 -> " after 1 fix attempt"; else -> " after $attempts fix attempts" }
-  return if (notFixed == 0) {
-    "QA found ${findingCount(total)}; all fixed$after."
-  } else {
-    "QA could not fix ${findingCount(notFixed)}. Review them yourself."
-  }
-}
-
-private fun findingCount(count: Int): String = if (count == 1) "1 finding" else "$count findings"
-
 internal fun goalAssessmentVerificationLabel(verification: GoalAssessmentVerification): String = when (verification) {
   GoalAssessmentVerification.Confirmed -> "confirmed"
   GoalAssessmentVerification.Refuted -> "refuted"

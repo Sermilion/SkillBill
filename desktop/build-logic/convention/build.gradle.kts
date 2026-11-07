@@ -31,6 +31,16 @@ tasks.withType<Test>().configureEach {
   inputs.file(desktopCatalog).withPropertyName("desktopVersionCatalog")
   systemProperty("skillbill.desktop.catalog", desktopCatalog.absolutePath)
   maxHeapSize = "1g"
+  val taskKey = "${rootDir.absolutePath}$path".hashCode().toUInt().toString(radix = 16).padStart(8, '0')
+  val fallbackTempDir = temporaryDir
+  doFirst {
+    val runScratch =
+      System.getenv("SKILL_BILL_RUN_SCRATCH_DIR")?.takeIf(String::isNotBlank)?.let(::File)?.takeIf(File::isDirectory)
+    val tempDir = runScratch?.resolve("t-$taskKey") ?: fallbackTempDir
+    tempDir.mkdirs()
+    (this as Test).jvmArgs("-Djava.io.tmpdir=${tempDir.absolutePath}")
+    environment.remove("SKILL_BILL_RUN_SCRATCH_DIR")
+  }
 }
 
 tasks.validatePlugins {

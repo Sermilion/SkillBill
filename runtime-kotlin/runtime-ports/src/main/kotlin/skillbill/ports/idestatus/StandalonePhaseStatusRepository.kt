@@ -13,7 +13,11 @@ import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandaloneQaChecklistWriteResult
 import java.time.Instant
 
-interface StandalonePhaseStatusRepository : StandalonePhaseCancellationRepository {
+interface StandalonePhaseStatusRepository :
+  StandalonePhaseCancellationRepository,
+  StandaloneValidationCheckRepository,
+  StandaloneValidationBranchRepository,
+  StandaloneOutputRepository {
   fun register(request: StandalonePhaseStatusRegistration): StandalonePhaseStatusRecord
 
   fun registerWorkflow(request: IdeStatusWorkflowRegistration): IdeStatusWorkflowExecution?

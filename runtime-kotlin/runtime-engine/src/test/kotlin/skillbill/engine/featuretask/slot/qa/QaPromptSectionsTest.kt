@@ -15,6 +15,37 @@ import kotlin.test.assertFalse
 
 class QaPromptSectionsTest {
   @Test
+  fun `unblock and detached process guidance reaches every policy and target kind`() {
+    val directory = Path.of("/tmp/qa-unblock")
+    val targets =
+      listOf(
+        QaDeclaredTarget("backend", setOf(QaTargetKind("backend")), FileLocation("/packs/backend/qa.md")),
+        QaDeclaredTarget("kmp", setOf(QaTargetKind("kmp"), QaTargetKind("android")), FileLocation("/packs/kmp/qa.md")),
+      )
+
+    listOf(QaPolicy.STANDALONE, QaPolicy.AUTO, QaPolicy.ON).forEach { policy ->
+      val qa =
+        QaExecutionContext(
+          workspace = QaWorkspace("phr-qa-unblock", directory, directory.resolve("report.md"), "$directory/"),
+          expected = qaTestExpected(),
+          target = QaExecutionTarget.Supported(targets, Path.of("/tmp/qa-checkout")),
+          policy = policy,
+        )
+      val supplement = QaPromptSections.supplement(qa).replace(Regex("\\s+"), " ")
+
+      assertContains(supplement, "## Unblock")
+      assertContains(supplement, "#### <capability>")
+      assertContains(supplement, "- Target:")
+      assertContains(supplement, "- Tried:")
+      assertContains(supplement, "- Evidence:")
+      assertContains(supplement, "- Remedy:")
+      assertContains(supplement, ".skill-bill/phases/qa.md")
+      assertContains(supplement, "Never start a line inside the block with `#`")
+      assertContains(supplement, "setsid nohup")
+    }
+  }
+
+  @Test
   fun `only standalone QA gets the progress block, and existing rules keep their wording`() {
     val directory = Path.of("/tmp/qa-progress")
 
@@ -37,6 +68,9 @@ class QaPromptSectionsTest {
     assertContains(standalone, "\"contract_version\": \"0.1\"")
     assertContains(standalone, "Progress commands never decide the verdict")
     assertContains(standalone, "Edit nothing outside the QA checkout and the invocation directory")
+    assertContains(standalone, "`- [passed|failed|not_exercised] <title>: <detail>. Evidence: <paths>`")
+    assertContains(standalone, "`Steps:`, `Expected:`, `Observed:` and `Evidence:`")
+    assertContains(standalone, "`[not restored]` only when the edit outlives the QA checkout")
     listOf(QaPolicy.AUTO, QaPolicy.ON).forEach { policy ->
       assertFalse("skill-bill qa plan" in QaPromptSections.supplement(context(policy)))
     }

@@ -24,6 +24,7 @@ import dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeArchiveFileChooser
+import dev.skillbill.desktop.core.testing.FakeDesktopClipboard
 import dev.skillbill.desktop.core.testing.FakeWorkBoardRepository
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
@@ -82,23 +83,31 @@ class SpecsPaneModelTest {
   }
 
   @Test
-  fun `a file inside a bundle cannot start or control its parent`() = runTest {
+  fun `a selected file uses its parent control while retaining its own row selection`() = runTest {
     val dispatcher = StandardTestDispatcher(testScheduler)
     Dispatchers.setMain(dispatcher)
+    specs.controlState.value = SpecControlState.Loaded(control(runState = SpecRunState.Paused, canStart = true), goal)
     val model = model(dispatcher)
     model.open()
     advanceUntilIdle()
 
     model.onAction(SpecsAction.Select("SKILL-1/spec.md"))
     advanceUntilIdle()
-    assertEquals(ToolbarSelection.FileInBundle("SKILL-1"), model.state.value.toolbar.selection)
+    assertEquals(ToolbarSelection.Bundle("SKILL-1"), model.state.value.toolbar.selection)
+    assertEquals("SKILL-1/spec.md", model.state.value.selectedPath)
+    assertEquals(1, specs.controlReads)
+    model.onAction(SpecsAction.Select("SKILL-1"))
+    model.onAction(SpecsAction.Select("SKILL-1/spec.md"))
+    advanceUntilIdle()
+    assertEquals(1, specs.controlReads)
     model.onAction(SpecsAction.Start)
     model.onAction(SpecsAction.Pause)
     model.onAction(SpecsAction.RequestCancel)
     advanceUntilIdle()
 
-    assertEquals(0, specs.controlReads)
-    assertEquals(emptyList(), controls.calls)
+    assertEquals(1, specs.controlReads)
+    assertEquals(listOf("launch"), controls.calls.map { it.control })
+    assertEquals("SKILL-1", controls.calls.single().item.issueKey)
   }
 
   @Test
@@ -142,7 +151,57 @@ class SpecsPaneModelTest {
   }
 
   @Test
-  fun `a second click on a bundle collapses what the first click expanded`() = runTest {
+  fun `choosing an agent resumes only a start that opened the picker`() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    specs.controlState.value = SpecControlState.Loaded(
+      control(runState = SpecRunState.Paused, canStart = true).copy(agentId = null, agentChoices = listOf("codex")),
+      goal,
+    )
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+    model.onAction(SpecsAction.Select("SKILL-1"))
+    advanceUntilIdle()
+
+    model.onAction(SpecsAction.Start)
+    advanceUntilIdle()
+    assertTrue(model.state.value.toolbar.agentMenuOpen)
+    model.onAction(SpecsAction.ChooseAgent("codex"))
+    advanceUntilIdle()
+
+    assertEquals(listOf("launch"), controls.calls.map { it.control })
+    assertEquals("codex", controls.calls.single().agentId)
+  }
+
+  @Test
+  fun `ordinary agent choice does not start and a forbidden agent menu stays closed`() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    specs.controlState.value = SpecControlState.Loaded(
+      control(runState = SpecRunState.Paused, canStart = false).copy(agentId = null, agentChoices = listOf("codex")),
+      goal,
+    )
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+    model.onAction(SpecsAction.Select("SKILL-1"))
+    advanceUntilIdle()
+
+    model.onAction(SpecsAction.OpenAgentMenu)
+    assertFalse(model.state.value.toolbar.agentMenuOpen)
+    model.onAction(SpecsAction.ChooseAgent("codex"))
+    advanceUntilIdle()
+    assertTrue(controls.calls.isEmpty())
+
+    model.onAction(SpecsAction.Deselect)
+    advanceUntilIdle()
+    assertNull(model.state.value.selectedPath)
+    assertEquals(ToolbarSelection.None, model.state.value.toolbar.selection)
+  }
+
+  @Test
+  fun `a bundle click selects without changing its expansion`() = runTest {
     val dispatcher = StandardTestDispatcher(testScheduler)
     Dispatchers.setMain(dispatcher)
     val model = model(dispatcher)
@@ -152,22 +211,28 @@ class SpecsPaneModelTest {
 
     model.onAction(SpecsAction.Click("SKILL-1"))
     advanceUntilIdle()
-    assertEquals(listOf("SKILL-1", "SKILL-1/spec.md"), paths())
-
-    model.onAction(SpecsAction.Click("SKILL-1"))
-    advanceUntilIdle()
     assertEquals(listOf("SKILL-1"), paths())
+    assertEquals("SKILL-1", model.state.value.selectedPath)
+
+    model.onAction(SpecsAction.Toggle("SKILL-1"))
+    advanceUntilIdle()
+    assertEquals(listOf("SKILL-1", "SKILL-1/spec.md"), paths())
   }
 
   @Test
-  fun `only a bundle row opens the row menu`() = runTest {
+  fun `file context menu selects and targets the parent bundle`() = runTest {
     val model = openedModel()
 
     model.onAction(SpecsAction.OpenRowMenu("SKILL-1/spec.md"))
-    model.onAction(SpecsAction.RequestDelete("SKILL-1/spec.md"))
     advanceUntilIdle()
-    assertNull(model.state.value.rowMenuPath)
-    assertNull(model.state.value.deleteTarget)
+    assertEquals("SKILL-1", model.state.value.rowMenuPath)
+    assertEquals("SKILL-1/spec.md", model.state.value.rowMenuAnchorPath)
+    assertEquals("SKILL-1/spec.md", model.state.value.selectedPath)
+    specs.treeState.value = SpecTreeState.Loaded(specs.loadedTree, project.specsRoot)
+    advanceUntilIdle()
+    assertEquals("SKILL-1", model.state.value.rowMenuPath)
+    assertEquals("SKILL-1/spec.md", model.state.value.rowMenuAnchorPath)
+    model.onAction(SpecsAction.DismissRowMenu)
 
     model.onAction(SpecsAction.OpenRowMenu("SKILL-1"))
     advanceUntilIdle()
@@ -181,6 +246,66 @@ class SpecsPaneModelTest {
       model.state.value.deleteTarget,
     )
     assertEquals(emptyList(), specs.deletes)
+  }
+
+  @Test
+  fun `shared spec actions preserve order and disabled runtime reasons`() {
+    val bundle = specs.loadedTree.roots.single() as SpecNode.Bundle
+    val control = control(canStart = true, canCancel = true, canDelete = false).copy(
+      canPause = true,
+      pauseRequested = true,
+      purgeVisible = true,
+      canPurge = false,
+    )
+    val state = SpecsUiState(
+      project = project,
+      selectedPath = bundle.path,
+      toolbar = SpecToolbarState(
+        selection = ToolbarSelection.Bundle(bundle.path),
+        control = SpecControlState.Loaded(control, goal),
+        favorite = true,
+        favoriteAvailable = true,
+      ),
+    )
+
+    val entries = specMenuActions(bundle, state).filterIsInstance<SpecMenuAction.Item>()
+
+    assertEquals(
+      listOf("Open spec", "Reveal folder", "Copy key", "Remove favorite", "Export work", "Start", "Pause requested", "Choose agent", "Cancel goal…", "Purge run history…", DELETE_SPEC_FILES),
+      entries.map { it.label },
+    )
+    assertFalse(entries.first { it.label == "Pause requested" }.enabled)
+    assertEquals(PAUSE_NOTICE, entries.first { it.label == "Pause requested" }.reason)
+    assertFalse(entries.last().enabled)
+    assertEquals(DELETE_LIVE, entries.last().reason)
+    assertEquals("F", entries.first { it.action == SpecsAction.ToggleFavorite }.shortcut)
+    assertEquals("R", entries.first { it.action == SpecsAction.Start }.shortcut)
+    assertEquals("A", entries.first { it.action == SpecsAction.OpenAgentMenu }.shortcut)
+  }
+
+  @Test
+  fun `command palette maps the shared spec actions in their menu order`() = runTest {
+    val model = model(StandardTestDispatcher(testScheduler))
+    val bundle = specs.loadedTree.roots.single() as SpecNode.Bundle
+    val state = SpecsUiState(
+      project = project,
+      tree = SpecTreeState.Loaded(specs.loadedTree, project.specsRoot),
+      selectedPath = bundle.path,
+      toolbar = SpecToolbarState(
+        selection = ToolbarSelection.Bundle(bundle.path),
+        control = SpecControlState.Loaded(
+          control(canStart = true, canCancel = true, canDelete = false).copy(pauseRequested = true),
+          goal,
+        ),
+      ),
+    )
+
+    val menuActions = specMenuActions(bundle, state).filterIsInstance<SpecMenuAction.Item>()
+    val paletteCommands = model.commandSection(state)!!.commands
+
+    assertEquals(menuActions.map { it.label }, paletteCommands.map { it.item.label })
+    assertEquals(menuActions.map { it.enabled }, paletteCommands.map { it.item.enabled })
+    assertEquals(PAUSE_NOTICE, paletteCommands.single { it.item.label == "Pause requested" }.item.end)
   }
 
   @Test
@@ -200,6 +325,40 @@ class SpecsPaneModelTest {
 
     assertEquals(listOf(SpecBundleRef("p1", "SKILL-1", "/repo")), specs.deletes)
     assertFalse(model.state.value.deleting)
+  }
+
+  @Test
+  fun `same bundle loaded false delete verdict prevents opening confirmation`() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    specs.controlState.value = SpecControlState.Loaded(control(canDelete = false), goal)
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+    model.onAction(SpecsAction.Select("SKILL-1"))
+    advanceUntilIdle()
+
+    model.onAction(SpecsAction.RequestDelete("SKILL-1"))
+    advanceUntilIdle()
+
+    assertNull(model.state.value.deleteTarget)
+    assertEquals(emptyList(), specs.deletes)
+  }
+
+  @Test
+  fun `delete stays available without loaded control`() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    specs.controlState.value = SpecControlState.Loading
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+
+    model.onAction(SpecsAction.RequestDelete("SKILL-1"))
+    advanceUntilIdle()
+
+    assertEquals("SKILL-1", model.state.value.deleteTarget?.path)
+    assertEquals(emptyList(), specs.deletes)
   }
 
   @Test
@@ -242,6 +401,23 @@ class SpecsPaneModelTest {
 
     assertFalse(model.state.value.toolbar.exportLiveDialogOpen)
     assertTrue(toasts.host.toasts.any { "feature/delivery" in (it.data.body ?: it.data.title) })
+  }
+
+  @Test
+  fun `export reaches its existing preflight while run control is loading`() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    specs.controlState.value = SpecControlState.Loading
+    controls.exportPreflightOutcome = ExportPreflightOutcome.Refused("Branch refused", ExportRefusalCategory.BRANCH)
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+    model.onAction(SpecsAction.Select("SKILL-1"))
+    model.onAction(SpecsAction.RequestExport)
+    advanceUntilIdle()
+
+    assertEquals(listOf<Pair<String, String?>>("SKILL-1" to "/repo"), controls.preflightRequests)
+    assertFalse(model.state.value.toolbar.exportLiveDialogOpen)
   }
 
   @Test
@@ -290,19 +466,13 @@ class SpecsPaneModelTest {
   }
 
   @Test
-  fun `toggle favorite writes only for bundle selection`() = runTest {
+  fun `file selection toggles the parent bundle favorite`() = runTest {
     val dispatcher = StandardTestDispatcher(testScheduler)
     Dispatchers.setMain(dispatcher)
     val model = model(dispatcher)
     model.open()
     advanceUntilIdle()
     model.onAction(SpecsAction.Select("SKILL-1/spec.md"))
-    advanceUntilIdle()
-    model.onAction(SpecsAction.ToggleFavorite)
-    advanceUntilIdle()
-    assertTrue(settings.settings.value.favoriteSpecs.isEmpty())
-
-    model.onAction(SpecsAction.Select("SKILL-1"))
     advanceUntilIdle()
     model.onAction(SpecsAction.ToggleFavorite)
     advanceUntilIdle()
@@ -366,12 +536,14 @@ class SpecsPaneModelTest {
     AppDispatchers(dispatcher, dispatcher, dispatcher),
     archiveChooser = archiveChooser,
     board = FakeWorkBoardRepository(),
+    clipboard = FakeDesktopClipboard(),
   ).also(models::add)
 
   private fun control(
     runState: SpecRunState = SpecRunState.NotStarted,
     canStart: Boolean = false,
     canCancel: Boolean = false,
+    canDelete: Boolean = true,
   ) = SpecBundleControlView(
     issueKey = "SKILL-1",
     runState = runState,
@@ -383,6 +555,7 @@ class SpecsPaneModelTest {
     canPause = false,
     pauseRequested = false,
     canCancel = canCancel,
+    canDelete = canDelete,
     purgeVisible = false,
     canPurge = false,
     agentId = "claude",

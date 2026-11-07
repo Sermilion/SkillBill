@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import skillbill.contracts.qa.QA_DEVICE_LEASE_CONTRACT_VERSION
 import skillbill.error.featuretask.qa.qaDeviceLeaseFailed
 import skillbill.infrastructure.contracts.sha256Hex
-import skillbill.infrastructure.host.resolveTelemetryStateDir
+import skillbill.infrastructure.host.jvm.resolveTelemetryStateDir
 import skillbill.infrastructure.workflow.process.runGitProcess
 import skillbill.infrastructure.workflow.repositoryStateKey
 import skillbill.model.EnvironmentContext

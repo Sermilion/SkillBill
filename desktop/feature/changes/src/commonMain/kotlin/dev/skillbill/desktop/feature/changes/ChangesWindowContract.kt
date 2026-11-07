@@ -68,7 +68,10 @@ data class ChangesWindowUiState(
 
 data class CommentComposerUi(val path: String, val side: CommentSide?, val line: Int?, val branch: String, val text: String = "", val saving: Boolean = false, val problem: String? = null)
 data class CommentEditUi(val threadId: String, val commentId: String, val text: String, val saving: Boolean = false, val problem: String? = null)
-data class ReviewBarUi(val submitting: Boolean = false, val confirmingDiscard: Boolean = false, val problem: String? = null)
+data class ReviewBarUi(val inFlight: ReviewWrite? = null, val confirmingDiscard: Boolean = false, val problem: String? = null) {
+  val submitting: Boolean get() = inFlight != null
+}
+enum class ReviewWrite { Submit, Discard }
 enum class ChangesView { Subtasks, Commits }
 
 enum class QuickScope { All, Running, Operator, Uncommitted }

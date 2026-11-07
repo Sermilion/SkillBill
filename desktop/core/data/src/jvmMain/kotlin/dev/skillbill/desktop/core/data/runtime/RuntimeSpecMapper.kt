@@ -50,6 +50,7 @@ internal fun SpecBundleControl.toDomain() = SpecBundleControlView(
   canPause = canPause,
   pauseRequested = pauseRequested,
   canCancel = canCancel,
+  canDelete = canDelete,
   purgeVisible = purgeVisible,
   canPurge = canPurge,
   agentId = agentId,

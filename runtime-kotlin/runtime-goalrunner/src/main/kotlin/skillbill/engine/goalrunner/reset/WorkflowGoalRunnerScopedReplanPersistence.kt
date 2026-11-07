@@ -24,6 +24,7 @@ import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodePlanBundleFromArtifact
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanFanOutHistory
 
 internal class WorkflowGoalRunnerScopedReplanPersistence(
   private val projectionPersistence: WorkflowGoalRunnerManifestProjectionPersistence,
@@ -109,7 +110,15 @@ internal class WorkflowGoalRunnerScopedReplanPersistence(
             workflowStatus = record.workflowStatus,
             currentStepId = record.currentStepId,
             stepUpdates = null,
-            artifactsPatch = WorkflowArtifactPatch.from(mapOf(bundleEntry)),
+            artifactsPatch =
+              WorkflowArtifactPatch.from(
+                mapOf(
+                  bundleEntry,
+                  DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_FAN_OUT_HISTORY.entry(
+                    FeatureTaskRuntimePlanFanOutHistory(emptyList()).asWorkflowArtifactEntry(),
+                  ),
+                ),
+              ),
             sessionId = record.sessionId.orEmpty(),
             acceptedSnapshotMutation = true,
           ),

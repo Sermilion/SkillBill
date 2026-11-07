@@ -397,6 +397,23 @@ class WorkNewTaskStartTest {
   }
 
   @Test
+  fun `goal and plan startup failures retain the reason and log instead of claiming an untracked start`() {
+    val log = Path.of("new-task.log")
+    val reason = "Database read failed: schema is incompatible with this runtime."
+    val start = newSubject(repoRoot, preflight, keyAdmission())
+    for (kind in NewTaskRunKind.entries) {
+      val exit = CompletableFuture<WorkRunExit>()
+      launcher.exit = log to exit
+      val prepared = assertIs<NewTaskPreparation.Ready>(start.prepareNewTask(repoRoot, intake(keyChoice = "SKILL-514")))
+
+      val running = assertIs<NewTaskStartResult.Running>(start.startNewTask(repoRoot, prepared, kind, "claude"))
+      exit.complete(WorkRunExit(1, listOf(reason)))
+
+      assertEquals("$reason Full log: $log", running.failure.toCompletableFuture().get())
+    }
+  }
+
+  @Test
   fun `a standalone run that exits blocked reports the blocked line and log`() {
     val log = Path.of("standalone-run.log")
     launcher.exit =

@@ -682,7 +682,7 @@ class PhaseStrategyCompositionTest {
     val excludedGate =
       when {
         qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD -> PHASE_VALIDATE
-        definition == SkeletonDefinition.GOAL_QA -> null
+        definition in setOf(SkeletonDefinition.GOAL_QA, SkeletonDefinition.GOAL_BUILD) -> null
         else -> PHASE_BUILD
       }
     val expectedSteps = definition.stepIds - setOfNotNull(excludedGate)
@@ -761,7 +761,7 @@ class PhaseStrategyCompositionTest {
   ): String =
     when {
       definition == SkeletonDefinition.VALIDATION -> AgentValidateStrategy.ID
-      definition == SkeletonDefinition.GOAL_QA -> PackBuildStrategy.ID
+      definition in setOf(SkeletonDefinition.GOAL_QA, SkeletonDefinition.GOAL_BUILD) -> PackBuildStrategy.ID
       qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD -> PackBuildStrategy.ID
       else -> AgentValidateStrategy.ID
     }

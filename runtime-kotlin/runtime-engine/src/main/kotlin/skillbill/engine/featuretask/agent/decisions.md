@@ -1,3 +1,28 @@
+## [2026-11-06] Keep unblock snippets free of heading lines
+Context: QA reports include pasteable setup instructions, and the runtime report parser reads Markdown headings even inside fenced blocks.
+Decision: Put missing capabilities under `####` headings in a final `## Unblock` section and require snippets without lines starting with `#`.
+Reason: Heading lines inside snippets could split report sections or create findings. The spec requires the existing parser, coverage and reason tokens to keep their behavior.
+
+## [2026-11-05] Treat partly tagged assertions as untagged
+Context: QA reports can contain a mixture of tagged and untagged assertions, and old rows lack structured details.
+Decision: Any untagged assertion bullet clears the assertion list and adds a warning. Null `qa_details` identifies a legacy row without backfill.
+Reason: Partial counts would misstate the checks, while null distinguishes records made before the structured format.
+
+## [2026-11-05] Keep goal finding fields with the merged finding
+Context: A later report can omit a finding that the goal now marks fixed. The existing `OBSERVED` payload key holds the title.
+Decision: Store observed text, expected text and steps in `findings_summary` under separate keys. Standalone details carry their own findings.
+Reason: Merging carries earlier finding fields forward, and retaining the existing key meaning preserves stored titles.
+
+## [2026-11-05] Record retained resources before QA settlement
+Context: Goal QA receives retained resources after `withExecution` returns, and a run can stop before settlement or start another iteration.
+Decision: Record and union retained resources immediately after execution, then preserve them in attempted and settled writes.
+Reason: Resources from an earlier iteration remain left behind until cleaned up, even if a later iteration replaces the report.
+
+## [2026-11-05] Keep report format warnings outside coverage warnings
+Context: Untagged assertions and failed assertions without findings produce report warnings, while verification reads coverage warnings.
+Decision: Add these format warnings to general warnings only.
+Reason: Report formatting must not change coverage verification or the settled QA verdict.
+
 ## [2026-11-05] Treat repeated empty check observations as an operational completion result
 Context: A PR can report no checks even though checks may register later. A failed lookup does not establish an empty result, and indefinite waiting prevents goals without reported checks from completing.
 Decision: Accept two successful empty observations at least two minutes apart for the same PR and nonblank head, followed by fresh matching identity confirmation, as `NoChecksReported`. Keep the existing outcome token and scope prior-check evidence to the PR identity. Goal monitoring requires a supplied published SHA to match.
@@ -767,3 +792,20 @@ valid probe records as before. This supersedes the earlier probe correction requ
 
 Reason: Probe formatting does not determine whether project checks passed. Durable
 workflow and telemetry contracts still validate the records the runtime writes.
+
+## 2026-11-05: Reference interaction audit reports without multiplying prose
+
+Context: SKILL-453 child wftr-20261105-192716-v3h4 submitted a 27,634-byte report with six bare
+interaction verdicts and three bare re-check verdicts. Implicit evidence copied that report nine
+times into a generated audit result, exceeding its 196,608-byte contract limit after the settlement
+tool had acknowledged receipt.
+
+Decision: Runtime interaction parsing binds omitted evidence to the producing workflow, phase,
+attempt and serial revision, with a per-decision fragment. Explicit citations retain their original
+meaning. The full report remains in the settled envelope or retained producer output, rather than in
+every trace and re-check field. Unbound parser callers keep their existing prose fallback. A closure
+reference without source citations uses the existing conservative re-check-on-any-change policy. The
+phase recorder rejects oversized generated trace evidence before its owner-fenced transaction so
+output correction can reuse the attempt. Settlement guidance identifies an ok response as receipt
+pending runtime validation, not completed workflow authority. Limits and existing saved state remain
+unchanged.

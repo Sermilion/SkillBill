@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -53,21 +54,23 @@ fun SbToggle(checked: Boolean, onCheckedChange: (Boolean) -> Unit, label: String
 }
 
 @Composable
-fun SbCheckbox(checked: Boolean, onCheckedChange: (Boolean) -> Unit, label: String, enabled: Boolean = true, modifier: Modifier = Modifier) {
+fun SbCheckbox(checked: Boolean, onCheckedChange: (Boolean) -> Unit, label: String, enabled: Boolean = true, modifier: Modifier = Modifier, indeterminate: Boolean = false) {
   val colors = SkillBillTheme.colors
   val shape = RoundedCornerShape(SkillBillRadius.xs)
   val interaction = remember { MutableInteractionSource() }
   Box(
     modifier.size(CHECKBOX_SIZE).alpha(if (enabled) 1f else .45f)
-      .background(if (checked) colors.accent else androidx.compose.ui.graphics.Color.Transparent, shape)
-      .border(1.dp, if (checked) colors.accent else colors.borderStrong, shape)
+      .background(if (checked || indeterminate) colors.accent else androidx.compose.ui.graphics.Color.Transparent, shape)
+      .border(1.dp, if (checked || indeterminate) colors.accent else colors.borderStrong, shape)
       .toggleable(value = checked, enabled = enabled, role = Role.Checkbox, interactionSource = interaction, indication = null, onValueChange = onCheckedChange)
       .handCursor(enabled)
       .sbFocusRing(interaction, shape)
-      .semantics { contentDescription = label },
+      .semantics { contentDescription = label; if (indeterminate) stateDescription = "Partially selected" },
     contentAlignment = Alignment.Center,
   ) {
-    if (checked) Canvas(Modifier.size(10.dp)) {
+    if (indeterminate) Canvas(Modifier.size(10.dp)) {
+      drawLine(colors.accentFg, androidx.compose.ui.geometry.Offset(size.width * .2f, size.height * .5f), androidx.compose.ui.geometry.Offset(size.width * .8f, size.height * .5f), strokeWidth = size.height * .18f, cap = StrokeCap.Round)
+    } else if (checked) Canvas(Modifier.size(10.dp)) {
       val path = Path().apply { moveTo(size.width * 20 / 24, size.height * 6 / 24); lineTo(size.width * 9 / 24, size.height * 17 / 24); lineTo(size.width * 4 / 24, size.height * 12 / 24) }
       drawPath(path, colors.accentFg, style = Stroke(width = size.width * 3 / 24, cap = StrokeCap.Round, join = StrokeJoin.Round))
     }

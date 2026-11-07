@@ -44,15 +44,17 @@ import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.feature.chat.AgentPicker
 import dev.skillbill.desktop.feature.chat.CursorMcpPicker
 import dev.skillbill.desktop.feature.chat.ChatActivityPill
-import dev.skillbill.desktop.feature.chat.ResumePicker
+import dev.skillbill.desktop.feature.chat.ResumePalette
+import dev.skillbill.desktop.feature.chat.ResumeScope
 import dev.skillbill.desktop.feature.chat.RESUME_COMMAND
 import dev.skillbill.desktop.feature.chat.SendNowGate
+import dev.skillbill.desktop.feature.chat.resumableDrafts
 import kotlin.time.Clock
 import kotlin.time.Instant
 
 internal val COMPOSER_MAX_WIDTH = 728.dp
 
-private const val PICKERS_DISABLED_BUSY = "Wait for the current reply to finish"
+internal const val PICKERS_DISABLED_BUSY = "Wait for the current reply to finish"
 internal const val PICKERS_DISABLED_STARTING = "Wait for the start to finish"
 internal const val PICKERS_DISABLED_MISSING_REPO = "This draft's repository is missing"
 private val REPOSITORY_PICKER_WIDTH = 620.dp
@@ -112,13 +114,16 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
         onSubmit = { press(true) },
       )
       if (state.resumePickerOpen) {
-        ResumePicker(saved, now(), { onAction(NewTaskAction.ResumeDraft(it)) }, { onAction(NewTaskAction.DismissResume) })
+        ResumePalette(
+          resumableDrafts(saved, draft.repository?.root), now(), ResumeScope(draft.repository?.name, worktree = false),
+          { it.newTask?.baseBranch }, focus, { onAction(NewTaskAction.ResumeDraft(it)) }, { onAction(NewTaskAction.DismissResume) },
+        )
       }
     }
     if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        RepositoryPicker(state, draft, chat, offer.starting, focus, now, Modifier.weight(1f, fill = false), onAction)
+        RepositoryPicker(state, draft, chat, busy, offer.starting, focus, now, Modifier.weight(1f, fill = false), onAction)
         AgentPicker(state.agent, state.agents, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy) { onAction(NewTaskAction.ChooseAgent(it)) }
         if (state.agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
           CursorMcpPicker(cursorMcpDependency, enabled = pickersEnabled) { draft.cursorMcpDependency = it }
@@ -159,14 +164,14 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
 }
 
 @Composable
-private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, chat: NewTaskChat?, starting: Boolean, composerFocus: FocusRequester, now: () -> Instant, modifier: Modifier, onAction: (NewTaskAction) -> Unit) {
+private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, chat: NewTaskChat?, busy: Boolean, starting: Boolean, composerFocus: FocusRequester, now: () -> Instant, modifier: Modifier, onAction: (NewTaskAction) -> Unit) {
   val pillFocus = remember { FocusRequester() }
   val repositoryFilterFocus = remember { FocusRequester() }
   val branchFilterFocus = remember { FocusRequester() }
   var closeFocus by remember { mutableStateOf(pillFocus) }
   val close = { onAction(NewTaskAction.CloseRepositoryPicker) }
   val repository = draft.repository
-  val mode = repositoryPillMode(chat, starting, repository)
+  val mode = repositoryPillMode(chat, busy, starting, repository)
   Box(modifier) {
     NewTaskRepositoryPill(
       mode,

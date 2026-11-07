@@ -5,6 +5,16 @@ Areas: runtime-kotlin, desktop/core/{domain,data}, desktop/feature/chat, orchest
 - Reusable: the approval broker and card lifecycle serve provider prompts and parked-operation confirmation; unsupported providers refuse before launch rather than falling back to forced execution.
 - Limits: managed organization policy is deferred; authenticated live provider parity was not established for Codex, Cursor or Junie. Desktop consumers require the approval and operation-card schema migrations. Feature flag: N/A. Acceptance criteria: 17/17 implemented.
 
+## [2026-11-05] SKILL-483.1 stop writing to shared tmp
+Areas: runtime-kotlin/runtime-infra, runtime-core, runtime-cli, runtime-mcp, runtime-kotlin/build-logic, desktop/app, desktop/core/data, desktop/benchmark, desktop/build-logic
+- Runtime temp resolution uses an explicit on-disk root; decomposition locks use a host-shared state directory. Review socket fallback removes its endpoint artifacts on close.
+- Agent runs and validation gates share reusable scratch management. JVM options, launch scripts, wrappers and test conventions propagate scratch roots; stale shared JVM scratch entries are swept by age.
+- Desktop temp writers use DesktopTempRoot. Tray icons use app-owned PNG and ICO files passed to NativeTray, with atomic writes and per-instance cleanup.
+- Runtime and desktop source guards check temp-root usage and test isolation; their tasks declare scanned files as inputs. The benchmark waits for board refreshes, prefetches details before timing, and uses a temporary directory to trigger session teardown failure.
+- Limits: raw JVM launches without a launch-time option can retain /tmp for JDK temp calls; IDE builds are uncovered. Lock paths differ across old and new runtime versions during upgrades. QA findings 2, 3 and 4 remain open; a goal run on the merged build remains unmeasured.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented in source, subject to the stated limits
+
 ## [2026-11-04] SKILL-451 local inline diff comments
 Areas: runtime-kotlin, desktop/core/{data,domain,ui}, desktop/feature/changes, orchestration/contracts, docs, skills/skill-bill
 - Added persistent branch-scoped diff comment threads and replies, a shared DiffCommentService, CLI and MCP access, desktop inline threads and draft publishing, and agent review outcome replies.

@@ -81,6 +81,8 @@ public class GoalExecutionRootResolver(
               executionWorktreeRemovedAt = null,
               executionWorktreeRetentionReason = null,
               executionWorktreeRetentionDetail = null,
+              executionMainCheckoutOutcome = null,
+              executionMainCheckoutDetail = null,
             )
           }
         }

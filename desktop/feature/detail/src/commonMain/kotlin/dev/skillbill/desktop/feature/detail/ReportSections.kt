@@ -6,10 +6,8 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ReasonBlock
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
-import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
@@ -18,20 +16,12 @@ import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 
-/** The run this standalone item describes, from its execution history. */
-internal fun currentExecution(item: WorkItem, detail: Detail) =
-  detail.executionHistory.firstOrNull { it.invocationId == item.control.invocationId }
-
-/** HANDOFF 9.2 item 17: a standalone QA run's report, present when this run's own execution recorded report text. */
-internal fun DetailSections.qaReportSection(item: WorkItem, detail: Detail, onAction: (DetailAction) -> Unit, run: dev.skillbill.desktop.core.domain.model.ExecutionInstance? = currentExecution(item, detail)) {
-  if (item.kind == WorkKind.Goal) return
-  val text = run?.qaReportText ?: return
-  item(key = "qa-report") {
-    Column(Modifier.padding(top = DocBlockGap)) {
-      ReasonBlock(label = "QA report", text = text, onCopy = { onAction(DetailAction.Copy(it)) }, color = SkillBillTheme.colors.stDone)
-    }
-  }
+internal fun Detail.execution(invocationId: String?) = invocationId?.let { id ->
+  selectedExecution?.takeIf { it.invocationId == id } ?: executionHistory.firstOrNull { it.invocationId == id }
 }
+
+/** The run this standalone item describes. */
+internal fun currentExecution(item: WorkItem, detail: Detail) = detail.execution(item.control.invocationId)
 
 /** A standalone run's saved phase briefings, one folded block per phase, in pipeline order. */
 internal fun DetailSections.briefingSection(item: WorkItem, detail: Detail, onAction: (DetailAction) -> Unit) {

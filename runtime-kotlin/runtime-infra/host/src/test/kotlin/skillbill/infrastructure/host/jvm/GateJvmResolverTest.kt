@@ -169,6 +169,29 @@ class GateJvmResolverTest {
     assertEquals(hostPath(), environment[GateJvmEnvironmentKeys.PATH])
   }
 
+  @Test
+  fun `a Picked up JAVA_TOOL_OPTIONS line on stderr does not stop the guard reading the java version`() {
+    val candidate = Files.createTempDirectory("gate-jvm-picked-up")
+    val other = Files.createTempDirectory("gate-jvm-picked-up-other")
+    try {
+      val java = Files.createDirectories(candidate.resolve("bin")).resolve("java")
+      Files.writeString(
+        java,
+        "#!/bin/sh\n" +
+          "echo 'Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/state/scratch/jvm' >&2\n" +
+          "echo 'openjdk version \"21.0.2\" 2024-01-16' >&2\n",
+      )
+      java.toFile().setExecutable(true)
+
+      assertEquals(
+        GateJvmDisposition.Export(candidate.toString()),
+        testGateJvmResolver().resolve(guardInput(candidate, other)),
+      )
+    } finally {
+      listOf(candidate, other).forEach { it.toFile().deleteRecursively() }
+    }
+  }
+
   private fun guardInput(
     skillBillJavaHome: Path,
     javaHome: Path,

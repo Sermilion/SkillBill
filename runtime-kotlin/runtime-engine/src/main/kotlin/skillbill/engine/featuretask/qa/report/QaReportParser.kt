@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.qa.report
 
 import skillbill.engine.featuretask.model.execution.QaSkipReason
 import skillbill.scaffold.model.QaTargetKind
+import skillbill.workflow.taskruntime.model.qa.QaAssertionOutcome
 
 public object QaReportParser {
   private const val FINDING_HEADING_PREFIX = "### "
@@ -14,7 +15,6 @@ public object QaReportParser {
     )
   private val SECTION_BREAK = Regex("^#{1,3}\\s")
   private val DIGIT = Regex("\\d")
-  private val PATH_TERMINATORS = charArrayOf('.', ':', ';', ',')
   private val COVERAGE_LINE =
     Regex("^[-*]\\s*([a-z][a-z0-9-]{0,31})\\s*:\\s*(passed|findings_open|findings|skipped|incomplete)\\b")
   private val REASON_TOKEN = Regex("(?<![A-Za-z0-9_])reason:\\s*([a-z_]+)", RegexOption.IGNORE_CASE)
@@ -29,8 +29,10 @@ public object QaReportParser {
     val verdict = verdictOf(text)
     val findings = findingsOf(text, evidencePrefix)
     val coverage = coverageOf(sectionLines(text, "coverage"))
-    val assertionsReported = sectionLines(text, "assertions").any(String::isNotBlank)
+    val assertionLines = sectionLines(text, "assertions")
+    val assertionsReported = assertionLines.any(String::isNotBlank)
     val isolationReported = sectionLines(text, "isolation").any(String::isNotBlank)
+    val parsedAssertions = QaReportSections.assertions(assertionLines, evidencePrefix)
     val findingsWarnings =
       if (verdict == QaVerdict.PASSED && findings.isNotEmpty()) {
         listOf(
@@ -60,12 +62,25 @@ public object QaReportParser {
       reason = reasonOf(text, verdict),
       findings = findings,
       reference = reference,
-      warnings = findingsWarnings + coverageWarnings,
+      warnings = findingsWarnings + reportWarnings(parsedAssertions, findings) + coverageWarnings,
       coverage = coverage,
       assertionsReported = assertionsReported,
       coverageWarnings = coverageWarnings,
+      assertions = parsedAssertions.assertions,
+      temporaryEdits = QaReportSections.temporaryEdits(sectionLines(text, "temporary edits")),
     )
   }
+
+  private fun reportWarnings(
+    parsed: QaParsedAssertions,
+    findings: List<QaReportFinding>,
+  ): List<String> =
+    buildList {
+      if (parsed.hasUntagged) add("QA report has untagged assertions; its checks are not counted")
+      if (findings.isEmpty() && parsed.assertions.any { it.outcome == QaAssertionOutcome.FAILED }) {
+        add("QA report tags a failed assertion but lists no finding")
+      }
+    }
 
   private fun allTargetsOutOfScope(
     declaredKinds: Set<QaTargetKind>,
@@ -109,7 +124,8 @@ public object QaReportParser {
   ): String? {
     if (verdict != QaVerdict.SKIPPED && verdict != QaVerdict.INCOMPLETE) return null
     val lines = text.lines()
-    val verdictAt = lines.indexOfFirst { line -> VERDICT_WORD.containsMatchIn(line) }
+    val verdictAt =
+      lines.indexOfFirst { line -> !QaReportSections.isTaggedAssertionLine(line) && VERDICT_WORD.containsMatchIn(line) }
     if (verdictAt < 0) return null
     val token =
       listOfNotNull(lines[verdictAt], lines.drop(verdictAt + 1).firstOrNull(String::isNotBlank))
@@ -151,7 +167,9 @@ public object QaReportParser {
 
   private fun verdictOf(text: String): QaVerdict {
     val word =
-      text.lineSequence().firstNotNullOfOrNull { line -> VERDICT_WORD.find(line)?.value?.lowercase() }
+      text.lineSequence()
+        .filterNot(QaReportSections::isTaggedAssertionLine)
+        .firstNotNullOfOrNull { line -> VERDICT_WORD.find(line)?.value?.lowercase() }
         ?: return QaVerdict.INCOMPLETE
     return verdictOfWord(word)
   }
@@ -193,7 +211,16 @@ public object QaReportParser {
     val title =
       headingText.substringAfter(' ', "").trim()
         .ifEmpty { body.firstOrNull(String::isNotBlank)?.trim().orEmpty() }
-    return QaReportFinding(token, title, section, evidencePathsOf(section, evidencePrefix))
+    val fields = QaReportSections.findingFields(body)
+    return QaReportFinding(
+      token,
+      title,
+      section,
+      QaReportSections.evidencePathsOf(section, evidencePrefix),
+      fields.observed,
+      fields.expected,
+      fields.steps,
+    )
   }
 
   private fun lineSpans(text: String): List<LineSpan> {
@@ -218,18 +245,5 @@ public object QaReportParser {
     val contentEnd: Int,
   ) {
     fun content(text: String): String = text.substring(start, contentEnd)
-  }
-
-  private fun evidencePathsOf(
-    section: String,
-    evidencePrefix: String,
-  ): List<String> {
-    if (evidencePrefix.isBlank()) return emptyList()
-    val pattern = Regex(Regex.escape(evidencePrefix) + "[^\\s`'\"<>()\\[\\]{}|]+")
-    return pattern.findAll(section)
-      .map { it.value.trimEnd { character -> character in PATH_TERMINATORS } }
-      .filter { path -> path.length > evidencePrefix.length && path.split('/').none { segment -> segment == ".." } }
-      .distinct()
-      .toList()
   }
 }

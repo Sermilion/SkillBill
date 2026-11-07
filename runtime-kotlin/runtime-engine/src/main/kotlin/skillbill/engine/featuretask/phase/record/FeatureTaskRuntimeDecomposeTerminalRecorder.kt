@@ -11,11 +11,14 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodePlanBundleFromArtifact
+import skillbill.workflow.taskruntime.artifact.decodePlanFanOutHistoryFromArtifact
 import skillbill.workflow.taskruntime.artifact.decomposeTerminalFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanFanOutHistory
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
@@ -87,10 +90,28 @@ public class FeatureTaskRuntimeDecomposeTerminalRecorder(
     bundle: FeatureTaskRuntimePlanBundle,
   ): Boolean = recordPlanBundleWithUnits(workflowId, bundle, emptyMap())
 
+  public fun replacePlanBundle(
+    workflowId: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+  ): Boolean = replacePlanBundleWithUnits(workflowId, bundle, emptyMap())
+
   public fun recordPlanBundleWithUnits(
     workflowId: String,
     bundle: FeatureTaskRuntimePlanBundle,
     unitRecords: Map<Int, FeatureTaskRuntimePhaseRecord>,
+  ): Boolean = writePlanBundle(workflowId, bundle, unitRecords, replace = false)
+
+  public fun replacePlanBundleWithUnits(
+    workflowId: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+    unitRecords: Map<Int, FeatureTaskRuntimePhaseRecord>,
+  ): Boolean = writePlanBundle(workflowId, bundle, unitRecords, replace = true)
+
+  private fun writePlanBundle(
+    workflowId: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+    unitRecords: Map<Int, FeatureTaskRuntimePhaseRecord>,
+    replace: Boolean,
   ): Boolean =
     database.transaction { unitOfWork ->
       val record =
@@ -115,6 +136,18 @@ public class FeatureTaskRuntimeDecomposeTerminalRecorder(
             ),
           )
         }
+      val completePatch =
+        patch.toMutableMap().apply {
+          if (replace) {
+            putAll(
+              mapOf(
+                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_FAN_OUT_HISTORY.entry(
+                  FeatureTaskRuntimePlanFanOutHistory(emptyList()).asWorkflowArtifactEntry(),
+                ),
+              ),
+            )
+          }
+        }
       val updated =
         engine.updateRecord(
           WorkflowFamily.TASK_RUNTIME.definition,
@@ -123,13 +156,93 @@ public class FeatureTaskRuntimeDecomposeTerminalRecorder(
             workflowStatus = record.workflowStatus,
             currentStepId = record.currentStepId,
             stepUpdates = null,
-            artifactsPatch = WorkflowArtifactPatch.from(patch),
+            artifactsPatch = WorkflowArtifactPatch.from(completePatch),
             sessionId = record.sessionId.orEmpty(),
           ),
         )
       unitOfWork.workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
       true
     }
+
+  public fun loadPlanFanOutHistory(workflowId: String): FeatureTaskRuntimePlanFanOutHistory? =
+    database.read { unitOfWork ->
+      val artifacts =
+        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)?.artifacts?.toMap()
+          ?: return@read null
+      val raw =
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_FAN_OUT_HISTORY.value(artifacts)
+          ?: return@read null
+      decodePlanFanOutHistoryFromArtifact(raw)
+    }
+
+  public fun recordPlanFanOutWave(
+    workflowId: String,
+    phase: Pair<String, Int>,
+    capacity: Int,
+    unitIds: List<Int>,
+  ): Boolean =
+    database.transaction { unitOfWork ->
+      recordPlanFanOutWaveInTransaction(unitOfWork, workflowId, phase, capacity, unitIds)
+    }
+
+  internal fun recordOwnedPlanFanOutWave(
+    workflowId: String,
+    phase: Pair<String, Int>,
+    capacity: Int,
+    unitIds: List<Int>,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Boolean =
+    database.transaction { unitOfWork ->
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)) return@transaction false
+      recordPlanFanOutWaveInTransaction(unitOfWork, workflowId, phase, capacity, unitIds)
+    }
+
+  private fun recordPlanFanOutWaveInTransaction(
+    unitOfWork: UnitOfWork,
+    workflowId: String,
+    phase: Pair<String, Int>,
+    capacity: Int,
+    unitIds: List<Int>,
+  ): Boolean {
+    val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return false
+    val phaseRecord = decodePhaseRecords(record.artifacts)[phase.first]
+    val phaseAttempt =
+      if (phaseRecord?.status == WorkflowStepStatus.RUNNING) {
+        phaseRecord.attemptCount
+      } else {
+        (phaseRecord?.attemptCount ?: 0) + 1
+      }
+    if (phaseAttempt != phase.second) return false
+    val artifacts = record.artifacts.toMap()
+    val current =
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_FAN_OUT_HISTORY.value(artifacts)
+        ?.let { raw ->
+          decodePlanFanOutHistoryFromArtifact(raw)
+        } ?: FeatureTaskRuntimePlanFanOutHistory(emptyList(), complete = false)
+    val updatedHistory = current.record(phase.second, capacity, unitIds)
+    if (updatedHistory == current) return true
+    val updated =
+      engine.updateRecord(
+        WorkflowFamily.TASK_RUNTIME.definition,
+        record,
+        WorkflowUpdateInput(
+          workflowStatus = record.workflowStatus,
+          currentStepId = record.currentStepId,
+          stepUpdates = null,
+          artifactsPatch =
+            WorkflowArtifactPatch.from(
+              mapOf(
+                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_FAN_OUT_HISTORY.entry(
+                  updatedHistory.asWorkflowArtifactEntry(),
+                ),
+              ),
+            ),
+          sessionId = record.sessionId.orEmpty(),
+        ),
+      )
+    unitOfWork.workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
+    return true
+  }
 
   public fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle? =
     database.read { unitOfWork ->

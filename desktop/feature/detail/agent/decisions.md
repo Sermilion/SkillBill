@@ -1,3 +1,109 @@
+## [2026-11-07] Order the plan document from the stage strip down
+Context: The mock puts current stage and activity before saved plan files, and SKILL-518 excludes changes to other run types.
+Decision: Order the standalone plan as stage strip, one Now block or blocked callout, Activity, Spec bundle, Transcript and Briefing. Keep incident controls immediately after the callout and use plan-local section headers and callout styling.
+Reason: Operators read current work before the saved plan. Changing shared Section or Callout styling would also restyle other run types. Provider events remain the source of tool rows; older runs cannot gain historical tool events.
+
+## [2026-11-07] Own plan navigation in run-keyed screen state
+Context: Stage links and Activity briefing links cross lazy rows, including collapsed or off-screen targets whose indices do not yet exist.
+Decision: Remember PlanScreenState above the list, keyed by work item id. Keep feed and fold state there; expand a briefing target before waiting at most ten frames for its index and scrolling. A new reveal cancels the previous job.
+Reason: A row-owned coroutine cannot survive lazy-row disposal. Screen ownership preserves navigation during expansion and cancels it when the selected item leaves composition; the item key resets state when switching runs.
+
+## [2026-11-07] Parse saved plan briefings in the desktop view
+Context: The screen needs setup and the digest handed to plan from existing saved stage briefings. Older text can lack structured setup, and digest headings are free-form prose.
+Decision: Use the pure commonMain PlanBriefing parser, taking setup from the first valid saved stage and the preplan digest from the plan stage. Keep exact raw briefings and show raw rows when setup parsing fails.
+Reason: The spec requires a desktop-only change using the existing briefing layout. The saved plan briefing records what plan received, so heuristic summaries must retain access to that original text.
+
+## [2026-11-07] Show readable transcript lines when any are loaded
+Context: Plan output interleaves readable delegate lines with provider stdout and stderr in the same loaded list.
+Decision: Show readable lines when present and raw lines otherwise. Derive the count and Copy from the shown lines, copying their original text oldest first.
+Reason: Showing both kinds duplicates events. Counting and copying the displayed selection keeps those actions consistent with what the operator can inspect.
+
+## [2026-11-07] Load older transcript lines only while expanded
+Context: Composing the paging footer requests another output page, while the collapsed Transcript is a three-line preview pinned to the newest line.
+Decision: Compose the paging footer only at the top of the expanded transcript list.
+Reason: A footer in the preview would request pages the operator never asked to see.
+
+## [2026-11-07] Treat parent spec files as saved once units exist
+Context: Subtask specs can exist before the plan report lists spec.md and the decomposition manifest. Activity paths have separate display and opening forms.
+Decision: Treat a report match, write event or any unit as saved-parent evidence. Resolve the opening path from the report, then the write event's opening path, then the first unit spec's directory; accept the yml manifest spelling.
+Reason: Parent files precede subtask specs, so report delay must not leave them unavailable. A shortened display path is not the file-opening target.
+
+## [2026-11-07] Derive plan progress from recorded totals and stage evidence
+Context: The unit list can be incomplete, and plan_subtasks can remain pending while fan-out runs. Reached stages can lack timestamps and tool events.
+Decision: Share planStageViews across status surfaces, deriving fan-out state from units, waves or activity when needed. Use recorded totals for status copy, writing ids for the writer range and projected reached states for Activity headers.
+Reason: Visible-unit counts can understate the planned total. Event presence alone cannot establish which stages were reached, and correcting the runtime projector is outside the desktop-only scope.
+
+## [2026-11-07] Parse truncated plan tool input without strict JSON decoding
+Context: Captured tool lines can end inside a quoted JSON value after the producer's character limit.
+Decision: Extract available fields with a tolerant regex in the desktop plan output normalizer. Preserve original text for Copy and full-output surfaces, and retain opening paths separately from shortened display paths.
+Reason: Strict JSON decoding would discard commands or paths from captured lines whose input was truncated.
+
+## [2026-11-06] Preserve the selected Verify QA report for Unblock
+Context: Verify QA must show the selected saved report's Unblock instructions, including skipped runs without parsed QA details.
+Decision: Carry raw report text through the existing Verify projection and desktop models. Retain QA_REPORT selection with QA_RECEIPT compatibility and parse Unblock only in the desktop view.
+Reason: The operator's scope amendment requires that saved report and unchanged snippet text. A final verdict, reconstructed findings or a repository file cannot supply that report's instructions.
+
+## [2026-11-06] Keep QA setup instructions operator-owned
+Context: Unblock snippets target `.skill-bill/phases/qa.md`, which the runtime reads into later QA prompts.
+Decision: Copy snippets verbatim and open the repository file through `openFileUnder` in the default application. Report opening failure without creating or editing the file.
+Reason: The requested workflow has the operator create the file and paste chosen setup instructions before the next run. Opening must target the repository copy and bypass editor environment variables.
+
+## [2026-11-06] Scope live validation checks to the current invocation
+Context: Resumed validation runs can retain earlier execution records, and some runs do not provide live checks.
+Decision: Project checks for the current standalone validation invocation and show them only when its availability flag is set.
+Reason: Earlier events would misrepresent the current run. The flag records availability without tying the UI to an agent name.
+
+## [2026-11-06] Combine plan progress with live tool activity
+Context: The plan-run design explains progress and saved specs; plan-activity exposes what the agent is doing within those stages.
+Decision: Keep the stage strip, subtasks, bundle and Implement gate together. Put a Now card and an expanded, internally scrolling activity feed above the subtasks. Filters and phase folds belong to each run; scrolling away from the latest row pauses Follow. Transcript opens the captured provider lines. Notes and consecutive completed reads expand in place.
+Reason: Operators can inspect current work without losing the plan outcome. Only provider events become tool rows; non-streaming runs retain recorded phases and saved-file evidence. Existing runs cannot gain historical tool events retroactively.
+Superseded by: Order the plan document from the stage strip down (2026-11-07)
+
+## [2026-11-06] Show quiet plan writers independently of run liveness
+Context: The plan-run design highlights a writer after several minutes without output, even when another writer still refreshes the run heartbeat.
+Decision: The standalone plan document highlights five minutes of observed output silence per writer and at the current stage. A restarted writer ignores output older than its start. Stopped runs show frozen durations and no live heartbeat. Existing incident controls own recovery.
+Reason: Output silence is useful operator feedback without changing the runtime's execution ownership or its twenty-minute stalled classification.
+
+## [2026-11-06] Show Verify QA evidence as names only
+Context: Verify QA results reuse the desktop QA results view, but Verify has no invocation directory for resolving evidence files.
+Decision: Render evidence names without file-opening actions for Verify QA.
+Reason: The existing evidence-opening path needs an invocation directory to constrain the target.
+
+## [2026-11-06] Preserve the goal intake draft when routing Verify fixes
+Context: Verify findings can be routed to a new goal while the operator has an unsent draft.
+Decision: Prefill goal intake only when its text is blank. Otherwise retain the draft and report the refusal.
+Reason: Replacing a nonblank draft would discard the operator's work.
+
+## [2026-11-06] Start a separate Verify run for re-verification
+Context: A completed, stopped or superseded Verify run records an intake and a verified target branch.
+Decision: Verify again submits a new Verify request with the intake as target, the recorded target as branch, and the current database session id.
+Reason: Re-verification must address the same branch while preserving the original run and respecting session changes.
+
+## [2026-11-05] Derive QA results from recorded fields
+Context: The full report buried open problems and untested work, and reports without tags cannot establish check counts.
+Decision: Derive the displayed verdict and sentence from recorded fields and counts. Untagged passes remain grey and show no check counts.
+Reason: Agent prose can contain detail after a reason token and cannot reliably determine the displayed verdict.
+
+## [2026-11-05] Keep live standalone QA results at the finding slot
+Context: Test-plan finding links target results rows while standalone QA is running.
+Decision: Show live results after activity when findings or report text exist. Move settled results above the status strip.
+Reason: Hiding live results would leave finding links without a scroll target.
+
+## [2026-11-05] Scope QA results fold state to each run
+Context: QA rows and folds are independent lazy items, and operators can page between runs.
+Decision: Store collapse state above the lazy list under keys scoped to the goal recording or standalone invocation.
+Reason: State survives scrolling without carrying open folds to a different run.
+
+## [2026-11-05] Count only unrestored edits as left behind
+Context: QA lists temporary edits in a disposable checkout that the runtime deletes.
+Decision: Carry every listed edit, but count only edits tagged `[not restored]` as left behind.
+Reason: Counting every temporary edit would flag forced-fault runs and name files removed with the checkout.
+
+## [2026-11-05] Show an attempted QA retest as running
+Context: A running goal retest can retain an attempted outcome from an earlier result.
+Decision: Display Running while the item runs and its outcome is null or attempted.
+Reason: Saying QA could not fix a problem would be premature during the retest.
+
 ## [2026-11-02] Separate displayed QA runs from live controls
 Context: An operator can inspect an older run while a newer QA invocation is active.
 Decision: Show the displayed run's commit, criteria, findings and report. A run displays live state only when unfinished and matching the control invocation; status, freshness and Cancel remain tied to the work item and live run.
@@ -87,4 +193,3 @@ Reason: Recovery eligibility can forbid retry without indicating that an operato
 Context: Opening a branch page needs the origin URL, but the desktop process allowlist forbids launching git.
 Decision: Resolve the git directory and origin from configuration and open the resulting URL with the desktop browser API.
 Reason: This keeps branch navigation within the process allowlist. URL insteadOf rewrites are not supported.
-

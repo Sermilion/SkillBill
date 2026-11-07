@@ -51,6 +51,8 @@ private object FeatureVerifyLifecycleTelemetryNoop : FeatureVerifyLifecycleTelem
     record: FeatureVerifyFinishedRecord,
     level: String,
   ) = Unit
+
+  override fun featureVerifyStaleReason(sessionId: String): String? = null
 }
 
 private object PrDescriptionLifecycleTelemetryNoop : PrDescriptionLifecycleTelemetryRepository {

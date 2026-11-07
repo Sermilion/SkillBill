@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.slot.attempt
 
 import skillbill.agent.model.PhaseOutput
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
+import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeResolvedPhaseAgent
@@ -12,6 +13,7 @@ import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepair
 import skillbill.engine.featuretask.persist.acceptance.SerialRepairSqliteFixture
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.core.auditProseValue
+import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.runloop.core.CapturedPhaseOutput
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
@@ -28,6 +30,7 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.interaction.unknownScenarios
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionBudget
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -43,6 +46,53 @@ import kotlin.test.assertTrue
 
 class AcceptanceCriterionInteractionTraceOutputGateTest {
   private val scenarios = AcceptanceCriterionRepairPhaseRecorderScenarios { _, _ -> }
+
+  @Test
+  fun `a long audit report with a bare verdict commits without multiplying its evidence`() {
+    SerialRepairSqliteFixture().use { f ->
+      f.owned { worker ->
+        val (scope, recorder) = scenarios.tracePendingSession(f, worker)
+        val phase = auditPhaseRequest(f, 3)
+        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(phase))
+        val report = "Source evidence. ".repeat(14000) + "\nInteraction IS-001: holds"
+
+        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(completedPhaseWrite(phase, report)))
+
+        assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
+        assertEquals(listOf("IS-001"), scope.snapshot?.interactionTrace?.tracedScenarioRefs)
+        val saved = assertNotNull(decodePhaseRecords(f.snapshot().artifacts)[phase.phaseId]?.outputArtifact)
+        assertEquals(report, auditProseValue(FeatureTaskRuntimeWorkflowArtifactMap.from(JsonCodec.parseValue(saved))))
+      }
+    }
+  }
+
+  @Test
+  fun `oversized explicit trace evidence is rejected without committing and can be corrected`() {
+    SerialRepairSqliteFixture().use { f ->
+      f.owned { worker ->
+        val (scope, recorder) = scenarios.tracePendingSession(f, worker)
+        val phase = auditPhaseRequest(f, 3)
+        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(phase))
+        val before = f.snapshot()
+        val accounting = scope.snapshot
+        val oversized =
+          "Interaction IS-001: holds trace " +
+            "é".repeat(FeatureTaskRuntimeHandoffProjectionBudget.PLANNING_PROJECTION.maxUtf8Bytes / 2)
+
+        val rejected =
+          assertIs<RequiredPhaseWrite.Rejected>(recorder.complete(completedPhaseWrite(phase, oversized)))
+
+        assertTrue(rejected.message.contains("UTF-8 bytes"))
+        assertEquals(before, f.snapshot())
+        assertEquals(accounting, scope.snapshot)
+        assertEquals(
+          RequiredPhaseWrite.Acknowledged,
+          recorder.complete(completedPhaseWrite(phase, "Interaction IS-001: holds trace src/Flow.kt:10")),
+        )
+        assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
+      }
+    }
+  }
 
   @Test
   fun `first malformed interaction trace completion maps to retry output check`() {

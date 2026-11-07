@@ -28,6 +28,7 @@ import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
+import dev.skillbill.desktop.core.domain.repository.WorkDetailResolution
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
@@ -62,6 +63,8 @@ import kotlin.time.Clock
 private const val CHECKOUT_NOT_OPENED = "Could not open the checkout directory. Check that it still exists."
 private const val BRANCH_NOT_OPENED = "Could not open the repository in your browser. Check its origin remote and default browser."
 private const val FILE_NOT_OPENED = "Could not open the file. Check that it still exists."
+private const val QA_INSTRUCTIONS_NOT_OPENED = "Couldn't open .skill-bill/phases/qa.md. Create it in the repository, then paste the snippet."
+private const val QA_INSTRUCTIONS_PATH = ".skill-bill/phases/qa.md"
 
 /**
  * One item's detail. The first state already holds the route's row as the header, so the header paints before any read. Pages a
@@ -122,6 +125,8 @@ class DetailViewModel(
   )
 
   private val controls = DetailControls(viewModelScope, workControls, toasts, ::launchStarted, ::launchFinished) { mutableState.value }
+  private val verifyFixActions = VerifyFixActions(viewModelScope, settings, toasts, mutableState) { effectChannel.trySend(it) }
+  private val verifyAgainLauncher = VerifyAgainLauncher(viewModelScope, workControls, session, toasts, mutableState)
 
   init {
     selection.select(null)
@@ -210,14 +215,24 @@ class DetailViewModel(
 
   fun onAction(action: DetailAction) {
     if (!state.value.itemResolved && action != DetailAction.Retry && action !is DetailAction.Navigate) return
+    if (action is DetailAction.ToggleFix || action is DetailAction.SetFixRoute || action is DetailAction.ToggleSelectAllFixes ||
+      action == DetailAction.ClearFixSelection || action == DetailAction.FixInChat || action == DetailAction.StartGoalWithFixes ||
+      action is DetailAction.GoalIntakeResult || action is DetailAction.MarkCriterion
+    ) {
+      verifyFixActions.onAction(action)
+      return
+    }
     when (action) {
       is ControlsAction -> controls.onAction(action)
       DetailAction.ToggleFavorite -> toggleFavorite()
+      DetailAction.VerifyAgain -> verifyAgainLauncher.start()
       is DetailAction.ToggleQaCase -> toggleQaCase(action.key)
+      is DetailAction.ToggleValidationCheck -> toggleValidationCheck(action.key)
       is DetailAction.SetAllQaCases -> mutableState.update { current -> current.copy(qaCaseOverrides = current.qaCaseOverrides + action.keys.associateWith { action.open }) }
       is DetailAction.SelectQaRun -> if (action.invocationId != null) mutableState.update { it.copy(selectedQaRun = action.invocationId) }
       is DetailAction.OpenQaReport -> open(FILE_NOT_OPENED) { specs.openFileInDefaultApp(action.path) }
       is DetailAction.OpenQaEvidence -> open(FILE_NOT_OPENED) { specs.openFileUnder(action.path, action.invocationDirectory) }
+      DetailAction.OpenQaPhaseInstructions -> openQaPhaseInstructions()
       is DetailAction.LoadMore -> loadMore(action.list)
       DetailAction.Next -> step(next = true)
       DetailAction.Previous -> step(next = false)
@@ -234,6 +249,8 @@ class DetailViewModel(
       DetailAction.OpenSelectedSubtaskSpec -> openSelectedSubtaskSpec()
       DetailAction.SubtaskListFocused -> if (state.value.focusSubtaskList) mutableState.update { it.copy(focusSubtaskList = false) }
       is DetailAction.OpenChangesWindow -> openChangesWindow(action.scope)
+      is DetailAction.SetVerifyCriteriaFilter -> mutableState.update { it.copy(verifyCriteriaFilter = action.filter) }
+      is DetailAction.OpenNewerVerifyRun -> openNewerVerifyRun(action.workflowId)
       is DetailAction.ReviewFindings -> {
         val header = state.value.header
         val detail = loadedDetail() ?: return
@@ -244,9 +261,27 @@ class DetailViewModel(
 
   private fun loadedDetail() = (state.value.sections as? SectionsUi.Loaded)?.detail
 
+  private fun openNewerVerifyRun(id: String) {
+    viewModelScope.launch {
+      when (val resolution = detail.resolve(id)) {
+        is WorkDetailResolution.Resolved -> effectChannel.send(DetailEffect.OpenItem(resolution.item))
+        WorkDetailResolution.Missing -> toasts.show(ToastMessage(ToastTone.Problem, "The newer verify run is no longer in the database."))
+        is WorkDetailResolution.Failed -> toasts.show(ToastMessage(ToastTone.Problem, "Couldn't open the newer verify run. Try again."))
+      }
+    }
+  }
+
   private fun toggleQaCase(key: QaCaseKey) {
     val open = qaCaseIsOpen(state.value.header, loadedDetail() ?: return, key, state.value.qaCaseOverrides) ?: return
     mutableState.update { it.copy(qaCaseOverrides = it.qaCaseOverrides + (key to !open)) }
+  }
+
+  private fun toggleValidationCheck(key: ValidationCheckKey) {
+    val detail = loadedDetail() ?: return
+    val run = detail.execution(key.invocationId) ?: return
+    val row = validationChecksSummary(run, qaRunLive(state.value.header, run)).rows.firstOrNull { it.check.checkId == key.checkId } ?: return
+    val open = validationCheckIsOpen(row, run.invocationId, qaRunLive(state.value.header, run), state.value.validationCheckOverrides)
+    mutableState.update { it.copy(validationCheckOverrides = it.validationCheckOverrides + (key to !open)) }
   }
 
   private fun effectiveSubtask(): SubtaskKey? = loadedDetail()?.let { selectedSubtask(state.value.header, it, state.value.subtaskChoice.key) }
@@ -312,6 +347,7 @@ class DetailViewModel(
       )
     }
     updateFavoriteState()
+    verifyFixActions.refresh()
   }
 
   private fun favoriteKey(header: WorkItem): FavoriteWorkKey? =
@@ -448,7 +484,11 @@ class DetailViewModel(
 
   /** Standalone reviews have no Changes window. Subtask scopes open only for a subtask the latest list can select. */
   private fun openChangesWindow(scope: ChangeScope) {
-    if (!state.value.header.showsChanges) return
+    val current = state.value
+    val verifyRun = loadedDetail()?.verifyRun
+    if (verifyRun != null) {
+      if (scope != ChangeScope.All || verifyRun.changedFiles.isEmpty() || verifyRunState(verifyRun) == VerifyRunState.Parked) return
+    } else if (!current.header.showsChanges) return
     if (scope is ChangeScope.Subtasks) {
       val listed = state.value.changes.subtasks as? SubtaskScopesState.Listed ?: return
       if (scope.from !in selectableSubtaskIds(listed.subtasks)) return
@@ -477,6 +517,15 @@ class DetailViewModel(
     viewModelScope.launch {
       if (request() == OpenOutcome.NotOpened) effectChannel.send(DetailEffect.ShowToast(ToastMessage(ToastTone.Problem, failure)))
     }
+  }
+
+  private fun openQaPhaseInstructions() {
+    val root = state.value.header.repositoryRoot.trimEnd('/')
+    if (root.isBlank()) {
+      effectChannel.trySend(DetailEffect.ShowToast(ToastMessage(ToastTone.Problem, QA_INSTRUCTIONS_NOT_OPENED)))
+      return
+    }
+    open(QA_INSTRUCTIONS_NOT_OPENED) { specs.openFileUnder("$root/$QA_INSTRUCTIONS_PATH", root) }
   }
 }
 

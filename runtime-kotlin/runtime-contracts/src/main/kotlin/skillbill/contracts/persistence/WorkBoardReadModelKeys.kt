@@ -24,6 +24,8 @@ object WorkBoardReadModelKeys {
 object WorkBoardReadModelPayloadKeys {
   const val GOAL_WORKTREE = "goal_worktree"
   const val GOAL_WORKTREE_RETENTION_DETAIL = "retention_detail"
+  const val GOAL_WORKTREE_MAIN_CHECKOUT_OUTCOME = "main_checkout_outcome"
+  const val GOAL_WORKTREE_MAIN_CHECKOUT_DETAIL = "main_checkout_detail"
   const val SNAPSHOT = "snapshot"
   const val REPOSITORY_ROOT = "repository_root"
   const val FINISHED_AT = "finished_at"

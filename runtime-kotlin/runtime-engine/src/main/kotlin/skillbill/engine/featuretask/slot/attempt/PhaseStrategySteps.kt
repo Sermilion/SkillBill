@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseAgentExecution
 import skillbill.error.featuretask.UnknownPhaseStepError
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 internal fun PhaseStrategy.promptSource(
@@ -45,8 +46,10 @@ internal fun stepCall(
 internal fun <S> runAgentStep(
   run: PhaseRun,
   state: S,
+  outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
+  captureStreamOutput: Boolean = false,
 ): PhaseOutcome where S : PhaseAcceptedStepExecution, S : PhaseAgentExecution =
-  state.runAcceptedAgentStep(run, stepCall(run, state))
+  state.runAcceptedAgentStep(run, stepCall(run, state), outputSink, captureStreamOutput)
 
 internal fun Map<String, PhaseStepPolicy>.policyOf(stepId: String): PhaseStepPolicy =
   this[stepId] ?: throw UnknownPhaseStepError(stepId)

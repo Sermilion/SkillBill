@@ -17,6 +17,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class StaleSessionReconcilerTest {
@@ -79,6 +80,26 @@ class StaleSessionReconcilerTest {
         0,
         reconcileStaleTelemetrySessions(connection, request.copy(now = now.plusSeconds(903))).processedCandidates,
       )
+    }
+  }
+
+  @Test
+  fun `feature verify stale reason reads the reconciled reason and null for an unknown session`() {
+    val dbPath = Files.createTempDirectory("verify-stale-reason").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      seedStaleLifecycleSessions(connection)
+      val request =
+        TelemetryReconciliationRequest(
+          level = "full",
+          cadenceSeconds = 0,
+          maximumBatchSize = 10,
+          now = Instant.parse("2030-01-02T00:00:00Z"),
+        )
+      reconcileStaleTelemetrySessions(connection, request)
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
+
+      assertEquals("no_terminal_before_threshold", store.featureVerifyStaleReason("fvs-stale"))
+      assertNull(store.featureVerifyStaleReason("fvs-unknown"))
     }
   }
 

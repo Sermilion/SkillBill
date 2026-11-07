@@ -91,6 +91,7 @@ internal const val FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_ARTIFACT_KEY: St
 internal const val FEATURE_TASK_RUNTIME_PLAN_SEED_ARTIFACT_KEY: String = "plan_seed"
 internal const val FEATURE_TASK_RUNTIME_PLAN_WORKFLOW_ARTIFACT_KEY: String = "plan_workflow"
 internal const val FEATURE_TASK_RUNTIME_PLAN_BUNDLE_ARTIFACT_KEY: String = "plan_bundle"
+internal const val FEATURE_TASK_RUNTIME_PLAN_FAN_OUT_HISTORY_ARTIFACT_KEY: String = "plan_fan_out_history"
 
 internal const val RUNTIME_REPOSITORY_EVIDENCE_ARTIFACT_KEY = "repository_evidence"
 

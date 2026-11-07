@@ -110,7 +110,7 @@ class InstallerShellDelegationTest {
     assertTrue(Files.isRegularFile(fixtures.orchestrationPlaybook), "orchestration/ must be preserved")
     assertTrue(Files.isRegularFile(fixtures.baselineManifest), "reserved baseline-manifest path must be preserved")
 
-    assertFalse(Files.exists(fixtures.runtimeBin), "runtime/ must be cleared under preserve-wipe")
+    assertTrue(Files.exists(fixtures.runtimeBin), "live runtime trees stay until activation retires them")
     assertFalse(Files.exists(fixtures.installedSkill), "installed-skills/ must be cleared under preserve-wipe")
     assertTrue(Files.isRegularFile(fixtures.stateDb), "*.db state DBs must be preserved under preserve-wipe")
     journalsAndBackup.forEach { path ->
@@ -129,7 +129,7 @@ class InstallerShellDelegationTest {
 
     assertEquals(0, run.exitCode, run.output)
     assertContains(run.output, "Claude subagent cleanup failed; continuing uninstall so reinstall can recover.")
-    assertFalse(Files.exists(fixtures.runtimeBin), "runtime/ must still be cleared after native cleanup failure")
+    assertTrue(Files.exists(fixtures.runtimeBin), "live runtime trees stay until activation retires them")
     assertFalse(
       Files.exists(fixtures.installedSkill),
       "installed-skills/ must still be cleared after native cleanup failure",

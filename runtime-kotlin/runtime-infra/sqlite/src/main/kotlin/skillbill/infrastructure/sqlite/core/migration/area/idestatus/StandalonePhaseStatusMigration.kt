@@ -10,6 +10,101 @@ internal object StandalonePhaseStatusMigration {
     backfillWorkflowExecutions(connection)
   }
 
+  fun createOutputCapture(connection: Connection) {
+    connection.createStatement().use { statement ->
+      statement.execute(
+        """
+        CREATE TABLE IF NOT EXISTS standalone_phase_output (
+          execution_id TEXT PRIMARY KEY REFERENCES standalone_phase_status(execution_id) ON DELETE CASCADE,
+          tail_json TEXT NOT NULL CHECK (length(tail_json) <= 4096),
+          latest_line_at TEXT,
+          attributed_json TEXT NOT NULL CHECK (length(attributed_json) <= 32768)
+        )
+        """.trimIndent(),
+      )
+    }
+  }
+
+  fun createOutputHistory(connection: Connection) {
+    connection.createStatement().use { statement ->
+      statement.execute(
+        """
+        CREATE TABLE IF NOT EXISTS standalone_phase_output_lines (
+          sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+          entry_id TEXT NOT NULL UNIQUE,
+          execution_id TEXT NOT NULL REFERENCES standalone_phase_status(execution_id) ON DELETE CASCADE,
+          line_text TEXT NOT NULL,
+          observed_at TEXT NOT NULL,
+          subtask_id INTEGER
+        )
+        """.trimIndent(),
+      )
+      statement.execute(
+        "CREATE INDEX IF NOT EXISTS standalone_output_lines_execution " +
+          "ON standalone_phase_output_lines(execution_id, sequence)",
+      )
+    }
+  }
+
+  fun createStructuredActivity(connection: Connection) {
+    val rawColumn =
+      connection.createStatement().use { statement ->
+        statement.executeQuery(
+          "SELECT 1 FROM pragma_table_info('standalone_phase_output_lines') WHERE name = 'is_raw'",
+        ).use {
+          it.next()
+        }
+      }
+    connection.createStatement().use { statement ->
+      if (!rawColumn) {
+        statement.execute(
+          "ALTER TABLE standalone_phase_output_lines ADD COLUMN is_raw INTEGER NOT NULL DEFAULT 0",
+        )
+      }
+      statement.execute(
+        """
+        CREATE TABLE IF NOT EXISTS standalone_plan_activity (
+          execution_id TEXT NOT NULL REFERENCES standalone_phase_status(execution_id) ON DELETE CASCADE,
+          event_id TEXT NOT NULL,
+          phase_id TEXT NOT NULL,
+          started_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          event_text TEXT NOT NULL,
+          agent_id TEXT NOT NULL,
+          file_path TEXT,
+          event_state TEXT NOT NULL,
+          duration_ms INTEGER,
+          exit_code INTEGER,
+          subtask_id INTEGER,
+          PRIMARY KEY(execution_id, event_id)
+        )
+        """.trimIndent(),
+      )
+      statement.execute(
+        "CREATE INDEX IF NOT EXISTS plan_activity_phase " +
+          "ON standalone_plan_activity(execution_id, phase_id, started_at)",
+      )
+    }
+  }
+
+  fun addAttributedOutputTimes(connection: Connection) {
+    val exists =
+      connection.prepareStatement(
+        "SELECT 1 FROM pragma_table_info('standalone_phase_output') WHERE name = ?",
+      ).use { statement ->
+        statement.setString(1, "attributed_at_json")
+        statement.executeQuery().use { it.next() }
+      }
+    if (exists) return
+    connection.createStatement().use { statement ->
+      statement.execute(
+        "ALTER TABLE standalone_phase_output ADD COLUMN attributed_at_json TEXT " +
+          "CHECK (attributed_at_json IS NULL OR length(attributed_at_json) <= 32768)",
+      )
+    }
+  }
+
   private fun createSchema(connection: Connection) {
     createExecutionRegistry(connection)
     createStandalonePhaseStatus(connection)

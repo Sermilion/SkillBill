@@ -91,7 +91,7 @@ class CliWorkDetailTest {
 
     listOf(workflowId, "plan-invocation").forEach { id ->
       val result = CliRuntime.run(listOf("--db", dbPath.toString(), "work", "detail", id), context)
-      assertEquals(0, result.exitCode, result.stdout)
+      assertEquals(0, result.exitCode, result.stdout + result.stderr)
       val item = decodeJsonObject(result.stdout)["item"] as Map<*, *>
       val snapshot = item["snapshot"] as Map<*, *>
       assertEquals("plan-invocation", snapshot["invocation_id"])
@@ -258,7 +258,7 @@ class CliWorkDetailTest {
           listOf("--db", dbPath.toString(), "work", "detail", "$phase-invocation"),
           CliRuntimeContext(environment = emptyMap(), userHome = home),
         )
-      assertEquals(0, result.exitCode, result.stdout)
+      assertEquals(0, result.exitCode, result.stdout + result.stderr)
       val item = decodeJsonObject(result.stdout)["item"] as Map<*, *>
       assertEquals(expectedPipeline, item["step_pipeline"])
     }

@@ -55,9 +55,6 @@ private class RowWalk(
   private fun matches(value: String) = textActive && value.contains(needle, ignoreCase = true)
 }
 
-internal fun toolbarSelection(roots: List<SpecNode>, path: String): ToolbarSelection =
-  selectionAt(roots, path)?.toolbar ?: ToolbarSelection.None
-
 internal data class SpecPathSelection(
   val node: SpecNode,
   val bundle: SpecNode.Bundle?,
@@ -72,8 +69,8 @@ internal fun selectionAt(roots: List<SpecNode>, path: String): SpecPathSelection
     is SpecNode.Folder -> null
   }
   val toolbar = when {
-    node is SpecNode.Bundle -> ToolbarSelection.Bundle(node.path)
-    node is SpecNode.File && bundle != null -> ToolbarSelection.FileInBundle(bundle.issueKey ?: bundle.name)
+    node is SpecNode.Bundle && bundle != null -> ToolbarSelection.Bundle(bundle.path)
+    node is SpecNode.File && bundle != null -> ToolbarSelection.Bundle(bundle.path)
     else -> ToolbarSelection.None
   }
   return SpecPathSelection(node, bundle, toolbar)

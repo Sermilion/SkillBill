@@ -1,5 +1,6 @@
 package skillbill.engine.work
 
+import skillbill.application.RecordingLifecycleTelemetryRepository
 import skillbill.contracts.JsonCodec
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.toStatusWireMap
@@ -17,6 +18,8 @@ import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.idestatus.model.IdeStatusWorkflowQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.idestatus.model.WorkDetailRequest
+import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -183,6 +186,58 @@ class IdeStatusServiceTest {
     assertNull(result.snapshot.problem)
     assertEquals("w-readable", result.snapshot.workflowId)
     assertEquals(IdeStatusWorkflowFamily.FEATURE_VERIFY, result.snapshot.workflowFamily)
+  }
+
+  @Test
+  fun `verify detail projects the stored run and the stale reason while other rows carry no verify run`() {
+    val fixture = gitRepoFixture("ide-status-verify-detail")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val workflows = IdeStatusWorkflowStates()
+    val qaReport =
+      "Verdict: findings_open\n\n## Coverage\n\n- desktop: findings_open\n\n" +
+        "### QA-1 Dialog steals focus\n\nSteps: Type in First name.\n\n" +
+        "Expected: The field keeps focus.\n\nObserved: Focus moved to the dialog in WarningDialog.kt:42.\n"
+    val artifacts =
+      mapOf(
+        "session_notes" to mapOf("superseded_by" to "wfv-newer"),
+        "verdict_result" to mapOf("verdict" to "APPROVE", "findings" to listOf("APPROVE")),
+        "qa_report" to mapOf("verdict" to "findings_open", "report_text" to qaReport),
+      )
+    workflows.saveRecord(
+      WorkflowFamily.VERIFY,
+      verifyRecord("w-verify", "2026-08-06T11:00:00Z").copy(artifactsJson = JsonCodec.mapToJsonString(artifacts)),
+    )
+    workflows.saveFeatureTaskWorkflow(runtimeRecord("w-runtime", "2026-08-06T09:00:00Z", currentStep = "pr"), PROSE)
+    workflows.saveFeatureTaskExecutionIdentity(identityFor("w-runtime", identity))
+    val telemetry =
+      object : LifecycleTelemetryRepository by RecordingLifecycleTelemetryRepository() {
+        override fun featureVerifyStaleReason(sessionId: String): String? =
+          "no_terminal_before_threshold".takeIf { sessionId == "session-w-verify" }
+      }
+    val database =
+      TrackingDatabase(
+        work =
+          listOf(
+            workItem("w-verify", WorkItemKind.FEATURE_VERIFY, "running", "2026-08-06T11:00:00Z"),
+            workItem("w-runtime", WorkItemKind.FEATURE_TASK_RUNTIME, "completed", "2026-08-06T09:00:00Z"),
+          ),
+        workflows = workflows,
+        telemetry = telemetry,
+      )
+    val service = ideStatusService(database)
+
+    val verifyRun =
+      requireNotNull(service.detail(WorkDetailRequest("w-verify", observedAt = ideStatusObservedAt)).item?.verifyRun)
+    val runtime = requireNotNull(service.detail(WorkDetailRequest("w-runtime", observedAt = ideStatusObservedAt)).item)
+
+    assertEquals("wfv-newer", verifyRun.supersededBy)
+    assertEquals("no_terminal_before_threshold", verifyRun.staleReason)
+    assertNull(verifyRun.verdict?.summary)
+    val qa = requireNotNull(verifyRun.qa)
+    assertEquals(listOf("QA-1"), qa.findings.map { it.id })
+    assertNull(qa.reportPath)
+    assertEquals(mapOf("QA-1" to listOf("WarningDialog.kt:42")), verifyRun.qaFindingLocations)
+    assertNull(runtime.verifyRun)
   }
 
   @Test

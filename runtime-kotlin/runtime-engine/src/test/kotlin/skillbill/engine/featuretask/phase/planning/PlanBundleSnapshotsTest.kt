@@ -156,6 +156,51 @@ class PlanBundleSnapshotsTest {
     assertTrue(settled is PlanUnitSettlement.Rejected, "expected Rejected but was $settled")
   }
 
+  @Test
+  fun `a fenced heading example in the planned details is not read as a scope change`() {
+    val written = writePlanBundle(repoRoot, ISSUE_KEY, projectStore)
+    val bundle = snapshots.capture(repoRoot, written, FeatureTaskRuntimePlanBundleOrigin.AUTHORED)
+    appendDetails(
+      written,
+      0,
+      "Report format:\n\n```text\n## Unblock\n#### display\n```\n\n### Task 1\n- Planned task.",
+    )
+
+    val planned = requirePlanned(snapshots.settleUnit(repoRoot, ISSUE_KEY, bundle, unitId = 1)).bundle
+
+    assertNull(snapshots.drift(repoRoot, ISSUE_KEY, planned))
+    val planText = requireNotNull(requireNotNull(planned.subtask(1)).planText)
+    assertTrue(planText.endsWith("### Task 1\n- Planned task."), planText)
+  }
+
+  @Test
+  fun `a tilde fence keeps a nested backtick fence and its headings inside the details`() {
+    val spec =
+      "# Subtask\n\n## Scope\nShip it.\n\n## Implementation Details\n" +
+        "~~~~text\n## Unblock\n```markdown\nline\n```\n~~~~\n### Tasks\n- Do it.\n\n## Validation Strategy\nRun tests."
+
+    assertEquals(
+      "# Subtask\n\n## Scope\nShip it.\n\n## Validation Strategy\nRun tests.",
+      PlanBundleSpecText.scopeOf(spec),
+    )
+    assertEquals(
+      "~~~~text\n## Unblock\n```markdown\nline\n```\n~~~~\n### Tasks\n- Do it.",
+      PlanBundleSpecText.detailsOf(spec),
+    )
+  }
+
+  @Test
+  fun `an unclosed fence falls back to plain heading boundaries`() {
+    val spec =
+      "## Scope\nShip it.\n\n## Implementation Details\n```text\n- Do it.\n\n" +
+        "## Validation Strategy\nRun tests."
+
+    assertEquals(
+      "## Scope\nShip it.\n\n## Validation Strategy\nRun tests.",
+      PlanBundleSpecText.scopeOf(spec),
+    )
+  }
+
   private fun unitComplete(unit: FeatureTaskRuntimePlanBundleSubtask): Boolean =
     snapshots.unitComplete(
       repoRoot,

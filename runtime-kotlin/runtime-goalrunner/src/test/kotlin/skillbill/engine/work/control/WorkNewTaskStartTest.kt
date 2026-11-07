@@ -51,6 +51,30 @@ class WorkNewTaskStartTest {
   }
 
   @Test
+  fun `qa instructions launch as one positional and keep the qa ownership key`() {
+    withRecordingStart("work-new-task-start-qa") { start, root, launches ->
+      val instructions = "Use staging.\nCompare against https://example.com/design and skip KYC."
+      assertIs<NewTaskStartResult.Started>(start.startStandalone(root, "qa", "cursor", instructions))
+      val launch = launches.single()
+      assertEquals(
+        listOf("phase", "qa", instructions, "--agent", "cursor"),
+        (launch.kind as WorkRunLaunchKind.RuntimeCommand).arguments,
+      )
+      assertEquals("${testGoalRepositoryIdentity(root)}:qa:standalone", launch.ownershipKey)
+    }
+  }
+
+  @Test
+  fun `qa instructions the cli would read as a phase option refuse before launch`() {
+    withRecordingStart("work-new-task-start-qa-refuse") { start, root, launches ->
+      listOf("target:main check the login", "mode:inline", "-x staging").forEach { instructions ->
+        assertIs<NewTaskStartResult.Refused>(start.startStandalone(root, "qa", "cursor", instructions))
+      }
+      assertEquals(emptyList(), launches)
+    }
+  }
+
+  @Test
   fun `different monitor intakes use different ownership keys`() {
     withRecordingStart("work-new-task-start-keys") { start, root, launches ->
       val identity = testGoalRepositoryIdentity(root)

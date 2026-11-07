@@ -75,6 +75,7 @@ internal fun modelMatchesAgent(
   when (agent) {
     "claude" -> model.startsWith("claude")
     "codex" -> model.startsWith("gpt")
+    "cursor" -> model.startsWith("grok") || model.startsWith("cursor-")
     else -> false
   }
 

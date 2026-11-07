@@ -52,7 +52,7 @@ internal class RuntimeDetailReads(
 
   override suspend fun refresh(id: String, extended: Map<DetailList, Int>): DetailRead = read("detail") { component ->
     component.databaseSession.readIfPresent snapshot@{
-      val result = component.ideStatusService.detail(WorkDetailRequest(id, observedAt = null))
+      val result = reads.ideStatusService.detail(WorkDetailRequest(id, observedAt = null))
       val options = result.item?.let(component.workControlService::optionsForObservedItem)
       val head = result.toRead(component, options, sessionId)
       if (head !is DetailRead.Loaded) return@snapshot head
@@ -62,7 +62,7 @@ internal class RuntimeDetailReads(
         var sections = loaded.sections
         while (remaining > 0) {
           val pageSize = remaining.coerceAtMost(WorkPaginationLimits.MAX_PAGE_SIZE)
-          val page = component.ideStatusService.detail(
+          val page = reads.ideStatusService.detail(
             WorkDetailRequest(id, pageSize = pageSize, list = list.toRuntime(), cursor = cursor),
           )
           val pageDetail = page.item?.toDetail(page.observedAt) ?: break
@@ -79,7 +79,7 @@ internal class RuntimeDetailReads(
   }
 
   override suspend fun activity(id: String): DetailRead = read("detail_activity") { component ->
-    val result = component.ideStatusService.detail(WorkDetailRequest(id, includeExtendedLists = false))
+    val result = reads.ideStatusService.detail(WorkDetailRequest(id, includeExtendedLists = false))
     result.toRead(component, options = null, sessionId = sessionId)
       .let { read ->
         if (read is DetailRead.Loaded) DetailRead.Activity(read.header, read.sections.detail.latestActivity) else read
@@ -87,7 +87,7 @@ internal class RuntimeDetailReads(
   }
 
   override suspend fun list(id: String, list: DetailList, cursor: String?): DetailRead = read("detail_list") { component ->
-    component.ideStatusService.detail(WorkDetailRequest(id, list = list.toRuntime(), cursor = cursor))
+    reads.ideStatusService.detail(WorkDetailRequest(id, list = list.toRuntime(), cursor = cursor))
       .toRead(component, options = null, sessionId = sessionId)
   }
 
@@ -137,6 +137,7 @@ internal fun DetailSections.Loaded.withList(list: DetailList, page: Detail, curs
       phaseResults = results,
     )
     DetailList.Executions -> detail.copy(executionHistory = merge(detail.executionHistory, page.executionHistory))
+    DetailList.PlanOutput -> detail.copy(planOutputLines = merge(detail.planOutputLines, page.planOutputLines).distinctBy { it.id }.sortedByDescending { it.sequence })
     DetailList.Dependencies -> detail.copy(dependencies = merge(detail.dependencies, page.dependencies))
   }
   return copy(
@@ -152,5 +153,6 @@ internal fun Detail.size(list: DetailList): Int = when (list) {
   DetailList.Phases -> phases.size
   DetailList.Validation -> validation.size
   DetailList.Executions -> executionHistory.size
+  DetailList.PlanOutput -> planOutputLines.size
   DetailList.Dependencies -> dependencies.size
 }

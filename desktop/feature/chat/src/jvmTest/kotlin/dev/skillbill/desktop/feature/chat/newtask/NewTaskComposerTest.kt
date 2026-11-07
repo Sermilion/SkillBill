@@ -1,6 +1,14 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.performScrollToNode
+import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
+import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
+import kotlin.time.Duration.Companion.minutes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -17,6 +25,7 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasSetTextAction
@@ -230,7 +239,7 @@ class NewTaskComposerTest {
   }
 
   @Test
-  fun `the repository pill turns static once a chat starts and the agent chip stays clickable after the first reply`() = runComposeUiTest {
+  fun `the repository pill stays available after a chat reply`() = runComposeUiTest {
     val chat = FakeExecutionChatRepository(supported = setOf("claude", "codex"))
     val events = Channel<ChatEvent>(Channel.UNLIMITED)
     chat.events = { events.consumeAsFlow().takeWhile { it != ChatEvent.Completed } }
@@ -273,8 +282,10 @@ class NewTaskComposerTest {
     waitUntil { draft.chat.value?.thread?.busy?.value == false }
     waitForIdle()
 
-    onNode(hasClickLabel("Change repository or base branch")).assertDoesNotExist()
-    onNodeWithContentDescription(REPOSITORY_PILL_CHEVRON, useUnmergedTree = true).assertDoesNotExist()
+    onNode(hasClickLabel("Change repository or base branch")).assertIsEnabled()
+    onNodeWithContentDescription(REPOSITORY_PILL_CHEVRON, useUnmergedTree = true).assertExists()
+    onNode(hasClickLabel("Change repository or base branch")).performClick()
+    assertTrue(actions.contains(NewTaskAction.OpenRepositoryPicker))
     onNode(hasClickLabel("Change agent")).assertIsEnabled().performClick()
     onNodeWithText("codex").assertExists()
   }
@@ -600,5 +611,87 @@ class NewTaskComposerTest {
 
   private fun hasClickLabel(label: String) = SemanticsMatcher("click $label") {
     it.config.getOrNull(SemanticsActions.OnClick)?.label == label
+  }
+
+  // Esc inside the palette's dialog must still tell the composer to close, and focus must come back to the task input.
+  @Test
+  fun `Esc closes the resume palette, sends DismissResume, and refocuses the composer`() = runComposeUiTest {
+    var state by mutableStateOf(NewTaskUiState(resumePickerOpen = true))
+    val actions = mutableListOf<NewTaskAction>()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskComposer(state, testNewTaskDraft()) { action ->
+            actions += action
+            if (action == NewTaskAction.DismissResume) state = state.copy(resumePickerOpen = false)
+          }
+        }
+      }
+    }
+    onNodeWithText("No saved chats yet").assertExists()
+    onNodeWithText("Pick a chat to see its latest messages.").assertExists()
+    val filter = onNode(hasSetTextAction() and hasText("Filter by title, branch or agent"))
+    filter.assertIsFocused()
+    filter.performKeyInput { pressKey(Key.Escape) }
+    waitForIdle()
+    assertTrue(NewTaskAction.DismissResume in actions)
+    onNodeWithText("No saved chats yet").assertDoesNotExist()
+    onNode(hasSetTextAction()).assertIsFocused()
+  }
+
+  @Test
+  fun `the resume palette lists only the picked repository, lifts the cap, and resumes the third draft on Enter`() = runComposeUiTest {
+    val now = Instant.parse("2026-11-06T06:00:00Z")
+    val chats = FakeExecutionChatRepository()
+    fun saved(id: String, root: String, minutesAgo: Int) = ChatHistoryEntry(
+      id, null, ChatAgent("claude", null, null), now - minutesAgo.minutes, "$id chat",
+      listOf(ChatHistoryLine(ChatHistoryRole.Operator, "$id chat")), ChatNewTaskContext(root, "main"),
+    )
+    val app = (1..42).map { saved("app-$it", "/work/app", it) }
+    val web = (1..5).map { saved("web-$it", "/work/web", it) }
+    (app + web).forEach { chats.saved[it.sessionId] = it }
+    val draft = NewTaskDraft(
+      chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
+      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
+    ).apply { repository = NewTaskRepository("/work/app", "app") }
+    draft.refreshSaved()
+    var state by mutableStateOf(NewTaskUiState())
+    val actions = mutableListOf<NewTaskAction>()
+    lateinit var focusManager: FocusManager
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          focusManager = LocalFocusManager.current
+          NewTaskComposer(state, draft, now = { now }) { action ->
+            actions += action
+            if (action is NewTaskAction.ResumeDraft || action == NewTaskAction.DismissResume) state = state.copy(resumePickerOpen = false)
+          }
+        }
+      }
+    }
+    runOnIdle { focusManager.clearFocus(force = true) }
+    onNode(hasSetTextAction()).assertIsNotFocused()
+    state = state.copy(resumePickerOpen = true)
+    fun row(id: String) = hasText("$id chat") and hasText("main · claude")
+    val list = onNode(hasScrollToIndexAction())
+    onNodeWithText("30 of 42 chats").assertExists()
+    onNodeWithText("Today").assertExists()
+    onNode(row("app-1")).assertExists()
+    onAllNodes(hasText("web-", substring = true)).assertCountEquals(0)
+    list.performScrollToNode(hasText("Show all 42 chats"))
+    onNodeWithText("Show all 42 chats").performClick()
+    onNodeWithText("42 chats").assertExists()
+    list.performScrollToNode(row("app-42"))
+    onAllNodes(hasText("web-", substring = true)).assertCountEquals(0)
+    val filter = onNode(hasSetTextAction() and hasText("Filter by title, branch or agent"))
+    filter.performKeyInput {
+      pressKey(Key.DirectionDown)
+      pressKey(Key.DirectionDown)
+      pressKey(Key.Enter)
+    }
+    waitForIdle()
+    assertEquals(listOf<NewTaskAction>(NewTaskAction.ResumeDraft(app[2])), actions)
+    onNodeWithText("42 chats").assertDoesNotExist()
+    onNode(hasSetTextAction()).assertIsFocused()
   }
 }

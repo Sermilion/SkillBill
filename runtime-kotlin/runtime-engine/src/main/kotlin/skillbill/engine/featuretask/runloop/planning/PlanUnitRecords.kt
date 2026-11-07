@@ -2,7 +2,9 @@ package skillbill.engine.featuretask.runloop.planning
 
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecordFor
+import skillbill.engine.featuretask.runner.STATUS_BLOCKED
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Instant
@@ -34,6 +36,31 @@ internal object PlanUnitRecords {
         PlanDecompositionStop.settledOutput(unit.stepId, "Planned subtask ${unit.subtaskId}.", prose).canonicalJson,
       now = now,
     )
+
+  fun blocked(
+    unit: PlanUnit,
+    attempt: PlanUnitAttempt,
+    reason: String,
+    now: Instant,
+  ): FeatureTaskRuntimePhaseRecord =
+    featureTaskRuntimePhaseRecordFor(
+      FeatureTaskRuntimePhaseStateRequest(
+        workflowId = unit.workflowId,
+        phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitRecordId(unit.subtaskId),
+        status = STATUS_BLOCKED,
+        attemptCount = attempt.attemptCount,
+        resolvedAgentId = attempt.resolvedAgentId,
+        finished = true,
+        blockedReason = reason,
+      ),
+      null,
+      now,
+    )
+
+  fun blocked(
+    record: FeatureTaskRuntimePhaseRecord,
+    reason: String,
+  ): FeatureTaskRuntimePhaseRecord = record.copy(status = WorkflowStepStatus.BLOCKED, blockedReason = reason)
 
   fun keptDetails(
     unit: PlanUnit,

@@ -5,6 +5,14 @@ import dev.skillbill.desktop.core.domain.model.AuditAttempt
 import dev.skillbill.desktop.core.domain.model.AuditCriterion
 import dev.skillbill.desktop.core.domain.model.AuditOutcome
 import dev.skillbill.desktop.core.domain.model.Detail
+import dev.skillbill.desktop.core.domain.model.ValidationBranchRun
+import dev.skillbill.desktop.core.domain.model.ValidationCheck
+import dev.skillbill.desktop.core.domain.model.ValidationCheckAttempt
+import dev.skillbill.desktop.core.domain.model.ValidationCheckResult
+import dev.skillbill.desktop.core.domain.model.ValidationOutcome
+import dev.skillbill.desktop.core.domain.model.PlanAgentActivity
+import dev.skillbill.desktop.core.domain.model.PlanOutputLine
+import dev.skillbill.desktop.core.domain.model.PlanWave
 import dev.skillbill.desktop.core.domain.model.DetailAttempts
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.ExecutionInstance
@@ -15,7 +23,13 @@ import dev.skillbill.desktop.core.domain.model.GoalAssessmentState
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentVerification
 import dev.skillbill.desktop.core.domain.model.GoalQaFinding
 import dev.skillbill.desktop.core.domain.model.GoalQaResult
-import dev.skillbill.desktop.core.domain.model.GoalWorktree
+import dev.skillbill.desktop.core.domain.model.QaAssertionOutcome
+import dev.skillbill.desktop.core.domain.model.QaRunAssertion
+import dev.skillbill.desktop.core.domain.model.QaRunCoverage
+import dev.skillbill.desktop.core.domain.model.QaRunDetails
+import dev.skillbill.desktop.core.domain.model.QaRunFinding
+import dev.skillbill.desktop.core.domain.model.QaRunRetainedResource
+import dev.skillbill.desktop.core.domain.model.QaRunTemporaryEdit
 import dev.skillbill.desktop.core.domain.model.Incident
 import dev.skillbill.desktop.core.domain.model.IncidentEvidence
 import dev.skillbill.desktop.core.domain.model.IncidentPrerequisiteDetail
@@ -51,6 +65,9 @@ import dev.skillbill.desktop.core.domain.model.SubtaskAuditResult
 import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
 import dev.skillbill.desktop.core.domain.model.SubtaskExecution
 import dev.skillbill.desktop.core.domain.model.SubtaskValidation
+import dev.skillbill.desktop.core.domain.model.StandalonePlanProgress as DesktopStandalonePlanProgress
+import dev.skillbill.desktop.core.domain.model.StandalonePlanStage as DesktopStandalonePlanStage
+import dev.skillbill.desktop.core.domain.model.StandalonePlanUnit as DesktopStandalonePlanUnit
 import dev.skillbill.desktop.core.domain.model.ValidationCommand
 import dev.skillbill.desktop.core.domain.model.ValidationGateRun
 import dev.skillbill.desktop.core.domain.model.ValidationResult
@@ -59,7 +76,6 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
 import skillbill.ports.idestatus.model.WorkChangeBaseline
-import skillbill.ports.idestatus.model.GoalWorktreeState as RuntimeGoalWorktreeState
 import dev.skillbill.desktop.core.domain.model.WorkPhase
 import dev.skillbill.desktop.core.domain.model.WorkQaOutcome
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
@@ -68,17 +84,24 @@ import skillbill.engine.work.control.model.WorkRunOptions
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState as RuntimeAssessmentFindingState
 import skillbill.goalrunner.assessment.model.GoalAssessmentVerification as RuntimeAssessmentVerification
 import skillbill.goalrunner.model.GoalRunnerAssessmentState
+import skillbill.goalrunner.model.GoalRunnerQaResult
 import skillbill.goalrunner.model.GoalRunnerSubtaskPhaseResults
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.ports.idestatus.model.ExecutionReasonRestoration
 import skillbill.ports.idestatus.model.IdeStatusWorkflowQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandalonePlanReport
+import skillbill.ports.idestatus.model.StandalonePlanProgress as RuntimeStandalonePlanProgress
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaStepStatus
 import skillbill.ports.idestatus.model.StandaloneQaTargetState
 import skillbill.ports.idestatus.model.StandaloneReviewReport
+import skillbill.ports.idestatus.model.LiveChecksAvailability
+import skillbill.ports.idestatus.model.ValidationCheckOutcome
+import skillbill.ports.idestatus.model.StandaloneValidationOutcome
 import skillbill.ports.idestatus.model.WorkDetailItem
+import skillbill.ports.idestatus.model.WorkExecutionInstance
+import skillbill.idestatus.model.IdeStatusPolicy
 import skillbill.ports.idestatus.model.WorkDetailList
 import skillbill.ports.idestatus.model.WorkIncidentProgress
 import skillbill.ports.idestatus.model.WorkIncidentProjection
@@ -88,6 +111,8 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryE
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryPreview
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryUnavailableReason
 import java.nio.file.Path
+import skillbill.workflow.taskruntime.model.qa.QaAssertionOutcome as RuntimeQaAssertionOutcome
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails as RuntimeQaRunDetails
 import java.time.Instant as JavaInstant
 import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
@@ -110,7 +135,9 @@ internal fun WorkDetailItem.toHeader(options: WorkRunOptions?, branches: Checked
         (this.changeBaseline as? WorkChangeBaseline.CommittedBranchRange)?.headBranch ?: item.branch
       null -> if (standalone) item.branch else branches.checkedOutBranch(Path.of(repositoryRoot)) ?: item.branch
     }
-  val planFeature = executionHistory.firstOrNull { it.invocationId == snapshot.execution?.invocationId }?.planReport?.featureName
+  val planFeature =
+    selectedExecution?.takeIf { it.invocationId == snapshot.execution?.invocationId }?.planReport?.featureName
+      ?: executionHistory.firstOrNull { it.invocationId == snapshot.execution?.invocationId }?.planReport?.featureName
   return item.copy(
     title = goalManifest?.featureName?.takeIf { item.kind == WorkKind.Goal && it.isNotBlank() }?.let { displayTitle(it, item.issueKey) }
       ?: planFeature?.takeIf { standalone && it.isNotBlank() }?.let { displayTitle(it, item.issueKey) } ?: item.title,
@@ -127,6 +154,7 @@ internal fun WorkDetailList.toDomain(): DetailList = when (this) {
   WorkDetailList.PHASES -> DetailList.Phases
   WorkDetailList.VALIDATION -> DetailList.Validation
   WorkDetailList.EXECUTIONS -> DetailList.Executions
+  WorkDetailList.PLAN_OUTPUT -> DetailList.PlanOutput
   WorkDetailList.DEPENDENCIES -> DetailList.Dependencies
 }
 
@@ -135,6 +163,7 @@ internal fun DetailList.toRuntime(): WorkDetailList = when (this) {
   DetailList.Phases -> WorkDetailList.PHASES
   DetailList.Validation -> WorkDetailList.VALIDATION
   DetailList.Executions -> WorkDetailList.EXECUTIONS
+  DetailList.PlanOutput -> WorkDetailList.PLAN_OUTPUT
   DetailList.Dependencies -> WorkDetailList.DEPENDENCIES
 }
 
@@ -150,6 +179,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     updatedAt = snapshot.updatedAt.toKotlinInstant(),
     lastAgentActivityLabel = snapshot.lastAgentActivityLabel?.wireValue,
     lastAgentActivityAt = snapshot.lastAgentActivityAt?.toKotlinInstant(),
+    currentActivity = snapshot.currentActivity,
     currentSubtaskStartedAt = snapshot.currentSubtask?.startedAt?.toKotlinInstant(),
     subtaskActiveDurationMs = snapshot.currentSubtask?.activeDurationMs,
     subtaskActiveDurationAsOf = snapshot.currentSubtask?.activeDurationAsOf?.toKotlinInstant(),
@@ -193,12 +223,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
       )
     },
     phaseResults = goal?.completedSubtaskPhaseResults.orEmpty().map { it.toDomain() },
-    goalQa = goal?.goalQaResult?.let { qa ->
-      GoalQaResult(
-        qa.outcome, qa.reason, qa.qaFixAttempts, qa.recordedAt.toKotlinInstant(),
-        qa.findings.map { GoalQaFinding(it.id, it.title, it.evidencePath, it.fixed) }, qa.reportText, qa.failureKind,
-      )
-    },
+    goalQa = goal?.goalQaResult?.toDomain(),
     goalAssessment = goal?.goalAssessmentResult?.let { assessment ->
       GoalAssessmentResult(
         assessment.state.toDomain(), assessment.round, assessment.exitReason?.wireValue, assessment.fixRan,
@@ -218,14 +243,22 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
         WorktreeEdit(it.recordedAt.toKotlinInstant(), it.pathSample, it.netInsertions, it.netDeletions, it.phaseId)
       },
     ),
-    executionHistory = executionHistory.map {
-      ExecutionInstance(
-        it.invocationId, it.executionId, it.lifecycleState, it.startedAt.toKotlinInstant(), it.updatedAt.toKotlinInstant(),
-        it.finishedAt?.toKotlinInstant(), it.result, it.restoration?.toDomain(), it.qaOutcome?.toDomain(), it.qaReportText,
-        it.planReport?.toDomain(), it.reviewReport?.toDomain(),
-        it.qaChecklist?.toDomain(), it.qaFindings.map { finding -> QaChecklistFinding(finding.id, finding.title, null) },
+    executionHistory = executionHistory.map { it.toDomain() },
+    selectedExecution = selectedExecution?.toDomain(),
+    validationBranchRuns = validationBranchRuns.map {
+      ValidationBranchRun(
+        invocationId = it.invocationId,
+        runSequence = it.runSequence,
+        lifecycle = IdeStatusPolicy.standaloneLifecycle(it.lifecycleState).toDomain(),
+        startedAt = it.startedAt.toKotlinInstant(),
+        finishedAt = it.finishedAt?.toKotlinInstant(),
+        activeDurationMs = it.activeDurationMs,
+        agent = it.launchAgentId,
+        currentActivity = it.currentActivity,
+        result = it.result,
       )
     },
+    selectedValidationResult = selectedValidationResult,
     incident = incident?.toDomain(),
     incidentHistory = incidentHistory.map { it.toDomain() },
     goalSpecBundle = goalSpecBundle?.toDomain(),
@@ -233,15 +266,50 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     changeBaseline = changeBaseline?.toDomain(),
     degradedGoalStatusSource = GOAL_STATUS_READ_SOURCE.takeIf { goal == null && !goalManifest?.subtasks.isNullOrEmpty() },
     currentSubtaskId = goal?.currentSubtaskId,
-    goalWorktree = goalWorktree?.let { GoalWorktree(it.path, it.state.toWorktreeDomain(), it.retentionReason, it.retentionDetail) },
+    goalWorktree = goalWorktree?.toDomainWorktree(),
     launchWarning = goal?.launchWarning,
+    planActivity = planActivity.map { record ->
+      val event = record.event
+      PlanAgentActivity(event.id, record.phaseId, event.kind.wireValue, event.text, record.at.toKotlinInstant(), record.updatedAt.toKotlinInstant(), event.agentId, event.path, event.state.wireValue, event.durationMs, event.exitCode, event.subtaskId)
+    },
+    planOutputLines = planOutputLines.map { PlanOutputLine(it.id, it.text, it.at.toKotlinInstant(), it.subtaskId, it.sequence, it.isRaw) },
+    planOutputTail = planOutputTail,
+    planOutputUpdatedAt = planOutputUpdatedAt?.toKotlinInstant(),
+    planSubtaskLatestLines = planSubtaskLatestLines,
+    standalonePlan = standalonePlanProgress?.toDomain(),
+    verifyRun = verifyRun?.toDomain(),
   )
 }
 
-private fun RuntimeGoalWorktreeState.toWorktreeDomain(): GoalWorktreeState = when (this) {
-  RuntimeGoalWorktreeState.ACTIVE -> GoalWorktreeState.Active
-  RuntimeGoalWorktreeState.RETAINED -> GoalWorktreeState.Retained
-  RuntimeGoalWorktreeState.REMOVED -> GoalWorktreeState.Removed
+private fun StandaloneValidationOutcome.toDomain(): ValidationOutcome = when (this) {
+  StandaloneValidationOutcome.PASSED -> ValidationOutcome.Passed
+  StandaloneValidationOutcome.FAILED -> ValidationOutcome.Failed
+  StandaloneValidationOutcome.BLOCKED -> ValidationOutcome.Blocked
+}
+
+private fun WorkExecutionInstance.toDomain() = ExecutionInstance(
+  invocationId, executionId, lifecycleState, startedAt.toKotlinInstant(), updatedAt.toKotlinInstant(),
+  finishedAt?.toKotlinInstant(), result, restoration?.toDomain(), qaOutcome?.toDomain(), qaReportText,
+  planReport?.toDomain(), reviewReport?.toDomain(),
+  qaChecklist?.toDomain(), qaFindings.map { finding -> QaChecklistFinding(finding.id, finding.title, null) },
+  qaDetails?.toDomain(),
+  liveChecks = liveChecks == LiveChecksAvailability.AVAILABLE,
+  validationOutcome = validationOutcome?.toDomain(),
+  validationChecks = validationChecks.map { check ->
+    ValidationCheck(check.checkId, check.name, check.command, check.workingDir, check.attempts.map { attempt ->
+      ValidationCheckAttempt(
+        attempt.number, attempt.startedAt?.toKotlinInstant(), attempt.finishedAt?.toKotlinInstant(),
+        attempt.outcome?.toDomain(), attempt.exitCode, attempt.note,
+      )
+    })
+  },
+)
+
+private fun ValidationCheckOutcome.toDomain(): ValidationCheckResult = when (this) {
+  ValidationCheckOutcome.PASSED -> ValidationCheckResult.Passed
+  ValidationCheckOutcome.FAILED -> ValidationCheckResult.Failed
+  ValidationCheckOutcome.BLOCKED -> ValidationCheckResult.Blocked
+  ValidationCheckOutcome.SKIPPED -> ValidationCheckResult.Skipped
 }
 
 private fun StandaloneQaChecklist.toDomain(): QaChecklist = QaChecklist(
@@ -344,6 +412,38 @@ private fun StandaloneReviewReport.toDomain(): ReviewReport =
 private fun StandalonePlanReport.toDomain(): PlanRunReport =
   PlanRunReport(featureName, parentSpecPath, subtasks.map { PlannedSubtask(it.id, it.name, it.specPath, it.dependsOn) }, bundleFiles)
 
+private fun RuntimeStandalonePlanProgress.toDomain(): DesktopStandalonePlanProgress = DesktopStandalonePlanProgress(
+  report?.toDomain(),
+  stages.map {
+    DesktopStandalonePlanStage(
+      it.phaseId,
+      it.firstStartedAt?.toKotlinInstant(),
+      it.finishedAt?.toKotlinInstant(),
+      it.briefingText,
+      it.status,
+    )
+  },
+  plannedSubtaskCount,
+  totalSubtaskCount,
+  currentPlanningSubtaskId,
+  planningWaveSubtaskIds,
+  planningWaveCapacity,
+  blockedSubtaskId,
+  blockedReason,
+  units.map { unit ->
+    DesktopStandalonePlanUnit(
+      unit.subtaskId, unit.name, unit.specPath, unit.dependsOn, unit.state.wireValue,
+      unit.startedAt?.toKotlinInstant(), unit.finishedAt?.toKotlinInstant(), unit.blockedReason, unit.latestOutput,
+      unit.latestOutputAt?.toKotlinInstant(),
+    )
+  },
+  stalledSince?.toKotlinInstant(),
+  planningWaveNumber,
+  planningWaveHistoryComplete,
+  blockedSubtaskIds,
+  waves.map { PlanWave(it.number, it.subtaskIds, it.startedAt?.toKotlinInstant()) },
+)
+
 private fun GoalRunnerAssessmentState.toDomain(): GoalAssessmentState = when (this) {
   GoalRunnerAssessmentState.BLOCKED -> GoalAssessmentState.Blocked
   GoalRunnerAssessmentState.PENDING -> GoalAssessmentState.Pending
@@ -432,3 +532,27 @@ private fun BlockIncidentRecoveryUnavailableReason.toDomain(): IncidentRecoveryU
   BlockIncidentRecoveryUnavailableReason.OPERATOR_DECISION -> IncidentRecoveryUnavailableReason.OperatorDecision
   BlockIncidentRecoveryUnavailableReason.QUALITY_GATE -> IncidentRecoveryUnavailableReason.QualityGate
 }
+
+internal fun GoalRunnerQaResult.toDomain() = GoalQaResult(
+  outcome, reason, qaFixAttempts, recordedAt.toKotlinInstant(),
+  findings.map { GoalQaFinding(it.id, it.title, it.fixed, it.evidencePaths, it.reportPath, it.observed, it.expected, it.steps) },
+  reportText,
+  failureKind,
+  details?.toDomain(),
+)
+
+internal fun RuntimeQaRunDetails.toDomain() = QaRunDetails(
+  reportPath, invocationDirectory, skipReason,
+  assertions.map { assertion ->
+    val outcome = when (assertion.outcome) {
+      RuntimeQaAssertionOutcome.PASSED -> QaAssertionOutcome.Passed
+      RuntimeQaAssertionOutcome.FAILED -> QaAssertionOutcome.Failed
+      RuntimeQaAssertionOutcome.NOT_EXERCISED -> QaAssertionOutcome.NotExercised
+    }
+    QaRunAssertion(outcome, assertion.title, assertion.detail, assertion.evidencePaths)
+  },
+  coverage.map { QaRunCoverage(it.kind, it.verdict, it.reason, it.backend) },
+  retainedResources.map { QaRunRetainedResource(it.kind, it.identity) },
+  temporaryEdits.map { QaRunTemporaryEdit(it.path, it.detail, it.notRestored) },
+  findings.map { QaRunFinding(it.id, it.title, it.observed, it.expected, it.steps, it.evidencePaths) },
+)

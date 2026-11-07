@@ -101,30 +101,10 @@ internal fun DetailSections.phaseResultsSection(item: WorkItem, detail: Detail) 
   }
 }
 
-/** HANDOFF 9.2 item 15: goal QA findings, the ones left for the operator first. */
-internal fun DetailSections.goalQaSection(detail: Detail) {
+/** HANDOFF 9.2 item 15: the goal's QA results. */
+internal fun DetailSections.goalQaSection(detail: Detail, running: Boolean, onAction: (DetailAction) -> Unit) {
   val qa = detail.goalQa ?: return
-  // The design lists the findings in the runtime's order, each as ref, title and state with no meta line.
-  val ordered = qa.findings
-  val notFixed = ordered.count { !it.fixed }
-  section(GOAL_QA_KEY, "Goal QA", count = qa.outcome) {
-    item(key = "goal-qa-summary") {
-      Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 12.dp)) {
-        if (qa.findings.isNotEmpty()) SectionText(qaFindingsSummary(qa.findings.size, notFixed, qa.fixAttempts), SkillBillTheme.colors.fgMuted)
-        if (!qa.reportText.isNullOrBlank() || !qa.reason.isNullOrBlank() || qa.failureKind != null) QaReportCard(qa)
-      }
-    }
-    itemsIndexed(ordered, key = { _, finding -> "goal-qa-${finding.id}" }) { index, finding ->
-      val colors = SkillBillTheme.colors
-      BoxedFindingRow(
-        index, ordered.size,
-        title = finding.title.ifBlank { finding.id },
-        ref = finding.id,
-        state = if (finding.fixed) "Fixed" else "Not fixed",
-        stateColor = if (finding.fixed) colors.stDone else colors.stFailed,
-      )
-    }
-  }
+  qaResultsSection(GOAL_QA_KEY, "Goal QA", qaResultsView(goalQaInput(qa, running)), onAction)
 }
 
 internal fun GoalAssessmentState.word(): String = when (this) {

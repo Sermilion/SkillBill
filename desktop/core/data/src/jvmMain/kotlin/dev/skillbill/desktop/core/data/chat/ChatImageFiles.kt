@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.core.data.chat
 
+import dev.skillbill.desktop.core.data.runtime.currentDesktopTempRoot
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatImage
@@ -10,13 +11,12 @@ import kotlinx.coroutines.flow.flow
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.Paths
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.deleteRecursively
 
 private val UNSAFE_NAME_CHARACTERS = Regex("[^A-Za-z0-9._-]")
 
-internal fun chatImageRoot(): Path = Paths.get(System.getProperty("java.io.tmpdir"), "skill-bill-chat-images")
+internal fun chatImageRoot(): Path = currentDesktopTempRoot().resolve("skill-bill-chat-images")
 
 internal fun chatImageDirectory(sessionId: String): Path =
   chatImageRoot().resolve(sessionId.replace(UNSAFE_NAME_CHARACTERS, "_"))

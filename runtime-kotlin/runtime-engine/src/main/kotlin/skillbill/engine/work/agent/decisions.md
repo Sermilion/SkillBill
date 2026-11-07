@@ -1,3 +1,22 @@
+## [2026-11-07] Show a Cursor grok launch on the activity model list
+Context: Activity keeps a phase model only when the id belongs to the attempt's agent. Claude matches `claude*`, Codex matches `gpt*`, and every other agent was dropped. A Cursor audit attempt records `grok-4.7-high-fast`, and the execution matrix records `cursor-grok-*`.
+Decision: A Cursor attempt keeps a model that starts with `grok` or `cursor-`. A `gpt*` or `claude*` id on that attempt stays hidden.
+Reason: Those prefixes are the Cursor model ids the runtime stores. A Codex or Claude id on a Cursor attempt is a borrowed model, which the activity list already refuses for the other agents.
+
+## [2026-11-06] Derive standalone plan settlement from phase records
+Context: Planning seeds subtask spec files before units finish. Goal planning also requires a details hash for its progress calculation.
+Decision: Standalone detail treats a completed unit with a nonblank output artifact as saved and filters seeded spec paths by those units. Goal planning retains its settlement rule.
+Reason: File existence does not prove a unit settled. The goal helper's extra hash requirement would hide standalone units that meet the saved contract.
+## [2026-11-06] Project Verify details in the runtime
+Context: Work detail needs saved Verify receipts, QA results and session staleness, including for older runs that lack artifacts.
+Decision: Build a read-only, Verify-only projection from the stored snapshot and session telemetry. Keep raw findings with parsed fields and leave missing data null or empty.
+Reason: Verify artifact access belongs to runtime-engine, where VerifyWorkflow is internal. Existing snapshot and session data avoid a second source of state and keep older records readable.
+
+## [2026-11-06] Store the Verify summary separately from the verdict
+Context: Verify detail needs a description of the work as well as the verdict and findings.
+Decision: Store a nonblank SUMMARY section as an optional verdict receipt field.
+Reason: The summary describes the change rather than the verdict. A separate optional field keeps it out of findings and allows older receipts to remain readable.
+
 ## [2026-11-04] Bind operator-supplied task identity without allocation
 Context: Goal and plan starts could mint a new key from a prefix or bind a key mentioned elsewhere in requirements, even when the operator had not supplied that identity.
 Decision: Bind only an admitted first token, a complete typed key, or a tracker key extracted from a URL. Ask for identity when none is available. Allow explicit typed reuse only for completed or abandoned terminal runs, while refusing used URLs and in-flight or resumable runs.

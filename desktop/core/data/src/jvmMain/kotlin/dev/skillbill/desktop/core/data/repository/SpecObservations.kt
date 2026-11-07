@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.merge
@@ -91,21 +92,22 @@ class SpecObservations internal constructor(
     trees.computeIfAbsent(projectId) { id ->
       val storePath = MutableStateFlow<String?>(null)
       val directoryChanges = storePath.flatMapLatest { path -> path?.let(::folderChanges) ?: emptyFlow() }
-      merge(
+      specTreeReads(merge(
         refreshes.computeIfAbsent(id) { MutableSharedFlow(replay = 1, extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST) }
           .onStart { emit(Unit) },
         preferredRepoRoot.map { }, directoryChanges, revisionChanges(DesktopReadSchema.SPECS_TOPIC).drop(1),
-      )
-        .conflate()
-        .mapLatest {
-          when (val read = readTree(id, preferredRepoRoot.value)) {
-            is Outcome.Success -> {
-              storePath.value = read.value.specsRoot
-              read.value.state
-            }
-            is Outcome.Failure -> SpecTreeState.Unavailable(read.error)
+      )) {
+        val repoRoot = preferredRepoRoot.value
+        val read = readTree(id, repoRoot)
+        if (repoRoot != preferredRepoRoot.value) null else when (read) {
+          is Outcome.Success -> {
+            storePath.value = read.value.specsRoot
+            read.value.state
           }
+          is Outcome.Failure -> SpecTreeState.Unavailable(read.error)
         }
+      }
+        .filterNotNull()
         .distinctUntilChanged()
         .stateIn(scope, SharingStarted.WhileSubscribed(SHARE_TIMEOUT_MS), SpecTreeState.Loading)
     }
@@ -192,7 +194,7 @@ class SpecObservations internal constructor(
       reads.read("spec_control") { component ->
         val control = component.specBrowserService.control(bundle.projectId, bundle.path, bundle.repoRoot?.let(Path::of))
         val liveGoal = control.workflowId?.let { workflowId ->
-          component.ideStatusService.detail(WorkDetailRequest(workflowId)).item?.toWorkItem(sessionId)
+          reads.ideStatusService.detail(WorkDetailRequest(workflowId)).item?.toWorkItem(sessionId)
         }
         SpecControlState.Loaded(control.toDomain(), liveGoal)
       }
@@ -205,3 +207,6 @@ class SpecObservations internal constructor(
 }
 
 private class TreeRead(val state: SpecTreeState, val specsRoot: String?)
+
+internal fun <T> specTreeReads(changes: Flow<Unit>, read: suspend () -> T): Flow<T> =
+  changes.conflate().map { read() }

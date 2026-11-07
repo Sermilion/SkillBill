@@ -33,6 +33,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.projectstore.ProjectStorePort
@@ -263,10 +264,31 @@ public open class FeatureTaskRuntimeRunLoopEntry(
   public open fun run(
     context: FeatureTaskRuntimeRunLoopContext,
     beforeDrive: (FeatureTaskRuntimeRunLoop) -> Unit = {},
+  ): FeatureTaskRuntimeRunReport = runLoop(context, beforeDrive, AgentRunOutputSink.NONE, false, null)
+
+  public open fun run(
+    context: FeatureTaskRuntimeRunLoopContext,
+    beforeDrive: (FeatureTaskRuntimeRunLoop) -> Unit,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
+    afterStepSettlement: (() -> Unit)?,
+  ): FeatureTaskRuntimeRunReport {
+    if (outputSink === AgentRunOutputSink.NONE && !captureStreamOutput && afterStepSettlement == null) {
+      return run(context, beforeDrive)
+    }
+    return runLoop(context, beforeDrive, outputSink, captureStreamOutput, afterStepSettlement)
+  }
+
+  private fun runLoop(
+    context: FeatureTaskRuntimeRunLoopContext,
+    beforeDrive: (FeatureTaskRuntimeRunLoop) -> Unit,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
+    afterStepSettlement: (() -> Unit)?,
   ): FeatureTaskRuntimeRunReport {
     val loop = FeatureTaskRuntimeRunLoop(context = context)
     beforeDrive(loop)
-    loop.drive()
+    loop.drive(outputSink, captureStreamOutput, afterStepSettlement)
     return loop.report()
   }
 }
@@ -281,36 +303,49 @@ public class FeatureTaskRuntimeRunLoop internal constructor(
     context.runState.coupledRunTransitions.establishResumedReentryPair(resumed)
   }
 
-  internal fun drive() {
+  internal fun drive(
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
+    afterStepSettlement: (() -> Unit)?,
+  ) {
     with(FeatureTaskRuntimeRunLoopDrive) {
       invalidateStaleEvidence(context)
-      context.runPhaseDriveLoop(::advance)
+      context.runPhaseDriveLoop { phaseId -> advance(phaseId, outputSink, captureStreamOutput, afterStepSettlement) }
     }
   }
 
-  internal fun advance(phaseId: String): PhaseSettlement {
-    if (context.request.stopAfterIntake && PhaseSlot.slotForStep(phaseId) != PhaseSlot.INTAKE) {
-      return PhaseSettlement.stop()
-    }
-    FeatureTaskRuntimeRunLoopDrive.phaseEntryBlockReason(context, phaseId)?.let { reason ->
-      FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(
+  internal fun advance(
+    phaseId: String,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
+    afterStepSettlement: (() -> Unit)?,
+  ): PhaseSettlement {
+    try {
+      if (context.request.stopAfterIntake && PhaseSlot.slotForStep(phaseId) != PhaseSlot.INTAKE) {
+        return PhaseSettlement.stop()
+      }
+      FeatureTaskRuntimeRunLoopDrive.phaseEntryBlockReason(context, phaseId)?.let { reason ->
+        FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(
+          context.request,
+          context.state,
+          session,
+          phaseId,
+          reason,
+        )
+        return PhaseSettlement.stop()
+      }
+      FeatureTaskRuntimeRunLoopDrive.settleWithoutLaunch(context, phaseId)?.let { settled -> return settled }
+      val reason = FeatureTaskRuntimeRunLoopDrive.advancePhaseReason(context, phaseId, outputSink, captureStreamOutput)
+      return FeatureTaskRuntimeRunLoopDrive.settleAdvanceOutcome(
         context.request,
         context.state,
         session,
         phaseId,
         reason,
       )
-      return PhaseSettlement.stop()
+    } finally {
+      afterStepSettlement?.invoke()
     }
-    FeatureTaskRuntimeRunLoopDrive.settleWithoutLaunch(context, phaseId)?.let { settled -> return settled }
-    val reason = FeatureTaskRuntimeRunLoopDrive.advancePhaseReason(context, phaseId)
-    return FeatureTaskRuntimeRunLoopDrive.settleAdvanceOutcome(
-      context.request,
-      context.state,
-      session,
-      phaseId,
-      reason,
-    )
   }
 
   internal fun report(): FeatureTaskRuntimeRunReport {

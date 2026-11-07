@@ -48,6 +48,7 @@ internal object VerifyWorkflow {
   const val RULES = "rules"
   const val VERDICT_FIELD = "verdict"
   const val FINDINGS = "findings"
+  const val SUMMARY = "summary"
   const val WARNINGS = "warnings"
   const val CHECKPOINT = "checkpoint"
   const val COMPARISON_SCOPE = "comparison_scope"

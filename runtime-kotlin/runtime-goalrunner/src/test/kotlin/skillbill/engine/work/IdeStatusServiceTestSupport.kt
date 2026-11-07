@@ -1,5 +1,6 @@
 package skillbill.engine.work
 
+import skillbill.application.RecordingLifecycleTelemetryRepository
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.baseBranch
@@ -38,6 +39,9 @@ import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.quality.GoalQualityAdmissionRequest
+import skillbill.engine.goalrunner.persist.quality.GoalQualityBuildSourceProof
+import skillbill.engine.goalrunner.persist.quality.GoalQualityPhaseProgressWrite
 import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
@@ -58,8 +62,6 @@ import skillbill.goalrunner.model.history.GoalFinalRepairContext
 import skillbill.goalrunner.model.history.GoalFinalRepairOutput
 import skillbill.goalrunner.model.history.GoalHistoryCompletion
 import skillbill.goalrunner.model.history.GoalHistoryWriterEntry
-import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
-import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.ports.db.DatabaseSessionFactory
@@ -344,6 +346,7 @@ internal fun ideStatusService(
             },
         ),
     )
+  val planReports = testPlanReports(manifestStore)
   val projector =
     IdeStatusProjector(
       workflowSnapshotValidator = snapshotValidator,
@@ -352,13 +355,7 @@ internal fun ideStatusService(
       manifestStore = GoalRunnerManifestProjectionReader(manifestStore),
       diagnostics = NoopRuntimeDiagnostics,
       qaCapabilities = ports.qaCapabilities,
-      planReports =
-        StandalonePlanReportBuilder(
-          manifestStore,
-          TestDecompositionManifestStore,
-          FixedProjectStorePort(ideStatusProjectStoreRoot),
-          NoopRuntimeDiagnostics,
-        ),
+      planReports = planReports,
     )
   val boardProjection = testBoardProjection(projector, ports.repositoryEnclosingRootPort)
   (database as? BoardProjectionCapture)?.accept(boardProjection)
@@ -376,6 +373,14 @@ internal fun ideStatusService(
     incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, ideStatusClock),
   )
 }
+
+private fun testPlanReports(manifestStore: GoalRunnerManifestStore) =
+  StandalonePlanReportBuilder(
+    manifestStore,
+    TestDecompositionManifestStore,
+    FixedProjectStorePort(ideStatusProjectStoreRoot),
+    NoopRuntimeDiagnostics,
+  )
 
 internal interface BoardProjectionCapture {
   fun accept(projection: WorkBoardItemProjection)
@@ -595,6 +600,7 @@ internal class TrackingDatabase(
   internal val goalPage: WorkGoalSubtaskPage? = null,
   internal val goalPages: ((afterSubtaskId: Int?, limit: Int) -> WorkGoalSubtaskPage?)? = null,
   internal val qaOutcomes: FeatureTaskQaOutcomeRepository = InMemoryFeatureTaskQaOutcomeRepository(),
+  internal val telemetry: LifecycleTelemetryRepository = RecordingLifecycleTelemetryRepository(),
 ) : DatabaseSessionFactory {
   override fun acquireDatabasePathProtection() =
     DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
@@ -695,8 +701,7 @@ internal class TrackingDatabase(
         get() = error("Not exercised by IdeStatusServiceTest.")
       override val reviews: ReviewRepository
         get() = error("Not exercised by IdeStatusServiceTest.")
-      override val lifecycleTelemetry: LifecycleTelemetryRepository
-        get() = error("Not exercised by IdeStatusServiceTest.")
+      override val lifecycleTelemetry: LifecycleTelemetryRepository = telemetry
       override val telemetryReconciliation: TelemetryReconciliationRepository
         get() = error("Not exercised by IdeStatusServiceTest.")
       override val telemetryOutbox: TelemetryOutboxRepository
@@ -958,9 +963,7 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
 
   override fun admitGoalQualityExecution(
     parentWorkflowId: String,
-    baselineContentFingerprint: String,
-    governingInputs: GoalQualityExecutionInputs,
-    executionPlans: GoalQualityExecutionPlans,
+    admission: GoalQualityAdmissionRequest,
   ): GoalQualityExecutionRecord = error("EmptyOutcomeStore does not persist goal quality execution.")
 
   override fun transitionGoalQualityExecution(
@@ -977,13 +980,9 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     acceptedPlan: String,
   ): GoalQualityPhaseProgress = error("EmptyOutcomeStore does not persist goal quality phase progress.")
 
-  override fun persistGoalQualityPhaseProgress(
-    parentWorkflowId: String,
-    invocationId: String,
-    definitionId: String,
-    acceptedPlan: String,
-    progress: GoalQualityPhaseProgress,
-  ): Boolean = false
+  override fun reenterGoalQualityBuild(proof: GoalQualityBuildSourceProof): GoalQualityExecutionRecord? = null
+
+  override fun persistGoalQualityPhaseProgress(write: GoalQualityPhaseProgressWrite): Boolean = false
 
   override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? = null
 

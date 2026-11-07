@@ -11,6 +11,7 @@ import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.settings.CriterionMark
 import dev.skillbill.desktop.core.ui.feedback.ToastMessage
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import kotlin.time.Instant
@@ -36,9 +37,16 @@ data class DetailUiState(
   val focusSubtaskList: Boolean = false,
   val changes: ChangesUi = ChangesUi(),
   val qaCaseOverrides: Map<QaCaseKey, Boolean> = emptyMap(),
+  val validationCheckOverrides: Map<ValidationCheckKey, Boolean> = emptyMap(),
   val selectedQaRun: String? = null,
   val activity: ActivityResult = ActivityResult.Loading,
+  val verifyCriteriaFilter: VerifyCriteriaFilter = VerifyCriteriaFilter.All,
+  val fixSelection: Map<String, FixRoute> = emptyMap(),
+  val criterionMarks: Map<Int, CriterionMark> = emptyMap(),
+  val verifyAgainInFlight: Boolean = false,
 )
+
+enum class VerifyCriteriaFilter { All, Gaps, Met }
 
 /**
  * The open item's changes; the section only shows once the detail has loaded. A goal carries its [subtasks] for the strip; any other
@@ -93,14 +101,29 @@ sealed interface ListLoad {
 data class BoardPosition(val index: Int, val total: Int, val previous: WorkItem?, val next: WorkItem?)
 
 data class QaCaseKey(val invocationId: String, val caseId: String)
+data class ValidationCheckKey(val invocationId: String, val checkId: String)
 
 sealed interface DetailAction {
+  data class OpenNewerVerifyRun(val workflowId: String) : DetailAction
+  data class SetVerifyCriteriaFilter(val filter: VerifyCriteriaFilter) : DetailAction
+  data class ToggleFix(val key: String) : DetailAction
+  data class SetFixRoute(val key: String, val route: FixRoute) : DetailAction
+  data class ToggleSelectAllFixes(val kind: FixKind) : DetailAction
+  data object ClearFixSelection : DetailAction
+  data object FixInChat : DetailAction
+  data object StartGoalWithFixes : DetailAction
+  data class GoalIntakeResult(val keys: List<String>, val accepted: Boolean) : DetailAction
+  data class MarkCriterion(val number: Int, val mark: CriterionMark?) : DetailAction
+  data object VerifyAgain : DetailAction
   data object ToggleFavorite : DetailAction
   data class ToggleQaCase(val key: QaCaseKey) : DetailAction
+  data class ToggleValidationCheck(val key: ValidationCheckKey) : DetailAction
   data class SetAllQaCases(val keys: List<QaCaseKey>, val open: Boolean) : DetailAction
   data class SelectQaRun(val invocationId: String?) : DetailAction
   data class OpenQaReport(val path: String) : DetailAction
   data class OpenQaEvidence(val path: String, val invocationDirectory: String) : DetailAction
+  /** Opens .skill-bill/phases/qa.md without writing it. */
+  data object OpenQaPhaseInstructions : DetailAction
   data class ReviewFindings(val action: ReviewFindingsAction) : DetailAction
   data class LoadMore(val list: DetailList) : DetailAction
   data object Next : DetailAction
@@ -130,6 +153,8 @@ sealed interface DetailAction {
 
 sealed interface DetailEffect {
   data class ReviewFindings(val item: WorkItem, val action: ReviewFindingsAction) : DetailEffect
+  data class FixInChat(val item: WorkItem, val brief: String) : DetailEffect
+  data class PrefillGoalIntake(val repoRoot: String, val branch: String, val text: String, val keys: List<String>) : DetailEffect
   data class OpenItem(val item: WorkItem) : DetailEffect
   data class OpenRoute(val route: AppRoute) : DetailEffect
   data class CopyToClipboard(val text: String) : DetailEffect

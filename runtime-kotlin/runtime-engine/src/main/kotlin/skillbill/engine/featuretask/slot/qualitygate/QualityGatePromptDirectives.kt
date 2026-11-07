@@ -12,6 +12,11 @@ private const val VALIDATE_TRIAGE_FORBIDDEN_PACK_GATE: String =
     "cache_bypassing_collect_all_full_gate_command, or any other pack-declared full-suite argv " +
     "during this triage turn. "
 
+private const val MACHINE_BUILD_SETTINGS_DIRECTIVE: String =
+  "Run build tools with the machine's own settings and shared caches. Do not point a build tool at a " +
+    "private home or cache: for Gradle, never set GRADLE_USER_HOME, GRADLE_OPTS, or JAVA_TOOL_OPTIONS, " +
+    "and never pass --gradle-user-home or -g. "
+
 private const val BUILD_PHASE_FORBIDDEN_EXTRAS: String =
   "Do not run `skill-bill validate`, `npx agnix`, `scripts/validate_agent_configs`, " +
     "`skill-bill phase validation`, `./gradlew check`, `check " + "--" + "continue`, or the pack " +
@@ -28,9 +33,10 @@ private fun runtimeOwnedValidateChecksDirective(): String {
     "Before choosing a host or container, read the applicable repository instructions and CI/setup scripts. " +
     "Before an expensive validation command, check the required toolchain and tools, writable home, cache, " +
     "and temporary paths, and any required display support. Prefer a known working host or the established " +
-    "isolated setup required by those instructions. Keep useful setup and discovery context in this invocation, " +
-    "and reuse only caches and mutable state this invocation is allowed to own. Never reuse another worktree's " +
-    "mutable state. Do not install packages automatically, stop a shared daemon, or change unrelated jobs. " +
+    "isolated setup required by those instructions. Keep useful setup and discovery context in this invocation. " +
+    MACHINE_BUILD_SETTINGS_DIRECTIVE +
+    "Never reuse another worktree's mutable state; the machine's shared tool caches are not worktree state. " +
+    "Do not install packages automatically, stop a shared daemon, or change unrelated jobs. " +
     "Revisit setup when relevant scripts, configuration, toolchain, or workspace requirements change; " +
     "an earlier setup does not prove an uninspected change is safe. " +
     "For each repair candidate, run every required local check whose tooling is available before publication, " +
@@ -103,7 +109,7 @@ internal fun runtimeOwnedBuildPhaseTask(packBuildCommand: String?): String {
     }
   return "You are the only build agent for this step — do not spawn delegated subagents. The runtime may " +
     "give you up to three repair turns against the remaining findings; each turn is another session of " +
-    "this same agent. $gateLine $BUILD_PHASE_FORBIDDEN_EXTRAS" +
+    "this same agent. $gateLine $BUILD_PHASE_FORBIDDEN_EXTRAS$MACHINE_BUILD_SETTINGS_DIRECTIVE" +
     "This phase is compile/buildability proof only: no suite tests, no full check, no substitute " +
     "agent-run gate. Address every open finding in the same turn. Do not rerun the pack build command " +
     "after each individual fix; targeted compile tasks are allowed while repairing when they are " +

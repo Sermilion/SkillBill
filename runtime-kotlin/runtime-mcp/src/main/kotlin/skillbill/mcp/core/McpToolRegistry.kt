@@ -3,8 +3,11 @@ package skillbill.mcp.core
 import skillbill.application.telemetry.validation.featureVerifyCompletionStatuses
 import skillbill.application.telemetry.validation.qualityCheckResults
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
+import skillbill.mcp.featuretask.VALIDATION_CHECK_PROTOCOL
 import skillbill.mcp.featuretask.featureTaskPhaseBlock
 import skillbill.mcp.featuretask.featureTaskPhaseComplete
+import skillbill.mcp.featuretask.validationCheck
+import skillbill.mcp.featuretask.validationCheckInvocationId
 import skillbill.mcp.lifecycle.featureVerifyFinished
 import skillbill.mcp.lifecycle.featureVerifyStarted
 import skillbill.mcp.lifecycle.prDescriptionGenerated
@@ -47,6 +50,7 @@ internal data class McpTool(
   val normalize: ((Map<String, Any?>) -> Map<String, Any?>)? = null,
   val runtimeOwnedArgumentKeys: Set<String> = emptySet(),
   val advertisedEnumSubset: Pair<String, List<String>>? = null,
+  val advertised: (McpComponent) -> Boolean = { true },
 ) {
   fun toPayload(): Map<String, Any?> =
     linkedMapOf(
@@ -102,8 +106,16 @@ internal object McpToolRegistry {
       ),
       McpTool(
         name = "feature_task_phase_complete",
-        description = "Complete a prose feature-task phase via durable settlement.",
+        description =
+          "Store a prose feature-task result for runtime validation. An ok response confirms receipt, " +
+            "not phase or workflow completion.",
         handler = ::featureTaskPhaseComplete,
+      ),
+      McpTool(
+        name = "validation_check",
+        description = VALIDATION_CHECK_PROTOCOL,
+        handler = ::validationCheck,
+        advertised = { component -> validationCheckInvocationId(component) != null },
       ),
       McpTool(
         name = McpToolPayloadKeys.FEATURE_VERIFY_FINISHED,
