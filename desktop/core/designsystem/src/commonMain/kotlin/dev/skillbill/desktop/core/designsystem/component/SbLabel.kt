@@ -58,7 +58,7 @@ fun SbLabel(
   val shape = SkillBillRadius.full
   val content: @Composable () -> Unit = { Row(
     modifier.then(if (maxWidth != null) Modifier.widthIn(max = maxWidth) else Modifier)
-      .height(if (size == SbControlSize.Small) 18.dp else 22.dp)
+      .height(if (size == SbControlSize.Regular) 22.dp else 18.dp)
       .clip(shape)
       .background(tint?.copy(alpha = .10f) ?: Color.Transparent, shape)
       .then(
@@ -78,7 +78,7 @@ fun SbLabel(
         },
       )
       // `.sb-label` pads 8px inside its 1px border.
-      .padding(horizontal = if (size == SbControlSize.Small) 7.dp else 9.dp),
+      .padding(horizontal = if (size == SbControlSize.Regular) 9.dp else 7.dp),
     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
   ) {
     when (style) {

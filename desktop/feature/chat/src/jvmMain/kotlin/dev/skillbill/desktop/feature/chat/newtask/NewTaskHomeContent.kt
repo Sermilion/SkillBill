@@ -2,7 +2,6 @@ package dev.skillbill.desktop.feature.chat.newtask
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,7 +24,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
@@ -35,12 +32,12 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
+import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
+import dev.skillbill.desktop.core.designsystem.component.SbButton
+import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 
-private val CHIP_SHAPE = RoundedCornerShape(13.dp)
 private val SECTION_SPACING = 8.dp
 
 internal const val NEW_TASK_HISTORY_ROWS = 6
@@ -93,25 +90,9 @@ private fun ReadinessRow(line: ReadinessLine) {
 @Composable
 internal fun NewTaskChips(onStart: ((String, String?) -> Unit)?, modifier: Modifier = Modifier) {
   FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    START_CHIPS.forEach { (label, kind) -> StartChip(label, enabled = onStart != null) { onStart?.invoke(kind, null) } }
-  }
-}
-
-@Composable
-private fun StartChip(label: String, enabled: Boolean, onClick: () -> Unit) {
-  val colors = SkillBillTheme.colors
-  val interaction = remember { MutableInteractionSource() }
-  val hovered by interaction.collectIsHoveredAsState()
-  Box(
-    Modifier.height(26.dp).sbFocusRing(interaction, CHIP_SHAPE).clip(CHIP_SHAPE)
-      .background(if (hovered) colors.bgHover else Color.Transparent)
-      .border(1.dp, colors.border, CHIP_SHAPE)
-      .then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
-      .clickable(interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
-      .padding(horizontal = 10.dp),
-    contentAlignment = Alignment.Center,
-  ) {
-    BasicText(label, style = SkillBillTheme.type.tSm.copy(color = if (enabled) colors.fgMuted else colors.fgFaint), maxLines = 1)
+    START_CHIPS.forEach { (label, kind) ->
+      SbButton(label, { onStart?.invoke(kind, null) }, size = SbControlSize.Small, enabled = onStart != null)
+    }
   }
 }
 

@@ -46,11 +46,8 @@ import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
-import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
-import dev.skillbill.desktop.core.designsystem.icon.SbIcon
-import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.ui.pane.MOD_KEY
 import dev.skillbill.desktop.feature.chat.chipText
 
@@ -118,16 +115,7 @@ internal fun OpenChatRow(item: OpenChatItem, selected: Boolean, onClick: () -> U
     if (onClose != null) {
       Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
         if (hovered) {
-          val closeInteraction = remember { MutableInteractionSource() }
-          val closeHovered by closeInteraction.collectIsHoveredAsState()
-          val closeShape = RoundedCornerShape(SkillBillRadius.sm)
-          SbTooltip("Close", "$MOD_KEY W") {
-            Box(Modifier.size(16.dp).background(if (closeHovered) colors.bgHover else Color.Transparent, closeShape)
-              .hoverable(closeInteraction).clickable(closeInteraction, indication = null, onClick = onClose)
-              .sbFocusRing(closeInteraction, closeShape).semantics { contentDescription = "Close ${item.title}"; role = Role.Button }, contentAlignment = Alignment.Center) {
-              SbIcon(LucideIcons.x, SbIconSize.Xs)
-            }
-          }
+          SbIconButton(LucideIcons.x, "Close ${item.title}", onClose, size = SbControlSize.XSmall, shortcut = "$MOD_KEY W")
         }
       }
     }

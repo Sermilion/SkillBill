@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.Hint
+import dev.skillbill.desktop.core.designsystem.component.SbButton
+import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangesState
@@ -34,7 +36,6 @@ import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
 import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
 import dev.skillbill.desktop.core.ui.changes.AddCount
-import dev.skillbill.desktop.core.ui.changes.ChangesButton
 import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.ScopeStateDot
 import dev.skillbill.desktop.core.ui.changes.SubtaskStrip
@@ -60,7 +61,7 @@ internal fun DetailSections.changesSection(changes: ChangesUi, onAction: (Detail
     "Changes",
     count = count,
     countStyle = if (subtasks is SubtaskScopesState.Listed) goalCountStyle else null,
-    actions = { ChangesButton("Open changes", { onAction(DetailAction.OpenChangesWindow()) }, primary = true, leadingIcon = LucideIcons.openWindow) },
+    actions = { SbButton("Open changes", { onAction(DetailAction.OpenChangesWindow()) }, variant = SbButtonVariant.Primary, icon = LucideIcons.openWindow) },
   ) {
     if (subtasks != null) goalChanges(subtasks, onAction) else executionChanges(changes.state)
   }

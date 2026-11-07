@@ -2,8 +2,6 @@ package dev.skillbill.desktop.feature.changes
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -17,7 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,24 +30,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.Segmented
 import dev.skillbill.desktop.core.designsystem.component.SegmentedOption
-import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
-import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
-import dev.skillbill.desktop.core.designsystem.icon.SbIcon
+import dev.skillbill.desktop.core.designsystem.component.SbPickerButton
 import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
 import dev.skillbill.desktop.core.domain.model.ScopeKind
 import dev.skillbill.desktop.core.domain.model.availableScopes
@@ -79,7 +70,16 @@ internal fun ScopeToolbar(
   ) {
     if (state.subtasksAvailable) {
       Box {
-        PickerButton(scopeLabel(state.scope, state.subtasks), state.pickerOpen) { onAction(ChangesWindowAction.TogglePicker) }
+        SbPickerButton(
+          { onAction(ChangesWindowAction.TogglePicker) },
+          Modifier.widthIn(min = 260.dp, max = 420.dp).semantics { selected = state.pickerOpen },
+          open = state.pickerOpen,
+        ) {
+          Row(Modifier.weight(1f, fill = false), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            BasicText("SCOPE", style = changesMono(10f, FontWeight.Medium, SkillBillTheme.colors.fgFaint).copy(letterSpacing = 0.08.em), maxLines = 1, softWrap = false)
+            BasicText(scopeLabel(state.scope, state.subtasks), Modifier.weight(1f, fill = false), style = changesSans(12f, FontWeight.SemiBold, SkillBillTheme.colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
+          }
+        }
         if (state.pickerOpen) ScopePicker(state, onAction, pickerSearch)
       }
       if (ScopeKind.Commits in (state.target?.let(::availableScopes).orEmpty())) {
@@ -101,31 +101,6 @@ internal fun ScopeToolbar(
     )
     Spacer(Modifier.weight(1f))
     FilterBox(state.filter, { onAction(ChangesWindowAction.SetFilter(it)) }, filterFocus, onFilterFocused)
-  }
-}
-
-@Composable
-private fun PickerButton(label: String, open: Boolean, onClick: () -> Unit) {
-  val colors = SkillBillTheme.colors
-  val interaction = remember { MutableInteractionSource() }
-  Row(
-    Modifier.widthIn(min = 260.dp, max = 420.dp)
-      .sbFocusRing(interaction, CONTROL_SHAPE)
-      .height(30.dp)
-      .background(colors.bgOverlay, CONTROL_SHAPE)
-      .border(1.dp, colors.borderStrong, CONTROL_SHAPE)
-      .pointerHoverIcon(PointerIcon.Hand)
-      .clickable(interaction, indication = null, role = Role.DropdownList, onClick = onClick)
-      .semantics { selected = open }
-      .padding(start = 12.dp, end = 10.dp),
-    horizontalArrangement = Arrangement.SpaceBetween,
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    Row(Modifier.weight(1f, fill = false), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-      BasicText("SCOPE", style = changesMono(10f, FontWeight.Medium, colors.fgFaint).copy(letterSpacing = 0.08.em), maxLines = 1, softWrap = false)
-      BasicText(label, Modifier.weight(1f, fill = false), style = changesSans(12f, FontWeight.SemiBold, colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-    CompositionLocalProvider(LocalContentColor provides colors.fg) { SbIcon(LucideIcons.chevronDown, 12.dp, strokeWidth = 2.4f, modifier = Modifier.padding(start = 8.dp)) }
   }
 }
 

@@ -61,8 +61,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbSpinner
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
-import dev.skillbill.desktop.core.designsystem.icon.SbIcon
-import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
+import dev.skillbill.desktop.core.designsystem.component.SbPickerButton
 import dev.skillbill.desktop.core.ui.pane.MOD_KEY
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import kotlinx.coroutines.CoroutineScope
@@ -71,6 +70,7 @@ import kotlin.math.roundToInt
 
 private const val EMPTY_CHAT_TITLE = "New chat"
 private const val WHEEL_STEP_DP = 48f
+private val OVERFLOW_BUTTON_WIDTH = 68.dp
 
 internal fun newTaskChatTitle(transcript: List<ChatMessage>): String =
   transcript.firstNotNullOfOrNull { it as? ChatMessage.Operator }?.text?.lineSequence()?.firstOrNull()?.trim()
@@ -141,7 +141,7 @@ internal fun NewTaskChatTabs(
   ) {
     val gapPx = with(density) { 2.dp.toPx().roundToInt() }
     val plusSlotPx = with(density) { 24.dp.toPx().roundToInt() } + gapPx
-    val moreSlotPx = with(density) { 48.dp.toPx().roundToInt() } + gapPx
+    val moreSlotPx = with(density) { OVERFLOW_BUTTON_WIDTH.toPx().roundToInt() } + gapPx
     val availablePx = with(density) { maxWidth.roundToPx() }
     val minTabPx = with(density) { 112.dp.toPx().roundToInt() }
     val maxTabPx = with(density) { 196.dp.toPx().roundToInt() }
@@ -207,19 +207,13 @@ internal fun NewTaskChatTabs(
 private fun OverflowButton(count: Int, hiddenActivity: Boolean, selected: Boolean, focusRequester: FocusRequester, onClick: () -> Unit) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
-  val interaction = remember { MutableInteractionSource() }
-  val hovered by interaction.collectIsHoveredAsState()
-  val shape = RoundedCornerShape(SkillBillRadius.sm)
-  Row(
-    Modifier.width(48.dp).height(24.dp).focusRequester(focusRequester).background(if (hovered || selected) colors.bgHover else Color.Transparent, shape)
-      .hoverable(interaction).clickable(interaction, indication = null, onClick = onClick)
-      .sbFocusRing(interaction, shape).semantics { contentDescription = "All $count open chats"; role = Role.Button },
-    verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+  SbPickerButton(
+    onClick,
+    Modifier.width(OVERFLOW_BUTTON_WIDTH).focusRequester(focusRequester).semantics { contentDescription = "All $count open chats" },
+    open = selected,
   ) {
     Box(Modifier.size(8.dp), contentAlignment = Alignment.Center) { if (hiddenActivity) Box(Modifier.size(5.dp).background(colors.accent, CircleShape)) }
     BasicText(count.toString(), style = type.tXs.copy(color = colors.fgMuted), maxLines = 1)
-    SbIcon(LucideIcons.chevronDown, SbIconSize.Xs)
   }
 }
 
@@ -240,21 +234,8 @@ private fun NewTaskChatTab(item: OpenChatItem, selected: Boolean, onClick: () ->
   ) {
     NewTaskChatMarker(item.status)
     BasicText(item.title, Modifier.weight(1f, fill = false), style = if (unread) type.tSm.copy(color = colors.fg, fontWeight = FontWeight.Medium) else type.tSm.copy(color = if (selected) colors.fg else colors.fg2), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) { if (hovered || selected) TabCloseButton(item.title, onClose) }
-  }
-}
-
-@Composable
-private fun TabCloseButton(title: String, onClose: () -> Unit) {
-  val colors = SkillBillTheme.colors
-  val interaction = remember { MutableInteractionSource() }
-  val hovered by interaction.collectIsHoveredAsState()
-  val shape = RoundedCornerShape(SkillBillRadius.sm)
-  SbTooltip("Close", "$MOD_KEY W") {
-    Box(Modifier.size(16.dp).background(if (hovered) colors.bgHover else Color.Transparent, shape).hoverable(interaction)
-      .clickable(interaction, indication = null, onClick = onClose).sbFocusRing(interaction, shape)
-      .semantics { contentDescription = "Close $title"; role = Role.Button }, contentAlignment = Alignment.Center) {
-      SbIcon(LucideIcons.x, SbIconSize.Xs)
+    Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) {
+      if (hovered || selected) SbIconButton(LucideIcons.x, "Close ${item.title}", onClose, size = SbControlSize.XSmall, shortcut = "$MOD_KEY W")
     }
   }
 }

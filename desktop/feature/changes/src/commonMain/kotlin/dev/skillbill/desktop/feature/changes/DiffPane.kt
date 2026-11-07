@@ -53,7 +53,7 @@ import dev.skillbill.desktop.core.domain.model.ChangeStatus
 import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.DiffCommentsState
 import dev.skillbill.desktop.core.ui.changes.AddCount
-import dev.skillbill.desktop.core.ui.changes.ChangesButton
+import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
@@ -145,7 +145,7 @@ private fun DiffTitle(file: ChangedFile, showCounts: Boolean, canOpen: Boolean, 
       }
     }
     if (canComment) dev.skillbill.desktop.core.designsystem.component.SbIconButton(dev.skillbill.desktop.core.designsystem.icon.LucideIcons.compose, "Comment on file", onComment, size = dev.skillbill.desktop.core.designsystem.component.SbControlSize.Small)
-    ChangesButton("Open in editor", onOpen, enabled = canOpen)
+    SbButton("Open in editor", onOpen, enabled = canOpen)
   }
 }
 
