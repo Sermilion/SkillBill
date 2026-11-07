@@ -99,7 +99,8 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
 
   internal fun agentSession(sessionId: String): String? = read(sessionId)?.agentSession
 
-  internal fun saveAgentSession(sessionId: String, agentSession: String) = update(sessionId) { it.copy(agentSession = agentSession) }
+  internal fun saveAgentSession(sessionId: String, agentSession: String) =
+    update(sessionId) { stored, _ -> stored.copy(agentSession = agentSession) }
 
   internal fun exchanges(sessionId: String): List<ChatExchange> = read(sessionId)?.let { chat ->
     if (chat.newTask != null) chat.lines.toExchanges() else chat.exchanges
@@ -110,11 +111,18 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
     chat.lines.take(context.pendingTurnLineIndex ?: chat.lines.size).toExchanges()
   }.orEmpty()
 
-  internal fun saveExchanges(sessionId: String, exchanges: List<ChatExchange>) = update(sessionId) { it.copy(exchanges = exchanges) }
+  internal fun saveExchanges(sessionId: String, exchanges: List<ChatExchange>) =
+    update(sessionId) { stored, _ -> stored.copy(exchanges = exchanges) }
 
   internal fun saveChat(entry: ChatHistoryEntry): Boolean {
-    val saved = update(entry.sessionId) {
-      it.copy(executionId = entry.executionId, agent = entry.agent, updatedAt = entry.updatedAt, lines = entry.lines, newTask = entry.newTask)
+    val saved = update(entry.sessionId) { stored, exists ->
+      stored.copy(
+        executionId = entry.executionId,
+        agent = entry.agent,
+        updatedAt = if (exists && stored.lines == entry.lines) stored.updatedAt else entry.updatedAt,
+        lines = entry.lines,
+        newTask = entry.newTask,
+      )
     }
     val executionId = entry.executionId ?: return saved
     synchronized(lock) {
@@ -178,9 +186,10 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
 
   private fun read(sessionId: String): StoredChat? = synchronized(lock) { fileFor(sessionId)?.let(::readFile) }
 
-  private fun update(sessionId: String, change: (StoredChat) -> StoredChat): Boolean = synchronized(lock) {
+  private fun update(sessionId: String, change: (StoredChat, Boolean) -> StoredChat): Boolean = synchronized(lock) {
     val file = fileFor(sessionId) ?: return@synchronized false
-    write(file, change(readFile(file) ?: StoredChat(sessionId)))
+    val existing = readFile(file)
+    write(file, change(existing ?: StoredChat(sessionId), existing != null))
   }
 
   private fun write(file: File, stored: StoredChat): Boolean {
