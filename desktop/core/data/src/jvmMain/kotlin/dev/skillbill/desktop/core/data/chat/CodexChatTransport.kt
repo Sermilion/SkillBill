@@ -3,6 +3,7 @@ package dev.skillbill.desktop.core.data.chat
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
+import dev.skillbill.desktop.core.data.usage.codexEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatScope
@@ -12,7 +13,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import me.tatarka.inject.annotations.Inject
-import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 
 /**
@@ -40,7 +40,7 @@ class CodexChatTransport(
     val command = ChatCommand(
       argv = agentCommand("codex", codexArguments(request, thread), host.variables["SHELL"]),
       workingDirectory = request.scope.repositoryRoot,
-      environment = host.variables + request.agent.profile?.let { mapOf(AgentHomeEnvironmentKeys.CODEX_HOME to it) }.orEmpty(),
+      environment = codexEnvironment(host.variables, request.agent.profile),
       stdin = prompt,
     )
     runChatTurn(launcher, diagnostics, command, CodexStreamDecoder { store.saveAgentSession(request.sessionId, it) })

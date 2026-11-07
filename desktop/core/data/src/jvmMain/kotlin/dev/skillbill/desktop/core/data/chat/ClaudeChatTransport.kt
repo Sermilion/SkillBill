@@ -4,7 +4,9 @@ import dev.skillbill.desktop.core.common.ApplicationCoroutineScope
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
-import dev.skillbill.desktop.core.data.session.SelectedAgentHomes
+import dev.skillbill.desktop.core.data.usage.UsageProfileResolver
+import dev.skillbill.desktop.core.domain.usage.UsageObservationSink
+import dev.skillbill.desktop.core.domain.usage.model.UsageProfileLookup
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
@@ -12,6 +14,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.filter
@@ -21,10 +24,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import me.tatarka.inject.annotations.Inject
-import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.time.Clock
 
 /**
  * Keeps one `claude -p` process per chat session in the execution's worktree, with permission checks skipped as executions
@@ -41,6 +45,9 @@ class ClaudeChatTransport(
   private val launcher: LiveChatProcessLauncher,
   private val diagnostics: Diagnostics,
   appScope: ApplicationCoroutineScope,
+  private val usageProfiles: UsageProfileResolver,
+  private val usageSink: UsageObservationSink,
+  private val clock: Clock,
 ) : ChatTransport {
   override val agentId = "claude"
 
@@ -48,13 +55,15 @@ class ClaudeChatTransport(
   private val sessions = ConcurrentHashMap<String, ClaudeLiveSession>()
   private val stopping = ConcurrentHashMap<String, Job>()
   private val unpromptedEvents = MutableSharedFlow<Pair<String, ChatEvent>>(extraBufferCapacity = UNPROMPTED_BUFFER)
+  private val processGenerations = AtomicLong()
 
   override fun run(request: ChatTurnRequest): Flow<ChatEvent> = flow {
-    val homes = SelectedAgentHomes(request.agent.profile ?: settings.settings.first().claudeConfigDir, host.userHome).current()
+    val selectedProfile = request.agent.profile ?: settings.settings.first().claudeConfigDir
+    val profile = usageProfiles.claude(selectedProfile)
     val command = ChatCommand(
       argv = agentCommand("claude", claudeArguments(request), host.variables["SHELL"]),
       workingDirectory = request.scope.repositoryRoot,
-      environment = claudeEnvironment(host.variables, homes),
+      environment = profile.environment,
       stdin = "",
     )
     val uuid = UUID.randomUUID().toString()
@@ -62,7 +71,7 @@ class ClaudeChatTransport(
     // A live process keeps the directory it started in, so a turn in another directory needs a new process.
     sessions[request.sessionId]?.takeIf { it.workingDirectory != command.workingDirectory }?.let { stop(request.sessionId, it) }
     awaitStopped(request.sessionId)
-    val session = registered(request.sessionId, command, uuid, sink)
+    val session = registered(request.sessionId, command, uuid, sink, profile.lookup)
     session.send(uuid, claudeMessage(request), request.images)
     var answered = false
     try {
@@ -82,10 +91,17 @@ class ClaudeChatTransport(
     sessions[sessionId]?.let { stop(sessionId, it) }
   }
 
-  private fun registered(sessionId: String, command: ChatCommand, uuid: String, sink: Channel<ChatEvent>): ClaudeLiveSession {
+  private fun registered(
+    sessionId: String,
+    command: ChatCommand,
+    uuid: String,
+    sink: Channel<ChatEvent>,
+    profile: UsageProfileLookup,
+  ): ClaudeLiveSession {
     while (true) {
+      scope.ensureActive()
       var created: ClaudeLiveSession? = null
-      val session = sessions.computeIfAbsent(sessionId) { open(sessionId, command).also { created = it } }
+      val session = sessions.computeIfAbsent(sessionId) { open(sessionId, command, profile).also { created = it } }
       if (session.register(uuid, sink)) {
         created?.job?.start()
         return session
@@ -94,21 +110,38 @@ class ClaudeChatTransport(
     }
   }
 
-  private fun open(sessionId: String, command: ChatCommand): ClaudeLiveSession {
-    val session = ClaudeLiveSession(command.workingDirectory, diagnostics) { event -> unpromptedEvents.tryEmit(sessionId to event) }
+  private fun open(
+    sessionId: String,
+    command: ChatCommand,
+    profile: UsageProfileLookup,
+  ): ClaudeLiveSession {
+    val processGeneration = processGenerations.incrementAndGet()
+    usageSink.bindSession(sessionId, profile, processGeneration)
+    val session = ClaudeLiveSession(
+      command.workingDirectory,
+      diagnostics,
+      sessionId,
+      processGeneration,
+      usageSink,
+      clock,
+    ) { event -> unpromptedEvents.tryEmit(sessionId to event) }
     session.job = scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
       try {
         launcher.open(command, session.input).collect(session::accept)
       } finally {
         sessions.remove(sessionId, session)
-        session.abandon()
       }
+    }
+    session.job.invokeOnCompletion {
+      usageSink.revokeSession(sessionId, processGeneration)
+      session.abandon()
     }
     return session
   }
 
   private fun stop(sessionId: String, session: ClaudeLiveSession) {
     val job = session.job
+    usageSink.revokeSession(sessionId, session.processGeneration)
     stopping[sessionId] = job
     job.invokeOnCompletion { stopping.remove(sessionId, job) }
     sessions.remove(sessionId, session)
@@ -141,12 +174,3 @@ internal fun claudeArguments(request: ChatTurnRequest): List<String> = buildList
 
 internal fun claudeMessage(request: ChatTurnRequest): String = listOfNotNull(modeNote(request.mode), request.prompt).joinToString("\n\n")
 
-/** An empty `CLAUDE_CONFIG_DIR` means the default account, which only works with the variable unset. */
-internal fun claudeEnvironment(variables: Map<String, String>, homes: Map<String, String>): Map<String, String> {
-  val environment = variables + homes
-  return if (homes[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR]?.isEmpty() == true) {
-    environment - AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR
-  } else {
-    environment
-  }
-}

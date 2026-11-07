@@ -3,6 +3,7 @@ package dev.skillbill.desktop.core.data.chat
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
+import dev.skillbill.desktop.core.data.usage.UsageProfileResolver
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
@@ -131,7 +132,7 @@ class AgentSessionCatalog(
     return Profiles(
       claude = agentProfiles(home, "claude", "projects", listOf(claudeSelected, variables[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR])),
       codex = agentProfiles(home, "codex", "sessions", listOf(variables[AgentHomeEnvironmentKeys.CODEX_HOME])),
-      cursor = agentProfiles(home, "cursor", "chats", listOf(variables[CURSOR_CONFIG_DIR], xdgCursor)),
+      cursor = agentProfiles(home, "cursor", "chats", listOf(variables[UsageProfileResolver.CURSOR_CONFIG_DIR], xdgCursor)),
     )
   }
 

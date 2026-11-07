@@ -17,6 +17,7 @@ import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
+import dev.skillbill.desktop.core.domain.usage.UsageRepository
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.ui.changes.ChangesWindows
@@ -48,6 +49,7 @@ abstract class AppComponent(
   abstract val workBoardRepository: WorkBoardRepository
   abstract val workControlRepository: WorkControlRepository
   abstract val workDetailRepository: WorkDetailRepository
+  abstract val usageRepository: UsageRepository
   abstract val changesWindows: ChangesWindows
   abstract val changesWindowViewModel: (WorkItem, ChangeScope) -> ChangesWindowViewModel
   abstract val specRepository: SpecRepository

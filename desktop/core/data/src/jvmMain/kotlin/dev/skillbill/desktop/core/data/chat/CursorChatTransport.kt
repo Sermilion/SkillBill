@@ -3,6 +3,7 @@ package dev.skillbill.desktop.core.data.chat
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
+import dev.skillbill.desktop.core.data.usage.cursorEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatScope
@@ -15,9 +16,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
-
-/** Cursor's config directory, which holds its chats; a resumed session runs with the profile it came from. */
-internal const val CURSOR_CONFIG_DIR = "CURSOR_CONFIG_DIR"
 
 /**
  * Runs each turn as one Cursor `agent --print` stream-json process with `--force`, as executions run. Cursor names its own
@@ -44,7 +42,7 @@ class CursorChatTransport(
     val command = ChatCommand(
       argv = agentCommand("agent", cursorArguments(request, chat), host.variables["SHELL"]),
       workingDirectory = request.scope.repositoryRoot,
-      environment = host.variables + request.agent.profile?.let { mapOf(CURSOR_CONFIG_DIR to it) }.orEmpty(),
+      environment = cursorEnvironment(host.variables, request.agent.profile),
       stdin = prompt,
     )
     runChatTurn(launcher, diagnostics, command, CursorStreamDecoder { store.saveAgentSession(request.sessionId, it) })

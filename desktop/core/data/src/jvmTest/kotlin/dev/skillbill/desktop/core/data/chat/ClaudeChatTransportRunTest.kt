@@ -7,10 +7,21 @@ import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
+import dev.skillbill.desktop.core.domain.usage.UsageObservationSink
+import dev.skillbill.desktop.core.domain.usage.model.RequestPermission
+import dev.skillbill.desktop.core.domain.usage.model.UsageProfileLookup
+import dev.skillbill.desktop.core.domain.usage.model.UsageRequest
+import dev.skillbill.desktop.core.domain.usage.model.UsageResult
+import dev.skillbill.desktop.core.domain.usage.model.UsageSessionStatus
+import dev.skillbill.desktop.core.data.usage.ProviderUsageRepository
+import dev.skillbill.desktop.core.data.usage.UsageProfileResolver
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
@@ -18,6 +29,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -31,7 +43,10 @@ import java.util.Collections
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 class ClaudeChatTransportRunTest {
   // One scripted claude process: the test reads what the app writes to stdin and decides what stdout prints.
@@ -63,13 +78,108 @@ class ClaudeChatTransportRunTest {
     suspend fun print(vararg lines: String) = lines.forEach { stdout.send(ChatProcessOutput.Line(it)) }
   }
 
-  private fun TestScope.transport(claude: FakeClaude, diagnostics: RecordingDiagnostics = RecordingDiagnostics()) = ClaudeChatTransport(
-    HostEnvironment(mapOf("SHELL" to "/bin/bash"), "/home/operator", ""),
-    FakeAppSettingsRepository(),
-    claude,
-    diagnostics,
-    ApplicationCoroutineScope(backgroundScope),
-  )
+  private fun TestScope.transport(claude: FakeClaude, diagnostics: RecordingDiagnostics = RecordingDiagnostics()) =
+    HostEnvironment(mapOf("SHELL" to "/bin/bash"), "/home/operator", "").let { host ->
+      val profiles = UsageProfileResolver(host)
+      ClaudeChatTransport(
+        host,
+        FakeAppSettingsRepository(),
+        claude,
+        diagnostics,
+        ApplicationCoroutineScope(backgroundScope),
+        profiles,
+        ProviderUsageRepository(profiles, FakeAppSettingsRepository()),
+        Clock.System,
+      )
+    }
+
+  @Test
+  fun `Claude usage status stays bound to its live session and malformed usage leaves chat running`() = runTest {
+    val host = HostEnvironment(mapOf("SHELL" to "/bin/bash"), "/home/operator", "")
+    val profiles = UsageProfileResolver(host)
+    val settings = FakeAppSettingsRepository()
+    val clock = object : Clock {
+      override fun now() = Instant.fromEpochMilliseconds(10_000)
+    }
+    val repository = ProviderUsageRepository(profiles, settings)
+    val claude = FakeClaude()
+    val diagnostics = RecordingDiagnostics()
+    val transport = ClaudeChatTransport(
+      host,
+      settings,
+      claude,
+      diagnostics,
+      ApplicationCoroutineScope(backgroundScope),
+      profiles,
+      repository,
+      clock,
+    )
+    val turn = async { transport.run(chatRequest()).toList() }
+    val (uuid, _) = claude.nextMessage()
+    claude.print(
+      """{"type":"rate_limit_event","session_id":"other-session","rate_limit_info":{"status":"rejected"}}""",
+      """{"type":"rate_limit_event","session_id":"session-1","rate_limit_info":{"status":"allowed_warning","utilization":100,"resets_at":"later"}}""",
+      """{"type":"rate_limit_event","session_id":42,"rate_limit_info":{"status":"rejected"}}""",
+      """{"type":"rate_limit_event","session_id":null,"rate_limit_info":{"status":"rejected"}}""",
+      replay(uuid),
+      textDelta("The reply continues"),
+      """{"type":"result","is_error":false,"result":"The reply continues"}""",
+    )
+
+    assertEquals(
+      listOf(ChatEvent.TextDelta("The reply continues"), ChatEvent.Completed),
+      turn.await(),
+    )
+    val usageRequest = UsageRequest(profiles.claude(null).lookup, "session-1")
+    val status = repository.sessionStatus(usageRequest) as UsageSessionStatus.Observed
+    assertEquals(RequestPermission.Allowed, status.permission)
+    assertTrue(status.warning)
+    val result = repository.observe(usageRequest).first() as UsageResult.Snapshot
+    assertTrue(result.value.meters.isEmpty())
+    assertEquals(listOf("usage.claude_event_invalid"), diagnostics.categories.filter { it.startsWith("usage.") })
+
+    transport.end("session-1")
+    claude.stopped.await()
+    assertEquals(UsageSessionStatus.Unavailable, repository.sessionStatus(usageRequest))
+  }
+
+  @Test
+  fun `cancellation before the lazy reader starts revokes its binding and completes the waiting turn`() = runTest {
+    val host = HostEnvironment(emptyMap(), "/home/operator", "")
+    val settings = FakeAppSettingsRepository()
+    val profiles = UsageProfileResolver(host)
+    val repository = ProviderUsageRepository(profiles, settings)
+    val appJob = Job(backgroundScope.coroutineContext[Job])
+    val clock = object : Clock {
+      override fun now() = Instant.fromEpochMilliseconds(10_000)
+    }
+    val sink = object : UsageObservationSink by repository {
+      override fun bindSession(logicalSessionId: String, profile: UsageProfileLookup, processGeneration: Long) {
+        repository.bindSession(logicalSessionId, profile, processGeneration)
+        repository.recordSessionStatus(logicalSessionId, processGeneration, RequestPermission.Allowed, false, clock.now())
+        appJob.cancel()
+      }
+    }
+    val claude = FakeClaude()
+    val transport = ClaudeChatTransport(
+      host,
+      settings,
+      claude,
+      RecordingDiagnostics(),
+      ApplicationCoroutineScope(CoroutineScope(backgroundScope.coroutineContext + appJob)),
+      profiles,
+      sink,
+      clock,
+    )
+
+    assertFailsWith<CancellationException> { transport.run(chatRequest()).toList() }
+    appJob.join()
+
+    assertTrue(appJob.isCancelled)
+    assertTrue(appJob.isCompleted)
+    assertTrue(claude.opened.isEmpty())
+    assertEquals(UsageSessionStatus.Unavailable, repository.sessionStatus(UsageRequest(profiles.claude(null).lookup, "session-1")))
+  }
 
   // A background build the agent started used to die when its turn's process exited, and nothing reported back.
   @Test

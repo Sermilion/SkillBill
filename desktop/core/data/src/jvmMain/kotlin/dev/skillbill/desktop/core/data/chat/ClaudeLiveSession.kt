@@ -1,13 +1,16 @@
 package dev.skillbill.desktop.core.data.chat
 
 import dev.skillbill.desktop.core.common.Diagnostics
+import dev.skillbill.desktop.core.domain.usage.UsageObservationSink
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.usage.model.RequestPermission
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
@@ -15,6 +18,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import java.util.Base64
+import kotlin.time.Clock
 
 /**
  * One `claude` process kept across a chat session's turns. Claude replays each operator message with the uuid the app gave
@@ -25,6 +29,10 @@ import java.util.Base64
 internal class ClaudeLiveSession(
   val workingDirectory: String,
   private val diagnostics: Diagnostics,
+  private val logicalSessionId: String,
+  val processGeneration: Long,
+  private val usageSink: UsageObservationSink,
+  private val clock: Clock,
   private val unprompted: (ChatEvent) -> Unit,
 ) {
   val input = Channel<String>(Channel.UNLIMITED)
@@ -39,6 +47,7 @@ internal class ClaudeLiveSession(
   private var reply: ChatReplyStream? = null
   private var streamStarted = false
   private var wroteText = false
+  private var usageDiagnosticRecorded = false
 
   /** Routes the reply to the message [uuid] into [sink]; false once the process ended, so the caller starts a new one. */
   fun register(uuid: String, sink: SendChannel<ChatEvent>): Boolean = synchronized(lock) {
@@ -81,6 +90,10 @@ internal class ClaudeLiveSession(
       }
     }
     val root = parseStreamLine(text)
+    if (root?.string("type") == RATE_LIMIT_EVENT) {
+      observeRateLimit(root)
+      return
+    }
     if (root != null && root.string("type") == "user" && (root["isReplay"] as? JsonPrimitive)?.booleanOrNull == true) {
       val sink = synchronized(lock) { root.string("uuid")?.let(pending::remove) } ?: return
       if (unpromptedOpen) emit(ChatEvent.Completed)
@@ -99,6 +112,36 @@ internal class ClaudeLiveSession(
     }
     if (events.any { it is ChatEvent.TextDelta }) wroteText = true
     events.forEach(::emit)
+  }
+
+  private fun observeRateLimit(root: JsonObject) {
+    val eventSessionId = root.string("session_id")
+    val status = root.obj("rate_limit_info")?.string("status")
+    if (("session_id" in root && eventSessionId != logicalSessionId) || status == null) {
+      recordUsageDiagnostic()
+      return
+    }
+    val permission = when (status) {
+      "allowed", "allowed_warning" -> RequestPermission.Allowed
+      "rejected" -> RequestPermission.Rejected
+      else -> {
+        recordUsageDiagnostic()
+        return
+      }
+    }
+    usageSink.recordSessionStatus(
+      logicalSessionId,
+      processGeneration,
+      permission,
+      status == "allowed_warning",
+      clock.now(),
+    )
+  }
+
+  private fun recordUsageDiagnostic() {
+    if (usageDiagnosticRecorded) return
+    usageDiagnosticRecorded = true
+    diagnostics.record("usage.claude_event_invalid")
   }
 
   private fun openReply() {
@@ -138,6 +181,8 @@ internal class ClaudeLiveSession(
     pending.values.toList().also { pending.clear() }
   }.also { input.close() }
 }
+
+private const val RATE_LIMIT_EVENT = "rate_limit_event"
 
 private fun userMessage(uuid: String, text: String, images: List<ChatImage>): String = buildJsonObject {
   put("type", "user")
