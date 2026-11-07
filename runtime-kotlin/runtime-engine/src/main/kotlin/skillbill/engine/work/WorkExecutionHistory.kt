@@ -13,6 +13,7 @@ import skillbill.idestatus.model.IdeStatusPolicy
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementReasonLookup
 import skillbill.ports.idestatus.model.ExecutionReasonRestoration
+import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
@@ -93,12 +94,26 @@ internal fun supersededPhase(
 
 private const val DISPLAYED_PHASE_SCAN = 100
 
+/**
+ * The workflow's live state, used for its current execution row.
+ *
+ * Workflow execution rows are written once at launch and never updated, so a row's stored lifecycle is
+ * only its launch state. The current execution takes the workflow's projected lifecycle, and any earlier
+ * execution ended when a later launch replaced it.
+ */
+internal data class WorkflowExecutionCurrentState(
+  val executionId: String?,
+  val lifecycleState: IdeStatusLifecycleState,
+  val finishedAt: Instant?,
+)
+
 internal fun workExecutionHistory(
   unitOfWork: UnitOfWork,
   standalone: StandalonePhaseStatusRecord?,
   workflowId: String,
   page: WorkDetailPagePosition,
   limit: Int,
+  current: WorkflowExecutionCurrentState? = null,
 ): List<WorkExecutionInstance> {
   val anchor = (page.anchor as? WorkDetailAnchor.Execution)?.anchor
   val offset = if (anchor == null) page.offset else 0
@@ -118,20 +133,34 @@ internal fun workExecutionHistory(
   } else {
     unitOfWork.standalonePhaseStatuses
       .readWorkflowExecutions(workflowId, page.observedAt, offset, limit, anchor)
-      .map {
-        WorkExecutionInstance(
-          it.invocationId,
-          it.executionId,
-          it.lifecycleState,
-          it.startedAt,
-          it.updatedAt,
-          null,
-          null,
-          runSequence = it.runSequence,
-        )
-      }
+      .map { workflowExecutionInstance(it, current) }
   }
 }
+
+internal fun workflowExecutionInstance(
+  execution: IdeStatusWorkflowExecution,
+  current: WorkflowExecutionCurrentState?,
+): WorkExecutionInstance {
+  val stored =
+    WorkExecutionInstance(
+      execution.invocationId,
+      execution.executionId,
+      execution.lifecycleState,
+      execution.startedAt,
+      execution.updatedAt,
+      null,
+      null,
+      runSequence = execution.runSequence,
+    )
+  val currentExecutionId = current?.executionId ?: return stored
+  return if (currentExecutionId == execution.executionId) {
+    stored.copy(lifecycleState = current.lifecycleState.wireValue, finishedAt = current.finishedAt)
+  } else {
+    stored.copy(lifecycleState = IdeStatusLifecycleState.TERMINAL.wireValue, result = SUPERSEDED_WORKFLOW_EXECUTION)
+  }
+}
+
+private const val SUPERSEDED_WORKFLOW_EXECUTION = "Ended; a later run of this workflow replaced it."
 
 internal fun workSelectedExecution(
   record: StandalonePhaseStatusRecord?,
