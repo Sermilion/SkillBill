@@ -96,4 +96,16 @@ class FakeExecutionChatRepository(
   override suspend fun deleteSavedChat(sessionId: String) {
     saved.remove(sessionId)
   }
+
+  /** Session ids passed to [requestSummary], in order. */
+  val summaryRequests: MutableList<String> = Collections.synchronizedList(mutableListOf())
+
+  override fun requestSummary(sessionId: String) {
+    summaryRequests += sessionId
+  }
+
+  /** Emit a session id to report a summary written. */
+  val summaryUpdateEvents: MutableSharedFlow<String> = MutableSharedFlow(extraBufferCapacity = 16)
+
+  override val summaryUpdates: Flow<String> get() = summaryUpdateEvents
 }

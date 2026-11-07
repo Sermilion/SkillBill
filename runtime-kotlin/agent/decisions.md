@@ -18,6 +18,20 @@ Context: Chat history can outlive a card state change or process restart.
 Decision: Persist only card identity in chat history and re-read the card from the store on resume.
 Reason: The store remains the current source of truth, so resumed cards show current state and do not act on stale copies.
 
+## [2026-11-07] Keep projection and quality-ledger rationale outside Kotlin comments
+Context: Validation found KDoc on runtime model and helper declarations outside interfaces.
+Decision: Keep their behavior unchanged and record the rationale here, as the source-comment rule requires.
+Reason: Workflow execution rows retain their launch lifecycle, so the current row uses the projected lifecycle and earlier rows become terminal after a later launch. A settled quality attempt records terminal actions through both phase settlement and observability. The accepted event is the latest matching terminal entry; conflicting COMPLETE and BLOCKED actions yield no accepted event. GoalRunnerStopReport.failurePhaseId identifies a failed goal-finish phase outside the blocked workflow's own steps.
+## [2026-11-07] Compose desktop fixture generation in runtime-core
+Context: SKILL-514 needs real migrations and board projections, but runtime-core already depends on runtime-application.
+Decision: Keep the catalog and port-level writer in runtime-application test fixtures; compose RuntimeComponent in runtime-core test fixtures.
+Reason: Spec decision D2 preserves dependency direction while exercising production persistence and projection. Constructing RuntimeComponent in runtime-application would invert that dependency.
+
+## [2026-11-07] Advance workflow-state to 0.4 while retaining readable versions
+Context: SKILL-514 spec decision D4 authorizes persisted TASK_RUNTIME timed_out support, which changes the accepted workflow-state shape.
+Decision: Use workflow-state 0.4, accept timed_out as terminal for TASK_RUNTIME, and retain 0.1, 0.2 and 0.3 in the readable set.
+Reason: The shape change requires a new contract version. Readable-version normalization preserves existing rows, addressing the stale-row trap behind the earlier 0.3 pin. D4 limits this amendment to persisted timeout support, without changing timeout scheduling or other families' accepted statuses.
+
 ## [2026-11-07] Keep live runtime trees across install replacement
 Context: A goal child JVM loads engine directive resources lazily. Pre-install `clear-state` and `activate_staged_runtime_pair` used `rm -rf` on `~/.skill-bill/runtime/runtime-cli`, which unlinked JARs still mapped by that JVM. A later `getResourceAsStream` then failed with `Missing directive resource`.
 Decision: Pre-install wipe no longer deletes `runtime/`. Activation renames each live tree into `runtime/retired/` before moving the staged tree into place, keeps the newest retired copy of each component, and restores the retired tree if the replacement `mv` fails.
@@ -434,6 +448,7 @@ Context: Pre-current workflow-state rows broke list, latest, work-list, IDE stat
 Decision: Leave the current const at "0.3". Add WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS beside it. The validator copies the wire map and replaces a readable contract_version with the current const before schema validate. Writes persist the current const for an older readable version.
 Reason: Bumping the const would make every existing 0.3 row stale again. The readable-set plus normalize-then-validate path mirrors FEATURE_TASK_RUNTIME_READABLE_CONTRACT_VERSIONS without a schema-shape change.
 Alternatives considered: Bumping to 0.4 was rejected because it recreates the stale-row problem this subtask exists to fix.
+Superseded by: Advance workflow-state to 0.4 while retaining readable versions (2026-11-07)
 
 ## [2026-10-09] Put 0.1 and 0.2 on the readable path; add no terminalize migration
 Context: Each pre-current workflow-state version had to join the readable set or be terminalized by a new named migration. Last DatabaseMigrationEntries version was 50.
@@ -3576,3 +3591,38 @@ The application environment guard matched `Thread(` as a substring, rejecting do
 ## [2026-11-04] Test temp dirs live under the Gradle user home
 
 Each Test task sets `java.io.tmpdir` to `<gradle-user-home>/sbt-<hash>`. `/tmp` is a RAM-backed tmpfs on developer machines, and leaked fixture dirs filled it and pushed other memory into swap. A module `build/` directory is not an option because tests need paths outside any git repository, and Unix socket tests need a short root for the 104-byte macOS path limit. The task deletes the directory on success and keeps it on failure for debugging. A later test task removes any `sbt-*` directory untouched for 24 hours, which covers failed runs from checkouts that no longer exist. `desktop/build-logic` carries the same rule because the two builds share no convention code.
+
+## [2026-11-05] Keep JVM temp writers behind each build's authority
+
+The `sbt-<hash>` directory under the Gradle user home remains the fallback outside a run. Inside a run, `AgentRunScratchSpace` supplies `<state>/scratch/jvm`; its seven-day age sweep removes abandoned entries. The JVM itself still writes `/tmp/hsperfdata_<user>` and `/tmp/.java_pid<pid>` under Q3, so those two files are outside the application rule.
+
+The runtime exemptions are narrow. `JdkHostPlatformPort.kt` is the only runtime reader of `java.io.tmpdir`. `RuntimeTempRoot.kt` compares the configured root with the real `/tmp` path and returns `/tmp` only when the configured value is blank and fallback directory creation failed. `GovernedReviewEvidenceEndpoint.kt` uses `/tmp` only for its Unix socket fallback when the path is too long, then removes the directory on close. `DesktopTempRoot.kt` holds the same temp-root decision for desktop code.
+
+The decomposition lock stays under `<state>/locks`. Run temp roots differ, but two runs must resolve the same lock file to exclude each other. The source guard catches literal `/tmp` paths and default-root temp creation, including absent, string, `null`, and all-caps first arguments. It cannot distinguish a lowercase variable or qualified constant from a `Path`; those forms remain review cases. No production call currently uses either form.
+
+## [2026-11-06] validation_check resolves its run from the server environment
+
+The `validation_check` MCP tool reads its run identity from `SKILL_BILL_VALIDATION_INVOCATION_ID` in the server process environment and never from tool arguments. An agent therefore cannot address another run's row, and a user-global server without the variable neither lists the tool nor records anything; a call returns `no_run_identity`. The recorder writes `current_activity` and inserts `validation_check_events` rows through narrow writes that leave `status_revision`, `updated_at` and the lease columns unchanged. `StandalonePhaseStatusEventSink` compare-and-sets on the revision it holds in memory, so a bumped revision would make its next persist stale.
+
+## [2026-11-07] Bound desktop QA cleanup to verified checkout outputs
+
+SKILL-514 originally rejected every fixture destination beneath the operator's `.skill-bill`.
+Runtime-owned goal checkouts and agent scratch directories live beneath that directory, so the
+fixture task could not run in its own goal checkout. The operator accepted a scoped change to
+AC-003 and AC-004 for execution `wftr-20261106-195351-1g7i`.
+
+The fixture writer permits one descendant location, the exact verified-checkout
+`runtime-kotlin/runtime-core/build/desktop-fixture/home`. It checks the entire deleted home,
+verifies Git worktree registration and module layout, rejects redirected or linked paths, and fails when
+operator-home identity or filesystem resolution is unavailable. Safe temporary homes outside
+operator state remain supported when they are outside the verified checkout and cannot contain it.
+Only the fixed fixture home is permitted within the checkout. Desktop staging and seeding check their fixed checkout-owned
+output paths and reject linked inputs before deletion or copying. An approved output slot still
+refuses cleanup when it contains current operator state.
+
+This changes the product safety contract. It adds no architecture baseline, suppression or
+mechanical guard exemption. A1 and A2 keep fixture policy in test fixtures and desktop build logic;
+A7 preserves loud refusal; A8 keeps the fixture environment explicit. G3 retains destructive-path
+rejection evidence, and G7 and P7 require this recorded contract correction. The checks assume
+exclusive use of the QA output directories during a task; they do not claim to defeat concurrent
+malicious replacement of ancestor directories.

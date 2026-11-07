@@ -10,6 +10,10 @@ import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
@@ -197,5 +201,63 @@ class ChatStoreTest {
     store.saveChat(draft)
 
     assertEquals(listOf(ChatExchange("make a plan", "")), store.newTaskHistory("pending"))
+  }
+
+  // A conversation save that rebuilt the record would wipe the summary the background writer stored, and a malformed
+  // summary that failed the decode would lose the chat itself.
+  @Test
+  fun `a stored summary and its source time survive a conversation save and a malformed or missing one reads as none`() {
+    val directory = File(host.userHome, CHAT_STORE_PATH).apply { mkdirs() }
+    fun seed(session: String, extra: String) = File(directory, "$session.json").writeText(
+      """{"session_id":"$session","execution_id":"wf-1","agent_id":"codex","updated_at_ms":1,"lines":[{"role":"Operator","text":"why blocked?"}]$extra}""",
+    )
+    seed("kept", ""","summary":"Fix the flaky CI step","summary_source_updated_at_ms":1""")
+    seed("blank", ""","summary":"  ","summary_source_updated_at_ms":"soon"""")
+    seed("number", ""","summary":42""")
+    seed("absent", "")
+    ChatStore(host, RecordingDiagnostics(), Clock.System).saveChat(entry("kept", 5).copy(summary = "ignored"))
+
+    val chats = ChatStore(host, RecordingDiagnostics(), Clock.System).savedChats("wf-1").associateBy { it.sessionId }
+
+    assertEquals("Fix the flaky CI step", chats.getValue("kept").summary)
+    assertEquals(Instant.fromEpochMilliseconds(5), chats.getValue("kept").updatedAt)
+    val kept = Json.parseToJsonElement(File(directory, "kept.json").readText()).jsonObject
+    assertEquals(1L, kept.getValue("summary_source_updated_at_ms").jsonPrimitive.long)
+    listOf("blank", "number", "absent").forEach { session ->
+      assertEquals(null, chats.getValue(session).summary, session)
+      assertEquals(listOf(ChatHistoryLine(ChatHistoryRole.Operator, "why blocked?")), chats.getValue(session).lines, session)
+    }
+  }
+
+  // A summary call that outlives a discard must not bring the chat back through the update fallback.
+  @Test
+  fun `a summary for a chat with no file writes nothing`() {
+    val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
+
+    assertEquals(false, store.saveSummary("gone", "About nothing.", Instant.fromEpochMilliseconds(1)))
+    assertEquals(false, File(host.userHome, "$CHAT_STORE_PATH/gone.json").exists())
+  }
+
+  // A summary that bumps updated_at reorders the list, and one that is never stale again misses new turns.
+  @Test
+  fun `a summary keeps order and update time and a later turn makes the chat stale again`() {
+    val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    store.saveChat(entry("old", 1))
+    store.saveChat(entry("new", 2))
+
+    assertTrue(store.saveSummary("old", "Why CI blocked.", Instant.fromEpochMilliseconds(1)))
+
+    assertEquals(listOf("new" to 2L, "old" to 1L), store.savedChats("wf-1").map { it.sessionId to it.updatedAt.toEpochMilliseconds() })
+    assertEquals(null, store.staleForSummary("old"))
+    assertEquals(listOf("new"), store.staleSummaries(5).map { it.sessionId })
+
+    val nextTurn = entry("old", 3)
+    store.saveChat(nextTurn.copy(lines = nextTurn.lines + listOf(
+      ChatHistoryLine(ChatHistoryRole.Operator, "what changed?"),
+      ChatHistoryLine(ChatHistoryRole.Agent, "The deployment is fixed."),
+    )))
+
+    assertEquals("old", store.staleForSummary("old")?.sessionId)
+    assertEquals(listOf("old"), store.staleSummaries(1).map { it.sessionId })
   }
 }

@@ -145,6 +145,34 @@ class GitScopedStagingOperationsTest {
   }
 
   @Test
+  fun `stagePaths stages tracked edits and deletions under an ignored directory`() {
+    write("src/build/Kept.kt", "kept\n")
+    write("src/build/Removed.kt", "removed\n")
+    git("add", "--", "src/build/Kept.kt", "src/build/Removed.kt")
+    git("commit", "-m", "track build package")
+    write(".gitignore", "build/\n")
+    git("add", "--", ".gitignore")
+    git("commit", "-m", "ignore build dirs")
+    write("src/build/Kept.kt", "kept updated\n")
+    Files.delete(repo.resolve("src/build/Removed.kt"))
+    write("owned/Live.kt", "owned\n")
+
+    val result =
+      GitScopedStagingOperations.stagePaths(
+        repo,
+        listOf("src/build/Kept.kt", "src/build/Removed.kt", "owned/Live.kt"),
+      )
+
+    assertTrue(result is WorkflowGitOperationResult.Ok, result.error)
+    val index = indexSnapshot()
+    val indexSha = index["src/build/Kept.kt"]?.split(' ')?.getOrNull(1)
+    val worktreeSha = runGitCommand(repo, "hash-object", "--", "src/build/Kept.kt").value.orEmpty().trim()
+    assertEquals(worktreeSha, indexSha, "a tracked file under an ignored directory must be updated")
+    assertFalse("src/build/Removed.kt" in index.keys, "a tracked deletion under an ignored directory must be staged")
+    assertTrue("owned/Live.kt" in index.keys)
+  }
+
+  @Test
   fun `stagePaths adds a feature spec only when it is not gitignored`() {
     write(".feature-specs/kept/spec.md", "kept\n")
     write(".feature-specs/tracked/spec.md", "tracked\n")

@@ -257,7 +257,12 @@ class ChatWorkspace(
   }
 
   fun activate(id: String) {
+    val previous = tabState.value.activeId
     tabState.update { it.activated(id) }
+    // Leaving an idle chat summarizes it; a busy one is summarized when it is closed.
+    if (previous != null && previous != tabState.value.activeId) {
+      sessions[previous]?.takeUnless { it.busyState.value }?.let { chat.requestSummary(it.sessionId) }
+    }
     observeActive()
   }
 
@@ -291,6 +296,8 @@ class ChatWorkspace(
     operationCards.remove(id)
     session.job.cancel()
     chat.end(session.sessionId)
+    // Read now, because a restart can rotate the session id.
+    chat.requestSummary(session.sessionId)
     tabState.update { it.without(id) }
     observeActive()
   }
@@ -308,8 +315,10 @@ class ChatWorkspace(
     observer?.cancel()
     observer = null
     sessions.values.forEach {
+      val idle = !it.busyState.value
       it.job.cancel()
       chat.end(it.sessionId)
+      if (idle) chat.requestSummary(it.sessionId)
     }
     sessions.clear()
     cursorMcpDependencies.clear()

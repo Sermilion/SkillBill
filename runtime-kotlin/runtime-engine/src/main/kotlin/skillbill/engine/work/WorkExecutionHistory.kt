@@ -100,38 +100,32 @@ internal data class WorkflowExecutionCurrentState(
   val finishedAt: Instant?,
 )
 
-internal data class WorkExecutionHistoryQuery(
-  val page: WorkDetailPagePosition,
-  val limit: Int,
-  val current: WorkflowExecutionCurrentState?,
-)
-
-internal fun workExecutionHistory(
-  unitOfWork: UnitOfWork,
+internal fun UnitOfWork.workExecutionHistory(
   standalone: StandalonePhaseStatusRecord?,
   workflowId: String,
-  query: WorkExecutionHistoryQuery,
+  page: WorkDetailPagePosition,
+  limit: Int,
+  current: WorkflowExecutionCurrentState? = null,
 ): List<WorkExecutionInstance> {
-  val page = query.page
   val anchor = (page.anchor as? WorkDetailAnchor.Execution)?.anchor
   val offset = if (anchor == null) page.offset else 0
   return if (standalone != null) {
-    unitOfWork.standalonePhaseStatuses.readPhaseExecutions(
+    standalonePhaseStatuses.readPhaseExecutions(
       StandalonePhaseExecutionQuery(
         standalone.repositoryIdentity,
         standalone.phaseId,
         phaseGroupIdentity(standalone).third,
         page.observedAt,
         offset,
-        query.limit,
+        limit,
         anchor,
       ),
     )
-      .map { workExecutionInstance(it, standalone.invocationId, unitOfWork) }
+      .map { workExecutionInstance(it, standalone.invocationId, this) }
   } else {
-    unitOfWork.standalonePhaseStatuses
-      .readWorkflowExecutions(workflowId, page.observedAt, offset, query.limit, anchor)
-      .map { workflowExecutionInstance(it, query.current) }
+    standalonePhaseStatuses
+      .readWorkflowExecutions(workflowId, page.observedAt, offset, limit, anchor)
+      .map { workflowExecutionInstance(it, current) }
   }
 }
 

@@ -86,6 +86,38 @@ class GoalQualityGateRecoveryTest {
   }
 
   @Test
+  fun `initial discovery cancelled by a graceful runner shutdown may run again before any gate run`() {
+    val interrupted =
+      FeatureTaskRuntimeValidationGateProgress(
+        gateRunCount = 0,
+        gateRuns = emptyList(),
+        pendingExternalOperation = "build:initial_discovery:./gradlew compileKotlin",
+        pendingExternalCheckpoint = "checkpoint",
+        pendingExternalInterrupted = true,
+      )
+    validate(progress(listOf(first, second), interrupted))
+  }
+
+  @Test
+  fun `interrupted repair and verification commands keep the unknown outcome block`() {
+    listOf(
+      "build:repair:build:1",
+      "build:post_repair_verify:./gradlew compileKotlin",
+      "validation:initial_discovery:./gradlew check",
+    ).forEach { operation ->
+      val interrupted =
+        gate.copy(
+          pendingExternalOperation = operation,
+          pendingExternalCheckpoint = "checkpoint",
+          pendingExternalInterrupted = true,
+        )
+      val failure =
+        assertFailsWith<SkillBillRuntimeException>(operation) { validate(progress(listOf(first, second), interrupted)) }
+      assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'build#1' is unknown")
+    }
+  }
+
+  @Test
   fun `an interrupted read-only QA attempt with a consistent start may run again`() {
     val qa = record.copy(phaseId = "qa")
     validateRetained(GoalQualityPhaseProgress(phaseRecords = mapOf("qa" to qa), phaseLedger = qaStarts("qa")))

@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SessionMoveResult
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 /** Chats with the agent of one execution. */
 interface ExecutionChatRepository {
@@ -71,4 +72,10 @@ interface ExecutionChatRepository {
 
   /** Deletes the saved chat of [sessionId] with its resume state. */
   suspend fun deleteSavedChat(sessionId: String)
+
+  /** Asks for a background summary of the saved chat of [sessionId]; returns at once, never throws, and is free when nothing changed. */
+  fun requestSummary(sessionId: String) {}
+
+  /** The session id of each summary written; a hot flow without replay. */
+  val summaryUpdates: Flow<String> get() = emptyFlow()
 }

@@ -338,7 +338,12 @@ private class QaPreparedRun(
     if (recordsGoalOutcome) outcomes.recordAttempted(run.request.qaOutcomeWorkflowId)
     val result =
       execution.withExecution(run.request.repoRoot, policy) { qa ->
-        execute(run.copy(qaExecution = qa.copy(namedDevice = run.request.qaDevice)))
+        outcomes.recordPreviewStarted(run.request.qaOutcomeWorkflowId, qa)
+        try {
+          execute(run.copy(qaExecution = qa.copy(namedDevice = run.request.qaDevice)))
+        } finally {
+          outcomes.recordPreviewEnded(run.request.qaOutcomeWorkflowId, qa.workspace.invocationId)
+        }
       }
     outcomes.recordRetainedResources(run.request.qaOutcomeWorkflowId, result.retainedResources)
     if (recordsGoalOutcome) {

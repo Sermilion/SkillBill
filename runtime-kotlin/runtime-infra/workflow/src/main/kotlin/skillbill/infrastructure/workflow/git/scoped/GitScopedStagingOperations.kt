@@ -29,12 +29,34 @@ internal object GitScopedStagingOperations : ScopedStagingGitOperations {
   ): WorkflowGitOperationResult {
     val normalized = paths.filter(String::isNotBlank).distinct()
     if (normalized.isEmpty()) return WorkflowGitOperationResult.Ok(value = "")
-    val resolved = resolveStageablePaths(repoRoot, normalized)
+    val indexed = indexedPaths(repoRoot, normalized)
+    if (indexed !is WorkflowGitOperationResult.Ok) return indexed
+    val indexedSet = indexed.value.orEmpty().split(GIT_NUL).filter(String::isNotBlank).toSet()
+    val resolved = resolveStageablePaths(repoRoot, normalized, indexedSet)
     if (resolved !is WorkflowGitOperationResult.Ok) return resolved
     val stageable = resolved.value.orEmpty().split(GIT_NUL).filter(String::isNotBlank)
-    stageable.chunked(PATHSPEC_BATCH_SIZE).forEach { batch ->
-      val staged = runGitCommand(repoRoot, listOf("add", "--all", "--") + batch)
-      if (staged !is WorkflowGitOperationResult.Ok) return staged
+    return stageResolvedPaths(repoRoot, stageable, indexedSet)
+  }
+
+  private fun stageResolvedPaths(
+    repoRoot: Path,
+    stageable: List<String>,
+    indexed: Set<String>,
+  ): WorkflowGitOperationResult {
+    val (tracked, untracked) = stageable.partition { it in indexed }
+    val trackedStaged = runBatched(repoRoot, listOf("update-index", "--remove", "--"), tracked)
+    if (trackedStaged !is WorkflowGitOperationResult.Ok) return trackedStaged
+    return runBatched(repoRoot, listOf("add", "--all", "--"), untracked)
+  }
+
+  private fun runBatched(
+    repoRoot: Path,
+    command: List<String>,
+    paths: List<String>,
+  ): WorkflowGitOperationResult {
+    paths.chunked(PATHSPEC_BATCH_SIZE).forEach { batch ->
+      val result = runGitCommand(repoRoot, command + batch)
+      if (result !is WorkflowGitOperationResult.Ok) return result
     }
     return WorkflowGitOperationResult.Ok(value = "")
   }
@@ -118,11 +140,11 @@ internal object GitScopedStagingOperations : ScopedStagingGitOperations {
   private fun indexEntryPath(entry: String): String? =
     entry.substringAfter('\t', missingDelimiterValue = "").takeIf(String::isNotBlank)
 
-  private fun resolveStageablePaths(
+  private fun indexedPaths(
     repoRoot: Path,
     normalized: List<String>,
   ): WorkflowGitOperationResult {
-    val indexed = mutableSetOf<String>()
+    val indexed = LinkedHashSet<String>()
     for (batch in normalized.chunked(PATHSPEC_BATCH_SIZE)) {
       val listed = runGitCommand(repoRoot, listOf("ls-files", "--stage", "-z", "--") + batch)
       if (listed !is WorkflowGitOperationResult.Ok) return listed
@@ -130,6 +152,14 @@ internal object GitScopedStagingOperations : ScopedStagingGitOperations {
         indexEntryPath(entry)?.let { indexed += it }
       }
     }
+    return WorkflowGitOperationResult.Ok(value = indexed.joinToString(GIT_NUL.toString()))
+  }
+
+  private fun resolveStageablePaths(
+    repoRoot: Path,
+    normalized: List<String>,
+    indexed: Set<String>,
+  ): WorkflowGitOperationResult {
     val materialized = materializePathspecs(repoRoot, normalized)
     val presentOrIndexed = materialized.filter { Files.isRegularFile(repoRoot.resolve(it)) || it in indexed }
     val ignoredUntracked = ignoredUntrackedPaths(repoRoot, presentOrIndexed)

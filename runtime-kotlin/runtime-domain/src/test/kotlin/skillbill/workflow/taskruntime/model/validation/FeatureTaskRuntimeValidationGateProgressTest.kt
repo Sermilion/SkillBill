@@ -91,6 +91,41 @@ class FeatureTaskRuntimeValidationGateProgressTest {
     )
   }
 
+  @Test
+  fun `an interrupted pending command round-trips and is omitted from the artifact when absent`() {
+    val interrupted =
+      FeatureTaskRuntimeValidationGateProgress(
+        gateRunCount = 0,
+        gateRuns = emptyList(),
+        pendingExternalOperation = "build:initial_discovery:./gradlew compileKotlin",
+        pendingExternalCheckpoint = "checkpoint",
+        pendingExternalInterrupted = true,
+      )
+    val artifact = interrupted.toArtifactMap()
+    assertEquals(true, artifact[ValidationEvidencePayloadKeys.PENDING_EXTERNAL_INTERRUPTED])
+    assertEquals(interrupted, FeatureTaskRuntimeValidationGateProgress.fromArtifactMap(artifact))
+
+    val settled = interrupted.copy(pendingExternalInterrupted = false)
+    assertFalse(ValidationEvidencePayloadKeys.PENDING_EXTERNAL_INTERRUPTED in settled.toArtifactMap())
+    assertEquals(settled, FeatureTaskRuntimeValidationGateProgress.fromArtifactMap(settled.toArtifactMap()))
+  }
+
+  @Test
+  fun `an interrupted flag requires its pending command and must be a boolean`() {
+    assertFailsWith<IllegalArgumentException> {
+      FeatureTaskRuntimeValidationGateProgress(
+        gateRunCount = 0,
+        gateRuns = emptyList(),
+        pendingExternalInterrupted = true,
+      )
+    }
+    assertFailsWith<SkillBillRuntimeException> {
+      FeatureTaskRuntimeValidationGateProgress.fromArtifactMap(
+        progressArtifact(emptyList()) + (ValidationEvidencePayloadKeys.PENDING_EXTERNAL_INTERRUPTED to "true"),
+      )
+    }
+  }
+
   private fun upgradedProgressArtifact(raw: Map<String, Any?>): Map<String, Any?> =
     raw +
       mapOf(

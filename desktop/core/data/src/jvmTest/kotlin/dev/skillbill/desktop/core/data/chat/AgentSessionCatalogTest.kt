@@ -125,6 +125,22 @@ class AgentSessionCatalogTest {
     assertEquals(listOf(ChatHistoryLine(ChatHistoryRole.Operator, "ship it")), catalog.open(entry))
   }
 
+  // A CLI session listed without its app record's summary would show the fallback title in every execution-chat palette.
+  @Test
+  fun `a cli session with an app record lists that record's summary and one without lists none`() = runTest {
+    write(".claude/projects/${claudeProjectName(root)}/c-1.jsonl", """{"type":"user","message":{"role":"user","content":"fix the lint job"}}""", modified = 2_000)
+    write(".claude/projects/${claudeProjectName(root)}/c-2.jsonl", """{"type":"user","message":{"role":"user","content":"why is CI red?"}}""", modified = 1_000)
+    write(
+      "$CHAT_STORE_PATH/c-1.json",
+      """{"session_id":"c-1","execution_id":"wf-1","agent_id":"claude","updated_at_ms":1,"lines":[{"role":"Operator","text":"fix the lint job"}],"summary":"Fix the lint job's formatter step"}""",
+      modified = 2_000,
+    )
+
+    val listed = catalog.list("wf-1", root, "current", ::ChatAgentFor)
+
+    assertEquals(listOf("c-1" to "Fix the lint job's formatter step", "c-2" to null), listed.map { it.sessionId to it.summary })
+  }
+
   @Suppress("FunctionName")
   private fun ChatAgentFor(agentId: String) = ChatAgent(agentId, null, null)
 }

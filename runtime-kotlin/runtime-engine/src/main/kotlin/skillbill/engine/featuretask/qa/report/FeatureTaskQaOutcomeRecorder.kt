@@ -1,12 +1,15 @@
 package skillbill.engine.featuretask.qa.report
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.featuretask.model.execution.QaExecutionContext
+import skillbill.engine.featuretask.model.execution.QaExecutionTarget
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
 import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.workflow.taskruntime.model.qa.QaRunDetails
+import skillbill.workflow.taskruntime.model.qa.QaRunPreview
 import java.time.Clock
 
 @Inject
@@ -21,6 +24,47 @@ public class FeatureTaskQaOutcomeRecorder(
     database.transaction { unitOfWork ->
       val outcomes = unitOfWork.featureTaskQaOutcomes
       outcomes.upsert(FeatureTaskQaOutcomeRecords.attempted(workflowId, outcomes.find(workflowId), clock.instant()))
+    }
+  }
+
+  internal fun recordPreviewStarted(
+    workflowId: String,
+    qa: QaExecutionContext,
+  ) {
+    val target = qa.target as? QaExecutionTarget.Supported ?: return
+    database.transaction { unit ->
+      val outcomes = unit.featureTaskQaOutcomes
+      val recorded =
+        outcomes.find(workflowId)
+          ?: FeatureTaskQaOutcomeRecords.attempted(workflowId, null, clock.instant())
+      val details = recorded.details ?: QaRunDetails()
+      outcomes.upsert(
+        recorded.copy(
+          details =
+            details.copy(
+              preview =
+                QaRunPreview(
+                  qa.workspace.invocationId,
+                  qa.workspace.directory.toAbsolutePath().normalize().toString(),
+                  target.targets.flatMap { it.kinds }.map { it.wireValue }.distinct(),
+                  active = true,
+                ),
+            ),
+        ),
+      )
+    }
+  }
+
+  internal fun recordPreviewEnded(
+    workflowId: String,
+    invocationId: String,
+  ) {
+    database.transaction { unit ->
+      val outcomes = unit.featureTaskQaOutcomes
+      val recorded = outcomes.find(workflowId) ?: return@transaction
+      val details = recorded.details ?: return@transaction
+      val preview = details.preview?.takeIf { it.invocationId == invocationId } ?: return@transaction
+      outcomes.upsert(recorded.copy(details = details.copy(preview = preview.copy(active = false))))
     }
   }
 

@@ -23,6 +23,9 @@ import dev.skillbill.desktop.core.domain.model.GoalAssessmentFindingState
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentResult
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentState
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentVerification
+import dev.skillbill.desktop.core.domain.model.GoalQaPreview
+import dev.skillbill.desktop.core.domain.model.QaPreviewState
+import dev.skillbill.desktop.core.domain.model.QaPreviewFrame
 import dev.skillbill.desktop.core.domain.model.GoalQaFinding
 import dev.skillbill.desktop.core.domain.model.GoalQaResult
 import dev.skillbill.desktop.core.domain.model.ExecutionInstance
@@ -45,6 +48,40 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class DetailPeekTest {
+  @Test
+  fun `goal details show only the selected desktop QA preview and remove its ended image`() = runComposeUiTest {
+    val preview = GoalQaPreview("goal-qa", "/qa/goal", listOf("desktop"), true, null)
+    val detail = emptyDetail.copy(
+      currentPhase = "qa",
+      subtasks = listOf(WorkSubtask(1, "Build", "completed", null, null, emptyList())),
+      goalQaPreview = preview,
+    )
+    val state = mutableStateOf(DetailUiState(
+      workItem("goal"), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch,
+      subtaskChoice = SubtaskChoice(SubtaskKey.GoalFinish), qaPreviewVisible = true,
+      qaPreview = QaPreviewState.Live(QaPreviewFrame(1, 1, intArrayOf(0xff112233.toInt()))),
+    ))
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        DetailsPane(state.value, remember { mutableStateOf(AssessmentOrder.Priority) }) {}
+      }
+    }
+
+    onNodeWithContentDescription("Live desktop QA preview for run goal-qa").performScrollTo().assertIsDisplayed()
+    runOnIdle { state.value = state.value.copy(qaPreview = QaPreviewState.Ended) }
+    onNodeWithContentDescription("Live desktop QA preview for run goal-qa").assertDoesNotExist()
+    onNodeWithText("The selected QA run has ended.").assertExists()
+    runOnIdle { state.value = state.value.copy(subtaskChoice = SubtaskChoice(SubtaskKey.Subtask(1))) }
+    onNodeWithText("Desktop preview").assertDoesNotExist()
+    runOnIdle {
+      state.value = state.value.copy(
+        subtaskChoice = SubtaskChoice(SubtaskKey.GoalFinish),
+        sections = SectionsUi.Loaded(detail.copy(goalQaPreview = preview.copy(targets = listOf("android"))), null, emptyMap(), emptySet()),
+      )
+    }
+    onNodeWithText("Desktop preview").assertDoesNotExist()
+  }
+
   @Test
   fun `phase pipeline appears only on the current subtask`() = runComposeUiTest {
     val detail = emptyDetail.copy(

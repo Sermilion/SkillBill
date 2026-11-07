@@ -133,6 +133,31 @@ class SpecsPaneModelTest {
   }
 
   @Test
+  fun `purge uses the resolved run owner checkout`() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    specs.controlState.value = SpecControlState.Loaded(
+      control(runState = SpecRunState.Complete).copy(
+        ownerRepoRoot = "/repo-b",
+        purgeVisible = true,
+        canPurge = true,
+      ),
+      goal,
+    )
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+    model.onAction(SpecsAction.Select("SKILL-1"))
+    advanceUntilIdle()
+
+    model.onAction(SpecsAction.RequestPurge)
+    model.onAction(SpecsAction.ConfirmPurge)
+    advanceUntilIdle()
+
+    assertEquals(listOf<Pair<String, String?>>("SKILL-1" to "/repo-b"), controls.purgeRequests)
+  }
+
+  @Test
   fun `resume uses the loaded work item instead of startGoal`() = runTest {
     val dispatcher = StandardTestDispatcher(testScheduler)
     Dispatchers.setMain(dispatcher)
@@ -550,6 +575,7 @@ class SpecsPaneModelTest {
     everStarted = runState != SpecRunState.NotStarted,
     workflowId = "SKILL-1",
     repositoryIdentity = "repo",
+    ownerRepoRoot = "/repo",
     canStart = canStart,
     startLabel = if (runState == SpecRunState.NotStarted) "Start" else "Resume",
     canPause = false,

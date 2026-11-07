@@ -43,6 +43,7 @@ fun main() {
     }
   }
   component.transitionNotifier.start()
+  component.chatSummarizer.start()
   val window = component.windowComponentFactory.createWindowComponent()
   val uiScale = resolveDesktopUiScale()
   nucleusApplication(backend = NucleusBackend.Awt) {
