@@ -76,6 +76,7 @@
 
   /* ---------- shell ---------- */
   function sidebar(st) {
+    const usage = usageData(st);
     const count = (sec) => D.items.filter((x) => x.section === sec).length;
     const live = D.items.filter((x) => x.section !== 'finished').length;
     const navOn = (v, sec) => (st.view === v && (sec === undefined || st.section === sec)) || (v === 'work' && sec === undefined && st.view === 'detail');
@@ -91,6 +92,7 @@
         })) }),
       ],
       footer: [
+        usage ? S.UsageCard(Object.assign({}, usage, { windows: usage.windows.map((w) => ({ label: w.label, remaining: w.remaining })), act: 'usage-toggle', expanded: !!st.popover && st.popover.type === 'usage' })) : '',
         S.SidebarItem({ icon: 'fileText', label: 'Specs', act: 'specs-toggle', on: st.specsOpen, tip: 'Specs pane', kbd: 'G S' }),
         S.SidebarItem({ icon: 'terminal', label: 'Terminal', act: 'term-toggle', on: st.termOpen, tip: 'Terminal', kbd: '⌃ `' }),
         S.SidebarItem({ icon: 'sliders', label: 'Settings', act: 'nav', arg: 'settings', tip: 'Settings', kbd: 'G ,' }),
@@ -98,6 +100,20 @@
         deviceSwitcher(st),
       ],
     });
+  }
+
+  function usageData(st) {
+    const contextual = st.view === 'detail' || st.view === 'newtask';
+    const run = st.view === 'detail' ? lookup(st.detailId) : null;
+    const agent = st.view === 'newtask' ? ntChat(st).agent : run && (run.agent || (run.runOptions || {}).agentId);
+    const provider = contextual ? D.USAGE.providers.find((p) => p.toLowerCase() === agent) : st.usage.provider;
+    if (!provider) return null;
+    const context = contextual ? st.view === 'detail' ? 'This run' : 'This chat' : null;
+    const scenario = (provider === 'Cursor' ? D.USAGE.cursorScenarios : D.USAGE.scenarios)[st.usage.scenario];
+    const data = provider === 'Claude' && st.usage.scenario === 'normal'
+      ? Object.assign({}, scenario, { note: 'Session resets in 3h 40m', windows: [{ label: '5-hour', remaining: 64, reset: 'Resets today at 17:56' }, { label: 'Weekly', remaining: 81, reset: 'Resets Mon, Nov 9 at 12:00' }] })
+      : scenario;
+    return Object.assign({}, data, { provider, context, providers: D.USAGE.providers, account: D.USAGE.accounts[provider], note: st.usage.scenario === 'normal' && st.usage.refreshed ? 'Just checked' : data.note });
   }
 
   /* ---------- QA device (sidebar footer; design/qa-device-picker, variant A "Switcher row") ---------- */
@@ -1887,7 +1903,7 @@
     statusIcon, stepText, clock, rowKey, repoOf, agentOf, LIFE, SECTIONS, resumable, controllable, pauseEligible, recoveryOffered,
     newTask, ntChat, chatLabel, chatStatus, chatEmpty, ntSendButton, pickerItems, targetPicker, targetPickerView, chatMenu, queuePanel,
     resumeListing, resumePalette, resumePaletteView,
-    qaView, qaResults, devicePanel,
+    qaView, qaResults, devicePanel, usageData,
     isPlanRun, planStrip, planNow, planTeaser, planActivity, planBundle, planTranscript, planBriefing, PLAN_STAGES,
     specOf, specPath, specControl, specMenuItems, specPanelItems, specProject, specAgent, specBar, get specRows() { return specRows; },
     isValidationRun, shapeReport, validationCard, validationDoc, valDur, verifyOutcome, checkRow, valDefaultParts, valDefaultChecks, checkExpandable, verifyCtx, verifyState, fixItems, verifyFixText, verifyQaDemo, VSTEP, devicePanelView, deviceTrigger, deviceOptions, devicePickable, deviceList,

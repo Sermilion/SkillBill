@@ -39,3 +39,28 @@ The top bar switches between four views:
 ## Status
 
 Design reference only. Nothing here ships. The Compose implementation built to this design lives in `desktop/`, and the prototype describes that app as built (see the revision note in the handoff). The current app in `desktop/` is the behavior reference. Design additions await implementation. Standalone mocks stay until the operator confirms their synced versions.
+
+## Usage limits card
+
+[USAGE-LIMITS.md](USAGE-LIMITS.md) records the implementation proposal, provider data sources, refresh policy and unresolved API coverage.
+
+The shared sidebar includes a usage card above its bottom shortcuts. It uses the existing palette, type, spacing and sidebar width. The navigation scrolls separately so the card stays visible. Click the card for provider selection and reset times. Escape or Close returns focus to the card.
+
+This design assumes provider subscription allowances. Account labels, percentages, window names and reset times are sample data. Refresh simulates a fresh reading. The design does not add automatic pausing or provider switching for runs. Reading live provider usage remains implementation work.
+
+The provider picker includes Codex, Claude and Cursor. The Cursor example uses a legacy plan with separate Cursor models and Other models pools and a billing-cycle reset. Cursor's allowance structure depends on the account's plan, so live data must supply the pool labels and reset dates. See [Cursor usage and limits](https://cursor.com/help/models-and-usage/usage-limits).
+
+The card follows context. Opening a run shows the provider recorded on that run, including completed runs. New task follows the selected chat's agent and updates when you switch chats or agents. A small "This run" or "This chat" label explains the selection. The details popup follows the same provider; its other provider buttons are disabled while context controls the card. Work and History keep the manual provider picker and remember its last selection. Junie has no usage card, and runs without a known provider also hide it. Junie remains available elsewhere in the prototype.
+
+Context examples use the existing run screens: [Codex](index.html#detail/INF-7), [Claude](index.html#detail/DSN-31), [Cursor](index.html#detail/ATL-402), and [Junie without a usage card](index.html#detail/ph-rk-validation). [New task](index.html#new-task) follows its selected chat.
+
+Review the card in the existing app layout with these links. Each opens the details popup. Close it to inspect the card alone.
+
+- [Available](index.html#usage/normal)
+- [Running low](index.html#usage/low)
+- [Limit reached](index.html#usage/exhausted)
+- [Out of date](index.html#usage/stale)
+- [Unavailable](index.html#usage/unavailable)
+- [Checking](index.html#usage/loading)
+
+The existing Components view also includes UsageCard and UsagePanel examples.

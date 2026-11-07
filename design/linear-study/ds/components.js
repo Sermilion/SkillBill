@@ -391,7 +391,25 @@
   }
   function Sidebar(o) {
     track('Sidebar');
-    return `<nav class="sb-side" aria-label="Main">${o.top}${join(o.items)}<div class="sb-side-foot">${join(o.footer)}</div></nav>`;
+    return `<nav class="sb-side" aria-label="Main">${o.top}<div class="sb-side-items" data-scroll="sidebar">${join(o.items)}</div><div class="sb-side-foot">${join(o.footer)}</div></nav>`;
+  }
+
+  function UsageWindow(o) {
+    track('UsageWindow');
+    const known = Number.isFinite(o.remaining);
+    const tone = !known || o.stale ? 'muted' : o.remaining === 0 ? 'empty' : o.remaining <= 15 ? 'low' : 'normal';
+    return `<span class="sb-usage-window is-${tone}"><span class="sb-usage-line"><span>${esc(o.label)}</span><b>${known ? esc(o.remaining) + '% left' : esc(o.loading ? 'Checking' : 'Unavailable')}</b></span><span class="sb-usage-track"${known ? ` role="meter" aria-label="${esc(o.label + (o.stale ? ', last known remaining allowance' : ', remaining allowance'))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${o.remaining}"` : ' aria-hidden="true"'}>${known ? `<i style="width:${Math.min(100, Math.max(0, o.remaining))}%"></i>` : ''}</span>${o.reset ? `<span class="sb-usage-reset">${esc(o.reset)}</span>` : ''}</span>`;
+  }
+
+  function UsageCard(o) {
+    track('UsageCard');
+    return `<button type="button" id="${esc(o.id || 'usage-card')}" class="sb-usage-card"${act(o.act, o.arg)} aria-haspopup="dialog" aria-expanded="${!!o.expanded}" aria-label="${esc(o.provider + ' usage limits, ' + o.status + (o.context ? ', following ' + o.context.toLowerCase() : '') + '. View details')}"><span class="sb-usage-heading"><span>Usage limits</span>${o.context ? `<span class="sb-usage-context">${esc(o.context)}</span>` : ''}${Icon('chevronRight', 'xs')}</span><span class="sb-usage-provider"><b>${esc(o.provider)}</b><span class="${o.tone ? 'is-' + esc(o.tone) : ''}">${esc(o.status)}</span></span>${join(o.windows.map((w) => UsageWindow(Object.assign({}, w, { stale: o.stale, loading: o.loading }))))}<span class="sb-usage-note">${esc(o.note)}</span></button>`;
+  }
+
+  function UsagePanel(o) {
+    track('UsagePanel');
+    const id = esc(o.id || 'usage');
+    return `<section class="sb-usage-panel" aria-labelledby="${id}-title"><div class="sb-usage-panel-head"><b id="${id}-title">Usage limits</b>${IconButton({ icon: 'x', label: 'Close usage details', act: 'usage-close', id: id + '-close', size: 'sm' })}</div><div class="sb-usage-tabs" role="group" aria-label="Provider">${o.providers.map((p) => `<button type="button" id="${id}-provider-${esc(p)}"${act('usage-provider', p)} aria-pressed="${o.provider === p}"${o.context && o.provider !== p ? ' disabled' : ''} class="${o.provider === p ? 'on' : ''}">${esc(p)}</button>`).join('')}</div><div class="sb-usage-panel-body">${o.context ? `<p class="sb-usage-following">Following ${esc(o.context.toLowerCase())}</p>` : ''}<div class="sb-usage-account"><b>${esc(o.provider)}</b><span>${esc(o.account)}</span></div>${o.message ? `<p class="sb-usage-message" role="status">${esc(o.message)}</p>` : ''}${join(o.windows.map((w) => UsageWindow(Object.assign({}, w, { stale: o.stale, loading: o.loading }))))}</div><div class="sb-usage-panel-foot"><span>${esc(o.note)}</span>${Button({ icon: 'refresh', label: 'Refresh', act: 'usage-refresh', size: 'sm', variant: 'ghost', disabled: o.loading })}</div><div class="sb-usage-sample">Sample data for design review</div></section>`;
   }
   function WorkspaceSwitcher(o) {
     track('WorkspaceSwitcher');
@@ -1314,7 +1332,7 @@
     Icon, BrandMark, StatusIcon, Kbd, Button, IconButton, Tooltip, IdTag, ShortId, StaleIndicator, Label, Avatar,
     ProgressRing, Clock, Segmented, ViewTabs, Toggle, Checkbox, Input, Field,
     PropertyList, MenuItem, Menu, Popover, CommandPalette, CommandList, Dialog, Ledger, ShortcutGrid,
-    Toast, ToastStack, Callout, Hint, EmptyState, SidebarItem, SidebarSection, RepoIcon, Sidebar, WorkspaceSwitcher,
+    Toast, ToastStack, Callout, Hint, EmptyState, SidebarItem, SidebarSection, RepoIcon, Sidebar, WorkspaceSwitcher, UsageWindow, UsageCard, UsagePanel,
     ViewHeader, Pager, GroupHeader, ListRow, SidePane, ReasonBlock, ExpandableText, foldButton, Checklist, FindingRow, EvidenceRow, EvidenceToggle, TerminalPane,
     DocHeader, Section, Box, MetricStrip, SubtaskRow, SubtaskList, SubtaskChip, SubtaskInspector, PhasePipeline,
     PaneSection, Breakdown, ActivityFeed, TreeRow, SettingsHeader, SettingsGroup, SettingRow, TierBadge,

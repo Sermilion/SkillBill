@@ -958,7 +958,28 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
   };
   const QA_DEVICES = { live: 'mixed', lists: DEVICE_LISTS };
 
+  const USAGE = {
+    providers: ['Codex', 'Claude', 'Cursor'],
+    accounts: { Codex: 'Personal account', Claude: 'Work account', Cursor: 'Personal account, legacy plan' },
+    cursorScenarios: {
+      normal: { status: 'Available', note: 'Usage resets in 12 days', windows: [{ label: 'Cursor models', remaining: 56, reset: 'Resets Nov 19 at 09:00' }, { label: 'Other models', remaining: 73, reset: 'Resets Nov 19 at 09:00' }] },
+      low: { status: 'Running low', tone: 'low', note: 'Usage resets in 12 days', message: 'Your included Cursor models allowance is running low.', windows: [{ label: 'Cursor models', remaining: 9, reset: 'Resets Nov 19 at 09:00' }, { label: 'Other models', remaining: 42, reset: 'Resets Nov 19 at 09:00' }] },
+      exhausted: { status: 'Limit reached', tone: 'empty', note: 'Usage resets in 12 days', message: 'Included Cursor models allowance used up. Other models still have included usage.', windows: [{ label: 'Cursor models', remaining: 0, reset: 'Resets Nov 19 at 09:00' }, { label: 'Other models', remaining: 42, reset: 'Resets Nov 19 at 09:00' }] },
+      stale: { status: 'Out of date', stale: true, note: 'Last checked 24m ago', message: 'Could not refresh usage. These are the last known values.', windows: [{ label: 'Cursor models', remaining: 56, reset: 'Last reported reset: Nov 19 at 09:00' }, { label: 'Other models', remaining: 73, reset: 'Last reported reset: Nov 19 at 09:00' }] },
+      unavailable: { status: 'Unavailable', note: 'Usage could not be retrieved', message: 'No usage data available for this account. Try refreshing.', windows: [{ label: 'Cursor models', remaining: null }, { label: 'Other models', remaining: null }] },
+      loading: { status: 'Checking', loading: true, note: 'Checking account usage', windows: [{ label: 'Cursor models', remaining: null }, { label: 'Other models', remaining: null }] },
+    },
+    scenarios: {
+      normal: { status: 'Available', note: 'Session resets in 2h 14m', windows: [{ label: '5-hour', remaining: 38, reset: 'Resets today at 16:30' }, { label: 'Weekly', remaining: 72, reset: 'Resets Thu, Nov 12 at 09:00' }] },
+      low: { status: 'Running low', tone: 'low', note: 'Session resets in 2h 14m', message: 'Your session allowance is running low.', windows: [{ label: '5-hour', remaining: 9, reset: 'Resets today at 16:30' }, { label: 'Weekly', remaining: 42, reset: 'Resets Thu, Nov 12 at 09:00' }] },
+      exhausted: { status: 'Limit reached', tone: 'empty', note: 'Session resets in 2h 14m', message: 'Session allowance used up. Resets today at 16:30.', windows: [{ label: '5-hour', remaining: 0, reset: 'Resets today at 16:30' }, { label: 'Weekly', remaining: 42, reset: 'Resets Thu, Nov 12 at 09:00' }] },
+      stale: { status: 'Out of date', stale: true, note: 'Last checked 24m ago', message: 'Could not refresh usage. These are the last known values.', windows: [{ label: '5-hour', remaining: 38, reset: 'Last reported reset: today at 16:30' }, { label: 'Weekly', remaining: 72, reset: 'Last reported reset: Thu, Nov 12 at 09:00' }] },
+      unavailable: { status: 'Unavailable', note: 'Usage could not be retrieved', message: 'No usage data available for this account. Try refreshing.', windows: [{ label: '5-hour', remaining: null }, { label: 'Weekly', remaining: null }] },
+      loading: { status: 'Checking', loading: true, note: 'Checking account usage', windows: [{ label: '5-hour', remaining: null }, { label: 'Weekly', remaining: null }] },
+    },
+  };
+
   window.DATA = { T0, REPOS, AGENTS, AGENT_CHOICES, PHASE_ORDER, GOAL_FINISH, items, history, valRoutes, projects, specs, NOTIFICATIONS, CLAUDE_DIRS, PHASE_GROUPS, MATRIX, BUDGET,
     REPO_BRANCHES, LONG_BRANCH, CHAT_HISTORY, NEW_TASK_CHATS, NEW_TASK_SELECTED, CHAT_REPLIES, NEW_TASK_STEPS, QUICK_STARTS,
-    QA, QA_DEVICES, VAL, VERIFY };
+    QA, QA_DEVICES, VAL, VERIFY, USAGE };
 })();

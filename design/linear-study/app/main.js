@@ -35,6 +35,7 @@
     /* QA device in the sidebar footer: which list the app found (data.js QA_DEVICES), the picked device ('auto' lets QA
      * choose), the popup's keyboard index and whether a refresh is running. qaOpen: open QA result rows and folds. */
     qaDev: { list: D.QA_DEVICES.live, selected: 'auto', kb: 0, checking: false }, qaOpen: new Set(),
+    usage: { provider: 'Codex', scenario: 'normal', refreshed: false },
     /* Validation runs: open report parts (indexes) and open checks (ids) per item, unset until the first toggle so the
      * defaults apply. Verify runs: open steps, criteria rows and folds ("<id>:s:<step>", "<id>:c:<n>"), the criteria filter,
      * the items selected for fixing (key to route, chat or goal) and criterion marks (repo or spec) per item.
@@ -66,11 +67,13 @@
     if (page === 'new-task') return { view: 'newtask', open: open === 'state' ? rest[0] === 'closing' ? 'closing' : null : open || null, scenario: open === 'state' ? rest[0] : null, variant: open === 'picker' || open === 'resume' ? rest[0] || null : null };
     if (page === 'detail' && open) return { view: 'detail', id: decodeURIComponent(open), open: null, inspector: rest[0], resultTab: rest[1] };
     if (page === 'qa-device') return { view: 'work', open: 'devices', devices: open && open in D.QA_DEVICES.lists ? open : null };
+    if (page === 'usage') return { view: 'work', open: 'usage', usageScenario: open in D.USAGE.scenarios ? open : 'normal' };
     if (page === 'specs') return open === 'project' ? { view: 'work', specs: true, project: rest[0] } : { view: 'work', specs: true, sel: open ? decodeURIComponent([open, ...rest].join('/')) : null };
     return null;
   }
   function applyRoute(r) {
     st.view = r.view;
+    if (r.usageScenario) { st.usage.scenario = r.usageScenario; st.usage.refreshed = false; st.sideOpen = true; }
     if (r.view === 'newtask') {
       st.ntVariant = r.variant;
       if (r.scenario || r.variant) st.nt = seedNewTaskScenario(r.scenario || 'fresh');
@@ -146,6 +149,7 @@
     run('Command menu', () => S.CommandPalette({ context: S.Label({ text: 'INF-7', dot: false }), list: S.CommandList(commandGroups(), 0) }));
     run('Menus', () => ['agent', 'item', 'project', 'claude'].map((t) => S.Popover({ x: 0, y: 0, body: popoverBody({ type: t, arg: 'INF-7' }) })).join(''));
     run('QA device', () => S.Popover({ x: 0, y: 0, flush: true, cls: 'sb-pop--dev', role: 'dialog', body: popoverBody({ type: 'devices' }) }));
+    run('Usage limits', () => as({ view: 'work' }, () => S.UsagePanel(X.usageData(st))));
     run('Dialogs', () => [dialogBody({ type: 'recover', arg: 'DSN-31' }), dialogBody({ type: 'purge', arg: 'SKILL-438' }), dialogBody({ type: 'spec-cancel', arg: 'SKILL-442' }), dialogBody({ type: 'spec-delete', arg: 'SKILL-444' }), dialogBody({ type: 'spec-export-live', arg: 'SKILL-442' }), dialogBody({ type: 'shortcuts' })].join(''));
     run('Toasts', () => S.ToastStack([S.Toast({ state: 'paused', title: 'Pause recorded', body: 'x' })]));
     run('Tooltip', () => S.Tooltip('Pause after subtask', 'P'));
@@ -371,6 +375,10 @@
     if (p.type === 'queue') return X.queuePanel(st);
     if (p.type === 'chats') return X.chatMenu(st);
     if (p.type === 'devices') return X.devicePanel(st);
+    if (p.type === 'usage') {
+      const usage = X.usageData(st);
+      return usage ? S.UsagePanel(Object.assign({}, usage, { note: st.usage.scenario === 'normal' ? 'Just checked' : usage.note })) : '';
+    }
     if (p.type === 'nt-agent') return S.Menu({ items: [{ head: 'Agent' }, ...D.AGENT_CHOICES.map((a) => ({ lead: S.Avatar({ name: a, initials: D.AGENTS[a].initials, color: D.AGENTS[a].color, size: 'sm' }), label: a, end: D.MATRIX[a] ? esc(D.MATRIX[a].reasoning.model) : '', act: 'nt-agent-pick', arg: a, checked: X.ntChat(st).agent === a }))] });
     if (p.type === 'claude') return S.Menu({ items: [{ head: 'Claude config directories found' }, ...D.CLAUDE_DIRS.map((d) => ({ icon: 'folder', html: `<span class="mono">${esc(d)}</span>`, label: d, act: 'claude-pick', arg: d, checked: st.prefs.claudeDir === d }))] });
     return '';
@@ -714,6 +722,7 @@
     }
     else if (open === 'closing') A['chat-close'](ntCur().id);
     else if (open === 'devices') A['dev-toggle']();
+    else if (open === 'usage') A['usage-toggle']();
   }
 
   /* ---------- QA device popup (design/qa-device-picker variant A) ---------- */
@@ -832,6 +841,24 @@
     'sec-toggle'(id) { st.closed.has(id) ? st.closed.delete(id) : st.closed.add(id); render(); },
     pager(dir) { const live = D.items.filter((x) => x.section !== 'finished'); const i = live.findIndex((x) => x.id === st.detailId); st.detailId = live[(i + +dir + live.length) % live.length].id; st.reasonOpen.clear(); render(); },
     'layer-close'() { st.popover = null; render(); },
+    'usage-toggle'(a, el) {
+      if (st.popover && st.popover.type === 'usage') return A['usage-close']();
+      const anchor = el || document.getElementById('usage-card');
+      if (!anchor) return;
+      st.popover = Object.assign({ type: 'usage', above: true, gap: 8, flush: true, steady: true, role: 'dialog', focus: 'usage-close' }, anchorPos(anchor));
+      render();
+    },
+    'usage-close'() { st.popover = null; st.focusNext = 'usage-card'; render(); },
+    'usage-provider'(provider) {
+      const usage = X.usageData(st);
+      if (!D.USAGE.providers.includes(provider) || !usage || usage.context) return;
+      st.usage.provider = provider; st.usage.refreshed = false;
+      st.focusNext = 'usage-provider-' + provider; render();
+    },
+    'usage-refresh'() {
+      st.usage.scenario = 'normal'; st.usage.refreshed = true;
+      st.focusNext = 'usage-close'; render();
+    },
     'layer-close-self'(a, el, e) { if (e.target === el) { st.dialog = null; st.cmdk = null; render(); } },
     'dialog-close'() { st.dialog = null; render(); },
 
@@ -1428,6 +1455,7 @@
   document.addEventListener('keydown', (e) => {
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key;
+    if (!st.popover && e.target.id === 'usage-card' && (key === 'Enter' || key === ' ')) { e.preventDefault(); return A['usage-toggle'](); }
     if (mod && key.toLowerCase() === 'k') { e.preventDefault(); if (st.cmdk) { st.cmdk = null; render(); } else A.cmdk(); return; }
     if (st.cmdk) {
       const n = (st.cmdk.flat || []).length;
@@ -1439,6 +1467,16 @@
     }
     if (e.ctrlKey && (e.code === 'Backquote')) { e.preventDefault(); return e.shiftKey ? A['term-new']() : A['term-toggle'](); }
     if (deviceKeys(e)) return;
+    if (st.popover && st.popover.type === 'usage') {
+      if (key === 'Escape') { e.preventDefault(); return A['usage-close'](); }
+      if (key === 'Tab') {
+        const controls = [...root.querySelectorAll('[data-pop] button:not([disabled])')];
+        const index = controls.indexOf(document.activeElement);
+        e.preventDefault();
+        controls[(index + (e.shiftKey ? -1 : 1) + controls.length) % controls.length].focus();
+      }
+      return;
+    }
     if (newTaskKeys(e)) return;
     if (specMenuKeys(e)) return;
     if (!st.popover && !st.dialog && specKeys(e)) return;
