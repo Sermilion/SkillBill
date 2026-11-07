@@ -95,9 +95,18 @@ internal class ChatThread(private val clock: Clock) {
 
   fun suggestActions(actions: List<ChatSuggestedAction>) = updateStreaming { it.copy(actions = actions) }
 
-  fun endStreaming() = messages.update { list ->
+  fun endStreaming() = endStreamingWhen { true }
+
+  /** A new provider message closes only an entry that already shows text, so tool-only messages keep one tool group. */
+  fun endMessage() = endStreamingWhen { it.text.isNotEmpty() || it.actions.isNotEmpty() }
+
+  private fun endStreamingWhen(closes: (ChatMessage.Agent) -> Boolean) = messages.update { list ->
     val last = list.lastOrNull()
-    if (last is ChatMessage.Agent && last.streaming) list.dropLast(1) + last.copy(streaming = false, finishedAt = clock.now()) else list
+    if (last is ChatMessage.Agent && last.streaming && closes(last)) {
+      list.dropLast(1) + last.copy(streaming = false, finishedAt = clock.now())
+    } else {
+      list
+    }
   }
 
   private fun updateStreaming(change: (ChatMessage.Agent) -> ChatMessage.Agent) = messages.update { list ->
@@ -112,7 +121,7 @@ internal class ChatThread(private val clock: Clock) {
 
 internal fun ChatThread.show(agent: ChatAgent?, event: ChatEvent) {
   when (event) {
-    ChatEvent.MessageStarted -> endStreaming()
+    ChatEvent.MessageStarted -> endMessage()
     is ChatEvent.TextDelta -> appendDelta(event.text)
     is ChatEvent.ToolUse -> appendTool(event.call)
     is ChatEvent.ToolResult -> recordToolResult(event)

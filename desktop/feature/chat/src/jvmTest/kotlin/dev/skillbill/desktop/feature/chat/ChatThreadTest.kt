@@ -29,6 +29,21 @@ class ChatThreadTest {
   }
 
   @Test
+  fun `tool-only messages share one tool group until a message with text closes the entry`() {
+    val thread = ChatThread(Clock.System)
+    val calls = (1..3).map { ChatToolCall("t$it", "Bash", "{}", null) }
+    calls.forEach { call ->
+      thread.show(null, ChatEvent.MessageStarted)
+      thread.show(null, ChatEvent.ToolUse(call))
+      thread.show(null, ChatEvent.ToolResult(call.id, "ok", false))
+    }
+    listOf(ChatEvent.MessageStarted, ChatEvent.TextDelta("Done."), ChatEvent.Completed).forEach { thread.show(null, it) }
+    val entry = thread.transcript.value.filterIsInstance<ChatMessage.Agent>().single()
+    assertEquals(listOf("t1", "t2", "t3"), entry.tools.map { it.call.id })
+    assertEquals("Done.", entry.text)
+  }
+
+  @Test
   fun `history keeps action-only replies and selected operator actions for restoration`() {
     val suggested = listOf(ChatSuggestedAction("Review", "Review this", ChatPermissionMode.ReadOnly, NewTaskActionKind.Review))
     val selected = ChatSuggestedAction("Inspect", "Inspect this", ChatPermissionMode.Act)
