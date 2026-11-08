@@ -1,3 +1,15 @@
+## [2026-11-08] SKILL-528 chat source for Changes
+Areas: desktop/feature/changes, desktop/core/domain, desktop/core/ui, desktop/app
+- ChangesSource distinguishes work items from chats. Chat source ids use a chat: prefix; reopening a source replaces its target, scope and optional file path and requests focus.
+- reusable: ChangesWindows.openChat accepts a supplied chat target, and chatScopeTarget maps the saved stash or HEAD and pre-existing untracked paths to a RunStart baseline.
+- Chat windows offer All, Uncommitted and Commits, including timeline commits without subtask owners. They use the supplied target without observing work detail and hide subtask controls, Running, Operator and the polling footer.
+- Initial and reopened file requests wait for the matching target and scope list. A matching filtered file clears the filter before selection; a missing requested file leaves the default selection.
+- Reopening aligns the files or commits view with the requested scope. Work sources keep their detail observation and scope controls.
+- Limits: chat windows do not live-poll; reopening refreshes the supplied target. Diff comments retain baseline-driven availability.
+Feature size: MEDIUM
+Feature flag: N/A
+Acceptance criteria: 1/1 owning parent criterion implemented in source, AC-004, including composer integration.
+
 ## [2026-11-05] SKILL-502 comment caret and diff word highlight
 Areas: desktop/core/ui, desktop/feature/changes
 - The comment composer and the thread reply box now draw their caret with a cursorBrush in colors.fg, the value SbInput uses.

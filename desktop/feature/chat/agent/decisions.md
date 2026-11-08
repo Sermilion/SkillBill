@@ -1,3 +1,19 @@
+## [2026-11-08] Preserve the chat's dirty working tree baseline
+Context: SKILL-528 requires chat changes to exclude tracked edits and untracked files that existed before the first agent turn.
+Decision: Capture HEAD, untracked paths and an optional unreferenced stash through WorkTreeSnapshotPort. Read against that stash when present and report unavailable if it no longer resolves.
+Reason: A HEAD-only baseline would count pre-existing tracked edits as chat work. Stash creation writes a Git object, so it belongs outside read-only WorkChangesPort. Falling back after pruning would silently change attribution.
+Revisit when: Baselines need retention beyond Git's unreferenced-object lifetime.
+
+## [2026-11-08] Do not reconstruct a missing baseline after chat work starts
+Context: Older saved chats have no baseline, capture can fail before the first turn, and agent switches rebind the conversation to a new session.
+Decision: Keep baseline decoding optional and preserve transcripts on malformed data. Attempt capture once before the first send; retain baseline and attempt state across same-repository rebinds and drop them on repository changes. Started chats without baselines remain without one.
+Reason: A later capture would include earlier agent edits in the baseline and omit them from the chat's changes. Keeping the original baseline across agent switches preserves attribution for the same repository.
+
+## [2026-11-08] Keep changes-popup state in the chat anchor
+Context: The changes pill can disappear while its popup is open when the chat's changes state becomes None.
+Decision: Keep the open flag local and keyed by chat. Keep SbPopover composed through the transition and return focus to the composer when the pill is absent, otherwise to the pill.
+Reason: No caller outside the composer needs this open state. The disappearance scenario requires focus to remain in the composer rather than target a removed pill.
+
 ## [2026-11-07] Keep tool-only messages in one tool group
 Context: Claude sends message_start for every API message, including ones that only call a tool, so each command became its own transcript entry.
 Decision: MessageStarted closes the streaming entry only when it already shows text or actions. Tool-only messages keep adding to the same tool group, and the next message with text lands in that entry.
