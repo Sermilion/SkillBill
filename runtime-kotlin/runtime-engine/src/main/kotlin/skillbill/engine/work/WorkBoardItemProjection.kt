@@ -705,11 +705,42 @@ public class WorkBoardItemProjection(
     val issueKey = standalone?.issueKey?.takeIf(String::isNotBlank) ?: return false
     val exact = standalone.repositoryIdentity
     val primary = decodeRepositoryRoot(exact)?.let(repositoryEnclosingRootPort::primaryRepositoryIdentity)
-    return setOfNotNull(exact, primary).any { identity ->
-      unitOfWork.workList
-        .goalParentCandidatePage(issueKey, identity, 0, WorkPaginationLimits.MAX_PAGE_SIZE)
-        .any { parent -> isListedGoalParent(parent.workflowId, unitOfWork) }
+    if (setOfNotNull(exact, primary).any { identity ->
+        unitOfWork.workList
+          .goalParentCandidatePage(issueKey, identity, 0, WorkPaginationLimits.MAX_PAGE_SIZE)
+          .any { parent -> isListedGoalParent(parent.workflowId, unitOfWork) }
+      }
+    ) {
+      return true
     }
+    val root = decodeRepositoryRoot(exact) ?: return false
+    return hasRecordedPlanningWorktreeParent(issueKey, root, unitOfWork)
+  }
+
+  private fun hasRecordedPlanningWorktreeParent(
+    issueKey: String,
+    root: Path,
+    unitOfWork: UnitOfWork,
+  ): Boolean {
+    var offset = 0
+    do {
+      val parents =
+        unitOfWork.workList.goalParentCandidatePage(
+          issueKey,
+          null,
+          offset,
+          WorkPaginationLimits.MAX_PAGE_SIZE,
+        )
+      if (parents.any { parent ->
+          val ownedPath = unitOfWork.goalRunnerControls.controlState(parent.workflowId).executionWorktreePath
+          ownedPath == root.toString() && isListedGoalParent(parent.workflowId, unitOfWork)
+        }
+      ) {
+        return true
+      }
+      offset += parents.size
+    } while (parents.size == WorkPaginationLimits.MAX_PAGE_SIZE)
+    return false
   }
 
   private fun isListedGoalParent(
