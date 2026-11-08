@@ -1090,9 +1090,46 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
   const LONG_REPLY = 'Yes. SpecsRepository can return names and keys from the directory listing first, then fill in titles and status as each spec.md is parsed. '
     + 'The panel shows rows within one frame and updates them in place. The parse moves to Dispatchers.IO and runs in batches of 50, so a scroll during the first load stays smooth. '
     + 'Archived bundles are listed last and parsed only when their group is expanded, which removes about 300 of the 510 reads from the first open.';
+  /* What a chat changed in its checkout since its first agent turn (the chat's baseline): the file list against that
+   * baseline, the commits the agent made since, and whether edits are still uncommitted. `since` is when the baseline was
+   * taken; a resumed chat keeps the baseline of its first session. files: [status (M, A, D, R), path, insertions, deletions]. */
+  const SB_SPECS = 'desktop/feature/specs/src/commonMain/kotlin/dev/skillbill/desktop/feature/specs';
+  const CHAT_CHANGES = {
+    few: { since: '14:20', commits: 0, uncommitted: true, files: [
+      ['A', 'desktop/feature/detail/src/commonMain/kotlin/dev/skillbill/desktop/feature/detail/PhaseTokenCost.kt', 58, 0],
+      ['M', 'desktop/feature/detail/src/commonMain/kotlin/dev/skillbill/desktop/feature/detail/DetailPhaseCard.kt', 21, 6],
+      ['M', 'desktop/core/domain/src/commonMain/kotlin/dev/skillbill/desktop/core/domain/model/PhaseRecord.kt', 5, 1],
+    ] },
+    many: { since: '11:05', commits: 2, uncommitted: true, files: [
+      ['M', SB_SPECS + '/SpecsRepository.kt', 112, 47],
+      ['A', SB_SPECS + '/SpecListingReader.kt', 96, 0],
+      ['M', SB_SPECS + '/SpecsPaneModel.kt', 64, 22],
+      ['M', SB_SPECS + '/SpecTreeRow.kt', 18, 9],
+      ['A', SB_SPECS + '/SpecParseBatches.kt', 51, 0],
+      ['R', SB_SPECS + '/SpecBodyLoader.kt', 12, 30],
+      ['M', SB_SPECS + '/SpecsPane.kt', 27, 11],
+      ['M', SB_SPECS + '/ArchivedSpecsGroup.kt', 15, 4],
+      ['D', SB_SPECS + '/SpecEagerParser.kt', 0, 88],
+      ['M', 'desktop/core/data/src/jvmMain/kotlin/dev/skillbill/desktop/core/data/specs/SpecFiles.kt', 22, 6],
+      ['M', 'desktop/core/domain/src/commonMain/kotlin/dev/skillbill/desktop/core/domain/model/SpecRow.kt', 9, 2],
+      ['A', 'desktop/feature/specs/src/jvmTest/kotlin/dev/skillbill/desktop/feature/specs/SpecListingReaderTest.kt', 74, 0],
+      ['M', 'desktop/feature/specs/src/jvmTest/kotlin/dev/skillbill/desktop/feature/specs/SpecsRepositoryTest.kt', 38, 15],
+      ['M', 'desktop/feature/specs/src/jvmTest/kotlin/dev/skillbill/desktop/feature/specs/SpecsPaneModelTest.kt', 26, 8],
+      ['A', 'docs/plans/specs-list-first-loading.md', 41, 0],
+      ['M', 'desktop/HANDOFF.md', 6, 1],
+      ['M', 'desktop/feature/specs/build.gradle.kts', 2, 0],
+    ] },
+    resumed: { since: 'Nov 6, 14:20', resumed: 'Nov 6', commits: 1, uncommitted: true, files: [
+      ['M', 'app/src/main/java/news/ui/MainScaffold.kt', 34, 19],
+      ['M', 'app/src/main/java/news/ui/offline/OfflineBanner.kt', 12, 7],
+      ['A', 'app/src/test/java/news/ui/offline/OfflineBannerPlacementTest.kt', 46, 0],
+      ['M', 'app/src/main/res/values/dimens.xml', 2, 1],
+    ] },
+  };
+
   const NEW_TASK_CHATS = [
-    { session: 'ses-token-cost' },
-    { session: 'ses-specs-slow', extra: [{ role: 'operator', text: 'can we show the list before the bodies load?' }], reply: LONG_REPLY, shown: 150, queue: [
+    { session: 'ses-token-cost', changes: 'few' },
+    { session: 'ses-specs-slow', changes: 'many', extra: [{ role: 'operator', text: 'can we show the list before the bodies load?' }], reply: LONG_REPLY, shown: 150, queue: [
       { text: 'Once that lands, write the list-first loading up as a short spec under docs/plans.' },
       { text: '[Image #1] This is what the Specs panel shows for the first three seconds.', images: 1 },
       { text: 'Run phase:goal', action: true },
@@ -1425,6 +1462,6 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
     it.subtasks[1].phases = { cards: PEEK.sub2 };
   })();
   window.DATA = { T0, REPOS, AGENTS, AGENT_CHOICES, PHASE_ORDER, GOAL_FINISH, items, history, valRoutes, projects, specs, NOTIFICATIONS, CLAUDE_DIRS, PHASE_GROUPS, MATRIX, BUDGET,
-    REPO_BRANCHES, LONG_BRANCH, CHAT_HISTORY, NEW_TASK_CHATS, NEW_TASK_SELECTED, CHAT_REPLIES, NEW_TASK_STEPS, QUICK_STARTS,
+    REPO_BRANCHES, LONG_BRANCH, CHAT_HISTORY, CHAT_CHANGES, NEW_TASK_CHATS, NEW_TASK_SELECTED, CHAT_REPLIES, NEW_TASK_STEPS, QUICK_STARTS,
     QA, QA_DEVICES, QA_STAGES, QA_LIVE, VAL, VERIFY, USAGE, BUILD, PEEK, MON };
 })();

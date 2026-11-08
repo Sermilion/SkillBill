@@ -356,10 +356,11 @@
   }
 
   /* ---------- Toast (also used for OS notifications) ---------- */
+  /* A toast: lead icon, title, body, optional actions, and × (`close`: { act, arg }) to dismiss it before it times out. */
   function Toast(o) {
     track('Toast');
     const lead = o.system ? BrandMark(18) : (o.state ? StatusIcon(o.state, o.frac) : Icon(o.icon || 'checkCircle'));
-    return `<div class="sb-toast" role="status">${lead}<div class="sb-toast-tx">${o.app ? `<div class="sb-toast-app"><span>${esc(o.app)}</span><span>${esc(o.when || 'now')}</span></div>` : ''}<div class="sb-toast-ti">${esc(o.title)}</div>${o.body ? `<div class="sb-toast-bd">${esc(o.body)}</div>` : ''}</div>${o.actions ? `<div class="sb-toast-ac">${join(o.actions)}</div>` : ''}</div>`;
+    return `<div class="sb-toast" role="status">${lead}<div class="sb-toast-tx">${o.app ? `<div class="sb-toast-app"><span>${esc(o.app)}</span><span>${esc(o.when || 'now')}</span></div>` : ''}<div class="sb-toast-ti">${esc(o.title)}</div>${o.body ? `<div class="sb-toast-bd">${esc(o.body)}</div>` : ''}</div>${o.actions ? `<div class="sb-toast-ac">${join(o.actions)}</div>` : ''}${o.close ? IconButton({ icon: 'x', label: 'Dismiss', act: o.close.act, arg: o.close.arg, size: 'sm', cls: 'sb-toast-x' }) : ''}</div>`;
   }
 
   function ToastStack(items) { track('ToastStack'); return `<div class="sb-toasts">${join(items)}</div>`; }
@@ -873,6 +874,37 @@
       <div class="sb-queue-list" id="queue-list" role="listbox" tabindex="-1" aria-label="Queued messages" data-zone="queue">${join(o.rows)}</div>
       ${o.undo ? `<div class="sb-queue-undo" role="status"><span>${esc(o.undo)}</span><span class="l-grow"></span>${Button({ label: 'Undo', variant: 'ghost', size: 'sm', act: 'q-undo', kbd: '⌘ Z' })}</div>` : ''}
       <div class="sb-queue-ft"><span>Sends in order when the current reply ends</span><span class="l-grow"></span>${Kbd('↑ ↓ Del')}</div></div>`;
+  }
+  /* What this chat changed in its checkout, on the composer's right next to Send: file count and line totals. It opens
+   * ChatChangesPanel. Absent until the chat has changed a file. `o`: { files, ins, del, expanded, act, since }. */
+  function ChatChangesPill(o) {
+    track('ChatChangesPill');
+    const html = `${o.files} ${o.files === 1 ? 'file' : 'files'} <span class="ins">+${o.ins}</span> <span class="del">−${o.del}</span>`;
+    return `<span class="sb-chg-anchor">${ChatPill({ icon: 'diff', html, chevron: 'chevronsUpDown', act: o.act, expanded: o.expanded, id: o.id, tip: `Files this chat changed since ${o.since}` })}</span>`;
+  }
+  const chgDir = (parts) => (parts.length > 3 ? `${parts[0]}/…/${parts.slice(-2).join('/')}` : parts.join('/'));
+  /* One changed file: status letter (A added, M modified, D deleted, R renamed), file name, its folder shortened from the
+   * middle, and its line counts. A click opens the Changes window on that file. */
+  function ChatChangeRow(o) {
+    track('ChatChangeRow');
+    const parts = o.path.split('/');
+    const name = parts.pop();
+    const word = { A: 'Added', M: 'Modified', D: 'Deleted', R: 'Renamed' }[o.status];
+    return `<button type="button" class="sb-chg-row"${act(o.act, o.path)} title="${esc(o.path)}"><span class="st is-${esc(o.status)}" aria-label="${word}">${esc(o.status)}</span><span class="nm"><b>${esc(name)}</b>${parts.length ? `<span class="dir">${esc(chgDir(parts))}</span>` : ''}</span><span class="num tnum">${o.ins ? `<span class="ins">+${o.ins}</span>` : ''}${o.del ? `<span class="del">−${o.del}</span>` : ''}</span></button>`;
+  }
+  /* The popup behind ChatChangesPill: Changes with the count and totals and Open diff, a note on a resumed chat (its
+   * baseline is the first session's, so edits made while it was closed count), at most `limit` files (the rest are one
+   * "N more files" row into the Changes window), then since when, commits and uncommitted edits. */
+  function ChatChangesPanel(o) {
+    track('ChatChangesPanel');
+    const limit = o.limit || 6;
+    const rows = o.files.slice(0, limit).map((f) => ChatChangeRow(Object.assign({ act: o.act }, f)));
+    const more = o.files.length - limit;
+    const made = [o.commits ? `${o.commits} ${o.commits === 1 ? 'commit' : 'commits'}` : '', o.uncommitted ? 'uncommitted edits' : ''].filter(Boolean).join(' and ');
+    return `<div class="sb-chg" aria-label="Changes in this chat"><div class="sb-chg-hd"><b>Changes</b><span class="n">${o.files.length} ${o.files.length === 1 ? 'file' : 'files'}</span><span class="tot tnum"><span class="ins">+${o.ins}</span> <span class="del">−${o.del}</span></span><span class="l-grow"></span>${Button({ label: 'Open diff', icon: 'external', variant: 'ghost', size: 'sm', act: o.act, arg: '' })}</div>
+      ${o.resumed ? `<div class="sb-chg-note">${Icon('history', 'xs')}<span>Counted from when this chat started on ${esc(o.resumed)}. Edits made while it was closed are included.</span></div>` : ''}
+      <div class="sb-chg-list" role="list">${rows.join('')}${more > 0 ? `<button type="button" class="sb-chg-more"${act(o.act, '')}>${more} more ${more === 1 ? 'file' : 'files'} in the diff${Icon('arrowRight', 'xs')}</button>` : ''}</div>
+      <div class="sb-chg-ft"><span>Since ${esc(o.since)}${made ? ` · ${made}` : ''}</span></div></div>`;
   }
   /* One saved chat in the resume palette: title with screenshot and CLI glyphs and the filter match in amber, age, then branch
    * and agent. Click selects it, a double click resumes it. */
@@ -1702,7 +1734,7 @@
     PaneSection, Breakdown, ActivityFeed, TreeRow, SettingsHeader, SettingsGroup, SettingRow, TierBadge,
     ConfigRow, TrayPopover,
     ChatStatusMark, ChatTabs, SuggestionChip, ChatMessage, ChatTranscript, ChatPill, Composer, StepLine, NewTaskHome,
-    InboxList, InboxRow, FilterBar, TargetPicker, QueuedRow, QueuePanel, ResumeRow, ResumePalette,
+    InboxList, InboxRow, FilterBar, TargetPicker, QueuedRow, QueuePanel, ChatChangesPill, ChatChangeRow, ChatChangesPanel, ResumeRow, ResumePalette,
     QaVerdict, QaChip, QaItem, QaFold, QaResults, QaLive, QaPreview, QaStageList, QaShots, QaRounds, ReportText, DeviceSwitcher, DeviceOption, DevicePanel,
     SegmentBar, CheckTally, RunOutcome, CheckRow, StepTimeline, WorkSummary, SelectAll, SelectionBar,
     ValidationDoc, FlagStrip, Tag, LinkButton, BoxNote, ReportPart, BranchRun,

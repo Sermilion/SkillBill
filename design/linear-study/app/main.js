@@ -61,6 +61,8 @@
     return ['components', 'foundations', 'states'].includes(h) ? h : 'prototype';
   }
   /* #new-task opens the New task view; #new-task/queue, #new-task/picker and #new-task/resume also open that popup.
+   * #new-task/changes/<variant> selects a chat with changes and opens its changes popup (none, few, many, resumed);
+   * #new-task/state/changes shows the same chat as few with the popup closed.
    * #detail/<id> opens a work item's detail (#detail/ph-sb-qa for QA results, #detail/ph-sb-plan for a plan run).
    * #build/<state>/<type> opens SKILL-417 with its build in one of the build indicator scenarios (state: running, slow,
    * passed, failed, first, idle; type: android, kotlin, ts, go, rust, ios, none).
@@ -69,7 +71,7 @@
    * in it (#specs/SKILL-438, #specs/done/SKILL-446, #specs/SKILL-442/spec.md) and #specs/project/<id> picks a project. */
   function routeFromHash() {
     const [page, open, ...rest] = (location.hash || '').replace('#', '').split('/');
-    if (page === 'new-task') return { view: 'newtask', open: open === 'state' ? rest[0] === 'closing' ? 'closing' : null : open || null, scenario: open === 'state' ? rest[0] : null, variant: open === 'picker' || open === 'resume' ? rest[0] || null : null };
+    if (page === 'new-task') return { view: 'newtask', open: open === 'state' ? rest[0] === 'closing' ? 'closing' : null : open || null, scenario: open === 'state' ? rest[0] : null, variant: open === 'picker' || open === 'resume' || open === 'changes' ? rest[0] || null : null };
     if (page === 'detail' && open) return { view: 'detail', id: decodeURIComponent(open), open: null, inspector: rest[0], resultTab: rest[1] };
     if (page === 'build') return { view: 'detail', id: D.BUILD.focus, open: null, build: { state: open || D.BUILD.live.state, type: rest[0] || D.BUILD.live.type } };
     if (page === 'qa-device') return { view: 'work', open: 'devices', devices: open && open in D.QA_DEVICES.lists ? open : null };
@@ -82,7 +84,7 @@
     if (r.usageScenario) { st.usage.scenario = r.usageScenario; st.sideOpen = true; }
     if (r.view === 'newtask') {
       st.ntVariant = r.variant;
-      if (r.scenario || r.variant) st.nt = seedNewTaskScenario(r.scenario || 'fresh');
+      if (r.scenario || r.variant) st.nt = seedNewTaskScenario(r.open === 'changes' ? 'changes-' + (r.variant || 'few') : r.scenario || 'fresh');
       if (r.open === 'picker' && r.variant) {
         const c = X.ntChat(st), pk = st.nt.pk;
         if (r.variant === 'firstRun') c.repo = null;
@@ -134,7 +136,7 @@
       const queued = Math.max(0, st.nt.chats.findIndex((c) => c.queue.length));
       const chats = st.nt.chats.map((c, i) => as({ view: 'newtask', termOpen: false, nt: Object.assign({}, st.nt, { active: i }) }, () => X.app(st))).join('');
       return chats + as({ view: 'newtask', nt: Object.assign({}, st.nt, { active: queued }) }, () =>
-        ['target', 'queue', 'chats', 'nt-agent'].map((t) => S.Popover({ x: 0, y: 0, flush: t === 'target' || t === 'queue', body: popoverBody({ type: t }) })).join('')
+        ['target', 'queue', 'changes', 'chats', 'nt-agent'].map((t) => S.Popover({ x: 0, y: 0, flush: t === 'target' || t === 'queue' || t === 'changes', body: popoverBody({ type: t }) })).join('')
         + dialogBody({ type: 'chat-close', arg: st.nt.chats[queued].id })
         + as({ dialog: { type: 'resume', q: '', active: 0, showAll: false } }, () => dialogBody(st.dialog)));
     });
@@ -250,6 +252,8 @@
     if (!pop || !st.popover) return;
     const r = pop.getBoundingClientRect();
     let x = st.popover.x, y = st.popover.y;
+    /* `right` lines the popup's right edge up with the anchor's (the changes popup over the composer's right side). */
+    if (st.popover.right != null) x = Math.max(8, st.popover.right - r.width);
     if (x + r.width > innerWidth - 8) x = Math.max(8, innerWidth - r.width - 8);
     /* `above` opens over the anchor, as the composer's popups do. With `gap` the popup keeps exactly that space above the
      * anchor: it is measured by layout height, which the opening animation's scale does not shrink (the QA device popup). */
@@ -285,7 +289,7 @@
   function fillTokenValues() {
     root.querySelectorAll('[data-token]').forEach((el) => { el.textContent = getComputedStyle(document.documentElement).getPropertyValue(el.dataset.token).trim(); });
   }
-  function renderToasts() { toastRoot.innerHTML = st.toasts.length ? S.ToastStack(st.toasts.map((t) => S.Toast(t))) : ''; }
+  function renderToasts() { toastRoot.innerHTML = st.toasts.length ? S.ToastStack(st.toasts.map((t) => S.Toast(Object.assign({ close: { act: 'toast-close', arg: t.id } }, t)))) : ''; }
   function toast(t) {
     const id = Math.random().toString(36).slice(2);
     st.toasts = st.toasts.concat([Object.assign({ id }, t)]).slice(-3);
@@ -385,6 +389,7 @@
     if (p.type === 'project') return S.Menu({ items: [{ head: 'Choose project' }, ...D.projects.map((pr) => ({ lead: S.RepoIcon(X.repoOf(pr.name)), label: pr.name, act: 'project-pick', arg: pr.id, checked: st.specProject === pr.id }))] });
     if (p.type === 'target') return X.targetPicker(st);
     if (p.type === 'queue') return X.queuePanel(st);
+    if (p.type === 'changes') return X.changesPanel(st);
     if (p.type === 'chats') return X.chatMenu(st);
     if (p.type === 'chat-tab') return X.chatTabMenu(st, p.arg);
     if (p.type === 'devices') return X.devicePanel(st);
@@ -506,7 +511,7 @@
       id: chatSeq++, session: x ? x.sessionId : null, title: x ? x.title : '', agent: x ? x.agent : 'claude',
       repo: x ? x.newTask.repositoryRoot : 'skill-bill', branch: x ? x.newTask.baseBranch : null,
       lines: x ? x.lines.map((l, i) => Object.assign({}, l, i === 0 && x.images.length ? { images: x.images } : {})) : [],
-      stream: null, unread: false, draft: '', queue: [],
+      stream: null, unread: false, draft: '', queue: [], changes: null,
     }, o || {});
   }
   function seedNewTask() {
@@ -517,6 +522,7 @@
       if (o.extra) c.lines.push(...o.extra.map((l) => Object.assign({}, l)));
       if (o.queue) c.queue = o.queue.map((m) => Object.assign({ id: queueSeq++ }, m));
       if (o.reply) c.stream = { full: o.reply, shown: o.shown || 0 };
+      if (o.changes) c.changes = D.CHAT_CHANGES[o.changes];
       return c;
     });
     return {
@@ -543,6 +549,21 @@
       nt.chats[n - 2].unread = true;
       nt.chats[n - 3].stream = { full: D.CHAT_REPLIES[0], shown: 40 };
     }
+    /* Chat changes: the token cost chat with no changes yet or a few, the specs chat after a long turn, and the offline banner
+     * chat resumed two days after it started. */
+    if (scenario === 'changes' || scenario.startsWith('changes-')) {
+      const v = scenario.slice(8) || 'few';
+      nt.chats = samples.map(stopped);
+      const pick = (session) => nt.chats.findIndex((chat) => chat.session === session);
+      if (v === 'none' || v === 'few') { nt.active = pick('ses-token-cost'); nt.chats[nt.active].changes = v === 'few' ? D.CHAT_CHANGES.few : null; }
+      if (v === 'many') { nt.active = pick('ses-specs-slow'); nt.chats[nt.active].lines.push({ role: 'agent', text: 'Done. The panel lists specs from the directory read first and fills in titles as each spec.md parses. Two commits so far; the tests for the batch reader are still uncommitted.' }); }
+      if (v === 'resumed') {
+        nt.active = pick('ses-offline-banner');
+        const chat = nt.chats[nt.active];
+        chat.unread = false; chat.changes = D.CHAT_CHANGES.resumed;
+        chat.lines.push({ role: 'notice', text: 'Resumed. Started Nov 6.' }, { role: 'operator', text: 'add a test that the banner sits under the app bar' }, { role: 'agent', text: 'Added OfflineBannerPlacementTest. It checks the banner bounds start at the app bar bottom on phone and tablet widths.' });
+      }
+    }
     if (scenario === 'closing') { nt.chats = samples; nt.active = samples.indexOf(replying); }
     if (scenario === 'few') { nt.chats = [empty()]; nt.active = 0; nt.saved = nt.saved.filter((chat) => chat.newTask.repositoryRoot === 'skill-bill').slice(0, 3); nt.few = true; }
     if (['pending', 'firstRun', 'noAgent', 'noRepo', 'detectionFailed'].includes(scenario)) {
@@ -557,6 +578,7 @@
   const pickerInput = () => ({ repos: st.nt.repos, chat: ntCur(), pk: st.nt.pk });
   const resumeInput = () => ({ repo: ntCur().repo, saved: st.nt.saved, q: st.dialog.q, active: st.dialog.active, showAll: st.dialog.showAll });
   const focusComposer = () => { st.focusNext = 'composer-' + ntCur().id; };
+  const refocusChanges = () => { st.focusNext = 'nt-changes'; };
   function selectChat(id) {
     const i = st.nt.chats.findIndex((c) => c.id === +id);
     if (i < 0) return;
@@ -694,6 +716,7 @@
       if (key === 'Enter') { e.preventDefault(); choosePick(list, st.nt.pk.active[list]); return true; }
       return false;
     }
+    if (p && p.type === 'changes' && key === 'Escape') { e.preventDefault(); st.popover = null; refocusChanges(); render(); return true; }
     if (p && p.type === 'queue') {
       const c = ntCur(), q = st.nt.q;
       if (key === 'Escape') { e.preventDefault(); closeQueuePop(); focusComposer(); render(); return true; }
@@ -726,6 +749,7 @@
   /* Opens the popup a #new-task/… route names. */
   function openRoute(open) {
     if (open === 'queue') { const i = st.nt.chats.findIndex((c) => c.queue.length); if (i >= 0) { st.nt.active = i; render(); A['q-toggle'](null, document.getElementById('nt-queue')); } }
+    else if (open === 'changes') { if (document.getElementById('nt-changes')) A['chg-toggle'](null, document.getElementById('nt-changes')); }
     else if (open === 'picker') { const i = st.nt.chats.findIndex((c) => X.chatEmpty(c)); if (i >= 0) { st.nt.active = i; render(); A['pk-toggle'](null, document.getElementById('nt-target')); } }
     else if (open === 'resume') {
       A['resume-palette']();
@@ -1300,6 +1324,21 @@
     'pk-pick'(arg) { const [list, i] = arg.split('|'); choosePick(list, +i); },
     'pk-add'() { addRepository(); },
     'pk-retry'() { st.nt.pk.branchState = 'ok'; if (st.popover) st.popover.focus = 'pk-filter-branch'; st.focusNext = 'pk-filter-branch'; render(); },
+
+    'toast-close'(id) { st.toasts = st.toasts.filter((t) => t.id !== id); renderToasts(); },
+
+    /* chat changes: the pill opens the file list; Open diff, a file or "N more files" opens the Changes window */
+    'chg-toggle'(a, el) {
+      if (st.popover && st.popover.type === 'changes') { st.popover = null; return render(); }
+      const anchor = el || document.getElementById('nt-changes');
+      st.popover = Object.assign({ type: 'changes', above: true, flush: true, role: 'dialog', right: anchor.getBoundingClientRect().right }, anchorPos(anchor));
+      render();
+    },
+    'chg-open'(path) {
+      const chg = X.chatChanges(ntCur());
+      st.popover = null; refocusChanges(); render();
+      toast({ icon: 'diff', title: 'Opened the Changes window', body: path ? path : `This chat's changes since ${chg ? chg.since : 'it started'}` });
+    },
 
     /* queued messages */
     'q-toggle'(a, el) {

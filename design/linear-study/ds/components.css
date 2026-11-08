@@ -279,6 +279,7 @@ input { font: inherit; color: inherit; }
 .sb-toast-ti { font: 500 var(--t-base)/1.35 var(--font-sans); color: var(--fg); }
 .sb-toast-bd { font-size: var(--t-sm); color: var(--fg-muted); line-height: 1.4; }
 .sb-toast-ac { display: flex; gap: 4px; align-items: center; }
+.sb-toast-x { flex: none; margin: -4px -6px 0 0; }
 
 /* Callout */
 .sb-callout {
@@ -955,6 +956,33 @@ button.sb-cpill[disabled] { opacity: 0.55; cursor: default; pointer-events: none
 .sb-qrow.kb > .sb-ibtn, .sb-qrow > .sb-ibtn:focus-visible { opacity: 1; }
 .sb-queue-undo { flex: none; display: flex; align-items: center; gap: var(--sp-2); padding: 4px 6px 4px var(--sp-3); border-top: 1px solid var(--border-subtle); color: var(--fg-muted); font-size: var(--t-xs); }
 .sb-queue-ft { flex: none; display: flex; align-items: center; gap: var(--sp-2); min-height: 30px; padding: 0 var(--sp-3); border-top: 1px solid var(--border-subtle); color: var(--fg-faint); font-size: var(--t-xs); }
+
+/* Chat changes: the composer pill with this chat's file count and line totals, and the popup listing the files */
+.sb-chg-anchor { flex: none; display: inline-flex; }
+.sb-chg-anchor > .sb-cpill { max-width: none; }
+.sb-chg-anchor .sb-cpill .ins, .sb-chg .ins { color: var(--st-done); }
+.sb-chg-anchor .sb-cpill .del, .sb-chg .del { color: var(--st-failed); }
+.sb-chg { width: min(440px, calc(100vw - 32px)); display: flex; flex-direction: column; font-size: var(--t-sm); }
+.sb-chg-hd { flex: none; display: flex; align-items: center; gap: var(--sp-2); height: 36px; padding: 0 6px 0 var(--sp-3); border-bottom: 1px solid var(--border-subtle); }
+.sb-chg-hd > b { font-weight: 500; color: var(--fg); }
+.sb-chg-hd > .n { font-size: var(--t-xs); color: var(--fg-faint); }
+.sb-chg-hd > .tot { font: 400 var(--t-xs)/1 var(--font-mono); }
+.sb-chg-note { flex: none; display: flex; align-items: flex-start; gap: var(--sp-2); padding: 7px var(--sp-3); border-bottom: 1px solid var(--border-subtle); background: var(--bg-hover); color: var(--fg-muted); font-size: var(--t-xs); line-height: 1.45; }
+.sb-chg-note > .sb-icon { margin-top: 2px; color: var(--fg-faint); }
+.sb-chg-list { display: flex; flex-direction: column; padding: var(--sp-1); }
+.sb-chg-row { height: 30px; display: flex; align-items: center; gap: var(--sp-2); width: 100%; padding: 0 var(--sp-2); border: 0; border-radius: var(--r-sm); background: transparent; color: var(--fg-2); text-align: left; cursor: pointer; }
+.sb-chg-row:hover, .sb-chg-row:focus-visible { background: var(--bg-active); color: var(--fg); outline: none; }
+.sb-chg-row > .st { flex: none; width: 14px; font: 500 var(--t-2xs)/1 var(--font-mono); text-align: center; color: var(--fg-muted); }
+.sb-chg-row > .st.is-A { color: var(--st-done); }
+.sb-chg-row > .st.is-D { color: var(--st-failed); }
+.sb-chg-row > .st.is-R { color: var(--st-planning); }
+.sb-chg-row > .nm { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--sp-2); overflow: hidden; white-space: nowrap; }
+.sb-chg-row > .nm > b { flex: 0 0 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font: 400 var(--t-sm) var(--font-mono); color: inherit; }
+.sb-chg-row > .nm > .dir { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--fg-faint); font-size: var(--t-xs); }
+.sb-chg-row > .num { flex: none; display: flex; gap: 6px; font: 400 var(--t-xs)/1 var(--font-mono); }
+.sb-chg-more { height: 30px; display: flex; align-items: center; gap: 6px; width: 100%; padding: 0 var(--sp-2) 0 30px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--fg-muted); font-size: var(--t-sm); text-align: left; cursor: pointer; }
+.sb-chg-more:hover, .sb-chg-more:focus-visible { background: var(--bg-active); color: var(--fg); outline: none; }
+.sb-chg-ft { flex: none; display: flex; align-items: center; gap: var(--sp-2); min-height: 30px; padding: 0 var(--sp-3); border-top: 1px solid var(--border-subtle); color: var(--fg-faint); font-size: var(--t-xs); }
 
 /* Resume palette and resume row: /resume, list on the left, the selected chat's latest messages on the right */
 .sb-resume { width: min(860px, calc(100vw - 48px)); height: min(520px, 76vh); display: flex; flex-direction: column; overflow: hidden; background: var(--bg-overlay); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-modal); animation: sb-pop-in var(--dur) var(--ease); }

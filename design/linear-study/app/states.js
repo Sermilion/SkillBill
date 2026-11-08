@@ -212,6 +212,8 @@
       ['New task', 'Nine open chats', 'new-task/state/many'], ['New task', 'Twenty chats with overflow', 'new-task/state/lots'],
       ['New task', 'Confirm closing a replying chat', 'new-task/state/closing'], ['New task', 'Few recent chats', 'new-task/state/few'],
       ['New task', 'Queued messages', 'new-task/queue'],
+      ['Chat changes', 'Chat with changes', 'new-task/state/changes'],
+      ...['none', 'few', 'many', 'resumed'].map((id) => ['Chat changes', { none: 'No changes yet', few: 'Three files', many: 'Seventeen files', resumed: 'Resumed chat' }[id], `new-task/changes/${id}`]),
       ...['pending', 'firstRun', 'noAgent', 'noRepo', 'detectionFailed'].map((id) => ['New task', { pending: 'Board read pending', firstRun: 'First run, ready', noAgent: 'No agent detected', noRepo: 'Choose a repository', detectionFailed: 'Agent detection failed' }[id], `new-task/state/${id}`]),
       ...['default', 'longBranch', 'firstRun', 'manyRepos', 'noMatch', 'loading', 'branchError', 'badFolder'].map((id) => ['Repository picker', { default: 'Default', longBranch: 'Long branch name', firstRun: 'No repository', manyRepos: 'Many repositories', noMatch: 'No matching branch', loading: 'Reading branches', branchError: 'Branch read failed', badFolder: 'Folder is not a repository' }[id], `new-task/picker/${id}`]),
       ...['default', 'cli', 'noMatch', 'empty', 'many'].map((id) => ['Resume chat', { default: 'Saved chats', cli: 'Agent CLI session', noMatch: 'No matching chat', empty: 'No saved chats', many: 'More than 30 chats' }[id], `new-task/resume/${id}`]),

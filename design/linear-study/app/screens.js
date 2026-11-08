@@ -2172,6 +2172,7 @@
       ? S.ChatPill({ icon: 'folder', html: c.repo ? repoAndBranch(c.repo, baseBranch(c)) : 'Choose repository', need: !c.repo, chevron: 'chevronDown', act: 'pk-toggle', expanded: pop.type === 'target', id: 'nt-target', tip: 'Change repository or base branch' })
       : S.ChatPill({ icon: 'folder', html: repoAndBranch(c.repo, baseBranch(c)), tip: `${c.repo} / ${baseBranch(c)}` });
     const model = agentModel(c.agent);
+    const chg = chatChanges(c);
     const agentPill = S.ChatPill({ lead: agentDot(c.agent), text: model ? `${c.agent} · ${model}` : c.agent, chevron: 'chevronDown', act: 'nt-agent-menu', expanded: pop.type === 'nt-agent', disabled: !!c.stream, tip: c.stream ? 'Wait for the current reply to finish' : 'Change agent' });
     return S.Composer({
       id: 'composer-' + c.id, chatId: c.id, value: c.draft, label: `Message for ${chatLabel(c)}`,
@@ -2180,7 +2181,7 @@
       hint: qaDeviceName(st) ? 'QA runs use the device picked in the sidebar.' : null,
       queue: n ? S.ChatPill({ sans: true, text: `${n} ${n === 1 ? 'message' : 'messages'} queued`, chevron: 'chevronsUpDown', act: 'q-toggle', expanded: pop.type === 'queue', id: 'nt-queue' }) : '',
       pills: [repoPill, agentPill],
-      actions: [c.stream ? S.Button({ label: 'Stop', size: 'sm', act: 'chat-stop', tip: 'Stop the reply. Queued messages return to the draft.' }) : '', ntSendButton(c)],
+      actions: [chg ? S.ChatChangesPill(Object.assign({ act: 'chg-toggle', expanded: pop.type === 'changes', id: 'nt-changes' }, chg)) : '', c.stream ? S.Button({ label: 'Stop', size: 'sm', act: 'chat-stop', tip: 'Stop the reply. Queued messages return to the draft.' }) : '', ntSendButton(c)],
     });
   }
   function newTask(st) {
@@ -2255,6 +2256,17 @@
     const filter = st.nt.chats.length > 8 ? S.FilterBar({ id: 'chat-menu-q', value: st.nt.menuQ, placeholder: `Filter ${st.nt.chats.length} open chats`, input: 'chat-menu-q' }) : '';
     return filter + S.Menu({ items: list.length ? list.map((c) => ({ lead: S.ChatStatusMark(chatStatus(c)), label: chatLabel(c), end: esc(c.repo || ''), checked: c === ntChat(st), act: 'chat-select', arg: c.id })) : [{ head: 'No open chat matches.' }] });
   }
+  /* The chat's changes against its baseline with line totals, or null before it changed a file (no pill then). */
+  function chatChanges(c) {
+    const x = c && c.changes;
+    if (!x || !x.files.length) return null;
+    const files = x.files.map(([status, path, ins, del]) => ({ status, path, ins, del }));
+    return Object.assign({}, x, { list: files, files: files.length, ins: files.reduce((n, f) => n + f.ins, 0), del: files.reduce((n, f) => n + f.del, 0) });
+  }
+  function changesPanel(st) {
+    const chg = chatChanges(ntChat(st));
+    return chg ? S.ChatChangesPanel(Object.assign({}, chg, { files: chg.list, act: 'chg-open' })) : '';
+  }
   function queuePanel(st) {
     const c = ntChat(st), q = st.nt.q;
     return S.QueuePanel({ count: c.queue.length, clearArmed: q.clearArmed, undo: q.undo && q.undo.chat === c.id ? q.undo.text : null, rows: c.queue.map((m, i) => S.QueuedRow({ index: i, text: m.text, next: i === 0, images: m.images, action: m.action, kb: i === q.kb, act: 'q-remove', arg: m.id })) });
@@ -2310,7 +2322,7 @@
   window.Screens = {
     buildOf, app, work, detail, history, settingsPage, specsPane, terminal, tierOf, lookup, itemBy, subKeys, selectedSub, paneShown,
     statusIcon, stepText, clock, rowKey, repoOf, agentOf, LIFE, SECTIONS, resumable, controllable, pauseEligible, recoveryOffered,
-    newTask, ntChat, chatLabel, chatStatus, chatEmpty, ntSendButton, pickerItems, targetPicker, targetPickerView, chatMenu, chatTabMenu, queuePanel,
+    newTask, ntChat, chatLabel, chatStatus, chatEmpty, ntSendButton, pickerItems, targetPicker, targetPickerView, chatMenu, chatTabMenu, queuePanel, chatChanges, changesPanel,
     resumeListing, resumePalette, resumePaletteView,
     qaView, qaResults, qaLiveBlock, peekCard, finishResults, devicePanel, usageData,
     isPlanRun, planStrip, planNow, planTeaser, planActivity, planBundle, planTranscript, planBriefing, PLAN_STAGES,
