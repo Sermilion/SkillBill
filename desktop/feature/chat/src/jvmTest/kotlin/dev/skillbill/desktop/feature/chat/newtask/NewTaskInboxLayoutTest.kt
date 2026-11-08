@@ -116,6 +116,27 @@ class NewTaskInboxLayoutTest {
     assertTrue(lastRow.bottom <= cardBounds.bottom)
   }
 
+  // Reversed precedence would hide every summary behind the first operator line, and losing the suffix hides the screenshot.
+  @Test
+  fun `a recent chat with a summary shows it beside the image name and one without shows its title`() = runSkikoComposeUiTest(
+    size = Size(800f, 700f),
+    density = Density(1.5f),
+  ) {
+    val summarized = chat("/tmp/shot.png fix the uploader", "/work/app").copy(summary = "Adds retry to the upload worker")
+    val plain = chat("Add CSV export to the history screen", "/work/app")
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        RecentChatsSection(listOf(summarized, plain), "/work/app", emptySet(), { now }, {}, {}, {})
+      }
+    }
+    waitForIdle()
+
+    onNodeWithText("Adds retry to the upload worker").assertExists()
+    onNodeWithText("shot.png", useUnmergedTree = true).assertExists()
+    onNodeWithText(chatTitle(summarized.title).title).assertDoesNotExist()
+    onNodeWithText(chatTitle(plain.title).title).assertExists()
+  }
+
   private fun SemanticsNodeInteraction.saveCapture(name: String) {
     val directory = System.getenv("SKILL512_EVIDENCE_DIR")?.let(::File) ?: return
     directory.mkdirs()

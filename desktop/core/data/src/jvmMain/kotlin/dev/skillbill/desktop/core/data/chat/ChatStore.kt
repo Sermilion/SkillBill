@@ -12,12 +12,15 @@ import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
+import dev.skillbill.desktop.core.domain.model.OperationCardReference
+import dev.skillbill.desktop.core.domain.model.OperationCardState
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import me.tatarka.inject.annotations.Inject
@@ -52,6 +55,8 @@ private object ChatStoreKeys {
   const val ROLE = "role"
   const val TEXT = "text"
   const val AGENT_SESSION = "agent_session"
+  const val CURSOR_PROFILE_IDENTITY = "cursor_profile_identity"
+  const val CURSOR_WORKING_DIRECTORY = "cursor_working_directory"
   const val EXCHANGES = "exchanges"
   const val OPERATOR = "operator"
   const val AGENT = "agent"
@@ -69,6 +74,16 @@ private object ChatStoreKeys {
   const val TITLE = "title"
   const val TARGET = "target"
   const val BRANCH = "branch"
+  const val APPROVAL = "approval"
+  const val OPERATION_CARD = "operation_card"
+  const val TOKEN = "token"
+  const val LAUNCH_ID = "launch_id"
+  const val OPERATION_ID = "operation_id"
+  const val STATE = "state"
+  const val DRAFT_CHOICES = "draft_choices"
+  const val REFUSAL = "refusal"
+  const val SUMMARY = "summary"
+  const val SUMMARY_SOURCE_UPDATED_AT = "summary_source_updated_at_ms"
 }
 
 /** What one session file holds; the workspace writes the conversation fields and the transports write the resume fields. */
@@ -79,8 +94,12 @@ private data class StoredChat(
   val updatedAt: Instant? = null,
   val lines: List<ChatHistoryLine> = emptyList(),
   val agentSession: String? = null,
+  val cursorProfileIdentity: String? = null,
+  val cursorWorkingDirectory: String? = null,
   val exchanges: List<ChatExchange> = emptyList(),
   val newTask: ChatNewTaskContext? = null,
+  val summary: String? = null,
+  val summarySourceUpdatedAt: Instant? = null,
 )
 
 /**
@@ -95,7 +114,23 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
 
   internal fun agentSession(sessionId: String): String? = read(sessionId)?.agentSession
 
-  internal fun saveAgentSession(sessionId: String, agentSession: String) = update(sessionId) { it.copy(agentSession = agentSession) }
+  internal fun saveAgentSession(sessionId: String, agentSession: String) =
+    update(sessionId) { stored, _ -> stored.copy(agentSession = agentSession) }
+
+  internal fun cursorSessionBinding(sessionId: String): CursorSessionBinding? = read(sessionId)?.let { chat ->
+    val profile = chat.cursorProfileIdentity ?: return@let null
+    val workingDirectory = chat.cursorWorkingDirectory ?: return@let null
+    CursorSessionBinding(profile, workingDirectory)
+  }
+
+  internal fun saveCursorSession(sessionId: String, agentSession: String, binding: CursorSessionBinding) =
+    update(sessionId) { stored, _ ->
+      stored.copy(
+        agentSession = agentSession,
+        cursorProfileIdentity = binding.profileIdentity,
+        cursorWorkingDirectory = binding.workingDirectory,
+      )
+    }
 
   internal fun exchanges(sessionId: String): List<ChatExchange> = read(sessionId)?.let { chat ->
     if (chat.newTask != null) chat.lines.toExchanges() else chat.exchanges
@@ -106,11 +141,18 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
     chat.lines.take(context.pendingTurnLineIndex ?: chat.lines.size).toExchanges()
   }.orEmpty()
 
-  internal fun saveExchanges(sessionId: String, exchanges: List<ChatExchange>) = update(sessionId) { it.copy(exchanges = exchanges) }
+  internal fun saveExchanges(sessionId: String, exchanges: List<ChatExchange>) =
+    update(sessionId) { stored, _ -> stored.copy(exchanges = exchanges) }
 
   internal fun saveChat(entry: ChatHistoryEntry): Boolean {
-    val saved = update(entry.sessionId) {
-      it.copy(executionId = entry.executionId, agent = entry.agent, updatedAt = entry.updatedAt, lines = entry.lines, newTask = entry.newTask)
+    val saved = update(entry.sessionId) { stored, exists ->
+      stored.copy(
+        executionId = entry.executionId,
+        agent = entry.agent,
+        updatedAt = if (exists && stored.lines == entry.lines) stored.updatedAt else entry.updatedAt,
+        lines = entry.lines,
+        newTask = entry.newTask,
+      )
     }
     val executionId = entry.executionId ?: return saved
     synchronized(lock) {
@@ -140,6 +182,26 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
       ?: allFiles().mapNotNull(::readFile).firstOrNull { it.agentSession == sessionId }?.toEntry()
   }
 
+  /** Writes [summary] onto an existing record only, keeping `updated_at`, so a chat deleted during the call stays deleted. */
+  internal fun saveSummary(sessionId: String, summary: String, sourceUpdatedAt: Instant): Boolean = synchronized(lock) {
+    val file = fileFor(sessionId) ?: return@synchronized false
+    val stored = readFile(file) ?: return@synchronized false
+    write(file, stored.copy(summary = summary, summarySourceUpdatedAt = sourceUpdatedAt))
+  }
+
+  /** The chat of [sessionId], found as [savedFor] finds it, when its summary is missing or older than its last save. */
+  internal fun staleForSummary(sessionId: String): ChatHistoryEntry? = synchronized(lock) {
+    val stored = fileFor(sessionId)?.let(::readFile)?.takeIf { it.toEntry() != null }
+      ?: allFiles().mapNotNull(::readFile).firstOrNull { it.agentSession == sessionId }
+    stored?.takeIf { it.needsSummary() }?.toEntry()
+  }
+
+  /** Every chat that needs a summary, newest first, at most [limit]. */
+  internal fun staleSummaries(limit: Int): List<ChatHistoryEntry> = synchronized(lock) {
+    allFiles().mapNotNull(::readFile).filter { it.needsSummary() }
+      .sortedByDescending { it.updatedAt ?: Instant.DISTANT_PAST }.take(limit).mapNotNull(StoredChat::toEntry)
+  }
+
   private fun chatsOf(executionId: String): List<StoredChat> =
     allFiles().mapNotNull(::readFile).filter { it.executionId == executionId }.sortedByDescending { it.updatedAt ?: Instant.DISTANT_PAST }
 
@@ -154,13 +216,17 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
 
   private fun read(sessionId: String): StoredChat? = synchronized(lock) { fileFor(sessionId)?.let(::readFile) }
 
-  private fun update(sessionId: String, change: (StoredChat) -> StoredChat): Boolean = synchronized(lock) {
+  private fun update(sessionId: String, change: (StoredChat, Boolean) -> StoredChat): Boolean = synchronized(lock) {
     val file = fileFor(sessionId) ?: return@synchronized false
-    val updated = change(readFile(file) ?: StoredChat(sessionId))
+    val existing = readFile(file)
+    write(file, change(existing ?: StoredChat(sessionId), existing != null))
+  }
+
+  private fun write(file: File, stored: StoredChat): Boolean {
     val temporary = File(directory, "${file.name}.tmp")
-    try {
+    return try {
       directory.mkdirs()
-      temporary.writeText(encode(updated).toString(), Charsets.UTF_8)
+      temporary.writeText(encode(stored).toString(), Charsets.UTF_8)
       Files.move(temporary.toPath(), file.toPath(), REPLACE_EXISTING)
       true
     } catch (_: IOException) {
@@ -195,8 +261,12 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
 
 private fun StoredChat.toEntry(): ChatHistoryEntry? {
   val operator = lines.firstOrNull { it.role == ChatHistoryRole.Operator } ?: return null
-  return ChatHistoryEntry(sessionId, executionId, agent ?: return null, updatedAt ?: Instant.DISTANT_PAST, operator.text, lines, newTask)
+  return ChatHistoryEntry(sessionId, executionId, agent ?: return null, updatedAt ?: Instant.DISTANT_PAST, operator.text, lines, newTask, summary)
 }
+
+/** Staleness rule: a listable chat whose summary source differs from its `updated_at`. */
+private fun StoredChat.needsSummary(): Boolean =
+  toEntry() != null && summarySourceUpdatedAt?.toEpochMilliseconds() != updatedAt?.toEpochMilliseconds()
 
 private fun List<ChatHistoryLine>.toExchanges(): List<ChatExchange> = buildList {
   var index = 0
@@ -214,7 +284,8 @@ private fun List<ChatHistoryLine>.toExchanges(): List<ChatExchange> = buildList 
         when (line.role) {
           ChatHistoryRole.Operator -> ChatExchange(line.text, "")
           ChatHistoryRole.Agent -> ChatExchange("", line.text)
-          ChatHistoryRole.Notice, ChatHistoryRole.Error -> error("Non-conversation line reached exchange conversion")
+          ChatHistoryRole.Notice, ChatHistoryRole.Error, ChatHistoryRole.Approval, ChatHistoryRole.OperationCard ->
+            error("Non-conversation line reached exchange conversion")
         },
       )
       index++
@@ -242,17 +313,23 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
           line.failure?.let { put(ChatStoreKeys.FAILURE, it.name) }
           if (line.actions.isNotEmpty()) put(ChatStoreKeys.ACTIONS, buildJsonArray { line.actions.forEach { add(it.toJson()) } })
           line.selectedAction?.let { put(ChatStoreKeys.SELECTED_ACTION, it.toJson()) }
+          line.approval?.let { put(ChatStoreKeys.APPROVAL, it.toJson()) }
+          line.operationCard?.let { put(ChatStoreKeys.OPERATION_CARD, it.toJson()) }
         })
       }
     },
   )
   chat.agentSession?.let { put(ChatStoreKeys.AGENT_SESSION, it) }
+  chat.cursorProfileIdentity?.let { put(ChatStoreKeys.CURSOR_PROFILE_IDENTITY, it) }
+  chat.cursorWorkingDirectory?.let { put(ChatStoreKeys.CURSOR_WORKING_DIRECTORY, it) }
   chat.newTask?.let { newTask ->
     put(ChatStoreKeys.NEW_TASK_ROOT, newTask.repositoryRoot)
     newTask.baseBranch?.let { put(ChatStoreKeys.NEW_TASK_BASE_BRANCH, it) }
     put(ChatStoreKeys.NEW_TASK_SESSION_ESTABLISHED, newTask.sessionEstablished)
     newTask.pendingTurnLineIndex?.let { put(ChatStoreKeys.NEW_TASK_PENDING_TURN_LINE_INDEX, it) }
   }
+  chat.summary?.let { put(ChatStoreKeys.SUMMARY, it) }
+  chat.summarySourceUpdatedAt?.let { put(ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT, it.toEpochMilliseconds()) }
   put(
     ChatStoreKeys.EXCHANGES,
     buildJsonArray {
@@ -282,10 +359,14 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
           ChatFailure.entries.firstOrNull { it.name == line.string(ChatStoreKeys.FAILURE) },
           line.actions(ChatStoreKeys.ACTIONS, diagnostics),
           line.selectedAction(diagnostics),
+          (line[ChatStoreKeys.APPROVAL] as? JsonObject)?.toApprovalCard(diagnostics),
+          (line[ChatStoreKeys.OPERATION_CARD] as? JsonObject)?.toOperationCardReference(),
         )
       }
     },
     agentSession = root.string(ChatStoreKeys.AGENT_SESSION),
+    cursorProfileIdentity = root.string(ChatStoreKeys.CURSOR_PROFILE_IDENTITY),
+    cursorWorkingDirectory = root.string(ChatStoreKeys.CURSOR_WORKING_DIRECTORY),
     exchanges = root.objects(ChatStoreKeys.EXCHANGES).mapNotNull { exchange ->
       val operator = exchange.string(ChatStoreKeys.OPERATOR) ?: return@mapNotNull null
       exchange.string(ChatStoreKeys.AGENT)?.let { ChatExchange(operator, it) }
@@ -298,6 +379,29 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
         (root[ChatStoreKeys.NEW_TASK_PENDING_TURN_LINE_INDEX] as? JsonPrimitive)?.intOrNull,
       )
     },
+    summary = root.string(ChatStoreKeys.SUMMARY)?.takeIf { it.isNotBlank() },
+    summarySourceUpdatedAt = (root[ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT] as? JsonPrimitive)?.longOrNull?.let(Instant::fromEpochMilliseconds),
+  )
+}
+
+private fun OperationCardReference.toJson(): JsonObject = buildJsonObject {
+  put(ChatStoreKeys.TOKEN, token)
+  put(ChatStoreKeys.LAUNCH_ID, launchId)
+  put(ChatStoreKeys.OPERATION_ID, operationId)
+  put(ChatStoreKeys.STATE, state.name)
+  draftChoices?.let { choices -> put(ChatStoreKeys.DRAFT_CHOICES, buildJsonObject { choices.forEach { (key, value) -> put(key, value) } }) }
+  refusal?.let { put(ChatStoreKeys.REFUSAL, it) }
+}
+
+private fun JsonObject.toOperationCardReference(): OperationCardReference? {
+  val state = OperationCardState.entries.firstOrNull { it.name == string(ChatStoreKeys.STATE) } ?: return null
+  return OperationCardReference(
+    token = string(ChatStoreKeys.TOKEN) ?: return null,
+    launchId = string(ChatStoreKeys.LAUNCH_ID) ?: return null,
+    operationId = string(ChatStoreKeys.OPERATION_ID) ?: return null,
+    state = state,
+    draftChoices = (get(ChatStoreKeys.DRAFT_CHOICES) as? JsonObject)?.mapValues { it.value.jsonPrimitive.content },
+    refusal = string(ChatStoreKeys.REFUSAL),
   )
 }
 

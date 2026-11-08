@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.SbMarqueeText
 import dev.skillbill.desktop.core.designsystem.component.dataColorFor
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
@@ -62,7 +63,7 @@ internal fun InboxRunRow(item: WorkItem, now: Instant, divider: Boolean, selecte
     selected = selected,
     leading = { InboxGlyph(InboxGlyphKind.Blocked, colors.stBlocked) },
     prefix = { BasicText(item.issueKey ?: item.id, style = inboxTextStyle(11.5.sp, mono = true).copy(color = colors.fgMuted), maxLines = 1) },
-    middle = { highlighted -> InboxTitle(item.title, item.exactPauseReason ?: item.reason ?: item.summary.takeIf(String::isNotBlank), monoSecondary = false, highlighted = highlighted) },
+    middle = { highlighted, _ -> InboxTitle(item.title, item.exactPauseReason ?: item.reason ?: item.summary.takeIf(String::isNotBlank), monoSecondary = false, highlighted = highlighted) },
     badge = { InboxBadge(item.stepLabel) },
     trailing = { _ -> InboxTime(shortAgo(item.control.updatedAt, now)) },
   )
@@ -71,14 +72,15 @@ internal fun InboxRunRow(item: WorkItem, now: Instant, divider: Boolean, selecte
 @Composable
 internal fun InboxChatRow(entry: ChatHistoryEntry, selectedRoot: String?, now: Instant, divider: Boolean, open: Boolean, selected: Boolean, onResume: (ChatHistoryEntry) -> Unit, onDiscard: (ChatHistoryEntry) -> Unit) {
   val colors = SkillBillTheme.colors
-  val title = remember(entry.title) { chatTitle(entry.title) }
+  val title = remember(entry.title, entry.summary) { chatTitle(entry.title) }
+  val displayTitle = entry.summary ?: title.title
   val repoLabel = chatRepoLabel(entry, selectedRoot)
   InboxRow(
     onClick = { onResume(entry) },
     divider = divider,
     selected = selected,
     leading = { InboxGlyph(if (title.imageName != null) InboxGlyphKind.Image else InboxGlyphKind.Chat, if (title.imageName != null) colors.data2 else colors.fgFaint) },
-    middle = { highlighted -> InboxTitle(title.title, title.imageName, monoSecondary = true, highlighted = highlighted) },
+    middle = { highlighted, hovered -> InboxTitle(displayTitle, title.imageName, monoSecondary = true, highlighted = highlighted, marquee = entry.summary != null && hovered) },
     badge = if (open || repoLabel != null) {
       {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -88,7 +90,7 @@ internal fun InboxChatRow(entry: ChatHistoryEntry, selectedRoot: String?, now: I
       }
     } else null,
     trailing = { highlighted ->
-      if (highlighted && !open) InboxDiscard(title.title) { onDiscard(entry) }
+      if (highlighted && !open) InboxDiscard(displayTitle) { onDiscard(entry) }
       else InboxTime(shortAgo(entry.updatedAt, now))
     },
   )
@@ -108,11 +110,12 @@ private fun InboxBadge(text: String, swatch: Color? = null, textColor: Color? = 
 }
 
 @Composable
-private fun InboxTitle(title: String, secondary: String?, monoSecondary: Boolean, highlighted: Boolean) {
+private fun InboxTitle(title: String, secondary: String?, monoSecondary: Boolean, highlighted: Boolean, marquee: Boolean = false) {
   val colors = SkillBillTheme.colors
   Layout(
     content = {
-      BasicText(title, style = inboxTextStyle().copy(color = if (highlighted) colors.fg else colors.fg2), maxLines = 1, overflow = TextOverflow.Ellipsis)
+      val style = inboxTextStyle().copy(color = if (highlighted) colors.fg else colors.fg2)
+      if (marquee) SbMarqueeText(title, style) else BasicText(title, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
       if (secondary != null) BasicText(secondary, style = inboxTextStyle(12.sp, mono = monoSecondary).copy(color = colors.fgFaint), maxLines = 1, overflow = TextOverflow.Ellipsis)
     },
   ) { measurables, constraints ->
@@ -168,7 +171,7 @@ private fun InboxRow(
   onClick: () -> Unit,
   divider: Boolean,
   leading: @Composable () -> Unit,
-  middle: @Composable (highlighted: Boolean) -> Unit,
+  middle: @Composable (highlighted: Boolean, hovered: Boolean) -> Unit,
   trailing: @Composable (highlighted: Boolean) -> Unit,
   blocked: Boolean = false,
   selected: Boolean = false,
@@ -205,7 +208,7 @@ private fun InboxRow(
   ) {
     Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) { leading() }
     prefix?.invoke()
-    Box(Modifier.weight(1f)) { middle(highlighted) }
+    Box(Modifier.weight(1f)) { middle(highlighted, hovered) }
     badge?.invoke()
     Box(Modifier.width(52.dp), contentAlignment = Alignment.CenterEnd) { trailing(highlighted) }
   }

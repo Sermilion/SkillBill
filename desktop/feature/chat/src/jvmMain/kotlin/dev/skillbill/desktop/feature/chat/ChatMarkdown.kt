@@ -8,10 +8,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import com.mikepenz.markdown.compose.Markdown
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.MarkdownCodeBlock
@@ -24,6 +21,7 @@ import com.mikepenz.markdown.model.DefaultMarkdownTypography
 import com.mikepenz.markdown.model.markdownPadding
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.runtimeTextStyles
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 
 @Composable
 internal fun ChatMarkdown(text: String, modifier: Modifier = Modifier) {
@@ -70,7 +68,7 @@ internal fun ChatMarkdown(text: String, modifier: Modifier = Modifier) {
         codeFence = { MarkdownCodeFence(it.content, it.node, it.typography.code) { code, language, _ -> ChatCodeBlock(code, language) } },
         codeBlock = { MarkdownCodeBlock(it.content, it.node, it.typography.code) { code, language, _ -> ChatCodeBlock(code, language) } },
         table = {
-          Box(Modifier.padding(vertical = 4.dp).border(1.dp, colors.border, RoundedCornerShape(SkillBillRadius.md))) {
+          SbBox(Modifier.padding(vertical = 4.dp)) {
             MarkdownTable(it.content, it.node, it.typography.table)
           }
         },

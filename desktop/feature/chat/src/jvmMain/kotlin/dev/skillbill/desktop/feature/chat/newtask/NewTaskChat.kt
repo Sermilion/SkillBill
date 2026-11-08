@@ -2,20 +2,29 @@ package dev.skillbill.desktop.feature.chat.newtask
 
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
+import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
+import dev.skillbill.desktop.feature.chat.ChatApprovals
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatThread
 import dev.skillbill.desktop.feature.chat.QueuedChatMessage
 import dev.skillbill.desktop.feature.chat.STOPPED_NOTICE
+import dev.skillbill.desktop.feature.chat.UnavailableApprovalFeed
+import dev.skillbill.desktop.feature.chat.savedApprovalLine
+import dev.skillbill.desktop.feature.chat.savedOperationCardLine
 import dev.skillbill.desktop.feature.chat.show
+import dev.skillbill.desktop.feature.chat.savedText
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -25,10 +34,10 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
@@ -60,14 +69,22 @@ internal class NewTaskChat(
   replay: NewTaskReplay? = null,
   private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
   private val onSaved: () -> Unit = {},
+  approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
+  retainedThread: ChatThread = ChatThread(clock),
+  private val saveLock: Mutex = Mutex(),
+  private val canPersist: () -> Boolean = { true },
 ) {
   private val sessionIdState = MutableStateFlow(initialSessionId)
   val sessionIdFlow: StateFlow<String> = sessionIdState.asStateFlow()
   val sessionId: String get() = sessionIdState.value
 
-  val thread = ChatThread(clock)
+  val thread = retainedThread
   val job: Job = SupervisorJob(scope.coroutineContext[Job])
-  private val saveLock = Mutex()
+  private val approvalFlow = ChatApprovals(approvals)
+
+  /** True only while the approval feed holds this window's operator registration for the draft's repository. */
+  val approvalLiveState = MutableStateFlow(false)
+  val approvalLive: StateFlow<Boolean> = approvalLiveState.asStateFlow()
   @Volatile
   private var turnRunning = false
   @Volatile
@@ -92,12 +109,44 @@ internal class NewTaskChat(
   init {
     thread.agentState.value = agent
     thread.agentSupportedState.value = chat.supports(agent.agentId)
+    thread.showCapability(agent)
     observeUnprompted()
+    followApprovals()
   }
 
-  fun send(text: String, action: ChatSuggestedAction? = null, onAccepted: () -> Unit = {}) {
-    if (text.isBlank() || repositoryMissing || closing) return
-    thread.queuedState.update { it + QueuedChatMessage(text, action, pauseAndAct = false) }
+  // Collecting the feed is what makes this window the repository's operator consumer; it ends with the draft's job.
+  private fun followApprovals() {
+    if (repositoryMissing) return
+    scope.launch(job + dispatcher) {
+      approvalFlow.follow(thread, approvalLiveState, { repositoryRoot }, { it.key.runId == sessionId }) {
+        if (!closing && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+      }
+    }
+  }
+
+  /** The operator's click on one option of a pending card; it sends nothing unless the feed holds a live registration. */
+  fun decideApproval(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean) {
+    if (!approvalLiveState.value || closing) return
+    scope.launch(job + dispatcher) { approvalFlow.decide(thread, key, optionId, alwaysAllow) }
+  }
+
+  fun dismissApproval(key: ApprovalCardKey) {
+    if (!approvalLiveState.value || closing) return
+    scope.launch(job + dispatcher) { approvalFlow.dismiss(thread, key) }
+  }
+
+  fun send(
+    text: String,
+    action: ChatSuggestedAction? = null,
+    images: List<ChatImage> = emptyList(),
+    onAccepted: () -> Unit = {},
+    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
+    onRejected: (() -> Unit)? = null,
+  ) {
+    if ((text.isBlank() && images.isEmpty()) || repositoryMissing || closing) return
+    thread.queuedState.update {
+      it + QueuedChatMessage(text, action, pauseAndAct = false, images = images, cursorMcpDependency = cursorMcpDependency, onRejected = onRejected)
+    }
     onAccepted()
     drainQueue()
   }
@@ -117,11 +166,17 @@ internal class NewTaskChat(
   private fun drainQueue() {
     if (closing || repositoryMissing || thread.busyState.value || turnJob != null || turnRunning) return
     val next = thread.takeQueuedMessage() ?: return
-    startTurn(next.text, next.action)
+    startTurn(next.text, next.action, next.images, next.cursorMcpDependency, next.onRejected)
   }
 
-  private fun startTurn(text: String, action: ChatSuggestedAction?) {
-    thread.append(ChatMessage.Operator(text, action))
+  private fun startTurn(
+    text: String,
+    action: ChatSuggestedAction?,
+    images: List<ChatImage>,
+    cursorMcpDependency: CursorMcpDependency,
+    onRejected: (() -> Unit)?,
+  ) {
+    thread.append(ChatMessage.Operator(text, action, images))
     pendingTurnLineIndex = snapshotLines().lastIndex
     pendingAcceptance = null
     thread.busyState.value = true
@@ -130,7 +185,7 @@ internal class NewTaskChat(
     val turn = scope.launch(job + dispatcher, start = CoroutineStart.LAZY) {
       turnJob = coroutineContext[Job]
       try {
-        runTurn(text)
+        runTurn(text, images, cursorMcpDependency, onRejected)
       } finally {
         finishTurn(coroutineContext.job)
       }
@@ -246,9 +301,10 @@ internal class NewTaskChat(
     }
   }
 
-  private suspend fun runTurn(text: String) {
+  private suspend fun runTurn(text: String, images: List<ChatImage>, cursorMcpDependency: CursorMcpDependency, onRejected: (() -> Unit)?) {
     if (!save()) {
       thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+      onRejected?.invoke()
       return
     }
     withContext(scope.coroutineContext.minusKey(Job)) { acceptPendingMessage() }
@@ -256,13 +312,14 @@ internal class NewTaskChat(
     var seenEvent = false
     val preamble = pendingReplay?.takeIf { !started }?.let { newTaskReplayPreamble(it, repositoryRoot, baseBranch) }
     val prompt = if (preamble == null) text else "$preamble\n\n$text"
-    chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, prompt)).collect { event ->
+    chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, prompt, images, cursorMcpDependency)).collect { event ->
+
       coroutineContext.ensureActive()
       if (!seenEvent) {
         seenEvent = true
         thread.dropUnprompted = false
       }
-      val opening = !opened && event !is ChatEvent.Failed
+      val opening = !opened && event !is ChatEvent.Failed && event !is ChatEvent.Notice
       if (opening) {
         opened = true
         started = true
@@ -271,10 +328,17 @@ internal class NewTaskChat(
       thread.show(agent, event)
       if (opening && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
     }
+    if (!opened) onRejected?.invoke()
   }
 
   private suspend fun showUnprompted(event: ChatEvent) {
     if (thread.dropUnprompted) return
+    if (event is ChatEvent.ApprovalRequested || event is ChatEvent.Notice) {
+      // A card is not reply text: it neither opens a turn nor holds the composer busy.
+      thread.show(thread.agentState.value, event)
+      if (started && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+      return
+    }
     val ownTurn = !turnRunning
     if (ownTurn) {
       thread.busyState.value = true
@@ -292,19 +356,25 @@ internal class NewTaskChat(
 
   private fun snapshotLines(): List<ChatHistoryLine> = thread.transcript.value.mapNotNull { message ->
     when (message) {
-      is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.text, selectedAction = message.action)
+      is ChatMessage.Notice -> message.operationCard?.let {
+        ChatHistoryLine(ChatHistoryRole.OperationCard, message.text, operationCard = it)
+      } ?: if (repositoryMissing && message.text.startsWith("This draft's repository no longer exists:")) null
+        else ChatHistoryLine(ChatHistoryRole.Notice, message.text)
+      is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.savedText(), selectedAction = message.action)
       is ChatMessage.Agent -> if (!message.streaming && (message.text.isNotBlank() || message.actions.isNotEmpty())) {
         ChatHistoryLine(ChatHistoryRole.Agent, message.text, actions = message.actions)
       } else null
-      is ChatMessage.Notice -> if (repositoryMissing && message.text.startsWith("This draft's repository no longer exists:")) null
-        else ChatHistoryLine(ChatHistoryRole.Notice, message.text)
       is ChatMessage.Error -> ChatHistoryLine(ChatHistoryRole.Error, message.text, message.failure)
+      // Every approval request and outcome of the draft is saved, whole, with no clipping.
+      is ChatMessage.Approval -> message.card.savedApprovalLine()
+      is ChatMessage.OperationCard -> message.savedOperationCardLine()
       is ChatMessage.StateLine -> null
     }
   }
 
   private suspend fun save(): Boolean {
     val saved = saveLock.withLock {
+      if (!canPersist()) return@withLock false
       val lines = snapshotLines()
       val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
       chat.saveNewTaskDraft(

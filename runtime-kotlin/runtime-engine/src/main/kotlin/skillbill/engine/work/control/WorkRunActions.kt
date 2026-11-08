@@ -2,6 +2,9 @@ package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.qa.QaDeviceLaunchTokens.QA_DEVICE_FLAG
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.engine.featuretask.model.execution.launchArguments
 import skillbill.engine.featuretask.phaserun.monitor.MONITOR_BRANCH_PREFIX
 import skillbill.engine.goal.GoalPreflightGateBlock
 import skillbill.engine.goal.GoalPreflightPort
@@ -11,6 +14,7 @@ import skillbill.engine.goal.GoalPreflightVerdict
 import skillbill.engine.goal.GoalRunnerStatusPort
 import skillbill.engine.goal.executionLivenessBlocksIdleSafeRefresh
 import skillbill.engine.goal.goalRepositoryIdentity
+import skillbill.engine.goal.goalRepositoryRootFromIdentity
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
@@ -60,6 +64,7 @@ public class WorkRunActions(
     repoRoot: Path,
     issueKey: String,
     agentId: String?,
+    qaDevice: QaNamedDevice? = null,
   ): WorkControlResult {
     val agent =
       agentId?.takeIf { it in SupportedAgent.supportedIds }
@@ -83,12 +88,12 @@ public class WorkRunActions(
           repoRoot,
           unit.dbPath,
           ownershipKey,
-          WorkRunLaunchKind.RuntimeCommand(runtimeResumeArguments(goalArguments(key, agent), repoRoot)),
+          WorkRunLaunchKind.RuntimeCommand(runtimeResumeArguments(goalArguments(key, agent, qaDevice), repoRoot)),
           emptyMap(),
         )
       when (val launched = launcher.start(request)) {
         is WorkRunLaunchResult.Refused -> WorkControlResult.LaunchFailed(launched.reason)
-        is WorkRunLaunchResult.Started -> WorkControlResult.Accepted
+        is WorkRunLaunchResult.Started, is WorkRunLaunchResult.AwaitingConfirmation -> WorkControlResult.Accepted
       }
     }
   }
@@ -96,6 +101,7 @@ public class WorkRunActions(
   internal fun launch(
     target: WorkRunTarget,
     agentId: String?,
+    qaDevice: QaNamedDevice? = null,
   ): WorkControlResult {
     val operation = operation@{ unit: UnitOfWork ->
       val item =
@@ -111,7 +117,7 @@ public class WorkRunActions(
         checkoutRejection(phase, target)?.let { return@operation WorkControlResult.Rejected(it) }
       }
       val arguments =
-        arguments(item, phase, unit, agent)
+        arguments(item, phase, unit, agent, qaDevice)
           ?: return@operation WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)
       val result =
         launcher.start(
@@ -181,7 +187,14 @@ public class WorkRunActions(
     val terminalValidation = completed && standaloneValidation
     val validationResume = standaloneValidation && isPausedOrBlocked(snapshot.lifecycleState)
     val agent = launchAgent(item, phase, unit)
-    val supported = arguments(item, phase, unit, agent ?: SupportedAgent.supportedIds.first()) != null
+    val supported =
+      arguments(
+        item,
+        phase,
+        unit,
+        agent ?: SupportedAgent.supportedIds.first(),
+        qaDevice = null,
+      ) != null
     val live =
       snapshot.lifecycleState == IdeStatusLifecycleState.ACTIVE || liveWorker ||
         item.goalStatus?.executionLiveness?.let { executionLivenessBlocksIdleSafeRefresh(it) } == true
@@ -195,7 +208,26 @@ public class WorkRunActions(
       "This older entry has no complete launch details.".takeIf {
         launchable && !supported
       },
+      goalStartedForPlan(phase, unit),
     )
+  }
+
+  private fun goalStartedForPlan(
+    phase: StandalonePhaseStatusRecord?,
+    unit: UnitOfWork,
+  ): Boolean {
+    val plan =
+      phase
+        ?.takeIf { it.launchScope == IdeStatusLaunchScope.STANDALONE }
+        ?.takeIf { it.phaseId == SkeletonDefinition.PLAN.id }
+        ?: return false
+    val issueKey = plan.issueKey?.takeIf(String::isNotBlank) ?: return false
+    val primary =
+      goalRepositoryRootFromIdentity(plan.repositoryIdentity)
+        ?.let(repositoryEnclosingRootPort::primaryRepositoryIdentity)
+    return setOfNotNull(plan.repositoryIdentity, primary).any { identity ->
+      unit.workList.goalParentCandidatePage(issueKey, identity, 0, 1).isNotEmpty()
+    }
   }
 
   private fun canLaunch(
@@ -245,8 +277,9 @@ public class WorkRunActions(
     phase: StandalonePhaseStatusRecord?,
     unit: UnitOfWork,
     agent: String,
+    qaDevice: QaNamedDevice?,
   ): List<String>? {
-    if (phase != null) return phaseArguments(phase, agent)
+    if (phase != null) return phaseArguments(phase, agent, qaDevice)
     if (item.snapshot.workflowFamily == IdeStatusWorkflowFamily.FEATURE_VERIFY) return null
     val issue = item.snapshot.issueKey ?: return null
     val workflow = item.snapshot.workflowId?.let { unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, it) }
@@ -256,26 +289,28 @@ public class WorkRunActions(
     ) {
       listOf("phase", "plan", issue, "--agent", agent)
     } else {
-      goalArguments(issue, agent)
+      goalArguments(issue, agent, qaDevice)
     }
   }
 
   private fun goalArguments(
     issue: String,
     agent: String,
-  ): List<String> = listOf("goal", issue, "--agent", agent)
+    qaDevice: QaNamedDevice? = null,
+  ): List<String> = listOf("goal", issue, "--agent", agent) + qaDevice.launchArguments()
 
   private fun phaseArguments(
     phase: StandalonePhaseStatusRecord,
     agent: String,
+    qaDevice: QaNamedDevice?,
   ): List<String>? {
     phase.monitorTarget?.let { target ->
       val selector = target.branchRef?.let { "$MONITOR_BRANCH_PREFIX$it" } ?: target.pullRequestUrl
       return listOf("phase", phase.phaseId, selector, "--agent", agent)
     }
-    phase.launchArguments?.let { saved -> return savedArguments(phase, saved, agent) }
+    phase.launchArguments?.let { saved -> return savedArguments(phase, saved, agent, qaDevice) }
     return when {
-      phase.launchScope == IdeStatusLaunchScope.GOAL -> phase.issueKey?.let { goalArguments(it, agent) }
+      phase.launchScope == IdeStatusLaunchScope.GOAL -> phase.issueKey?.let { goalArguments(it, agent, qaDevice) }
       phase.workflowId != null && phase.phaseId == SkeletonDefinition.PLAN.id ->
         phase.issueKey?.let { listOf("phase", "plan", it, "--agent", agent) }
       phase.phaseId in
@@ -294,6 +329,7 @@ public class WorkRunActions(
     phase: StandalonePhaseStatusRecord,
     saved: List<String>,
     agent: String,
+    qaDevice: QaNamedDevice?,
   ): List<String>? {
     val prefix =
       when (phase.launchScope) {
@@ -301,11 +337,32 @@ public class WorkRunActions(
         IdeStatusLaunchScope.GOAL -> listOf("goal")
       }
     if (saved.take(prefix.size) != prefix) return null
-    val agentFlag = saved.indexOf("--agent")
-    return if (agentFlag >= 0 && agentFlag + 1 < saved.size) {
-      saved.toMutableList().apply { this[agentFlag + 1] = agent }
+    val currentArguments =
+      if (phase.launchScope == IdeStatusLaunchScope.GOAL || phase.phaseId == SkeletonDefinition.QA.id) {
+        saved.withoutQaDevice() + qaDevice.launchArguments()
+      } else {
+        saved
+      }
+    val agentFlag = currentArguments.indexOf("--agent")
+    return if (agentFlag >= 0 && agentFlag + 1 < currentArguments.size) {
+      currentArguments.toMutableList().apply { this[agentFlag + 1] = agent }
     } else {
-      saved + listOf("--agent", agent)
+      currentArguments + listOf("--agent", agent)
+    }
+  }
+
+  private fun List<String>.withoutQaDevice(): List<String> {
+    val arguments = this
+    return buildList {
+      var index = 0
+      while (index < arguments.size) {
+        if (arguments[index] == QA_DEVICE_FLAG) {
+          index += if (index + 1 < arguments.size) 2 else 1
+        } else {
+          add(arguments[index])
+          index++
+        }
+      }
     }
   }
 

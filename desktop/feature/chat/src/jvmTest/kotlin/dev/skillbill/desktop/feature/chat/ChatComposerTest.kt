@@ -29,6 +29,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.text.TextRange
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
@@ -163,6 +164,14 @@ class ChatComposerTest {
         workspace.drafts[item.id] = ""
       }
       onNodeWithText("Send now", substring = false).assertExists()
+      val image = ChatImage(byteArrayOf(1), "image/png")
+      runOnIdle { workspace.addPastedImage(item.id, image) }
+      onNodeWithText("Send now", substring = false).assertDoesNotExist()
+      onNodeWithText("Queue", substring = false).performClick()
+      runOnIdle {
+        assertNull(workspace.pastedImages[item.id])
+        assertEquals(listOf(image), session.queued.value.last().images)
+      }
       runOnIdle { session.stoppableState.value = false }
       onNodeWithText("Stop", substring = false).assertDoesNotExist()
     }
@@ -184,8 +193,7 @@ class ChatComposerTest {
     runComposeUiTest {
       setContent {
         SkillBillTheme(reducedMotion = true) {
-          // The no-image paste falls through to text paste; an empty fake keeps it off the host clipboard.
-          CompositionLocalProvider(LocalShellInput provides ShellInput(), LocalClipboard provides EmptyClipboard) {
+          CompositionLocalProvider(LocalShellInput provides ShellInput(), LocalClipboard provides TextPasteClipboard("copied")) {
             // Encoding on the test's own dispatcher lets waitForIdle observe the chip with no real-time polling.
             ChatComposer(session, workspace, clipboard = { pasted }, encodeContext = EmptyCoroutineContext)
           }
@@ -196,6 +204,9 @@ class ChatComposerTest {
       val modifier = if (pasteUsesMeta) Key.MetaLeft else Key.CtrlLeft
       field.performKeyInput { withKeyDown(modifier) { pressKey(paste) } }
       onNodeWithText("[Image #1]").assertExists()
+      onNodeWithText("[Image #1]").performClick()
+      onNodeWithContentDescription("[Image #1]").assertExists()
+      field.performKeyInput { pressKey(Key.Escape) }
       onNodeWithContentDescription("Remove image 1").performClick()
       onNodeWithText("[Image #1]").assertDoesNotExist()
 
@@ -212,7 +223,7 @@ class ChatComposerTest {
       field.performTextInput("typed")
       field.performKeyInput { withKeyDown(modifier) { pressKey(paste) } }
       onNodeWithText("[Image #1]").assertDoesNotExist()
-      runOnIdle { assertEquals("typed", workspace.drafts[item.id]) }
+      runOnIdle { assertEquals("typedcopied", workspace.drafts[item.id]) }
     }
   }
 
@@ -252,10 +263,12 @@ class ChatComposerTest {
   }
 }
 
-private object EmptyClipboard : Clipboard {
-  override val nativeClipboard = java.awt.datatransfer.Clipboard("empty")
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+internal class TextPasteClipboard(text: String) : Clipboard {
+  private val contents = java.awt.datatransfer.StringSelection(text)
+  override val nativeClipboard = java.awt.datatransfer.Clipboard("text").apply { setContents(contents, null) }
 
-  override suspend fun getClipEntry(): ClipEntry? = null
+  override suspend fun getClipEntry(): ClipEntry = ClipEntry(contents)
 
   override suspend fun setClipEntry(clipEntry: ClipEntry?) = Unit
 }

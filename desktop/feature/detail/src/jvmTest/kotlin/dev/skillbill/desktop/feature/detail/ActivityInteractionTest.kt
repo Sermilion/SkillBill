@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -107,7 +108,8 @@ class ActivityInteractionTest {
     setContent { SkillBillTheme(reducedMotion = true) { ActivityTimeline(listOf(blocked, clean), "goal", onJump = { jumped = it }) } }
 
     onNodeWithText("Needs a decision").assertDoesNotExist()
-    onNodeWithText("Blocks 1").performClick()
+    val blocksTab = hasText("Blocks") and hasText("1") and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)
+    onNode(blocksTab).performClick()
     onNodeWithText("Clean child").assertDoesNotExist()
     onNodeWithText("Needs a decision").assertExists()
     onNode(hasText("Recovered child") and hasClickAction()).performClick()
@@ -115,7 +117,7 @@ class ActivityInteractionTest {
     onNodeWithText("All", substring = false).performClick()
     onNodeWithText("Clean child").assertExists()
     onNodeWithText("Needs a decision").assertDoesNotExist()
-    onNodeWithText("Blocks 1").performClick()
+    onNode(blocksTab).performClick()
     onNode(SemanticsMatcher("timeline jump") { it.config.getOrNull(SemanticsActions.OnClick)?.label == "Jump to Recovered child" }).performClick()
     onNodeWithText("Clean child").assertExists()
     onNodeWithText("Needs a decision").assertExists()

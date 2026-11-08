@@ -1,5 +1,6 @@
 package skillbill.infrastructure.launcher.agentrun
 
+import skillbill.infrastructure.launcher.process.cursor.AcpProvider
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
@@ -22,6 +23,7 @@ internal class JunieAgentRunCommandBuilder(
   override val agent: SupportedAgent = SupportedAgent.JUNIE
   override val reviewIsolation: ReviewLaunchIsolationStrategy = ReviewLaunchIsolationStrategy.FRESH_PROCESS
   override val outputDecoder: AgentRunOutputDecoder = AgentRunOutputDecoder.JUNIE_TEXT
+  override val approvalProtocol: AgentRunApprovalProtocol = AgentRunApprovalProtocol.JUNIE_ACP
 
   override fun continuation(
     command: AgentRunCommand,
@@ -31,7 +33,33 @@ internal class JunieAgentRunCommandBuilder(
   override fun build(request: SkillRunRequest): AgentRunCommand {
     requireProcessLaunch(request, reviewIsolation)
     requireGovernedReviewLaunch(request, agent, governedReviewLaunchCapability)
-    return goalContinuationCommand(request, agent, databasePath) ?: AgentRunCommand(
+    val continuation = goalContinuationCommand(request, agent, databasePath)
+    return when {
+      continuation != null -> continuation
+      request.reviewEvidenceBroker == null -> acpCommand(request)
+      else -> textCommand(request)
+    }
+  }
+
+  private fun acpCommand(request: SkillRunRequest): AgentRunCommand {
+    require(request.modelOverride == null && request.effortOverride == null) {
+      "junie cannot honor a model/effort directive; remove its execution_matrix entry or --phase-model assignment."
+    }
+    return AgentRunCommand(
+      command = listOf(SupportedAgent.JUNIE.wireValue) + AcpProvider.Junie.acpArguments,
+      workingDirectory = request.repoRoot,
+      timeout = request.timeout,
+      stdinText = launchPrompt(request),
+      environment = goalContinuationEnvironment(request) + runtimeDatabaseEnvironment(true, databasePath),
+      inheritEnvironment = true,
+      conversationIsolation = governedReviewConversationIsolation(request),
+      approvalProtocol = approvalProtocol,
+      idlePolicy = unstreamedLivenessPolicy(request),
+    )
+  }
+
+  private fun textCommand(request: SkillRunRequest): AgentRunCommand =
+    AgentRunCommand(
       command =
         buildList {
           require(request.modelOverride == null && request.effortOverride == null) {
@@ -61,5 +89,4 @@ internal class JunieAgentRunCommandBuilder(
       environmentPassthroughKeys =
         if (request.reviewEvidenceBroker != null) JUNIE_PROVIDER_PASSTHROUGH_KEYS else emptySet(),
     )
-  }
 }

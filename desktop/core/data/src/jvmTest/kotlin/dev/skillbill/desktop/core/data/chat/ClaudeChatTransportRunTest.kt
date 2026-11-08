@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatImage
+import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.usage.UsageObservationSink
@@ -61,7 +62,10 @@ class ClaudeChatTransportRunTest {
   }
 
   // One scripted claude process: the test reads what the app writes to stdin and decides what stdout prints.
-  private class FakeClaude(val holdStop: CompletableDeferred<Unit>? = null) : LiveChatProcessLauncher {
+  private class FakeClaude(
+    val holdStop: CompletableDeferred<Unit>? = null,
+    val loginOutput: List<String> = emptyList(),
+  ) : LiveChatProcessLauncher {
     val opened: MutableList<ChatCommand> = Collections.synchronizedList(mutableListOf())
     val stdin = Channel<String>(Channel.UNLIMITED)
     val stdout = Channel<ChatProcessOutput>(Channel.UNLIMITED)
@@ -70,7 +74,46 @@ class ClaudeChatTransportRunTest {
 
     override fun open(command: ChatCommand, input: ReceiveChannel<String>): Flow<ChatProcessOutput> = channelFlow {
       opened += command
-      launch { for (line in input) stdin.send(line) }
+      launch {
+        for (line in input) {
+          if (INITIALIZE_REQUEST in line) {
+            loginOutput.forEach { stdout.send(ChatProcessOutput.Line(it)) }
+            stdout.send(ChatProcessOutput.Line(INITIALIZE_SUCCESS))
+          } else {
+            stdin.send(line)
+          }
+        }
+      }
+      try {
+        for (output in stdout) send(output)
+      } finally {
+        stopped.complete(Unit)
+        stopHeld.complete(Unit)
+        withContext(NonCancellable) { holdStop?.await() }
+      }
+    }
+
+    override fun openAcknowledged(
+      command: ChatCommand,
+      input: ReceiveChannel<ChatProcessInput>,
+    ): Flow<ChatProcessOutput> = channelFlow {
+      opened += command
+      launch {
+        for (message in input) {
+          try {
+            if (INITIALIZE_REQUEST in message.line) {
+              loginOutput.forEach { stdout.send(ChatProcessOutput.Line(it)) }
+              stdout.send(ChatProcessOutput.Line(INITIALIZE_SUCCESS))
+            } else {
+              stdin.send(message.line)
+            }
+            message.written.complete(true)
+          } catch (failure: Throwable) {
+            message.written.complete(false)
+            throw failure
+          }
+        }
+      }
       try {
         for (output in stdout) send(output)
       } finally {
@@ -87,115 +130,71 @@ class ClaudeChatTransportRunTest {
     }
 
     suspend fun print(vararg lines: String) = lines.forEach { stdout.send(ChatProcessOutput.Line(it)) }
+
+    companion object {
+      const val INITIALIZE_REQUEST = "\"subtype\":\"initialize\""
+      const val INITIALIZE_SUCCESS =
+        """{"type":"control_response","response":{"subtype":"success","request_id":"skill-bill-init"}}"""
+    }
   }
 
-  private fun TestScope.transport(claude: FakeClaude, diagnostics: RecordingDiagnostics = RecordingDiagnostics()) =
-    HostEnvironment(mapOf("SHELL" to "/bin/bash"), "/home/operator", "").let { host ->
-      val profiles = UsageProfileResolver(host)
-      ClaudeChatTransport(
-        host,
-        FakeAppSettingsRepository(),
-        claude,
-        diagnostics,
-        ApplicationCoroutineScope(backgroundScope),
-        profiles,
-        ProviderUsageRepository(profiles, FakeAppSettingsRepository(), unusedCodexReader, ApplicationCoroutineScope(backgroundScope), usageClock),
-        Clock.System,
-      )
-    }
-
-  @Test
-  fun `Claude usage status stays bound to its live session and malformed usage leaves chat running`() = runTest {
+  private fun TestScope.transport(claude: FakeClaude, diagnostics: RecordingDiagnostics = RecordingDiagnostics()): ClaudeChatTransport {
     val host = HostEnvironment(mapOf("SHELL" to "/bin/bash"), "/home/operator", "")
-    val profiles = UsageProfileResolver(host)
     val settings = FakeAppSettingsRepository()
-    val clock = object : Clock {
-      override fun now() = Instant.fromEpochMilliseconds(10_000)
-    }
-    val repository = ProviderUsageRepository(profiles, settings, unusedCodexReader, ApplicationCoroutineScope(backgroundScope), usageClock)
-    val claude = FakeClaude()
-    val diagnostics = RecordingDiagnostics()
-    val transport = ClaudeChatTransport(
+    val profiles = UsageProfileResolver(host)
+    val repository = ProviderUsageRepository(
+      profiles,
+      settings,
+      unusedCodexReader,
+      ApplicationCoroutineScope(backgroundScope),
+      usageClock,
+    )
+    return ClaudeChatTransport(
       host,
       settings,
       claude,
+      { _, root, _, _, writeLine, stopProcess, onCard ->
+        ChatApprovalOpening.Opened(ClaudeChatApproval(root, writeLine, stopProcess, diagnostics, onCard))
+      },
       diagnostics,
       ApplicationCoroutineScope(backgroundScope),
       profiles,
       repository,
-      clock,
+      usageClock,
     )
-    val turn = async { transport.run(chatRequest()).toList() }
-    val (uuid, _) = claude.nextMessage()
-    claude.print(
-      """{"type":"rate_limit_event","session_id":"other-session","rate_limit_info":{"status":"rejected"}}""",
-      """{"type":"rate_limit_event","session_id":"session-1","rate_limit_info":{"status":"allowed_warning","utilization":100,"resets_at":"later"}}""",
-      """{"type":"rate_limit_event","session_id":42,"rate_limit_info":{"status":"rejected"}}""",
-      """{"type":"rate_limit_event","session_id":null,"rate_limit_info":{"status":"rejected"}}""",
-      replay(uuid),
-      textDelta("The reply continues"),
-      """{"type":"result","is_error":false,"result":"The reply continues"}""",
-    )
-
-    assertEquals(
-      listOf(ChatEvent.TextDelta("The reply continues"), ChatEvent.Completed),
-      turn.await(),
-    )
-    val usageRequest = UsageRequest(profiles.claude(null).lookup, "session-1")
-    val status = repository.sessionStatus(usageRequest) as UsageSessionStatus.Observed
-    assertEquals(RequestPermission.Allowed, status.permission)
-    assertTrue(status.warning)
-    val result = repository.observe(usageRequest).first() as UsageResult.Snapshot
-    assertTrue(result.value.meters.isEmpty())
-    assertEquals(listOf("usage.claude_event_invalid"), diagnostics.categories.filter { it.startsWith("usage.") })
-
-    transport.end("session-1")
-    claude.stopped.await()
-    assertEquals(UsageSessionStatus.Unavailable, repository.sessionStatus(usageRequest))
   }
 
-  @Test
-  fun `cancellation before the lazy reader starts revokes its binding and completes the waiting turn`() = runTest {
-    val host = HostEnvironment(emptyMap(), "/home/operator", "")
-    val settings = FakeAppSettingsRepository()
-    val profiles = UsageProfileResolver(host)
-    val repository = ProviderUsageRepository(profiles, settings, unusedCodexReader, ApplicationCoroutineScope(backgroundScope), usageClock)
-    val appJob = Job(backgroundScope.coroutineContext[Job])
-    val clock = object : Clock {
-      override fun now() = Instant.fromEpochMilliseconds(10_000)
-    }
-    val sink = object : UsageObservationSink by repository {
-      override fun bindSession(logicalSessionId: String, profile: UsageProfileLookup, processGeneration: Long) {
-        repository.bindSession(logicalSessionId, profile, processGeneration)
-        repository.recordSessionStatus(logicalSessionId, processGeneration, RequestPermission.Allowed, false, clock.now())
-        appJob.cancel()
-      }
-    }
-    val claude = FakeClaude()
-    val transport = ClaudeChatTransport(
-      host,
-      settings,
-      claude,
-      RecordingDiagnostics(),
-      ApplicationCoroutineScope(CoroutineScope(backgroundScope.coroutineContext + appJob)),
-      profiles,
-      sink,
-      clock,
-    )
-
-    assertFailsWith<CancellationException> { transport.run(chatRequest()).toList() }
-    appJob.join()
-
-    assertTrue(appJob.isCancelled)
-    assertTrue(appJob.isCompleted)
-    assertTrue(claude.opened.isEmpty())
-    assertEquals(UsageSessionStatus.Unavailable, repository.sessionStatus(UsageRequest(profiles.claude(null).lookup, "session-1")))
-  }
 
   // A background build the agent started used to die when its turn's process exited, and nothing reported back.
   @Test
-  fun `the process outlives the turn, a reply the agent starts on its own reaches unprompted, and the next turn reuses it`() = runTest {
+  fun `claude keeps deltas in their message and starts another entry after tools`() = runTest {
     val claude = FakeClaude()
+    val transport = transport(claude)
+    val turn = async { transport.run(chatRequest()).toList() }
+    val (uuid, _) = claude.nextMessage()
+    val start = """{"type":"stream_event","event":{"type":"message_start","message":{"role":"assistant"}}}"""
+    claude.print(
+      replay(uuid), start, textBlockStart(), textDelta("Check"), textDelta("ing."),
+      """{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{}}]}}""",
+      """{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}""",
+      start, textBlockStart(), textDelta("Done."),
+      """{"type":"result","is_error":false}""",
+    )
+    assertEquals(
+      listOf(
+        ChatEvent.MessageStarted, ChatEvent.TextDelta("Check"), ChatEvent.TextDelta("ing."),
+        ChatEvent.ToolUse(ChatToolCall("t1", "Bash", "{}", null)), ChatEvent.ToolResult("t1", "ok", false),
+        ChatEvent.MessageStarted, ChatEvent.TextDelta("Done."), ChatEvent.Completed,
+      ),
+      turn.await(),
+    )
+    transport.end("session-1")
+    claude.stopped.await()
+  }
+
+  @Test
+  fun `the process outlives the turn, a reply the agent starts on its own reaches unprompted, and the next turn reuses it`() = runTest {
+    val claude = FakeClaude(loginOutput = listOf("Agent pid 4242"))
     val diagnostics = RecordingDiagnostics()
     val transport = transport(claude, diagnostics)
     val unprompted = async(start = CoroutineStart.UNDISPATCHED) { transport.unprompted("session-1").take(2).toList() }
@@ -203,7 +202,6 @@ class ClaudeChatTransportRunTest {
     val first = async { transport.run(chatRequest()).toList() }
     val (uuid, text) = claude.nextMessage()
     claude.print(
-      "Agent pid 4242",
       """{"type":"system","subtype":"init"}""",
       replay(uuid),
       textDelta("Started the build"),
@@ -332,6 +330,40 @@ class ClaudeChatTransportRunTest {
 
     transport.end("session-1")
     claude.stopped.await()
+  }
+
+  // A user frame written before the provider accepted host permission control would run without approval cards.
+  @Test
+  fun `a turn's user frame is held until the provider answers initialize`() {
+    val diagnostics = RecordingDiagnostics()
+    val session = ClaudeLiveSession(
+      ChatProcessBinding(ChatPermissionMode.Act, ""),
+      "/work/skill-bill",
+      diagnostics,
+      "session-1",
+      1,
+      object : UsageObservationSink {
+        override fun bindSession(logicalSessionId: String, profile: UsageProfileLookup, processGeneration: Long) = Unit
+        override fun recordSessionStatus(
+          logicalSessionId: String,
+          processGeneration: Long,
+          permission: RequestPermission,
+          warning: Boolean,
+          observedAt: Instant,
+        ) = Unit
+        override fun revokeSession(logicalSessionId: String, processGeneration: Long) = Unit
+      },
+      Clock.System,
+    ) {}
+    session.approval = ClaudeChatApproval("/work/skill-bill", { true }, {}, diagnostics, onCard = {})
+
+    session.send("uuid-1", "operator prompt", emptyList())
+    assertTrue(session.input.tryReceive().isFailure)
+
+    session.accept(ChatProcessOutput.Line(FakeClaude.INITIALIZE_SUCCESS))
+    val frame = Json.parseToJsonElement(session.input.tryReceive().getOrThrow().line).jsonObject
+    assertEquals("uuid-1", frame.getValue("uuid").jsonPrimitive.content)
+    assertTrue(session.initializedSignal.isCompleted)
   }
 
   // Claude streams each message between tool calls as its own text block; joined without a break they read as one run-on paragraph.

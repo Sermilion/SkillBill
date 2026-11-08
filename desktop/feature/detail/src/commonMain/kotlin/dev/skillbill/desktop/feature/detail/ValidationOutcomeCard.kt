@@ -1,18 +1,11 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.border
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -20,12 +13,14 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.unit.dp
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbClock
 import dev.skillbill.desktop.core.designsystem.component.rememberRuntimeText
+import dev.skillbill.desktop.core.designsystem.detail.BarSegment
 import dev.skillbill.desktop.core.designsystem.detail.MetricCell
 import dev.skillbill.desktop.core.designsystem.detail.MetricStrip
+import dev.skillbill.desktop.core.designsystem.detail.SegmentBar
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.ValidationBranchRun
@@ -72,73 +67,69 @@ internal fun ValidationOutcomeCard(item: WorkItem, detail: Detail, shape: Valida
   }
   val borderTone = if (run?.liveChecks == true && run.validationOutcome != null) tone
   else if (item.lifecycle == Lifecycle.Terminal) colors.borderSubtle else tone
-  Column(
-    Modifier.fillMaxWidth().border(1.dp, borderTone, RoundedCornerShape(SkillBillRadius.md))
-      .padding(16.dp),
-    verticalArrangement = Arrangement.spacedBy(12.dp),
-  ) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (active) BasicText("● LIVE", Modifier.alpha(activityPulse(active)), style = SkillBillTheme.type.tXs.copy(color = tone))
-        if (summaryHeadline != null) {
-          BasicText(summaryHeadline, style = SkillBillTheme.type.tBaseMedium.copy(color = colors.fg))
-        } else {
-          BasicText(plainHeadline.orEmpty(), style = SkillBillTheme.type.tBaseMedium.copy(color = colors.fg))
-        }
-        if (live && runningCheck != null) {
-          BasicText("${runningCheck.check.workingDir}  ${runningCheck.check.command}", style = SkillBillTheme.type.monoSm.copy(color = colors.fgMuted))
-          val attempt = runningCheck.check.attempts.last()
-          SbClock(0L, attempt.startedAt, live = true, showSeconds = true)
-        } else if (active) {
-          BasicText("The report appears here when the agent finishes.", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
-          detail.lastAgentActivityAt?.let { at ->
-            BasicText("${detail.lastAgentActivityLabel ?: "Last agent signal"} · ${formatInstant(at, "d MMM HH:mm")}", style = SkillBillTheme.type.tXs.copy(color = colors.fgFaint))
+  SbBox(borderColor = borderTone) {
+    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          if (active) BasicText("● LIVE", Modifier.alpha(activityPulse(active)), style = SkillBillTheme.type.tXs.copy(color = tone))
+          if (summaryHeadline != null) {
+            BasicText(summaryHeadline, style = SkillBillTheme.type.tBaseMedium.copy(color = colors.fg))
+          } else {
+            BasicText(plainHeadline.orEmpty(), style = SkillBillTheme.type.tBaseMedium.copy(color = colors.fg))
           }
-        } else {
-          summaryRest?.let { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = colors.fg2)) }
+          if (live && runningCheck != null) {
+            BasicText("${runningCheck.check.workingDir}  ${runningCheck.check.command}", style = SkillBillTheme.type.monoSm.copy(color = colors.fgMuted))
+            val attempt = runningCheck.check.attempts.last()
+            SbClock(0L, attempt.startedAt, live = true, showSeconds = true)
+          } else if (active) {
+            BasicText("The report appears here when the agent finishes.", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
+            detail.lastAgentActivityAt?.let { at ->
+              BasicText("${detail.lastAgentActivityLabel ?: "Last agent signal"} · ${formatInstant(at, "d MMM HH:mm")}", style = SkillBillTheme.type.tXs.copy(color = colors.fgFaint))
+            }
+          } else {
+            summaryRest?.let { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = colors.fg2)) }
+          }
         }
+        if (live && runningCheck != null) Unit
+        else if (active) SbClock(item.activeDurationMs, item.activeDurationAsOf, live = true, showSeconds = true)
+        else BasicText(activityDuration(elapsed), style = SkillBillTheme.type.tBaseMedium.copy(color = colors.fgMuted))
       }
-      if (live && runningCheck != null) Unit
-      else if (active) SbClock(item.activeDurationMs, item.activeDurationAsOf, live = true, showSeconds = true)
-      else BasicText(activityDuration(elapsed), style = SkillBillTheme.type.tBaseMedium.copy(color = colors.fgMuted))
-    }
-    if (run?.liveChecks == true && run.validationOutcome != null) {
-      BasicText(when (run.validationOutcome) {
-        ValidationOutcome.Passed -> "Passed"
-        ValidationOutcome.Blocked -> "Blocked · needs an operator"
-        ValidationOutcome.Failed -> "Failed"
-        null -> ""
-      }, style = SkillBillTheme.type.tSmMedium.copy(color = tone))
-    }
-    if (showsChecks && summary != null) {
-      val tallyEntries = summary.tally.map { (state, count) -> "$count ${state.word}" to state.tone() }
-      val tallyText = buildAnnotatedString {
-        tallyEntries.forEachIndexed { index, (text, color) ->
-          if (index > 0) append(", ")
-          pushStyle(SpanStyle(color = color))
-          append(text)
-          pop()
+      if (run?.liveChecks == true && run.validationOutcome != null) {
+        BasicText(when (run.validationOutcome) {
+          ValidationOutcome.Passed -> "Passed"
+          ValidationOutcome.Blocked -> "Blocked · needs an operator"
+          ValidationOutcome.Failed -> "Failed"
+          null -> ""
+        }, style = SkillBillTheme.type.tSmMedium.copy(color = tone))
+      }
+      if (showsChecks && summary != null) {
+        val tallyEntries = summary.tally.map { (state, count) -> "$count ${state.word}" to state.tone() }
+        val tallyText = buildAnnotatedString {
+          tallyEntries.forEachIndexed { index, (text, color) ->
+            if (index > 0) append(", ")
+            pushStyle(SpanStyle(color = color))
+            append(text)
+            pop()
+          }
+          if (summary.fixedFailedAttempts > 0) {
+            if (tallyEntries.isNotEmpty()) append(", ")
+            append("${summary.fixedFailedAttempts} failed attempts fixed")
+          }
         }
-        if (summary.fixedFailedAttempts > 0) {
-          if (tallyEntries.isNotEmpty()) append(", ")
-          append("${summary.fixedFailedAttempts} failed attempts fixed")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          BasicText(tallyText, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted))
         }
+        SegmentBar(summary.rows.map { BarSegment(1f, it.state.tone()) }, description = tallyText.text, gap = 2.dp)
       }
-      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        BasicText(tallyText, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted))
-      }
-      Row(Modifier.fillMaxWidth().height(5.dp).clip(CircleShape), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        summary.rows.forEach { row -> Box(Modifier.weight(1f).height(5.dp).background(row.state.tone())) }
-      }
+      MetricStrip(
+        listOf(
+          MetricCell("Active") { SbClock(item.activeDurationMs, item.activeDurationAsOf, live = active, showSeconds = true) },
+          MetricCell("Started", item.startedAt?.let { formatInstant(it, "d MMM HH:mm") } ?: "—", note = item.finishedAt?.let { "→ finished ${formatInstant(it, "HH:mm")}" }),
+          MetricCell("Agent", if (showsChecks && summary != null) "Checks ${summary.done}/${summary.total}${if (summary.retried > 0) ", ${summary.retried} retried" else ""}" else item.agentId ?: "—"),
+          MetricCell("Run", "#${item.control.runSequence}", note = validationBranchPosition(detail.invocationId, detail.validationBranchRuns)),
+        ),
+      )
     }
-    MetricStrip(
-      listOf(
-        MetricCell("Active") { SbClock(item.activeDurationMs, item.activeDurationAsOf, live = active, showSeconds = true) },
-        MetricCell("Started", item.startedAt?.let { formatInstant(it, "d MMM HH:mm") } ?: "—", note = item.finishedAt?.let { "→ finished ${formatInstant(it, "HH:mm")}" }),
-        MetricCell("Agent", if (showsChecks && summary != null) "Checks ${summary.done}/${summary.total}${if (summary.retried > 0) ", ${summary.retried} retried" else ""}" else item.agentId ?: "—"),
-        MetricCell("Run", "#${item.control.runSequence}", note = validationBranchPosition(detail.invocationId, detail.validationBranchRuns)),
-      ),
-    )
   }
 }
 

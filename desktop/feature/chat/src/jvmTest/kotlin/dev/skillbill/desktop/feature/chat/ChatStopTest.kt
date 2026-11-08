@@ -3,6 +3,7 @@ package dev.skillbill.desktop.feature.chat
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.ControlRejection
@@ -190,7 +191,10 @@ class ChatStopTest {
     workspace.send(item.id, "hold")
     runCurrent()
     workspace.drafts[item.id] = "draft tail"
-    workspace.send(item.id, "queued one")
+    val queuedImage = ChatImage(byteArrayOf(1), "image/png")
+    val draftImage = ChatImage(byteArrayOf(2), "image/png")
+    workspace.addPastedImage(item.id, draftImage)
+    workspace.send(item.id, "queued one", listOf(queuedImage))
     workspace.send(item.id, "queued two")
     runCurrent()
     val before = fake.requests.size
@@ -198,6 +202,7 @@ class ChatStopTest {
     runCurrent()
     assertEquals(before, fake.requests.size)
     assertEquals("queued one\n\nqueued two\n\ndraft tail", workspace.drafts[item.id])
+    assertEquals(listOf(queuedImage, draftImage), workspace.pastedImages[item.id])
     assertTrue(workspace.session(item.id)!!.queued.value.isEmpty())
   }
 
@@ -240,7 +245,7 @@ class ChatStopTest {
     val header = MutableStateFlow(loaded(item))
     details.details = mapOf(item.id to header)
     fake.events = { request ->
-      if (request.mode == ChatPermissionMode.Act) flow { awaitCancellation() } else flowOf(ChatEvent.Completed)
+      if (request.prompt.startsWith(ACT_PREFIX)) flow { awaitCancellation() } else flowOf(ChatEvent.Completed)
     }
     val workspace = workspace()
     workspace.open(item)
@@ -276,7 +281,7 @@ class ChatStopTest {
     val header = MutableStateFlow(loaded(item))
     details.details = mapOf(item.id to header)
     fake.events = { request ->
-      if (request.mode == ChatPermissionMode.Act) flow { awaitCancellation() } else flowOf(ChatEvent.Completed)
+      if (request.prompt.startsWith(ACT_PREFIX)) flow { awaitCancellation() } else flowOf(ChatEvent.Completed)
     }
     val workspace = workspace()
     workspace.open(item)

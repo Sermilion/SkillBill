@@ -9,6 +9,7 @@ import dev.skillbill.desktop.core.domain.model.WorkKind
 
 internal const val REFRESH_BEFORE_CONTROLS = "Refresh the detail before using run controls."
 internal const val WORKING = "Working…"
+internal const val GOAL_STARTED = "A goal already started for this plan"
 
 private val RECOVER_ALLOWED = setOf(IncidentProgress.RecoveryAvailable, IncidentProgress.NeedsPrerequisites)
 
@@ -38,6 +39,7 @@ internal data class RunActionsView(
   val decision: OperatorDecisionNeeded?,
   val implement: ControlButton? = null,
   val implementationNote: Boolean = false,
+  val goalStartedNote: Boolean = false,
 )
 
 /** HANDOFF 9.2 items 4, 5 and 7 as rules D-A to D-F: presence, labels and enablement only; nothing is sorted or timed. */
@@ -64,7 +66,19 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
   val launchable = ready && options?.canLaunch == true && (item.issueKey ?: item.id) !in controls.reservations
   val agentId = controls.chosenAgent ?: options?.agentId
   val launch = ControlButton(label(InFlightControl.Launch, options?.launchLabel?.ifBlank { null } ?: "Resume"), launchable).takeIf { resumable }
-  val agent = ControlButton(agentId?.let { "Agent: $it" } ?: "Choose agent", launchable).takeIf { resumable }
+
+  val goalStarted = controls.implementationStarted || options?.goalStarted == true
+  val implement = ControlButton(
+    label(InFlightControl.Launch, "Implement"),
+    ready && !goalStarted && loaded != null && planImplementationEnabled(item, loaded.detail) && item.issueKey !in controls.reservations,
+    tooltip = GOAL_STARTED.takeIf { goalStarted },
+  ).takeIf { item.offersPlanImplementation() }
+  val agentLabel = agentId?.let { "Agent: $it" } ?: "Choose agent"
+  val agent = when {
+    resumable -> ControlButton(agentLabel, launchable)
+    implement != null -> ControlButton(agentLabel, implement.enabled)
+    else -> null
+  }
 
   val confirmed = confirmedPrerequisites(state, incident)
   val allConfirmed = incident != null && incident.prerequisites.all { prerequisiteOf(it.kind) in confirmed }
@@ -103,11 +117,9 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
     checklist = checklist,
     checklistEnabled = ready,
     decision = decision,
-    implement = ControlButton(
-      label(InFlightControl.Launch, "Implement"),
-      ready && !controls.implementationStarted && planImplementationEnabled(item, loaded.detail) && item.issueKey !in controls.reservations,
-    ).takeIf { item.offersPlanImplementation() },
-    implementationNote = item.offersPlanImplementation() && !planFinished(item, loaded?.detail),
+    implement = implement,
+    implementationNote = implement != null && !goalStarted && !planFinished(item, loaded?.detail),
+    goalStartedNote = implement != null && goalStarted,
   )
 }
 

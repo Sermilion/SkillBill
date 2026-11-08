@@ -86,6 +86,38 @@ class GoalQualityGateRecoveryTest {
   }
 
   @Test
+  fun `initial discovery cancelled by a graceful runner shutdown may run again before any gate run`() {
+    val interrupted =
+      FeatureTaskRuntimeValidationGateProgress(
+        gateRunCount = 0,
+        gateRuns = emptyList(),
+        pendingExternalOperation = "build:initial_discovery:./gradlew compileKotlin",
+        pendingExternalCheckpoint = "checkpoint",
+        pendingExternalInterrupted = true,
+      )
+    validate(progress(listOf(first, second), interrupted))
+  }
+
+  @Test
+  fun `interrupted repair and verification commands keep the unknown outcome block`() {
+    listOf(
+      "build:repair:build:1",
+      "build:post_repair_verify:./gradlew compileKotlin",
+      "validation:initial_discovery:./gradlew check",
+    ).forEach { operation ->
+      val interrupted =
+        gate.copy(
+          pendingExternalOperation = operation,
+          pendingExternalCheckpoint = "checkpoint",
+          pendingExternalInterrupted = true,
+        )
+      val failure =
+        assertFailsWith<SkillBillRuntimeException>(operation) { validate(progress(listOf(first, second), interrupted)) }
+      assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'build#1' is unknown")
+    }
+  }
+
+  @Test
   fun `an interrupted read-only QA attempt with a consistent start may run again`() {
     val qa = record.copy(phaseId = "qa")
     validateRetained(GoalQualityPhaseProgress(phaseRecords = mapOf("qa" to qa), phaseLedger = qaStarts("qa")))
@@ -116,13 +148,33 @@ class GoalQualityGateRecoveryTest {
     assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'qa#1' is unknown")
   }
 
+  @Test
+  fun `an interrupted validation attempt always runs again`() {
+    val validate = record.copy(phaseId = "validate")
+    val retry = validate.copy(attemptCount = 2)
+    val retryStarts = qaStarts("validate").map { it.copy(attemptCount = 2) }
+    val retryTerminal =
+      retryStarts.last().copy(
+        action = FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
+        sequenceNumber = 11,
+      )
+    listOf(
+      GoalQualityPhaseProgress(phaseRecords = mapOf("validate" to validate), phaseLedger = qaStarts("validate")),
+      GoalQualityPhaseProgress(phaseRecords = mapOf("validate" to validate)),
+      GoalQualityPhaseProgress(phaseRecords = mapOf("validate" to retry), phaseLedger = retryStarts + retryTerminal),
+    ).forEach { progress -> validateRetained(progress, SkeletonDefinition.VALIDATION) }
+  }
+
   private fun qaStarts(phaseId: String) = listOf(first.copy(phaseId = phaseId), second.copy(phaseId = phaseId))
 
-  private fun validateRetained(progress: GoalQualityPhaseProgress) {
+  private fun validateRetained(
+    progress: GoalQualityPhaseProgress,
+    definition: SkeletonDefinition = SkeletonDefinition.GOAL_QA,
+  ) {
     val resolver = resolver()
     val plan =
       resolver.resolveExecutionPlan(
-        PhaseRunRequest(definitionId = SkeletonDefinition.GOAL_QA.id, repoRoot = home, invokedAgentId = "codex"),
+        PhaseRunRequest(definitionId = definition.id, repoRoot = home, invokedAgentId = "codex"),
         "goal-parent",
       )
     resolver.validateRetainedRunningPhases(progress, plan, "goal-parent:quality-invocation")

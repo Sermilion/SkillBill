@@ -3,6 +3,9 @@ package dev.skillbill.desktop.feature.chat
 import androidx.compose.runtime.snapshots.Snapshot
 import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
+import dev.skillbill.desktop.core.domain.model.OperationCardDetailsView
+import dev.skillbill.desktop.core.domain.model.OperationCardState
+import dev.skillbill.desktop.core.domain.model.OperationCardView
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
@@ -12,6 +15,7 @@ import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
@@ -505,6 +509,28 @@ class ChatWorkspaceTest {
   }
 
   @Test
+  fun `a refused draft restores its own MCP declaration after the picker changes`() = runTest {
+    val item = workItem("SKILL-453")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val reply = Channel<ChatEvent>(Channel.UNLIMITED)
+    chat.events = { flow { for (event in reply) emit(event) } }
+
+    workspace.send(item.id, "use the team server", cursorMcpDependency = CursorMcpDependency.TeamDashboardRequired)
+    runCurrent()
+    workspace.cursorMcpDependencies[item.id] = CursorMcpDependency.ProjectUserOnly
+    reply.send(ChatEvent.Failed(ChatFailure.AgentUnsupported, null))
+    reply.close()
+    runCurrent()
+
+    assertEquals("use the team server", workspace.drafts[item.id])
+    assertEquals(CursorMcpDependency.TeamDashboardRequired, workspace.cursorMcpDependencies[item.id])
+    workspace.closeAll()
+  }
+
+  @Test
   fun `an image that finishes normalizing after its chat closed is dropped`() = runTest {
     val item = workItem("SKILL-450")
     details.details = mapOf(item.id to flowOf(loaded(item)))
@@ -665,6 +691,46 @@ class ChatWorkspaceTest {
     assertEquals(listOf(goal.id), cancelled)
     assertNull(workspace.session(goal.id))
     assertTrue(phaseSession.job.isActive)
+  }
+
+  // Summarizing on every reply bills the operator per turn; missing the switch or close leaves rows on fallback titles.
+  @Test
+  fun `switching away from an idle chat and closing one request summaries and a finished turn does not`() = runTest {
+    val goal = workItem("SKILL-1")
+    val phase = workItem("phase-1", kind = WorkKind.Phase)
+    details.details = mapOf(goal.id to flowOf(loaded(goal)), phase.id to flowOf(loaded(phase)))
+    val workspace = workspace()
+
+    workspace.open(goal)
+    workspace.open(phase)
+    runCurrent()
+    assertEquals(emptyList(), chat.summaryRequests)
+
+    workspace.activate(goal.id)
+    val goalSessionId = workspace.session(goal.id)!!.sessionId
+    workspace.close(goal.id)
+    runCurrent()
+
+    assertEquals(listOf(workspace.session(phase.id)!!.sessionId, goalSessionId), chat.summaryRequests)
+  }
+
+  // Summarizing a chat mid-turn bills a summary of half a reply and leaves the finished chat stale.
+  @Test
+  fun `switching away from a busy chat requests no summary`() = runTest {
+    val goal = workItem("SKILL-1")
+    val phase = workItem("phase-1", kind = WorkKind.Phase)
+    details.details = mapOf(goal.id to flowOf(loaded(goal)), phase.id to flowOf(loaded(phase)))
+    chat.events = { flow<ChatEvent> { awaitCancellation() } }
+    val workspace = workspace()
+
+    workspace.open(goal)
+    workspace.open(phase)
+    runCurrent()
+    workspace.activate(goal.id)
+    runCurrent()
+
+    assertTrue(workspace.session(phase.id)!!.busyState.value)
+    assertEquals(emptyList(), chat.summaryRequests)
   }
 
   @Test
@@ -835,6 +901,68 @@ class ChatWorkspaceTest {
   }
 
   @Test
+  fun `opening and follow-up chat turns use Act for every agent independently of execution lifecycle`() = runTest {
+    val agents = setOf("claude", "codex", "cursor", "junie")
+    for (agent in agents) {
+      for (lifecycle in Lifecycle.entries) {
+        val item = workItem("SKILL-1", lifecycle = lifecycle).copy(running = lifecycle == Lifecycle.Active, agentId = agent)
+        details.details = mapOf(item.id to flowOf(loaded(item)))
+        val repository = FakeExecutionChatRepository(ChatAgent(agent, null, null), agents)
+        val workspace = workspace(repository = repository)
+
+        workspace.open(item)
+        runCurrent()
+        workspace.send(item.id, "edit the requested file")
+        runCurrent()
+
+        assertEquals(2, repository.requests.size, "$agent / $lifecycle")
+        repository.requests.forEach { request ->
+          assertEquals(ChatPermissionMode.Act, request.mode, "$agent / $lifecycle")
+          assertEquals(agent, request.agent.agentId)
+        }
+        assertTrue(controls.calls.isEmpty())
+        workspace.close(item.id)
+        runCurrent()
+      }
+    }
+  }
+
+  @Test
+  fun `execution chat sends an adjustment reply to a replacement verify proposal instead of an ordinary agent turn`() = runTest {
+    val item = workItem("SKILL-1", lifecycle = Lifecycle.Terminal).copy(running = false)
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    val original = OperationCardView(
+      "old-token", "old-launch", "verify", OperationCardState.AwaitingConfirmation, "Original proposal",
+      OperationCardDetailsView.Verify(emptyList(), "SKILL-1", "/repo/spec.md", "branch", "local", "full"),
+      null, null, canConfirm = true,
+    )
+    val revised = original.copy(token = "new-token", launchId = "new-launch", summary = "Revised proposal")
+    controls.operationCards[original.launchId] = original
+    controls.operationCards[revised.launchId] = revised
+    controls.newTaskOutcome = NewTaskStartOutcome.AwaitingConfirmation("SKILL-1", NewTaskKind.Verify, original.launchId)
+    val action = ChatSuggestedAction("Verify", "Verify this branch", ChatPermissionMode.Act, NewTaskActionKind.Verify, target = "spec:/repo/spec.md")
+    chat.events = { flowOf(ChatEvent.SuggestedActions(listOf(action)), ChatEvent.Completed) }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    val reply = session.transcript.value.filterIsInstance<ChatMessage.Agent>().last()
+    workspace.executeAction(item.id, reply, action)
+    runCurrent()
+    workspace.operationCardActions(item.id)!!.onAdjust(original.token)
+    runCurrent()
+    assertEquals(1, controls.newTaskRequests.size)
+
+    controls.newTaskOutcome = NewTaskStartOutcome.AwaitingConfirmation("SKILL-1", NewTaskKind.Verify, revised.launchId)
+    workspace.send(item.id, "Focus on accessibility")
+    runCurrent()
+
+    assertEquals(1, chat.requests.size)
+    assertEquals("Focus on accessibility", controls.newTaskRequests.last().proposalChanges)
+    assertEquals(revised, session.thread.operationCard(revised.token)?.card)
+  }
+
+  @Test
   fun `an action sends its exact instruction once and an older reply cannot execute it again`() = runTest {
     val item = workItem("SKILL-1")
     details.details = mapOf(item.id to flowOf(loaded(item)))
@@ -854,7 +982,7 @@ class ChatWorkspaceTest {
 
     assertEquals(2, chat.requests.size)
     assertTrue(chat.requests.last().prompt.endsWith(action.instruction))
-    assertEquals(ChatPermissionMode.ReadOnly, chat.requests.last().mode)
+    assertEquals(ChatPermissionMode.Act, chat.requests.last().mode)
     assertEquals(listOf(ChatMessage.Operator(action.instruction, action)), session.transcript.value.filterIsInstance<ChatMessage.Operator>())
     assertTrue(controls.calls.isEmpty())
   }
@@ -907,7 +1035,7 @@ class ChatWorkspaceTest {
     val item = workItem("SKILL-1")
     val header = MutableStateFlow(loaded(item))
     details.details = mapOf(item.id to header)
-    chat.events = { request -> if (request.mode == ChatPermissionMode.Act) flow<ChatEvent> { awaitCancellation() } else flowOf(ChatEvent.Completed) }
+    chat.events = { request -> if (request.prompt.startsWith(ACT_PREFIX)) flow<ChatEvent> { awaitCancellation() } else flowOf(ChatEvent.Completed) }
     val workspace = workspace()
     workspace.open(item)
     runCurrent()
@@ -939,7 +1067,7 @@ class ChatWorkspaceTest {
     details.details = mapOf(item.id to header)
     val done = CompletableDeferred<Unit>()
     chat.events = { request ->
-      if (request.mode == ChatPermissionMode.Act) {
+      if (request.prompt.startsWith(ACT_PREFIX)) {
         flow { done.await(); emit(ChatEvent.Completed) }
       } else {
         flowOf(ChatEvent.Completed)
@@ -971,7 +1099,7 @@ class ChatWorkspaceTest {
     details.details = mapOf(item.id to header)
     val done = CompletableDeferred<Unit>()
     chat.events = { request ->
-      if (request.mode == ChatPermissionMode.Act) {
+      if (request.prompt.startsWith(ACT_PREFIX)) {
         flow { done.await(); emit(ChatEvent.Completed) }
       } else {
         flowOf(ChatEvent.Completed)

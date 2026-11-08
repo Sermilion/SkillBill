@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.core.designsystem.detail
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.runtime.CompositionLocalProvider
@@ -38,6 +39,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -48,6 +50,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 
 /** `.sb-doc` gap: the space between the detail document's blocks. */
 val DocBlockGap = 28.dp
@@ -174,19 +178,36 @@ fun LazyListScope.section(
   if (!collapsed) content()
 }
 
-/** `.sb-box`: a 1px `--border-subtle` frame, radius 8, with the content inside the border, clipped to the inner corners. */
+/** `.sb-box`: a clipped radius-8 frame with a 1px [borderColor], optional [fill] behind content, and an optional [header] band. */
 @Composable
-fun SbBox(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-  Column(modifier.fillMaxWidth().sbBoxSegment(0, 1), content = content)
+fun SbBox(
+  modifier: Modifier = Modifier,
+  fill: Color? = null,
+  borderColor: Color = SkillBillTheme.colors.borderSubtle,
+  header: (@Composable RowScope.() -> Unit)? = null,
+  content: @Composable ColumnScope.() -> Unit,
+) {
+  val colors = SkillBillTheme.colors
+  Column(modifier.fillMaxWidth().sbBoxSegment(0, 1, fill, borderColor)) {
+    header?.let {
+      Row(Modifier.fillMaxWidth().background(colors.bgRaised).hairline(Edge.Bottom, borderColor), verticalAlignment = Alignment.CenterVertically, content = it)
+    }
+    content()
+  }
 }
 
 /**
  * Draws one lazy-list item as a segment of an [SbBox]. The CSS border takes 1px of the box, so the segment insets its content by
- * 1 on both sides, and on the top of the first and the bottom of the last; the border draws over the content, so a row's own
+ * 1 on both sides, and on the top of the first and the bottom of the last; [fill] sits behind content, and [borderColor] draws over it, so a row's own
  * background (the current subtask's) never covers it, and the first and last segments draw the rounded corners.
  */
 @Composable
-fun Modifier.sbBoxSegment(index: Int, count: Int): Modifier {
+fun Modifier.sbBoxSegment(
+  index: Int,
+  count: Int,
+  fill: Color? = null,
+  borderColor: Color = SkillBillTheme.colors.borderSubtle,
+): Modifier {
   val first = index == 0
   val last = index == count - 1
   val radius = SkillBillRadius.md
@@ -197,7 +218,6 @@ fun Modifier.sbBoxSegment(index: Int, count: Int): Modifier {
     bottomStart = if (last) inner else 0.dp,
     bottomEnd = if (last) inner else 0.dp,
   )
-  val border = SkillBillTheme.colors.borderSubtle
   return drawWithContent {
     drawContent()
     val stroke = 1.dp.toPx()
@@ -208,12 +228,14 @@ fun Modifier.sbBoxSegment(index: Int, count: Int): Modifier {
     val bottom = if (last) size.height - half else size.height + 2 * r
     clipRect {
       drawRoundRect(
-        border,
+        borderColor,
         topLeft = Offset(half, top),
         size = Size(size.width - stroke, bottom - top),
         cornerRadius = CornerRadius(r - half),
         style = Stroke(stroke),
       )
     }
-  }.padding(start = 1.dp, end = 1.dp, top = if (first) 1.dp else 0.dp, bottom = if (last) 1.dp else 0.dp).clip(clipShape)
+  }.padding(start = 1.dp, end = 1.dp, top = if (first) 1.dp else 0.dp, bottom = if (last) 1.dp else 0.dp)
+    .clip(clipShape)
+    .then(if (fill != null) Modifier.background(fill) else Modifier)
 }

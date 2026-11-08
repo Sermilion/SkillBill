@@ -34,7 +34,7 @@ class NewTaskChatListTest {
       setContent {
         SkillBillTheme(reducedMotion = true) {
           CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-            NewTaskChatList(items, drafts[0], chats::select, chats::newChat, chats::requestClose)
+            NewTaskChatList(items, drafts[0], chats::select, chats::newChat, chats::requestClose, chats::discard)
           }
         }
       }

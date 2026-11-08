@@ -96,9 +96,17 @@
     devices: '<rect width="10" height="14" x="3" y="8" rx="2"/><path d="M5 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2h-2.4"/><path d="M8 18h.01"/>',
     wifi: '<path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/>',
     minus: '<path d="M5 12h14"/>',
+    /* Monitor run glyphs (design/monitor-run): a repair, a push, a merge, a PR field edit and the CI loop. */
+    wrench: '<path d="M14 6a4 4 0 0 0 5 5l-9 9-3-3 9-9a4 4 0 0 1-2-2z"/>',
+    upload: '<path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 20h16"/>',
+    merge: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 7v10"/><path d="M6 7c0 4 5 5 10 5"/>',
+    tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="7.5" r="1"/>',
+    loop: '<path d="m17 2 3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="m7 22-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>',
     gap: '<circle cx="12" cy="12" r="8" stroke-dasharray="3 3.2"/>',
     /* QA results glyphs, drawn as design/qa-results draws them: an open finding, something left behind, a report or run
      * details row, and the check, file, image, copy and open marks on its rows and chips. */
+    video: '<path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
+    videoOff: '<path d="M10.66 6H14a2 2 0 0 1 2 2v2.5l5.248-3.062A.5.5 0 0 1 22 7.87v8.196"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><path d="m2 2 20 20"/>',
     qaBug: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5"/><path d="M12 16h.01"/>',
     qaLeft: '<path d="M12 4l9 16H3z"/><path d="M12 10v4"/><path d="M12 17h.01"/>',
     qaDoc: '<path d="M6 4h12v16H6z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
@@ -108,6 +116,8 @@
     qaCopy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
     qaOpen: '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
     star: '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>',
+    pr: '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M6 8.5v7M18 15.5V9a3 3 0 0 0-3-3h-4"/><path d="m13 3.5-2.5 2.5L13 8.5"/>',
+    list: '<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',
     flag: '<path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/>',
   };
   function Icon(name, size) {
@@ -182,7 +192,7 @@
     track('Button');
     const v = o.variant || 'secondary';
     const cls = cx('sb-btn', v !== 'secondary' && 'sb-btn--' + v, o.size === 'sm' && 'sb-btn--sm');
-    return `<button type="button" class="${cls}"${act(o.act, o.arg)}${o.disabled ? ' disabled' : ''}${tipAttrs(o.tip, o.tipKbd)}${o.id ? ` id="${esc(o.id)}"` : ''}>${o.icon ? Icon(o.icon) : ''}${o.label ? `<span>${esc(o.label)}</span>` : ''}${o.count != null ? `<span class="sb-btn-n">${esc(o.count)}</span>` : ''}${o.kbd ? Kbd(o.kbd) : ''}</button>`;
+    return `<button type="button" class="${cls}"${act(o.act, o.arg)}${o.disabled ? ' disabled' : ''}${tipAttrs(o.tip, o.tipKbd)}${o.id ? ` id="${esc(o.id)}"` : ''}>${o.icon ? Icon(o.icon) : ''}${o.label ? `<span>${esc(o.label)}</span>` : ''}${o.trail ? Icon(o.trail) : ''}${o.count != null ? `<span class="sb-btn-n">${esc(o.count)}</span>` : ''}${o.kbd ? Kbd(o.kbd) : ''}</button>`;
   }
   function IconButton(o) {
     track('IconButton');
@@ -237,7 +247,7 @@
   /* ---------- Segmented, ViewTabs ---------- */
   function Segmented(o) {
     track('Segmented');
-    return `<div class="sb-seg" role="tablist">${o.items.map((it) => `<button type="button" role="tab" aria-selected="${it.id === o.value}" class="${it.id === o.value ? 'on' : ''}"${act(o.act, it.arg == null ? it.id : it.arg)}${it.disabled ? ' disabled' : ''}${tipAttrs(it.tip)}>${it.icon ? Icon(it.icon, 'sm') : ''}${esc(it.label)}</button>`).join('')}</div>`;
+    return `<div class="sb-seg" role="tablist">${o.items.map((it) => `<button type="button" role="tab" aria-selected="${it.id === o.value}" class="${it.id === o.value ? 'on' : ''}"${act(o.act, it.arg == null ? it.id : it.arg)}${it.disabled ? ' disabled' : ''}${tipAttrs(it.tip)}>${it.icon ? Icon(it.icon, 'sm') : ''}${it.dot ? '<span class="sb-qlive-dot" aria-hidden="true"></span>' : ''}${esc(it.label)}</button>`).join('')}</div>`;
   }
   function ViewTabs(o) {
     track('ViewTabs');
@@ -501,11 +511,92 @@
     ]);
     const passes = (o.reviews || []).map((p) => `<div class="sb-insp-pass"><div class="sb-insp-line"><b>Pass ${p.n}</b><span>· ${esc(p.verdict)}</span><span class="tnum">· ${p.open} unresolved</span></div>${p.findings.length ? `<div class="sb-insp-finds">${p.findings.map(([sev, text, where]) => FindingRow({ compact: true, severity: sev, title: text, meta: `<span class="mono" title="${esc(where)}">${esc(shortPath(where))}</span>` })).join('')}</div>` : ''}</div>`).join('');
     const review = `<div class="sb-insp-sec"><div class="sb-insp-hd">Review</div>${passes || '<span class="sb-insp-none">No review yet</span>'}${o.audit ? `<div class="sb-insp-line"><b>Audit</b><span>· ${esc(o.audit.verdict)}</span></div>${o.audit.summary ? ExpandableText({ text: o.audit.summary, cls: 'sb-insp-note' }) : ''}` : ''}</div>`;
-    return `<div class="sb-insp">${o.title ? `<div class="sb-insp-ti">${esc(o.title)}</div>` : ''}${o.blocked ? Hint({ tone: 'warn', text: o.blocked, fold: true }) : ''}${props}${review}</div>`;
+    /* `phases` (the Phases tabs and their PhasePeek card) follows the properties. When the review phase has a card, `noReview`
+     * drops the Review block: its passes and findings live in that card. */
+    return `<div class="sb-insp">${o.title ? `<div class="sb-insp-ti">${esc(o.title)}</div>` : ''}${o.blocked ? Hint({ tone: 'warn', text: o.blocked, fold: true }) : ''}${props}${o.phases || ''}${o.noReview ? '' : review}</div>`;
   }
-  function PhasePipeline(steps) {
+  /* With `o.tabs` (the details pane) the steps are tabs: a step with `act` opens its PhasePeek card, `selected` draws a ring
+   * outside the state color, a running step leads with a breathing dot and a step without `act` stays inert. Arrow keys,
+   * Home and End move between the steps that open (main.js). `skipped` strikes the label through. */
+  function PhasePipeline(steps, o) {
     track('PhasePipeline');
-    return `<div class="sb-pipe">${steps.map((s, i) => (i && !s.goalStart ? '<span class="sb-pipe-sep"></span>' : (s.goalStart ? '<span style="width:10px"></span>' : '')) + `<span class="${cx('sb-step', s.state, s.goal && 'goal')}"${tipAttrs(s.tip)}>${s.state === 'done' ? Icon('check') : ''}${esc(s.label)}${s.count ? ` · ${esc(s.count)}` : ''}</span>`).join('')}</div>`;
+    o = o || {};
+    const step = (s) => {
+      const lead = s.state === 'done' ? Icon('check') : o.tabs && s.state === 'now' ? '<span class="sb-step-live"></span>' : '';
+      const label = `${lead}${esc(s.label)}${s.count ? ` · ${esc(s.count)}` : ''}`;
+      if (!o.tabs) return `<span class="${cx('sb-step', s.state, s.goal && 'goal')}"${tipAttrs(s.tip)}>${label}</span>`;
+      const can = !!s.act;
+      return `<button type="button" role="tab" class="${cx('sb-step', 'goal', s.state, can && 'can')}" aria-selected="${!!(can && s.selected)}" tabindex="${can && s.selected ? 0 : -1}"${can ? act(s.act, s.arg) : ' aria-disabled="true"'} data-peek-pill="${esc(s.label)}" title="${esc(s.tip || (can ? `Show ${s.label}` : s.state === 'skipped' ? `${s.label} was skipped` : `${s.label} has not started`))}">${label}</button>`;
+    };
+    return `<div class="${cx('sb-pipe', o.tabs && 'sb-pipe--tabs')}"${o.tabs ? ` role="tablist" aria-label="${esc(o.label || 'Phases')}"` : ''}>${steps.map((s, i) => (i && !s.goalStart ? '<span class="sb-pipe-sep"></span>' : (s.goalStart ? '<span style="width:10px"></span>' : '')) + step(s)).join('')}</div>`;
+  }
+
+  /* ---------- Phase peek: the card under the details-pane phase tabs (design/phase-peek) ---------- */
+  const PEEK_TONE = { done: 'var(--st-done)', now: 'var(--st-active)', fail: 'var(--st-failed)', wait: 'var(--st-blocked)', skipped: 'var(--fg-faint)', pending: 'var(--st-pending)' };
+  const PEEK_WORD = { done: 'Done', now: 'Running', fail: 'Failed', wait: 'Blocked', skipped: 'Skipped', pending: 'Pending' };
+  const PEEK_STATUS = { done: 'done', now: 'active', fail: 'failed', wait: 'blocked', skipped: 'skipped', pending: 'pending' };
+  /* The selected phase: a header (status, title, phase id, state word, agent and model, round, time, duration) with an edge
+   * in `tone` (defaults to the state), an optional tinted `why` strip, then `parts` (PeekPart HTML), an Activity timeline
+   * and a `foot` button that opens the phase's full screen. */
+  function PhasePeek(o) {
+    track('PhasePeek');
+    const tone = o.tone || o.state;
+    const meta = [
+      o.agent ? `<span class="who">${o.agent}${esc(o.model || '')}</span>` : '',
+      o.round ? `<span>${esc(o.round)}</span>` : '', o.when ? `<span>${esc(o.when)}</span>` : '',
+    ].filter(Boolean).join('<i>·</i>');
+    const head = `<div class="sb-pk-hd" style="--tone:${PEEK_TONE[tone] || PEEK_TONE.pending}"><span class="st">${StatusIcon(PEEK_STATUS[o.state] || 'pending', 0.5)}</span><span class="nm">${esc(o.title)}<span class="id">${esc(o.id)}</span></span><span class="w">${esc(o.word || PEEK_WORD[o.state] || '')}</span><div class="mt">${meta}</div><span class="du">${esc(o.dur || '')}</span></div>`;
+    const why = o.why ? `<div class="sb-pk-part sb-pk-why" style="--tone:${PEEK_TONE[tone] || PEEK_TONE.pending}"><div class="sb-pk-tx">${o.why}</div></div>` : '';
+    const foot = o.foot ? `<div class="sb-pk-ft"><button type="button" class="sb-pk-btn"${act(o.foot.act, o.foot.arg)}>${esc(o.foot.label)}${Icon(o.foot.external ? 'external' : 'arrowRight', 'xs')}</button></div>` : '';
+    return `<div class="sb-pk" role="tabpanel" aria-label="${esc(o.title)}">${head}${why}${join(o.parts)}${o.activity && o.activity.length ? PeekTimeline(o.activity) : ''}${foot}</div>`;
+  }
+  /* One part of a PhasePeek: a small caps title with an `end` slot (text or a control), then `body`. `live` tints it for Now. */
+  function PeekPart(o) {
+    track('PeekPart');
+    return `<div class="${cx('sb-pk-part', o.live && 'is-live')}"><div class="${cx('sb-pk-ti', o.control && 'has-ctl')}">${esc(o.title)}${o.end ? `<span class="end">${o.end}</span>` : ''}</div>${join(o.body)}</div>`;
+  }
+  /* A line in Now: a pulse (`live`) or an icon, the text (HTML the caller escaped), an optional `keep` tail that never
+   * truncates (+12 −4) and how long ago. */
+  function PeekSignal(o) {
+    track('PeekSignal');
+    const tx = o.keep ? `<span class="tx split"><span class="trunc">${o.html}</span><span class="keep">${o.keep}</span></span>` : `<span class="${cx('tx', o.wrap && 'wrap')}">${o.html}</span>`;
+    return `<div class="sb-pk-sig"><span class="lead">${o.live ? '<span class="pulse"></span>' : Icon(o.icon || 'pencil', 'xs')}</span>${tx}<span class="ago">${esc(o.ago || '')}</span></div>`;
+  }
+  function PeekCmd(text) { track('PeekCmd'); return `<div class="sb-pk-cmd">${Icon('terminal', 'xs')}<span>${esc(text)}</span></div>`; }
+  /* Equal cells, one per check: ok, bad, warn, run (breathing) or empty. */
+  function PeekCells(cells) { track('PeekCells'); return `<div class="sb-pk-cells">${cells.map((c) => `<i class="${esc(c)}"></i>`).join('')}</div>`; }
+  /* A row of numbers: [value, label, tone (ok, bad, warn)]. */
+  function PeekStats(items) {
+    track('PeekStats');
+    return `<div class="sb-pk-stats" style="--n:${items.length}">${items.map(([v, l, t]) => `<div><b class="${esc(t || '')}">${esc(v)}</b><span>${esc(l)}</span></div>`).join('')}</div>`;
+  }
+  /* What a phase produced: an icon, the text (HTML), an `end` note. With `act` the row is a button with an arrow (or the
+   * external mark) on hover. */
+  function PeekOutput(o) {
+    track('PeekOutput');
+    const inner = `${Icon(o.icon || 'file', 'xs')}<span class="tx">${o.html}</span><span class="end">${esc(o.end || '')}${o.act ? Icon(o.external ? 'external' : 'arrowRight', 'xs') : ''}</span>`;
+    return o.act ? `<button type="button" class="sb-pk-out is-btn"${act(o.act, o.arg)}${o.tip ? ` title="${esc(o.tip)}"` : ''}>${inner}</button>` : `<div class="sb-pk-out"${o.tip ? ` title="${esc(o.tip)}"` : ''}>${inner}</div>`;
+  }
+  const PEEK_SEV = { blocker: 'var(--st-failed)', major: 'var(--st-blocked)', high: 'var(--st-blocked)', medium: 'var(--data-1)', minor: 'var(--fg-muted)', low: 'var(--fg-muted)', nit: 'var(--fg-faint)' };
+  const PEEK_FSTATE = { fixed: ['Fixed', 'var(--st-done)'], open: ['Open', 'var(--fg-faint)'], refuted: ['Refuted', 'var(--fg-faint)'] };
+  /* A one-line finding: severity, title (truncated, full in the tooltip) and its state. */
+  function PeekFinding(o) {
+    track('PeekFinding');
+    const f = PEEK_FSTATE[o.state];
+    return `<div class="sb-pk-find" style="--c:${PEEK_SEV[o.severity] || 'var(--fg-faint)'}"><span class="sev">${esc(o.severity)}</span><span class="tx" title="${esc(o.title)}">${esc(o.title)}</span>${f ? `<span class="fs" style="--c:${f[1]}">${f[0]}</span>` : '<span></span>'}</div>`;
+  }
+  /* A check or criterion: ok (green check), bad (red cross), run (spinner) or waiting (ring); the name, its command and time. */
+  function PeekCheck(o) {
+    track('PeekCheck');
+    const g = o.state === 'ok' ? `<span class="g ok">${Icon('check', 'xs')}</span>` : o.state === 'bad' ? `<span class="g bad">${Icon('x', 'xs')}</span>` : o.state === 'run' ? '<span class="spin"></span>' : '<span class="ring"></span>';
+    return `<div class="sb-pk-chk"${o.cmd ? ` title="${esc(o.cmd)}"` : ''}>${g}<span class="tx">${esc(o.name)}${o.cmd ? `<em>${esc(o.cmd)}</em>` : ''}</span><span class="w">${esc(o.time || '')}</span></div>`;
+  }
+  /* Label and value pairs on one wrapping line ("Exit all findings resolved"). Values are HTML. */
+  function PeekFacts(items) { track('PeekFacts'); return `<div class="sb-pk-facts">${items.map(([k, v]) => `<span>${esc(k)} <b>${v}</b></span>`).join('')}</div>`; }
+  /* Activity: [time, html, tone] rows on a thin rail; tone colors the dot (now breathes). */
+  function PeekTimeline(rows) {
+    track('PeekTimeline');
+    return `<div class="sb-pk-part"><div class="sb-pk-ti">Activity</div><div class="sb-pk-tl">${rows.map(([t, html, tone]) => `<div class="${cx('ev', tone === 'now' && 'now')}"><span class="dot" style="--c:${PEEK_TONE[tone] || 'var(--border-strong)'}"></span><span class="tx">${html}</span><span class="t">${esc(t)}</span></div>`).join('')}</div></div>`;
   }
   /* Titled group in the details pane: 11.5px faint title. With `status` ({ state }) the title leads with that StatusIcon
    * and ends with the state's word in its color ("Blocked"); `end` is a free end slot. */
@@ -597,7 +688,7 @@
   function FindingRow(o) {
     track('FindingRow');
     const chips = (o.chips || []).filter(Boolean);
-    return `<div class="${cx('sb-finding', o.compact && 'sb-finding--compact', o.lead != null && 'has-lead')}">${o.lead != null ? `<span class="sb-finding-sel">${o.lead}</span>` : ''}${o.severity ? `<span class="sb-finding-sev" style="--c:${o.sevColor || SEVERITY[o.severity] || 'var(--fg-faint)'}">${esc(o.severity)}</span>` : ''}${o.refHtml || (o.ref ? IdTag(o.ref) : '')}<div class="sb-finding-tx">${ExpandableText({ text: o.title, cls: 'sb-finding-ti' })}${o.meta ? (o.compact ? `<span>${o.meta}</span>` : ExpandableText({ html: o.meta, cls: 'sb-finding-mt' })) : ''}${chips.length ? `<div class="sb-qchips">${chips.join('')}</div>` : ''}${overlap(o.hint)}</div>${o.state ? Label({ text: o.state, color: o.stateColor || 'var(--fg-faint)', dot: true }) : ''}${o.end ? `<span class="sb-finding-end">${o.end}</span>` : ''}</div>`;
+    return `<div class="${cx('sb-finding', o.compact && 'sb-finding--compact', o.stacked && 'sb-finding--stacked', o.lead != null && 'has-lead')}">${o.lead != null ? `<span class="sb-finding-sel">${o.lead}</span>` : ''}${o.severity ? `<span class="sb-finding-sev" style="--c:${o.sevColor || SEVERITY[o.severity] || 'var(--fg-faint)'}">${esc(o.severity)}</span>` : ''}${o.refHtml || (o.ref ? IdTag(o.ref) : '')}<div class="sb-finding-tx">${ExpandableText({ text: o.title, cls: 'sb-finding-ti' })}${o.meta ? (o.compact ? `<span>${o.meta}</span>` : ExpandableText({ html: o.meta, cls: 'sb-finding-mt' })) : ''}${chips.length ? `<div class="sb-qchips">${chips.join('')}</div>` : ''}${overlap(o.hint)}</div>${o.state ? Label({ text: o.state, color: o.stateColor || 'var(--fg-faint)', dot: true }) : ''}${o.end ? `<span class="sb-finding-end">${o.end}</span>` : ''}</div>`;
   }
 
   /* ---------- Activity feed: one line per recorded event, oldest first, icons joined by a connector ---------- */
@@ -659,13 +750,15 @@
     if (status === 'unread') return `<span class="sb-cmark" role="img" aria-label="New reply"><span class="dot"></span></span>`;
     return '<span class="sb-cmark"></span>';
   }
-  /* The open chats as tabs: { tabs: [{ id, label, status, on, tip }], count }. Tabs round on top and the selected one joins the
-   * panel. "+" follows the last tab. The count button at the far right shows only while tabs are clipped (main.js fitChatTabs)
-   * and carries a mark when a clipped tab is replying or has a new reply. */
+  /* The open chats as tabs: { tabs: [{ id, label, status, on, tip }], count }. The strip is the top of the New task screen, so
+   * it leads with the sidebar toggle while the sidebar is a drawer. Tabs round on top and the selected one joins the panel.
+   * Right-click, Shift+F10 or the menu key on a tab opens Close and Discard. "+" follows the last tab. The count button at the
+   * far right shows only while tabs are clipped (main.js fitChatTabs) and carries a mark when a clipped tab is replying or has a
+   * new reply. */
   function ChatTabs(o) {
     track('ChatTabs');
-    const tabs = o.tabs.map((t) => `<div class="${cx('sb-ctab', t.on && 'on', t.status === 'unread' && 'unread')}" role="tab" aria-selected="${!!t.on}" data-act="chat-select" data-arg="${esc(t.id)}" data-tab="${esc(t.id)}" data-status="${esc(t.status || '')}"${tipAttrs(t.tip || t.label)}>${ChatStatusMark(t.status)}<span class="label">${esc(t.label)}</span>${IconButton({ icon: 'x', label: `Close ${t.label}`, kbd: '⌘ W', act: 'chat-close', arg: t.id, size: 'sm' })}</div>`).join('');
-    return `<div class="sb-ctabs" role="tablist" aria-label="Open chats"><div class="sb-ctabs-scroll" data-ctabs>${tabs}</div>${IconButton({ icon: 'plus', label: 'New chat', kbd: '⌘ T', act: 'chat-new', size: 'sm' })}<button type="button" class="sb-ctabs-more" data-act="chat-menu" data-ctabs-more hidden aria-label="All ${o.count} open chats" data-tip="All open chats">${ChatStatusMark(null)}${o.count}${Icon('chevronDown', 'sm')}</button></div>`;
+    const tabs = o.tabs.map((t) => `<div class="${cx('sb-ctab', t.on && 'on', t.status === 'unread' && 'unread')}" role="tab" tabindex="0" aria-selected="${!!t.on}" aria-haspopup="menu" data-act="chat-select" data-arg="${esc(t.id)}" data-tab="${esc(t.id)}" data-ctx="chat:${esc(t.id)}" data-status="${esc(t.status || '')}"${tipAttrs(t.tip || t.label)}>${ChatStatusMark(t.status)}<span class="label">${esc(t.label)}</span>${IconButton({ icon: 'x', label: `Close ${t.label}`, kbd: '⌘ W', act: 'chat-close', arg: t.id, size: 'sm' })}</div>`).join('');
+    return `<div class="sb-ctabs" role="tablist" aria-label="Open chats">${IconButton({ icon: 'panelLeft', label: 'Toggle sidebar', kbd: '[', act: 'toggle-side', cls: 'sb-side-toggle' })}<div class="sb-ctabs-scroll" data-ctabs>${tabs}</div>${IconButton({ icon: 'plus', label: 'New chat', kbd: '⌘ T', act: 'chat-new', size: 'sm' })}<button type="button" class="sb-ctabs-more" data-act="chat-menu" data-ctabs-more hidden aria-label="All ${o.count} open chats" data-tip="All open chats">${ChatStatusMark(null)}${o.count}${Icon('chevronDown', 'sm')}</button></div>`;
   }
   /* A suggested next step: an action the agent offered (the first is `primary`), or a quick start under an empty composer.
    * `note` trails the label in faint text ("QA my branch on Pixel 8 Pro" once a QA device is picked). */
@@ -845,6 +938,72 @@
     const targets = (o.targets || []).map(([kind, word]) => `<span><b>${esc(kind)}</b> ${esc(word)}</span>`).join('<span>·</span>');
     return `<div class="sb-qa"><p class="sb-qa-st">${esc(o.sentence)}</p>${groups}${folds.length ? `<div class="sb-box sb-qfolds">${folds.join('')}</div>` : ''}${targets ? `<div class="sb-qa-tg">${targets}</div>` : ''}</div>`;
   }
+
+  /* ---------- QA live: goal QA while it runs ---------- */
+  /* Sample pixels standing in for a frame of the app under test: a sidebar, a header, rows and an amber button. `dim` for a
+   * frame that is no longer live (restarting, no capture, ended); `cursor` draws the pointer QA is driving. */
+  const qaFrame = (dim, cursor) => `<span class="${cx('sb-qframe', dim && 'is-dim')}" aria-hidden="true"><span class="sb"><i class="on"></i><i></i><i></i><i class="w"></i><i></i></span><span class="mn"><i class="h"></i><i class="r"></i><i></i><i class="r"></i><i class="btn"></i><i class="r"></i></span>${cursor ? '<span class="cur"></span>' : ''}</span>`;
+  /* The 16:10 preview box. Kinds: `later` (video icon, "Video starts at <stage>" and why), `waiting` (spinner, the display is
+   * up and nothing has drawn), `live` (frames, a LIVE badge, the criterion and display), `reconnect` (last frame dimmed under
+   * a spinner while QA restarts the display), `nocapture` (last frame dimmed, NO VIDEO and why), `none` (no display at
+   * all) and `ended` (the last frame as a still with its time). */
+  function QaPreview(o) {
+    track('QaPreview');
+    const empty = (lead, title, text) => `<div class="sb-qpv-empty">${lead}${title ? `<b>${esc(title)}</b>` : ''}${text ? `<p>${esc(text)}</p>` : ''}</div>`;
+    const spin = '<span class="sb-qpv-spin" aria-hidden="true"></span>';
+    const badge = (cls, html) => `<span class="${cx('sb-qpv-badge', cls)}">${html}</span>`;
+    let inner;
+    switch (o.kind) {
+      case 'later': inner = empty(Icon('video'), o.title, o.text); break;
+      case 'waiting': inner = empty(spin, o.title, o.text); break;
+      case 'live': inner = `${qaFrame(false, true)}${badge('is-live', '<i></i>LIVE')}<span class="sb-qpv-cap"><span>${esc(o.caption)}</span><span>${esc(o.info)}</span></span>`; break;
+      case 'reconnect': inner = `${qaFrame(true)}${badge('is-warn', `${Icon('warn', 'xs')}DISPLAY RESTARTING`)}<span class="sb-qpv-veil">${empty(spin, null, o.text)}</span>`; break;
+      case 'nocapture': inner = `${qaFrame(true)}${badge('is-warn', `${Icon('videoOff', 'xs')}NO VIDEO`)}<span class="sb-qpv-veil"><p>${esc(o.text)}</p></span>`; break;
+      case 'none': inner = empty(Icon('videoOff'), o.title, o.text); break;
+      case 'ended': inner = `${qaFrame(true)}${badge('is-ended', `LAST FRAME · ${esc(o.at)}`)}`; break;
+      default: inner = '';
+    }
+    return `<div class="sb-qpv" role="img" aria-label="${esc(o.label || 'QA live preview')}"${o.kind === 'live' ? '' : ' aria-live="polite"'}>${inner}</div>`;
+  }
+  /* The stages of one QA attempt. Each row: a check (done), a spinning ring (now), warn, a dash (skipped, struck through) or
+   * an empty ring (pending); the name with a `video` tag (red while the preview shows frames) or `headless`; the duration or
+   * "now"; and one detail `line` (HTML the caller escaped). `summary` replaces the list with one row after QA ends. */
+  function QaStageList(o) {
+    track('QaStageList');
+    if (o.summary) return `<button type="button" class="sb-qstages is-sum" aria-expanded="false"${act(o.act, o.arg)}>${Icon('check', 'sm')}<span>${esc(o.summary)}</span><span class="t">${esc(o.time || '')}</span></button>`;
+    const glyph = (k) => k === 'done' ? Icon('check', 'sm') : k === 'warn' ? Icon('warn', 'sm') : k === 'skip' ? Icon('minus', 'sm') : `<span class="${cx('ring', k === 'now' && 'is-now')}"></span>`;
+    const tag = (s) => s.tag === 'video' ? `<span class="${cx('sb-qtag', s.tagOn && 'is-on')}" title="The preview shows video during this stage">${Icon('video', 'xs')}video</span>` : s.tag === 'headless' ? '<span class="sb-qtag" title="Runs without a display">headless</span>' : '';
+    return `<ol class="sb-qstages" aria-label="QA stages">${o.stages.map((s) => `<li class="${cx('sb-qstage', 'is-' + s.state)}"><span class="g">${glyph(s.state)}</span><span class="nm">${esc(s.name)}${tag(s)}</span><span class="t">${esc(s.time || '')}</span>${s.line ? `<span class="ln">${s.line}</span>` : ''}</li>`).join('')}</ol>`;
+  }
+  /* Screenshots QA saved under evidence/, newest first, three across. `total` counts every file. */
+  function QaShots(o) {
+    track('QaShots');
+    if (!o.files || !o.files.length) return '';
+    return `<div class="sb-qshots"><div class="hd"><span>Screenshots · ${o.total}</span>${o.total > o.files.length ? '<span>newest first</span>' : ''}</div><div class="row">${o.files.map((f) => `<button type="button" class="sb-qshot"${act('open-file', 'evidence/' + f)}${tipAttrs('evidence/' + f)}><span class="th">${qaFrame(false, true)}</span><span class="cap">${esc(f)}</span></button>`).join('')}</div></div>`;
+  }
+  /* The goal QA fix loop as a strip: QA 1 with its findings, qa_fix, QA 2. */
+  function QaRounds(o) {
+    track('QaRounds');
+    return `<div class="sb-qrounds" aria-label="Goal QA rounds">${o.rounds.map((r) => `<span class="${cx('sb-qround', 'is-' + r.state)}">${r.icon ? Icon(r.icon, 'xs') : ''}${esc(r.label)}</span>`).join('<i></i>')}</div>`;
+  }
+  /* Goal QA while it runs, top down: the stage (or verdict) word with "stage N of 7 · elapsed", the round and invocation,
+   * target chips, the round strip, the preview, an optional hint (when an earlier run reached video), a callout, the
+   * screenshots and the stage list. */
+  function QaLive(o) {
+    track('QaLive');
+    const targets = (o.targets || []).map((t) => `<span class="sb-qtgt" style="--c:${QA_TONE[t.tone] || 'var(--st-active)'}"><i></i>${esc(t.label)}</span>`).join('');
+    return `<div class="sb-qlive">
+      <div class="sb-qlive-hd"><span class="w" style="--c:${QA_TONE[o.tone] || 'var(--st-active)'}"><i></i>${esc(o.word)}</span><span class="m">${esc(o.meta)}</span></div>
+      <p class="sb-qlive-sub">${o.sub}</p>
+      ${targets ? `<div class="sb-qtgts">${targets}</div>` : ''}
+      ${o.rounds ? QaRounds({ rounds: o.rounds }) : ''}
+      ${QaPreview(o.preview)}
+      ${o.hint ? `<p class="sb-qlive-hint">${Icon('clock', 'xs')}<span>${esc(o.hint)}</span></p>` : ''}
+      ${o.callout || ''}
+      ${o.shots ? QaShots(o.shots) : ''}
+      ${QaStageList(o.stages)}
+    </div>`;
+  }
   /* An agent report as text: headings, paragraphs, bullet and numbered lists (an item indented two or more spaces nests
    * under the one before; an indented plain line continues it), fenced blocks, `code` and **bold**. A path under a home or
    * temp directory shows as its file name, with the full path in the tooltip. Each plain line is its own paragraph. */
@@ -881,7 +1040,7 @@
   }
 
   /* ---------- Run outcome: the card a validation or Verify run opens with, and the parts under it ---------- */
-  const RUN_TONE = { done: 'var(--st-done)', active: 'var(--st-active)', blocked: 'var(--st-blocked)', failed: 'var(--st-failed)', neutral: 'var(--fg-2)', faint: 'var(--fg-faint)', accent: 'var(--accent-text)' };
+  const RUN_TONE = { merged: 'var(--data-5)', done: 'var(--st-done)', active: 'var(--st-active)', blocked: 'var(--st-blocked)', failed: 'var(--st-failed)', neutral: 'var(--fg-2)', faint: 'var(--fg-faint)', accent: 'var(--accent-text)' };
   /* A bar split into segments. `segs` [{ n, tone }] grow by n (a Verify score: green fine, amber needs a look, red blocking,
    * in that order); `equal` draws one 5px segment per check instead, where a running check breathes and a skipped one is
    * hatched. With no segment it draws the empty track, so bars in a row stay aligned. Tones: done, blocked, failed, active,
@@ -977,7 +1136,7 @@
   /* A 16px tag in the tone's color on a 14% tint: "reported by the agent" beside the Checks title. Tones as Badge. */
   function Tag(o) { track('Tag'); return `<span class="sb-tag" style="--c:${VTONE[o.tone] || o.color || VTONE.faint}">${esc(o.text)}</span>`; }
   /* Text that acts like a link: 11.5px in the accent, underlined on hover. Expand all and Collapse all on a report. */
-  function LinkButton(o) { track('LinkButton'); return `<button type="button" class="sb-linkbtn"${act(o.act, o.arg)}>${esc(o.label)}</button>`; }
+  function LinkButton(o) { track('LinkButton'); return `<button type="button" class="sb-linkbtn"${act(o.act, o.arg)}>${esc(o.label)}${o.icon ? Icon(o.icon, 'xs') : ''}</button>`; }
   /* One faint line inside a Box that holds a section's place: "Waiting for the agent to list its checks." */
   function BoxNote(o) { track('BoxNote'); return `<div class="sb-boxnote">${esc(o.text)}</div>`; }
   /* The text of a report part: consecutive lines join into a paragraph, numbered and bullet lists (an item indented two or
@@ -1020,6 +1179,155 @@
     return `<button type="button" class="${cx('sb-vrun', o.current && 'is-cur')}"${o.current ? ' aria-current="true"' : ''}${act(o.act, o.arg)}>${inner}</button>`;
   }
 
+
+  /* ---------- Monitor run document (design/monitor-run) ---------- */
+  /* The column a monitor run renders in. It is a ValidationDoc too, so the header, the outcome card, boxes and sections take
+   * the validation metrics; .sb-mondoc adds what differs: the PR number before the title, a breathing signal dot, the
+   * actions row inside the card and the cap pips in its last cell. */
+  function MonitorDoc(children) { track('MonitorDoc'); return `<div class="sb-vdoc sb-valdoc sb-mondoc">${join(children)}</div>`; }
+  const MON_TONE = { now: 'var(--st-active)', done: 'var(--st-done)', fail: 'var(--st-failed)', conflict: 'var(--st-blocked)', blocked: 'var(--st-blocked)', merged: 'var(--data-5)', stopped: 'var(--fg-faint)' };
+  /* The repair cap as `cap` 10px squares, `used` of them filled orange; red once all are used ("3 of 3"). */
+  function CapPips(o) {
+    track('CapPips');
+    const cap = o.cap || 3;
+    return `<span class="${cx('sb-mon-pips', o.used >= cap && 'is-full')}" role="img" aria-label="${esc(`${o.used} of ${cap} failed repairs`)}">${Array.from({ length: cap }, (_, i) => `<i class="${i < o.used ? 'on' : ''}"></i>`).join('')}</span>`;
+  }
+  /* Buttons inside a RunOutcome, 12px under its text: Monitor again, Open worktree, Open failing job, Open PR. */
+  function OutcomeActions(buttons) { track('OutcomeActions'); return `<div class="sb-mon-acts">${join(buttons)}</div>`; }
+  /* One row per CI round of a monitor run and a column per step: CI (monitor), Repair (monitor_fix), Publish (commit_push).
+   * A cell has a 2px edge in its tone, the result in a few words, one faint line (the head sha in mono, the failing check,
+   * the agent and time) and, for CI, one small bar per check (passed, failed, running, queued). The live cell breathes a dot
+   * after its word; the selected cell sits on the accent tint with a ring. `empty` cells hold a faint line ("Starts on a
+   * failure", "After the fix", "Cap reached"). With `act` a cell is a button. `compact` drops the step ids and narrows the
+   * cycle column for the details pane. `foot` is [icon, text] pairs under the grid. */
+  function MonitorCycles(o) {
+    track('MonitorCycles');
+    const head = [[o.compact ? '#' : 'Cycle', null], ['CI', 'monitor'], ['Repair', 'monitor_fix'], ['Publish', 'commit_push']]
+      .map(([t, id], i) => `<div class="${cx('gh', i && 'col')}">${esc(t)}${id && !o.compact ? `<span class="id">${id}</span>` : ''}</div>`).join('');
+    const cell = (c, first) => {
+      if (!c || c.empty != null) return `<div class="${cx('cell is-empty', first && 'first')}">${esc((c && c.empty) || '—')}</div>`;
+      const bar = c.bar ? `<span class="bar">${c.bar.length ? c.bar.map((b) => `<i class="is-${esc(b)}"></i>`).join('') : '<i></i><i></i><i></i>'}</span>` : '';
+      const inner = `<span class="w"><span>${esc(c.word)}</span></span><span class="s">${c.sub || ''}</span>${bar}`;
+      const cls = cx('cell', first && 'first', c.live && 'is-live', c.sel && 'is-sel');
+      const style = ` style="--c:${MON_TONE[c.tone] || 'var(--fg-faint)'}"`;
+      return c.act ? `<button type="button" class="${cls}"${style}${act(c.act, c.arg)} aria-pressed="${!!c.sel}">${inner}</button>` : `<div class="${cls}"${style}>${inner}</div>`;
+    };
+    const rows = o.rows.map((r, i) => `<div class="${cx('gn', !i && 'first')}">${esc(r.n)}<small>${esc(r.at)}</small></div>${r.cells.map((c) => cell(c, !i)).join('')}`).join('');
+    const foot = o.foot ? `<div class="sb-mon-gfoot">${o.foot.map(([icon, text]) => `<span>${Icon(icon, 'xs')}${esc(text)}</span>`).join('')}</div>` : '';
+    return `<div class="${cx('sb-mon-grid', o.compact && 'is-compact')}" role="group" aria-label="${esc(o.label || 'Monitor cycles')}">${head}${rows}</div>${foot}`;
+  }
+  /* A bordered box with a raised head line: a 12px glyph, the bold title, a faint `sub` (HTML) and an `end` slot (links,
+   * a badge). The CI board, a repair, its files, the local checks and the publish receipt each sit in one. */
+  function MonitorBox(o) {
+    track('MonitorBox');
+    return `<div class="sb-box sb-mon-box"><div class="sb-mon-bh">${Icon(o.icon || 'info', 'xs')}<b>${esc(o.title)}</b>${o.sub ? `<span class="sub">${o.sub}</span>` : ''}${o.end ? `<span class="end">${join(o.end)}</span>` : ''}</div>${join(o.body)}</div>`;
+  }
+  /* The summary band at the top of a MonitorBox: lines (MonitorLine), a SegmentBar or ResolveBar and a CheckTally, 8px apart. */
+  function MonitorSummary(children) { track('MonitorSummary'); return `<div class="sb-mon-sum">${join(children)}</div>`; }
+  /* One line in a MonitorSummary: a 12px glyph, the text (HTML) and a faint `end` (the last and next poll, commits on the
+   * base). `color` tints the whole line (orange for a conflicting PR, purple once merged). */
+  function MonitorLine(o) {
+    track('MonitorLine');
+    return `<div class="sb-mon-line"${o.color ? ` style="color:${o.color}"` : ''}>${Icon(o.icon || 'commit', 'xs')}<span>${o.html}</span>${o.end ? `<span class="end">${o.end}</span>` : ''}</div>`;
+  }
+  /* A short sha in mono on an 18px chip. With `act` it is a button (copy). */
+  function ShaChip(o) {
+    track('ShaChip');
+    const inner = `${o.icon ? Icon('commit', 'xs') : ''}${esc(o.sha)}`;
+    return o.act ? `<button type="button" class="sb-mon-sha"${act(o.act, o.arg)}${tipAttrs(o.tip || `Copy ${o.sha}`)}>${inner}</button>` : `<span class="sb-mon-sha">${inner}</span>`;
+  }
+  /* A 16px tag in mono on a tint: "Repair outcome: fixed" (ok), "2 of 3 hunks left" (warn), "rerun" (ok). */
+  function MonBadge(o) { track('MonBadge'); return `<span class="${cx('sb-mon-badge', o.tone && 'is-' + o.tone)}">${esc(o.text)}</span>`; }
+  /* A small caps group label inside a box: Failed 1, Running 2, Waiting 1, Passed 3, Fixing, Conflicted files. With `fold`
+   * ({ act, arg }) a chevron before it opens or folds the group. */
+  function MonitorGroup(o) {
+    track('MonitorGroup');
+    return `<div class="sb-mon-group">${o.fold ? `<button type="button" class="fd" aria-expanded="${!!o.fold.open}"${act(o.fold.act, o.fold.arg)} aria-label="${esc(`${o.fold.open ? 'Fold' : 'Show'} ${o.label}`)}">${Icon('chevronRight', 'xs')}</button>` : ''}${esc(o.label)}${o.count != null ? `<span>${esc(o.count)}</span>` : ''}</div>`;
+  }
+  /* A folded group as one line: a green check, the names on one faint line and "show". The whole line opens the group. */
+  function FoldLine(o) {
+    track('FoldLine');
+    return `<div class="sb-mon-row"><button type="button" class="sb-mon-rh"${act(o.act, o.arg)}><span class="gl"><span class="ic" style="--c:var(--st-done)">${Icon('check')}</span></span><span class="bd"><span class="sub is-flush">${esc(o.text)}</span></span><span class="side"><span class="w">show</span></span></button></div>`;
+  }
+  /* One CI check: a 13px glyph (check, cross, a spinner while running, a dashed ring while queued, a ring once unfinished at
+   * the final read, a dash when skipped or cancelled), the name, its workflow and runner in faint text with "running",
+   * "queued for a runner" or "unfinished at the final read", the failure in one line (`why`, HTML), then "rerun", the
+   * time, an external mark that opens the job and, with a log, a chevron. Open, the LogTail shows under it. Failing rows
+   * sit on a red tint, running rows on a green one. */
+  const MCHK = { pass: ['Passed', 'check', 'var(--st-done)'], fail: ['Failed', 'x', 'var(--st-failed)'], skipping: ['Skipped', 'minus', 'var(--fg-faint)'], cancel: ['Cancelled', 'minus', 'var(--fg-faint)'], pending: ['Running'], queued: ['Queued'], stale: ['Unfinished'] };
+  function MonitorCheckRow(o) {
+    track('MonitorCheckRow');
+    const [word, icon, color] = MCHK[o.state] || MCHK.queued;
+    const glyph = o.state === 'pending' ? '<span class="spin"></span>' : o.state === 'queued' ? '<span class="ring is-dash"></span>' : o.state === 'stale' ? '<span class="ring"></span>' : `<span class="ic" style="--c:${color}">${Icon(icon)}</span>`;
+    const tail = o.mono || o.plain ? '' : o.state === 'pending' ? ' · running' : o.state === 'queued' ? ' · queued for a runner' : o.state === 'stale' ? ' · unfinished at the final read' : '';
+    const ext = o.ext ? `<span class="ext" role="button" tabindex="0"${act(o.ext.act, o.ext.arg)}${tipAttrs('Open job on GitHub')}>${Icon('external', 'xs')}</span>` : '';
+    const side = `<span class="side">${o.rerun ? MonBadge({ text: 'rerun', tone: 'ok' }) : ''}<span class="w">${o.state === 'queued' && !o.time ? 'waiting' : esc(o.time || '')}</span>${ext}${o.act ? Icon('chevronRight', 'xs') : ''}</span>`;
+    const main = `<span class="gl" title="${word}">${glyph}</span><span class="bd"><span class="nm">${esc(o.name)}</span><span class="${cx('sub', o.mono && 'is-mono')}">${esc(o.job || '')}${tail}</span>${o.why ? `<span class="why">${o.why}</span>` : ''}</span>${side}`;
+    const head = o.act ? `<button type="button" class="sb-mon-rh" aria-expanded="${!!o.open}"${act(o.act, o.arg)}>${main}</button>` : `<div class="sb-mon-rh">${main}</div>`;
+    return `<div class="${cx('sb-mon-row', 'is-' + o.state)}">${head}${o.open && o.log ? o.log : ''}</div>`;
+  }
+  /* The failed-job log tail the runtime fetches for the repair brief: a mono head ("Failed-job log tail · run N", Copy and
+   * Full log), then the lines on an inset. Error lines sit on a red tint with a 2px red edge; context lines are faint. */
+  function LogTail(o) {
+    track('LogTail');
+    return `<div class="sb-mon-log"><div class="hd">${Icon('terminal', 'xs')}<span class="lb">Failed-job log tail${o.run ? ` · run ${esc(o.run)}` : ''}</span><span class="end">${join(o.actions)}</span></div><pre>${o.lines.map(([cls, t]) => `<span class="${esc(cls || '')}">${esc(t)}</span>`).join('')}</pre></div>`;
+  }
+  /* What happens next, on an inset strip at the foot of a box: an arrow and one sentence (HTML). */
+  function NextLine(o) { track('NextLine'); return `<div class="sb-mon-next">${Icon('arrowRight', 'xs')}<span>${o.html}</span></div>`; }
+  /* The agent doing a repair: a 24px avatar in the agent's color, the line (its live signal in green, or its explanation
+   * when finished, HTML), the agent and model under it, and an `action` (Watch agent) on the right. */
+  function RepairAgent(o) {
+    track('RepairAgent');
+    return `<div class="sb-mon-agent"><span class="av" style="--c:${o.color}">${esc(o.initials)}</span><div class="mn"><div class="tx">${o.html}</div><div class="sub">${esc(o.sub)}</div></div><span class="ac">${o.action || ''}</span></div>`;
+  }
+  /* A file a repair changed, from the edit journal: a glyph (pencil while edited, image for a binary), the path in faint mono
+   * with the file name in fg (ellipsis at the start), +/− or "binary", and how long ago; the file being edited now sits on
+   * a green tint and says "editing". */
+  function ChangedFileRow(o) {
+    track('ChangedFileRow');
+    const parts = String(o.path).split('/'), name = parts.pop();
+    const stat = o.binary ? '<span class="faint">binary</span>' : `<span class="ins">+${esc(o.ins)}</span> <span class="del">−${esc(o.del)}</span>`;
+    return `<div class="${cx('sb-mon-file', o.live && 'is-live')}">${Icon(o.icon || (o.live ? 'pencil' : o.binary ? 'image' : 'file'), 'xs')}<span class="path" title="${esc(o.path)}">${parts.length ? `<span class="dir"><bdi>${esc(parts.join('/'))}/</bdi></span>` : ''}<b>${esc(name)}</b></span><span class="st">${o.stat === false ? '' : stat}</span><span class="ago">${o.live ? 'editing' : esc(o.ago || '')}</span></div>`;
+  }
+  /* A bar of resolved (green) over still conflicted (orange) files. */
+  function ResolveBar(o) {
+    track('ResolveBar');
+    return `<div class="sb-mon-res" role="img" aria-label="${esc(`${o.done} of ${o.total} resolved`)}"><i style="width:${(o.done / o.total) * 100}%"></i><i class="c" style="width:${((o.total - o.done) / o.total) * 100}%"></i></div>`;
+  }
+  /* Two short notes side by side on insets, each under a mono caps label: what this PR and the base changed in a conflicted
+   * file, a PR field before and after an edit. */
+  function SideBySide(o) {
+    track('SideBySide');
+    return `<div class="${cx('sb-mon-sides', o.flush && 'is-flush')}">${o.items.map(([k, html]) => `<div class="side"><b>${esc(k)}</b>${html}</div>`).join('')}</div>`;
+  }
+  /* A file in a merge repair: its glyph (green check resolved, orange warning conflicted, a spinner while the agent edits
+   * it), the path, "claude is editing this file", its hunks as 8px squares (green resolved, orange open) and a badge
+   * (resolved, "1 of 3 hunks left", "1 of 1 binary left"); `sides` (SideBySide) under it. */
+  function ConflictFileRow(o) {
+    track('ConflictFileRow');
+    const parts = String(o.path).split('/'), name = parts.pop();
+    const left = o.hunks.filter((h) => !h).length;
+    const glyph = o.state === 'resolved' ? `<span class="ic" style="--c:var(--st-done)">${Icon('check')}</span>` : o.live ? '<span class="spin"></span>' : `<span class="ic" style="--c:var(--st-blocked)">${Icon('warn')}</span>`;
+    const badge = o.state === 'resolved' ? MonBadge({ text: 'resolved', tone: 'ok' }) : MonBadge({ text: `${left} of ${o.hunks.length} ${o.binary ? 'binary' : o.hunks.length === 1 ? 'hunk' : 'hunks'} left`, tone: 'warn' });
+    return `<div class="${cx('sb-mon-row', o.state === 'conflict' && 'is-conflict')}"><div class="sb-mon-rh"><span class="gl">${glyph}</span><span class="bd"><span class="path" title="${esc(o.path)}"><span class="dir"><bdi>${esc(parts.join('/'))}/</bdi></span><b>${esc(name)}</b></span>${o.live ? `<span class="sub is-live">${esc(o.liveText || 'The agent is editing this file')}</span>` : ''}</span><span class="side"><span class="hunks">${o.hunks.map((h) => `<i class="${h ? 'on' : ''}"></i>`).join('')}</span>${badge}</span></div>${o.sides || ''}</div>`;
+  }
+  /* A repair's publication on a rail: each step a 17px node (done check, now breathing, wait dashed), the title, its time,
+   * then the detail (HTML) or a `commit`: the sha chip, its parents with what each is (PR head, main tip) and the message on
+   * a 2px rule. */
+  function PublishSteps(o) {
+    track('PublishSteps');
+    return `<div class="sb-mon-steps">${o.steps.map((x) => {
+      const c = x.commit;
+      const detail = c ? `${ShaChip({ sha: c.sha, icon: true, act: c.act, arg: c.arg })} <span class="pars"><span class="faint">parent${c.parents.length > 1 ? 's' : ''}</span>${c.parents.map(([sha, note]) => `${ShaChip({ sha })}<span class="faint">${esc(note)}</span>`).join('')}</span><div class="msg">${esc(c.msg)}</div>` : (x.html || '');
+      return `<div class="${cx('st', 'is-' + x.state)}"><span class="nd">${x.state === 'done' ? Icon('check', 'xs') : x.state === 'fail' ? Icon('x', 'xs') : ''}</span><span class="ti">${esc(x.title)}</span><span class="wh">${esc(x.when || '')}</span><div class="dt">${detail}</div></div>`;
+    }).join('')}</div>`;
+  }
+  /* A monitor run's activity: the time in mono on the left, a 7px dot in the tone, the line (HTML). */
+  function EventLines(rows) {
+    track('EventLines');
+    return `<div class="sb-mon-acts-list">${rows.map(([t, html, color]) => `<div class="ev" style="--c:${color || 'var(--fg-faint)'}"><span class="t">${esc(t)}</span><span class="d"></span><span class="tx">${html}</span></div>`).join('')}</div>`;
+  }
+
   /* ---------- Verify run document (design/verify-run) ---------- */
   /* The column a Verify run renders in. It keeps the mock's rhythm (header lines 8, 6 and 12px apart, the summary and the
    * outcome card 20px below, each section 24px below the last) instead of the document's 28px gap, and sets the shared parts
@@ -1034,7 +1342,7 @@
   function VerifyHeader(o) {
     track('VerifyHeader');
     const meta = (o.meta || []).filter(Boolean).map((m) => {
-      const text = `<span class="${cx(m.mono && 'mono')}">${esc(m.text)}</span>`;
+      const text = `<span class="${cx(m.mono && 'mono')}">${m.html != null ? m.html : esc(m.text)}</span>`;
       const inner = m.act ? `<button type="button" class="${cx('mi', m.link && 'is-link')}"${act(m.act, m.arg)}${tipAttrs(m.tip)}>${text}</button>` : text;
       return `<span class="it"${!m.act && m.tip ? ` title="${esc(m.tip)}"` : ''}>${Icon(m.icon, 'xs')}${inner}</span>`;
     }).join('');
@@ -1062,7 +1370,7 @@
    * then the body. It never collapses. Without `title` it only spaces its body (Activity). */
   function VerifySection(o) {
     track('VerifySection');
-    const hd = o.title ? `<div class="hd"><h2>${esc(o.title)}</h2>${o.count != null ? `<span class="n">${esc(o.count)}</span>` : ''}${o.end ? `<span class="end">${join(o.end)}</span>` : ''}</div>` : '';
+    const hd = o.title || o.html ? `<div class="hd"><h2>${o.html != null ? o.html : esc(o.title)}</h2>${o.count != null ? `<span class="n">${esc(o.count)}</span>` : ''}${o.end ? `<span class="end">${join(o.end)}</span>` : ''}</div>` : '';
     return `<section class="sb-vsec"${o.id ? ` id="${esc(o.id)}"` : ''}>${hd}${o.sub ? `<p class="sub">${esc(o.sub)}</p>` : ''}${join(o.body)}</section>`;
   }
   /* An 18px tag in mono capitals on a 14% tint of its tone: a criterion grade (Met, Partial, Missing, To confirm, Not
@@ -1327,6 +1635,42 @@
     return `<button type="button" class="${cx('sb-ppill', o.need && 'is-need')}"${act(o.act, o.arg)} aria-haspopup="menu" aria-expanded="${!!o.expanded}" title="${esc(o.tip || '')}"${o.id ? ` id="${esc(o.id)}"` : ''}>${inner}${Icon('chevronDown', 'xs')}</button>`;
   }
 
+  /* ---------- Build indicator ----------
+   * A build is a build tool command the runtime found in the run's agent process tree, matched against the repository's
+   * platform pack: { state: running | passed | failed, cmd, short, kind, tool, ms, usual, t0, pid, started, exit, ago, prev }.
+   * `usual` is the median of the same command's last five runs in the repository; null before there is history. */
+  const buildSlow = (b) => b.state === 'running' && b.usual && b.ms > b.usual;
+  const buildTone = (b) => (b.state === 'failed' ? 'is-failed' : buildSlow(b) ? 'is-slow' : '');
+  const buildClock = (b) => (b.state === 'running' ? Clock({ ms: b.ms, t0: b.t0, live: true, secs: true }) : `<span class="tnum">${fmtDur(b.ms, true)}</span>`);
+  /* Work row meta: shows while a build runs (spinner, short command, ticking time) or after it failed. A passed build stays
+   * in the run document. Orange once the build runs past its usual time. */
+  function BuildChip(b) {
+    track('BuildChip');
+    if (b.state === 'failed') return `<span class="sb-build-chip is-failed" data-tip="${esc(b.cmd + ' exited ' + b.exit + ' after ' + fmtDur(b.ms, true))}">${Icon('x', 'xs')}${esc(b.short)}<span class="tnum">failed</span></span>`;
+    const tip = `${b.cmd} · ${b.kind}${b.usual ? ' · usually ' + fmtDur(b.usual, true) : ''}`;
+    return `<span class="${cx('sb-build-chip', buildTone(b))}" data-tip="${esc(tip)}"><span class="sb-build-spin" aria-hidden="true"></span>${esc(b.short)}${buildClock(b)}</span>`;
+  }
+  /* Run document, right under the header: Building, Build passed or Build failed, the full command, the time with the usual
+   * time or how far over it, a bar against the usual time while it runs, then project type, tool, pid, start, exit code and
+   * the previous build of the same command. */
+  function BuildStrip(b) {
+    track('BuildStrip');
+    const running = b.state === 'running';
+    const lead = running ? `<span class="sb-build-spin" role="img" aria-label="Running"></span>` : StatusIcon(b.state === 'passed' ? 'done' : 'failed');
+    const word = running ? 'Building' : b.state === 'passed' ? 'Build passed' : 'Build failed';
+    let sub;
+    if (running && b.usual) sub = buildSlow(b) ? `<small class="over">${fmtDur(b.ms - b.usual, true)} over usual</small>` : `<small>usually ${fmtDur(b.usual, true)}</small>`;
+    else if (running) sub = '<small>first run, no usual time yet</small>';
+    else sub = `<small>finished ${esc(b.ago)}</small>`;
+    const bar = running && b.usual ? `<div class="sb-build-track" aria-hidden="true"><i data-bar-ms="${b.ms}" data-bar-t0="${b.t0}" data-bar-of="${b.usual}" style="width:${Math.min(100, (b.ms / b.usual) * 100)}%"></i></div>` : '';
+    const meta = [`<b>${esc(b.kind)}</b>`, esc(b.tool), `pid ${esc(b.pid)}`, `started ${esc(b.started)}`];
+    if (!running) meta.push(`exit ${esc(b.exit)}`);
+    if (b.prev) meta.push(`previous ${StatusIcon(b.prev[0])} ${esc(b.prev[1])}, ${esc(b.prev[2])}`);
+    return `<div class="${cx('sb-build', buildTone(b))}" role="status" aria-live="polite">
+      <div class="sb-build-top">${lead}<span class="sb-build-word">${word}</span><code class="sb-build-cmd" title="${esc(b.cmd)}">${esc(b.cmd)}</code><span class="sb-build-time">${buildClock(b)}${sub}</span></div>
+      ${bar}<div class="sb-build-meta">${meta.join('<span>·</span>')}</div></div>`;
+  }
+
   window.SB = {
     esc, cx, join, fmtDur, fmtAgo, shortId, shortPath, SUB_VERB: VERB, track, inScope, usage, STATES, ICONS: Object.keys(P),
     Icon, BrandMark, StatusIcon, Kbd, Button, IconButton, Tooltip, IdTag, ShortId, StaleIndicator, Label, Avatar,
@@ -1335,15 +1679,19 @@
     Toast, ToastStack, Callout, Hint, EmptyState, SidebarItem, SidebarSection, RepoIcon, Sidebar, WorkspaceSwitcher, UsageWindow, UsageCard, UsagePanel,
     ViewHeader, Pager, GroupHeader, ListRow, SidePane, ReasonBlock, ExpandableText, foldButton, Checklist, FindingRow, EvidenceRow, EvidenceToggle, TerminalPane,
     DocHeader, Section, Box, MetricStrip, SubtaskRow, SubtaskList, SubtaskChip, SubtaskInspector, PhasePipeline,
+    PhasePeek, PeekPart, PeekSignal, PeekCmd, PeekCells, PeekStats, PeekOutput, PeekFinding, PeekCheck, PeekFacts, PeekTimeline,
     PaneSection, Breakdown, ActivityFeed, TreeRow, SettingsHeader, SettingsGroup, SettingRow, TierBadge,
     ConfigRow, TrayPopover,
     ChatStatusMark, ChatTabs, SuggestionChip, ChatMessage, ChatTranscript, ChatPill, Composer, StepLine, NewTaskHome,
     InboxList, InboxRow, FilterBar, TargetPicker, QueuedRow, QueuePanel, ResumeRow, ResumePalette,
-    QaVerdict, QaChip, QaItem, QaFold, QaResults, ReportText, DeviceSwitcher, DeviceOption, DevicePanel,
+    QaVerdict, QaChip, QaItem, QaFold, QaResults, QaLive, QaPreview, QaStageList, QaShots, QaRounds, ReportText, DeviceSwitcher, DeviceOption, DevicePanel,
     SegmentBar, CheckTally, RunOutcome, CheckRow, StepTimeline, WorkSummary, SelectAll, SelectionBar,
     ValidationDoc, FlagStrip, Tag, LinkButton, BoxNote, ReportPart, BranchRun,
     VerifyDoc, VerifyHeader, Banner, Fold, Quote, VerifySection, Badge, CriterionRow, FieldText, MarkRow, FileChip, FileChips, RouteSwitch,
     ReceiptFinding, TestValueRow, BadgeGrid, MiniRule, KeyValues, CheckLines, DirBars, TextLink, VerifyQa,
     StageStrip, PlanNow, FeedFilter, PlanFeed, BoxHead, PlanBundle, Transcript, FactList, BriefFold, BriefBody, BriefingTeaser, SpecBar, PropPill,
+    BuildChip, BuildStrip,
+    MonitorDoc, CapPips, OutcomeActions, MonitorCycles, MonitorBox, MonitorSummary, MonitorLine, ShaChip, MonBadge, MonitorGroup, FoldLine,
+    MonitorCheckRow, LogTail, NextLine, RepairAgent, ChangedFileRow, ResolveBar, SideBySide, ConflictFileRow, PublishSteps, EventLines,
   };
 })();

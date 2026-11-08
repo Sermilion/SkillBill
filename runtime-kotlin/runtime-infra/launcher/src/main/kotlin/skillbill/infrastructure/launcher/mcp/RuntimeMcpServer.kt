@@ -44,6 +44,22 @@ internal fun claudeRuntimeMcpArguments(
     ?.let { listOf("--mcp-config", claudeRuntimeMcpConfig(it, databasePath, request.validationCheckInvocationId)) }
     .orEmpty()
 
+internal fun claudeRuntimeSettlementToolArguments(
+  request: SkillRunRequest,
+  runtimeMcpBin: Path?,
+): List<String> =
+  if (runtimeMcpBin != null && attachesRuntimeMcp(request)) {
+    listOf("--allowedTools", RUNTIME_SETTLEMENT_TOOLS.joinToString(","))
+  } else {
+    emptyList()
+  }
+
+private val RUNTIME_SETTLEMENT_TOOLS =
+  listOf(
+    "mcp__${RUNTIME_MCP_SERVER_NAME}__feature_task_phase_complete",
+    "mcp__${RUNTIME_MCP_SERVER_NAME}__feature_task_phase_block",
+  )
+
 internal fun codexRuntimeMcpArguments(
   request: SkillRunRequest,
   runtimeMcpBin: Path?,

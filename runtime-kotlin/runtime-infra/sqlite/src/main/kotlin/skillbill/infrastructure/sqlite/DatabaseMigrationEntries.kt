@@ -17,12 +17,16 @@ import skillbill.infrastructure.sqlite.core.migration.area.FeatureTaskPhaseStrat
 import skillbill.infrastructure.sqlite.core.migration.area.FeedbackEventMigration
 import skillbill.infrastructure.sqlite.core.migration.area.GoalNoChangeReasonMigration
 import skillbill.infrastructure.sqlite.core.migration.area.GoalTelemetryMigration
-import skillbill.infrastructure.sqlite.core.migration.area.OperationProposalsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDependencyMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelRebuildMigration
+import skillbill.infrastructure.sqlite.core.migration.area.WorkflowStateVersionMigration
+import skillbill.infrastructure.sqlite.core.migration.area.addApprovalNotRequiredDelivery
 import skillbill.infrastructure.sqlite.core.migration.area.addGoalContinuationColumns
+import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalLeasesAndGrantFacts
+import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalOwnerLeaseExpiry
+import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalRecordsAndRules
 import skillbill.infrastructure.sqlite.core.migration.area.addReviewFindingActions
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
@@ -40,6 +44,10 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStand
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaReport
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneReviewRunId
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.recordValidationCheckEvents
+import skillbill.infrastructure.sqlite.core.migration.area.operation.OperationProposalsMigration
+import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationConfirmationExecutions
+import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationLaunchRetention
+import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationProposalCards
 import skillbill.infrastructure.sqlite.core.migration.area.optionalRepairEvidenceColumn
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion4
@@ -421,14 +429,16 @@ internal val databaseMigrations: List<DatabaseMigration> =
       operation = { connection ->
         val alreadyRekeyed =
           connection.prepareStatement(
-            "SELECT 1 FROM pragma_table_info('producer_output_evidence') WHERE name = 'generation'",
+            "SELECT 1 FROM pragma_table_info('producer_output_evidence') WHERE name = " +
+              "'generation'",
           ).use { statement ->
             statement.executeQuery().use { resultSet -> resultSet.next() }
           }
         if (!alreadyRekeyed) {
           connection.createStatement().use {
             it.execute(
-              "ALTER TABLE producer_output_evidence RENAME TO producer_output_evidence_pre_generation",
+              "ALTER TABLE producer_output_evidence RENAME TO " +
+                "producer_output_evidence_pre_generation",
             )
             it.execute(
               """
@@ -772,7 +782,8 @@ internal val databaseMigrations: List<DatabaseMigration> =
           statement.execute(
             "CREATE INDEX IF NOT EXISTS idx_feature_task_workflows_goal_parent " +
               "ON feature_task_workflows(CASE WHEN json_valid(artifacts_json) " +
-              "THEN json_extract(artifacts_json, '$.goal_continuation.parent_workflow_id') END)",
+              "THEN json_extract(artifacts_json, " +
+              "'$.goal_continuation.parent_workflow_id') END)",
           )
         }
       },
@@ -1004,4 +1015,44 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 107,
       name = "record-structured-plan-activity",
       operation = { connection -> StandalonePhaseStatusMigration.createStructuredActivity(connection) },
+    ) +
+    DatabaseMigration(
+      version = 108,
+      name = "migrate-workflow-state-0-4-and-rebuild-board",
+      operation = WorkflowStateVersionMigration::apply,
+    ) +
+    DatabaseMigration(
+      version = 109,
+      name = "add-operator-approval-records-and-rules",
+      operation = ::addOperatorApprovalRecordsAndRules,
+    ) +
+    DatabaseMigration(
+      version = 110,
+      name = "add-operator-approval-leases-and-grant-facts",
+      operation = ::addOperatorApprovalLeasesAndGrantFacts,
+    ) +
+    DatabaseMigration(
+      version = 111,
+      name = "add-operator-approval-owner-lease-expiry",
+      operation = ::addOperatorApprovalOwnerLeaseExpiry,
+    ) +
+    DatabaseMigration(
+      version = 112,
+      name = "add-operation-proposal-cards",
+      operation = ::addOperationProposalCards,
+    ) +
+    DatabaseMigration(
+      version = 113,
+      name = "add-operation-launch-retention",
+      operation = ::addOperationLaunchRetention,
+    ) +
+    DatabaseMigration(
+      version = 114,
+      name = "add-operation-confirmation-executions",
+      operation = ::addOperationConfirmationExecutions,
+    ) +
+    DatabaseMigration(
+      version = 115,
+      name = "add-approval-not-required-delivery",
+      operation = ::addApprovalNotRequiredDelivery,
     )

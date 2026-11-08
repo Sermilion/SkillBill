@@ -725,6 +725,21 @@ migrate_legacy_config_to_durable_path() {
   [[ -z "$output" ]] || info "$output"
 }
 
+migrate_persisted_data() {
+  local staged_cli="${STAGED_RUNTIME_ROOT:-}/runtime-cli.tmp/bin/runtime-cli"
+  if [[ -z "${STAGED_RUNTIME_ROOT:-}" || ! -x "$staged_cli" ]]; then
+    err "Installation stopped: the staged runtime is unavailable for data migration."
+    return 1
+  fi
+  local output
+  if ! output="$("$staged_cli" --home "$HOME" install migrate-data 2>&1)"; then
+    err "Installation stopped before runtime activation: persisted data migration did not complete."
+    [[ -z "$output" ]] || err "$output"
+    return 1
+  fi
+  [[ -z "$output" ]] || info "$output"
+}
+
 # >>> retired IDE plugin cleanup (keep identical in install.sh and uninstall.sh)
 # Removes copies of the retired Skill Bill IntelliJ plugin (id dev.skillbill.status) and
 # VS Code extension (id skill-bill.skill-bill-status) from the user's IDEs. The helpers
@@ -1527,7 +1542,7 @@ run_runtime_cli() {
 runtime_cli_supports_selection_replay() {
   local runtime_bin="$1"
   [[ -x "$runtime_bin" ]] || return 1
-  "$runtime_bin" install --help 2>/dev/null | grep -q "replay-last-selection"
+  "$runtime_bin" install --help 2>/dev/null | grep "replay-last-selection" >/dev/null
 }
 
 build_selection_replay_runtime_cli() {
@@ -2774,6 +2789,10 @@ run_full_install() {
     return 1
   fi
   migrate_legacy_config_to_durable_path || {
+    discard_staged_runtime
+    return 1
+  }
+  migrate_persisted_data || {
     discard_staged_runtime
     return 1
   }

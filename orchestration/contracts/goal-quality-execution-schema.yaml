@@ -286,6 +286,7 @@ $defs:
       last_agent_unfixed_criteria: {type: array, items: {type: string}}
       pending_external_operation: {type: [string, "null"]}
       pending_external_checkpoint: {type: [string, "null"]}
+      pending_external_interrupted: {type: boolean}
       accepted_repair_outputs: {type: array, items: {type: object}}
       terminal_outcome: {type: [string, "null"]}
       terminal_reason: {type: [string, "null"]}

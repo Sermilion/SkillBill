@@ -575,6 +575,13 @@ public class FeatureTaskRuntimeRunState(
     acknowledgedAttemptCounts[phaseId] = maxOf(acknowledgedAttemptCounts[phaseId] ?: 0, attemptCount)
   }
 
+  internal fun recordSpentAttempt(
+    phaseId: String,
+    attemptCount: Int,
+  ) {
+    persistedAttemptCounts[phaseId] = maxOf(persistedAttemptCounts[phaseId] ?: 0, attemptCount)
+  }
+
   internal fun clearPersistedBlock(phaseId: String) {
     blockedRecords.remove(phaseId)
   }

@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
@@ -75,6 +76,7 @@ class NewTaskChatsTest {
 
     val b = chats.newChat()
     assertSame(b, chats.selected.value)
+    assertEquals(emptyList(), chat.summaryRequests)
     assertEquals(listOf(a, b), chats.open.value)
     assertEquals(NewTaskRepository(root, "repo"), b.repository)
     assertEquals("main", b.baseBranch)
@@ -129,6 +131,7 @@ class NewTaskChatsTest {
     assertTrue(chat.saved.getValue(sessionId).lines.any { it.text == "partial" })
     assertEquals(listOf(b), chats.open.value)
     assertSame(b, chats.selected.value)
+    assertEquals(listOf(sessionId), chat.summaryRequests.distinct())
     val reopen = toasts.host.toasts.single().data.actions.single()
     assertEquals("Reopen", reopen.label)
 
@@ -188,8 +191,38 @@ class NewTaskChatsTest {
     assertFalse(chats.resume(entry("broken").copy(newTask = null)))
     assertEquals(listOf(a, b, c), chats.open.value)
     assertSame(c, chats.selected.value)
+    val imageDraft = chats.newChat()
+    val image = ChatImage(byteArrayOf(1), "image/png")
+    imageDraft.addPastedImage(image)
+    assertTrue(chats.resume(entry("saved-z")))
+    assertNotSame(imageDraft, chats.selected.value)
+    assertNull(imageDraft.chat.value)
+    assertEquals(listOf(image), imageDraft.images)
     runCurrent()
     assertEquals(emptyList(), chat.ended)
+  }
+
+  // Leaving an idle chat without a summary request leaves its row on the fallback title; a missed update keeps it stale on screen.
+  @Test
+  fun `leaving an idle chat requests its summary and a written summary reloads Recent chats`() = runTest {
+    val chat = FakeExecutionChatRepository()
+    chat.events = { flowOf(ChatEvent.Completed) }
+    val chats = testNewTaskChats(chat)
+    val a = chats.selected.value.ready()
+    a.text = "build export"
+    a.send()
+    runCurrent()
+
+    chats.newChat()
+
+    assertEquals(listOf(checkNotNull(a.chat.value).sessionId), chat.summaryRequests)
+
+    chat.saved["saved-z"] = entry("saved-z")
+    chat.summaryUpdateEvents.emit("saved-z")
+    runCurrent()
+
+    assertTrue(chats.saved.value.any { it.sessionId == "saved-z" })
+    a.close()
   }
 
   private fun NewTaskDraft.ready(): NewTaskDraft = apply {

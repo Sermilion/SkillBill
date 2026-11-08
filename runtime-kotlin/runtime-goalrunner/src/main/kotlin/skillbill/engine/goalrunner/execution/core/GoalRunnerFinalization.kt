@@ -198,6 +198,9 @@ public class GoalRunnerFinalization(
         pauseForProviderLimit(finalState, attempted, qaResult.reason, qaResult.stepId),
       )
     }
+    if (qaResult is GoalQaGateResult.Blocked) {
+      return ValidatedPublicationPrep.Stopped(qualityStageStopped(finalState, attempted, qaResult))
+    }
     if (qaResult is GoalQaGateResult.Warned) warnQa(request, qaResult.reason)
     val invocationId =
       currentQualityExecution(outcomeStore, finalState.parentWorkflowId)?.invocationId
@@ -487,6 +490,25 @@ public class GoalRunnerFinalization(
         workflowId = state.parentWorkflowId,
         lastResumableStep = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
         failureCode = failureCode,
+      ),
+    )
+
+  private fun qualityStageStopped(
+    state: GoalRunnerManifestState,
+    attempted: List<Int>,
+    blocked: GoalQaGateResult.Blocked,
+  ): GoalRunnerRunReport =
+    stopped(
+      StoppedReportArgs(
+        issueKey = state.manifest.issueKey,
+        attempted = attempted,
+        subtaskId = 0,
+        reason = GoalRunnerStopReason.BLOCKED,
+        blockedReason = blocked.reason,
+        workflowId = state.parentWorkflowId,
+        lastResumableStep = blocked.stepId,
+        failureCode = blocked.failureCode,
+        failurePhaseId = blocked.stepId,
       ),
     )
 

@@ -21,6 +21,7 @@ import dev.skillbill.desktop.core.domain.model.GoalAssessmentFindingState
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentResult
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentState
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentVerification
+import dev.skillbill.desktop.core.domain.model.GoalQaPreview
 import dev.skillbill.desktop.core.domain.model.GoalQaFinding
 import dev.skillbill.desktop.core.domain.model.GoalQaResult
 import dev.skillbill.desktop.core.domain.model.QaAssertionOutcome
@@ -147,7 +148,7 @@ internal fun WorkDetailItem.toHeader(options: WorkRunOptions?, branches: Checked
   )
 }
 
-internal fun WorkRunOptions.toDomain() = RunOptions(canCancel, canLaunch, launchLabel, agentId, agentChoices, unavailableReason)
+internal fun WorkRunOptions.toDomain() = RunOptions(canCancel, canLaunch, launchLabel, agentId, agentChoices, unavailableReason, goalStarted)
 
 internal fun WorkDetailList.toDomain(): DetailList = when (this) {
   WorkDetailList.SUBTASKS -> DetailList.Subtasks
@@ -224,6 +225,9 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     },
     phaseResults = goal?.completedSubtaskPhaseResults.orEmpty().map { it.toDomain() },
     goalQa = goal?.goalQaResult?.toDomain(),
+    goalQaPreview = qaPreview?.let { preview ->
+      GoalQaPreview(preview.invocationId, preview.invocationDirectory, preview.targets, preview.active, qaPreviewSubtaskId)
+    },
     goalAssessment = goal?.goalAssessmentResult?.let { assessment ->
       GoalAssessmentResult(
         assessment.state.toDomain(), assessment.round, assessment.exitReason?.wireValue, assessment.fixRan,

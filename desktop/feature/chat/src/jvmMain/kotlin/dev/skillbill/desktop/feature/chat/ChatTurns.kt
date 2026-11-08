@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
@@ -55,8 +56,8 @@ internal fun removedWorktreeNotice(root: String, result: SessionMoveResult?): St
   return "$REMOVED_WORKTREE_CHAT_NOTICE $root. $sentence"
 }
 
-/** The one mode rule: a running or active execution is only read; anything else may be acted on. */
-internal fun modeFor(header: WorkItem): ChatPermissionMode =
+/** Coordinates optional pause actions with execution state; provider chat turns always use Act. */
+internal fun coordinationModeFor(header: WorkItem): ChatPermissionMode =
   if (header.running || header.lifecycle == Lifecycle.Active) ChatPermissionMode.ReadOnly else ChatPermissionMode.Act
 
 /** The directory an execution's agent runs in: its checkout while that directory exists, else the repository root. */
@@ -94,7 +95,7 @@ internal class ChatTurns(
     val header = state?.header ?: session.item
     session.item = header
     followRoot(session)
-    session.modeState.value = modeFor(header)
+    session.coordinationModeState.value = coordinationModeFor(header)
     if (sections is DetailSections.Loaded) return ExecutionRead(header, sections.detail, sections.runOptions)
     session.append(ChatMessage.Notice(UNREADABLE_NOTICE))
     return ExecutionRead(header, null, null)
@@ -162,16 +163,23 @@ internal class ChatTurns(
   }
 
   /** Sends [text] with the full snapshot on a first turn and the diff since the last delivered one after that. */
-  suspend fun turn(session: ChatSession, read: ExecutionRead, mode: ChatPermissionMode, text: String, prefix: String? = null, images: List<ChatImage> = emptyList()) {
+  suspend fun turn(
+    session: ChatSession,
+    read: ExecutionRead,
+    text: String,
+    prefix: String? = null,
+    images: List<ChatImage> = emptyList(),
+    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
+  ): Boolean {
     val agent = session.agentState.value ?: resolve(session, read) ?: run {
       session.append(ChatMessage.Notice(NO_AGENT_NOTICE))
-      return
+      return false
     }
     val current = snapshot(read.header, read.detail)
     val delivered = session.delivered
     val context = if (session.started && delivered != null) diff(delivered, current).render() else current.render()
     val prompt = listOfNotNull(prefix, context, text.takeIf { it.isNotBlank() }).joinToString("\n\n")
-    stream(session, agent, read.header, mode, prompt, current, images)
+    return stream(session, agent, read.header, prompt, current, images, cursorMcpDependency)
   }
 
   /** Resolves the session's agent without a turn, so a chat that skips the opening turn can still be sent to. */
@@ -183,38 +191,41 @@ internal class ChatTurns(
     chat.resolveAgent(read.header, read.detail, read.runOptions)?.also {
       session.agentState.value = it
       session.agentSupportedState.value = chat.supports(it.agentId)
+      session.thread.showCapability(it)
     }
 
-  // The snapshot counts as delivered, and the CLI session as created, only once the turn produced output. A turn that ends
-  // without cancellation saves the chat, so a later window can resume it.
+  // A provider session and snapshot count as delivered only after a non-failure update. Refused setup leaves saved history intact.
   private suspend fun stream(
     session: ChatSession,
     agent: ChatAgent,
     header: WorkItem,
-    mode: ChatPermissionMode,
     prompt: String,
     sent: ExecutionSnapshot,
     images: List<ChatImage>,
-  ) {
+    cursorMcpDependency: CursorMcpDependency,
+  ): Boolean {
     val root = header.workingRoot()
     val scope = ChatScope.Execution(header.id, header.kind, header.issueKey, header.title, root)
-    val request = ChatTurnRequest(session.sessionId, !session.started, agent, scope, mode, prompt, images)
+    val request = ChatTurnRequest(session.sessionId, !session.started, agent, scope, ChatPermissionMode.Act, prompt, images, cursorMcpDependency)
     var delivered = false
     try {
       chat.send(request).collect { event ->
         session.thread.dropUnprompted = false
         if (event !is ChatEvent.Failed && !delivered) {
-          delivered = true
-          session.delivered = sent
-          session.started = true
-          session.startedRoot = root
+          if (event !is ChatEvent.Notice) {
+            delivered = true
+            session.delivered = sent
+            session.started = true
+            session.startedRoot = root
+          }
         }
         session.thread.show(agent, event)
       }
     } finally {
       session.endStreaming()
     }
-    if (session.started) save(session, agent)
+    if (session.started && delivered) save(session, agent)
+    return delivered
   }
 
   /**
@@ -223,6 +234,11 @@ internal class ChatTurns(
    */
   suspend fun unprompted(session: ChatSession, event: ChatEvent) {
     if (session.thread.dropUnprompted) return
+    if (event is ChatEvent.ApprovalRequested || event is ChatEvent.Notice) {
+      // A card is not a reply: it neither holds the composer nor ends with a completion, so it never starts an own turn.
+      session.thread.show(session.agentState.value, event)
+      return
+    }
     val ownTurn = session.turnJob == null
     if (ownTurn) {
       session.busyState.value = true
@@ -247,6 +263,19 @@ internal class ChatTurns(
       !session.started -> session.restart(UUID.randomUUID().toString())
       agent != null -> save(session, agent)
     }
+  }
+
+  /** Saves the chat after an approval outcome changed outside a turn, so the saved copy shows the final outcome. */
+  suspend fun approvalChanged(session: ChatSession) {
+    val agent = session.agentState.value
+    if (agent != null && session.started) save(session, agent)
+  }
+
+  /** Saves the chat after an operation card changed outside a turn; false when the chat has no agent to save under. */
+  internal suspend fun operationCardChanged(session: ChatSession): Boolean {
+    val agent = session.agentState.value ?: return false
+    save(session, agent)
+    return true
   }
 
   private suspend fun save(session: ChatSession, agent: ChatAgent) {

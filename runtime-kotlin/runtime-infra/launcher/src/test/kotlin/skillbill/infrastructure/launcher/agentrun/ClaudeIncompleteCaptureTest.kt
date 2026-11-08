@@ -34,6 +34,7 @@ class ClaudeIncompleteCaptureTest {
           ),
         executableLookup = ALL_EXECUTABLES_AVAILABLE,
         diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
       ).launchFacts(request().copy(streamProviderOutput = true))
 
     assertEquals("", facts.stdout)

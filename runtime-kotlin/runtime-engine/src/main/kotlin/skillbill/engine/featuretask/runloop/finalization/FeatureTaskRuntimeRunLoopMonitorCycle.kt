@@ -173,11 +173,18 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     repairAssociation: RepairPublicationAssociation,
   ): PhaseOutcome {
     if (repairAssociation == RepairPublicationAssociation.Unchanged) {
-      return block(
+      val repairKey = MonitorRepairAccounting.unchangedRepairKey(iteration)
+      return routeToRepair(
         run,
         iteration,
-        "The completed repair published no source, merge, or pull request change, and CI still fails on branch " +
-          "'$branch'. ${failingChecksList(outcome.failingChecks)}",
+        RepairRoute(
+          "The completed repair '$repairKey' published no source, merge, or pull request change, and CI " +
+            "still fails on branch '$branch'. ${failingChecksList(outcome.failingChecks)} " +
+            "Inspect the failing job logs and fix their cause before reporting the next repair complete.",
+          FeatureTaskRuntimeVerdict.CI_FAILED,
+          outcome.editableFieldsDigest,
+        ),
+        repairKey,
       )
     }
     val published = repairAssociation as? RepairPublicationAssociation.Published
@@ -238,7 +245,7 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
       monitorOutput(
         run.phaseId,
         if (route.verdict == FeatureTaskRuntimeVerdict.CI_FAILED) {
-          "CI confirmed that a published repair failed."
+          "CI confirmed that the repair did not resolve the failing checks."
         } else {
           "CI or merge repair work is starting."
         },
@@ -282,6 +289,9 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
         .distinct()
     val capSummary =
       when {
+        failedCommitShas.any(MonitorRepairAccounting::isUnchangedRepairKey) ->
+          "Monitoring stopped after ${failedCommitShas.size} unsuccessful repair attempt(s), including " +
+            "repairs that published no change: " + failedCommitShas.sorted().joinToString(", ") { "'$it'" } + "."
         failedCommitShas.size >= FeatureTaskRuntimePhaseWorkflowDefinition.MAX_MONITOR_FIX_ATTEMPTS ->
           "Monitoring stopped after ${failedCommitShas.size} CI-confirmed failed repair commit(s): " +
             failedCommitShas.sorted().joinToString(", ") { "'$it'" } + "."

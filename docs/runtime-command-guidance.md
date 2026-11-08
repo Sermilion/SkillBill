@@ -56,6 +56,25 @@ Its `phase:<name>` forms run `skill-bill phase <name>`, and its `operation:<name
 forms run `skill-bill operation <name>`, relaying one operator confirmation.
 `skill-bill goal status` stays CLI-only; no skill wraps it.
 
+## New phase and operation iteration priority
+
+An explicit new phase or operation iteration takes priority over an earlier paused,
+cancelled, idle or blocked iteration for the same target. Historical results and
+unfinished work do not reserve admission for an inactive iteration. A new iteration
+does not preempt a running execution or steal a held resource lock. Preserve earlier
+run identities, results and completed work; a fresh request does not erase history
+or answer a parked operation's confirmation proposal.
+
+Standalone monitor admission applies this rule under its target lock. A recorded
+settlement identifies an inactive invocation even when the hosting process remains
+alive. An unsettled owner requires same-host positive process-death evidence.
+Archive the prior ownership record before advancing its generation. Discard verified
+owned cancelled work; preserve other unfinished resources with their archived
+ownership record and report their location. They no longer block a fresh monitor.
+An undrained repair child remains protected until its shutdown is established.
+Shared phase and operation launch completion includes ownership cleanup, so a new
+iteration cannot race a completion notification that still holds the launch lock.
+
 ## Standalone review finding actions
 
 The desktop review detail has an Actions section with "Fix findings" and "Verify
@@ -141,9 +160,19 @@ the runner clears the ambiguity itself.
 
 The same command handles a goal that blocks with "The outcome of goal-quality
 step '<step>#<attempt>' is unknown". That happens when the runner died during an
-agent-backed QA or validation step, before the step recorded its outcome. The
+agent-backed QA or QA fix step, before the step recorded its outcome. The
 command retires the unsettled quality execution, and the next goal run admits a
 fresh one.
+
+A goal run never needs this command for an interrupted validation step.
+Validate only has to make the build green on the current tree, so the next run
+starts it again on whatever the tree holds. Other interrupted mutating steps
+keep the block.
+
+Validate blocks for one reason: three attempts in a row failed to make the
+build green. Any failed attempt, whether the agent settled blocked, its process
+died or its output was unusable, starts a fresh attempt. A provider-limit pause
+still pauses at once.
 
 The command refuses while a runner holds the goal, and when the parent has
 neither ambiguous nor unsettled quality state. It does not change subtasks,
@@ -300,6 +329,35 @@ runtime commit strategy and launches no agent. Details:
 
 ## Desktop new-task start
 
+New-task and execution chats add no tool restrictions, approval steps or
+workflow gates. Their prompts supply context and optional action-button
+formatting. The agent can carry out operator requests directly with its
+available tools, including shell commands and the skill-bill CLI. Button-only
+launches, issue-key acceptance in chat and pause-and-act are not prerequisites
+for direct tool use. Optional start buttons still use the desktop intake path
+below; runtime commands retain their own contracts.
+
+All provider launches default to native permission bypass, including execution
+and new-task chats, workflow phases, review workers and background summaries.
+Claude uses `--dangerously-skip-permissions`. Codex app-server explicitly sends
+`approvalPolicy: never` with `danger-full-access` on thread start and resume,
+and `dangerFullAccess` on each turn; one-shot Codex launches use
+`--dangerously-bypass-approvals-and-sandbox`. Cursor uses `--force`, `--trust`,
+`--approve-mcps` and `--sandbox disabled`, including ACP launches. Junie ACP
+sets `brave_mode` to enabled and requires acknowledgement before prompting;
+its existing headless review path remains autonomous. This policy supersedes
+the earlier default of routing every eligible permission prompt to the operator.
+Read-only phase instructions still constrain the requested work; they do not
+select a restrictive provider sandbox by default.
+
+The broker remains connected for genuine permission requests a harness still
+emits. These requests retain their provider identity and wait for the operator's
+card decision. Ordinary chat questions use the question UI or prose and never
+manufacture a permission request. Bypass does not confirm parked `verify` or
+`pr-review-fix` proposals; their operator confirmation cards retain their own
+contracts. Provider-managed restrictions remain authoritative, and an action
+rejected by the provider is never replayed automatically.
+
 Issue-key allocation has two owners. The dispatcher prose in
 `skills/skill-bill/content.md` handles terminal intake, and
 `NewTaskIssueKeyAllocator` handles desktop intake. Both inspect local spec
@@ -361,6 +419,11 @@ supplied briefing without starting standalone phase or operation commands.
 
 ### Phases
 
+`skill-bill phase qa` and `skill-bill goal` accept `--qa-device serial:<serial>`
+or `--qa-device avd:<name>`. The option is refused on other phases and never
+becomes intake text or an acceptance criterion. A goal uses the device only from
+its current launch. Resuming it without the option lets QA choose a device.
+
 Validation runs the project's required checks and fixes every failure in the same
 session, including build failures. It may run repository build and packaging commands,
 including the pack build command, to prepare missing or stale validation artifacts.
@@ -413,16 +476,11 @@ retain the existing failure behavior. This applies to standalone and workflow
 validation and the local validation performed during monitor repair; remote CI
 results keep their existing completion rules.
 
-A monitor retry rechecks an abandoned owner's retained `publication_unknown` state
-under the admission lock after confirming that the previous owner process is dead
-on the same host.
-It uses the resolved PR head remote to verify publication before removing owned
-resources. Dirty, untracked, unpublished, or unverifiable work remains retained.
-Explicit stale recovery uses the same resolved remote. Retention after an
-undrained repair child continues to block retry. A resolved monitor target
-that fails admission or setup records a blocked attempt with its exact PR and
-head branch. Its worktree path stays absent until a worktree exists, so desktop
-launch following can select the failure and display its reason.
+Monitor retries follow the new-iteration priority rule above. Explicit stale recovery
+uses the resolved remote when verifying publication. A resolved monitor target that
+fails admission or setup records a blocked attempt with its exact PR and head branch.
+Its worktree path stays absent until a worktree exists, so desktop launch following
+can select the failure and display its reason.
 
 Standalone phases print step transitions while running. Their final output retains
 every completed step's result in execution order, so `phase pr` reports the created
@@ -519,10 +577,15 @@ Decomposed goal runs use `same_branch_commit_per_subtask`: each completed subtas
 
 ## Goal CI monitoring
 
-Monitoring counts distinct published repair commits only after CI fails on those
-commits. Resume reconstructs qualified failures from retained runtime producer,
-completion, publication, and Git evidence. Repeated observations of a commit keep
-one failure. A later repair replacing the latest phase record does not erase a
+Monitoring counts distinct published repair commits after CI fails on those
+commits. A completed repair that publishes no change while CI still fails also
+consumes one of the three attempts and returns to repair instead of blocking
+immediately. These failures use the monitor attempt identity, so separate no-change
+repairs count separately even on the same commit. Resume derives them from the
+existing completed repair, publication and monitor evidence without rewriting
+records. Resume reconstructs qualified failures from retained runtime producer,
+completion, publication, and Git evidence. Repeated observations of a published
+repair commit keep one failure. A later repair replacing the latest phase record does not erase a
 previously qualified failure. Missing or contradictory history stays unknown, does not add a failure, and does not exhaust the cap. Missing monitor output blocks cap-sensitive resume. Initial CI failure, pending checks, unassociated observations, and merge conflicts do not consume this budget. Green checks complete monitoring only when the observed PR head matches the latest completed pushed publication.
 
 Before choosing a host or container for CI repair, read the applicable `AGENTS.md`
@@ -715,8 +778,13 @@ A retryable block first goes to read-only report admission. That admission retur
 independent source verification, or `advance` for a concrete external obstacle.
 Both `progress` and `advance` consume the attempt. An agent stopping after one
 partial edit is not an external obstacle.
-A completed repair claim, with verdict `completed`, `satisfied`, or no verdict,
-goes directly to independent source verification. A verifier's `progress` verdict
+A completed repair claim with an explicit verdict `completed` or `satisfied`
+goes directly to independent source verification. A repair report with an omitted
+or unrecognized verdict first goes through the same read-only report admission,
+whether submitted through the completion tool or captured from final prose.
+An unfinished report is recorded as incomplete against its original reservation
+and returns to repair planning; missing metadata never establishes completion.
+A verifier's `progress` verdict
 rejects that completion claim and consumes one unsuccessful outcome.
 The third unsuccessful outcome blocks that criterion. Explicit operator resume of
 the blocked goal resets the active failure counts to zero and grants three new

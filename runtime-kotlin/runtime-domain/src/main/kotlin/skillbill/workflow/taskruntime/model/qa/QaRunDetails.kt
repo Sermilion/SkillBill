@@ -54,4 +54,12 @@ data class QaRunDetails(
   val retainedResources: List<QaRunRetainedResource> = emptyList(),
   val temporaryEdits: List<QaRunTemporaryEdit> = emptyList(),
   val findings: List<QaRunFinding> = emptyList(),
+  val preview: QaRunPreview? = null,
+)
+
+data class QaRunPreview(
+  val invocationId: String,
+  val invocationDirectory: String,
+  val targets: List<String>,
+  val active: Boolean,
 )

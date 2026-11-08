@@ -1,3 +1,13 @@
+## [2026-11-07] Publish a conflict repair that merged a base which moved since
+Context: In SKILL-516 the monitor_fix agent merged `origin/main` and resolved conflicts while three more commits landed on main. The guard only accepted a `MERGE_HEAD` that reached the current `origin/main`, so the runtime blocked a valid two-parent merge and asked the operator to redo it.
+Decision: The guard also accepts an in-progress merge whose `MERGE_HEAD` is an older commit on `origin/<base>`, as long as HEAD does not already contain it. If the pull request still conflicts after publication, the next monitor round merges the newer tip.
+Reason: A stale base merge still keeps the base as a parent, so publishing it is progress, not a flattened merge. Requiring base commits HEAD lacks keeps each uncharged repair round moving the branch forward.
+
+## [2026-11-07] Keep the QA device separate from requirements and durable goal inputs
+Context: SKILL-517 needs an operator-selected device for standalone and goal QA. Standalone QA treats intake as requirements, and goal QA takes no operator text.
+Decision: Carry the typed device through launch requests and QA execution context, beside lease guidance. Read goal selection from the current launch without persisting it in goal-quality inputs or continuation tokens.
+Reason: Putting the device in intake would change acceptance criteria. The spec requires launch-only goal selection and an unchanged goal-quality-execution schema version. A resume without the flag lets QA choose.
+
 ## [2026-11-06] Keep unblock snippets free of heading lines
 Context: QA reports include pasteable setup instructions, and the runtime report parser reads Markdown headings even inside fenced blocks.
 Decision: Put missing capabilities under `####` headings in a final `## Unblock` section and require snippets without lines starting with `#`.
@@ -809,3 +819,11 @@ phase recorder rejects oversized generated trace evidence before its owner-fence
 output correction can reuse the attempt. Settlement guidance identifies an ok response as receipt
 pending runtime validation, not completed workflow authority. Limits and existing saved state remain
 unchanged.
+
+## [2026-11-07] Retry completed CI repairs that publish no change
+
+Context: SKILL-453 stopped after a repair claimed completion without publishing a fix, although the failing CI checks remained actionable.
+
+Decision: A qualified completed repair with unchanged publication and failing CI consumes one monitor repair attempt and returns to repair. Derive its identity from the monitor attempt, retaining the existing cap and evidence checks. Reconstruct the same identities from retained completion, producer, publication and Git evidence on resume; existing published repair identities remain unchanged. No durable shape or version changes are required.
+
+Alternatives considered: retrying without accounting can loop forever; blocking on the first no-change repair prevents recovery within the existing allowance.

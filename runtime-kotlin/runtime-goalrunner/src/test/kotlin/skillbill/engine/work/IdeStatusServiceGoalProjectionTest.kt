@@ -19,10 +19,12 @@ import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
+import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.idestatus.model.IdeStatusPauseReasonCode
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
+import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.work.model.WorkGoalSubtaskPage
@@ -38,6 +40,8 @@ import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeProviderLimitSignal
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails
+import skillbill.workflow.taskruntime.model.qa.QaRunPreview
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.nio.file.Files
@@ -50,6 +54,53 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class IdeStatusServiceGoalProjectionTest {
+  @Test
+  fun `goal detail projects the current child preview and final QA preview from their own outcomes`() {
+    for (finalQa in listOf(false, true)) {
+      val fixture = gitRepoFixture("goal-live-preview-$finalQa")
+      val identity = testGoalRepositoryIdentity(fixture)
+      val state =
+        if (finalQa) {
+          zeroAc46ManifestState(fixture, identity)
+        } else {
+          goalManifestState(fixture, identity, childWorkflowId = "w-child", lastResumableStep = "qa")
+        }
+      val preview = QaRunPreview("qa-selected", "/qa/selected", listOf("desktop"), active = true)
+      val outcome =
+        FeatureTaskQaOutcome(
+          "w-child",
+          StandaloneQaOutcome.ATTEMPTED,
+          null,
+          0,
+          null,
+          "2026-08-06T10:00:00Z",
+          details = QaRunDetails(preview = preview),
+        )
+      val database =
+        TrackingDatabase(
+          work = listOf(workItem("goal-1", WorkItemKind.FEATURE_GOAL, "running", "2026-08-06T10:00:00Z")),
+          workflows = IdeStatusWorkflowStates(),
+          controls =
+            object : GoalRunnerControlRepository by EmptyGoalRunnerControlRepository {
+              override fun controlState(parentWorkflowId: String) =
+                GoalRunnerControlState(repositoryIdentity = identity)
+            },
+        )
+      database.transaction { unit -> unit.featureTaskQaOutcomes.upsert(outcome) }
+      val outcomes =
+        object : GoalRunnerWorkflowOutcomeStore by EmptyOutcomeStore {
+          override fun recordedGoalQaOutcome(parentWorkflowId: String) = outcome.takeIf { finalQa }
+        }
+      val service = ideStatusService(database, manifestStore = StubGoalManifestStore(state), outcomeStore = outcomes)
+
+      val detail = requireNotNull(service.detail(WorkDetailRequest("goal-1", observedAt = ideStatusObservedAt)).item)
+
+      assertEquals(preview, detail.qaPreview)
+      assertEquals(if (finalQa) null else 2, detail.qaPreviewSubtaskId)
+      assertEquals(1, database.writeCalls)
+    }
+  }
+
   @Test
   fun `goal detail includes QA pills only when the routed pack declares the QA slot capability`() {
     for (declaresQa in listOf(false, true)) {

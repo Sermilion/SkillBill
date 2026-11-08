@@ -7,19 +7,25 @@ import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testProjectStore
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationCandidate
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.engine.featuretask.model.execution.QaNamedDeviceKind
 import skillbill.engine.goal.GoalNewWorkAdmission
 import skillbill.engine.goal.GoalNewWorkAdmissionPort
 import skillbill.engine.goal.GoalPreflightPort
 import skillbill.engine.goal.GoalPreflightRequest
 import skillbill.engine.goal.GoalPreflightResult
 import skillbill.engine.goal.GoalPreflightVerdict
+import skillbill.engine.operation.core.NoOperationCardLifecycle
 import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
 import skillbill.engine.work.control.model.NewTaskStartResult
+import skillbill.engine.work.control.model.OperationStartRequest
 import skillbill.engine.work.control.model.StandaloneCheckout
+import skillbill.engine.work.control.model.StandalonePhaseRequest
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.operation.EmptyOperationCardRepository
 import skillbill.ports.work.WorkRunLauncher
 import skillbill.ports.work.model.WorkRunExit
 import skillbill.ports.work.model.WorkRunLaunchKind
@@ -31,6 +37,7 @@ import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeCreation
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolderKind
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeObservation
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
 import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
@@ -46,6 +53,18 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+
+private fun WorkNewTaskStart.startOperation(
+  repoRoot: Path,
+  operationId: String,
+  target: String?,
+  agentId: String,
+  checkout: StandaloneCheckout = StandaloneCheckout(),
+): NewTaskStartResult =
+  startOperation(
+    repoRoot,
+    OperationStartRequest(operationId, target, agentId, checkout = checkout),
+  )
 
 class WorkNewTaskStartTest {
   private val repoRoot: Path = Files.createTempDirectory("work-new-task-start")
@@ -65,7 +84,10 @@ class WorkNewTaskStartTest {
         branch: String,
       ): Path? = branchHolder
     }
-  private val branchWorktrees = RecordingBranchWorktreeResources()
+  private val branchWorktrees =
+    RecordingBranchWorktreeResources(
+      observation = BranchWorktreeObservation.CallerOwned(repoRoot, repoRoot, "main", "abc123"),
+    )
   private val subject =
     WorkNewTaskStart(
       database,
@@ -78,6 +100,7 @@ class WorkNewTaskStartTest {
       NoopRuntimeDiagnostics,
       goalWorktrees,
       branchWorktrees,
+      OperationCardLaunches(EmptyOperationCardRepository, NoOperationCardLifecycle) { emptyMap() },
     )
 
   @Test
@@ -197,6 +220,7 @@ class WorkNewTaskStartTest {
     NoopRuntimeDiagnostics,
     goalWorktrees,
     branchWorktrees,
+    OperationCardLaunches(EmptyOperationCardRepository, NoOperationCardLifecycle) { emptyMap() },
   )
 
   private fun keyAdmission() =
@@ -233,7 +257,13 @@ class WorkNewTaskStartTest {
   fun `a branch another checkout holds runs there without being claimed as created`() {
     branchHolder = siblingRoot
 
-    val result = subject.startStandalone(repoRoot, "review", "claude", null, StandaloneCheckout(branch = "feat/x"))
+    val result =
+      subject.startStandalone(
+        repoRoot,
+        StandalonePhaseRequest("review"),
+        "claude",
+        StandaloneCheckout(branch = "feat/x"),
+      )
 
     assertEquals(NewTaskStartResult.Started, result)
     assertEquals(siblingRoot, launcher.lastDirectory())
@@ -249,6 +279,8 @@ class WorkNewTaskStartTest {
   @Test
   fun `a branch no checkout holds runs in the worktree created for it`() {
     branchWorktrees.creation = BranchWorktreeCreation.Created(siblingRoot)
+    branchWorktrees.observation =
+      BranchWorktreeObservation.RuntimeManaged(siblingRoot, repoRoot, "feat/x", "abc123", holderPresent = true)
 
     val result = subject.startOperation(repoRoot, "verify", "SKILL-1", "claude", StandaloneCheckout(branch = "feat/x"))
 
@@ -262,7 +294,13 @@ class WorkNewTaskStartTest {
   fun `a branch that exists nowhere refuses the start without launching`() {
     branchWorktrees.creation = BranchWorktreeCreation.Missing
 
-    val result = subject.startStandalone(repoRoot, "qa", "claude", null, StandaloneCheckout(branch = "feat/gone"))
+    val result =
+      subject.startStandalone(
+        repoRoot,
+        StandalonePhaseRequest("qa"),
+        "claude",
+        StandaloneCheckout(branch = "feat/gone"),
+      )
 
     val refused = assertIs<NewTaskStartResult.Refused>(result)
     assertTrue("feat/gone" in refused.reason, refused.reason)
@@ -274,7 +312,13 @@ class WorkNewTaskStartTest {
     branchWorktrees.creation = BranchWorktreeCreation.Created(siblingRoot)
     launcher.refusal = "A run is already starting or running for this work."
 
-    val result = subject.startStandalone(repoRoot, "pr", "claude", null, StandaloneCheckout(branch = "feat/x"))
+    val result =
+      subject.startStandalone(
+        repoRoot,
+        StandalonePhaseRequest("pr"),
+        "claude",
+        StandaloneCheckout(branch = "feat/x"),
+      )
 
     assertIs<NewTaskStartResult.Refused>(result)
     assertEquals(
@@ -288,9 +332,14 @@ class WorkNewTaskStartTest {
     branchHolder = siblingRoot
     val checkout = Files.createTempDirectory("work-new-task-start-checkout")
 
-    subject.startStandalone(repoRoot, "monitor", "claude", "branch:feat/x", StandaloneCheckout(checkout, "feat/x"))
+    subject.startStandalone(
+      repoRoot,
+      StandalonePhaseRequest("monitor", "branch:feat/x"),
+      "claude",
+      StandaloneCheckout(checkout, "feat/x"),
+    )
     assertEquals(checkout, launcher.lastDirectory())
-    subject.startStandalone(repoRoot, "review", "claude", null, StandaloneCheckout(checkout))
+    subject.startStandalone(repoRoot, StandalonePhaseRequest("review"), "claude", StandaloneCheckout(checkout))
     assertEquals(checkout, launcher.lastDirectory())
 
     assertEquals(emptyList(), branchWorktrees.created)
@@ -300,7 +349,12 @@ class WorkNewTaskStartTest {
 
   @Test
   fun `startStandalone monitor passes target as positional`() {
-    val result = subject.startStandalone(repoRoot, "monitor", "claude", "https://github.com/org/repo/pull/1")
+    val result =
+      subject.startStandalone(
+        repoRoot,
+        StandalonePhaseRequest("monitor", "https://github.com/org/repo/pull/1"),
+        "claude",
+      )
     assertEquals(NewTaskStartResult.Started, result)
     assertEquals(
       listOf("phase", "monitor", "https://github.com/org/repo/pull/1", "--agent", "claude"),
@@ -310,9 +364,40 @@ class WorkNewTaskStartTest {
 
   @Test
   fun `startStandalone review keeps argv without target positional`() {
-    val result = subject.startStandalone(repoRoot, "review", "claude", null)
+    val result = subject.startStandalone(repoRoot, StandalonePhaseRequest("review"), "claude")
     assertEquals(NewTaskStartResult.Started, result)
     assertEquals(listOf("phase", "review", "--agent", "claude"), launcher.lastArgs())
+  }
+
+  @Test
+  fun `named device is appended to QA and refused for another standalone phase`() {
+    val device = QaNamedDevice(QaNamedDeviceKind.SERIAL, "R58M123")
+    val result = subject.startStandalone(repoRoot, StandalonePhaseRequest("qa"), "claude", qaDevice = device)
+
+    assertEquals(NewTaskStartResult.Started, result)
+    assertEquals(listOf("phase", "qa", "--agent", "claude", "--qa-device", "serial:R58M123"), launcher.lastArgs())
+    assertIs<NewTaskStartResult.Refused>(
+      subject.startStandalone(repoRoot, StandalonePhaseRequest("review"), "claude", qaDevice = device),
+    )
+  }
+
+  @Test
+  fun `new task adds a named device to goal argv but not plan argv`() {
+    val start = newSubject(repoRoot, preflight, keyAdmission())
+    val prepared =
+      assertIs<NewTaskPreparation.Ready>(start.prepareNewTask(repoRoot, intake(keyChoice = "SKILL-517")))
+    val device = QaNamedDevice(QaNamedDeviceKind.AVD, "Pixel_8_API_35")
+
+    assertEquals(
+      NewTaskStartResult.Started,
+      start.startNewTask(repoRoot, prepared, NewTaskRunKind.GOAL, "claude", device),
+    )
+    assertTrue(launcher.lastArgs().takeLast(2) == listOf("--qa-device", "avd:Pixel_8_API_35"))
+    assertEquals(
+      NewTaskStartResult.Started,
+      start.startNewTask(repoRoot, prepared, NewTaskRunKind.PLAN, "claude", device),
+    )
+    assertEquals(listOf("phase", "plan", prepared.intake, "--agent", "claude"), launcher.lastArgs())
   }
 
   @Test
@@ -322,6 +407,29 @@ class WorkNewTaskStartTest {
     val args = launcher.lastArgs()
     assertEquals(listOf("operation", "verify", "check the branch", "--agent", "claude"), args)
     assertTrue(args.none { it.startsWith("target:") || it.startsWith("mode:") || it.startsWith("qa:") })
+  }
+
+  @Test
+  fun `proposal adjustments preserve the spec argument and pass changes as separate operator instructions`() {
+    val changes = "Exclude deployment and describe confirm: tokens as documentation only"
+    val result =
+      subject.startOperation(
+        repoRoot,
+        OperationStartRequest("verify", "spec:/repo/spec.md", "claude", proposalChanges = changes),
+      )
+
+    assertEquals(NewTaskStartResult.Started, result)
+    assertEquals(
+      listOf(
+        "operation",
+        "verify",
+        "spec:/repo/spec.md",
+        "Operator requested proposal changes (later instructions take precedence):\n$changes",
+        "--agent",
+        "claude",
+      ),
+      launcher.lastArgs(),
+    )
   }
 
   @Test
@@ -365,7 +473,12 @@ class WorkNewTaskStartTest {
   @Test
   fun `standalone target starting with a dash is refused without launching`() {
     launcher.calls = 0
-    val phase = subject.startStandalone(repoRoot, "monitor", "claude", " --recover-stale-owner=x")
+    val phase =
+      subject.startStandalone(
+        repoRoot,
+        StandalonePhaseRequest("monitor", " --recover-stale-owner=x"),
+        "claude",
+      )
     assertIs<NewTaskStartResult.Refused>(phase)
     assertTrue(phase.reason.contains("--recover-stale-owner=x"))
     assertIs<NewTaskStartResult.Refused>(subject.startOperation(repoRoot, "verify", "-h", "claude"))
@@ -406,7 +519,10 @@ class WorkNewTaskStartTest {
           ),
         ),
       )
-    val running = assertIs<NewTaskStartResult.Running>(subject.startStandalone(repoRoot, "monitor", "claude", "url"))
+    val running =
+      assertIs<NewTaskStartResult.Running>(
+        subject.startStandalone(repoRoot, StandalonePhaseRequest("monitor", "url"), "claude"),
+      )
     val reason = assertNotNull(running.failure.toCompletableFuture().get())
     assertTrue(reason.startsWith("Phase 'monitor' blocked at 'monitor': Monitor target refused"), reason)
     assertTrue(reason.endsWith("Full log: $log"), reason)

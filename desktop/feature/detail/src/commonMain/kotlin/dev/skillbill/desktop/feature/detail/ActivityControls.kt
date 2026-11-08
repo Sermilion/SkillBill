@@ -5,37 +5,33 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.SbDivider
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
+import dev.skillbill.desktop.core.designsystem.component.ViewTab
+import dev.skillbill.desktop.core.designsystem.component.ViewTabs
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
+import dev.skillbill.desktop.core.designsystem.status.StatusDot
 import dev.skillbill.desktop.core.domain.model.ActivityStatus
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
@@ -66,18 +62,7 @@ internal fun ActivityAction(label: String, onClick: () -> Unit) {
 
 @Composable
 internal fun ActivityFilter(blocksOnly: Boolean, count: Int, onChange: (Boolean) -> Unit) {
-  val colors = SkillBillTheme.colors
-  Row(Modifier.border(1.dp, colors.borderStrong, RoundedCornerShape(7.dp))) {
-    listOf(false to "All", true to "Blocks $count").forEach { (blocks, label) ->
-      val source = remember { MutableInteractionSource() }
-      val active = blocksOnly == blocks
-      Box(Modifier.sbFocusRing(source, RoundedCornerShape(5.dp))
-        .background(if (active) colors.bgOverlay else Color.Transparent, RoundedCornerShape(5.dp))
-        .semantics { selected = active }.clickable(source, null, role = Role.Tab, onClick = { onChange(blocks) }).padding(horizontal = 9.dp, vertical = 4.dp)) {
-        ActivityText(label, sans = true, size = 11.5f, color = if (active) colors.fg else colors.fgMuted)
-      }
-    }
-  }
+  ViewTabs(listOf(ViewTab(false, "All"), ViewTab(true, "Blocks", count = count)), blocksOnly, onChange)
 }
 
 @Composable
@@ -106,14 +91,13 @@ internal fun ActivityDot(status: ActivityStatus, modifier: Modifier = Modifier) 
     ActivityStatus.COMPLETE -> colors.stDone
     else -> colors.fgFaint
   }
-  Box(modifier.size(7.dp).alpha(activityPulse(status == ActivityStatus.RUNNING))
-    .then(if (status == ActivityStatus.PENDING) Modifier.border(1.dp, color, CircleShape) else Modifier.background(color, CircleShape)))
+  StatusDot(color, modifier, hollow = status == ActivityStatus.PENDING, pulse = status == ActivityStatus.RUNNING)
 }
 
 @Composable
 internal fun ActivityWait(milliseconds: Long) {
   Row(Modifier.fillMaxWidth().padding(start = 60.dp, top = 7.dp, bottom = 7.dp)) {
     ActivityText("idle ${activityDuration(milliseconds)}", faint = true)
-    Box(Modifier.weight(1f).padding(start = 10.dp, top = 7.dp).height(1.dp).background(SkillBillTheme.colors.border))
+    SbDivider(Modifier.weight(1f).padding(start = 10.dp, top = 7.dp), color = SkillBillTheme.colors.border)
   }
 }

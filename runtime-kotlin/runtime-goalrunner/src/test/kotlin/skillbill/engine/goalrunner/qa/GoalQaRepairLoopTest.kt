@@ -4,6 +4,8 @@ import org.junit.jupiter.api.io.TempDir
 import skillbill.application.testProjectStore
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.model.execution.QaExpectedIdentity
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.engine.featuretask.model.execution.QaNamedDeviceKind
 import skillbill.engine.featuretask.phaserun.PhaseRunEntryFixture
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
@@ -50,7 +52,6 @@ import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
-import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.quality.GoalQualityPreQaBuildState
 import skillbill.install.model.SupportedAgent
@@ -80,20 +81,33 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Clock
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import kotlin.test.assertSame
 
 class GoalQaRepairLoopTest {
   @TempDir lateinit var home: Path
+
+  @Test
+  fun `goal QA prompt carries the device from the current launch`() {
+    val fixture =
+      Fixture(
+        verdicts = listOf(QaVerdict.PASSED),
+        qaFixOutput = { "" },
+        qaDevice = QaNamedDevice(QaNamedDeviceKind.AVD, "Pixel_8_API_35"),
+      )
+
+    fixture.gate.run(fixture.state, fixture.request)
+
+    assertContains(fixture.prompts("qa").single(), "AVD `Pixel_8_API_35`")
+  }
 
   @Test
   fun `goal QA hands the finding to qa_fix, builds and retests the repaired tree, then validates once`() {
@@ -199,12 +213,12 @@ class GoalQaRepairLoopTest {
         buildGateRunner = ThrowingBuildGateRunner(failure),
       )
 
-    val thrown = assertFailsWith<SkillBillRuntimeException> { fixture.gate.run(fixture.state, fixture.request) }
+    val blocked = assertIs<GoalQaGateResult.Blocked>(fixture.gate.run(fixture.state, fixture.request))
 
-    assertEquals(WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION, thrown.code)
-    assertContains(assertNotNull(thrown.message), "gate runner exploded")
-    assertFalse(assertNotNull(thrown.message).contains("after interruption"), thrown.message)
-    assertSame(failure, thrown.cause)
+    assertEquals("WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION", blocked.failureCode)
+    assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD, blocked.stepId)
+    assertContains(blocked.reason, "gate runner exploded")
+    assertFalse(blocked.reason.contains("after interruption"), blocked.reason)
   }
 
   @Test
@@ -350,6 +364,7 @@ class GoalQaRepairLoopTest {
     buildGateRunner: ValidationGateRunner? = null,
     freeFormReport: String? = null,
     limitFirstQa: Boolean = false,
+    qaDevice: QaNamedDevice? = null,
   ) {
     private val clock = Clock.systemUTC()
     private val database: DatabaseSessionFactory = phaseRunDatabase(home, clock)
@@ -425,7 +440,13 @@ class GoalQaRepairLoopTest {
             subtasks = listOf(DecompositionSubtask(id = 1, name = "Implementation", specPath = "subtask.md")),
           ),
       )
-    val request = GoalRunnerRunRequest(issueKey = "SKILL-500", repoRoot = home, invokedAgentId = "claude")
+    val request =
+      GoalRunnerRunRequest(
+        issueKey = "SKILL-500",
+        repoRoot = home,
+        invokedAgentId = "claude",
+        qaDevice = qaDevice,
+      )
     val gate: DefaultGoalRunnerQaGate
 
     init {

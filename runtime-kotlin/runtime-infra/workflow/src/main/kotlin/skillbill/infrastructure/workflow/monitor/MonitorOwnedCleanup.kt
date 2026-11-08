@@ -2,6 +2,7 @@ package skillbill.infrastructure.workflow.monitor
 
 import skillbill.infrastructure.workflow.worktree.worktreeDirtyRetention
 import skillbill.infrastructure.workflow.worktree.worktreePathProblem
+import skillbill.ports.monitor.model.MonitorOutcomeKind
 import skillbill.ports.monitor.model.MonitorOwnershipState
 import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.monitor.model.MonitorResolvedTarget
@@ -35,8 +36,11 @@ internal class MonitorOwnedCleanup(
     removalAllowed: Boolean = true,
   ): MonitorSettlement {
     val retention =
-      retentionFor(directory, record, target)
-        ?: if (removalAllowed) null else childMayBeRunningRetention(record)
+      when {
+        !removalAllowed -> childMayBeRunningRetention(record)
+        outcome?.kind == MonitorOutcomeKind.CANCELLED -> ownershipRetention(directory, record)
+        else -> retentionFor(directory, record, target)
+      }
     return if (retention != null) {
       retain(directory, record, retention, outcome)
     } else {
@@ -56,16 +60,24 @@ internal class MonitorOwnedCleanup(
     record: MonitorOwnershipRecord,
     target: MonitorResolvedTarget?,
   ): MonitorSettlement.Retained? {
-    namespaceRetention(record)?.let { return it }
+    ownershipRetention(directory, record)?.let { return it }
     val path = record.executionPath?.let(Path::of)?.takeIf { Files.exists(it, LinkOption.NOFOLLOW_LINKS) }
     return if (path == null) {
       orphanedBranchRetention(record, target)
     } else {
-      unownedRetention(directory, path, record)
-        ?: dirtyRetention(path)
+      dirtyRetention(path)
         ?: publicationVerdict(path, "the worktree", monitorGit(path, "rev-parse", "HEAD"), record, target)
           ?.let { (reason, detail) -> MonitorSettlement.Retained(reason, path, detail) }
     }
+  }
+
+  private fun ownershipRetention(
+    directory: Path,
+    record: MonitorOwnershipRecord,
+  ): MonitorSettlement.Retained? {
+    namespaceRetention(record)?.let { return it }
+    val path = record.executionPath?.let(Path::of)?.takeIf { Files.exists(it, LinkOption.NOFOLLOW_LINKS) }
+    return path?.let { unownedRetention(directory, it, record) }
   }
 
   private fun namespaceRetention(record: MonitorOwnershipRecord): MonitorSettlement.Retained? {

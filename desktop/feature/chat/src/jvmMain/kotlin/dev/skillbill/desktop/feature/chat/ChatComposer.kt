@@ -13,14 +13,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -33,26 +31,26 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
+import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.component.SbMenu
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
+import dev.skillbill.desktop.core.designsystem.component.SbPopoverPlacement
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
-import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.feature.chat.newtask.IssuePrefixPicker
 import java.io.File
-import java.io.IOException
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * The active chat's input. Enter sends and Shift+Enter starts a new line; "Pause and act" shows only while the execution runs.
@@ -72,20 +70,20 @@ internal fun ChatComposer(
   val agent by session.agent.collectAsState()
   val supported by session.agentSupported.collectAsState()
   val gone by session.gone.collectAsState()
-  val mode by session.mode.collectAsState()
+  val coordinationMode by session.coordinationMode.collectAsState()
+  val id = session.id
+  val cursorMcpDependency = workspace.cursorMcpDependencies[id] ?: CursorMcpDependency.Unspecified
   val choices by session.resumeChoices.collectAsState()
   val queued by session.queued.collectAsState()
   val prefixChoice by session.prefixChoice.collectAsState()
   val focus = remember(session) { FocusRequester() }
   val gate = remember(session) { SendNowGate() }
   LaunchedEffect(session) { focus.requestFocus() }
-  val id = session.id
   val text = workspace.drafts[id].orEmpty()
   val command = text.trim().takeIf { it in CHAT_COMMANDS }
   val images = workspace.pastedImages[id].orEmpty()
-  val scope = rememberCoroutineScope()
   val ready = command != null || (supported && !gone && (text.isNotBlank() || images.isNotEmpty()))
-  val sendNow = stoppable && queued.isNotEmpty() && text.isBlank() && supported && !gone
+  val sendNow = stoppable && queued.isNotEmpty() && text.isBlank() && images.isEmpty() && supported && !gone
   fun run(command: String) {
     workspace.drafts.remove(id)
     when (command) {
@@ -93,10 +91,10 @@ internal fun ChatComposer(
       CLEAR_COMMAND -> workspace.clear(id)
     }
   }
-  fun submit(action: (String, String, List<ChatImage>) -> Unit) {
+  fun submit(action: (String, String, List<ChatImage>, CursorMcpDependency) -> Unit) {
     if (!ready) return
     if (command != null) return run(command)
-    action(id, text, images)
+    action(id, text, images, cursorMcpDependency)
     workspace.drafts.remove(id)
     workspace.pastedImages.remove(id)
     focus.requestFocus()
@@ -109,22 +107,8 @@ internal fun ChatComposer(
       }
       return
     }
-    submit(workspace::send)
+    submit { chatId, message, pastedImages, dependency -> workspace.send(chatId, message, pastedImages, dependency) }
     gate.pressed(workspace.now(), viaEnter)
-  }
-  // Returns true, consuming the key, only when the clipboard holds an image; a text paste falls through to the field.
-  fun pasteImage(event: KeyEvent): Boolean {
-    if (!event.isPasteShortcut() || !supported || gone) return false
-    val pasted = clipboard.read() ?: return false
-    scope.launch {
-      val image = try {
-        withContext(encodeContext) { normalizedChatImage(pasted) }
-      } catch (_: IOException) {
-        null
-      }
-      if (image != null) workspace.addPastedImage(id, image)
-    }
-    return true
   }
   Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     ChatActivityPill(session.thread, gone)
@@ -136,11 +120,17 @@ internal fun ChatComposer(
     }
     Box(Modifier.fillMaxWidth()) {
       SbInput(
-        text, { workspace.drafts[id] = it },
+        text, {
+          if (workspace.drafts[id] != it) {
+            workspace.cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
+          }
+          workspace.drafts[id] = it
+        },
         modifier = Modifier.fillMaxWidth()
+          .pasteChatImages(supported && !gone, clipboard, encodeContext) { workspace.addPastedImage(id, it) }
           .onPreviewKeyEvent { event ->
             if (event.key == Key.Enter && event.type == KeyEventType.KeyUp) gate.enterReleased()
-            pasteImage(event)
+            false
           }
           .focusRequester(focus)
           .gatesShortcutsWhileFocused(),
@@ -160,8 +150,8 @@ internal fun ChatComposer(
     if (images.isNotEmpty()) {
       Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         // The remove control leaves with its chip, so focus returns to the input for the next paste.
-        images.forEachIndexed { index, _ ->
-          ImageChip(index + 1, onRemove = {
+        images.forEachIndexed { index, image ->
+          ImageChip(index + 1, image, onRemove = {
             workspace.removePastedImage(id, index)
             focus.requestFocus()
           })
@@ -170,8 +160,13 @@ internal fun ChatComposer(
     }
     if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-      ModeBadge(mode)
+      ModeBadge(ChatPermissionMode.Act)
       AgentPicker(agent, workspace.agents, enabled = !busy && !gone) { workspace.switchAgent(id, it) }
+      if (agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
+        CursorMcpPicker(cursorMcpDependency, enabled = !gone) {
+          workspace.cursorMcpDependencies[id] = it
+        }
+      }
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
         if (stoppable) {
           SbButton(
@@ -180,9 +175,12 @@ internal fun ChatComposer(
             tooltip = "Ends this reply. Queued messages return to the draft",
           )
         }
-        if (mode == ChatPermissionMode.ReadOnly) {
+        if (coordinationMode == ChatPermissionMode.ReadOnly) {
           SbButton(
-            if (busy) "Queue pause and act" else "Pause and act", { submit(workspace::pauseAndAct) },
+            if (busy) "Queue pause and act" else "Pause and act",
+            { submit { chatId, message, pastedImages, dependency ->
+              workspace.pauseAndAct(chatId, message, pastedImages, dependency)
+            } },
             size = SbControlSize.Small, enabled = ready && command == null,
             tooltip = "Pauses the execution when this message runs, acts, then resumes it",
           )
@@ -205,6 +203,57 @@ internal fun ChatComposer(
   }
 }
 
+@Composable
+internal fun CursorMcpPicker(
+  value: CursorMcpDependency,
+  enabled: Boolean,
+  modifier: Modifier = Modifier,
+  onChoose: (CursorMcpDependency) -> Unit,
+) {
+  var open by remember { mutableStateOf(false) }
+  val label = when (value) {
+    CursorMcpDependency.Unspecified -> "MCP scope: choose"
+    CursorMcpDependency.ProjectUserOnly -> "MCP scope: project/user only"
+    CursorMcpDependency.TeamDashboardRequired -> "MCP scope: team dashboard"
+  }
+  Box(modifier) {
+    SbButton(label, { open = true }, size = SbControlSize.Small, enabled = enabled)
+    if (open) {
+      ShellLayer { open = false }
+      SbPopover(expanded = true, onDismissRequest = { open = false }, placement = SbPopoverPlacement.Above) {
+        SbMenu(
+          listOf(
+            SbMenuEntry.Item(
+              "Choose later",
+              {
+                open = false
+                onChoose(CursorMcpDependency.Unspecified)
+              },
+              checked = value == CursorMcpDependency.Unspecified,
+            ),
+            SbMenuEntry.Item(
+              "Project/user configuration only",
+              {
+                open = false
+                onChoose(CursorMcpDependency.ProjectUserOnly)
+              },
+              checked = value == CursorMcpDependency.ProjectUserOnly,
+            ),
+            SbMenuEntry.Item(
+              "Requires team dashboard server",
+              {
+                open = false
+                onChoose(CursorMcpDependency.TeamDashboardRequired)
+              },
+              checked = value == CursorMcpDependency.TeamDashboardRequired,
+            ),
+          ),
+        )
+      }
+    }
+  }
+}
+
 /** The agent chip; clicking it lists the agents the chat can switch to. */
 @Composable
 internal fun AgentPicker(agent: ChatAgent?, agents: List<String>, enabled: Boolean, disabledWhy: String? = null, onChoose: (String) -> Unit) {
@@ -217,7 +266,13 @@ internal fun AgentPicker(agent: ChatAgent?, agents: List<String>, enabled: Boole
       .clickable(enabled = canOpen, onClickLabel = "Change agent") { open = true }
       .then(if (why != null) Modifier.semantics { stateDescription = why } else Modifier)
     val chip = @Composable {
-      ChatPill(chipText(agent), mono = true, icon = LucideIcons.cpu, maxWidth = 220.dp, modifier = chipModifier)
+      SbLabel(
+        chipText(agent),
+        style = SbLabelStyle.Mono,
+        icon = LucideIcons.cpu,
+        maxWidth = 220.dp,
+        modifier = chipModifier,
+      )
     }
     if (why != null) SbTooltip(why) { chip() } else chip()
     if (open && canOpen) {

@@ -26,7 +26,8 @@
   const AGENT_CHOICES = ['claude', 'codex', 'cursor', 'junie'];
 
   const PHASE_ORDER = ['preplan', 'plan', 'implement', 'simplify', 'audit', 'review', 'build', 'validate', 'write_history', 'commit_push'];
-  const GOAL_FINISH = ['pr', 'monitor', 'monitor_fix'];
+  /* Goal finish phases in run order, as the app lists them (FeatureTaskRuntimePhaseIds). */
+  const GOAL_FINISH = ['goal_assessment', 'qa', 'qa_fix', 'validate', 'pr', 'monitor', 'monitor_fix'];
 
   /* Subtask builders (WorkSubtask + SubtaskDependency + SubtaskValidation + SubtaskPhaseResults + PlannedSubtask.specPath).
    * `id` and `spec` come from the position. Ages (`*Ago`) are seconds before now and stand in for the model's Instants. */
@@ -40,7 +41,8 @@
   const bundle = (n) => ['traceability.md', ...Array.from({ length: n }, (_, i) => `spec_subtask_${n - i}.md`), 'spec.md', 'decomposition-manifest.yaml'];
 
   /* QA results, shaped like the desktop's GoalQaResult and an execution's qaVerdict, qaReportText and qaDetails (QaRunDetails):
-   * outcome (passed | findings | skipped | incomplete | attempted, null while nothing settled), findings ({ id, title, fixed,
+   * outcome (passed | findings | skipped | incomplete | attempted, null while nothing settled), reportPreview (design only: the
+   * closed Full report line), findings ({ id, title, fixed,
    * observed, expected, steps, evidencePaths }), reportText, reason, failureKind, and details ({ reportPath,
    * invocationDirectory, skipReason, assertions ({ outcome passed | failed | not_exercised, title, detail, evidencePaths }),
    * coverage ({ kind, verdict, reason }), retainedResources ({ kind, identity }), temporaryEdits ({ path, detail,
@@ -255,6 +257,175 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
     passed: { runSeq: 413, liveChecks: true, outcome: 'passed', checks: VAL_CHECKS_447, result: VAL_REPORT.e1a3d2a4, branchRuns: [R406, R411, Object.assign({}, R413, { started: 'Today 07:12', item: 'ph-sb-validation-done' })] },
     blocked: { runSeq: 32, liveChecks: true, outcome: 'blocked', checks: VAL_CHECKS_32, result: VAL_REPORT['1dce0e4f'], branchRuns: VAL_RUNS_085 },
   };
+  /* ---------- Monitor runs (design/monitor-run) ----------
+   * One story in ten snapshots: a monitor run on PR #482 that fails CI, repairs it, hits a merge conflict and goes green,
+   * plus the cap, unresolved, PR-edit and merged endings. A run is `cycles`: per CI round a `ci` step (PullRequestCheck
+   * snapshots: name, bucket pass | fail | pending | skipping | cancel, "queued" for pending without startedAt, its link and
+   * the failed-job log tail), an optional `fix` (monitor_fix: the failure it fixes, the edit journal, the local gates, the
+   * "Repair outcome" line and its prose; kind 'conflict' for a merge repair with its conflicted files) and an optional
+   * `pub` (commit_push: staged, the commit with its parents, the guarded push, the acknowledged head; kind 'prEdit' for a
+   * repair that only edited the PR). Step state: now, done, fail, conflict, merged, blocked. Not persisted yet: check
+   * snapshots, the ledger's published repairs and heads, conflicted files and gate runs live in memory (MonitorFixBrief,
+   * StandaloneMonitorLedger) or nowhere. */
+  const MON = (function () {
+    const PR = { num: 482, title: 'Keep QA live preview working across display crashes', branch: 'feat/SKILL-512-qa-live-preview', base: 'main', slug: 'skill-bill/skill-bill' };
+    const C = (name, bucket, time, job, extra) => Object.assign({ name, bucket, time, job }, extra || {});
+    const LOG_SHOT = [['dim', '> Task :desktop:app:verifyRoborazziDesktop'], ['', 'QaPreviewScreenshotTest > reconnectBanner() FAILED'], ['err', '    com.github.takahirom.roborazzi.RoborazziCompareException: Image is changed.'], ['err', '    QaPreview_reconnect.png differs: 2.41% of pixels (threshold 0.10%)'], ['dim', '        at QaPreviewScreenshotTest.kt:88'], ['', '    Compare image: build/outputs/roborazzi/QaPreview_reconnect_compare.png'], ['', '31 tests completed, 1 failed'], ['err', 'FAILURE: Build failed with an exception.'], ['dim', 'Error: Process completed with exit code 1.']];
+    const LOG_FLAKY = [['dim', '> Task :runtime-engine:test'], ['', 'StandaloneMonitorServiceTest > publishes after lease renewal FAILED'], ['err', '    org.opentest4j.AssertionFailedError: expected: <9b2f0c4> but was: <a41c9e2>'], ['dim', '        at StandaloneMonitorServiceTest.kt:214'], ['', '1874 tests completed, 1 failed, 6 skipped'], ['err', 'FAILURE: Build failed with an exception.']];
+    const LOG_SECRET = [['dim', 'Run ./scripts/upload-preview.sh'], ['err', 'error: PREVIEW_UPLOAD_TOKEN is not set'], ['', 'Secrets are not passed to workflows triggered from forks or by Dependabot.'], ['dim', 'Error: Process completed with exit code 2.']];
+    const ALL5 = (o) => [
+      C('build-desktop (ubuntu)', o[0][0], o[0][1], 'Desktop CI · ubuntu-latest'), C('build-desktop (macos)', o[1][0], o[1][1], 'Desktop CI · macos-14'),
+      C('runtime-tests', o[2][0], o[2][1], 'Runtime CI · ubuntu-latest', o[2][2]), C('lint', o[3][0], o[3][1], 'Lint · ubuntu-latest'),
+      C('screenshot-diff', o[4][0], o[4][1], 'Desktop CI · ubuntu-latest', o[4][2]),
+    ];
+    const shotFail = { log: LOG_SHOT, why: '`QaPreview_reconnect.png` differs by 2.41% (threshold 0.10%).', run: '12081457342' };
+    const SONNET = 'claude-sonnet-5-5 · high';
+    const WT = '~/.skill-bill/monitor/skill-bill/mon-5e21/checkout';
+    const ci1Run = { kind: 'ci', state: 'now', head: 'a41c9e2', headNote: 'PR head at start', polled: '12s ago', next: 'in 18s', since: '11:32', dur: '6m 40s',
+      checks: ALL5([['pass', '4m 58s'], ['pending', '6m 40s'], ['pending', '5m 12s'], ['pass', '1m 22s'], ['queued', '']]),
+      next_: 'Any failure starts repair 1 right away, even while other checks still run. All five passing ends the run.' };
+    const ci1Fail = { kind: 'ci', state: 'fail', head: 'a41c9e2', headNote: 'PR head at start', polled: 'final read 11:41', since: '11:32', dur: '9m 05s',
+      checks: ALL5([['pass', '6m 02s'], ['pending', '9m 05s'], ['pass', '9m 15s'], ['pass', '1m 22s'], ['fail', '3m 48s', shotFail]]),
+      next_: 'Repair started at the first failure. build-desktop (macos) was still running; its result on a41c9e2 no longer matters.' };
+    const fix1Live = { kind: 'fix', state: 'now', agent: 'claude', model: SONNET, since: '11:41', dur: '1m 32s', repair: 1, signal: 'Editing QaReconnectBanner.kt', ago: '8s ago',
+      fixing: [{ name: 'screenshot-diff', job: 'Desktop CI · ubuntu-latest', bucket: 'fail', time: '3m 48s', why: shotFail.why, log: LOG_SHOT, run: shotFail.run }],
+      files: [{ path: 'desktop/app/src/test/snapshots/QaPreview_reconnect.png', binary: true, ago: '2m ago' }, { path: 'desktop/feature/qa/src/commonMain/kotlin/QaReconnectBanner.kt', ins: 6, del: 3, live: true }], worktree: WT,
+      gates: [['Build gate', 'pass', '1m 02s', './gradlew :desktop:app:assemble'], ['Validation gate', 'pending', '24s', './gradlew :desktop:app:verifyRoborazziDesktop']],
+      next_: 'When the agent ends with "Repair outcome: fixed", the runtime commits and pushes. Any other ending leaves the work in the worktree and blocks.' };
+    const fix1Files = [{ path: 'desktop/app/src/test/snapshots/QaPreview_reconnect.png', binary: true }, { path: 'desktop/feature/qa/src/commonMain/kotlin/QaReconnectBanner.kt', ins: 8, del: 3 }];
+    const fix1Done = Object.assign({}, fix1Live, { state: 'done', dur: '1m 50s', signal: null, outcome: 'fixed', files: fix1Files, next_: null,
+      summary: 'The reconnect banner moved 4px when the preview reconnects; the baseline still had the old position. Kept the banner offset and refreshed the baseline, then confirmed the new image matches CI\'s compare image.',
+      gates: [['Build gate', 'pass', '1m 02s', './gradlew :desktop:app:assemble'], ['Validation gate', 'pass', '2m 31s', './gradlew :desktop:app:verifyRoborazziDesktop']] });
+    const commit1 = { sha: '9b2f0c4', msg: 'Refresh the reconnect banner baseline', parents: [['a41c9e2', 'PR head']] };
+    const pub1Live = { kind: 'pub', state: 'now', since: '11:43', dur: '9s', repair: 1, files: fix1Files, steps: [
+      { state: 'done', title: 'Staged', html: '2 paths from the owned worktree', when: '11:43' },
+      { state: 'done', title: 'Committed', commit: commit1, when: '11:43' },
+      { state: 'now', title: 'Pushing', html: 'Normal push to `origin/feat/SKILL-512-qa-live-preview`. Accepted only while the remote head is still `a41c9e2`, the last head this run published.', when: '9s' },
+      { state: 'wait', title: 'Remote acknowledged', html: 'Waiting for the push to return' },
+      { state: 'wait', title: 'Cycle 2', html: 'Watches CI on the pushed head' }] };
+    const pub1Done = Object.assign({}, pub1Live, { state: 'done', dur: '22s', steps: [
+      { state: 'done', title: 'Staged', html: '2 paths from the owned worktree', when: '11:43' },
+      { state: 'done', title: 'Committed', commit: commit1, when: '11:43' },
+      { state: 'done', title: 'Pushed', html: 'Normal push to `origin/feat/SKILL-512-qa-live-preview`, remote head was `a41c9e2` as expected.', when: '11:43' },
+      { state: 'done', title: 'Remote acknowledged', html: 'PR head is now `9b2f0c4`', when: '11:44' }] });
+    const ci2Conflict = { kind: 'ci', state: 'conflict', head: '9b2f0c4', headNote: 'repair 1', polled: 'final read 11:51', since: '11:44', dur: '7m 10s',
+      checks: ALL5([['pass', '5m 51s'], ['pending', '7m 10s'], ['pass', '6m 40s'], ['pass', '1m 20s'], ['pass', '3m 51s']]), mergeable: 'conflicting',
+      next_: 'GitHub reports the PR as conflicting with main. Merge repair started; a conflict does not count against the repair cap.' };
+    const confLive = { kind: 'conflict', state: 'now', agent: 'claude', model: SONNET, since: '11:51', dur: '3m 05s', repair: 2, signal: 'Resolving QaStageList.kt', ago: '5s ago',
+      base: 'main', baseSha: '3fa1c2e', ahead: 14, worktree: WT,
+      files: [
+        { path: 'desktop/feature/qa/src/commonMain/kotlin/QaPreviewHost.kt', state: 'resolved', hunks: [1, 1], ours: 'Reconnect retries the display 3 times', theirs: 'main renamed `PreviewSurface` to `QaSurface`' },
+        { path: 'desktop/feature/qa/src/commonMain/kotlin/QaStageList.kt', state: 'conflict', live: true, hunks: [1, 0, 0], ours: 'Stage times survive tab switches', theirs: 'main added the `uitests` stage row' },
+        { path: 'desktop/app/src/test/snapshots/QaPreview_reconnect.png', state: 'conflict', hunks: [0], binary: true, ours: 'Baseline from repair 1 (9b2f0c4)', theirs: 'main refreshed all QA baselines' },
+        { path: 'docs/desktop/qa-preview.md', state: 'resolved', hunks: [1] }],
+      auto: ['desktop/feature/qa/build.gradle.kts', 'desktop/feature/qa/src/commonMain/kotlin/QaRounds.kt', 'runtime-kotlin/runtime-engine/src/main/kotlin/QaLaunch.kt', 'README.md', 'gradle/libs.versions.toml'],
+      gates: [['Build gate', 'queued', '', './gradlew :desktop:app:assemble'], ['Validation gate', 'queued', '', './gradlew :desktop:app:check']],
+      next_: 'The agent leaves the merge in progress. The runtime records the merge commit with both parents and pushes it.' };
+    const confDone = Object.assign({}, confLive, { state: 'done', dur: '6m 12s', signal: null, outcome: 'fixed', next_: null,
+      files: confLive.files.map((f) => Object.assign({}, f, { state: 'resolved', live: false, hunks: f.hunks.map(() => 1) })),
+      summary: 'Kept the stage-time cache and added main\'s `uitests` row to it. Took main\'s renamed `QaSurface` and regenerated the reconnect baseline on top of main\'s refreshed set.',
+      gates: [['Build gate', 'pass', '1m 10s', './gradlew :desktop:app:assemble'], ['Validation gate', 'pass', '4m 02s', './gradlew :desktop:app:check']] });
+    const pub2Done = { kind: 'pub', state: 'done', since: '11:57', dur: '31s', repair: 2, merge: true, steps: [
+      { state: 'done', title: 'Staged', html: '4 resolved paths and 5 auto-merged', when: '11:57' },
+      { state: 'done', title: 'Committed merge', commit: { sha: '5d71aa0', msg: 'Merge main into feat/SKILL-512-qa-live-preview', parents: [['9b2f0c4', 'PR head'], ['3fa1c2e', 'main tip']] }, when: '11:57' },
+      { state: 'done', title: 'Pushed', html: 'Normal push, remote head was `9b2f0c4` as expected.', when: '11:58' },
+      { state: 'done', title: 'Remote acknowledged', html: 'PR head is now `5d71aa0`. GitHub reports it mergeable.', when: '11:58' }],
+      files: [{ path: 'desktop/feature/qa/src/commonMain/kotlin/QaPreviewHost.kt', ins: 4, del: 4 }, { path: 'desktop/feature/qa/src/commonMain/kotlin/QaStageList.kt', ins: 12, del: 2 }, { path: 'desktop/app/src/test/snapshots/QaPreview_reconnect.png', binary: true }, { path: 'docs/desktop/qa-preview.md', ins: 2, del: 1 }] };
+    const ci3Wait = { kind: 'ci', state: 'now', head: '5d71aa0', headNote: 'merge of main', polled: '8s ago', next: 'in 22s', since: '11:58', dur: '1m 05s', checks: [], registering: { reads: 1, until: '12:00' },
+      next_: 'No checks on 5d71aa0 yet. Results from 9b2f0c4 are ignored. The run ends with "no checks reported" only after two empty reads two minutes apart and a fresh lookup of the same PR and head.' };
+    const ci3Pass = { kind: 'ci', state: 'done', head: '5d71aa0', headNote: 'merge of main', polled: 'final read 12:09', since: '11:58', dur: '10m 52s',
+      checks: ALL5([['pass', '6m 10s'], ['pass', '8m 44s'], ['pass', '9m 31s'], ['pass', '1m 19s'], ['pass', '3m 50s']]) };
+    const A = {
+      c1: [['11:32', 'Watching PR <b>#482</b> on <span class="mono">a41c9e2</span> <em>· 5 checks</em>', 'neutral']],
+      c1fail: [['11:41', '<b>screenshot-diff</b> failed <em>· build-desktop (macos) still running</em>', 'failed'], ['11:41', 'Repair 1 started <em>· claude</em>', 'active']],
+      fix1: [['11:43', 'Repair 1 fixed <em>· 2 files, local checks passed</em>', 'done']],
+      pub1: [['11:43', 'Committed <span class="mono">9b2f0c4</span>', 'done'], ['11:44', 'Pushed <span class="mono">9b2f0c4</span> <em>· cycle 2</em>', 'done']],
+      c2conf: [['11:51', 'PR conflicts with <b>main</b> <em>· merge repair, not counted against the cap</em>', 'blocked'], ['11:51', 'Repair 2 started <em>· merging main@3fa1c2e</em>', 'active']],
+      fix2: [['11:57', 'Repair 2 fixed <em>· 4 conflicts resolved</em>', 'done']],
+      pub2: [['11:58', 'Pushed merge <span class="mono">5d71aa0</span> <em>· cycle 3</em>', 'done']],
+      c3pass: [['12:09', 'All 5 checks passed on <span class="mono">5d71aa0</span>', 'done']],
+    };
+    const cyc = (n, at, ci, fix, pub) => ({ n, at, ci, fix: fix || null, pub: pub || null });
+    const FLAKY = (n, sha, at) => ({ kind: 'ci', state: 'fail', head: sha, headNote: n ? `repair ${n}` : 'PR head at start', polled: `final read ${at}`, since: at, dur: '9m 30s',
+      checks: ALL5([['pass', '6m 02s'], ['pass', '8m 40s'], ['fail', '9m 30s', { log: LOG_FLAKY, why: 'expected `9b2f0c4` but was `a41c9e2` in StandaloneMonitorServiceTest.kt:214', run: '1208150' + n }], ['pass', '1m 22s'], ['pass', '3m 50s']]) });
+    const FLAKY_FIX = (n, path, ins, del, line) => ({ kind: 'fix', state: 'done', agent: 'claude', model: SONNET, since: '', dur: `4m 1${n}s`, repair: n, outcome: 'fixed',
+      fixing: [{ name: 'runtime-tests', job: 'Runtime CI · ubuntu-latest', bucket: 'fail', time: '9m 30s', why: 'expected `9b2f0c4` but was `a41c9e2`', log: LOG_FLAKY }],
+      files: [{ path, ins, del }], summary: line, gates: [['Build gate', 'pass', '2m 11s', './gradlew :runtime-engine:assemble'], ['Validation gate', 'pass', '6m 40s', './gradlew :runtime-engine:test']] });
+    const FLAKY_PUB = (n, sha, parent) => ({ kind: 'pub', state: 'done', dur: '20s', repair: n, files: [], steps: [
+      { state: 'done', title: 'Committed', commit: { sha, msg: ['', 'Wait for the lease renewal before publishing', 'Use a fixed clock in the lease test', 'Await the publication future in the monitor test'][n], parents: [[parent, n === 1 ? 'PR head' : `repair ${n - 1}`]] } },
+      { state: 'done', title: 'Pushed', html: 'Remote head matched the last published head.' },
+      { state: 'done', title: 'Remote acknowledged', html: `PR head is now \`${sha}\`` }] });
+    const SVC = 'runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/monitor/standalone/StandaloneMonitorService.kt';
+    const SVC_TEST = 'runtime-kotlin/runtime-engine/src/test/kotlin/skillbill/engine/featuretask/slot/monitor/standalone/StandaloneMonitorServiceTest.kt';
+    const ciSecret = { kind: 'ci', state: 'fail', head: 'a41c9e2', headNote: 'PR head at start', polled: 'final read 11:44', since: '11:32', dur: '12m 01s',
+      checks: [C('build-desktop (ubuntu)', 'pass', '6m 02s', 'Desktop CI · ubuntu-latest'), C('build-desktop (macos)', 'pass', '8m 31s', 'Desktop CI · macos-14'), C('runtime-tests', 'pass', '9m 15s', 'Runtime CI · ubuntu-latest'), C('lint', 'pass', '1m 22s', 'Lint · ubuntu-latest'), C('preview-upload', 'fail', '41s', 'Preview · ubuntu-latest', { log: LOG_SECRET, why: '`PREVIEW_UPLOAD_TOKEN is not set`', run: '12081499012' })] };
+    const fixSecret = { kind: 'fix', state: 'blocked', agent: 'claude', model: SONNET, since: '11:44', dur: '7m 11s', repair: 1, outcome: 'unresolved',
+      fixing: [{ name: 'preview-upload', job: 'Preview · ubuntu-latest', bucket: 'fail', time: '41s', why: '`PREVIEW_UPLOAD_TOKEN is not set`', log: LOG_SECRET }], files: [],
+      summary: 'The job runs `scripts/upload-preview.sh`, which needs `PREVIEW_UPLOAD_TOKEN`. GitHub does not pass secrets to this workflow because the PR comes from a fork. The script and workflow are correct for same-repo PRs. Fix options: run the workflow on `pull_request_target` with a reviewed checkout, or have a maintainer push the branch to the main repository.',
+      gates: [['Build gate', 'pass', '1m 02s', './gradlew :desktop:app:assemble'], ['Validation gate', 'pass', '3m 18s', './gradlew :desktop:app:check']] };
+    const ciTitle = { kind: 'ci', state: 'fail', head: 'a41c9e2', headNote: 'PR head at start', polled: 'final read 11:33', since: '11:32', dur: '40s',
+      checks: [C('pr-title', 'fail', '6s', 'PR lint · ubuntu-latest', { log: [['', 'Validating "monitor: show cycles"'], ['err', 'error: title must start with an issue key, e.g. "[SKILL-512] ..."'], ['dim', 'Error: Process completed with exit code 1.']], why: 'title must start with an issue key' }), C('build-desktop (ubuntu)', 'pending', '40s', 'Desktop CI · ubuntu-latest'), C('build-desktop (macos)', 'queued', '', 'Desktop CI · macos-14'), C('runtime-tests', 'pending', '38s', 'Runtime CI · ubuntu-latest'), C('lint', 'pass', '31s', 'Lint · ubuntu-latest')] };
+    const fixTitle = { kind: 'fix', state: 'done', agent: 'claude', model: SONNET, since: '11:33', dur: '1m 02s', repair: 1, outcome: 'fixed', prOnly: true,
+      fixing: [{ name: 'pr-title', job: 'PR lint · ubuntu-latest', bucket: 'fail', time: '6s', why: 'title must start with an issue key' }], files: [],
+      summary: 'The PR title lacked the issue key the pr-title check requires. Renamed it with `gh pr edit`; no repository file needed a change.', gates: [] };
+    const pubTitle = { kind: 'prEdit', state: 'done', since: '11:34', dur: '3s', repair: 1, field: 'title', head: 'a41c9e2', from: 'monitor: show cycles', to: '[SKILL-512] Keep QA live preview working across display crashes', grace: '11:46' };
+    const ci2Title = { kind: 'ci', state: 'now', head: 'a41c9e2', headNote: 'same head, PR edited', polled: '4s ago', next: 'in 26s', since: '11:36', dur: '2m 40s',
+      checks: [C('pr-title', 'pass', '5s', 'PR lint · ubuntu-latest', { rerun: true }), C('build-desktop (ubuntu)', 'pass', '5m 58s', 'Desktop CI · ubuntu-latest'), C('build-desktop (macos)', 'pending', '4m 02s', 'Desktop CI · macos-14'), C('runtime-tests', 'pass', '8m 51s', 'Runtime CI · ubuntu-latest'), C('lint', 'pass', '31s', 'Lint · ubuntu-latest')],
+      next_: 'Any check that runs after the edit counts toward the cap again; until then, or until 11:46, a red result is treated as stale.' };
+    const ci2Merged = { kind: 'ci', state: 'merged', head: '9b2f0c4', headNote: 'repair 1', polled: 'final read 11:47', since: '11:44', dur: '3m 05s', mergedAt: '11:47',
+      checks: ALL5([['pass', '2m 51s'], ['pending', '3m 05s'], ['pass', '2m 58s'], ['pass', '1m 20s'], ['pass', '2m 49s']]), next_: 'The PR was merged before every check settled. The run does not wait for the rest.' };
+    /* One entry per design/monitor-run scenario. hero: tone (RunOutcome tone), icon, word, head and text (inline markdown),
+     * signal, acts ([label, icon, external, primary]). cap: failed published repairs. sel: the cell opened at first. */
+    const RUNS = {
+      ciRunning: { label: 'Cycle 1 · CI running', life: 'active', step: 'monitor', head: 'a41c9e2', elapsed: '6m 40s', cap: 0, sel: 'c1.ci',
+        hero: { tone: 'active', icon: 'eye', live: true, word: 'Watching CI', head: 'Waiting on build-desktop (macos) and runtime-tests. 2 of 5 checks passed.', text: 'screenshot-diff is queued for a runner. Polling GitHub every 30 seconds.', signal: 'Last read 12s ago · next in 18s' },
+        cycles: [cyc(1, '11:32', ci1Run)], activity: A.c1 },
+      repair: { label: 'Cycle 1 · CI failed, repair running', life: 'active', step: 'monitor_fix', head: 'a41c9e2', elapsed: '10m 32s', cap: 0, capNote: 'the first failure is free', sel: 'c1.fix',
+        hero: { tone: 'active', icon: 'wrench', live: true, word: 'Repairing', head: 'Fixing screenshot-diff: the reconnect banner baseline is out of date.', text: 'claude has changed 2 files in the owned worktree. Local validation is running before anything is pushed.', signal: 'claude · Editing QaReconnectBanner.kt · 8s ago' },
+        cycles: [cyc(1, '11:32', ci1Fail, fix1Live)], activity: A.c1.concat(A.c1fail) },
+      publishing: { label: 'Cycle 1 · Publishing the repair', life: 'active', step: 'commit_push', head: 'a41c9e2', elapsed: '11m 41s', cap: 0, sel: 'c1.pub',
+        hero: { tone: 'active', icon: 'upload', live: true, word: 'Publishing', head: 'Pushing 9b2f0c4 to feat/SKILL-512-qa-live-preview.', text: 'Repair 1 fixed screenshot-diff and local checks passed. The push only lands if nobody else moved the branch.', signal: 'git push · 9s' },
+        cycles: [cyc(1, '11:32', ci1Fail, fix1Done, pub1Live)], activity: A.c1.concat(A.c1fail, A.fix1, A.pub1.slice(0, 1)) },
+      conflict: { label: 'Cycle 2 · Merge conflict repair', life: 'active', step: 'monitor_fix', head: '9b2f0c4', elapsed: '23m 05s', cap: 0, sel: 'c2.fix', prState: 'conflicting',
+        hero: { tone: 'blocked', icon: 'merge', live: true, word: 'Resolving conflicts', head: 'PR #482 conflicts with main. 2 of 4 files resolved.', text: 'main moved 14 commits ahead while CI ran. claude is merging main@3fa1c2e into the branch. Conflicts do not count against the repair cap.', signal: 'claude · Resolving QaStageList.kt · 5s ago' },
+        cycles: [cyc(1, '11:32', ci1Fail, fix1Done, pub1Done), cyc(2, '11:44', ci2Conflict, confLive)], activity: A.c1.concat(A.c1fail, A.fix1, A.pub1, A.c2conf) },
+      cycle3: { label: 'Cycle 3 · Waiting for checks to register', life: 'active', step: 'monitor', head: '5d71aa0', elapsed: '25m 10s', cap: 0, sel: 'c3.ci',
+        hero: { tone: 'active', icon: 'clock', live: true, word: 'Watching CI', head: 'Waiting for checks to appear on 5d71aa0.', text: 'The merge commit was pushed a minute ago. GitHub has not reported any checks for it yet.', signal: 'Last read 8s ago · next in 22s' },
+        cycles: [cyc(1, '11:32', ci1Fail, fix1Done, pub1Done), cyc(2, '11:44', ci2Conflict, confDone, pub2Done), cyc(3, '11:58', ci3Wait)], activity: A.c1.concat(A.c1fail, A.fix1, A.pub1, A.c2conf, A.fix2, A.pub2) },
+      green: { label: 'Finished · CI green', life: 'terminal', step: null, head: '5d71aa0', elapsed: '37m 02s', cap: 0, sel: 'c3.ci',
+        hero: { tone: 'done', icon: 'check', word: 'CI passed', head: 'All 5 checks passed on 5d71aa0.', text: 'Took 3 cycles: one failed check fixed, one merge conflict with main resolved. Both repairs were pushed to the PR as 9b2f0c4 and 5d71aa0.', acts: [['Open PR', 'pr', true], ['Copy summary', 'commit']] },
+        cycles: [cyc(1, '11:32', ci1Fail, fix1Done, pub1Done), cyc(2, '11:44', ci2Conflict, confDone, pub2Done), cyc(3, '11:58', ci3Pass)], activity: A.c1.concat(A.c1fail, A.fix1, A.pub1, A.c2conf, A.fix2, A.pub2, A.c3pass, [['12:09', 'Run finished <em>· CI green</em>', 'done']]) },
+      cap: { label: 'Blocked · Repair cap reached', life: 'blocked', step: 'monitor', head: 'e07b1d3', elapsed: '58m 20s', cap: 3, sel: 'c4.ci', capped: true,
+        hero: { tone: 'failed', icon: 'stop', word: 'Repair cap reached', head: 'runtime-tests still fails after 3 published repairs.', text: 'Each repair passed locally, and each pushed commit failed the same test in CI: StandaloneMonitorServiceTest "publishes after lease renewal". That points at a race that only shows on the CI runner.', acts: [['Monitor again', 'refresh', false, true], ['Open failing job', 'external', true], ['Open PR', 'pr', true]] },
+        cycles: [
+          cyc(1, '13:02', FLAKY(0, 'a41c9e2', '13:02'), FLAKY_FIX(1, SVC, 9, 2, 'Publication now waits for the lease renewal to land.'), FLAKY_PUB(1, '9b2f0c4', 'a41c9e2')),
+          cyc(2, '13:17', FLAKY(1, '9b2f0c4', '13:17'), FLAKY_FIX(2, SVC_TEST, 6, 4, 'Swapped the system clock for a fixed clock in the lease test.'), FLAKY_PUB(2, 'c40a77e', '9b2f0c4')),
+          cyc(3, '13:33', FLAKY(2, 'c40a77e', '13:33'), FLAKY_FIX(3, SVC_TEST, 3, 1, 'The test now awaits the publication future before asserting.'), FLAKY_PUB(3, 'e07b1d3', 'c40a77e')),
+          cyc(4, '13:49', FLAKY(3, 'e07b1d3', '13:49'))],
+        activity: [['13:02', 'Watching PR <b>#482</b> on <span class="mono">a41c9e2</span>', 'neutral'], ['13:11', '<b>runtime-tests</b> failed', 'failed'], ['13:16', 'Pushed repair 1 <span class="mono">9b2f0c4</span>', 'done'], ['13:26', 'Repair 1 still fails CI <em>· 1 of 3</em>', 'failed'], ['13:32', 'Pushed repair 2 <span class="mono">c40a77e</span>', 'done'], ['13:42', 'Repair 2 still fails CI <em>· 2 of 3</em>', 'failed'], ['13:48', 'Pushed repair 3 <span class="mono">e07b1d3</span>', 'done'], ['13:58', 'Repair 3 still fails CI <em>· 3 of 3, stopped</em>', 'failed']] },
+      unresolved: { label: 'Blocked · Repair unresolved', life: 'blocked', step: 'monitor_fix', head: 'a41c9e2', elapsed: '19m 12s', cap: 0, sel: 'c1.fix',
+        hero: { tone: 'blocked', icon: 'warn', word: 'Needs you', head: 'preview-upload needs the PREVIEW_UPLOAD_TOKEN secret, which this PR cannot read.', text: 'claude read the failed job and found no repository change that fixes it. Nothing was pushed. The worktree is kept with its notes.', acts: [['Monitor again', 'refresh', false, true], ['Open worktree', 'folder'], ['Open failing job', 'external', true]] },
+        cycles: [cyc(1, '11:32', ciSecret, fixSecret)],
+        activity: [['11:32', 'Watching PR <b>#482</b> on <span class="mono">a41c9e2</span>', 'neutral'], ['11:44', '<b>preview-upload</b> failed', 'failed'], ['11:44', 'Repair 1 started <em>· claude</em>', 'active'], ['11:51', 'Repair 1 <b>unresolved</b> <em>· missing secret</em>', 'blocked']] },
+      prEdit: { label: 'Cycle 1 · Repair edited the PR only', life: 'active', step: 'monitor', head: 'a41c9e2', elapsed: '4m 20s', cap: 0, sel: 'c1.pub',
+        hero: { tone: 'active', icon: 'tag', live: true, word: 'Watching CI', head: 'pr-title now passes. Waiting for the checks to rerun on the edited PR.', text: 'Repair 1 changed the PR title only, so nothing was pushed. Failures count again once a check runs after the edit, or after a 10 minute grace (until 11:46).', signal: 'Last read 4s ago · next in 26s' },
+        cycles: [cyc(1, '11:32', ciTitle, fixTitle, pubTitle), cyc(2, '11:36', ci2Title)],
+        activity: [['11:32', 'Watching PR <b>#482</b> on <span class="mono">a41c9e2</span>', 'neutral'], ['11:33', '<b>pr-title</b> failed', 'failed'], ['11:34', 'Repair 1 edited the PR title <em>· no push</em>', 'done'], ['11:36', 'pr-title passed on rerun', 'done']] },
+      merged: { label: 'Finished · PR merged while watching', life: 'terminal', step: null, head: '9b2f0c4', elapsed: '14m 50s', cap: 0, sel: 'c2.ci', prState: 'merged',
+        hero: { tone: 'merged', icon: 'merge', word: 'Merged', head: 'PR #482 was merged into main at 11:47. Monitoring stopped.', text: 'A merged PR ends the run whatever its checks say. build-desktop (macos) was still running on 9b2f0c4; GitHub keeps its result on the PR.', acts: [['Open PR', 'pr', true]] },
+        cycles: [cyc(1, '11:32', ci1Fail, fix1Done, pub1Done), cyc(2, '11:44', ci2Merged)], activity: A.c1.concat(A.c1fail, A.fix1, A.pub1, [['11:47', 'PR <b>#482</b> merged into main', 'merged'], ['11:47', 'Run finished <em>· merged</em>', 'done']]) },
+    };
+    Object.values(RUNS).forEach((r) => { r.pr = PR; });
+    /* The Goal finish cards reuse the steps: monitor cycle 2 on #482 and the monitor_fix repair before it. */
+    return { PR, RUNS, steps: { ci1Fail, fix1Done, pub1Done, ci2Run: Object.assign({}, ci1Run, { head: '9b2f0c4', headNote: 'repair 1', since: '11:44', dur: '12m 30s', polled: '45s ago', next: 'in 15s',
+      checks: ALL5([['pass', '6m 02s'], ['pending', '7m 40s'], ['pass', '9m 15s'], ['pass', '1m 22s'], ['pass', '3m 51s']]), next_: 'build-desktop (macos) is the last check. If it passes, the goal finishes; a failure starts repair 2.' }), ci3Pass } };
+  })();
+  const monItem = (id, key, o) => Object.assign({ id, kind: 'phase', phase: 'monitor', repo: 'skill-bill', title: MON.PR.title, branch: MON.PR.branch, issue: null,
+    lifecycle: MON.RUNS[key].life, section: { active: 'phases', blocked: 'needs' }[MON.RUNS[key].life] || 'history', step: MON.RUNS[key].step || 'monitor', summary: MON.RUNS[key].hero.head, goalMs: 632000, live: MON.RUNS[key].life === 'active', fresh: true,
+    agent: 'claude', model: 'claude-sonnet-5-5', effort: 'high', invocation: 'inv-5e21c0d9a4b7f3e28160c5aa-mon', started: '11:32', updated: '11:42:20', startedAgo: 632,
+    runOptions: { canLaunch: MON.RUNS[key].life === 'blocked', canCancel: MON.RUNS[key].life === 'active', launchLabel: 'Monitor again' },
+    steps: [['monitor', 'done'], ['monitor_fix', 'done'], ['commit_push', 'done']], monRun: MON.RUNS[key] }, o || {});
+
   /* Validation runs only reachable by route (#detail/<id>): two running states that would otherwise add rows to the board. */
   const valRoutes = [
     { id: 'ph-sb-val-running', kind: 'phase', phase: 'validation', repo: 'skill-bill', lifecycle: 'active', section: 'phases', title: 'Validation on ' + BRANCH_447, branch: BRANCH_447, step: 'validate', summary: R411.line, goalMs: 551689, live: true, fresh: true, agent: 'claude', invocation: 'inv-b2fc61394d0a7e5c2f81d9a6-411', started: '14:31', updated: '14:40:43', startedAgo: 552, runOptions: { canLaunch: false, canCancel: true }, steps: [['validate', 'now']], valRun: Object.assign({ day: 'Oct 29' }, VAL.stored) },
@@ -701,6 +872,8 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
     { id: 'ph-sb-validation', kind: 'phase', phase: 'validation', repo: 'skill-bill', lifecycle: 'active', section: 'phases', title: 'Validation on fix/ide-status-readonly-lease', branch: 'fix/ide-status-readonly-lease', step: 'validate', summary: 'Running Tray check and distributable', goalMs: 10 * M + 55000, live: true, fresh: true, model: 'claude-sonnet-5-5', effort: 'high', agent: 'claude', invocation: 'inv-5c028fed5cc5adf53a7a6453-7d1', started: '09:38', updated: '09:48:40', startedAgo: 660, runOptions: { canLaunch: false, canCancel: true }, steps: [['validate', 'now']], valRun: Object.assign({ day: 'Today' }, VAL.running) },
     { id: 'ph-rk-validation', kind: 'phase', phase: 'validation', repo: 'runtime-kotlin', lifecycle: 'active', section: 'phases', title: 'Validation on feat/RT-94-lease-reaper', branch: 'feat/RT-94-lease-reaper', step: 'validate', summary: 'The validate child is active and producing output', goalMs: 5 * M + 12000, live: true, fresh: true, agent: 'junie', invocation: 'inv-9a0e3c7714b2d6f08e51ac3d-2f6', started: '09:43', updated: '09:48:12', startedAgo: 312, runOptions: { canLaunch: false, canCancel: true }, steps: [['validate', 'now']], valRun: Object.assign({ day: 'Today' }, VAL.noChecks) },
     { id: 'ph-sb-val-limit', kind: 'phase', phase: 'validation', repo: 'skill-bill', lifecycle: 'blocked', section: 'needs', title: 'Validation on ' + BRANCH_447, branch: BRANCH_447, step: 'validate', summary: 'Paused at the agent provider\'s usage limit; resumes at validate', goalMs: 1576888, live: false, fresh: true, model: 'gpt-6.1-terra', effort: 'high', agent: 'codex', invocation: 'inv-c31d70f5a2e94b0d6f13c8e7-406', started: '14:02', updated: 'Yesterday 14:28', startedAgo: 70400, finishedAgo: 68800, runOptions: { canLaunch: true, canCancel: true, launchLabel: 'Resume', agentId: 'codex' }, steps: [['validate', 'wait']], valRun: Object.assign({ day: 'Yesterday' }, VAL.limit) },
+    monItem('ph-sb-mon-cap', 'cap', { section: 'needs', goalMs: 3500000, started: '13:02', updated: '13:58:40' }),
+    monItem('ph-sb-monitor', 'repair', { section: 'phases', goalMs: 632000 }),
     { id: 'ph-atl-pr', kind: 'phase', phase: 'pr', repo: 'atlas-web', lifecycle: 'active', section: 'phases', title: 'pr on feat/ATL-402-checkout-retry', branch: 'feat/ATL-402-checkout-retry', step: 'monitor_fix', exec: '1/3', summary: 'Fixing 1 failing check: lint', goalMs: 21 * M + 8000, live: true, fresh: true, model: 'claude-sonnet-5-5', effort: 'medium', agent: 'claude', invocation: 'inv-7f3c6534839588bb13e22a54-a91', started: '09:27', updated: '09:48:02', startedAgo: 1380, runOptions: { canLaunch: false, canCancel: true }, steps: [['commit_push', 'done'], ['pr', 'done'], ['monitor', 'done'], ['monitor_fix', 'now']] },
     { id: 'ph-pay-qa', kind: 'phase', phase: 'qa', repo: 'payments-svc', lifecycle: 'failed', section: 'needs', title: 'qa on PAY-72-passkey-enrollment', branch: 'PAY-72-passkey-enrollment', step: 'qa', summary: 'QA stopped before it wrote a report', goalMs: 7 * M + 40000, live: false, fresh: true, model: 'claude-sonnet-5-5', effort: 'medium', agent: 'claude', invocation: 'inv-91c4e7a2b05d38f6c1e9a7d4-3b8', started: '09:20', updated: '09:27:52', startedAgo: 1860, finishedAgo: 1400, runOptions: { canLaunch: true, canCancel: false, launchLabel: 'Run again', agentId: 'claude' }, steps: [['qa', 'fail']], qa: QA.unfinished },
     planItem({ id: 'ph-sb-plan', issue: 'SKILL-513', repo: 'skill-bill', lifecycle: 'active', section: 'phases', title: 'Live plan progress on the detail screen', step: 'plan_subtasks', summary: 'Writing specs for subtasks 3 to 5. 2 of 7 saved.', model: 'claude-opus-5-5', effort: 'high', agent: 'claude', invocation: 'inv-6b3e0c91a7d24f5880c1e3b2-5a1', started: '09:37', updated: '09:48:50', startedAgo: 698, planRun: PLAN_513 }),
@@ -716,6 +889,7 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
     { id: 'op-prfix', kind: 'operation', op: 'pr-review-fix', repo: 'atlas-web', lifecycle: 'active', section: 'operations', title: 'pr-review-fix on #318', branch: 'feat/ATL-399-cart-badge', step: 'pr-review-fix', summary: 'Proposing fixes for 4 review comments', goalMs: 2 * M, live: true, fresh: true, model: 'claude-sonnet-5-5', effort: 'medium', agent: 'claude', invocation: 'inv-3b7a1dc070603fe1ae258162-0c1', started: '09:47', updated: '09:49:01', startedAgo: 180, runOptions: { canLaunch: false, canCancel: true }, steps: [] },
 
     /* Finished today */
+    monItem('ph-sb-mon-green', 'green', { section: 'finished', goalMs: 2222000, finishedAt: '12:09', finishedAgo: 120 }),
     planItem({ id: 'ph-sb-plan-done', issue: 'SKILL-511', repo: 'skill-bill', lifecycle: 'terminal', section: 'finished', finishedAt: '08:50', title: 'Spec bundle file order in the detail', step: 'plan_subtasks', summary: 'Plan ready. 4 subtasks, all specs saved.', model: 'claude-opus-5-5', effort: 'high', agent: 'claude', invocation: 'inv-2f71c08d4e9a3b6c5d7e10a2-e11', started: '08:41', updated: '08:50:34', startedAgo: 4060, finishedAgo: 3488, runOptions: { canLaunch: false, canCancel: false }, planRun: PLAN_511 }),
     {
       id: 'SKILL-416', kind: 'goal', repo: 'skill-bill', lifecycle: 'terminal', section: 'finished', finishedAt: '07:46',
@@ -788,6 +962,15 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
   valRoutes.push(
     valRoute('ph-sb-val-repairs', 'skill-bill', BRANCH_447, 'claude', 'Oct 29 14:41', '14:59', 1105000, 1105098, VAL.repairs, 637800),
     valRoute('ph-za-val-report', 'zero-account', BRANCH_085, 'codex', 'Oct 29 14:05', '14:19', 843000, 843171, VAL.blockedReportOnly, 638700));
+  /* Monitor runs reachable by route only, one per design/monitor-run scenario; the repair, cap and green runs are on the board. */
+  valRoutes.push(
+    monItem('ph-sb-mon-ci', 'ciRunning', { goalMs: 400000, startedAgo: 400 }),
+    monItem('ph-sb-mon-publish', 'publishing', { goalMs: 701000, startedAgo: 701 }),
+    monItem('ph-sb-mon-conflict', 'conflict', { goalMs: 1385000, startedAgo: 1385 }),
+    monItem('ph-sb-mon-wait', 'cycle3', { goalMs: 1510000, startedAgo: 1510 }),
+    monItem('ph-sb-mon-unresolved', 'unresolved', { goalMs: 1152000 }),
+    monItem('ph-sb-mon-pr-edit', 'prEdit', { goalMs: 260000, startedAgo: 260 }),
+    monItem('ph-sb-mon-merged', 'merged', { goalMs: 890000, finishedAt: '11:47', finishedAgo: 900 }));
 
   /* Spec pane (design/specs-panel; desktop feature/specs). Projects from specBrowserService.projects(): `checkout` false has
    * no checkout on this machine, `problem` failed to read. Bundles from snapshot(): `status` is the tree status the spec
@@ -958,6 +1141,29 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
   };
   const QA_DEVICES = { live: 'mixed', lists: DEVICE_LISTS };
 
+  /* Build indicator: build tool commands the runtime finds in a run's agent process tree, matched
+   * against the repository's platform pack. `types` is what SKILL-417 builds per project type (the #build/<state>/<type>
+   * routes switch it); `runs` are the fixed builds of other runs on the board. `usual` is the median of the same command's
+   * last five runs in the repository. */
+  const BUILD = {
+    live: { state: 'running', type: 'android' },
+    focus: 'SKILL-417',
+    types: {
+      android: { tool: 'Gradle 8.10', kind: 'Android', cmd: './gradlew :app:assembleDebug', short: 'gradlew assembleDebug', usual: 3 * M + 10000 },
+      kotlin: { tool: 'Gradle 8.10', kind: 'Kotlin/JVM', cmd: './gradlew :runtime-engine:test', short: 'gradlew test', usual: 2 * M + 20000 },
+      ts: { tool: 'pnpm 9', kind: 'TypeScript', cmd: 'pnpm build', short: 'pnpm build', usual: 48000 },
+      go: { tool: 'Go 1.23', kind: 'Go', cmd: 'go test ./...', short: 'go test', usual: 1 * M + 5000 },
+      rust: { tool: 'Cargo', kind: 'Rust', cmd: 'cargo build --release', short: 'cargo build', usual: 4 * M },
+      ios: { tool: 'Xcode 16', kind: 'iOS', cmd: 'xcodebuild -scheme Newsreader build', short: 'xcodebuild', usual: 5 * M + 30000 },
+    },
+    runs: {
+      'ph-sb-validation': { tool: 'Gradle 8.10', kind: 'Kotlin/JVM', cmd: './gradlew clean check createDistributable --no-build-cache', short: 'gradlew check', state: 'running', ms: 6 * M + 5000, usual: 4 * M + 10000, pid: 51877, started: '14:24', prev: ['done', '4m 02s', '41m ago'] },
+      'ph-rk-validation': { tool: 'Gradle 8.10', kind: 'Kotlin/JVM', cmd: './gradlew build', short: 'gradlew build', state: 'failed', ms: 48000, usual: 2 * M, exit: 1, ago: '1m ago', pid: 50211, started: '14:29' },
+      'ph-atl-pr': { tool: 'pnpm 9', kind: 'TypeScript', cmd: 'pnpm build', short: 'pnpm build', state: 'running', ms: 22000, usual: 1 * M + 5000, pid: 52003, started: '14:30' },
+      'PAY-19': { tool: 'Go 1.23', kind: 'Go', cmd: 'go test ./...', short: 'go test', state: 'passed', ms: 1 * M + 12000, usual: 1 * M + 10000, exit: 0, ago: '4m ago', pid: 49120, started: '14:26' },
+    },
+  };
+
   const USAGE = {
     providers: ['Codex', 'Claude', 'Cursor'],
     accounts: { Codex: 'Personal account', Claude: 'Work account', Cursor: 'Personal account, legacy plan' },
@@ -979,7 +1185,242 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
     },
   };
 
+  /* Goal QA while it runs: the stage QA is on, the live preview and the screenshots it has saved.
+   * Stage names follow the desktop target in platform-packs/kmp/qa/kmp-qa.md. `video` marks the stages where the preview can
+   * show frames. The runtime does not report stages yet; see R6 in HANDOFF.md. Sample data modeled on the
+   * SKILL-516 QA runs of 2026-11-07. */
+  const QA_STAGES = [
+    { id: 'prepare', name: 'Prepare checkout' },
+    { id: 'uitests', name: 'Compose UI tests', headless: true },
+    { id: 'display', name: 'Start private display' },
+    { id: 'launch', name: 'Launch app', video: true },
+    { id: 'exercise', name: 'Exercise running app', video: true },
+    { id: 'report', name: 'Write report' },
+    { id: 'cleanup', name: 'Clean up' },
+  ];
+  const QA_LIVE_DONE = { prepare: '0:52', uitests: '7:31', display: '0:09', launch: '1:22' };
+  /* Each scenario: `at` (the stage QA is on), `states` overrides (warn, skip), `times` for finished stages, `lines` (one
+   * detail line per stage), `preview` (later, waiting, live, reconnect, nocapture, none, ended), `shots` (evidence/ file
+   * names, oldest first), `callout`, `hint` and `rounds` for the goal QA fix loop. */
+  const QA_LIVE = {
+    prepare: { label: 'Preparing the checkout', elapsed: '0:38', at: 'prepare',
+      lines: { prepare: 'Isolating app data under `qa-7c1e/home`' }, preview: { kind: 'later', reachAt: 'launch' } },
+    uitests: { label: 'Compose UI tests', elapsed: '5:12', at: 'uitests', times: { prepare: '0:52' },
+      lines: { uitests: 'Running `:feature:detail:jvmTest --rerun-tasks` · 3 of 6 test classes' },
+      preview: { kind: 'later', reachAt: 'launch', why: 'UI tests run without a display. Video starts when QA launches the app, after these tests and the display start.' },
+      hint: 'The last QA run on this repository reached Launch app 9m 40s in.' },
+    display: { label: 'Display up, app not drawn', elapsed: '10:05', at: 'launch', times: { prepare: '0:52', uitests: '7:31', display: '0:09' },
+      lines: { display: 'Display `:97` with capture · framebuffer protected', launch: 'Gradle is building `:desktop:app:run` · waiting for the window' },
+      preview: { kind: 'waiting', text: 'Display :97 is ready. Waiting for the app window.', sub: 'Frames appear when the app draws its first window.' } },
+    live: { label: 'Live', elapsed: '13:48', at: 'exercise', times: QA_LIVE_DONE,
+      lines: { exercise: 'Criterion 3 of 5 · clicking "QA" in the finish tabs' },
+      preview: { kind: 'live', caption: 'Criterion 3 of 5', info: ':97 · 1600×1000' }, shots: ['app-start.png', 'finish-tabs.png', 'qa-tab-open.png'] },
+    restart: { label: 'Display restarting', elapsed: '12:31', at: 'exercise', times: QA_LIVE_DONE, states: { exercise: 'warn' },
+      lines: { exercise: 'Display `:97` exited with SIGBUS at 21:59:40. QA is restarting it with capture.' },
+      preview: { kind: 'reconnect', text: 'The display crashed at 21:59:40. QA is restarting it. Video resumes when the app draws again.' }, shots: ['app-start.png', 'finish-tabs.png'] },
+    nocapture: { label: 'Restarted without capture', elapsed: '15:02', at: 'exercise', times: QA_LIVE_DONE, states: { exercise: 'warn' },
+      lines: { exercise: 'Running on display `:98` without capture · screenshots only' },
+      preview: { kind: 'nocapture', text: 'QA restarted the display without capture, so there is no video for the rest of this attempt. Screenshots below still update.' },
+      callout: { text: 'Display `:97` crashed at 21:30 with SIGBUS. QA restarted it as `:98` without `-fbdir`, which breaks the rule in kmp-qa.md. QA will record this as a live-preview limitation.', chip: { icon: 'qaFile', label: 'xvfb.log', mono: true } },
+      shots: ['app-start.png', 'finish-tabs.png', 'after-restart.png'] },
+    nodisplay: { label: 'No display', elapsed: '9:40', at: 'report', times: { prepare: '0:52', uitests: '7:31' }, states: { display: 'skip', launch: 'skip', exercise: 'skip' },
+      lines: { display: 'No Xvfb on this machine · listed under Unblock', report: 'Writing `report.md`' },
+      preview: { kind: 'none', text: 'QA could not start a private display. It ran the Compose UI tests only.' },
+      callout: { text: 'Install `xorg-server-xvfb` so QA can run the app on a private display. The report lists this under Unblock.', chip: { icon: 'qaOpen', label: 'Open Unblock' } } },
+    fixloop: { label: 'Round 2 after a fix', elapsed: '3:05', at: 'prepare', round: 2,
+      lines: { prepare: 'Reusing isolated data from round 1' }, preview: { kind: 'later', reachAt: 'launch' },
+      hint: 'Round 1 reached Launch app 9m 40s in.',
+      rounds: [{ icon: 'qaBug', label: 'QA 1 · 1 finding', state: 'done' }, { icon: 'check', label: 'qa_fix', state: 'done' }, { label: 'QA 2', state: 'now' }] },
+    ended: { label: 'Finished', elapsed: '18:22', done: true,
+      times: Object.assign({}, QA_LIVE_DONE, { exercise: '6:40', report: '1:20', cleanup: '0:28' }),
+      preview: { kind: 'ended', at: '22:05' }, shots: ['app-start.png', 'finish-tabs.png', 'qa-tab-open.png', 'preview-blank.png', 'resize-900.png'] },
+  };
+
+
+  /* ---------- Phase peek (design/phase-peek): one card per phase under the details-pane phase tabs ----------
+   * A card: title, agent, model (with effort), round, when, dur, word (overrides the state word), tone (overrides the
+   * edge color), why (HTML strip), nowTitle and now (blocks while it runs or waits), madeTitle, madeEnd (text, or
+   * { sort: true } for the assessment order control) and made (blocks), results (blocks), activity ([time, html, tone])
+   * and open ({ label, toast, external }) for the footer button. Blocks: signal, edit, cmd, cells, text, stats, out,
+   * finds, checks, facts; and for goal finish: assessment (it.assessment), qaLive (it.qaLive), qaRun, qaResults
+   * (it.goalQa), qaWait and qaFinding. Sources: phase records, settlement envelopes, the edit journal,
+   * agent_activity_stamps and the phase receipts (HANDOFF.md 4.1). Monitor CI checks are not persisted yet. */
+  const PEEK = (function () {
+    const OPUS = 'claude-opus-5-5 · high', SONNET = 'claude-sonnet-5-5 · high', GPT = 'gpt-6.1-sol · high';
+    const path = (p) => `<span class="mono" title="${p}">${p.split('/').pop()}</span>`;
+    function subCards(o) {
+      return {
+        preplan: { title: 'Preplan', agent: 'claude', model: OPUS, when: o.t[0], dur: '1m 52s', made: [{ kind: 'text', html: o.preplan }],
+          activity: [[o.t[0], 'Started · <em>attempt 1</em>'], [o.t[1], 'Settled <em>· done</em>', 'done']] },
+        plan: { title: 'Plan', agent: 'claude', model: OPUS, when: o.t[1], dur: '3m 05s',
+          made: [{ kind: 'out', items: [{ icon: 'fileText', html: `<span class="mono">${o.spec}</span>`, end: `${o.criteria} criteria`, toast: `Opened ${o.spec}` }] }, { kind: 'text', html: o.plan }],
+          activity: [[o.t[1], 'Started'], [o.t[2], `Wrote ${o.spec}`, 'done']] },
+        implement: { title: 'Implement', agent: 'claude', model: SONNET, round: o.implRound || 'attempt 1', when: o.t[2], dur: o.implDur || '14m 20s', madeEnd: 'from the edit journal',
+          made: [
+            { kind: 'stats', items: [[String(o.files.length), 'files'], [`+${o.ins}`, 'added', 'ok'], [`−${o.del}`, 'removed', 'bad'], [String(o.newFiles), 'new']] },
+            { kind: 'out', items: o.files.slice(0, 4).map(([p, i, d, n]) => ({ icon: n ? 'file' : 'pencil', html: `${path(p)}${n ? ' <em>new</em>' : ''}`, end: `+${i} −${d}`, tip: p, toast: `Opened ${p.split('/').pop()} in the diff` })) },
+          ].concat(o.files.length > 4 ? [{ kind: 'text', html: `<span class="note">${o.files.length - 4} more files in Changes</span>` }] : []),
+          activity: o.implAct, open: { label: 'Open changes', toast: 'Opened the Changes window filtered to implement' } },
+        simplify: { title: 'Simplify', agent: 'claude', model: SONNET, when: o.t[3], dur: '4m 41s',
+          made: [{ kind: 'stats', items: [['3', 'files'], ['+18', 'added', 'ok'], ['−56', 'removed', 'bad'], ['−38', 'net']] }, { kind: 'text', html: o.simplify }],
+          activity: [[o.t[3], 'Started'], [o.t[4], 'Settled <em>· done</em>', 'done']] },
+        audit: { title: 'Audit', agent: 'claude', model: OPUS, when: o.t[4], dur: '2m 10s', word: 'Satisfied', madeTitle: 'Acceptance criteria', madeEnd: `${o.audit.length} of ${o.audit.length} covered`,
+          made: [{ kind: 'checks', rows: o.audit.map((c) => [c, 'ok']) }], activity: [[o.t[4], 'Started'], [o.t[5], 'Verdict <b>satisfied</b>', 'done']] },
+      };
+    }
+    const S2 = {
+      t: ['08:12', '08:14', '08:17', '08:52', '08:57', '08:59'],
+      preplan: 'Change sits in <b>IdeStatusService</b> and its presenter. Risk: the lease check reads the parent snapshot before the child settles. Plan keeps the poll interval as it is.',
+      spec: 'spec_subtask_02.md', criteria: 3,
+      plan: 'Three criteria: the live goal phase wins after a child finishes, a finished child label clears on the next poll, and the lease check runs once per poll.',
+      files: [['runtime/src/main/kotlin/dev/skillbill/ide/IdeStatusService.kt', 128, 42], ['runtime/src/main/kotlin/dev/skillbill/ide/IdeStatusPresenter.kt', 31, 9], ['runtime/src/test/kotlin/dev/skillbill/ide/IdeStatusServiceTest.kt', 96, 0, true], ['runtime/src/main/kotlin/dev/skillbill/ide/GoalPhaseSnapshot.kt', 22, 4], ['runtime/src/main/kotlin/dev/skillbill/ide/LeaseCheck.kt', 6, 11], ['runtime/src/test/kotlin/dev/skillbill/ide/fixtures/GoalSnapshots.kt', 40, 0, true]],
+      ins: 323, del: 66, newFiles: 2, implRound: 'attempt 2', implDur: '21m 02s',
+      implAct: [['08:17', 'Attempt 1 started'], ['08:38', 'Attempt 1 hit the 20 min timeout <em>· relaunched</em>', 'wait'], ['08:39', 'Attempt 2 started'], ['08:52', 'Settled <em>· 6 files, +323 −66</em>', 'done']],
+      simplify: 'Merged two snapshot lookups into <span class="mono">GoalPhaseSnapshot.current()</span> and dropped an unused lease cache.',
+      audit: ['Live goal phase wins after a child finishes', 'Finished child label clears on the next poll', 'Lease check runs once per poll'],
+    };
+    const S1 = {
+      t: ['21:38', '21:40', '21:44', '22:10', '22:15', '22:17'],
+      preplan: 'Status store already keeps the workflow id. Only the execution row is missing, so the change stays in one table and its reader.',
+      spec: 'spec_subtask_01.md', criteria: 2,
+      plan: 'Two criteria: the store keeps the execution for a standalone phase, and a restart reads it back.',
+      files: [['runtime/src/main/kotlin/dev/skillbill/status/StandaloneStatusStore.kt', 64, 18], ['runtime/src/main/kotlin/dev/skillbill/status/StandaloneStatusMigration.kt', 41, 0, true], ['runtime/src/test/kotlin/dev/skillbill/status/StandaloneStatusStoreTest.kt', 88, 3]],
+      ins: 193, del: 21, newFiles: 1, implDur: '25m 48s',
+      implAct: [['21:44', 'Started'], ['22:10', 'Settled <em>· 3 files, +193 −21</em>', 'done']],
+      simplify: 'Folded the row mapper into the store and removed a duplicate null check.',
+      audit: ['Store keeps the execution for a standalone phase', 'A restart reads the execution back'],
+    };
+    const reviewNow = {
+      title: 'Review', agent: 'claude', model: 'claude-opus-5-5 · xhigh', round: 'pass 2', when: 'since 09:31', dur: '17m 20s',
+      now: [{ kind: 'signal', live: true, text: 'Verifying 3 review findings', ago: '14s ago' }, { kind: 'edit', agent: 'claude', path: 'runtime/src/main/kotlin/dev/skillbill/ide/IdeStatusService.kt', ins: 12, del: 4, ago: '2m ago' }],
+      madeTitle: 'Pass 1 findings', madeEnd: 'changes requested',
+      made: [{ kind: 'finds', rows: [['major', 'The status reads the child phase after the parent snapshot is replaced', 'fixed'], ['minor', 'The lease check runs twice per poll', 'fixed'], ['minor', 'A finished child keeps its phase label for one poll', 'open']] }],
+      activity: [['09:14', 'Pass 1 started'], ['09:22', 'Pass 1 <b>changes requested</b> <em>· 3 findings</em>', 'wait'], ['09:23', 'Fix 1 <em>· 2 files, +31 −12</em>', 'done'], ['09:31', 'Pass 2 started', 'now']],
+      open: { label: 'Open review', toast: 'Opened review run rv-5c21 for subtask 02' },
+    };
+    const tail1 = {
+      review: { title: 'Review', agent: 'claude', model: 'claude-opus-5-5 · xhigh', round: 'pass 1', when: '22:17', dur: '6m 12s', word: 'Approved',
+        made: [{ kind: 'text', html: 'Approved on the first pass. No findings.' }], activity: [['22:17', 'Pass 1 started'], ['22:23', 'Pass 1 <b>approved</b>', 'done']],
+        open: { label: 'Open review', toast: 'Opened review run rv-19aa for subtask 01' } },
+      build: { title: 'Build', agent: 'claude', model: SONNET, when: '22:23', dur: '3m 02s', word: 'Passed', madeTitle: 'Build receipt',
+        made: [{ kind: 'cmd', text: './gradlew :runtime:assemble' }, { kind: 'stats', items: [['passed', 'result', 'ok'], ['3m 02s', 'took'], ['0', 'warnings']] }],
+        activity: [['22:23', 'Started'], ['22:26', 'Build passed', 'done']] },
+      validate: { title: 'Validate', agent: 'claude', model: SONNET, when: '22:26', dur: '5m 40s', word: 'Passed', madeTitle: 'Checks', madeEnd: '4 of 4 passed',
+        made: [{ kind: 'checks', rows: [['Unit tests', 'ok', '2m 51s', ':runtime:test'], ['Detekt', 'ok', '41s', ':runtime:detekt'], ['ktlint', 'ok', '18s', 'ktlintCheck'], ['Contract tests', 'ok', '1m 50s', ':contracts:test']] }],
+        activity: [['22:26', 'Started'], ['22:32', 'Validation passed <em>· 4 checks</em>', 'done']] },
+      write_history: { title: 'Write history', agent: 'claude', model: SONNET, when: '22:32', dur: '48s', madeTitle: 'History receipt',
+        made: [{ kind: 'out', items: [{ icon: 'history', html: '<span class="mono">history/2026-10.md</span>', end: '1 entry', toast: 'Opened history/2026-10.md' }] }, { kind: 'stats', items: [['yes', 'written', 'ok'], ['2', 'decisions'], ['1', 'path']] }],
+        activity: [['22:32', 'Started'], ['22:33', 'Wrote 1 entry, 2 decisions', 'done']] },
+      commit_push: { title: 'Commit and push', agent: 'claude', model: SONNET, when: '22:33', dur: '22s', madeTitle: 'Commit',
+        made: [{ kind: 'out', items: [{ icon: 'commit', html: '<span class="mono">a41c9e2d</span> Keep the workflow execution in the standalone status store', toast: 'Copied a41c9e2d31400fb0f88b0c0c93e893410f9e06c2' }, { icon: 'branch', html: 'Pushed to <span class="mono">feat/SKILL-417-keep-ide-status…</span>', end: '4 paths' }] }],
+        activity: [['22:33', 'Committed 4 paths'], ['22:33', 'Pushed', 'done']] },
+    };
+    const validateBlocked = {
+      title: 'Validate', agent: 'claude', model: SONNET, round: 'attempt 3', when: 'since 10:50', dur: '21m 14s',
+      why: '<b>Blocked:</b> the IntelliJ plugin test needs a JetBrains IDE download, and the sandbox has no network. Three attempts hit the same error.',
+      now: [{ kind: 'signal', icon: 'list', wrap: true, text: 'Waits for you: allow network for the plugin test, or skip that check for this subtask.' }],
+      madeTitle: 'Checks', madeEnd: '3 passed · 1 failed',
+      made: [{ kind: 'cells', cells: ['ok', 'ok', 'ok', 'bad'] }, { kind: 'checks', rows: [['Unit tests', 'ok', '2m 40s', ':runtime:test'], ['Detekt', 'ok', '44s', ':runtime:detekt'], ['VS Code extension tests', 'ok', '1m 12s', 'npm test'], ['IntelliJ plugin tests', 'bad', 'exit 1', ':intellij:test']] }],
+      activity: [['10:50', 'Attempt 1 <em>· plugin test failed, exit 1</em>', 'fail'], ['10:58', 'Attempt 2 <em>· same error</em>', 'fail'], ['11:06', 'Attempt 3 <em>· same error</em>', 'fail'], ['11:11', 'Blocked, waiting for you', 'wait']],
+      open: { label: 'Open validation run', toast: 'Opened the validation run detail' },
+    };
+
+    /* Goal finish. goal_assessment and qa read the goal's assessment, goalQa and qaLive records; these cards add the header and activity. */
+    const DIR = '/home/you/.skill-bill/qa/SkillBill-65f9b9859e5144f1/qa-7c1e/';
+    const CHECKS = ['Pills open a card', 'Running phase opens by default', 'QA card shows the live preview', 'Preview survives a display restart', 'Toast clears the composer', 'Arrow keys move between pills'];
+    const REPORT = 'Verdict: passed\n\nI exercised the goal finish pane on the desktop app: the phase pills, the QA card while QA ran, and the card after a display restart. Round 1 found one problem; qa_fix fixed it and round 2 passed.\n\n## Coverage\n\n- desktop: passed\n- android: skipped [reason: empty_scope]\n- backend: skipped [reason: empty_scope]\n- web: skipped [reason: empty_scope]';
+    const QA1 = { id: 'QA-1', title: 'Toast overlaps the composer on a 1280px window', observed: 'the "Copied" toast covered the send button for 2 seconds.', expected: 'Toasts sit above the composer and never cover its buttons.', steps: '1. Resize the window to 1280×800\n2. Copy a commit id from the pane\n3. Look at the composer', evidencePaths: [DIR + 'evidence/toast-composer.png'] };
+    const checks = (n) => CHECKS.slice(0, n).map((t) => asserted('passed', t, 'Exercised through the running app and matched the acceptance criterion.', []));
+    const coverage = [cov('desktop', 'passed'), ...outOfScope(['android', 'backend', 'web'])];
+    const qaRec = (key, outcome, fixAttempts, findings, n) => ({ runKey: key, outcome, fixAttempts, reportText: REPORT, reportPreview: 'I exercised the goal finish pane on the desktop app…', findings, details: { reportPath: DIR + 'report.md', invocationDirectory: DIR, assertions: checks(n), coverage } });
+    const qa = {
+      fixed: qaRec('goal-qa-SKILL-512', 'passed', 1, [Object.assign({}, QA1, { fixed: true })], 6),
+      round1: qaRec('goal-qa-SKILL-512-r1', 'findings', 0, [QA1], 5),
+      clean: qaRec('goal-qa-SKILL-512-clean', 'passed', 0, [], 6),
+    };
+    const assessment = { state: 'COMPLETED', round: 1, fixRan: true, exit: 'all findings resolved', fixCommit: '5e0c7a19', findings: [
+      { ref: 'GA-001', severity: 'Minor', path: 'ClipboardImagePaste.kt', line: 58, scenario: 'Paste ignores images over 8 MB and shows no message.', verification: 'REFUTED', state: 'REFUTED' },
+      { ref: 'GA-002', severity: 'Major', path: 'QaPreviewHost.kt', line: 112, scenario: 'The live preview stops drawing frames after the display reconnects.', verification: 'CONFIRMED', state: 'FIXED' },
+      { ref: 'GA-003', severity: 'Major', path: 'QaStageList.kt', line: 40, scenario: 'Stage times reset to zero when the QA tab is opened again.', verification: 'CONFIRMED', state: 'FIXED' },
+    ] };
+    const qaLive = { label: 'Live', elapsed: '13:48', at: 'exercise', round: 1, times: { prepare: '0:52', uitests: '7:31', display: '0:09', launch: '1:22' },
+      lines: { exercise: 'Criterion 3 of 6 · opening the QA card while QA runs' }, preview: { kind: 'live', caption: 'Criterion 3 of 6', info: ':97 · 1600×1000' },
+      shots: ['app-start.png', 'finish-pane.png', 'qa-card-open.png'] };
+    const SHOTS = ['app-start.png', 'finish-pane.png', 'qa-card-open.png', 'stage-list.png', 'resize-900.png', 'toast-composer.png'];
+    const qaRun = (rounds, total, at, time) => ({ kind: 'qaRun', rounds, total, at, time, shots: SHOTS.slice(-3).reverse() });
+    const valChecks = (last) => [['Unit tests', 'ok', '3m 10s', ':desktop:app:test'], ['Detekt', 'ok', '52s', 'detektAll'], ['ktlint', 'ok', '20s', 'ktlintCheck'], ['Compose screenshot tests', last, last === 'run' ? '1m 40s' : '2m 31s', ':desktop:app:verifyRoborazzi'], ['Contract tests', last === 'run' ? 'wait' : 'ok', last === 'run' ? '' : '1m 05s', ':contracts:test']];
+    const valNow = {
+      title: 'Validate', agent: 'codex', model: GPT, round: 'attempt 1', when: 'since 11:22', dur: '6m 02s',
+      now: [{ kind: 'cells', cells: ['ok', 'ok', 'ok', 'run', ''] }, { kind: 'signal', live: true, text: 'Check 4 of 5 · Compose screenshot tests', ago: '1m 40s' }, { kind: 'cmd', text: './gradlew :desktop:app:verifyRoborazzi' }],
+      madeTitle: 'Checks', madeEnd: '3 passed · 1 running · 1 waiting', made: [{ kind: 'checks', rows: valChecks('run') }],
+      activity: [['11:22', 'Started <em>· 5 checks from the validation receipt</em>'], ['11:27', '3 checks passed', 'done'], ['11:27', 'Compose screenshot tests running', 'now']],
+      open: { label: 'Open validation run', toast: 'Opened the validation run detail' },
+    };
+    /* Goal finish monitor loop on #482: cycle 1 failed screenshot-diff, monitor_fix repaired it and commit_push published
+     * 9b2f0c4, cycle 2 watches CI. The cards reuse the monitor run blocks (design/monitor-run): the compact Cycles grid, the
+     * CI board, and the repair panel with its publish receipt. */
+    const MS = MON.steps;
+    const monCycles = [{ n: 1, at: '11:32', ci: MS.ci1Fail, fix: MS.fix1Done, pub: MS.pub1Done }, { n: 2, at: '11:44', ci: MS.ci2Run, fix: null, pub: null }];
+    const monNow = {
+      title: 'Monitor', agent: 'codex', model: GPT, round: 'cycle 2', when: 'since 11:44', dur: '12m 30s',
+      now: [{ kind: 'signal', live: true, text: 'Waiting for build-desktop (macos)', ago: '20s ago' }, { kind: 'signal', icon: 'list', text: 'gh pr checks 482 · 4 passed, 1 running', ago: '45s ago' }],
+      madeTitle: 'Cycles', madeEnd: '1 repair published', made: [{ kind: 'monCycles', cycles: monCycles }],
+      resultsTitle: 'CI on 9b2f0c4', resultsEnd: 'last poll 45s ago', results: [{ kind: 'ciBoard', step: MS.ci2Run }],
+      activity: [['11:32', 'Cycle 1 started'], ['11:41', '<b>screenshot-diff</b> failed', 'fail'], ['11:44', 'monitor_fix pushed <span class="mono">9b2f0c4</span>', 'done'], ['11:44', 'Cycle 2 started', 'now']],
+      open: { label: 'Open checks on GitHub', external: true, toast: 'Opened github.com/skill-bill/skill-bill/pull/482/checks' },
+    };
+    const ciGreen1 = Object.assign({}, MS.ci3Pass, { head: 'a41c9e2', headNote: 'PR head at start', since: '11:32', dur: '9m 05s', polled: 'final read 11:41' });
+    const finish = {
+      assess: { title: 'Goal assessment', agent: 'codex', model: GPT, round: 'round 1', when: '10:48', dur: '9m 30s', word: 'Completed', madeTitle: 'Findings', madeEnd: { sort: true },
+        made: [{ kind: 'assessment' }],
+        activity: [['10:48', 'Round 1 started'], ['10:55', '3 findings <em>· 2 major, 1 minor</em>', 'wait'], ['10:56', 'GA-001 refuted <em>· 8 MB limit shows a toast</em>'], ['10:57', 'Fixed GA-002 and GA-003 <em>· 5e0c7a19</em>', 'done']] },
+      qaLive: { title: 'QA', agent: 'codex', model: 'gpt-6-luna · medium', round: 'round 1', when: 'since 10:58', dur: '13m 48s', nowTitle: 'Live', now: [{ kind: 'qaLive' }], madeTitle: 'Results', made: [{ kind: 'qaWait' }],
+        activity: [['10:58', 'Started on <span class="mono">:desktop:app</span>'], ['11:06', 'Compose UI tests passed <em>· 7:31</em>', 'done'], ['11:08', 'App launched <em>· video on</em>', 'done'], ['11:09', 'Exercising criterion 3 of 6', 'now']] },
+      qaRound1: { title: 'QA', agent: 'codex', model: 'gpt-6-luna · medium', round: 'round 1', when: '10:58', dur: '12m 10s', word: '1 problem · fixing', tone: 'wait', madeTitle: 'Run', madeEnd: 'qa-7c1e',
+        made: [qaRun([{ icon: 'qaBug', label: 'QA 1 · 1 finding', state: 'done' }, { label: 'qa_fix', state: 'now' }, { label: 'QA 2', state: 'pending' }], 11, '11:10', '16:40')],
+        results: [{ kind: 'qaResults', fixing: true }],
+        activity: [['10:58', 'Round 1 started on <span class="mono">:desktop:app</span>'], ['11:08', 'App launched <em>· video on</em>', 'done'], ['11:10', '<b>1 finding</b> <em>· QA-1</em>', 'wait'], ['11:10', 'Handed to qa_fix']] },
+      qa: { title: 'QA', agent: 'codex', model: 'gpt-6-luna · medium', round: 'round 2', when: '10:58', dur: '18m 04s', word: 'Passed after fixes', madeTitle: 'Run', madeEnd: 'qa-7c1e',
+        made: [qaRun([{ icon: 'qaBug', label: 'QA 1 · 1 finding', state: 'done' }, { icon: 'check', label: 'qa_fix', state: 'done' }, { icon: 'check', label: 'QA 2', state: 'done' }], 14, '11:16', '18:04')],
+        results: [{ kind: 'qaResults' }],
+        activity: [['10:58', 'Round 1 started on <span class="mono">:desktop:app</span>'], ['11:10', 'Round 1 <b>1 finding</b> <em>· QA-1</em>', 'wait'], ['11:16', 'qa_fix fixed QA-1', 'done'], ['11:17', 'Round 2 started'], ['11:22', 'Round 2 <b>passed</b> <em>· 6 checks</em>', 'done']] },
+      qaClean: { title: 'QA', agent: 'codex', model: 'gpt-6-luna · medium', round: 'round 1', when: '10:58', dur: '16m 40s', word: 'Passed', madeTitle: 'Run', madeEnd: 'qa-7c1e',
+        made: [qaRun(null, 11, '11:16', '16:40')], results: [{ kind: 'qaResults' }],
+        activity: [['10:58', 'Started on <span class="mono">:desktop:app</span>'], ['11:15', 'Passed <em>· 6 checks, no findings</em>', 'done']] },
+      qaFixNow: { title: 'QA fix', agent: 'claude', model: SONNET, round: 'attempt 1 of 3', when: 'since 11:10', dur: '4m 05s',
+        now: [{ kind: 'signal', live: true, text: 'Fixing QA-1 · Toast overlaps the composer', ago: '12s ago' }, { kind: 'edit', agent: 'claude', path: 'desktop/feature/chat/src/commonMain/kotlin/ComposerToastHost.kt', ins: 14, del: 3, ago: '40s ago' }],
+        madeTitle: 'Fixing', made: [{ kind: 'qaFinding', finding: QA1, state: 'Fixing', tone: 'blocked' }, { kind: 'facts', items: [['Next', 'QA round 2 on the fixed tree']] }],
+        activity: [['11:10', 'Started <em>· 1 open finding</em>'], ['11:12', 'Reproduced QA-1 at 1280×800'], ['11:13', 'Editing ComposerToastHost.kt', 'now']] },
+      qaFix: { title: 'QA fix', agent: 'claude', model: SONNET, round: 'attempt 1 of 3', when: '11:10', dur: '6m 11s', word: 'Fixed',
+        made: [{ kind: 'qaFinding', finding: QA1, state: 'Fixed', tone: 'done' }, { kind: 'out', items: [{ icon: 'pencil', html: path('desktop/feature/chat/src/commonMain/kotlin/ComposerToastHost.kt'), end: '+14 −3' }, { icon: 'commit', html: '<span class="mono">c0d4e8f1</span> Lift the toast above the composer', toast: 'Copied c0d4e8f1' }] }],
+        activity: [['11:10', 'Started <em>· 1 open finding</em>'], ['11:16', 'Fixed QA-1 <em>· tested tree c0d4e8f1</em>', 'done']] },
+      valNow,
+      valDone: Object.assign({}, valNow, { when: '11:22', dur: '8m 46s', word: 'Passed', now: null, madeEnd: '5 of 5 passed', made: [{ kind: 'checks', rows: valChecks('ok') }], activity: [['11:22', 'Started'], ['11:31', 'Validation passed <em>· 5 checks</em>', 'done']] }),
+      pr: { title: 'Pull request', agent: 'codex', model: GPT, when: '11:31', dur: '1m 12s', word: 'Opened',
+        made: [{ kind: 'out', items: [{ icon: 'pr', html: '<b>#482</b> Keep QA live preview working across display crashes', external: true, toast: 'Opened github.com/skill-bill/skill-bill/pull/482' }, { icon: 'branch', html: '<span class="mono">feat/SKILL-512-qa-live-preview</span> → <span class="mono">main</span>' }] }],
+        activity: [['11:31', 'Started'], ['11:32', 'Created PR <b>#482</b>', 'done']] },
+      monNow,
+      monDone: Object.assign({}, monNow, { round: 'cycle 1', when: '11:32', dur: '9m 05s', word: 'Green', now: null, madeEnd: 'no repair needed', made: [{ kind: 'monCycles', cycles: [{ n: 1, at: '11:32', ci: ciGreen1, fix: null, pub: null }] }],
+        resultsTitle: 'CI on a41c9e2', resultsEnd: 'all passed', results: [{ kind: 'ciBoard', step: ciGreen1 }], activity: [['11:32', 'Cycle 1 started'], ['11:41', 'All 5 checks passed', 'done']] }),
+      monFix: { title: 'Monitor fix', agent: 'claude', model: SONNET, round: 'repair 1', when: '11:41', dur: '1m 50s', word: 'Fixed',
+        why: 'Fixed <b>screenshot-diff</b>. The preview test baseline still had the old reconnect banner.',
+        madeTitle: 'Repair 1', madeEnd: 'screenshot-diff', made: [{ kind: 'repair', step: MS.fix1Done }],
+        resultsTitle: 'Publish · commit_push', resultsEnd: '9b2f0c4 pushed', results: [{ kind: 'publish', step: MS.pub1Done }],
+        activity: [['11:41', 'Started <em>· 1 failing check</em>'], ['11:43', 'Fixed <em>· 2 files, local checks passed</em>', 'done'], ['11:44', 'Pushed <span class="mono">9b2f0c4</span>', 'done']] },
+    };
+    return {
+      sub1: Object.assign(subCards(S1), tail1),
+      sub2: Object.assign(subCards(S2), { review: reviewNow }),
+      sub3: Object.assign(subCards(S2), { review: Object.assign({}, tail1.review, { when: '10:41' }), build: Object.assign({}, tail1.build, { when: '10:47' }), validate: validateBlocked }),
+      finish, qa, assessment, qaLive,
+    };
+  })();
+  (function () {
+    const it = items.find((x) => x.id === 'SKILL-417');
+    it.subtasks[0].phases = { cards: PEEK.sub1, note: '58m total' };
+    it.subtasks[1].phases = { cards: PEEK.sub2 };
+  })();
   window.DATA = { T0, REPOS, AGENTS, AGENT_CHOICES, PHASE_ORDER, GOAL_FINISH, items, history, valRoutes, projects, specs, NOTIFICATIONS, CLAUDE_DIRS, PHASE_GROUPS, MATRIX, BUDGET,
     REPO_BRANCHES, LONG_BRANCH, CHAT_HISTORY, NEW_TASK_CHATS, NEW_TASK_SELECTED, CHAT_REPLIES, NEW_TASK_STEPS, QUICK_STARTS,
-    QA, QA_DEVICES, VAL, VERIFY, USAGE };
+    QA, QA_DEVICES, QA_STAGES, QA_LIVE, VAL, VERIFY, USAGE, BUILD, PEEK, MON };
 })();

@@ -25,7 +25,7 @@
     ],
     chosenAgent: {}, prereqs: new Set(), recovered: new Set(), secCollapse: {}, reasonOpen: new Set(),
     /* Subtask index: selection per goal ('3' or 'finish'), inline expansion per goal (narrow windows), open breakdowns, full activity feeds */
-    subSel: {}, subOpen: {}, finishTab: {}, bdOpen: new Set(), feedAll: new Set(), narrow: false,
+    subSel: {}, subOpen: {}, peekSel: {}, bdOpen: new Set(), feedAll: new Set(), narrow: false,
     settingsPage: 'general', agent: 'claude', cfgOpen: null, draft: null, matrix: JSON.parse(JSON.stringify(D.MATRIX)), phaseTiers: {},
     compaction: { enabled: true, window: 400000, pct: 70, phases: { review: { window: 600000, pct: 60 } } }, budget: D.BUDGET.map((r) => r.slice()),
     prefs: { dbPath: '', dbDraft: '', claudeDir: '~/.claude', retention: '24h', login: true, notify: Object.fromEntries(D.NOTIFICATIONS.map(([id, , on]) => [id, on])), specType: 'local', gradleWrapper: '', telemetry: 'anonymous' },
@@ -34,7 +34,7 @@
     nt: seedNewTask(), focusNext: null,
     /* QA device in the sidebar footer: which list the app found (data.js QA_DEVICES), the picked device ('auto' lets QA
      * choose), the popup's keyboard index and whether a refresh is running. qaOpen: open QA result rows and folds. */
-    qaDev: { list: D.QA_DEVICES.live, selected: 'auto', kb: 0, checking: false }, qaOpen: new Set(),
+    qaDev: { list: D.QA_DEVICES.live, selected: 'auto', kb: 0, checking: false }, build: Object.assign({}, D.BUILD.live), qaOpen: new Set(),
     usage: { provider: 'Codex', scenario: 'normal', refreshed: false },
     /* Validation runs: open report parts (indexes) and open checks (ids) per item, unset until the first toggle so the
      * defaults apply. Verify runs: open steps, criteria rows and folds ("<id>:s:<step>", "<id>:c:<n>"), the criteria filter,
@@ -42,6 +42,9 @@
      * 0AC-85 opens with the mock's starting selection so the selection bar shows in use: F-001, #2 and the Empty address
      * book test (row 2) to chat, #6 to a goal, #3 and #4 marked Not in this repo. */
     valParts: {}, valChecks: {}, vOpen: new Set(), vFilter: {},
+    /* Monitor runs (design/monitor-run): the Cycles cell whose panel is open per item ("c2.fix"; default: the run's live or
+     * last step), and the log tails and folded groups the operator flipped from their defaults ("<id>|<cell>:<check>"). */
+    monSel: {}, monOpen: new Set(), monFold: new Set(),
     vSel: { 'op-verify-085': { 'f:F-001': 'chat', 'c:2': 'chat', 't:2': 'chat', 'c:6': 'goal' } }, vMarks: { 'op-verify-085': { 'c:3': 'repo', 'c:4': 'repo' } },
   };
   let devTimer = null;
@@ -59,6 +62,8 @@
   }
   /* #new-task opens the New task view; #new-task/queue, #new-task/picker and #new-task/resume also open that popup.
    * #detail/<id> opens a work item's detail (#detail/ph-sb-qa for QA results, #detail/ph-sb-plan for a plan run).
+   * #build/<state>/<type> opens SKILL-417 with its build in one of the build indicator scenarios (state: running, slow,
+   * passed, failed, first, idle; type: android, kotlin, ts, go, rust, ios, none).
    * #qa-device opens the QA device popup; #qa-device/<list> opens it over one of the sample device lists (mixed, one,
    * unauth, offline, avdOnly, none, noAdb), the scenarios of design/qa-device-picker. #specs opens the Specs pane over Work; #specs/<path> selects a bundle or a file
    * in it (#specs/SKILL-438, #specs/done/SKILL-446, #specs/SKILL-442/spec.md) and #specs/project/<id> picks a project. */
@@ -66,6 +71,7 @@
     const [page, open, ...rest] = (location.hash || '').replace('#', '').split('/');
     if (page === 'new-task') return { view: 'newtask', open: open === 'state' ? rest[0] === 'closing' ? 'closing' : null : open || null, scenario: open === 'state' ? rest[0] : null, variant: open === 'picker' || open === 'resume' ? rest[0] || null : null };
     if (page === 'detail' && open) return { view: 'detail', id: decodeURIComponent(open), open: null, inspector: rest[0], resultTab: rest[1] };
+    if (page === 'build') return { view: 'detail', id: D.BUILD.focus, open: null, build: { state: open || D.BUILD.live.state, type: rest[0] || D.BUILD.live.type } };
     if (page === 'qa-device') return { view: 'work', open: 'devices', devices: open && open in D.QA_DEVICES.lists ? open : null };
     if (page === 'usage') return { view: 'work', open: 'usage', usageScenario: open in D.USAGE.scenarios ? open : 'normal' };
     if (page === 'specs') return open === 'project' ? { view: 'work', specs: true, project: rest[0] } : { view: 'work', specs: true, sel: open ? decodeURIComponent([open, ...rest].join('/')) : null };
@@ -94,11 +100,15 @@
       }
     }
     if (r.id) st.detailId = r.id;
-    if (r.id && r.inspector === 'finish') {
-      st.subSel[r.id] = 'finish'; st.subOpen[r.id] = true;
-      st.finishTab[r.id] = r.resultTab === 'qa' ? 'qa' : 'assessment';
+    /* #detail/<id>/<subtask id | finish>/<phase> selects a subtask or Goal finish and opens one phase card in the details
+     * pane. The older /finish/assessment and /finish/qa links open the goal_assessment and qa cards. */
+    if (r.id && r.inspector) {
+      st.subSel[r.id] = r.inspector; st.subOpen[r.id] = true;
+      const phase = r.resultTab === 'assessment' ? 'goal_assessment' : r.resultTab;
+      if (phase) st.peekSel[`${r.id}|${r.inspector}`] = phase;
       st.propsOpen = true; st.specsOpen = false;
     }
+    if (r.build) st.build = r.build;
     if (r.devices) { st.qaDev.list = r.devices; st.qaDev.selected = 'auto'; }
     if (r.specs) {
       st.specsOpen = true;
@@ -131,7 +141,7 @@
     run('Work', () => as({ view: 'work', termOpen: false }, () => X.app(st)));
     const everyOpen = { has: () => true };
     run('Detail', () => [['INF-7'], ['DSN-31'], ['NEWS-176'], ['SKILL-417'], ['ATL-402'], ['SKILL-416'], ['ph-rk-review'], ['ph-atl-pr'], ['op-verify'], ['ph-atl-qa'], ['ph-sb-qa'], ['ph-pay-qa'], ['ph-sb-qa-gaps'], ['ph-sb-qa-left'], ['ph-sb-qa-docs'], ['ph-sb-qa-legacy'],
-      ['ph-sb-validation'], ['ph-rk-validation'], ['ph-sb-val-limit'], ['ph-sb-validation-done'], ['ph-sb-val-413'], ['ph-sb-val-411'], ['ph-za-validation'], ['ph-sb-val-running'], ['ph-sb-val-waiting'], ['ph-sb-val-repairs'], ['ph-za-val-report'], ['op-verify-confirm'], ['op-verify-nocrit'], ['op-verify-fixes'], ['op-verify-085'], ['op-verify-stopped'], ['op-verify-superseded'], ['ph-sb-plan'], ['ph-atl-plan'], ['ph-news-plan'], ['ph-pay-plan'], ['ph-rk-plan'], ['ph-sb-plan-done']].map(([id]) => as({ view: 'detail', detailId: id, termOpen: false, narrow: false, propsOpen: true, specsOpen: false, secCollapse: { 'incident-evidence': false, 'verify-intake': false }, qaOpen: everyOpen, vOpen: everyOpen, valParts: new Proxy({}, { get: () => everyOpen }), valChecks: new Proxy({}, { get: () => everyOpen }), vSel: { 'op-verify-085': { 'f:F-001': 'chat', 'c:6': 'goal' } }, vMarks: { 'op-verify-085': { 'c:3': 'repo' } } }, () => X.app(st))).join('')
+      ['ph-sb-validation'], ['ph-rk-validation'], ['ph-sb-val-limit'], ['ph-sb-validation-done'], ['ph-sb-val-413'], ['ph-sb-val-411'], ['ph-za-validation'], ['ph-sb-val-running'], ['ph-sb-val-waiting'], ['ph-sb-val-repairs'], ['ph-za-val-report'], ['op-verify-confirm'], ['op-verify-nocrit'], ['op-verify-fixes'], ['op-verify-085'], ['op-verify-stopped'], ['op-verify-superseded'], ['ph-sb-plan'], ['ph-atl-plan'], ['ph-news-plan'], ['ph-pay-plan'], ['ph-rk-plan'], ['ph-sb-plan-done'], ['ph-sb-monitor'], ['ph-sb-mon-ci'], ['ph-sb-mon-publish'], ['ph-sb-mon-conflict'], ['ph-sb-mon-wait'], ['ph-sb-mon-green'], ['ph-sb-mon-cap'], ['ph-sb-mon-unresolved'], ['ph-sb-mon-pr-edit'], ['ph-sb-mon-merged']].map(([id]) => as({ view: 'detail', detailId: id, termOpen: false, narrow: false, propsOpen: true, specsOpen: false, secCollapse: { 'incident-evidence': false, 'verify-intake': false }, qaOpen: everyOpen, vOpen: everyOpen, valParts: new Proxy({}, { get: () => everyOpen }), valChecks: new Proxy({}, { get: () => everyOpen }), vSel: { 'op-verify-085': { 'f:F-001': 'chat', 'c:6': 'goal' } }, vMarks: { 'op-verify-085': { 'c:3': 'repo' } } }, () => X.app(st))).join('')
       + as({ view: 'detail', detailId: 'SKILL-416', termOpen: false, narrow: false, propsOpen: true, specsOpen: false, subSel: { 'SKILL-416': 'finish' } }, () => X.app(st))
       + as({ view: 'detail', detailId: 'INF-7', termOpen: false, narrow: true }, () => X.app(st)));
     run('History', () => as({ view: 'history', termOpen: false }, () => X.app(st)));
@@ -287,6 +297,8 @@
   function tick() {
     const now = Date.now();
     document.querySelectorAll('[data-tick]').forEach((el) => { el.textContent = S.fmtDur(+el.dataset.ms + (now - +el.dataset.t0), el.hasAttribute('data-secs')); });
+    /* Build bars grow with their clocks: elapsed over the usual time (BuildStrip). */
+    document.querySelectorAll('[data-bar-of]').forEach((el) => { el.style.width = Math.min(100, ((+el.dataset.barMs + now - +el.dataset.barT0) / +el.dataset.barOf) * 100) + '%'; });
   }
   setInterval(tick, 1000);
 
@@ -374,6 +386,7 @@
     if (p.type === 'target') return X.targetPicker(st);
     if (p.type === 'queue') return X.queuePanel(st);
     if (p.type === 'chats') return X.chatMenu(st);
+    if (p.type === 'chat-tab') return X.chatTabMenu(st, p.arg);
     if (p.type === 'devices') return X.devicePanel(st);
     if (p.type === 'usage') {
       const usage = X.usageData(st);
@@ -823,7 +836,14 @@
     /* key|default: a toggle sticks per section key, so it holds while paging between items */
     /* Goal assessment order; it holds while paging, like section collapse. */
     'assess-order'(id) { st.assessOrder = id; render(); },
-    'finish-tab'(arg) { const [id, tab] = arg.split('|'); st.finishTab[id] = tab; render(); },
+    /* Phase tabs in the details pane: open that phase's card and keep focus on its tab. */
+    'peek-pill'(arg) {
+      const [id, key, phase] = arg.split('|');
+      st.peekSel[`${id}|${key}`] = phase;
+      render();
+      const el = root.querySelector(`[data-act="peek-pill"][data-arg="${CSS.escape(arg)}"]`);
+      if (el) el.focus({ preventScroll: true });
+    },
     'sec-collapse'(arg) { const [key, def] = arg.split('|'); const now = key in st.secCollapse ? st.secCollapse[key] : def === '1'; st.secCollapse[key] = !now; render(); },
     /* An ExpandableText without caller state: flip the fold in place; the next render folds it again. */
     'fold-toggle'(a, el) {
@@ -1086,6 +1106,11 @@
       if (el) el.focus({ preventScroll: true });
     },
 
+    /* Monitor run: a Cycles cell opens its step's panel; a failed check opens its log tail; a group folds to one line. */
+    'mon-cell'(arg) { const [id, key] = arg.split('|'); st.monSel[id] = key; render(); refocus('mon-cell', arg); },
+    'mon-log'(key) { st.monOpen.has(key) ? st.monOpen.delete(key) : st.monOpen.add(key); render(); refocus('mon-log', key); },
+    'mon-fold'(key) { st.monFold.has(key) ? st.monFold.delete(key) : st.monFold.add(key); render(); },
+
     /* Validation run: report parts and checks open in place; the flag strip opens a part and scrolls to it. */
     'val-part'(arg) {
       const [id, i] = arg.split('|'); const it = item(id); if (!it) return;
@@ -1223,7 +1248,7 @@
     'chat-close'(id) { const c = chatById(id); st.popover = null; if (!c) return render(); if (c.stream) { st.dialog = { type: 'chat-close', arg: c.id }; return render(); } closeChat(c); },
     'chat-close-confirm'(id) { const c = chatById(id); if (c) closeChat(c); },
     'chat-reopen'(id) { const c = st.nt.closed[id]; if (!c) return; delete st.nt.closed[id]; st.nt.chats.push(c); st.toasts = []; renderToasts(); if (st.view !== 'newtask') go('newtask'); selectChat(c.id); },
-    'chat-discard'() { const c = ntCur(); stopReply(c); st.nt.saved = st.nt.saved.filter((x) => x.sessionId !== c.session); removeChat(c); st.popover = null; focusComposer(); render(); },
+    'chat-discard'(id) { const c = (id != null && chatById(id)) || ntCur(); stopReply(c); st.nt.saved = st.nt.saved.filter((x) => x.sessionId !== c.session); removeChat(c); st.popover = null; focusComposer(); render(); },
     'chat-menu'(a, el) { st.nt.menuQ = ''; st.popover = Object.assign({ type: 'chats', focus: st.nt.chats.length > 8 ? 'chat-menu-q' : null }, anchorPos(el)); render(); },
     /* Send; while a reply runs, Queue; with an empty draft and messages queued, Send now. "/resume" opens the resume palette. */
     'chat-send'() {
@@ -1350,6 +1375,11 @@
     const el = e.target.closest('[data-ctx]');
     if (!el) return;
     e.preventDefault();
+    if (el.dataset.ctx.startsWith('chat:')) {
+      /* Shift+F10 and the menu key fire contextmenu with no pointer position, so the menu opens under the tab. */
+      const at = e.clientX || e.clientY ? { x: e.clientX, y: e.clientY, top: e.clientY } : anchorPos(el);
+      st.popover = Object.assign({ type: 'chat-tab', arg: el.dataset.ctx.slice(5) }, at); render(); return;
+    }
     if (el.dataset.ctx.startsWith('spec:')) {
       const path = el.dataset.ctx.slice(5), sp = X.specOf(path);
       st.specSel = path;
@@ -1385,6 +1415,16 @@
     if (tab && keep) { const v = input.value.trim(); tab.customName = v || null; }
     st.termRenaming = null; render();
   }
+  /* Phase tabs: arrow keys move between the phases that open a card; Home and End jump to the first and last. */
+  root.addEventListener('keydown', (e) => {
+    const tab = e.target.closest && e.target.closest('[data-act="peek-pill"]');
+    if (!tab || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    const tabs = [...tab.closest('[role="tablist"]').querySelectorAll('[data-act="peek-pill"]')];
+    let i = tabs.indexOf(tab);
+    i = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : Math.max(0, Math.min(tabs.length - 1, i + (e.key === 'ArrowRight' ? 1 : -1)));
+    e.preventDefault(); e.stopPropagation();
+    A['peek-pill'](tabs[i].dataset.arg);
+  }, true);
   root.addEventListener('keydown', (e) => {
     if (e.target.id !== 'term-rename-in') return;
     if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); commitRename(e.target, true); }

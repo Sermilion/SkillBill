@@ -438,8 +438,8 @@ branch refuses. With no intake, exactly one open pull request headed by the chec
 monitors that PR; several such pull requests refuse; when the all-state listing has never had a pull
 request from the checked-out branch and that branch exists, the checkout is watched; when merged or
 closed history still lists that branch with no open pull request, or the checked-out branch is
-missing, the run completes with nothing to monitor. A branch on the default branch, a protected branch, or a branch the caller cannot push is
-report-only: CI failures block with the check links and no repair runs. Branch targets never receive
+missing, the run completes with nothing to monitor. A protected branch, or a branch the caller cannot push, is
+report-only, including the default branch when it is protected: CI failures block with the check links and no repair runs. Branch targets never receive
 merge-conflict repair. A branch with no reported CI blocks after one hour. Repositories whose
 workflows trigger only on `pull_request` report no CI for a branch with no open pull request. A tip
 that moves during a repair blocks with the work preserved rather than following the new tip.
@@ -487,26 +487,30 @@ window use the normal pending, failure, and success paths. Conditional or delaye
 checks may appear after completion. Inspect the PR again if those checks matter.
 Branch targets keep their separate one-hour no-check policy.
 
-Admission allows one monitor per pull request or named branch target. A second monitor for the same
-target with a live owner blocks and names that owner. A stale owner blocks and reports its owner
-token. After confirming the process is gone, rerun with the exact PR URL or `branch:<name>` and
-`--recover-stale-owner <owner-token>`. The option applies only to `phase monitor`,
-needs an explicit target, and is refused when the token is malformed or does not
-match the recorded owner. Recovery never takes over a live owner or a worktree with
-unfinished work.
+Admission allows one active monitor per pull request or named branch target. A held
+admission lock blocks a second monitor and names its owner. Once that lock is free,
+a settled previous invocation does not block a new iteration, even when its hosting
+process remains alive. Without a settled outcome, same-host positive process-death
+evidence is required. An unverifiable owner or an undrained repair child still blocks.
+Normal new iterations need no explicit recovery token. Optional explicit recovery
+with `--recover-stale-owner <owner-token>` still needs an exact PR URL or
+`branch:<name>` and validates the recorded token and process evidence.
 
-Status, events, and the printed report name the exact PR URL, repository, head
-branch and head repository, invocation, owned worktree, and the cleanup outcome. A clean
-run releases the worktree and branch. A worktree with uncommitted or untracked
-changes, unpublished commits, unknown publication state, unowned resources, or a
-failed cleanup is retained, and the report names its path and reason. Retained work
-blocks a fresh monitor of the same target until it is resolved. A hard kill leaves no
-cleanup record and is handled as stale recovery, not as guaranteed cleanup.
-Canceling or rerunning a monitor from the desktop targets its exact invocation and
-PR URL or `branch:<name>`. A rerun launches `phase monitor <that URL or branch:<name>>` without checking the head
-branch out in the caller checkout. Cancel stops the owning process and keeps
-retained work. Goal finalization and `phase:pr` keep their branch-based monitoring
-unchanged.
+Before replacing inactive ownership, admission archives its record under
+`history/<generation>/ownership.json` in the target's monitor directory, then advances
+the generation. Failure to preserve that history blocks the new iteration without
+erasing the original record. Cancellation discards verified owned worktrees,
+branches and refs, including unfinished edits and unpublished commits. Other
+unfinished resources are preserved with their archived ownership and reported path,
+and no longer block a new iteration. The caller's checkout stays untouched.
+
+Status, events and the printed report name the exact target, repositories, head
+branch, invocation, owned worktree and cleanup outcome. Clean owned resources are
+removed on settlement. A hard kill has no guaranteed cleanup; the next iteration
+reconciles its stale ownership using process-death evidence. Cancel and rerun from
+the desktop target the exact invocation and PR URL or `branch:<name>`. Rerun launches
+`phase monitor <that URL or branch:<name>>` without checking out the head branch in
+the caller checkout. Goal finalization and `phase:pr` retain their branch monitoring.
 
 While CI is pending, progress reports identify the current PR and include available
 check links. Describe queued checks as waiting, and name running work only when the

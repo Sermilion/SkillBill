@@ -34,6 +34,7 @@ import skillbill.goalrunner.model.GoalRunnerLivenessState
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
@@ -52,6 +53,7 @@ import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.nio.file.Path
 import java.time.Clock
 
 private const val CHILD_FAILURE_OUTPUT_EXCERPT_MAX_CHARS = 8192
@@ -143,12 +145,36 @@ public class GoalRunnerLaunchReconciler(
             dependencies.goalContinuation?.lastResumableStep ==
               FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW,
           goalContinuation = dependencies.goalContinuation,
+          approval =
+            if (dependencies.goalContinuation != null) {
+              AgentRunApprovalRequirement.RuntimeHosted
+            } else {
+              AgentRunApprovalRequirement.Unowned(
+                missingContinuationReason(args.issueKey, args.subtaskId, request.repoRoot),
+              )
+            },
           spawnAuthorization = spawnAuthorization,
           activityStampSink = dependencies.activityStampSink,
           worktreeEditObserver = dependencies.worktreeEditObserver,
           additionalWritableDirectories = listOf(projectStore.resolve(request.repoRoot).root),
         ),
     )
+  }
+
+  private fun missingContinuationReason(
+    issueKey: String,
+    subtaskId: Int,
+    repoRoot: Path,
+  ): String {
+    val state = manifestStore.loadByIssueKey(issueKey, repoRoot) ?: return "goal $issueKey has no manifest"
+    val subtask =
+      state.manifest.subtasks.firstOrNull { it.id == subtaskId }
+        ?: return "goal $issueKey manifest has no subtask $subtaskId"
+    return if (subtask.specPath.isBlank()) {
+      "goal $issueKey subtask $subtaskId has no spec path"
+    } else {
+      "goal $issueKey subtask $subtaskId has no branch"
+    }
   }
 
   private fun goalContinuationContext(

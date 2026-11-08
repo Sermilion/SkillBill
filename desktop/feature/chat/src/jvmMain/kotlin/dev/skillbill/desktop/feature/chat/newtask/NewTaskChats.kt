@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.designsystem.component.ToastAction
@@ -11,6 +12,7 @@ import dev.skillbill.desktop.core.ui.feedback.ToastMessage
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
+import dev.skillbill.desktop.feature.chat.UnavailableApprovalFeed
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -106,6 +108,7 @@ class NewTaskChats(
   private val toasts: ToastQueue,
   private val windowScope: WindowCoroutineScope,
   private val clock: Clock,
+  private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
 ) {
   private val scope = windowScope.scope
   private val savedChats = NewTaskSavedChats(chats, scope, toasts)
@@ -146,10 +149,18 @@ class NewTaskChats(
 
   internal val saved: StateFlow<List<ChatHistoryEntry>> = savedChats.saved
 
+  init {
+    // A summary written in the background changes its Recent chats row.
+    scope.launch { chats.summaryUpdates.collect { refreshSaved() } }
+  }
+
   /** Shows [draft]. It never ends, flushes, closes or stops any chat, so the others keep streaming. */
   fun select(draft: NewTaskDraft) {
     if (draft !in openState.value) return
+    val outgoing = selectedState.value
     selectedState.value = draft
+    // Leaving an idle chat summarizes it; a busy one is summarized when it is closed.
+    if (outgoing !== draft) outgoing.chat.value?.takeUnless { it.thread.busy.value }?.let { chats.requestSummary(it.sessionId) }
     newReplyState.update { it - draft }
   }
 
@@ -196,7 +207,7 @@ class NewTaskChats(
     if (draft in openState.value && draft.discard()) remove(draft)
   }
 
-  /** Deletes [entry], removing the open chat that holds it like the header Discard does. */
+  /** Deletes [entry], removing the open chat that holds it like a tab's Discard does. */
   internal fun discardSaved(entry: ChatHistoryEntry) {
     val holder = openState.value.firstOrNull { it.chat.value?.sessionId == entry.sessionId }
     if (holder != null) {
@@ -216,7 +227,7 @@ class NewTaskChats(
       return true
     }
     val previous = selectedState.value
-    val target = if (previous.chat.value == null && previous.text.isBlank()) previous else newChat()
+    val target = if (previous.chat.value == null && previous.text.isBlank() && previous.images.isEmpty()) previous else newChat()
     if (!target.resume(entry)) {
       if (target !== previous) {
         openState.update { it - target }
@@ -243,7 +254,10 @@ class NewTaskChats(
   internal fun disposeAll() = openState.value.forEach { it.dispose() }
 
   /** Closes every open chat. False when any one fails to save; that chat stays open, so calling again retries it. */
-  internal suspend fun closeAll(): Boolean = openState.value.map { it.close() }.all { it }
+  internal suspend fun closeAll(): Boolean = openState.value.map { draft ->
+    val idleChat = draft.chat.value?.takeUnless { it.thread.busy.value }
+    draft.close().also { closed -> if (closed && idleChat != null) chats.requestSummary(idleChat.sessionId) }
+  }.all { it }
 
   private suspend fun close(draft: NewTaskDraft) {
     if (draft !in openState.value || !closingDrafts.add(draft)) return
@@ -256,6 +270,7 @@ class NewTaskChats(
       if (chat != null) {
         // Read after close(): the session id can rotate while the last turn finishes.
         val sessionId = chat.sessionId
+        chats.requestSummary(sessionId)
         toasts.show(ToastData("Closed \"$title\". It stays in Recent chats.", actions = listOf(ToastAction("Reopen") { reopen(sessionId) })))
       }
     } finally {
@@ -309,7 +324,7 @@ class NewTaskChats(
   }
 
   private fun create(): NewTaskDraft {
-    val draft = NewTaskDraft(chats, workControls, databaseSession, toasts, windowScope, clock, savedChats)
+    val draft = NewTaskDraft(chats, workControls, databaseSession, toasts, windowScope, clock, approvals, savedChats)
     draft.chatDispatcher = chatDispatcher
     replyWatches[draft] = watchReplies(draft)
     return draft

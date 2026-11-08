@@ -365,7 +365,7 @@ class InstallServiceTest {
   }
 
   @Test
-  fun `apply install reports a database migration failure as a warning and keeps the selection`() {
+  fun `apply install refuses a failed database migration without saving successful choices`() {
     val home = Path.of("/tmp/skillbill-install-service-busy-home")
     val plan = installPlan(request(Path.of("/tmp/skillbill-install-service-busy-repo"), home))
     val selectionPort = RecordingInstallSelectionPersistencePort()
@@ -379,13 +379,13 @@ class InstallServiceTest {
 
     val result = service.applyInstall(plan)
 
-    assertEquals(InstallApplyStatus.WARNING, result.status)
-    assertEquals(InstallApplyIssueKind.DATABASE_MIGRATION_FAILED, result.warnings.single().kind)
-    assertEquals(1, selectionPort.writeRequests.size)
+    assertEquals(InstallApplyStatus.FAILURE, result.status)
+    assertEquals(InstallApplyIssueKind.DATABASE_MIGRATION_FAILED, result.failures.single().kind)
+    assertEquals(0, selectionPort.writeRequests.size)
   }
 
   @Test
-  fun `apply install defers a pending migration while a recorded worker process is still running`() {
+  fun `apply install refuses a pending migration while a recorded worker process is still running`() {
     val home = Path.of("/tmp/skillbill-install-service-live-worker-home")
     val plan = installPlan(request(Path.of("/tmp/skillbill-install-service-live-worker-repo"), home))
     val schemaPort = RecordingDatabaseSchemaPort(pendingMigrations = true)
@@ -411,8 +411,8 @@ class InstallServiceTest {
     val result = service.applyInstall(plan)
 
     assertEquals(0, schemaPort.migrateCalls)
-    assertEquals(InstallApplyStatus.WARNING, result.status)
-    val warning = result.warnings.single()
+    assertEquals(InstallApplyStatus.FAILURE, result.status)
+    val warning = result.failures.single()
     assertEquals(InstallApplyIssueKind.DATABASE_MIGRATION_DEFERRED, warning.kind)
     assertTrue("phase plan (plan-live)" in warning.message)
     assertFalse("wftr-exited" in warning.message)

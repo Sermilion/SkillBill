@@ -1,5 +1,6 @@
 package skillbill.ports
 
+import skillbill.ports.approval.ApprovalStore
 import skillbill.ports.blockincident.BlockIncidentRecoveryRepository
 import skillbill.ports.blockincident.BlockIncidentRepository
 import skillbill.ports.blockincident.ProductReportRepository
@@ -19,6 +20,7 @@ import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.learning.LearningRepository
+import skillbill.ports.operation.OperationCardRepository
 import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.persistence.model.GoalPurgeTableCounts
 import skillbill.ports.persistence.model.GoalPurgeTarget
@@ -53,6 +55,8 @@ interface UnitOfWork : GoalRunnerPersistenceSession {
   val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository
   val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository
   val operationProposals: OperationProposalRepository
+  val operationCards: OperationCardRepository
+  val approvals: ApprovalStore
   val blockIncidents: BlockIncidentRepository
   val blockIncidentRecoveries: BlockIncidentRecoveryRepository
   val productReports: ProductReportRepository

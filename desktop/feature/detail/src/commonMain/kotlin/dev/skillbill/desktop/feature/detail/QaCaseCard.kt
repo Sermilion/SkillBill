@@ -1,7 +1,5 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -21,10 +19,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
@@ -37,8 +33,13 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.SbDivider
+import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.component.SbSpinner
+import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
@@ -47,9 +48,9 @@ import dev.skillbill.desktop.core.designsystem.status.StatusKind
 @Composable
 internal fun QaCaseCard(case: QaCaseView, invocationDirectory: String?, onOpenFinding: (String) -> Unit, onAction: (DetailAction) -> Unit) {
   val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(SkillBillRadius.lg)
+  val shape = RoundedCornerShape(SkillBillRadius.md)
   val border = if (case.status.label == "Running") colors.stActive else colors.borderSubtle
-  Column(Modifier.fillMaxWidth().clip(shape).background(colors.bgRaised).border(1.dp, border, shape)) {
+  SbBox(fill = colors.bgRaised, borderColor = border) {
     val interaction = remember { MutableInteractionSource() }
     Row(
       Modifier.fillMaxWidth().heightIn(min = 56.dp).sbFocusRing(interaction, shape)
@@ -65,14 +66,20 @@ internal fun QaCaseCard(case: QaCaseView, invocationDirectory: String?, onOpenFi
       CaseStatusIcon(case.status.label)
       BasicText(case.id, Modifier.width(56.dp), style = SkillBillTheme.type.monoSm.copy(color = colors.fgMuted))
       BasicText(case.title, Modifier.weight(1f), style = SkillBillTheme.type.tMd.copy(color = colors.fg), maxLines = 2)
-      CaseStatusPill(case.status.label)
+      val statusColor = when (case.status.label) {
+        "Failed" -> colors.stFailed
+        "Passed" -> colors.stDone
+        "Running" -> colors.stActive
+        else -> colors.fgMuted
+      }
+      SbLabel(case.status.label, style = SbLabelStyle.Tint(statusColor))
       BasicText("${case.done}/${case.total}", Modifier.width(40.dp), style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted), maxLines = 1)
       CompositionLocalProvider(LocalContentColor provides colors.fgFaint) {
         SbIcon(LucideIcons.chevronDown, 16.dp, modifier = Modifier.graphicsLayer { rotationZ = if (case.open) 180f else 0f })
       }
     }
     if (case.open) {
-      Box(Modifier.fillMaxWidth().heightIn(min = 1.dp).background(colors.borderSubtle))
+      SbDivider(color = colors.borderSubtle)
       Column(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         case.steps.forEach { step -> QaStepRow(step, invocationDirectory, onOpenFinding, onAction) }
       }
@@ -93,52 +100,37 @@ private fun CaseStatusIcon(status: String) {
 }
 
 @Composable
-private fun CaseStatusPill(status: String) {
-  val colors = SkillBillTheme.colors
-  val color = when (status) {
-    "Failed" -> colors.stFailed
-    "Passed" -> colors.stDone
-    "Running" -> colors.stActive
-    else -> colors.fgMuted
-  }
-  val fill = if (status in setOf("Failed", "Passed", "Running")) color.copy(alpha = .15f) else colors.bgHover
-  Box(Modifier.background(fill, SkillBillRadius.full).padding(horizontal = 10.dp, vertical = 2.dp)) {
-    BasicText(status, style = SkillBillTheme.type.tSm.copy(color = color, fontWeight = FontWeight.SemiBold), maxLines = 1)
-  }
-}
-
-@Composable
 private fun QaStepRow(step: QaStepView, invocationDirectory: String?, onOpenFinding: (String) -> Unit, onAction: (DetailAction) -> Unit) {
   val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(SkillBillRadius.md)
   val running = step.display == QaStepDisplay.Running
-  val background = if (running) colors.stActive.copy(alpha = .10f) else Color.Transparent
   val frame = if (running) colors.stActive.copy(alpha = .35f) else Color.Transparent
-  Row(Modifier.fillMaxWidth().background(background, shape).border(1.dp, frame, shape).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-    Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) { StepStatusIcon(step.display) }
-    BasicText(step.number.toString(), Modifier.width(18.dp), style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint))
-    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-      val textColor = when (step.display) {
-        QaStepDisplay.Pending, QaStepDisplay.NotRun -> colors.fgMuted
-        else -> colors.fg
-      }
-      BasicText(step.text, style = SkillBillTheme.type.tBase.copy(color = textColor, fontWeight = if (running) FontWeight.SemiBold else FontWeight.Normal))
-      step.note?.let { note ->
-        val noteColor = when (step.display) {
-          QaStepDisplay.Failed -> colors.stFailed
-          QaStepDisplay.Running -> colors.stActive
-          else -> colors.fgMuted
+  SbBox(fill = if (running) colors.stActive.copy(alpha = .10f) else null, borderColor = frame) {
+    Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+      Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) { StepStatusIcon(step.display) }
+      BasicText(step.number.toString(), Modifier.width(18.dp), style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint))
+      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        val textColor = when (step.display) {
+          QaStepDisplay.Pending, QaStepDisplay.NotRun -> colors.fgMuted
+          else -> colors.fg
         }
-        BasicText(note, style = SkillBillTheme.type.tSm.copy(color = noteColor))
-      }
-      if (step.findingId != null || (invocationDirectory != null && step.evidence.isNotEmpty())) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          step.findingId?.let { FindingChip(it, onOpenFinding) }
-          if (invocationDirectory != null) step.evidence.forEach { path -> EvidenceChip(path) { onAction(DetailAction.OpenQaEvidence(path, invocationDirectory)) } }
+        BasicText(step.text, style = SkillBillTheme.type.tBase.copy(color = textColor, fontWeight = if (running) FontWeight.SemiBold else FontWeight.Normal))
+        step.note?.let { note ->
+          val noteColor = when (step.display) {
+            QaStepDisplay.Failed -> colors.stFailed
+            QaStepDisplay.Running -> colors.stActive
+            else -> colors.fgMuted
+          }
+          BasicText(note, style = SkillBillTheme.type.tSm.copy(color = noteColor))
+        }
+        if (step.findingId != null || (invocationDirectory != null && step.evidence.isNotEmpty())) {
+          FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            step.findingId?.let { SbTag("Finding $it", tone = colors.stFailed, onClick = { onOpenFinding(it) }) }
+            if (invocationDirectory != null) step.evidence.forEach { path -> EvidenceChip(path) { onAction(DetailAction.OpenQaEvidence(path, invocationDirectory)) } }
+          }
         }
       }
+      step.updatedAt?.let { BasicText(formatInstant(it, "HH:mm"), style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint)) }
     }
-    step.updatedAt?.let { BasicText(formatInstant(it, "HH:mm"), style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint)) }
   }
 }
 
@@ -161,33 +153,7 @@ private fun StatusDescription(description: String, content: @Composable () -> Un
 }
 
 @Composable
-private fun FindingChip(id: String, onOpen: (String) -> Unit) {
-  val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(SkillBillRadius.xs)
-  BasicText(
-    "Finding $id",
-    Modifier.background(colors.stFailed.copy(alpha = .15f), shape).clickable(role = Role.Button, onClick = { onOpen(id) }).padding(horizontal = 8.dp, vertical = 2.dp),
-    style = SkillBillTheme.type.tSm.copy(color = colors.stFailed, fontWeight = FontWeight.SemiBold),
-  )
-}
-
-@Composable
 internal fun EvidenceChip(path: String, onOpen: () -> Unit) {
   val name = fileName(path)
-  QaChip(name, LucideIcons.file, "Open evidence $name", mono = true, onClick = onOpen)
-}
-
-@Composable
-internal fun QaChip(label: String, icon: ImageVector, description: String = label, mono: Boolean = false, onClick: () -> Unit) {
-  val colors = SkillBillTheme.colors
-  val type = SkillBillTheme.type
-  Row(
-    Modifier.background(colors.bgRaised, RoundedCornerShape(SkillBillRadius.xs)).border(1.dp, colors.border, RoundedCornerShape(SkillBillRadius.xs))
-      .clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = description }
-      .padding(horizontal = 8.dp, vertical = 2.dp),
-    horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically,
-  ) {
-    SbIcon(icon, 12.dp)
-    BasicText(label, style = (if (mono) type.monoSm else type.tSm).copy(color = colors.fg2))
-  }
+  SbTag(name, Modifier.semantics { contentDescription = "Open evidence $name" }, mono = true, icon = LucideIcons.file, onClick = onOpen)
 }

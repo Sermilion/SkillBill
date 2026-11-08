@@ -10,6 +10,7 @@ import skillbill.application.review.packet.toVerificationLaunchEnvelope
 import skillbill.application.review.preparation.ReviewPreparationService
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.ReviewFindingPayloadKeys
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
@@ -119,6 +120,7 @@ class ReviewClaimVerificationRunner(
               timeout = input.launch.timeout,
               promptOverride = prompt,
               modelOverride = input.launch.modelOverride,
+              approval = AgentRunApprovalRequirement.GovernedReview,
               additionalWritableDirectories = listOf(input.launch.projectStoreRoot),
             ).boundedReviewLane(input.launch.laneProgressIdleTimeout),
         ),
@@ -272,6 +274,7 @@ class ReviewClaimVerificationRunner(
               timeout = input.launch.timeout,
               promptOverride = prompt,
               modelOverride = input.launch.modelOverride,
+              approval = AgentRunApprovalRequirement.GovernedReview,
               additionalWritableDirectories = listOf(input.launch.projectStoreRoot),
             ).boundedReviewLane(input.launch.laneProgressIdleTimeout),
         ),

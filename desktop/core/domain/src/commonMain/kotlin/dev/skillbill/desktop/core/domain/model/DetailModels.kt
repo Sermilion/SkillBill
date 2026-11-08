@@ -5,7 +5,10 @@ import kotlin.time.Instant
 /** The detail lists that page on their own, one to one with the runtime's lists. */
 enum class DetailList { Subtasks, Phases, Validation, Executions, Dependencies, PlanOutput }
 
-/** What the runtime allows for running one item again; the app renders it and decides nothing. */
+/**
+ * What the runtime allows for running one item again; the app renders it and decides nothing. [goalStarted] is true for a
+ * standalone plan whose issue already has a goal in the same repository.
+ */
 data class RunOptions(
   val canCancel: Boolean,
   val canLaunch: Boolean,
@@ -13,6 +16,7 @@ data class RunOptions(
   val agentId: String?,
   val agentChoices: List<String>,
   val unavailableReason: String?,
+  val goalStarted: Boolean = false,
 )
 
 /** An open detail: [header] paints at once from the row, [sections] arrive from the first read. */
@@ -102,6 +106,7 @@ data class Detail(
   val validationBranchRuns: List<ValidationBranchRun> = emptyList(),
   val selectedValidationResult: String? = null,
   val selectedExecution: ExecutionInstance? = null,
+  val goalQaPreview: GoalQaPreview? = null,
   val planActivity: List<PlanAgentActivity> = emptyList(),
   val planOutputLines: List<PlanOutputLine> = emptyList(),
   val planOutputTail: List<String> = emptyList(),

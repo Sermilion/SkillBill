@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.DetectedAgentsRead
 import dev.skillbill.desktop.core.domain.model.RepositoryBranches
 import dev.skillbill.desktop.core.domain.model.RepositoryBranchesRead
@@ -60,6 +61,7 @@ data class NewTaskUiState(
   val branchRead: BranchReadState = BranchReadState.Idle,
   val repositoryPicks: Int = 0,
   val newTaskChatLayout: NewTaskChatLayout = NewTaskChatLayout.DEFAULT,
+  val qaDeviceName: String? = null,
 )
 
 sealed interface NewTaskAction {
@@ -75,7 +77,6 @@ sealed interface NewTaskAction {
   data object Send : NewTaskAction
   data object Stop : NewTaskAction
   data object SendNow : NewTaskAction
-  data object Discard : NewTaskAction
   data object NewChat : NewTaskAction
   data object DismissResume : NewTaskAction
   data class ResumeDraft(val entry: ChatHistoryEntry) : NewTaskAction
@@ -114,6 +115,10 @@ class NewTaskViewModel(
       .onEach { layout -> mutableState.update { it.copy(newTaskChatLayout = layout) } }
       .catch { diagnostics.record("desktop_new_task_chat_layout_unavailable") }
       .launchIn(viewModelScope)
+    settings.settings.map { it.qaDevice?.displayName }.distinctUntilChanged()
+      .onEach { name -> mutableState.update { it.copy(qaDeviceName = name) } }
+      .catch { diagnostics.record("desktop_qa_device_pick_unavailable") }
+      .launchIn(viewModelScope)
     val first = draft
     readBranches(first)
     viewModelScope.launch { observeBoard(loadRepositories()) }
@@ -127,10 +132,14 @@ class NewTaskViewModel(
   fun onAction(action: NewTaskAction) {
     val target = draft
     when (action) {
-      is NewTaskAction.TextChanged -> target.text = action.text
+      is NewTaskAction.TextChanged -> {
+        if (target.text != action.text) target.cursorMcpDependency = CursorMcpDependency.Unspecified
+        target.text = action.text
+      }
       is NewTaskAction.ChooseBaseBranch -> {
         if (!canChangeContext(target)) return
         pathCheck?.cancel()
+        target.cursorMcpDependency = CursorMcpDependency.Unspecified
         target.baseBranch = action.branch
         target.rebindChat()
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
@@ -142,6 +151,7 @@ class NewTaskViewModel(
       is NewTaskAction.SubmitRepositoryPath -> submitPath(target, action.path)
       NewTaskAction.AddRepository -> addRepository(target)
       is NewTaskAction.ChooseAgent -> {
+        target.cursorMcpDependency = CursorMcpDependency.Unspecified
         target.agentId = action.agentId
         readAgent(target) { resolveAgent(target, action.agentId) }
       }
@@ -158,7 +168,6 @@ class NewTaskViewModel(
       NewTaskAction.Send -> send(target)
       NewTaskAction.Stop -> target.stop()
       NewTaskAction.SendNow -> target.sendNow()
-      NewTaskAction.Discard -> chats.discard(target)
       NewTaskAction.NewChat -> chats.newChat()
       NewTaskAction.DismissResume -> mutableState.update { it.copy(resumePickerOpen = false) }
       is NewTaskAction.DiscardDraft -> chats.discardSaved(action.entry)
@@ -286,6 +295,7 @@ class NewTaskViewModel(
   private fun selectRepository(target: NewTaskDraft, repository: NewTaskRepository, listed: RepositoryBranches? = null) {
     if (!canChangeContext(target)) return
     pathCheck?.cancel()
+    target.cursorMcpDependency = CursorMcpDependency.Unspecified
     if (repository.root != target.repository?.root) target.baseBranch = ""
     target.repository = repository
     target.rebindChat()

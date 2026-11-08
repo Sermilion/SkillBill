@@ -39,16 +39,51 @@ public sealed interface NewTaskPreparation {
 
 public enum class NewTaskRunKind { GOAL, PLAN }
 
+public data class StandalonePhaseRequest(
+  public val phaseId: String,
+  public val target: String? = null,
+)
+
 public data class StandaloneCheckout(
   public val checkoutRoot: Path? = null,
   public val branch: String? = null,
 )
 
+public data class OperationStartRequest(
+  public val operationId: String,
+  public val target: String?,
+  public val agentId: String,
+  public val profile: String? = null,
+  public val checkout: StandaloneCheckout = StandaloneCheckout(),
+  public val confirmation: OperatorConfirmation? = null,
+  public val proposalChanges: String? = null,
+)
+
+public data class OperatorConfirmation(
+  public val token: String,
+  public val selection: String? = null,
+)
+
+public sealed interface OperationCardDismissal {
+  public data object Dismissed : OperationCardDismissal
+
+  public data class Stale(public val reason: String) : OperationCardDismissal
+}
+
 public sealed interface NewTaskStartResult {
   public data object Started : NewTaskStartResult
 
-  /** Started, and [failure] completes when the run exits: with why it failed, or null after a clean exit. */
-  public data class Running(public val failure: CompletionStage<String?>) : NewTaskStartResult
+  /**
+   * Started, and [failure] completes when the run exits: with why it failed, or null after a clean exit or after the
+   * awaiting-confirmation exit. [launchId] names the operator launch whose card the run may have published.
+   */
+  public data class Running(
+    public val failure: CompletionStage<String?>,
+    public val launchId: String? = null,
+  ) : NewTaskStartResult
+
+  /** The operation exited at once with its confirmation card published for the launch named [launchId]. */
+  public data class AwaitingConfirmation(public val launchId: String) : NewTaskStartResult
 
   public data object KeyTaken : NewTaskStartResult
 

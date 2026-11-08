@@ -30,7 +30,7 @@
 # - The parity test `WorkflowStateSchemaContractVersionTest` fails the
 #   build if they diverge. To bump the contract, edit BOTH constants in
 #   the same change.
-# - The value `"0.1"` mirrors the `contractVersion` field that the two
+# - The value `"0.4"` mirrors the `contractVersion` field that the two
 #   shipped `WorkflowDefinition`s emit today (`FeatureImplement` and
 #   `FeatureVerify`). Bumping the runtime contract requires editing all
 #   three sites (the two definitions and this schema) under one parity
@@ -90,10 +90,10 @@ $defs:
   # `workflow_status` enum. The branches are mutually exclusive
   # because `workflow_name` is a const in each branch — `oneOf` is the
   # right combinator (XOR), not `anyOf`.
-  # SKILL-65 Subtask 2: the experimental runtime-driven feature-task pipeline
+  # TASK_RUNTIME supports timed_out as a terminal persisted status.
   # (`FeatureTaskRuntimePhaseWorkflowDefinition`). A third mutually-exclusive
   # `oneOf` branch keyed on `workflow_name=feature-task-runtime`, with its own
-  # phase step-id set and 6-value workflow-status enum (including `blocked`).
+  # phase step-id set and workflow-status enum, including `timed_out`.
   # The schema header explicitly allows new families that match this shape; the
   # VERIFY branch is unchanged.
   # Unknown top-level fields on a feature-task-runtime snapshot are rejected by the
@@ -123,6 +123,7 @@ $defs:
           # SKILL-142: the child pauses non-terminally when the reserved remediation pass
           # leaves an unresolved Blocker, awaiting the bounded operator decision.
           - paused
+          - timed_out
       current_step_id:
         type: string
         # See note above on the empty-string allowance.
@@ -287,9 +288,9 @@ properties:
   contract_version:
     type: string
     minLength: 1
-    const: "0.3"
+    const: "0.4"
     description: >
-      Pinned to `WORKFLOW_STATE_CONTRACT_VERSION` (currently "0.1"). The
+      Pinned to `WORKFLOW_STATE_CONTRACT_VERSION` (currently "0.4"). The
       parity test `WorkflowStateSchemaContractVersionTest` keeps the two
       in lockstep. Mirrors the `contractVersion` field on every shipped
       `WorkflowDefinition`.
@@ -359,8 +360,8 @@ x-coherence-checks:
   per-skill-status-divergence:
     description: >
       The two shipped workflow families ship divergent enums:
-      `bill-feature-task` has 12 step ids and 6 workflow statuses
-      (including `blocked`), while `bill-feature-verify` has 9 step ids
+      `bill-feature-task` has 12 step ids and 8 workflow statuses
+      (including `blocked` and `timed_out`), while `bill-feature-verify` has 9 step ids
       and 5 workflow statuses (no `blocked`). The schema encodes this
       with `oneOf` keyed on `workflow_name` so a `verify` snapshot
       carrying `workflow_status="blocked"` is rejected even though

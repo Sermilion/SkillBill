@@ -3,10 +3,12 @@ package skillbill.di.core
 import me.tatarka.inject.annotations.Component
 import me.tatarka.inject.annotations.Provides
 import skillbill.application.agentrun.AgentRunService
+import skillbill.application.approval.ApprovalOperatorService
 import skillbill.application.config.ConfigResolutionService
 import skillbill.application.config.RuntimeConfigEditService
 import skillbill.application.install.ExternalAddonOverlayService
 import skillbill.application.install.ExternalPlatformPackResolutionService
+import skillbill.application.install.InstallDatabasePreparation
 import skillbill.application.install.InstallService
 import skillbill.application.learning.LearningService
 import skillbill.application.review.diffcomment.DiffCommentService
@@ -101,6 +103,7 @@ import skillbill.model.RuntimeVersion
 import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
 import skillbill.ports.agentrun.AgentRunLauncher
+import skillbill.ports.approval.ApprovalOwnerAuthority
 import skillbill.ports.blockincident.BlockIncidentContractValidator
 import skillbill.ports.blockincident.BlockIncidentTelemetryPort
 import skillbill.ports.blockincident.ProductIssueCredentialPort
@@ -172,6 +175,7 @@ abstract class RuntimeComponent(
     RuntimeInstallerProvides,
     RuntimeOptionalCallbackProvides,
     RuntimeWorkControlProvides,
+    RuntimeApprovalProvides,
     RuntimeDiagnosticsProvides {
   private val resolvedRuntimeContext: RuntimeContext by lazy {
     RuntimeBootstrapBindings.runtimeContext(inputRuntimeContext)
@@ -337,6 +341,7 @@ abstract class RuntimeComponent(
   abstract val runtimeConfigEditService: RuntimeConfigEditService
   abstract val externalAgentAddonSourceConfigPort: ExternalAgentAddonSourceConfigPort
   abstract val installService: InstallService
+  abstract val installDatabasePreparation: InstallDatabasePreparation
   abstract val externalAddonOverlayService: ExternalAddonOverlayService
   abstract val externalPlatformPackResolutionService: ExternalPlatformPackResolutionService
   abstract val agentRunLauncher: AgentRunLauncher
@@ -355,6 +360,8 @@ abstract class RuntimeComponent(
   abstract val goalRunnerStatusService: GoalRunnerStatusService
   abstract val goalPlanningLogService: GoalPlanningLogService
   abstract val goalOperatorDecisionService: GoalOperatorDecisionService
+  abstract val approvalOperations: ApprovalOperatorService
+  abstract val approvalOwners: ApprovalOwnerAuthority
   abstract val installAgentService: InstallAgentService
   abstract val installMcpRegistrationPort: InstallMcpRegistrationPort
   abstract val installNativeAgentLinkPort: InstallNativeAgentLinkPort

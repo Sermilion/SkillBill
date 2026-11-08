@@ -5,8 +5,6 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -15,7 +13,6 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
@@ -53,11 +50,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
-import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.composite.runAfterCurrentEvent
-import dev.skillbill.desktop.core.designsystem.layeredShadow
 import dev.skillbill.desktop.core.designsystem.menuSpec
 import kotlinx.coroutines.isActive
 
@@ -101,7 +95,6 @@ fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset 
     }
   }
   if (expanded) {
-    val shape = RoundedCornerShape(SkillBillRadius.md)
     Popup(
       popupPositionProvider = PopoverPositionProvider(offsetPx, gapPx, marginPx, placement),
       onDismissRequest = onDismissRequest,
@@ -120,9 +113,7 @@ fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset 
       ) {
         Column(
           Modifier.widthIn(min = panelMinWidth, max = panelMaxWidth).heightIn(max = maxHeight)
-            .layeredShadow(SkillBillTheme.shadows.popover, shape)
-            .background(SkillBillTheme.colors.bgOverlay, shape)
-            .border(1.dp, SkillBillTheme.colors.borderStrong, shape)
+            .sbOverlaySurface()
             // The menu's 4px padding sits inside this 1px border.
             .padding(1.dp)
             .verticalScroll(rememberScrollState())

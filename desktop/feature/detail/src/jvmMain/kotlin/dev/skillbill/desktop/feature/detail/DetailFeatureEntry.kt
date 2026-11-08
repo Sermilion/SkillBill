@@ -2,6 +2,8 @@ package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import dev.skillbill.desktop.core.designsystem.component.ToastData
@@ -99,6 +101,10 @@ class DetailFeatureEntry(
       chatShortcut = CHAT_SHORTCUT,
       onToggleChat = { chat.toggleChat(item) },
     )
+    SideEffect { viewModel.onAction(DetailAction.SetQaPreviewVisible(host.detailsPaneVisible)) }
+    DisposableEffect(viewModel) {
+      onDispose { viewModel.onAction(DetailAction.SetQaPreviewVisible(false)) }
+    }
     DetailScreen(state, host) { action ->
       if (action is DetailAction.SelectSubtask || action is DetailAction.MoveSubtaskSelection) {
         shellPanes.specsOpen = false

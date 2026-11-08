@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.model.core.PhaseInstructions
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparation
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparationRequest
@@ -54,6 +55,7 @@ public data class PhaseRunRequest(
   public val recoverStaleOwner: String? = null,
   public val qaExecution: QaExecutionContext? = null,
   public val qaSelection: FeatureTaskRuntimeQaSelection? = null,
+  public val qaDevice: QaNamedDevice? = null,
   public val acceptanceCriteria: List<String>? = null,
   public val recordedGoalQaOutcome: FeatureTaskQaOutcome? = null,
   public val goalHistoryWriterInput: GoalHistoryWriterInput? = null,
@@ -146,6 +148,7 @@ public data class InMemoryPhaseRunFacts(
   val intake: PhaseRunIntake,
   override val workflowId: String = "",
   override val monitorExecution: MonitorExecutionContext? = null,
+  val invocationId: String = "",
   override val validationCheckInvocationId: String? = null,
 ) : FeatureTaskRuntimeRunFacts {
   override val admittedExecution: AdmittedFeatureTaskRuntimeExecution? = null
@@ -155,6 +158,7 @@ public data class InMemoryPhaseRunFacts(
   override val stopAfterIntake: Boolean = false
   override val issueKey: String = intake.issueKey
   override val qaSelection: FeatureTaskRuntimeQaSelection? = request.qaSelection
+  override val qaDevice: QaNamedDevice? = request.qaDevice
   override val runInvariants: FeatureTaskRuntimeRunInvariants =
     request.acceptanceCriteria?.let { intake.runInvariants.copy(acceptanceCriteria = it) } ?: intake.runInvariants
   override val invokedAgentId: String = request.invokedAgentId
@@ -179,4 +183,5 @@ public data class InMemoryPhaseRunFacts(
   override val goalQualityAutomaticRecovery: Boolean = request.goalQualityPhaseProgress != null
   override val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? = request.acceptedGoalQualityExecutionPlan
   override val qaOutcomeWorkflowId: String = request.goalQualityInvocationId?.let { "$workflowId:$it" } ?: workflowId
+  override val approvalRunId: String = workflowId.ifBlank { invocationId }
 }

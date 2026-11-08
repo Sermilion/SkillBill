@@ -44,7 +44,7 @@ private val BUTTON_SMALL_PADDING = 8.dp + BUTTON_BORDER
 private val BUTTON_GAP = 6.dp
 
 enum class SbButtonVariant { Secondary, Primary, Ghost, Danger, DangerSolid }
-enum class SbControlSize { Regular, Small }
+enum class SbControlSize { Regular, Small, XSmall }
 
 @Composable
 fun SbButton(
@@ -78,7 +78,7 @@ fun SbButton(
   }
   val content: @Composable () -> Unit = {
     Row(
-      modifier.height(if (size == SbControlSize.Small) BUTTON_SMALL_HEIGHT else BUTTON_HEIGHT)
+      modifier.height(if (size == SbControlSize.Regular) BUTTON_HEIGHT else BUTTON_SMALL_HEIGHT)
         .alpha(if (enabled) 1f else .45f)
         .background(bg, shape)
         .then(if (variant == SbButtonVariant.Primary || variant == SbButtonVariant.Ghost || variant == SbButtonVariant.DangerSolid) Modifier
@@ -92,7 +92,7 @@ fun SbButton(
           (label ?: tooltip)?.let { contentDescription = it }
           if (!enabled) disabled()
         }
-        .padding(horizontal = if (size == SbControlSize.Small) BUTTON_SMALL_PADDING else BUTTON_PADDING),
+        .padding(horizontal = if (size == SbControlSize.Regular) BUTTON_PADDING else BUTTON_SMALL_PADDING),
       horizontalArrangement = Arrangement.spacedBy(BUTTON_GAP, Alignment.CenterHorizontally),
       verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -106,7 +106,7 @@ fun SbButton(
           CompositionLocalProvider(LocalContentColor provides iconColor) { SbIcon(it, SbIconSize.Sm) }
         }
         label?.let {
-          val style = if (size == SbControlSize.Small) SkillBillTheme.type.tXs else SkillBillTheme.type.tSmMedium
+          val style = if (size == SbControlSize.Regular) SkillBillTheme.type.tSmMedium else SkillBillTheme.type.tXs
           BasicText(it, style = style.copy(color = fg, lineHeight = 1.em), maxLines = 1, softWrap = false)
         }
         shortcut?.let { Kbd(it.split(' ').filter(String::isNotBlank), onAccent = variant == SbButtonVariant.Primary) }

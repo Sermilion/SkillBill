@@ -3,7 +3,6 @@ package dev.skillbill.desktop.core.data.chat
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
-import dev.skillbill.desktop.core.data.usage.UsageProfileResolver
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
@@ -56,6 +55,7 @@ class AgentSessionCatalog(
       ChatHistoryEntry(
         session.id, saved?.executionId, agent, session.updatedAt,
         saved?.title ?: session.title ?: "${session.agentId} session", saved?.lines.orEmpty(),
+        summary = saved?.summary,
       )
     }
     val appOnly = store.savedChats(executionId).filter { it.agent.agentId !in sessionStoreAgents && it.sessionId !in excluded }
@@ -63,7 +63,13 @@ class AgentSessionCatalog(
   }
 
   internal fun open(entry: ChatHistoryEntry): List<ChatHistoryLine> {
-    if (entry.agent.agentId in handleAgents) store.saveAgentSession(entry.sessionId, entry.sessionId)
+    if (entry.agent.agentId == "codex" && store.agentSession(entry.sessionId) == null) {
+      if (!store.saveChat(entry) || !store.saveAgentSession(entry.sessionId, entry.sessionId)) {
+        throw IOException("Could not save the provider thread for this chat. Try opening it again.")
+      }
+    } else if (entry.agent.agentId == "cursor") {
+      store.saveAgentSession(entry.sessionId, entry.sessionId)
+    }
     if (entry.lines.isNotEmpty()) return entry.lines
     val file = listed[entry.sessionId]?.file ?: return emptyList()
     return readSafely("chat.session_lines_unreadable") {
@@ -132,7 +138,7 @@ class AgentSessionCatalog(
     return Profiles(
       claude = agentProfiles(home, "claude", "projects", listOf(claudeSelected, variables[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR])),
       codex = agentProfiles(home, "codex", "sessions", listOf(variables[AgentHomeEnvironmentKeys.CODEX_HOME])),
-      cursor = agentProfiles(home, "cursor", "chats", listOf(variables[UsageProfileResolver.CURSOR_CONFIG_DIR], xdgCursor)),
+      cursor = agentProfiles(home, "cursor", "chats", listOf(variables[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR], xdgCursor)),
     )
   }
 

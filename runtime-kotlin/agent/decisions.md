@@ -1,3 +1,48 @@
+## [2026-11-08] Let the branch monitor repair an unprotected default branch
+Context: SKILL-463 made a `branch:` monitor report-only when the target was the repository's default branch, even when the branch was unprotected and the caller could push. The operator commits directly to `main`, so a red `main` blocked with "no repair ran" and needed a manual fix.
+Decision: MonitorTargetPolicy no longer treats the default branch as a report-only reason. A branch target is report-only only when GitHub reports it protected, reports no protection data, or the caller has no push permission. An unprotected, pushable default branch resolves to REPOSITORY_PUSH and gets CI repair like any other branch.
+Reason: Branch protection and push permission are the signals that a push would be refused or unwanted. Being the default branch says neither, and repositories that want `main` guarded already protect it.
+Alternatives considered: An opt-in flag for default-branch repair adds a setting for a case branch protection already covers.
+
+## [2026-11-07] Keep proposal revisions separate from operation targets
+Context: A verify proposal may use a spec path as its target, while the operator's adjustment is free-form text.
+Decision: Carry revisions as an optional operation-start input and append one separate operator-instruction argument. Preserve the original target, agent, profile and checkout, and retain the revised argument list in the existing launch context.
+Reason: Appending revision text to a spec target changes the parsed file path. Separate instructions reach criteria extraction without changing confirmation authority or requiring a storage migration.
+
+## [2026-11-07] Consume operation confirmation before execution
+Context: A parked operation must not be confirmable through output the chat agent can echo or by repeated card clicks.
+Decision: Bind confirmation to a persisted proposal card and consume it with compare-and-swap before execution; reject raw confirm/select starts and unoffered pr-review-fix choices.
+Reason: Only the operator card action admits execution and a consumed proposal cannot run twice. A crash after consumption may leave the result uncertain.
+
+## [2026-11-07] Do not replay a consumed confirmation after owner death
+Context: The owner can die after consuming a confirmation but before reporting whether the operation ran.
+Decision: When death is verified, settle the card as consumed_uncertain and refuse replay; if liveness is unknown, leave it confirming.
+Reason: Replaying a possibly half-run operation risks duplicate effects, while treating an unverifiable owner as dead risks concurrent execution.
+
+## [2026-11-07] Classify parked launches by exit code and launch identity
+Context: Desktop needs to associate detached parked operations with their persisted proposal cards.
+Decision: Map exit code 4 to awaiting_confirmation and pass the launch id to link the run with saved launch context; preserve the CLI exit and text contract.
+Reason: The exit code identifies the parked state without parsing prose, and launch identity locates the card without changing existing CLI consumers.
+
+## [2026-11-07] Restore operation cards from their durable row
+Context: Chat history can outlive a card state change or process restart.
+Decision: Persist only card identity in chat history and re-read the card from the store on resume.
+Reason: The store remains the current source of truth, so resumed cards show current state and do not act on stale copies.
+
+## [2026-11-07] Keep projection and quality-ledger rationale outside Kotlin comments
+Context: Validation found KDoc on runtime model and helper declarations outside interfaces.
+Decision: Keep their behavior unchanged and record the rationale here, as the source-comment rule requires.
+Reason: Workflow execution rows retain their launch lifecycle, so the current row uses the projected lifecycle and earlier rows become terminal after a later launch. A settled quality attempt records terminal actions through both phase settlement and observability. The accepted event is the latest matching terminal entry; conflicting COMPLETE and BLOCKED actions yield no accepted event. GoalRunnerStopReport.failurePhaseId identifies a failed goal-finish phase outside the blocked workflow's own steps.
+## [2026-11-07] Compose desktop fixture generation in runtime-core
+Context: SKILL-514 needs real migrations and board projections, but runtime-core already depends on runtime-application.
+Decision: Keep the catalog and port-level writer in runtime-application test fixtures; compose RuntimeComponent in runtime-core test fixtures.
+Reason: Spec decision D2 preserves dependency direction while exercising production persistence and projection. Constructing RuntimeComponent in runtime-application would invert that dependency.
+
+## [2026-11-07] Advance workflow-state to 0.4 while retaining readable versions
+Context: SKILL-514 spec decision D4 authorizes persisted TASK_RUNTIME timed_out support, which changes the accepted workflow-state shape.
+Decision: Use workflow-state 0.4, accept timed_out as terminal for TASK_RUNTIME, and retain 0.1, 0.2 and 0.3 in the readable set.
+Reason: The shape change requires a new contract version. Readable-version normalization preserves existing rows, addressing the stale-row trap behind the earlier 0.3 pin. D4 limits this amendment to persisted timeout support, without changing timeout scheduling or other families' accepted statuses.
+
 ## [2026-11-07] Keep live runtime trees across install replacement
 Context: A goal child JVM loads engine directive resources lazily. Pre-install `clear-state` and `activate_staged_runtime_pair` used `rm -rf` on `~/.skill-bill/runtime/runtime-cli`, which unlinked JARs still mapped by that JVM. A later `getResourceAsStream` then failed with `Missing directive resource`.
 Decision: Pre-install wipe no longer deletes `runtime/`. Activation renames each live tree into `runtime/retired/` before moving the staged tree into place, keeps the newest retired copy of each component, and restores the retired tree if the replacement `mv` fails.
@@ -414,6 +459,7 @@ Context: Pre-current workflow-state rows broke list, latest, work-list, IDE stat
 Decision: Leave the current const at "0.3". Add WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS beside it. The validator copies the wire map and replaces a readable contract_version with the current const before schema validate. Writes persist the current const for an older readable version.
 Reason: Bumping the const would make every existing 0.3 row stale again. The readable-set plus normalize-then-validate path mirrors FEATURE_TASK_RUNTIME_READABLE_CONTRACT_VERSIONS without a schema-shape change.
 Alternatives considered: Bumping to 0.4 was rejected because it recreates the stale-row problem this subtask exists to fix.
+Superseded by: Advance workflow-state to 0.4 while retaining readable versions (2026-11-07)
 
 ## [2026-10-09] Put 0.1 and 0.2 on the readable path; add no terminalize migration
 Context: Each pre-current workflow-state version had to join the readable set or be terminalized by a new named migration. Last DatabaseMigrationEntries version was 50.
@@ -3568,3 +3614,81 @@ The decomposition lock stays under `<state>/locks`. Run temp roots differ, but t
 ## [2026-11-06] validation_check resolves its run from the server environment
 
 The `validation_check` MCP tool reads its run identity from `SKILL_BILL_VALIDATION_INVOCATION_ID` in the server process environment and never from tool arguments. An agent therefore cannot address another run's row, and a user-global server without the variable neither lists the tool nor records anything; a call returns `no_run_identity`. The recorder writes `current_activity` and inserts `validation_check_events` rows through narrow writes that leave `status_revision`, `updated_at` and the lease columns unchanged. `StandalonePhaseStatusEventSink` compare-and-sets on the revision it holds in memory, so a bumped revision would make its next persist stale.
+
+## [2026-11-07] Bound desktop QA cleanup to verified checkout outputs
+
+SKILL-514 originally rejected every fixture destination beneath the operator's `.skill-bill`.
+Runtime-owned goal checkouts and agent scratch directories live beneath that directory, so the
+fixture task could not run in its own goal checkout. The operator accepted a scoped change to
+AC-003 and AC-004 for execution `wftr-20261106-195351-1g7i`.
+
+The fixture writer permits one descendant location, the exact verified-checkout
+`runtime-kotlin/runtime-core/build/desktop-fixture/home`. It checks the entire deleted home,
+verifies Git worktree registration and module layout, rejects redirected or linked paths, and fails when
+operator-home identity or filesystem resolution is unavailable. Safe temporary homes outside
+operator state remain supported when they are outside the verified checkout and cannot contain it.
+Only the fixed fixture home is permitted within the checkout. Desktop staging and seeding check their fixed checkout-owned
+output paths and reject linked inputs before deletion or copying. An approved output slot still
+refuses cleanup when it contains current operator state.
+
+This changes the product safety contract. It adds no architecture baseline, suppression or
+mechanical guard exemption. A1 and A2 keep fixture policy in test fixtures and desktop build logic;
+A7 preserves loud refusal; A8 keeps the fixture environment explicit. G3 retains destructive-path
+rejection evidence, and G7 and P7 require this recorded contract correction. The checks assume
+exclusive use of the QA output directories during a task; they do not claim to defeat concurrent
+malicious replacement of ancestor directories.
+
+## [2026-11-07] Keep approved command failures inside the Codex turn
+
+Context: An approved command can exit non-zero while resolving a merge or repairing a build. Ending the turn on that result prevents the agent from completing its repair.
+
+Decision: Treat an executed command's failure as a tool result. A declined action or a provider or protocol failure can still end the turn. The Codex session-channel regression tests cover successful approval followed by a failed command.
+
+## [2026-11-07] Cancelled standalone monitors discard owned repair work
+
+Cancellation ends the repair attempt and discards its verified owned worktree,
+branch and refs, including uncommitted files and unpublished commits. Retaining
+those resources used to block a fresh monitor on the same target. Other outcomes
+keep the existing retention policy. Cleanup still checks ownership and waits for
+repair-child shutdown. Admission and explicit stale recovery clean older cancelled
+retained records only after same-host positive process-death evidence; unknown
+publication that may represent an undrained child continues to block. No ownership
+record schema changes or replacements with defaults are required.
+
+## [2026-11-07] Keep merge-repair rationale outside function KDoc
+
+Moved the existing `MonitorMergeRepairGuard` rationale here to satisfy the Kotlin
+comment architecture gate. A repair is publishable when HEAD already contains
+`origin/<base>`, or an in-progress merge brings base commits HEAD lacks. The base
+can move while the agent resolves conflicts, so `MERGE_HEAD` may be an older base
+commit than the current `origin/<base>`. Publishing that merge keeps the base as a
+parent and makes progress; a later monitor round merges the newer tip if the PR
+still conflicts.
+
+## [2026-11-08] New iterations supersede inactive ownership
+
+New phase and operation iterations take priority over paused, cancelled, idle and
+blocked predecessors for the same target. They do not preempt running owners or
+consume parked confirmation proposals. The shared detached launcher completes its
+exit notification after ownership cleanup, preventing a new launch from racing
+the old admission-lock cleanup.
+
+Monitor admission was the retained-work exception. Under its target lock, a saved
+settlement now establishes inactivity even when the host process remains alive.
+Without a settled outcome, same-host positive process-death evidence is required.
+Archive the existing record under `history/<generation>/ownership.json` before
+advancing the generation. Preserve unfinished non-cancelled resources and their
+history; discard verified owned cancelled work. An undrained child remains protected.
+This supersedes the earlier requirement to manually resolve non-cancelled retained
+work before a fresh monitor can start. Archived records use the unchanged ownership
+contract and keep their original identities and evidence; repeated reconciliation
+reuses the first validated archive and never resets history to defaults.
+
+## [2026-11-08] Keep validate-retry rationale outside comments
+
+Validate has one job: make the build green on the current tree. Any failed attempt,
+whatever stopped it, starts a fresh one, and an interrupted running attempt reruns
+instead of being retained. Validate blocks only after `MAX_VALIDATE_ATTEMPTS`
+attempts fail; a pause stops at once. `spendFailedAttempt` counts a failed attempt
+as spent, so the next launch of the phase in the same process starts a new attempt.
+Moved here from source comments to satisfy the Kotlin comment architecture gate.

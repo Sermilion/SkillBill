@@ -2,6 +2,7 @@ package skillbill.di.core
 
 import me.tatarka.inject.annotations.Provides
 import skillbill.contracts.time.JvmSystemClock
+import skillbill.di.core.scheduler.StandaloneOutputSchedulerProvides
 import skillbill.infrastructure.host.JdkBoundedWorkFanOutPort
 import skillbill.infrastructure.host.JdkDaemonThreadPort
 import skillbill.infrastructure.host.JdkIdentifierGeneratorPort

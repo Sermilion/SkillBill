@@ -1,27 +1,23 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.detail.BarSegment
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
+import dev.skillbill.desktop.core.designsystem.detail.SegmentBar
 import dev.skillbill.desktop.core.domain.model.QaAssertionOutcome
 import dev.skillbill.desktop.core.domain.model.VerifyRunDetails
 
@@ -146,26 +142,12 @@ internal fun VerifyOutcomeCard(view: VerifyOutcomeView, onCellClick: (String) ->
         Column(Modifier.weight(1f).clickable(role = Role.Button, onClickLabel = "Go to ${cell.title}", onClick = { onCellClick(cell.targetKey) }).semantics { contentDescription = "${cell.title}: ${cell.value}. Go to ${cell.title}" }.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
           androidx.compose.foundation.text.BasicText(cell.title, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted))
           androidx.compose.foundation.text.BasicText(cell.value, style = SkillBillTheme.type.tSm.copy(color = colors.fg, fontWeight = FontWeight.Medium), maxLines = 2)
-          ScoreBar(cell.segments)
+          SegmentBar(
+            cell.segments.map { BarSegment(it.count.toFloat(), toneColor(it.tone, colors.stDone, colors.stBlocked, colors.stFailed, colors.fgFaint)) },
+            description = if (cell.segments.isEmpty()) "No score recorded" else "Score breakdown",
+          )
         }
       }
-    }
-  }
-}
-
-@Composable
-private fun ScoreBar(segments: List<VerifyScoreSegment>) {
-  val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(SkillBillRadius.xs)
-  Row(Modifier.fillMaxWidth().height(6.dp).clip(shape).background(colors.borderSubtle).semantics { contentDescription = if (segments.isEmpty()) "No score recorded" else "Score breakdown" }) {
-    val total = segments.sumOf { it.count }
-    if (total > 0) segments.forEach { segment ->
-      if (segment.count > 0) Box(Modifier.weight(segment.count.toFloat()).height(6.dp).background(when (segment.tone) {
-        VerifyScoreTone.Green -> colors.stDone
-        VerifyScoreTone.Amber -> colors.stBlocked
-        VerifyScoreTone.Red -> colors.stFailed
-        VerifyScoreTone.Faint -> colors.fgFaint
-      }))
     }
   }
 }

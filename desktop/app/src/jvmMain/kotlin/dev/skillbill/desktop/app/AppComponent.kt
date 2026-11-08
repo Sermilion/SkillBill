@@ -11,6 +11,7 @@ import dev.skillbill.desktop.core.common.DatabaseDispatcher
 import dev.skillbill.desktop.core.common.AppDispatchers
 import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.common.HostEnvironment
+import dev.skillbill.desktop.core.data.chat.ChatSummarizer
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.data.session.DatabaseSessionManager
 import dev.skillbill.desktop.core.data.usage.ProviderUsageRepository
@@ -44,6 +45,7 @@ abstract class AppComponent(
   abstract val appSettingsRepository: AppSettingsRepository
   abstract val applicationCoroutineScope: ApplicationCoroutineScope
   abstract val startAtLoginSync: StartAtLoginSync
+  abstract val chatSummarizer: ChatSummarizer
   abstract val trayViewModel: () -> TrayViewModel
   abstract val transitionNotifier: TransitionNotifier
   abstract val trayAvailability: TrayAvailability

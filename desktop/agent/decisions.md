@@ -38,6 +38,92 @@ Reason: Numeric fixtures establish display behavior without proving provider cap
 Context: Route, provider or visibility changes can remove the usage trigger while a popup or deferred focus callback still exists.
 Decision: Reuse SbPopover and ShellLayer, bind expansion to the window model's context token, and return focus only to the current surviving requester while the popover composition remains active.
 Reason: Escape must close usage before underlying navigation. Context invalidation must release the layer without sending focus to a removed trigger.
+## [2026-11-07] Preserve work-area composition across panel branches
+Context: Extracting ContentPanel splits ShellFrame's work area between a frameless drawer Box and a framed panel at the drawer breakpoint.
+Decision: Remember movable content and invoke it from both branches.
+Reason: Separate direct content calls would give the work area different composition positions and reset remembered state on breakpoint crossings. The spec requires preserving that state.
+
+## [2026-11-07] Ask for proposal changes before replacing an operation card
+Context: Adjust immediately reran the original verify or pr-review-fix request, giving the operator no chance to explain the intended revision.
+Decision: Adjust asks a question in the current chat. Its next reply starts a replacement proposal using the original launch settings and separate revision instructions; the replacement still needs an explicit Confirm click.
+Reason: The operator expects to describe the changes before seeing another confirmation card. Repeating the original request cannot express that revision.
+
+## [2026-11-07] Start operator chats in Act independently of execution lifecycle
+Context: Chats attached to active executions inherited ReadOnly permissions, preventing ordinary edit and QA requests from being approved.
+Decision: Launch opening and follow-up operator chat turns in Act for every agent. Execution lifecycle only coordinates optional pause-and-act actions. Permission cards represent structured harness permission requests; ordinary questions use the question UI or prose.
+Reason: Operators use chat to act on repository work. A running execution must not silently turn that chat into a read-only session, and an agent asking a question must not manufacture a tool permission request.
+
+## [2026-11-07] Keep summary writes separate and stamp the summarized snapshot
+Context: Conversation saves rewrite the chat file, and a new turn or discard can happen while a background summary runs.
+Decision: saveChat preserves stored summary fields and ignores the entry's summary. Only saveSummary changes them, under the store lock on an existing file, with the snapshot's updated_at as summary_source_updated_at_ms and no change to the stored updated_at.
+Reason: Ordinary saves must not erase summaries. Stamping a newer stored time would mark old content current; preserving updated_at keeps Recent chats order, and refusing a missing file prevents a discarded chat from reappearing.
+Revisit when: Other callers need to edit or clear summaries, or summaries must incorporate turns saved during a call.
+
+## [2026-11-07] Recover stale summaries at startup instead of tray quit
+Context: Tray Quit exits without closing chats, and the shutdown hook signals live agent processes, so a summary started at quit would die.
+Decision: Start one app-scoped serial queue and sweep at most 20 stale chats, newest first, once at launch. Chat close, leaving an idle chat and window close request summaries; per-reply saves and hiding the pane do not.
+Reason: Persisted staleness lets the next launch recover unfinished work without delaying quit or racing process shutdown. App scope lets window-close requests finish while hidden to the tray, and the startup cap bounds agent spend after a long gap.
+Revisit when: Quit can wait for background work, or the newest-20 cap leaves needed summaries missing.
+
+## [2026-11-07] Restrict summary calls and use an explicit cheap-model map
+Context: Saved transcripts are untrusted input, and summary calls bill the chat's own agent account.
+Decision: Run separate one-shot commands outside repositories with Claude haiku, Codex gpt-6-luna or Cursor gpt-5.4-nano-none. Use tool-less, read-only or ask-mode arguments, omit session-resume and permission-bypass flags, and skip unmapped agents with chat.summary_unsupported_agent.
+Reason: Transcript instructions must not gain tool or write authority or disturb the chat's resume state. Junie has no confirmed cheap model, so guessing could select an expensive model or fail.
+Alternatives considered: Reusing ChatTransport.run would carry the chat's full permissions and save agent session state.
+Revisit when: Agent models or CLI flags change, or a cheap Junie model is confirmed.
+
+## [2026-11-07] Use a stationary ellipsis for summaries under reduced motion
+Context: Summary rows must scroll sideways when text overflows, while the app also supports LocalReducedMotion.
+Decision: SbMarqueeText applies continuous basicMarquee only when reduced motion is off. Reduced motion renders one stationary ellipsized line; fallback titles retain their existing rendering.
+Reason: Following the existing reduced-motion gate avoids scrolling for operators who disable motion and still leaves readable truncated text.
+Revisit when: The design calls for wrapping or another overflow treatment under reduced motion.
+
+## [2026-11-07] Bind preview lifetime to the visible selected QA execution
+Context: Historical runs can retain framebuffer files, concurrent runs can be active, and a detail ViewModel can survive route disposal.
+Decision: Derive the request from the selected standalone desktop QA execution and current database session. Require visible route and pane authorization, clear frames on request changes, cancel the former observer and reject late generations. Terminal selections never read a source.
+Reason: File presence and ViewModel lifetime do not establish that the operator is viewing an active run. The selected execution and current visibility must authorize every published frame.
+
+## [2026-11-07] Confine framebuffer opens through directory handles
+Context: Preview reads must remain inside the selected invocation even if a path changes between validation and opening.
+Decision: Traverse the invocation and fixed preview child through scoped SecureDirectoryStream handles, reject symlinks and open the final regular file read-only without following links. Refuse the source when secure directory streams are unavailable.
+Reason: Path-string validation alone cannot confine the actual open. Directory-relative handles preserve that boundary during path replacement and close on every exit.
+
+## [2026-11-07] Use only the invocation-owned private framebuffer
+Context: QA can use an existing display when private capture is unavailable, but preview must never expose the operator's visible display.
+Decision: Capture only the registered owner-only live-preview child through private Xvfb -fbdir. Registration refusal disables capture. Reuse the existing resource registry and stop producer processes before releasing the child.
+Reason: Exact invocation ownership isolates concurrent runs and preserves retained-resource and cancellation cleanup behavior. Existing-display QA fallback supplies no authorized preview source.
+## [2026-11-07] Force the Linux source-run software renderer
+Context: SKILL-514 QA reported an X11 visual lookup crash during the source-run launch. QA-2 remains open after three repair attempts.
+Decision: Select Skiko SOFTWARE_COMPAT for Linux source runs through both the JVM property and SKIKO_RENDER_API.
+Reason: SKIKO_RENDER_API takes precedence over an inherited renderer setting, so the environment override is required to force the selected renderer.
+
+## [2026-11-07] Stamp copied source-run identities as one launch pair
+Context: A QA checkout can differ from the installed runtime. Dirty build identities require a matching commit and a shared non-empty install run id.
+Decision: Stage runtime-cli and prepared app resources from the same checkout, then stamp only the copied identity records with one fresh source-run UUID on every execution.
+Reason: BuildIdentityPlugin reads the install run id during configuration and omits it for clean trees. Stamping the staged pair supplies the dirty-build identity without changing gate rules or real-install behavior.
+
+## [2026-11-07] Isolate source-run settings and child-agent state
+Context: Desktop settings live under user.home without an environment override. A saved database path can override SKILL_BILL_DB, and blank TERM lets startup import login-shell exports.
+Decision: Recreate a scratch home for each QA launch, redirect JVM and child-process state and temp paths there, and set TERM to `dumb` only when inherited TERM is blank.
+Reason: Overriding SKILL_BILL_STATE_DIR alone leaves the operator's settings and database reachable. The TERM fallback preserves launch overrides. Scratch agent configuration means QA agents do not inherit the operator's login.
+Alternatives considered: Keeping the real user.home would require a production settings-path override, outside the spec's real-install constraints.
+
+## [2026-11-07] Keep QA discovery explicit and picks owned by settings
+Context: The sidebar and New Task chip display the same persisted pick while device availability and leases can change independently.
+Decision: AppSettingsRepository owns the pick. Window-scoped QaDevicePickerState owns cancellable discovery on open and explicit refresh. Preserve a missing pick and match an AVD pick to its running emulator.
+Reason: Explicit discovery avoids background adb polling. Both UI surfaces observe saved settings so rejected writes retain the prior pick. Disconnecting hardware must not silently select auto.
+Revisit when: Live device updates become a requirement or device picks need a narrower scope than app settings.
+
+## [2026-11-07] Read the confirmed QA pick before eligible launches
+Context: The general settings flow converts an I/O failure to empty preferences, which cannot distinguish auto from an unreadable saved selector.
+Decision: Use readQaDevice against one store snapshot before launch writes, retain it through allocation retries and refuse eligible launches on read failure.
+Reason: Storage failure must not silently launch QA with auto targeting or combine selector values from different reads. Hardware discovery must not erase a saved pick.
+
+## [2026-11-07] Keep picker lease discovery advisory and read-only
+Context: The picker needs repository lease occupancy, but occupancy can change after discovery and the writer's lock helper creates storage.
+Decision: Read typed lease snapshots through the active runtime port without writer locks, reclamation or file changes. Retain unverifiable owners and diagnose unavailable occupancy.
+Reason: Discovery must not acquire or release devices. QA owns actual lease acquisition, and an unavailable occupancy read must not prevent adb discovery.
+Alternatives considered: Reusing the writer's lock helper would mutate storage during a read.
 
 ## [2026-11-06] Save the chat width after a drag settles and flush it on window close
 Context: Dragging the chat divider changes the width many times per second. Writing each value to DataStore is wasteful, and a width changed just before quitting could be lost.
@@ -266,6 +352,7 @@ Revisit when: Cursor messages are needed in the transcript; they sit in a SQLite
 Context: The operator asked for the chat to do anything the execution agent can, with no limits added by the app, and for chat on codex, cursor and junie. Read-only turns were denying `gh pr view` and similar commands.
 Decision: Claude turns pass --dangerously-skip-permissions and drop --restricted, --tools, --allowedTools, --permission-mode and --permission-prompts. Codex turns pass --dangerously-bypass-approvals-and-sandbox with shell_environment_policy.inherit=all, Cursor turns pass --force, --trust and --approve-mcps, and Junie runs headless as the launcher runs it. ReadOnly and Act still pick the scope prompt and drive pause-and-act, but limit no tools. Codex and Cursor resume the thread or chat id their first turn reported, held in memory per chat session. Junie's text output carries no session id, so each Junie turn sends the earlier exchanges of the chat, newest first up to 120,000 characters. The operator can switch a chat's agent from the composer chip; the switch takes that agent's REASONING-tier model, or the CLI default, and starts a new agent session with the full snapshot.
 Reason: Executions already run these agents with permission checks off, so a stricter chat only blocked the operator. A switched agent cannot resume another agent's session.
+Superseded by: SKILL-453 operator approvals are broker-owned and host-controlled (2026-11-07)
 Supersedes: "Allow shell commands in chat act mode", "Run chat turns restricted, prompt-free and without the prompt snapshot" (the snapshot flag stays off), the read-only profile in "Let the chat workspace own pause, act and resume", and "Show unsupported chat agents instead of switching to Claude" for codex, cursor and junie.
 
 ## [2026-10-31] Return executable chat suggestions as reply metadata
@@ -441,3 +528,20 @@ Reason: SwingPanel otherwise paints above Compose content regardless of composab
 Context: Review publishing needs a short success message tied to the comment bar and diff context.
 Decision: Render the review toast in the Changes diff pane and expire it after 2.6 seconds through the view-model coroutine delay.
 Reason: The application toast stack has a fixed 5-second lifetime and appears outside the review context.
+
+## [2026-11-07] Keep every chat free of app-imposed permission and workflow gates
+Context: Chat prompt rules made ordinary requests wait for action buttons, issue-key acceptance or a pause even though the chat transports expose the execution agent's tools.
+Decision: New-task and execution chat prompts carry repository or execution context and optional action-button formatting. They permit direct shell, CLI, MCP, Git, gh and file-edit requests without adding chat-specific approval steps, key-confirmation gates, execution-only scope limits or mode-dependent instructions. ReadOnly and Act remain UI coordination metadata for optional pause-and-act actions; transports no longer inject them into prompts or operator messages. Provider launch permissions and runtime command contracts retain their own owners.
+Reason: Conversation context and button formatting must not reduce what the operator can ask the chat agent to do. This supersedes earlier decisions that used chat mode to select prompt guidance or required button-only launches.
+
+## [2026-11-07] Route interactive Codex approvals to operator cards
+Context: Act chat explicitly selected `auto_review`, so commands could be approved without a card or denied for lacking specific authorization before the operator could review their payload.
+Decision: Use `on-request` with `approvalsReviewer: user` for Act chat thread start, resume and turn start. Admit these fields against the installed schema for all three methods. Keep other runtime callers on their existing settings.
+Reason: Provider approval requests must reach the existing live card broker before execution. This uses the provider's human-review protocol rather than interpreting rejection text, replaying a denied action or bypassing managed restrictions.
+Superseded by: Default all provider launches to native permission bypass (2026-11-07)
+
+## [2026-11-07] Keep Cursor and Junie chat on interactive ACP permissions
+Context: Cursor Act chat added `--auto-review`, which let the provider decide tool requests before the operator-card broker saw them. Junie already used its standard `--acp` command.
+Decision: Both chat transports launch the provider's standard ACP arguments. Remove Cursor's automatic-review argument override. Verify that publishing requests from either provider produce full pending cards and send no permission response until an operator decision is delivered.
+Reason: Interactive permission decisions belong to the operator. Retain provider-issued options, session identity checks, read-only mode and unsupported-interaction handling.
+Superseded by: Default all provider launches to native permission bypass (2026-11-07)

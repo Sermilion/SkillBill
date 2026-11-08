@@ -1,5 +1,6 @@
 package skillbill.infrastructure.launcher.agentrun
 
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.SkillRunGoalContinuationContext
 import skillbill.ports.agentrun.model.SkillRunRequest
@@ -9,7 +10,8 @@ import kotlin.test.assertIs
 import kotlin.time.Duration.Companion.seconds
 
 internal const val AGENT_RUN_LAUNCHER_PHASE_PROMPT =
-  "Phase: plan\nTask: produce an ordered plan.\nRequired final output: one raw JSON object."
+  "Phase: plan\nTask: produce an ordered plan.\nRequired final output: one " +
+    "raw JSON object."
 
 internal fun ProcessAgentRunAdapter.launchFacts(request: SkillRunRequest): AgentRunLaunchFacts =
   assertIs<AgentRunLaunchFacts>(launch(request))
@@ -19,6 +21,7 @@ internal fun skillRunRequest(
   goalContinuation: SkillRunGoalContinuationContext? = goalContinuationContext(),
 ): SkillRunRequest =
   SkillRunRequest(
+    approval = AgentRunApprovalRequirement.OutsideApproval,
     issueKey = issueKey,
     repoRoot = Path.of("/tmp/skillbill-agent-run"),
     subtaskId = 2,

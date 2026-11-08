@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.runloop.qualitygate.packBuildGateProgressKey
 import skillbill.engine.featuretask.runloop.qualitygate.validationDefinitionId
 import skillbill.engine.featuretask.slot.PhaseQualityGateOperation
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.engine.featuretask.validation.interruptedInitialDiscovery
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
 import skillbill.error.shellcontent.WorkflowFailureCode
@@ -119,7 +120,8 @@ public class PhaseRunPlanResolver(
     outcomeNamespace: String,
   ) {
     progress.phaseRecords.values.filter { record ->
-      retainedRunningPhase(progress, plan, record)
+      retainedRunningPhase(progress, plan, record) &&
+        strategies.qualityGateOperation(plan, record.phaseId) != PhaseQualityGateOperation.AgentValidation
     }.forEach { record ->
       val envelopeAccepted =
         progress.acceptedEnvelopes.any {
@@ -243,6 +245,7 @@ public class PhaseRunPlanResolver(
           progress.validationGateProgressKey to progress.validationGateProgress
       }
     if (storedKey != expectedKey || nested == null) unknownQualityStep(record)
+    if (nested.interruptedInitialDiscovery(commandFamily)) return
     if (nested.pendingExternalOperation != null || nested.pendingExternalCheckpoint != null) {
       unknownQualityStep(
         record,

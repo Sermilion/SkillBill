@@ -158,9 +158,14 @@ internal fun acceptedTerminalEvent(
   progress: GoalQualityPhaseProgress,
   phaseId: String,
   attempt: Int,
-) = progress.phaseLedger.singleOrNull {
-  it.phaseId == phaseId && it.attemptCount == attempt &&
-    it.action in setOf(FeatureTaskRuntimePhaseLedgerAction.COMPLETE, FeatureTaskRuntimePhaseLedgerAction.BLOCKED)
+): FeatureTaskRuntimePhaseLedgerEntry? {
+  val terminals =
+    progress.phaseLedger.filter {
+      it.phaseId == phaseId && it.attemptCount == attempt &&
+        it.action in setOf(FeatureTaskRuntimePhaseLedgerAction.COMPLETE, FeatureTaskRuntimePhaseLedgerAction.BLOCKED)
+    }
+  if (terminals.map { it.action }.distinct().size > 1) return null
+  return terminals.maxByOrNull { it.sequenceNumber }
 }
 
 internal fun validateExecutionDisposition(

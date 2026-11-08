@@ -1,13 +1,9 @@
 package dev.skillbill.desktop.feature.chat
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -24,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -39,12 +34,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -60,16 +52,22 @@ import androidx.compose.ui.unit.min
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.list.sbRowSurface
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.Kbd
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
+import dev.skillbill.desktop.core.designsystem.component.SbElevation
+import dev.skillbill.desktop.core.designsystem.component.sbOverlaySurface
+import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
+import dev.skillbill.desktop.core.designsystem.component.SbMarqueeText
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
-import dev.skillbill.desktop.core.designsystem.layeredShadow
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.ui.input.ShellLayer
@@ -103,21 +101,20 @@ internal fun ResumePalette(
     val current = listing.shown.getOrNull(selected)
     val resume: () -> Unit = { current?.let(onResume) }
     BoxWithConstraints(Modifier.fillMaxSize().clickable(onClick = onDismiss)) {
-      val shape = RoundedCornerShape(SkillBillRadius.lg)
       Column(
         Modifier.align(Alignment.TopCenter).padding(top = maxHeight * .12f)
           .width(min(860.dp, (maxWidth - 48.dp).coerceAtLeast(0.dp))).height(min(520.dp, maxHeight * .76f))
-          .layeredShadow(SkillBillTheme.shadows.modal, shape).background(colors.bgOverlay, shape)
+          .sbOverlaySurface(SbElevation.Modal)
           .focusProperties { canFocus = false }
           .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
-          .border(1.dp, colors.border, shape).padding(1.dp)
+          .padding(1.dp)
           .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) { onDismiss(); true } else false },
       ) {
         FilterBar(query, scope, onQuery = { query = it; active = 0 }, onMove = { step ->
           active = (selected + step).coerceAtMost(listing.shown.lastIndex).coerceAtLeast(0)
         }, onSubmit = resume)
         Row(Modifier.weight(1f).fillMaxWidth()) {
-          Box(Modifier.weight(1f).fillMaxHeight().edge(colors.borderSubtle, right = true)) {
+          Box(Modifier.weight(1f).fillMaxHeight().hairline(Edge.End, colors.borderSubtle)) {
             ResumeList(choices.isEmpty(), listing, query, showAll, selected, now, zone, branchOf, onShowAll = { showAll = true }, onActivate = { active = it }, onResume = onResume)
           }
           Box(Modifier.weight(1f).fillMaxHeight()) {
@@ -138,7 +135,7 @@ private fun FilterBar(query: String, scope: ResumeScope, onQuery: (String) -> Un
   LaunchedEffect(Unit) { focus.requestFocus() }
   val placeholder = if (scope.worktree) "Filter chats in this worktree" else "Filter by title, branch or agent"
   Row(
-    Modifier.fillMaxWidth().height(44.dp).edge(colors.borderSubtle, bottom = true).padding(horizontal = 14.dp),
+    Modifier.fillMaxWidth().height(44.dp).hairline(Edge.Bottom, colors.borderSubtle).padding(horizontal = 14.dp),
     horizontalArrangement = Arrangement.spacedBy(10.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
@@ -165,7 +162,13 @@ private fun FilterBar(query: String, scope: ResumeScope, onQuery: (String) -> Un
         }
       },
     )
-    scope.label?.let { ChatPill(it, icon = if (scope.worktree) LucideIcons.branch else LucideIcons.folder, mono = scope.worktree) }
+    scope.label?.let {
+      SbLabel(
+        it,
+        style = if (scope.worktree) SbLabelStyle.Mono else SbLabelStyle.Plain,
+        icon = if (scope.worktree) LucideIcons.branch else LucideIcons.folder,
+      )
+    }
   }
 }
 
@@ -227,16 +230,10 @@ private fun ResumeRow(
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val interaction = remember { MutableInteractionSource() }
-  val hovered by interaction.collectIsHoveredAsState()
   val title = resumeTitle(entry)
-  val background = when {
-    active -> colors.bgActive
-    hovered -> colors.bgHover
-    else -> Color.Transparent
-  }
   Column(
-    Modifier.fillMaxWidth().padding(horizontal = 6.dp).background(background, RoundedCornerShape(SkillBillRadius.sm))
-      .hoverable(interaction).focusProperties { canFocus = false }.combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onDoubleClick = onDoubleClick)
+    Modifier.fillMaxWidth().padding(horizontal = 6.dp).sbRowSurface(interaction, selected = active)
+      .focusProperties { canFocus = false }.combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onDoubleClick = onDoubleClick)
       .padding(horizontal = 8.dp, vertical = 6.dp),
     verticalArrangement = Arrangement.spacedBy(2.dp),
   ) {
@@ -245,12 +242,15 @@ private fun ResumeRow(
         if (entry.lines.isEmpty()) SbIcon(LucideIcons.terminal, SbIconSize.Xs)
         if (title.images.isNotEmpty()) SbIcon(LucideIcons.image, SbIconSize.Xs)
       }
+      val text = entry.summary ?: title.text
       val styled = buildAnnotatedString {
-        append(title.text)
-        val at = if (query.isEmpty()) -1 else title.text.indexOf(query, ignoreCase = true)
+        append(text)
+        val at = if (query.isEmpty()) -1 else text.indexOf(query, ignoreCase = true)
         if (at >= 0) addStyle(SpanStyle(color = colors.accentText), at, at + query.length)
       }
-      BasicText(styled, Modifier.weight(1f), style = type.tSm.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
+      val style = type.tSm.copy(color = colors.fg)
+      if (entry.summary != null) SbMarqueeText(styled, style, Modifier.weight(1f))
+      else BasicText(styled, Modifier.weight(1f), style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
       if (title.images.size > 1) BasicText("+${title.images.size - 1}", style = type.t2xs.copy(color = colors.fgFaint))
       BasicText(savedAgo(entry.updatedAt, now).removeSuffix(" ago"), style = type.t2xs.copy(color = colors.fgFaint))
     }
@@ -278,8 +278,8 @@ private fun ResumePreview(entry: ChatHistoryEntry?, now: Instant, branchOf: (Cha
           BasicText("Pick a chat to see its latest messages.", style = type.tSm.copy(color = colors.fgFaint))
         }
       } else {
-        Column(Modifier.fillMaxWidth().edge(colors.borderSubtle, bottom = true).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          BasicText(resumeTitle(entry).text, style = type.tMd.copy(color = colors.fg, fontWeight = FontWeight.Medium), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.borderSubtle).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          BasicText(entry.summary ?: resumeTitle(entry).text, style = type.tMd.copy(color = colors.fg, fontWeight = FontWeight.Medium), maxLines = 2, overflow = TextOverflow.Ellipsis)
           branchOf(entry)?.let { PreviewFact("Branch") { BasicText(it, style = type.monoSm.copy(color = colors.fgMuted), maxLines = 1, overflow = TextOverflow.Ellipsis) } }
           PreviewFact("Agent") { BasicText("${agentName(entry.agent)} · ${savedAgo(entry.updatedAt, now)}", style = type.tXs.copy(color = colors.fgMuted)) }
         }
@@ -294,7 +294,7 @@ private fun ResumePreview(entry: ChatHistoryEntry?, now: Instant, branchOf: (Cha
               val (paths, rest) = splitLeadingImages(line.text)
               Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 BasicText(if (line.role == ChatHistoryRole.Operator) "You" else agentName(entry.agent), style = type.tXs.copy(color = colors.fgMuted, fontWeight = FontWeight.Medium))
-                paths.forEach { ChatPill(it.substringAfterLast('/'), icon = LucideIcons.image) }
+                paths.forEach { SbLabel(it.substringAfterLast('/'), icon = LucideIcons.image) }
                 if (rest.isNotBlank()) BasicText(rest.trim(), style = type.tSm.copy(color = colors.fg), maxLines = 4, overflow = TextOverflow.Ellipsis)
               }
             }
@@ -303,7 +303,7 @@ private fun ResumePreview(entry: ChatHistoryEntry?, now: Instant, branchOf: (Cha
       }
     }
     Row(
-      Modifier.fillMaxWidth().edge(colors.borderSubtle, top = true).padding(horizontal = 12.dp, vertical = 10.dp),
+      Modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).padding(horizontal = 12.dp, vertical = 10.dp),
       horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
     ) {
       SbButton("Cancel", onDismiss, size = SbControlSize.Small)
@@ -335,7 +335,7 @@ private fun PaletteFooter(count: String) {
   val colors = SkillBillTheme.colors
   val hint = SkillBillTheme.type.t2xs.copy(color = colors.fgFaint)
   Row(
-    Modifier.fillMaxWidth().height(30.dp).edge(colors.borderSubtle, top = true).padding(horizontal = 12.dp),
+    Modifier.fillMaxWidth().height(30.dp).hairline(Edge.Top, colors.borderSubtle).padding(horizontal = 12.dp),
     horizontalArrangement = Arrangement.spacedBy(6.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
@@ -346,12 +346,4 @@ private fun PaletteFooter(count: String) {
     Spacer(Modifier.weight(1f))
     BasicText(count, style = hint)
   }
-}
-
-/** Draws a 1 dp line on the chosen edges, inside the bounds. */
-private fun Modifier.edge(color: Color, top: Boolean = false, right: Boolean = false, bottom: Boolean = false): Modifier = drawBehind {
-  val stroke = 1.dp.toPx()
-  if (top) drawLine(color, Offset(0f, stroke / 2), Offset(size.width, stroke / 2), stroke)
-  if (bottom) drawLine(color, Offset(0f, size.height - stroke / 2), Offset(size.width, size.height - stroke / 2), stroke)
-  if (right) drawLine(color, Offset(size.width - stroke / 2, 0f), Offset(size.width - stroke / 2, size.height), stroke)
 }

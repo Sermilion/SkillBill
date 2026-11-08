@@ -27,6 +27,7 @@ import dev.skillbill.desktop.app.command.CommandMenu
 import dev.skillbill.desktop.app.display.DesktopUiScale
 import dev.skillbill.desktop.app.display.DesktopUiScaleProvider
 import dev.skillbill.desktop.app.di.WindowComponent
+import dev.skillbill.desktop.app.shell.qadevice.QaDeviceSwitcher
 import dev.skillbill.desktop.app.keyboard.ShortcutSheet
 import dev.skillbill.desktop.app.keyboard.KeyPress
 import dev.skillbill.desktop.app.keyboard.ShellKey
@@ -270,6 +271,7 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
         onOpenSpecFavorite = { projectId, path ->
           openSpecFavorite(panes, window.specsPane::open, window.specsPane::revealFavorite, projectId, path)
         },
+        qaDeviceSwitcher = { QaDeviceSwitcher(window.qaDevice) },
       )
     }
   }
