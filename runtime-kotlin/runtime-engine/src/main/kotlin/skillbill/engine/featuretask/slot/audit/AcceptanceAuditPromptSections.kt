@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.model.audit.AcceptanceAuditInteractionTraceS
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionInteractionTraceRound
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
+import skillbill.engine.featuretask.phase.prompt.directives.ACCEPTANCE_SUBTASK_SCOPE_RULE
 import skillbill.engine.featuretask.phase.prompt.directives.MATERIALITY_RULE
 import skillbill.engine.featuretask.phase.prompt.directives.PHASE_COMPLETE_SETTLEMENT_TOOL
 import skillbill.engine.featuretask.phase.prompt.directives.ceremonyScalingOf
@@ -24,7 +25,7 @@ internal object AcceptanceAuditPromptSections {
       "store, the same list, board, status, or history seam, and callers of the function you would change. " +
       "Do not leave a cousin path for the next audit round. Report only siblings that are material gaps. " +
       "Do not open a different criterion to chase unrelated work. The latest reported gap is context, " +
-      "not a scope limit."
+      "not a scope limit within the selected subtask. $ACCEPTANCE_SUBTASK_SCOPE_RULE"
 
   const val ACCEPTED_RECHECK_SENTENCE: String =
     "Criteria accepted by an earlier audit are re-checked only when the runtime lists them in the " +

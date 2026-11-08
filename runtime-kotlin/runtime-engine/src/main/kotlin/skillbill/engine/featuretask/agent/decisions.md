@@ -852,3 +852,19 @@ Context: SKILL-453 stopped after a repair claimed completion without publishing 
 Decision: A qualified completed repair with unchanged publication and failing CI consumes one monitor repair attempt and returns to repair. Derive its identity from the monitor attempt, retaining the existing cap and evidence checks. Reconstruct the same identities from retained completion, producer, publication and Git evidence on resume; existing published repair identities remain unchanged. No durable shape or version changes are required.
 
 Alternatives considered: retrying without accounting can loop forever; blocking on the first no-change repair prevents recovery within the existing allowance.
+
+## 2026-11-08: Keep acceptance repair within declared subtask ownership
+
+Context: The 0AC-103 subtask 1 audit mixed missing domain evidence with engine
+settlement changes explicitly assigned to subtask 4. Defect-class expansion and
+saved repair plans could repeatedly demand that later integration.
+
+Decision: Audit, repair planning and implementation share a subtask scope directive.
+Each gap must cite a current obligation. Explicit later-subtask integration stays
+deferred, while current contract, domain enforcement, serialization and retained
+evidence remain required. Reconcile retained findings and plans before repair.
+Do not infer deferral from file ownership or a worker claim. This narrows the
+defect-class expansion rule to the authored subtask boundary.
+
+Reason: Related callers can belong to a later integration subtask. Their absence
+does not excuse a missing prerequisite or move their ownership into this repair.

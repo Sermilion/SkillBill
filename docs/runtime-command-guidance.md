@@ -785,6 +785,16 @@ accounting. The runtime keeps authored text and aliases with that accounting. It
 does not require headings, field labels, IDs written by the agent, coverage
 markers, or a strict adoption receipt in an audit or repair plan.
 
+Audit and repair apply the selected subtask's authored scope, non-goals and explicit
+ownership boundaries before expanding a defect class. Each gap must cite an obligation
+of the current subtask. Work explicitly assigned to a later subtask cannot keep the
+current criterion open or become a required repair item. Missing engine acquisition
+or caller integration alone is not a gap when that integration is deferred. Current
+contract, pure domain enforcement, serialization and retained-evidence obligations
+still apply. File ownership or worker prose alone cannot authorize a deferral.
+Audit and repair reconcile retained findings and saved plans against these boundaries,
+name excluded deferred work and its declared owner, and retain valid current gaps.
+
 Audit counts only material gaps. A gap is material when a realistic user, operator
 or runtime action reaches it in normal use and it causes a visible failure, wrong
 behavior, or loss of data someone relies on. Absolute criterion wording ("never",

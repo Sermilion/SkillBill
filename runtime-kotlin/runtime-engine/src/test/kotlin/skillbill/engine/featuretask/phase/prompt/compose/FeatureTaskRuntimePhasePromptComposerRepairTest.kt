@@ -9,6 +9,19 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimePhasePromptComposerRepairTest {
   @Test
+  fun `audit and repair exclude deferred integration without excusing current domain obligations`() {
+    listOf("audit", "audit_plan_fix", "audit_implement_fix").forEach { phase ->
+      val prompt = composePromptForPhase(phase)
+      assertContains(prompt, "For each gap, cite the current subtask obligation it violates.")
+      assertContains(prompt, "Work explicitly assigned to a later subtask is deferred context")
+      assertContains(prompt, "Missing engine acquisition or caller integration alone is not a gap")
+      assertContains(prompt, "pure domain enforcement, serialization, and retained evidence")
+      assertContains(prompt, "Reconcile prior findings and saved plans against these boundaries")
+      assertContains(prompt, "preserve all remaining in-scope gaps")
+    }
+  }
+
+  @Test
   fun `audits never re-check criteria an earlier audit accepted`() {
     val auditPrompt = composePromptForPhase("audit")
     assertContains(
