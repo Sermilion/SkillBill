@@ -42,6 +42,7 @@ internal object VerifyWorkflow {
   const val QA_SELECTION = "qa_selection"
   const val ISSUE_KEY = "issue_key"
   const val SUPERSEDED_BY = "superseded_by"
+  const val WITHDRAWN_AT = "withdrawn_at"
 
   const val CONTRACT_VERSION = "contract_version"
   const val RULES = "rules"

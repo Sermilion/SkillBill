@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.reviewStepOutput
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
+import skillbill.engine.operation.core.NoOperationCardLifecycle
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationConfirmationGate
 import skillbill.engine.operation.core.OperationExecutor
@@ -24,6 +25,7 @@ import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.operation.UnavailableOperationCardRepository
 import skillbill.ports.operation.model.OperationProposal
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.projectstore.FixedProjectStorePort
@@ -126,10 +128,11 @@ internal class PrReviewFixHarness : AutoCloseable {
           }),
         ),
       ),
-      OperationConfirmationGate(proposals, git, Clock.systemUTC()),
+      OperationConfirmationGate(proposals, UnavailableOperationCardRepository, git, Clock.systemUTC()),
       OperationStepRunner(runner, git),
       FixedProjectStorePort(root.resolve("project-store")),
       RecordingBranchWorktreeResources(),
+      NoOperationCardLifecycle,
     )
 
   init {
@@ -316,7 +319,9 @@ internal class ScriptedPrReviewFixRunner(
   private val repo: Path,
 ) : PhaseRunner {
   val inputs = mutableListOf<PhaseStepInput>()
-  var matrix: String = "Thread T1 — a.kt:9\nVerdict: agree\n"
+  var matrix: String =
+    "Thread T1 — a.kt:9\nVerdict: agree\nOptions:\n1. (recommended) Rename as asked.\n2. Keep the name.\n" +
+      "Thread T2 — b.kt:4\nVerdict: agree\nOptions:\n1. (recommended) Rename as asked.\n2. Keep the name.\n"
   var localReply: String = "outcome: fixed\nAddressed the local comment.\n"
   var editDuringAnalysis: Boolean = false
   var editSharedFile: Boolean = false

@@ -6,6 +6,7 @@ import skillbill.contracts.workflow.identity.blockincident.BlockIncidentDiagnosi
 import skillbill.engine.diagnostics.block.recoverableFailureOf
 import skillbill.model.RepositoryRoot
 import skillbill.ports.agentrun.AgentRunLauncher
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
@@ -53,6 +54,7 @@ public class BlockIncidentAgentPass(
         progressIdleTimeout = remaining.toKotlinDuration(),
         promptOverride = prompt(draft),
         readOnlyPhase = true,
+        approval = AgentRunApprovalRequirement.OutsideApproval,
       )
     var outcome: AgentRunLaunchOutcome? = null
     recoverableFailureOf { outcome = launcher.launch(AgentRunLaunchRequest(agentId, request)) }

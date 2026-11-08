@@ -146,7 +146,7 @@ class MonitorTargetPolicyTest {
   }
 
   @Test
-  fun `branch writability classifies default, protected, no push and pushable feature branches`() {
+  fun `branch writability classifies pushable default, protected, no push and pushable feature branches`() {
     val defaultHead = head(ref = "main")
     val defaultBranch = MonitorBranchTip(ACME, "main", SHA)
     val default =
@@ -155,8 +155,18 @@ class MonitorTargetPolicyTest {
         MonitorBranchLookup.Found(defaultHead, protected = false, defaultBranch),
       )
     val defaultOpen = assertIs<MonitorTargetResolution.Open>(default).target
-    assertEquals(MonitorWritability.REPORT_ONLY, defaultOpen.writability)
-    assertEquals("it is the repository's default branch", defaultOpen.reportOnlyReason)
+    assertEquals(MonitorWritability.REPOSITORY_PUSH, defaultOpen.writability)
+    assertNull(defaultOpen.reportOnlyReason)
+
+    val protectedDefault =
+      assertIs<MonitorTargetResolution.Open>(
+        validatedBranchTarget(
+          MonitorBranchIdentity(ACME, "main"),
+          MonitorBranchLookup.Found(defaultHead, protected = true, defaultBranch),
+        ),
+      ).target
+    assertEquals(MonitorWritability.REPORT_ONLY, protectedDefault.writability)
+    assertEquals("it is protected", protectedDefault.reportOnlyReason)
 
     val protected =
       assertIs<MonitorTargetResolution.Open>(

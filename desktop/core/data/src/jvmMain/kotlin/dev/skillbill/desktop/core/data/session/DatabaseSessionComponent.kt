@@ -4,6 +4,8 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
+import dev.skillbill.desktop.core.data.approval.ApprovalObservations
+import dev.skillbill.desktop.core.data.approval.SessionApprovalGenerations
 import dev.skillbill.desktop.core.data.di.DatabaseSessionScope
 import dev.skillbill.desktop.core.data.repository.ActivityObservations
 import dev.skillbill.desktop.core.data.repository.BoardObservations
@@ -60,6 +62,8 @@ interface DatabaseSessionComponent {
   val changeScopes: ChangeScopeObservations
   val activity: ActivityObservations
   val diffComments: DiffCommentObservations
+  val approvals: ApprovalObservations
+  val approvalGenerations: SessionApprovalGenerations
 
   @ContributesSubcomponent.Factory(AppScope::class)
   interface Factory {
@@ -230,9 +234,19 @@ class RuntimeSessionGraph internal constructor(val component: DatabaseSessionCom
     return component.signals.start()
   }
 
+  /** Ends every approval owner generation and operator registration of this session while its database is still usable. */
+  internal fun releaseApprovals() {
+    component.approvalGenerations.closeAll()
+    component.approvals.releaseAll()
+  }
+
   override fun release() {
-    component.purgeIdentity.clear()
-    component.runtime.databaseReadConnections.release()
+    try {
+      releaseApprovals()
+    } finally {
+      component.purgeIdentity.clear()
+      component.runtime.databaseReadConnections.release()
+    }
   }
 }
 

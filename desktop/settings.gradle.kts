@@ -5,6 +5,7 @@ includeBuild("../runtime-kotlin") {
     substitute(module("dev.skillbill:runtime-cli")).using(project(":runtime-cli"))
     substitute(module("dev.skillbill:runtime-core")).using(project(":runtime-core"))
     substitute(module("dev.skillbill:runtime-contracts")).using(project(":runtime-contracts"))
+    substitute(module("dev.skillbill:runtime-infra-launcher")).using(project(":runtime-infra:launcher"))
     substitute(module("dev.skillbill:runtime-infra-host")).using(project(":runtime-infra:host"))
     substitute(module("dev.skillbill:runtime-infra-contracts")).using(project(":runtime-infra:contracts"))
     substitute(module("dev.skillbill:runtime-infra-sqlite")).using(project(":runtime-infra:sqlite"))

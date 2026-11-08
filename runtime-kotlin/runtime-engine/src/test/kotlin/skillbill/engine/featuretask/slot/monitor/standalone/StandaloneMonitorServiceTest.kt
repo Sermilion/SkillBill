@@ -156,7 +156,7 @@ class StandaloneMonitorServiceTest {
         target.copy(
           identity = MonitorBranchIdentity(ACME, "main"),
           writability = MonitorWritability.REPORT_ONLY,
-          reportOnlyReason = "it is the repository's default branch",
+          reportOnlyReason = "it is protected",
         ),
       )
     branch.beginRepair(StandalonePendingRepair("CI failed", PUBLISHED))

@@ -57,7 +57,8 @@ private fun ChatMessage.replayLine(): ReplayLine? {
   val line = when (this) {
     is ChatMessage.Operator -> ReplayLine("Operator", savedText())
     is ChatMessage.Agent -> if (streaming) null else ReplayLine("Agent", text)
-    is ChatMessage.Notice, is ChatMessage.Error, is ChatMessage.StateLine -> null
+    is ChatMessage.Notice, is ChatMessage.Error, is ChatMessage.StateLine,
+    is ChatMessage.Approval, is ChatMessage.OperationCard -> null
   }
   return line?.takeIf { it.text.isNotBlank() }
 }

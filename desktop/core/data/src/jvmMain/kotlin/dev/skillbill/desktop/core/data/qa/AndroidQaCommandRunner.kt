@@ -52,6 +52,15 @@ internal class AndroidQaCommandRunner(
               true
             }
           }
+          is ChatProcessOutput.StdoutEnded -> {
+            if (event.stderrTail.isNotEmpty()) diagnostics.record("desktop_qa_command_stderr_observed")
+            if (event.readFailure != null) {
+              result = QaCommandResult(null, "", "command_output_unavailable")
+              false
+            } else {
+              true
+            }
+          }
           is ChatProcessOutput.Exited -> {
             if (event.stderrTail.isNotEmpty()) diagnostics.record("desktop_qa_command_stderr_observed")
             result = QaCommandResult(event.code, output.toString(StandardCharsets.UTF_8))

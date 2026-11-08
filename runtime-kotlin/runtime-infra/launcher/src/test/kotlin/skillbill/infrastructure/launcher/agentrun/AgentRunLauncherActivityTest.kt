@@ -40,7 +40,13 @@ class AgentRunLauncherActivityTest {
   @Test
   fun `launch facts expose provider-neutral child session path and id for codex and other builders`() {
     val runner = RecordingAgentRunProcessRunner()
-    val adapters = headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE, diagnostics = NoopRuntimeDiagnostics)
+    val adapters =
+      headlessAgentRunAdapters(
+        runner,
+        ALL_EXECUTABLES_AVAILABLE,
+        diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
+      )
     listOf(SupportedAgent.CODEX, SupportedAgent.CLAUDE, SupportedAgent.JUNIE, SupportedAgent.CURSOR).forEach { agent ->
       val facts = requireNotNull(adapters[agent]).launchFacts(skillRunRequest())
       assertEquals("/tmp/skillbill-agent-run", facts.childSessionPath, "session path for $agent")

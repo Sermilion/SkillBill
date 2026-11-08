@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -24,8 +25,13 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import dev.skillbill.desktop.core.designsystem.component.Callout
+import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
@@ -33,9 +39,11 @@ import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
 import dev.skillbill.desktop.core.designsystem.component.SbPopoverPlacement
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.feature.chat.AgentPicker
+import dev.skillbill.desktop.feature.chat.CursorMcpPicker
 import dev.skillbill.desktop.feature.chat.ChatActivityPill
 import dev.skillbill.desktop.feature.chat.ClipboardImageReader
 import dev.skillbill.desktop.feature.chat.ImageChip
@@ -74,6 +82,7 @@ internal fun NewTaskComposer(
   val stoppable = chat?.let { key(it) { it.thread.stoppable.collectAsState().value } } ?: false
   val queued = chat?.let { key(it) { it.thread.queued.collectAsState().value } }.orEmpty()
   val gate = remember(chat) { SendNowGate() }
+  val cursorMcpDependency = draft.cursorMcpDependency
   val offer by draft.offer.collectAsState()
   val ready = !offer.starting && draft.canSend()
   val sendNow = stoppable && queued.isNotEmpty() && draft.text.isBlank() && draft.images.isEmpty() && !offer.starting
@@ -87,6 +96,7 @@ internal fun NewTaskComposer(
   val saved by draft.saved.collectAsState()
   val submit = {
     val startsTurn = ready && !busy && draft.text.trim() != RESUME_COMMAND
+    draft.cursorMcpDependency = cursorMcpDependency
     onAction(NewTaskAction.Send)
     if (startsTurn) focusManager.clearFocus()
   }
@@ -141,6 +151,9 @@ internal fun NewTaskComposer(
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         RepositoryPicker(state, draft, chat, busy, offer.starting, focus, now, Modifier.weight(1f, fill = false), onAction)
         AgentPicker(state.agent, state.agents, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy) { onAction(NewTaskAction.ChooseAgent(it)) }
+        if (state.agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
+          CursorMcpPicker(cursorMcpDependency, enabled = pickersEnabled) { draft.cursorMcpDependency = it }
+        }
       }
       Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (stoppable) {
@@ -161,6 +174,15 @@ internal fun NewTaskComposer(
           size = SbControlSize.Small,
           enabled = ready || sendNow,
           shortcut = "↵",
+        )
+      }
+    }
+    state.agent?.approvalUnavailableReason?.let { reason ->
+      SelectionContainer {
+        Callout(
+          tone = FeedbackTone.Info,
+          body = reason,
+          modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
         )
       }
     }

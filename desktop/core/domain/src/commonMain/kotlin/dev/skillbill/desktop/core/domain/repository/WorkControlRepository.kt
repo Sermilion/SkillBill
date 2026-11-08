@@ -2,6 +2,9 @@ package dev.skillbill.desktop.core.domain.repository
 
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
+import dev.skillbill.desktop.core.domain.model.OperationCardDismissOutcome
+import dev.skillbill.desktop.core.domain.model.OperationCardView
+import dev.skillbill.desktop.core.domain.model.OperationCardLookup
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
 import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
 import dev.skillbill.desktop.core.domain.model.ExportOutcome
@@ -31,6 +34,16 @@ interface WorkControlRepository {
   suspend fun startGoal(repoRoot: String, issueKey: String, agentId: String?): ControlOutcome
 
   suspend fun startNewTask(request: NewTaskStart): NewTaskStartOutcome
+
+  /** The stored approval card of an operation launch, or null while none is stored. */
+  suspend fun operationCardForLaunch(launchId: String): OperationCardView?
+
+  /** The stored approval card for [token], read again to revalidate a card restored from history. */
+  suspend fun operationCard(token: String): OperationCardView?
+
+  suspend fun revalidateOperationCard(token: String): OperationCardLookup
+
+  suspend fun dismissOperationCard(token: String): OperationCardDismissOutcome
 
   suspend fun recoveryPreview(item: WorkItem, confirmedPrerequisites: Set<IncidentPrerequisite>): RecoveryPreviewOutcome
 

@@ -169,7 +169,7 @@ class PhaseStandaloneMonitorExecutionTest {
   }
 
   @Test
-  fun `a failing report-only branch blocks with every check link and never repairs or pushes`() {
+  fun `a failing protected branch blocks with every check link and never repairs or pushes`() {
     failingHeads += baseSha
 
     val result = run(intake = "branch:main")
@@ -177,7 +177,7 @@ class PhaseStandaloneMonitorExecutionTest {
     val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
     assertTrue(CHECK_URL in blocked.reason, blocked.reason)
     assertTrue(
-      "This branch is report-only because it is the repository's default branch, so no repair ran." in blocked.reason,
+      "This branch is report-only because it is protected, so no repair ran." in blocked.reason,
       blocked.reason,
     )
     assertEquals(emptyList(), repairCwds)

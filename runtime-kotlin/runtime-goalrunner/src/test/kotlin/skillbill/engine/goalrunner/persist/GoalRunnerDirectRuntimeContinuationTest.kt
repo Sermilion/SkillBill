@@ -11,6 +11,7 @@ import skillbill.engine.goalrunner.execution.core.testWorktreeEditJournalWriter
 import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.diagnostics.ChildFailureOutputStore
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.workflow.decomposition.withWorkflowId
@@ -144,6 +145,61 @@ class GoalRunnerDirectRuntimeContinuationTest {
       context.specPath,
     )
   }
+
+  @Test
+  fun `launch without a goal manifest is unowned and names the missing manifest`() {
+    val reconciler = reconciler(InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1)))
+
+    val launchRequest = reconciler.subtaskLaunchRequest(launchArgs(issueKey = "SKILL-57"))
+
+    assertNull(launchRequest.skillRunRequest.goalContinuation)
+    assertEquals(
+      AgentRunApprovalRequirement.Unowned("goal SKILL-57 has no manifest"),
+      launchRequest.skillRunRequest.approval,
+    )
+  }
+
+  @Test
+  fun `launch for a subtask without a spec path is unowned and names the missing spec path`() {
+    val base = manifest(subtaskCount = 1)
+    val reconciler =
+      reconciler(
+        InMemoryGoalManifestStore(manifest = base.copy(subtasks = base.subtasks.map { it.copy(specPath = "") })),
+      )
+
+    val launchRequest = reconciler.subtaskLaunchRequest(launchArgs(issueKey = "SKILL-56"))
+
+    assertNull(launchRequest.skillRunRequest.goalContinuation)
+    assertEquals(
+      AgentRunApprovalRequirement.Unowned("goal SKILL-56 subtask 1 has no spec path"),
+      launchRequest.skillRunRequest.approval,
+    )
+  }
+
+  private fun reconciler(store: InMemoryGoalManifestStore): GoalRunnerLaunchReconciler {
+    val outcomeStore = RecordingOutcomeStore()
+    return GoalRunnerLaunchReconciler(
+      manifestStore = store,
+      outcomeStore = outcomeStore,
+      progressReader = GoalRunnerProgressReader(outcomeStore),
+      activityStampWriter = testActivityStampWriter(),
+      worktreeEditJournalWriter = testWorktreeEditJournalWriter(),
+      clock = testHarnessClock,
+      diagnostics = NoopRuntimeDiagnostics,
+      projectStore = testProjectStore,
+      childFailureOutputStore = ChildFailureOutputStore { _, _, _ -> "test.log" },
+    )
+  }
+
+  private fun launchArgs(issueKey: String): SubtaskLaunchRequestArgs =
+    SubtaskLaunchRequestArgs(
+      issueKey = issueKey,
+      subtaskId = 1,
+      request = wiringRunRequest().copy(issueKey = issueKey),
+      assignedWorkflowId = null,
+      reviewBaseline = null,
+      spawnAuthorization = null,
+    )
 
   private fun wiringRunRequest(): GoalRunnerRunRequest =
     GoalRunnerRunRequest(

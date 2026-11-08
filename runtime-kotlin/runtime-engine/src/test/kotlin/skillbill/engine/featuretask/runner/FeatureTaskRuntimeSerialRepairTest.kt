@@ -269,8 +269,12 @@ class FeatureTaskRuntimeSerialRepairTest {
               }
             "audit_plan_fix", "audit_implement_fix" -> {
               assertEquals("AC-002", state?.currentCriterionRef)
-              if (phase == "audit_implement_fix") repaired = true
-              defaultPhaseOutput(request)
+              if (phase == "audit_implement_fix") {
+                repaired = true
+                completedRepairOutput(defaultPhaseOutput(request))
+              } else {
+                defaultPhaseOutput(request)
+              }
             }
             else -> defaultPhaseOutput(request)
           },
@@ -425,8 +429,12 @@ class FeatureTaskRuntimeSerialRepairTest {
                 assertContains(prompt, secondRejection)
                 repairPrompts += phase
               }
-              if (phase == "audit_implement_fix") repairs++
-              defaultPhaseOutput(request)
+              if (phase == "audit_implement_fix") {
+                repairs++
+                completedRepairOutput(defaultPhaseOutput(request))
+              } else {
+                defaultPhaseOutput(request)
+              }
             }
             else -> defaultPhaseOutput(request)
           },
@@ -861,83 +869,6 @@ class FeatureTaskRuntimeSerialRepairTest {
     }
   }
 
-  private fun runOwnedSerial(
-    harness: RunnerHarness,
-    action: (
-      AdmittedFeatureTaskRuntimeExecution,
-      AcquiredFeatureTaskRuntimeWorker,
-      AcceptanceCriterionRepairRunState,
-    ) -> Unit,
-  ) {
-    val persistence = serialPersistence(harness)
-    val admission =
-      ExecutionPlanAdmissionFixture(
-        database = harness.io.database,
-        selectedStrategies = harness.strategies,
-        specPath = harness.request().runInvariants.specReference,
-      )
-    val coordinator =
-      FeatureTaskRuntimeWorkerCoordinator(
-        harness.io.database,
-        NoopFeatureTaskRuntimeWorkerSupervisor,
-        testHarnessClock,
-        admission.admission,
-        NoopRuntimeDiagnostics,
-        absentDatabaseCheckpoint,
-      )
-    val inputs =
-      admission.creationResolver().resolveInputs(
-        harness.request().repoRoot,
-        admission.plan.qualityGateSelection,
-        admission.inputs.validationDepth,
-        null,
-        WORKFLOW_ID,
-      )
-    coordinator.runOwned(
-      WORKFLOW_ID,
-      inputs,
-      admission.identity(WORKFLOW_ID, harness.request().issueKey),
-    ) { admitted, worker ->
-      val hydration =
-        persistence.inspectExisting(
-          worker,
-          harness.request().runInvariants.acceptanceCriteria,
-          "a".repeat(64),
-        )
-      val criteria = harness.request().runInvariants.acceptanceCriteria
-      val scope =
-        AcceptanceCriterionRepairRunState(
-          hydration,
-          AcceptanceCriterionRepairBinding(
-            sha256Hex(JsonCodec.valueToJsonString(criteria)),
-            worker.workflowId,
-            "a".repeat(64),
-            criteria,
-          ),
-        )
-      action(admitted, worker, scope)
-    }
-  }
-
-  private fun continuingAuditOutput(
-    state: AcceptanceCriterionRepairState?,
-    audits: Int,
-  ): String =
-    when {
-      state == null -> serialDiscoveryOutput()
-      state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
-        serialStructuredAuditOutput(audits, state, "The complete production repair is present.")
-      state.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED ->
-        auditRemainingAcOutput(
-          state.interactionTrace.pendingRechecks.joinToString("\n") { "Recheck $it: holds evidence src/Foo.kt:1" },
-        ).replace("\"status\": \"completed\",", "\"status\": \"completed\", \"verdict\": \"satisfied\",")
-      else ->
-        auditRemainingAcOutput("Open criteria: AC-001").replace(
-          "\"status\": \"completed\",",
-          "\"status\": \"completed\", \"verdict\": \"advance\",",
-        )
-    }
-
   private fun budgetVerificationOutput(
     audit: Int,
     state: AcceptanceCriterionRepairState,
@@ -1032,7 +963,7 @@ class FeatureTaskRuntimeSerialRepairTest {
           }""",
             )
           } else {
-            facts(defaultPhaseOutput(request))
+            facts(completedRepairOutput(defaultPhaseOutput(request)))
           }
         }
         "validate" ->
@@ -1044,173 +975,256 @@ class FeatureTaskRuntimeSerialRepairTest {
     }
   }
 
-  private fun serialDiscoveryOutput(): String {
-    val authored = listOf("AC-1", "AC-2")
-    val specDigest = "a".repeat(64)
-    val audit =
-      mapOf(
-        SharedPayloadKeys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION,
-        Keys.MODE to AcceptanceCriterionRepairMode.INITIAL_DISCOVERY.wireValue,
-        Keys.CATALOG_ID to sha256Hex(JsonCodec.valueToJsonString(authored)),
-        Keys.SPEC_DIGEST to specDigest,
-        Keys.EXECUTION_ID to WORKFLOW_ID,
-        Keys.TREE_DIGEST to "d".repeat(64),
-        Keys.CHECKPOINT_ID to "checkpoint:1",
-        Keys.PRODUCING_OUTPUT_ID to "audit:discovery",
-        Keys.PRODUCING_OUTPUT_DIGEST to "e".repeat(64),
-        Keys.EXPECTED_REVISION to null,
-        Keys.CURRENT_CRITERION_REF to null,
-        Keys.RESERVATION_ID to null,
-        Keys.CRITERIA to
-          authored.mapIndexed { index, _ ->
-            mapOf(
-              Keys.CANONICAL_REF to "AC-%03d".format(index + 1),
-              Keys.SOURCE_DISPOSITION to AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED.wireValue,
-              Keys.VALIDATION_OBLIGATION to AcceptanceCriterionValidationObligation.DEFERRED.wireValue,
-              Keys.VALIDATION_OWNER_AVAILABLE to true,
-              Keys.EVIDENCE_REF to specDigest,
-            )
-          },
-        Keys.DEPENDENCIES to emptyList<Any>(),
-        Keys.REGRESSED_REFS to emptyList<String>(),
-        Keys.EDGE_CHANGES to emptyList<Any>(),
-        Keys.INTERACTIONS to emptyList<Any>(),
-        Keys.RECHECKS to emptyList<Any>(),
-      )
-    return JsonCodec.mapToJsonString(
-      mapOf(
-        SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
-        SharedPayloadKeys.PHASE_ID to "audit",
-        SharedPayloadKeys.STATUS to "completed",
-        SharedPayloadKeys.SUMMARY to "Initial structured acceptance audit.",
-        SharedPayloadKeys.VERDICT to "advance",
-        SharedPayloadKeys.PRODUCED_OUTPUTS to
-          mapOf(
-            SharedPayloadKeys.VALUE to "Initial structured acceptance audit.",
-            Keys.ACCEPTANCE_CRITERION_AUDIT_RESULT to audit,
-          ),
-      ),
+  private fun completedRepairOutput(output: String): String =
+    output.replace(
+      "\"status\": \"completed\",",
+      "\"status\": \"completed\", \"verdict\": \"completed\",",
     )
-  }
+}
 
-  private fun serialStructuredAuditOutput(
-    attempt: Int,
-    state: AcceptanceCriterionRepairState?,
-    prose: String,
-  ): String {
-    val current = assertNotNull(state)
-    val tree = current.admittedTreeDigest ?: sha256Hex("unchanged-source")
-    val checkpoint = current.admittedCheckpointId ?: "unchanged-source"
-    val ref = "$WORKFLOW_ID:audit:$attempt:${current.revision}"
-    val digest = sha256Hex("$WORKFLOW_ID:audit:$attempt:${current.revision}:$prose:$tree")
-    val targeted = current.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION
-    val selected =
-      if (targeted) {
-        current.criteria.filter { it.canonicalRef == current.currentCriterionRef }
-      } else {
-        current.criteria.filter { it.sourceDisposition != AcceptanceCriterionSourceDisposition.NOT_APPLICABLE }
-      }
-    val mode =
-      if (targeted) {
-        AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED
-      } else {
-        AcceptanceCriterionRepairMode.INITIAL_DISCOVERY
-      }
-    val auditResult =
-      mapOf(
-        SharedPayloadKeys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION,
-        Keys.MODE to mode.wireValue,
-        Keys.CATALOG_ID to current.catalogId,
-        Keys.SPEC_DIGEST to current.specDigest,
-        Keys.EXECUTION_ID to current.executionId,
-        Keys.TREE_DIGEST to tree,
-        Keys.CHECKPOINT_ID to checkpoint,
-        Keys.PRODUCING_OUTPUT_ID to ref,
-        Keys.PRODUCING_OUTPUT_DIGEST to digest,
-        Keys.EXPECTED_REVISION to current.revision.takeIf { targeted },
-        Keys.CURRENT_CRITERION_REF to current.currentCriterionRef.takeIf { targeted },
-        Keys.RESERVATION_ID to current.reservation?.reservationId.takeIf { targeted },
-        Keys.CRITERIA to selected.map { criterionFact(it, targeted, prose) },
-        Keys.DEPENDENCIES to current.asRepairWireMap()[Keys.DEPENDENCIES],
-        Keys.REGRESSED_REFS to emptyList<String>(),
-        Keys.EDGE_CHANGES to emptyList<Any>(),
-        Keys.INTERACTIONS to emptyList<Any>(),
-        Keys.RECHECKS to emptyList<Any>(),
-      )
-    return JsonCodec.mapToJsonString(
-      mapOf(
-        SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
-        SharedPayloadKeys.PHASE_ID to "audit",
-        SharedPayloadKeys.STATUS to "completed",
-        SharedPayloadKeys.SUMMARY to "Structured acceptance audit.",
-        SharedPayloadKeys.VERDICT to "satisfied",
-        SharedPayloadKeys.PRODUCED_OUTPUTS to
-          mapOf(
-            SharedPayloadKeys.VALUE to prose,
-            Keys.ACCEPTANCE_CRITERION_AUDIT_RESULT to auditResult,
-          ),
-      ),
+internal fun runOwnedSerial(
+  harness: RunnerHarness,
+  action: (
+    AdmittedFeatureTaskRuntimeExecution,
+    AcquiredFeatureTaskRuntimeWorker,
+    AcceptanceCriterionRepairRunState,
+  ) -> Unit,
+) {
+  val persistence = serialPersistence(harness)
+  val admission =
+    ExecutionPlanAdmissionFixture(
+      database = harness.io.database,
+      selectedStrategies = harness.strategies,
+      specPath = harness.request().runInvariants.specReference,
     )
-  }
-
-  private fun criterionFact(
-    criterion: AcceptanceCriterionRepairCriterion,
-    targeted: Boolean,
-    prose: String,
-  ): Map<String, Any?> {
-    val disposition = if (targeted) AcceptanceCriterionSourceDisposition.SOURCE_CLOSED else criterion.sourceDisposition
-    return mapOf(
-      Keys.CANONICAL_REF to criterion.canonicalRef,
-      Keys.SOURCE_DISPOSITION to disposition.wireValue,
-      Keys.VALIDATION_OBLIGATION to criterion.validationObligation.wireValue,
-      Keys.VALIDATION_OWNER_AVAILABLE to criterion.validationOwnerAvailable,
-      Keys.EVIDENCE_REF to prose,
-    )
-  }
-
-  private fun serialPersistence(harness: RunnerHarness): AcceptanceCriterionRepairPersistence {
-    val database = harness.io.database
-    val boundary = RuntimeOwnedPersistenceBoundary(database, NoopRuntimeDiagnostics)
-    val validator = featureTaskRuntimeWireArtifactValidatorForTest()
-    val execution = ExecutionPlanAdmissionFixture()
-    val source =
-      object : FeatureTaskRuntimeRunInvariantsSource {
-        override fun read(specPath: Path) =
-          FeatureTaskRuntimeRunInvariantsRead.Read(harness.request().runInvariants, "a".repeat(64))
-      }
-    val persistence =
-      FeatureTaskRuntimeWorkflowPersistence(
-        database,
-        NoopWorkflowSnapshotValidator,
-        validator,
-      )
-    return AcceptanceCriterionRepairPersistence(
-      boundary,
-      persistence,
-      FeatureTaskRuntimePhaseStateRecorder(
-        database,
-        persistence,
-        boundary,
-        validator,
-        harnessPhaseSettlement(),
-        testHarnessClock,
-      ),
-      validator,
-      object : AcceptanceCriterionRepairProjection {
-        override fun write(request: AcceptanceCriterionRepairProjectionRequest) = Unit
-      },
-      NoopRuntimeDiagnostics,
+  val coordinator =
+    FeatureTaskRuntimeWorkerCoordinator(
+      harness.io.database,
+      NoopFeatureTaskRuntimeWorkerSupervisor,
       testHarnessClock,
-      AcceptanceCriterionRepairLegacyAdoption(
-        execution.codec,
-        execution.compatibility,
-        ContractFeatureTaskRuntimePhaseOutputMigration(),
-        harness.gitOperations,
-        source,
-        RUNNER_TEST_PROJECT_STORE,
-        SqliteWorkflowArtifactWireEncoder(),
-      ),
-      AcceptanceCriterionRepairAuditAdmission(validator),
+      admission.admission,
+      NoopRuntimeDiagnostics,
+      absentDatabaseCheckpoint,
     )
+  val inputs =
+    admission.creationResolver().resolveInputs(
+      harness.request().repoRoot,
+      admission.plan.qualityGateSelection,
+      admission.inputs.validationDepth,
+      null,
+      WORKFLOW_ID,
+    )
+  coordinator.runOwned(
+    WORKFLOW_ID,
+    inputs,
+    admission.identity(WORKFLOW_ID, harness.request().issueKey),
+  ) { admitted, worker ->
+    val hydration =
+      persistence.inspectExisting(
+        worker,
+        harness.request().runInvariants.acceptanceCriteria,
+        "a".repeat(64),
+      )
+    val criteria = harness.request().runInvariants.acceptanceCriteria
+    val scope =
+      AcceptanceCriterionRepairRunState(
+        hydration,
+        AcceptanceCriterionRepairBinding(
+          sha256Hex(JsonCodec.valueToJsonString(criteria)),
+          worker.workflowId,
+          "a".repeat(64),
+          criteria,
+        ),
+      )
+    action(admitted, worker, scope)
   }
+}
+
+internal fun continuingAuditOutput(
+  state: AcceptanceCriterionRepairState?,
+  audits: Int,
+): String =
+  when {
+    state == null -> serialDiscoveryOutput()
+    state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
+      serialStructuredAuditOutput(audits, state, "The complete production repair is present.")
+    state.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED ->
+      auditRemainingAcOutput(
+        state.interactionTrace.pendingRechecks.joinToString("\n") { "Recheck $it: holds evidence src/Foo.kt:1" },
+      ).replace("\"status\": \"completed\",", "\"status\": \"completed\", \"verdict\": \"satisfied\",")
+    else ->
+      auditRemainingAcOutput("Open criteria: AC-001").replace(
+        "\"status\": \"completed\",",
+        "\"status\": \"completed\", \"verdict\": \"advance\",",
+      )
+  }
+
+internal fun serialDiscoveryOutput(): String {
+  val authored = listOf("AC-1", "AC-2")
+  val specDigest = "a".repeat(64)
+  val audit =
+    mapOf(
+      SharedPayloadKeys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION,
+      Keys.MODE to AcceptanceCriterionRepairMode.INITIAL_DISCOVERY.wireValue,
+      Keys.CATALOG_ID to sha256Hex(JsonCodec.valueToJsonString(authored)),
+      Keys.SPEC_DIGEST to specDigest,
+      Keys.EXECUTION_ID to WORKFLOW_ID,
+      Keys.TREE_DIGEST to "d".repeat(64),
+      Keys.CHECKPOINT_ID to "checkpoint:1",
+      Keys.PRODUCING_OUTPUT_ID to "audit:discovery",
+      Keys.PRODUCING_OUTPUT_DIGEST to "e".repeat(64),
+      Keys.EXPECTED_REVISION to null,
+      Keys.CURRENT_CRITERION_REF to null,
+      Keys.RESERVATION_ID to null,
+      Keys.CRITERIA to
+        authored.mapIndexed { index, _ ->
+          mapOf(
+            Keys.CANONICAL_REF to "AC-%03d".format(index + 1),
+            Keys.SOURCE_DISPOSITION to AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED.wireValue,
+            Keys.VALIDATION_OBLIGATION to AcceptanceCriterionValidationObligation.DEFERRED.wireValue,
+            Keys.VALIDATION_OWNER_AVAILABLE to true,
+            Keys.EVIDENCE_REF to specDigest,
+          )
+        },
+      Keys.DEPENDENCIES to emptyList<Any>(),
+      Keys.REGRESSED_REFS to emptyList<String>(),
+      Keys.EDGE_CHANGES to emptyList<Any>(),
+      Keys.INTERACTIONS to emptyList<Any>(),
+      Keys.RECHECKS to emptyList<Any>(),
+    )
+  return JsonCodec.mapToJsonString(
+    mapOf(
+      SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+      SharedPayloadKeys.PHASE_ID to "audit",
+      SharedPayloadKeys.STATUS to "completed",
+      SharedPayloadKeys.SUMMARY to "Initial structured acceptance audit.",
+      SharedPayloadKeys.VERDICT to "advance",
+      SharedPayloadKeys.PRODUCED_OUTPUTS to
+        mapOf(
+          SharedPayloadKeys.VALUE to "Initial structured acceptance audit.",
+          Keys.ACCEPTANCE_CRITERION_AUDIT_RESULT to audit,
+        ),
+    ),
+  )
+}
+
+internal fun serialStructuredAuditOutput(
+  attempt: Int,
+  state: AcceptanceCriterionRepairState?,
+  prose: String,
+): String {
+  val current = assertNotNull(state)
+  val tree = current.admittedTreeDigest ?: sha256Hex("unchanged-source")
+  val checkpoint = current.admittedCheckpointId ?: "unchanged-source"
+  val ref = "$WORKFLOW_ID:audit:$attempt:${current.revision}"
+  val digest = sha256Hex("$WORKFLOW_ID:audit:$attempt:${current.revision}:$prose:$tree")
+  val targeted = current.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION
+  val selected =
+    if (targeted) {
+      current.criteria.filter { it.canonicalRef == current.currentCriterionRef }
+    } else {
+      current.criteria.filter { it.sourceDisposition != AcceptanceCriterionSourceDisposition.NOT_APPLICABLE }
+    }
+  val mode =
+    if (targeted) {
+      AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED
+    } else {
+      AcceptanceCriterionRepairMode.INITIAL_DISCOVERY
+    }
+  val auditResult =
+    mapOf(
+      SharedPayloadKeys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION,
+      Keys.MODE to mode.wireValue,
+      Keys.CATALOG_ID to current.catalogId,
+      Keys.SPEC_DIGEST to current.specDigest,
+      Keys.EXECUTION_ID to current.executionId,
+      Keys.TREE_DIGEST to tree,
+      Keys.CHECKPOINT_ID to checkpoint,
+      Keys.PRODUCING_OUTPUT_ID to ref,
+      Keys.PRODUCING_OUTPUT_DIGEST to digest,
+      Keys.EXPECTED_REVISION to current.revision.takeIf { targeted },
+      Keys.CURRENT_CRITERION_REF to current.currentCriterionRef.takeIf { targeted },
+      Keys.RESERVATION_ID to current.reservation?.reservationId.takeIf { targeted },
+      Keys.CRITERIA to selected.map { criterionFact(it, targeted, prose) },
+      Keys.DEPENDENCIES to current.asRepairWireMap()[Keys.DEPENDENCIES],
+      Keys.REGRESSED_REFS to emptyList<String>(),
+      Keys.EDGE_CHANGES to emptyList<Any>(),
+      Keys.INTERACTIONS to emptyList<Any>(),
+      Keys.RECHECKS to emptyList<Any>(),
+    )
+  return JsonCodec.mapToJsonString(
+    mapOf(
+      SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+      SharedPayloadKeys.PHASE_ID to "audit",
+      SharedPayloadKeys.STATUS to "completed",
+      SharedPayloadKeys.SUMMARY to "Structured acceptance audit.",
+      SharedPayloadKeys.VERDICT to "satisfied",
+      SharedPayloadKeys.PRODUCED_OUTPUTS to
+        mapOf(
+          SharedPayloadKeys.VALUE to prose,
+          Keys.ACCEPTANCE_CRITERION_AUDIT_RESULT to auditResult,
+        ),
+    ),
+  )
+}
+
+private fun criterionFact(
+  criterion: AcceptanceCriterionRepairCriterion,
+  targeted: Boolean,
+  prose: String,
+): Map<String, Any?> {
+  val disposition = if (targeted) AcceptanceCriterionSourceDisposition.SOURCE_CLOSED else criterion.sourceDisposition
+  return mapOf(
+    Keys.CANONICAL_REF to criterion.canonicalRef,
+    Keys.SOURCE_DISPOSITION to disposition.wireValue,
+    Keys.VALIDATION_OBLIGATION to criterion.validationObligation.wireValue,
+    Keys.VALIDATION_OWNER_AVAILABLE to criterion.validationOwnerAvailable,
+    Keys.EVIDENCE_REF to prose,
+  )
+}
+
+private fun serialPersistence(harness: RunnerHarness): AcceptanceCriterionRepairPersistence {
+  val database = harness.io.database
+  val boundary = RuntimeOwnedPersistenceBoundary(database, NoopRuntimeDiagnostics)
+  val validator = featureTaskRuntimeWireArtifactValidatorForTest()
+  val execution = ExecutionPlanAdmissionFixture()
+  val source =
+    object : FeatureTaskRuntimeRunInvariantsSource {
+      override fun read(specPath: Path) =
+        FeatureTaskRuntimeRunInvariantsRead.Read(harness.request().runInvariants, "a".repeat(64))
+    }
+  val persistence =
+    FeatureTaskRuntimeWorkflowPersistence(
+      database,
+      NoopWorkflowSnapshotValidator,
+      validator,
+    )
+  return AcceptanceCriterionRepairPersistence(
+    boundary,
+    persistence,
+    FeatureTaskRuntimePhaseStateRecorder(
+      database,
+      persistence,
+      boundary,
+      validator,
+      harnessPhaseSettlement(),
+      testHarnessClock,
+    ),
+    validator,
+    object : AcceptanceCriterionRepairProjection {
+      override fun write(request: AcceptanceCriterionRepairProjectionRequest) = Unit
+    },
+    NoopRuntimeDiagnostics,
+    testHarnessClock,
+    AcceptanceCriterionRepairLegacyAdoption(
+      execution.codec,
+      execution.compatibility,
+      ContractFeatureTaskRuntimePhaseOutputMigration(),
+      harness.gitOperations,
+      source,
+      RUNNER_TEST_PROJECT_STORE,
+      SqliteWorkflowArtifactWireEncoder(),
+    ),
+    AcceptanceCriterionRepairAuditAdmission(validator),
+  )
 }
