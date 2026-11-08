@@ -44,6 +44,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -213,6 +214,42 @@ class ProviderUsageRepositoryTest {
     assertEquals("/profile/two", status.profile.configurationReference)
     assertEquals(RequestPermission.Allowed, status.permission)
     assertEquals(true, status.warning)
+  }
+
+  @Test
+  fun `profile observation follows bindings and falls back to current settings`() = runTest {
+    val profiles = UsageProfileResolver(HostEnvironment(emptyMap(), "/home/operator", ""))
+    val settings = FakeAppSettingsRepository()
+    settings.setClaudeConfigDir("/settings/a")
+    val repository = ProviderUsageRepository(profiles, settings, unusedCodexReader, ApplicationCoroutineScope(backgroundScope), fixedClock)
+    val observed = mutableListOf<UsageProfileLookup>()
+    val observer = backgroundScope.launch {
+      repository.observeProfileLookup(UsageProvider.Claude, null, "logical-session").collect { observed += it }
+    }
+    try {
+      runCurrent()
+      assertEquals("/settings/a", observed.last().configurationReference)
+
+      repository.bindSession("logical-session", UsageProfileLookup(UsageProvider.Claude, "/process/a", 1), 10)
+      runCurrent()
+      assertEquals("/process/a", observed.last().configurationReference)
+
+      settings.setClaudeConfigDir("/settings/b")
+      runCurrent()
+      assertEquals("/process/a", observed.last().configurationReference)
+
+      repository.bindSession("logical-session", UsageProfileLookup(UsageProvider.Claude, "/process/b", 2), 11)
+      repository.revokeSession("logical-session", 10)
+      runCurrent()
+      assertEquals("/process/b", observed.last().configurationReference)
+
+      repository.closeUsage()
+      runCurrent()
+      assertEquals("/settings/b", observed.last().configurationReference)
+    } finally {
+      observer.cancelAndJoin()
+      repository.closeUsage()
+    }
   }
 
   private companion object {

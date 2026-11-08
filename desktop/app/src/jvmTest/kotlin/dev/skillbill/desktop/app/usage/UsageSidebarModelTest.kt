@@ -151,7 +151,9 @@ class UsageSidebarModelTest {
   fun `late profile lookup cannot publish after a database switch`() = runTest {
     val fixture = Fixture(this)
     val lookup = CompletableDeferred<UsageProfileLookup>()
-    fixture.usage.lookup = { withContext(NonCancellable) { lookup.await() } }
+    fixture.usage.profileObservations = {
+      flow { emit(withContext(NonCancellable) { lookup.await() }) }
+    }
     runCurrent()
 
     fixture.session.state.value = DatabaseSessionState.Open("/other-db", 2)
@@ -162,6 +164,23 @@ class UsageSidebarModelTest {
     assertNull(fixture.model.view.value.provider)
     assertTrue(fixture.usage.demands.isEmpty())
     assertTrue(fixture.usage.acquired.isEmpty())
+  }
+
+  @Test
+  fun `live profile changes replace demand without context reselection`() = runTest {
+    val fixture = Fixture(this)
+    val profile = MutableStateFlow(UsageProfileLookup(UsageProvider.Claude, "/home/a", 1))
+    fixture.usage.profileObservations = { profile }
+    fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(
+      1, ChatAgent("claude", null, null), "chat-session", false,
+    )
+    runCurrent()
+    val originalLease = fixture.usage.leases.values.single()
+    profile.value = UsageProfileLookup(UsageProvider.Claude, "/home/b", 2)
+    runCurrent()
+
+    assertEquals("/home/b", fixture.usage.demands.values.single().request.profile.configurationReference)
+    assertTrue(originalLease !in fixture.usage.leases.values)
   }
 
   private class Fixture(test: TestScope) {
@@ -211,9 +230,14 @@ private class TestUsageRepository : UsageRepository {
   val reason = UsageUnavailableReason(UsageUnavailableCode.ProviderUnavailable)
   val result = UsageResult.Unavailable(reason)
   var lookup: suspend (UsageProvider) -> UsageProfileLookup = { UsageProfileLookup(it, null, 1) }
+  var profileObservations: (UsageProvider) -> Flow<UsageProfileLookup> = { provider ->
+    flow { emit(lookup(provider)) }
+  }
   var observations: () -> Flow<UsageResult> = { MutableStateFlow(result) }
 
   override suspend fun profileLookup(provider: UsageProvider, selectedProfile: String?, logicalSessionId: String?) = lookup(provider)
+  override fun observeProfileLookup(provider: UsageProvider, selectedProfile: String?, logicalSessionId: String?) =
+    profileObservations(provider)
   override fun observe(request: UsageRequest) = observations()
   override fun observeDemand(ownerId: String) = observations()
   override fun acquireDemand(demand: UsageDemand): UsageDemandResult {

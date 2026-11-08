@@ -46,6 +46,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
@@ -107,6 +108,7 @@ class ProviderUsageRepository(
   private val profileResults = MutableStateFlow<Map<UsageProfileLookup, UsageResult>>(emptyMap())
   private val leaseReferences = mutableMapOf<String, MutableSet<Pair<Acquisition, String>>>()
   private val bindings = mutableMapOf<String, LiveBinding>()
+  private val bindingProfiles = MutableStateFlow<Map<String, UsageProfileLookup>>(emptyMap())
   private val statuses = MutableStateFlow<Map<String, UsageSessionStatus.Observed>>(emptyMap())
   private val demands = mutableMapOf<String, UsageDemand>()
   private val demandSnapshots = MutableStateFlow<Map<String, UsageDemand>>(emptyMap())
@@ -149,6 +151,7 @@ class ProviderUsageRepository(
     }
     synchronized(sessionLock) {
       bindings.clear()
+      bindingProfiles.value = emptyMap()
       statuses.value = emptyMap()
     }
     usageJob.cancel()
@@ -159,6 +162,21 @@ class ProviderUsageRepository(
       synchronized(sessionLock) { bindings[logicalSessionId]?.profile }?.let { return it }
     }
     return profileFor(provider, selectedProfile ?: if (provider == UsageProvider.Claude) settings.settings.first().claudeConfigDir else null).lookup
+  }
+
+  override fun observeProfileLookup(
+    provider: UsageProvider,
+    selectedProfile: String?,
+    logicalSessionId: String?,
+  ): Flow<UsageProfileLookup> = when {
+    provider == UsageProvider.Claude && selectedProfile == null && logicalSessionId != null ->
+      combine(settings.settings, bindingProfiles) { currentSettings, currentBindings ->
+        currentBindings[logicalSessionId]
+          ?: profileFor(provider, currentSettings.claudeConfigDir).lookup
+      }.distinctUntilChanged()
+    provider == UsageProvider.Claude && selectedProfile == null ->
+      settings.settings.map { profileFor(provider, it.claudeConfigDir).lookup }.distinctUntilChanged()
+    else -> flow { emit(profileFor(provider, selectedProfile).lookup) }
   }
 
   override fun observe(request: UsageRequest): Flow<UsageResult> = observeRequest(request, null)
@@ -705,6 +723,7 @@ class ProviderUsageRepository(
     synchronized(sessionLock) {
       if (closed.get()) return
       bindings[logicalSessionId] = LiveBinding(profile, processGeneration)
+      bindingProfiles.value = bindingProfiles.value + (logicalSessionId to profile)
       statuses.value = statuses.value - logicalSessionId
     }
   }
@@ -735,6 +754,7 @@ class ProviderUsageRepository(
       val binding = bindings[logicalSessionId] ?: return
       if (binding.processGeneration != processGeneration) return
       bindings.remove(logicalSessionId)
+      bindingProfiles.value = bindingProfiles.value - logicalSessionId
       statuses.value = statuses.value - logicalSessionId
     }
   }

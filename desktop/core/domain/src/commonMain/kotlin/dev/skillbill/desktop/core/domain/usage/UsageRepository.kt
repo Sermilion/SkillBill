@@ -20,6 +20,12 @@ interface UsageRepository {
     logicalSessionId: String? = null,
   ): UsageProfileLookup
 
+  fun observeProfileLookup(
+    provider: UsageProvider,
+    selectedProfile: String?,
+    logicalSessionId: String? = null,
+  ): Flow<UsageProfileLookup>
+
   fun observe(request: UsageRequest): Flow<UsageResult>
 
   fun observeDemand(ownerId: String): Flow<UsageResult>

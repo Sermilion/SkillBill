@@ -90,8 +90,10 @@ class UsageSidebarModel(
   private var manualAgentId = "codex"
   private var request: UsageRequest? = null
   private var demandJob: Job? = null
+  private var profileJob: Job? = null
   private var presentationTimeJob: Job? = null
   private var demandGeneration = 0L
+  private var profileContextGeneration = 0L
   private var popupToken = 0L
   private var routeGeneration = 0L
   private var routeEntry: RouteEntry? = null
@@ -233,7 +235,7 @@ class UsageSidebarModel(
           it.options == context.options && it.fallback == context.fallback && it.label == context.label
       } == true
       previous = context
-      if (sameSource && request != null) {
+      if (sameSource && (request != null || profileJob?.isActive == true)) {
         state.value = state.value.copy(active = context.header.running)
         reconcileDemand()
         return@collectLatest
@@ -250,7 +252,8 @@ class UsageSidebarModel(
     var previous: SelectedNewTaskUsageContext.Ready? = null
     chat.selectedNewTaskUsageContext.collectLatest { selected ->
       if (!isCurrentRoute(expectedRouteGeneration)) return@collectLatest
-      if (selected is SelectedNewTaskUsageContext.Ready && previous?.copy(activeWork = selected.activeWork) == selected && request != null) {
+      if (selected is SelectedNewTaskUsageContext.Ready && previous?.copy(activeWork = selected.activeWork) == selected &&
+        (request != null || profileJob?.isActive == true)) {
         state.value = state.value.copy(active = selected.activeWork)
         reconcileDemand()
         return@collectLatest
@@ -322,7 +325,10 @@ class UsageSidebarModel(
   ) {
     if (!isCurrentRoute(expectedRouteGeneration) || expectedManualChoiceGeneration?.let { it != manualChoiceGeneration } == true) return
     val contextGeneration = ++demandGeneration
+    val profileContext = ++profileContextGeneration
     val contextPopupToken = ++popupToken
+    profileJob?.cancel()
+    profileJob = null
     stopDemand()
     request = null
     val contextState = UsageSidebarState(
@@ -344,35 +350,47 @@ class UsageSidebarModel(
         if (agent == null) label else null,
       )
     }
-    val profile = try {
-      usage.profileLookup(provider, agent.profile, logicalSessionId)
-    } catch (cancelled: CancellationException) {
-      throw cancelled
-    } catch (_: Exception) {
-      diagnostics.record("usage_context_profile_lookup_failed")
-      if (contextGeneration == demandGeneration && isCurrentRoute(expectedRouteGeneration) && expectedManualChoiceGeneration?.let { it != manualChoiceGeneration } != true) {
-        stopDemand()
-        request = null
-        state.value = contextState.copy(
-          provider = provider,
-          unavailableReason = "The provider profile is unavailable",
-          popupDismissalToken = popupToken,
-        )
-      }
-      return
-    }
-    if (contextGeneration != demandGeneration || !isCurrentRoute(expectedRouteGeneration) || expectedManualChoiceGeneration?.let { it != manualChoiceGeneration } == true) return
     val model = agent.model?.takeIf { modelIsActual }?.let { UsageModelSelection(it, ModelSelectionProvenance.ActualExecution) }
-    request = UsageRequest(profile, logicalSessionId, model)
-    state.value = contextState.copy(
-      provider = provider,
-      popupDismissalToken = popupToken,
-      demandEligible = eligible(),
-    )
-    reconcileDemand()
+    state.value = contextState.copy(provider = provider, demandEligible = false)
+    profileJob = scope.launch {
+      try {
+        usage.observeProfileLookup(provider, agent.profile, logicalSessionId).collect { profile ->
+          if (profileContext != profileContextGeneration || !isCurrentRoute(expectedRouteGeneration) ||
+            expectedManualChoiceGeneration?.let { it != manualChoiceGeneration } == true) return@collect
+          val next = UsageRequest(profile, logicalSessionId, model)
+          if (request == next) return@collect
+          if (contextGeneration != demandGeneration && request == null) return@collect
+          stopDemand()
+          request = next
+          state.value = state.value.copy(
+            result = null,
+            unavailableReason = null,
+            demandEligible = eligible(),
+          )
+          reconcileDemand()
+        }
+      } catch (cancelled: CancellationException) {
+        throw cancelled
+      } catch (_: Exception) {
+        diagnostics.record("usage_context_profile_lookup_failed")
+        if (profileContext == profileContextGeneration && isCurrentRoute(expectedRouteGeneration) &&
+          expectedManualChoiceGeneration?.let { it != manualChoiceGeneration } != true) {
+          stopDemand()
+          request = null
+          state.value = state.value.copy(
+            result = null,
+            unavailableReason = "The provider profile is unavailable",
+            demandEligible = false,
+          )
+        }
+      }
+    }
   }
 
   private fun replaceContext(contextual: Boolean = false, reason: String? = null, label: String? = null) {
+    ++profileContextGeneration
+    profileJob?.cancel()
+    profileJob = null
     stopDemand()
     request = null
     ++demandGeneration
