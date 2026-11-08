@@ -39,7 +39,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ToastStack
 import dev.skillbill.desktop.core.designsystem.navigation.LocalSidebarToggle
 import dev.skillbill.desktop.core.domain.model.ChangeScope
-import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import dev.skillbill.desktop.core.ui.changes.ChangesWindows
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
@@ -91,7 +91,7 @@ fun ApplicationScope.MainWindow(
   visible: Boolean,
   focusRequest: Int,
   changes: ChangesWindows,
-  createChangesViewModel: (WorkItem, ChangeScope) -> ChangesWindowViewModel,
+  createChangesViewModel: (ChangesSource, ChangeScope, String?) -> ChangesWindowViewModel,
   onCloseRequest: () -> Unit,
 ) {
   DisposableEffect(window) {
@@ -188,7 +188,7 @@ fun ApplicationScope.MainWindow(
               CommandMenu(window)
               if (panes.shortcutsOpen) ShortcutSheet { panes.shortcutsOpen = false }
               changesEntry?.let { entry ->
-                key(entry.item.id) { ChangesOverlay(entry, changesKeys, createChangesViewModel, changes::close) }
+                key(entry.source.id) { ChangesOverlay(entry, changesKeys, createChangesViewModel, changes::close) }
               }
               ToastStack(window.toasts.host)
             }

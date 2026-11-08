@@ -1,3 +1,17 @@
+## [2026-11-08] SKILL-528 chat changes indicator
+Areas: desktop/feature/chat/newtask, desktop/core/domain, desktop/core/data, desktop/core/testing, desktop/core/designsystem, runtime-kotlin/runtime-ports, runtime-kotlin/runtime-infra/workflow, runtime-kotlin/runtime-core
+- New Task captures HEAD, pre-existing untracked paths, an optional unreferenced stash SHA and capture time before its first agent turn. Saved drafts retain the baseline and capture-attempt state; older started chats load without a baseline, and malformed baseline data records a diagnostic without losing the transcript.
+- Same-repository agent rebinds keep the original baseline and attempt state. Repository switches drop them. Failed capture is not retried after chat work starts.
+- reusable: WorkTreeSnapshotPort and GitWorkTreeSnapshotAdapter capture without moving refs; WorkChangesPort remains read-only. ChatChangesRepository and ChatChangeReads combine baseline diffs, commit timeline and current-HEAD reads under GitReadLock on IO.
+- Reads refresh after turns and on baseline restore, sort files by path and total available line counts. Cancelled or replaced read jobs cannot publish stale state. Empty or unavailable results hide the pill; unavailable reads record diagnostics.
+- The composer places the non-compressing file-count and line-total pill before Stop and Send. Its end-aligned popup lists six files at most, a more-files action, baseline time, commit and uncommitted-edit text, and a resumed-chat note.
+- Popup actions close it and open the chat Changes window in All scope, optionally selecting a file. Chat-keyed popup state returns focus to the pill or to the composer if the pill disappears.
+- reusable: SbPopover.AboveEnd mirrors end alignment with clamping and below fallback; SbPickerButton accepts a chevron override. Non-system toasts gain Dismiss while retaining their five-second lifetime.
+- Limits: an unreferenced stash can be pruned. A missing stash hides changes without falling back to HEAD. There is no mid-turn polling. Visual parity remains unconfirmed.
+Feature size: MEDIUM
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented in source across the feature; visual acceptance remains unconfirmed.
+
 ## [2026-11-07] Paste images in New Task and run chats
 Areas: desktop/feature/chat production and JVM tests
 - Both composers use the same Cmd/Ctrl+V image handler. Text paste still reaches the text field, and image encoding runs off the UI thread.

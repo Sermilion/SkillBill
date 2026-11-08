@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,6 +41,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
 import dev.skillbill.desktop.core.designsystem.component.SbPopoverPlacement
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
+import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.feature.chat.AgentPicker
@@ -73,6 +75,7 @@ private val REPOSITORY_PICKER_WIDTH = 620.dp
 internal fun NewTaskComposer(
   state: NewTaskUiState, draft: NewTaskDraft, focus: FocusRequester = remember { FocusRequester() }, now: () -> Instant = Clock.System::now,
   clipboard: ClipboardImageReader = SystemClipboardImageReader, encodeContext: CoroutineContext = Dispatchers.Default,
+  onOpenChanges: (ChangesSource.Chat, String?) -> Unit = { _, _ -> },
   onAction: (NewTaskAction) -> Unit,
 ) {
   LaunchedEffect(focus) { focus.requestFocus() }
@@ -81,6 +84,7 @@ internal fun NewTaskComposer(
   val busy = chat?.let { key(it) { it.thread.busy.collectAsState().value } } ?: false
   val stoppable = chat?.let { key(it) { it.thread.stoppable.collectAsState().value } } ?: false
   val queued = chat?.let { key(it) { it.thread.queued.collectAsState().value } }.orEmpty()
+  val changes = chat?.let { key(it) { it.changes.collectAsState().value } } ?: ChatChangesState.None
   val gate = remember(chat) { SendNowGate() }
   val cursorMcpDependency = draft.cursorMcpDependency
   val offer by draft.offer.collectAsState()
@@ -155,7 +159,8 @@ internal fun NewTaskComposer(
           CursorMcpPicker(cursorMcpDependency, enabled = pickersEnabled) { draft.cursorMcpDependency = it }
         }
       }
-      Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+      Row(Modifier.wrapContentWidth(unbounded = true), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        ChatChangesAnchor(chat, changes, focus, now, onOpenChanges)
         if (stoppable) {
           SbButton(
             "Stop", { onAction(NewTaskAction.Stop); focus.requestFocus() },

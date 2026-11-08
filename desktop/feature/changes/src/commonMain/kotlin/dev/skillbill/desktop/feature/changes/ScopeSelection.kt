@@ -151,6 +151,11 @@ internal fun filterSubtasks(subtasks: List<ScopeSubtask>, query: String): List<S
  * Without Subtasks only All and Uncommitted are available.
  */
 internal fun quickButtons(state: ChangesWindowUiState): List<QuickButtonUi> {
+  if (state.chatScopes) return listOf(
+    QuickButtonUi(QuickScope.All, "All", (state.allRead as? ScopeListUi.Listed)?.changes?.files?.size, true, state.scope == ChangeScope.All && state.view != ChangesView.Commits),
+    readButton(QuickScope.Uncommitted, "Uncommitted", state.uncommittedRead, state.scope == ChangeScope.Uncommitted && state.view != ChangesView.Commits),
+    QuickButtonUi(QuickScope.Commits, "Commits", state.commits.size, state.commits.isNotEmpty(), state.view == ChangesView.Commits),
+  )
   val scope = state.scope
   val target = state.target
   val allCount = (state.allRead as? ScopeListUi.Listed)?.changes?.files?.size

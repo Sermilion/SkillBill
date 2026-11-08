@@ -10,6 +10,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.Dialog
@@ -17,13 +19,12 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.ViewModelStore
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.ChangeScope
-import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import dev.skillbill.desktop.core.ui.changes.ChangesWindowEntry
 import dev.skillbill.desktop.feature.changes.ChangesScreen
 import dev.skillbill.desktop.feature.changes.ChangesWindowFrame
 import dev.skillbill.desktop.feature.changes.ChangesWindowKeys
 import dev.skillbill.desktop.feature.changes.ChangesWindowViewModel
-import dev.skillbill.desktop.feature.changes.changesWindowTitle
 
 /** The share of the main window's width and height the Changes panel takes; the shell stays visible around it. */
 private const val PANEL_SHARE = 0.94f
@@ -33,13 +34,14 @@ private const val PANEL_SHARE = 0.94f
 fun ChangesOverlay(
   entry: ChangesWindowEntry,
   keys: ChangesWindowKeys,
-  createViewModel: (WorkItem, ChangeScope) -> ChangesWindowViewModel,
+  createViewModel: (ChangesSource, ChangeScope, String?) -> ChangesWindowViewModel,
   onClose: () -> Unit,
 ) {
   val store = remember { ViewModelStore() }
   DisposableEffect(store) { onDispose { store.clear() } }
-  val viewModel = remember { createViewModel(entry.item, entry.scope).also { store.put("changes", it) } }
-  LaunchedEffect(entry.focusRequest) { if (entry.focusRequest > 0) viewModel.requestScope(entry.scope) }
+  val viewModel = remember { createViewModel(entry.source, entry.scope, entry.selectedPath).also { store.put("changes", it) } }
+  val state by viewModel.state.collectAsState()
+  LaunchedEffect(entry.focusRequest) { if (entry.focusRequest > 0) viewModel.reopen(entry.source, entry.scope, entry.selectedPath) }
   Dialog(
     onClose,
     DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = true, usePlatformDefaultWidth = false, scrimColor = SkillBillTheme.colors.scrim),
@@ -52,7 +54,7 @@ fun ChangesOverlay(
         Modifier.size(maxWidth * PANEL_SHARE, maxHeight * PANEL_SHARE)
           .clickable(remember { MutableInteractionSource() }, indication = null) { },
       ) {
-        ChangesWindowFrame(changesWindowTitle(entry.item), closeAtStart = closeButtonAtStart(), onClose) { ChangesScreen(viewModel, keys, onClose) }
+        ChangesWindowFrame(state.title, closeAtStart = closeButtonAtStart(), onClose) { ChangesScreen(viewModel, keys, onClose) }
       }
     }
   }

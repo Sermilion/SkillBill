@@ -53,7 +53,9 @@ internal fun ScopeToolbar(
     horizontalArrangement = Arrangement.spacedBy(8.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    if (state.subtasksAvailable) {
+    val chatCommitPicker = state.chatScopes && state.view == ChangesView.Commits &&
+      ScopeKind.Commits in (state.target?.let(::availableScopes).orEmpty())
+    if (state.subtasksAvailable || chatCommitPicker) {
       Box {
         SbPickerButton(
           { onAction(ChangesWindowAction.TogglePicker) },
@@ -67,7 +69,7 @@ internal fun ScopeToolbar(
         }
         if (state.pickerOpen) ScopePicker(state, onAction, pickerSearch)
       }
-      if (ScopeKind.Commits in (state.target?.let(::availableScopes).orEmpty())) {
+      if (state.subtasksAvailable && ScopeKind.Commits in (state.target?.let(::availableScopes).orEmpty())) {
         Segmented(ChangesView.entries.map { SegmentedOption(it, it.name) }, state.view) { onAction(ChangesWindowAction.SetView(it)) }
       }
     }

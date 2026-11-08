@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
+import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
@@ -15,6 +16,7 @@ import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
+import dev.skillbill.desktop.core.domain.repository.ChatChangesRepository
 import dev.skillbill.desktop.feature.chat.ChatApprovals
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatThread
@@ -73,6 +75,10 @@ internal class NewTaskChat(
   retainedThread: ChatThread = ChatThread(clock),
   private val saveLock: Mutex = Mutex(),
   private val canPersist: () -> Boolean = { true },
+  changesRepository: ChatChangesRepository = UnavailableChatChanges,
+  initialChangesBaseline: ChatChangesBaseline? = null,
+  resumedChanges: Boolean = false,
+  changesCaptureAttempted: Boolean = false,
 ) {
   private val sessionIdState = MutableStateFlow(initialSessionId)
   val sessionIdFlow: StateFlow<String> = sessionIdState.asStateFlow()
@@ -81,6 +87,11 @@ internal class NewTaskChat(
   val thread = retainedThread
   val job: Job = SupervisorJob(scope.coroutineContext[Job])
   private val approvalFlow = ChatApprovals(approvals)
+  private val changesTracker = NewTaskChatChanges(changesRepository, scope, dispatcher, repositoryRoot, initialChangesBaseline, resumedChanges, repositoryMissing, changesCaptureAttempted || initiallyStarted || initialChangesBaseline != null)
+  val changes: StateFlow<ChatChangesState> = changesTracker.state
+  val changesBaseline: ChatChangesBaseline? get() = changesTracker.baseline
+  internal val changesResumed: Boolean get() = changesTracker.resumed
+  internal val changesCaptureAttempted: Boolean get() = changesTracker.captureAttempted
 
   /** True only while the approval feed holds this window's operator registration for the draft's repository. */
   val approvalLiveState = MutableStateFlow(false)
@@ -213,6 +224,7 @@ internal class NewTaskChat(
       withContext(NonCancellable) {
         if (stopped && !started) rotateSession()
         if (!save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+        changesTracker.refresh()
       }
     } finally {
       turnRunning = false
@@ -248,6 +260,7 @@ internal class NewTaskChat(
         thread.endStreaming()
         thread.append(ChatMessage.Notice(STOPPED_NOTICE))
         if (!save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+        changesTracker.refresh()
       } finally {
         thread.busyState.value = false
       }
@@ -282,6 +295,7 @@ internal class NewTaskChat(
   }
 
   fun end() {
+    changesTracker.end()
     thread.queuedState.value = emptyList()
     thread.stoppableState.value = false
     job.cancel()
@@ -302,6 +316,7 @@ internal class NewTaskChat(
   }
 
   private suspend fun runTurn(text: String, images: List<ChatImage>, cursorMcpDependency: CursorMcpDependency, onRejected: (() -> Unit)?) {
+    changesTracker.captureBeforeFirstTurn(started)
     if (!save()) {
       thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
       onRejected?.invoke()
@@ -351,6 +366,7 @@ internal class NewTaskChat(
       thread.stoppableState.value = false
     }
     if (!save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+    changesTracker.refresh()
     drainQueue()
   }
 
@@ -385,7 +401,7 @@ internal class NewTaskChat(
           clock.now(),
           title,
           lines,
-          ChatNewTaskContext(repositoryRoot, baseBranch, started, pendingTurnLineIndex),
+          ChatNewTaskContext(repositoryRoot, baseBranch, started, pendingTurnLineIndex, changesTracker.baseline, changesTracker.captureAttempted),
         ),
       )
     }

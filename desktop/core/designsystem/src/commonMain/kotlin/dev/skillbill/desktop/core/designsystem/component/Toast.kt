@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -43,6 +44,7 @@ import dev.skillbill.desktop.core.designsystem.toastInSpec
 import dev.skillbill.desktop.core.designsystem.icon.BrandMark
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
+import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 
@@ -106,6 +108,7 @@ fun Toast(data: ToastData, onDismiss: () -> Unit) {
     if (data.actions.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
       data.actions.forEach { SbButton(it.label, it.onClick, variant = SbButtonVariant.Ghost, size = SbControlSize.Small) }
     }
+    if (data.lead != ToastLead.System) SbIconButton(LucideIcons.x, "Dismiss", onDismiss, Modifier.offset(x = (-6).dp, y = (-4).dp), size = SbControlSize.Small)
   }
 }
 

@@ -5,6 +5,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.toNewTaskKind
+import dev.skillbill.desktop.core.domain.model.ChangeScope
+import dev.skillbill.desktop.core.ui.changes.ChangesWindows
+import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.navigation.AppNavigator
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
@@ -22,7 +25,7 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 /** Renders [NewTaskRoute]. */
 @Inject
 @SingleIn(WindowScope::class)
-class NewTaskFeatureEntry(private val createViewModel: () -> NewTaskViewModel, private val navigator: AppNavigator) : FeatureEntry {
+class NewTaskFeatureEntry(private val createViewModel: () -> NewTaskViewModel, private val navigator: AppNavigator, private val changesWindows: ChangesWindows) : FeatureEntry {
   override fun renders(route: AppRoute): Boolean = route == NewTaskRoute
 
   @Composable
@@ -33,6 +36,7 @@ class NewTaskFeatureEntry(private val createViewModel: () -> NewTaskViewModel, p
       now = viewModel::now,
       onOpenRun = { navigator.navigate(DetailRoute(it)) },
       onShowAllWork = { navigator.navigate(WorkRoute(null)) },
+      onOpenChatChanges = { source, path -> changesWindows.openChat(source, ChangeScope.All, path) },
       onStart = { wire, target, action ->
         NewTaskActionKind.entries.firstOrNull { it.wire == wire }?.toNewTaskKind()?.let { kind ->
           viewModel.draft.start(kind, target = target, action = action)
