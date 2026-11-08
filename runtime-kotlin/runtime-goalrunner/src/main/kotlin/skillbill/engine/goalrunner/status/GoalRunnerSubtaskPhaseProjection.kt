@@ -1,16 +1,35 @@
 package skillbill.engine.goalrunner.status
 
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
+import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
+import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeCommitPushPayloadKeys
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeMeasuredFactKeys
 import skillbill.error.core.catchingNonCancellation
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeValidationEvidenceSchema
+import skillbill.goalrunner.model.GoalRunnerHistoryReceipt
+import skillbill.goalrunner.model.GoalRunnerPhaseCard
+import skillbill.goalrunner.model.GoalRunnerPhaseCardEdit
+import skillbill.goalrunner.model.GoalRunnerPhaseCardOutput
+import skillbill.goalrunner.model.GoalRunnerPhaseCardState
 import skillbill.goalrunner.model.GoalRunnerPhaseConclusion
 import skillbill.goalrunner.model.GoalRunnerSubtaskAuditAttempt
 import skillbill.goalrunner.model.GoalRunnerSubtaskAuditCriterion
 import skillbill.goalrunner.model.GoalRunnerSubtaskAuditOutcome
 import skillbill.goalrunner.model.GoalRunnerSubtaskAuditResult
 import skillbill.goalrunner.model.GoalRunnerSubtaskExecution
+import skillbill.goalrunner.model.GoalRunnerSubtaskPhaseResults
+import skillbill.idestatus.model.AgentActivityStamp
+import skillbill.idestatus.model.WorktreeEditTick
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.artifact.decodeValidationGateExecutionEvidenceFromArtifact
 import skillbill.workflow.taskruntime.artifact.isPreContractAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
@@ -21,6 +40,7 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDispo
 import skillbill.workflow.taskruntime.model.audit.auditAttempts
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal fun projectSubtaskAudit(
@@ -179,3 +199,202 @@ internal fun subtaskExecution(
     phaseAttemptCounts = records.filter { it.attemptCount > 0 }.associate { it.phaseId to it.attemptCount },
   )
 }
+
+private const val FILE_LIMIT = 50
+private const val EDIT_SAMPLE_LIMIT = 8
+
+internal fun attachLivePhaseCardFacts(
+  results: List<GoalRunnerSubtaskPhaseResults>,
+  currentSubtaskId: Int?,
+  tick: WorktreeEditTick?,
+  stamp: AgentActivityStamp?,
+): List<GoalRunnerSubtaskPhaseResults> =
+  results.map { result ->
+    if (result.subtaskId != currentSubtaskId) {
+      result
+    } else {
+      val activityCard =
+        result.phaseCards.lastOrNull {
+          it.state == GoalRunnerPhaseCardState.RUNNING || it.state == GoalRunnerPhaseCardState.BLOCKED
+        }
+      result.copy(
+        phaseCards =
+          result.phaseCards.map { card ->
+            card.copy(
+              edit =
+                if (tick?.phaseId == card.phaseId) {
+                  GoalRunnerPhaseCardEdit(
+                    tick.recordedAt,
+                    tick.entries.size,
+                    tick.entries.sumOf { it.insertions },
+                    tick.entries.sumOf { it.deletions },
+                    tick.entries.map { it.path }.take(EDIT_SAMPLE_LIMIT),
+                  )
+                } else {
+                  card.edit
+                },
+              activityAt = stamp?.recordedAt.takeIf { card.phaseId == activityCard?.phaseId },
+              activityLabel = stamp?.label.takeIf { card.phaseId == activityCard?.phaseId },
+            )
+          },
+      )
+    }
+  }
+
+internal data class LivePhaseCardSource(
+  val currentSubtaskId: Int?,
+  val workflowId: String?,
+  val tick: WorktreeEditTick?,
+)
+
+internal fun readLivePhaseCardFacts(
+  results: List<GoalRunnerSubtaskPhaseResults>,
+  source: LivePhaseCardSource,
+  database: DatabaseSessionFactory,
+  durableRead: GoalRunnerStatusDurableReadTracker,
+): List<GoalRunnerSubtaskPhaseResults> {
+  val stamp =
+    source.workflowId?.takeIf {
+      source.currentSubtaskId != null && results.any { it.subtaskId == source.currentSubtaskId }
+    }?.let { id ->
+      catchingNonCancellation { database.read { unit -> unit.agentActivityStamps.read(id) } }.getOrElse { error ->
+        durableRead.recordDegradedRead(
+          "goal-status.phase_card_activity_stamp",
+          "agent_activity_stamp",
+          "omitted",
+          error,
+        )
+        null
+      }
+    }
+  return attachLivePhaseCardFacts(results, source.currentSubtaskId, source.tick, stamp)
+}
+
+internal fun FeatureTaskRuntimePhaseRecord.toPhaseCardHeader(): GoalRunnerPhaseCard? {
+  val state = status.toPhaseCardState() ?: return null
+  return GoalRunnerPhaseCard(
+    phaseId = phaseId,
+    state = state,
+    round =
+      if (phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) {
+        reviewPassNumber ?: attemptCount
+      } else {
+        attemptCount
+      },
+    startedAt = firstStartedAt,
+    finishedAt = finishedAt,
+    durationMillis = durationMillis,
+    agentId = resolvedAgentId.takeIf(String::isNotBlank),
+    model = launchedModel?.takeIf(String::isNotBlank),
+    effort = launchedEffort?.takeIf(String::isNotBlank),
+    blockedReason = blockedReason,
+    files = fileManifestIntroduced.take(FILE_LIMIT),
+  )
+}
+
+private fun WorkflowStepStatus.toPhaseCardState(): GoalRunnerPhaseCardState? =
+  when (this) {
+    WorkflowStepStatus.PENDING -> null
+    WorkflowStepStatus.RUNNING -> GoalRunnerPhaseCardState.RUNNING
+    WorkflowStepStatus.COMPLETED -> GoalRunnerPhaseCardState.COMPLETED
+    WorkflowStepStatus.FAILED -> GoalRunnerPhaseCardState.FAILED
+    WorkflowStepStatus.BLOCKED -> GoalRunnerPhaseCardState.BLOCKED
+    WorkflowStepStatus.SKIPPED -> GoalRunnerPhaseCardState.SKIPPED
+    WorkflowStepStatus.PAUSED -> GoalRunnerPhaseCardState.PAUSED
+  }
+
+internal fun phaseCardOutput(
+  envelope: Map<String, Any?>,
+  sourceLabel: String,
+): GoalRunnerPhaseCardOutput {
+  val produced = envelope[SharedPayloadKeys.PRODUCED_OUTPUTS].asStringMap()
+  val facts = produced[FeatureTaskRuntimeMeasuredFactKeys.MEASURED_FACTS].asStringMap()
+  val commit = produced[FeatureTaskRuntimeCommitPushPayloadKeys.COMMIT_PUSH_RESULT].asStringMap()
+
+  fun knownString(value: Any?): String? =
+    (value as? String)?.takeIf { it.isNotBlank() && it != FeatureTaskRuntimeMeasuredFactKeys.UNKNOWN }
+
+  fun gate(key: String): FeatureTaskRuntimeValidationGateExecutionEvidence? {
+    val raw = produced[key] ?: return null
+    return decodeValidationGateExecutionEvidenceFromArtifact(raw, sourceLabel)
+      ?: throw invalidFeatureTaskRuntimeValidationEvidenceSchema(sourceLabel, "$key must be an object.")
+  }
+  val changedPaths = facts[FeatureTaskRuntimeMeasuredFactKeys.CHANGED_PATHS].stringListOrNull()
+  val history =
+    if (changedPaths != null || facts.containsKey(FeatureTaskRuntimeMeasuredFactKeys.HISTORY_WRITTEN) ||
+      facts.containsKey(FeatureTaskRuntimeMeasuredFactKeys.DECISIONS_RECORDED)
+    ) {
+      GoalRunnerHistoryReceipt(
+        changedPaths,
+        facts[FeatureTaskRuntimeMeasuredFactKeys.HISTORY_WRITTEN].knownBoolean(),
+        facts[FeatureTaskRuntimeMeasuredFactKeys.DECISIONS_RECORDED].knownBoolean(),
+      )
+    } else {
+      null
+    }
+  return GoalRunnerPhaseCardOutput(
+    verdict = knownString(envelope[SharedPayloadKeys.VERDICT]),
+    buildReceipt = gate(ValidationEvidencePayloadKeys.BUILD_RECEIPT),
+    validationReceipt = gate(ValidationEvidencePayloadKeys.VALIDATION_RESULT),
+    historyReceipt = history,
+    commitSha = knownString(commit[DecompositionManifestPayloadKeys.COMMIT_SHA]),
+    pushedBranch = knownString(commit[DecompositionPlanningPayloadKeys.BRANCH]),
+    pushed = commit[FeatureTaskRuntimeCommitPushPayloadKeys.PUSHED].knownBoolean(),
+    pullRequestUrl = knownString(facts[FeatureTaskRuntimeMeasuredFactKeys.PR_URL]),
+    pullRequestNumber = (facts[FeatureTaskRuntimeMeasuredFactKeys.PR_NUMBER] as? Number)?.toInt(),
+  )
+}
+
+internal fun subtaskPhaseCards(
+  workflowId: String,
+  records: Map<String, FeatureTaskRuntimePhaseRecord>,
+  database: DatabaseSessionFactory,
+  degradation: SubtaskReadDegradation,
+): List<GoalRunnerPhaseCard> {
+  val cards =
+    FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds.mapNotNull { phaseId ->
+      records[phaseId]?.let { record -> record.toPhaseCardHeader()?.let { it to record } }
+    }
+  if (cards.isEmpty()) return emptyList()
+  return catchingNonCancellation {
+    database.read { unit ->
+      cards.map { (card, record) ->
+        val output =
+          catchingNonCancellation {
+            val stored = unit.featureTaskPhaseSettlements.find(workflowId, card.phaseId, record.attemptCount)
+            val raw = stored?.envelopeJson ?: record.outputArtifact
+            raw?.let { parseEnvelope(it, card.phaseId) }?.let { phaseCardOutput(it, card.phaseId) }
+          }.getOrElse { error ->
+            degradation.record(
+              GoalRunnerSubtaskReadSource.PHASE_CARD_OUTPUT,
+              "${card.phaseId}_settlement_envelope",
+              "omitted",
+              error,
+            )
+            null
+          }
+        card.copy(output = output)
+      }
+    }
+  }.getOrElse { error ->
+    degradation.record(GoalRunnerSubtaskReadSource.PHASE_CARD_OUTPUT, "phase_settlement_envelopes", "omitted", error)
+    cards.map { (card, _) -> card }
+  }
+}
+
+private fun parseEnvelope(
+  raw: String,
+  sourceLabel: String,
+): Map<String, Any?> =
+  JsonCodec.parseObjectOrNull(raw)?.let(JsonCodec::jsonElementToValue)?.let(JsonCodec::anyToStringAnyMap)
+    ?: throw invalidFeatureTaskRuntimePhaseOutputSchema(sourceLabel, "Phase card envelope must be a JSON object.")
+
+private fun Any?.asStringMap(): Map<String, Any?> =
+  (this as? Map<*, *>)?.entries?.associate { it.key.toString() to it.value }.orEmpty()
+
+private fun Any?.knownBoolean(): Boolean? = this as? Boolean
+
+private fun Any?.stringListOrNull(): List<String>? =
+  (this as? List<*>)?.mapNotNull {
+    (it as? String)?.takeIf { value -> value.isNotBlank() && value != FeatureTaskRuntimeMeasuredFactKeys.UNKNOWN }
+  }

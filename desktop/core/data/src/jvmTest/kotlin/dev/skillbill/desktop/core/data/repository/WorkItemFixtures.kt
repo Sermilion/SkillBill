@@ -8,6 +8,16 @@ import dev.skillbill.desktop.core.domain.model.WorkControlIdentity
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkLiveSection
 import kotlin.time.Instant
+import skillbill.goalrunner.model.GoalRunnerCiCheck
+import skillbill.goalrunner.model.GoalRunnerCiCycle
+import skillbill.goalrunner.model.GoalRunnerHistoryReceipt
+import skillbill.goalrunner.model.GoalRunnerPhaseCard
+import skillbill.goalrunner.model.GoalRunnerPhaseCardEdit
+import skillbill.goalrunner.model.GoalRunnerPhaseCardOutput
+import skillbill.goalrunner.model.GoalRunnerPhaseCardState
+import skillbill.goalrunner.model.GoalRunnerStatusProjection
+import skillbill.goalrunner.model.GoalRunnerSubtaskPhaseResults
+import java.time.Instant as JavaInstant
 
 internal fun workItem(id: String, membershipDeadline: Instant? = null) = WorkItem(
   id = id, kind = null, issueKey = null, title = id, summary = id, lifecycle = Lifecycle.Active, planningPrepared = false,
@@ -34,4 +44,29 @@ internal fun emptyDetail(observedAt: Instant = Instant.fromEpochMilliseconds(0))
   attempts = DetailAttempts(emptyMap(), emptyMap(), emptyMap(), null, 0), validation = emptyList(), phaseResults = emptyList(),
   goalQa = null, goalAssessment = null, latestActivity = LatestActivity(null, null), executionHistory = emptyList(),
   incident = null, incidentHistory = emptyList(), goalSpecBundle = null, observedAt = observedAt,
+)
+
+internal fun phaseCardRuntimeFixture(nullFacts: Boolean = false): GoalRunnerPhaseCard {
+  val at = JavaInstant.parse("2026-11-08T10:00:00Z")
+  return GoalRunnerPhaseCard(
+    phaseId = "implement", state = if (nullFacts) GoalRunnerPhaseCardState.BLOCKED else GoalRunnerPhaseCardState.RUNNING,
+    round = if (nullFacts) null else 2, startedAt = at.takeUnless { nullFacts }, finishedAt = null,
+    durationMillis = null, agentId = "agent".takeUnless { nullFacts }, model = "model".takeUnless { nullFacts },
+    effort = "high".takeUnless { nullFacts }, blockedReason = "reason".takeUnless { nullFacts },
+    files = if (nullFacts) emptyList() else listOf("src/Example.kt"),
+    edit = if (nullFacts) null else GoalRunnerPhaseCardEdit(at, 1, 4, 2, listOf("src/Example.kt")),
+    activityAt = at.takeUnless { nullFacts }, output = if (nullFacts) null else GoalRunnerPhaseCardOutput(
+      "passed", null, null, GoalRunnerHistoryReceipt(listOf("src/Example.kt"), true, false),
+      "abc123", "feature/527", true, "https://example.test/pr/7", 7,
+    ), pullRequestUrl = "https://example.test/pr/7".takeUnless { nullFacts }, pullRequestNumber = 7.takeUnless { nullFacts },
+    ciCycles = if (nullFacts) emptyList() else listOf(GoalRunnerCiCycle(1, at, at, at, "passed", "abc123", listOf(GoalRunnerCiCheck("check", "pass", null, at, at, 0)))),
+    repairedChecks = emptyList(), conflictBaseBranch = null, fixCommitSha = null,
+  )
+}
+
+internal fun phaseCardProjectionRuntimeFixture(): GoalRunnerStatusProjection = GoalRunnerStatusProjection(
+  issueKey = "SKILL-527", completeCount = 0, pendingCount = 0, blockedCount = 0, currentSubtaskId = 2,
+  currentStep = "implement", activeAgent = "agent",
+  completedSubtaskPhaseResults = listOf(GoalRunnerSubtaskPhaseResults(2, phaseCards = listOf(phaseCardRuntimeFixture()))),
+  goalFinishCards = listOf("goal_assessment", "qa", "qa_fix", "validate", "pr", "monitor", "monitor_fix").map { phaseCardRuntimeFixture().copy(phaseId = it) },
 )

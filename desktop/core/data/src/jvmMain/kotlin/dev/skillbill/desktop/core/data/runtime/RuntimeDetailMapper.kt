@@ -72,6 +72,13 @@ import dev.skillbill.desktop.core.domain.model.StandalonePlanUnit as DesktopStan
 import dev.skillbill.desktop.core.domain.model.ValidationCommand
 import dev.skillbill.desktop.core.domain.model.ValidationGateRun
 import dev.skillbill.desktop.core.domain.model.ValidationResult
+import dev.skillbill.desktop.core.domain.model.PhaseCard
+import dev.skillbill.desktop.core.domain.model.PhaseCardState
+import dev.skillbill.desktop.core.domain.model.PhaseCardEdit
+import dev.skillbill.desktop.core.domain.model.PhaseCardOutput
+import dev.skillbill.desktop.core.domain.model.PhaseCardHistoryReceipt
+import dev.skillbill.desktop.core.domain.model.CiCycle
+import dev.skillbill.desktop.core.domain.model.CiCheck
 import dev.skillbill.desktop.core.domain.model.WorkDependency
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
@@ -87,6 +94,14 @@ import skillbill.goalrunner.assessment.model.GoalAssessmentVerification as Runti
 import skillbill.goalrunner.model.GoalRunnerAssessmentState
 import skillbill.goalrunner.model.GoalRunnerQaResult
 import skillbill.goalrunner.model.GoalRunnerSubtaskPhaseResults
+import skillbill.goalrunner.model.GoalRunnerCiCheck
+import skillbill.goalrunner.model.GoalRunnerCiCycle
+import skillbill.goalrunner.model.GoalRunnerHistoryReceipt
+import skillbill.goalrunner.model.GoalRunnerPhaseCardEdit
+import skillbill.goalrunner.model.GoalRunnerPhaseCardOutput
+import skillbill.goalrunner.model.GoalRunnerPhaseCard
+import skillbill.goalrunner.model.GoalRunnerPhaseCardState
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.ports.idestatus.model.ExecutionReasonRestoration
 import skillbill.ports.idestatus.model.IdeStatusWorkflowQaOutcome
@@ -210,20 +225,11 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
       SubtaskValidation(
         validation.subtaskId, validation.validationPassed, validation.integrityProblem,
         validation.evidence?.results.orEmpty().map { ValidationCommand(it.command, it.exitCode) },
-        validation.gateExecutionEvidence?.let { evidence ->
-          ValidationResult(
-            evidence.validationStatus, evidence.checks, evidence.gateRunCount,
-            evidence.gateRuns.map { run ->
-              ValidationGateRun(
-                run.durationMs, run.outcome.wireValue, run.cacheMode.wireValue, run.executedWorkUnits, run.executedChecks,
-                run.command, run.exitCode,
-              )
-            },
-          )
-        },
+        validation.gateExecutionEvidence?.toDomain(),
       )
     },
     phaseResults = goal?.completedSubtaskPhaseResults.orEmpty().map { it.toDomain() },
+    goalFinishCards = goal?.goalFinishCards.orEmpty().map { it.toDomain() },
     goalQa = goal?.goalQaResult?.toDomain(),
     goalQaPreview = qaPreview?.let { preview ->
       GoalQaPreview(preview.invocationId, preview.invocationDirectory, preview.targets, preview.active, qaPreviewSubtaskId)
@@ -237,6 +243,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
             it.evidence,
           )
         },
+        assessment.fixCommitSha,
       )
     },
     latestActivity = LatestActivity(
@@ -380,6 +387,77 @@ internal fun GoalRunnerSubtaskPhaseResults.toDomain(): SubtaskPhaseResults = Sub
       startedAt = it.startedAt.toKotlinInstant(),
       updatedAt = it.updatedAt.toKotlinInstant(),
       phaseAttemptCounts = it.phaseAttemptCounts,
+    )
+  },
+  phaseCards = phaseCards.map { it.toDomain() },
+)
+
+private fun GoalRunnerPhaseCard.toDomain(): PhaseCard = PhaseCard(
+  phaseId = phaseId,
+  state = when (state) {
+    GoalRunnerPhaseCardState.RUNNING -> PhaseCardState.Running
+    GoalRunnerPhaseCardState.COMPLETED -> PhaseCardState.Done
+    GoalRunnerPhaseCardState.FAILED -> PhaseCardState.Failed
+    GoalRunnerPhaseCardState.BLOCKED -> PhaseCardState.Blocked
+    GoalRunnerPhaseCardState.SKIPPED -> PhaseCardState.Skipped
+    GoalRunnerPhaseCardState.PAUSED -> PhaseCardState.Paused
+  },
+  round = round,
+  startedAt = startedAt?.toKotlinInstant(),
+  finishedAt = finishedAt?.toKotlinInstant(),
+  durationMillis = durationMillis,
+  agentId = agentId,
+  model = model,
+  effort = effort,
+  blockedReason = blockedReason,
+  files = files,
+  edit = edit?.toDomain(),
+  activityLabel = activityLabel?.wireValue,
+  activityAt = activityAt?.toKotlinInstant(),
+  output = output?.toDomain(),
+  pullRequestUrl = pullRequestUrl,
+  pullRequestNumber = pullRequestNumber,
+  ciCycles = ciCycles.map { it.toDomain() },
+  repairedChecks = repairedChecks.map { it.toDomain() },
+  conflictBaseBranch = conflictBaseBranch,
+  fixCommitSha = fixCommitSha,
+)
+
+private fun GoalRunnerPhaseCardEdit.toDomain(): PhaseCardEdit = PhaseCardEdit(
+  recordedAt.toKotlinInstant(), fileCount, insertions, deletions, samplePaths,
+)
+
+private fun GoalRunnerPhaseCardOutput.toDomain(): PhaseCardOutput = PhaseCardOutput(
+  verdict = verdict,
+  buildReceipt = buildReceipt?.toDomain(),
+  validationReceipt = validationReceipt?.toDomain(),
+  historyReceipt = historyReceipt?.toDomain(),
+  commitSha = commitSha,
+  pushedBranch = pushedBranch,
+  pushed = pushed,
+  pullRequestUrl = pullRequestUrl,
+  pullRequestNumber = pullRequestNumber,
+)
+
+private fun GoalRunnerHistoryReceipt.toDomain(): PhaseCardHistoryReceipt = PhaseCardHistoryReceipt(
+  changedPaths, historyWritten, decisionsRecorded,
+)
+
+private fun GoalRunnerCiCycle.toDomain(): CiCycle = CiCycle(
+  cycle, startedAt.toKotlinInstant(), observedAt.toKotlinInstant(), finishedAt?.toKotlinInstant(), outcome, headSha,
+  checks.map { it.toDomain() },
+)
+
+private fun GoalRunnerCiCheck.toDomain(): CiCheck = CiCheck(
+  name, bucket, link, startedAt?.toKotlinInstant(), completedAt?.toKotlinInstant(), durationMillis,
+)
+
+private fun FeatureTaskRuntimeValidationGateExecutionEvidence.toDomain(): ValidationResult = ValidationResult(
+  validationStatus, checks, gateRunCount,
+  gateRuns.map { run ->
+    ValidationGateRun(
+      run.durationMs, run.outcome.wireValue, run.cacheMode.wireValue, run.executedWorkUnits, run.executedChecks,
+      run.command, run.exitCode,
     )
   },
 )

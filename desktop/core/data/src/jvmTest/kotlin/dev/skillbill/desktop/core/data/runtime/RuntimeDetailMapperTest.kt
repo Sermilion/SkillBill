@@ -1,5 +1,8 @@
 package dev.skillbill.desktop.core.data.runtime
 
+import dev.skillbill.desktop.core.data.repository.phaseCardProjectionRuntimeFixture
+import dev.skillbill.desktop.core.data.repository.phaseCardRuntimeFixture
+import dev.skillbill.desktop.core.domain.model.PhaseCardState
 import dev.skillbill.desktop.core.domain.model.AuditOutcome
 import dev.skillbill.desktop.core.domain.model.ReviewFindingStatus
 import dev.skillbill.desktop.core.domain.model.ReviewReportFinding
@@ -28,8 +31,62 @@ import java.time.Instant
 import skillbill.review.model.ReviewFindingStatus as RuntimeReviewFindingStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class RuntimeDetailMapperTest {
+  @Test
+  fun `detail maps all goal finish cards in runtime order`() {
+    val now = Instant.parse("2026-11-08T10:00:00Z")
+    val item = WorkDetailItem(
+      snapshot = IdeStatusSnapshot("repo", IdeStatusLifecycleState.ACTIVE, IdeStatusStep("implement", "Implement"), now, IdeStatusFreshness.FRESH, "Running", "Feature"),
+      recoveryWorkId = "workflow", repositoryRoot = "/repo", stepPipeline = emptyList(), goalStatus = phaseCardProjectionRuntimeFixture(),
+    )
+
+    val detail = item.toDetail(now)
+
+    assertEquals(listOf("goal_assessment", "qa", "qa_fix", "validate", "pr", "monitor", "monitor_fix"), detail.goalFinishCards.map { it.phaseId })
+    assertEquals("feature/527", detail.goalFinishCards.first().output?.pushedBranch)
+    assertEquals(7, detail.goalFinishCards.first().output?.pullRequestNumber)
+  }
+
+  @Test
+  fun `phase card mapper preserves recorded facts and keeps missing facts null`() {
+    val mapped = GoalRunnerSubtaskPhaseResults(2, phaseCards = listOf(phaseCardRuntimeFixture())).toDomain().phaseCards.single()
+    assertEquals("implement", mapped.phaseId)
+    assertEquals(PhaseCardState.Running, mapped.state)
+    assertEquals(2, mapped.round)
+    assertEquals("agent", mapped.agentId)
+    assertEquals(listOf("src/Example.kt"), mapped.files)
+    assertEquals(4, mapped.edit?.insertions)
+    assertEquals("passed", mapped.output?.verdict)
+    assertEquals("abc123", mapped.output?.commitSha)
+    assertEquals(7, mapped.pullRequestNumber)
+    assertEquals("passed", mapped.ciCycles.single().outcome)
+    assertEquals(0L, mapped.ciCycles.single().checks.single().durationMillis)
+
+    val sparse = GoalRunnerSubtaskPhaseResults(2, phaseCards = listOf(phaseCardRuntimeFixture(nullFacts = true))).toDomain().phaseCards.single()
+    assertEquals(PhaseCardState.Blocked, sparse.state)
+    assertNull(sparse.agentId)
+    assertNull(sparse.model)
+    assertNull(sparse.effort)
+    assertNull(sparse.blockedReason)
+    assertNull(sparse.round)
+    assertNull(sparse.startedAt)
+    assertNull(sparse.finishedAt)
+    assertNull(sparse.durationMillis)
+    assertNull(sparse.activityAt)
+    assertNull(sparse.activityLabel)
+    assertNull(sparse.pullRequestUrl)
+    assertNull(sparse.pullRequestNumber)
+    assertNull(sparse.conflictBaseBranch)
+    assertNull(sparse.fixCommitSha)
+    assertEquals(emptyList(), sparse.files)
+    assertEquals(emptyList(), sparse.repairedChecks)
+    assertNull(sparse.output)
+    assertNull(sparse.edit)
+    assertEquals(emptyList(), sparse.ciCycles)
+  }
+
   @Test
   fun `standalone plan detail preserves stage output and saved unit projection without inventing output time`() {
     val started = Instant.parse("2026-10-01T09:00:00Z")

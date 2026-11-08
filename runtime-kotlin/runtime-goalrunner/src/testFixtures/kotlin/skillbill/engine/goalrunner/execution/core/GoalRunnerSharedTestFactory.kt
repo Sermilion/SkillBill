@@ -140,7 +140,7 @@ fun testGoalRunnerStatusService(
   phaseRecorder: FeatureTaskRuntimePhaseRecorder = goalRunnerDefaultPhaseRecorder(),
   clock: Clock = testHarnessClock,
   ports: GoalRunnerStatusTestPorts = GoalRunnerStatusTestPorts(),
-  database: DatabaseSessionFactory = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
+  database: DatabaseSessionFactory = GoalRunnerStatusTestDatabase(),
   decompositionManifestStore: DecompositionManifestStore = UnavailableDecompositionManifestStore,
 ): GoalRunnerStatusService {
   val projectionAssembler =
