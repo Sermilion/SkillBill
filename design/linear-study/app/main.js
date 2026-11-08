@@ -67,10 +67,11 @@
    * #build/<state>/<type> opens SKILL-417 with its build in one of the build indicator scenarios (state: running, slow,
    * passed, failed, first, idle; type: android, kotlin, ts, go, rust, ios, none).
    * #qa-device opens the QA device popup; #qa-device/<list> opens it over one of the sample device lists (mixed, one,
-   * unauth, offline, avdOnly, none, noAdb), the scenarios of design/qa-device-picker. #specs opens the Specs pane over Work; #specs/<path> selects a bundle or a file
+   * unauth, offline, avdOnly, none, noAdb), the scenarios of QA device design. #specs opens the Specs pane over Work; #specs/<path> selects a bundle or a file
    * in it (#specs/SKILL-438, #specs/done/SKILL-446, #specs/SKILL-442/spec.md) and #specs/project/<id> picks a project. */
   function routeFromHash() {
     const [page, open, ...rest] = (location.hash || '').replace('#', '').split('/');
+    if (['activity', 'changes', 'comments'].includes(page)) return { view: page, surfaceScenario: open || null };
     if (page === 'new-task') return { view: 'newtask', open: open === 'state' ? rest[0] === 'closing' ? 'closing' : null : open || null, scenario: open === 'state' ? rest[0] : null, variant: open === 'picker' || open === 'resume' || open === 'changes' ? rest[0] || null : null };
     if (page === 'detail' && open) return { view: 'detail', id: decodeURIComponent(open), open: null, inspector: rest[0], resultTab: rest[1] };
     if (page === 'build') return { view: 'detail', id: D.BUILD.focus, open: null, build: { state: open || D.BUILD.live.state, type: rest[0] || D.BUILD.live.type } };
@@ -81,6 +82,7 @@
   }
   function applyRoute(r) {
     st.view = r.view;
+    st.surfaceScenario = r.surfaceScenario || null;
     if (r.usageScenario) { st.usage.scenario = r.usageScenario; st.sideOpen = true; }
     if (r.view === 'newtask') {
       st.ntVariant = r.variant;
@@ -185,6 +187,7 @@
     /* A `steady` popup plays its opening animation once, not again on each re-render (the QA device popup on Refresh and ↑ ↓). */
     if (st.popover) { const pc = st.popover; out += S.Popover({ x: pc.x, y: pc.y, body: popoverBody(pc), flush: pc.flush, role: pc.role, cls: [pc.cls, pc.steady && pc.drawn ? 'is-steady' : ''].filter(Boolean).join(' ') }); pc.drawn = true; }
     if (st.dialog) out += dialogBody(st.dialog);
+    if (st.changeView) out += X.changesWindow(st.changeView);
     if (st.cmdk) {
       const it = contextItem();
       out += S.CommandPalette({ context: it ? S.Label({ text: X.rowKey(it), dot: false }) : '', query: st.cmdk.q, list: S.CommandList(filteredGroups(), st.cmdk.hl) });
@@ -205,6 +208,8 @@
     const zoneId = zone ? zone.dataset.zone : null;
     hideTip();
     root.innerHTML = docBar() + `<div class="doc-body">${body()}</div>` + overlays();
+    root.querySelector('.doc-bar').inert = !!st.changeView;
+    root.querySelector('.doc-body').inert = !!st.changeView;
     root.querySelectorAll('[data-scroll]').forEach((el) => { if (scrolls[el.dataset.scroll] != null) el.scrollTop = scrolls[el.dataset.scroll]; });
     root.querySelectorAll('[data-pin]').forEach((el) => { if (pinned.has(el.dataset.scroll) || scrolls[el.dataset.scroll] == null) el.scrollTop = el.scrollHeight; });
     if (st.cmdk) { const i = document.getElementById('cmdk-input'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
@@ -352,6 +357,45 @@
     if (st.mode !== 'prototype') { st.mode = 'prototype'; history.replaceState(null, '', '#prototype'); }
     render();
   }
+  function openChanges(work, scope, file) {
+    st.changeReturnFocus = document.activeElement?.id || `changes-open-${st.detailId}`;
+    st.changeView = { work, scope, file };
+    st.popover = null; st.dialog = null;
+    st.focusNext = 'changes-close';
+    render();
+  }
+  function closeChanges() {
+    st.changeView = null;
+    st.focusNext = st.changeReturnFocus;
+    render();
+  }
+  root.addEventListener('design-open-changes', (event) => openChanges(event.detail.work, event.detail.scope));
+  root.addEventListener('design-escape', () => { if (st.changeView) closeChanges(); });
+  function changesKeys(event) {
+    if (!st.changeView) return false;
+    if (event.key === 'Escape') { event.preventDefault(); closeChanges(); return true; }
+    if (event.key !== 'Tab') {
+      if (['j', 'k', '[', ']', 'a', 's', '/'].includes(event.key)) {
+        event.preventDefault();
+        root.querySelector('[embedded="window"]').shadowRoot.dispatchEvent(new CustomEvent('design-change-key', { detail: { key: event.key } }));
+      }
+      return true;
+    }
+    const buttons = [];
+    function collect(node) {
+      node.querySelectorAll('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),[tabindex="0"],sb-design-surface').forEach((element) => {
+        if (element.shadowRoot) collect(element.shadowRoot);
+        else if (element.getClientRects().length) buttons.push(element);
+      });
+    }
+    collect(root.querySelector('.sb-changes-dialog'));
+    let active = document.activeElement;
+    while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+    if (event.shiftKey && active === buttons[0]) { event.preventDefault(); buttons.at(-1)?.focus(); }
+    else if (!event.shiftKey && active === buttons.at(-1)) { event.preventDefault(); buttons[0]?.focus(); }
+    return true;
+  }
+
   function openItem(id) { st.detailId = id; go('detail'); }
   function openTerminalFor(it) {
     const r = X.repoOf(it ? it.repo : 'skill-bill');
@@ -762,7 +806,7 @@
     else if (open === 'usage') A['usage-toggle']();
   }
 
-  /* ---------- QA device popup (design/qa-device-picker variant A) ---------- */
+  /* ---------- QA device popup (QA device design variant A) ---------- */
   /* The list is read when the popup opens and on Refresh (R); nothing polls in the background. ↑ ↓ skip devices that cannot
    * be picked, Enter picks, Esc closes and returns focus to the switcher. */
   function closeDevices() { st.popover = null; st.focusNext = 'qa-device'; render(); }
@@ -849,6 +893,13 @@
   }
   const A = {
     noop() {},
+    'changes-open'(id) { openChanges(id || st.detailId); },
+    'changes-close'() { closeChanges(); },
+    surface(name) {
+      if (name === 'changes') { openChanges(st.detailId); return; }
+      if (location.hash === '#' + name) { st.mode = 'prototype'; applyRoute({ view: name }); render(); }
+      else location.hash = name;
+    },
     mode(m) { st.mode = m; st.popover = null; history.replaceState(null, '', '#' + m); render(); const sc = root.querySelector('[data-scroll="lib"],[data-scroll="found"]'); if (sc) sc.scrollTop = 0; },
     anchor(id) { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
     nav(v) { go(v, v === 'work' ? { section: null } : {}); },
@@ -916,14 +967,15 @@
     'dialog-close'() { st.dialog = null; render(); },
 
     /* run controls */
-    'pause-soft'(id) { const it = item(id); st.popover = null; if (!it || !X.pauseEligible(it)) return render(); it.pauseRequested = true; render(); toast({ state: 'paused', title: 'Pause recorded', body: 'The goal pauses at its next checkpoint.' }); },
-    'pause-now'(id) { const it = item(id); st.popover = null; if (!it || !X.controllable(it)) return render(); Object.assign(it, { lifecycle: 'paused', live: false, pauseRequested: false, liveness: 'idle', reason: 'operator_pause: Paused from the desktop app.', runOptions: Object.assign({}, it.runOptions, { canLaunch: true, launchLabel: 'Resume' }) }); render(); toast({ state: 'paused', title: 'Stop confirmed', body: 'The goal runner has exited.' }); },
+    'pause-soft'(id) { const it = item(id); st.popover = null; if (!it || !X.pauseEligible(it)) return render(); it.pauseRequested = true; (it.flowEvents ||= []).push({ name: 'Pause requested', status: 'paused', t: 'Waiting for the next checkpoint.' }); render(); toast({ state: 'paused', title: 'Pause recorded', body: 'The goal pauses at its next checkpoint.' }); },
+    'pause-now'(id) { const it = item(id); st.popover = null; if (!it || !X.controllable(it)) return render(); Object.assign(it, { lifecycle: 'paused', live: false, pauseRequested: false, liveness: 'idle', reason: 'operator_pause: Paused from the desktop app.', runOptions: Object.assign({}, it.runOptions, { canLaunch: true, launchLabel: 'Resume' }) }); (it.flowEvents ||= []).push({ name: 'Paused', status: 'paused', t: 'Paused from the desktop app.' }); render(); toast({ state: 'paused', title: 'Stop confirmed', body: 'The goal runner has exited.' }); },
     launch(id) {
       const it = item(id); st.popover = null;
       if (!it || !it.runOptions || !it.runOptions.canLaunch) return render();
       const agent = st.chosenAgent[id] || it.runOptions.agentId;
       if (!agent) { const btn = root.querySelector(`[data-act="agent-menu"][data-arg="${id}"]`); if (btn) return A['agent-menu'](id, btn); }
-      Object.assign(it, { lifecycle: 'active', live: true, liveness: 'live', reason: null, incident: null, agent, section: it.kind === 'goal' ? 'goals' : it.kind === 'operation' ? 'operations' : 'phases', runOptions: Object.assign({}, it.runOptions, { canLaunch: false }) });
+      Object.assign(it, { lifecycle: 'active', live: true, pauseRequested: false, finishedAt: null, finishedAgo: null, liveness: 'live', reason: null, incident: null, agent, section: it.kind === 'goal' ? 'goals' : it.kind === 'operation' ? 'operations' : 'phases', runOptions: Object.assign({}, it.runOptions, { canLaunch: false, canCancel: true }) });
+      (it.flowEvents ||= []).push({ name: 'Run resumed', t: `Continuing at ${it.step}.` });
       render(); toast({ state: 'active', frac: 0.2, title: `${it.runOptions.launchLabel || 'Resume'} requested`, body: `Starts the installed ${agent} harness.` });
     },
     'agent-menu'(id, el) { st.popover = Object.assign({ type: 'agent', arg: id }, anchorPos(el)); render(); },
@@ -932,16 +984,16 @@
       st.chosenAgent[id] = agent; st.popover = null; render();
       if (after && id.startsWith('spec:')) A['spec-start'](id.slice(5));
     },
-    cancel(id) { const it = item(id); st.popover = null; if (!it || !it.runOptions || !it.runOptions.canCancel) return render(); Object.assign(it, { lifecycle: 'canceled', live: false, pauseRequested: false, runOptions: Object.assign({}, it.runOptions, { canCancel: false, canLaunch: true, launchLabel: 'Run again' }) }); render(); toast({ state: 'canceled', title: 'Cancel recorded', body: `${X.rowKey(it)} is marked canceled. Its branch and commits stay.` }); },
+    cancel(id) { const it = item(id); st.popover = null; if (!it || !it.runOptions || !it.runOptions.canCancel) return render(); Object.assign(it, { lifecycle: 'canceled', section: 'finished', live: false, liveness: 'idle', reason: null, incident: null, pauseRequested: false, runOptions: Object.assign({}, it.runOptions, { canCancel: false, canLaunch: true, launchLabel: 'Run again' }) }); (it.flowEvents ||= []).push({ name: 'Canceled', status: 'canceled', t: 'Branch and commits retained.' }); render(); toast({ state: 'canceled', title: 'Cancel recorded', body: `${X.rowKey(it)} is marked canceled. Its branch and commits stay.` }); },
     prereq(key) { st.prereqs.has(key) ? st.prereqs.delete(key) : st.prereqs.add(key); render(); },
     recover(id) { const it = item(id); if (!it || !X.recoveryOffered(st, it)) return; st.dialog = { type: 'recover', arg: id }; render(); },
     'recover-confirm'(id) { st.recovered.add(id); st.dialog = null; render(); toast({ icon: 'refresh', title: 'Recovery request finished', body: 'Incident details were refreshed.' }); },
     copy(t) { st.popover = null; render(); copyText(t); },
-    toast(t) { st.popover = null; render(); toast({ icon: 'checkCircle', title: t }); },
+    toast(t) { if (/Changes window|repair diff| in the diff/i.test(t)) { openChanges(st.detailId); return; } st.popover = null; render(); toast({ icon: 'checkCircle', title: t }); },
     'open-file'(f) { toast({ icon: 'external', title: 'Opened in its default app', body: f }); },
     'term-here'(id) { st.popover = null; openTerminalFor(item(id)); render(); },
 
-    /* specs pane (design/specs-panel variant A; desktop SpecsPaneModel) */
+    /* specs pane (specs pane design variant A; desktop SpecsPaneModel) */
     'specs-toggle'() { st.specsOpen = !st.specsOpen; st.popover = null; render(); },
     /* A bundle or file row selects; a folder toggles too; a file opens in its default app. */
     'spec-select'(path) {
@@ -998,7 +1050,7 @@
     'project-menu'(a, el) { st.popover = Object.assign({ type: 'project' }, anchorPos(el)); render(); },
     'project-pick'(id) { st.specProject = id; st.specSel = null; st.popover = null; render(); },
 
-    /* plan runs (design/plan-detail) */
+    /* plan runs (plan run design) */
     'plan-filter'(arg) { const [id, f] = arg.split('|'); st.planFilter[id] = f; render(); },
     'plan-follow'(id) { st.planFollow[id] = st.planFollow[id] === false; render(); },
     'plan-jump'(id) { st.planFollow[id] = true; render(); },
@@ -1335,9 +1387,10 @@
       render();
     },
     'chg-open'(path) {
-      const chg = X.chatChanges(ntCur());
-      st.popover = null; refocusChanges(); render();
-      toast({ icon: 'diff', title: 'Opened the Changes window', body: path ? path : `This chat's changes since ${chg ? chg.since : 'it started'}` });
+      const chat = ntCur();
+      const context = window.DesignFlow.registerChat(chat, X.chatLabel(chat));
+      openChanges(context, null, path);
+      st.changeReturnFocus = 'nt-changes';
     },
 
     /* queued messages */
@@ -1527,6 +1580,7 @@
     if (ts && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { ts.scrollLeft += e.deltaY; e.preventDefault(); }
   }, { passive: false });
   window.addEventListener('hashchange', () => {
+    st.changeView = null;
     st.mode = modeFromHash();
     const r = routeFromHash();
     if (r) {
@@ -1541,6 +1595,7 @@
 
   let gPending = false, gTimer = null;
   document.addEventListener('keydown', (e) => {
+    if (changesKeys(e)) return;
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key;
     if (!st.popover && e.target.id === 'usage-card' && (key === 'Enter' || key === ' ')) { e.preventDefault(); return A['usage-toggle'](); }

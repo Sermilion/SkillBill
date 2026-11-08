@@ -1024,7 +1024,7 @@ button.sb-cpill[disabled] { opacity: 0.55; cursor: default; pointer-events: none
 /* QA verdict: the word after an 8px dot, both in the tone color; in the QA section head it follows the title */
 .sb-qav { display: inline-flex; align-items: center; gap: 6px; font: 500 var(--t-sm)/1 var(--font-sans); color: var(--c); white-space: nowrap; }
 .sb-qav > i { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--c); }
-/* The QA section (design/qa-results): title, then the verdict 8px after it, 12px above the sentence */
+/* The QA section (QA results design): title, then the verdict 8px after it, 12px above the sentence */
 .sb-sec--qa { gap: var(--sp-3); }
 .sb-sec--qa > .sb-sec-hd { gap: var(--sp-2); line-height: 1.45; }
 .sb-sec--qa > .sb-sec-hd > .sb-sec-tg { gap: var(--sp-2); }
@@ -1257,7 +1257,7 @@ button.sb-qitem-hd:focus-visible { outline-offset: -2px; }
 .sb-out-cell > .s { font-size: var(--t-xs); color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sb-out-cell > .sb-segbar { margin-top: 4px; }
 
-/* Check row: one reported validation check (design/validation-run); a spinner while it runs, a ring while it waits,
+/* Check row: one reported validation check (validation run design); a spinner while it runs, a ring while it waits,
  * attempts listed when open */
 .sb-chk + .sb-chk { border-top: 1px solid var(--border-subtle); }
 .sb-chk.is-running { background: color-mix(in srgb, var(--st-active) 5%, transparent); }
@@ -1357,7 +1357,7 @@ button.sb-chk-hd:focus-visible { outline-offset: -2px; }
 .sb-selall.is-rule { padding: 2px 0 6px; border-bottom: 1px solid var(--border-subtle); }
 .sb-btn-n { color: var(--fg-faint); font-weight: 400; }
 
-/* Verify run document (design/verify-run). VerifyDoc keeps the mock's spacing and type, and sets the shared parts it holds
+/* Verify run document (Verify run design). VerifyDoc keeps the mock's spacing and type, and sets the shared parts it holds
  * to the mock's metrics: 12px buttons in fg-2 with 12px glyphs, 22px small buttons, 16px checkboxes, bordered boxes, the
  * inset filter, the outcome card's 1.45 line height. */
 .sb-vdoc { display: flex; flex-direction: column; min-width: 0; line-height: 1.45; }
@@ -1390,7 +1390,7 @@ button.sb-chk-hd:focus-visible { outline-offset: -2px; }
 .sb-out-cell > .s .is-active { color: var(--st-active); }
 .sb-vdoc .sb-wsum-lb { line-height: 1.45; }
 .sb-vdoc .sb-wsum-tx code { line-height: normal; }
-/* ValidationDoc: a validation run's column (design/validation-run). It is also a .sb-vdoc, so it shares the Verify column's
+/* ValidationDoc: a validation run's column (validation run design). It is also a .sb-vdoc, so it shares the Verify column's
  * metrics; these rules set what differs in the validation design. */
 .sb-valdoc > .sb-flagged { margin-top: var(--sp-3); }
 .sb-valdoc .sb-vhd > .ti { overflow-wrap: anywhere; }
@@ -1632,7 +1632,7 @@ button.sb-chk-hd:focus-visible { outline-offset: -2px; }
 .sb-devsw > .sb-icon { color: var(--fg-faint); }
 
 /* Device panel: the QA device popup over the switcher; device option: one device in it */
-/* The popup frame takes the plain border, as design/qa-device-picker draws it; 300px wide with that border. */
+/* The popup frame takes the plain border, as QA device design draws it; 300px wide with that border. */
 .sb-pop--dev { border-color: var(--border); }
 .sb-devpop { width: min(298px, calc(100vw - 26px)); display: flex; flex-direction: column; font-size: var(--t-sm); line-height: 1.45; color: var(--fg-2); }
 .sb-devpop-hd { flex: none; display: flex; align-items: center; gap: var(--sp-2); height: 36px; padding: 0 6px 0 var(--sp-3); border-bottom: 1px solid var(--border-subtle); }
@@ -2153,3 +2153,19 @@ button.sb-mon-rh:focus-visible { outline-offset: -2px; }
 .sb-pk-part .sb-mon-log > .hd > .end { white-space: nowrap; }
 .sb-mon-grid.is-compact > .cell > .s { display: none; }
 .sb-mon-grid.is-compact > .cell.is-empty { font-size: var(--t-2xs); }
+
+/* Recorded activity and Changes window views. */
+.sb-surface-page { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.sb-surface-nav { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--border-subtle); }
+.sb-surface-intro { padding: 16px 20px 0; }
+.sb-surface-intro h1 { margin: 0; font-size: var(--t-xl); font-weight: 600; }
+.sb-surface-intro p { margin: 6px 0 12px; color: var(--fg-muted); font-size: var(--t-sm); }
+.sb-surface-scroll { flex: 1; min-height: 0; overflow: auto; }
+
+/* Changes stays over the selected run or chat. */
+.sb-changes-layer { position: fixed; inset: 0; z-index: 150; padding: 28px; background: rgba(0, 0, 0, .68); display: flex; }
+.sb-changes-dialog { display: flex; flex-direction: column; min-height: 0; min-width: 0; flex: 1; background: var(--bg-panel); border: 1px solid var(--border-strong); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-lg); }
+.sb-changes-header { display: flex; flex: none; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.sb-changes-header h2 { margin: 0 0 4px; font-size: var(--t-md); font-weight: 600; }
+.sb-changes-dialog > sb-design-surface { flex: 1; min-height: 0; }
+@media (max-width: 900px) { .sb-changes-layer { padding: 8px; } .sb-changes-header > .t-faint { display: none; } }

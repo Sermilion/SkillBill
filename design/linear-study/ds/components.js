@@ -103,7 +103,7 @@
     tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="7.5" r="1"/>',
     loop: '<path d="m17 2 3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="m7 22-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>',
     gap: '<circle cx="12" cy="12" r="8" stroke-dasharray="3 3.2"/>',
-    /* QA results glyphs, drawn as design/qa-results draws them: an open finding, something left behind, a report or run
+    /* QA results glyphs, drawn as QA results design draws them: an open finding, something left behind, a report or run
      * details row, and the check, file, image, copy and open marks on its rows and chips. */
     video: '<path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
     videoOff: '<path d="M10.66 6H14a2 2 0 0 1 2 2v2.5l5.248-3.062A.5.5 0 0 1 22 7.87v8.196"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><path d="m2 2 20 20"/>',
@@ -1172,7 +1172,7 @@
     return `<div class="sb-selbar" role="region" aria-label="${esc(o.label || 'Selected')}"><div class="sb-selbar-tx"><b>${esc(o.title)}</b>${o.sub ? `<span class="sub">${esc(o.sub)}</span>` : ''}${o.note ? `<span class="note">${Icon('link', 'xs')}<span>${o.note}</span></span>` : ''}</div><div class="sb-selbar-ac">${join(o.actions)}</div></div>`;
   }
 
-  /* ---------- Validation run document (design/validation-run) ---------- */
+  /* ---------- Validation run document (validation run design) ---------- */
   /* The column a validation run renders in. It takes the Verify column's metrics (VerifyDoc: header rhythm, 12px buttons,
    * bordered boxes, the outcome card at a 1.45 line height) and sets the outcome card to the validation design: label 2px
    * above the head, text 6px under it at 1.55, the signal 8px, the tally 6px and the check bar 12px below. The flag
@@ -1379,7 +1379,7 @@
     return `<div class="sb-mon-acts-list">${rows.map(([t, html, color]) => `<div class="ev" style="--c:${color || 'var(--fg-faint)'}"><span class="t">${esc(t)}</span><span class="d"></span><span class="tx">${html}</span></div>`).join('')}</div>`;
   }
 
-  /* ---------- Verify run document (design/verify-run) ---------- */
+  /* ---------- Verify run document (Verify run design) ---------- */
   /* The column a Verify run renders in. It keeps the mock's rhythm (header lines 8, 6 and 12px apart, the summary and the
    * outcome card 20px below, each section 24px below the last) instead of the document's 28px gap, and sets the shared parts
    * it holds (Button, Checkbox, Box, Segmented, RunOutcome) to the mock's metrics. */
@@ -1562,7 +1562,7 @@
       <div class="sb-devpop-ft"><span>${o.checking ? 'Checking…' : 'Checked just now'}</span><span class="l-grow"></span>${Kbd('↑ ↓ ↵')}</div></div>`;
   }
 
-  /* ---------- Plan run: a standalone plan phase (design/plan-detail; desktop PlanStatus, PlanNowCard, PlanActivity, PlanSubtasks) ---------- */
+  /* ---------- Plan run: a standalone plan phase (plan run design; desktop PlanStatus, PlanNowCard, PlanActivity, PlanSubtasks) ---------- */
   /* One glyph per stage or unit state: queued (dashed ring), now (green spinner), quiet (slow orange spinner), done (green
    * check), blocked (orange warning). */
   function planGlyph(state) {
@@ -1669,7 +1669,7 @@
     return `<button type="button" class="sb-brief"${act(o.act, o.arg)} aria-label="Expand briefing"><span class="flow">${flow}</span><span class="legend">${o.legend.map((l) => `<span><i class="${l.cls}"></i>${esc(l.text)}</span>`).join('')}</span><span class="facts">${o.facts.map((f) => `<span class="${cx('f', f.tone && 'is-' + f.tone)}">${Icon(f.icon, 'xs')}<span>${f.key ? `<span class="k">${esc(f.key)}</span> ` : ''}${f.html}</span></span>`).join('')}</span><span class="pills">${o.pills.map((p) => `<span class="${cx('pill', p.strong && 'strong')}">${esc(p.text)}</span>`).join('')}</span><span class="fade"></span><span class="cta">${Icon('chevronDown', 'xs')}${esc(o.cta)}</span></button>`;
   }
 
-  /* ---------- Specs pane (design/specs-panel, variant A; desktop SpecSelectionBar) ---------- */
+  /* ---------- Specs pane (specs pane design, variant A; desktop SpecSelectionBar) ---------- */
   /* The selected spec docked at the bottom of the Specs pane: key, title, progress and the favorite star; the status and agent
    * pills, the actions button and the one primary action the runtime allows; then a note (the pause notice, or the reason
    * run controls are off). notes: [{ text, tone (error) }]. */

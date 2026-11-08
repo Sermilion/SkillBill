@@ -207,6 +207,9 @@
     }).join('')}</tr>`).join('');
     const variants = catalog.special.map((row) => `<tr><th scope="row">${esc(row.type)}</th><td>${X.statusIcon(X.lookup(row.id))} ${link(row.id, row.label)}</td><td>${esc(location(row.id))}</td></tr>`).join('');
     const chats = [
+      ...['real', 'one', 'running', 'long', 'phase'].map((id, i) => ['Activity', ['Recorded run', 'One subtask', 'Running', '33 subtasks', 'Standalone phase'][i], `activity/${id}`]),
+      ['Changes', 'Subtask scopes and ranges', 'changes'],
+      ...['Writing a review', 'Review added', 'After phase review', 'After review fixes'].map((label, i) => ['Diff comments', label, `comments/${i + 1}`]),
       ['New task', 'Home', 'new-task'], ['New task', 'Two idle chats', 'new-task/state/two'],
       ['New task', 'Replying in the background', 'new-task/state/busy'], ['New task', 'Mixed repositories', 'new-task/state/mixed'],
       ['New task', 'Nine open chats', 'new-task/state/many'], ['New task', 'Twenty chats with overflow', 'new-task/state/lots'],

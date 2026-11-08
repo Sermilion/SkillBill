@@ -1,297 +1,6 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>Skill Bill · Diff comments (design mock)</title>
-<style>
-:root {
-  --bg-frame:#0B0B0D; --bg-panel:#111114; --bg-raised:#17171B; --bg-overlay:#1C1C21; --bg-inset:#08080A;
-  --bg-window:#0E0E11; --bg-control:#1F1F24; --bg-hover:rgba(255,255,255,.035); --bg-active:rgba(255,255,255,.065);
-  --bg-selected:rgba(233,168,28,.08);
-  --border-subtle:rgba(255,255,255,.055); --border:#26262C; --border-strong:#383840; --border-hover:#4A4A54;
-  --fg:#EDEDF0; --fg2:#C4C4CC; --fg-muted:#9C9CA6; --fg-faint:#6A6A74;
-  --accent:#E9A81C; --accent-hover:#F3C462; --accent-fg:#14100A; --accent-text:#F3C462;
-  --accent-tint:rgba(233,168,28,.12); --accent-ring:rgba(233,168,28,.5);
-  --st-active:#3FB950; --st-planning:#6FA8DC; --st-blocked:#E2703C; --st-failed:#F0555B; --st-done:#3FB950; --st-paused:#9C9CA6;
-  --diff-add:rgba(63,185,80,.15); --diff-del:rgba(240,85,91,.15); --diff-hunk:#17171B;
-  --sans: Inter, "SF Pro Text", system-ui, -apple-system, sans-serif;
-  --mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
-  --ease: cubic-bezier(.2,.8,.2,1);
-  --gutter: 52px;
-}
-* { box-sizing: border-box; }
-html, body { margin:0; height:100%; background:#050506; color:var(--fg); font-family:var(--sans); -webkit-font-smoothing:antialiased; }
-button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
-textarea, input { font: inherit; color: inherit; }
-::selection { background: rgba(233,168,28,.3); }
-
-/* ---------- mock-only controls (not part of the app) ---------- */
-.mockbar { height:48px; display:flex; align-items:center; gap:14px; padding:0 22px; color:var(--fg-muted); font-size:12px; }
-.mockbar b { color:var(--fg2); font-weight:600; }
-.mockbar .seg { display:flex; border:1px solid var(--border-strong); border-radius:8px; padding:1px; }
-.mockbar .seg button { height:26px; padding:0 11px; border-radius:6px; color:var(--fg-muted); font-size:12px; }
-.mockbar .seg button:hover { color:var(--fg); background:var(--bg-hover); }
-.mockbar .seg button.on { color:var(--fg); background:var(--bg-active); }
-.mockbar .note { margin-left:auto; color:var(--fg-faint); }
-
-/* ---------- window frame ---------- */
-.stage { position:absolute; inset:48px 22px 22px; }
-.window { position:absolute; inset:0; display:flex; flex-direction:column; background:var(--bg-window); border:1px solid var(--border);
-  border-radius:12px; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4); }
-.titlebar { height:38px; flex:none; display:flex; align-items:center; padding:0 8px; background:var(--bg-inset); border-bottom:1px solid var(--border); }
-.titlebar .lights { width:56px; display:flex; gap:7px; padding-left:6px; }
-.titlebar .lights i { width:11px; height:11px; border-radius:50%; background:#2b2b31; }
-.titlebar .title { flex:1; text-align:center; font-size:12px; font-weight:600; color:var(--fg-muted); }
-
-.toolbar { flex:none; display:flex; align-items:center; gap:8px; padding:10px 14px; background:var(--bg-panel); border-bottom:1px solid var(--border); }
-.scope { height:30px; min-width:300px; display:flex; align-items:center; gap:8px; padding:0 10px 0 12px; border:1px solid var(--border-strong); border-radius:7px; background:var(--bg-control); font-size:12px; }
-.scope .lbl { font-family:var(--mono); font-size:10px; letter-spacing:.08em; color:var(--fg-faint); }
-.scope .val { font-family:var(--mono); color:var(--fg); }
-.seg2 { display:flex; border:1px solid var(--border-strong); border-radius:7px; padding:1px; }
-.seg2 span { height:26px; display:flex; align-items:center; gap:6px; padding:0 10px; border-radius:6px; font-size:12px; color:var(--fg-muted); }
-.seg2 span.on { background:var(--bg-active); color:var(--fg); }
-.seg2 span em { font-style:normal; font-family:var(--mono); font-size:10.5px; color:var(--fg-faint); }
-.filter { width:200px; height:30px; display:flex; align-items:center; padding:0 10px; background:var(--bg-inset); border:1px solid var(--border-strong); border-radius:7px; font-size:12px; color:var(--fg-faint); }
-.spacer { flex:1; }
-
-/* comment navigator in toolbar */
-.cnav { height:30px; display:flex; align-items:center; border:1px solid var(--border-strong); border-radius:7px; background:var(--bg-control); overflow:hidden; transition:border-color .2s; }
-.cnav .sum { display:flex; align-items:center; gap:8px; padding:0 10px; font-size:12px; color:var(--fg2); height:100%; }
-.cnav .sum .n { font-family:var(--mono); font-size:11px; }
-.cnav .dot { width:6px; height:6px; border-radius:50%; display:inline-block; }
-.cnav .arrows { display:flex; border-left:1px solid var(--border-strong); height:100%; }
-.cnav .arrows button { width:26px; display:grid; place-items:center; color:var(--fg-muted); }
-.cnav .arrows button:hover { background:var(--bg-hover); color:var(--fg); }
-.cnav .arrows button + button { border-left:1px solid var(--border); }
-
-.scopebar { flex:none; height:29px; display:flex; align-items:center; gap:10px; padding:0 14px; border-bottom:1px solid var(--border); font-size:12px; color:var(--fg-muted); }
-.scopebar .mono { font-family:var(--mono); color:var(--fg2); }
-.add { color:var(--st-done); font-family:var(--mono); font-size:11px; }
-.del { color:var(--st-failed); font-family:var(--mono); font-size:11px; }
-
-.body { flex:1; min-height:0; display:flex; }
-
-/* ---------- file list ---------- */
-.files { width:340px; flex:none; border-right:1px solid var(--border); background:var(--bg-side, #121215); overflow:auto; padding:6px 0; }
-.dir { height:29px; display:flex; align-items:flex-end; padding:0 14px 4px; font-family:var(--mono); font-size:11px; color:var(--fg-faint); }
-.file { height:27px; display:flex; align-items:center; gap:8px; padding:0 14px; cursor:pointer; font-size:12px; position:relative; }
-.file:hover { background:var(--bg-hover); }
-.file.sel { background:var(--bg-selected); }
-.file.sel::before { content:""; position:absolute; left:0; top:4px; bottom:4px; width:2px; border-radius:2px; background:var(--accent); }
-.file .st { width:16px; font-family:var(--mono); font-size:11px; font-weight:600; }
-.file .name { flex:1; font-family:var(--mono); color:var(--fg2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.file.sel .name { color:var(--fg); }
-.cbadge { display:flex; align-items:center; gap:4px; height:18px; padding:0 6px; border-radius:9px; font-family:var(--mono); font-size:10.5px; color:var(--fg-muted); background:var(--bg-active); transition:background .25s, color .25s; }
-.cbadge.pending { background:var(--accent-tint); color:var(--accent-text); }
-.cbadge.done { background:transparent; color:var(--fg-faint); }
-
-/* ---------- diff pane ---------- */
-.pane { flex:1; min-width:0; display:flex; flex-direction:column; position:relative; }
-.pane-head { flex:none; display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--bg-panel); border-bottom:1px solid var(--border); font-size:12px; }
-.pane-head .path { font-family:var(--mono); font-weight:500; color:var(--fg); }
-.pane-head .path span { color:var(--fg-faint); }
-.btn { height:26px; padding:0 10px; display:inline-flex; align-items:center; gap:6px; border-radius:6px; border:1px solid var(--border-strong); background:var(--bg-control); font-size:12px; color:var(--fg2); transition:background .15s, border-color .15s, color .15s; white-space:nowrap; }
-.btn:hover { border-color:var(--border-hover); color:var(--fg); }
-.btn.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-fg); font-weight:600; }
-.btn.primary:hover { background:var(--accent-hover); border-color:var(--accent-hover); }
-.btn.primary:disabled { opacity:.45; cursor:default; }
-.btn.ghost { border-color:transparent; background:transparent; color:var(--fg-muted); }
-.btn.ghost:hover { background:var(--bg-hover); color:var(--fg); }
-.btn.danger { background:rgba(240,85,91,.14); border-color:rgba(240,85,91,.35); color:#ff8a8f; }
-.btn.danger:hover { background:rgba(240,85,91,.22); }
-.btn .kc { margin-left:2px; }
-.kc { display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px; padding:0 4px; border-radius:4px; font-family:var(--mono); font-size:10px;
-  background:var(--bg-raised); box-shadow:inset 0 -1px 0 var(--border-strong), 0 0 0 1px var(--border-strong); color:var(--fg-muted); }
-.btn.primary .kc { background:rgba(0,0,0,.14); box-shadow:none; color:var(--accent-fg); }
-
-.scroll { flex:1; overflow:auto; scroll-behavior:smooth; padding-bottom:120px; }
-.sep { height:38px; display:flex; align-items:center; gap:10px; padding:0 14px; background:var(--bg-panel); border-top:1px solid var(--border); border-bottom:1px solid var(--border); font-size:12px; position:sticky; top:0; z-index:3; }
-.sep .path { font-family:var(--mono); font-weight:500; }
-.sep .path span { color:var(--fg-faint); }
-.hunk { display:flex; height:32px; align-items:center; background:var(--diff-hunk); font-family:var(--mono); font-size:12px; color:var(--st-planning); padding-left:calc(var(--gutter)*2 + 12px); gap:10px;
-  background-image:linear-gradient(var(--border),var(--border)), linear-gradient(var(--border),var(--border)); background-size:1px 100%,1px 100%; background-position:calc(var(--gutter) - 1px) 0, calc(var(--gutter)*2 - 1px) 0; background-repeat:no-repeat; }
-.hunk span { color:var(--fg-faint); }
-.row { display:flex; height:20px; font-family:var(--mono); font-size:12px; line-height:20px; position:relative;
-  background-image:linear-gradient(var(--border),var(--border)), linear-gradient(var(--border),var(--border)); background-size:1px 100%,1px 100%; background-position:calc(var(--gutter) - 1px) 0, calc(var(--gutter)*2 - 1px) 0; background-repeat:no-repeat; }
-.row.k-add { background-color:var(--diff-add); }
-.row.k-del { background-color:var(--diff-del); }
-.row .g { width:var(--gutter); flex:none; text-align:right; padding-right:10px; color:var(--fg-faint); user-select:none; }
-.row .t { padding-left:12px; white-space:pre; color:var(--fg2); }
-.row.k-add .t, .row.k-del .t { color:var(--fg); }
-.row:hover { box-shadow:inset 0 0 0 9999px rgba(255,255,255,.025); }
-.row.anchored .g { color:var(--fg-muted); }
-.row.anchored::after { content:""; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--rail, var(--st-planning)); }
-.row.targeted { box-shadow:inset 0 0 0 9999px rgba(233,168,28,.07); }
-.row.targeted .g { color:var(--accent-text); }
-
-/* add-comment affordance in gutter */
-.addc { position:absolute; left:calc(var(--gutter)*2 - 10px); top:1px; width:18px; height:18px; border-radius:5px; display:grid; place-items:center;
-  background:var(--accent); color:var(--accent-fg); opacity:0; transform:scale(.6); transition:opacity .12s, transform .16s var(--ease); z-index:2;
-  box-shadow:0 2px 8px rgba(0,0,0,.5); }
-.row:hover .addc { opacity:1; transform:scale(1); }
-.addc:hover { background:var(--accent-hover); transform:scale(1.1) !important; }
-
-/* ---------- threads ---------- */
-.slot { padding:6px 16px 10px calc(var(--gutter)*2 + 12px); background:var(--bg-window); position:relative; }
-.slot::before { content:""; position:absolute; left:calc(var(--gutter)*2 - 1px); top:0; bottom:0; width:1px; background:var(--border); }
-.slot::after { content:""; position:absolute; left:calc(var(--gutter) - 1px); top:0; bottom:0; width:1px; background:var(--border); }
-.slot > * + * { margin-top:8px; }
-.enter { animation:enter .32s var(--ease) both; }
-@keyframes enter { from { opacity:0; transform:translateY(-4px); clip-path:inset(0 0 100% 0 round 10px); } to { opacity:1; transform:none; clip-path:inset(0 0 0 0 round 10px); } }
-.leave { animation:leave .2s ease-in both; }
-@keyframes leave { to { opacity:0; transform:translateY(-4px) scale(.99); } }
-.flash { animation:flash 1.2s var(--ease); }
-@keyframes flash { 0%,30% { box-shadow:0 0 0 2px var(--accent-ring), 0 8px 24px rgba(0,0,0,.35); } 100% { box-shadow:0 0 0 0 transparent, 0 8px 24px rgba(0,0,0,.25); } }
-
-.thread { max-width:780px; border:1px solid var(--border); border-radius:10px; background:var(--bg-raised); overflow:hidden; position:relative;
-  box-shadow:0 8px 24px rgba(0,0,0,.25); font-family:var(--sans); transition:border-color .25s; }
-.thread::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--rail); transition:background .3s; }
-.thread.s-pending { --rail:var(--accent); border-style:dashed; border-color:rgba(233,168,28,.35); }
-.thread.s-open { --rail:var(--st-planning); }
-.thread.s-resolved { --rail:var(--st-done); }
-.thread.s-declined { --rail:var(--st-paused); }
-
-.c { display:flex; gap:10px; padding:11px 14px 11px 16px; position:relative; }
-.c + .c { border-top:1px solid var(--border-subtle); }
-.c.reply { padding-left:46px; background:rgba(255,255,255,.012); }
-.av { width:22px; height:22px; flex:none; border-radius:50%; display:grid; place-items:center; font-size:9.5px; font-weight:700; letter-spacing:.02em; }
-.av.user { background:#2c2c34; color:var(--fg2); box-shadow:0 0 0 1px var(--border-strong); }
-.av.agent { border-radius:6px; background:var(--accent-tint); color:var(--accent-text); box-shadow:0 0 0 1px rgba(233,168,28,.3); }
-.c.reply .av { width:20px; height:20px; }
-.cmain { flex:1; min-width:0; }
-.chead { display:flex; align-items:center; gap:7px; height:22px; font-size:12px; }
-.chead .who { font-weight:600; color:var(--fg); }
-.chead .src { font-family:var(--mono); font-size:10.5px; color:var(--fg-faint); padding:1px 5px; border:1px solid var(--border); border-radius:4px; }
-.chead .when { color:var(--fg-faint); }
-.chead .right { margin-left:auto; display:flex; align-items:center; gap:6px; }
-.cbody { margin-top:3px; font-size:13px; line-height:1.55; color:var(--fg2); white-space:pre-wrap; word-wrap:break-word; }
-.cbody code { font-family:var(--mono); font-size:11.5px; padding:1px 5px; border-radius:4px; background:var(--bg-inset); border:1px solid var(--border); color:var(--fg); }
-.cbody em { color:var(--fg); font-style:italic; }
-.icons { display:flex; gap:2px; opacity:0; transition:opacity .15s; }
-.c:hover .icons, .icons:focus-within { opacity:1; }
-.ib { width:24px; height:24px; border-radius:6px; display:grid; place-items:center; color:var(--fg-faint); }
-.ib:hover { background:var(--bg-active); color:var(--fg); }
-.ib.del:hover { color:#ff8a8f; background:rgba(240,85,91,.12); }
-
-/* chips */
-.chip { display:inline-flex; align-items:center; gap:5px; height:19px; padding:0 7px; border-radius:10px; font-size:11px; font-weight:500; white-space:nowrap; transition:all .3s var(--ease); }
-.chip .d { width:6px; height:6px; border-radius:50%; background:currentColor; }
-.chip.pending { color:var(--accent-text); background:var(--accent-tint); }
-.chip.open { color:var(--st-planning); background:rgba(111,168,220,.12); }
-.chip.resolved { color:var(--st-done); background:rgba(63,185,80,.12); }
-.chip.declined { color:var(--fg-muted); background:rgba(156,156,166,.12); }
-.chip.outdated { color:var(--fg-muted); background:transparent; border:1px solid var(--border-strong); }
-.sev { font-family:var(--mono); font-size:10.5px; height:18px; padding:0 6px; border-radius:4px; display:inline-flex; align-items:center; gap:5px; text-transform:lowercase; }
-.sev.blocker { color:var(--st-failed); background:rgba(240,85,91,.12); }
-.sev.major { color:var(--st-blocked); background:rgba(226,112,60,.12); }
-.sev.minor { color:var(--fg2); background:var(--bg-active); }
-.fid { font-family:var(--mono); font-size:10.5px; color:var(--fg-faint); }
-.outcome { display:inline-flex; align-items:center; gap:5px; height:20px; padding:0 7px; border-radius:5px; font-size:11px; font-weight:600; margin-right:6px; vertical-align:1px; }
-.outcome.fixed { color:var(--st-done); background:rgba(63,185,80,.12); }
-.outcome.refuted { color:var(--fg2); background:var(--bg-active); }
-.outcome.skipped { color:var(--fg-muted); background:var(--bg-hover); border:1px solid var(--border); }
-.outcome.failed { color:var(--st-failed); background:rgba(240,85,91,.12); }
-.outcome code { background:transparent; border:0; padding:0; font-size:11px; color:inherit; font-weight:500; }
-
-.orig { margin:2px 14px 0 16px; padding:6px 10px; border-radius:6px; background:var(--bg-inset); border:1px solid var(--border); font-family:var(--mono); font-size:11.5px; color:var(--fg-muted); white-space:pre; overflow:hidden; text-overflow:ellipsis; }
-.orig b { font-weight:400; color:var(--fg-faint); margin-right:8px; }
-
-/* thread footer */
-.tfoot { display:flex; align-items:center; gap:8px; padding:8px 14px 10px 16px; border-top:1px solid var(--border-subtle); }
-.replybox { flex:1; min-height:30px; display:flex; align-items:center; padding:0 10px; border-radius:7px; background:var(--bg-inset); border:1px solid var(--border); font-size:12.5px; color:var(--fg-faint); cursor:text; transition:border-color .15s; }
-.replybox:hover { border-color:var(--border-strong); }
-.tfoot .state-note { flex:1; font-size:12px; color:var(--fg-faint); }
-
-/* composer */
-.composer { max-width:780px; border:1px solid var(--accent-ring); border-radius:10px; background:var(--bg-raised); box-shadow:0 0 0 3px rgba(233,168,28,.08), 0 10px 30px rgba(0,0,0,.35); overflow:hidden; }
-.composer.inline { border:0; box-shadow:none; border-radius:0; border-top:1px solid var(--border-subtle); background:transparent; }
-.composer textarea { display:block; width:100%; min-height:72px; resize:none; border:0; outline:0; background:transparent; padding:12px 14px 6px 16px; font-size:13px; line-height:1.55; color:var(--fg); }
-.composer textarea::placeholder { color:var(--fg-faint); }
-.composer .cf { display:flex; align-items:center; gap:8px; padding:6px 10px 10px 16px; }
-.composer .hint { flex:1; font-size:11.5px; color:var(--fg-faint); display:flex; align-items:center; gap:6px; }
-.editing textarea { min-height:52px; padding:6px 0 4px; }
-.editing .cf { padding:4px 0 2px; }
-
-/* collapsed thread */
-.collapsed { display:flex; align-items:center; gap:9px; height:36px; padding:0 12px 0 16px; cursor:pointer; font-size:12px; color:var(--fg-muted); }
-.collapsed:hover { background:var(--bg-hover); }
-.collapsed .snip { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--fg-faint); }
-.collapsed .snip b { color:var(--fg-muted); font-weight:500; }
-.collapsed .chev { color:var(--fg-faint); transition:transform .2s; }
-
-.confirm { display:flex; align-items:center; gap:8px; padding:9px 14px 10px 16px; background:rgba(240,85,91,.06); border-top:1px solid rgba(240,85,91,.2); font-size:12.5px; color:var(--fg2); }
-.confirm span { flex:1; }
-
-/* review bar */
-.reviewbar { position:absolute; left:50%; bottom:18px; transform:translate(-50%, 140%); opacity:0; transition:transform .38s var(--ease), opacity .25s; z-index:10;
-  display:flex; align-items:center; gap:12px; padding:8px 8px 8px 16px; border-radius:12px; background:var(--bg-overlay); border:1px solid var(--border-strong);
-  box-shadow:0 16px 40px rgba(0,0,0,.55), 0 0 0 1px rgba(0,0,0,.3); font-size:12.5px; white-space:nowrap; }
-.reviewbar.show { transform:translate(-50%, 0); opacity:1; }
-.reviewbar .pulse { width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 0 var(--accent-ring); animation:pulse 2.2s infinite; }
-@keyframes pulse { 0% { box-shadow:0 0 0 0 rgba(233,168,28,.45); } 70%,100% { box-shadow:0 0 0 7px rgba(233,168,28,0); } }
-.reviewbar .count { font-weight:600; color:var(--fg); }
-.reviewbar .sub { color:var(--fg-faint); }
-.reviewbar .vr { width:1px; height:20px; background:var(--border-strong); }
-.reviewbar .btn { height:30px; }
-
-.toast { position:absolute; right:18px; bottom:18px; display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:10px; background:var(--bg-overlay); border:1px solid var(--border-strong);
-  box-shadow:0 12px 32px rgba(0,0,0,.5); font-size:12.5px; color:var(--fg2); transform:translateY(20px); opacity:0; transition:all .3s var(--ease); pointer-events:none; z-index:11; }
-.toast.show { transform:none; opacity:1; }
-.toast .ok { color:var(--st-done); display:grid; }
-
-.footer { flex:none; height:26px; display:flex; align-items:center; gap:14px; padding:0 14px; background:var(--bg-panel); border-top:1px solid var(--border); font-size:11px; color:var(--fg-faint); white-space:nowrap; }
-.footer .h { display:flex; align-items:center; gap:4px; }
-
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
-</style>
-</head>
-<body>
-<div class="mockbar">
-  <b>Design mock · Diff comments</b>
-  <span>Scenario</span>
-  <div class="seg" id="scenarios">
-    <button data-s="1">1 · Writing a review</button>
-    <button data-s="2">2 · Review added</button>
-    <button data-s="3">3 · After phase:review</button>
-    <button data-s="4">4 · After pr-review-fix</button>
-  </div>
-  <span class="note">Everything is clickable. Hover a diff line and click + (or press c) to comment.</span>
-</div>
-
-<div class="stage">
-  <div class="window">
-    <div class="titlebar"><div class="lights"><i></i><i></i><i></i></div><div class="title">Changes · SKILL-474 · feat/diff-cache</div><div style="width:56px"></div></div>
-    <div class="toolbar">
-      <div class="scope"><span class="lbl">SCOPE</span><span class="val">main...feat/diff-cache</span><span style="flex:1"></span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></div>
-      <div class="seg2"><span class="on">All <em>4</em></span><span>Uncommitted <em>0</em></span></div>
-      <div class="filter">Filter files  /</div>
-      <div class="spacer"></div>
-      <div class="cnav" id="cnav"></div>
-    </div>
-    <div class="scopebar"><span class="mono">main...feat/diff-cache</span><span>· 4 files</span><span class="add">+33</span><span class="del">−9</span></div>
-    <div class="body">
-      <div class="files" id="files"></div>
-      <div class="pane">
-        <div class="pane-head" id="panehead"></div>
-        <div class="scroll" id="scroll"></div>
-        <div class="reviewbar" id="reviewbar"></div>
-        <div class="toast" id="toast"></div>
-      </div>
-    </div>
-    <div class="footer">
-      <span class="h"><span class="kc">j</span><span class="kc">k</span> file</span>
-      <span class="h"><span class="kc">/</span> filter</span>
-      <span class="h"><span class="kc">o</span> open in editor</span>
-      <span class="h"><span class="kc">c</span> comment on line</span>
-      <span class="h"><span class="kc">n</span><span class="kc">p</span> next / previous comment</span>
-      <span class="h"><span class="kc">⌘</span><span class="kc">↵</span> add review</span>
-      <span class="spacer"></span>
-      <span>Comments are saved locally with feat/diff-cache · refreshes every 3 s while the run runs</span>
-    </div>
-  </div>
-</div>
-
-<script>
+(function () {
+  'use strict';
+  window.DesignSurfaces.register("comments", "<div class=\"mockbar\">\n  <b>Diff comments</b>\n  <span>Scenario</span>\n  <div class=\"seg\" id=\"scenarios\">\n    <button data-s=\"1\">1 \u00b7 Writing a review</button>\n    <button data-s=\"2\">2 \u00b7 Review added</button>\n    <button data-s=\"3\">3 \u00b7 After phase:review</button>\n    <button data-s=\"4\">4 \u00b7 After pr-review-fix</button>\n  </div>\n  <span class=\"note\">Everything is clickable. Hover a diff line and click + (or press c) to comment.</span>\n</div>\n\n<div class=\"stage\">\n  <div class=\"window\">\n    <div class=\"titlebar\"><div class=\"lights\"><i></i><i></i><i></i></div><div class=\"title\">Changes \u00b7 SKILL-474 \u00b7 feat/diff-cache</div><div style=\"width:56px\"></div></div>\n    <div class=\"toolbar\">\n      <div class=\"scope\"><span class=\"lbl\">SCOPE</span><span class=\"val\">main...feat/diff-cache</span><span style=\"flex:1\"></span><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\"><path d=\"m6 9 6 6 6-6\"/></svg></div>\n      <div class=\"seg2\"><span class=\"on\">All <em>4</em></span><span>Uncommitted <em>0</em></span></div>\n      <div class=\"filter\">Filter files  /</div>\n      <div class=\"spacer\"></div>\n      <div class=\"cnav\" id=\"cnav\"></div>\n    </div>\n    <div class=\"scopebar\"><span class=\"mono\">main...feat/diff-cache</span><span>\u00b7 4 files</span><span class=\"add\">+33</span><span class=\"del\">\u22129</span></div>\n    <div class=\"body\">\n      <div class=\"files\" id=\"files\"></div>\n      <div class=\"pane\">\n        <div class=\"pane-head\" id=\"panehead\"></div>\n        <div class=\"scroll\" id=\"scroll\"></div>\n        <div class=\"reviewbar\" id=\"reviewbar\"></div>\n        <div class=\"toast\" id=\"toast\"></div>\n      </div>\n    </div>\n    <div class=\"footer\">\n      <span class=\"h\"><span class=\"kc\">j</span><span class=\"kc\">k</span> file</span>\n      <span class=\"h\"><span class=\"kc\">/</span> filter</span>\n      <span class=\"h\"><span class=\"kc\">o</span> open in editor</span>\n      <span class=\"h\"><span class=\"kc\">c</span> comment on line</span>\n      <span class=\"h\"><span class=\"kc\">n</span><span class=\"kc\">p</span> next / previous comment</span>\n      <span class=\"h\"><span class=\"kc\">\u2318</span><span class=\"kc\">\u21b5</span> add review</span>\n      <span class=\"spacer\"></span>\n      <span>Comments are saved locally with feat/diff-cache \u00b7 refreshes every 3 s while the run runs</span>\n    </div>\n  </div>\n</div>", function (document, host, cleanup, setTimeout, saved) {
 const I = {
   plus:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   msg:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
@@ -310,7 +19,7 @@ const I = {
 
 /* ---------- sample diff ---------- */
 const C='c', A='a', D='d';
-const FILES = [
+const SAMPLE_FILES = [
   { path:'desktop/core/data/src/jvmMain/kotlin/dev/skillbill/desktop/core/data/repository/RuntimeWorkChangesRepository.kt', st:'M', ins:14, del:5, hunks:[
     { h:'@@ -41,10 +41,14 @@', src:'class RuntimeWorkChangesRepository(', lines:[
       [C,41,41,'  override fun fileDiff(baseline: ChangeBaseline, path: String): FileDiffState {'],
@@ -391,12 +100,13 @@ const FILES = [
     ]},
   ]},
 ];
+const FILES = host.model ? host.model.files : SAMPLE_FILES;
 const F = i => FILES[i].path;
 
 /* ---------- scenarios ---------- */
 const U = (body, when='just now') => ({ id:uid(), author:'user', body, when });
 const AG = (body, src, when, extra={}) => ({ id:uid(), author:'agent', body, src, when, ...extra });
-let _id = 0; function uid() { return 'x' + (++_id); }
+let _id = saved ? saved.id : 0; function uid() { return 'x' + (++_id); }
 
 const T = {
   u1: () => ({ file:F(0), side:'new', num:44 }),
@@ -524,8 +234,10 @@ function renderDiff() {
   const st = el.scrollTop;
   let html = '';
   FILES.forEach((f, fi) => {
+    if (host.model && fi !== S.selected) return;
     const dir = f.path.slice(0, f.path.lastIndexOf('/') + 1);
     html += `<div class="sep" id="file-${fi}"><span style="font-family:var(--mono);font-size:11px;font-weight:600;color:${f.st === 'A' ? 'var(--st-done)' : 'var(--accent-text)'}">${f.st}</span><span class="path"><span>${esc(dir)}</span>${esc(f.path.slice(dir.length))}</span><span class="add">+${f.ins}</span><span class="del">−${f.del}</span></div>`;
+    if (!f.hunks.length) html += '<div class="empty">No text diff was recorded for this file.</div>';
     f.hunks.forEach(h => {
       html += `<div class="hunk">${esc(h.h)}<span>${esc(h.src)}</span></div>`;
       h.lines.forEach(l => {
@@ -648,7 +360,9 @@ function jump(dir) {
   const order = navOrder(); if (!order.length) return;
   S.cursor = (S.cursor + dir + order.length) % order.length;
   const t = findThread(order[S.cursor]);
-  S.selected = FILES.findIndex(f => f.path === t.file); renderFiles(); renderHead();
+  S.selected = FILES.findIndex(f => f.path === t.file);
+  if (host.model) { host.dispatchEvent(new CustomEvent('design-select-file', { bubbles: true, composed: true, detail: { path: t.file } })); return; }
+  renderFiles(); renderHead();
   const el = document.getElementById('t-' + t.id);
   el.scrollIntoView({ block:'center', behavior:'smooth' });
   el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
@@ -714,6 +428,7 @@ document.addEventListener('keydown', e => {
     return addReview();
   }
   if (e.key === 'Escape') {
+    if (S.composer || S.replying || S.editing) e.stopImmediatePropagation();
     if (S.composer) { S.composer = null; render(); }
     else if (S.replying) { S.replying = null; render(); }
     else if (S.editing) { S.editing = null; render(); }
@@ -723,10 +438,18 @@ document.addEventListener('keydown', e => {
   if (e.key === 'c' && S.hover) { e.preventDefault(); openComposer(S.hover.f, S.hover.side, S.hover.num); }
   if (e.key === 'n') jump(1);
   if (e.key === 'p') jump(-1);
-  if (e.key === 'j' || e.key === 'k') { S.selected = Math.max(0, Math.min(FILES.length - 1, S.selected + (e.key === 'j' ? 1 : -1))); renderFiles(); renderHead(); document.getElementById('file-' + S.selected).scrollIntoView({ behavior:'smooth' }); }
+  if (!host.model && (e.key === 'j' || e.key === 'k')) { S.selected = Math.max(0, Math.min(FILES.length - 1, S.selected + (e.key === 'j' ? 1 : -1))); renderFiles(); renderHead(); document.getElementById('file-' + S.selected).scrollIntoView({ behavior:'smooth' }); }
 });
 
-load(1);
-</script>
-</body>
-</html>
+if (saved) {
+  S = saved.state;
+  if (host.model) S.selected = Math.max(0, FILES.findIndex(file => file.path === host.model.selected));
+  document.querySelectorAll('#scenarios button').forEach((button) => button.classList.toggle('on', +button.dataset.s === S.scenario));
+  render(true);
+} else if (host.model) {
+  S = { scenario: 0, threads: [], selected: Math.max(0, FILES.findIndex(file => file.path === host.model.selected)), composer: null, editing: null, confirm: null, expanded: new Set(), fresh: new Set(), cursor: -1, hover: null };
+  render(true);
+} else load(Math.max(1, Math.min(4, Number(host.getAttribute('scenario')) || 1)));
+return () => ({ state: S, id: _id });
+  });
+})();

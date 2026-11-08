@@ -33,12 +33,33 @@ The top bar switches between four views:
 | `app/screens.js` | Screens composed from components and layout primitives only. |
 | `app/library.js` | The Components and Foundations pages, the tray popover and OS notification surfaces. |
 | `app/states.js` | State examples and the States catalog. Examples use the same detail renderers and stay out of the everyday board sample. |
+| `app/flow.js` | Adapts the selected run or chat to Activity and Changes, and parses patches for inline comments. |
 | `app/main.js` | State, actions, keyboard model, command menu, menus, dialogs, toasts, terminal tabs, live clocks. |
+| `app/surfaces.js`, `app/activity.js`, `app/changes.js`, `app/comments.js` | Scoped Activity, Changes and Diff comments views, sample records and interactions. |
+| `ds/surfaces.css`, `ds/activity.css`, `ds/changes.css`, `ds/comments.css` | Shared token aliases and styles for those views. |
 | `index.html` | Page shell and documentation chrome styles. |
 
 ## Status
 
-Design reference only. Nothing here ships. The Compose implementation built to this design lives in `desktop/`, and the prototype describes that app as built (see the revision note in the handoff). The current app in `desktop/` is the behavior reference. Design additions await implementation. Standalone mocks stay until the operator confirms their synced versions.
+Design reference only. Nothing here ships. The Compose implementation built to this design lives in `desktop/`, and the prototype describes that app as built (see the revision note in the handoff). The current app in `desktop/` is the behavior reference. Design additions await implementation. Duplicate standalone mocks have been removed. The Activity, Changes window and Diff comments designs are now part of this prototype; their standalone copies have been removed.
+
+## Activity, Changes and Diff comments
+
+Open `index.html`, choose a goal on Work and browse its detail. Activity is embedded below Changes, with the selected goal's subtasks, recorded phases, blocks and recent updates. Expand a group or use the timeline to inspect its phases.
+
+Click Open changes in the detail header or Changes overview. The window opens over that same goal. Choose a scope and file, then hover a diff line and click + to draft a comment. Pending comments stay in one review while you switch files in that scope. Add review publishes them together locally. Close changes or press Escape to return to the goal. Comments and scope choices survive closing and reopening the window.
+
+The Work board includes "Changes window with subtask scopes", a 33-subtask example with recorded patches for trying the picker, ranges and comments. The IDE status goal also has an illustrative patch. Other runs and chats show their own sample file list. A file without a patch says "No text diff was recorded for this file." Chat changes and Verify's Open changes action use the same window with their own context.
+
+States keeps the extra examples for comparing variants:
+
+- Recorded activity has five historical and synthetic scenarios.
+- Changes window retains the 33-subtask scope example.
+- Diff comments has four scenarios covering writing a review, published threads, agent review and review fixes.
+
+All data is part of this HTML prototype. Refreshing resets local interactions. No files, reviews or runs are changed.
+
+`app/surfaces.js` owns the scoped view lifecycle and in-memory snapshots. Each view has a controller under `app/` and a stylesheet under `ds/`. Their local styles inherit the shared tokens through `ds/surfaces.css`; they do not affect other screens. All modules load from the same `index.html`, including with `file://`.
 
 ## Usage limits card
 

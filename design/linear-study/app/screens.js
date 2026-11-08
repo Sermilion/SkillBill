@@ -122,7 +122,7 @@
     return Object.assign({}, data, { provider, contextAgent: contextual ? agent : null, color: colors[provider], colors, providers: D.USAGE.providers, agents, defaultAgent: st.prefs.defaultAgent });
   }
 
-  /* ---------- QA device (sidebar footer; design/qa-device-picker, variant A "Switcher row") ---------- */
+  /* ---------- QA device (sidebar footer; QA device design, variant A "Switcher row") ---------- */
   /* `list` is one of D.QA_DEVICES.lists (null when adb is not found); `selected` is a device id or 'auto'. Let QA choose
    * keeps today's behavior: the QA pack picks a free ready device or boots an AVD. A stopped AVD can be picked and QA boots
    * it when the run starts. Unauthorized, offline and leased devices show but cannot be picked. */
@@ -272,7 +272,7 @@
     const p = it.pipeline;
     return D.PHASE_ORDER.map((id) => {
       if (p.done.includes(id)) return { label: id, state: 'done' };
-      if (id === p.now) return { label: id, state: p.failed ? 'fail' : it.lifecycle === 'blocked' ? 'wait' : it.lifecycle === 'active' ? 'now' : '', count: it.exec };
+      if (id === p.now) return { label: id, state: p.failed || it.lifecycle === 'failed' ? 'fail' : it.lifecycle === 'canceled' ? 'skipped' : it.lifecycle === 'active' && it.live ? 'now' : 'wait', count: it.exec };
       return { label: id, state: '' };
     });
   }
@@ -376,7 +376,7 @@
    * assessment and QA results (they replace the app's Assessment / QA switch). Selection per item and list:
    * st.peekSel["<id>|<subtask id or finish>"]. Default: the running or stopped phase, else the last phase that ran. */
   function finishStates(it) {
-    if (it.finish && it.finish.states) return it.finish.states;
+    if (it.finish && it.finish.states) return phaseDisplayStates(it, it.finish.states);
     const out = {};
     D.GOAL_FINISH.forEach((id) => { out[id] = it.finishDone ? 'done' : ''; });
     if (!it.finishDone) {
@@ -388,6 +388,8 @@
   /* The Goal finish row and pane title: running, waiting, done or pending. */
   function finishState(it) {
     const v = Object.values(finishStates(it));
+    if (v.includes('wait') && it.lifecycle === 'paused') return 'paused';
+    if (v.includes('skipped') && it.lifecycle === 'canceled') return 'canceled';
     return v.includes('now') ? 'active' : v.includes('wait') ? 'blocked' : v.includes('fail') ? 'failed' : it.finishDone ? 'done' : 'pending';
   }
   const QA_CARD_TONE = { failed: 'fail', blocked: 'wait', done: 'done', faint: 'skipped' };
@@ -406,12 +408,20 @@
     }
     return null;
   }
+  function phaseDisplayStates(it, states) {
+    return Object.fromEntries(Object.entries(states).map(([phase, value]) => [phase, value === 'now' && (it.lifecycle !== 'active' || !it.live) ? it.lifecycle === 'failed' ? 'fail' : it.lifecycle === 'canceled' ? 'skipped' : 'wait' : value]));
+  }
+  function subDisplayState(it, sub) {
+    if (sub.status === 'completed_no_change') return 'no_change';
+    const value = window.DesignFlow.subtaskState(it, sub);
+    return ({ running: 'active', complete: 'done', waiting: 'pending', stopped: 'canceled' })[value] || value;
+  }
   function subPhaseStates(it, s) {
-    if (s.phases && s.phases.states) return s.phases.states;
+    if (s.phases && s.phases.states) return phaseDisplayStates(it, s.phases.states);
     const out = {};
     if (s.status === 'complete' || s.status === 'completed_no_change') D.PHASE_ORDER.forEach((id) => { out[id] = 'done'; });
     else if (!isFinished(it) && s.id === it.current && it.pipeline && !it.planning) pipelineSteps(it).forEach((p) => { out[p.label] = p.state; });
-    return out;
+    return phaseDisplayStates(it, out);
   }
   function subPhaseCounts(it, s) {
     if (s.phases && s.phases.counts) return s.phases.counts;
@@ -460,7 +470,8 @@
     }
   }
   function peekCard(st, it, id, c, state) {
-    const blocks = (list) => (list || []).map((b) => peekBlock(st, it, b)).join('');
+    if (['now', 'wait', 'skipped', 'fail'].includes(state) && it.lifecycle !== 'active' && c.now) c = { ...c, word: LIFE[it.lifecycle][0], nowTitle: 'Last activity' };
+    const blocks = (list) => (list || []).map((b) => peekBlock(st, it, b.kind === 'signal' && !it.live ? { ...b, live: false } : b)).join('');
     const sortable = c.madeEnd && c.madeEnd.sort;
     const end = sortable ? (it.assessment && it.assessment.findings.length > 1 ? S.Segmented({ act: 'assess-order', value: st.assessOrder || 'default', items: [{ id: 'default', label: 'Default' }, { id: 'priority', label: 'Priority' }, { id: 'status', label: 'Status' }] }) : '') : c.madeEnd ? esc(c.madeEnd) : '';
     const parts = [
@@ -494,7 +505,7 @@
       const key = String(s.id);
       const current = !finished && s.id === it.current;
       const meta = [s.commit ? S.ShortId({ value: s.commit, label: 'commit' }) : '', current && it.live ? subClock(it) : '', s.status === 'completed_no_change' ? S.Label({ text: 'no change', dot: false }) : ''];
-      return S.SubtaskRow({ num: pad(s.id), state: SUB_STATE[s.status], frac: 0.5, title: s.title, current, selected: key === sel, meta, act: 'sub-select', arg: `${it.id}|${key}`, body: inline && key === sel ? subtaskInspector(st, it, s, true) : '', expanded: open });
+      return S.SubtaskRow({ num: pad(s.id), state: subDisplayState(it, s), frac: 0.5, title: s.title, current, selected: key === sel, meta, act: 'sub-select', arg: `${it.id}|${key}`, body: inline && key === sel ? subtaskInspector(st, it, s, true) : '', expanded: open });
     });
     const fin = finishStates(it), finCounts = (it.finish && it.finish.counts) || {};
     rows.push(S.SubtaskRow({ num: '··', state: finishState(it), title: 'Goal finish', selected: sel === 'finish', meta: [], act: 'sub-select', arg: `${it.id}|finish`, body: inline && sel === 'finish' ? finishResults(st, it) : S.PhasePipeline(D.GOAL_FINISH.map((id) => ({ label: id, state: fin[id] || '', count: finCounts[id] || null, goal: true }))), expanded: open }));
@@ -504,7 +515,7 @@
     const sel = selectedSub(st, it);
     if (sel === 'finish') return finishResults(st, it);
     const s = it.subtasks.find((x) => String(x.id) === sel);
-    return S.PaneSection({ title: `Subtask ${pad(s.id)}`, status: { state: SUB_STATE[s.status], frac: 0.5 }, body: subtaskInspector(st, it, s, false) });
+    return S.PaneSection({ title: `Subtask ${pad(s.id)}`, status: { state: subDisplayState(it, s), frac: 0.5 }, body: subtaskInspector(st, it, s, false) });
   }
   /* Spec files: the goal-level files only (subtask specs open from the inspector), manifest, spec.md, then by name. */
   function specFilesPane(it) {
@@ -576,12 +587,10 @@
   function activitySection(st, it) {
     const all = activityEntries(it);
     if (!all.length) return '';
-    const showAll = st.feedAll.has(it.id);
-    const hidden = showAll ? 0 : Math.max(0, all.length - FEED_MAX);
-    return secBlock(st, 'activity', { title: 'Activity', count: all.length, body: S.ActivityFeed({ entries: all.slice(hidden), hidden, act: 'feed-all', arg: it.id }) });
+    return secBlock(st, 'activity', { title: 'Activity', body: `<sb-design-surface screen="activity" embedded="detail" work="${esc(it.id)}"></sb-design-surface>` });
   }
 
-  /* ---------- QA results (design/qa-results; desktop feature/detail QaResultsView, QaResultsSection, QaUnblock) ---------- */
+  /* ---------- QA results (QA results design; desktop feature/detail QaResultsView, QaResultsSection, QaUnblock) ---------- */
   /* The verdict word and the sentence come from counts, never from the agent's prose. Open findings, things QA left behind,
    * untested areas and Unblock entries need the reader; fixed findings, passed checks, run details and the full report fold.
    * `q` is a GoalQaResult or a standalone run's QA facts (data.js QA); `o`: { fixLoop (goal QA), running }. */
@@ -699,7 +708,7 @@
    * without one draws no evidence chips. Returns the verdict for the section's end slot and the body. */
   /* `namesOnly` draws evidence chips that name files and open nothing; `select(findingId)` adds a checkbox, a Chat or Goal
    * switch and a shared-code hint per open finding, and `selectHead` a Select all row. A Verify run's QA step no longer
-   * uses them: it renders VerifyQa (design/verify-run). */
+   * uses them: it renders VerifyQa (Verify run design). */
   function qaResults(st, q, o) {
     o = o || {};
     const v = qaView(q, o);
@@ -738,7 +747,7 @@
     };
   }
 
-  /* ---------- Validation run (design/validation-run, Redesign; desktop feature/detail ValidationDocument,
+  /* ---------- Validation run (validation run design, Redesign; desktop feature/detail ValidationDocument,
    * ValidationOutcomeCard, ValidationChecksSection, ValidationReport, ValidationReportParts, ValidationBranchRunsSection) ---------- */
   /* A standalone validation phase renders its own document, in the mock's order: the header, the outcome card (it replaces
    * the Step and Phase elapsed tiles: the step is always validate, so the tile and the one-stage pipeline said nothing),
@@ -1161,7 +1170,7 @@
     return monStepPanel(st, it, b.step, `finish:${b.kind}:${b.step.repair || ''}`, { live });
   }
 
-  /* ---------- Plan run (design/plan-detail; desktop feature/detail PlanDocument, PlanStatus, PlanNowCard, PlanActivity,
+  /* ---------- Plan run (plan run design; desktop feature/detail PlanDocument, PlanStatus, PlanNowCard, PlanActivity,
    * PlanSubtasks, PlanOutput, PlanImplementation) ---------- */
   /* A standalone plan reads top down: the stage strip (the only place with stage status and time), one Now block (or the
    * blocked callout), Activity, the Spec bundle with a row per subtask spec, the Transcript and the Briefing. */
@@ -1372,7 +1381,7 @@
     return [planStrip(it), planNow(it), planActivity(st, it), planBundle(st, it), planTranscript(st, it), planBriefing(st, it)];
   }
 
-  /* ---------- Verify run (design/verify-run; desktop feature/detail VerifyDocument, VerifyHeader, VerifyOutcomeCard,
+  /* ---------- Verify run (Verify run design; desktop feature/detail VerifyDocument, VerifyHeader, VerifyOutcomeCard,
    * VerifyCriteriaSection, VerifyStepsTimeline, VerifyReceiptBody, VerifyFixSelection, VerifyFixControls) ---------- */
   /* A Verify run reads top down: what the change does, the outcome card (verdict and four counts that jump to their
    * evidence), the acceptance criteria it grades, the steps with their receipts, Activity, and a selection bar for fixes. */
@@ -1769,14 +1778,14 @@
     ]);
 
     const parts = [];
-    /* Validation and Verify runs have their own documents (design/validation-run, design/verify-run). */
+    /* Validation and Verify runs have their own documents (validation run design, Verify run design). */
     const val = isValidationRun(it), ver = !!it.verifyRun, plan = isPlanRun(it), mon = isMonitorRun(it);
     if (ver) parts.push(verifyDoc(st, it));
     else if (val) parts.push(validationDoc(st, it));
     else if (mon) parts.push(monitorDoc(st, it));
     else parts.push(S.DocHeader({
       eyebrow: [plan ? planBadge(it) : lifeLabel(it), it.stalled ? S.Label({ text: 'Stalled', color: 'var(--st-blocked)', tint: true, dot: false }) : '', S.IdTag(rowKey(it)), it.issue && !goal ? S.IdTag(it.issue) : '', S.Label({ text: kindWord(it), dot: false }), it.lifecycle !== 'terminal' ? S.Label({ text: it.fresh && !it.refreshFailed ? 'fresh' : 'stale', color: it.fresh && !it.refreshFailed ? 'var(--st-done)' : 'var(--fg-faint)' }) : '', plan && it.model ? S.Label({ text: `${it.model}${it.effort ? ` · ${it.effort} effort` : ''}`, dot: false }) : ''],
-      title: it.title, sub: location, actions: [runActions(st, it)],
+      title: it.title, sub: location, actions: [runActions(st, it), S.Button({ label: 'Open changes', icon: 'diff', act: 'changes-open', arg: it.id, id: `changes-open-${it.id}` })],
     }));
     /* Validation runs get no strip: their live card already names the running check command. */
     const build = !val && !ver && !mon && buildOf(st, it);
@@ -1792,6 +1801,7 @@
     if (goal && it.planning) parts.push(secBlock(st, 'subtasks', { title: 'Subtasks', count: `${it.planned}/${it.total} plans saved`, body: S.Hint({ text: 'Subtasks appear here once their plans are saved.' }) }));
     if (goal && it.pipeline && !it.planning) parts.push(secBlock(st, 'pipeline', { title: 'Phase pipeline', body: S.PhasePipeline(pipelineSteps(it)) }));
     if (!goal && !plan && !mon && (it.steps || []).length > 1) parts.push(secBlock(st, 'pipeline', { title: 'Phase pipeline', body: S.PhasePipeline(it.steps.map(([label, state]) => ({ label, state, count: state === 'now' ? it.exec : null }))) }));
+    if (goal) parts.push(secBlock(st, 'changes', { title: 'Changes', body: `<sb-design-surface screen="changes" embedded="overview" work="${esc(it.id)}"></sb-design-surface>` }));
     if (!plan && !ver && !val && !mon) parts.push(activitySection(st, it));
     /* Standalone phases and operations keep their own validation, phase results and spec bundle in the document. */
     if (!goal && it.validation) parts.push(secBlock(st, 'validation', { title: 'Validation', body: S.Box(it.validation.map(([n, ok, checks]) => S.FindingRow({ ref: `Subtask ${n}`, title: `${ok ? 'passed' : 'failed'} · ${checks} checks`, state: ok ? 'passed' : 'failed', stateColor: ok ? 'var(--st-done)' : 'var(--st-failed)' }))) }));
@@ -1829,7 +1839,7 @@
     return workArea(st, header, `<div class="sb-scroll" data-scroll="history">${body}</div>`);
   }
 
-  /* ---------- Specs pane (design/specs-panel, variant A "selection bar"; desktop feature/specs SpecsPane, SpecsTree,
+  /* ---------- Specs pane (specs pane design, variant A "selection bar"; desktop feature/specs SpecsPane, SpecsTree,
    * SpecSelectionBar, SpecsMenuModel, PurgeConfirmationDialog) ---------- */
   /* One object, one action list: right-click, the row's ⋯, the bar's ⋯ and ⌘K show the same spec actions in the same order.
    * The bar promotes one primary action chosen by state. Run verdicts follow SpecBundleControlPolicy.kt. */
@@ -2272,7 +2282,7 @@
     return S.QueuePanel({ count: c.queue.length, clearArmed: q.clearArmed, undo: q.undo && q.undo.chat === c.id ? q.undo.text : null, rows: c.queue.map((m, i) => S.QueuedRow({ index: i, text: m.text, next: i === 0, images: m.images, action: m.action, kb: i === q.kb, act: 'q-remove', arg: m.id })) });
   }
 
-  /* /resume (ResumePalette, variant B of design/resume-chat-picker): saved chats of the composer's repository, newest first,
+  /* /resume (ResumePalette, variant B of resume picker design): saved chats of the composer's repository, newest first,
    * the first 30 until a filter or Show all. `o`: { repo, saved, q, active, showAll }. */
   const RESUME_LIMIT = 30;
   const resumeGroup = (m) => (m < 8 * 60 ? 'Today' : m < 32 * 60 ? 'Yesterday' : m < 7 * 1440 ? 'This week' : 'Older');
@@ -2313,14 +2323,27 @@
   }
   const resumePalette = (st) => resumePaletteView({ repo: ntChat(st).repo, saved: st.nt.saved, q: st.dialog.q, active: st.dialog.active, showAll: st.dialog.showAll });
 
+  function changesWindow(view) {
+    const model = window.DesignFlow.changesFor(view.work);
+    return `<div class="sb-changes-layer"><section class="sb-changes-dialog" role="dialog" aria-modal="true" aria-labelledby="changes-title"><header class="sb-changes-header"><div><h2 id="changes-title">Changes</h2><span class="t-muted">${esc(model.goal)}</span></div><span class="l-grow"></span><span class="t-faint">Hover a diff line to add a review comment</span>${S.Button({ label: 'Close changes', icon: 'x', act: 'changes-close', id: 'changes-close' })}</header><sb-design-surface screen="changes" embedded="window" work="${esc(view.work)}"${view.scope ? ` scope="${esc(JSON.stringify(view.scope))}"` : ''}${view.file ? ` file="${esc(view.file)}"` : ''}></sb-design-surface></section></div>`;
+  }
+
+  function designSurface(st) {
+    const labels = { activity: 'Recorded activity', changes: 'Changes window', comments: 'Diff comments' };
+    const scenarios = { activity: ['real', 'one', 'running', 'long', 'phase'], changes: [], comments: ['1', '2', '3', '4'] };
+    const scenario = scenarios[st.view].includes(st.surfaceScenario) ? st.surfaceScenario : '';
+    const controls = Object.entries(labels).map(([id, label]) => S.Button({ label, act: 'surface', arg: id, variant: st.view === id ? 'primary' : 'ghost', size: 'sm' }));
+    return `<div class="sb-surface-page"><div class="sb-surface-nav">${S.Button({ label: 'Back to work', icon: 'arrowLeft', act: 'nav', arg: 'work', variant: 'ghost', size: 'sm' })}<span class="l-grow"></span>${controls.join('')}</div><div class="sb-surface-intro"><h1>${labels[st.view]}</h1><p>Interactive sample records. These examples do not change files or start runs.</p></div><div class="sb-surface-scroll" data-scroll="surface"><sb-design-surface screen="${st.view}" scenario="${esc(scenario)}"></sb-design-surface></div></div>`;
+  }
+
   /* ---------- page ---------- */
   function app(st) {
-    const views = { work, detail, history, settings: settingsPage, newtask: newTask };
+    const views = { work, detail, history, settings: settingsPage, newtask: newTask, activity: designSurface, changes: designSurface, comments: designSurface };
     return shell(st, (views[st.view] || work)(st));
   }
 
   window.Screens = {
-    buildOf, app, work, detail, history, settingsPage, specsPane, terminal, tierOf, lookup, itemBy, subKeys, selectedSub, paneShown,
+    subPhaseStates, finishStates, buildOf, app, work, detail, history, changesWindow, settingsPage, specsPane, terminal, tierOf, lookup, itemBy, subKeys, selectedSub, paneShown,
     statusIcon, stepText, clock, rowKey, repoOf, agentOf, LIFE, SECTIONS, resumable, controllable, pauseEligible, recoveryOffered,
     newTask, ntChat, chatLabel, chatStatus, chatEmpty, ntSendButton, pickerItems, targetPicker, targetPickerView, chatMenu, chatTabMenu, queuePanel, chatChanges, changesPanel,
     resumeListing, resumePalette, resumePaletteView,
