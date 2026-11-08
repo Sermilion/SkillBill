@@ -46,20 +46,11 @@ internal fun RunActions(
         val variant = if (view.launchNote) SbButtonVariant.Primary else SbButtonVariant.Secondary
         ActionButton(button, LucideIcons.play, "R", variant) { onAction(ControlsAction.Launch) }
       }
-      view.agent?.let { button ->
-        Box {
-          ActionButton(button, LucideIcons.bot) { onAction(ControlsAction.OpenAgentMenu) }
-          if (menuOpen) {
-            val close = { onAction(ControlsAction.CloseAgentMenu) }
-            ShellLayer(close)
-            SbPopover(expanded = true, onDismissRequest = close) {
-            SbMenu(agentChoices.map { agent -> SbMenuEntry.Item(agent, { onAction(ControlsAction.ChooseAgent(agent)) }, checked = agent == view.agentId) })
-            }
-          }
-        }
-      }
+      // The agent picker sits after the button it launches: Resume before it, Implement after it.
+      if (view.implement == null) AgentPicker(view, agentChoices, menuOpen, onAction)
       view.implement?.let { button ->
         ActionButton(button, LucideIcons.play, variant = if (button.enabled) SbButtonVariant.Primary else SbButtonVariant.Secondary) { onAction(ControlsAction.ImplementPlan) }
+        AgentPicker(view, agentChoices, menuOpen, onAction)
       }
       view.cancel?.let { ActionButton(it, LucideIcons.x, variant = SbButtonVariant.Danger) { onAction(ControlsAction.Cancel) } }
       view.recover?.let { ActionButton(it, LucideIcons.refresh, modifier = Modifier.focusRequester(recoverFocus)) { onAction(ControlsAction.Recover) } }
@@ -67,8 +58,24 @@ internal fun RunActions(
     // `.t-faint` at `--t-xs`, regular weight.
     if (view.launchNote) BasicText("Starts the installed agent harness", style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal))
     if (view.implementationNote) BasicText("Implement turns on when every spec is saved", style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal))
+    if (view.goalStartedNote) BasicText("$GOAL_STARTED. Open the goal to follow or resume it.", style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal))
     view.unavailableReason?.let { Hint(it, FeedbackTone.Warn) }
     if (view.refreshNeeded) Hint(REFRESH_BEFORE_CONTROLS, FeedbackTone.Warn)
+  }
+}
+
+@Composable
+private fun AgentPicker(view: RunActionsView, agentChoices: List<String>, menuOpen: Boolean, onAction: (ControlsAction) -> Unit) {
+  val button = view.agent ?: return
+  Box {
+    ActionButton(button, LucideIcons.bot) { onAction(ControlsAction.OpenAgentMenu) }
+    if (menuOpen) {
+      val close = { onAction(ControlsAction.CloseAgentMenu) }
+      ShellLayer(close)
+      SbPopover(expanded = true, onDismissRequest = close) {
+        SbMenu(agentChoices.map { agent -> SbMenuEntry.Item(agent, { onAction(ControlsAction.ChooseAgent(agent)) }, checked = agent == view.agentId) })
+      }
+    }
   }
 }
 

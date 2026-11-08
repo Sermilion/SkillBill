@@ -14,6 +14,7 @@ import skillbill.engine.goal.GoalPreflightVerdict
 import skillbill.engine.goal.GoalRunnerStatusPort
 import skillbill.engine.goal.executionLivenessBlocksIdleSafeRefresh
 import skillbill.engine.goal.goalRepositoryIdentity
+import skillbill.engine.goal.goalRepositoryRootFromIdentity
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
@@ -207,7 +208,27 @@ public class WorkRunActions(
       "This older entry has no complete launch details.".takeIf {
         launchable && !supported
       },
+      goalStartedForPlan(phase, unit),
     )
+  }
+
+  /** True for a standalone plan whose issue already has a goal in this repository; that goal owns the work. */
+  private fun goalStartedForPlan(
+    phase: StandalonePhaseStatusRecord?,
+    unit: UnitOfWork,
+  ): Boolean {
+    val plan =
+      phase
+        ?.takeIf { it.launchScope == IdeStatusLaunchScope.STANDALONE }
+        ?.takeIf { it.phaseId == SkeletonDefinition.PLAN.id }
+        ?: return false
+    val issueKey = plan.issueKey?.takeIf(String::isNotBlank) ?: return false
+    val primary =
+      goalRepositoryRootFromIdentity(plan.repositoryIdentity)
+        ?.let(repositoryEnclosingRootPort::primaryRepositoryIdentity)
+    return setOfNotNull(plan.repositoryIdentity, primary).any { identity ->
+      unit.workList.goalParentCandidatePage(issueKey, identity, 0, 1).isNotEmpty()
+    }
   }
 
   private fun canLaunch(
