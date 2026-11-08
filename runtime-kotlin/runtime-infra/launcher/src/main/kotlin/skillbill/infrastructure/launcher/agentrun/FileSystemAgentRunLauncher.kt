@@ -15,6 +15,7 @@ import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
 import skillbill.ports.approval.ApprovalOwnerAuthority
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import java.nio.file.Path
 import java.time.Clock
@@ -29,6 +30,7 @@ class FileSystemAgentRunLauncher internal constructor(
   runtimeMcpBin: Path? = null,
   approvals: AgentRunApprovalOwners? = null,
   userHome: Path? = null,
+  projectStore: ProjectStorePort,
 ) : AgentRunLauncher {
   @Inject
   constructor(
@@ -39,8 +41,10 @@ class FileSystemAgentRunLauncher internal constructor(
     diagnostics: RuntimeDiagnostics,
     approvalOwners: ApprovalOwnerAuthority,
     clock: Clock,
+    projectStore: ProjectStorePort,
   ) : this(
     processRunner = processRunner as AgentRunProcessRunner,
+    projectStore = projectStore,
     executableLookup = executableLookup,
     databasePath = databaseSessionFactory.resolveDbPath(),
     providerEnvironment = environment.environment,
@@ -52,13 +56,14 @@ class FileSystemAgentRunLauncher internal constructor(
   )
 
   private val adapters: Map<SupportedAgent, ProcessAgentRunAdapter> =
-    headlessAgentRunAdapters(
+    HeadlessAgentRunAdapterFactory(
       processRunner,
       executableLookup,
       AgentRunWorkerBinding(databasePath, runtimeMcpBin, approvals, userHome, providerEnvironment),
       diagnostics,
       clock,
-    )
+      projectStore,
+    ).create()
 
   override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
     resolveAgentRunLaunchModel(request, providerEnvironment)

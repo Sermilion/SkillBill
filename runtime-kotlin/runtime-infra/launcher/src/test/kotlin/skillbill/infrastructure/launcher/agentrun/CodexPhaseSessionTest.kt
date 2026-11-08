@@ -11,6 +11,7 @@ import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.projectstore.FixedProjectStorePort
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -53,12 +54,13 @@ class CodexPhaseSessionTest {
         }
       val adapter =
         requireNotNull(
-          headlessAgentRunAdapters(
+          HeadlessAgentRunAdapterFactory(
             runner,
             ALL_EXECUTABLES_AVAILABLE,
             diagnostics = NoopRuntimeDiagnostics,
             clock = LAUNCH_TEST_CLOCK,
-          )[SupportedAgent.CODEX],
+            projectStore = FixedProjectStorePort(Files.createTempDirectory("launcher-project-store")),
+          ).create()[SupportedAgent.CODEX],
         )
       val result =
         adapter.launchFacts(

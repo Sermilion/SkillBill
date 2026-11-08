@@ -4,6 +4,8 @@ import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.projectstore.FixedProjectStorePort
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -77,5 +79,6 @@ class CodexAgentFailureDiagnosticTest {
     executableLookup = ALL_EXECUTABLES_AVAILABLE,
     diagnostics = NoopRuntimeDiagnostics,
     clock = LAUNCH_TEST_CLOCK,
+    projectStore = FixedProjectStorePort(Files.createTempDirectory("launcher-project-store")),
   ).launchFacts(governedReviewRequest())
 }

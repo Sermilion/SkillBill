@@ -8,11 +8,13 @@ import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.SkillRunGoalContinuationContext
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -204,13 +206,14 @@ class AgentRunGoalContinuationCommandTest {
     )
 
   private fun adapters(runner: RecordingAgentRunProcessRunner) =
-    headlessAgentRunAdapters(
+    HeadlessAgentRunAdapterFactory(
       runner,
       ALL_EXECUTABLES_AVAILABLE,
       AgentRunWorkerBinding(databasePath = Path.of("/tmp/skillbill-agent-run/metrics.db")),
       diagnostics = NoopRuntimeDiagnostics,
       clock = LAUNCH_TEST_CLOCK,
-    )
+      projectStore = FixedProjectStorePort(Files.createTempDirectory("launcher-project-store")),
+    ).create()
 
   private fun goalContinuationContext(
     childWorkflowId: String? = null,

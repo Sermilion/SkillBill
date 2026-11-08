@@ -8,6 +8,7 @@ import skillbill.infrastructure.launcher.process.launch.testAgentRunProcessReque
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunProgressEmitter
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.projectstore.FixedProjectStorePort
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -41,12 +42,13 @@ class AgentRunLauncherActivityTest {
   fun `launch facts expose provider-neutral child session path and id for codex and other builders`() {
     val runner = RecordingAgentRunProcessRunner()
     val adapters =
-      headlessAgentRunAdapters(
+      HeadlessAgentRunAdapterFactory(
         runner,
         ALL_EXECUTABLES_AVAILABLE,
         diagnostics = NoopRuntimeDiagnostics,
         clock = LAUNCH_TEST_CLOCK,
-      )
+        projectStore = FixedProjectStorePort(Files.createTempDirectory("launcher-project-store")),
+      ).create()
     listOf(SupportedAgent.CODEX, SupportedAgent.CLAUDE, SupportedAgent.JUNIE, SupportedAgent.CURSOR).forEach { agent ->
       val facts = requireNotNull(adapters[agent]).launchFacts(skillRunRequest())
       assertEquals("/tmp/skillbill-agent-run", facts.childSessionPath, "session path for $agent")

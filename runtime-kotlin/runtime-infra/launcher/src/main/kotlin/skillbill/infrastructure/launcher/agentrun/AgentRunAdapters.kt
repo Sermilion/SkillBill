@@ -55,6 +55,7 @@ import skillbill.ports.approval.claudeProfileIdentity
 import skillbill.ports.approval.model.ApprovalOwnerOpenRequest
 import skillbill.ports.approval.model.ApprovalOwnerOpenResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.workflow.taskruntime.model.skeleton.LAUNCH_MODEL_TOKEN_PATTERN
 import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
 import java.nio.file.Path
@@ -104,6 +105,7 @@ internal class ProcessAgentRunAdapter(
   private val approvals: AgentRunApprovalOwners? = null,
   private val inheritedEnvironment: Map<String, String> = emptyMap(),
   private val userHome: Path? = null,
+  private val projectStore: ProjectStorePort,
 ) {
   val canHostApprovalCards: Boolean get() = commandBuilder.approvalProtocol != null
 
@@ -210,7 +212,7 @@ internal class ProcessAgentRunAdapter(
             workspaceRoots = request.additionalWritableDirectories.map { it.toAbsolutePath().normalize().toString() },
           )
         val approvalDeadline = approvalEnclosingDeadline(clock, request.timeout)
-        CodexPhaseSession(process, processRunner, clock, diagnostics) { settings ->
+        CodexPhaseSession(process, processRunner, clock, diagnostics, projectStore) { settings ->
           openCodexSession(settings, request, approvalDeadline)
         }.run(launch)
       } else {
@@ -789,39 +791,43 @@ internal data class AgentRunWorkerBinding(
   val providerEnvironment: Map<String, String> = emptyMap(),
 )
 
-internal fun headlessAgentRunAdapters(
-  processRunner: AgentRunProcessRunner,
-  executableLookup: ExecutableLookup = PathExecutableLookup(),
-  workerBinding: AgentRunWorkerBinding = AgentRunWorkerBinding(),
-  diagnostics: RuntimeDiagnostics,
-  clock: Clock,
-): Map<SupportedAgent, ProcessAgentRunAdapter> =
-  listOf(
-    ClaudeAgentRunCommandBuilder(
-      providerEnvironment = workerBinding.providerEnvironment,
-      databasePath = workerBinding.databasePath,
-      runtimeMcpBin = workerBinding.runtimeMcpBin,
-    ),
-    CodexAgentRunCommandBuilder(
-      databasePath = workerBinding.databasePath,
-      runtimeMcpBin = workerBinding.runtimeMcpBin,
-    ),
-    JunieAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
-    CursorAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
-  ).associate { builder ->
-    builder.agent to
-      ProcessAgentRunAdapter(
-        agent = builder.agent,
-        commandBuilder = builder,
-        processRunner = processRunner,
-        clock = clock,
-        executableLookup = executableLookup,
-        diagnostics = diagnostics,
-        approvals = workerBinding.approvals,
-        inheritedEnvironment = workerBinding.providerEnvironment,
-        userHome = workerBinding.userHome,
-      )
-  }
+internal class HeadlessAgentRunAdapterFactory(
+  private val processRunner: AgentRunProcessRunner,
+  private val executableLookup: ExecutableLookup = PathExecutableLookup(),
+  private val workerBinding: AgentRunWorkerBinding = AgentRunWorkerBinding(),
+  private val diagnostics: RuntimeDiagnostics,
+  private val clock: Clock,
+  private val projectStore: ProjectStorePort,
+) {
+  fun create(): Map<SupportedAgent, ProcessAgentRunAdapter> =
+    listOf(
+      ClaudeAgentRunCommandBuilder(
+        providerEnvironment = workerBinding.providerEnvironment,
+        databasePath = workerBinding.databasePath,
+        runtimeMcpBin = workerBinding.runtimeMcpBin,
+      ),
+      CodexAgentRunCommandBuilder(
+        databasePath = workerBinding.databasePath,
+        runtimeMcpBin = workerBinding.runtimeMcpBin,
+      ),
+      JunieAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
+      CursorAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
+    ).associate { builder ->
+      builder.agent to
+        ProcessAgentRunAdapter(
+          agent = builder.agent,
+          commandBuilder = builder,
+          processRunner = processRunner,
+          clock = clock,
+          executableLookup = executableLookup,
+          diagnostics = diagnostics,
+          approvals = workerBinding.approvals,
+          inheritedEnvironment = workerBinding.providerEnvironment,
+          userHome = workerBinding.userHome,
+          projectStore = projectStore,
+        )
+    }
+}
 
 internal data class AgentRunApprovalOwners(
   val authority: ApprovalOwnerAuthority,

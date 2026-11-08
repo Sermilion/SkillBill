@@ -12,6 +12,7 @@ import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRunner
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.projectstore.ProjectStorePort
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -27,6 +28,7 @@ internal class CodexPhaseSession(
   private val runner: AgentRunProcessRunner,
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
+  private val projectStore: ProjectStorePort,
   private val open: (CodexSessionLaunch) -> AgentRunApprovalOpenResult,
 ) {
   private val startedAt = clock.instant()
@@ -35,7 +37,9 @@ internal class CodexPhaseSession(
   fun run(launch: CodexSessionLaunch): AgentRunProcessResult {
     val directory =
       try {
-        Files.createTempDirectory(request.launch.workingDirectory, ".skill-bill-codex-schema-")
+        val root = projectStore.resolve(request.launch.workingDirectory).root.resolve("scratch")
+        Files.createDirectories(root)
+        Files.createTempDirectory(root, "codex-schema-")
       } catch (failure: IOException) {
         return refused("Could not prepare the Codex protocol inspection: ${failure.message.orEmpty()}")
       }

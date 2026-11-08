@@ -7,6 +7,8 @@ import skillbill.infrastructure.launcher.process.launch.runAgentRunContinuations
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.projectstore.FixedProjectStorePort
+import java.nio.file.Files
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
@@ -136,6 +138,7 @@ class CodexOutputTokenContinuationTest {
       executableLookup = ALL_EXECUTABLES_AVAILABLE,
       diagnostics = NoopRuntimeDiagnostics,
       clock = LAUNCH_TEST_CLOCK,
+      projectStore = FixedProjectStorePort(Files.createTempDirectory("launcher-project-store")),
     )
 
   private fun exhausted(
