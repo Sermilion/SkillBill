@@ -127,18 +127,19 @@ internal fun DetailSections.subtaskSection(item: WorkItem, detail: Detail, state
   // screens.js `hasSubtasks`: a goal past planning with no subtasks has no Subtasks section, unless its first page is still to come.
   val loaded = state.sections as? SectionsUi.Loaded
   if (detail.subtasks.isEmpty() && loaded?.moreLists?.contains(DetailList.Subtasks) != true) return
+  val order = assessmentOrder
   val progress = item.progress
   section(
     "subtasks", "Subtasks",
     count = progress?.let { "${it.done}/${it.total}" } ?: detail.subtasks.size.toString(),
     actions = if (progress == null) null else { { ProgressRing(progress.done, progress.total, showText = false) } },
   ) {
-    item(key = "subtask-index") { SubtaskIndex(item, detail, state, paneShown, onAction) }
+    item(key = "subtask-index") { SubtaskIndex(item, detail, state, order, paneShown, onAction) }
   }
 }
 
 @Composable
-private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, paneShown: Boolean, onAction: (DetailAction) -> Unit) {
+private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, assessmentOrder: androidx.compose.runtime.MutableState<AssessmentOrder>, paneShown: Boolean, onAction: (DetailAction) -> Unit) {
   val colors = SkillBillTheme.colors
   val shellInput = LocalShellInput.current
   DisposableEffect(shellInput) { onDispose { shellInput.setFocusSource(ShellInput.SUBTASK_LIST_SOURCE, false) } }
@@ -203,14 +204,18 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, p
       SubtaskRow(
         modifier = revealModifier(SubtaskKey.GoalFinish),
         number = "··",
-        status = goalFinishStatus(item),
+        status = goalFinishStatus(item, detail),
         progress = null,
         title = "Goal finish",
         selected = selected == SubtaskKey.GoalFinish,
         onClick = { selectVisibleRow(SubtaskKey.GoalFinish) },
         divider = false,
-        body = if (finishedAt(item) != null || detail.currentPhase !in detail.goalFinishPipeline) null else {
-          { PhasePipeline(goalFinishSteps(item, detail)) }
+        body = when {
+          !paneShown && selected == SubtaskKey.GoalFinish && state.subtaskChoice.expanded -> ({
+            GoalFinishPhases(item, detail, state, assessmentOrder, onAction)
+          })
+          finishedAt(item) != null || detail.currentPhase !in detail.goalFinishPipeline -> null
+          else -> ({ PhasePipeline(goalFinishTabs(detail).map { dev.skillbill.desktop.core.designsystem.detail.PipelineStep(it.id, it.state, goal = true) }) })
         },
       )
     }

@@ -59,6 +59,7 @@ import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import skillbill.ports.qa.QaWorkspacePort
 import skillbill.ports.qa.model.QaReportSource
+import skillbill.ports.qa.model.QaRetainedScreenshot
 import skillbill.ports.qa.model.QaWorkspace
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -167,6 +168,14 @@ fun unavailableQaReportSettlement(): QaReportSettlement =
         repoRoot: Path,
         reference: String,
       ): QaReportSource? = null
+
+      override fun retainScreenshot(
+        repoRoot: Path,
+        invocationId: String,
+        sourcePath: Path,
+        label: String,
+        asFrame: Boolean,
+      ): QaRetainedScreenshot = error("This fixture does not retain screenshots.")
 
       override fun close(workspace: QaWorkspace) = Unit
     },

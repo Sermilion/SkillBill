@@ -58,6 +58,10 @@ internal fun PhaseCardState.toPeekState(): dev.skillbill.desktop.core.designsyst
 }
 
 internal fun phaseTitle(id: String): String = when (id) {
+  "goal_assessment" -> "Goal assessment"
+  "qa" -> "QA"
+  "qa_fix" -> "QA fix"
+  "monitor_fix" -> "Monitor fix"
   "preplan" -> "Preplan"
   "plan" -> "Plan"
   "implement" -> "Implement"

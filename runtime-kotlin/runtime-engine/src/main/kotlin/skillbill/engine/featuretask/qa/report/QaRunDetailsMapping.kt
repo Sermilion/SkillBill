@@ -11,19 +11,28 @@ internal object QaRunDetailsMapping {
   private val LEADING_REASON_TOKEN = Regex("^[a-z_]+")
 
   fun goal(
-    report: QaReport?,
-    reportPath: String?,
-    evidencePrefix: String?,
-    producedReason: String?,
+    tested: QaSettledRun,
     previous: QaRunDetails?,
   ): QaRunDetails? {
+    val report = tested.report
+    val reportPath = tested.reportPath
+    val evidencePrefix = tested.evidencePrefix
+    val invocationId = tested.invocationId
+    val producedReason = tested.producedReason
     val skipReason = skipReasonOf(producedReason) ?: report?.reason
     val retained = previous?.retainedResources.orEmpty()
     if (report == null) {
-      return if (skipReason == null && retained.isEmpty() && previous?.preview == null) {
+      val hasHistory = previous?.let { it.preview != null || it.occurrences.isNotEmpty() } == true
+      return if (skipReason == null && retained.isEmpty() && !hasHistory) {
         null
       } else {
-        QaRunDetails(skipReason = skipReason, retainedResources = retained, preview = previous?.preview)
+        QaRunDetails(
+          skipReason = skipReason,
+          retainedResources = retained,
+          preview = previous?.preview,
+          historyAvailability = previous?.historyAvailability ?: "not_recorded",
+          occurrences = previous?.occurrences.orEmpty(),
+        )
       }
     }
     return reported(report).copy(
@@ -32,6 +41,15 @@ internal object QaRunDetailsMapping {
       skipReason = skipReason,
       retainedResources = retained,
       preview = previous?.preview,
+      historyAvailability = previous?.historyAvailability ?: "not_recorded",
+      occurrences =
+        previous?.occurrences.orEmpty().map { occurrence ->
+          if (occurrence.workspaceInvocationId == (invocationId ?: previous?.preview?.invocationId)) {
+            occurrence.copy(screenshots = occurrence.screenshots.ifEmpty { report.screenshots })
+          } else {
+            occurrence
+          }
+        },
     )
   }
 

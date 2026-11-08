@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.qa.checklist
 
+import skillbill.engine.featuretask.phaserun.qa.InMemoryQaWorkspaces
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
@@ -41,7 +42,8 @@ class QaChecklistRecorderTest {
       environment = mapOf("TEST" to "1"),
       diagnostics = diagnostics,
     )
-  private val recorder = QaChecklistRecorder(database, Clock.fixed(NOW, ZoneOffset.UTC), diagnostics)
+  private val recorder =
+    QaChecklistRecorder(database, Clock.fixed(NOW, ZoneOffset.UTC), diagnostics, InMemoryQaWorkspaces())
 
   @Test
   fun `re-registering a plan keeps a result only on a matching case, number and text`() {

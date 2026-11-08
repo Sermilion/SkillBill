@@ -29,13 +29,13 @@ import dev.skillbill.desktop.core.domain.model.WorkSubtask
 import kotlin.time.Instant
 
 @Composable
-internal fun SubtaskPhaseCard(item: WorkItem, detail: Detail, subtask: WorkSubtask, card: PhaseCard, results: SubtaskPhaseResults?, activity: ActivityResult, renderedAt: Instant, onAction: (DetailAction) -> Unit) {
+internal fun SubtaskPhaseCard(item: WorkItem, detail: Detail, subtask: WorkSubtask?, card: PhaseCard, results: SubtaskPhaseResults?, activity: ActivityResult, renderedAt: Instant, onAction: (DetailAction) -> Unit) {
   val state = card.state.toPeekState()
   val model = listOfNotNull(card.model, card.effort).joinToString(" · ").ifBlank { null }
   val start = card.startedAt?.let { formatInstant(it, "d MMM HH:mm") }
   val duration = card.durationMillis?.let(::activityDuration)
-  val path = subtaskSpecPath(detail, subtask.id)
-  val phaseActivity = activityRows(activity, subtask.id, card)
+  val path = subtask?.let { subtaskSpecPath(detail, it.id) }
+  val phaseActivity = activityRows(activity, subtask?.id, card)
   val footer = when (card.phaseId) {
     "plan" -> path?.let { PeekFooter("Open spec file", false) { onAction(DetailAction.OpenSpecFile(it)) } }
     "commit_push" -> item.branch?.let { PeekFooter("Open branch", true) { onAction(DetailAction.OpenBranch) } }
@@ -65,7 +65,7 @@ internal fun SubtaskPhaseCard(item: WorkItem, detail: Detail, subtask: WorkSubta
 private fun produced(card: PhaseCard, results: SubtaskPhaseResults?, path: String?, onAction: (DetailAction) -> Unit) {
   when (card.phaseId) {
     "plan" -> path?.let { PeekPart("Produced") { PeekOutput(LucideIcons.fileText, fileName(it), onClick = { onAction(DetailAction.OpenSpecFile(it)) }, tooltip = it) } }
-    "implement" -> {
+    "implement", "qa_fix" -> {
       val edit = card.edit
       if (edit != null) PeekPart("Produced") { PeekStats(listOf(PeekStat(edit.fileCount.toString(), "files"), PeekStat("+${edit.insertions}", "added", PeekStatTone.Good), PeekStat("−${edit.deletions}", "removed", PeekStatTone.Bad))) }
       else if (card.files.isNotEmpty()) PeekPart("Produced") { card.files.forEach { PeekOutput(LucideIcons.file, it, tooltip = it) } }
@@ -103,7 +103,7 @@ private fun ValidationReceipt(title: String, receipt: dev.skillbill.desktop.core
   }
 }
 
-private fun activityRows(activity: ActivityResult, subtaskId: Int, card: PhaseCard): List<PeekTimelineRow> {
+private fun activityRows(activity: ActivityResult, subtaskId: Int?, card: PhaseCard): List<PeekTimelineRow> {
   val listed = activity as? ActivityResult.Listed ?: return emptyList()
   val group = listed.groups.firstOrNull { it.subtaskId == subtaskId } ?: return emptyList()
   val rows = buildList<Pair<Instant, PeekTimelineRow>> {

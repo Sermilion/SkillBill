@@ -15,6 +15,7 @@ Desktop UI is user-facing UI. Criteria that describe only a desktop app still ha
 ## Rules
 
 - Write generated scripts, screenshots, UI dumps, and log excerpts only under the invocation directory the briefing names, outside the QA checkout. Nothing goes in the working tree.
+- At capture time, run `skill-bill qa screenshot --invocation <invocation id> --file <absolute path> --label <short label>` for every PNG or JPEG, including images not linked to findings. Keep the image under the invocation evidence directory and list it in the `## Screenshots` report section.
 - Build, install, and test from the QA checkout the briefing names. It is a temporary worktree of the tree under test, and the runtime deletes it when QA ends.
 - When a criterion or changed behavior needs a state the environment does not produce on its own, force it. Edit any file in the QA checkout to inject a fault, force an error response, add a debug hook, or shorten a timeout, or change the environment, for example by cutting the network while a response streams. Rebuild after an edit, and list every such edit, with the flows it made possible, under `## Temporary edits` in the report.
 - That the environment could not produce a state is never a reason to leave a flow unexercised. Report a flow as not exercised only when a forced attempt failed, and name what you tried and why it failed.

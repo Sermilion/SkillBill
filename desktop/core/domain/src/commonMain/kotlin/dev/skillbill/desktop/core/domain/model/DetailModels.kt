@@ -340,6 +340,7 @@ data class GoalAssessmentResult(
   val fixRan: Boolean,
   val findings: List<GoalAssessmentFinding>,
   val fixCommitSha: String? = null,
+  val unavailableReason: String? = null,
 )
 
 data class GoalAssessmentFinding(

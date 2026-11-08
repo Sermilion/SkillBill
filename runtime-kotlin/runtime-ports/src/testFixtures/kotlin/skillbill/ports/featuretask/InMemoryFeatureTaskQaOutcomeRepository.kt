@@ -10,4 +10,9 @@ class InMemoryFeatureTaskQaOutcomeRepository : FeatureTaskQaOutcomeRepository {
   }
 
   override fun find(workflowId: String): FeatureTaskQaOutcome? = outcomes[workflowId]
+
+  override fun findByWorkspaceInvocation(invocationId: String): FeatureTaskQaOutcome? =
+    outcomes.values.firstOrNull { outcome ->
+      outcome.details?.occurrences?.any { occurrence -> occurrence.workspaceInvocationId == invocationId } == true
+    }
 }

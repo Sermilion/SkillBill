@@ -4,6 +4,7 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parsers.CommandLineParser
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.model.CliRunInputs
+import skillbill.engine.featuretask.phaserun.qa.InMemoryQaWorkspaces
 import skillbill.engine.featuretask.qa.checklist.QaChecklistRecorder
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.infrastructure.workflow.qa.FileSystemQaChecklistPlanFile
@@ -35,7 +36,8 @@ import kotlin.test.assertEquals
 class QaProgressCommandTest {
   private val database =
     sqliteDatabaseSessionFactory(Files.createTempDirectory("qa-progress"), environment = mapOf("TEST" to "1"))
-  private val recorder = QaChecklistRecorder(database, Clock.systemUTC(), NoopRuntimeDiagnostics)
+  private val recorder =
+    QaChecklistRecorder(database, Clock.systemUTC(), NoopRuntimeDiagnostics, InMemoryQaWorkspaces())
 
   @Test
   fun `qa root exposes plan step and target progress commands`() {
@@ -105,7 +107,8 @@ class QaProgressCommandTest {
 
   @Test
   fun `a database failure prints failed and exits 0`() {
-    val broken = QaChecklistRecorder(FailingDatabase(database), Clock.systemUTC(), NoopRuntimeDiagnostics)
+    val broken =
+      QaChecklistRecorder(FailingDatabase(database), Clock.systemUTC(), NoopRuntimeDiagnostics, InMemoryQaWorkspaces())
 
     val result = checkNotNull(step(broken, "--step", "1", "--status", "passed").result)
 
@@ -168,6 +171,8 @@ class QaProgressCommandTest {
       QaPlanCommand(recorder, state, FileSystemQaChecklistPlanFile()),
       QaStepCommand(recorder, state),
       QaTargetCommand(recorder, state),
+      QaStageCommand(recorder, state),
+      QaScreenshotCommand(recorder, state, inputs),
     )
   }
 

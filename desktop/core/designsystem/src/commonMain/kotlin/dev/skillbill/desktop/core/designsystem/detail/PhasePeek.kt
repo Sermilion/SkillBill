@@ -51,6 +51,7 @@ fun PhasePeek(
   why: String? = null,
   activity: List<PeekTimelineRow> = emptyList(),
   footer: PeekFooter? = null,
+  endControl: (@Composable () -> Unit)? = null,
   parts: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
   val colors = SkillBillTheme.colors
@@ -75,6 +76,9 @@ fun PhasePeek(
         BasicText(word ?: peekWord(state), style = SkillBillTheme.type.tXs.copy(color = toneColor, fontWeight = FontWeight.Medium), maxLines = 1)
         durationLabel?.let { BasicText(it, style = SkillBillTheme.type.t2xs.copy(color = colors.fgFaint), maxLines = 1) }
       }
+    }
+    endControl?.let { control ->
+      Box(Modifier.align(Alignment.End).padding(start = 10.dp, end = 10.dp, bottom = 8.dp)) { control() }
     }
     if (!why.isNullOrBlank()) BasicText(why, Modifier.fillMaxWidth().drawBehind { drawRect(toneColor.copy(alpha = .10f)) }.padding(9.dp), style = SkillBillTheme.type.tXs.copy(color = colors.fg2))
     Column(Modifier.fillMaxWidth(), content = parts)

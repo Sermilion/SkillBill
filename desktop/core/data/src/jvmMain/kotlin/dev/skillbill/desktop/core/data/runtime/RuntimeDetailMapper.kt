@@ -244,6 +244,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
           )
         },
         assessment.fixCommitSha,
+        assessment.unavailableReason,
       )
     },
     latestActivity = LatestActivity(
@@ -637,4 +638,26 @@ internal fun RuntimeQaRunDetails.toDomain() = QaRunDetails(
   retainedResources.map { QaRunRetainedResource(it.kind, it.identity) },
   temporaryEdits.map { QaRunTemporaryEdit(it.path, it.detail, it.notRestored) },
   findings.map { QaRunFinding(it.id, it.title, it.observed, it.expected, it.steps, it.evidencePaths) },
+  historyAvailability,
+  occurrences.map { occurrence ->
+    dev.skillbill.desktop.core.domain.model.QaRunOccurrence(
+      occurrence.occurrenceId,
+      occurrence.kind,
+      occurrence.phaseAttempt,
+      occurrence.workspaceInvocationId,
+      occurrence.startedAt,
+      occurrence.finishedAt,
+      occurrence.disposition,
+      occurrence.testedTreeIdentity,
+      occurrence.resultReference,
+      occurrence.frameReference,
+      occurrence.frameAvailability,
+      occurrence.screenshots.map { image ->
+        dev.skillbill.desktop.core.domain.model.QaRunScreenshot(image.label, image.path, image.recordedAt, image.format)
+      },
+      occurrence.stages.map { stage ->
+        dev.skillbill.desktop.core.domain.model.QaRunStage(stage.name, stage.state, stage.startedAt, stage.finishedAt, stage.detail)
+      },
+    )
+  },
 )

@@ -107,7 +107,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   }
   val item = state.header
   val view = runActionsView(state)
-  val paneShown = host.detailsPaneOpen && !host.specsOpen && !host.chatPaneOpen
+  val paneShown = host.detailsPaneVisible && (item.kind != WorkKind.Goal || LocalShellLayout.current.showDetailsPane)
   val recoverFocus = remember { FocusRequester() }
   val listState = rememberLazyListState()
   val planScreenState = rememberPlanScreenState(item.id)
@@ -205,9 +205,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
       }
       DetailPeek(
         open = paneShown,
-        wide = (state.sections as? SectionsUi.Loaded)?.detail?.let {
-          selectedSubtask(item, it, state.subtaskChoice.key) == SubtaskKey.GoalFinish
-        } == true,
+        wide = detailsPaneWide(item),
         onDismiss = { if (host.detailsPaneOpen) host.onToggleDetails() },
       ) {
         peekState.SaveableStateProvider("${item.id}:${state.subtaskChoice.key}") {
@@ -283,10 +281,6 @@ internal fun DetailSections.document(state: DetailUiState, view: RunActionsView,
       briefingSection(item, detail, onAction)
       reviewActionsSection(item, detail, onAction)
       standaloneResultSection(item, detail)
-      if (item.kind != WorkKind.Goal) {
-        goalQaSection(detail, item.running, onAction)
-        goalAssessmentSection(detail)
-      }
       // Standalone phases and operations keep their dependencies, validation, phase results and spec bundle in the document.
       dependencySection(item, detail, state, onAction)
       validationSection(item, detail)

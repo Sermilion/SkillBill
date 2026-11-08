@@ -367,6 +367,11 @@ private class FeatureTaskRuntimeRunLoopQaStepBinding(
   override val boundHooks: PhaseBoundStepHooks<PhaseQaStepBinding> =
     PhaseBoundStepHooks<PhaseQaStepBinding>(hooks, this)
 
+  override fun currentAttempt(): Int? {
+    bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)
+    return environment.progress.phase(run.phaseId).acknowledgedAttemptCount
+  }
+
   override fun qaRepairState(): QaRepairState? {
     bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)
     return environment.recorder.loadQaRepairState(workflowId)

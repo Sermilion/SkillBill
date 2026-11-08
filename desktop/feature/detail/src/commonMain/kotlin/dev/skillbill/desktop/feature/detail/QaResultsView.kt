@@ -39,6 +39,7 @@ internal data class QaResultsInput(
   val fallbackInvocationDirectory: String? = null,
   val fallbackReportPath: String? = null,
   val evidenceMode: QaEvidenceMode = QaEvidenceMode.Invocation,
+  val fixing: Boolean = false,
 )
 
 internal data class QaFindingRow(
@@ -68,6 +69,7 @@ internal data class QaResultsView(
   val tone: QaResultsTone,
   val sentence: String,
   val open: List<QaFindingRow>,
+  val openLabel: String,
   val left: List<QaLeftRow>,
   val notTested: List<QaDetailRow>,
   val fixed: QaListFold?,
@@ -80,13 +82,14 @@ internal data class QaResultsView(
   val unblock: List<QaUnblockEntry>,
 )
 
-internal fun goalQaInput(qa: GoalQaResult, running: Boolean): QaResultsInput {
+internal fun goalQaInput(qa: GoalQaResult, running: Boolean, fixing: Boolean = false): QaResultsInput {
   val reportPath = qa.findings.firstNotNullOfOrNull { finding -> finding.reportPath?.takeIf { it.isNotBlank() } }
   return QaResultsInput(
     runKey = qa.recordedAt.toString(),
     outcome = goalQaVerdict(qa.outcome),
     running = running,
     fixLoop = true,
+    fixing = fixing,
     fixAttempts = qa.fixAttempts,
     reason = qa.reason,
     failureKind = qa.failureKind,
@@ -133,6 +136,7 @@ private fun parentDirectory(path: String): String? =
 
 private enum class QaWord(val label: String) {
   Running("Running"),
+  Fixing("Fixing"),
   Review("Needs your review"),
   Skipped("Skipped"),
   DidNotFinish("Did not finish"),
@@ -178,7 +182,8 @@ internal fun qaResultsView(input: QaResultsInput): QaResultsView {
     word = word.label,
     tone = qaTone(word, skipToken, counts.tagged),
     sentence = qaSentence(word, input, counts, skipToken, leftList),
-    open = open.map { findingRow(it, input.fixLoop, directory) },
+    open = open.map { findingRow(it, input.fixLoop, input.fixing, directory) },
+    openLabel = if (input.fixing) "Sent to qa_fix" else "Needs you",
     left = leftRows(retained, leftEdits, directory),
     notTested = notTested,
     fixed = fixedFold,
@@ -197,6 +202,7 @@ private fun qaWord(input: QaResultsInput, counts: QaCounts): QaWord {
   val unsettled = outcome == null || outcome == QaVerdict.Attempted
   val unfinished = unsettled || outcome == QaVerdict.Incomplete
   return when {
+    input.fixing && counts.open > 0 -> QaWord.Fixing
     input.running && unsettled -> QaWord.Running
     counts.open > 0 || outcome == QaVerdict.Findings -> QaWord.Review
     outcome == QaVerdict.Skipped -> QaWord.Skipped
@@ -212,7 +218,7 @@ private fun qaTone(word: QaWord, skipToken: String?, tagged: Boolean): QaResults
   QaWord.Running -> QaResultsTone.Faint
   QaWord.Review, QaWord.DidNotFinish -> QaResultsTone.Failed
   QaWord.Skipped -> if (skipToken == EMPTY_SCOPE) QaResultsTone.Faint else QaResultsTone.Blocked
-  QaWord.Incomplete, QaWord.Cleanup -> QaResultsTone.Blocked
+  QaWord.Fixing, QaWord.Incomplete, QaWord.Cleanup -> QaResultsTone.Blocked
   QaWord.PassedAfterFixes, QaWord.Passed -> if (tagged) QaResultsTone.Done else QaResultsTone.Faint
 }
 
@@ -226,6 +232,7 @@ private fun qaSentence(word: QaWord, input: QaResultsInput, counts: QaCounts, sk
     else -> "All ${counts.passed} checks passed."
   }
   val body = when (word) {
+    QaWord.Fixing -> listOfNotNull("QA found $problems. qa_fix is working on ${if (counts.open == 1) "it" else "them"}, then QA runs again.", checks)
     QaWord.Running -> listOfNotNull("QA is still running.", "It has ${counted(counts.open, "open problem")} so far.".takeIf { counts.open > 0 })
     QaWord.Review -> when {
       counts.open == 0 -> listOf("QA reported problems but listed none of them. Open the full report.")
@@ -284,13 +291,13 @@ private fun leftPhrase(kind: String, count: Int): String = when {
   else -> "$count processes running"
 }
 
-private fun findingRow(finding: QaResultsFinding, fixLoop: Boolean, runDirectory: String?): QaFindingRow {
+private fun findingRow(finding: QaResultsFinding, fixLoop: Boolean, fixing: Boolean, runDirectory: String?): QaFindingRow {
   val directory = finding.evidenceDirectory ?: runDirectory
   fun shown(text: String?) = text?.takeIf { it.isNotBlank() }?.let { shortenPaths(it, directory) }
   return QaFindingRow(
     id = finding.id,
     title = shortenPaths(finding.title.ifBlank { finding.id }, directory),
-    state = if (fixLoop) "Not fixed" else "Open",
+    state = if (fixing) "Fixing" else if (fixLoop) "Not fixed" else "Open",
     observed = shown(finding.observed)?.let(::capitalized),
     expected = shown(finding.expected),
     steps = shown(finding.steps),

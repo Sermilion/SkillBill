@@ -33,6 +33,7 @@ public object QaReportParser {
     val assertionsReported = assertionLines.any(String::isNotBlank)
     val isolationReported = sectionLines(text, "isolation").any(String::isNotBlank)
     val parsedAssertions = QaReportSections.assertions(assertionLines, evidencePrefix)
+    val parsedScreenshots = QaReportSections.screenshots(sectionLines(text, "screenshots"), evidencePrefix)
     val findingsWarnings =
       if (verdict == QaVerdict.PASSED && findings.isNotEmpty()) {
         listOf(
@@ -62,12 +63,18 @@ public object QaReportParser {
       reason = reasonOf(text, verdict),
       findings = findings,
       reference = reference,
-      warnings = findingsWarnings + reportWarnings(parsedAssertions, findings) + coverageWarnings,
+      warnings =
+        findingsWarnings + reportWarnings(parsedAssertions, findings) + coverageWarnings +
+          listOfNotNull(
+            "QA screenshot inventory rejected ${parsedScreenshots.rejected} entries"
+              .takeIf { parsedScreenshots.rejected > 0 },
+          ),
       coverage = coverage,
       assertionsReported = assertionsReported,
       coverageWarnings = coverageWarnings,
       assertions = parsedAssertions.assertions,
       temporaryEdits = QaReportSections.temporaryEdits(sectionLines(text, "temporary edits")),
+      screenshots = parsedScreenshots.screenshots,
     )
   }
 

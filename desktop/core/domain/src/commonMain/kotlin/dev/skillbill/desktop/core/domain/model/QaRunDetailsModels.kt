@@ -35,4 +35,26 @@ data class QaRunDetails(
   val retainedResources: List<QaRunRetainedResource> = emptyList(),
   val temporaryEdits: List<QaRunTemporaryEdit> = emptyList(),
   val findings: List<QaRunFinding> = emptyList(),
+  val historyAvailability: String = "not_recorded",
+  val occurrences: List<QaRunOccurrence> = emptyList(),
 )
+
+data class QaRunOccurrence(
+  val occurrenceId: String,
+  val kind: String,
+  val phaseAttempt: Int?,
+  val workspaceInvocationId: String?,
+  val startedAt: String,
+  val finishedAt: String?,
+  val disposition: String,
+  val testedTreeIdentity: String?,
+  val resultReference: String?,
+  val frameReference: String?,
+  val frameAvailability: String,
+  val screenshots: List<QaRunScreenshot>,
+  val stages: List<QaRunStage>,
+)
+
+data class QaRunScreenshot(val label: String, val path: String, val recordedAt: String, val format: String)
+
+data class QaRunStage(val name: String, val state: String, val startedAt: String?, val finishedAt: String?, val detail: String?)

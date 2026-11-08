@@ -60,6 +60,8 @@ class PhaseGoalQaRunTest {
     val outcome = database.read { it.featureTaskQaOutcomes.find("goal-parent") }
     assertEquals(StandaloneQaOutcome.SKIPPED, outcome?.outcome)
     assertEquals("2".repeat(64), outcome?.testedTreeIdentity)
+    assertEquals("recorded", outcome?.details?.historyAvailability)
+    assertEquals(1, outcome?.details?.occurrences?.single()?.phaseAttempt)
   }
 
   @Test

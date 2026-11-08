@@ -50,10 +50,6 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
 import dev.skillbill.desktop.core.ui.status.subtaskStatusKind
 
-/** Result section keys shared by the document and the side peek. */
-internal const val GOAL_QA_KEY = "goal-qa"
-internal const val GOAL_ASSESSMENT_KEY = "goal-assessment"
-
 /** components.js `VERB`: a subtask state's word in the pane title. */
 internal fun statusWord(kind: StatusKind): String = when (kind) {
   StatusKind.Completed -> "Done"
@@ -68,11 +64,20 @@ internal fun statusWord(kind: StatusKind): String = when (kind) {
 }
 
 /** The Goal finish row's state: done once the goal finished, else pending. */
-internal fun goalFinishStatus(item: WorkItem): StatusKind = if (finishedAt(item) != null) StatusKind.Completed else StatusKind.Pending
+internal fun goalFinishStatus(item: WorkItem, detail: Detail): StatusKind {
+  val states = detail.goalFinishCards.map { it.state }
+  return when {
+    dev.skillbill.desktop.core.domain.model.PhaseCardState.Running in states -> StatusKind.Active
+    states.any { it == dev.skillbill.desktop.core.domain.model.PhaseCardState.Blocked || it == dev.skillbill.desktop.core.domain.model.PhaseCardState.Paused } -> StatusKind.Blocked
+    dev.skillbill.desktop.core.domain.model.PhaseCardState.Failed in states -> StatusKind.Failed
+    finishedAt(item) != null -> StatusKind.Completed
+    else -> StatusKind.Pending
+  }
+}
 
 /** The pane title's status for the selected row. */
 internal fun inspectorStatus(item: WorkItem, detail: Detail, key: SubtaskKey): PaneStatus = when (key) {
-  SubtaskKey.GoalFinish -> goalFinishStatus(item).let { PaneStatus(it, statusWord(it)) }
+  SubtaskKey.GoalFinish -> goalFinishStatus(item, detail).let { PaneStatus(it, statusWord(it)) }
   is SubtaskKey.Subtask -> {
     val kind = subtaskStatusKind(detail.subtasks.firstOrNull { it.id == key.id }?.status.orEmpty())
     PaneStatus(kind, statusWord(kind), 0.5f)

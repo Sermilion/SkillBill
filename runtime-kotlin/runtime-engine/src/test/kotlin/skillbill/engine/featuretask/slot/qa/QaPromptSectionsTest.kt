@@ -87,7 +87,7 @@ class QaPromptSectionsTest {
   }
 
   @Test
-  fun `only standalone QA gets the progress block, and existing rules keep their wording`() {
+  fun `standalone QA gets checklist commands and goal QA gets stage and screenshot commands`() {
     val directory = Path.of("/tmp/qa-progress")
 
     fun context(policy: QaPolicy) =
@@ -106,6 +106,7 @@ class QaPromptSectionsTest {
     val standalone = QaPromptSections.supplement(context(QaPolicy.STANDALONE))
 
     assertContains(standalone, "skill-bill qa plan --invocation phr-qa-progress --file <path>")
+    assertContains(standalone, "skill-bill qa screenshot --invocation phr-qa-progress --file <absolute path>")
     assertContains(standalone, "\"contract_version\": \"0.1\"")
     assertContains(standalone, "Progress commands never decide the verdict")
     assertContains(standalone, "Edit nothing outside the QA checkout and the invocation directory")
@@ -113,7 +114,12 @@ class QaPromptSectionsTest {
     assertContains(standalone, "`Steps:`, `Expected:`, `Observed:` and `Evidence:`")
     assertContains(standalone, "`[not restored]` only when the edit outlives the QA checkout")
     listOf(QaPolicy.AUTO, QaPolicy.ON).forEach { policy ->
-      assertFalse("skill-bill qa plan" in QaPromptSections.supplement(context(policy)))
+      val goal = QaPromptSections.supplement(context(policy))
+      assertFalse("skill-bill qa plan" in goal)
+      assertFalse("skill-bill qa step" in goal)
+      assertContains(goal, "skill-bill qa stage --invocation phr-qa-progress")
+      assertContains(goal, "skill-bill qa screenshot --invocation phr-qa-progress")
+      assertContains(goal, "Progress commands never decide the verdict")
     }
   }
 

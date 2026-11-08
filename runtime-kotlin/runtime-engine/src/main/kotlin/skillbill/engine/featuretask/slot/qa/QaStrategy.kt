@@ -135,10 +135,8 @@ public class QaStrategy(
   ): PhaseOutcome {
     val target = run.qaExecution?.target
     if (run.phaseId != entryStep) return runAgentStep(run, state)
-    if (target !is QaExecutionTarget.Skipped) {
-      if (run.request.admittedExecution != null) outcomes.recordAttempted(run.request.qaOutcomeWorkflowId)
-      return runAgentStep(run, state)
-    }
+    if (run.request.admittedExecution != null) outcomes.recordAttempted(run.request.qaOutcomeWorkflowId)
+    if (target !is QaExecutionTarget.Skipped) return runAgentStep(run, state)
     return runtimeCompletion(run, state, target.detail, QaReports.skipped(target.reason, target.detail))
   }
 
@@ -165,6 +163,9 @@ public class QaStrategy(
     val output = enriched.copy(verdict = verdict.wireValue)
     val iteration = state.nextStepIteration()
     state.settleRuntimeAuthoredCompletion(run.phaseId, output)
+    if (run.request.admittedExecution != null || run.request.qaSelection != null) {
+      outcomes.recordPreviewStarted(run.request.qaOutcomeWorkflowId, checkNotNull(run.qaExecution), iteration)
+    }
     return PhaseOutcome.completed(
       FeatureTaskRuntimePhaseOutput(run.phaseId, iteration, output.canonicalJson, output, null),
     )
@@ -210,7 +211,13 @@ public class QaStrategy(
         run: PhaseRun,
         context: PhaseAttemptLaunchHookContext,
         state: PhaseQaStepBinding,
-      ): String? = MISSING_WORKSPACE.takeIf { run.qaExecution == null }
+      ): String? {
+        val qa = run.qaExecution ?: return MISSING_WORKSPACE
+        if (run.request.admittedExecution != null || run.request.qaSelection != null) {
+          outcomes.recordPreviewStarted(run.request.qaOutcomeWorkflowId, qa, state.currentAttempt())
+        }
+        return null
+      }
 
       override fun checkValidatedOutput(
         run: PhaseRun,
@@ -280,6 +287,7 @@ public class QaStrategy(
                       QaPhaseOutputKeys.HEAD_REVISION to qa.expected.headRevision,
                       QaPhaseOutputKeys.TREE_IDENTITY to qa.expected.treeIdentity,
                       QaPhaseOutputKeys.EVIDENCE_PREFIX to qa.expected.evidencePrefix,
+                      QaPhaseOutputKeys.WORKSPACE_INVOCATION_ID to qa.workspace.invocationId,
                       QaPhaseOutputKeys.WARNINGS to report.warnings,
                       QaPhaseOutputKeys.REPAIRS_EXHAUSTED to exhausted,
                       QaPhaseOutputKeys.OPEN_FINDINGS to
@@ -320,10 +328,10 @@ private class QaPreparedRun(
     run: PhaseRun,
     execute: (PhaseRun) -> PhaseOutcome,
   ): PhaseOutcome {
-    if (run.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA || run.qaExecution != null) {
-      return execute(
-        run,
-      )
+    if (run.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA) return execute(run)
+    val recordsHistory = run.request.admittedExecution != null || run.request.qaSelection != null
+    run.qaExecution?.let { qa ->
+      return executeWithHistory(run, qa.workspace.invocationId, recordsHistory) { execute(run) }
     }
     val recordsGoalOutcome = run.request.admittedExecution == null && run.request.qaSelection != null
     val policy =
@@ -338,11 +346,8 @@ private class QaPreparedRun(
     if (recordsGoalOutcome) outcomes.recordAttempted(run.request.qaOutcomeWorkflowId)
     val result =
       execution.withExecution(run.request.repoRoot, policy) { qa ->
-        outcomes.recordPreviewStarted(run.request.qaOutcomeWorkflowId, qa)
-        try {
+        executeWithHistory(run, qa.workspace.invocationId, recordsHistory) {
           execute(run.copy(qaExecution = qa.copy(namedDevice = run.request.qaDevice)))
-        } finally {
-          outcomes.recordPreviewEnded(run.request.qaOutcomeWorkflowId, qa.workspace.invocationId)
         }
       }
     outcomes.recordRetainedResources(run.request.qaOutcomeWorkflowId, result.retainedResources)
@@ -353,16 +358,39 @@ private class QaPreparedRun(
         check(output.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA && output.status == "completed") {
           "completed QA step has no accepted completed QA output."
         }
-        recordGoalOutcome(run.request.qaOutcomeWorkflowId, output, result.expected.treeIdentity)
+        recordGoalOutcome(run.request.qaOutcomeWorkflowId, output, result.expected.treeIdentity, result.invocationId)
       }
     }
     return result.value
+  }
+
+  private fun executeWithHistory(
+    run: PhaseRun,
+    invocationId: String,
+    recordsHistory: Boolean,
+    execute: () -> PhaseOutcome,
+  ): PhaseOutcome {
+    var disposition = "failed"
+    return AutoCloseable {
+      if (recordsHistory) outcomes.recordPreviewEnded(run.request.qaOutcomeWorkflowId, invocationId, disposition)
+    }.use {
+      execute().also { outcome ->
+        disposition =
+          when (outcome) {
+            is PhaseOutcome.Completed -> "execution_completed"
+            is PhaseOutcome.Blocked -> "blocked"
+            is PhaseOutcome.Paused -> "paused"
+            is PhaseOutcome.RegenerateProducer -> "interrupted"
+          }
+      }
+    }
   }
 
   private fun recordGoalOutcome(
     workflowId: String,
     output: NormalizedFeatureTaskRuntimePhaseOutput,
     testedTreeIdentity: String,
+    invocationId: String,
   ) {
     val wire = output.envelopeWireMap()
     val verdict = QaVerdictRule.verdictFor(output.verdict?.let(FeatureTaskRuntimeVerdict::fromWire), wire)
@@ -403,6 +431,7 @@ private class QaPreparedRun(
         FeatureTaskQaFailureKind.fromWire(produced[QaPhaseOutputKeys.FAILURE_KIND] as? String),
         produced[QaPhaseOutputKeys.EVIDENCE_PREFIX] as? String,
         produced[QaPhaseOutputKeys.REASON] as? String,
+        invocationId = invocationId,
       ),
     )
   }

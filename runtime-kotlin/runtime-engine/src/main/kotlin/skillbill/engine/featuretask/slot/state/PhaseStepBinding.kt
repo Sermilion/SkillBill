@@ -91,6 +91,8 @@ public interface PhaseAgentStepBinding :
   PhaseAgentExecution
 
 public interface PhaseQaStepBinding : PhaseAgentStepBinding {
+  public fun currentAttempt(): Int?
+
   public fun qaRepairState(): QaRepairState?
 }
 

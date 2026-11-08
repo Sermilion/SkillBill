@@ -54,7 +54,7 @@ internal fun DetailSections.qaResultsSection(key: String, title: String, view: Q
       BasicText(view.sentence, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
     }
     if (view.open.isNotEmpty()) {
-      item(key = "$key-open-label") { QaGroupLabel("Needs you", view.open.size) }
+      item(key = "$key-open-label") { QaGroupLabel(view.openLabel, view.open.size) }
       view.open.forEachIndexed { index, row ->
         item(key = qaFindingRowKey(row.id)) { QaFindingItem(row, index, view.open.size, state, "$base:f:${row.id}", onAction, view.evidenceMode) }
       }
@@ -115,7 +115,7 @@ internal fun QaResultsContent(
     } else BasicText(view.sentence, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
     if (view.open.isNotEmpty()) {
       beforeFindings()
-      QaGroupLabel("Needs you", view.open.size)
+      QaGroupLabel(view.openLabel, view.open.size)
       view.open.forEachIndexed { index, row ->
         QaFindingItem(row, index, view.open.size, state, "$base:f:${row.id}", onAction, view.evidenceMode)
         findingExtra(row)
@@ -311,7 +311,7 @@ private fun QaFindingItem(row: QaFindingRow, index: Int, count: Int, state: Sect
   val open = expandable && !state.isCollapsed(part, default = true)
   Column(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
     if (index > 0) QaRowRule()
-    QaItemHead(LucideIcons.alert, colors.stFailed, row.id, row.title, row.state, row.observed, open.takeIf { expandable }) { state.toggle(part, default = true) }
+    QaItemHead(LucideIcons.alert, if (row.state == "Fixing") colors.stBlocked else colors.stFailed, row.id, row.title, row.state, row.observed, open.takeIf { expandable }) { state.toggle(part, default = true) }
     if (open) {
       Column(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         row.expected?.let { QaField("Expected", it) }

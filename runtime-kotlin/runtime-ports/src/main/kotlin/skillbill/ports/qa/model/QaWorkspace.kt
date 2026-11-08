@@ -13,3 +13,11 @@ data class QaReportSource(
   val content: String,
   val evidencePrefix: String,
 )
+
+data class QaRetainedScreenshot(
+  val path: String,
+  val format: String,
+  val byteSize: Long,
+  val width: Int,
+  val height: Int,
+)

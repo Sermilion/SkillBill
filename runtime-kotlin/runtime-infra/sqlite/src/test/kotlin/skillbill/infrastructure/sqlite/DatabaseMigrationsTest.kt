@@ -2377,6 +2377,7 @@ private val expectedMigrationDefinitions =
     114 to "add-operation-confirmation-executions",
     115 to "add-approval-not-required-delivery",
     116 to "record-monitor-ci-cycles",
+    117 to "record-qa-panel-occurrences",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {
