@@ -11,6 +11,12 @@ sealed interface QaLeaseResult {
   data class Contended(val ownerInvocationId: String) : QaLeaseResult
 }
 
+sealed interface QaDeviceLeaseSnapshot {
+  data class Holders(val leases: List<QaDeviceLease>) : QaDeviceLeaseSnapshot
+
+  data class Unavailable(val reason: String) : QaDeviceLeaseSnapshot
+}
+
 sealed interface QaLeaseReleaseOutcome {
   data class Released(val deviceFingerprint: String) : QaLeaseReleaseOutcome
 

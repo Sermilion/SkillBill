@@ -1,0 +1,16 @@
+<resources>
+    <string name="qa_preview_title">Desktop preview</string>
+    <string name="qa_preview_run">Run %1$s</string>
+    <string name="qa_preview_waiting">Waiting</string>
+    <string name="qa_preview_live">Live</string>
+    <string name="qa_preview_ended">Ended</string>
+    <string name="qa_preview_ended_detail">The selected QA run has ended.</string>
+    <string name="qa_preview_description">Live desktop QA preview for run %1$s</string>
+    <string name="qa_preview_source_unavailable">The private framebuffer is not available yet.</string>
+    <string name="qa_preview_source_invalid">The framebuffer source was rejected.</string>
+    <string name="qa_preview_frame_incomplete">Waiting for a complete framebuffer snapshot.</string>
+    <string name="qa_preview_format_unsupported">This framebuffer format is not supported.</string>
+    <string name="qa_preview_limits_exceeded">The framebuffer exceeds the preview limits.</string>
+    <string name="qa_preview_read_failed">The framebuffer could not be read.</string>
+    <string name="qa_preview_display_blank">The display is running, but no app window has drawn on it yet.</string>
+</resources>

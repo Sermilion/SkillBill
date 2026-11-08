@@ -1,6 +1,7 @@
 package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.goal.GoalRunnerPauseStatus
 import skillbill.engine.goal.GoalRunnerStatusPort
 import skillbill.engine.goal.GoalRunnerStopStatus
@@ -10,6 +11,7 @@ import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
 import skillbill.engine.work.control.model.NewTaskStartResult
 import skillbill.engine.work.control.model.StandaloneCheckout
+import skillbill.engine.work.control.model.StandalonePhaseRequest
 import skillbill.engine.work.control.model.WorkControlAction
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
@@ -71,10 +73,11 @@ public class WorkControlService(
     target: WorkRunTarget,
     action: WorkControlAction,
     agentId: String? = null,
+    qaDevice: QaNamedDevice? = null,
   ): WorkControlResult =
     when (action) {
       WorkControlAction.CANCEL -> cancellation.cancel(target)
-      WorkControlAction.LAUNCH -> runs.launch(target, agentId)
+      WorkControlAction.LAUNCH -> runs.launch(target, agentId, qaDevice)
       WorkControlAction.PAUSE, WorkControlAction.STOP, WorkControlAction.RECOVER ->
         WorkControlResult.Rejected(
           WorkControlRejection.INELIGIBLE_TARGET,
@@ -85,7 +88,8 @@ public class WorkControlService(
     repoRoot: Path,
     issueKey: String,
     agentId: String?,
-  ): WorkControlResult = runs.startGoal(repoRoot, issueKey, agentId)
+    qaDevice: QaNamedDevice? = null,
+  ): WorkControlResult = runs.startGoal(repoRoot, issueKey, agentId, qaDevice)
 
   public fun prepareNewTask(
     repoRoot: Path,
@@ -97,15 +101,16 @@ public class WorkControlService(
     prepared: NewTaskPreparation.Ready,
     kind: NewTaskRunKind,
     agentId: String,
-  ): NewTaskStartResult = newTaskStart.startNewTask(repoRoot, prepared, kind, agentId)
+    qaDevice: QaNamedDevice? = null,
+  ): NewTaskStartResult = newTaskStart.startNewTask(repoRoot, prepared, kind, agentId, qaDevice)
 
   public fun startStandalone(
     repoRoot: Path,
-    phaseId: String,
+    request: StandalonePhaseRequest,
     agentId: String,
-    target: String? = null,
     checkout: StandaloneCheckout = StandaloneCheckout(),
-  ): NewTaskStartResult = newTaskStart.startStandalone(repoRoot, phaseId, agentId, target, checkout)
+    qaDevice: QaNamedDevice? = null,
+  ): NewTaskStartResult = newTaskStart.startStandalone(repoRoot, request, agentId, checkout, qaDevice)
 
   public fun startOperation(
     repoRoot: Path,

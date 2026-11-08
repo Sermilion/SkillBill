@@ -37,6 +37,8 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.text.input.VisualTransformation
@@ -52,9 +54,9 @@ private val INPUT_HEIGHT = 30.dp
 private val MULTILINE_MAX_HEIGHT = 120.dp
 
 /**
- * A [multiline] input grows up to 120 dp; Enter submits and Shift+Enter inserts a newline. [visualTransformation] styles
- * the shown text only. Focus requesters, focus callbacks, semantics, extra key handlers, and a larger minimum height go
- * through [modifier].
+ * A [multiline] input starts at [multilineMinHeight], grows up to 120 dp and keeps its text at the top. Enter submits
+ * and Shift+Enter inserts a newline. [visualTransformation] styles the shown text only. Focus requesters, focus
+ * callbacks, semantics, extra key handlers, and a larger minimum height go through [modifier].
  */
 @Composable
 fun SbInput(
@@ -84,6 +86,7 @@ fun SbInput(
   isError: Boolean = false, enabled: Boolean = true, readOnly: Boolean = false,
   onSubmit: (() -> Unit)? = null, multiline: Boolean = false,
   visualTransformation: VisualTransformation = VisualTransformation.None,
+  multilineMinHeight: Dp = INPUT_HEIGHT, lineHeight: TextUnit = 1.em,
 ) {
   val colors = SkillBillTheme.colors
   val shape = RoundedCornerShape(SkillBillRadius.sm)
@@ -100,7 +103,7 @@ fun SbInput(
     label = "input-focus-ring",
   ).value
   // `.sb-input` sets 400 13px/1 sans; `--mono` swaps the family and drops to 12px. The placeholder inherits the same font.
-  val textStyle = (if (mono) SkillBillTheme.type.monoSm else SkillBillTheme.type.tBase).copy(lineHeight = 1.em)
+  val textStyle = (if (mono) SkillBillTheme.type.monoSm else SkillBillTheme.type.tBase).copy(lineHeight = lineHeight)
   BasicTextField(
     value = value,
     onValueChange = onValueChange,
@@ -112,7 +115,7 @@ fun SbInput(
     // caret-color defaults to the text color.
     cursorBrush = SolidColor(colors.fg),
     interactionSource = interaction,
-    modifier = modifier.then(if (multiline) Modifier.heightIn(min = INPUT_HEIGHT, max = MULTILINE_MAX_HEIGHT) else Modifier.height(INPUT_HEIGHT))
+    modifier = modifier.then(if (multiline) Modifier.heightIn(min = multilineMinHeight, max = MULTILINE_MAX_HEIGHT) else Modifier.height(INPUT_HEIGHT))
       .background(colors.bgInset, shape)
       .drawBehind {
         if (focusRing.alpha > 0f) {
@@ -140,7 +143,7 @@ fun SbInput(
     decorationBox = { innerTextField ->
       Row(
         if (multiline) Modifier else Modifier.fillMaxHeight(),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = if (multiline) Alignment.Top else Alignment.CenterVertically,
         // With an icon the text starts at padding-left 30px + 1px border: 9 + 14 + 8.
         horizontalArrangement = Arrangement.spacedBy(8.dp),
       ) {

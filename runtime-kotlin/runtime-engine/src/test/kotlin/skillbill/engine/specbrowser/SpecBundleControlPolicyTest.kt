@@ -24,7 +24,7 @@ class SpecBundleControlPolicyTest {
   fun `every run state offers only its own actions and purge is never offered while running`() {
     val cases =
       listOf(
-        facts(null) to Verdict(SpecBundleRunState.NOT_STARTED, true, "Start", false, false, true, true, true),
+        facts(null) to Verdict(SpecBundleRunState.NOT_STARTED, true, "Start", false, false, true, true, false),
         facts(live(IdeStatusLifecycleState.ACTIVE, false, options(canCancel = true, canLaunch = false))) to
           Verdict(SpecBundleRunState.RUNNING, false, "Resume", true, true, false, true, false),
         facts(live(IdeStatusLifecycleState.ACTIVE, true, options(canCancel = true, canLaunch = false))) to
@@ -66,7 +66,16 @@ class SpecBundleControlPolicyTest {
     lifecycle: IdeStatusLifecycleState,
     pauseRequested: Boolean,
     options: WorkRunOptions,
-  ) = ControlLive("goal-1", "repo", lifecycle, pauseRequested, pauseEligible = true, options = options)
+  ) = ControlLive(
+    workflowId = "goal-1",
+    repositoryIdentity = "repo",
+    ownerRepoRoot = "/repo",
+    lifecycle = lifecycle,
+    pauseRequested = pauseRequested,
+    pauseEligible = true,
+    targetAvailable = true,
+    options = options,
+  )
 
   private fun options(
     canCancel: Boolean,

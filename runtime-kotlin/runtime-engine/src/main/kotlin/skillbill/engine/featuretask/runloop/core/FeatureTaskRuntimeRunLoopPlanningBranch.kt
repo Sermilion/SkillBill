@@ -1,8 +1,10 @@
 package skillbill.engine.featuretask.runloop.core
 
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
+import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.phaseLoopContext
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeNonBlockingFailure
@@ -12,7 +14,9 @@ import skillbill.engine.featuretask.runloop.phase.PhaseFailureContinuationReques
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.coupledSession
+import skillbill.engine.featuretask.runloop.state.durablePhaseAttemptCount
 import skillbill.engine.featuretask.runloop.state.unresolvedReviewFindings
+import skillbill.engine.featuretask.runner.STATUS_BLOCKED
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.PhaseBoundLoopRules
 import skillbill.engine.featuretask.slot.PhaseBoundStepHooks
@@ -27,7 +31,9 @@ import skillbill.engine.featuretask.slot.PhaseStepFailure
 import skillbill.engine.featuretask.slot.PhaseStepFailureSource
 import skillbill.engine.featuretask.slot.PhaseUpstreamFailureContinuationHooks
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseDeclaration
@@ -403,8 +409,60 @@ internal object FeatureTaskRuntimeRunLoopPlanningBranch {
             reason = "Phase execution could not finish: ${error.code}",
             source = PhaseStepFailureSource.THROWN,
           ),
-        ) ?: throw error
+        ) ?: blockDatabaseContention(error)
       }
+
+    private fun blockDatabaseContention(error: SkillBillRuntimeException): PhaseOutcome {
+      if (generateSequence<Throwable>(error) { it.cause }.none {
+          it is SkillBillRuntimeException && it.code == DatabaseFailureCode.BUSY
+        }
+      ) {
+        throw error
+      }
+      val attempt = durablePhaseAttemptCount(context.state, run.phaseId)
+      val reason = "Database contention interrupted phase '${run.phaseId}'. Retry after the current write completes."
+      val persisted =
+        catchingNonCancellation {
+          val record = context.recorder.loadPhaseRecords(run.request.workflowId)?.get(run.phaseId)
+          context.runState.coupledRunTransitions.persistBlockedPhaseState(
+            context.recorder,
+            FeatureTaskRuntimePhaseStateRequest(
+              workflowId = run.request.workflowId,
+              phaseId = run.phaseId,
+              status = STATUS_BLOCKED,
+              attemptCount = maxOf(attempt, record?.attemptCount ?: 0),
+              resolvedAgentId = run.resolvedAgent.resolvedAgentId,
+              finished = false,
+              outputArtifact = record?.outputArtifact ?: context.state.phase(run.phaseId).output?.payload,
+              rejectedOutput = record?.rejectedOutput,
+              repairEvidence = record?.repairEvidence,
+              blockedReason = reason,
+              failureDisposition = FeatureTaskRuntimeFailureDisposition.RETRYABLE,
+              failureCode = DatabaseFailureCode.BUSY.name,
+              fileManifestBefore = record?.fileManifestBefore.orEmpty(),
+              fileManifestAfter = record?.fileManifestAfter.orEmpty(),
+              fileManifestIntroduced = record?.fileManifestIntroduced.orEmpty(),
+              loopId = record?.loopId ?: run.reentry?.loopId,
+              edgeIteration = record?.edgeIteration ?: run.reentry?.edgeIteration,
+              reviewPassNumber = record?.reviewPassNumber,
+              mutating = run.policy.mutating,
+            ),
+          )
+        }
+      val saved = persisted.getOrNull() == true
+      RuntimeDiagnosticsBestEffortWarning.record(
+        context.diagnostics,
+        "seam=phase_database_contention workflow=${run.request.workflowId} phase=${run.phaseId} " +
+          "attempt=$attempt value_expected=finished value_used=${if (saved) "blocked" else "unpersisted_block"} " +
+          "cause=${DatabaseFailureCode.BUSY}",
+        error,
+      )
+      if (!saved) {
+        persisted.exceptionOrNull()?.takeIf { it !== error }?.let(error::addSuppressed)
+        throw error
+      }
+      return PhaseOutcome.blocked(reason, DatabaseFailureCode.BUSY.name)
+    }
   }
 }
 

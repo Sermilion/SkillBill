@@ -92,14 +92,14 @@ class JdkFeatureTaskRuntimeWorkerSupervisor(
     val handle = ProcessHandle.of(ownership.pid).orElse(null) ?: return
     if (handle.pid() == ProcessHandle.current().pid()) return
     diagnostics.warning(
-      "Waiting for existing goal runner pid=${ownership.pid} (duplicate-launch attach).",
+      "Waiting for runtime worker pid=${ownership.pid} to exit.",
     )
     try {
       handle.onExit().get(timeout.toMillis(), TimeUnit.MILLISECONDS)
     } catch (_: TimeoutException) {
       diagnostics.warning(
-        "Timed out after ${timeout.toMillis()}ms waiting for existing goal runner " +
-          "pid=${ownership.pid} (duplicate-launch attach).",
+        "Timed out after ${timeout.toMillis()}ms waiting for runtime worker " +
+          "pid=${ownership.pid} to exit.",
       )
     } catch (interrupted: InterruptedException) {
       Thread.currentThread().interrupt()

@@ -17,6 +17,11 @@ import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
+import dev.skillbill.desktop.core.domain.model.GoalQaPreview
+import dev.skillbill.desktop.core.domain.model.QaPreviewFrame
+import dev.skillbill.desktop.core.domain.model.WorkSubtask
+import dev.skillbill.desktop.core.domain.model.QaPreviewRequest
+import dev.skillbill.desktop.core.domain.model.QaPreviewState
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.ScopeChangesState
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
@@ -32,6 +37,7 @@ import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.repository.WorkChangeScopesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
+import dev.skillbill.desktop.core.domain.repository.QaPreviewRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
@@ -47,10 +53,13 @@ import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -86,6 +95,9 @@ class DetailViewModelTest {
   }
 
   private val settings = FakeAppSettingsRepository()
+  private val qaPreview = object : QaPreviewRepository {
+    override fun observe(request: QaPreviewRequest): Flow<QaPreviewState> = flowOf(QaPreviewState.Ended)
+  }
 
   private fun viewModel(
     board: FakeWorkBoardRepository = FakeWorkBoardRepository(),
@@ -93,7 +105,67 @@ class DetailViewModelTest {
     workControls: FakeWorkControlRepository = FakeWorkControlRepository(),
     toastQueue: ToastQueue = ToastQueue(),
     specs: SpecRepository = NoSpecs,
-  ) = DetailViewModel(source, session, details, changes, scopes, activity, board, specs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, workControls, toastQueue, settings)
+    preview: QaPreviewRepository = qaPreview,
+  ) = DetailViewModel(source, session, details, changes, scopes, activity, board, specs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, workControls, toastQueue, settings, preview)
+
+  @Test
+  fun `goal preview follows selected subtask and pane visibility and clears frames when QA ends`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val source = item.copy(kind = WorkKind.Goal, running = true, lifecycle = Lifecycle.Active, currentSubtaskId = "1")
+    val requests = mutableListOf<QaPreviewRequest>()
+    val closed = mutableListOf<String>()
+    val frame = QaPreviewState.Live(QaPreviewFrame(1, 1, intArrayOf(0xff112233.toInt())))
+    val repository = object : QaPreviewRepository {
+      override fun observe(request: QaPreviewRequest): Flow<QaPreviewState> = flow {
+        requests += request
+        try {
+          emit(frame)
+          awaitCancellation()
+        } finally {
+          closed += request.invocationId
+        }
+      }
+    }
+    val viewModel = viewModel(source = source, preview = repository)
+    val preview = GoalQaPreview("qa-goal", "/qa/goal", listOf("Desktop"), true, null)
+    val detail = emptyDetail.copy(
+      currentPhase = "qa",
+      subtasks = listOf(WorkSubtask(1, "Build", "in_progress", null, null, emptyList())),
+      goalQaPreview = preview,
+    )
+    runCurrent()
+    details.flow.emit(DetailState(source, DetailSections.Loaded(detail, null, emptyMap(), emptySet(), stale = false)))
+    viewModel.onAction(DetailAction.SetQaPreviewVisible(true))
+    runCurrent()
+    assertTrue(requests.isEmpty())
+
+    viewModel.onAction(DetailAction.SelectSubtask(SubtaskKey.GoalFinish))
+    runCurrent()
+    assertEquals("qa-goal", requests.single().invocationId)
+    assertEquals(frame, viewModel.state.value.qaPreview)
+
+    viewModel.onAction(DetailAction.SelectSubtask(SubtaskKey.Subtask(1)))
+    assertEquals(QaPreviewState.Ended, viewModel.state.value.qaPreview)
+    runCurrent()
+    assertEquals(listOf("qa-goal"), closed)
+
+    val subtaskDetail = detail.copy(goalQaPreview = preview.copy(invocationId = "qa-subtask", subtaskId = 1))
+    details.flow.emit(DetailState(source, DetailSections.Loaded(subtaskDetail, null, emptyMap(), emptySet(), stale = false)))
+    runCurrent()
+    assertEquals("qa-subtask", requests.last().invocationId)
+    viewModel.onAction(DetailAction.SetQaPreviewVisible(false))
+    assertEquals(QaPreviewState.Ended, viewModel.state.value.qaPreview)
+    runCurrent()
+    assertEquals(listOf("qa-goal", "qa-subtask"), closed)
+
+    viewModel.onAction(DetailAction.SetQaPreviewVisible(true))
+    runCurrent()
+    val ended = subtaskDetail.copy(goalQaPreview = subtaskDetail.goalQaPreview!!.copy(active = false))
+    details.flow.emit(DetailState(source, DetailSections.Loaded(ended, null, emptyMap(), emptySet(), stale = false)))
+    runCurrent()
+    assertEquals(QaPreviewState.Ended, viewModel.state.value.qaPreview)
+    assertEquals(3, closed.size)
+  }
 
   @Test
   fun `opening qa instructions targets the repository file and reports a missing file`() = runTest {
@@ -169,7 +241,7 @@ class DetailViewModelTest {
   fun `favorite toggle refuses a resolved row without its database observation`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val toastQueue = ToastQueue()
-    val viewModel = DetailViewModel(item, session, details, changes, scopes, activity, FakeWorkBoardRepository(), NoSpecs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, FakeWorkControlRepository(), toastQueue, settings)
+    val viewModel = DetailViewModel(item, session, details, changes, scopes, activity, FakeWorkBoardRepository(), NoSpecs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, FakeWorkControlRepository(), toastQueue, settings, qaPreview)
     advanceUntilIdle()
     details.flow.emit(DetailState(item, DetailSections.Loaded(emptyDetail, null, emptyMap(), emptySet(), stale = false)))
     advanceUntilIdle()

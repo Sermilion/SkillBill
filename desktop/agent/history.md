@@ -1,3 +1,57 @@
+## [2026-11-07] SKILL-525 background chat summaries with marquee
+Areas: desktop/app, desktop/core/data chat, desktop/core/domain, desktop/core/designsystem, desktop/core/testing, desktop/feature/chat and its newtask package
+- MEDIUM feature. Recent chats and /resume rows prefer a saved one-sentence summary, retain their existing title fallback and image suffix, and match summaries in the resume palette filter. Open tabs, transcript headers and chat search keep their titles.
+- Closing chats, leaving an idle chat and closing the window request summaries. Per-reply saves and hiding the pane do not. Summary update events refresh Recent chats; startup queues at most 20 stale chats, newest first, to recover work left by quit.
+- ChatSummarizer is an app-scoped sequential queue with pending-request deduplication, a staleness read before each call, a 120-second timeout and diagnosed failures that leave the worker running. reusable
+- One-shot calls use the chat's agent and account with Claude haiku, Codex gpt-6-luna or Cursor gpt-5.4-nano-none. They run outside repositories with tool-less, read-only or ask-mode arguments and bypass ChatTransport so chat resume state stays unchanged.
+- ChatStore adds optional summary and summary_source_updated_at_ms keys without migration. Conversation saves preserve both and retain updated_at for unchanged lines. The dedicated writer updates existing records only, preserves ordering and stamps the summarized snapshot so newer turns remain stale.
+- SbMarqueeText is a reusable single-line String or AnnotatedString component. Overflowing summaries scroll continuously; LocalReducedMotion selects a stationary ellipsis. Fallback titles keep their existing ellipsis, and the palette preview uses two lines without a marquee.
+- Transcript input keeps the first operator line and newest operator/agent lines within 12,000 characters, with 2,000 per line. Output takes the first nonblank line, strips markers and quotes, and cuts at a word within 200 characters.
+- QA repairs append an actual operator/agent turn before stale-summary assertions in ChatStoreTest and ChatSummarizerTest. A timestamp-only resave no longer represents a changed conversation.
+- DesktopLauncher defaults Skiko to SOFTWARE on Linux before Compose starts and honors explicit skiko.renderApi and SKIKO_RENDER_API overrides.
+- Limits: Junie and unmapped agents receive no summary; CLI sessions the app never saved keep fallback titles. Live summary QA needs an installed agent, which the isolated home lacks. The store format and repository API additions preserve existing callers.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
+## [2026-11-07] SKILL-521 live desktop QA preview
+Areas: desktop/core/data, desktop/core/domain, desktop/feature/detail, platform-packs/kmp/qa, runtime-kotlin/runtime-domain, runtime-kotlin/runtime-engine, runtime-kotlin/runtime-goalrunner
+- MEDIUM feature. The existing details pane shows a watch-only preview for the selected standalone desktop QA execution, with Waiting, Live and Ended states, invocation identity and accessible status text.
+- KMP QA guidance registers an owner-only live-preview child before private Xvfb capture. Registration refusal disables capture and retains limitation evidence. Cleanup stops registered producers before releasing the child through the existing resource registry.
+- QaPreviewRequest, QaPreviewFrame and the cold QaPreviewRepository flow are reusable domain components without filesystem or Compose types. JVM data owns snapshot reads and decoding; the detail feature owns image conversion.
+- QaPreviewSource confines read-only, no-follow opens of live-preview/Xvfb_screen0 through scoped SecureDirectoryStream handles. The bounded XWD v7 decoder checks offsets, masks, stride and allocation limits, accepts both pixel byte orders and returns opaque ARGB.
+- Each observer reads one bounded snapshot at a time and waits 250 milliseconds after an attempt. Degraded-reason transitions emit bounded diagnostic categories. Rejected frames clear the image; later valid frames can recover.
+- DetailViewModel keys observation by database session, work, selected invocation, directory and liveness. Mandatory route and pane visibility wiring cancels hidden collection; generation checks reject late frames. Terminal selections are Ended without source reads.
+- Limits: private file-backed Xvfb, SecureDirectoryStream support and the supported XWD format are required. Ambient displays, goal QA and legacy runs without that source supply no preview. Frames may tear during repaint. No database or command-contract change.
+- The latest frame fits the existing pane and preserves its aspect ratio. Localized labels and image descriptions identify the selected run. The panel has no recording, input, export or expanded-viewer controls.
+Feature flag: N/A
+Acceptance criteria: 1/1 implemented for the parent; 5/5 implemented for subtask 1
+## [2026-11-07] SKILL-514 desktop source-run QA launch
+Areas: desktop/app, desktop/build-logic/convention, desktop/core/data, desktop/core/domain, desktop/core/testing, desktop/feature/detail, desktop/feature/specs, desktop/QA.md, AGENTS.md
+- QA launches with `cd desktop && ./gradlew :app:runFromSource`. The opt-in task builds same-checkout runtime-cli, stages runtime and app resources, and stamps both copied identity records with one fresh shared install run id per execution.
+- SourceRunStaging and SourceRunPreparation provide reusable staging and seeding. Missing identities, runtime JARs or fixture data stop launch; a missing fixture preserves the previous scratch home.
+- Each launch regenerates QAFIX database rows and spec bundles, then recreates and seeds `desktop/app/build/source-run/home`. The tasks remain outside normal check, build and assemble wiring.
+- JVM home, preferences, resources and temp paths, child-process temp variables, runtime, database and agent configuration all point into source-run outputs. Blank TERM becomes `dumb` to preserve launch overrides.
+- Preparation verifies Git worktree ownership and fixed checkout output paths, rejects redirected paths and linked entries, and protects operator state. QA output directories require exclusive task ownership.
+- Linux source runs select Skiko SOFTWARE_COMPAT through both the JVM property and SKIKO_RENDER_API, overriding an inherited renderer setting. QA-2 remains open after three repairs; these settings do not establish interactive launch success.
+- Specs carries the goal owner's checkout into purge requests. Runtime control projection disables ambiguous targets across a project's checkouts.
+- AGENTS.md and desktop/QA.md name the source-run command, scratch layout and fixture behavior. The scratch agent configuration does not inherit the operator's login.
+- Limits: fixture live states can change after the generator exits. macOS and Windows native behavior remains unverified. Gate rules and real-install behavior are unchanged.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented for the parent feature; QA-2 remains unresolved
+
+## [2026-11-07] SKILL-517 QA device picker in sidebar
+Areas: desktop/app/shell/qadevice, desktop/core/data, desktop/core/domain, desktop/core/datastore, desktop/core/designsystem, desktop/feature/chat, desktop/feature/settings; runtime-engine, runtime-cli, runtime-goalrunner, runtime-contracts, runtime-ports, runtime-infra/workflow
+- MEDIUM feature. The sidebar footer has an upward device picker, and the New Task QA chip names the saved pick. Ready devices and stopped AVDs are pickable; leased, unauthorized, offline and unsupported devices are disabled.
+- Window-scoped QaDevicePickerState owns cancellable discovery on open and explicit refresh, with no polling. Pure presentation rules match AVD picks to running emulators, retain missing picks and skip disabled rows during keyboard navigation. reusable
+- Discovery resolves SDK tools through ANDROID_HOME, ANDROID_SDK_ROOT, repository local.properties and PATH. Injected command execution bounds output and subprocess duration; unknown running AVD identities suppress stopped candidates.
+- Read-only lease snapshots join fingerprinted holders across normalized roots from the loaded Work board. Live and unverifiable owners remain occupied; unavailable occupancy is diagnosed and does not prevent adb discovery.
+- AppSettingsRepository owns the persisted Serial/Avd pick and display name. Atomic writes preserve the previous pick on failure; malformed preferences decode to diagnosed auto without exposing stored identities. QaDevicePick and QaDeviceDiscoveryRepository are reusable.
+- Eligible launches read one confirmed settings snapshot before launch writes and retain it through allocation retries. Read failure refuses launch. Work-board QA and goal relaunches replace recorded device arguments with the current pick; auto clears the old selector.
+- The runtime carries the selection through a typed --qa-device channel outside intake and acceptance criteria. Missing hardware stays selected so QA can skip with a reason rather than substitute another target.
+- Limits: Android only, advisory occupancy and explicit refresh. No UI emulator controls or operation:verify targeting. Runtime port and settings implementations need the added members; goal-quality inputs and lease schemas retain their versions.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented across runtime and desktop
+
 ## [2026-11-06] SKILL-513 docked, resizable chat pane with persisted width
 Areas: desktop/app, desktop/core/datastore, desktop/core/domain, desktop/core/testing, desktop/core/ui, desktop/feature/chat
 - Chat is a docked right pane in the work area, not a floating overlay. It takes the shared right slot while open outside Settings; otherwise the specs pane keeps its rule. WorkArea takes an optional right width.

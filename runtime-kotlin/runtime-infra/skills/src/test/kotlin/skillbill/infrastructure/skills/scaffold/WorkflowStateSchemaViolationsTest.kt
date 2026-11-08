@@ -168,6 +168,23 @@ class WorkflowStateSchemaViolationsTest {
   }
 
   @Test
+  fun `timed_out validates on the runtime branch and loud-fails on the verify branch`() {
+    validator.validate(
+      baseTaskRuntimeSnapshot().toMutableMap().apply { put("workflow_status", "timed_out") },
+      "bill-feature-task",
+    )
+
+    val verifyError =
+      assertFailsWith<SkillBillRuntimeException> {
+        validator.validate(
+          baseVerifySnapshot().toMutableMap().apply { put("workflow_status", "timed_out") },
+          "bill-feature-verify",
+        )
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertContains(verifyError.message.orEmpty(), "workflow_status")
+  }
+
+  @Test
   fun `plan_fix step id loud-fails on feature-task-runtime snapshots`() {
     val currentStep =
       baseTaskRuntimeSnapshot().toMutableMap().apply {
@@ -205,7 +222,7 @@ class WorkflowStateSchemaViolationsTest {
       "session_id" to "",
       "workflow_name" to "bill-feature-task",
       "mode" to "runtime",
-      "contract_version" to "0.3",
+      "contract_version" to "0.4",
       "workflow_status" to "running",
       "current_step_id" to "plan",
       "steps" to
@@ -227,7 +244,7 @@ class WorkflowStateSchemaViolationsTest {
       "workflow_id" to "wfv-19700101-000000-aaaa",
       "session_id" to "",
       "workflow_name" to "bill-feature-verify",
-      "contract_version" to "0.3",
+      "contract_version" to "0.4",
       "workflow_status" to "running",
       "current_step_id" to "gather_diff",
       "steps" to

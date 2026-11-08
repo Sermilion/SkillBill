@@ -4,6 +4,8 @@ import skillbill.contracts.qa.QA_CHECKLIST_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.execution.QaDeclaredTarget
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.engine.featuretask.model.execution.QaNamedDeviceKind
 import skillbill.engine.featuretask.model.execution.QaPolicy
 import skillbill.engine.featuretask.model.execution.QaSkipReason
 import skillbill.ports.qa.model.qaEnvironmentName
@@ -86,7 +88,7 @@ internal object QaPromptSections {
     |- Environment name: `${qaEnvironmentName(qa.workspace.invocationId)}`.
     |- Evidence paths in the report must start with `${qa.expected.evidencePrefix}`.
     |- Report path: `${qa.workspace.reportPath}`. Write exactly one markdown report there.
-    |${deviceLeaseLines(qa.workspace.invocationId)}
+    |${deviceLeaseLines(qa.workspace.invocationId, qa.namedDevice)}
     |
     |${environmentResourceRules(qa.workspace.invocationId)}
     |$ENVIRONMENT_AND_ISOLATION_RULES
@@ -293,7 +295,10 @@ internal object QaPromptSections {
       """.trimMargin()
   }
 
-  private fun deviceLeaseLines(invocationId: String): String =
+  private fun deviceLeaseLines(
+    invocationId: String,
+    namedDevice: QaNamedDevice?,
+  ): String =
     """
     |- Before installing on a device, take its lease with
     |  `skill-bill qa lease acquire --invocation $invocationId --device <serial>`. A `contended`
@@ -304,7 +309,23 @@ internal object QaPromptSections {
     |  call it device-contended only when every authorized candidate is leased by someone else.
     |  Release leases this invocation acquired before switching targets and when done with
     |  `skill-bill qa lease release --invocation $invocationId --device <serial>`.
-    """.trimMargin()
+    """.trimMargin() + namedDevice?.let(::namedDeviceLine).orEmpty()
+
+  private fun namedDeviceLine(device: QaNamedDevice): String =
+    when (device.kind) {
+      QaNamedDeviceKind.SERIAL -> {
+        val serialArgument = "'${device.value.replace("'", "'\"'\"'")}'"
+        "\n- The operator named device serial `${device.value}` for this run. " +
+          "Use it for `adb -s $serialArgument` and lease it as above. Never substitute another target. " +
+          "If `adb devices` does not list it, or it is unauthorized, offline, or leased by another run, " +
+          "settle `skipped` and say why."
+      }
+      QaNamedDeviceKind.AVD ->
+        "\n- The operator named AVD `${device.value}` for this run. " +
+          "Use it, and boot it by the pack's emulator-boot steps when it is not running. " +
+          "Never substitute another target. If `emulator -list-avds` does not list it, " +
+          "settle `skipped` and name the listed AVDs."
+    }
 
   private fun environmentResourceRules(invocationId: String): String =
     """

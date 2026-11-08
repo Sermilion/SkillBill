@@ -1,93 +1,162 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import dev.skillbill.desktop.core.designsystem.LocalContentColor
+import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
-import dev.skillbill.desktop.core.designsystem.component.SbClock
+import dev.skillbill.desktop.core.designsystem.component.SbSpinner
+import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
-import dev.skillbill.desktop.core.designsystem.detail.MetricCell
-import dev.skillbill.desktop.core.designsystem.detail.MetricStrip
+import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
+import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.StandalonePlanProgress
-import dev.skillbill.desktop.core.domain.model.StandalonePlanStage
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlin.time.Instant
 
-private data class PlanStageLabel(val title: String, val id: String)
-
-private val PLAN_STAGES = listOf(
-  PlanStageLabel("Reading the repo", "preplan"),
-  PlanStageLabel("Splitting the work", "plan"),
-  PlanStageLabel("Writing subtask specs", "plan_subtasks"),
-)
-
-internal fun DetailSections.planStatus(item: WorkItem, detail: Detail) {
-  this.item(key = "plan-stage-strip") {
-    PlanStageStripContent(item, detail)
-  }
-  this.item(key = "plan-status") {
-    PlanStatusLine(item, detail)
-  }
-  this.item(key = "plan-heartbeat") {
-    PlanHeartbeat(item, detail, planQuietSince(item, detail))
-  }
-}
-
 @Composable
-private fun PlanStageStripContent(item: WorkItem, detail: Detail) {
-  val plan = detail.standalonePlan
-  val stages = plan?.stages.orEmpty().associateBy(StandalonePlanStage::phaseId)
+internal fun PlanStageStrip(item: WorkItem, detail: Detail, onStageClick: (String) -> Unit) {
+  val views = planStageViews(item, detail)
+  val hasRunningStage = item.running && views.any { it.state == PlanStageState.Running }
   val ticker = LocalUiTicker.current
-  if (item.running) DisposableEffect(ticker) { ticker.retain(); onDispose { ticker.release() } }
-  val now = if (item.running) ticker.now.value else detail.observedAt
-  val cells = PLAN_STAGES.map { label ->
-    val stage = stages[label.id]
-    val blocked = stage?.status == "blocked" || (label.id == "plan_subtasks" && hasBlockedSubtasks(plan))
-    val quiet = stage?.status == "running" && planQuietSince(item, detail) != null
-    val status = when {
-      blocked -> "blocked"
-      stage?.status == "running" && item.running -> "active"
-      stage?.status == "running" -> "paused"
-      stage?.status == "completed" -> "done"
-      stage?.status == "failed" -> "failed"
-      stage?.status == "paused" -> "paused"
-      else -> "queued"
+  if (hasRunningStage) DisposableEffect(ticker) { ticker.retain(); onDispose { ticker.release() } }
+  val now = if (hasRunningStage) ticker.now.value else null
+  val separatorColor = SkillBillTheme.colors.borderSubtle
+  val shape = RoundedCornerShape(SkillBillRadius.md)
+  Row(
+    Modifier.fillMaxWidth().padding(top = DocBlockGap).clip(shape).border(1.dp, SkillBillTheme.colors.border, shape),
+  ) {
+    views.forEachIndexed { index, view ->
+      val interaction = remember(view.phaseId) { MutableInteractionSource() }
+      val quiet = view.state == PlanStageState.Running && planQuietSince(item, detail) != null
+      val blocked = view.state == PlanStageState.Blocked
+      val active = view.state == PlanStageState.Running
+      val tint = when {
+        blocked || quiet || view.state == PlanStageState.Failed -> SkillBillTheme.colors.stBlocked
+        active -> SkillBillTheme.colors.stActive
+        view.state == PlanStageState.Done -> SkillBillTheme.colors.fg2
+        view.state == PlanStageState.Paused -> SkillBillTheme.colors.fgMuted
+        else -> SkillBillTheme.colors.fgFaint
+      }
+      val background = when {
+        blocked || quiet -> SkillBillTheme.colors.stBlocked.copy(alpha = .07f)
+        active -> SkillBillTheme.colors.stActive.copy(alpha = .06f)
+        else -> Color.Transparent
+      }
+      val elapsed = when {
+        view.state == PlanStageState.NotStarted -> null
+        view.startedAt == null -> null
+        active -> now?.let { elapsedText(view.startedAt, it) }
+        else -> elapsedText(view.startedAt, view.finishedAt ?: detail.updatedAt)
+      }
+      Column(
+        Modifier.weight(1f)
+          .testTag("plan-stage-${view.phaseId}")
+          .semantics {
+            stateDescription = when {
+              quiet -> "Running, waiting for output"
+              view.state == PlanStageState.NotStarted -> "Not started"
+              view.state == PlanStageState.Done -> "Completed"
+              else -> view.state.name
+            }
+          }
+          .background(background)
+          .then(if (index == 0) Modifier else Modifier.drawBehind {
+            drawLine(
+              separatorColor,
+              Offset(0f, 0f),
+              Offset(0f, size.height),
+              strokeWidth = 1.dp.toPx(),
+            )
+          })
+          .then(if (view.state == PlanStageState.NotStarted) Modifier else Modifier
+            .sbFocusRing(interaction, shape)
+            .clickable(interactionSource = interaction, indication = null, role = Role.Button) { onStageClick(view.phaseId) })
+          .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+      ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          when {
+            active -> SbSpinner(
+              11.dp,
+              tint,
+              modifier = Modifier.rotate(-90f),
+              durationMillis = if (quiet) 2_400 else 900,
+              trackAlpha = .25f,
+              arcSweep = 90f,
+            )
+            blocked || view.state == PlanStageState.Failed -> StageIcon(LucideIcons.warn, tint)
+            view.state == PlanStageState.Done -> StageIcon(LucideIcons.check, SkillBillTheme.colors.stDone)
+            view.state == PlanStageState.NotStarted -> DashedRing(tint)
+            else -> StageIcon(LucideIcons.check, SkillBillTheme.colors.fgMuted)
+          }
+          BasicText(
+            view.label,
+            Modifier.weight(1f),
+            style = SkillBillTheme.type.tSm.copy(color = tint, fontWeight = FontWeight.Medium),
+            maxLines = 1,
+          )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          BasicText(view.phaseId, style = SkillBillTheme.type.t2xs.copy(color = SkillBillTheme.colors.fgFaint))
+          Spacer(Modifier.weight(1f))
+          if (elapsed != null) {
+            BasicText(
+              elapsed,
+              style = SkillBillTheme.type.tXs.copy(color = if (active) SkillBillTheme.colors.fg else SkillBillTheme.colors.fgMuted),
+              maxLines = 1,
+            )
+          }
+        }
+      }
     }
-    val duration = when {
-      stage?.status == "running" -> elapsedTextOrNull(stage.firstStartedAt, now)
-      stage?.finishedAt != null -> stage.finishedAt?.let { elapsedTextOrNull(stage.firstStartedAt, it) }
-      !item.running -> elapsedTextOrNull(stage?.firstStartedAt, detail.updatedAt)
-      else -> null
-    }
-    val statusColor = when {
-      blocked || quiet || status == "failed" -> SkillBillTheme.colors.stBlocked
-      status == "active" -> SkillBillTheme.colors.stActive
-      status == "done" -> SkillBillTheme.colors.fg2
-      else -> SkillBillTheme.colors.fgFaint
-    }
-    MetricCell(
-      label = label.title,
-      value = duration.orEmpty(),
-      note = label.id,
-      lead = { PlanGlyph(if (blocked) "blocked" else if (status == "done") "saved" else if (status == "active") "writing" else "queued", statusColor) },
-      tone = when { blocked || quiet -> SkillBillTheme.colors.stBlocked; status == "active" -> SkillBillTheme.colors.stActive; else -> null },
-    )
   }
-  MetricStrip(cells, Modifier.padding(top = DocBlockGap))
 }
 
 @Composable
-private fun PlanStatusLine(item: WorkItem, detail: Detail) {
-  BasicText(planStatusText(item, detail), Modifier.fillMaxWidth().padding(top = 4.dp), style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
+private fun StageIcon(icon: ImageVector, color: Color) {
+  CompositionLocalProvider(LocalContentColor provides color) { SbIcon(icon, 11.dp) }
+}
+
+@Composable
+private fun DashedRing(color: Color) {
+  Canvas(Modifier.size(11.dp)) {
+    drawCircle(color, style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 2.dp.toPx()))))
+  }
 }
 
 internal fun planStatusText(item: WorkItem, detail: Detail): String {
@@ -96,13 +165,22 @@ internal fun planStatusText(item: WorkItem, detail: Detail): String {
     hasBlockedSubtasks(plan) -> "${blockedSubtasksLabel(blockedSubtaskIds(plan))}. ${plan?.plannedSubtaskCount} of ${plan?.totalSubtaskCount} saved, ${plan?.units?.count { it.state == "queued" }} not started."
     planFinished(item, detail) -> "Plan ready. ${plan?.totalSubtaskCount ?: 0} subtasks, all specs saved."
     !item.running -> lifecycleLabel(item.lifecycle)
-    plan?.units?.isNotEmpty() == true -> {
-      val writing = plan.units.filter { it.state == "writing" }.map { it.subtaskId }
-      val action = if (writing.isEmpty()) "Preparing the next subtask specs" else "Writing specs for ${if (writing.size == 1) "subtask" else "subtasks"} ${writing.joinToString(", ")}"
-      "$action. ${plan.plannedSubtaskCount} of ${plan.totalSubtaskCount} saved."
+    else -> {
+      val views = planStageViews(item, detail).associateBy { it.phaseId }
+      when {
+        !plan?.units.isNullOrEmpty() || views["plan_subtasks"]?.state == PlanStageState.Running -> {
+          val writing = plan?.units.orEmpty().filter { it.state == "writing" }.map { it.subtaskId }
+          val action = when {
+            writing.isEmpty() -> "Writing specs"
+            writing.size == 1 -> "Writing specs for subtask ${writing.single()}"
+            else -> "Writing specs for subtasks ${writing.min()} to ${writing.max()}"
+          }
+          "$action. ${plan?.plannedSubtaskCount ?: 0} of ${plan?.totalSubtaskCount ?: 0} saved."
+        }
+        views["plan"]?.state == PlanStageState.Running -> "Splitting the work into subtasks. Their specs appear in the bundle once the manifest is saved."
+        else -> "Reading the repository and the intake before it splits the work."
+      }
     }
-    plan?.stages?.firstOrNull { it.status == "running" }?.phaseId == "plan" -> "Splitting the work into subtasks. The list appears here once the decomposition is saved."
-    else -> "Reading the repository and the intake before it splits the work."
   }
 }
 
@@ -113,36 +191,6 @@ internal fun blockedSubtaskIds(plan: StandalonePlanProgress?): List<Int> =
 
 internal fun blockedSubtasksLabel(ids: List<Int>): String =
   "Planning stopped at ${if (ids.size == 1) "subtask" else "subtasks"} ${ids.joinToString(", ")}"
-
-@Composable
-private fun PlanHeartbeat(item: WorkItem, detail: Detail, stalledSince: Instant?) {
-  val ticker = LocalUiTicker.current
-  val outputAt = detail.planOutputUpdatedAt
-  val elapsedOnly = item.running && item.activeDurationAsOf == null && item.startedAt != null
-  if (item.running && (elapsedOnly || stalledSince != null || outputAt != null)) {
-    DisposableEffect(ticker) { ticker.retain(); onDispose { ticker.release() } }
-  }
-  val colors = SkillBillTheme.colors
-  Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-    BasicText(if (planFinished(item, detail)) "Total" else "Elapsed", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
-    if (elapsedOnly) {
-      BasicText(elapsedTextOrNull(item.startedAt, ticker.now.value).orEmpty(), style = SkillBillTheme.type.tSm.copy(color = colors.fg))
-    } else {
-      SbClock(item.activeDurationMs, item.activeDurationAsOf, live = item.running, showSeconds = true)
-    }
-    if (item.running && stalledSince != null) {
-      BasicText("No output for ${elapsedText(stalledSince, ticker.now.value)}", style = SkillBillTheme.type.tSmMedium.copy(color = colors.stBlocked))
-    } else if (item.running && outputAt != null) {
-      val age = elapsedText(outputAt, ticker.now.value)
-      BasicText("Last output $age ago", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
-    }
-    if (planFinished(item, detail)) item.finishedAt?.let {
-      BasicText("finished ${formatInstant(it, "d MMM HH:mm")}", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
-    }
-
-  }
-}
-
 
 internal const val PLAN_QUIET_SECONDS = 5 * 60L
 

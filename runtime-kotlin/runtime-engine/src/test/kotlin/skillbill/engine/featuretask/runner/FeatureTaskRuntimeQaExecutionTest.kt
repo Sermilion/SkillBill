@@ -62,6 +62,27 @@ class FeatureTaskRuntimeQaExecutionTest {
   private var qaFixOutputOverride: String? = null
 
   @Test
+  fun `goal QA publishes its exact live invocation before agent launch and ends it on cancellation`() {
+    lateinit var fixture: Fixture
+    fixture =
+      fixture(QaVerdict.PASSED, onPhase = { phase ->
+        if (phase == "qa") {
+          val preview = assertNotNull(fixture.storedQaOutcome()?.details?.preview)
+          assertEquals("qa-test-invocation", preview.invocationId)
+          assertEquals(Path.of(QA_TEST_QA_ROOT, preview.invocationId).toString(), preview.invocationDirectory)
+          assertEquals(listOf("android"), preview.targets)
+          assertTrue(preview.active)
+          throw CancellationException("stop during QA")
+        }
+      })
+
+    assertFailsWith<CancellationException> { fixture.harness.runner.run(fixture.harness.request) }
+
+    assertFalse(assertNotNull(fixture.storedQaOutcome()?.details?.preview).active)
+    assertEquals(listOf("qa-test-invocation"), fixture.workspaces.closedInvocations)
+  }
+
+  @Test
   fun `full runs prepare QA before launch and advance on a prose report with any verdict`() {
     for (verdict in listOf(QaVerdict.PASSED, QaVerdict.SKIPPED, QaVerdict.INCOMPLETE)) {
       val fixture = fixture(verdict)
@@ -96,6 +117,7 @@ class FeatureTaskRuntimeQaExecutionTest {
       assertEquals(0, stored.qaFixAttempts)
       assertContains(assertNotNull(stored.reportText), "Verdict: ${verdict.wireValue}")
       assertTrue(stored.findings.isEmpty())
+      assertFalse(assertNotNull(stored.details?.preview).active)
     }
   }
 

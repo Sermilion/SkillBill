@@ -21,45 +21,45 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
+import dev.skillbill.desktop.core.designsystem.SkillBillMotion
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 
 internal val NEW_TASK_STEPS = listOf("plan", "implement", "audit", "review", "validate", "qa", "pr")
 
-private const val AMBER_UNTIL = 0.10f
-private const val GREY_FROM = 0.16f
-private const val CYCLE_MS = 6300
+private const val CYCLE_MS = 4200
+private const val FADE_IN_UNTIL = .15f
+private const val GROWN_AT = .85f
 private const val GLOW_ALPHA = .16f
 private const val GOAL_LINE_ALPHA = .5f
-private val DOT_DIAMETER = 7.dp
+private val DOT_DIAMETER = 5.dp
+private val LIT_DOT_DIAMETER = 7.dp
 private val GLOW_WIDTH = 3.dp
+private val DOT_ROW_HEIGHT = LIT_DOT_DIAMETER + GLOW_WIDTH * 2
 private val MIN_LINE_WIDTH = 460.dp
 
-/** Both values run from 0 to 1. */
-internal data class DotFrame(val amber: Float, val glow: Float)
+/** [reach] is the share of the line from the first dot to the last that the sweep covers; both values run from 0 to 1. */
+internal data class SweepFrame(val reach: Float, val alpha: Float)
 
-/** The 0.9s stagger is exactly 1/7 of the 6.3s cycle, so each step's phase is [progress] shifted by [step] sevenths. */
-internal fun idleDotFrame(step: Int, progress: Float): DotFrame {
-  val phase = (progress - step / 7f).mod(1f)
-  val amber = when {
-    phase <= AMBER_UNTIL -> 1f
-    phase < GREY_FROM -> (GREY_FROM - phase) / (GREY_FROM - AMBER_UNTIL)
-    else -> 0f
+/** The sweep grows to the last dot over 85% of the cycle, fading in over the first 15% and out over the last 15%. */
+internal fun sweepFrame(progress: Float): SweepFrame {
+  val ease = SkillBillMotion.easing
+  val reach = ease.transform((progress / GROWN_AT).coerceIn(0f, 1f))
+  val alpha = when {
+    progress < FADE_IN_UNTIL -> ease.transform(progress / FADE_IN_UNTIL)
+    progress <= GROWN_AT -> 1f
+    else -> 1f - ease.transform(((progress - GROWN_AT) / (1f - GROWN_AT)).coerceAtMost(1f))
   }
-  return DotFrame(amber, amber)
-}
-
-internal fun stepDotFrame(step: Int, progress: Float?, reducedMotion: Boolean): DotFrame = when {
-  reducedMotion -> DotFrame(if (step == 0) 1f else 0f, 0f)
-  progress != null -> idleDotFrame(step, progress)
-  else -> DotFrame(0f, 0f)
+  return SweepFrame(reach, alpha)
 }
 
 @Composable
@@ -71,17 +71,32 @@ internal fun rememberIdleProgress(): State<Float> =
     label = "new-task-idle-progress",
   )
 
-/** Reads [progress] only while drawing, so a frame redraws the dots and never recomposes the screen. */
+/** Reads [progress] only while drawing, so a frame redraws the line and never recomposes the screen. */
 @Composable
-internal fun StepLine(progress: State<Float>?, reducedMotion: Boolean, preview: NewTaskRoutePreview?) {
+internal fun StepLine(progress: State<Float>?, preview: NewTaskRoutePreview?) {
   val colors = SkillBillTheme.colors
+  val track = if (preview == NewTaskRoutePreview.Goal) colors.accent.copy(alpha = GOAL_LINE_ALPHA) else colors.border
   Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-      Row(Modifier.horizontalScroll(rememberScrollState()).width(max(MIN_LINE_WIDTH, maxWidth))) {
-        NEW_TASK_STEPS.forEachIndexed { step, label ->
+      Row(
+        Modifier.horizontalScroll(rememberScrollState()).width(max(MIN_LINE_WIDTH, maxWidth)).drawBehind {
+          val y = DOT_ROW_HEIGHT.toPx() / 2
+          val first = size.width / NEW_TASK_STEPS.size / 2
+          val last = size.width - first
+          val stroke = 1.dp.toPx()
+          drawLine(track, Offset(first, y), Offset(last, y), stroke)
+          val sweep = progress?.value?.let(::sweepFrame) ?: return@drawBehind
+          val head = first + (last - first) * sweep.reach
+          if (head > first && sweep.alpha > 0f) {
+            val brush = Brush.horizontalGradient(listOf(Color.Transparent, colors.accent), startX = first, endX = head)
+            drawLine(brush, Offset(first, y), Offset(head, y), stroke, alpha = sweep.alpha)
+          }
+        },
+      ) {
+        NEW_TASK_STEPS.forEach { label ->
           val lit = preview?.lights(label) == true
           Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            StepDot(step, progress, reducedMotion, preview, lit)
+            StepDot(lit)
             BasicText(label, style = SkillBillTheme.type.monoSm.copy(fontSize = 11.5.sp, color = if (lit) colors.accentHover else colors.fgMuted))
           }
         }
@@ -98,20 +113,15 @@ internal fun StepLine(progress: State<Float>?, reducedMotion: Boolean, preview: 
 }
 
 @Composable
-private fun StepDot(step: Int, progress: State<Float>?, reducedMotion: Boolean, preview: NewTaskRoutePreview?, lit: Boolean) {
+private fun StepDot(lit: Boolean) {
   val colors = SkillBillTheme.colors
-  Canvas(Modifier.fillMaxWidth().height(DOT_DIAMETER + GLOW_WIDTH * 2)) {
-    val frame = when {
-      preview == null -> stepDotFrame(step, progress?.value, reducedMotion)
-      lit -> DotFrame(1f, 1f)
-      else -> DotFrame(0f, 0f)
+  Canvas(Modifier.fillMaxWidth().height(DOT_ROW_HEIGHT)) {
+    if (lit) {
+      val radius = LIT_DOT_DIAMETER.toPx() / 2
+      drawCircle(colors.accent.copy(alpha = GLOW_ALPHA), radius + GLOW_WIDTH.toPx())
+      drawCircle(colors.accent, radius)
+    } else {
+      drawCircle(colors.borderStrong, DOT_DIAMETER.toPx() / 2)
     }
-    val lineStart = if (step == 0) center.x else 0f
-    val lineEnd = if (step == NEW_TASK_STEPS.lastIndex) center.x else size.width
-    val line = if (preview == NewTaskRoutePreview.Goal) colors.accent.copy(alpha = GOAL_LINE_ALPHA) else colors.border
-    drawLine(line, Offset(lineStart, center.y), Offset(lineEnd, center.y), 1.dp.toPx())
-    val radius = DOT_DIAMETER.toPx() / 2
-    if (frame.glow > 0f) drawCircle(colors.accent.copy(alpha = GLOW_ALPHA * frame.glow), radius + GLOW_WIDTH.toPx())
-    drawCircle(lerp(colors.stripIdle, colors.accent, frame.amber), radius)
   }
 }

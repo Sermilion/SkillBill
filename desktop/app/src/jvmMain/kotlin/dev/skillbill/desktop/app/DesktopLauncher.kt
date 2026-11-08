@@ -16,6 +16,8 @@ private const val DELEGATE_MAIN_CLASS_PROPERTY = "skillbill.desktop.mainClass"
 private const val DEFAULT_MAIN_CLASS = "dev.skillbill.desktop.app.ApplicationKt"
 private const val REFUSAL_CLASS = "dev.skillbill.desktop.app.RuntimeUnavailableAppKt"
 private const val RESOURCES_DIRECTORY_PROPERTY = "compose.application.resources.dir"
+private const val SKIKO_RENDER_API_PROPERTY = "skiko.renderApi"
+private const val SKIKO_RENDER_API_ENV = "SKIKO_RENDER_API"
 
 /**
  * Checks the installed runtime against this build, then starts the app in one class loader over the app's jars plus the runtime's
@@ -25,6 +27,11 @@ private const val RESOURCES_DIRECTORY_PROPERTY = "compose.application.resources.
 fun main(args: Array<String>) {
   System.setProperty("java.io.tmpdir", currentDesktopTempRoot().toString())
   System.setProperty("compose.interop.blending", "true")
+  if (System.getProperty("os.name", "").contains("linux", ignoreCase = true) &&
+    System.getProperty(SKIKO_RENDER_API_PROPERTY) == null && System.getenv(SKIKO_RENDER_API_ENV) == null
+  ) {
+    System.setProperty(SKIKO_RENDER_API_PROPERTY, "SOFTWARE")
+  }
   val runtimeRoot = runtimeInstallRoot(System.getenv(), System.getProperty("user.home"))
   val appRecord = appIdentityPath()
   val installation = InstalledRuntimeBuildGate(runtimeRoot, appRecord).check()

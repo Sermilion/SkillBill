@@ -66,7 +66,9 @@ internal class DetailScreenHost(
   val chatPaneOpen: Boolean = false,
   val chatShortcut: String = "",
   val onToggleChat: () -> Unit = {},
-)
+) {
+  val detailsPaneVisible: Boolean get() = detailsPaneOpen && !specsOpen && !chatPaneOpen
+}
 
 private fun sectionCrumb(section: WorkLiveSection?): String = when (section) {
   WorkLiveSection.NeedsYou -> "Needs you"
@@ -105,6 +107,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   val view = runActionsView(state)
   val recoverFocus = remember { FocusRequester() }
   val listState = rememberLazyListState()
+  val planScreenState = rememberPlanScreenState(item.id)
   val qaRow = isStandaloneQa(item)
   val validationRow = isStandaloneValidation(item)
   val loaded = state.sections as? SectionsUi.Loaded
@@ -168,7 +171,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
           state = listState,
           contentPadding = PaddingValues(start = side, end = side, top = if (narrow) 20.dp else 32.dp, bottom = if (narrow) 48.dp else 64.dp),
         ) {
-          val sections = DetailSections(this, collapse, listState, assessmentOrder, keys)
+          val sections = DetailSections(this, collapse, listState, assessmentOrder, keys, planScreenState)
           sections.item(key = "header") {
             val verifyRun = loaded?.detail?.verifyRun
             if (verifyRun != null) VerifyHeader(verifyRun, onAction) {
@@ -176,7 +179,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
                 val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
                 RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction)
               }
-            } else DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }, qa = if (qaRow) QaHeaderFacts(qaView?.testedCommit, qaView?.criteriaSource) else null, validation = validationRow, planReady = item.isStandalonePlan() && planFinished(item, loaded?.detail)) {
+            } else DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }, qa = if (qaRow) QaHeaderFacts(qaView?.testedCommit, qaView?.criteriaSource) else null, validation = validationRow, planReady = item.isStandalonePlan() && planFinished(item, loaded?.detail), planBlocked = item.isStandalonePlan() && hasBlockedSubtasks(loaded?.detail?.standalonePlan)) {
               if (state.sections != SectionsUi.Gone) {
                 val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
                 RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction)
@@ -198,7 +201,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         }
       }
       DetailPeek(
-        open = host.detailsPaneOpen && !host.specsOpen && !host.chatPaneOpen,
+        open = host.detailsPaneVisible,
         wide = (state.sections as? SectionsUi.Loaded)?.detail?.let {
           selectedSubtask(item, it, state.subtaskChoice.key) == SubtaskKey.GoalFinish
         } == true,
@@ -223,7 +226,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
 }
 
 /** HANDOFF 9.2 item 7, with the operator decision inside it; a decision with no incident gets its own section. */
-internal fun DetailSections.incident(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
+internal fun DetailSections.incident(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit, planHeader: Boolean = false) {
   val detail = (state.sections as? SectionsUi.Loaded)?.detail
   val incident = detail?.incident
   val decision: @Composable () -> Unit = {
@@ -231,10 +234,11 @@ internal fun DetailSections.incident(state: DetailUiState, view: RunActionsView,
   }
   val sectionCollapse = collapse
   if (incident != null) item(key = "incident") {
-    IncidentSection(incident, view, decision, onAction, sectionCollapse, { onAction(DetailAction.Copy(it)) }, Modifier.padding(top = DocBlockGap))
+    IncidentSection(incident, view, decision, onAction, sectionCollapse, { onAction(DetailAction.Copy(it)) }, Modifier.padding(top = if (planHeader) 20.dp else DocBlockGap), planHeader)
   }
-  if (incident == null && view.decision != null && state.sections != SectionsUi.Gone) item(key = "decision") {
-    Section(title = "Operator decision", Modifier.padding(top = DocBlockGap)) { decision() }
+  if (incident == null && view.decision != null && state.sections != SectionsUi.Gone) {
+    if (planHeader) planSection("decision", "Operator decision") { item(key = "decision-body") { decision() } }
+    else item(key = "decision") { Section(title = "Operator decision", Modifier.padding(top = DocBlockGap)) { decision() } }
   }
 }
 

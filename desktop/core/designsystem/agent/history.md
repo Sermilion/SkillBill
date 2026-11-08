@@ -10,6 +10,7 @@ Areas: desktop/core/designsystem, desktop/core/ui, desktop/app, desktop/feature/
 - Accepted shifts include shared card radii and borderSubtle frames, a solid pending-comment frame, Tint without a dot in the chat header, alpha-only PendingReviewBar pulses and layout-direction-aware End rules. Caller modifiers precede divider sizing and panel framing.
 - ContentPanel serves the shell, runtime refusal and Settings. ShellFrame uses movable content across framed and drawer branches to retain remembered work-area state.
 - Limits: collapsed tool groups retain the header rule beside the bottom frame; comment inputs adopt the 120dp internal-scroll cap. Unread overflow badges, target cards, timeline bars, unframed search rows, window chrome and desktop-tray remain separate families; preventing future copies with lint remains a follow-up.
+- QA coverage ends at the tree before validation changed code. The published change differs from that QA-tested tree, and QA does not rerun.
 Feature flag: N/A
 Acceptance criteria: 4/4 implemented
 

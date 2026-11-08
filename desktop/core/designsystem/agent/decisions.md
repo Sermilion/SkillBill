@@ -1,7 +1,7 @@
 ## [2026-11-07] Share presentation without transferring feature behavior
 Context: SKILL-516 merges repeated drawing across desktop modules whose domain mappings and interaction lifetimes differ.
-Decision: Accept plain values and slots in shared components. Row and overlay surfaces own drawing; callers keep activation, focus, keyboard handling, dismissal and feature decorations. Status and bar callers map domain states; skeleton callers own loading semantics and animation.
-Reason: A drawing API can serve passive validation rows as well as clickable rows without making passive content actionable. Moving feature state into the design system would introduce domain dependencies and duplicate existing behavior owners.
+Decision: Accept plain values and slots in shared components. Row and overlay surfaces own drawing; callers keep activation, focus, keyboard handling, dismissal and feature decorations. Row callers supply the shared MutableInteractionSource and choose the shape, using RectangleShape for normal ListRow, inbox and file rows. Status and bar callers map domain states; skeleton callers own loading semantics and animation.
+Reason: A drawing API can serve passive validation rows as well as clickable rows without making passive content actionable. Sharing the interaction source keeps hover observation with the caller's interactions; explicit rectangular shapes prevent default rounding from clipping full-width rows. Moving feature state into the design system would introduce domain dependencies and duplicate existing behavior owners.
 
 ## [2026-11-07] Use compact density without shrinking existing controls
 Context: The spec chooses the compact implementation when duplicates differ only in density, and otherwise chooses design-system rendering.
@@ -47,6 +47,10 @@ Reason: A design-system owner avoids an app dependency from Settings. The inner 
 Context: Zero and negative progress segments must consume neither width nor gaps, while an empty visible list must retain its described track.
 Decision: Filter weights before emitting spaced children. Keep the track background and content description on the container.
 Reason: Skipped entries would otherwise reserve gaps or remove the track in zero-total states.
+## [2026-11-07] Extend SbSpinner without changing existing callers
+Context: The plan stage strip needs a track ring, a shorter arc and different turn durations. QA, validation and chat already use SbSpinner.
+Decision: Add durationMillis, trackAlpha and arcSweep with defaults of 1000 milliseconds, no track and a 270-degree arc. Plan callers supply their own values; reduced motion holds rotation at zero.
+Reason: These defaults preserve the previous drawing for existing callers while the plan strip matches its mock.
 
 ## [2026-10-30] Supply dialog text styles explicitly
 Context: Dialogs need muted body text while accepting composable content.

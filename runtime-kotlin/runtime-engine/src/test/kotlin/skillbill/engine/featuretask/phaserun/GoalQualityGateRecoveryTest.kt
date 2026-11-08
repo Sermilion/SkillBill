@@ -86,6 +86,38 @@ class GoalQualityGateRecoveryTest {
   }
 
   @Test
+  fun `initial discovery cancelled by a graceful runner shutdown may run again before any gate run`() {
+    val interrupted =
+      FeatureTaskRuntimeValidationGateProgress(
+        gateRunCount = 0,
+        gateRuns = emptyList(),
+        pendingExternalOperation = "build:initial_discovery:./gradlew compileKotlin",
+        pendingExternalCheckpoint = "checkpoint",
+        pendingExternalInterrupted = true,
+      )
+    validate(progress(listOf(first, second), interrupted))
+  }
+
+  @Test
+  fun `interrupted repair and verification commands keep the unknown outcome block`() {
+    listOf(
+      "build:repair:build:1",
+      "build:post_repair_verify:./gradlew compileKotlin",
+      "validation:initial_discovery:./gradlew check",
+    ).forEach { operation ->
+      val interrupted =
+        gate.copy(
+          pendingExternalOperation = operation,
+          pendingExternalCheckpoint = "checkpoint",
+          pendingExternalInterrupted = true,
+        )
+      val failure =
+        assertFailsWith<SkillBillRuntimeException>(operation) { validate(progress(listOf(first, second), interrupted)) }
+      assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'build#1' is unknown")
+    }
+  }
+
+  @Test
   fun `an interrupted read-only QA attempt with a consistent start may run again`() {
     val qa = record.copy(phaseId = "qa")
     validateRetained(GoalQualityPhaseProgress(phaseRecords = mapOf("qa" to qa), phaseLedger = qaStarts("qa")))
@@ -116,16 +148,48 @@ class GoalQualityGateRecoveryTest {
     assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'qa#1' is unknown")
   }
 
+  @Test
+  fun `an interrupted validation attempt may run again only while its input source is unchanged`() {
+    val validate = record.copy(phaseId = "validate")
+    val progress =
+      GoalQualityPhaseProgress(phaseRecords = mapOf("validate" to validate), phaseLedger = qaStarts("validate"))
+
+    validateRetained(progress, SkeletonDefinition.VALIDATION) { true }
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        validateRetained(progress, SkeletonDefinition.VALIDATION) { false }
+      }
+    assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'validate#1' is unknown")
+  }
+
+  @Test
+  fun `an unchanged source does not resume a validation attempt after earlier accepted work`() {
+    val validate = record.copy(phaseId = "validate", attemptCount = 2)
+    val ledger = qaStarts("validate").map { it.copy(attemptCount = 2) }
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        validateRetained(
+          GoalQualityPhaseProgress(phaseRecords = mapOf("validate" to validate), phaseLedger = ledger),
+          SkeletonDefinition.VALIDATION,
+        ) { true }
+      }
+    assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'validate#2' is unknown")
+  }
+
   private fun qaStarts(phaseId: String) = listOf(first.copy(phaseId = phaseId), second.copy(phaseId = phaseId))
 
-  private fun validateRetained(progress: GoalQualityPhaseProgress) {
+  private fun validateRetained(
+    progress: GoalQualityPhaseProgress,
+    definition: SkeletonDefinition = SkeletonDefinition.GOAL_QA,
+    inputSourceUnchanged: () -> Boolean = { false },
+  ) {
     val resolver = resolver()
     val plan =
       resolver.resolveExecutionPlan(
-        PhaseRunRequest(definitionId = SkeletonDefinition.GOAL_QA.id, repoRoot = home, invokedAgentId = "codex"),
+        PhaseRunRequest(definitionId = definition.id, repoRoot = home, invokedAgentId = "codex"),
         "goal-parent",
       )
-    resolver.validateRetainedRunningPhases(progress, plan, "goal-parent:quality-invocation")
+    resolver.validateRetainedRunningPhases(progress, plan, "goal-parent:quality-invocation", inputSourceUnchanged)
   }
 
   private fun resolver(): PhaseRunPlanResolver {

@@ -191,6 +191,7 @@ data class FeatureTaskRuntimeValidationGateProgress(
   val terminalReason: String? = null,
   val terminalFailureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
   val terminalFailureCode: String? = null,
+  val pendingExternalInterrupted: Boolean = false,
 ) {
   init {
     val reason =
@@ -199,6 +200,8 @@ data class FeatureTaskRuntimeValidationGateProgress(
           pendingExternalOperation?.isBlank() == true || pendingExternalCheckpoint?.isBlank() == true
         ) {
           "Pending validation gate operation identity and checkpoint must be present together."
+        } else if (pendingExternalInterrupted && pendingExternalOperation == null) {
+          "An interrupted validation gate operation must keep its pending identity."
         } else {
           if (acceptedRepairOutputs.map { it.repairTurn }.distinct().size != acceptedRepairOutputs.size ||
             acceptedRepairOutputs.any { it.repairTurn > repairsUsed }
@@ -261,7 +264,9 @@ data class FeatureTaskRuntimeValidationGateProgress(
       ValidationEvidencePayloadKeys.TERMINAL_REASON to terminalReason,
       ValidationEvidencePayloadKeys.TERMINAL_FAILURE_DISPOSITION to terminalFailureDisposition?.wireValue,
       ValidationEvidencePayloadKeys.TERMINAL_FAILURE_CODE to terminalFailureCode,
-    )
+    ).apply {
+      if (pendingExternalInterrupted) put(ValidationEvidencePayloadKeys.PENDING_EXTERNAL_INTERRUPTED, true)
+    }
 
   companion object {
     internal fun violation(
@@ -320,6 +325,8 @@ data class FeatureTaskRuntimeValidationGateProgress(
       val terminalReason = raw.optionalGateProgressString(ValidationEvidencePayloadKeys.TERMINAL_REASON)
       val terminalFailureDisposition = decodeTerminalFailureDisposition(raw)
       val terminalFailureCode = raw.optionalGateProgressString(ValidationEvidencePayloadKeys.TERMINAL_FAILURE_CODE)
+      val pendingExternalInterrupted =
+        raw.optionalGateProgressFlag(ValidationEvidencePayloadKeys.PENDING_EXTERNAL_INTERRUPTED)
       violation(gateRunCount, gateRuns, repairsUsed)?.let { reason ->
         throw invalidWorkflowStateSchemaError("FeatureTaskRuntimeValidationGateProgress is incoherent: $reason")
       }
@@ -340,6 +347,7 @@ data class FeatureTaskRuntimeValidationGateProgress(
         terminalReason,
         terminalFailureDisposition,
         terminalFailureCode,
+        pendingExternalInterrupted,
       )
     }
 
@@ -565,6 +573,12 @@ private fun Map<String, Any?>.optionalGateProgressString(key: String): String? {
   if (!containsKey(key) || this[key] == null) return null
   return this[key] as? String
     ?: throw invalidWorkflowStateSchemaError("Validation gate progress field '$key' must be a string or null.")
+}
+
+private fun Map<String, Any?>.optionalGateProgressFlag(key: String): Boolean {
+  if (!containsKey(key) || this[key] == null) return false
+  return this[key] as? Boolean
+    ?: throw invalidWorkflowStateSchemaError("Validation gate progress field '$key' must be a boolean or null.")
 }
 
 private fun invalidGateRuns(reason: String): Nothing = throw invalidWorkflowStateSchemaError(reason)

@@ -64,6 +64,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbElevation
 import dev.skillbill.desktop.core.designsystem.component.sbOverlaySurface
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
+import dev.skillbill.desktop.core.designsystem.component.SbMarqueeText
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
@@ -241,12 +242,15 @@ private fun ResumeRow(
         if (entry.lines.isEmpty()) SbIcon(LucideIcons.terminal, SbIconSize.Xs)
         if (title.images.isNotEmpty()) SbIcon(LucideIcons.image, SbIconSize.Xs)
       }
+      val text = entry.summary ?: title.text
       val styled = buildAnnotatedString {
-        append(title.text)
-        val at = if (query.isEmpty()) -1 else title.text.indexOf(query, ignoreCase = true)
+        append(text)
+        val at = if (query.isEmpty()) -1 else text.indexOf(query, ignoreCase = true)
         if (at >= 0) addStyle(SpanStyle(color = colors.accentText), at, at + query.length)
       }
-      BasicText(styled, Modifier.weight(1f), style = type.tSm.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
+      val style = type.tSm.copy(color = colors.fg)
+      if (entry.summary != null) SbMarqueeText(styled, style, Modifier.weight(1f))
+      else BasicText(styled, Modifier.weight(1f), style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
       if (title.images.size > 1) BasicText("+${title.images.size - 1}", style = type.t2xs.copy(color = colors.fgFaint))
       BasicText(savedAgo(entry.updatedAt, now).removeSuffix(" ago"), style = type.t2xs.copy(color = colors.fgFaint))
     }
@@ -275,7 +279,7 @@ private fun ResumePreview(entry: ChatHistoryEntry?, now: Instant, branchOf: (Cha
         }
       } else {
         Column(Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.borderSubtle).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          BasicText(resumeTitle(entry).text, style = type.tMd.copy(color = colors.fg, fontWeight = FontWeight.Medium), maxLines = 2, overflow = TextOverflow.Ellipsis)
+          BasicText(entry.summary ?: resumeTitle(entry).text, style = type.tMd.copy(color = colors.fg, fontWeight = FontWeight.Medium), maxLines = 2, overflow = TextOverflow.Ellipsis)
           branchOf(entry)?.let { PreviewFact("Branch") { BasicText(it, style = type.monoSm.copy(color = colors.fgMuted), maxLines = 1, overflow = TextOverflow.Ellipsis) } }
           PreviewFact("Agent") { BasicText("${agentName(entry.agent)} · ${savedAgo(entry.updatedAt, now)}", style = type.tXs.copy(color = colors.fgMuted)) }
         }

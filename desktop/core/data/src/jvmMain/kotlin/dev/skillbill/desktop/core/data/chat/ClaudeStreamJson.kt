@@ -14,6 +14,7 @@ internal fun decodeClaudeLine(line: String): List<ChatEvent> {
   val root = parseStreamLine(line) ?: return listOf(ChatEvent.Failed(ChatFailure.StreamMalformed, line.take(200)))
   return when (root.string("type")) {
     "stream_event" -> {
+      if (root.obj("event")?.string("type") == "message_start") return listOf(ChatEvent.MessageStarted)
       val delta = root.obj("event")?.obj("delta")
       val text = delta?.string("text")
       if (delta?.string("type") == "text_delta" && text != null) listOf(ChatEvent.TextDelta(text)) else emptyList()

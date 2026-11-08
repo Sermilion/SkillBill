@@ -21,6 +21,7 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.PhaseAttemptHistory
 import skillbill.engine.featuretask.slot.AcceptanceRepairCapability
 import skillbill.engine.featuretask.slot.MonitorRepairCapability
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
@@ -134,7 +135,7 @@ public class FeatureTaskRuntimeRunnerExecutePrepared(
     return FeatureTaskRuntimeRunState(
       initialRecords = records,
       transitions = executionPlan.phaseTraversal(),
-      durableInitialLedger = ledger,
+      initialAttemptHistory = PhaseAttemptHistory(ledger),
       initialRetainedOutputs =
         history.outputs +
           listOfNotNull(

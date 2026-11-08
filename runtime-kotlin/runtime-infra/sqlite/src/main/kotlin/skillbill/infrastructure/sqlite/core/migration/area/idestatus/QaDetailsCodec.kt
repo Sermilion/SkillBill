@@ -10,6 +10,7 @@ import skillbill.workflow.taskruntime.model.qa.QaRunAssertion
 import skillbill.workflow.taskruntime.model.qa.QaRunCoverage
 import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import skillbill.workflow.taskruntime.model.qa.QaRunFinding
+import skillbill.workflow.taskruntime.model.qa.QaRunPreview
 import skillbill.workflow.taskruntime.model.qa.QaRunRetainedResource
 import skillbill.workflow.taskruntime.model.qa.QaRunTemporaryEdit
 import java.sql.ResultSet
@@ -17,6 +18,15 @@ import java.sql.ResultSet
 internal fun encodeQaDetails(details: QaRunDetails): String =
   JsonCodec.valueToJsonString(
     mapOf(
+      SqliteQaDetailsKeys.PREVIEW to
+        details.preview?.let { preview ->
+          mapOf(
+            SqliteQaDetailsKeys.INVOCATION_ID to preview.invocationId,
+            SqliteQaDetailsKeys.INVOCATION_DIRECTORY to preview.invocationDirectory,
+            SqliteQaDetailsKeys.TARGETS to preview.targets,
+            SqliteQaDetailsKeys.ACTIVE to preview.active,
+          )
+        },
       SqliteQaDetailsKeys.REPORT_PATH to details.reportPath,
       SqliteQaDetailsKeys.INVOCATION_DIRECTORY to details.invocationDirectory,
       SqliteQaDetailsKeys.SKIP_REASON to details.skipReason,
@@ -40,6 +50,16 @@ internal fun decodeQaDetails(json: String): QaRunDetails {
     }
   val root = JsonCodec.anyToStringAnyMap(parsed) ?: invalidQaDetails("Stored QA details are not an object.")
   return QaRunDetails(
+    preview =
+      root[SqliteQaDetailsKeys.PREVIEW]?.let { value ->
+        val entry = JsonCodec.anyToStringAnyMap(value) ?: invalidQaDetails("Stored QA preview is not an object.")
+        QaRunPreview(
+          entry.requiredText(SqliteQaDetailsKeys.INVOCATION_ID),
+          entry.requiredText(SqliteQaDetailsKeys.INVOCATION_DIRECTORY),
+          entry.textList(SqliteQaDetailsKeys.TARGETS),
+          entry[SqliteQaDetailsKeys.ACTIVE] as? Boolean ?: invalidQaDetails("Stored QA preview has no active flag."),
+        )
+      },
     reportPath = root.optionalText(SqliteQaDetailsKeys.REPORT_PATH),
     invocationDirectory = root.optionalText(SqliteQaDetailsKeys.INVOCATION_DIRECTORY),
     skipReason = root.optionalText(SqliteQaDetailsKeys.SKIP_REASON),

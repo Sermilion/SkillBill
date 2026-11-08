@@ -1,12 +1,59 @@
+## [2026-11-07] Keep tool-only messages in one tool group
+Context: Claude sends message_start for every API message, including ones that only call a tool, so each command became its own transcript entry.
+Decision: MessageStarted closes the streaming entry only when it already shows text or actions. Tool-only messages keep adding to the same tool group, and the next message with text lands in that entry.
+Reason: Tool calls between two pieces of agent text read as one block of work, as they did before message boundaries existed.
+
+## [2026-11-07] Preserve provider message boundaries inside a chat turn
+Context: Paragraph separators fixed run-on text but still combined every assistant message in a turn into one transcript entry.
+Decision: Claude message starts and Codex and Cursor whole-message items emit MessageStarted. The reply parser settles buffered text and action metadata at that boundary, and the thread finishes its prior entry without completing the turn. Deltas within a message still append to one entry. Operator and finished assistant text share a copy control with copied feedback.
+Reason: Message identity comes from the provider rather than text formatting. Separate saved history lines preserve the boundary on resume, while late tool results still update their original entry.
+
+## [2026-11-07] Fill the tab title so the close control keeps the trailing inset
+Context: A short tab title that does not fill leftover width stays at its text width, so the 20dp close control follows the title instead of the tab's trailing edge.
+Decision: The title fills the space between the marker and the close slot. The row stays padded 10dp at the start and 4dp at the end.
+Reason: The design grows the label, which pins the close control's trailing edge on that 4dp inset for a selected tab and on hover.
+
+## [2026-11-07] Mask home card content inside the border
+Context: Home cards need overflow fades while retaining their border and the blocked-run and selected-row tints.
+Decision: Apply 24dp vertical gradients with DstIn blending on an offscreen layer around the inner scrolling column, inside the card's border padding. Cards with five or fewer rows draw no fade.
+Reason: An alpha mask fades the existing row content without painting a solid panel color over its tints or fading the border. This follows the tab strip's masking technique.
+
+## [2026-11-07] Keep home card keys local and pass through digits and open-chat Delete
+Context: Recent chats and Needs you each own selection. The brief has Up, Down, Enter and Delete inside a focused card, and neither the brief nor the mock has digit shortcuts.
+Decision: The card consumes Up, Down and Enter, and consumes Delete only for a chat absent from the open sessions. Digits, Ctrl, Meta, Alt, open-chat Delete and run Delete pass through. Row and discard controls stay outside Tab traversal, and Recent chats targets Needs you when that card exists.
+Reason: Digit keys are not row shortcuts. Delete discards only a saved chat that is not already open. An open chat resumes onto its tab, and a run has no discard.
+
+## [2026-11-07] List Recent chats with the resume palette's repository filter
+Context: The home listed saved chats across repositories, while the resume palette was already limited to the picked repository.
+Decision: Recent chats uses resumableDrafts for the selected chat's repository root and hides when that list is empty, including when no repository is selected. Search chats still opens that scoped palette.
+Reason: The brief's Recent chats section is every saved chat for that chat's repository, using the same filter as the palette.
+
+## [2026-11-07] Drop InboxItem and keep pure chat title helpers
+Context: The merged inbox, its filters and its day groups are gone, so a home row is either a blocked run or a saved chat.
+Decision: Run rows take WorkItem and chat rows take ChatHistoryEntry. chatTitle, chatRepoLabel and shortAgo stay free of Compose, and saved-chat contracts stay unchanged.
+Reason: Filters, day groups and the merged list are removed, so rows no longer share an InboxItem wrapper. The helpers still format titles, repository badges and short times without a UI harness.
+
+## [2026-11-06] Reserve the overflow spacer's row gap
+Context: The overflow row contains tabs, New chat, a weighted spacer and the chevron. Row spacing adds three gaps, while the existing button-slot reservations account for two.
+Decision: Keep row spacing and subtract one additional 2dp gap from the available tab-container width when overflowing.
+Reason: Without that reservation the fixed children exceed the available width by 2dp and displace the chevron. Explicit tab width also keeps New chat beside fitting tabs.
+
+## [2026-11-06] Keep the strip hairline outside tab fade masks
+Context: Only the selected tab should join the content below. Painted frame-color fades and full-height unselected hover fills can hide the strip hairline.
+Decision: Keep the hairline on the parent strip, apply offscreen DstIn masks to tab content, and stop unselected hover fill 1dp above the bottom. Selected fill reaches the bottom and uses an open top-and-side border.
+Reason: The parent hairline remains visible through faded content and under hovered unselected tabs. The selected tab alone covers it to form the panel join.
+
 ## [2026-11-06] Keep home inbox derivation separate from saved chat data
 Context: The home combines work rows and saved drafts, with filtering, keyboard selection and deferred discard layered onto the same list.
 Decision: Keep InboxItem and its derivation helpers free of Compose. Derive plain titles, image names, repository badges and short times for the card without changing saved-chat contracts or resume-palette formatting.
 Reason: The interaction layer can use the inbox model without changing saved-chat data. Pure helpers also allow fixed-clock and explicit-zone tests without a UI harness.
+Superseded by: Drop InboxItem and keep pure chat title helpers (2026-11-07)
 
 ## [2026-11-06] Keep inbox navigation on the focused card
 Context: Inbox rows share a screen with the composer. Existing shell routing allows unmodified navigation keys through when no screen handler is registered.
 Decision: The card handles navigation, opening and chat Delete on key-down. Rows and discard buttons stay outside Tab traversal, and Ctrl, Meta and Alt combinations pass through.
 Reason: Card-local handling keeps composer digits as text and prevents row controls from also handling the same key. No shell or screen-level handler is needed.
+Superseded by: Keep home card keys local and pass through digits and open-chat Delete (2026-11-07)
 
 ## [2026-11-06] Let each saved-chat discard own its undo window
 Context: Home-list discard must hide a chat immediately and allow five seconds to undo. Several chats can be discarded before their windows expire.
@@ -49,6 +96,7 @@ Revisit when: Pending replay must survive saved-chat resume, or the conversation
 Context: The home lists drafts across repositories, while the resume palette identifies a single repository with its scope chip.
 Decision: New Task passes only drafts for the picked repository to the palette, or none if no repository is picked. The home list remains cross-repository; its Show all opens the scoped palette.
 Reason: A cross-repository result under a single repository label could switch repositories without warning. The home list still offers drafts from other repositories.
+Superseded by: List Recent chats with the resume palette's repository filter (2026-11-07)
 
 ## [2026-11-06] Count a bare-key chip click as key acceptance
 Context: The prompt offers a "Use SKILL-n" chip, but newTaskOperatorIdentity skipped every operator message sent from a suggested action, so clicking it did nothing and the operator had to type the key.

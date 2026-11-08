@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -17,13 +18,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -41,12 +43,9 @@ import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.component.SbControlSize
-import dev.skillbill.desktop.core.designsystem.component.SbLabel
-import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
+import dev.skillbill.desktop.core.designsystem.component.SbMarqueeText
 import dev.skillbill.desktop.core.designsystem.component.dataColorFor
-import dev.skillbill.desktop.core.designsystem.detail.GroupLabel
-import dev.skillbill.desktop.core.designsystem.list.sbRowSurface
+import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlin.math.max
@@ -55,59 +54,68 @@ import kotlin.math.roundToInt
 import kotlin.time.Instant
 
 @Composable
-internal fun InboxGroupHeader(day: InboxDay) {
-  val colors = SkillBillTheme.colors
-  GroupLabel(day.label, Modifier.background(colors.bgPanel))
-}
-
-@Composable
-internal fun InboxRunRow(row: InboxItem.Run, now: Instant, selected: Boolean, shortcut: Int?, divider: Boolean, onOpenRun: (WorkItem) -> Unit) {
-  val item = row.item
+internal fun InboxRunRow(item: WorkItem, now: Instant, divider: Boolean, selected: Boolean, onOpenRun: (WorkItem) -> Unit) {
   val colors = SkillBillTheme.colors
   InboxRow(
     onClick = { onOpenRun(item) },
-    blocked = row.blocked,
-    selected = selected,
-    shortcut = shortcut,
+    blocked = true,
     divider = divider,
-    leading = { InboxGlyph(if (row.blocked) InboxGlyphKind.Blocked else InboxGlyphKind.Running, if (row.blocked) colors.stBlocked else colors.stActive) },
-    prefix = {
-      BasicText(item.issueKey ?: item.id, style = inboxTextStyle(11.5.sp, mono = true).copy(color = colors.fgMuted), maxLines = 1)
-    },
-    middle = { highlighted ->
-      InboxTitle(item.title, item.exactPauseReason ?: item.reason ?: item.summary.takeIf(String::isNotBlank), monoSecondary = false, highlighted = highlighted)
-    },
-    badge = { SbLabel(item.stepLabel, size = SbControlSize.Small) },
+    selected = selected,
+    leading = { InboxGlyph(InboxGlyphKind.Blocked, colors.stBlocked) },
+    prefix = { BasicText(item.issueKey ?: item.id, style = inboxTextStyle(11.5.sp, mono = true).copy(color = colors.fgMuted), maxLines = 1) },
+    middle = { highlighted, _ -> InboxTitle(item.title, item.exactPauseReason ?: item.reason ?: item.summary.takeIf(String::isNotBlank), monoSecondary = false, highlighted = highlighted) },
+    badge = { InboxBadge(item.stepLabel) },
     trailing = { _ -> InboxTime(shortAgo(item.control.updatedAt, now)) },
   )
 }
 
 @Composable
-internal fun InboxChatRow(row: InboxItem.Chat, now: Instant, selected: Boolean, shortcut: Int?, divider: Boolean, onResume: (ChatHistoryEntry) -> Unit, onDiscard: (ChatHistoryEntry) -> Unit) {
+internal fun InboxChatRow(entry: ChatHistoryEntry, selectedRoot: String?, now: Instant, divider: Boolean, open: Boolean, selected: Boolean, onResume: (ChatHistoryEntry) -> Unit, onDiscard: (ChatHistoryEntry) -> Unit) {
   val colors = SkillBillTheme.colors
+  val title = remember(entry.title, entry.summary) { chatTitle(entry.title) }
+  val displayTitle = entry.summary ?: title.title
+  val repoLabel = chatRepoLabel(entry, selectedRoot)
   InboxRow(
-    onClick = { onResume(row.entry) },
-    selected = selected,
-    shortcut = shortcut,
+    onClick = { onResume(entry) },
     divider = divider,
-    leading = { InboxGlyph(if (row.title.imageName != null) InboxGlyphKind.Image else InboxGlyphKind.Chat, if (row.title.imageName != null) colors.data2 else colors.fgFaint) },
-    middle = { highlighted -> InboxTitle(row.title.title, row.title.imageName, monoSecondary = true, highlighted = highlighted) },
-    badge = row.repoLabel?.let { label ->
-      { SbLabel(label, style = SbLabelStyle.Dot(colors.dataColorFor(label)), size = SbControlSize.Small) }
-    },
+    selected = selected,
+    leading = { InboxGlyph(if (title.imageName != null) InboxGlyphKind.Image else InboxGlyphKind.Chat, if (title.imageName != null) colors.data2 else colors.fgFaint) },
+    middle = { highlighted, hovered -> InboxTitle(displayTitle, title.imageName, monoSecondary = true, highlighted = highlighted, marquee = entry.summary != null && hovered) },
+    badge = if (open || repoLabel != null) {
+      {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+          if (open) InboxBadge("open", textColor = colors.accentText, borderColor = colors.accentRing)
+          repoLabel?.let { InboxBadge(it, colors.dataColorFor(it)) }
+        }
+      }
+    } else null,
     trailing = { highlighted ->
-      if (highlighted) InboxDiscard(row.title.title) { onDiscard(row.entry) }
-      else InboxTime(shortAgo(row.entry.updatedAt, now))
+      if (highlighted && !open) InboxDiscard(displayTitle) { onDiscard(entry) }
+      else InboxTime(shortAgo(entry.updatedAt, now))
     },
   )
 }
 
 @Composable
-private fun InboxTitle(title: String, secondary: String?, monoSecondary: Boolean, highlighted: Boolean) {
+private fun InboxBadge(text: String, swatch: Color? = null, textColor: Color? = null, borderColor: Color? = null) {
+  val colors = SkillBillTheme.colors
+  Row(
+    Modifier.height(18.dp).border(1.dp, borderColor ?: colors.border, RoundedCornerShape(50)).padding(horizontal = 7.dp),
+    horizontalArrangement = Arrangement.spacedBy(5.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    if (swatch != null) Box(Modifier.size(6.dp).background(swatch, RoundedCornerShape(2.dp)))
+    BasicText(text, style = inboxTextStyle(10.5.sp).copy(color = textColor ?: colors.fgMuted), maxLines = 1)
+  }
+}
+
+@Composable
+private fun InboxTitle(title: String, secondary: String?, monoSecondary: Boolean, highlighted: Boolean, marquee: Boolean = false) {
   val colors = SkillBillTheme.colors
   Layout(
     content = {
-      BasicText(title, style = inboxTextStyle().copy(color = if (highlighted) colors.fg else colors.fg2), maxLines = 1, overflow = TextOverflow.Ellipsis)
+      val style = inboxTextStyle().copy(color = if (highlighted) colors.fg else colors.fg2)
+      if (marquee) SbMarqueeText(title, style) else BasicText(title, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
       if (secondary != null) BasicText(secondary, style = inboxTextStyle(12.sp, mono = monoSecondary).copy(color = colors.fgFaint), maxLines = 1, overflow = TextOverflow.Ellipsis)
     },
   ) { measurables, constraints ->
@@ -144,10 +152,13 @@ private fun InboxDiscard(title: String, onDiscard: () -> Unit) {
   val colors = SkillBillTheme.colors
   val interaction = remember { MutableInteractionSource() }
   val hovered by interaction.collectIsHoveredAsState()
+  val shape = RoundedCornerShape(4.dp)
   Box(
-    Modifier.offset(x = 4.dp).size(22.dp).focusProperties { canFocus = false }
-      .then(if (hovered) Modifier.background(colors.bgActive, RoundedCornerShape(4.dp)) else Modifier)
+    Modifier.offset(x = 4.dp).size(22.dp)
+      .then(if (hovered) Modifier.background(colors.bgActive, shape) else Modifier)
+      .focusProperties { canFocus = false }
       .clickable(interaction, indication = null, role = Role.Button, onClick = onDiscard)
+      .sbFocusRing(interaction, shape)
       .semantics { contentDescription = "Discard $title" },
     contentAlignment = Alignment.Center,
   ) {
@@ -158,45 +169,47 @@ private fun InboxDiscard(title: String, onDiscard: () -> Unit) {
 @Composable
 private fun InboxRow(
   onClick: () -> Unit,
-  selected: Boolean,
-  shortcut: Int?,
   divider: Boolean,
   leading: @Composable () -> Unit,
-  middle: @Composable (highlighted: Boolean) -> Unit,
+  middle: @Composable (highlighted: Boolean, hovered: Boolean) -> Unit,
   trailing: @Composable (highlighted: Boolean) -> Unit,
   blocked: Boolean = false,
+  selected: Boolean = false,
   prefix: (@Composable () -> Unit)? = null,
   badge: (@Composable () -> Unit)? = null,
 ) {
   val colors = SkillBillTheme.colors
   val interaction = remember { MutableInteractionSource() }
   val hovered by interaction.collectIsHoveredAsState()
-  val highlighted = hovered || selected
+  var focusedWithin by remember { mutableStateOf(false) }
+  val highlighted = hovered || focusedWithin || selected
   Row(
-    Modifier.fillMaxWidth().height(34.dp).focusProperties { canFocus = false }
-      .sbRowSurface(interaction, selected = selected, shape = RectangleShape)
+    Modifier.fillMaxWidth().height(34.dp)
       .drawBehind {
         if (blocked) {
           val end = if (highlighted) Color.White.copy(alpha = .03f) else Color.Transparent
           drawRect(Brush.horizontalGradient(listOf(colors.stBlocked.copy(alpha = if (highlighted) .11f else .07f), end), endX = size.width * .4f))
+        } else if (highlighted) drawRect(colors.bgHover)
+        if (selected && blocked) drawRect(colors.bgHover)
+        if (selected && !blocked) {
+          drawRect(colors.accent, topLeft = androidx.compose.ui.geometry.Offset(7.dp.toPx(), 7.dp.toPx()), size = Size(2.dp.toPx(), size.height - 14.dp.toPx()))
         }
         if (divider) drawRect(colors.borderSubtle, size = Size(size.width, 1.dp.toPx()))
         if (blocked) drawRect(colors.stBlocked, size = Size(2.dp.toPx(), size.height))
-        else if (selected) drawRoundRect(colors.accent, topLeft = Offset(0f, 7.dp.toPx()), size = Size(2.dp.toPx(), (size.height - 14.dp.toPx()).coerceAtLeast(0f)), cornerRadius = CornerRadius(2.dp.toPx()))
       }
       .pointerHoverIcon(PointerIcon.Hand)
+      .onFocusChanged { focusedWithin = it.hasFocus }
+      .focusProperties { canFocus = false }
       .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
+      .sbFocusRing(interaction, RectangleShape)
       .padding(start = 12.dp, end = 10.dp),
     horizontalArrangement = Arrangement.spacedBy(10.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
     Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) { leading() }
     prefix?.invoke()
-    Box(Modifier.weight(1f)) { middle(highlighted) }
+    Box(Modifier.weight(1f)) { middle(highlighted, hovered) }
     badge?.invoke()
     Box(Modifier.width(52.dp), contentAlignment = Alignment.CenterEnd) { trailing(highlighted) }
-    Box(Modifier.width(16.dp), contentAlignment = Alignment.Center) {
-      if (shortcut != null) BasicText(shortcut.toString(), style = inboxTextStyle(10.sp, mono = true).copy(color = colors.fgFaint))
-    }
   }
 }

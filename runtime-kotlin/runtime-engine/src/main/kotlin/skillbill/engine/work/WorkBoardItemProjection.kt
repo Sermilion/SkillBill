@@ -28,6 +28,7 @@ import skillbill.error.core.rethrowIfDatabaseFailure
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
@@ -43,6 +44,7 @@ import skillbill.ports.idestatus.model.GoalMainCheckoutOutcome
 import skillbill.ports.idestatus.model.GoalWorktreeState
 import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
+import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
@@ -89,8 +91,9 @@ public class WorkBoardItemProjection(
     skipDiagnostics: AggregateSkipDiagnostics,
   ): WorkBoardItem? {
     val (observedAt, finishedFrom) = window
+    var found: WorkDetailMatch.Found? = null
     return try {
-      val found = detailMatch(id, unitOfWork) as? WorkDetailMatch.Found ?: return null
+      found = detailMatch(id, unitOfWork) as? WorkDetailMatch.Found ?: return null
       if (isPlanPhaseOfListedGoal(found, unitOfWork)) return null
       val identity = found.standalone?.repositoryIdentity ?: found.work?.repositoryIdentity
       val root = identity?.let(::decodeRepositoryRoot)
@@ -120,7 +123,36 @@ public class WorkBoardItemProjection(
         )
       }
     } catch (error: SkillBillRuntimeException) {
-      skipIncompatibleBoardItem(error, diagnostics, skipDiagnostics, this.diagnostics, id)
+      if (!error.isInvalidWorkflowStateFailure() || found == null) {
+        skipIncompatibleBoardItem(error, diagnostics, skipDiagnostics, this.diagnostics, id)
+      } else {
+        val resolved = found.work
+        val identity = resolved?.repositoryIdentity
+        val root = identity?.let(::decodeRepositoryRoot)
+        if (resolved == null || identity == null || root == null) throw error
+        this.diagnostics.warning(
+          "seam=$IDE_STATUS_STATUS_SEAM value_expected=readable_row value_used=blocked_record workflow_id=$id " +
+            "failure_code=${error.failureCodeLabel()} error=${error.message.orEmpty()}",
+        )
+        val snapshot =
+          IdeStatusProblemSnapshots.blockedWorkRecord(
+            identity,
+            observedAt,
+            resolved.item,
+            error.message.orEmpty(),
+          )
+        ideStatusValidator.validate(snapshot, "work-board:$id")
+        WorkBoardItem(
+          snapshot = snapshot,
+          repositoryRoot = root.toString(),
+          liveSection = workLiveSection(snapshot, null),
+          requiresAttention = workRequiresAttention(snapshot),
+          displayGroup = workDisplayGroup(snapshot, null),
+          displayPriority = workDisplayPriority(snapshot, null),
+          observation = unitOfWork.workList.observation(),
+          databaseFileObservation = unitOfWork.databaseFileObservation,
+        )
+      }
     }
   }
 
@@ -162,7 +194,19 @@ public class WorkBoardItemProjection(
     work: List<ResolvedWorkItem>,
   ): WorkBoardItem {
     val projection = projector.project(candidate, context.copy(branchCorrelation = candidate.branchCorrelation))
-    val snapshot = projection.snapshot
+    val snapshot =
+      if (projection.snapshot.problem?.code == IdeStatusProblemCode.INCOMPATIBLE_RECORD) {
+        projection.snapshot.copy(
+          lifecycleState = IdeStatusLifecycleState.BLOCKED,
+          issueKey = candidate.issueKey,
+          workflowFamily = candidate.workflowFamily,
+          execution = candidate.execution,
+          summary =
+            "Saved data needs migration. Install a compatible runtime and retry; existing progress is retained.",
+        )
+      } else {
+        projection.snapshot
+      }
     ideStatusValidator.validate(snapshot, "work-board:${candidate.workflowId}")
     val completion =
       if (isFinished(snapshot)) {

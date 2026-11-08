@@ -57,7 +57,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * The active chat's input. Enter sends and Shift+Enter starts a new line; "Pause and act" shows only while the execution runs.
- * Stop ends the running reply and returns queued messages to the draft; Send now ends the reply and sends the first queued message.
+ * Stop ends the running reply and returns queued messages to the draft; Send now ends the reply and sends the queue as one turn.
  * The input stays editable while a turn runs. Submitting queues a message until the current turn ends.
  * A draft of `/resume` or `/clear` is a command: it shows highlighted and runs even while a turn runs. `/resume` opens the
  * saved-chat picker; `/clear` ends the running turn and starts a new conversation.

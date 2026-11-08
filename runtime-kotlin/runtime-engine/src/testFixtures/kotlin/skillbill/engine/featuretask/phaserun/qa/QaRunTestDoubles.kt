@@ -11,6 +11,7 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.qa.QaDeviceLeasePort
 import skillbill.ports.qa.QaWorkspacePort
 import skillbill.ports.qa.model.QaDeviceLease
+import skillbill.ports.qa.model.QaDeviceLeaseSnapshot
 import skillbill.ports.qa.model.QaLeaseReleaseOutcome
 import skillbill.ports.qa.model.QaLeaseResult
 import skillbill.ports.qa.model.QaReportSource
@@ -59,6 +60,8 @@ class InMemoryQaWorkspaces(
 class RecordingQaLeases(
   private val outcomes: List<QaLeaseReleaseOutcome> = emptyList(),
 ) : QaDeviceLeasePort {
+  override fun liveHolders(repoRoot: Path): QaDeviceLeaseSnapshot = QaDeviceLeaseSnapshot.Holders(emptyList())
+
   val releasedInvocations = mutableListOf<String>()
 
   override fun acquire(

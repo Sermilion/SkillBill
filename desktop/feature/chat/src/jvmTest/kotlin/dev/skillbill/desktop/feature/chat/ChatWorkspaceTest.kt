@@ -500,7 +500,7 @@ class ChatWorkspaceTest {
   }
 
   @Test
-  fun `messages queued during a reply run in order without splitting the streaming answer`() = runTest {
+  fun `queued messages and images send as one follow-up without splitting the streaming answer`() = runTest {
     val item = workItem("SKILL-1")
     details.details = mapOf(item.id to flowOf(loaded(item)))
     val replies = mutableListOf<Channel<ChatEvent>>()
@@ -516,27 +516,37 @@ class ChatWorkspaceTest {
     replies[0].send(ChatEvent.TextDelta("Before "))
     runCurrent()
 
-    workspace.send(item.id, "first question")
+    val firstImage = ChatImage(byteArrayOf(1), "image/png")
+    val secondImage = ChatImage(byteArrayOf(2), "image/png")
+    workspace.send(item.id, "first question", listOf(firstImage))
     workspace.send(item.id, "second question")
+    workspace.send(item.id, "", listOf(secondImage))
     runCurrent()
     assertEquals(1, chat.requests.size)
-    assertEquals(2, session.queued.value.size)
+    assertEquals(3, session.queued.value.size)
     replies[0].send(ChatEvent.TextDelta("after"))
     replies[0].send(ChatEvent.Completed)
     replies[0].close()
     runCurrent()
 
     assertEquals(2, chat.requests.size)
-    assertTrue(chat.requests[1].prompt.endsWith("first question"))
+    val combined = "first question\n\nsecond question"
+    assertTrue(chat.requests[1].prompt.endsWith(combined))
+    assertEquals(listOf(firstImage, secondImage), chat.requests[1].images)
     assertEquals("Before after", session.transcript.value.filterIsInstance<ChatMessage.Agent>().first().text)
-    assertEquals(listOf("first question"), session.transcript.value.filterIsInstance<ChatMessage.Operator>().map { it.text })
+    assertEquals(listOf(combined), session.transcript.value.filterIsInstance<ChatMessage.Operator>().map { it.text })
+    assertEquals(listOf(firstImage, secondImage), session.transcript.value.filterIsInstance<ChatMessage.Operator>().single().images)
+    assertTrue(session.queued.value.isEmpty())
+    workspace.send(item.id, "later question")
+    runCurrent()
+    assertEquals(2, chat.requests.size)
     assertEquals(1, session.queued.value.size)
     replies[1].send(ChatEvent.Failed(ChatFailure.BinaryMissing, null))
     replies[1].close()
     runCurrent()
 
     assertEquals(3, chat.requests.size)
-    assertTrue(chat.requests[2].prompt.endsWith("second question"))
+    assertTrue(chat.requests[2].prompt.endsWith("later question"))
     assertTrue(session.queued.value.isEmpty())
   }
 
@@ -616,6 +626,46 @@ class ChatWorkspaceTest {
     assertEquals(listOf(goal.id), cancelled)
     assertNull(workspace.session(goal.id))
     assertTrue(phaseSession.job.isActive)
+  }
+
+  // Summarizing on every reply bills the operator per turn; missing the switch or close leaves rows on fallback titles.
+  @Test
+  fun `switching away from an idle chat and closing one request summaries and a finished turn does not`() = runTest {
+    val goal = workItem("SKILL-1")
+    val phase = workItem("phase-1", kind = WorkKind.Phase)
+    details.details = mapOf(goal.id to flowOf(loaded(goal)), phase.id to flowOf(loaded(phase)))
+    val workspace = workspace()
+
+    workspace.open(goal)
+    workspace.open(phase)
+    runCurrent()
+    assertEquals(emptyList(), chat.summaryRequests)
+
+    workspace.activate(goal.id)
+    val goalSessionId = workspace.session(goal.id)!!.sessionId
+    workspace.close(goal.id)
+    runCurrent()
+
+    assertEquals(listOf(workspace.session(phase.id)!!.sessionId, goalSessionId), chat.summaryRequests)
+  }
+
+  // Summarizing a chat mid-turn bills a summary of half a reply and leaves the finished chat stale.
+  @Test
+  fun `switching away from a busy chat requests no summary`() = runTest {
+    val goal = workItem("SKILL-1")
+    val phase = workItem("phase-1", kind = WorkKind.Phase)
+    details.details = mapOf(goal.id to flowOf(loaded(goal)), phase.id to flowOf(loaded(phase)))
+    chat.events = { flow<ChatEvent> { awaitCancellation() } }
+    val workspace = workspace()
+
+    workspace.open(goal)
+    workspace.open(phase)
+    runCurrent()
+    workspace.activate(goal.id)
+    runCurrent()
+
+    assertTrue(workspace.session(phase.id)!!.busyState.value)
+    assertEquals(emptyList(), chat.summaryRequests)
   }
 
   @Test

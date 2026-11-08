@@ -118,7 +118,7 @@ class PhaseMonitorRunTest {
   }
 
   @Test
-  fun `a completed repair without a source change blocks without claiming a failed repair commit`() {
+  fun `repairs that publish no change retry three times before blocking`() {
     initFeatureBranch()
     editSourceOnRepair = false
     val result =
@@ -129,8 +129,37 @@ class PhaseMonitorRunTest {
     val blocked = assertIs<PhaseRunResult.Blocked>(result)
     assertTrue("published no source, merge, or pull request change" in blocked.reason, blocked.reason)
     assertTrue("validate (https://ci.example/run)" in blocked.reason, blocked.reason)
-    assertTrue("CI-confirmed failed repair" !in blocked.reason, blocked.reason)
-    assertEquals(listOf(MONITOR_FIX), launchedPhaseIds())
+    assertTrue("3 unsuccessful repair attempt(s)" in blocked.reason, blocked.reason)
+    assertEquals(List(3) { MONITOR_FIX }, launchedPhaseIds())
+  }
+
+  @Test
+  fun `a repair that publishes no change gets another chance to fix the failing check`() {
+    initFeatureBranch()
+    var repairs = 0
+    val repairLauncher =
+      repairLauncher {
+        repairs += 1
+        if (repairs == 2) Files.writeString(repoRoot.resolve("ci-fix.txt"), "Fix CI\n")
+      }
+    val checks =
+      PullRequestChecksLookup { _, _ ->
+        PullRequestChecks.Reported(
+          listOf(
+            PullRequestCheck(
+              "validate",
+              if (repairs < 2) CheckBucket.FAIL else CheckBucket.PASS,
+              "https://ci.example/run",
+            ),
+          ),
+        )
+      }
+
+    val result = entry(checks = checks, agentLauncher = repairLauncher).runMonitor("SKILL-904")
+
+    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertEquals(List(2) { MONITOR_FIX }, launchedPhaseIds(repairLauncher))
+    assertEquals("Fix CI", git(origin, "show", "$FEATURE_BRANCH:ci-fix.txt"))
   }
 
   @Test

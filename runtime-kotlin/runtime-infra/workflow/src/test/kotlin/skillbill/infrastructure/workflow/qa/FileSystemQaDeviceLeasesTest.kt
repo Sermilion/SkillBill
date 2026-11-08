@@ -3,6 +3,7 @@ package skillbill.infrastructure.workflow.qa
 import skillbill.infrastructure.workflow.monitor.FakeMonitorProcessInspector
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.qa.model.QaDeviceLeaseSnapshot
 import skillbill.ports.qa.model.QaLeaseResult
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.telemetry.STATE_DIR_ENVIRONMENT_KEY
@@ -76,6 +77,51 @@ class FileSystemQaDeviceLeasesTest {
 
     assertEquals(SECOND, reclaimed.lease.invocationId)
     assertTrue(warnings.single().contains("kind=stale_reclaim"), "stale reclaim must emit one record: $warnings")
+  }
+
+  @Test
+  fun `live holder snapshot omits dead owners and leaves records and directory entries unchanged`() {
+    assertIs<QaLeaseResult.Acquired>(leases.acquire(repoRoot, DEVICE, FIRST))
+    val before = Files.readAllBytes(leaseFile)
+    val directory = leaseFile.parent
+    val entriesBefore =
+      Files.list(directory).use { entries ->
+        entries.map { it.fileName.toString() }.sorted().toList()
+      }
+
+    val live = assertIs<QaDeviceLeaseSnapshot.Holders>(leases.liveHolders(repoRoot))
+    assertEquals(listOf(DEVICE to FIRST), live.leases.map { it.deviceFingerprint to it.invocationId })
+    assertContentEquals(before, Files.readAllBytes(leaseFile))
+    val entriesAfter =
+      Files.list(directory).use { entries ->
+        entries.map { it.fileName.toString() }.sorted().toList()
+      }
+    assertEquals(entriesBefore, entriesAfter)
+
+    inspector.inspection = FeatureTaskRuntimeProcessInspection.NotRunning
+    assertEquals(emptyList(), assertIs<QaDeviceLeaseSnapshot.Holders>(leases.liveHolders(repoRoot)).leases)
+    assertContentEquals(before, Files.readAllBytes(leaseFile))
+  }
+
+  @Test
+  fun `a non Git root returns unavailable and records the degradation`() {
+    val nonRepository = Files.createTempDirectory("skillbill-not-a-repository")
+    try {
+      assertEquals(QaDeviceLeaseSnapshot.Unavailable("repository_unavailable"), leases.liveHolders(nonRepository))
+      assertTrue(warnings.any { it.contains("seam=qa_device_lease_snapshot") && it.contains("repository_unavailable") })
+    } finally {
+      nonRepository.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `malformed lease records are skipped with a diagnostic`() {
+    assertIs<QaLeaseResult.Acquired>(leases.acquire(repoRoot, DEVICE, FIRST))
+    Files.writeString(leaseFile, "{")
+
+    assertEquals(emptyList(), assertIs<QaDeviceLeaseSnapshot.Holders>(leases.liveHolders(repoRoot)).leases)
+    assertTrue(warnings.any { it.contains("seam=qa_device_lease_snapshot") && it.contains("record_unreadable") })
+    assertEquals("{", Files.readString(leaseFile))
   }
 
   private companion object {

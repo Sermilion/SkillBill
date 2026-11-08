@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.model
 
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.goal.GoalRunnerAppliedRepair
 import skillbill.goalrunner.model.GoalPullRequestStatus
 import skillbill.ports.agentrun.model.AgentRunOutputSink
@@ -23,6 +24,7 @@ public data class GoalRunnerRunRequest(
   public val eventSink: GoalRunnerEventSink = GoalRunnerEventSink.NONE,
   public val codeReviewMode: CodeReviewExecutionMode? = null,
   public val qaSelection: FeatureTaskRuntimeQaSelection? = null,
+  public val qaDevice: QaNamedDevice? = null,
   public val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
   public val stopAfterSubtaskId: Int? = null,
   public val intake: String? = null,

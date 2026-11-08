@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopCommitCycle
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.PhaseAttemptHistory
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -90,6 +91,22 @@ class MonitorRepairResumeAccountingTest {
       assertTrue("https://ci.example/failed" in reason, reason)
     }
     assertTrue(harness.launcher.requests.isEmpty())
+  }
+
+  @Test
+  fun `restart retains the exhausted budget for three repairs that published no change`() {
+    seedThreeFailures(changeSource = false)
+
+    repeat(2) {
+      val state = restoredState()
+      assertEquals(
+        setOf("unchanged-repair:2", "unchanged-repair:3", "unchanged-repair:4"),
+        state.monitorFailedRepairCommitShas,
+      )
+      val reason = FeatureTaskRuntimeRunLoopMonitorCycle.monitorCapExhaustionReason("monitor_fix", state)
+      assertTrue("3 unsuccessful repair attempt(s)" in reason, reason)
+      assertTrue("https://ci.example/failed" in reason, reason)
+    }
   }
 
   @Test
@@ -181,14 +198,14 @@ class MonitorRepairResumeAccountingTest {
     return FeatureTaskRuntimeRunState(
       initialRecords = records,
       transitions = supported.plan.traversal,
-      durableInitialLedger = ledger,
+      initialAttemptHistory = PhaseAttemptHistory(ledger),
       initialRetainedOutputs = history.outputs,
       initialMonitorRepairFailures = history.failedRepairs,
       resumeRulesFn = harness.strategies.resumeRules(supported.plan),
     )
   }
 
-  private fun seedThreeFailures() {
+  private fun seedThreeFailures(changeSource: Boolean = true) {
     git(root, "init", "--bare", "--initial-branch=main", origin.toString())
     git(root, "init", "--initial-branch=main", repo.toString())
     git(repo, "config", "user.email", "monitor@example.com")
@@ -220,16 +237,21 @@ class MonitorRepairResumeAccountingTest {
           "monitor_fix",
         )
       complete("monitor_fix", attempt, output)
-      publish(attempt + 1)
+      publish(attempt + 1, changeSource)
       complete("monitor", attempt + 1, failedMonitor(commits.last()))
     }
     assertEquals(WorkflowStepStatus.COMPLETED, recorder.loadPhaseRecords(WORKFLOW_ID)?.get("monitor_fix")?.status)
   }
 
-  private fun publish(attempt: Int) {
-    Files.writeString(repo.resolve("source.txt"), "repair $attempt\n")
-    git(repo, "add", "source.txt")
-    git(repo, "commit", "-m", "Repair $attempt")
+  private fun publish(
+    attempt: Int,
+    changeSource: Boolean = true,
+  ) {
+    if (changeSource) {
+      Files.writeString(repo.resolve("source.txt"), "repair $attempt\n")
+      git(repo, "add", "source.txt")
+      git(repo, "commit", "-m", "Repair $attempt")
+    }
     git(repo, "push", "origin", "HEAD:main")
     val sha = git(repo, "rev-parse", "HEAD")
     commits += sha
