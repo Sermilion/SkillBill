@@ -101,7 +101,7 @@ class GitMonitorResources(
     val directory = admission.directory
     var admitted = false
     try {
-      var existing =
+      val existing =
         try {
           MonitorAdmissionFiles.read(directory)
         } catch (failure: SkillBillRuntimeException) {
@@ -112,14 +112,8 @@ class GitMonitorResources(
             null,
           )
         }
-      if (existing?.hasRecheckableSettlement() == true &&
-        inspector.currentProcess().hostIdentity == existing.process.hostIdentity &&
-        inspector.inspect(existing.process).isConfirmedDead()
-      ) {
-        cleanup.settle(directory, existing, request.target, existing.outcome)
-        existing = MonitorAdmissionFiles.read(directory)
-      }
-      val block = existing?.let(::admissionBlock)
+      val reclaimed = existing?.let { reclaimInactive(directory, it, request.target) } == true
+      val block = existing?.takeUnless { reclaimed }?.let(::admissionBlock)
       if (block != null) {
         val path = if (block == MonitorAdmissionBlock.RETAINED_WORK) retainedPath(existing, directory) else directory
         return MonitorAcquisition.Blocked(block, path, blockDetail(existing, block), summaryOf(existing))
@@ -133,6 +127,38 @@ class GitMonitorResources(
       if (!admitted) admission.close()
     }
   }
+
+  private fun reclaimInactive(
+    directory: Path,
+    record: MonitorOwnershipRecord,
+    target: MonitorResolvedTarget,
+  ): Boolean {
+    if (record.state == MonitorOwnershipState.RELEASED || record.hasUndrainedCancellation()) return false
+    val settled = record.state == MonitorOwnershipState.RETAINED && record.outcome != null
+    if (!settled && (
+        inspector.currentProcess().hostIdentity != record.process.hostIdentity ||
+          !inspector.inspect(record.process).isConfirmedDead()
+      )
+    ) {
+      return false
+    }
+    val history = MonitorAdmissionFiles.archive(directory, record)
+    val result = cleanup.settle(directory, record, target, recoveryOutcome(record))
+    diagnostics.info(
+      "seam=standalone_monitor.admission outcome=reclaimed previous_invocation=${record.invocationId} " +
+        "previous_owner=${record.ownerToken} history=$history",
+    )
+    if (result is MonitorSettlement.Retained) {
+      diagnostics.warning(
+        "seam=standalone_monitor.admission outcome=preserved_previous_work path=${result.path} " +
+          "reason=${result.reason.wireValue} history=$history",
+      )
+    }
+    return result !is MonitorSettlement.FenceLost
+  }
+
+  private fun MonitorOwnershipRecord.hasUndrainedCancellation(): Boolean =
+    outcome?.kind == MonitorOutcomeKind.CANCELLED && retention?.reason == MonitorRetentionReason.PUBLICATION_UNKNOWN
 
   override fun fetchPinned(
     fence: MonitorFence,

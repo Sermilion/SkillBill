@@ -124,6 +124,28 @@ internal object MonitorAdmissionFiles {
     }
   }
 
+  fun archive(
+    directory: Path,
+    record: MonitorOwnershipRecord,
+  ): Path {
+    val history = directory.resolve("history").resolve(record.generation.toString())
+    try {
+      Files.createDirectories(history)
+      val archived = read(history)
+      if (archived == null) {
+        write(history, record)
+      } else if (archived.ownerToken != record.ownerToken || archived.generation != record.generation) {
+        throw SkillBillRuntimeException(
+          StandaloneMonitorFailureCode.INCOHERENT_OWNERSHIP,
+          "Monitor ownership history at $history belongs to a different owner or generation.",
+        )
+      }
+      return history
+    } catch (failure: IOException) {
+      throw ioFailure("archive ownership at $history", failure)
+    }
+  }
+
   private fun ioFailure(
     action: String,
     cause: IOException,

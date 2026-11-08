@@ -68,7 +68,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -239,26 +238,24 @@ class PhaseStandaloneMonitorExecutionTest {
   }
 
   @Test
-  fun `a retained repair blocks retry with a persisted attempt on the pull request branch before launching an agent`() {
+  fun `a new iteration supersedes a blocked monitor without losing its unfinished repair`() {
     failingHeads += headSha
     repairOutcome = UNRESOLVED
-    assertIs<PhaseRunResult.Blocked>(run())
-    val launches = launcher.requests.size
+    val previous = assertIs<PhaseRunResult.Blocked>(run())
+    val oldWorktree = repairCwds.single()
+    failingHeads.clear()
 
-    val result = assertIs<PhaseRunResult.Blocked>(run())
+    val next = assertIs<PhaseRunResult.Completed>(run())
 
-    assertTrue("retained" in result.reason, result.reason)
-    assertEquals(launches, launcher.requests.size)
-    val record = assertNotNull(database.read { it.standalonePhaseStatuses.readByInvocation(result.invocationId) })
-    assertEquals("blocked", record.lifecycleState)
-    assertEquals("monitor", record.currentStep)
-    assertEquals(result.reason, record.terminalResult)
-    assertEquals(FEATURE_BRANCH, record.branchCorrelation)
+    assertTrue(previous.invocationId != next.invocationId)
+    assertOwnedWorktreeRemoved(next.targetReport)
+    assertEquals("class Fix1", Files.readString(oldWorktree.resolve("Fix.kt")).trim())
+    val original = assertNotNull(database.read { it.standalonePhaseStatuses.readByInvocation(previous.invocationId) })
+    val current = assertNotNull(database.read { it.standalonePhaseStatuses.readByInvocation(next.invocationId) })
+    assertEquals("blocked", original.lifecycleState)
+    assertEquals("terminal", current.lifecycleState)
+    assertEquals(FEATURE_BRANCH, current.branchCorrelation)
     assertEquals("main", git(caller, "branch", "--show-current"))
-    val target = assertNotNull(record.monitorTarget)
-    assertEquals(PULL_REQUEST_URL, target.pullRequestUrl)
-    assertNull(target.worktreePath)
-    assertTrue(Files.exists(repairCwds.single()))
   }
 
   @Test
