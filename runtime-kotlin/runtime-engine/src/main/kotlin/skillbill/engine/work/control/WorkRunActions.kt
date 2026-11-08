@@ -212,7 +212,6 @@ public class WorkRunActions(
     )
   }
 
-  /** True for a standalone plan whose issue already has a goal in this repository; that goal owns the work. */
   private fun goalStartedForPlan(
     phase: StandalonePhaseStatusRecord?,
     unit: UnitOfWork,

@@ -74,9 +74,9 @@ internal class NewTaskChat(
   private val saveLock: Mutex = Mutex(),
   private val canPersist: () -> Boolean = { true },
 ) {
-  @Volatile
-  var sessionId: String = initialSessionId
-    private set
+  private val sessionIdState = MutableStateFlow(initialSessionId)
+  val sessionIdFlow: StateFlow<String> = sessionIdState.asStateFlow()
+  val sessionId: String get() = sessionIdState.value
 
   val thread = retainedThread
   val job: Job = SupervisorJob(scope.coroutineContext[Job])
@@ -225,7 +225,7 @@ internal class NewTaskChat(
   private suspend fun rotateSession() {
     val old = sessionId
     saveLock.withLock {
-      sessionId = UUID.randomUUID().toString()
+      sessionIdState.value = UUID.randomUUID().toString()
       chat.deleteSavedChat(old)
     }
     unpromptedJob?.cancel()

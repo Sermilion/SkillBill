@@ -26,6 +26,8 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.usage.UsageCard
+import dev.skillbill.desktop.core.designsystem.usage.UsageUiState
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
 import dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey
 import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
@@ -170,5 +172,35 @@ class ShellSidebarFavoritesTest {
     openChats = 1
     onNodeWithText("2").assertDoesNotExist()
     onNodeWithText("1").assertExists()
+  }
+
+  @Test
+  fun `usage stays in the fixed footer while board navigation scrolls`() = runComposeUiTest {
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        Box(Modifier.width(280.dp).height(420.dp)) {
+          ShellSidebar(
+            topRoute = WorkRoute(null), sectionSizes = null, favorites = emptyList(), specFavorites = emptyList(), specsOpen = false,
+            terminalOpen = false, chatOpen = false, newTaskDraft = false, newTaskOpenChats = 1, contributions = emptyList(),
+            usage = {
+              UsageCard(
+                UsageUiState(
+                  provider = "Cursor", account = "Current local account", status = "Usage unavailable",
+                  accountExplanation = "This is the selected local account, not a verified account for a particular run.",
+                  source = "Cursor", reason = "Cursor does not expose personal usage here; its plan is unknown. This source does not expose a personal usage snapshot here.",
+                ),
+                onOpen = {},
+              )
+            }, onNavigate = {}, onOpenCommandMenu = {}, onToggleSpecs = {}, onToggleTerminal = {},
+            onToggleChat = {}, onShowShortcuts = {}, onRemoveFavorite = {}, onRemoveSpecFavorite = {}, onOpenSpecFavorite = { _, _ -> },
+          )
+        }
+      }
+    }
+
+    onNodeWithText("Board").performScrollTo()
+    onNodeWithText("Board").assertIsDisplayed()
+    onNodeWithText("Usage limits").assertIsDisplayed()
+    onNodeWithText("Settings").assertIsDisplayed()
   }
 }
