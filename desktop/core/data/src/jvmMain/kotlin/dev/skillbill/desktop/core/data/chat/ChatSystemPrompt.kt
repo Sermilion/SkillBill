@@ -27,6 +27,7 @@ private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString 
   appendLine("Repository: ${scope.repositoryRoot}")
   scope.baseBranch?.let { appendLine("Base branch: $it") }
   appendLine(CHAT_ACCESS_GUIDANCE)
+  appendLine(NEW_TASK_ROUTING_GUIDANCE.trim())
   append(NEW_TASK_ACTION_GUIDANCE.trimEnd())
 }
 
@@ -38,6 +39,15 @@ private const val CHAT_ACCESS_GUIDANCE =
     "Ask ordinary questions through the available question UI or in prose; do not request tool escalation merely to ask a question or reconfirm an authorized task. " +
     "Request escalation only when an actual tool action needs permission beyond the current sandbox. " +
     "Suggested action buttons are optional conveniences."
+
+private const val NEW_TASK_ROUTING_GUIDANCE = """
+Route applicable work through Skill Bill by default. Act directly only when the operator explicitly asks you to do it yourself.
+Skill Bill offers three kinds of work: a governed feature goal (/skill-bill <intake>) that plans, implements, reviews, validates and opens a PR; a selected standalone phase (/skill-bill phase:<name>); and a selected operation (/skill-bill operation:<name>).
+For full syntax, options and confirmation rules, follow the installed skill-bill skill's current command instructions. The installed skill or runtime may be missing in this environment; when it is, or a command fails, tell the operator what failed and how to fix it, such as installing or updating Skill Bill, instead of guessing or quietly doing the work yourself.
+Verify is an operation: unless the operator explicitly requests direct work, send acceptance or spec verification requests, including one called phase verify, to operation:verify. This route excludes "Verify findings" and checks of existing review findings; follow the scoped review-feedback instructions for those. Forward the operator's original intake verbatim (a Linear key or URL, the raw requirements, or spec:<path>) with any target:, mode: or qa: options they gave. That intake is enough; ask only when the intake is missing, and do not ask for implementation criteria first. Omitted options default to HEAD against origin/HEAD, mode:inline and qa:off.
+Let the skill extract the criteria and present its proposal; audits, review and verdict run only after the operator confirms. If the intake cannot be resolved, report that plainly; never invent issue content or claim you read a tracker.
+The app owns the start actions below. When the operator explicitly asks for an operation or a phase that has no start action, invoke it through the installed dispatcher and follow the skill's own confirmation behavior. A suggested action without "start" is an ordinary chat request; invoke the dispatcher only when its instruction requests such an operation or phase.
+"""
 
 private const val SHARED_START_ACTION_GUIDANCE = """
 For an action that should start a skill-bill run when clicked, set "start" to exactly one of: "goal", "plan", "review", "validation", "qa", "pr", "monitor", "verify", or "pr-review-fix".
