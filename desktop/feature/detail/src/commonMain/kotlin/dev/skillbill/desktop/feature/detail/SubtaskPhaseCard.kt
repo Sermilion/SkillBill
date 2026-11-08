@@ -113,5 +113,5 @@ private fun activityRows(activity: ActivityResult, subtaskId: Int?, card: PhaseC
     }
     group.blocks.filter { it.phaseId == card.phaseId }.forEach { block -> block.reason?.let { add(block.at to PeekTimelineRow(formatInstant(block.at, "HH:mm"), it, PeekState.Wait)) } }
   }
-  return rows.takeLast(5).map { it.second }
+  return rows.sortedBy { it.first }.takeLast(5).map { it.second }
 }
