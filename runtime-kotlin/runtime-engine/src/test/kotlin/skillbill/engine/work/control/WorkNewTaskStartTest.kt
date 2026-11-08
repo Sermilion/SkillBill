@@ -167,9 +167,13 @@ class WorkNewTaskStartTest {
       terminalWithoutReuse.startNewTask(root, terminalReady, NewTaskRunKind.GOAL, "claude"),
     )
     val reusable = newSubject(root, preflightWith(GoalPreflightVerdict.TERMINAL_ONLY), keyAdmission())
+    val withoutReuse =
+      assertIs<NewTaskPreparation.Ready>(
+        reusable.prepareNewTask(root, intake(keyChoice = "SKILL-500")),
+      )
     assertEquals(
-      NewTaskPreparation.Refused("SKILL-500 already has a spec."),
-      reusable.prepareNewTask(root, intake(keyChoice = "SKILL-500")),
+      NewTaskStartResult.Refused("SKILL-500 already finished. Purge its run history to start it again."),
+      reusable.startNewTask(root, withoutReuse, NewTaskRunKind.GOAL, "claude"),
     )
     val ready =
       assertIs<NewTaskPreparation.Ready>(
@@ -199,6 +203,33 @@ class WorkNewTaskStartTest {
         running.startNewTask(root, runningReady, NewTaskRunKind.GOAL, "claude"),
       )
     }
+  }
+
+  @Test
+  fun `a cancelled key with a retained spec starts new work without requesting reuse`() {
+    val root = Files.createTempDirectory("work-new-task-cancelled")
+    bundle(root.resolve("project-specs"), "SKILL-500-cancelled", "# SKILL-500 Old task", "")
+    for (verdict in listOf(GoalPreflightVerdict.NEW_WORK, GoalPreflightVerdict.TERMINAL_ONLY)) {
+      val start = newSubject(root, preflightWith(verdict, WorkflowStatus.ABANDONED), keyAdmission())
+      val ready = assertIs<NewTaskPreparation.Ready>(start.prepareNewTask(root, intake(keyChoice = "SKILL-500")))
+      assertEquals(NewTaskStartResult.Started, start.startNewTask(root, ready, NewTaskRunKind.GOAL, "claude"))
+      assertTrue("Add a small feature" in ready.intake)
+    }
+    assertEquals(
+      "# SKILL-500 Old task",
+      Files.readString(root.resolve("project-specs/SKILL-500-cancelled/spec.md")),
+    )
+  }
+
+  @Test
+  fun `cancelled history cannot release a key claimed by a newer running task`() {
+    val root = Files.createTempDirectory("work-new-task-cancelled-occupied")
+    bundle(root.resolve("project-specs"), "SKILL-500-cancelled", "", "")
+    val start =
+      newSubject(root, preflightWith(GoalPreflightVerdict.ALREADY_RUNNING, WorkflowStatus.ABANDONED), keyAdmission())
+    val ready = assertIs<NewTaskPreparation.Ready>(start.prepareNewTask(root, intake(keyChoice = "SKILL-500")))
+    assertIs<NewTaskStartResult.Refused>(start.startNewTask(root, ready, NewTaskRunKind.GOAL, "claude"))
+    assertEquals(0, launcher.calls)
   }
 
   private fun newSubject(

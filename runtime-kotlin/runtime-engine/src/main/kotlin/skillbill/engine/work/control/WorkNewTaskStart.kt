@@ -211,16 +211,13 @@ public class WorkNewTaskStart(
   private fun startRefusal(
     checked: GoalPreflightResult,
     prepared: NewTaskPreparation.Ready,
-  ): String? =
-    if (
-      checked.verdict == GoalPreflightVerdict.TERMINAL_ONLY && prepared.reuseRequested &&
-      checked.candidates.lastOrNull()?.status.workflowStatus() in
-      setOf(WorkflowStatus.COMPLETED, WorkflowStatus.ABANDONED)
-    ) {
-      null
-    } else {
-      goalStartRefusal(checked)
-    }
+  ): String? {
+    val latestStatus = checked.candidates.lastOrNull()?.status.workflowStatus()
+    val reusable =
+      latestStatus == WorkflowStatus.ABANDONED ||
+        (latestStatus == WorkflowStatus.COMPLETED && prepared.reuseRequested)
+    return if (checked.verdict == GoalPreflightVerdict.TERMINAL_ONLY && reusable) null else goalStartRefusal(checked)
+  }
 
   public fun startStandalone(
     repoRoot: Path,
@@ -696,12 +693,9 @@ public class WorkNewTaskStart(
     if (request.occupiedKeys.any { it.equals(key, ignoreCase = true) }) {
       return NewTaskPreparation.Refused("$key is already in use. Choose another key.")
     }
-    if (allocator.holds(repoRoot, key)) {
-      if (origin == IdentityOrigin.URL || !request.reuseRequested) {
-        return NewTaskPreparation.Refused(
-          if (origin == IdentityOrigin.URL) "$key is already used." else "$key already has a spec.",
-        )
-      }
+    val reuseRequested = request.reuseRequested && origin == IdentityOrigin.TYPED
+    if (origin == IdentityOrigin.URL && allocator.holds(repoRoot, key)) {
+      return NewTaskPreparation.Refused("$key is already used.")
     }
     if (intake.toByteArray(Charsets.UTF_8).size > MAX_INTAKE_BYTES) {
       return NewTaskPreparation.Refused(
@@ -715,7 +709,7 @@ public class WorkNewTaskStart(
             key,
             intake,
             allocated = false,
-            reuseRequested = request.reuseRequested && origin == IdentityOrigin.TYPED,
+            reuseRequested = reuseRequested,
           )
         } else {
           NewTaskPreparation.Refused("The composed intake resolved to ${checked.issueKey}, not $key.")

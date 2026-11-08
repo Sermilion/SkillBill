@@ -56,6 +56,24 @@ Its `phase:<name>` forms run `skill-bill phase <name>`, and its `operation:<name
 forms run `skill-bill operation <name>`, relaying one operator confirmation.
 `skill-bill goal status` stays CLI-only; no skill wraps it.
 
+## New-task chat preparation and launch
+
+New-task chat gathers repository context, clarifies requirements, checks infrastructure
+and access, and resolves blockers before it offers a goal start card. It infers what
+it can from available evidence and batches questions that affect the outcome. This
+preparation stays in chat. A standalone planning run is a separate explicit request.
+
+Only the operator clicking the inline start card launches a goal from new-task chat.
+Chat replies, issue keys and requests to implement do not authorize a CLI or MCP
+launch. The app owns the start action and issue-key entry. An explicit request for
+direct implementation stays in chat without creating a goal.
+
+Cancellation retains the task's history for bookkeeping. Once cancellation settles,
+the operator can assign its key to another task without purging history or requesting
+reuse separately. The runtime creates an independent parent and preserves earlier
+records. A running or resumable task still owns its key. Start admission rechecks
+ownership after preparation so cancelled history cannot override a newer live task.
+
 ## New phase and operation iteration priority
 
 An explicit new phase or operation iteration takes priority over an earlier paused,

@@ -58,7 +58,7 @@ class ChatSystemPromptTest {
   fun `the new-task prompt routes applicable work and verify intake through Skill Bill`() {
     val prompt = scopeSystemPrompt(ChatScope.NewTask("/work/app", null))
 
-    assertTrue("Route applicable work through Skill Bill by default" in prompt)
+    assertTrue("Route applicable work through Skill Bill by default after preparation" in prompt)
     assertTrue("explicitly asks you to do it yourself" in prompt)
     assertTrue("installed skill-bill skill's current command instructions" in prompt)
     assertTrue("including one called phase verify, to operation:verify" in prompt)
@@ -72,6 +72,23 @@ class ChatSystemPromptTest {
     assertTrue("instead of guessing or quietly doing the work yourself" in prompt)
     assertTrue("invoke it through the installed dispatcher" in prompt)
     assertTrue("invoke the dispatcher only when its instruction requests such an operation or phase" in prompt)
+  }
+
+  @Test
+  fun `new task preparation resolves prerequisites before a user owned goal launch`() {
+    val prompt = scopeSystemPrompt(ChatScope.NewTask("/work/app", null))
+
+    assertTrue("Inspect the repository and connected context" in prompt)
+    assertTrue("check required infrastructure, tooling and access" in prompt)
+    assertTrue("batch related questions" in prompt)
+    assertTrue("Withhold the goal card while known blockers or material questions remain unresolved" in prompt)
+    assertTrue("It does not start a standalone planning run" in prompt)
+    assertTrue("Only the operator clicking the inline UI start card may launch a goal" in prompt)
+    assertTrue("Never launch a goal through shell commands, the skill-bill CLI, MCP tools or another agent" in prompt)
+    assertTrue("Do not allocate or reserve an issue key during preparation" in prompt)
+    assertTrue("perform that direct work without starting a goal" in prompt)
+    assertFalse("Suggested action buttons are optional conveniences" in prompt)
+    assertFalse("workflow gates" in prompt)
   }
 
   @Test
