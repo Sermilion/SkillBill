@@ -43,6 +43,9 @@ interface AppSettingsRepository {
 
   suspend fun readQaDevice(): Outcome<QaDevicePick?, SettingsRejection>
 
+  /** Null or blank clears the default, so new work starts with the first detected agent again. */
+  suspend fun setDefaultAgent(agentId: String?): Outcome<Unit, SettingsRejection>
+
   suspend fun setFavorite(key: FavoriteWorkKey, favorite: Boolean): Outcome<Unit, SettingsRejection>
 
   suspend fun setSpecFavorite(key: FavoriteSpecKey, favorite: Boolean): Outcome<Unit, SettingsRejection>

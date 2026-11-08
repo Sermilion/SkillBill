@@ -28,14 +28,14 @@
     subSel: {}, subOpen: {}, peekSel: {}, bdOpen: new Set(), feedAll: new Set(), narrow: false,
     settingsPage: 'general', agent: 'claude', cfgOpen: null, draft: null, matrix: JSON.parse(JSON.stringify(D.MATRIX)), phaseTiers: {},
     compaction: { enabled: true, window: 400000, pct: 70, phases: { review: { window: 600000, pct: 60 } } }, budget: D.BUDGET.map((r) => r.slice()),
-    prefs: { dbPath: '', dbDraft: '', claudeDir: '~/.claude', retention: '24h', login: true, notify: Object.fromEntries(D.NOTIFICATIONS.map(([id, , on]) => [id, on])), specType: 'local', gradleWrapper: '', telemetry: 'anonymous' },
+    prefs: { dbPath: '', dbDraft: '', claudeDir: '~/.claude', retention: '24h', login: true, notify: Object.fromEntries(D.NOTIFICATIONS.map(([id, , on]) => [id, on])), specType: 'local', gradleWrapper: '', telemetry: 'anonymous', defaultAgent: null },
     popover: null, dialog: null, cmdk: null, toasts: [],
     /* New task: open chats, saved chats, repositories and popup state (seedNewTask). focusNext is an element id focused once after the next render. */
     nt: seedNewTask(), focusNext: null,
     /* QA device in the sidebar footer: which list the app found (data.js QA_DEVICES), the picked device ('auto' lets QA
      * choose), the popup's keyboard index and whether a refresh is running. qaOpen: open QA result rows and folds. */
     qaDev: { list: D.QA_DEVICES.live, selected: 'auto', kb: 0, checking: false }, build: Object.assign({}, D.BUILD.live), qaOpen: new Set(),
-    usage: { provider: 'Codex', scenario: 'normal', refreshed: false },
+    usage: { provider: 'Codex', scenario: 'normal', override: null, last: null },
     /* Validation runs: open report parts (indexes) and open checks (ids) per item, unset until the first toggle so the
      * defaults apply. Verify runs: open steps, criteria rows and folds ("<id>:s:<step>", "<id>:c:<n>"), the criteria filter,
      * the items selected for fixing (key to route, chat or goal) and criterion marks (repo or spec) per item.
@@ -79,7 +79,7 @@
   }
   function applyRoute(r) {
     st.view = r.view;
-    if (r.usageScenario) { st.usage.scenario = r.usageScenario; st.usage.refreshed = false; st.sideOpen = true; }
+    if (r.usageScenario) { st.usage.scenario = r.usageScenario; st.sideOpen = true; }
     if (r.view === 'newtask') {
       st.ntVariant = r.variant;
       if (r.scenario || r.variant) st.nt = seedNewTaskScenario(r.scenario || 'fresh');
@@ -390,7 +390,7 @@
     if (p.type === 'devices') return X.devicePanel(st);
     if (p.type === 'usage') {
       const usage = X.usageData(st);
-      return usage ? S.UsagePanel(Object.assign({}, usage, { note: st.usage.scenario === 'normal' ? 'Just checked' : usage.note })) : '';
+      return S.UsagePanel(usage);
     }
     if (p.type === 'nt-agent') return S.Menu({ items: [{ head: 'Agent' }, ...D.AGENT_CHOICES.map((a) => ({ lead: S.Avatar({ name: a, initials: D.AGENTS[a].initials, color: D.AGENTS[a].color, size: 'sm' }), label: a, end: D.MATRIX[a] ? esc(D.MATRIX[a].reasoning.model) : '', act: 'nt-agent-pick', arg: a, checked: X.ntChat(st).agent === a }))] });
     if (p.type === 'claude') return S.Menu({ items: [{ head: 'Claude config directories found' }, ...D.CLAUDE_DIRS.map((d) => ({ icon: 'folder', html: `<span class="mono">${esc(d)}</span>`, label: d, act: 'claude-pick', arg: d, checked: st.prefs.claudeDir === d }))] });
@@ -565,7 +565,7 @@
     st.popover = null; focusComposer();
     render();
   }
-  const blankChat = () => { const c = ntCur(); return chatFromSaved(null, { repo: c ? c.repo : 'skill-bill', agent: c ? c.agent : 'claude' }); };
+  const blankChat = () => { const c = ntCur(); return chatFromSaved(null, { repo: c ? c.repo : 'skill-bill', agent: st.prefs.defaultAgent || (c ? c.agent : 'claude') }); };
   function removeChat(c) {
     const i = st.nt.chats.indexOf(c);
     st.nt.chats.splice(i, 1);
@@ -869,14 +869,23 @@
       render();
     },
     'usage-close'() { st.popover = null; st.focusNext = 'usage-card'; render(); },
+    /* Tabs always work. In a run or chat the pick holds until that context's agent changes. */
     'usage-provider'(provider) {
+      if (!D.USAGE.providers.includes(provider)) return;
       const usage = X.usageData(st);
-      if (!D.USAGE.providers.includes(provider) || !usage || usage.context) return;
-      st.usage.provider = provider; st.usage.refreshed = false;
+      if (usage.contextAgent !== null) st.usage.override = { agent: usage.contextAgent, provider };
+      else st.usage.provider = provider;
+      st.usage.last = provider;
       st.focusNext = 'usage-provider-' + provider; render();
     },
+    /* The agent new chats, goals and phases start with. The active chip clears it. */
+    'usage-default-agent'(agent) {
+      if (!D.AGENT_CHOICES.includes(agent)) return;
+      st.prefs.defaultAgent = st.prefs.defaultAgent === agent ? null : agent;
+      st.focusNext = 'usage-default-' + agent; render();
+    },
     'usage-refresh'() {
-      st.usage.scenario = 'normal'; st.usage.refreshed = true;
+      st.usage.scenario = 'normal';
       st.focusNext = 'usage-close'; render();
     },
     'layer-close-self'(a, el, e) { if (e.target === el) { st.dialog = null; st.cmdk = null; render(); } },

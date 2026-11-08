@@ -1,3 +1,25 @@
+## [2026-11-08] Admit Codex limits for the account the app-server reports
+Context: The Codex usage card never showed numbers. The collector treated the `account/updated` notice that Codex sends on every startup as an account change, and it dropped valid `account/rateLimits/read` responses because numeric admission was closed.
+Decision: Each read runs a fresh app-server process, so the collector ignores `account/updated` and trusts the `account/read` response. A `chatgpt` account becomes a verified subject keyed by the `accountId` from the rate-limit response, or the account email when that is absent, and each rate-limit window becomes a percentage meter with its reset. The collector reports a pull capability, so the existing coordinator schedules reads and enables Refresh.
+Reason: The app-server answers for the profile the app launched it with, and the repository still checks the reservation, profile and subject before admitting a reading. An API-key account stays unsupported.
+Supersedes: "Keep production numeric usage disabled until identity is verified" for Codex. Cursor stays closed.
+
+## [2026-11-08] Keep the usage card fixed and on the last valid agent
+Context: The card cleared to no provider on every route change and context reload, so it disappeared and reappeared, and its provider tabs were disabled outside Work and History.
+Decision: The card keeps a fixed height with two meter slots and keeps the last valid agent and reading when the context names no supported agent. Failed or unverified reads never replace a shown reading. The tabs always work; a manual pick holds until the run or chat changes agent. Meter order is ranked in the data layer, shortest window first.
+Reason: Layout shifts in the sidebar footer read as constant switching, and a failed refresh is not news worth replacing real numbers for.
+
+## [2026-11-08] Store a default agent in app settings
+Context: New task drafts started on the first detected agent, and board, detail and spec launches without a recorded agent needed a manual pick.
+Decision: `AppSettings.defaultAgentId`, chosen in the usage popup, starts new drafts and follows untouched empty drafts. The detail and spec agent pickers show it when a run has no recorded agent and allows it, and the control repository passes it only when a launch names no agent and the item has none recorded.
+Reason: A recorded agent and the runtime's per-phase overrides must keep winning; the default only fills gaps.
+
+## [2026-11-08] Show Claude rate-limit windows as meters and keep the last reading per profile
+Context: The Claude usage card showed only "Usage unavailable". Claude's `rate_limit_event` carries `unifiedWindows` (five_hour, seven_day, with utilization and resetsAt), but the decoder kept only `status`, and a New task draft with no live process had no reading at all.
+Decision: ClaudeLiveSession maps each unified window, or the top-level `rateLimitType` window on older CLIs, to a percentage meter with its reset and rolling period. The repository ranks them into card and popup meters and keeps the latest status per Claude profile lookup, which a request without a live status for that profile shows with its age.
+Reason: The app launched the process with the profile it records, so that process's own events describe that profile's account; no path, token or email is used to infer identity. A profile can switch accounts between sessions, so the carried reading shows its observation age and is replaced by the next event.
+Supersedes: "Keep production numeric usage disabled until identity is verified" for Claude session events only. Codex and Cursor stay closed.
+
 ## [2026-11-08] Map build presentation in core/ui
 Context: Work rows and run details consume WorkBuild, while design-system components accept SbBuild presentation values.
 Decision: Map runtime builds to WorkBuild in core/data and convert WorkBuild to SbBuild in core/ui/status for both features.

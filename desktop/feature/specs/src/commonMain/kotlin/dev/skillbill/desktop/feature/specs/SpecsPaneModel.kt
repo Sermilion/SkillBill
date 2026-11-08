@@ -236,7 +236,19 @@ class SpecsPaneModel(
     return commands.takeIf { it.isNotEmpty() }?.let { CommandSection(current.toolbar.bundleKey ?: bundle.issueKey ?: bundle.name, it) }
   }
 
+  /** The default agent setting; a spec with no recorded agent starts with it when the spec allows it. */
+  private var defaultAgentId: String? = null
+
   init {
+    scope.launch {
+      try {
+        settings.settings.collect { defaultAgentId = it.defaultAgentId }
+      } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        throw cancelled
+      } catch (_: Exception) {
+        defaultAgentId = null
+      }
+    }
     scope.launch {
       settings.favoriteSpecs.collect { result ->
         specFavoritesSnapshot.value = result
@@ -734,7 +746,7 @@ class SpecsPaneModel(
           chosenAgent = when {
             accepted == null -> toolbar.chosenAgent
             keepAgent -> toolbar.chosenAgent
-            else -> accepted.control.agentId
+            else -> accepted.control.agentId ?: defaultAgentId?.takeIf { it in accepted.control.agentChoices }
           },
           agentMenuOpen = toolbar.agentMenuOpen && keepAgentMenu,
           confirmingCancel = toolbar.confirmingCancel && keepCancel,

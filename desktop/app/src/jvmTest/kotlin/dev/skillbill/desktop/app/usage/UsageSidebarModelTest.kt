@@ -21,6 +21,7 @@ import dev.skillbill.desktop.core.domain.usage.model.UsageResult
 import dev.skillbill.desktop.core.domain.usage.model.UsageSessionStatus
 import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableCode
 import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableReason
+import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
@@ -127,7 +128,6 @@ class UsageSidebarModelTest {
 
     assertTrue(fixture.usage.demands.isEmpty())
     assertFalse(fixture.model.view.value.demandEligible)
-    assertNull(fixture.model.view.value.result)
     assertEquals("Usage observation failed", fixture.model.view.value.unavailableReason)
     assertTrue("usage_demand_observation_failed" in fixture.diagnostics.categories)
   }
@@ -142,7 +142,7 @@ class UsageSidebarModelTest {
     Snapshot.sendApplyNotifications()
     runCurrent()
 
-    assertNull(fixture.model.view.value.provider)
+    assertEquals(UsageProvider.Codex, fixture.model.view.value.provider)
     assertTrue(fixture.usage.demands.isEmpty())
     assertFalse(fixture.usage.acquired.any { it.request.profile.provider == UsageProvider.Claude })
   }
@@ -183,6 +183,71 @@ class UsageSidebarModelTest {
     assertTrue(originalLease !in fixture.usage.leases.values)
   }
 
+  @Test
+  fun `a context without a supported agent keeps the last provider and its lease`() = runTest {
+    val fixture = Fixture(this)
+    runCurrent()
+    val lease = fixture.usage.leases.values.single()
+
+    fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Pending(2)
+    runCurrent()
+    fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(3, ChatAgent("aider", null, null), null, false)
+    runCurrent()
+
+    assertEquals(UsageProvider.Codex, fixture.model.view.value.provider)
+    assertSame(lease, fixture.usage.leases.values.single())
+  }
+
+  @Test
+  fun `a manual pick holds in a run context until the agent changes`() = runTest {
+    val fixture = Fixture(this)
+    runCurrent()
+    val tokenBefore = fixture.model.view.value.popupDismissalToken
+
+    fixture.model.chooseManualProvider("claude")
+    runCurrent()
+    assertEquals(UsageProvider.Claude, fixture.model.view.value.provider)
+    assertEquals(tokenBefore, fixture.model.view.value.popupDismissalToken)
+
+    val selected = fixture.chat.selectedNewTaskUsageContext.value as SelectedNewTaskUsageContext.Ready
+    fixture.chat.selectedNewTaskUsageContext.value = selected.copy(selectionToken = 9, logicalSessionId = "next-session")
+    runCurrent()
+    assertEquals(UsageProvider.Claude, fixture.model.view.value.provider)
+
+    fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(10, ChatAgent("cursor", null, null), null, false)
+    runCurrent()
+    assertEquals(UsageProvider.Cursor, fixture.model.view.value.provider)
+  }
+
+  @Test
+  fun `the default agent toggles on and off from the usage popup`() = runTest {
+    val fixture = Fixture(this)
+    runCurrent()
+
+    fixture.model.toggleDefaultAgent("claude")
+    runCurrent()
+    assertEquals("claude", fixture.settings.settings.value.defaultAgentId)
+    assertEquals("claude", fixture.model.defaultAgent.value)
+
+    fixture.model.toggleDefaultAgent("claude")
+    runCurrent()
+    assertNull(fixture.settings.settings.value.defaultAgentId)
+    assertNull(fixture.model.defaultAgent.value)
+  }
+
+  @Test
+  fun `a failed read does not replace the reading already shown`() = runTest {
+    val fixture = Fixture(this)
+    val results = MutableStateFlow<UsageResult>(UsageResult.SignInRequired(fixture.usage.reason))
+    fixture.usage.observations = { results }
+    runCurrent()
+
+    results.value = UsageResult.TransientFailure(fixture.usage.reason)
+    runCurrent()
+
+    assertTrue(fixture.model.view.value.result is UsageResult.SignInRequired)
+  }
+
   private class Fixture(test: TestScope) {
     val windowJob = Job(test.backgroundScope.coroutineContext[Job])
     val session = TestSession()
@@ -191,8 +256,9 @@ class UsageSidebarModelTest {
     val usage = TestUsageRepository()
     val diagnostics = RecordingDiagnostics()
     val details = FakeWorkDetailRepository()
+    val settings = FakeAppSettingsRepository()
     val model = UsageSidebarModel(
-      chat, FakeExecutionChatRepository(), details, navigator, session, usage, diagnostics,
+      chat, FakeExecutionChatRepository(), details, navigator, session, usage, diagnostics, settings,
       WindowCoroutineScope(CoroutineScope(test.backgroundScope.coroutineContext + windowJob)),
     ).apply {
       setWindowFacts(visible = true, isMinimized = false, focused = true)

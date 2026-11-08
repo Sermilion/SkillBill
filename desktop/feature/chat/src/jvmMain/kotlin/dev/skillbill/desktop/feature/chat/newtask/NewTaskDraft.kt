@@ -110,6 +110,9 @@ class NewTaskDraft internal constructor(
   var addedRepositories: List<NewTaskRepository> by mutableStateOf(emptyList())
   var baseBranch: String by mutableStateOf("")
   var agentId: String? by mutableStateOf(null)
+
+  /** True once the operator picks an agent for this draft; until then it follows the default agent setting. */
+  internal var agentChosen = false
   var selectedAgent: ChatAgent? by mutableStateOf(null)
 
   internal val chat: StateFlow<NewTaskChat?> = chatState.asStateFlow()

@@ -404,22 +404,41 @@
     return `<nav class="sb-side" aria-label="Main">${o.top}<div class="sb-side-items" data-scroll="sidebar">${join(o.items)}</div><div class="sb-side-foot">${join(o.footer)}</div></nav>`;
   }
 
+  /* Green while most of the window is left, yellow around half, red as it runs out. Mixed in Oklab like the app's lerp. */
+  function usageColor(used) {
+    const left = Math.max(0, Math.min(100, 100 - used));
+    return left >= 50
+      ? `color-mix(in oklab, var(--st-done) ${(left - 50) * 2}%, var(--data-1))`
+      : `color-mix(in oklab, var(--data-1) ${left * 2}%, var(--st-failed))`;
+  }
+  /* One window. The card puts the countdown after the label; `detailed` rows give the reset its own line with the clock time. */
   function UsageWindow(o) {
     track('UsageWindow');
-    const known = Number.isFinite(o.remaining);
-    const tone = !known || o.stale ? 'muted' : o.remaining === 0 ? 'empty' : o.remaining <= 15 ? 'low' : 'normal';
-    return `<span class="sb-usage-window is-${tone}"><span class="sb-usage-line"><span>${esc(o.label)}</span><b>${known ? esc(o.remaining) + '% left' : esc(o.loading ? 'Checking' : 'Unavailable')}</b></span><span class="sb-usage-track"${known ? ` role="meter" aria-label="${esc(o.label + (o.stale ? ', last known remaining allowance' : ', remaining allowance'))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${o.remaining}"` : ' aria-hidden="true"'}>${known ? `<i style="width:${Math.min(100, Math.max(0, o.remaining))}%"></i>` : ''}</span>${o.reset ? `<span class="sb-usage-reset">${esc(o.reset)}</span>` : ''}</span>`;
+    const used = Math.max(0, Math.min(100, o.used));
+    const label = !o.detailed && o.resetIn ? `${o.label} · ${o.resetIn}` : o.label;
+    const reset = o.detailed && o.resetIn ? (o.resetIn === 'now' ? 'Resetting' : ['Resets in ' + o.resetIn, o.resetAt].filter(Boolean).join(' · ')) : '';
+    return `<span class="sb-usage-window" style="--usage-color:${usageColor(o.used)}"><span class="sb-usage-line"><span class="trunc">${esc(label)}</span><b>${esc(o.used)}%</b></span><span class="sb-usage-track" role="meter" aria-label="${esc(o.label + ', ' + o.used + '% used')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${used}"><i style="width:${used}%"></i></span>${reset ? `<span class="sb-usage-reset">${esc(reset)}</span>` : ''}</span>`;
   }
 
+  /* Fixed height: the agent name and two window slots, whatever the state. A message fills the first slot when there are no windows. */
   function UsageCard(o) {
     track('UsageCard');
-    return `<button type="button" id="${esc(o.id || 'usage-card')}" class="sb-usage-card"${act(o.act, o.arg)} aria-haspopup="dialog" aria-expanded="${!!o.expanded}" aria-label="${esc(o.provider + ' usage limits, ' + o.status + (o.context ? ', following ' + o.context.toLowerCase() : '') + '. View details')}"><span class="sb-usage-heading"><span>Usage limits</span>${o.context ? `<span class="sb-usage-context">${esc(o.context)}</span>` : ''}${Icon('chevronRight', 'xs')}</span><span class="sb-usage-provider"><b>${esc(o.provider)}</b><span class="${o.tone ? 'is-' + esc(o.tone) : ''}">${esc(o.status)}</span></span>${join(o.windows.map((w) => UsageWindow(Object.assign({}, w, { stale: o.stale, loading: o.loading }))))}<span class="sb-usage-note">${esc(o.note)}</span></button>`;
+    const windows = (o.windows || []).slice(0, 2);
+    const slots = [0, 1].map((i) => `<span class="sb-usage-slot">${windows[i] ? UsageWindow(windows[i]) : i === 0 && o.message ? `<span class="sb-usage-empty">${esc(o.message)}</span>` : ''}</span>`).join('');
+    return `<button type="button" id="${esc(o.id || 'usage-card')}" class="sb-usage-card"${act(o.act, o.arg)} aria-haspopup="dialog" aria-expanded="${!!o.expanded}" aria-label="${esc(o.provider + ' usage limits. View details')}"><span class="sb-usage-provider" style="--c:${o.color || 'var(--fg)'}"><b>${esc(o.provider)}</b>${Icon('chevronRight', 'xs')}</span>${slots}</button>`;
   }
 
+  /* Provider tabs, every window with when it resets, the default agent and Refresh / Dashboard. Nothing else. */
   function UsagePanel(o) {
     track('UsagePanel');
     const id = esc(o.id || 'usage');
-    return `<section class="sb-usage-panel" aria-labelledby="${id}-title"><div class="sb-usage-panel-head"><b id="${id}-title">Usage limits</b>${IconButton({ icon: 'x', label: 'Close usage details', act: 'usage-close', id: id + '-close', size: 'sm' })}</div><div class="sb-usage-tabs" role="group" aria-label="Provider">${o.providers.map((p) => `<button type="button" id="${id}-provider-${esc(p)}"${act('usage-provider', p)} aria-pressed="${o.provider === p}"${o.context && o.provider !== p ? ' disabled' : ''} class="${o.provider === p ? 'on' : ''}">${esc(p)}</button>`).join('')}</div><div class="sb-usage-panel-body">${o.context ? `<p class="sb-usage-following">Following ${esc(o.context.toLowerCase())}</p>` : ''}<div class="sb-usage-account"><b>${esc(o.provider)}</b><span>${esc(o.account)}</span></div>${o.message ? `<p class="sb-usage-message" role="status">${esc(o.message)}</p>` : ''}${join(o.windows.map((w) => UsageWindow(Object.assign({}, w, { stale: o.stale, loading: o.loading }))))}</div><div class="sb-usage-panel-foot"><span>${esc(o.note)}</span>${Button({ icon: 'refresh', label: 'Refresh', act: 'usage-refresh', size: 'sm', variant: 'ghost', disabled: o.loading })}</div><div class="sb-usage-sample">Sample data for design review</div></section>`;
+    const tabs = o.providers.map((p) => `<button type="button" id="${id}-provider-${esc(p)}"${act('usage-provider', p)} aria-pressed="${o.provider === p}" class="${o.provider === p ? 'on' : ''}" style="--c:${(o.colors || {})[p] || 'var(--fg)'}">${esc(p)}</button>`).join('');
+    const body = (o.windows || []).length
+      ? join(o.windows.map((w) => UsageWindow(Object.assign({}, w, { detailed: true }))))
+      : `<p class="sb-usage-empty" role="status">${esc(o.message || '')}</p>`;
+    const agents = (o.agents || []).map((a) => `<button type="button" id="${id}-default-${esc(a.name)}"${act('usage-default-agent', a.name)} role="radio" aria-checked="${o.defaultAgent === a.name}" class="${o.defaultAgent === a.name ? 'on' : ''}" style="--c:${a.color}"${tipAttrs(o.defaultAgent === a.name ? 'Default for new work. Click to clear' : 'Use ' + a.label + ' for new chats, goals and phases')}>${Avatar({ name: a.name, initials: a.initials, color: a.color, size: 'sm', tip: a.label })}<span>${esc(a.label)}</span></button>`).join('');
+    const defaults = agents ? `<div class="sb-usage-default"><span>Default agent</span><div class="sb-usage-tabs sb-usage-agents" role="radiogroup" aria-label="Default agent for new chats, goals and phases">${agents}</div></div>` : '';
+    return `<section class="sb-usage-panel" aria-labelledby="${id}-title"><div class="sb-usage-panel-head"><b id="${id}-title">Usage limits</b>${IconButton({ icon: 'x', label: 'Close usage details', act: 'usage-close', id: id + '-close', size: 'sm' })}</div><div class="sb-usage-tabs" role="group" aria-label="Provider">${tabs}</div><div class="sb-usage-panel-body">${body}</div>${defaults}<div class="sb-usage-panel-foot">${Button({ icon: 'refresh', label: o.signedOut ? 'Recheck sign-in' : 'Refresh', act: 'usage-refresh', size: 'sm', variant: 'ghost', disabled: o.loading })}${o.provider === 'Junie' ? '' : Button({ label: 'Dashboard', act: 'noop', size: 'sm', variant: 'ghost' })}</div></section>`;
   }
   function WorkspaceSwitcher(o) {
     track('WorkspaceSwitcher');

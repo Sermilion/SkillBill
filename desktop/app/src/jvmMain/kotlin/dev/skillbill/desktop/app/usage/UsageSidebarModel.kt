@@ -11,6 +11,8 @@ import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
+import dev.skillbill.desktop.core.common.Outcome
+import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import dev.skillbill.desktop.core.domain.usage.UsageRepository
 import dev.skillbill.desktop.core.domain.usage.model.ModelSelectionProvenance
 import dev.skillbill.desktop.core.domain.usage.model.UsageDemand
@@ -47,25 +49,26 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import kotlin.time.Clock
 import kotlin.time.Instant
 
+/**
+ * What the usage card shows. [provider] and [result] always describe the last valid agent: a context without a supported
+ * agent, a pending selection or a hidden sidebar leaves them in place, so the card never blanks out or jumps.
+ */
 data class UsageSidebarState(
   val provider: UsageProvider? = null,
-  val contextual: Boolean = false,
-  val contextLabel: String? = null,
-  val accountLabel: String? = null,
-  val accountExplanation: String? = null,
-  val fallback: Boolean = false,
-  val unavailableReason: String? = null,
   val result: UsageResult? = null,
+  val unavailableReason: String? = null,
   val active: Boolean = false,
-  val choicesEnabled: Boolean = true,
   val demandEligible: Boolean = false,
   val popupDismissalToken: Long = 0,
+  /** Changes whenever the usage request changes, so refresh availability can be re-observed. */
+  val requestVersion: Long = 0,
 )
 
 @Inject
@@ -78,6 +81,7 @@ class UsageSidebarModel(
   private val session: DatabaseSessionController,
   private val usage: UsageRepository,
   private val diagnostics: Diagnostics,
+  private val settings: AppSettingsRepository,
   windowScope: WindowCoroutineScope,
   private val clock: Clock = Clock.System,
 ) {
@@ -85,6 +89,16 @@ class UsageSidebarModel(
   private val ownerId = "window-${UUID.randomUUID()}"
   private val state = MutableStateFlow(UsageSidebarState())
   val view: StateFlow<UsageSidebarState> = state.asStateFlow()
+  /** Every agent the app can run, for the default agent choice. */
+  val agents: List<String> = try {
+    executionChats.agents()
+  } catch (_: Exception) {
+    emptyList()
+  }
+  private val defaultAgentState = MutableStateFlow<String?>(null)
+
+  /** The agent new chats, goals and phases start with; null means the first detected agent. */
+  val defaultAgent: StateFlow<String?> = defaultAgentState.asStateFlow()
   private val presentationTimeState = MutableStateFlow(clock.now())
   val presentationTime: StateFlow<Instant> = presentationTimeState.asStateFlow()
   private var manualAgentId = "codex"
@@ -92,14 +106,12 @@ class UsageSidebarModel(
   private var demandJob: Job? = null
   private var profileJob: Job? = null
   private var presentationTimeJob: Job? = null
-  private var demandGeneration = 0L
-  private var profileContextGeneration = 0L
+  private var agentGeneration = 0L
+  private var observationGeneration = 0L
   private var popupToken = 0L
   private var routeGeneration = 0L
   private var routeEntry: RouteEntry? = null
   private var released = false
-  private var observationGeneration = 0L
-  private var manualChoiceGeneration = 0L
   private var demandActive = false
   private var mainVisible = false
   private var minimized = false
@@ -109,25 +121,41 @@ class UsageSidebarModel(
   private var cardHostAttached = false
   private var hasFocus = false
 
+  /** The agent the card currently shows. */
+  private var currentKey: AgentKey? = null
+
+  /** The agent the current context last asked for; a manual pick holds until this changes. */
+  private var contextKey: AgentKey? = null
+  private var manualOverride = false
+
+  /** The last result worth showing per provider, so switching back shows it at once instead of a loading state. */
+  private val lastResults = mutableMapOf<Pair<UsageProvider, String?>, UsageResult>()
+
   init {
+    scope.launch {
+      try {
+        settings.settings.collect { defaultAgentState.value = it.defaultAgentId }
+      } catch (cancelled: CancellationException) {
+        throw cancelled
+      } catch (_: Exception) {
+        diagnostics.record("usage_default_agent_unavailable")
+      }
+    }
     scope.launch {
       try {
         combine(snapshotFlow { navigator.top }, session.state) { entry, database -> entry to database }
           .collectLatest { (entry, database) ->
             val generation = ++routeGeneration
             routeEntry = entry
-            replaceContext()
-            if (database !is DatabaseSessionState.Open || entry.sessionId != database.sessionId || entry.route is SettingsRoute) {
-              state.value = state.value.copy(
-                contextLabel = null,
-                unavailableReason = null,
-                contextual = entry.route is DetailRoute || entry.route is NewTaskRoute,
-                choicesEnabled = entry.route is WorkRoute || entry.route is HistoryRoute,
-              )
-              settingsRoute = entry.route is SettingsRoute
+            settingsRoute = entry.route is SettingsRoute
+            if (database !is DatabaseSessionState.Open || (entry.sessionId != null && entry.sessionId != database.sessionId)) {
+              clearAgent()
               return@collectLatest
             }
-            settingsRoute = false
+            if (settingsRoute) {
+              reconcileDemand()
+              return@collectLatest
+            }
             when (val route = entry.route) {
               is DetailRoute -> observeDetail(route.item, generation)
               is NewTaskRoute -> observeNewTask(generation)
@@ -169,15 +197,25 @@ class UsageSidebarModel(
     reconcileDemand()
   }
 
+  /** Shows [agentId]'s usage. The pick holds until the open run or chat switches to a different agent. */
   fun chooseManualProvider(agentId: String) {
-    if (released || !state.value.choicesEnabled || providerFor(agentId) == null) return
-    if (!isCurrentRoute(routeGeneration) || navigator.top.route.let { it !is WorkRoute && it !is HistoryRoute }) return
+    if (released || providerFor(agentId) == null) return
     manualAgentId = agentId
-    val choiceGeneration = ++manualChoiceGeneration
-    if (!state.value.contextual) {
-      replaceContext()
-      val expectedRouteGeneration = routeGeneration
-      scope.launch { useManualContext(expectedRouteGeneration, choiceGeneration) }
+    manualOverride = navigator.top.route.let { it !is WorkRoute && it !is HistoryRoute }
+    val expectedRouteGeneration = routeGeneration
+    scope.launch { useManualAgent(expectedRouteGeneration) }
+  }
+
+  /** Saves [agentId] as the default agent; the current default clears it. */
+  fun toggleDefaultAgent(agentId: String) {
+    if (released) return
+    val next = agentId.takeUnless { it == defaultAgentState.value }
+    defaultAgentState.value = next
+    scope.launch {
+      if (settings.setDefaultAgent(next) is Outcome.Failure) {
+        diagnostics.record("usage_default_agent_write_failed")
+        defaultAgentState.value = settings.settings.first().defaultAgentId
+      }
     }
   }
 
@@ -204,7 +242,8 @@ class UsageSidebarModel(
     released = true
     cardHostAttached = false
     stopPresentationTime()
-    replaceContext()
+    profileJob?.cancel()
+    stopDemand()
     scope.cancel()
   }
 
@@ -213,38 +252,23 @@ class UsageSidebarModel(
     details.observe(item).catch { failure ->
       if (failure is CancellationException) throw failure
       diagnostics.record("usage_detail_observation_failed")
-      if (isCurrentRoute(expectedRouteGeneration)) {
-        replaceContext(contextual = true, label = "Current item defaults, details failed to load")
-        val agent = resolveAgentOrNull(item, null, null)
-        replaceAgent(agent, null, item.running, true, "Current item defaults, details failed to load", true, expectedRouteGeneration = expectedRouteGeneration)
-      }
+      if (isCurrentRoute(expectedRouteGeneration)) applyContextAgent(resolveAgentOrNull(item, null, null), null, item.running)
     }.collectLatest { detailState ->
       if (!isCurrentRoute(expectedRouteGeneration)) return@collectLatest
       val context = when (val sections = detailState.sections) {
-        DetailSections.Pending -> ContextDetail(detailState.header, null, null, true, "Current item defaults while details load")
-        is DetailSections.Loaded -> if (sections.stale) {
-          ContextDetail(detailState.header, null, null, true, "Current item defaults, details are stale")
-        } else {
-          ContextDetail(detailState.header, sections.detail, sections.runOptions, false, "Run details")
-        }
-        DetailSections.Gone -> ContextDetail(detailState.header, null, null, true, "Current item defaults, run details are unavailable")
-        is DetailSections.Failed -> ContextDetail(detailState.header, null, null, true, "Current item defaults, run details failed to load")
+        is DetailSections.Loaded -> if (sections.stale) ContextDetail(detailState.header, null, null) else ContextDetail(detailState.header, sections.detail, sections.runOptions)
+        DetailSections.Pending, DetailSections.Gone, is DetailSections.Failed -> ContextDetail(detailState.header, null, null)
       }
       val sameSource = previous?.let {
-        it.header.agentId == context.header.agentId && it.detail?.activeAgent == context.detail?.activeAgent &&
-          it.options == context.options && it.fallback == context.fallback && it.label == context.label
+        it.header.agentId == context.header.agentId && it.detail?.activeAgent == context.detail?.activeAgent && it.options == context.options
       } == true
       previous = context
-      if (sameSource && (request != null || profileJob?.isActive == true)) {
-        state.value = state.value.copy(active = context.header.running)
-        reconcileDemand()
+      if (sameSource) {
+        updateActivity(context.header.running)
         return@collectLatest
       }
-      replaceContext(contextual = true, label = context.label)
       val agent = resolveAgentOrNull(context.header, context.detail, context.options)
-      if (isCurrentRoute(expectedRouteGeneration)) {
-        replaceAgent(agent, null, context.header.running, true, context.label, context.fallback, expectedRouteGeneration = expectedRouteGeneration)
-      }
+      if (isCurrentRoute(expectedRouteGeneration)) applyContextAgent(agent, null, context.header.running)
     }
   }
 
@@ -252,50 +276,36 @@ class UsageSidebarModel(
     var previous: SelectedNewTaskUsageContext.Ready? = null
     chat.selectedNewTaskUsageContext.collectLatest { selected ->
       if (!isCurrentRoute(expectedRouteGeneration)) return@collectLatest
-      if (selected is SelectedNewTaskUsageContext.Ready && previous?.copy(activeWork = selected.activeWork) == selected &&
-        (request != null || profileJob?.isActive == true)) {
-        state.value = state.value.copy(active = selected.activeWork)
-        reconcileDemand()
+      // Absent and Pending keep the last valid agent on screen.
+      if (selected !is SelectedNewTaskUsageContext.Ready) return@collectLatest
+      if (previous?.copy(activeWork = selected.activeWork) == selected) {
+        updateActivity(selected.activeWork)
         return@collectLatest
       }
-      previous = selected as? SelectedNewTaskUsageContext.Ready
-      when (selected) {
-        is SelectedNewTaskUsageContext.Absent -> replaceContext()
-        is SelectedNewTaskUsageContext.Pending -> replaceContext(contextual = true)
-        is SelectedNewTaskUsageContext.Ready -> replaceAgent(
-          selected.agent,
-          selected.logicalSessionId,
-          selected.activeWork,
-          contextual = true,
-          label = "Selected New task",
-          fallback = false,
-          modelIsActual = selected.agent.model != null,
-          expectedRouteGeneration = expectedRouteGeneration,
-        )
-      }
+      previous = selected
+      applyContextAgent(selected.agent, selected.logicalSessionId, selected.activeWork, modelIsActual = selected.agent.model != null)
     }
   }
 
   private suspend fun observeManual(expectedRouteGeneration: Long) {
-    useManualContext(expectedRouteGeneration, manualChoiceGeneration)
+    manualOverride = false
+    contextKey = null
+    useManualAgent(expectedRouteGeneration)
     awaitCancellation()
   }
 
-  private suspend fun useManualContext(expectedRouteGeneration: Long, expectedManualChoiceGeneration: Long) {
-    if (!isCurrentRoute(expectedRouteGeneration) || expectedManualChoiceGeneration != manualChoiceGeneration) return
-    if (providerFor(manualAgentId) == null) return replaceContext()
-    replaceContext()
+  private suspend fun useManualAgent(expectedRouteGeneration: Long) {
+    val agentId = manualAgentId
     val agent = try {
-      executionChats.agentFor(manualAgentId)
+      executionChats.agentFor(agentId)
     } catch (cancelled: CancellationException) {
       throw cancelled
     } catch (_: Exception) {
       diagnostics.record("usage_manual_agent_resolution_failed")
-      if (!isCurrentRoute(expectedRouteGeneration) || expectedManualChoiceGeneration != manualChoiceGeneration) return
-      return replaceContext(reason = "The selected provider could not be resolved", label = "Current local account")
+      return
     }
-    if (!isCurrentRoute(expectedRouteGeneration) || expectedManualChoiceGeneration != manualChoiceGeneration) return
-    replaceAgent(agent, null, false, false, "Current local account", false, accountExplanation = "This is the selected local account, not a verified account for a particular run.", expectedRouteGeneration = expectedRouteGeneration, expectedManualChoiceGeneration = expectedManualChoiceGeneration)
+    if (!isCurrentRoute(expectedRouteGeneration) || settingsRoute || agentId != manualAgentId) return
+    applyAgent(agent, null, state.value.active.takeIf { manualOverride } ?: false, modelIsActual = false)
   }
 
   private suspend fun resolveAgentOrNull(
@@ -311,104 +321,93 @@ class UsageSidebarModel(
     null
   }
 
-  private suspend fun replaceAgent(
-    agent: ChatAgent?,
-    logicalSessionId: String?,
-    active: Boolean,
-    contextual: Boolean,
-    label: String,
-    fallback: Boolean,
-    modelIsActual: Boolean = false,
-    accountExplanation: String? = if (contextual) "Run history does not record a verified account. This uses the current local account." else null,
-    expectedRouteGeneration: Long = routeGeneration,
-    expectedManualChoiceGeneration: Long? = null,
-  ) {
-    if (!isCurrentRoute(expectedRouteGeneration) || expectedManualChoiceGeneration?.let { it != manualChoiceGeneration } == true) return
-    val contextGeneration = ++demandGeneration
-    val profileContext = ++profileContextGeneration
-    val contextPopupToken = ++popupToken
+  /** Follows the context's agent unless the operator picked one for this context. No supported agent keeps the last one. */
+  private fun applyContextAgent(agent: ChatAgent?, logicalSessionId: String?, active: Boolean, modelIsActual: Boolean = false) {
+    val key = agent?.let { keyFor(it, logicalSessionId, modelIsActual) }
+    if (key == null) {
+      // Nothing supported to follow: keep the last agent, or start from the manual pick if nothing has been shown yet.
+      if (currentKey == null) {
+        val expectedRouteGeneration = routeGeneration
+        scope.launch { useManualAgent(expectedRouteGeneration) }
+      }
+      return updateActivity(active)
+    }
+    val sameAgent = contextKey?.let { it.provider == key.provider && it.profile == key.profile } == true
+    contextKey = key
+    if (manualOverride && sameAgent) return
+    manualOverride = false
+    applyAgent(agent, logicalSessionId, active, modelIsActual)
+  }
+
+  private fun applyAgent(agent: ChatAgent, logicalSessionId: String?, active: Boolean, modelIsActual: Boolean) {
+    if (released) return
+    val key = keyFor(agent, logicalSessionId, modelIsActual) ?: return updateActivity(active)
+    if (key == currentKey && (request != null || profileJob?.isActive == true)) return updateActivity(active)
+    currentKey = key
+    val generation = ++agentGeneration
     profileJob?.cancel()
     profileJob = null
     stopDemand()
-    request = null
-    val contextState = UsageSidebarState(
-      contextual = contextual,
-      contextLabel = label,
-      accountLabel = if (contextual) "Current local account" else label,
-      accountExplanation = accountExplanation,
-      fallback = fallback,
+    setRequest(null)
+    state.value = state.value.copy(
+      provider = key.provider,
+      result = lastResults[key.cacheKey],
+      unavailableReason = null,
       active = active,
-      choicesEnabled = !contextual,
-      popupDismissalToken = contextPopupToken,
+      demandEligible = false,
     )
-    state.value = contextState
-    val provider = agent?.let { providerFor(it.agentId) }
-    if (agent == null || provider == null) {
-      return replaceContext(
-        contextual,
-        if (agent == null) "No provider is available for this context" else null,
-        if (agent == null) label else null,
-      )
-    }
     val model = agent.model?.takeIf { modelIsActual }?.let { UsageModelSelection(it, ModelSelectionProvenance.ActualExecution) }
-    state.value = contextState.copy(provider = provider, demandEligible = false)
     profileJob = scope.launch {
       try {
-        usage.observeProfileLookup(provider, agent.profile, logicalSessionId).collect { profile ->
-          if (profileContext != profileContextGeneration || !isCurrentRoute(expectedRouteGeneration) ||
-            expectedManualChoiceGeneration?.let { it != manualChoiceGeneration } == true) return@collect
+        usage.observeProfileLookup(key.provider, agent.profile, logicalSessionId).collect { profile ->
+          if (generation != agentGeneration || released) return@collect
           val next = UsageRequest(profile, logicalSessionId, model)
           if (request == next) return@collect
-          if (contextGeneration != demandGeneration && request == null) return@collect
           stopDemand()
-          request = next
-          state.value = state.value.copy(
-            result = null,
-            unavailableReason = null,
-            demandEligible = eligible(),
-          )
+          setRequest(next)
           reconcileDemand()
         }
       } catch (cancelled: CancellationException) {
         throw cancelled
       } catch (_: Exception) {
         diagnostics.record("usage_context_profile_lookup_failed")
-        if (profileContext == profileContextGeneration && isCurrentRoute(expectedRouteGeneration) &&
-          expectedManualChoiceGeneration?.let { it != manualChoiceGeneration } != true) {
+        if (generation == agentGeneration) {
           stopDemand()
-          request = null
-          state.value = state.value.copy(
-            result = null,
-            unavailableReason = "The provider profile is unavailable",
-            demandEligible = false,
-          )
+          setRequest(null)
+          state.value = state.value.copy(unavailableReason = "The provider profile is unavailable", demandEligible = false)
         }
       }
     }
   }
 
-  private fun replaceContext(contextual: Boolean = false, reason: String? = null, label: String? = null) {
-    ++profileContextGeneration
+  private fun clearAgent() {
+    ++agentGeneration
     profileJob?.cancel()
     profileJob = null
     stopDemand()
     request = null
-    ++demandGeneration
-    val dismissalToken = ++popupToken
-    state.value = UsageSidebarState(
-      contextual = contextual,
-      contextLabel = label ?: if (contextual) "Usage context unavailable" else null,
-      unavailableReason = reason,
-      choicesEnabled = !contextual,
-      popupDismissalToken = dismissalToken,
-      demandEligible = false,
-    )
+    currentKey = null
+    contextKey = null
+    manualOverride = false
+    lastResults.clear()
+    state.value = UsageSidebarState(popupDismissalToken = ++popupToken, requestVersion = state.value.requestVersion + 1)
+  }
+
+  private fun setRequest(next: UsageRequest?) {
+    request = next
+    state.value = state.value.copy(requestVersion = state.value.requestVersion + 1)
+  }
+
+  private fun updateActivity(active: Boolean) {
+    if (state.value.active == active) return
+    state.value = state.value.copy(active = active)
+    reconcileDemand()
   }
 
   private fun reconcileDemand() {
     val currentRequest = request
     val eligible = currentRequest != null && eligible() && state.value.provider != null
-    state.value = state.value.copy(demandEligible = eligible)
+    if (state.value.demandEligible != eligible) state.value = state.value.copy(demandEligible = eligible)
     reconcilePresentationTime(eligible)
     if (!eligible || currentRequest == null) {
       stopDemand()
@@ -420,21 +419,20 @@ class UsageSidebarModel(
     } else {
       usage.acquireDemand(demand)
       demandActive = true
-      val generation = demandGeneration
+      val generation = agentGeneration
+      val cacheKey = currentKey?.cacheKey
       val observation = ++observationGeneration
       demandJob = scope.launch {
         try {
           usage.observeDemand(ownerId).collectLatest { result ->
-            if (generation == demandGeneration && observation == observationGeneration) {
-              state.value = state.value.copy(result = result, unavailableReason = null)
-            }
+            if (generation == agentGeneration && observation == observationGeneration && cacheKey != null) accept(cacheKey, result)
           }
         } catch (cancelled: CancellationException) {
           throw cancelled
         } catch (_: Exception) {
           diagnostics.record("usage_demand_observation_failed")
           if (observation == observationGeneration) {
-            state.value = state.value.copy(result = null, unavailableReason = "Usage observation failed")
+            state.value = state.value.copy(unavailableReason = "Usage observation failed")
           }
         } finally {
           if (observation == observationGeneration) {
@@ -444,6 +442,19 @@ class UsageSidebarModel(
         }
       }
     }
+  }
+
+  /** A failed or unverified read never replaces a reading the card already shows; sign-in and real data always do. */
+  private fun accept(cacheKey: Pair<UsageProvider, String?>, result: UsageResult) {
+    val previous = lastResults[cacheKey]
+    val shown = if (result.isDefinitive() || previous?.isDefinitive() != true) result else previous
+    lastResults[cacheKey] = shown
+    state.value = state.value.copy(result = shown, unavailableReason = null)
+  }
+
+  private fun UsageResult.isDefinitive() = when (this) {
+    is UsageResult.Snapshot, is UsageResult.Partial, is UsageResult.EmptySuccess, is UsageResult.SignInRequired -> true
+    is UsageResult.Unavailable, is UsageResult.Unsupported, is UsageResult.TransientFailure, is UsageResult.Throttled -> false
   }
 
   private fun reconcilePresentationTime(eligible: Boolean) {
@@ -456,7 +467,7 @@ class UsageSidebarModel(
     presentationTimeJob = scope.launch {
       try {
         while (true) {
-          delay(1_000)
+          delay(60_000)
           presentationTimeState.value = clock.now()
         }
       } finally {
@@ -475,14 +486,15 @@ class UsageSidebarModel(
     ++observationGeneration
     demandJob?.cancel()
     demandJob = null
-    usage.releaseDemand(ownerId)
+    if (demandActive) usage.releaseDemand(ownerId)
     demandActive = false
   }
 
   private fun isCurrentRoute(generation: Long): Boolean {
     val entry = routeEntry ?: return false
     val database = session.state.value as? DatabaseSessionState.Open ?: return false
-    return !released && generation == routeGeneration && navigator.top.entryToken == entry.entryToken && entry.sessionId == database.sessionId
+    return !released && generation == routeGeneration && navigator.top.entryToken == entry.entryToken &&
+      (entry.sessionId == null || entry.sessionId == database.sessionId)
   }
 
   private fun eligible() = !released && mainVisible && !minimized && !settingsRoute && (inlineSidebarVisible || drawerOpen) && cardHostAttached
@@ -491,18 +503,24 @@ class UsageSidebarModel(
     if (wasVisible && !eligible()) state.value = state.value.copy(popupDismissalToken = ++popupToken)
   }
 
+  private fun keyFor(agent: ChatAgent, logicalSessionId: String?, modelIsActual: Boolean): AgentKey? =
+    providerFor(agent.agentId)?.let { AgentKey(it, agent.profile, logicalSessionId, agent.model?.takeIf { modelIsActual }) }
+
   private fun providerFor(agentId: String): UsageProvider? = when (agentId.lowercase()) {
     "codex" -> UsageProvider.Codex
     "claude" -> UsageProvider.Claude
     "cursor" -> UsageProvider.Cursor
+    "junie" -> UsageProvider.Junie
     else -> null
+  }
+
+  private data class AgentKey(val provider: UsageProvider, val profile: String?, val logicalSessionId: String?, val model: String?) {
+    val cacheKey get() = provider to profile
   }
 
   private data class ContextDetail(
     val header: WorkItem,
     val detail: dev.skillbill.desktop.core.domain.model.Detail?,
     val options: dev.skillbill.desktop.core.domain.model.RunOptions?,
-    val fallback: Boolean,
-    val label: String,
   )
 }

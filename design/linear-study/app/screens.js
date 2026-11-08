@@ -93,7 +93,7 @@
         })) }),
       ],
       footer: [
-        usage ? S.UsageCard(Object.assign({}, usage, { windows: usage.windows.map((w) => ({ label: w.label, remaining: w.remaining })), act: 'usage-toggle', expanded: !!st.popover && st.popover.type === 'usage' })) : '',
+        S.UsageCard(Object.assign({}, usage, { act: 'usage-toggle', expanded: !!st.popover && st.popover.type === 'usage' })),
         S.SidebarItem({ icon: 'fileText', label: 'Specs', act: 'specs-toggle', on: st.specsOpen, tip: 'Specs pane', kbd: 'G S' }),
         S.SidebarItem({ icon: 'terminal', label: 'Terminal', act: 'term-toggle', on: st.termOpen, tip: 'Terminal', kbd: '⌃ `' }),
         S.SidebarItem({ icon: 'sliders', label: 'Settings', act: 'nav', arg: 'settings', tip: 'Settings', kbd: 'G ,' }),
@@ -103,18 +103,23 @@
     });
   }
 
+  /* The card follows the open run or selected chat. A tab picked in that context holds until the context's agent changes, and a
+   * context with no known agent keeps the last provider shown. */
   function usageData(st) {
     const contextual = st.view === 'detail' || st.view === 'newtask';
     const run = st.view === 'detail' ? lookup(st.detailId) : null;
     const agent = st.view === 'newtask' ? ntChat(st).agent : run && (run.agent || (run.runOptions || {}).agentId);
-    const provider = contextual ? D.USAGE.providers.find((p) => p.toLowerCase() === agent) : st.usage.provider;
-    if (!provider) return null;
-    const context = contextual ? st.view === 'detail' ? 'This run' : 'This chat' : null;
-    const scenario = (provider === 'Cursor' ? D.USAGE.cursorScenarios : D.USAGE.scenarios)[st.usage.scenario];
-    const data = provider === 'Claude' && st.usage.scenario === 'normal'
-      ? Object.assign({}, scenario, { note: 'Session resets in 3h 40m', windows: [{ label: '5-hour', remaining: 64, reset: 'Resets today at 17:56' }, { label: 'Weekly', remaining: 81, reset: 'Resets Mon, Nov 9 at 12:00' }] })
-      : scenario;
-    return Object.assign({}, data, { provider, context, providers: D.USAGE.providers, account: D.USAGE.accounts[provider], note: st.usage.scenario === 'normal' && st.usage.refreshed ? 'Just checked' : data.note });
+    const fromContext = contextual ? D.USAGE.providers.find((p) => p.toLowerCase() === agent) : null;
+    const override = st.usage.override && st.usage.override.agent === agent ? st.usage.override.provider : null;
+    const provider = override || fromContext || (contextual ? st.usage.last || st.usage.provider : st.usage.provider);
+    if (fromContext && !override) st.usage.last = fromContext;
+    const scenario = st.usage.scenario;
+    const data = (provider === 'Cursor' || provider === 'Junie') && !['signedout', 'loading'].includes(scenario) ? D.USAGE[provider.toLowerCase()]
+      : provider === 'Claude' && D.USAGE.claude[scenario] ? D.USAGE.claude[scenario]
+      : D.USAGE.scenarios[scenario];
+    const colors = Object.fromEntries(D.USAGE.providers.map((p) => [p, D.AGENTS[p.toLowerCase()].color]));
+    const agents = D.AGENT_CHOICES.map((name) => ({ name, label: name.slice(0, 1).toUpperCase() + name.slice(1), initials: D.AGENTS[name].initials, color: D.AGENTS[name].color }));
+    return Object.assign({}, data, { provider, contextAgent: contextual ? agent : null, color: colors[provider], colors, providers: D.USAGE.providers, agents, defaultAgent: st.prefs.defaultAgent });
   }
 
   /* ---------- QA device (sidebar footer; design/qa-device-picker, variant A "Switcher row") ---------- */

@@ -55,6 +55,10 @@ class UsageProfileResolver(private val host: HostEnvironment) {
     )
   }
 
+  /** Junie has no readable usage source; the lookup only keys its "no usage data" state. */
+  internal fun junie(selectedProfile: String?): EffectiveUsageProfile =
+    EffectiveUsageProfile(lookup(UsageProvider.Junie, selectedProfile), host.variables)
+
   internal fun claude(selectedProfile: String?): EffectiveUsageProfile {
     val homes = SelectedAgentHomes(selectedProfile, host.userHome).current()
     val environment = claudeEnvironment(host.variables, homes)

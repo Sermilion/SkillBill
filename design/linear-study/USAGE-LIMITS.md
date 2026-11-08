@@ -87,7 +87,7 @@ Use bounded reads and process startup. Start with a ten-second read deadline and
 
 A collector failure must not interrupt runs, chat or navigation. Isolate collector jobs from execution jobs, propagate cancellation and keep all reads off the UI thread. If an owned process exits or its protocol becomes invalid, close its resources and restart only under the same bounded retry policy. Do not recover by scraping another source or starting a model turn. Invalid or incomplete responses never make an older reading fresh.
 
-For event-only data, show "Updated by this session" and the observation age. For pull sources, mark readings stale after two expected refresh intervals without a successful observation. Crossing a reported reset makes that meter expired even if the rest of the snapshot remains recent.
+For event-only data, show "Updated by chat sessions" and the observation age. A Claude profile with no live session shows the last reading any chat reported for it. For pull sources, mark readings stale after two expected refresh intervals without a successful observation. Crossing a reported reset makes that meter expired even if the rest of the snapshot remains recent.
 
 ## Ownership in this repository
 

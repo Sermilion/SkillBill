@@ -1164,25 +1164,29 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
     },
   };
 
+  /* Usage card states. `used` is the percentage of the window already used; the track and value color by what is left. The
+   * windows come from the provider's live reading, never from a fixed list: Codex and Claude usually report a 5-hour and a
+   * weekly window, and an account that reports only a weekly one (the `weekly` state) leaves the second slot empty. Cursor
+   * and Junie have no readable usage source, so they show "No usage data". Only a provider that reports a sign-in failure says
+   * "Not signed in". */
   const USAGE = {
-    providers: ['Codex', 'Claude', 'Cursor'],
-    accounts: { Codex: 'Personal account', Claude: 'Work account', Cursor: 'Personal account, legacy plan' },
-    cursorScenarios: {
-      normal: { status: 'Available', note: 'Usage resets in 12 days', windows: [{ label: 'Cursor models', remaining: 56, reset: 'Resets Nov 19 at 09:00' }, { label: 'Other models', remaining: 73, reset: 'Resets Nov 19 at 09:00' }] },
-      low: { status: 'Running low', tone: 'low', note: 'Usage resets in 12 days', message: 'Your included Cursor models allowance is running low.', windows: [{ label: 'Cursor models', remaining: 9, reset: 'Resets Nov 19 at 09:00' }, { label: 'Other models', remaining: 42, reset: 'Resets Nov 19 at 09:00' }] },
-      exhausted: { status: 'Limit reached', tone: 'empty', note: 'Usage resets in 12 days', message: 'Included Cursor models allowance used up. Other models still have included usage.', windows: [{ label: 'Cursor models', remaining: 0, reset: 'Resets Nov 19 at 09:00' }, { label: 'Other models', remaining: 42, reset: 'Resets Nov 19 at 09:00' }] },
-      stale: { status: 'Out of date', stale: true, note: 'Last checked 24m ago', message: 'Could not refresh usage. These are the last known values.', windows: [{ label: 'Cursor models', remaining: 56, reset: 'Last reported reset: Nov 19 at 09:00' }, { label: 'Other models', remaining: 73, reset: 'Last reported reset: Nov 19 at 09:00' }] },
-      unavailable: { status: 'Unavailable', note: 'Usage could not be retrieved', message: 'No usage data available for this account. Try refreshing.', windows: [{ label: 'Cursor models', remaining: null }, { label: 'Other models', remaining: null }] },
-      loading: { status: 'Checking', loading: true, note: 'Checking account usage', windows: [{ label: 'Cursor models', remaining: null }, { label: 'Other models', remaining: null }] },
-    },
+    providers: ['Codex', 'Claude', 'Cursor', 'Junie'],
     scenarios: {
-      normal: { status: 'Available', note: 'Session resets in 2h 14m', windows: [{ label: '5-hour', remaining: 38, reset: 'Resets today at 16:30' }, { label: 'Weekly', remaining: 72, reset: 'Resets Thu, Nov 12 at 09:00' }] },
-      low: { status: 'Running low', tone: 'low', note: 'Session resets in 2h 14m', message: 'Your session allowance is running low.', windows: [{ label: '5-hour', remaining: 9, reset: 'Resets today at 16:30' }, { label: 'Weekly', remaining: 42, reset: 'Resets Thu, Nov 12 at 09:00' }] },
-      exhausted: { status: 'Limit reached', tone: 'empty', note: 'Session resets in 2h 14m', message: 'Session allowance used up. Resets today at 16:30.', windows: [{ label: '5-hour', remaining: 0, reset: 'Resets today at 16:30' }, { label: 'Weekly', remaining: 42, reset: 'Resets Thu, Nov 12 at 09:00' }] },
-      stale: { status: 'Out of date', stale: true, note: 'Last checked 24m ago', message: 'Could not refresh usage. These are the last known values.', windows: [{ label: '5-hour', remaining: 38, reset: 'Last reported reset: today at 16:30' }, { label: 'Weekly', remaining: 72, reset: 'Last reported reset: Thu, Nov 12 at 09:00' }] },
-      unavailable: { status: 'Unavailable', note: 'Usage could not be retrieved', message: 'No usage data available for this account. Try refreshing.', windows: [{ label: '5-hour', remaining: null }, { label: 'Weekly', remaining: null }] },
-      loading: { status: 'Checking', loading: true, note: 'Checking account usage', windows: [{ label: '5-hour', remaining: null }, { label: 'Weekly', remaining: null }] },
+      normal: { windows: [{ label: '5 hour', used: 12, resetIn: '2h 14m', resetAt: '16:30' }, { label: 'Weekly', used: 43, resetIn: '4d 6h', resetAt: 'Thu 09:00' }] },
+      low: { windows: [{ label: '5 hour', used: 91, resetIn: '2h 14m', resetAt: '16:30' }, { label: 'Weekly', used: 58, resetIn: '4d 6h', resetAt: 'Thu 09:00' }] },
+      exhausted: { windows: [{ label: '5 hour', used: 100, resetIn: '2h 14m', resetAt: '16:30' }, { label: 'Weekly', used: 64, resetIn: '4d 6h', resetAt: 'Thu 09:00' }] },
+      weekly: { windows: [{ label: 'Weekly', used: 43, resetIn: '4d 6h', resetAt: 'Thu 09:00' }] },
+      signedout: { message: 'Not signed in', signedOut: true },
+      nodata: { message: 'No usage data' },
+      loading: { message: 'Loading…', loading: true },
     },
+    claude: {
+      normal: { windows: [{ label: '5 hour', used: 36, resetIn: '3h 40m', resetAt: '17:56' }, { label: 'Weekly', used: 19, resetIn: '1d 0h', resetAt: 'Mon 12:00' }] },
+      low: { windows: [{ label: '5 hour', used: 91, resetIn: '3h 40m', resetAt: '17:56' }, { label: 'Weekly', used: 58, resetIn: '1d 0h', resetAt: 'Mon 12:00' }] },
+      exhausted: { windows: [{ label: '5 hour', used: 100, resetIn: '3h 40m', resetAt: '17:56' }, { label: 'Weekly', used: 64, resetIn: '1d 0h', resetAt: 'Mon 12:00' }] },
+    },
+    cursor: { message: 'No usage data' },
+    junie: { message: 'No usage data' },
   };
 
   /* Goal QA while it runs: the stage QA is on, the live preview and the screenshots it has saved.

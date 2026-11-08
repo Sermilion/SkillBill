@@ -18,6 +18,7 @@ internal object AppPreferenceKeys {
   val QA_DEVICE_KIND = stringPreferencesKey("qa_device_kind")
   val QA_DEVICE_VALUE = stringPreferencesKey("qa_device_value")
   val QA_DEVICE_DISPLAY_NAME = stringPreferencesKey("qa_device_display_name")
+  val DEFAULT_AGENT = stringPreferencesKey("default_agent")
   val START_AT_LOGIN = booleanPreferencesKey("start_at_login")
   val TERMINAL_HEIGHT_DP = intPreferencesKey("terminal_height_dp")
   val CHAT_WIDTH_DP = intPreferencesKey("chat_width_dp")

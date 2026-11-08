@@ -190,8 +190,9 @@ internal class ClaudeLiveSession(
 
   private fun observeRateLimit(root: JsonObject) {
     val eventSessionId = root.string("session_id")
-    val status = root.obj("rate_limit_info")?.string("status")
-    if (("session_id" in root && eventSessionId != logicalSessionId) || status == null) {
+    val info = root.obj("rate_limit_info")
+    val status = info?.string("status")
+    if (("session_id" in root && eventSessionId != logicalSessionId) || info == null || status == null) {
       recordUsageDiagnostic()
       return
     }
@@ -203,12 +204,14 @@ internal class ClaudeLiveSession(
         return
       }
     }
+    val observedAt = clock.now()
     usageSink.recordSessionStatus(
       logicalSessionId,
       processGeneration,
       permission,
       status == "allowed_warning",
-      clock.now(),
+      observedAt,
+      claudeRateLimitMeters(info, observedAt),
     )
   }
 

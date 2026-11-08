@@ -184,11 +184,7 @@ class ShellSidebarFavoritesTest {
             terminalOpen = false, chatOpen = false, newTaskDraft = false, newTaskOpenChats = 1, contributions = emptyList(),
             usage = {
               UsageCard(
-                UsageUiState(
-                  provider = "Cursor", account = "Current local account", status = "Usage unavailable",
-                  accountExplanation = "This is the selected local account, not a verified account for a particular run.",
-                  source = "Cursor", reason = "Cursor does not expose personal usage here; its plan is unknown. This source does not expose a personal usage snapshot here.",
-                ),
+                UsageUiState(provider = "Cursor", agentId = "cursor", message = "No usage data"),
                 onOpen = {},
               )
             }, onNavigate = {}, onOpenCommandMenu = {}, onToggleSpecs = {}, onToggleTerminal = {},
@@ -200,7 +196,7 @@ class ShellSidebarFavoritesTest {
 
     onNodeWithText("Board").performScrollTo()
     onNodeWithText("Board").assertIsDisplayed()
-    onNodeWithText("Usage limits").assertIsDisplayed()
+    onNodeWithText("Cursor").assertIsDisplayed()
     onNodeWithText("Settings").assertIsDisplayed()
   }
 }

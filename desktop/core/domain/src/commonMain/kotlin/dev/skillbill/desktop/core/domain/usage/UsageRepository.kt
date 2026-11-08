@@ -2,6 +2,7 @@ package dev.skillbill.desktop.core.domain.usage
 
 import dev.skillbill.desktop.core.domain.usage.model.UsageDemand
 import dev.skillbill.desktop.core.domain.usage.model.UsageDemandResult
+import dev.skillbill.desktop.core.domain.usage.model.UsageMeter
 import dev.skillbill.desktop.core.domain.usage.model.UsageProfileLookup
 import dev.skillbill.desktop.core.domain.usage.model.UsageProvider
 import dev.skillbill.desktop.core.domain.usage.model.RequestPermission
@@ -58,6 +59,7 @@ interface UsageObservationSink {
     permission: RequestPermission,
     warning: Boolean,
     observedAt: Instant,
+    meters: List<UsageMeter> = emptyList(),
   )
 
   fun revokeSession(logicalSessionId: String, processGeneration: Long)

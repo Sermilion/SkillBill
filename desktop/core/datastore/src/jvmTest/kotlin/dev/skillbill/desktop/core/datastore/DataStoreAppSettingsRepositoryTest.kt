@@ -153,6 +153,19 @@ class DataStoreAppSettingsRepositoryTest {
   }
 
   @Test
+  fun `the default agent round trips and clearing removes it`() = runTest {
+    val store = PreferenceDataStoreFactory.create(scope = backgroundScope) { File(directory, "default-agent.preferences_pb") }
+    val repository = DataStoreAppSettingsRepository(store, RecordingDiagnostics())
+
+    assertEquals(null, repository.settings.first().defaultAgentId)
+    assertEquals(Outcome.Success(Unit), repository.setDefaultAgent(" claude "))
+    assertEquals("claude", repository.settings.first().defaultAgentId)
+    assertEquals(Outcome.Success(Unit), repository.setDefaultAgent(null))
+    assertEquals(null, repository.settings.first().defaultAgentId)
+    assertEquals(null, store.data.first()[AppPreferenceKeys.DEFAULT_AGENT])
+  }
+
+  @Test
   fun `QA device selection round trips and clearing preserves unrelated settings`() = runTest {
     val file = File(directory, "qa-device.preferences_pb")
     val store = PreferenceDataStoreFactory.create(scope = backgroundScope) { file }

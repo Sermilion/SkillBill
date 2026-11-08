@@ -38,6 +38,26 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.seconds
+import dev.skillbill.desktop.core.domain.usage.model.OmissionSemantics
+import dev.skillbill.desktop.core.domain.usage.model.RequestPermission
+import dev.skillbill.desktop.core.domain.usage.model.UsageAuthMode
+import dev.skillbill.desktop.core.domain.usage.model.UsageCapability
+import dev.skillbill.desktop.core.domain.usage.model.UsageFreshness
+import dev.skillbill.desktop.core.domain.usage.model.UsageMeter
+import dev.skillbill.desktop.core.domain.usage.model.UsageMeterScope
+import dev.skillbill.desktop.core.domain.usage.model.UsageObservation
+import dev.skillbill.desktop.core.domain.usage.model.UsageObservationSubject
+import dev.skillbill.desktop.core.domain.usage.model.UsagePeriod
+import dev.skillbill.desktop.core.domain.usage.model.UsageRefreshFamily
+import dev.skillbill.desktop.core.domain.usage.model.UsageRefreshState
+import dev.skillbill.desktop.core.domain.usage.model.UsageSource
+import dev.skillbill.desktop.core.domain.usage.model.UsageValue
+import dev.skillbill.desktop.core.domain.usage.model.VerifiedUsageIdentity
+import dev.skillbill.desktop.core.domain.usage.model.VerifiedUsageSubject
+import dev.skillbill.desktop.core.domain.usage.model.VerifiedUsageWorkspaceScope
+import kotlinx.serialization.json.booleanOrNull
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 data class CodexAcquisitionContext(
   val profile: UsageProfileLookup,
@@ -77,7 +97,10 @@ class CodexUsageCollector(
   private val launcher: BoundedProtocolLauncher,
   private val diagnostics: Diagnostics,
   private val dispatchers: AppDispatchers,
+  private val clock: Clock = Clock.System,
 ) : CodexUsageReader {
+  override val refreshCapability: UsageRefreshCapability = UsageRefreshCapability.Pull(UsageRefreshFamily.CodexSnapshot)
+
   override suspend fun read(context: CodexAcquisitionContext): UsageResult = withContext(dispatchers.io) {
     val profile = context.profile
     if (profile.provider != UsageProvider.Codex) return@withContext protocolUnsupported(1)
@@ -159,10 +182,61 @@ class CodexUsageCollector(
     val limits = readRequest(connection, "account/rateLimits/read", buildJsonObject { }, context) { ++requestSequence } ?: return transient()
     if (limits == RpcResponse.Invalidated) return invalidated()
     if (limits.error != null || limits.result == null) return protocolUnsupported(6)
-    if (CodexUsageProtocol.parseQuota(limits.result) !is CodexQuotaParse.Valid) return parseRejected(4)
-    diagnostics.record("usage.codex.identity_unavailable")
-    return UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.ProfileUnverified))
+    val quota = CodexUsageProtocol.parseQuota(limits.result) as? CodexQuotaParse.Valid ?: return parseRejected(4)
+    val limitsRecord = limits.result as? JsonObject
+    val identity = limitsRecord?.string("accountId") ?: accountRecord.string("email")
+    if (identity == null) {
+      diagnostics.record("usage.codex.identity_unavailable")
+      return UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.ProfileUnverified))
+    }
+    val workspace = accountRecord.string("workspaceName")
+      ?.let { VerifiedUsageWorkspaceScope.Workspace(it) }
+      ?: VerifiedUsageWorkspaceScope.VerifiedNonWorkspace
+    val subject = VerifiedUsageSubject(context.profile, VerifiedUsageIdentity(identity, workspace), UsageAuthMode.Account)
+    val observedAt = clock.now()
+    val source = UsageSource(UsageProvider.Codex, UsageCapability.NumericSnapshot)
+    val meters = quota.buckets.flatMap { it.meters(observedAt, source) }
+    if (meters.isEmpty()) {
+      return UsageResult.EmptySuccess(subject, source, observedAt, OmissionSemantics.OmittedFieldsAreRemoved, context.reservationId)
+    }
+    val permission = when ((limitsRecord?.get("ordinaryUsageAllowed") as? JsonPrimitive)?.booleanOrNull) {
+      true -> RequestPermission.Allowed
+      false -> RequestPermission.Rejected
+      null -> RequestPermission.Unknown
+    }
+    return UsageResult.Snapshot(
+      UsageObservation(
+        subject = UsageObservationSubject.Account(subject),
+        collectionTime = observedAt,
+        sourceObservationTime = null,
+        source = source,
+        freshness = UsageFreshness.Current,
+        refreshState = UsageRefreshState.Complete,
+        meters = meters,
+        requestPermission = permission,
+      ),
+      OmissionSemantics.OmittedFieldsAreRemoved,
+      context.reservationId,
+    )
   }
+
+  private fun CodexQuotaBucket.meters(observedAt: Instant, source: UsageSource): List<UsageMeter> =
+    listOfNotNull(primary, secondary).mapNotNull { window ->
+      val durationSeconds = window.durationMinutes * 60
+      UsageMeter.create(
+        bucketIdentity = "$limitId:${window.durationMinutes}",
+        label = windowLabel(window.durationMinutes),
+        scope = if (limitId == DEFAULT_LIMIT_ID) UsageMeterScope.General else UsageMeterScope.Pool(limitName ?: limitId),
+        observedAt = observedAt,
+        resetAt = window.resetsAtUnixSeconds?.let(Instant::fromEpochSeconds),
+        period = UsagePeriod.Rolling.create(durationSeconds) ?: UsagePeriod.Unknown,
+        value = UsageValue.PercentageUsed.create(window.usedPercent) ?: return@mapNotNull null,
+        sourceOwner = source,
+      )
+    }
+
+  private fun JsonObject.string(key: String): String? =
+    (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf(String::isNotBlank)
 
   private suspend fun readRequest(
     connection: BoundedProtocolConnection,
@@ -202,10 +276,9 @@ class CodexUsageCollector(
               return RpcResponse.Invalid
             }
             is Frame.Notification -> when (frame.method) {
-              "account/updated" -> {
-                context.emit(CodexAcquisitionEvent.AccountInvalidated(context.reservationId))
-                return RpcResponse.Invalidated
-              }
+              // Codex announces the current account on every startup. Each read uses a fresh process, so the
+              // announcement cannot describe a change during this read and the account/read response is authoritative.
+              "account/updated" -> Unit
               "account/rateLimits/updated" -> {
                 val candidate = frame.params?.let(CodexUsageProtocol::parseQuota)
                 if (candidate !is CodexQuotaParse.Valid) {
@@ -286,6 +359,19 @@ class CodexUsageCollector(
   }
 
   private fun invalidated() = UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.ProfileUnverified))
+
+  private companion object {
+    const val DEFAULT_LIMIT_ID = "codex"
+
+    fun windowLabel(minutes: Long): String = when {
+      minutes == 300L -> "5 hour"
+      minutes == 7L * 24 * 60 -> "Weekly"
+      minutes in 28L * 24 * 60..31L * 24 * 60 -> "Monthly"
+      minutes % (24 * 60) == 0L -> "${minutes / (24 * 60)} day"
+      minutes % 60 == 0L -> "${minutes / 60} hour"
+      else -> "$minutes minute"
+    }
+  }
 
   private sealed interface StartupResult {
     data object Failed : StartupResult

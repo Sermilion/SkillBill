@@ -30,7 +30,7 @@ internal fun agentInitials(agentId: String): String = when (agentId) {
   else -> agentId.take(2).replaceFirstChar { it.uppercase() }.ifBlank { "?" }
 }
 
-internal fun agentDataSlot(agentId: String): Int = when (agentId) {
+fun agentDataSlot(agentId: String): Int = when (agentId) {
   AgentIds.Claude -> 4
   AgentIds.Codex -> 2
   AgentIds.Cursor -> 6

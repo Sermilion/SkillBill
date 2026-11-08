@@ -50,6 +50,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
@@ -175,9 +176,11 @@ class RuntimeWorkControlRepository(
       ReservationAdmission.ChangedSession -> return ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
       is ReservationAdmission.Reserved -> admission.handle
     }
+    // A run with a recorded agent keeps it; the default agent only fills a launch that names none.
+    val launchAgent = agentId ?: if (item.agentId == null) readDefaultAgent() else null
     return reserved(handle) {
       runControl(item, "control_launch") { runtime, target ->
-        runtime.workControlService.request(target, WorkControlAction.LAUNCH, agentId, qaDevice).toControlOutcome(ControlKind.LAUNCH, diagnostics)
+        runtime.workControlService.request(target, WorkControlAction.LAUNCH, launchAgent, qaDevice).toControlOutcome(ControlKind.LAUNCH, diagnostics)
       }
     }
   }
@@ -190,6 +193,7 @@ class RuntimeWorkControlRepository(
     }
     if (!sessionIsCurrent(session)) return ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
     if (launches.isReserved(issueKey)) return ControlOutcome.AlreadyLaunching
+    val goalAgent = agentId ?: readDefaultAgent()
     val identity = callInSession(
       session,
       "control_goal_identity",
@@ -231,7 +235,7 @@ class RuntimeWorkControlRepository(
           ?: return@callInSession ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
         when (val result = runtime.databaseSession.transactionFenced(observation) {
           if (!sessionIsCurrent(session)) null
-          else runtime.workControlService.startGoal(Path.of(repoRoot), issueKey, agentId, qaDevice)
+          else runtime.workControlService.startGoal(Path.of(repoRoot), issueKey, goalAgent, qaDevice)
         }) {
           FencedTransactionResult.ChangedTarget -> ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
           is FencedTransactionResult.Committed -> result.value?.toControlOutcome(ControlKind.START_GOAL, diagnostics)
@@ -390,6 +394,16 @@ class RuntimeWorkControlRepository(
         if (request.kind == NewTaskKind.Qa) qaDevice else null,
       )
     }
+  }
+
+  /** The default agent setting, or null when it is unset or unreadable so the runtime's own rule applies. */
+  private suspend fun readDefaultAgent(): String? = try {
+    settings.settings.first().defaultAgentId
+  } catch (cancelled: kotlinx.coroutines.CancellationException) {
+    throw cancelled
+  } catch (_: Exception) {
+    diagnostics.record("desktop_default_agent_unavailable")
+    null
   }
 
   private suspend fun readQaDevice(): Outcome<QaNamedDevice?, SettingsRejection> =

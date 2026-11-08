@@ -267,6 +267,17 @@ class PlanActionsTest {
   }
 
   @Test
+  fun `a run without a recorded agent offers the default agent when the run allows it`() {
+    val unrecorded = RunOptions(false, false, "Run again", null, listOf("claude", "codex"), null, false)
+    val state = finishedPlanState(unrecorded)
+
+    assertEquals("Choose agent", runActionsView(state).agent?.label)
+    assertEquals("Agent: codex", runActionsView(state.copy(defaultAgentId = "codex")).agent?.label)
+    assertEquals("Choose agent", runActionsView(state.copy(defaultAgentId = "junie")).agent?.label)
+    assertEquals("Agent: claude", runActionsView(finishedPlanState(planOptions(goalStarted = false)).copy(defaultAgentId = "codex")).agent?.label)
+  }
+
+  @Test
   fun `Implement starts the goal with the agent picked next to it`() = runTest {
     var current = finishedPlanState(planOptions(goalStarted = false))
     val agents = mutableListOf<String?>()

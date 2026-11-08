@@ -19,6 +19,7 @@ internal data class CodexQuotaWindow(
 
 internal data class CodexQuotaBucket(
   val limitId: String,
+  val limitName: String? = null,
   val primary: CodexQuotaWindow?,
   val secondary: CodexQuotaWindow?,
 )
@@ -56,7 +57,8 @@ internal object CodexUsageProtocol {
       val secondary = if (secondaryElement == null || secondaryElement == JsonNull) null
       else parseWindow(secondaryElement) ?: return CodexQuotaParse.Invalid
       if (id.isBlank()) return CodexQuotaParse.Invalid
-      CodexQuotaBucket(id, primary, secondary)
+      val name = (bucket["limitName"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf(String::isNotBlank)
+      CodexQuotaBucket(id, name, primary, secondary)
     }
     return CodexQuotaParse.Valid(buckets)
   }

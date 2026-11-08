@@ -21,6 +21,8 @@ data class AppSettings(
   val favoriteSpecs: Set<FavoriteSpecKey> = emptySet(),
   val newTaskChatLayout: NewTaskChatLayout = NewTaskChatLayout.DEFAULT,
   val qaDevice: QaDevicePick? = null,
+  /** Agent id new chats, goals and phases start with when nothing else names one; null keeps the first detected agent. */
+  val defaultAgentId: String? = null,
 ) {
   companion object {
     const val TERMINAL_HEIGHT_DEFAULT_DP = 200
@@ -43,6 +45,7 @@ data class AppSettings(
       favoriteSpecs = emptySet(),
       newTaskChatLayout = NewTaskChatLayout.DEFAULT,
       qaDevice = null,
+      defaultAgentId = null,
     )
   }
 }

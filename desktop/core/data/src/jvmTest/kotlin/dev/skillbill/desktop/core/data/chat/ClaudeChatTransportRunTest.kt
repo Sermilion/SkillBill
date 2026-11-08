@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.usage.UsageObservationSink
 import dev.skillbill.desktop.core.domain.usage.model.RequestPermission
+import dev.skillbill.desktop.core.domain.usage.model.UsageMeter
 import dev.skillbill.desktop.core.domain.usage.model.UsageProfileLookup
 import dev.skillbill.desktop.core.domain.usage.model.UsageRequest
 import dev.skillbill.desktop.core.domain.usage.model.UsageResult
@@ -350,6 +351,7 @@ class ClaudeChatTransportRunTest {
           permission: RequestPermission,
           warning: Boolean,
           observedAt: Instant,
+          meters: List<UsageMeter>,
         ) = Unit
         override fun revokeSession(logicalSessionId: String, processGeneration: Long) = Unit
       },

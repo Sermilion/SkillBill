@@ -3,7 +3,7 @@ package dev.skillbill.desktop.core.domain.usage.model
 import kotlin.time.Instant
 import kotlin.time.Duration
 
-enum class UsageProvider { Codex, Claude, Cursor }
+enum class UsageProvider { Codex, Claude, Cursor, Junie }
 
 data class UsageProfileLookup(
   val provider: UsageProvider,
@@ -281,6 +281,7 @@ sealed interface UsageSessionStatus {
     val permission: RequestPermission,
     val warning: Boolean,
     val observedAt: Instant,
+    val meters: List<UsageMeter> = emptyList(),
   ) : UsageSessionStatus
 
   data object Unavailable : UsageSessionStatus

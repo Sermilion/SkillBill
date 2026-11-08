@@ -47,6 +47,7 @@ internal fun Preferences.toAppSettings(onUnsupported: (String) -> Unit): AppSett
       NewTaskChatLayout.entries.firstOrNull { it.wireValue == raw }
     },
     qaDevice = qaDevice,
+    defaultAgentId = this[AppPreferenceKeys.DEFAULT_AGENT]?.takeIf(String::isNotBlank),
   )
 }
 

@@ -7,7 +7,12 @@ import dev.skillbill.desktop.core.data.chat.BoundedProtocolConnection
 import dev.skillbill.desktop.core.data.chat.BoundedProtocolInput
 import dev.skillbill.desktop.core.data.chat.BoundedProtocolLauncher
 import dev.skillbill.desktop.core.data.chat.ChatCommand
+import dev.skillbill.desktop.core.domain.usage.model.RequestPermission
+import dev.skillbill.desktop.core.domain.usage.model.UsageObservationSubject
 import dev.skillbill.desktop.core.domain.usage.model.UsageProfileLookup
+import dev.skillbill.desktop.core.domain.usage.model.UsageValue
+import dev.skillbill.desktop.core.domain.usage.model.VerifiedUsageIdentity
+import dev.skillbill.desktop.core.domain.usage.model.VerifiedUsageWorkspaceScope
 import dev.skillbill.desktop.core.domain.usage.model.UsageProvider
 import dev.skillbill.desktop.core.domain.usage.model.UsageResult
 import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableCode
@@ -99,17 +104,59 @@ class CodexUsageCollectorTest {
   }
 
   @Test
-  fun `account change invalidates the acquisition before any further account read`() = runTest {
+  fun `startup account announcement does not invalidate the read`() = runTest {
     val events = mutableListOf<CodexAcquisitionEvent>()
     val connection = ScriptedConnection { method, id ->
-      if (method == "account/read") """{"method":"account/updated","params":{}}""" else defaultResponse(method, id)
+      if (method == "account/read") {
+        """{"method":"account/updated","params":{"authMode":"chatgpt","planType":"plus"}}""" + "\n" + defaultResponse(method, id)
+      } else defaultResponse(method, id)
     }
     val context = context().copy(emit = { events += it })
 
-    assertIs<UsageResult.Unavailable>(collector(connection).read(context))
-    assertEquals(listOf<CodexAcquisitionEvent>(CodexAcquisitionEvent.AccountInvalidated(context.reservationId)), events)
-    assertEquals(listOf("initialize", "initialized", "account/read"), connection.methods)
+    collector(connection).read(context)
+
+    assertTrue(events.none { it is CodexAcquisitionEvent.AccountInvalidated })
+    assertEquals(listOf("initialize", "initialized", "account/read", "account/rateLimits/read"), connection.methods)
     assertTrue(connection.closed)
+  }
+
+  @Test
+  fun `verified account limits become labelled percentage meters`() = runTest {
+    val connection = ScriptedConnection { method, id ->
+      val result = when (method) {
+        "account/read" -> """{"account":{"type":"chatgpt","email":"operator@example.com","planType":"plus","workspaceName":null}}"""
+        "account/rateLimits/read" -> """{"ordinaryUsageAllowed":true,"accountId":"account-1","rateLimitsByLimitId":{"codex":{"limitId":"codex","limitName":null,""" +
+          """"primary":{"usedPercent":12,"windowDurationMins":300,"resetsAt":1794657062},"secondary":{"usedPercent":43,"windowDurationMins":10080,"resetsAt":null}}}}"""
+        else -> null
+      }
+      if (result == null) defaultResponse(method, id) else """{"id":$id,"result":$result}"""
+    }
+
+    val snapshot = assertIs<UsageResult.Snapshot>(collector(connection).read(context()))
+
+    assertEquals("reservation", snapshot.reservationId)
+    val subject = assertIs<UsageObservationSubject.Account>(snapshot.value.subject).value
+    assertEquals(VerifiedUsageIdentity("account-1", VerifiedUsageWorkspaceScope.VerifiedNonWorkspace), subject.identity)
+    assertEquals(listOf("5 hour", "Weekly"), snapshot.value.meters.map { it.label })
+    assertEquals(listOf(12.0, 43.0), snapshot.value.meters.map { (it.value as UsageValue.PercentageUsed).percent })
+    assertEquals(RequestPermission.Allowed, snapshot.value.requestPermission)
+  }
+
+  @Test
+  fun `an account with only a weekly window gets only a weekly meter`() = runTest {
+    val connection = ScriptedConnection { method, id ->
+      val result = when (method) {
+        "account/read" -> """{"account":{"type":"chatgpt","email":"operator@example.com","planType":"prolite","workspaceName":null}}"""
+        "account/rateLimits/read" -> """{"accountId":"account-1","rateLimitsByLimitId":{"codex":{"limitId":"codex","limitName":null,""" +
+          """"primary":{"usedPercent":43,"windowDurationMins":10080,"resetsAt":1794657062},"secondary":null}}}"""
+        else -> null
+      }
+      if (result == null) defaultResponse(method, id) else """{"id":$id,"result":$result}"""
+    }
+
+    val snapshot = assertIs<UsageResult.Snapshot>(collector(connection).read(context()))
+
+    assertEquals(listOf("Weekly"), snapshot.value.meters.map { it.label })
   }
 
   private fun context() = CodexAcquisitionContext(
@@ -146,7 +193,7 @@ class CodexUsageCollectorTest {
       methods += method
       if ("id" !in message) return true
       val id = message.getValue("id").jsonPrimitive.content
-      respond(method, id)?.let { incoming.send(BoundedProtocolInput.Line(it)) }
+      respond(method, id)?.lines()?.forEach { incoming.send(BoundedProtocolInput.Line(it)) }
       return true
     }
 

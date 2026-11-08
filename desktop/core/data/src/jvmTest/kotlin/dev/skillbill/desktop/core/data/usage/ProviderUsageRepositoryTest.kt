@@ -217,6 +217,52 @@ class ProviderUsageRepositoryTest {
   }
 
   @Test
+  fun `Claude meters reach the session card and stay visible to a new draft on the same profile`() = runTest {
+    val repository = ProviderUsageRepository(
+      UsageProfileResolver(HostEnvironment(emptyMap(), "/home/operator", "")),
+      FakeAppSettingsRepository(),
+      unusedCodexReader,
+      ApplicationCoroutineScope(backgroundScope),
+      fixedClock,
+    )
+    val profile = UsageProfileLookup(UsageProvider.Claude, "/home/operator/.claude", 1)
+    val other = UsageProfileLookup(UsageProvider.Claude, "/home/operator/.claude-work", 2)
+    fun meter(id: String, percent: Double) = UsageMeter.create(
+      id, id, UsageMeterScope.General, fixedClock.now(), null, UsagePeriod.Unknown, UsageValue.PercentageUsed.create(percent)!!,
+    )!!
+    val fiveHour = meter("claude:five_hour", 7.0)
+    val weekly = meter("claude:seven_day", 81.0)
+    val session = mutableListOf<UsageResult>()
+    val draft = mutableListOf<UsageResult>()
+    val otherDraft = mutableListOf<UsageResult>()
+    val observers = listOf(
+      backgroundScope.launch { repository.observe(UsageRequest(profile, "chat")).collect { session += it } },
+      backgroundScope.launch { repository.observe(UsageRequest(profile, "new-draft")).collect { draft += it } },
+      backgroundScope.launch { repository.observe(UsageRequest(other)).collect { otherDraft += it } },
+    )
+    try {
+      runCurrent()
+      assertIs<UsageResult.Unavailable>(draft.last())
+
+      repository.bindSession("chat", profile, 10)
+      repository.recordSessionStatus("chat", 10, RequestPermission.Allowed, true, fixedClock.now(), listOf(fiveHour, weekly))
+      repository.revokeSession("chat", 10)
+      runCurrent()
+
+      val live = assertIs<UsageResult.Snapshot>(session.first { it is UsageResult.Snapshot }).value
+      assertEquals(listOf(weekly, fiveHour), live.cardCandidates)
+      assertEquals(true, live.sessionWarning)
+      val carried = assertIs<UsageResult.Snapshot>(draft.last()).value
+      assertEquals(listOf(weekly, fiveHour), carried.popupMeters)
+      assertEquals(RequestPermission.Allowed, carried.requestPermission)
+      assertEquals(UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.SessionObservationUnavailable)), otherDraft.last())
+    } finally {
+      observers.forEach { it.cancelAndJoin() }
+      repository.closeUsage()
+    }
+  }
+
+  @Test
   fun `profile observation follows bindings and falls back to current settings`() = runTest {
     val profiles = UsageProfileResolver(HostEnvironment(emptyMap(), "/home/operator", ""))
     val settings = FakeAppSettingsRepository()

@@ -50,6 +50,8 @@ data class DetailUiState(
   val fixSelection: Map<String, FixRoute> = emptyMap(),
   val criterionMarks: Map<Int, CriterionMark> = emptyMap(),
   val verifyAgainInFlight: Boolean = false,
+  /** The default agent setting; a launch with no chosen or recorded agent uses it when the run allows it. */
+  val defaultAgentId: String? = null,
 )
 
 enum class VerifyCriteriaFilter { All, Gaps, Met }

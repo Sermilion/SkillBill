@@ -35,6 +35,16 @@ class UsagePolicyTest {
   }
 
   @Test
+  fun `ranking lists shorter allowance windows first`() {
+    val weekly = meter("weekly", UsageMeterScope.General, UsageValue.PercentageUsed.create(90.0)!!)
+      .copy(period = UsagePeriod.Rolling.create(7 * 24 * 3600)!!)
+    val fiveHour = meter("five", UsageMeterScope.General, UsageValue.PercentageUsed.create(5.0)!!)
+      .copy(period = UsagePeriod.Rolling.create(5 * 3600)!!)
+
+    assertEquals(listOf("five", "weekly"), UsageMeterRanking.rank(listOf(weekly, fiveHour), null).cardCandidates.map { it.bucketIdentity })
+  }
+
+  @Test
   fun `refresh timing keeps freshness basis and caps jittered retry`() {
     val sourceFloor = 2.minutes
     assertEquals(2.minutes, UsageRefreshPolicy.expectedInterval(UsageProvider.Codex, UsageCapability.NumericSnapshot, true, sourceFloor))

@@ -7,7 +7,9 @@ import dev.skillbill.desktop.core.domain.usage.model.SessionUsageScope
 import dev.skillbill.desktop.core.domain.usage.model.UsageCapability
 import dev.skillbill.desktop.core.domain.usage.model.UsageDemand
 import dev.skillbill.desktop.core.domain.usage.model.UsageDemandResult
+import dev.skillbill.desktop.core.domain.usage.model.UsageCoverage
 import dev.skillbill.desktop.core.domain.usage.model.UsageFreshness
+import dev.skillbill.desktop.core.domain.usage.model.UsageMeter
 import dev.skillbill.desktop.core.domain.usage.model.UsageObservation
 import dev.skillbill.desktop.core.domain.usage.model.UsageObservationSubject
 import dev.skillbill.desktop.core.domain.usage.model.VerifiedUsageSubject
@@ -110,6 +112,7 @@ class ProviderUsageRepository(
   private val bindings = mutableMapOf<String, LiveBinding>()
   private val bindingProfiles = MutableStateFlow<Map<String, UsageProfileLookup>>(emptyMap())
   private val statuses = MutableStateFlow<Map<String, UsageSessionStatus.Observed>>(emptyMap())
+  private val lastProfileStatuses = MutableStateFlow<Map<UsageProfileLookup, UsageSessionStatus.Observed>>(emptyMap())
   private val demands = mutableMapOf<String, UsageDemand>()
   private val demandSnapshots = MutableStateFlow<Map<String, UsageDemand>>(emptyMap())
   private val closed = AtomicBoolean(false)
@@ -153,6 +156,7 @@ class ProviderUsageRepository(
       bindings.clear()
       bindingProfiles.value = emptyMap()
       statuses.value = emptyMap()
+      lastProfileStatuses.value = emptyMap()
     }
     usageJob.cancel()
   }
@@ -238,8 +242,12 @@ class ProviderUsageRepository(
         }
         if (ownerId == null) refreshCoordinator.release(coordinatorOwner)
       }
-    } else if (request.profile.provider == UsageProvider.Claude && sessionId != null) {
-      emitAll(statuses.map { current -> sessionResult(request, sessionId, current[sessionId]) })
+    } else if (request.profile.provider == UsageProvider.Claude) {
+      emitAll(
+        combine(statuses, lastProfileStatuses) { current, last ->
+          claudeResult(request, sessionId?.let(current::get), last[request.profile])
+        }.distinctUntilChanged(),
+      )
     } else {
       emit(baseline(request))
     }
@@ -750,6 +758,7 @@ class ProviderUsageRepository(
     permission: RequestPermission,
     warning: Boolean,
     observedAt: Instant,
+    meters: List<UsageMeter>,
   ) {
     synchronized(sessionLock) {
       val binding = bindings[logicalSessionId] ?: return
@@ -760,8 +769,10 @@ class ProviderUsageRepository(
         permission,
         warning,
         observedAt,
+        meters,
       )
       statuses.value = statuses.value + (logicalSessionId to observation)
+      lastProfileStatuses.value = lastProfileStatuses.value + (binding.profile to observation)
     }
   }
 
@@ -778,34 +789,46 @@ class ProviderUsageRepository(
   private fun baseline(request: UsageRequest): UsageResult = when (request.profile.provider) {
     UsageProvider.Codex -> UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.AwaitingCapabilityReader))
     UsageProvider.Claude -> UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.SessionObservationUnavailable))
-    UsageProvider.Cursor -> UsageResult.Unsupported(UsageUnavailableReason(UsageUnavailableCode.UnsupportedPersonalSnapshot))
+    UsageProvider.Cursor, UsageProvider.Junie -> UsageResult.Unsupported(UsageUnavailableReason(UsageUnavailableCode.UnsupportedPersonalSnapshot))
   }
 
-  private fun sessionResult(request: UsageRequest, sessionId: String, status: UsageSessionStatus.Observed?): UsageResult =
-    synchronized(sessionLock) {
-      val binding = bindings[sessionId]
-      val active = status?.takeIf {
-        request.profile.provider == UsageProvider.Claude &&
-          it.scope.logicalSessionId == sessionId && binding?.processGeneration == it.scope.processGeneration &&
-          sameProfile(binding.profile, request.profile) && sameProfile(it.profile, request.profile)
-      } ?: return@synchronized UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.SessionObservationUnavailable))
-      UsageResult.Snapshot(
-        UsageObservation(
-          subject = UsageObservationSubject.Session(active.scope),
-          collectionTime = active.observedAt,
-          sourceObservationTime = null,
-          statusObservedAt = active.observedAt,
-          source = UsageSource(active.profile.provider, UsageCapability.SessionStatusOnly),
-          freshness = UsageFreshness.Current,
-          refreshState = UsageRefreshState.Idle,
-          meters = emptyList(),
-          requestPermission = active.permission,
-          sessionWarning = active.warning,
-          coverage = dev.skillbill.desktop.core.domain.usage.model.UsageCoverage.Empty,
-        ),
-        OmissionSemantics.OmittedFieldsAreUnchanged,
-      )
+  /**
+   * The live session's latest status, or else the latest one any session reported for the same profile, so a new
+   * draft shows the allowance its account last reported instead of nothing.
+   */
+  private fun claudeResult(
+    request: UsageRequest,
+    status: UsageSessionStatus.Observed?,
+    lastForProfile: UsageSessionStatus.Observed?,
+  ): UsageResult = synchronized(sessionLock) {
+    val sessionId = request.logicalSessionId
+    val binding = sessionId?.let(bindings::get)
+    val live = status?.takeIf {
+      it.scope.logicalSessionId == sessionId && binding?.processGeneration == it.scope.processGeneration &&
+        sameProfile(binding.profile, request.profile) && sameProfile(it.profile, request.profile)
     }
+    val active = live ?: lastForProfile?.takeIf { sameProfile(it.profile, request.profile) }
+      ?: return@synchronized UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.SessionObservationUnavailable))
+    val ranked = UsageMeterRanking.rank(active.meters, null)
+    UsageResult.Snapshot(
+      UsageObservation(
+        subject = UsageObservationSubject.Session(active.scope),
+        collectionTime = active.observedAt,
+        sourceObservationTime = null,
+        statusObservedAt = active.observedAt,
+        source = UsageSource(active.profile.provider, UsageCapability.SessionStatusOnly),
+        freshness = UsageFreshness.Current,
+        refreshState = UsageRefreshState.Idle,
+        meters = active.meters,
+        cardCandidates = ranked.cardCandidates,
+        popupMeters = ranked.popupMeters,
+        requestPermission = active.permission,
+        sessionWarning = active.warning,
+        coverage = if (active.meters.isEmpty()) UsageCoverage.Empty else UsageCoverage.Partial,
+      ),
+      OmissionSemantics.OmittedFieldsAreUnchanged,
+    )
+  }
 
   private fun sameProfile(left: UsageProfileLookup, right: UsageProfileLookup): Boolean =
     left.provider == right.provider && left.configurationReference == right.configurationReference && left.generation == right.generation
@@ -814,12 +837,13 @@ class ProviderUsageRepository(
     UsageProvider.Codex -> profiles.codex(selectedProfile)
     UsageProvider.Claude -> profiles.claude(selectedProfile)
     UsageProvider.Cursor -> profiles.cursor(selectedProfile)
+    UsageProvider.Junie -> profiles.junie(selectedProfile)
   }
 
   private fun refreshCapability(provider: UsageProvider): UsageRefreshCapability = when (provider) {
     UsageProvider.Codex -> codexUsageCollector.refreshCapability
     UsageProvider.Claude -> UsageRefreshCapability.EventOnly
-    UsageProvider.Cursor -> UsageRefreshCapability.Unsupported
+    UsageProvider.Cursor, UsageProvider.Junie -> UsageRefreshCapability.Unsupported
   }
 
   private fun refreshCapability(profile: UsageProfileLookup): UsageRefreshCapability =
@@ -846,7 +870,7 @@ class ProviderUsageRepository(
       },
     )
     UsageProvider.Claude -> UsageUnavailableReason(UsageUnavailableCode.SessionObservationUnavailable)
-    UsageProvider.Cursor -> UsageUnavailableReason(UsageUnavailableCode.UnsupportedPersonalSnapshot)
+    UsageProvider.Cursor, UsageProvider.Junie -> UsageUnavailableReason(UsageUnavailableCode.UnsupportedPersonalSnapshot)
   }
 
   private fun disabledAvailability(provider: UsageProvider) = UsageRefreshAvailability.Disabled(refreshDisabledReason(provider))

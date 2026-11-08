@@ -2,9 +2,12 @@ package dev.skillbill.desktop.core.designsystem.usage
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -20,6 +23,7 @@ fun UsagePanel(
   modifier: Modifier = Modifier,
   headerAction: @Composable () -> Unit = {},
   providerControls: @Composable () -> Unit = {},
+  settingsContent: @Composable () -> Unit = {},
   footerContent: @Composable () -> Unit = {},
 ) {
   val colors = SkillBillTheme.colors
@@ -33,32 +37,21 @@ fun UsagePanel(
       headerAction()
     }
     providerControls()
-    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-      state.contextLabel?.let { BasicText("Following $it", style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted)) }
-      Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        BasicText(state.provider, style = SkillBillTheme.type.tSmMedium.copy(color = colors.fg))
-        state.account.takeIf(String::isNotBlank)?.let { BasicText(it, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted)) }
-        state.accountExplanation?.let { BasicText(it, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted)) }
-      }
-      Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        BasicText(state.status, style = SkillBillTheme.type.tXs.copy(color = colors.fg2))
-        state.reason?.let { BasicText(it, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted)) }
-        if (state.checking) BasicText("Checking for updates", style = SkillBillTheme.type.tXs.copy(color = colors.fg2))
-        if (state.stale) BasicText("Stale data", style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted))
-        if (state.expired) BasicText("Expired", style = SkillBillTheme.type.tXs.copy(color = colors.stFailed))
-        if (state.sessionOnly) BasicText("Updated by this session", style = SkillBillTheme.type.tXs.copy(color = colors.fg2))
-        state.source?.let { BasicText("Source: $it", style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted)) }
-        state.observationAge?.let { BasicText(it, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted)) }
-        state.requestPermission?.let { BasicText("Request permission: $it", style = SkillBillTheme.type.tXs.copy(color = colors.fg2)) }
-      }
-      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        state.detailMeters.forEach { meter -> key(meter.id) { UsageMeterRow(meter) } }
+    Column(
+      Modifier.fillMaxWidth().heightIn(min = 120.dp).padding(16.dp),
+      verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+      if (state.meters.isEmpty()) {
+        state.message?.let { BasicText(it, style = usageText().copy(color = colors.fgMuted)) }
+      } else {
+        state.meters.forEach { meter -> key(meter.id) { UsageMeterRow(meter, detailed = true) } }
       }
     }
-    androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().background(colors.borderSubtle).padding(top = 1.dp))
-    Column(
+    settingsContent()
+    Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+    Row(
       Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-      horizontalAlignment = Alignment.End,
+      horizontalArrangement = Arrangement.End,
     ) {
       footerContent()
     }
