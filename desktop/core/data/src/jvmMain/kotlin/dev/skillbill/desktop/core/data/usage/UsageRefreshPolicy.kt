@@ -18,7 +18,7 @@ internal object UsageRefreshPolicy {
     if (capability != UsageCapability.NumericSnapshot) return null
     val productInterval = when (provider) {
       UsageProvider.Codex -> familyInterval(UsageRefreshFamily.CodexSnapshot, active)
-      UsageProvider.Claude, UsageProvider.Cursor, UsageProvider.Junie -> return null
+      UsageProvider.Claude -> return null
     }
     return maxOf(productInterval, sourceFloor)
   }

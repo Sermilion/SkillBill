@@ -3,7 +3,8 @@ package dev.skillbill.desktop.core.domain.usage.model
 import kotlin.time.Instant
 import kotlin.time.Duration
 
-enum class UsageProvider { Codex, Claude, Cursor, Junie }
+/** Agents with a readable usage source. Cursor and Junie expose none, so the usage card hides for them. */
+enum class UsageProvider { Codex, Claude }
 
 data class UsageProfileLookup(
   val provider: UsageProvider,

@@ -63,8 +63,19 @@ class UsagePresentationTest {
     val failed = UsageSidebarState(UsageProvider.Codex, UsageResult.TransientFailure(reason)).toUsageUiState(now)
 
     assertEquals("Not signed in", signedOut.message)
-    assertEquals("No usage data", failed.message)
+    assertEquals("Couldn't read usage", failed.message)
     assertTrue(failed.meters.isEmpty())
+  }
+
+  @Test
+  fun `no reading yet says what will bring one instead of no data`() {
+    fun messageFor(provider: UsageProvider, code: UsageUnavailableCode) =
+      UsageSidebarState(provider, UsageResult.Unavailable(UsageUnavailableReason(code))).toUsageUiState(now).message
+
+    assertEquals("Shows after the next Claude reply", messageFor(UsageProvider.Claude, UsageUnavailableCode.SessionObservationUnavailable))
+    assertEquals("Loading…", messageFor(UsageProvider.Codex, UsageUnavailableCode.ProfileUnverified))
+    assertEquals("Loading…", UsageSidebarState(UsageProvider.Codex).toUsageUiState(now).message)
+    assertEquals("Couldn't read usage", UsageSidebarState(UsageProvider.Codex, unavailableReason = "Usage observation failed").toUsageUiState(now).message)
   }
 
   @Test

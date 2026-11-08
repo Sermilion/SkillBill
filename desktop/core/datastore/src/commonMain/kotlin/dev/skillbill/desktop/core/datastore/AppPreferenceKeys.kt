@@ -26,6 +26,8 @@ internal object AppPreferenceKeys {
   val FAVORITE_WORK = stringSetPreferencesKey("favorite_work")
   val FAVORITE_SPECS = stringSetPreferencesKey("favorite_specs")
   val CRITERION_MARKS = stringSetPreferencesKey("criterion_marks")
+  val USAGE_LAST_AGENT = stringPreferencesKey("usage_last_agent")
+  val USAGE_LAST_READINGS = stringSetPreferencesKey("usage_last_readings")
 
   private val NOTIFY_BLOCKED = booleanPreferencesKey("notify_blocked")
   private val NOTIFY_FAILED = booleanPreferencesKey("notify_failed")

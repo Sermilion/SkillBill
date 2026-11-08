@@ -11,6 +11,8 @@ import dev.skillbill.desktop.core.domain.usage.model.UsageMeterScope
 import dev.skillbill.desktop.core.domain.usage.model.UsageProvider
 import dev.skillbill.desktop.core.domain.usage.model.UsageResult
 import dev.skillbill.desktop.core.domain.usage.model.UsageValue
+import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableReason
+import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableCode
 import java.time.ZoneId
 import kotlin.math.roundToLong
 import java.time.format.DateTimeFormatter
@@ -20,19 +22,17 @@ import kotlin.time.Instant
 internal fun UsageProvider.uiName() = when (this) {
   UsageProvider.Codex -> "Codex"
   UsageProvider.Claude -> "Claude"
-  UsageProvider.Cursor -> "Cursor"
-  UsageProvider.Junie -> "Junie"
 }
 
 internal fun UsageProvider.agentId() = when (this) {
   UsageProvider.Codex -> "codex"
   UsageProvider.Claude -> "claude"
-  UsageProvider.Cursor -> "cursor"
-  UsageProvider.Junie -> "junie"
 }
 
 /** Agent name plus its allowance windows in the repository's ranked order. One short line replaces the meters when there are none. */
 internal fun UsageSidebarState.toUsageUiState(now: Instant): UsageUiState {
+  // An agent without a usage source shows its name and nothing else: no meters, no "no data" line.
+  nameOnlyAgent?.let { return UsageUiState(provider = it.replaceFirstChar(Char::uppercase), agentId = it, nameOnly = true) }
   val meters = result?.meters().orEmpty().map { it.toUiMeter(now) }
   return UsageUiState(
     provider = provider?.uiName() ?: "Usage",
@@ -42,18 +42,38 @@ internal fun UsageSidebarState.toUsageUiState(now: Instant): UsageUiState {
   )
 }
 
+/** One short line when there are no meters. Each says what is happening; no state reads as a bare "no data". */
 private fun UsageSidebarState.message(): String = when (val result = result) {
   is UsageResult.SignInRequired -> "Not signed in"
   is UsageResult.Snapshot -> when {
     result.value.source.capability == UsageCapability.SessionStatusOnly && result.value.requestPermission == RequestPermission.Rejected -> "Limit reached"
     result.value.sessionWarning == true -> "Near limit"
-    result.value.emptySuccess -> "No limits reported"
-    else -> "No usage data"
+    else -> "No limits reported"
   }
   is UsageResult.EmptySuccess -> "No limits reported"
-  null -> if (provider == null) "No agent selected" else if (unavailableReason == null && demandEligible) "Loading…" else "No usage data"
-  else -> "No usage data"
+  is UsageResult.Partial -> LOADING
+  is UsageResult.Throttled -> "Refresh delayed"
+  is UsageResult.TransientFailure -> COULD_NOT_READ
+  is UsageResult.Unavailable -> result.reason.message()
+  is UsageResult.Unsupported -> result.reason.message()
+  null -> when {
+    provider == null -> "No agent selected"
+    unavailableReason != null -> COULD_NOT_READ
+    else -> LOADING
+  }
 }
+
+private fun UsageUnavailableReason.message(): String = when (code) {
+  // Claude reports limits only alongside a reply; nothing can be read before the first one.
+  UsageUnavailableCode.SessionObservationUnavailable -> "Shows after the next Claude reply"
+  // Codex answers these while its first read is still on the way.
+  UsageUnavailableCode.ProfileUnverified, UsageUnavailableCode.AwaitingCapabilityReader -> LOADING
+  UsageUnavailableCode.Throttled -> "Refresh delayed"
+  UsageUnavailableCode.UnsupportedPersonalSnapshot, UsageUnavailableCode.ProviderUnavailable, UsageUnavailableCode.TransientFailure -> COULD_NOT_READ
+}
+
+private const val LOADING = "Loading…"
+private const val COULD_NOT_READ = "Couldn't read usage"
 
 private fun UsageResult.meters(): List<UsageMeter> = when (this) {
   is UsageResult.Snapshot -> value.popupMeters

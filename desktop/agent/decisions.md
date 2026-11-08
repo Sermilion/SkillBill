@@ -1,3 +1,15 @@
+## [2026-11-08] Size the usage card to its rows and name each empty state
+Context: The card reserved two meter rows, so Codex with one weekly window and Cursor by name showed blank space. "No usage data" covered loading, failed reads and Claude before its first reply alike.
+Decision: The card holds the header plus one row per window up to two, one row for a message, and no rows for a name-only agent. Empty states say what is happening: "Loading…" while Codex reads, "Couldn't read usage" after a failed read, "Refresh delayed" when throttled, and "Shows after the next Claude reply" before Claude has reported.
+Reason: Blank rows read as missing data, and a generic "no data" hides whether to wait, retry or send a message.
+Supersedes: The fixed two-row height from "Keep the usage card fixed and on the last valid agent". The card still keeps the last valid agent and reading.
+
+## [2026-11-08] Show Cursor and Junie on the usage card by name only
+Context: Cursor and Junie have no readable usage source. The Cursor CLI has no usage command, its plan numbers sit behind undocumented cursor.com endpoints that need the session token from Cursor's own storage, and Junie exposes no quota at all. The card showed "No usage data" for both.
+Decision: UsageProvider covers only Codex and Claude. When the open chat or run uses Cursor or Junie, the card shows the agent's name and nothing else, asks for no usage, and its popup keeps the Codex and Claude tabs and the default agent picker without Refresh or Dashboard. A tab picked there holds until the context changes agent. The last Codex or Claude agent and reading stay for when a usage agent returns.
+Reason: An empty or "no data" state for an agent that can never report reads as a fault. The card is still the place to switch the shown provider and set the default agent.
+Supersedes: The Cursor and Junie tabs and "No usage data" states from "Keep the usage card fixed and on the last valid agent".
+
 ## [2026-11-08] Admit Codex limits for the account the app-server reports
 Context: The Codex usage card never showed numbers. The collector treated the `account/updated` notice that Codex sends on every startup as an account change, and it dropped valid `account/rateLimits/read` responses because numeric admission was closed.
 Decision: Each read runs a fresh app-server process, so the collector ignores `account/updated` and trusts the `account/read` response. A `chatgpt` account becomes a verified subject keyed by the `accountId` from the rate-limit response, or the account email when that is absent, and each rate-limit window becomes a percentage meter with its reset. The collector reports a pull capability, so the existing coordinator schedules reads and enables Refresh.

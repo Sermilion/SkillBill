@@ -22,7 +22,6 @@ class UsageProfileResolverTest {
     val host = HostEnvironment(
       mapOf(
         "CODEX_HOME" to "/shell/codex",
-        "CURSOR_CONFIG_DIR" to "/shell/cursor",
         "CLAUDE_CONFIG_DIR" to "/shell/claude",
       ),
       "/home/operator",
@@ -34,9 +33,7 @@ class UsageProfileResolverTest {
     val explicitDefault = resolver.codex("/home/operator/.codex")
     assertEquals("/home/operator/.codex", explicitDefault.lookup.configurationReference)
     assertEquals("/home/operator/.codex", resolver.resolveCodex(explicitDefault.lookup).environment["CODEX_HOME"])
-    assertEquals("/selected/cursor", resolver.cursor("/selected/cursor").environment["CURSOR_CONFIG_DIR"])
     assertEquals("/shell/codex", resolver.codex(null).lookup.configurationReference)
-    assertEquals("/shell/cursor", resolver.cursor(null).lookup.configurationReference)
     assertEquals("/shell/claude", resolver.claude(null).environment["CLAUDE_CONFIG_DIR"])
     assertEquals("/selected/claude", resolver.claude("/selected/claude").environment["CLAUDE_CONFIG_DIR"])
     assertEquals(UsageProvider.Claude, resolver.claude("/home/operator/.claude").lookup.provider)

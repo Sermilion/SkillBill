@@ -13,6 +13,7 @@ import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
+import dev.skillbill.desktop.core.domain.usage.LastUsageStore
 import dev.skillbill.desktop.core.domain.usage.UsageRepository
 import dev.skillbill.desktop.core.domain.usage.model.ModelSelectionProvenance
 import dev.skillbill.desktop.core.domain.usage.model.UsageDemand
@@ -58,7 +59,8 @@ import kotlin.time.Instant
 
 /**
  * What the usage card shows. [provider] and [result] always describe the last valid agent: a context without a supported
- * agent, a pending selection or a hidden sidebar leaves them in place, so the card never blanks out or jumps.
+ * agent, a pending selection, a database switch or a hidden sidebar leaves them in place, so the card never blanks out or
+ * jumps. Before any context names an agent, the card shows the agent it showed last, even in an earlier app run.
  */
 data class UsageSidebarState(
   val provider: UsageProvider? = null,
@@ -67,6 +69,11 @@ data class UsageSidebarState(
   val active: Boolean = false,
   val demandEligible: Boolean = false,
   val popupDismissalToken: Long = 0,
+  /**
+   * The open chat or run uses this agent, which has no usage source (Cursor, Junie). The card shows only its name and the
+   * popup still offers provider tabs and the default agent; [provider] and [result] stay for when a usage agent returns.
+   */
+  val nameOnlyAgent: String? = null,
   /** Changes whenever the usage request changes, so refresh availability can be re-observed. */
   val requestVersion: Long = 0,
 )
@@ -82,6 +89,7 @@ class UsageSidebarModel(
   private val usage: UsageRepository,
   private val diagnostics: Diagnostics,
   private val settings: AppSettingsRepository,
+  private val lastUsage: LastUsageStore,
   windowScope: WindowCoroutineScope,
   private val clock: Clock = Clock.System,
 ) {
@@ -101,7 +109,8 @@ class UsageSidebarModel(
   val defaultAgent: StateFlow<String?> = defaultAgentState.asStateFlow()
   private val presentationTimeState = MutableStateFlow(clock.now())
   val presentationTime: StateFlow<Instant> = presentationTimeState.asStateFlow()
-  private var manualAgentId = "codex"
+  /** The agent the operator picked on the card; null follows the fallback chain in [fallbackAgentId]. */
+  private var manualAgentId: String? = null
   private var request: UsageRequest? = null
   private var demandJob: Job? = null
   private var profileJob: Job? = null
@@ -127,6 +136,9 @@ class UsageSidebarModel(
   /** The agent the current context last asked for; a manual pick holds until this changes. */
   private var contextKey: AgentKey? = null
   private var manualOverride = false
+
+  /** The usage-less agent the current context last named, so a manual pick holds until the context changes agent. */
+  private var nameOnlyContext: String? = null
 
   /** The last result worth showing per provider, so switching back shows it at once instead of a loading state. */
   private val lastResults = mutableMapOf<Pair<UsageProvider, String?>, UsageResult>()
@@ -154,6 +166,7 @@ class UsageSidebarModel(
             }
             if (settingsRoute) {
               reconcileDemand()
+              if (currentKey == null) useManualAgent(generation, onSettings = true)
               return@collectLatest
             }
             when (val route = entry.route) {
@@ -276,8 +289,11 @@ class UsageSidebarModel(
     var previous: SelectedNewTaskUsageContext.Ready? = null
     chat.selectedNewTaskUsageContext.collectLatest { selected ->
       if (!isCurrentRoute(expectedRouteGeneration)) return@collectLatest
-      // Absent and Pending keep the last valid agent on screen.
-      if (selected !is SelectedNewTaskUsageContext.Ready) return@collectLatest
+      // Absent and Pending keep the last valid agent on screen, or show the fallback agent when there is none yet.
+      if (selected !is SelectedNewTaskUsageContext.Ready) {
+        if (currentKey == null) useManualAgent(expectedRouteGeneration)
+        return@collectLatest
+      }
       if (previous?.copy(activeWork = selected.activeWork) == selected) {
         updateActivity(selected.activeWork)
         return@collectLatest
@@ -294,8 +310,9 @@ class UsageSidebarModel(
     awaitCancellation()
   }
 
-  private suspend fun useManualAgent(expectedRouteGeneration: Long) {
-    val agentId = manualAgentId
+  private suspend fun useManualAgent(expectedRouteGeneration: Long, onSettings: Boolean = false) {
+    val picked = manualAgentId
+    val agentId = picked ?: fallbackAgentId()
     val agent = try {
       executionChats.agentFor(agentId)
     } catch (cancelled: CancellationException) {
@@ -304,8 +321,29 @@ class UsageSidebarModel(
       diagnostics.record("usage_manual_agent_resolution_failed")
       return
     }
-    if (!isCurrentRoute(expectedRouteGeneration) || settingsRoute || agentId != manualAgentId) return
+    if (!isCurrentRoute(expectedRouteGeneration) || (settingsRoute && !onSettings) || picked != manualAgentId) return
     applyAgent(agent, null, state.value.active.takeIf { manualOverride } ?: false, modelIsActual = false)
+  }
+
+  /** The agent shown now, else the one shown last (also across restarts), else the default agent, else Codex. */
+  private suspend fun fallbackAgentId(): String {
+    state.value.provider?.let { return it.agentId() }
+    val remembered = try {
+      lastUsage.lastAgent()
+    } catch (cancelled: CancellationException) {
+      throw cancelled
+    } catch (_: Exception) {
+      diagnostics.record("usage_last_agent_unavailable")
+      null
+    }
+    val default = defaultAgentState.value ?: try {
+      settings.settings.first().defaultAgentId
+    } catch (cancelled: CancellationException) {
+      throw cancelled
+    } catch (_: Exception) {
+      null
+    }
+    return listOfNotNull(remembered, default).firstOrNull { providerFor(it) != null } ?: "codex"
   }
 
   private suspend fun resolveAgentOrNull(
@@ -321,8 +359,20 @@ class UsageSidebarModel(
     null
   }
 
-  /** Follows the context's agent unless the operator picked one for this context. No supported agent keeps the last one. */
+  /**
+   * Follows the context's agent unless the operator picked one for this context. An agent without a usage source shows
+   * by name only; an unresolved agent keeps the last one.
+   */
   private fun applyContextAgent(agent: ChatAgent?, logicalSessionId: String?, active: Boolean, modelIsActual: Boolean = false) {
+    if (agent != null && providerFor(agent.agentId) == null) {
+      val sameAgent = nameOnlyContext == agent.agentId
+      nameOnlyContext = agent.agentId
+      contextKey = null
+      if (manualOverride && sameAgent) return updateActivity(active)
+      manualOverride = false
+      return showNameOnly(agent.agentId, active)
+    }
+    nameOnlyContext = null
     val key = agent?.let { keyFor(it, logicalSessionId, modelIsActual) }
     if (key == null) {
       // Nothing supported to follow: keep the last agent, or start from the manual pick if nothing has been shown yet.
@@ -342,7 +392,14 @@ class UsageSidebarModel(
   private fun applyAgent(agent: ChatAgent, logicalSessionId: String?, active: Boolean, modelIsActual: Boolean) {
     if (released) return
     val key = keyFor(agent, logicalSessionId, modelIsActual) ?: return updateActivity(active)
-    if (key == currentKey && (request != null || profileJob?.isActive == true)) return updateActivity(active)
+    val wasNameOnly = state.value.nameOnlyAgent != null
+    if (wasNameOnly) state.value = state.value.copy(nameOnlyAgent = null)
+    if (key == currentKey && (request != null || profileJob?.isActive == true)) {
+      updateActivity(active)
+      if (wasNameOnly) reconcileDemand()
+      return
+    }
+    if (key.provider != currentKey?.provider) rememberAgent(key.provider)
     currentKey = key
     val generation = ++agentGeneration
     profileJob?.cancel()
@@ -380,6 +437,7 @@ class UsageSidebarModel(
     }
   }
 
+  /** Drops the request tied to the closed database but keeps the agent and its readings on screen; usage is per account. */
   private fun clearAgent() {
     ++agentGeneration
     profileJob?.cancel()
@@ -389,8 +447,31 @@ class UsageSidebarModel(
     currentKey = null
     contextKey = null
     manualOverride = false
-    lastResults.clear()
-    state.value = UsageSidebarState(popupDismissalToken = ++popupToken, requestVersion = state.value.requestVersion + 1)
+    state.value = state.value.copy(
+      unavailableReason = null,
+      active = false,
+      demandEligible = false,
+      popupDismissalToken = ++popupToken,
+      requestVersion = state.value.requestVersion + 1,
+    )
+  }
+
+  /** Names [agentId] on the card and stops asking for usage; the last usage agent and reading stay for later. */
+  private fun showNameOnly(agentId: String, active: Boolean) {
+    state.value = state.value.copy(nameOnlyAgent = agentId, active = active)
+    reconcileDemand()
+  }
+
+  private fun rememberAgent(provider: UsageProvider) {
+    scope.launch {
+      try {
+        lastUsage.setLastAgent(provider.agentId())
+      } catch (cancelled: CancellationException) {
+        throw cancelled
+      } catch (_: Exception) {
+        diagnostics.record("usage_last_agent_write_failed")
+      }
+    }
   }
 
   private fun setRequest(next: UsageRequest?) {
@@ -497,7 +578,7 @@ class UsageSidebarModel(
       (entry.sessionId == null || entry.sessionId == database.sessionId)
   }
 
-  private fun eligible() = !released && mainVisible && !minimized && !settingsRoute && (inlineSidebarVisible || drawerOpen) && cardHostAttached
+  private fun eligible() = !released && state.value.nameOnlyAgent == null && mainVisible && !minimized && !settingsRoute && (inlineSidebarVisible || drawerOpen) && cardHostAttached
 
   private fun dismissPopupIfTriggerLost(wasVisible: Boolean) {
     if (wasVisible && !eligible()) state.value = state.value.copy(popupDismissalToken = ++popupToken)
@@ -509,8 +590,6 @@ class UsageSidebarModel(
   private fun providerFor(agentId: String): UsageProvider? = when (agentId.lowercase()) {
     "codex" -> UsageProvider.Codex
     "claude" -> UsageProvider.Claude
-    "cursor" -> UsageProvider.Cursor
-    "junie" -> UsageProvider.Junie
     else -> null
   }
 

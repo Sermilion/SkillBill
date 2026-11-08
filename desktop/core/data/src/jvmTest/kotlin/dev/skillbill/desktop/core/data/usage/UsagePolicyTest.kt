@@ -49,7 +49,7 @@ class UsagePolicyTest {
     val sourceFloor = 2.minutes
     assertEquals(2.minutes, UsageRefreshPolicy.expectedInterval(UsageProvider.Codex, UsageCapability.NumericSnapshot, true, sourceFloor))
     assertEquals(5.minutes, UsageRefreshPolicy.expectedInterval(UsageProvider.Codex, UsageCapability.NumericSnapshot, false, 0.seconds))
-    assertNull(UsageRefreshPolicy.expectedInterval(UsageProvider.Cursor, UsageCapability.NumericSnapshot, true, 0.seconds))
+    assertNull(UsageRefreshPolicy.expectedInterval(UsageProvider.Claude, UsageCapability.NumericSnapshot, true, 0.seconds))
     assertNull(UsageRefreshPolicy.expectedInterval(UsageProvider.Codex, UsageCapability.Unsupported, true, 0.seconds))
     val observedAt = Instant.fromEpochMilliseconds(1_000)
     assertEquals(observedAt + 10.minutes, UsageRefreshPolicy.staleAt(observedAt, 5.minutes))

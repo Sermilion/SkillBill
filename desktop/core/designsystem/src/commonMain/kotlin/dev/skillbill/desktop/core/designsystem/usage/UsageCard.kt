@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
@@ -39,7 +40,7 @@ import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 
-/** Meter slots the card always reserves, so its height never changes with the data. */
+/** The most meter rows the card shows; the popup lists every window. */
 const val USAGE_CARD_METER_SLOTS = 2
 
 private val HeaderHeight = 18.dp
@@ -47,8 +48,15 @@ private val SlotHeight = 26.dp
 private val Gap = 8.dp
 private val Padding = 12.dp
 
-/** The card's fixed height: header plus [USAGE_CARD_METER_SLOTS] meter slots, whatever the state. */
-val UsageCardHeight = Padding * 2 + HeaderHeight + (SlotHeight + Gap) * USAGE_CARD_METER_SLOTS
+/** Rows under the header: none for a name-only agent, one for a message, one per window up to [USAGE_CARD_METER_SLOTS]. */
+fun usageCardRows(state: UsageUiState): Int = when {
+  state.nameOnly -> 0
+  state.meters.isEmpty() -> if (state.message != null) 1 else 0
+  else -> state.meters.size.coerceAtMost(USAGE_CARD_METER_SLOTS)
+}
+
+/** The card's height for [rows] rows under the header. */
+fun usageCardHeight(rows: Int): Dp = Padding * 2 + HeaderHeight + (SlotHeight + Gap) * rows
 
 /** The agent's avatar color, or the default text color when no agent is known. */
 @Composable
@@ -62,7 +70,7 @@ fun UsageCard(state: UsageUiState, onOpen: () -> Unit, modifier: Modifier = Modi
   val hovered by interaction.collectIsHoveredAsState()
   val shape = RoundedCornerShape(SkillBillRadius.md)
   Column(
-    modifier.fillMaxWidth().height(UsageCardHeight)
+    modifier.fillMaxWidth().height(usageCardHeight(usageCardRows(state)))
       .background(if (hovered) colors.bgRaised else colors.bgPanel, shape)
       .border(1.dp, if (hovered) colors.borderStrong else colors.border, shape)
       .hoverable(interaction).clickable(interactionSource = interaction, indication = null, onClick = onOpen).handCursor()
@@ -77,7 +85,7 @@ fun UsageCard(state: UsageUiState, onOpen: () -> Unit, modifier: Modifier = Modi
       CompositionLocalProvider(LocalContentColor provides colors.fgFaint) { SbIcon(LucideIcons.chevronRight, SbIconSize.Xs) }
     }
     val meters = state.meters.take(USAGE_CARD_METER_SLOTS)
-    repeat(USAGE_CARD_METER_SLOTS) { index ->
+    repeat(usageCardRows(state)) { index ->
       Box(Modifier.fillMaxWidth().height(SlotHeight), contentAlignment = Alignment.CenterStart) {
         val meter = meters.getOrNull(index)
         when {

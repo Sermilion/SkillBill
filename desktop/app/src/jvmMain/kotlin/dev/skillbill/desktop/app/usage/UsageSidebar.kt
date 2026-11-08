@@ -103,10 +103,11 @@ fun UsageSidebar(model: UsageSidebarModel, modifier: Modifier = Modifier) {
       ui,
       Modifier.fillMaxWidth(),
       headerAction = { SbIconButton(LucideIcons.x, "Close usage details", { expanded = false }, size = SbControlSize.Small) },
-      providerControls = { UsageProviderSelector(state.provider) { model.chooseManualProvider(it.agentId()) } },
+      providerControls = { UsageProviderSelector(state.provider.takeIf { state.nameOnlyAgent == null }) { model.chooseManualProvider(it.agentId()) } },
       settingsContent = { if (model.agents.isNotEmpty()) DefaultAgentSelector(model.agents, defaultAgent, model::toggleDefaultAgent) },
       footerContent = {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        // An agent without a usage source has nothing to refresh and no usage page.
+        if (state.nameOnlyAgent == null) Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
           SbButton(
             if (signInRequired) "Recheck sign-in" else "Refresh",
             { if (signInRequired) model.recheckSignIn() else model.refresh() },
@@ -210,10 +211,8 @@ private fun UsageProviderSelector(selected: UsageProvider?, onSelect: (UsageProv
   }
 }
 
-/** The provider's own usage page; Junie has no known one, so it gets no Dashboard button. */
-private fun UsageProvider.usageUrl(): String? = when (this) {
+/** The provider's own usage page. */
+private fun UsageProvider.usageUrl(): String = when (this) {
   UsageProvider.Codex -> "https://chatgpt.com/codex/settings/usage"
   UsageProvider.Claude -> "https://claude.ai/settings/usage"
-  UsageProvider.Cursor -> "https://cursor.com/dashboard"
-  UsageProvider.Junie -> null
 }

@@ -23,4 +23,6 @@ data class UsageUiState(
   val agentId: String? = null,
   val meters: List<UsageUiMeter> = emptyList(),
   val message: String? = null,
+  /** The agent has no usage source, such as Cursor: the card shows only its name and the panel drops the meter area and footer. */
+  val nameOnly: Boolean = false,
 )

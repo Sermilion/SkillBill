@@ -3,6 +3,8 @@ package dev.skillbill.desktop.core.data.usage
 import dev.skillbill.desktop.core.common.ApplicationCoroutineScope
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
+import dev.skillbill.desktop.core.testing.FakeLastUsageStore
+import dev.skillbill.desktop.core.domain.usage.StoredUsageReading
 import dev.skillbill.desktop.core.domain.usage.model.RequestPermission
 import dev.skillbill.desktop.core.domain.usage.model.UsageProfileLookup
 import dev.skillbill.desktop.core.domain.usage.model.UsageProvider
@@ -256,6 +258,61 @@ class ProviderUsageRepositoryTest {
       assertEquals(listOf(weekly, fiveHour), carried.popupMeters)
       assertEquals(RequestPermission.Allowed, carried.requestPermission)
       assertEquals(UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.SessionObservationUnavailable)), otherDraft.last())
+    } finally {
+      observers.forEach { it.cancelAndJoin() }
+      repository.closeUsage()
+    }
+  }
+
+  @Test
+  fun `a Claude reading from an earlier run shows until a session reports, and a live reading is stored`() = runTest {
+    val stored = FakeLastUsageStore()
+    val repository = ProviderUsageRepository(
+      UsageProfileResolver(HostEnvironment(emptyMap(), "/home/operator", "")),
+      FakeAppSettingsRepository(),
+      unusedCodexReader,
+      ApplicationCoroutineScope(backgroundScope),
+      fixedClock,
+      lastUsage = stored,
+    )
+    // The generation differs from the earlier run's; only the configuration directory has to match.
+    val profile = UsageProfileLookup(UsageProvider.Claude, "/home/operator/.claude", 7)
+    fun meter(id: String, percent: Double, at: Instant) = UsageMeter.create(
+      id, id, UsageMeterScope.General, at, null, UsagePeriod.Unknown, UsageValue.PercentageUsed.create(percent)!!,
+    )!!
+    val earlierAt = Instant.fromEpochMilliseconds(1_000)
+    val earlier = meter("claude:seven_day", 40.0, earlierAt)
+    stored.readings[UsageProvider.Claude to "/home/operator/.claude"] =
+      StoredUsageReading(RequestPermission.Allowed, false, earlierAt, listOf(earlier))
+    val draft = mutableListOf<UsageResult>()
+    val other = mutableListOf<UsageResult>()
+    val observers = listOf(
+      backgroundScope.launch { repository.observe(UsageRequest(profile, "draft")).collect { draft += it } },
+      backgroundScope.launch {
+        repository.observe(UsageRequest(UsageProfileLookup(UsageProvider.Claude, "/home/operator/.claude-work", 8))).collect { other += it }
+      },
+    )
+    try {
+      runCurrent()
+      val restored = assertIs<UsageResult.Snapshot>(draft.last()).value
+      assertEquals(listOf(earlier), restored.popupMeters)
+      assertEquals(UsageFreshness.Stale, restored.freshness)
+      assertIs<UsageResult.Unavailable>(other.last())
+
+      val live = meter("claude:seven_day", 55.0, fixedClock.now())
+      repository.bindSession("chat", profile, 10)
+      repository.recordSessionStatus("chat", 10, RequestPermission.Allowed, false, fixedClock.now(), listOf(live))
+      runCurrent()
+
+      val current = assertIs<UsageResult.Snapshot>(draft.last()).value
+      assertEquals(listOf(live), current.popupMeters)
+      assertEquals(UsageFreshness.Current, current.freshness)
+      assertEquals(listOf(live), stored.readings[UsageProvider.Claude to "/home/operator/.claude"]?.meters)
+
+      // A status without windows keeps the stored numbers.
+      repository.recordSessionStatus("chat", 10, RequestPermission.Allowed, true, fixedClock.now())
+      runCurrent()
+      assertEquals(listOf(live), stored.readings[UsageProvider.Claude to "/home/operator/.claude"]?.meters)
     } finally {
       observers.forEach { it.cancelAndJoin() }
       repository.closeUsage()

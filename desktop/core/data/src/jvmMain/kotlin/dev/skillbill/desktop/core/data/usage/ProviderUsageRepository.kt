@@ -1,5 +1,7 @@
 package dev.skillbill.desktop.core.data.usage
 
+import dev.skillbill.desktop.core.domain.usage.LastUsageStore
+import dev.skillbill.desktop.core.domain.usage.StoredUsageReading
 import dev.skillbill.desktop.core.domain.usage.UsageObservationSink
 import dev.skillbill.desktop.core.domain.usage.UsageRepository
 import dev.skillbill.desktop.core.domain.usage.model.RequestPermission
@@ -78,6 +80,7 @@ class ProviderUsageRepository(
   private val scheduler: UsageScheduler = CoroutineUsageScheduler,
   private val jitter: UsageJitter = RandomUsageJitter,
   private val diagnostics: Diagnostics = NoopUsageDiagnostics,
+  private val lastUsage: LastUsageStore = LastUsageStore.None,
 ) : UsageRepository, UsageObservationSink {
   private data class LiveBinding(val profile: UsageProfileLookup, val processGeneration: Long)
   private data class AcquisitionKey(val profile: UsageProfileLookup, val environment: Map<String, String>)
@@ -113,6 +116,10 @@ class ProviderUsageRepository(
   private val bindingProfiles = MutableStateFlow<Map<String, UsageProfileLookup>>(emptyMap())
   private val statuses = MutableStateFlow<Map<String, UsageSessionStatus.Observed>>(emptyMap())
   private val lastProfileStatuses = MutableStateFlow<Map<UsageProfileLookup, UsageSessionStatus.Observed>>(emptyMap())
+
+  /** The newest reading per provider and configuration, including one an earlier app run stored. */
+  private val storedReadings = MutableStateFlow<Map<StoredReadingKey, StoredUsageReading>>(emptyMap())
+  private val loadedReadings = mutableSetOf<StoredReadingKey>()
   private val demands = mutableMapOf<String, UsageDemand>()
   private val demandSnapshots = MutableStateFlow<Map<String, UsageDemand>>(emptyMap())
   private val closed = AtomicBoolean(false)
@@ -157,6 +164,8 @@ class ProviderUsageRepository(
       bindingProfiles.value = emptyMap()
       statuses.value = emptyMap()
       lastProfileStatuses.value = emptyMap()
+      storedReadings.value = emptyMap()
+      loadedReadings.clear()
     }
     usageJob.cancel()
   }
@@ -243,9 +252,10 @@ class ProviderUsageRepository(
         if (ownerId == null) refreshCoordinator.release(coordinatorOwner)
       }
     } else if (request.profile.provider == UsageProvider.Claude) {
+      loadStoredReading(request.profile)
       emitAll(
-        combine(statuses, lastProfileStatuses) { current, last ->
-          claudeResult(request, sessionId?.let(current::get), last[request.profile])
+        combine(statuses, lastProfileStatuses, storedReadings) { current, last, stored ->
+          claudeResult(request, sessionId?.let(current::get), last[request.profile], stored[request.profile.storedKey()])
         }.distinctUntilChanged(),
       )
     } else {
@@ -773,7 +783,36 @@ class ProviderUsageRepository(
       )
       statuses.value = statuses.value + (logicalSessionId to observation)
       lastProfileStatuses.value = lastProfileStatuses.value + (binding.profile to observation)
+      // A status without windows says nothing about the allowance, so it never replaces a reading with numbers.
+      if (meters.isEmpty()) return
+      val key = binding.profile.storedKey()
+      val reading = StoredUsageReading(permission, warning, observedAt, meters)
+      rememberReading(key, reading)
+      usageScope.launch { lastUsage.setLastReading(key.provider, key.configurationReference, reading) }
     }
+  }
+
+  /** Reads the stored reading for [profile] once per app run, so a new draft shows what the account last reported. */
+  private suspend fun loadStoredReading(profile: UsageProfileLookup) {
+    val key = profile.storedKey()
+    if (!synchronized(sessionLock) { loadedReadings.add(key) }) return
+    val stored = try {
+      lastUsage.lastReading(key.provider, key.configurationReference)
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+      synchronized(sessionLock) { loadedReadings.remove(key) }
+      throw cancelled
+    } catch (_: Exception) {
+      diagnostics.record("usage.stored_reading_unavailable")
+      null
+    } ?: return
+    synchronized(sessionLock) { if (!closed.get()) rememberReading(key, stored) }
+  }
+
+  /** Keeps [reading] unless a newer one for the same key is already known. Callers hold [sessionLock]. */
+  private fun rememberReading(key: StoredReadingKey, reading: StoredUsageReading) {
+    val known = storedReadings.value[key]
+    if (known != null && known.observedAt > reading.observedAt) return
+    storedReadings.value = storedReadings.value + (key to reading)
   }
 
   override fun revokeSession(logicalSessionId: String, processGeneration: Long) {
@@ -789,7 +828,6 @@ class ProviderUsageRepository(
   private fun baseline(request: UsageRequest): UsageResult = when (request.profile.provider) {
     UsageProvider.Codex -> UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.AwaitingCapabilityReader))
     UsageProvider.Claude -> UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.SessionObservationUnavailable))
-    UsageProvider.Cursor, UsageProvider.Junie -> UsageResult.Unsupported(UsageUnavailableReason(UsageUnavailableCode.UnsupportedPersonalSnapshot))
   }
 
   /**
@@ -800,6 +838,7 @@ class ProviderUsageRepository(
     request: UsageRequest,
     status: UsageSessionStatus.Observed?,
     lastForProfile: UsageSessionStatus.Observed?,
+    stored: StoredUsageReading?,
   ): UsageResult = synchronized(sessionLock) {
     val sessionId = request.logicalSessionId
     val binding = sessionId?.let(bindings::get)
@@ -807,8 +846,10 @@ class ProviderUsageRepository(
       it.scope.logicalSessionId == sessionId && binding?.processGeneration == it.scope.processGeneration &&
         sameProfile(binding.profile, request.profile) && sameProfile(it.profile, request.profile)
     }
-    val active = live ?: lastForProfile?.takeIf { sameProfile(it.profile, request.profile) }
-      ?: return@synchronized UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.SessionObservationUnavailable))
+    val recent = live ?: lastForProfile?.takeIf { sameProfile(it.profile, request.profile) }
+    val active = recent ?: stored?.let {
+      UsageSessionStatus.Observed(SessionUsageScope(STORED_READING_SESSION, 0), request.profile, it.permission, it.warning, it.observedAt, it.meters)
+    } ?: return@synchronized UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.SessionObservationUnavailable))
     val ranked = UsageMeterRanking.rank(active.meters, null)
     UsageResult.Snapshot(
       UsageObservation(
@@ -817,7 +858,7 @@ class ProviderUsageRepository(
         sourceObservationTime = null,
         statusObservedAt = active.observedAt,
         source = UsageSource(active.profile.provider, UsageCapability.SessionStatusOnly),
-        freshness = UsageFreshness.Current,
+        freshness = if (recent == null) UsageFreshness.Stale else UsageFreshness.Current,
         refreshState = UsageRefreshState.Idle,
         meters = active.meters,
         cardCandidates = ranked.cardCandidates,
@@ -830,20 +871,22 @@ class ProviderUsageRepository(
     )
   }
 
+  /** Stored readings outlive the per-run profile generation, so they are keyed by provider and configuration only. */
+  private data class StoredReadingKey(val provider: UsageProvider, val configurationReference: String?)
+
+  private fun UsageProfileLookup.storedKey() = StoredReadingKey(provider, configurationReference)
+
   private fun sameProfile(left: UsageProfileLookup, right: UsageProfileLookup): Boolean =
     left.provider == right.provider && left.configurationReference == right.configurationReference && left.generation == right.generation
 
   private fun profileFor(provider: UsageProvider, selectedProfile: String?): EffectiveUsageProfile = when (provider) {
     UsageProvider.Codex -> profiles.codex(selectedProfile)
     UsageProvider.Claude -> profiles.claude(selectedProfile)
-    UsageProvider.Cursor -> profiles.cursor(selectedProfile)
-    UsageProvider.Junie -> profiles.junie(selectedProfile)
   }
 
   private fun refreshCapability(provider: UsageProvider): UsageRefreshCapability = when (provider) {
     UsageProvider.Codex -> codexUsageCollector.refreshCapability
     UsageProvider.Claude -> UsageRefreshCapability.EventOnly
-    UsageProvider.Cursor, UsageProvider.Junie -> UsageRefreshCapability.Unsupported
   }
 
   private fun refreshCapability(profile: UsageProfileLookup): UsageRefreshCapability =
@@ -870,7 +913,6 @@ class ProviderUsageRepository(
       },
     )
     UsageProvider.Claude -> UsageUnavailableReason(UsageUnavailableCode.SessionObservationUnavailable)
-    UsageProvider.Cursor, UsageProvider.Junie -> UsageUnavailableReason(UsageUnavailableCode.UnsupportedPersonalSnapshot)
   }
 
   private fun disabledAvailability(provider: UsageProvider) = UsageRefreshAvailability.Disabled(refreshDisabledReason(provider))
@@ -1261,3 +1303,6 @@ class ProviderUsageRepository(
 
   private fun transientCodex() = UsageResult.TransientFailure(UsageUnavailableReason(UsageUnavailableCode.TransientFailure))
 }
+
+/** The session id a reading restored from an earlier app run carries; no live session uses it. */
+private const val STORED_READING_SESSION = "stored"

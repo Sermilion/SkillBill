@@ -2,6 +2,7 @@ package dev.skillbill.desktop.app.usage
 
 import androidx.compose.runtime.snapshots.Snapshot
 import dev.skillbill.desktop.app.navigation.WindowNavigator
+import dev.skillbill.desktop.core.designsystem.usage.UsageUiState
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
@@ -23,6 +24,7 @@ import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableCode
 import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableReason
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
+import dev.skillbill.desktop.core.testing.FakeLastUsageStore
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import dev.skillbill.desktop.core.testing.workItem
@@ -53,6 +55,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class UsageSidebarModelTest {
@@ -161,9 +164,71 @@ class UsageSidebarModelTest {
     lookup.complete(UsageProfileLookup(UsageProvider.Codex, null, 1))
     runCurrent()
 
-    assertNull(fixture.model.view.value.provider)
+    assertEquals(UsageProvider.Codex, fixture.model.view.value.provider)
     assertTrue(fixture.usage.demands.isEmpty())
     assertTrue(fixture.usage.acquired.isEmpty())
+  }
+
+  @Test
+  fun `a database switch keeps the agent and its reading on the card`() = runTest {
+    val fixture = Fixture(this)
+    val reading = UsageResult.SignInRequired(fixture.usage.reason)
+    fixture.usage.observations = { MutableStateFlow(reading) }
+    runCurrent()
+    val tokenBefore = fixture.model.view.value.popupDismissalToken
+
+    fixture.session.state.value = DatabaseSessionState.Open("/other-db", 2)
+    runCurrent()
+
+    assertEquals(UsageProvider.Codex, fixture.model.view.value.provider)
+    assertEquals(reading, fixture.model.view.value.result)
+    assertTrue(fixture.model.view.value.popupDismissalToken > tokenBefore)
+    assertTrue(fixture.usage.demands.isEmpty())
+  }
+
+  @Test
+  fun `a draft without an agent shows the agent the card showed last`() = runTest {
+    val fixture = Fixture(this, lastAgent = "claude", context = SelectedNewTaskUsageContext.Absent(1))
+    runCurrent()
+
+    assertEquals(UsageProvider.Claude, fixture.model.view.value.provider)
+    assertEquals(UsageProvider.Claude, fixture.usage.demands.values.single().request.profile.provider)
+  }
+
+  @Test
+  fun `a pending draft with nothing remembered falls back to the default agent, then Codex`() = runTest {
+    val withDefault = Fixture(this, context = SelectedNewTaskUsageContext.Pending(1))
+    withDefault.settings.setDefaultAgent("claude")
+    runCurrent()
+    assertEquals(UsageProvider.Claude, withDefault.model.view.value.provider)
+
+    // A default agent without a usage source is skipped.
+    val cursorDefault = Fixture(this, context = SelectedNewTaskUsageContext.Pending(1))
+    cursorDefault.settings.setDefaultAgent("cursor")
+    runCurrent()
+    assertEquals(UsageProvider.Codex, cursorDefault.model.view.value.provider)
+  }
+
+  @Test
+  fun `Settings at launch still names an agent but holds no demand`() = runTest {
+    val fixture = Fixture(this, lastAgent = "claude")
+    fixture.navigator.navigate(SettingsRoute(SettingsPageId.App))
+    fixture.model.setSidebarFacts(settings = true, inlineVisible = true, drawerIsOpen = false)
+    runCurrent()
+
+    assertEquals(UsageProvider.Claude, fixture.model.view.value.provider)
+    assertTrue(fixture.usage.demands.isEmpty())
+  }
+
+  @Test
+  fun `the card remembers the agent it shows`() = runTest {
+    val fixture = Fixture(this)
+    runCurrent()
+    assertEquals("codex", fixture.lastUsage.agent)
+
+    fixture.model.chooseManualProvider("claude")
+    runCurrent()
+    assertEquals("claude", fixture.lastUsage.agent)
   }
 
   @Test
@@ -184,18 +249,75 @@ class UsageSidebarModelTest {
   }
 
   @Test
-  fun `a context without a supported agent keeps the last provider and its lease`() = runTest {
+  fun `a pending context keeps the last provider and its lease`() = runTest {
     val fixture = Fixture(this)
     runCurrent()
     val lease = fixture.usage.leases.values.single()
 
     fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Pending(2)
     runCurrent()
-    fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(3, ChatAgent("aider", null, null), null, false)
-    runCurrent()
 
     assertEquals(UsageProvider.Codex, fixture.model.view.value.provider)
+    assertNull(fixture.model.view.value.nameOnlyAgent)
     assertSame(lease, fixture.usage.leases.values.single())
+  }
+
+  @Test
+  fun `an agent without a usage source shows only its name until one with usage returns`() = runTest {
+    val fixture = Fixture(this)
+    runCurrent()
+
+    fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(2, ChatAgent("cursor", null, null), null, false)
+    runCurrent()
+    assertEquals("cursor", fixture.model.view.value.nameOnlyAgent)
+    assertEquals(UsageUiState(provider = "Cursor", agentId = "cursor", nameOnly = true), fixture.model.view.value.toUsageUiState(Instant.fromEpochSeconds(0)))
+    assertTrue(fixture.usage.demands.isEmpty())
+
+    fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(3, ChatAgent("junie", null, null), null, false)
+    runCurrent()
+    assertEquals("junie", fixture.model.view.value.nameOnlyAgent)
+
+    fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(4, ChatAgent("codex", "actual-model", null), "chat-session", false)
+    runCurrent()
+    assertNull(fixture.model.view.value.nameOnlyAgent)
+    assertEquals(UsageProvider.Codex, fixture.model.view.value.provider)
+    assertEquals(UsageProvider.Codex, fixture.usage.demands.values.single().request.profile.provider)
+  }
+
+  @Test
+  fun `a provider picked during a Cursor chat holds until the chat changes agent`() = runTest {
+    val fixture = Fixture(this, context = SelectedNewTaskUsageContext.Ready(1, ChatAgent("cursor", null, null), null, false))
+    runCurrent()
+    assertEquals("cursor", fixture.model.view.value.nameOnlyAgent)
+
+    fixture.model.chooseManualProvider("claude")
+    runCurrent()
+    assertNull(fixture.model.view.value.nameOnlyAgent)
+    assertEquals(UsageProvider.Claude, fixture.model.view.value.provider)
+
+    fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(2, ChatAgent("cursor", null, null), "next", false)
+    runCurrent()
+    assertEquals(UsageProvider.Claude, fixture.model.view.value.provider)
+    assertNull(fixture.model.view.value.nameOnlyAgent)
+
+    fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(3, ChatAgent("junie", null, null), null, false)
+    runCurrent()
+    assertEquals("junie", fixture.model.view.value.nameOnlyAgent)
+  }
+
+  @Test
+  fun `the board shows usage again after a Cursor chat`() = runTest {
+    val fixture = Fixture(this, context = SelectedNewTaskUsageContext.Ready(1, ChatAgent("cursor", null, null), null, false))
+    runCurrent()
+    assertEquals("cursor", fixture.model.view.value.nameOnlyAgent)
+
+    fixture.navigator.navigate(WorkRoute(null))
+    Snapshot.sendApplyNotifications()
+    runCurrent()
+
+    assertNull(fixture.model.view.value.nameOnlyAgent)
+    assertEquals(UsageProvider.Codex, fixture.model.view.value.provider)
+    assertEquals(1, fixture.usage.demands.size)
   }
 
   @Test
@@ -216,7 +338,7 @@ class UsageSidebarModelTest {
 
     fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(10, ChatAgent("cursor", null, null), null, false)
     runCurrent()
-    assertEquals(UsageProvider.Cursor, fixture.model.view.value.provider)
+    assertEquals("cursor", fixture.model.view.value.nameOnlyAgent)
   }
 
   @Test
@@ -248,17 +370,22 @@ class UsageSidebarModelTest {
     assertTrue(fixture.model.view.value.result is UsageResult.SignInRequired)
   }
 
-  private class Fixture(test: TestScope) {
+  private class Fixture(
+    test: TestScope,
+    lastAgent: String? = null,
+    context: SelectedNewTaskUsageContext = SelectedNewTaskUsageContext.Ready(1, ChatAgent("codex", "actual-model", null), "chat-session", false),
+  ) {
     val windowJob = Job(test.backgroundScope.coroutineContext[Job])
     val session = TestSession()
     val navigator = WindowNavigator(session, SelectionHolder())
-    val chat = TestChat()
+    val chat = TestChat(context)
+    val lastUsage = FakeLastUsageStore(lastAgent)
     val usage = TestUsageRepository()
     val diagnostics = RecordingDiagnostics()
     val details = FakeWorkDetailRepository()
     val settings = FakeAppSettingsRepository()
     val model = UsageSidebarModel(
-      chat, FakeExecutionChatRepository(), details, navigator, session, usage, diagnostics, settings,
+      chat, FakeExecutionChatRepository(), details, navigator, session, usage, diagnostics, settings, lastUsage,
       WindowCoroutineScope(CoroutineScope(test.backgroundScope.coroutineContext + windowJob)),
     ).apply {
       setWindowFacts(visible = true, isMinimized = false, focused = true)
@@ -273,13 +400,11 @@ private class TestSession : DatabaseSessionController {
   override fun reopen() = Unit
 }
 
-private class TestChat : ChatCommands {
+private class TestChat(context: SelectedNewTaskUsageContext) : ChatCommands {
   override val shownChatId = MutableStateFlow<String?>(null)
   override val newTaskDraftOpen = MutableStateFlow(false)
   override val newTaskOpenChats = MutableStateFlow(1)
-  override val selectedNewTaskUsageContext = MutableStateFlow<SelectedNewTaskUsageContext>(
-    SelectedNewTaskUsageContext.Ready(1, ChatAgent("codex", "actual-model", null), "chat-session", false),
-  )
+  override val selectedNewTaskUsageContext = MutableStateFlow(context)
   override fun toggleChat(item: WorkItem?) = Unit
   override fun toggleChatPane() = Unit
   override fun runReviewAction(item: WorkItem, action: ReviewFindingsAction) = Unit
