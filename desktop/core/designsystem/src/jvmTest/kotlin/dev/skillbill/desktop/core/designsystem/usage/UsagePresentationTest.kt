@@ -72,6 +72,22 @@ class UsagePresentationTest {
   }
 
   @Test
+  fun `an expired window explains why no current percentage is shown`() = runComposeUiTest {
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        UsagePanel(UsageUiState("Claude", "claude", meters = listOf(
+          UsageUiMeter("five", "5 hour", "Awaiting update", resetIn = "now"),
+        )), Modifier.width(316.dp))
+      }
+    }
+
+    onNodeWithText("Awaiting update").assertIsDisplayed()
+    onNodeWithText("Window ended. Waiting for a new reading").assertIsDisplayed()
+    onNodeWithText("Resetting").assertDoesNotExist()
+    onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).assertCountEquals(0)
+  }
+
+  @Test
   fun `a name-only agent shows only the provider controls and settings`() = runComposeUiTest {
     var state by mutableStateOf(UsageUiState("Cursor", "cursor", nameOnly = true))
     setContent {

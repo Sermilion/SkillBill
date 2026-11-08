@@ -831,8 +831,8 @@ class ProviderUsageRepository(
   }
 
   /**
-   * The live session's latest status, or else the latest one any session reported for the same profile, so a new
-   * draft shows the allowance its account last reported instead of nothing.
+   * Uses the newest numeric reading for the profile, even when an older chat remains open or the latest status
+   * has no windows. Status-only events still supply the latest permission and warning.
    */
   private fun claudeResult(
     request: UsageRequest,
@@ -846,25 +846,29 @@ class ProviderUsageRepository(
       it.scope.logicalSessionId == sessionId && binding?.processGeneration == it.scope.processGeneration &&
         sameProfile(binding.profile, request.profile) && sameProfile(it.profile, request.profile)
     }
-    val recent = live ?: lastForProfile?.takeIf { sameProfile(it.profile, request.profile) }
-    val active = recent ?: stored?.let {
+    val recent = listOfNotNull(live, lastForProfile?.takeIf { sameProfile(it.profile, request.profile) })
+      .maxByOrNull { it.observedAt }
+    val retained = stored?.let {
       UsageSessionStatus.Observed(SessionUsageScope(STORED_READING_SESSION, 0), request.profile, it.permission, it.warning, it.observedAt, it.meters)
-    } ?: return@synchronized UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.SessionObservationUnavailable))
+    }
+    val active = listOfNotNull(live, recent, retained).filter { it.meters.isNotEmpty() }.maxByOrNull { it.observedAt }
+      ?: recent ?: retained
+      ?: return@synchronized UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.SessionObservationUnavailable))
     val ranked = UsageMeterRanking.rank(active.meters, null)
     UsageResult.Snapshot(
       UsageObservation(
         subject = UsageObservationSubject.Session(active.scope),
         collectionTime = active.observedAt,
         sourceObservationTime = null,
-        statusObservedAt = active.observedAt,
+        statusObservedAt = (recent ?: active).observedAt,
         source = UsageSource(active.profile.provider, UsageCapability.SessionStatusOnly),
-        freshness = if (recent == null) UsageFreshness.Stale else UsageFreshness.Current,
+        freshness = if (active === retained) UsageFreshness.Stale else UsageFreshness.Current,
         refreshState = UsageRefreshState.Idle,
         meters = active.meters,
         cardCandidates = ranked.cardCandidates,
         popupMeters = ranked.popupMeters,
-        requestPermission = active.permission,
-        sessionWarning = active.warning,
+        requestPermission = (recent ?: active).permission,
+        sessionWarning = (recent ?: active).warning,
         coverage = if (active.meters.isEmpty()) UsageCoverage.Empty else UsageCoverage.Partial,
       ),
       OmissionSemantics.OmittedFieldsAreUnchanged,

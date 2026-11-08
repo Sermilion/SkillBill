@@ -320,6 +320,49 @@ class ProviderUsageRepositoryTest {
   }
 
   @Test
+  fun `an older Claude chat uses a newer profile reading including zero after reset`() = runTest {
+    val repository = ProviderUsageRepository(
+      UsageProfileResolver(HostEnvironment(emptyMap(), "/home/operator", "")),
+      FakeAppSettingsRepository(), unusedCodexReader, ApplicationCoroutineScope(backgroundScope), fixedClock,
+    )
+    val profile = UsageProfileLookup(UsageProvider.Claude, "/home/operator/.claude", 1)
+    fun reading(percent: Double, at: Instant) = listOf(UsageMeter.create(
+      "claude:five_hour", "5 hour", UsageMeterScope.General, at, null, UsagePeriod.Unknown,
+      UsageValue.PercentageUsed.create(percent)!!,
+    )!!)
+    val oldAt = Instant.fromEpochMilliseconds(1_000)
+    val old = reading(59.0, oldAt)
+    val fresh = reading(0.0, fixedClock.now())
+    val publications = mutableListOf<UsageResult>()
+    repository.bindSession("older-chat", profile, 1)
+    repository.bindSession("newer-chat", profile, 2)
+    val observer = backgroundScope.launch {
+      repository.observe(UsageRequest(profile, "older-chat")).collect { publications += it }
+    }
+    try {
+      repository.recordSessionStatus("older-chat", 1, RequestPermission.Allowed, false, oldAt, old)
+      runCurrent()
+      assertEquals(old, assertIs<UsageResult.Snapshot>(publications.last()).value.popupMeters)
+      repository.recordSessionStatus("newer-chat", 2, RequestPermission.Allowed, false, fixedClock.now(), fresh)
+      runCurrent()
+      assertEquals(fresh, assertIs<UsageResult.Snapshot>(publications.last()).value.popupMeters)
+
+      repository.recordSessionStatus("older-chat", 1, RequestPermission.Rejected, true, fixedClock.now())
+      runCurrent()
+      val statusOnly = assertIs<UsageResult.Snapshot>(publications.last()).value
+      assertEquals(fresh, statusOnly.popupMeters)
+      assertEquals(RequestPermission.Rejected, statusOnly.requestPermission)
+      assertEquals(true, statusOnly.sessionWarning)
+      repository.recordSessionStatus("older-chat", 1, RequestPermission.Allowed, false, oldAt, old)
+      runCurrent()
+      assertEquals(fresh, assertIs<UsageResult.Snapshot>(publications.last()).value.popupMeters)
+    } finally {
+      observer.cancelAndJoin()
+      repository.closeUsage()
+    }
+  }
+
+  @Test
   fun `profile observation follows bindings and falls back to current settings`() = runTest {
     val profiles = UsageProfileResolver(HostEnvironment(emptyMap(), "/home/operator", ""))
     val settings = FakeAppSettingsRepository()

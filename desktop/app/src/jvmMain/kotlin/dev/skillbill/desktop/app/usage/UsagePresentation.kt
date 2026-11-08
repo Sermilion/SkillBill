@@ -82,7 +82,8 @@ private fun UsageResult.meters(): List<UsageMeter> = when (this) {
 }
 
 internal fun UsageMeter.toUiMeter(now: Instant, zone: ZoneId = ZoneId.systemDefault()): UsageUiMeter {
-  val (valueText, progress) = when (val value = value) {
+  val expired = expired || resetAt?.let { it <= now } == true
+  val (valueText, progress) = if (expired) "Awaiting update" to null else when (val value = value) {
     is UsageValue.PercentageUsed -> "${value.percent.percentText()}%" to (value.percent / 100.0).toFloat()
     is UsageValue.AmountUsed -> "${value.amount.display()} / ${value.limit.display()} ${value.limit.unit}" to value.barFraction?.toFloat()
     is UsageValue.Money -> "${value.amount.display()} ${value.currency}" to null
@@ -90,7 +91,7 @@ internal fun UsageMeter.toUiMeter(now: Instant, zone: ZoneId = ZoneId.systemDefa
     UsageValue.Unlimited -> "Unlimited" to null
     is UsageValue.Status -> value.label to null
   }
-  val resetIn = resetAt?.let { deadline -> if (deadline <= now) "now" else (deadline - now).inWholeSeconds.compactDuration() }
+  val resetIn = if (expired) "now" else resetAt?.let { deadline -> (deadline - now).inWholeSeconds.compactDuration() }
   // A model or pool window names its model, so "Weekly (Opus)" never reads as a second account-wide weekly limit.
   val scopedLabel = when (val meterScope = scope) {
     is UsageMeterScope.Model -> "$label (${meterScope.name})"

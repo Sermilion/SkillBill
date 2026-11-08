@@ -46,6 +46,26 @@ class UsagePresentationTest {
   }
 
   @Test
+  fun `a reset hides the previous percentage until a fresh reading arrives`() {
+    val fiveHour = meter("five", "5 hour", 5 * 3600, 59.0, now + 90.minutes)
+    val weekly = meter("weekly", "Weekly", 7 * 24 * 3600, 85.0, now + 2.days)
+    val reading = UsageSidebarState(UsageProvider.Claude, snapshot(listOf(fiveHour, weekly)))
+
+    assertEquals("59%", reading.toUsageUiState(now).meters.first().valueText)
+    val expired = reading.toUsageUiState(now + 90.minutes)
+    assertEquals(listOf("Awaiting update", "85%"), expired.meters.map { it.valueText })
+    assertEquals(null, expired.meters.first().progress)
+    assertEquals("now", expired.meters.first().resetIn)
+    assertEquals(null, expired.meters.first().resetAt)
+    assertEquals("Awaiting update", reading.toUsageUiState(now + 2.hours).meters.first().valueText)
+
+    val fresh = meter("five", "5 hour", 5 * 3600, 0.0, now + 5.hours)
+    val updated = UsageSidebarState(UsageProvider.Claude, snapshot(listOf(fresh, weekly))).toUsageUiState(now + 2.hours)
+    assertEquals("0%", updated.meters.first().valueText)
+    assertEquals(0f, updated.meters.first().progress)
+  }
+
+  @Test
   fun `only reported windows show, and a model window names its model`() {
     val weekly = meter("weekly", "Weekly", 7 * 24 * 3600, 40.0, now + 1.days)
     val opus = requireNotNull(UsageMeter.create(

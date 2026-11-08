@@ -72,7 +72,7 @@ fun UsageMeterRow(meter: UsageUiMeter, modifier: Modifier = Modifier, detailed: 
       if (progress != null) drawRoundRect(fillColor, size = Size(size.width * progress, size.height), cornerRadius = radius)
     }
     if (detailed) meter.resetIn?.let {
-      val text = if (it == "now") "Resetting" else listOfNotNull("Resets in $it", meter.resetAt).joinToString(" · ")
+      val text = if (it == "now") "Window ended. Waiting for a new reading" else listOfNotNull("Resets in $it", meter.resetAt).joinToString(" · ")
       BasicText(text, style = usageSmallText().copy(color = colors.fgMuted), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
   }
