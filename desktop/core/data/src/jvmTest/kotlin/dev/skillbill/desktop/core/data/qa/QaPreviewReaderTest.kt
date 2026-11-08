@@ -5,6 +5,8 @@ import dev.skillbill.desktop.core.domain.model.QaPreviewState
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.io.TempDir
@@ -37,6 +39,29 @@ class QaPreviewReaderTest {
     writeFrame(invocation, intArrayOf(0x000000, 0x112233))
     val live = assertIs<QaPreviewState.Live>(reader.observe(request).drop(1).first())
     assertContentEquals(intArrayOf(0xff000000.toInt(), 0xff112233.toInt()), live.frame.argb)
+  }
+
+  @Test
+  fun `an open preview reconnects when a restarted display replaces its framebuffer`() = runBlocking {
+    val invocation = temporary.toRealPath()
+    assumeTrue(Files.newDirectoryStream(invocation).use { it is SecureDirectoryStream<Path> })
+    val diagnostics = RecordingDiagnostics()
+    val firstPixels = intArrayOf(0x000000, 0x112233)
+    val replacementPixels = intArrayOf(0x445566, 0x778899)
+    writeFrame(invocation, firstPixels)
+    val framebuffer = invocation.resolve("live-preview/Xvfb_screen0")
+    val transitions = ArrayDeque<() -> Unit>()
+    transitions.add { Files.delete(framebuffer) }
+    transitions.add { writeFrame(invocation, replacementPixels) }
+    val reader = QaPreviewReader(diagnostics, pause = { transitions.removeFirst().invoke() })
+    val request = QaPreviewRequest(1, "work", "qa-1", invocation.toString(), active = true)
+
+    val states = reader.observe(request).take(4).toList()
+
+    assertContentEquals(firstPixels.map { it or 0xff000000.toInt() }.toIntArray(), assertIs<QaPreviewState.Live>(states[1]).frame.argb)
+    assertEquals(QaPreviewState.Waiting(QaPreviewState.Reason.SourceUnavailable), states[2])
+    assertContentEquals(replacementPixels.map { it or 0xff000000.toInt() }.toIntArray(), assertIs<QaPreviewState.Live>(states[3]).frame.argb)
+    assertEquals(listOf("qa_preview_source_unavailable"), diagnostics.categories)
   }
 
   private fun writeFrame(invocation: Path, pixels: IntArray) {

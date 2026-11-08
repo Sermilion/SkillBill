@@ -180,7 +180,7 @@ private fun ColumnScope.NewTaskChatContent(
         qaDeviceName = state.qaDeviceName,
       )
     }
-    NewTaskComposer(state, draft, focus, host.now, onAction)
+    NewTaskComposer(state, draft, focus, host.now, onAction = onAction)
   }
 }
 

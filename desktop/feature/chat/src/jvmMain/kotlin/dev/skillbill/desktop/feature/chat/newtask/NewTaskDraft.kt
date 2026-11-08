@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
@@ -103,6 +104,8 @@ class NewTaskDraft internal constructor(
   internal var chatDispatcher = Dispatchers.IO
 
   var text: String by mutableStateOf("")
+  internal var images: List<ChatImage> by mutableStateOf(emptyList())
+    private set
   var repository: NewTaskRepository? by mutableStateOf(null)
   var addedRepositories: List<NewTaskRepository> by mutableStateOf(emptyList())
   var baseBranch: String by mutableStateOf("")
@@ -120,18 +123,28 @@ class NewTaskDraft internal constructor(
   /** Every repository's saved drafts, newest first, as of the latest [refreshSaved]. */
   internal val saved: StateFlow<List<ChatHistoryEntry>> = savedChats.saved
 
-  internal fun canSend(): Boolean = canAdmitTurn(text)
+  internal fun addPastedImage(image: ChatImage) {
+    if (closing) return
+    cursorMcpDependency = CursorMcpDependency.Unspecified
+    images = images + image
+  }
 
-  private fun canAdmitTurn(message: String): Boolean {
+  internal fun removePastedImage(index: Int) {
+    images = images.filterIndexed { position, _ -> position != index }
+  }
+
+  internal fun canSend(): Boolean = canAdmitTurn(text, images)
+
+  private fun canAdmitTurn(message: String, attachments: List<ChatImage> = emptyList()): Boolean {
     val current = chatState.value
-    return !closing && message.isNotBlank() && repository != null && selectedAgent != null && selectedAgent?.agentId == agentId &&
+    return !closing && (message.isNotBlank() || attachments.isNotEmpty()) && repository != null && selectedAgent != null && selectedAgent?.agentId == agentId &&
       current?.repositoryMissing != true && !offerState.value.starting
   }
 
-  /** Sends the typed text, opening the chat on the first message, and clears it. It does nothing unless [canSend] holds. */
+  /** Sends the text and images, opening the chat on the first message, and clears the draft. Requires [canSend]. */
   internal fun send() {
     if (!canSend()) return
-    sendTurn(text, null, cursorMcpDependency)
+    sendTurn(text, null, images, cursorMcpDependency)
   }
 
   internal fun sendSuggestedAction(action: ChatSuggestedAction): Boolean {
@@ -143,10 +156,11 @@ class NewTaskDraft internal constructor(
   internal fun stop() {
     val returned = chatState.value?.stop().orEmpty()
     if (returned.isNotEmpty()) {
-      cursorMcpDependency = if (text.isBlank()) {
+      cursorMcpDependency = if (text.isBlank() && images.isEmpty()) {
         returned.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.Unspecified
       } else CursorMcpDependency.Unspecified
       text = restoredDraft(returned, text)
+      images = returned.flatMap { it.images } + images
     }
   }
 
@@ -154,21 +168,33 @@ class NewTaskDraft internal constructor(
     chatState.value?.sendNow()
   }
 
-  private fun sendTurn(submitted: String, action: ChatSuggestedAction?, cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified) {
+  private fun sendTurn(
+    submitted: String,
+    action: ChatSuggestedAction?,
+    attachments: List<ChatImage> = emptyList(),
+    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
+  ) {
     val current = chatState.value ?: open(UUID.randomUUID().toString(), checkNotNull(repository).root, baseBranch.ifBlank { null }, checkNotNull(selectedAgent))
     offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, started = null)
-    if (action == null && cards.submitAdjustment(current.thread, submitted)) {
+    if (action == null && attachments.isEmpty() && cards.submitAdjustment(current.thread, submitted)) {
       if (text == submitted) text = ""
       return
     }
     current.send(
       submitted,
       action,
-      onAccepted = { if (action == null && text == submitted) text = "" },
+      images = attachments,
+      onAccepted = {
+        if (action == null) {
+          if (text == submitted) text = ""
+          if (images == attachments) images = emptyList()
+        }
+      },
       cursorMcpDependency = cursorMcpDependency,
       onRejected = {
-        if (action == null && text.isBlank()) {
+        if (action == null && text.isBlank() && images.isEmpty()) {
           text = submitted
+          images = attachments
           this.cursorMcpDependency = cursorMcpDependency
         }
       },
@@ -432,6 +458,7 @@ class NewTaskDraft internal constructor(
   internal fun dispose() {
     chatState.value?.end()
     chatState.value = null
+    images = emptyList()
     clearChatFeedback()
   }
 

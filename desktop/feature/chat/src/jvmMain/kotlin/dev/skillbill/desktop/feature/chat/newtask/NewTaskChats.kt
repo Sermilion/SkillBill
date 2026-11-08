@@ -227,7 +227,7 @@ class NewTaskChats(
       return true
     }
     val previous = selectedState.value
-    val target = if (previous.chat.value == null && previous.text.isBlank()) previous else newChat()
+    val target = if (previous.chat.value == null && previous.text.isBlank() && previous.images.isEmpty()) previous else newChat()
     if (!target.resume(entry)) {
       if (target !== previous) {
         openState.update { it - target }

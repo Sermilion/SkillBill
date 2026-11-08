@@ -140,7 +140,8 @@ class ChatWorkspace(
   // A paste still normalizing when its chat closes must not leave an orphan entry behind.
   internal fun addPastedImage(id: String, image: ChatImage) {
     if (id !in sessions) return
-    pastedImages[id] = pastedImages[id].orEmpty() + image
+    cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
+    pastedImages[id] =pastedImages[id].orEmpty() + image
   }
 
   internal fun removePastedImage(id: String, index: Int) {
@@ -450,6 +451,8 @@ class ChatWorkspace(
       } else CursorMcpDependency.Unspecified
       session.queuedState.value = emptyList()
       drafts[id] = restoredDraft(queued, drafts[id].orEmpty())
+      val restoredImages = queued.flatMap { it.images }
+      if (restoredImages.isNotEmpty()) pastedImages[id] = restoredImages + pastedImages[id].orEmpty()
     }
     interrupt(session)
   }

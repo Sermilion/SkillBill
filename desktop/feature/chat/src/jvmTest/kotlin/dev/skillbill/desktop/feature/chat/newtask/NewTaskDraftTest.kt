@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
@@ -121,6 +122,31 @@ class NewTaskDraftTest {
     assertEquals("Exclude deployment", controls.newTaskRequests.last().proposalChanges)
     assertEquals(revised, current.thread.operationCard(revised.token)?.card)
     assertEquals("", draft.text)
+  }
+
+  @Test
+  fun `stopping returns queued images to the draft and resending delivers each attachment once`() = runTest {
+    chat.events = { flow { awaitCancellation() } }
+    val draft = draft()
+    draft.say("first")
+    runCurrent()
+    val queued = ChatImage(byteArrayOf(1), "image/png")
+    val pending = ChatImage(byteArrayOf(2), "image/png")
+    draft.addPastedImage(queued)
+    draft.send()
+    draft.addPastedImage(pending)
+    draft.stop()
+    runCurrent()
+
+    assertEquals(listOf(queued, pending), draft.images)
+    assertTrue(draft.canSend())
+    draft.send()
+    runCurrent()
+
+    assertEquals(listOf(queued, pending), chat.requests.last().images)
+    assertEquals(2, chat.requests.size)
+    assertTrue(draft.images.isEmpty())
+    draft.close()
   }
 
   @Test

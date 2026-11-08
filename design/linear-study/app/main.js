@@ -25,7 +25,7 @@
     ],
     chosenAgent: {}, prereqs: new Set(), recovered: new Set(), secCollapse: {}, reasonOpen: new Set(),
     /* Subtask index: selection per goal ('3' or 'finish'), inline expansion per goal (narrow windows), open breakdowns, full activity feeds */
-    subSel: {}, subOpen: {}, finishTab: {}, bdOpen: new Set(), feedAll: new Set(), narrow: false,
+    subSel: {}, subOpen: {}, peekSel: {}, bdOpen: new Set(), feedAll: new Set(), narrow: false,
     settingsPage: 'general', agent: 'claude', cfgOpen: null, draft: null, matrix: JSON.parse(JSON.stringify(D.MATRIX)), phaseTiers: {},
     compaction: { enabled: true, window: 400000, pct: 70, phases: { review: { window: 600000, pct: 60 } } }, budget: D.BUDGET.map((r) => r.slice()),
     prefs: { dbPath: '', dbDraft: '', claudeDir: '~/.claude', retention: '24h', login: true, notify: Object.fromEntries(D.NOTIFICATIONS.map(([id, , on]) => [id, on])), specType: 'local', gradleWrapper: '', telemetry: 'anonymous' },
@@ -97,9 +97,12 @@
       }
     }
     if (r.id) st.detailId = r.id;
-    if (r.id && r.inspector === 'finish') {
-      st.subSel[r.id] = 'finish'; st.subOpen[r.id] = true;
-      st.finishTab[r.id] = r.resultTab === 'qa' ? 'qa' : 'assessment';
+    /* #detail/<id>/<subtask id | finish>/<phase> selects a subtask or Goal finish and opens one phase card in the details
+     * pane. The older /finish/assessment and /finish/qa links open the goal_assessment and qa cards. */
+    if (r.id && r.inspector) {
+      st.subSel[r.id] = r.inspector; st.subOpen[r.id] = true;
+      const phase = r.resultTab === 'assessment' ? 'goal_assessment' : r.resultTab;
+      if (phase) st.peekSel[`${r.id}|${r.inspector}`] = phase;
       st.propsOpen = true; st.specsOpen = false;
     }
     if (r.build) st.build = r.build;
@@ -830,7 +833,14 @@
     /* key|default: a toggle sticks per section key, so it holds while paging between items */
     /* Goal assessment order; it holds while paging, like section collapse. */
     'assess-order'(id) { st.assessOrder = id; render(); },
-    'finish-tab'(arg) { const [id, tab] = arg.split('|'); st.finishTab[id] = tab; render(); },
+    /* Phase tabs in the details pane: open that phase's card and keep focus on its tab. */
+    'peek-pill'(arg) {
+      const [id, key, phase] = arg.split('|');
+      st.peekSel[`${id}|${key}`] = phase;
+      render();
+      const el = root.querySelector(`[data-act="peek-pill"][data-arg="${CSS.escape(arg)}"]`);
+      if (el) el.focus({ preventScroll: true });
+    },
     'sec-collapse'(arg) { const [key, def] = arg.split('|'); const now = key in st.secCollapse ? st.secCollapse[key] : def === '1'; st.secCollapse[key] = !now; render(); },
     /* An ExpandableText without caller state: flip the fold in place; the next render folds it again. */
     'fold-toggle'(a, el) {
@@ -1397,6 +1407,16 @@
     if (tab && keep) { const v = input.value.trim(); tab.customName = v || null; }
     st.termRenaming = null; render();
   }
+  /* Phase tabs: arrow keys move between the phases that open a card; Home and End jump to the first and last. */
+  root.addEventListener('keydown', (e) => {
+    const tab = e.target.closest && e.target.closest('[data-act="peek-pill"]');
+    if (!tab || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    const tabs = [...tab.closest('[role="tablist"]').querySelectorAll('[data-act="peek-pill"]')];
+    let i = tabs.indexOf(tab);
+    i = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : Math.max(0, Math.min(tabs.length - 1, i + (e.key === 'ArrowRight' ? 1 : -1)));
+    e.preventDefault(); e.stopPropagation();
+    A['peek-pill'](tabs[i].dataset.arg);
+  }, true);
   root.addEventListener('keydown', (e) => {
     if (e.target.id !== 'term-rename-in') return;
     if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); commitRename(e.target, true); }

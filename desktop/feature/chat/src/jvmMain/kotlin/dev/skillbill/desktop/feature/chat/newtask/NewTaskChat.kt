@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
@@ -23,6 +24,7 @@ import dev.skillbill.desktop.feature.chat.UnavailableApprovalFeed
 import dev.skillbill.desktop.feature.chat.savedApprovalLine
 import dev.skillbill.desktop.feature.chat.savedOperationCardLine
 import dev.skillbill.desktop.feature.chat.show
+import dev.skillbill.desktop.feature.chat.savedText
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -136,13 +138,14 @@ internal class NewTaskChat(
   fun send(
     text: String,
     action: ChatSuggestedAction? = null,
+    images: List<ChatImage> = emptyList(),
     onAccepted: () -> Unit = {},
     cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
     onRejected: (() -> Unit)? = null,
   ) {
-    if (text.isBlank() || repositoryMissing || closing) return
+    if ((text.isBlank() && images.isEmpty()) || repositoryMissing || closing) return
     thread.queuedState.update {
-      it + QueuedChatMessage(text, action, pauseAndAct = false, cursorMcpDependency = cursorMcpDependency, onRejected = onRejected)
+      it + QueuedChatMessage(text, action, pauseAndAct = false, images = images, cursorMcpDependency = cursorMcpDependency, onRejected = onRejected)
     }
     onAccepted()
     drainQueue()
@@ -163,16 +166,17 @@ internal class NewTaskChat(
   private fun drainQueue() {
     if (closing || repositoryMissing || thread.busyState.value || turnJob != null || turnRunning) return
     val next = thread.takeQueuedMessage() ?: return
-    startTurn(next.text, next.action, next.cursorMcpDependency, next.onRejected)
+    startTurn(next.text, next.action, next.images, next.cursorMcpDependency, next.onRejected)
   }
 
   private fun startTurn(
     text: String,
     action: ChatSuggestedAction?,
+    images: List<ChatImage>,
     cursorMcpDependency: CursorMcpDependency,
     onRejected: (() -> Unit)?,
   ) {
-    thread.append(ChatMessage.Operator(text, action))
+    thread.append(ChatMessage.Operator(text, action, images))
     pendingTurnLineIndex = snapshotLines().lastIndex
     pendingAcceptance = null
     thread.busyState.value = true
@@ -181,7 +185,7 @@ internal class NewTaskChat(
     val turn = scope.launch(job + dispatcher, start = CoroutineStart.LAZY) {
       turnJob = coroutineContext[Job]
       try {
-        runTurn(text, cursorMcpDependency, onRejected)
+        runTurn(text, images, cursorMcpDependency, onRejected)
       } finally {
         finishTurn(coroutineContext.job)
       }
@@ -297,7 +301,7 @@ internal class NewTaskChat(
     }
   }
 
-  private suspend fun runTurn(text: String, cursorMcpDependency: CursorMcpDependency, onRejected: (() -> Unit)?) {
+  private suspend fun runTurn(text: String, images: List<ChatImage>, cursorMcpDependency: CursorMcpDependency, onRejected: (() -> Unit)?) {
     if (!save()) {
       thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
       onRejected?.invoke()
@@ -308,7 +312,8 @@ internal class NewTaskChat(
     var seenEvent = false
     val preamble = pendingReplay?.takeIf { !started }?.let { newTaskReplayPreamble(it, repositoryRoot, baseBranch) }
     val prompt = if (preamble == null) text else "$preamble\n\n$text"
-    chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, prompt, cursorMcpDependency = cursorMcpDependency)).collect { event ->
+    chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, prompt, images, cursorMcpDependency)).collect { event ->
+
       coroutineContext.ensureActive()
       if (!seenEvent) {
         seenEvent = true
@@ -355,7 +360,7 @@ internal class NewTaskChat(
         ChatHistoryLine(ChatHistoryRole.OperationCard, message.text, operationCard = it)
       } ?: if (repositoryMissing && message.text.startsWith("This draft's repository no longer exists:")) null
         else ChatHistoryLine(ChatHistoryRole.Notice, message.text)
-      is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.text, selectedAction = message.action)
+      is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.savedText(), selectedAction = message.action)
       is ChatMessage.Agent -> if (!message.streaming && (message.text.isNotBlank() || message.actions.isNotEmpty())) {
         ChatHistoryLine(ChatHistoryRole.Agent, message.text, actions = message.actions)
       } else null

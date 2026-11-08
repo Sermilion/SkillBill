@@ -265,6 +265,33 @@ class PhaseMonitorRunTest {
   }
 
   @Test
+  fun `a merge conflict repair publishes a merge of a base that moved during the repair, then merges the new tip`() {
+    initFeatureBranch()
+    val staleTip = advanceRemoteMain()
+    var latestTip = staleTip
+    var repairs = 0
+    val repairLauncher =
+      repairLauncher {
+        repairs += 1
+        git(repoRoot, "fetch", "origin", "main")
+        git(repoRoot, "merge", "--no-commit", "--no-ff", "origin/main")
+        if (repairs == 1) {
+          latestTip = advanceRemoteMain("moved-base.txt")
+          git(repoRoot, "fetch", "origin", "main")
+        }
+      }
+    val identity: PullRequestIdentityLookup = { repo, branch -> conflictingUntilMerged(latestTip).lookup(repo, branch) }
+
+    val result = entry(identity = identity, agentLauncher = repairLauncher).runMonitor("SKILL-904")
+
+    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertEquals(2, repairs)
+    val published = git(origin, "rev-parse", FEATURE_BRANCH)
+    git(origin, "merge-base", "--is-ancestor", staleTip, published)
+    git(origin, "merge-base", "--is-ancestor", latestTip, published)
+  }
+
+  @Test
   fun `a merge conflict repair that flattens the merge into the working tree is not published`() {
     initFeatureBranch()
     val baseTip = advanceRemoteMain()
@@ -540,14 +567,18 @@ class PhaseMonitorRunTest {
     git(repoRoot, "push", "-u", "origin", FEATURE_BRANCH)
   }
 
-  private fun advanceRemoteMain(): String {
+  private fun advanceRemoteMain(fileName: String = "base.txt"): String {
     val writer = root.resolve("base-writer")
-    git(root, "clone", "--branch", "main", origin.toString(), writer.toString())
-    git(writer, "config", "user.email", "phase-monitor@example.com")
-    git(writer, "config", "user.name", "Phase Monitor")
-    git(writer, "config", "commit.gpgsign", "false")
-    Files.writeString(writer.resolve("base.txt"), "base\n")
-    git(writer, "add", "base.txt")
+    if (Files.exists(writer)) {
+      git(writer, "pull", "--ff-only", "origin", "main")
+    } else {
+      git(root, "clone", "--branch", "main", origin.toString(), writer.toString())
+      git(writer, "config", "user.email", "phase-monitor@example.com")
+      git(writer, "config", "user.name", "Phase Monitor")
+      git(writer, "config", "commit.gpgsign", "false")
+    }
+    Files.writeString(writer.resolve(fileName), "base\n")
+    git(writer, "add", fileName)
     git(writer, "commit", "-m", "Advance base")
     git(writer, "push", "origin", "main")
     return git(writer, "rev-parse", "HEAD")

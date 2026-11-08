@@ -22,6 +22,7 @@ import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepair
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPersistence
 import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
+import skillbill.engine.featuretask.runloop.qualitygate.MAX_VALIDATE_ATTEMPTS
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.infrastructure.sqlite.workflow.artifact.SqliteWorkflowArtifactWireEncoder
@@ -608,7 +609,7 @@ class FeatureTaskRuntimeSerialRepairTest {
     val currentState = AtomicReference<AcceptanceCriterionRepairState?>()
     val changedPhases = mutableListOf<String>()
     val launcher =
-      serialLauncher(AtomicInteger(), validationFailures = 1, onPhase = { phase ->
+      serialLauncher(AtomicInteger(), validationFailures = MAX_VALIDATE_ATTEMPTS, onPhase = { phase ->
         if (phase in setOf("validate", "write_history")) {
           changedPhases += phase
           git.repositoryFingerprintValue = "changed-by-$phase"
@@ -627,13 +628,13 @@ class FeatureTaskRuntimeSerialRepairTest {
       val request = harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope)
       val report = harness.runner.run(request, worker)
       assertEquals("validate", assertIs<FeatureTaskRuntimeRunReport.Blocked>(report, "$report").lastIncompletePhase)
-      assertEquals(listOf("validate"), changedPhases)
+      assertEquals(List(MAX_VALIDATE_ATTEMPTS) { "validate" }, changedPhases)
       assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
       val finishedPhases = harness.launchedPromptPhaseOrder().toList()
       val resumed = harness.runner.run(request, worker)
       assertIs<FeatureTaskRuntimeRunReport.Completed>(resumed, "$resumed")
       assertEquals(finishedPhases + listOf("validate", "write_history"), harness.launchedPromptPhaseOrder())
-      assertEquals(listOf("validate", "validate", "write_history"), changedPhases)
+      assertEquals(List(MAX_VALIDATE_ATTEMPTS + 1) { "validate" } + "write_history", changedPhases)
     }
   }
 

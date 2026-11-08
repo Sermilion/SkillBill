@@ -7,6 +7,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.contracts.workflow.featuretask.ValidationTestProbePayloadKeys
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import skillbill.engine.featuretask.runloop.qualitygate.MAX_VALIDATE_ATTEMPTS
 import skillbill.engine.featuretask.slot.VALIDATE_PROBE_LINE
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.install.model.SupportedAgent
@@ -120,13 +121,13 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
   }
 
   @Test
-  fun `blank results cannot advance beyond validate`() {
+  fun `blank results cannot advance beyond validate after every attempt`() {
     val harness = validationHarness("")
 
     val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
 
     assertEquals("validate", report.lastIncompletePhase)
-    assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "validate" })
+    assertEquals(MAX_VALIDATE_ATTEMPTS, harness.launchedPromptPhaseOrder().count { it == "validate" })
     assertFalse("write_history" in harness.launchedPromptPhaseOrder())
     val records = harness.recorder.loadPhaseRecords(WORKFLOW_ID).orEmpty()
     assertEquals(WorkflowStepStatus.BLOCKED, records["validate"]?.status)
@@ -134,7 +135,7 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
   }
 
   @Test
-  fun `blocked phase result remains blocked without a runtime check to override it`() {
+  fun `a validation attempt that keeps blocking stops after three attempts`() {
     val output =
       """
       {"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"validate","status":"blocked",
@@ -146,12 +147,14 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
     val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
 
     assertEquals("validate", report.lastIncompletePhase)
-    assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "validate" })
+    assertEquals(MAX_VALIDATE_ATTEMPTS, harness.launchedPromptPhaseOrder().count { it == "validate" })
     assertFalse("write_history" in harness.launchedPromptPhaseOrder())
+    assertContains(report.blockedReason, "after $MAX_VALIDATE_ATTEMPTS attempts")
+    assertContains(report.blockedReason, "Quality check could not run.")
   }
 
   @Test
-  fun `legacy partial validation reports retain failures without launching a salvage session`() {
+  fun `a blocked validation attempt is retried and completes once the build is green`() {
     val remaining = "WidgetTest failed: expected 2 but got 3."
     listOf("progress", "no_progress", null, "shrinking").forEach { verdict ->
       val harness =
@@ -159,15 +162,12 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
           facts(if (attempt == 1) blockedValidateOutput(remaining, verdict) else validJsonOutput("validate"))
         }
 
-      val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
-
-      assertEquals("validate", report.lastIncompletePhase)
-      assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "validate" })
-      assertFalse("write_history" in harness.launchedPromptPhaseOrder())
+      assertIs<FeatureTaskRuntimeRunReport.Completed>(harness.runner.run(harness.request()))
+      assertEquals(2, harness.launchedPromptPhaseOrder().count { it == "validate" })
+      assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "write_history" })
       val record = assertNotNull(harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("validate"))
-      assertEquals(WorkflowStepStatus.BLOCKED, record.status)
-      assertContains(assertNotNull(record.outputArtifact), remaining)
-      assertFalse(report.blockedReason.contains("leftover set did not shrink"))
+      assertEquals(WorkflowStepStatus.COMPLETED, record.status)
+      assertEquals(2, record.attemptCount)
     }
   }
 

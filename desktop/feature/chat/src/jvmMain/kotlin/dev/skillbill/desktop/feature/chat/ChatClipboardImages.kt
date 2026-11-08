@@ -12,6 +12,7 @@ import java.awt.Color
 import java.awt.Image
 import java.awt.RenderingHints
 import java.awt.Toolkit
+import java.awt.datatransfer.Clipboard
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.UnsupportedFlavorException
 import java.awt.image.BufferedImage
@@ -32,8 +33,8 @@ internal const val JPEG_QUALITY = 0.85f
 internal val pasteUsesMeta: Boolean = System.getProperty("os.name").orEmpty().startsWith("Mac")
 
 /** Cmd+V on macOS, Ctrl+V elsewhere. */
-internal fun KeyEvent.isPasteShortcut(): Boolean =
-  type == KeyEventType.KeyDown && key == Key.V && (if (pasteUsesMeta) isMetaPressed else isCtrlPressed)
+internal fun KeyEvent.isPasteShortcut(usesMeta: Boolean = pasteUsesMeta): Boolean =
+  type == KeyEventType.KeyDown && key == Key.V && (if (usesMeta) isMetaPressed else isCtrlPressed)
 
 /** Reads an image off the clipboard; null when the clipboard holds no image or cannot be read. */
 internal fun interface ClipboardImageReader {
@@ -41,9 +42,13 @@ internal fun interface ClipboardImageReader {
 }
 
 /** The system clipboard. Text copied from a page often carries an image flavor too, so an image counts only when no text does. */
-internal object SystemClipboardImageReader : ClipboardImageReader {
+internal object SystemClipboardImageReader : ClipboardImageReader by AwtClipboardImageReader()
+
+internal class AwtClipboardImageReader(
+  private val clipboard: () -> Clipboard = { Toolkit.getDefaultToolkit().systemClipboard },
+) : ClipboardImageReader {
   override fun read(): BufferedImage? = try {
-    val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+    val clipboard = clipboard()
     if (!clipboard.isDataFlavorAvailable(DataFlavor.imageFlavor) || clipboard.isDataFlavorAvailable(DataFlavor.stringFlavor)) {
       null
     } else {

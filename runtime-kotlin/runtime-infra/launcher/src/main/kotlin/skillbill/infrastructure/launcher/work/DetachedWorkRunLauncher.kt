@@ -21,6 +21,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
 import java.util.UUID
+import java.util.concurrent.CompletionStage
 import java.util.concurrent.TimeUnit
 
 class DetachedWorkRunLauncher internal constructor(
@@ -148,11 +149,12 @@ class DetachedWorkRunLauncher internal constructor(
         throw failure
       }
       var exitedEarly: Int? = null
+      var exit: CompletionStage<Process>? = null
       try {
         exitedEarly = process.takeIf { awaitStartupExit(it, startupGrace) }?.exitValue()
       } finally {
         if (exitedEarly == null || exitedEarly == 0) {
-          releaseOnExit(process, request, log, input)
+          exit = releaseOnExit(process, request, log, input)
           handedOff = true
         }
       }
@@ -167,7 +169,7 @@ class DetachedWorkRunLauncher internal constructor(
         return refuse("The runner exited before starting. See $log")
       }
       diagnostics.info("seam=work-run.launch outcome=started log=$log")
-      WorkRunLaunchResult.Started(log, process.onExit().thenApply { workRunExit(it.exitValue(), log) })
+      WorkRunLaunchResult.Started(log, requireNotNull(exit).thenApply { workRunExit(it.exitValue(), log) })
     } catch (failure: IOException) {
       diagnostics.warning("seam=work-run.launch outcome=failed", failure)
       WorkRunLaunchResult.Refused("The runner could not start: ${failure.message}")
@@ -200,7 +202,7 @@ class DetachedWorkRunLauncher internal constructor(
     request: WorkRunLaunchRequest,
     log: Path,
     input: Path?,
-  ) {
+  ): CompletionStage<Process> =
     process.onExit().whenComplete { finished, error ->
       try {
         if (error != null || finished?.exitValue() !in SUCCESSFUL_EXITS) {
@@ -221,7 +223,6 @@ class DetachedWorkRunLauncher internal constructor(
         }
       }
     }
-  }
 
   private fun startProcess(
     built: InstalledLaunch.Ready,
