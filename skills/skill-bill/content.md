@@ -438,8 +438,8 @@ branch refuses. With no intake, exactly one open pull request headed by the chec
 monitors that PR; several such pull requests refuse; when the all-state listing has never had a pull
 request from the checked-out branch and that branch exists, the checkout is watched; when merged or
 closed history still lists that branch with no open pull request, or the checked-out branch is
-missing, the run completes with nothing to monitor. A branch on the default branch, a protected branch, or a branch the caller cannot push is
-report-only: CI failures block with the check links and no repair runs. Branch targets never receive
+missing, the run completes with nothing to monitor. A protected branch, or a branch the caller cannot push, is
+report-only, including the default branch when it is protected: CI failures block with the check links and no repair runs. Branch targets never receive
 merge-conflict repair. A branch with no reported CI blocks after one hour. Repositories whose
 workflows trigger only on `pull_request` report no CI for a branch with no open pull request. A tip
 that moves during a repair blocks with the work preserved rather than following the new tip.

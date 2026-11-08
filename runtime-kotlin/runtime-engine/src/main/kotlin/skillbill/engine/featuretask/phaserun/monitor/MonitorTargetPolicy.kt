@@ -106,7 +106,6 @@ internal fun validatedBranchTarget(
   val repository = identity.repository
   val reportOnlyReason =
     when {
-      found.head.tip.ref == found.defaultBranch.ref -> "it is the repository's default branch"
       found.protected != false -> "it is protected"
       found.head.writeEvidence.repositoryPush != true -> "the caller has no push permission"
       else -> null

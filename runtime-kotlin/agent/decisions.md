@@ -1,3 +1,9 @@
+## [2026-11-08] Let the branch monitor repair an unprotected default branch
+Context: SKILL-463 made a `branch:` monitor report-only when the target was the repository's default branch, even when the branch was unprotected and the caller could push. The operator commits directly to `main`, so a red `main` blocked with "no repair ran" and needed a manual fix.
+Decision: MonitorTargetPolicy no longer treats the default branch as a report-only reason. A branch target is report-only only when GitHub reports it protected, reports no protection data, or the caller has no push permission. An unprotected, pushable default branch resolves to REPOSITORY_PUSH and gets CI repair like any other branch.
+Reason: Branch protection and push permission are the signals that a push would be refused or unwanted. Being the default branch says neither, and repositories that want `main` guarded already protect it.
+Alternatives considered: An opt-in flag for default-branch repair adds a setting for a case branch protection already covers.
+
 ## [2026-11-07] Keep proposal revisions separate from operation targets
 Context: A verify proposal may use a spec path as its target, while the operator's adjustment is free-form text.
 Decision: Carry revisions as an optional operation-start input and append one separate operator-instruction argument. Preserve the original target, agent, profile and checkout, and retain the revised argument list in the existing launch context.
