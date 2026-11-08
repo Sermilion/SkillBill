@@ -308,6 +308,12 @@ object LucideIcons {
       path("m19 12-7 7-7-7")
     }
   }
+  val arrowRight: ImageVector by lazy {
+    imageVector("arrowRight") {
+      path("M5 12h14")
+      path("m12 5 7 7-7 7")
+    }
+  }
   val arrowLeft: ImageVector by lazy {
     imageVector("arrowLeft") {
       path("m12 19-7-7 7-7")

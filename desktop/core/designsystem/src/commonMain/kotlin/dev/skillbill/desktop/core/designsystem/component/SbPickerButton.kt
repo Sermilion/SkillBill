@@ -42,6 +42,7 @@ fun SbPickerButton(
   enabled: Boolean = true,
   onClickLabel: String? = null,
   chevronDescription: String? = null,
+  chevron: ImageVector = LucideIcons.chevronDown,
   content: @Composable RowScope.() -> Unit,
 ) {
   val colors = SkillBillTheme.colors
@@ -73,7 +74,7 @@ fun SbPickerButton(
       content()
       if (onClick != null) {
         CompositionLocalProvider(LocalContentColor provides colors.fgFaint) {
-          SbIcon(LucideIcons.chevronDown, SbIconSize.Xs, contentDescription = chevronDescription)
+          SbIcon(chevron, SbIconSize.Xs, contentDescription = chevronDescription)
         }
       }
     }
