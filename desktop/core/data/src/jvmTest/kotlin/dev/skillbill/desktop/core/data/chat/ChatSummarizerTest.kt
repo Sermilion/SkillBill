@@ -90,10 +90,10 @@ class ChatSummarizerTest {
 
   // A multi-line or quoted reply makes an unreadable row, and stamping the newer save hides turns from re-summarizing.
   @Test
-  fun `the first reply line becomes the summary stamped with the snapshot time`() = runTest {
+  fun `the first reply line becomes the chat title stamped with the snapshot time`() = runTest {
     val summarizer = summarizer()
     store.saveChat(entry("s1", "claude", 1))
-    reply = { command -> agentReply(command, "\n- \"Fixes the flaky upload test.\"\nMore text") }
+    reply = { command -> agentReply(command, "\n- \"Fix flaky upload test\"\nMore text") }
     during = {
       val nextTurn = entry("s1", "claude", 2)
       store.saveChat(nextTurn.copy(lines = nextTurn.lines + listOf(
@@ -107,9 +107,22 @@ class ChatSummarizerTest {
     summarizer.request("s1")
     runCurrent()
 
-    assertEquals("Fixes the flaky upload test.", store.savedFor("s1")?.summary)
+    assertEquals("Fix flaky upload test", store.savedFor("s1")?.summary)
     assertEquals("s1", store.staleForSummary("s1")?.sessionId)
     assertEquals(listOf("s1"), updates)
+  }
+
+  // An agent that ignores the length request must not fill a Recent chats row with a long sentence.
+  @Test
+  fun `overlong generated titles stop at a whole word within eighty characters`() = runTest {
+    val summarizer = summarizer()
+    store.saveChat(entry("long-title", "claude", 1))
+    reply = { claudeReply("Investigate failing desktop builds and fix dependency resolution across all development environments") }
+
+    summarizer.request("long-title")
+    runCurrent()
+
+    assertEquals("Investigate failing desktop builds and fix dependency resolution across all", store.savedFor("long-title")?.summary)
   }
 
   // A failed call that saves its partial reply as the summary, or a Junie chat that launches an agent with no cheap model, both cost the operator.

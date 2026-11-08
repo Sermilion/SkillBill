@@ -36,7 +36,7 @@ private const val UPDATES_BUFFER = 16
 private val SUMMARY_TIMEOUT = 120.seconds
 
 /**
- * Writes a one-sentence summary into stale saved chats, one at a time app-wide, from a one-shot call to the chat's own agent
+ * Writes a short descriptive title into stale saved chats, one at a time app-wide, from a one-shot call to the chat's own agent
  * on its cheapest model, billed to the chat's account. The queue runs in the application scope, so a summary outlives the
  * window that asked for it. [updates] emits the session id of each summary written.
  */
@@ -107,14 +107,14 @@ class ChatSummarizer(
     )
     // Ending the collection early destroys the process, so the timeout also ends it.
     val events = withTimeoutOrNull(SUMMARY_TIMEOUT) { runChatTurn(launcher, diagnostics, command, summaryDecoder(agentId)).toList() }
-    val sentence = events?.takeIf { all -> all.none { it is ChatEvent.Failed } }
-      ?.filterIsInstance<ChatEvent.TextDelta>()?.joinToString("") { it.text }?.let(::summarySentence)
-    if (sentence == null) {
+    val title = events?.takeIf { all -> all.none { it is ChatEvent.Failed } }
+      ?.filterIsInstance<ChatEvent.TextDelta>()?.joinToString("") { it.text }?.let(::summaryTitle)
+    if (title == null) {
       diagnostics.record("chat.summary_failed")
       return
     }
     // The snapshot's updatedAt, so a turn saved during the call leaves the chat stale for the next trigger.
-    if (store.saveSummary(entry.sessionId, sentence, entry.updatedAt)) updatesState.tryEmit(entry.sessionId)
+    if (store.saveSummary(entry.sessionId, title, entry.updatedAt)) updatesState.tryEmit(entry.sessionId)
   }
 
   private fun binary(agentId: String): String = if (agentId == "cursor") "agent" else agentId
