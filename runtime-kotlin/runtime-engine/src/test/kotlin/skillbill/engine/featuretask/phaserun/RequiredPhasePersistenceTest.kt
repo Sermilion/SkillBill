@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopPlanningBranch
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.runloop.qualitygate.MAX_VALIDATE_ATTEMPTS
 import skillbill.engine.featuretask.runner.IMPLEMENT_OUTPUT
 import skillbill.engine.featuretask.runner.PLAN_OUTPUT
 import skillbill.engine.featuretask.runner.PREPLAN_OUTPUT
@@ -216,13 +217,20 @@ class RequiredPhasePersistenceTest {
             }
           }
 
-        assertEquals(rejection.message, outcome.blockedReason, phase)
+        val expectedReason =
+          if (phase == "validate") {
+            "Validation could not make the build green after $MAX_VALIDATE_ATTEMPTS attempts. " +
+              "Last attempt: ${rejection.message}"
+          } else {
+            rejection.message
+          }
+        assertEquals(expectedReason, outcome.blockedReason, phase)
         assertEquals(0, launcherCount(), phase)
         assertEquals(0, gateCount(), phase)
         assertNoGitEffects()
         val terminal = assertNotNull(context.recorder.loadPhaseRecords(WORKFLOW_ID)?.get(phase))
         assertEquals(WorkflowStepStatus.BLOCKED, terminal.status)
-        assertEquals(rejection.message, terminal.blockedReason)
+        assertEquals(expectedReason, terminal.blockedReason)
         assertEquals(1, terminal.attemptCount)
       }
     }

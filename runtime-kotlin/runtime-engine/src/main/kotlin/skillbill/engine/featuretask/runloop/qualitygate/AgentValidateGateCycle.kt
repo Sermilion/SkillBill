@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairRe
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminalOutcome
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 
 internal class AgentValidateGateCycle(
   private val context: PhaseQualityGateCycleContext,
@@ -21,8 +22,27 @@ internal class AgentValidateGateCycle(
 ) {
   private var stoppedAttempt: PhaseOutcome? = null
 
+  /**
+   * Validate has one job: make the build green on the current tree. Any failed attempt, whatever stopped it,
+   * starts a fresh one. Validate blocks only after [MAX_VALIDATE_ATTEMPTS] attempts fail; a pause stops at once.
+   */
   internal fun run(run: PhaseRun): PhaseOutcome {
     call.acceptedExecution.requireAcceptedStep(run, call.strategyId)
+    var failed: PhaseOutcome? = null
+    repeat(MAX_VALIDATE_ATTEMPTS) {
+      val outcome = attempt(run)
+      if (outcome.blockedReason == null) return outcome
+      failed = outcome
+      context.coupledRunTransitions.spendFailedAttempt(
+        run.phaseId,
+        currentAttempt(run, call.acceptedExecution.nextStepIteration()),
+      )
+    }
+    return exhausted(run, requireNotNull(failed))
+  }
+
+  private fun attempt(run: PhaseRun): PhaseOutcome {
+    stoppedAttempt = null
     val iteration = call.acceptedExecution.nextStepIteration()
     val cycle =
       validationCoordinator.execute(
@@ -32,6 +52,29 @@ internal class AgentValidateGateCycle(
       )
     return stoppedAttempt ?: settle(run, iteration, cycle)
   }
+
+  private fun exhausted(
+    run: PhaseRun,
+    last: PhaseOutcome,
+  ): PhaseOutcome {
+    val record = currentRecord(run)
+    return context.blockGateStep(
+      run,
+      record?.attemptCount ?: call.acceptedExecution.nextStepIteration(),
+      "Validation could not make the build green after $MAX_VALIDATE_ATTEMPTS attempts. " +
+        "Last attempt: ${last.blockedReason}",
+      record?.failureDisposition ?: FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
+      last.failureCode,
+    )
+  }
+
+  private fun currentAttempt(
+    run: PhaseRun,
+    fallback: Int,
+  ): Int = currentRecord(run)?.attemptCount ?: fallback
+
+  private fun currentRecord(run: PhaseRun): FeatureTaskRuntimePhaseRecord? =
+    context.recorder.loadPhaseRecords(context.request.workflowId)?.get(run.phaseId)
 
   private fun repair(
     acceptedRun: PhaseRun,
@@ -68,11 +111,7 @@ internal class AgentValidateGateCycle(
           is ValidationGateCycleTerminalOutcome.Blocked ->
             context.blockGateStep(
               run,
-              context.recorder
-                .loadPhaseRecords(context.request.workflowId)
-                ?.get(run.phaseId)
-                ?.attemptCount
-                ?: iteration,
+              currentAttempt(run, iteration),
               terminal.reason,
               terminal.failureDisposition ?: FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
               terminal.failureCode,
@@ -80,3 +119,5 @@ internal class AgentValidateGateCycle(
         }
     }
 }
+
+internal const val MAX_VALIDATE_ATTEMPTS: Int = 3

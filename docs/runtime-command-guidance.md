@@ -160,14 +160,19 @@ the runner clears the ambiguity itself.
 
 The same command handles a goal that blocks with "The outcome of goal-quality
 step '<step>#<attempt>' is unknown". That happens when the runner died during an
-agent-backed QA or validation step, before the step recorded its outcome. The
+agent-backed QA or QA fix step, before the step recorded its outcome. The
 command retires the unsettled quality execution, and the next goal run admits a
 fresh one.
 
-A goal run resumes an interrupted first validation attempt by itself, without
-this command, when that attempt recorded no outcome, accepted no output, and
-the repository contents still match the fingerprint recorded when QA settled.
-Any other interrupted mutating step keeps the block.
+A goal run never needs this command for an interrupted validation step.
+Validate only has to make the build green on the current tree, so the next run
+starts it again on whatever the tree holds. Other interrupted mutating steps
+keep the block.
+
+Validate blocks for one reason: three attempts in a row failed to make the
+build green. Any failed attempt, whether the agent settled blocked, its process
+died or its output was unusable, starts a fresh attempt. A provider-limit pause
+still pauses at once.
 
 The command refuses while a runner holds the goal, and when the parent has
 neither ambiguous nor unsettled quality state. It does not change subtasks,

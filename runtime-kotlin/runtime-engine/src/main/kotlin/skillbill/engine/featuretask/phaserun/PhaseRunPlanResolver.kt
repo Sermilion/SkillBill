@@ -118,10 +118,11 @@ public class PhaseRunPlanResolver(
     progress: GoalQualityPhaseProgress,
     plan: ResolvedPhaseExecutionPlan,
     outcomeNamespace: String,
-    inputSourceUnchanged: () -> Boolean = { false },
   ) {
     progress.phaseRecords.values.filter { record ->
-      retainedRunningPhase(progress, plan, record)
+      retainedRunningPhase(progress, plan, record) &&
+        // Validate only has to make the build green on the current tree, so an interrupted attempt reruns.
+        strategies.qualityGateOperation(plan, record.phaseId) != PhaseQualityGateOperation.AgentValidation
     }.forEach { record ->
       val envelopeAccepted =
         progress.acceptedEnvelopes.any {
@@ -158,9 +159,7 @@ public class PhaseRunPlanResolver(
           ) {
             unknownQualityStep(record)
           }
-          if (!envelopeAccepted && !replayableStep(progress, record, plan, inputSourceUnchanged)) {
-            unknownQualityStep(record)
-          }
+          if (!envelopeAccepted && !replayableReadOnlyStep(progress, record, plan)) unknownQualityStep(record)
         }
       }
     }
@@ -215,27 +214,16 @@ public class PhaseRunPlanResolver(
     return !envelopeAccepted && idle && !resumableProviderPause
   }
 
-  private fun replayableStep(
+  private fun replayableReadOnlyStep(
     progress: GoalQualityPhaseProgress,
     record: FeatureTaskRuntimePhaseRecord,
     plan: ResolvedPhaseExecutionPlan,
-    inputSourceUnchanged: () -> Boolean,
   ): Boolean {
     val policy = strategies.selectedOwnerOf(record.phaseId, plan)?.policyFor(record.phaseId) ?: return false
-    val readOnly = !policy.mutating && !policy.fileMutating
-    if (!readOnly && !untouchedFirstAttempt(progress, record)) return false
+    if (policy.mutating || policy.fileMutating) return false
     validateAttemptStarts(progress.phaseLedger, record)
-    if (hasTerminalAction(progress.phaseLedger, record)) return false
-    return readOnly || inputSourceUnchanged()
+    return !hasTerminalAction(progress.phaseLedger, record)
   }
-
-  private fun untouchedFirstAttempt(
-    progress: GoalQualityPhaseProgress,
-    record: FeatureTaskRuntimePhaseRecord,
-  ): Boolean =
-    record.attemptCount == 1 && progress.phaseRecords.keys == setOf(record.phaseId) &&
-      progress.acceptedOutputs.isEmpty() && progress.acceptedEnvelopes.isEmpty() &&
-      progress.acceptedSourceObservations.isEmpty()
 
   internal fun validateRunningGate(
     progress: GoalQualityPhaseProgress,

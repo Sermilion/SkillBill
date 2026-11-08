@@ -361,16 +361,6 @@ internal fun currentContentFingerprint(
       "Could not record settled repository contents for '${state.parentWorkflowId}'.",
     )
 
-internal fun validationInputSourceUnchanged(
-  gitOperations: WorkflowGitOperations,
-  execution: GoalQualityExecution,
-  request: GoalRunnerRunRequest,
-): Boolean {
-  val postQa = execution.postQaContentFingerprint?.takeIf(String::isNotBlank) ?: return false
-  val current = goalRunnerRepositoryContentIdentity(gitOperations, request.repoRoot) as? WorkflowGitOperationResult.Ok
-  return current?.value == postQa
-}
-
 internal fun currentRepositoryCheckpoint(
   gitOperations: WorkflowGitOperations,
   request: GoalRunnerRunRequest,
