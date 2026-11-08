@@ -40,6 +40,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.Callout
+import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.hoverSpec
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
@@ -136,16 +138,22 @@ private fun ColumnScope.NewTaskChatContent(
         mode = ChatPermissionMode.Act,
         modifier = Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = COMPOSER_MAX_WIDTH),
         allowStartActions = host.onStart != null,
+        startIssueKey = draft.acceptedIssueKey,
         allowSuggestedActions = !offer.starting,
         footer = if (offer.prefixKind != null) {
           {
-            NewTaskPrefixPrompt(
+            NewTaskIssueKeyPrompt(
               offer.choices,
+              selectedKey = offer.selectedKey,
+              linkedKeys = draft.issueKeyProposals,
               enabled = !chatBusy && !offer.starting && offer.started == null,
-              onChoose = draft::retryPrefix,
+              onChoose = draft::selectIssueKey,
+              onStart = { draft.start(checkNotNull(offer.prefixKind), keyChoice = offer.selectedKey, action = offer.action) },
             )
           }
-        } else null,
+        } else draft.acceptedIssueKey?.let { key ->
+          { Callout(tone = FeedbackTone.Info, body = "Selected issue key: $key") }
+        },
         approvals = ChatApprovalActions(
           live = chat.approvalLive.collectAsState().value,
           onDecide = chat::decideApproval,

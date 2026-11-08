@@ -30,21 +30,24 @@ internal fun newTaskStartArgumentIdentity(raw: String?): String? {
 }
 
 internal fun newTaskOperatorIdentity(messages: List<ChatMessage>): String? {
-  val operators = messages.filterIsInstance<ChatMessage.Operator>().filter { it.action == null || acceptsKeyChip(it) }
-  for ((index, message) in operators.withIndex()) {
-    val text = message.text.trim()
-    if (NEW_TASK_COMPLETE_KEY.matches(text)) return text
-    val tokens = text.split(Regex("\\s+"))
-    val identity = tokens.firstNotNullOfOrNull { token ->
-      token.takeIf { candidate ->
-        (index == 0 && candidate == tokens.firstOrNull() && NEW_TASK_COMPLETE_KEY.matches(candidate)) ||
-          ("://" in candidate && newTaskCompleteKeyOrUrl(candidate) != null)
+  return messages.asReversed().filterIsInstance<ChatMessage.Operator>()
+    .firstNotNullOfOrNull { message ->
+      message.text.trim().takeIf {
+        NEW_TASK_COMPLETE_KEY.matches(it) && (message.action == null || acceptsKeyChip(message))
       }
     }
-    if (identity != null) return identity
-  }
-  return null
 }
+
+internal fun newTaskIssueKeyProposals(messages: List<ChatMessage>): List<String> =
+  messages.asReversed().filterIsInstance<ChatMessage.Operator>().filter { it.action == null }
+    .flatMap { message ->
+      message.text.split(Regex("\\s+")).mapNotNull { token ->
+        val url = token.trim('(', ')', '<', '>', ',', '.')
+        if (!url.startsWith("https://linear.app/")) null
+        else newTaskCompleteKeyOrUrl(url)?.substringBefore('?')?.substringBefore('#')
+          ?.split('/')?.firstOrNull(NEW_TASK_COMPLETE_KEY::matches)?.uppercase()
+      }
+    }.distinct()
 
 private fun acceptsKeyChip(message: ChatMessage.Operator): Boolean {
   val action = message.action ?: return false

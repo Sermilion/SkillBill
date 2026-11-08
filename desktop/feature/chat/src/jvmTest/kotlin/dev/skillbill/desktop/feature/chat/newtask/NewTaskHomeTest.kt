@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -67,6 +68,29 @@ import kotlin.time.Instant
 @OptIn(ExperimentalTestApi::class)
 class NewTaskHomeTest {
   private val host = NewTaskScreenHost(now = { Instant.fromEpochMilliseconds(0) }, onOpenRun = {}, onShowAllWork = {})
+
+  @Test
+  fun `key proposal selection shows identity and requires a separate start click`() = runComposeUiTest {
+    val selected = mutableStateOf<String?>(null)
+    var launches = 0
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskIssueKeyPrompt(
+            listOf("SKILL-530"), selected.value, emptyList(), true,
+            onChoose = { selected.value = it }, onStart = { launches++ },
+          )
+        }
+      }
+    }
+    onNodeWithText("Start run SKILL-530").assertDoesNotExist()
+    onNodeWithText("SKILL-530 from next local project key").performClick()
+    onNodeWithText("Selected issue key: SKILL-530").assertExists()
+    onNodeWithText("Start run SKILL-530").assertIsEnabled()
+    assertEquals(0, launches)
+    onNodeWithText("Start run SKILL-530").performClick()
+    assertEquals(1, launches)
+  }
 
   @Test
   fun `recent chats filter to the selected repository and route resume and discard`() = runComposeUiTest {

@@ -16,6 +16,7 @@ import skillbill.engine.goal.GoalPreflightRequest
 import skillbill.engine.goal.GoalPreflightResult
 import skillbill.engine.goal.GoalPreflightVerdict
 import skillbill.engine.operation.core.NoOperationCardLifecycle
+import skillbill.engine.work.control.model.NewTaskIdentityPolicy
 import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
@@ -104,14 +105,17 @@ class WorkNewTaskStartTest {
     )
 
   @Test
-  fun `missing identity asks for the single inventory prefix without minting`() {
+  fun `missing identity suggests the next local key without minting`() {
     val root = Files.createTempDirectory("work-new-task-prefix")
     bundle(root.resolve("project-specs"), "NEWS-8-existing", "", "")
     val result =
       newSubject(root, preflight, GoalNewWorkAdmissionPort { _, _ -> GoalNewWorkAdmission.NoIssueKey })
-        .prepareNewTask(root, intake(keyChoice = null))
+        .prepareNewTask(
+          root,
+          intake(keyChoice = null).copy(identityPolicy = NewTaskIdentityPolicy.RESOLVED_DESKTOP_IDENTITY),
+        )
 
-    assertEquals(NewTaskPreparation.NeedsKey(listOf("NEWS")), result)
+    assertEquals(NewTaskPreparation.NeedsKey(listOf("NEWS-9")), result)
   }
 
   @Test

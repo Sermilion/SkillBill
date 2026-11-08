@@ -68,6 +68,17 @@ Chat replies, issue keys and requests to implement do not authorize a CLI or MCP
 launch. The app owns the start action and issue-key entry. An explicit request for
 direct implementation stays in chat without creating a goal.
 
+A new-task goal or plan requires an explicitly accepted complete issue key. Chat
+proposes the next available key from the selected project's local inventory, or
+extracts a proposal from an operator-supplied Linear issue URL. Proposals never
+reserve keys or authorize a launch. Sentence mentions, including sentence-leading
+keys, and URLs do not count as acceptance. A message containing only the key or
+a clicked "Use <key>" action accepts it. The latest explicit selection wins.
+The app shows the accepted key on the start action. Without one, Start opens a
+complete-key picker with proposals and a separate start button. Changing the
+repository clears the selection. Admission rechecks ownership before launch and
+refuses a taken key rather than silently choosing another one.
+
 Cancellation retains the task's history for bookkeeping. Once cancellation settles,
 the operator can assign its key to another task without purging history or requesting
 reuse separately. The runtime creates an independent parent and preserves earlier

@@ -12,6 +12,16 @@ class ChatSystemPromptTest {
 
   // An agent told to act on "this execution" hunts for one.
   @Test
+  fun `goal key proposals require explicit acceptance and stay scoped to the selected project`() {
+    val prompt = scopeSystemPrompt(ChatScope.NewTask("/work/app", null))
+    assertTrue("propose a complete issue key and wait for the operator to accept it" in prompt)
+    assertTrue("suggest its next available key" in prompt)
+    assertTrue("A supplied Linear issue URL proposes its extracted key, but does not accept it" in prompt)
+    assertTrue("The latest explicit selection wins" in prompt)
+    assertTrue("Never borrow a prefix from another repository" in prompt)
+  }
+
+  @Test
   fun `the new-task prompt names the checkout and action rules without any execution guidance`() {
     val prompt = scopeSystemPrompt(ChatScope.NewTask("/work/app", "develop"))
 

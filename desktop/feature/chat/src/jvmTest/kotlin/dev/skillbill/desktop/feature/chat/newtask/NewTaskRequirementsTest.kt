@@ -12,6 +12,23 @@ import kotlin.test.assertTrue
 
 class NewTaskRequirementsTest {
   @Test
+  fun `discussing another run never selects its key and later explicit selection wins`() {
+    val mention = ChatMessage.Operator("0AC-103 has multiple block reasons where Audit found ACs not implemented")
+    assertNull(newTaskOperatorIdentity(listOf(mention)))
+    val selected = ChatMessage.Operator("SKILL-530")
+    assertEquals("SKILL-530", newTaskOperatorIdentity(listOf(mention, selected)))
+    assertEquals("SKILL-531", newTaskOperatorIdentity(listOf(mention, selected, ChatMessage.Operator("SKILL-531"))))
+  }
+
+  @Test
+  fun `Linear links propose keys without accepting them or reading agent suggestions`() {
+    val linked = ChatMessage.Operator("Use https://linear.app/team/issue/SKILL-530/fix?view=all for the requirements")
+    assertEquals(listOf("SKILL-530"), newTaskIssueKeyProposals(listOf(linked)))
+    assertNull(newTaskOperatorIdentity(listOf(linked)))
+    assertEquals(emptyList(), newTaskIssueKeyProposals(listOf(ChatMessage.Agent("https://linear.app/team/issue/OTHER-99/fix", false, emptyList()))))
+  }
+
+  @Test
   fun `keeps operator messages verbatim and labels agent context before later replies`() {
     val messages = listOf(
       ChatMessage.Operator("  Add export support.  "),
@@ -45,13 +62,13 @@ class NewTaskRequirementsTest {
   }
 
   @Test
-  fun `operator identity accepts dedicated keys and URLs but ignores mentions and suggested actions`() {
+  fun `operator identity accepts dedicated keys but ignores URLs mentions and unaccepted suggestions`() {
     val suggested = ChatSuggestedAction("Start", "Start this", ChatPermissionMode.Act, NewTaskActionKind.Goal)
 
     assertEquals("SKILL-479", newTaskOperatorIdentity(listOf(ChatMessage.Operator("SKILL-479"))))
-    assertEquals("SKILL-479", newTaskOperatorIdentity(listOf(ChatMessage.Operator("SKILL-479 Add export"))))
+    assertNull(newTaskOperatorIdentity(listOf(ChatMessage.Operator("SKILL-479 Add export"))))
     val url = "https://linear.app/team/issue/SKILL-479/export?view=full"
-    assertEquals(url, newTaskOperatorIdentity(listOf(ChatMessage.Operator(url))))
+    assertNull(newTaskOperatorIdentity(listOf(ChatMessage.Operator(url))))
     assertNull(newTaskOperatorIdentity(listOf(ChatMessage.Operator("Please fix SKILL-476 while adding export"))))
     assertNull(newTaskOperatorIdentity(listOf(ChatMessage.Agent("SKILL-477", false, emptyList()))))
     assertNull(newTaskOperatorIdentity(listOf(ChatMessage.Operator("SKILL-478", suggested))))

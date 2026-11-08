@@ -36,6 +36,42 @@ import kotlin.time.Clock
 @OptIn(ExperimentalCoroutinesApi::class)
 class NewTaskDraftStartTest {
   @Test
+  fun `reported cross project mention asks for a key and selection alone does not launch`() = runTest {
+    val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val controls = FakeWorkControlRepository().apply { newTaskOutcome = NewTaskStartOutcome.NeedsKey(listOf("SKILL-530")) }
+    val draft = draftWithFinishedTurn(chats, controls, "0AC-103 has multiple block reasons where Audit found ACs not implemented")
+    draft.start(NewTaskKind.GoalRun)
+    runCurrent()
+    assertNull(controls.newTaskRequests.single().keyChoice)
+    assertEquals(listOf("SKILL-530"), draft.offer.value.choices)
+    draft.selectIssueKey("SKILL")
+    assertNull(draft.offer.value.selectedKey)
+    draft.selectIssueKey("SKILL-530")
+    runCurrent()
+    assertEquals(1, controls.newTaskRequests.size)
+    assertEquals("SKILL-530", draft.offer.value.selectedKey)
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("SKILL-530", NewTaskKind.GoalRun)
+    draft.start(NewTaskKind.GoalRun, draft.offer.value.selectedKey)
+    runCurrent()
+    assertEquals("SKILL-530", controls.newTaskRequests.last().keyChoice)
+  }
+
+  @Test
+  fun `changing repositories refuses a launch using the previous conversation identity`() = runTest {
+    val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val controls = FakeWorkControlRepository()
+    val draft = draftWithFinishedTurn(chats, controls, "SKILL-530")
+    draft.repository = NewTaskRepository("/another/repository", "another")
+    draft.start(NewTaskKind.GoalRun)
+    runCurrent()
+    assertTrue(controls.newTaskRequests.isEmpty())
+    assertNull(draft.offer.value.selectedKey)
+    draft.repository = NewTaskRepository("/work/repo", "repo")
+    assertNull(draft.acceptedIssueKey)
+    assertTrue(draft.issueKeyProposals.isEmpty())
+  }
+
+  @Test
   fun `empty goal identity asks for a key without minting`() = runTest {
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository().apply { newTaskOutcome = NewTaskStartOutcome.NeedsKey(listOf("APP")) }
@@ -67,7 +103,7 @@ class NewTaskDraftStartTest {
   }
 
   @Test
-  fun `operator URL identity is raw and sentence mentions do not become identity`() = runTest {
+  fun `operator URL and sentence mentions do not become accepted identity`() = runTest {
     val url = "https://linear.app/team/issue/SKILL-502/title"
     val urlChats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val urlControls = FakeWorkControlRepository()
@@ -76,9 +112,11 @@ class NewTaskDraftStartTest {
     runCurrent()
 
     with(urlControls.newTaskRequests.single()) {
-      assertEquals(url, keyChoice)
+      assertNull(keyChoice)
       assertFalse(reuseRequested)
     }
+    assertEquals(listOf("SKILL-502"), urlDraft.issueKeyProposals)
+    assertNull(urlDraft.acceptedIssueKey)
 
     val sentenceChats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val sentenceControls = FakeWorkControlRepository()

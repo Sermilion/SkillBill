@@ -12,6 +12,19 @@ import kotlin.test.assertEquals
 
 class NewTaskIssueKeyAllocatorTest {
   @Test
+  fun `suggestions include archived decimal and reserved keys without borrowing other project prefixes`() {
+    val root = Files.createTempDirectory("new-task-suggestions")
+    val specs = root.resolve("project-specs")
+    bundle(specs, "NEWS-4-existing", "", "")
+    bundle(root.resolve(".feature-specs/done"), "NEWS-8.2-old", "", "")
+    bundle(specs, "LOCAL-100-generated", "", "")
+    val allocator =
+      NewTaskIssueKeyAllocator(projectStore(root, specs), TestDecompositionManifestStore, NoopRuntimeDiagnostics)
+    assertEquals(listOf("NEWS-10"), allocator.suggestions(root, setOf("NEWS-9", "OTHER-999")))
+    assertEquals(listOf("NEWS-9"), allocator.suggestions(root, emptySet()))
+  }
+
+  @Test
   fun `allocates above each bundle identity in each inventory root`() {
     for (root in listOf("project-specs", ".feature-specs", ".feature-specs/done")) {
       for (identity in listOf("directory", "heading", "manifest")) {

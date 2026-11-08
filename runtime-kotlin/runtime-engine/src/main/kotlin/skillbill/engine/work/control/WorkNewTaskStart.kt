@@ -129,7 +129,7 @@ public class WorkNewTaskStart(
         choice.contains(GOAL_INTAKE_URL_MARKER) -> extractDesktopUrlKey(choice)?.let { it to IdentityOrigin.URL }
         ISSUE_KEY.matches(choice) -> choice.uppercase() to IdentityOrigin.TYPED
         else -> null
-      } ?: return NewTaskPreparation.NeedsKey(allocator.prefixes(repoRoot))
+      } ?: return NewTaskPreparation.NeedsKey(allocator.suggestions(repoRoot, request.occupiedKeys))
     val requirements = request.requirements
     val agentTitle = usableTitle(request.title)
     val titleLine = requirements.trim().lineSequence().firstOrNull(String::isNotBlank).orEmpty()

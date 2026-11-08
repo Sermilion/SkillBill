@@ -1,3 +1,8 @@
+## [2026-11-08] Separate proposed keys from accepted launch identity
+Context: A SkillBill chat began by discussing another project's run. The leading key became the new goal identity without an explicit selection.
+Decision: Only complete-key operator messages and visible bare-key acceptance chips select chat identity. The latest selection wins. Linear links propose keys, and missing-key preparation proposes the next local project keys. The picker separates selection from launch. Repository changes invalidate earlier acceptance.
+Reason: Describing a run does not authorize using its identity for new work. Start actions show the accepted key before launch. Existing persisted runs and chats remain intact.
+
 ## [2026-11-07] Keep tool-only messages in one tool group
 Context: Claude sends message_start for every API message, including ones that only call a tool, so each command became its own transcript entry.
 Decision: MessageStarted closes the streaming entry only when it already shows text or actions. Tool-only messages keep adding to the same tool group, and the next message with text lands in that entry.

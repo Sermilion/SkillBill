@@ -33,6 +33,7 @@ internal fun ChatActionButtons(
   actions: List<ChatSuggestedAction>,
   enabled: Boolean,
   mode: ChatPermissionMode,
+  startIssueKey: String? = null,
   onAction: (ChatSuggestedAction) -> Unit,
 ) {
   val colors = SkillBillTheme.colors
@@ -41,8 +42,11 @@ internal fun ChatActionButtons(
     actions.forEachIndexed { index, action ->
       // A start never pauses the execution: on a running one the click only explains the refusal.
       val pause = mode == ChatPermissionMode.ReadOnly && action.mode == ChatPermissionMode.Act && action.start == null
+      val label = if (startIssueKey != null && action.start in setOf(NewTaskActionKind.Goal, NewTaskActionKind.Plan)) {
+        "${action.label} $startIssueKey"
+      } else action.label
       ActionRow(
-        label = if (pause) "Pause and ${action.label.replaceFirstChar { it.lowercase() }}" else action.label,
+        label = if (pause) "Pause and ${action.label.replaceFirstChar { it.lowercase() }}" else label,
         action = action,
         pause = pause,
         primary = index == 0,
