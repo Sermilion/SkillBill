@@ -1,3 +1,8 @@
+## [2026-11-08] Allow chat commit scopes without subtask attribution
+Context: New Task chats supply timeline commits with empty ownerIds and have no subtasks or subtask ranges.
+Decision: Mark chat targets explicitly and offer All, Uncommitted and Commits through availableScopes. Reuse normalizeCommits and resolveScope for their timeline selections.
+Reason: The existing subtask-range gate would hide Commits for chats. Chat commit selection depends on membership in the supplied timeline, while All reads the captured RunStart baseline.
+
 ## [2026-11-05] Keep the word highlight in its own holder and read it in the row
 Context: Highlighting must work when canAuthor is false, and a click should not recompose the whole diff stream.
 Decision: ChangesScreen owns a dedicated DiffWordHighlight instead of adding a field to DiffAuthoringInput. DiffLineRow reads the selection itself, and FileDiffStream never reads it during composition.

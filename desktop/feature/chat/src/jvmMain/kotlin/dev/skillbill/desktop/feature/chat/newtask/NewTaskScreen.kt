@@ -47,6 +47,7 @@ import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.feature.chat.ChatApprovalActions
 import dev.skillbill.desktop.feature.chat.ChatTranscript
@@ -64,6 +65,7 @@ internal class NewTaskScreenHost(
   val onOpenRun: (WorkItem) -> Unit,
   val onShowAllWork: () -> Unit,
   val onStart: ((String, String?, ChatSuggestedAction?) -> Unit)? = null,
+  val onOpenChatChanges: (ChangesSource.Chat, String?) -> Unit = { _, _ -> },
 )
 
 @Composable
@@ -188,7 +190,7 @@ private fun ColumnScope.NewTaskChatContent(
         qaDeviceName = state.qaDeviceName,
       )
     }
-    NewTaskComposer(state, draft, focus, host.now, onAction = onAction)
+    NewTaskComposer(state, draft, focus, host.now, onOpenChanges = host.onOpenChatChanges, onAction = onAction)
   }
 }
 

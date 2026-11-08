@@ -48,6 +48,7 @@ import dev.skillbill.desktop.core.domain.repository.DiffCommentRepository
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
 import dev.skillbill.desktop.core.testing.workItem
+import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -80,12 +81,49 @@ class ChangesWindowViewModelTest {
   fun tearDown() = Dispatchers.resetMain()
 
   @Test
+  fun `opening and reopening a chat keeps the view aligned with its requested scope`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val committed = ChangeScope.Commits(listOf("head"))
+    val target = ChangeScopeTarget(
+      "chat:session", "/repo", baseline, emptyList(), false,
+      timeline = ChangeScopeTimeline("base", "head", listOf(ScopeCommit("head", "base", "Change", emptyList()))),
+      chat = true,
+    )
+    val source = ChangesSource.Chat("session", "Chat", target)
+    scopes.list(committed).value = listed(file("src/A.kt"), file("src/B.kt"))
+    scopes.list(ChangeScope.All).value = listed(file("src/A.kt"))
+    val viewModel = ChangesWindowViewModel(source, committed, "src/B.kt", details, scopes, opener, comments)
+    advanceUntilIdle()
+
+    assertEquals(ChangesView.Commits, viewModel.state.value.view)
+    assertEquals("src/B.kt", viewModel.state.value.selectedPath)
+    assertEquals(listOf(QuickScope.Commits), viewModel.state.value.quick.filter { it.pressed }.map { it.kind })
+
+    viewModel.onAction(ChangesWindowAction.TogglePicker)
+    assertEquals(true, viewModel.state.value.pickerOpen)
+    viewModel.reopen(source, ChangeScope.All, null)
+    advanceUntilIdle()
+
+    assertEquals(ChangeScope.All, viewModel.state.value.scope)
+    assertEquals(ChangesView.Subtasks, viewModel.state.value.view)
+    assertEquals(false, viewModel.state.value.pickerOpen)
+    assertEquals(listOf(QuickScope.All), viewModel.state.value.quick.filter { it.pressed }.map { it.kind })
+
+    viewModel.reopen(source, committed, "src/B.kt")
+    advanceUntilIdle()
+
+    assertEquals(committed, viewModel.state.value.scope)
+    assertEquals(ChangesView.Commits, viewModel.state.value.view)
+    assertEquals("src/B.kt", viewModel.state.value.selectedPath)
+  }
+
+  @Test
   fun `a scope the execution does not offer falls back to all changes`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = workItem("P", kind = WorkKind.Phase)
     detailOf(phase)
 
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.Subtasks(2, 2), details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(phase), ChangeScope.Subtasks(2, 2), null, details, scopes, opener, comments)
     advanceUntilIdle()
 
     assertEquals(ChangeScope.All, viewModel.state.value.scope)
@@ -99,7 +137,7 @@ class ChangesWindowViewModelTest {
     detailOf(phase)
     comments.state.value = availablePending()
     scopes.list(ChangeScope.All).value = listed(file("src/A.kt"))
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(phase), ChangeScope.All, null, details, scopes, opener, comments)
     setContent {
       SkillBillTheme(reducedMotion = true) {
         Dialog({}, DialogProperties(usePlatformDefaultWidth = false)) {
@@ -126,7 +164,7 @@ class ChangesWindowViewModelTest {
     detailOf(phase)
     comments.state.value = availablePending()
     comments.submitResult = Outcome.Failure(CommentRejection("closed"))
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(phase), ChangeScope.All, null, details, scopes, opener, comments)
     runCurrent()
 
     viewModel.onAction(ChangesWindowAction.SubmitReview)
@@ -145,7 +183,7 @@ class ChangesWindowViewModelTest {
     detailOf(phase)
     comments.state.value = availablePending()
     comments.reviewWrite = CompletableDeferred()
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(phase), ChangeScope.All, null, details, scopes, opener, comments)
     runCurrent()
 
     viewModel.onAction(ChangesWindowAction.SubmitReview)
@@ -166,7 +204,7 @@ class ChangesWindowViewModelTest {
     detailOf(phase)
     comments.state.value = availablePending()
     comments.discardFailure = NoSuchMethodError("discardPending")
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(phase), ChangeScope.All, null, details, scopes, opener, comments)
     runCurrent()
 
     viewModel.onAction(ChangesWindowAction.RequestDiscard)
@@ -185,7 +223,7 @@ class ChangesWindowViewModelTest {
     detailOf(phase)
     comments.state.value = availablePending()
     comments.submitResult = Outcome.Success(2)
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(phase), ChangeScope.All, null, details, scopes, opener, comments)
     runCurrent()
 
     viewModel.onAction(ChangesWindowAction.SubmitReview)
@@ -206,7 +244,7 @@ class ChangesWindowViewModelTest {
     comments.state.value = availablePending()
     val write = CompletableDeferred<Outcome<Unit, CommentRejection>>()
     comments.pendingWrite = write
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(phase), ChangeScope.All, null, details, scopes, opener, comments)
     runCurrent()
     viewModel.onAction(ChangesWindowAction.OpenComposer("src/A.kt", CommentSide.New, 10))
     viewModel.onAction(ChangesWindowAction.ComposerText("original"))
@@ -231,7 +269,7 @@ class ChangesWindowViewModelTest {
     comments.state.value = availablePending()
     val write = CompletableDeferred<Outcome<Int, CommentRejection>>()
     comments.reviewWrite = write
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(phase), ChangeScope.All, null, details, scopes, opener, comments)
     runCurrent()
     viewModel.onAction(ChangesWindowAction.SubmitReview)
     runCurrent()
@@ -251,7 +289,7 @@ class ChangesWindowViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = workItem("P", kind = WorkKind.Phase)
     detailOf(phase)
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(phase), ChangeScope.All, null, details, scopes, opener, comments)
     scopes.list(ChangeScope.All).value = listed(file("a/A.kt"), file("b/B.kt"))
     advanceUntilIdle()
 
@@ -279,7 +317,7 @@ class ChangesWindowViewModelTest {
       stats = mapOf(3 to SubtaskStats(listOf(foo), 1, 0), 5 to SubtaskStats(listOf(foo), 1, 0)),
       timeline = timelineFor(listOf(subtask(3), subtask(5))),
     )
-    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(goal), ChangeScope.All, null, details, scopes, opener, comments)
     scopes.list(ChangeScope.All).value = listed(file("a/Bar.kt"), foo)
     advanceUntilIdle()
     viewModel.onAction(ChangesWindowAction.SelectFile(foo.path))
@@ -313,7 +351,7 @@ class ChangesWindowViewModelTest {
       timeline = timelineFor(listOf(subtask(3), subtask(5))),
     )
     scopes.list(ChangeScope.Subtasks(3, 3)).value = ScopeChangesState.BaseUnavailable("start3 is not in the repository")
-    val viewModel = ChangesWindowViewModel(goal, ChangeScope.Subtasks(3, 3), details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(goal), ChangeScope.Subtasks(3, 3), null, details, scopes, opener, comments)
     advanceUntilIdle()
 
     assertEquals(ChangeScope.Subtasks(3, 3), viewModel.state.value.scope)
@@ -333,7 +371,7 @@ class ChangesWindowViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = workItem("P", kind = WorkKind.Phase)
     val detail = detailOf(phase)
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(phase), ChangeScope.All, null, details, scopes, opener, comments)
     advanceUntilIdle()
 
     detail.value = DetailState(phase, DetailSections.Gone)
@@ -398,7 +436,7 @@ class ChangesWindowViewModelTest {
         ScopeCommit("c", "op", "last", listOf(2)),
       )),
     )
-    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(goal), ChangeScope.All, null, details, scopes, opener, comments)
     advanceUntilIdle()
     viewModel.requestScope(ChangeScope.Subtasks(2, 2))
 
@@ -438,7 +476,7 @@ class ChangesWindowViewModelTest {
       "/repo", "main", rangesSupported = true, subtasks = listOf(subtask(1)), stats = emptyMap(), timeline = timelineFor(listOf(subtask(1))),
     )
     scopes.list(ChangeScope.All).value = listed(file("a/A.kt"), file("b/B.kt"))
-    val viewModel = ChangesWindowViewModel(goal, ChangeScope.Subtasks(1, 1), details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(goal), ChangeScope.Subtasks(1, 1), null, details, scopes, opener, comments)
     advanceUntilIdle()
 
     assertEquals(ChangeScope.Subtasks(1, 1), viewModel.state.value.scope)
@@ -450,7 +488,7 @@ class ChangesWindowViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = workItem("P", kind = WorkKind.Phase)
     detailOf(phase)
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(phase), ChangeScope.All, null, details, scopes, opener, comments)
     scopes.list(ChangeScope.All).value = listed(file("a/A.kt"), file("b/B.kt"))
     advanceUntilIdle()
     val request = viewModel.state.value.scrollRequest
@@ -476,7 +514,7 @@ class ChangesWindowViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = workItem("P", kind = WorkKind.Phase)
     detailOf(phase)
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(phase), ChangeScope.All, null, details, scopes, opener, comments)
     scopes.list(ChangeScope.All).value = listed(file("a/A.kt"), file("b/B.kt"), file("c/C.kt"))
     advanceUntilIdle()
     viewModel.onAction(ChangesWindowAction.EnsureDiffs(listOf("b/B.kt", "c/C.kt")))
@@ -498,7 +536,7 @@ class ChangesWindowViewModelTest {
     scopes.subtasks.value = SubtaskScopesState.Listed(
       "/repo", "main", rangesSupported = true, subtasks = listOf(subtask(1)), stats = emptyMap(), timeline = timelineFor(listOf(subtask(1))),
     )
-    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(goal), ChangeScope.All, null, details, scopes, opener, comments)
     scopes.list(ChangeScope.All).value = listed(file("a/A.kt"))
     advanceUntilIdle()
     viewModel.onAction(ChangesWindowAction.EnsureDiffs(listOf("a/A.kt")))
@@ -519,7 +557,7 @@ class ChangesWindowViewModelTest {
         listOf(Comment("comment", CommentAuthor.User, null, "Question", null, epoch, null))),
     ), canAuthor = true)
     comments.stateChange = Outcome.Failure(CommentRejection("closed"))
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(phase), ChangeScope.All, null, details, scopes, opener, comments)
     advanceUntilIdle()
 
     viewModel.onAction(ChangesWindowAction.SetThreadState("thread", CommentState.Resolved))
@@ -535,7 +573,7 @@ class ChangesWindowViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = workItem("P", kind = WorkKind.Phase)
     detailOf(phase)
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(phase), ChangeScope.All, null, details, scopes, opener, comments)
     val deleted = ChangedFile("a/Gone.kt", null, ChangeStatus.Deleted, 0, 3)
     scopes.list(ChangeScope.All).value = listed(deleted, file("a/Kept.kt"))
     advanceUntilIdle()
@@ -568,7 +606,7 @@ class ChangesWindowViewModelTest {
       "/repo", "main", rangesSupported = true, subtasks = subtasks, stats = emptyMap(),
       timeline = ChangeScopeTimeline("base", "head", commits),
     )
-    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener, comments)
+    val viewModel = ChangesWindowViewModel(ChangesSource.Work(goal), ChangeScope.All, null, details, scopes, opener, comments)
     advanceUntilIdle()
     return viewModel
   }

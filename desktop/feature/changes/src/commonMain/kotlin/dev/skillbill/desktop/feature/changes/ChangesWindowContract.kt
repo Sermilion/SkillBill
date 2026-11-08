@@ -13,11 +13,11 @@ import dev.skillbill.desktop.core.domain.model.ScopeChangesState
 import dev.skillbill.desktop.core.domain.model.ScopeKind
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
-import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.availableScopes
 
 data class ChangesWindowUiState(
-  val item: WorkItem,
+  val title: String,
+  val running: Boolean = false,
   val content: WindowContent = WindowContent.Loading,
   val scope: ChangeScope,
   val view: ChangesView = ChangesView.Subtasks,
@@ -53,6 +53,7 @@ data class ChangesWindowUiState(
 ) {
   val target: ChangeScopeTarget? get() = (content as? WindowContent.Ready)?.target
   val commits get() = target?.timeline?.commits.orEmpty()
+  val chatScopes: Boolean get() = target?.chat == true
   val subtasksAvailable: Boolean get() = target?.let { ScopeKind.Subtasks in availableScopes(it) } == true
   val visibleFiles: List<ChangedFile> get() = groups.flatMap { group -> group.rows.map { it.file } }
   val selectedFile: ChangedFile? get() = visibleFiles.firstOrNull { it.path == selectedPath }
@@ -74,7 +75,7 @@ data class ReviewBarUi(val inFlight: ReviewWrite? = null, val confirmingDiscard:
 enum class ReviewWrite { Submit, Discard }
 enum class ChangesView { Subtasks, Commits }
 
-enum class QuickScope { All, Running, Operator, Uncommitted }
+enum class QuickScope { All, Running, Operator, Uncommitted, Commits }
 
 /** A quick scope button; [count] is null before its read lands. */
 data class QuickButtonUi(val kind: QuickScope, val label: String, val count: Int?, val enabled: Boolean, val pressed: Boolean, val running: Boolean = false)

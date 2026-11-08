@@ -22,7 +22,7 @@ import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import dev.skillbill.desktop.core.domain.usage.UsageRepository
 import dev.skillbill.desktop.core.domain.model.ChangeScope
-import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import dev.skillbill.desktop.core.ui.changes.ChangesWindows
 import dev.skillbill.desktop.feature.changes.ChangesWindowViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -56,7 +56,7 @@ abstract class AppComponent(
   abstract val usageRepository: UsageRepository
   abstract val providerUsageRepository: ProviderUsageRepository
   abstract val changesWindows: ChangesWindows
-  abstract val changesWindowViewModel: (WorkItem, ChangeScope) -> ChangesWindowViewModel
+  abstract val changesWindowViewModel: (ChangesSource, ChangeScope, String?) -> ChangesWindowViewModel
   abstract val specRepository: SpecRepository
   abstract val windowComponentFactory: WindowComponent.Factory
 }

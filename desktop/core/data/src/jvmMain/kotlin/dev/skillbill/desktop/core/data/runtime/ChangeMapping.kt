@@ -3,9 +3,12 @@ package dev.skillbill.desktop.core.data.runtime
 import dev.skillbill.desktop.core.domain.model.ChangeBaseline
 import dev.skillbill.desktop.core.domain.model.ChangeStatus
 import dev.skillbill.desktop.core.domain.model.ChangedFile
+import dev.skillbill.desktop.core.domain.model.ChangeScopeTimeline
+import dev.skillbill.desktop.core.domain.model.ScopeCommit
 import skillbill.ports.idestatus.model.WorkChangeBaseline
 import skillbill.ports.workchanges.model.WorkChangeStatus
 import skillbill.ports.workchanges.model.WorkChangedFile
+import skillbill.ports.workchanges.model.WorkCommitTimelineResult
 
 internal fun WorkChangeBaseline.toDomain(): ChangeBaseline = when (this) {
   is WorkChangeBaseline.SubtaskStart -> ChangeBaseline.SubtaskStart(worktreeRoot, baseSha, excludedUntrackedPaths)
@@ -25,6 +28,10 @@ internal fun ChangeBaseline.toPort(): WorkChangeBaseline = when (this) {
 internal fun WorkChangedFile.toDomain(): ChangedFile = ChangedFile(path, oldPath, status.toDomain(), insertions, deletions)
 
 internal fun ChangedFile.toPort(): WorkChangedFile = WorkChangedFile(path, oldPath, status.toPort(), insertions, deletions)
+
+internal fun WorkCommitTimelineResult.Listed.toChatTimeline(): ChangeScopeTimeline = ChangeScopeTimeline(
+  mergeBaseSha, headSha, commits.map { ScopeCommit(it.sha, it.parentSha, it.subject, emptyList()) },
+)
 
 private fun WorkChangeStatus.toDomain(): ChangeStatus = when (this) {
   WorkChangeStatus.ADDED -> ChangeStatus.Added

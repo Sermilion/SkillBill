@@ -163,7 +163,7 @@ fun ChangesScreen(viewModel: ChangesWindowViewModel, keys: ChangesWindowKeys, on
             })
           }
         }
-        ChangesFooter(state.subtasksAvailable, state.view, state.canAuthor)
+        ChangesFooter(state.subtasksAvailable, state.chatScopes, state.view, state.canAuthor)
       }
     }
   }
@@ -173,7 +173,7 @@ fun ChangesScreen(viewModel: ChangesWindowViewModel, keys: ChangesWindowKeys, on
 private fun CenterHint(text: String) = Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Hint(text) }
 
 @Composable
-private fun ChangesFooter(subtasksAvailable: Boolean, view: ChangesView, canAuthor: Boolean) {
+private fun ChangesFooter(subtasksAvailable: Boolean, chatScopes: Boolean, view: ChangesView, canAuthor: Boolean) {
   val colors = SkillBillTheme.colors
   val text = changesSans(11f, FontWeight.Normal, colors.fgFaint)
   Row(
@@ -181,7 +181,7 @@ private fun ChangesFooter(subtasksAvailable: Boolean, view: ChangesView, canAuth
     horizontalArrangement = Arrangement.spacedBy(14.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    if (subtasksAvailable) {
+    if (subtasksAvailable || chatScopes && view == ChangesView.Commits) {
       FooterHint(listOf("s"), if (view == ChangesView.Commits) "pick commit" else "pick subtask")
       FooterHint(listOf("[", "]"), if (view == ChangesView.Commits) "previous / next commit" else "previous / next subtask")
     }
@@ -191,7 +191,7 @@ private fun ChangesFooter(subtasksAvailable: Boolean, view: ChangesView, canAuth
     FooterHint(listOf("o"), "open in editor")
     if (canAuthor) FooterHint(listOf("c"), "comment")
     Spacer(Modifier.weight(1f))
-    BasicText("Refreshes every 3 s while the ${if (subtasksAvailable) "goal" else "run"} runs", style = text, maxLines = 1, softWrap = false)
+    if (!chatScopes) BasicText("Refreshes every 3 s while the ${if (subtasksAvailable) "goal" else "run"} runs", style = text, maxLines = 1, softWrap = false)
   }
 }
 
