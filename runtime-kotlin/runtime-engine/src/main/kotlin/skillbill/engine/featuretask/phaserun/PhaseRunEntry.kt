@@ -564,6 +564,31 @@ public class PhaseRunEntry(
     expectedBranch: String? = null,
     standalone: MonitorPreparation.Prepared? = null,
   ): PhaseRunResult {
+    val setup = phaseRunSetup(request, invocationId, workflowId, standalone)
+    val branch = setup.branch
+    val executionPlan = setup.executionPlan
+    val facts = setup.facts
+    if (expectedBranch != null && branch?.branch != expectedBranch) {
+      return PhaseRunResult.Blocked(
+        invocationId,
+        emptyList(),
+        null,
+        executionPlan.selectedEntryStepIds.first(),
+        "Goal finalization requires branch '$expectedBranch'; current branch is '${branch?.branch.orEmpty()}'.",
+      )
+    }
+    val records = inMemoryRecords(request, workflowId, branch, standalone, invocationId)
+    val state = stateFactory.create(facts, executionPlan, records, invocationId)
+    val report = runLoopEntry.run(runLoopEntry.context(facts, state))
+    return resultOf(report, state, records)
+  }
+
+  private fun phaseRunSetup(
+    request: PhaseRunRequest,
+    invocationId: String,
+    workflowId: String,
+    standalone: MonitorPreparation.Prepared?,
+  ): PhaseRunSetup {
     val acceptedExecutionPlan = request.acceptedGoalQualityPlanText
     val definition = SkeletonDefinition.byId(request.definitionId)
     if (definition.runStateKind != SkeletonRunStateKind.IN_MEMORY) {
@@ -577,7 +602,15 @@ public class PhaseRunEntry(
     val intake = intakeResolver.resolve(definition, request, branch?.branch)
     val liveChecksInvocation = invocationId.takeIf { standaloneValidation(request, definition, workflowId) }
     val resolutionFacts =
-      InMemoryPhaseRunFacts(request, definition, intake, workflowId, standalone?.context, liveChecksInvocation)
+      InMemoryPhaseRunFacts(
+        request,
+        definition,
+        intake,
+        workflowId,
+        standalone?.context,
+        invocationId,
+        liveChecksInvocation,
+      )
     val executionPlan =
       acceptedExecutionPlan?.let { encoded ->
         plans.validateGoalQualityExecutionPlan(
@@ -593,21 +626,10 @@ public class PhaseRunEntry(
         intake,
         workflowId,
         standalone?.context,
+        invocationId,
         liveChecksInvocation,
       )
-    if (expectedBranch != null && branch?.branch != expectedBranch) {
-      return PhaseRunResult.Blocked(
-        invocationId,
-        emptyList(),
-        null,
-        executionPlan.selectedEntryStepIds.first(),
-        "Goal finalization requires branch '$expectedBranch'; current branch is '${branch?.branch.orEmpty()}'.",
-      )
-    }
-    val records = inMemoryRecords(request, workflowId, branch, standalone, invocationId)
-    val state = stateFactory.create(facts, executionPlan, records, invocationId)
-    val report = runLoopEntry.run(runLoopEntry.context(facts, state))
-    return resultOf(report, state, records)
+    return PhaseRunSetup(branch, executionPlan, facts)
   }
 
   private fun inMemoryRecords(
@@ -728,6 +750,12 @@ public class PhaseRunEntry(
       request.acceptedGoalQualityPlanText == null &&
       request.goalQualityInvocationId == null
 }
+
+private data class PhaseRunSetup(
+  val branch: FeatureTaskRuntimeResolvedBranch?,
+  val executionPlan: ResolvedPhaseExecutionPlan,
+  val facts: InMemoryPhaseRunFacts,
+)
 
 private fun newInvocationId(): String = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}"
 

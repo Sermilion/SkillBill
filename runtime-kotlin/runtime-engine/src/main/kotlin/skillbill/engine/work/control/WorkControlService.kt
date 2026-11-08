@@ -1,15 +1,19 @@
 package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.operationcard.OperationCardProjection
 import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.goal.GoalRunnerPauseStatus
 import skillbill.engine.goal.GoalRunnerStatusPort
 import skillbill.engine.goal.GoalRunnerStopStatus
+import skillbill.engine.operation.core.OperationCardRevalidation
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
 import skillbill.engine.work.control.model.NewTaskStartResult
+import skillbill.engine.work.control.model.OperationCardDismissal
+import skillbill.engine.work.control.model.OperationStartRequest
 import skillbill.engine.work.control.model.StandaloneCheckout
 import skillbill.engine.work.control.model.StandalonePhaseRequest
 import skillbill.engine.work.control.model.WorkControlAction
@@ -114,11 +118,22 @@ public class WorkControlService(
 
   public fun startOperation(
     repoRoot: Path,
-    operationId: String,
-    target: String?,
-    agentId: String,
-    checkout: StandaloneCheckout = StandaloneCheckout(),
-  ): NewTaskStartResult = newTaskStart.startOperation(repoRoot, operationId, target, agentId, checkout)
+    request: OperationStartRequest,
+  ): NewTaskStartResult = newTaskStart.startOperation(repoRoot, request)
+
+  public fun dismissOperationCard(token: String): OperationCardDismissal = newTaskStart.dismissOperationCard(token)
+
+  public fun operationCard(token: String): OperationCardProjection? = newTaskStart.operationCard(token)
+
+  public fun operationCardForLaunch(launchId: String): OperationCardProjection? =
+    newTaskStart.operationCardForLaunch(
+      launchId,
+    )
+
+  public fun revalidateOperationCard(token: String): OperationCardRevalidation =
+    newTaskStart.revalidateOperationCard(
+      token,
+    )
 
   public fun recoveryPreview(
     target: WorkRunTarget,

@@ -6,10 +6,18 @@ import kotlin.time.Instant
  * The agent a chat turn runs on; a null [model] or [effort] leaves the agent CLI's own default. [profile] is the agent's config
  * directory, such as `~/.codex-api`, when a resumed session came from it; null runs the agent as the app is configured to.
  */
-data class ChatAgent(val agentId: String, val model: String?, val effort: String?, val profile: String? = null)
+data class ChatAgent(
+  val agentId: String,
+  val model: String?,
+  val effort: String?,
+  val profile: String? = null,
+  val approvalUnavailableReason: String? = null,
+)
 
-/** [ReadOnly] while the execution runs; [Act] once the operator paused it to act. */
+/** Provider permission scope; operator chats start in [Act], independently of execution lifecycle. */
 enum class ChatPermissionMode { ReadOnly, Act }
+
+enum class CursorMcpDependency { Unspecified, ProjectUserOnly, TeamDashboardRequired }
 
 /** What a chat is about: one [Execution], or [NewTask] work with no execution yet. [repositoryRoot] is where the agent runs. */
 sealed interface ChatScope {
@@ -51,6 +59,7 @@ data class ChatTurnRequest(
   val mode: ChatPermissionMode,
   val prompt: String,
   val images: List<ChatImage> = emptyList(),
+  val cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
 )
 
 /** The run a new-task action starts when clicked; [wire] is its value in the action block and on the start chips. */
@@ -88,11 +97,16 @@ sealed interface ChatEvent {
 
   data class TextDelta(val text: String) : ChatEvent
 
+  data class Notice(val text: String) : ChatEvent
+
   data class ToolUse(val call: ChatToolCall) : ChatEvent
 
   data class ToolResult(val callId: String, val output: String, val isError: Boolean) : ChatEvent
 
   data class SuggestedActions(val actions: List<ChatSuggestedAction>) : ChatEvent
+
+  /** A permission request of this chat's process, or its settled outcome; the same card may arrive again as it changes. */
+  data class ApprovalRequested(val card: ApprovalCard) : ChatEvent
 
   data object Completed : ChatEvent
 
@@ -100,16 +114,33 @@ sealed interface ChatEvent {
 }
 
 /** Why a turn ended without an answer. */
-enum class ChatFailure { AgentUnsupported, BinaryMissing, ProcessFailed, StreamMalformed }
+enum class ChatFailure { AgentUnsupported, ApprovalUnsupported, BinaryMissing, ProcessFailed, StreamMalformed }
 
-enum class ChatHistoryRole { Operator, Agent, Notice, Error }
+enum class ChatHistoryRole { Operator, Agent, Notice, Error, Approval, OperationCard }
 
+/** What a saved chat keeps of a parked-operation card: only the identity, so a restored card is read from the store again. */
+data class OperationCardReference(
+  val token: String,
+  val launchId: String,
+  val operationId: String,
+  val state: OperationCardState,
+  val draftChoices: Map<String, String>? = null,
+  val refusal: String? = null,
+)
+
+/**
+ * One saved line. An [ChatHistoryRole.Approval] line carries the complete structured [approval] record and its outcome;
+ * [text] is only a one-line label. A restored card is a display copy and never authority. An [ChatHistoryRole.OperationCard]
+ * line carries only its [operationCard] reference.
+ */
 data class ChatHistoryLine(
   val role: ChatHistoryRole,
   val text: String,
   val failure: ChatFailure? = null,
   val actions: List<ChatSuggestedAction> = emptyList(),
   val selectedAction: ChatSuggestedAction? = null,
+  val approval: ApprovalCard? = null,
+  val operationCard: OperationCardReference? = null,
 )
 
 /** Where a saved new-task draft runs; it marks the save as a draft, which references no execution. */

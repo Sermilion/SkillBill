@@ -26,6 +26,7 @@ import skillbill.application.review.parallel.verification.parallelCodeReviewInli
 import skillbill.application.review.parallel.verification.parallelCodeReviewNoOpResumeOutcome
 import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.terminalStatus
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.SkillRunRequest
@@ -148,6 +149,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
                 reviewEvidenceBroker = args.bound.broker,
                 reviewEvidenceEndpoint = args.bound.endpoint,
                 reviewFanOut = true,
+                approval = AgentRunApprovalRequirement.GovernedReview,
                 additionalWritableDirectories = listOf(args.request.projectStoreRoot),
               ).boundedReviewLane(args.request.laneProgressIdleTimeout, args.bound.evidenceReads),
           ),

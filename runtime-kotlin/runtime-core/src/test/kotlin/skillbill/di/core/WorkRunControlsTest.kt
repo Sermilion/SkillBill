@@ -1,5 +1,7 @@
 package skillbill.di.core
 
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.projectstore.ProjectStoreLayout
 import skillbill.engine.work.control.WorkCancellation
 import skillbill.engine.work.control.model.WorkControlAction
 import skillbill.engine.work.control.model.WorkControlRejection
@@ -32,7 +34,15 @@ import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
+import skillbill.workflow.decomposition.encodeDecompositionManifestWireMap
+import skillbill.workflow.decomposition.intentFor
+import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.decomposition.runtime.goalParentArtifactProjection
+import skillbill.workflow.decomposition.withParentStatus
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
 import java.nio.file.Files
@@ -345,6 +355,70 @@ class WorkRunControlsTest {
       val prompt = assertIs<WorkRunLaunchKind.AgentHarness>(launched.single().kind).prompt
       assertContains(prompt, "Run the goal with /skill-bill")
       assertContains(prompt, "[\"goal\",\"SKILL-9 Render answers\",\"--agent\",\"codex\"]")
+    }
+  }
+
+  @Test
+  fun `a standalone plan reports a goal started for its issue in the same repository`() {
+    establishTemporarySchemaReadiness("plan-goal-started").use { fixture ->
+      val component = component(fixture.tempDir, fixture.dbPath)
+      val identity = "repo-root-realpath-v1:${fixture.tempDir.toRealPath()}"
+      component.databaseSession.transaction {
+        it.standalonePhaseStatuses.register(registration(fixture.tempDir).copy(issueKey = "SKILL-9", phaseId = "plan"))
+      }
+      assertFalse(assertNotNull(component.workControlService.options(target(component))).goalStarted)
+
+      insertGoalParent(fixture.dbPath, "other-repo-goal", "SKILL-9")
+      component.databaseSession.transaction { unit ->
+        unit.goalRunnerControls.persistControlState(
+          "other-repo-goal",
+          GoalRunnerControlState(repositoryIdentity = "repo-root-realpath-v1:/elsewhere"),
+        )
+      }
+      assertFalse(assertNotNull(component.workControlService.options(target(component))).goalStarted)
+
+      insertGoalParent(fixture.dbPath, "plan-goal", "SKILL-9")
+      component.databaseSession.transaction { unit ->
+        unit.goalRunnerControls.persistControlState("plan-goal", GoalRunnerControlState(repositoryIdentity = identity))
+      }
+      assertTrue(assertNotNull(component.workControlService.options(target(component))).goalStarted)
+    }
+  }
+
+  private fun insertGoalParent(
+    database: Path,
+    workflowId: String,
+    issueKey: String,
+  ) {
+    val spec = "${ProjectStoreLayout.SPECS_PREFIX}$issueKey"
+    val subtask = DecompositionSubtask(id = 1, name = "Phase", specPath = "$spec/spec_subtask_1.md", status = "pending")
+    val manifest =
+      DecompositionManifest(
+        issueKey = issueKey,
+        featureName = "Goal for $issueKey",
+        parentSpecPath = "$spec/spec.md",
+        baseBranch = "main",
+        featureBranch = "feat/$issueKey",
+        currentSubtaskIntent = intentFor(subtask.id, subtask.status),
+        subtasks = listOf(subtask),
+      ).withParentStatus()
+    val artifacts =
+      goalParentArtifactProjection(
+        DurableWorkflowArtifacts.EMPTY,
+        FeatureTaskRuntimeWorkflowArtifactMap.from(encodeDecompositionManifestWireMap(manifest)),
+      )
+    ensureTestDatabase(database).use { connection ->
+      connection.prepareStatement(
+        """
+        INSERT INTO feature_task_workflows (workflow_id, mode, contract_version, issue_key, steps_json, artifacts_json)
+        VALUES (?, 'runtime', '1', ?, '[]', ?)
+        """.trimIndent(),
+      ).use { statement ->
+        statement.setString(1, workflowId)
+        statement.setString(2, issueKey)
+        statement.setString(3, JsonCodec.mapToJsonString(artifacts))
+        statement.executeUpdate()
+      }
     }
   }
 

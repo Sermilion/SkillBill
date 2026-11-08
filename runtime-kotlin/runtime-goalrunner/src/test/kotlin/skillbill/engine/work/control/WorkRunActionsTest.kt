@@ -20,6 +20,7 @@ import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerManifest
 import skillbill.engine.goalrunner.goalPreflightServiceForTests
 import skillbill.engine.goalrunner.preflight.GoalPreflightService
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
+import skillbill.engine.operation.core.NoOperationCardLifecycle
 import skillbill.engine.work.EmptyOutcomeStore
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.model.NewTaskPreparation
@@ -46,6 +47,7 @@ import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.idestatus.model.WorkDetailRequest
+import skillbill.ports.operation.EmptyOperationCardRepository
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.work.WorkRunLauncher
@@ -408,6 +410,7 @@ class WorkRunActionsTest {
           NoopRuntimeDiagnostics,
           InPlaceGoalWorktreeResources,
           RecordingBranchWorktreeResources(),
+          OperationCardLaunches(EmptyOperationCardRepository, NoOperationCardLifecycle) { emptyMap() },
         )
 
       val result =

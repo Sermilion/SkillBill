@@ -10,6 +10,7 @@ import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.work.control.WorkControlService
 import skillbill.infrastructure.launcher.work.DetachedWorkRunLauncher
 import skillbill.ports.system.HostAgentHomesPort
+import skillbill.ports.work.LaunchAgentHomesPort
 import skillbill.ports.work.WorkIncidentRecoveryCommands
 import skillbill.ports.work.WorkRunLauncher
 
@@ -31,6 +32,9 @@ internal interface RuntimeWorkControlProvides {
     callbacks: OptionalCallbacks,
     adapter: DetachedWorkRunLauncher,
   ): WorkRunLauncher = callbacks.workRunLauncher ?: adapter
+
+  @Provides
+  fun launchAgentHomesPort(adapter: DetachedWorkRunLauncher): LaunchAgentHomesPort = adapter
 
   @Provides
   fun hostAgentHomesPort(callbacks: OptionalCallbacks): HostAgentHomesPort =

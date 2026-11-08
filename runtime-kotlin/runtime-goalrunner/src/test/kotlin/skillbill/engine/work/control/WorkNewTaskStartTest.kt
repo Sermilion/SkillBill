@@ -6,6 +6,7 @@ import skillbill.application.testProjectStore
 import skillbill.engine.goal.GoalNewWorkAdmission
 import skillbill.engine.goal.GoalNewWorkAdmissionPort
 import skillbill.engine.goalrunner.goalPreflightServiceForTests
+import skillbill.engine.operation.core.NoOperationCardLifecycle
 import skillbill.engine.work.control.model.NewTaskStartResult
 import skillbill.engine.work.control.model.StandalonePhaseRequest
 import skillbill.engine.work.ideStatusClock
@@ -14,6 +15,7 @@ import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.operation.EmptyOperationCardRepository
 import skillbill.ports.work.WorkRunLauncher
 import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
@@ -127,6 +129,7 @@ class WorkNewTaskStartTest {
           NoopRuntimeDiagnostics,
           InPlaceGoalWorktreeResources,
           RecordingBranchWorktreeResources(),
+          OperationCardLaunches(EmptyOperationCardRepository, NoOperationCardLifecycle) { emptyMap() },
         ),
         root,
         launches,

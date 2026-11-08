@@ -42,6 +42,9 @@
      * 0AC-85 opens with the mock's starting selection so the selection bar shows in use: F-001, #2 and the Empty address
      * book test (row 2) to chat, #6 to a goal, #3 and #4 marked Not in this repo. */
     valParts: {}, valChecks: {}, vOpen: new Set(), vFilter: {},
+    /* Monitor runs (design/monitor-run): the Cycles cell whose panel is open per item ("c2.fix"; default: the run's live or
+     * last step), and the log tails and folded groups the operator flipped from their defaults ("<id>|<cell>:<check>"). */
+    monSel: {}, monOpen: new Set(), monFold: new Set(),
     vSel: { 'op-verify-085': { 'f:F-001': 'chat', 'c:2': 'chat', 't:2': 'chat', 'c:6': 'goal' } }, vMarks: { 'op-verify-085': { 'c:3': 'repo', 'c:4': 'repo' } },
   };
   let devTimer = null;
@@ -138,7 +141,7 @@
     run('Work', () => as({ view: 'work', termOpen: false }, () => X.app(st)));
     const everyOpen = { has: () => true };
     run('Detail', () => [['INF-7'], ['DSN-31'], ['NEWS-176'], ['SKILL-417'], ['ATL-402'], ['SKILL-416'], ['ph-rk-review'], ['ph-atl-pr'], ['op-verify'], ['ph-atl-qa'], ['ph-sb-qa'], ['ph-pay-qa'], ['ph-sb-qa-gaps'], ['ph-sb-qa-left'], ['ph-sb-qa-docs'], ['ph-sb-qa-legacy'],
-      ['ph-sb-validation'], ['ph-rk-validation'], ['ph-sb-val-limit'], ['ph-sb-validation-done'], ['ph-sb-val-413'], ['ph-sb-val-411'], ['ph-za-validation'], ['ph-sb-val-running'], ['ph-sb-val-waiting'], ['ph-sb-val-repairs'], ['ph-za-val-report'], ['op-verify-confirm'], ['op-verify-nocrit'], ['op-verify-fixes'], ['op-verify-085'], ['op-verify-stopped'], ['op-verify-superseded'], ['ph-sb-plan'], ['ph-atl-plan'], ['ph-news-plan'], ['ph-pay-plan'], ['ph-rk-plan'], ['ph-sb-plan-done']].map(([id]) => as({ view: 'detail', detailId: id, termOpen: false, narrow: false, propsOpen: true, specsOpen: false, secCollapse: { 'incident-evidence': false, 'verify-intake': false }, qaOpen: everyOpen, vOpen: everyOpen, valParts: new Proxy({}, { get: () => everyOpen }), valChecks: new Proxy({}, { get: () => everyOpen }), vSel: { 'op-verify-085': { 'f:F-001': 'chat', 'c:6': 'goal' } }, vMarks: { 'op-verify-085': { 'c:3': 'repo' } } }, () => X.app(st))).join('')
+      ['ph-sb-validation'], ['ph-rk-validation'], ['ph-sb-val-limit'], ['ph-sb-validation-done'], ['ph-sb-val-413'], ['ph-sb-val-411'], ['ph-za-validation'], ['ph-sb-val-running'], ['ph-sb-val-waiting'], ['ph-sb-val-repairs'], ['ph-za-val-report'], ['op-verify-confirm'], ['op-verify-nocrit'], ['op-verify-fixes'], ['op-verify-085'], ['op-verify-stopped'], ['op-verify-superseded'], ['ph-sb-plan'], ['ph-atl-plan'], ['ph-news-plan'], ['ph-pay-plan'], ['ph-rk-plan'], ['ph-sb-plan-done'], ['ph-sb-monitor'], ['ph-sb-mon-ci'], ['ph-sb-mon-publish'], ['ph-sb-mon-conflict'], ['ph-sb-mon-wait'], ['ph-sb-mon-green'], ['ph-sb-mon-cap'], ['ph-sb-mon-unresolved'], ['ph-sb-mon-pr-edit'], ['ph-sb-mon-merged']].map(([id]) => as({ view: 'detail', detailId: id, termOpen: false, narrow: false, propsOpen: true, specsOpen: false, secCollapse: { 'incident-evidence': false, 'verify-intake': false }, qaOpen: everyOpen, vOpen: everyOpen, valParts: new Proxy({}, { get: () => everyOpen }), valChecks: new Proxy({}, { get: () => everyOpen }), vSel: { 'op-verify-085': { 'f:F-001': 'chat', 'c:6': 'goal' } }, vMarks: { 'op-verify-085': { 'c:3': 'repo' } } }, () => X.app(st))).join('')
       + as({ view: 'detail', detailId: 'SKILL-416', termOpen: false, narrow: false, propsOpen: true, specsOpen: false, subSel: { 'SKILL-416': 'finish' } }, () => X.app(st))
       + as({ view: 'detail', detailId: 'INF-7', termOpen: false, narrow: true }, () => X.app(st)));
     run('History', () => as({ view: 'history', termOpen: false }, () => X.app(st)));
@@ -1102,6 +1105,11 @@
       const el = root.querySelector(`[data-act="qa-toggle"][data-arg="${CSS.escape(key)}"]`);
       if (el) el.focus({ preventScroll: true });
     },
+
+    /* Monitor run: a Cycles cell opens its step's panel; a failed check opens its log tail; a group folds to one line. */
+    'mon-cell'(arg) { const [id, key] = arg.split('|'); st.monSel[id] = key; render(); refocus('mon-cell', arg); },
+    'mon-log'(key) { st.monOpen.has(key) ? st.monOpen.delete(key) : st.monOpen.add(key); render(); refocus('mon-log', key); },
+    'mon-fold'(key) { st.monFold.has(key) ? st.monFold.delete(key) : st.monFold.add(key); render(); },
 
     /* Validation run: report parts and checks open in place; the flag strip opens a part and scrolls to it. */
     'val-part'(arg) {

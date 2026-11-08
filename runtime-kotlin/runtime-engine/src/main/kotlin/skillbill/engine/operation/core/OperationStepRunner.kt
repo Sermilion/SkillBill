@@ -141,6 +141,7 @@ public class OperationStepRunner(
           attempt = TRACKED_ATTEMPT,
           observeLaunch = false,
           briefingText = directive,
+          approvalRunId = context.invocationId,
           additionalWritableDirectories =
             (listOf(context.projectStoreRoot) + context.additionalWritableDirectories).distinct(),
         ),

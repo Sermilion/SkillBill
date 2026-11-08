@@ -400,6 +400,7 @@ class DefaultPhaseRunnerTest {
           attempt = null,
           observeLaunch = false,
           briefingText = "",
+          approvalRunId = "wftr-default-phase-runner",
         ),
       policy = PhaseStepPolicy(false, false, false, false, false),
     )

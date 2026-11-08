@@ -34,6 +34,7 @@ import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStepSession
 import skillbill.engine.featuretask.slot.reviewStepOutput
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
+import skillbill.engine.operation.core.NoOperationCardLifecycle
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationConfirmationGate
 import skillbill.engine.operation.core.OperationExecutor
@@ -55,6 +56,7 @@ import skillbill.ports.blockincident.BlockIncidentContractValidator
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
+import skillbill.ports.operation.UnavailableOperationCardRepository
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
@@ -209,10 +211,11 @@ internal class VerifyOperationHarness : AutoCloseable {
     executor =
       OperationExecutor(
         OperationRegistry(listOf(verify)),
-        OperationConfirmationGate(proposals, git, clock),
+        OperationConfirmationGate(proposals, UnavailableOperationCardRepository, git, clock),
         OperationStepRunner(runner, git, AgentBuildObserverFactory.NONE),
         FixedProjectStorePort(projectStoreRoot),
         RecordingBranchWorktreeResources(),
+        NoOperationCardLifecycle,
       )
   }
 

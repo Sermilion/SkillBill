@@ -48,6 +48,7 @@ internal class VerifyAgainLauncher(
         )
         when (val outcome = controls.startNewTask(request)) {
           is NewTaskStartOutcome.Started -> toasts.show(ToastMessage(ToastTone.Confirmation, "Started a new Verify run"))
+          is NewTaskStartOutcome.AwaitingConfirmation -> toasts.show(ToastMessage(ToastTone.Confirmation, "Verify is waiting for operator approval in Chat"))
           is NewTaskStartOutcome.Refused -> toasts.show(ToastMessage(ToastTone.Problem, outcome.message))
           is NewTaskStartOutcome.Failed -> toasts.show(ToastMessage(ToastTone.Problem, readProblemText(outcome.problem)))
           is NewTaskStartOutcome.NeedsKey -> toasts.show(ToastMessage(ToastTone.Problem, "Verify could not start without an issue key."))

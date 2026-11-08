@@ -1,5 +1,7 @@
 package skillbill.engine.operation.core
 
+import skillbill.contracts.operationcard.OperationCardDetails
+
 public sealed interface OperationOutcome {
   public data class Completed(val text: String) : OperationOutcome
 
@@ -12,8 +14,14 @@ public sealed interface OperationOutcome {
   public data class AwaitingConfirmation(
     val token: String,
     val proposalSummary: String,
+    val card: OperationCardFacts? = null,
   ) : OperationOutcome
 }
+
+public data class OperationCardFacts(
+  val details: OperationCardDetails,
+  val sourceAnchors: Map<String, String> = emptyMap(),
+)
 
 /** An operation outcome that refuses the invocation: blocked with nothing changed, or a usage problem. */
 public sealed interface OperationRefusal : OperationOutcome {

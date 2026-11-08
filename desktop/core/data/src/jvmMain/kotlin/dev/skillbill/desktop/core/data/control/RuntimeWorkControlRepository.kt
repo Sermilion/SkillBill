@@ -18,6 +18,9 @@ import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.ControlRejection
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
 import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
+import dev.skillbill.desktop.core.domain.model.OperationCardDismissOutcome
+import dev.skillbill.desktop.core.domain.model.OperationCardView
+import dev.skillbill.desktop.core.domain.model.OperationCardLookup
 import dev.skillbill.desktop.core.domain.model.PrerequisiteInstruction
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
 import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
@@ -53,7 +56,10 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
+import skillbill.contracts.operationcard.OperationCardProjection
 import skillbill.di.core.RuntimeComponent
+import skillbill.engine.work.control.WorkControlService
+import skillbill.engine.operation.core.OperationCardRevalidation
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.goalrunner.model.GoalRunnerExportRequest
 import skillbill.engine.goalrunner.model.GoalRunnerExportRefusalCategory
@@ -72,6 +78,9 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.engine.work.control.model.WorkControlAction
 import kotlinx.coroutines.future.await
 import skillbill.engine.work.control.model.NewTaskStartResult
+import skillbill.engine.work.control.model.OperationCardDismissal
+import skillbill.engine.work.control.model.OperationStartRequest
+import skillbill.engine.work.control.model.OperatorConfirmation
 import skillbill.engine.work.control.model.StandaloneCheckout
 import skillbill.engine.work.control.model.StandalonePhaseRequest
 import skillbill.engine.work.control.model.WorkControlRejection
@@ -95,6 +104,9 @@ import kotlin.time.toJavaInstant
 private val RESERVATION_BOARD = BoardQuery(HistoryWindow.DEFAULT, filter = "", pageSize = WorkPaginationLimits.DEFAULT_PAGE_SIZE)
 
 private val NO_SESSION = ReadProblem.Runtime("The database session is not open.")
+
+private const val DATABASE_CHANGED_REASON = "The database changed. Reload the card."
+private val DATABASE_CHANGED = ReadProblem.Runtime(DATABASE_CHANGED_REASON)
 
 /**
  * Run controls and goal writes against the open session's runtime. Every request first checks that the item was read from
@@ -332,9 +344,10 @@ class RuntimeWorkControlRepository(
                   is NewTaskStartResult.Refused -> NewTaskStartOutcome.Refused(started.reason)
                   is NewTaskStartResult.Running -> {
                     launches.releaseOnExit(handle, started.failure)
-                    NewTaskStartOutcome.Started(prepared.key, request.kind) { started.failure.await() }
+                    NewTaskStartOutcome.Started(prepared.key, request.kind, awaitFailure = { started.failure.await() })
                   }
                   NewTaskStartResult.Started -> NewTaskStartOutcome.Started(prepared.key, request.kind)
+                  is NewTaskStartResult.AwaitingConfirmation -> NewTaskStartOutcome.Refused("A goal run cannot wait for a confirmation.")
                 }
               }
             }.let { it to keyWasTaken }
@@ -399,11 +412,65 @@ class RuntimeWorkControlRepository(
     return startReservedStandalone(request, session, operationId, settleOnStarted = false) { runtime ->
       runtime.workControlService.startOperation(
         Path.of(request.repoRoot),
-        operationId,
-        request.target,
-        request.agentId,
-        request.standaloneCheckout(),
+        OperationStartRequest(
+          operationId,
+          request.target,
+          request.agentId,
+          request.profile,
+          request.standaloneCheckout(),
+          request.confirmation?.let { OperatorConfirmation(it.token, it.selection) },
+          proposalChanges = request.proposalChanges,
+        ),
       )
+    }
+  }
+
+  override suspend fun operationCardForLaunch(launchId: String): OperationCardView? =
+    readOperationCard("control_operation_card_for_launch") { it.operationCardForLaunch(launchId) }
+
+  override suspend fun operationCard(token: String): OperationCardView? =
+    readOperationCard("control_operation_card") { it.operationCard(token) }
+
+  override suspend fun revalidateOperationCard(token: String): OperationCardLookup {
+    val session = sessions.sessions.value ?: return OperationCardLookup.Unavailable(DATABASE_CHANGED)
+    return callInSession(
+      session,
+      "control_revalidate_operation_card",
+      { OperationCardLookup.Unavailable(it) },
+      stale = { OperationCardLookup.Unavailable(DATABASE_CHANGED) },
+    ) { runtime ->
+      if (!sessionIsCurrent(session)) return@callInSession OperationCardLookup.Unavailable(DATABASE_CHANGED)
+      when (val result = runtime.workControlService.revalidateOperationCard(token)) {
+        OperationCardRevalidation.Missing -> OperationCardLookup.Missing
+        is OperationCardRevalidation.Present -> OperationCardLookup.Present(
+          result.card.toView(result.canConfirm, result.reason),
+        )
+      }
+    }
+  }
+
+  override suspend fun dismissOperationCard(token: String): OperationCardDismissOutcome {
+    val session = sessions.sessions.value ?: return OperationCardDismissOutcome.Stale(DATABASE_CHANGED_REASON)
+    return callInSession(
+      session,
+      "control_dismiss_operation_card",
+      { OperationCardDismissOutcome.Stale(DATABASE_CHANGED_REASON) },
+      stale = { OperationCardDismissOutcome.Stale(DATABASE_CHANGED_REASON) },
+    ) { runtime ->
+      when (val dismissed = runtime.workControlService.dismissOperationCard(token)) {
+        OperationCardDismissal.Dismissed -> OperationCardDismissOutcome.Dismissed
+        is OperationCardDismissal.Stale -> OperationCardDismissOutcome.Stale(dismissed.reason)
+      }
+    }
+  }
+
+  private suspend fun readOperationCard(
+    name: String,
+    read: (WorkControlService) -> OperationCardProjection?,
+  ): OperationCardView? {
+    val session = sessions.sessions.value ?: return null
+    return callInSession(session, name, { null }, stale = { null }) { runtime ->
+      read(runtime.workControlService)?.toView()
     }
   }
 
@@ -452,8 +519,10 @@ class RuntimeWorkControlRepository(
             is NewTaskStartResult.Refused -> NewTaskStartOutcome.Refused(started.reason)
             is NewTaskStartResult.Running -> {
               launches.releaseOnExit(handle, started.failure)
-              NewTaskStartOutcome.Started(id, request.kind) { started.failure.await() }
+              NewTaskStartOutcome.Started(id, request.kind, { started.failure.await() }, started.launchId)
             }
+            is NewTaskStartResult.AwaitingConfirmation ->
+              NewTaskStartOutcome.AwaitingConfirmation(id, request.kind, started.launchId)
             else -> NewTaskStartOutcome.Started(id, request.kind)
           }
         }

@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
+import skillbill.ports.operation.UnavailableOperationCardRepository
 import skillbill.ports.operation.UnavailableOperationProposalRepository
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
@@ -35,7 +36,12 @@ class OperationExecutorBranchWorktreeTest {
           },
         ),
       ),
-      OperationConfirmationGate(UnavailableOperationProposalRepository, NoopWorkflowGitOperations, Clock.systemUTC()),
+      OperationConfirmationGate(
+        UnavailableOperationProposalRepository,
+        UnavailableOperationCardRepository,
+        NoopWorkflowGitOperations,
+        Clock.systemUTC(),
+      ),
       OperationStepRunner(
         object : PhaseRunner {
           override fun run(
@@ -48,6 +54,7 @@ class OperationExecutorBranchWorktreeTest {
       ),
       FixedProjectStorePort(repoRoot.resolve("project-store")),
       worktrees,
+      NoOperationCardLifecycle,
     )
 
   @Test

@@ -11,6 +11,7 @@ kotlin {
     // Runtime classes come from the installed runtime's class loader at run time, never from the app image.
     compileOnly("dev.skillbill:runtime-core")
     compileOnly("dev.skillbill:runtime-contracts")
+    compileOnly("dev.skillbill:runtime-infra-launcher")
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.filekit.dialogs)
   }
@@ -18,6 +19,7 @@ kotlin {
     // compileOnly is invisible to tests, which run the runtime types they construct.
     implementation("dev.skillbill:runtime-core")
     implementation("dev.skillbill:runtime-contracts")
+    implementation("dev.skillbill:runtime-infra-launcher")
     implementation("dev.skillbill:runtime-domain")
     implementation(projects.core.testing)
     implementation(libs.kotlinx.coroutines.test)

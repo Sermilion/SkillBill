@@ -5,6 +5,7 @@ import skillbill.contracts.review.GovernedReviewEvidenceContracts
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointHandle
 import skillbill.ports.review.evidence.ReviewEvidenceBroker
@@ -14,6 +15,9 @@ import skillbill.ports.review.model.ReviewExpansionAuthorizationRequest
 import skillbill.ports.review.model.ReviewToolCall
 import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
@@ -70,8 +74,8 @@ internal fun assertCodexGovernedLaunch(command: List<String>) {
   governedOperations.forEach { operation ->
     assertTrue("$mcpTomlServer.tools.$operation.approval_mode=\"approve\"" in configValues)
   }
-  assertEquals("read-only", command[command.indexOf("--sandbox") + 1])
-  assertTrue("--dangerously-bypass-approvals-and-sandbox" !in command)
+  assertTrue("--dangerously-bypass-approvals-and-sandbox" in command)
+  assertTrue("--sandbox" !in command)
   assertTrue(configValues.any { it.startsWith(mcpTomlServer) && it.contains("enabled_tools=") })
   assertTrue(
     configValues.any { value ->
@@ -106,6 +110,7 @@ internal fun request(
   compaction: PhaseCompactionDirective? = null,
 ): SkillRunRequest =
   SkillRunRequest(
+    approval = AgentRunApprovalRequirement.OutsideApproval,
     issueKey = "SKILL-113",
     repoRoot = Path.of("/tmp/skillbill-agent-run"),
     subtaskId = 1,
@@ -118,6 +123,7 @@ internal fun request(
 
 internal fun governedReviewRequest(nativeReviewWorkerName: String? = null): SkillRunRequest =
   request().copy(
+    approval = AgentRunApprovalRequirement.GovernedReview,
     reviewEvidenceBroker = NoOpReviewEvidenceBroker,
     reviewEvidenceEndpoint = StubReviewEvidenceEndpoint,
     nativeReviewWorkerName = nativeReviewWorkerName,
@@ -152,3 +158,9 @@ internal object NoOpReviewEvidenceBroker : ReviewEvidenceBroker {
 
   override fun terminalOutcome() = error("unused")
 }
+
+internal val LAUNCH_TEST_CLOCK: Clock =
+  Clock.fixed(
+    Instant.EPOCH,
+    ZoneOffset.UTC,
+  )

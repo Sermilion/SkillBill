@@ -148,7 +148,7 @@ internal fun WorkDetailItem.toHeader(options: WorkRunOptions?, branches: Checked
   )
 }
 
-internal fun WorkRunOptions.toDomain() = RunOptions(canCancel, canLaunch, launchLabel, agentId, agentChoices, unavailableReason)
+internal fun WorkRunOptions.toDomain() = RunOptions(canCancel, canLaunch, launchLabel, agentId, agentChoices, unavailableReason, goalStarted)
 
 internal fun WorkDetailList.toDomain(): DetailList = when (this) {
   WorkDetailList.SUBTASKS -> DetailList.Subtasks

@@ -245,7 +245,7 @@ class ChatStopTest {
     val header = MutableStateFlow(loaded(item))
     details.details = mapOf(item.id to header)
     fake.events = { request ->
-      if (request.mode == ChatPermissionMode.Act) flow { awaitCancellation() } else flowOf(ChatEvent.Completed)
+      if (request.prompt.startsWith(ACT_PREFIX)) flow { awaitCancellation() } else flowOf(ChatEvent.Completed)
     }
     val workspace = workspace()
     workspace.open(item)
@@ -281,7 +281,7 @@ class ChatStopTest {
     val header = MutableStateFlow(loaded(item))
     details.details = mapOf(item.id to header)
     fake.events = { request ->
-      if (request.mode == ChatPermissionMode.Act) flow { awaitCancellation() } else flowOf(ChatEvent.Completed)
+      if (request.prompt.startsWith(ACT_PREFIX)) flow { awaitCancellation() } else flowOf(ChatEvent.Completed)
     }
     val workspace = workspace()
     workspace.open(item)

@@ -1,7 +1,6 @@
 package skillbill.infrastructure.launcher.agentrun
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.contracts.time.JvmSystemClock
 import skillbill.infrastructure.launcher.mcp.resolveRuntimeMcpBin
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRunner
 import skillbill.infrastructure.launcher.process.launch.JvmAgentRunProcessRunner
@@ -13,6 +12,7 @@ import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
+import skillbill.ports.approval.ApprovalOwnerAuthority
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
@@ -25,8 +25,10 @@ class FileSystemAgentRunLauncher internal constructor(
   databasePath: Path? = null,
   private val providerEnvironment: Map<String, String> = emptyMap(),
   diagnostics: RuntimeDiagnostics,
+  clock: Clock,
   runtimeMcpBin: Path? = null,
-  clock: Clock = JvmSystemClock,
+  approvals: AgentRunApprovalOwners? = null,
+  userHome: Path? = null,
 ) : AgentRunLauncher {
   @Inject
   constructor(
@@ -35,6 +37,7 @@ class FileSystemAgentRunLauncher internal constructor(
     executableLookup: ExecutableLookup,
     environment: EnvironmentContext,
     diagnostics: RuntimeDiagnostics,
+    approvalOwners: ApprovalOwnerAuthority,
     clock: Clock,
   ) : this(
     processRunner = processRunner as AgentRunProcessRunner,
@@ -42,15 +45,17 @@ class FileSystemAgentRunLauncher internal constructor(
     databasePath = databaseSessionFactory.resolveDbPath(),
     providerEnvironment = environment.environment,
     diagnostics = diagnostics,
-    runtimeMcpBin = resolveRuntimeMcpBin(environment.environment, environment.userHome),
     clock = clock,
+    runtimeMcpBin = resolveRuntimeMcpBin(environment.environment, environment.userHome),
+    approvals = AgentRunApprovalOwners(approvalOwners, clock),
+    userHome = environment.userHome.takeUnless { it == EnvironmentContext.UnspecifiedUserHome },
   )
 
   private val adapters: Map<SupportedAgent, ProcessAgentRunAdapter> =
     headlessAgentRunAdapters(
       processRunner,
       executableLookup,
-      headlessAgentRunCommandBuilders(AgentRunWorkerBinding(databasePath, runtimeMcpBin), providerEnvironment),
+      AgentRunWorkerBinding(databasePath, runtimeMcpBin, approvals, userHome, providerEnvironment),
       diagnostics,
       clock,
     )

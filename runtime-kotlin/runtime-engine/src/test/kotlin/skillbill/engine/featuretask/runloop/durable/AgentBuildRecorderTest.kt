@@ -209,6 +209,7 @@ class AgentBuildRecorderTest {
             observeLaunch = true,
             briefingText = "",
             subtaskId = 3,
+            approvalRunId = "approval-run",
           ),
         policy = PhaseStepPolicy(false, false, false, false, false),
       ),

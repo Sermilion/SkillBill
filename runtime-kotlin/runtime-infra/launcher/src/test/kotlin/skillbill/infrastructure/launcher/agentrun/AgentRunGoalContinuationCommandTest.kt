@@ -4,6 +4,7 @@ import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.SkillRunGoalContinuationContext
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -26,7 +27,7 @@ class AgentRunGoalContinuationCommandTest {
   @Test
   fun `ordinary phase worker does not receive goal continuation marker`() {
     val runner = RecordingAgentRunProcessRunner()
-    requireNotNull(adapters(runner)[SupportedAgent.CODEX]).launch(
+    requireNotNull(adapters(runner)[SupportedAgent.CLAUDE]).launch(
       skillRunRequest(goalContinuation = null).copy(promptOverride = "Run the implementation phase."),
     )
 
@@ -194,6 +195,7 @@ class AgentRunGoalContinuationCommandTest {
     goalContinuation: SkillRunGoalContinuationContext? = goalContinuationContext(),
   ): SkillRunRequest =
     SkillRunRequest(
+      approval = AgentRunApprovalRequirement.OutsideApproval,
       issueKey = "SKILL-56",
       repoRoot = Path.of("/tmp/skillbill-agent-run"),
       subtaskId = 2,
@@ -205,10 +207,9 @@ class AgentRunGoalContinuationCommandTest {
     headlessAgentRunAdapters(
       runner,
       ALL_EXECUTABLES_AVAILABLE,
-      headlessAgentRunCommandBuilders(
-        AgentRunWorkerBinding(databasePath = Path.of("/tmp/skillbill-agent-run/metrics.db")),
-      ),
+      AgentRunWorkerBinding(databasePath = Path.of("/tmp/skillbill-agent-run/metrics.db")),
       diagnostics = NoopRuntimeDiagnostics,
+      clock = LAUNCH_TEST_CLOCK,
     )
 
   private fun goalContinuationContext(

@@ -8,11 +8,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.io.TempDir
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.SecureDirectoryStream
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -25,6 +27,7 @@ class QaPreviewReaderTest {
   @Test
   fun `a display with nothing drawn waits instead of showing a blank live frame`() = runBlocking {
     val invocation = temporary.toRealPath()
+    assumeTrue(Files.newDirectoryStream(invocation).use { it is SecureDirectoryStream<Path> })
     val diagnostics = RecordingDiagnostics()
     val reader = QaPreviewReader(diagnostics, pause = {})
     val request = QaPreviewRequest(1, "work", "qa-1", invocation.toString(), active = true)
@@ -41,6 +44,7 @@ class QaPreviewReaderTest {
   @Test
   fun `an open preview reconnects when a restarted display replaces its framebuffer`() = runBlocking {
     val invocation = temporary.toRealPath()
+    assumeTrue(Files.newDirectoryStream(invocation).use { it is SecureDirectoryStream<Path> })
     val diagnostics = RecordingDiagnostics()
     val firstPixels = intArrayOf(0x000000, 0x112233)
     val replacementPixels = intArrayOf(0x445566, 0x778899)

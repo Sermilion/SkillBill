@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -54,7 +55,7 @@ class ChatSummarizerTest {
 
   // A summary call that can edit files, run tools, resume the chat or bill the reasoning model costs the operator real work.
   @Test
-  fun `each agent runs read-only on its cheap model in the summaries directory`() = runTest {
+  fun `each agent uses native bypass on its cheap model in the summaries directory`() = runTest {
     val summarizer = summarizer()
     listOf("claude", "codex", "cursor").forEachIndexed { index, agent -> store.saveChat(entry(agent, agent, index + 1L)) }
     reply = { command -> agentReply(command, "About CI.") }
@@ -63,7 +64,6 @@ class ChatSummarizerTest {
     runCurrent()
 
     val forbidden = listOf(
-      "--dangerously-skip-permissions", "--dangerously-bypass-approvals-and-sandbox", "--force", "--yolo", "--approve-mcps",
       "--session-id", "--resume", "--append-system-prompt", "--system-prompt",
     )
     val expected = mapOf("claude" to "haiku", "codex" to "gpt-6-luna", "agent" to "gpt-5.4-nano-none")
@@ -72,11 +72,11 @@ class ChatSummarizerTest {
       val binary = expected.keys.first { it in command.argv }
       assertTrue(expected.getValue(binary) in command.argv, "${command.argv}")
       assertTrue(forbidden.none { it in command.argv }, "${command.argv}")
-      assertTrue(command.workingDirectory.endsWith(CHAT_SUMMARY_PATH))
+      assertEquals(File(host.userHome, CHAT_SUMMARY_PATH).path, command.workingDirectory)
     }
-    assertTrue(listOf("--sandbox", "read-only", "--ephemeral").all { it in commands.first { "codex" in it.argv }.argv })
-    assertTrue(listOf("--mode", "ask").all { it in commands.first { "agent" in it.argv }.argv })
-    assertTrue(listOf("--tools", "", "--no-session-persistence").all { it in commands.first { "claude" in it.argv }.argv })
+    assertTrue(listOf("--dangerously-bypass-approvals-and-sandbox", "--ephemeral").all { it in commands.first { "codex" in it.argv }.argv })
+    assertTrue(listOf("--force", "--trust", "--approve-mcps", "--sandbox", "disabled").all { it in commands.first { "agent" in it.argv }.argv })
+    assertTrue(listOf("--dangerously-skip-permissions", "--tools", "", "--no-session-persistence").all { it in commands.first { "claude" in it.argv }.argv })
     listOf("claude", "cursor").forEach { agent ->
       val argv = commands.first { agent in it.argv || (agent == "cursor" && "agent" in it.argv) }.argv
       val outputFormat = argv.indexOf("--output-format")
