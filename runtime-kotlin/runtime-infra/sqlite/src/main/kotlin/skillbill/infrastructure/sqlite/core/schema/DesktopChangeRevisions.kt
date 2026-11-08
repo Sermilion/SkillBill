@@ -354,6 +354,7 @@ private val DESKTOP_CHANGE_TABLES =
       keys = column("invocation_id"),
       installedLater = true,
     ),
+    DesktopChangeTable("monitor_ci_cycles", PHASE_TOPICS, keys = column(WORKFLOW_ID), installedLater = true),
   )
 
 internal fun installWorkBoardChangeTriggers(connection: Connection) {

@@ -1,32 +1,15 @@
 package skillbill.engine.featuretask.slot.monitor
 
-import skillbill.ports.goalrunner.runner.model.PullRequestCheck
-import java.util.concurrent.ConcurrentHashMap
+import skillbill.ports.idestatus.model.MonitorCiCheckBucket
+import skillbill.ports.idestatus.model.MonitorCiCycleOutcome
+import skillbill.ports.idestatus.model.MonitorCiCycleRecord
 
-internal class MonitorFixBrief {
-  private val failingChecks = ConcurrentHashMap<String, List<PullRequestCheck>>()
-  private val conflictBaseBranches = ConcurrentHashMap<String, String>()
+internal object MonitorFixBrief {
+  fun conflictBaseBranch(latest: MonitorCiCycleRecord?): String? =
+    latest?.takeIf { it.outcome == MonitorCiCycleOutcome.CONFLICTED }?.conflictBaseBranch?.takeIf(String::isNotBlank)
 
-  fun record(
-    issueKey: String,
-    checks: List<PullRequestCheck>,
-  ) {
-    conflictBaseBranches.remove(issueKey)
-    failingChecks[issueKey] = checks
-  }
-
-  fun recordConflict(
-    issueKey: String,
-    baseBranch: String,
-  ) {
-    failingChecks.remove(issueKey)
-    conflictBaseBranches[issueKey] = baseBranch
-  }
-
-  fun conflictBaseBranch(issueKey: String): String? = conflictBaseBranches[issueKey]
-
-  fun stepContextFor(issueKey: String): String {
-    conflictBaseBranches[issueKey]?.let { baseBranch ->
+  fun stepContextFor(latest: MonitorCiCycleRecord?): String {
+    conflictBaseBranch(latest)?.let { baseBranch ->
       return "## Merge conflict\n" +
         "The open pull request conflicts with '$baseBranch'. Run `git fetch origin $baseBranch`, then " +
         "`git merge --no-commit --no-ff origin/$baseBranch`. Resolve every conflict and stage the resolved files. " +
@@ -34,14 +17,14 @@ internal class MonitorFixBrief {
         "do not push. The runtime commits the merge with both parents and pushes it. A repair " +
         "without a merge of 'origin/$baseBranch' in progress is not published."
     }
-    val checks = failingChecks[issueKey] ?: return NO_SNAPSHOT
-    return "## Failing CI checks\n" + checks.joinToString("\n") { check -> "- ${check.name}: ${check.link}" }
+    if (latest == null || latest.outcome != MonitorCiCycleOutcome.FAILED) return NO_SNAPSHOT
+    val failing = latest.checks.filter { it.bucket == MonitorCiCheckBucket.FAIL }
+    if (failing.isEmpty()) return NO_SNAPSHOT
+    return "## Failing CI checks\n" + failing.joinToString("\n") { check -> "- ${check.name}: ${check.link}" }
   }
 
-  private companion object {
-    const val NO_SNAPSHOT: String =
-      "## Failing CI checks\n" +
-        "No failing-check snapshot is recorded for this run. List the failing checks yourself with " +
-        "`gh pr checks <pr-number> --json name,bucket,link`, then fix them."
-  }
+  private const val NO_SNAPSHOT: String =
+    "## Failing CI checks\n" +
+      "No failing-check snapshot is recorded for this run. List the failing checks yourself with " +
+      "`gh pr checks <pr-number> --json name,bucket,link`, then fix them."
 }

@@ -33,7 +33,9 @@ import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
 import skillbill.ports.idestatus.AgentActivityStampRepository
 import skillbill.ports.idestatus.EmptyAgentActivityStampRepository
+import skillbill.ports.idestatus.EmptyMonitorCiCycleRepository
 import skillbill.ports.idestatus.EmptyWorktreeEditJournalRepository
+import skillbill.ports.idestatus.MonitorCiCycleRepository
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
@@ -73,6 +75,7 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
   open override val unaddressedFindings: UnaddressedFindingsRepository = UnavailableUnaddressedFindingsRepository
   open override val agentActivityStamps: AgentActivityStampRepository = EmptyAgentActivityStampRepository
   open override val worktreeEditJournal: WorktreeEditJournalRepository = EmptyWorktreeEditJournalRepository
+  open override val monitorCiCycles: MonitorCiCycleRepository = EmptyMonitorCiCycleRepository
   open override val standalonePhaseStatuses: StandalonePhaseStatusRepository =
     object : StandalonePhaseStatusRepository {
       override fun register(request: StandalonePhaseStatusRegistration): StandalonePhaseStatusRecord =

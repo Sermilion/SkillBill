@@ -26,11 +26,15 @@ import skillbill.engine.featuretask.slot.attempt.blockAndPersistInPhase
 import skillbill.engine.featuretask.slot.attempt.finalizationCoupledProgress
 import skillbill.engine.featuretask.slot.attempt.persistFinalizationCompleted
 import skillbill.engine.featuretask.slot.attempt.persistFinalizationRequiredRunning
+import skillbill.engine.featuretask.slot.state.CiWatchListeners
 import skillbill.engine.featuretask.slot.state.ExpectedCiHead
 import skillbill.engine.featuretask.slot.state.PhaseCiObservation
 import skillbill.engine.featuretask.slot.state.PullRequestCiOutcome
+import skillbill.engine.featuretask.slot.state.PullRequestCiSnapshot
 import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
+import skillbill.ports.idestatus.model.MonitorCiCycleOutcome
+import skillbill.ports.idestatus.model.MonitorCiCycleRecord
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -59,7 +63,15 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     val baseBranch = gitOperations.baseBranchOrDefault(request.repoRoot, resolved?.baseBranch)
     val branch = requirePublishableBranch(resolved?.branch, baseBranch)
     val (repairAssociation, expectedHead) = publishedHeadExpectation(repairSteps, iteration)
-    val outcome = observePublishedHead(run, observation, branch, expectedHead)
+    var record = monitorCycleStartRecord(run, iteration, repairAssociation, clock.instant())
+    recordMonitorCycleBestEffort(observation, request.workflowId, record, diagnostics, "start")
+    val outcome =
+      observePublishedHead(run, observation, branch, expectedHead) { snapshot ->
+        record = record.observed(snapshot, clock.instant())
+        recordMonitorCycleBestEffort(observation, request.workflowId, record, diagnostics, "observation")
+      }
+    recordTerminalCycle(run, iteration, observation, record.finished(outcome, baseBranch, clock.instant()))
+      ?.let { return it }
     return when (outcome) {
       PullRequestCiOutcome.Merged ->
         complete(run, iteration, mergedMonitorOutput(run.phaseId, branch))
@@ -89,18 +101,8 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
           ),
         )
       PullRequestCiOutcome.NoPullRequest -> settleWithoutPullRequest(run, iteration, branch)
-      is PullRequestCiOutcome.Failed -> {
-        observation.recordFailingChecks(request.issueKey, outcome.failingChecks)
-        failedCiOutcome(run, iteration, branch, outcome, repairAssociation)
-      }
-      PullRequestCiOutcome.Conflicted -> {
-        observation.recordMergeConflict(request.issueKey, baseBranch)
-        routeToRepair(
-          run,
-          iteration,
-          RepairRoute(conflictProse(branch, baseBranch), FeatureTaskRuntimeVerdict.PROGRESS),
-        )
-      }
+      is PullRequestCiOutcome.Failed -> failedCiOutcome(run, iteration, branch, outcome, repairAssociation)
+      PullRequestCiOutcome.Conflicted -> conflictedOutcome(run, iteration, branch, baseBranch)
       is PullRequestCiOutcome.Blocked -> block(run, iteration, outcome.reason)
       is PullRequestCiOutcome.Unavailable -> {
         RuntimeDiagnosticsBestEffortWarning.record(
@@ -144,25 +146,51 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     return repairAssociation to expectedHead
   }
 
+  private fun PhaseRuntimeFinalizationContext.recordTerminalCycle(
+    run: PhaseRun,
+    iteration: Int,
+    observation: PhaseCiObservation,
+    record: MonitorCiCycleRecord,
+  ): PhaseOutcome? {
+    if (record.outcome != MonitorCiCycleOutcome.CONFLICTED) {
+      recordMonitorCycleBestEffort(observation, request.workflowId, record, diagnostics, "outcome")
+      return null
+    }
+    return catchingNonCancellation { observation.recordCycle(request.workflowId, record) }
+      .exceptionOrNull()
+      ?.let { error ->
+        block(
+          run,
+          iteration,
+          "Monitor could not record the merge conflict with '${record.conflictBaseBranch}' in the monitor CI " +
+            "cycle record, so repair publication cannot check the base-branch merge: ${error.message.orEmpty()}",
+        )
+      }
+  }
+
   private fun PhaseRuntimeFinalizationContext.observePublishedHead(
     run: PhaseRun,
     observation: PhaseCiObservation,
     branch: String,
     expectedHead: ExpectedCiHead,
+    onObserved: (PullRequestCiSnapshot) -> Unit,
   ): PullRequestCiOutcome =
     observation.watch(
       request.repoRoot,
       branch,
-      onCiRunning = { pullRequestUrl, pending ->
-        observability.ciStillRunning(run.phaseId, pullRequestUrl, pending)
-      },
-      expectedHead = expectedHead,
-      onInconclusive = { reason ->
-        RuntimeDiagnosticsBestEffortWarning.record(
-          diagnostics,
-          "Monitor kept polling after an inconclusive CI observation: $reason",
-        )
-      },
+      expectedHead,
+      CiWatchListeners(
+        onCiRunning = { pullRequestUrl, pending ->
+          observability.ciStillRunning(run.phaseId, pullRequestUrl, pending)
+        },
+        onInconclusive = { reason ->
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "Monitor kept polling after an inconclusive CI observation: $reason",
+          )
+        },
+        onObserved = onObserved,
+      ),
     )
 
   private fun PhaseRuntimeFinalizationContext.failedCiOutcome(
@@ -254,6 +282,18 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
         pullRequestFieldsDigest = route.pullRequestFieldsDigest,
       ),
       qualifiedFailedRepairSha,
+    )
+
+  private fun PhaseRuntimeFinalizationContext.conflictedOutcome(
+    run: PhaseRun,
+    iteration: Int,
+    branch: String,
+    baseBranch: String,
+  ): PhaseOutcome =
+    routeToRepair(
+      run,
+      iteration,
+      RepairRoute(conflictProse(branch, baseBranch), FeatureTaskRuntimeVerdict.PROGRESS),
     )
 
   private fun conflictProse(

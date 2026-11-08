@@ -27,6 +27,7 @@ import skillbill.infrastructure.sqlite.review.stats.TriageRuntime
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryStore
 import skillbill.infrastructure.sqlite.telemetry.outbox.TelemetryOutboxStore
 import skillbill.infrastructure.sqlite.telemetry.reconciliation.reconcileStaleTelemetrySessions
+import skillbill.infrastructure.sqlite.workflow.MonitorCiCycleStore
 import skillbill.infrastructure.sqlite.workflow.WorktreeEditJournalStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.AgentActivityStampStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.StandalonePhaseStatusStore
@@ -61,6 +62,7 @@ import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
 import skillbill.ports.goalrunner.model.GoalArchiveTableRow
 import skillbill.ports.idestatus.AgentActivityStampRepository
+import skillbill.ports.idestatus.MonitorCiCycleRepository
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
@@ -151,6 +153,7 @@ internal class SQLiteUnitOfWork(
     AgentActivityStampStore(connection)
   override val worktreeEditJournal: WorktreeEditJournalRepository =
     WorktreeEditJournalStore(connection)
+  override val monitorCiCycles: MonitorCiCycleRepository = MonitorCiCycleStore(connection)
   override val standalonePhaseStatuses: StandalonePhaseStatusRepository =
     StandalonePhaseStatusStore(connection, clock, diagnostics, transactionActive)
   override val rejectedOutputDiagnostics: RejectedOutputDiagnosticRepository =
@@ -291,6 +294,7 @@ private val GOAL_PLANNING_TABLES = listOf("goal_planning_preparations", "goal_sh
 private val PURGE_WORKFLOW_KEYED_TABLES =
   listOf(
     "worktree_edit_journal",
+    "monitor_ci_cycles",
     "producer_output_evidence",
     "rejected_output_diagnostics",
     "agent_activity_stamps",

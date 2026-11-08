@@ -1,5 +1,6 @@
 package skillbill.di.core
 import me.tatarka.inject.annotations.Provides
+import skillbill.engine.featuretask.slot.monitor.MonitorCiCycleRecorder
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.infrastructure.host.process.InstallerProcessAdapter
 import skillbill.infrastructure.http.HttpInstallerScriptFetchAdapter
@@ -43,10 +44,12 @@ internal interface RuntimeOptionalCallbackProvides {
   fun monitorStrategy(
     callbacks: OptionalCallbacks,
     pullRequestChecksLookup: PullRequestChecksLookup,
+    cycles: MonitorCiCycleRecorder,
   ): MonitorStrategy =
     MonitorStrategy(
       callbacks.pullRequestIdentityLookup ?: GhPullRequestIdentityLookup(includeMergeState = true),
       pullRequestChecksLookup,
+      cycles,
     )
 
   @Provides

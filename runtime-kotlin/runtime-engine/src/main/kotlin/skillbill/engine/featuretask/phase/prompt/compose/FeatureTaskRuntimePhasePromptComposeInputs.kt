@@ -60,6 +60,7 @@ public data class FeatureTaskRuntimePhasePromptComposeInputs(
   internal val implementationChecklistAddress: String? = null,
   public val projectInstructions: List<PhaseProjectInstructionsResolution.Injected> = emptyList(),
   public val goalHistoryWriterInput: GoalHistoryWriterInput? = null,
+  public val workflowId: String? = null,
 ) {
   internal val validateProbeScope: ValidateProbeScope? get() = validateProbeScopeSource()
   internal val validateProbesActive: Boolean get() = validateProbeScope != null

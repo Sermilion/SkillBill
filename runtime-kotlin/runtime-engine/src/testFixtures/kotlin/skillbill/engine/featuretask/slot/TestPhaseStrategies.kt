@@ -14,10 +14,12 @@ import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentFixStrateg
 import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
+import skillbill.engine.featuretask.slot.monitor.MonitorCiCycleRecorder
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
+import skillbill.engine.featuretask.slot.monitor.unusedMonitorCiCycleRecorder
 import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
@@ -91,6 +93,7 @@ fun testPhaseStrategies(
   qaReports: QaReportSettlement = unavailableQaReportSettlement(),
   qaExecution: QaExecutionLifecycle = testQaExecutionLifecycle(),
   qaOutcomes: FeatureTaskQaOutcomeRecorder = unusedQaOutcomeRecorder(),
+  monitorCycles: MonitorCiCycleRecorder = unusedMonitorCiCycleRecorder(),
   inlineRubricResolver: InlineReviewRubricResolver? = null,
   phaseInstructionSource: PhaseInstructionFileSource? = null,
 ): PhaseStrategyLookup {
@@ -126,7 +129,10 @@ fun testPhaseStrategies(
           PrDescriptionStrategy(pullRequestIdentityLookup, LocalPullRequestTemplateFiles),
           runner,
         ),
-        PhaseStrategyRegistration(MonitorStrategy(monitoredPullRequestLookup, pullRequestChecksLookup), runner),
+        PhaseStrategyRegistration(
+          MonitorStrategy(monitoredPullRequestLookup, pullRequestChecksLookup, monitorCycles),
+          runner,
+        ),
         PhaseStrategyRegistration(standaloneMonitor, runner),
         PhaseStrategyRegistration(StandaloneMonitorPublicationStrategy(standaloneMonitorService), runner),
         PhaseStrategyRegistration(

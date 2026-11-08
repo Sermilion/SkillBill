@@ -31,6 +31,7 @@ import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
+import skillbill.engine.featuretask.slot.monitor.unusedMonitorCiCycleRecorder
 import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
@@ -150,6 +151,7 @@ class PhaseStrategyCompositionTest {
     MonitorStrategy(
       OpenPullRequestIdentityLookup(NoopWorkflowGitOperations),
       PassingPullRequestChecksLookup,
+      unusedMonitorCiCycleRecorder(),
     )
 
   private val strategies =

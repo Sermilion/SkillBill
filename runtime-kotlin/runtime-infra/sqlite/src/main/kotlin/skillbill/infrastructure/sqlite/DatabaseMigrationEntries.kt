@@ -59,6 +59,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.recordDiffComments
 import skillbill.infrastructure.sqlite.core.migration.area.recordGoalAssessmentCounts
 import skillbill.infrastructure.sqlite.core.migration.area.recordGoalBlockedReason
 import skillbill.infrastructure.sqlite.core.migration.area.recordGoalSubtaskTraceProbeCounts
+import skillbill.infrastructure.sqlite.core.migration.area.recordMonitorCiCycles
 import skillbill.infrastructure.sqlite.core.migration.area.requireGoalPlanningPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.diagnosticevidence.rekeyDiagnosticEvidenceByRepairTurn
 import skillbill.infrastructure.sqlite.core.migration.dropDelegatedReviewLifecycleTables
@@ -1055,4 +1056,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 115,
       name = "add-approval-not-required-delivery",
       operation = ::addApprovalNotRequiredDelivery,
+    ) +
+    DatabaseMigration(
+      version = 116,
+      name = "record-monitor-ci-cycles",
+      operation = ::recordMonitorCiCycles,
     )

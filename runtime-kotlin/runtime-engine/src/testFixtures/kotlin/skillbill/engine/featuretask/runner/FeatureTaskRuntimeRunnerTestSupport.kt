@@ -90,6 +90,7 @@ import skillbill.engine.featuretask.slot.harnessPendingVerifyFindingIds
 import skillbill.engine.featuretask.slot.harnessReviewRunnerSyncingPendingVerifyFindings
 import skillbill.engine.featuretask.slot.implementationCheckOutput
 import skillbill.engine.featuretask.slot.isImplementationCheckPrompt
+import skillbill.engine.featuretask.slot.monitor.MonitorCiCycleRecorder
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.state.PhaseRunState
@@ -1393,6 +1394,7 @@ private fun harnessPhaseStrategies(
     qaReports = runtimeConfig.qaReports,
     phaseInstructionSource = runtimeConfig.phaseInstructionSource,
     qaOutcomes = FeatureTaskQaOutcomeRecorder(database, testHarnessClock),
+    monitorCycles = MonitorCiCycleRecorder(database),
   )
 
 private fun telemetryHarnessRunner(
