@@ -43,7 +43,16 @@ fun SbIconButton(
   // `.sb-ibtn` transitions both background and color over --dur-fast.
   val iconColor = rememberHoverColor(hovered || selected, colors.fgMuted, colors.fg).value
   val shape = RoundedCornerShape(SkillBillRadius.sm)
-  val dimension = if (size == SbControlSize.Small) 24.dp else 28.dp
+  val dimension = when (size) {
+    SbControlSize.Regular -> 28.dp
+    SbControlSize.Small -> 24.dp
+    SbControlSize.XSmall -> 16.dp
+  }
+  val iconSize = when (size) {
+    SbControlSize.Regular -> SbIconSize.Md
+    SbControlSize.Small -> SbIconSize.Sm
+    SbControlSize.XSmall -> SbIconSize.Xs
+  }
   val content: @Composable () -> Unit = {
     Box(
       modifier.size(dimension).alpha(if (enabled) 1f else .45f).background(background, shape)
@@ -60,7 +69,7 @@ fun SbIconButton(
       contentAlignment = Alignment.Center,
     ) {
       CompositionLocalProvider(LocalContentColor provides iconColor) {
-        SbIcon(icon, if (size == SbControlSize.Small) SbIconSize.Sm else SbIconSize.Md)
+        SbIcon(icon, iconSize)
       }
     }
   }

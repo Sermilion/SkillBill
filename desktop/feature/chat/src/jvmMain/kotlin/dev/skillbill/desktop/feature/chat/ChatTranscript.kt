@@ -46,6 +46,7 @@ import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
@@ -167,19 +168,17 @@ private fun StateCard(message: ChatMessage.StateLine) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val tone = stateTone(state, colors)
-  val shape = RoundedCornerShape(SkillBillRadius.md)
-  Row(
-    Modifier.fillMaxWidth().border(1.dp, colors.border, shape).background(colors.bgRaised, shape).padding(12.dp),
-    horizontalArrangement = Arrangement.spacedBy(10.dp),
-  ) {
-    CompositionLocalProvider(LocalContentColor provides tone) { SbIcon(stateIcon(state), SbIconSize.Md, modifier = Modifier.padding(top = 2.dp)) }
-    SelectionContainer {
-      Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        BasicText(
-          listOfNotNull(state.name, message.phase?.let { "on $it" }).joinToString(" "),
-          style = type.tBaseMedium.copy(color = colors.fg),
-        )
-        message.detail?.let { BasicText(it, style = type.tSm.copy(color = colors.fgMuted)) }
+  SbBox(fill = colors.bgRaised) {
+    Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+      CompositionLocalProvider(LocalContentColor provides tone) { SbIcon(stateIcon(state), SbIconSize.Md, modifier = Modifier.padding(top = 2.dp)) }
+      SelectionContainer {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+          BasicText(
+            listOfNotNull(state.name, message.phase?.let { "on $it" }).joinToString(" "),
+            style = type.tBaseMedium.copy(color = colors.fg),
+          )
+          message.detail?.let { BasicText(it, style = type.tSm.copy(color = colors.fgMuted)) }
+        }
       }
     }
   }

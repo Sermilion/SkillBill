@@ -1,6 +1,5 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,11 +7,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,18 +18,17 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
+import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.designsystem.detail.PaneSection
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
+import dev.skillbill.desktop.core.designsystem.status.StatusDot
 import dev.skillbill.desktop.core.domain.model.ReviewFindingStatus
 import dev.skillbill.desktop.core.domain.model.ReviewPass
 import dev.skillbill.desktop.core.domain.model.ReviewReportFinding
 import dev.skillbill.desktop.core.domain.model.RunningReviewPass
-
-private const val SEVERITY_TINT_ALPHA = .14f
 
 /** The Review caption with its pass count or running pass, then one block per completed pass. */
 @Composable
@@ -89,7 +83,7 @@ private fun RunningReviewPassBlock(pass: RunningReviewPass, modifier: Modifier) 
     }
   Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      Box(Modifier.size(7.dp).background(SkillBillTheme.colors.stActive, CircleShape))
+      StatusDot(SkillBillTheme.colors.stActive)
       Box(Modifier.weight(1f)) { InspectorLine("Pass ${pass.passNumber}", details) }
     }
     if (pass.lanes.isNotEmpty()) RunningReviewLanes(pass)
@@ -126,9 +120,13 @@ private fun RunningReviewLanes(pass: RunningReviewPass) {
 
 @Composable
 private fun InspectorFindingsBox(findings: List<ReviewReportFinding>) {
-  Column(Modifier.fillMaxWidth().background(SkillBillTheme.colors.bgInset, RoundedCornerShape(SkillBillRadius.md))) {
+  Column(Modifier.fillMaxWidth()) {
     findings.forEachIndexed { index, finding ->
-      InspectorFindingRow(index, finding, Modifier.fillMaxWidth().sbBoxSegment(index, findings.size))
+      InspectorFindingRow(
+        index,
+        finding,
+        Modifier.fillMaxWidth().sbBoxSegment(index, findings.size, fill = SkillBillTheme.colors.bgInset),
+      )
     }
   }
 }
@@ -153,7 +151,11 @@ private fun InspectorFindingRow(index: Int, finding: ReviewReportFinding, modifi
     verticalArrangement = Arrangement.spacedBy(6.dp),
   ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
-      SeverityBadge(finding.severity)
+      SbTag(finding.severity, tone = when (finding.severity.lowercase()) {
+        "blocker" -> colors.stFailed
+        "major" -> colors.stBlocked
+        else -> null
+      })
       BasicText(
         finding.description,
         Modifier.weight(1f),
@@ -173,26 +175,10 @@ private fun InspectorFindingRow(index: Int, finding: ReviewReportFinding, modifi
 }
 
 @Composable
-private fun SeverityBadge(severity: String) {
-  val colors = SkillBillTheme.colors
-  val (text, background) = when (severity.lowercase()) {
-    "blocker" -> colors.stFailed to colors.stFailed.copy(alpha = SEVERITY_TINT_ALPHA)
-    "major" -> colors.stBlocked to colors.stBlocked.copy(alpha = SEVERITY_TINT_ALPHA)
-    else -> colors.fg2 to colors.bgOverlay
-  }
-  Box(
-    Modifier.height(18.dp).background(background, RoundedCornerShape(SkillBillRadius.xs)).padding(horizontal = 6.dp),
-    contentAlignment = Alignment.Center,
-  ) {
-    BasicText(severity, style = SkillBillTheme.type.tXs.copy(color = text), maxLines = 1, softWrap = false)
-  }
-}
-
-@Composable
 private fun FindingState(status: ReviewFindingStatus) {
   val color = status.color()
   Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-    Box(Modifier.size(6.dp).background(color, CircleShape))
+    StatusDot(color)
     BasicText(status.label(), style = SkillBillTheme.type.tSmMedium.copy(color = color), maxLines = 1, softWrap = false)
   }
 }

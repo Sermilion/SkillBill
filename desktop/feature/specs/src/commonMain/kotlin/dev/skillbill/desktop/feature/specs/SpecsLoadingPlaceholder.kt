@@ -1,6 +1,5 @@
 package dev.skillbill.desktop.feature.specs
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,21 +11,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.unit.dp
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
-import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.SkeletonBlock
 import dev.skillbill.desktop.core.designsystem.component.sbPulse
 import kotlinx.coroutines.delay
 
@@ -59,17 +55,12 @@ internal fun SpecsLoadingPlaceholder(modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        PlaceholderBlock(Modifier.size(14.dp), CircleShape)
-        PlaceholderBlock(Modifier.width(62.dp).height(14.dp), RoundedCornerShape(SkillBillRadius.xs))
+        SkeletonBlock(Modifier.size(14.dp), CircleShape)
+        SkeletonBlock(Modifier.width(62.dp).height(14.dp))
         Box(Modifier.weight(1f)) {
-          PlaceholderBlock(Modifier.fillMaxWidth(titleFraction).height(10.dp), RoundedCornerShape(SkillBillRadius.xs))
+          SkeletonBlock(Modifier.fillMaxWidth(titleFraction).height(10.dp))
         }
       }
     }
   }
-}
-
-@Composable
-private fun PlaceholderBlock(modifier: Modifier, shape: Shape) {
-  Box(modifier.background(SkillBillTheme.colors.bgActive, shape))
 }

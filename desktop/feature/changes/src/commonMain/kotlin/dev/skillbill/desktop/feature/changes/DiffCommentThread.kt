@@ -3,9 +3,7 @@ package dev.skillbill.desktop.feature.changes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -27,7 +25,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -46,12 +43,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
@@ -73,8 +65,11 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillColors
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
+import dev.skillbill.desktop.core.designsystem.component.SbTag
+import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
 import dev.skillbill.desktop.core.domain.model.Comment
@@ -96,7 +91,6 @@ internal fun DiffCommentThread(
   modifier: Modifier = Modifier,
 ) {
   val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(7.dp)
   val railTarget = when (thread.state) {
     CommentState.Pending -> colors.accent
     CommentState.Open -> colors.stPlanning
@@ -113,19 +107,7 @@ internal fun DiffCommentThread(
     if (ui.draft != null) focusRequester.requestFocus()
   }
   DisposableEffect(thread.id) { onDispose { onReplyFocusChanged(thread.id, false) } }
-  Column(
-    modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(shape).background(colors.bgPanel)
-      .then(if (thread.state == CommentState.Pending) Modifier.drawBehind {
-        val stroke = 1.dp.toPx()
-        drawRoundRect(
-          color = colors.accent.copy(alpha = .35f),
-          topLeft = Offset(stroke / 2, stroke / 2),
-          size = Size(size.width - stroke, size.height - stroke),
-          cornerRadius = CornerRadius(7.dp.toPx()),
-          style = Stroke(stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))),
-        )
-      } else Modifier.border(BorderStroke(1.dp, colors.border), shape)),
-  ) {
+  SbBox(modifier.height(IntrinsicSize.Min), fill = colors.bgPanel, borderColor = if (thread.state == CommentState.Pending) colors.accent.copy(alpha = .35f) else colors.borderSubtle) {
     Row(Modifier.height(IntrinsicSize.Min)) {
       Box(Modifier.width(3.dp).fillMaxHeight().drawBehind {
         drawLine(rail, Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), strokeWidth = size.width)
@@ -139,7 +121,7 @@ internal fun DiffCommentThread(
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          Chip(thread.state.name, stateColor(thread.state, colors))
+          SbTag(thread.state.name, tone = stateColor(thread.state, colors))
           BasicText(thread.comments.firstOrNull()?.body?.lineSequence()?.firstOrNull().orEmpty(), Modifier.weight(1f), style = changesSans(11f, FontWeight.Normal, colors.fg2), maxLines = 1)
           BasicText("${(thread.comments.size - 1).coerceAtLeast(0)} replies", style = changesSans(10f, FontWeight.Normal, colors.fgMuted))
         }
@@ -159,9 +141,9 @@ internal fun DiffCommentThread(
             verticalArrangement = Arrangement.spacedBy(5.dp),
             itemVerticalAlignment = Alignment.CenterVertically,
           ) {
-            Chip(thread.state.name, stateColor(thread.state, colors))
-            if (thread.outdated) Chip("Outdated", colors.stFailed)
-            thread.severity?.let { Chip(it, severityColor(it, colors)) }
+            SbTag(thread.state.name, tone = stateColor(thread.state, colors))
+            if (thread.outdated) SbTag("Outdated", tone = colors.stFailed)
+            thread.severity?.let { SbTag(it, tone = severityColor(it, colors)) }
             thread.findingRef?.let { BasicText(it, style = changesMono(10f, FontWeight.Medium, colors.fgMuted)) }
           }
           if (thread.outdated && (thread.line != null || thread.anchorLineText != null)) {
@@ -198,10 +180,10 @@ internal fun DiffCommentThread(
             )
           }
           if (ui.draft != null) {
-            BasicTextField(
-              value = ui.draft,
-              onValueChange = { onAction(ChangesWindowAction.EditReply(thread.id, it)) },
-              modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp).background(colors.bgInset, RoundedCornerShape(5.dp)).padding(8.dp)
+            SbInput(
+              ui.draft,
+              { onAction(ChangesWindowAction.EditReply(thread.id, it)) },
+              Modifier.fillMaxWidth().heightIn(min = 54.dp)
                 .focusRequester(focusRequester).onFocusChanged { onReplyFocusChanged(thread.id, it.isFocused) }
                 .onPreviewKeyEvent { event ->
                   if (event.type != KeyEventType.KeyDown) false
@@ -209,8 +191,8 @@ internal fun DiffCommentThread(
                   else if (event.key == Key.Enter && (event.isCtrlPressed || event.isMetaPressed)) { if (!ui.busy) onAction(ChangesWindowAction.SendReply(thread.id)); true }
                   else false
                 },
-              textStyle = changesSans(11.5f, FontWeight.Normal, colors.fg),
-              cursorBrush = SolidColor(colors.fg),
+              multiline = true,
+              onSubmit = null,
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
               ActionText("Send", colors.accentText, ui.busy) { onAction(ChangesWindowAction.SendReply(thread.id)) }
@@ -253,7 +235,7 @@ private fun CommentRow(comment: Comment, sourceLabel: String?, now: Instant, bus
     ) { BasicText(if (agent) "✦" else "U", style = changesSans(10f, FontWeight.SemiBold, if (agent) colors.accentText else colors.fg2)) }
     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
       FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-        if (comment.author == CommentAuthor.Agent) comment.outcome?.let { Chip(it.name, outcomeColor(it, colors)) }
+        if (comment.author == CommentAuthor.Agent) comment.outcome?.let { SbTag(it.name, tone = outcomeColor(it, colors)) }
         BasicText(comment.agentId ?: if (agent) "Agent" else "You", style = changesSans(10.5f, FontWeight.SemiBold, colors.fg))
         sourceLabel?.let { BasicText(it, style = changesMono(9f, FontWeight.Normal, colors.fgMuted)) }
         BasicText(relativeTime(comment.createdAt, now), style = changesSans(9.5f, FontWeight.Normal, colors.fgFaint), maxLines = 1)
@@ -274,11 +256,6 @@ private fun relativeTime(createdAt: Instant, now: Instant): String {
     minutes < 1440 -> "${minutes / 60}h ago"
     else -> "${minutes / 1440}d ago"
   }
-}
-
-@Composable
-private fun Chip(label: String, color: Color) {
-  BasicText(label, Modifier.background(color.copy(alpha = 0.12f), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 3.dp), style = changesSans(9f, FontWeight.Medium, color), maxLines = 1)
 }
 
 @Composable

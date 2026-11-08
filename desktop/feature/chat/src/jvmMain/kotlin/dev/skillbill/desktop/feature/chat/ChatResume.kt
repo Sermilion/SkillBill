@@ -20,6 +20,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillColors
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import java.io.File
 import kotlin.time.Duration
@@ -82,7 +84,7 @@ internal fun CommandHint(command: String, onClick: () -> Unit) {
     horizontalArrangement = Arrangement.spacedBy(8.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    ChatPill(command, mono = true)
+    SbLabel(command, style = SbLabelStyle.Mono)
     BasicText(CHAT_COMMANDS.getValue(command), style = type.tSm.copy(color = colors.fgMuted))
   }
 }
