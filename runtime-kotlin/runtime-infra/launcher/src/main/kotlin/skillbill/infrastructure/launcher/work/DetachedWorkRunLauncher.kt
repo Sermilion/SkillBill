@@ -110,18 +110,11 @@ class DetachedWorkRunLauncher internal constructor(
 
   private fun installedLaunch(request: WorkRunLaunchRequest): InstalledLaunch =
     when (val kind = request.kind) {
-      is WorkRunLaunchKind.AgentHarness -> harnessLaunch(kind)
       is WorkRunLaunchKind.RuntimeCommand ->
         resolveExecutable(listOf(RUNTIME_EXECUTABLE))
           ?.let { InstalledLaunch.Ready(listOf(it.toString()) + kind.arguments) }
           ?: InstalledLaunch.Refused("The $RUNTIME_EXECUTABLE runtime is not installed or is not on PATH.")
     }
-
-  private fun harnessLaunch(harness: WorkRunLaunchKind.AgentHarness): InstalledLaunch =
-    InstalledLaunch.Refused(
-      "The ${harness.agentId} harness cannot be started directly: it has no operator approval channel, so " +
-        "permission requests could not be shown on a card. Start the run through the skill-bill runtime instead.",
-    )
 
   private fun startInstalled(
     built: InstalledLaunch.Ready,

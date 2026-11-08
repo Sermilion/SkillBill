@@ -379,10 +379,12 @@ the earlier default of routing every eligible permission prompt to the operator.
 Read-only phase instructions still constrain the requested work; they do not
 select a restrictive provider sandbox by default.
 
-The broker remains connected for genuine permission requests a harness still
-emits. These requests retain their provider identity and wait for the operator's
-card decision. Ordinary chat questions use the question UI or prose and never
-manufacture a permission request. Bypass does not confirm parked `verify` or
+Approval cards apply only to chats. The chat broker remains connected for genuine
+permission requests a harness still emits. Runs launch through the runtime with
+native permission bypass and do not require an operator approval channel. A run
+resume or rerun never starts a chat harness as an intermediary. Ordinary chat
+questions use the question UI or prose and never manufacture a permission request.
+Bypass does not confirm parked `verify` or
 `pr-review-fix` proposals; their operator confirmation cards retain their own
 contracts. Provider-managed restrictions remain authoritative, and an action
 rejected by the provider is never replayed automatically.

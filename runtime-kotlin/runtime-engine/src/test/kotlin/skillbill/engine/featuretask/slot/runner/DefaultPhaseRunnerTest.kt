@@ -13,6 +13,7 @@ import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunBuildObserver
 import skillbill.ports.agentrun.model.AgentRunCommandEvent
 import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
@@ -45,6 +46,26 @@ import kotlin.test.fail
 
 class DefaultPhaseRunnerTest {
   @TempDir lateinit var databaseHome: Path
+
+  @Test
+  fun `runtime phases launch outside chat approval cards`() {
+    val requests = mutableListOf<SkillRunRequest>()
+    val runner =
+      DefaultPhaseRunner(
+        GoalRunnerSubtaskLauncher { launch ->
+          requests += launch.skillRunRequest
+          agentRunLaunchFacts(SupportedAgent.CLAUDE)
+        },
+        NoopWorkflowGitOperations,
+      )
+
+    listOf("preplan", "plan", "implement", "validate", "qa", "monitor").forEach { phase ->
+      runner.run(input(phase), PrepareOnlyPhaseRunState)
+    }
+
+    assertEquals(6, requests.size)
+    requests.forEach { assertEquals(AgentRunApprovalRequirement.OutsideApproval, it.approval) }
+  }
 
   @Test
   fun `unobserved launches still receive the build observer`() {
@@ -400,7 +421,6 @@ class DefaultPhaseRunnerTest {
           attempt = null,
           observeLaunch = false,
           briefingText = "",
-          approvalRunId = "wftr-default-phase-runner",
         ),
       policy = PhaseStepPolicy(false, false, false, false, false),
     )

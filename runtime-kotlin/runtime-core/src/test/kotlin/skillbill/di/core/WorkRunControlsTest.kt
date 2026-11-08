@@ -50,7 +50,6 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import kotlin.test.Test
-import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -291,11 +290,8 @@ class WorkRunControlsTest {
           null,
         ),
       )
-      val harness = assertIs<WorkRunLaunchKind.AgentHarness>(launched.single().kind)
-      assertEquals("codex", harness.agentId)
-      assertContains(harness.prompt, "/skill-bill phase:monitor")
-      assertContains(harness.prompt, "https://example.test/pr/42")
-      assertContains(harness.prompt, "Selected agent: codex")
+      val command = assertIs<WorkRunLaunchKind.RuntimeCommand>(launched.single().kind)
+      assertEquals(listOf("phase", "monitor", "https://example.test/pr/42", "--agent", "codex"), command.arguments)
       assertEquals(fixture.dbPath, launched.single().databasePath)
       assertEquals(mapOf("CLAUDE_CONFIG_DIR" to "/home/dev/.claude-work"), launched.single().agentEnvironment)
       Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/other\n")
@@ -317,6 +313,40 @@ class WorkRunControlsTest {
       Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/main\n")
       assertEquals(WorkControlResult.Accepted, component.launchRun(target, null))
       assertEquals(2, launched.size)
+    }
+  }
+
+  @Test
+  fun `a standalone plan resumes through the runtime without a chat approval channel`() {
+    establishTemporarySchemaReadiness("standalone-plan-resume").use { fixture ->
+      Files.createDirectory(fixture.tempDir.resolve(".git"))
+      Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/main\n")
+      val launched = mutableListOf<WorkRunLaunchRequest>()
+      val launcher =
+        object : WorkRunLauncher {
+          override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
+
+          override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
+            launched += request
+            return WorkRunLaunchResult.Started(fixture.tempDir.resolve("run.log"))
+          }
+        }
+      val component = component(fixture.tempDir, fixture.dbPath, launcher)
+      component.databaseSession.transaction {
+        it.standalonePhaseStatuses.register(
+          registration(fixture.tempDir).copy(
+            issueKey = "SKILL-9",
+            phaseId = "plan",
+            launchAgentId = "claude",
+            launchArguments = listOf("phase", "plan", "SKILL-9", "--agent", "claude"),
+          ),
+        )
+      }
+
+      assertEquals(WorkControlResult.Accepted, component.launchRun(target(component), "codex"))
+      val command = assertIs<WorkRunLaunchKind.RuntimeCommand>(launched.single().kind)
+      assertEquals(listOf("phase", "plan", "SKILL-9", "--agent", "codex"), command.arguments)
+      assertEquals(fixture.dbPath, launched.single().databasePath)
     }
   }
 
@@ -352,9 +382,19 @@ class WorkRunControlsTest {
       assertEquals(IdeStatusDisplayGroup.GOALS, item.displayGroup)
 
       assertEquals(WorkControlResult.Accepted, component.launchRun(target(component), "codex"))
-      val prompt = assertIs<WorkRunLaunchKind.AgentHarness>(launched.single().kind).prompt
-      assertContains(prompt, "Run the goal with /skill-bill")
-      assertContains(prompt, "[\"goal\",\"SKILL-9 Render answers\",\"--agent\",\"codex\"]")
+      val command = assertIs<WorkRunLaunchKind.RuntimeCommand>(launched.single().kind)
+      assertEquals(
+        listOf(
+          "goal",
+          "SKILL-9 Render answers",
+          "--agent",
+          "codex",
+          "--repo-root",
+          fixture.tempDir.toString(),
+          "--no-live-output",
+        ),
+        command.arguments,
+      )
     }
   }
 
@@ -864,9 +904,11 @@ class WorkRunControlsTest {
       }
 
       assertEquals(WorkControlResult.Accepted, component.launchRun(targetFor("monitor-7"), "codex"))
-      val prompt = assertIs<WorkRunLaunchKind.AgentHarness>(launched.single().kind).prompt
-      assertContains(prompt, "https://github.com/acme/repo/pull/7")
-      assertFalse("https://example.test/stale" in prompt)
+      val command = assertIs<WorkRunLaunchKind.RuntimeCommand>(launched.single().kind)
+      assertEquals(
+        listOf("phase", "monitor", "https://github.com/acme/repo/pull/7", "--agent", "codex"),
+        command.arguments,
+      )
 
       assertEquals(WorkControlResult.Accepted, component.cancelRun(targetFor("monitor-8")))
       assertEquals("$repository:github.com/acme/repo#8:monitor", stopped.single().ownershipKey)
@@ -930,10 +972,8 @@ class WorkRunControlsTest {
 
       assertEquals(WorkControlResult.Accepted, component.launchRun(target, "codex"))
 
-      val prompt = assertIs<WorkRunLaunchKind.AgentHarness>(launched.single().kind).prompt
-      assertContains(prompt, "Monitor exactly branch:main")
-      assertContains(prompt, "Do not check out the branch main in this repository")
-      assertFalse("/tree/main" in prompt)
+      val command = assertIs<WorkRunLaunchKind.RuntimeCommand>(launched.single().kind)
+      assertEquals(listOf("phase", "monitor", "branch:main", "--agent", "codex"), command.arguments)
     }
   }
 

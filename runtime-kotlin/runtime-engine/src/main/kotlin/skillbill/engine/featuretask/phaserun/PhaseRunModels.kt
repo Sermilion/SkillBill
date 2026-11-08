@@ -183,5 +183,4 @@ public data class InMemoryPhaseRunFacts(
   override val goalQualityAutomaticRecovery: Boolean = request.goalQualityPhaseProgress != null
   override val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? = request.acceptedGoalQualityExecutionPlan
   override val qaOutcomeWorkflowId: String = request.goalQualityInvocationId?.let { "$workflowId:$it" } ?: workflowId
-  override val approvalRunId: String = workflowId.ifBlank { invocationId }
 }

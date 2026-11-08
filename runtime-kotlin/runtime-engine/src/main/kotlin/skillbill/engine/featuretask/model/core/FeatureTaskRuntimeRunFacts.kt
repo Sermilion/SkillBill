@@ -120,9 +120,6 @@ public interface FeatureTaskRuntimeRunFacts {
    * including goal, goal-child and goal-quality validation.
    */
   public val validationCheckInvocationId: String?
-
-  /** The run id every agent launch of this run is owned by for operator approvals; never blank for a launch. */
-  public val approvalRunId: String get() = workflowId
 }
 
 public data class PhaseInstructions(
