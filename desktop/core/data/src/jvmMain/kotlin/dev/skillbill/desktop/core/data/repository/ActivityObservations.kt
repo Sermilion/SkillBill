@@ -10,6 +10,7 @@ import skillbill.engine.work.timeline.model.WorkActivityFact
 import dev.skillbill.desktop.core.domain.model.ActivityGroup
 import dev.skillbill.desktop.core.domain.model.ActivityGroupKind
 import dev.skillbill.desktop.core.domain.model.ActivityPhase
+import dev.skillbill.desktop.core.domain.model.ActivityPhaseEvent
 import dev.skillbill.desktop.core.domain.model.ActivityResult
 import dev.skillbill.desktop.core.domain.model.ActivityStatus
 import dev.skillbill.desktop.core.domain.model.ReadProblem
@@ -50,6 +51,13 @@ internal fun WorkActivityResult.toDomain(): ActivityResult = when (this) {
       g.phases.map { p -> ActivityPhase(p.phaseId, p.attempt, p.startedAt?.toKotlinInstant(), p.finishedAt?.toKotlinInstant(), p.agent, p.model, p.effort, p.summary, p.verdict) },
       g.blocks.map { block -> ActivityBlock(block.id, block.at.toKotlinInstant(), ActivityBlockKind.valueOf(block.kind.name), block.phaseId, block.attempt, block.reason, block.needsDecision) },
       g.before.map { it.toDomain() }, g.after.map { it.toDomain() }, ActivityGroupKind.valueOf(g.kind.name),
+      phaseEvents = buildList {
+        g.phases.forEach { phase ->
+          phase.startedAt?.let { add(ActivityPhaseEvent(phase.phaseId, it.toKotlinInstant(), "Started · attempt ${phase.attempt}", false)) }
+          phase.finishedAt?.let { add(ActivityPhaseEvent(phase.phaseId, it.toKotlinInstant(), "Settled · ${phase.verdict ?: phase.summary ?: "finished"}", false)) }
+        }
+        g.blocks.forEach { block -> block.reason?.let { add(ActivityPhaseEvent(block.phaseId, block.at.toKotlinInstant(), it, true)) } }
+      }.sortedBy { it.at },
     )
   })
 }

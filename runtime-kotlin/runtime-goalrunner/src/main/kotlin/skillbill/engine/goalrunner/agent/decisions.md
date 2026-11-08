@@ -1,3 +1,14 @@
+## [2026-11-08] Attribute live edit facts only to the current matching phase
+Context: The edit journal keeps one workflow tick and clears it when the worktree is clean; workflow activity stamps do not identify a phase.
+Decision: Attach edits only to the current subtask card whose phase matches the tick. Attach activity only to that subtask's last running or blocked card; preserve earlier cards' introduced-file facts.
+Reason: The stored data cannot establish historical per-phase edits or activity. Reusing the latest tick on earlier cards would attribute changes to the wrong phase.
+
+## [2026-11-08] Derive goal finish cards from existing durable sources
+Context: Goal PR, monitor and monitor_fix runs lack durable phase records; the spec assigns their cards to retained PR facts and monitor cycle rows.
+Decision: Derive card states in runtime-goalrunner and carry them through desktop mapping. Read at most 10 monitor cycles and attribute a repair commit to the cycle immediately after its failed or conflicted routing cycle.
+Reason: Existing durable sources preserve runtime authority over lifecycle verdicts without extra phase persistence or desktop inference. Missing agent and timing facts stay null, and failed reads record degradation.
+Revisit when: Goal finish phases gain durable records or the product needs more than the bounded cycle history.
+
 # goalrunner boundary decisions
 
 ## [2026-11-07] Keep the initial build separate from QA repair builds

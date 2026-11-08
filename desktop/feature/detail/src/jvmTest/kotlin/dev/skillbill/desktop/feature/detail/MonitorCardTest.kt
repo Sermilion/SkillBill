@@ -1,8 +1,6 @@
 package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.assertDoesNotExist
-import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -45,7 +43,7 @@ class MonitorCardTest {
     onNodeWithText("Passing check").assertExists()
     onNodeWithText("Cycle 1 · Conflicted").assertExists()
 
-    setContent { SkillBillTheme(reducedMotion = true) { MonitorCard(card.copy(ciCycles = listOf(older, conflictedWithPassingCheck, running)), null, now) } }
+    setContent { SkillBillTheme(reducedMotion = true) { MonitorCard(card.copy(ciCycles = listOf(older, conflictedWithPassingCheck, running.copy(cycle = 2))), null, now) } }
     onNodeWithText("Cycle 1 · Conflicted").assertExists()
     onNodeWithText("Cycle 2 · Running").assertExists()
 

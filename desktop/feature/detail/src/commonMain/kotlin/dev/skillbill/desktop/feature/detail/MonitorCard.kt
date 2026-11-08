@@ -57,13 +57,11 @@ internal fun MonitorCard(card: PhaseCard, url: String?, now: Instant) {
       end = latest?.takeIf { it.finishedAt == null }?.let { lastPollLabel(it.observedAt, now) },
     ) { latest?.checks?.forEach { LinkedCiCheck(it) } }
     val earlier = card.ciCycles.dropLast(1).takeLast(5)
-    val currentResult = latest?.outcome?.let { cycle ->
-      latest.finishedAt?.let { finishedAt ->
-        PeekTimelineRow(formatInstant(finishedAt, "HH:mm"), "Cycle ${latest.cycle} · ${capitalized(humanized(cycle))}", null)
-      }
+    val currentResult = latest?.let {
+      PeekTimelineRow(formatInstant(it.finishedAt ?: it.observedAt, "HH:mm"), "Cycle ${it.cycle} · ${it.outcome?.let { outcome -> capitalized(humanized(outcome)) } ?: "Running"}", null)
     }
     if (currentResult != null || earlier.isNotEmpty()) PeekTimeline(listOfNotNull(currentResult) + earlier.map {
-      PeekTimelineRow(formatInstant(it.finishedAt ?: it.observedAt, "HH:mm"), "Cycle ${it.cycle} · ${it.outcome?.let(::humanized) ?: "Running"}", null)
+      PeekTimelineRow(formatInstant(it.finishedAt ?: it.observedAt, "HH:mm"), "Cycle ${it.cycle} · ${it.outcome?.let { outcome -> capitalized(humanized(outcome)) } ?: "Running"}", null)
     })
   }
 }

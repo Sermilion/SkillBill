@@ -106,12 +106,7 @@ private fun ValidationReceipt(title: String, receipt: dev.skillbill.desktop.core
 private fun activityRows(activity: ActivityResult, subtaskId: Int?, card: PhaseCard): List<PeekTimelineRow> {
   val listed = activity as? ActivityResult.Listed ?: return emptyList()
   val group = listed.groups.firstOrNull { it.subtaskId == subtaskId } ?: return emptyList()
-  val rows = buildList<Pair<Instant, PeekTimelineRow>> {
-    group.phases.filter { it.phaseId == card.phaseId }.forEach { phase ->
-      phase.startedAt?.let { add(it to PeekTimelineRow(formatInstant(it, "HH:mm"), "Started · attempt ${phase.attempt}", null)) }
-      phase.finishedAt?.let { add(it to PeekTimelineRow(formatInstant(it, "HH:mm"), "Settled · ${phase.verdict ?: phase.summary ?: "finished"}", null)) }
-    }
-    group.blocks.filter { it.phaseId == card.phaseId }.forEach { block -> block.reason?.let { add(block.at to PeekTimelineRow(formatInstant(block.at, "HH:mm"), it, PeekState.Wait)) } }
+  return group.phaseEvents.filter { it.phaseId == card.phaseId }.takeLast(5).map {
+    PeekTimelineRow(formatInstant(it.at, "HH:mm"), it.label, if (it.blocked) PeekState.Wait else null)
   }
-  return rows.sortedBy { it.first }.takeLast(5).map { it.second }
 }
