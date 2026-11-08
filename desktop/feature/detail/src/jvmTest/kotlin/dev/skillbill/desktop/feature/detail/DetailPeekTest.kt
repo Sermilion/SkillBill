@@ -101,6 +101,7 @@ class DetailPeekTest {
       SectionsUi.Loaded(detail, null, emptyMap(), emptySet()),
       false,
       epoch,
+      subtaskChoice = SubtaskChoice(SubtaskKey.Subtask(3), expanded = false),
     )
     val open = mutableStateOf(false)
     val input = ShellInput()
@@ -133,6 +134,7 @@ class DetailPeekTest {
     )
     val state = mutableStateOf(DetailUiState(
       workItem("goal"), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch,
+      subtaskChoice = SubtaskChoice(SubtaskKey.Subtask(1), expanded = false),
     ))
     val open = mutableStateOf(false)
     val input = ShellInput()

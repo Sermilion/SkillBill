@@ -19,6 +19,11 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
@@ -57,6 +62,7 @@ fun SubtaskRow(
   divider: Boolean = true,
   body: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
+  val openRow = LocalSubtaskRowOpen.current
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val pending = status == StatusKind.Pending
@@ -78,7 +84,9 @@ fun SubtaskRow(
         .background(if (hovered) colors.bgHover else Color.Transparent)
         .then(
           if (onClick != null) {
-            Modifier.hoverable(interaction).pointerHoverIcon(PointerIcon.Hand)
+            Modifier.onPreviewKeyEvent { event ->
+                if (openRow != null && event.type == KeyEventType.KeyDown && (event.key == Key.Enter || event.key == Key.NumPadEnter)) { openRow(); true } else false
+              }.hoverable(interaction).pointerHoverIcon(PointerIcon.Hand)
               .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
               .expandSemantics(body != null)
           } else {

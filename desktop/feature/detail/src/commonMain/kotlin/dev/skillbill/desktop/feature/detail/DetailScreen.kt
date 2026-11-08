@@ -107,6 +107,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   }
   val item = state.header
   val view = runActionsView(state)
+  val paneShown = host.detailsPaneOpen && !host.specsOpen && !host.chatPaneOpen
   val recoverFocus = remember { FocusRequester() }
   val listState = rememberLazyListState()
   val planScreenState = rememberPlanScreenState(item.id)
@@ -199,11 +200,11 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
           if (!validationRow && item.reason != null && item.lifecycle != Lifecycle.Terminal) sections.item(key = "reason") {
             Column(Modifier.padding(top = DocBlockGap)) { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
           }
-          sections.document(state, view, onAction, qaView, scrollToFinding, validationPage, scrollToVerifySection)
+          sections.document(state, view, paneShown, onAction, qaView, scrollToFinding, validationPage, scrollToVerifySection)
         }
       }
       DetailPeek(
-        open = host.detailsPaneVisible,
+        open = paneShown,
         wide = (state.sections as? SectionsUi.Loaded)?.detail?.let {
           selectedSubtask(item, it, state.subtaskChoice.key) == SubtaskKey.GoalFinish
         } == true,
@@ -245,7 +246,7 @@ internal fun DetailSections.incident(state: DetailUiState, view: RunActionsView,
 }
 
 /** Detail sections with Activity last; placeholders hold their place until the first read lands. */
-internal fun DetailSections.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit, qaView: QaChecklistView?, onOpenFinding: (String) -> Unit, validationPage: ValidationPageState? = null, onScrollToVerifySection: (String) -> Unit = {}) {
+internal fun DetailSections.document(state: DetailUiState, view: RunActionsView, paneShown: Boolean, onAction: (DetailAction) -> Unit, qaView: QaChecklistView?, onOpenFinding: (String) -> Unit, validationPage: ValidationPageState? = null, onScrollToVerifySection: (String) -> Unit = {}) {
   val item = state.header
   when (val sections = state.sections) {
     SectionsUi.Pending -> {
@@ -276,7 +277,7 @@ internal fun DetailSections.document(state: DetailUiState, view: RunActionsView,
       item(key = "metrics") {
         Column(Modifier.padding(top = DocBlockGap)) { DetailMetrics(item, detail) }
       }
-      subtaskSection(item, detail, state, onAction)
+      subtaskSection(item, detail, state, paneShown, onAction)
       pipelineSection(item, detail)
       if (item.showsChanges) changesSection(state.changes, onAction)
       briefingSection(item, detail, onAction)

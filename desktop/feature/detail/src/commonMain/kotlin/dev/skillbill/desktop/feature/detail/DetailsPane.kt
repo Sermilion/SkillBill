@@ -68,7 +68,7 @@ internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<Ass
       LazyColumn(Modifier.weight(1f), state = listState, contentPadding = PaddingValues(24.dp)) {
         val sections = DetailSections(this, collapse, listState, assessmentOrder)
         if (detail != null) {
-          sections.item(key = "inspector") { InspectorSection(item, detail, selected, onAction) }
+          sections.item(key = "inspector") { InspectorSection(state, item, detail, selected, onAction) }
           if (state.qaPreviewVisible && (selected != SubtaskKey.GoalFinish || resultTab == "qa")) {
             previewRun?.let { run -> sections.item(key = "qa-preview") { QaPreview(run.invocationId, state.qaPreview) } }
           }
@@ -216,14 +216,25 @@ private fun RunsSection(itemId: String, attempts: DetailAttempts) {
 
 /** The selected subtask, or the Goal finish steps; goals with a subtask index only. */
 @Composable
-private fun InspectorSection(item: WorkItem, detail: Detail, chosen: SubtaskKey?, onAction: (DetailAction) -> Unit) {
+private fun InspectorSection(state: DetailUiState, item: WorkItem, detail: Detail, chosen: SubtaskKey?, onAction: (DetailAction) -> Unit) {
   val key = chosen ?: return
   val status = inspectorStatus(item, detail, key)
   when (key) {
     SubtaskKey.GoalFinish -> PaneSection(title = "Goal finish", status = status) { PhasePipeline(goalFinishSteps(item, detail)) }
     is SubtaskKey.Subtask -> {
       val subtask = detail.subtasks.firstOrNull { it.id == key.id } ?: return
-      PaneSection(title = "Subtask ${subtaskNumber(subtask.id)}", status = status) { SubtaskInspector(detail, subtask, onAction) }
+      PaneSection(title = "Subtask ${subtaskNumber(subtask.id)}", status = status) {
+        SubtaskInspector(
+          item = item,
+          detail = detail,
+          subtask = subtask,
+          phaseChoice = state.phaseChoice,
+          activity = state.activity,
+          inline = false,
+          renderedAt = state.renderedAt,
+          onAction = onAction,
+        )
+      }
     }
   }
 }

@@ -17,21 +17,40 @@ private const val BLOCKED = "blocked"
 private const val SUBTASK_SPEC_PREFIX = "spec_subtask_"
 
 /**
- * The window's subtask selections, one per work item, so a choice survives paging between items (J, K, the pager), which
- * replaces the detail and its ViewModel. The choices belong to one database session: item ids repeat across databases, so a
- * new session starts empty. UI state only; nothing here reaches the runtime.
+ * The window's active subtask selections and explicit phase return rows, one per work item, so paging between items retains
+ * the row whose phase the user chose. The choices belong to one database session: item ids repeat across databases, so a new
+ * session starts empty. UI state only; nothing here reaches the runtime.
  */
 @Inject
 @SingleIn(WindowScope::class)
 class SubtaskSelections(private val session: DatabaseSessionController) {
   private val choices = mutableMapOf<String, SubtaskChoice>()
+  private val phaseChoices = mutableMapOf<PhaseChoiceKey, String>()
+  private val phaseReturnRows = mutableMapOf<String, SubtaskKey>()
   private var sessionId: Long? = null
   private var carryListFocus = false
 
-  fun get(itemId: String): SubtaskChoice = current()[itemId] ?: SubtaskChoice()
+  fun get(itemId: String): SubtaskChoice {
+    val rows = current()
+    val ordinary = rows[itemId] ?: SubtaskChoice()
+    val returnRow = phaseReturnRows[itemId] ?: return ordinary
+    return SubtaskChoice(returnRow, expanded = if (ordinary.key == returnRow) ordinary.expanded else true)
+  }
 
   fun set(itemId: String, choice: SubtaskChoice) {
     current()[itemId] = choice
+    phaseReturnRows.remove(itemId)
+  }
+
+  fun phases(itemId: String): Map<PhaseChoiceKey, String> {
+    current()
+    return phaseChoices.filterKeys { it.itemId == itemId }
+  }
+
+  fun setPhase(key: PhaseChoiceKey, phaseId: String) {
+    current()
+    phaseChoices[key] = phaseId
+    phaseReturnRows[key.itemId] = key.subtask
   }
 
   /**
@@ -48,6 +67,8 @@ class SubtaskSelections(private val session: DatabaseSessionController) {
     val open = (session.state.value as? DatabaseSessionState.Open)?.sessionId
     if (open != sessionId) {
       choices.clear()
+      phaseChoices.clear()
+      phaseReturnRows.clear()
       sessionId = open
     }
     return choices

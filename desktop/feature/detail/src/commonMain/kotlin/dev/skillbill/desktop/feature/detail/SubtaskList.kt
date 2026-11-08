@@ -111,7 +111,7 @@ internal fun BoxedFindingRow(
  * HANDOFF 9.2 item 9: the Subtasks index, one focusable box with the subtasks and a final Goal finish row. A row selects its
  * subtask for the side peek. The dependency and validation lists the inspector reads page in behind it. Goals only.
  */
-internal fun DetailSections.subtaskSection(item: WorkItem, detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit) {
+internal fun DetailSections.subtaskSection(item: WorkItem, detail: Detail, state: DetailUiState, paneShown: Boolean, onAction: (DetailAction) -> Unit) {
   if (item.kind != WorkKind.Goal) return
   if (item.statusKind() == StatusKind.Planning) {
     val plans = item.planningProgress
@@ -133,12 +133,12 @@ internal fun DetailSections.subtaskSection(item: WorkItem, detail: Detail, state
     count = progress?.let { "${it.done}/${it.total}" } ?: detail.subtasks.size.toString(),
     actions = if (progress == null) null else { { ProgressRing(progress.done, progress.total, showText = false) } },
   ) {
-    item(key = "subtask-index") { SubtaskIndex(item, detail, state, onAction) }
+    item(key = "subtask-index") { SubtaskIndex(item, detail, state, paneShown, onAction) }
   }
 }
 
 @Composable
-private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit) {
+private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, paneShown: Boolean, onAction: (DetailAction) -> Unit) {
   val colors = SkillBillTheme.colors
   val shellInput = LocalShellInput.current
   DisposableEffect(shellInput) { onDispose { shellInput.setFocusSource(ShellInput.SUBTASK_LIST_SOURCE, false) } }
@@ -148,7 +148,7 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, o
   var revealed by remember(item.id) { mutableStateOf(state.subtaskChoice) }
   fun selectVisibleRow(key: SubtaskKey) {
     revealed = SubtaskChoice(key)
-    onAction(DetailAction.SelectSubtask(key))
+    onAction(DetailAction.SelectSubtask(key, inline = !paneShown))
   }
   LaunchedEffect(state.subtaskChoice) {
     if (state.subtaskChoice == revealed) return@LaunchedEffect
@@ -192,8 +192,10 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, o
             }
             if (status == StatusKind.CompletedNoChange) SbLabel("no change")
           },
-          body = if (detail.stepPipeline.isEmpty() || !isCurrent) null else {
-            { PhasePipeline(subtaskSteps(item, detail, status, isCurrent)) }
+          body = when {
+            !paneShown && isSelected && state.subtaskChoice.expanded -> ({ SubtaskInspector(item, detail, subtask, state.phaseChoice, state.activity, inline = true, renderedAt = state.renderedAt, onAction) })
+            !isCurrent || detail.stepPipeline.isEmpty() -> null
+            else -> ({ PhasePipeline(subtaskSteps(item, detail, status, isCurrent)) })
           },
         )
       }

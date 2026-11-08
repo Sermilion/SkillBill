@@ -106,7 +106,12 @@ class DetailFeatureEntry(
       onDispose { viewModel.onAction(DetailAction.SetQaPreviewVisible(false)) }
     }
     DetailScreen(state, host) { action ->
-      if (action is DetailAction.SelectSubtask || action is DetailAction.MoveSubtaskSelection) {
+      val openDetailsPane = when (action) {
+        is DetailAction.SelectSubtask -> !action.inline
+        is DetailAction.MoveSubtaskSelection -> true
+        else -> false
+      }
+      if (openDetailsPane) {
         shellPanes.specsOpen = false
         shellPanes.detailsPaneOpen = true
       }
