@@ -17,9 +17,9 @@ internal fun toolActivityLabel(call: ChatToolCall): String {
   }
   fun file(): String? = (argument("file_path", "path", "file")
     ?: call.input.takeIf { args == null && it.isNotBlank() && it.lineSequence().count() == 1 && !it.startsWith("{") })
-    ?.replace('\\', '/')?.substringAfterLast('/')
+    ?.replace('\\', '/')?.substringAfterLast('/')?.takeIf(::isActivityFileName)
   fun label(verb: String, detail: String?, fallback: String): String =
-    if (detail.isNullOrBlank()) fallback else "$verb $detail"
+    if (detail.isNullOrBlank() || !isActivityDetail(detail)) fallback else "$verb $detail"
   val label = when (name.lowercase()) {
     "edit", "multiedit", "write", "notebookedit", "str_replace", "delete", "file_change" ->
       label("Editing", file(), "Editing files...")
@@ -28,19 +28,24 @@ internal fun toolActivityLabel(call: ChatToolCall): String {
       val path = patch.lineSequence().firstNotNullOfOrNull { line ->
         listOf("*** Update File: ", "*** Add File: ", "*** Delete File: ")
           .firstOrNull { line.startsWith(it) }?.let { line.removePrefix(it) }
-      }?.replace('\\', '/')?.substringAfterLast('/')
+      }?.replace('\\', '/')?.substringAfterLast('/')?.takeIf(::isActivityFileName)
       label("Editing", path, "Editing files...")
     }
     "read", "read_file", "notebookread" -> label("Reading", file(), "Reading files...")
-    "grep", "glob", "search", "webfetch", "websearch", "web_search" ->
-      label("Searching for", argument("pattern", "query", "url") ?: call.summary, "Searching...")
-    "ls" -> label("Listing", file(), "Listing files...")
-    "bash", "shell", "exec_command", "run", "command_execution" -> {
-      val command = argument("command", "cmd") ?: call.input.takeIf { args == null && !it.startsWith("{") }
-      label("Running", command?.lineSequence()?.firstOrNull(), "Running command...")
+    "grep", "glob", "search", "webfetch", "websearch", "web_search" -> {
+      val query = argument("pattern", "query", "url")
+        ?: call.input.takeIf { args == null && name.lowercase() in setOf("websearch", "web_search") }
+      label("Searching for", query, "Searching...")
     }
+    "ls" -> label("Listing", file(), "Listing files...")
+    "bash", "shell", "exec", "exec_command", "run", "command_execution" -> "Running command..."
+    "wait", "wait_agent", "sleep", "write_stdin" -> "Waiting for response..."
     "task", "agent", "spawn_agent" -> label("Agent working on", argument("description", "task_name"), "Agent working...")
-    else -> "Calling $name"
+    else -> {
+      val server = call.name.takeIf { it.startsWith("mcp__") }?.removePrefix("mcp__")?.substringBefore("__")
+        ?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,48}")) }
+      if (server != null) "Calling $server MCP" else "Using tools..."
+    }
   }
   val compact = label.replace(Regex("[\\p{Cntrl}\\s]+"), " ").trim()
   return if (compact.length > ACTIVITY_LIMIT) compact.take(ACTIVITY_LIMIT - 3) + "..." else compact
@@ -54,3 +59,8 @@ private fun toolArguments(input: String): JsonObject? {
     null
   }
 }
+
+private fun isActivityFileName(value: String): Boolean = value.matches(Regex("[\\p{L}\\p{N}_.-]+"))
+
+private fun isActivityDetail(value: String): Boolean =
+  value.none { it.isISOControl() || it in "`$;|&<>{}" }
