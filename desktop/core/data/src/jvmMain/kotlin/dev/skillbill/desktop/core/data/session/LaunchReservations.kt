@@ -6,12 +6,16 @@ import dev.skillbill.desktop.core.domain.model.StandaloneRelaunch
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.util.concurrent.CompletionStage
+import kotlin.time.Duration.Companion.seconds
+
+private val START_CONFIRMATION_INTERVAL = 10.seconds
 
 internal val WorkItem.launchKey: String get() = issueKey ?: id
 
@@ -111,6 +115,32 @@ class LaunchReservations {
       latest[handle.sessionId]?.let { settleFromBoard(handle.key, held[handle.key], it) }
     }
     publish()
+  }
+
+  /** Rechecks accepted launches even when no board change arrives. Failed reads wait for the next check. */
+  internal suspend fun awaitStart(handle: LaunchReservationHandle, refresh: suspend () -> BoardPage?): Boolean {
+    while (awaitingBoard(handle)) {
+      delay(START_CONFIRMATION_INTERVAL)
+      if (!awaitingBoard(handle)) return false
+      val page = refresh() ?: continue
+      if (releaseUnconfirmed(handle, page)) return true
+    }
+    return false
+  }
+
+  private fun awaitingBoard(handle: LaunchReservationHandle): Boolean = synchronized(lock) {
+    held[handle.key]?.let { it.handle === handle && it.phase == Phase.AwaitingBoard } == true
+  }
+
+  private fun releaseUnconfirmed(handle: LaunchReservationHandle, page: BoardPage): Boolean = synchronized(lock) {
+    val reservation = held[handle.key]?.takeIf { it.handle === handle && it.phase == Phase.AwaitingBoard }
+      ?: return@synchronized false
+    if (reservation.baselineObservedAt != null && page.observedAt < reservation.baselineObservedAt) return@synchronized false
+    settleFromBoard(handle.key, reservation, Snapshot(page, handle.sessionId))
+    val unconfirmed = held[handle.key]?.handle === handle
+    if (unconfirmed) held.remove(handle.key)
+    publish()
+    unconfirmed
   }
 
   internal fun onBoard(sessionId: Long, page: BoardPage) = synchronized(lock) {

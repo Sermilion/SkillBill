@@ -122,7 +122,7 @@ class RuntimeWorkControlRepository(
   private val settings: AppSettingsRepository,
   private val launches: LaunchReservations,
   private val diagnostics: Diagnostics,
-  appScope: ApplicationCoroutineScope,
+  private val appScope: ApplicationCoroutineScope,
 ) : WorkControlRepository {
   init {
     appScope.scope.launch {
@@ -775,7 +775,7 @@ class RuntimeWorkControlRepository(
 
   private fun sessionIsCurrent(session: DatabaseSessionComponent): Boolean = sessions.isCurrent(session)
 
-  /** Holds [handle] around [request]; the reservation ends on failure, or once the board shows the launch. */
+  /** Holds [handle] until failure, a board change, or a fresh check finds that the launch did not start. */
   private suspend fun reserved(handle: LaunchReservationHandle, request: suspend () -> ControlOutcome): ControlOutcome {
     val outcome = try {
       request()
@@ -785,6 +785,19 @@ class RuntimeWorkControlRepository(
     }
     val succeeded = outcome !is ControlOutcome.Refused && outcome !is ControlOutcome.Failed
     launches.settle(handle, succeeded)
+    if (succeeded) appScope.scope.launch {
+      val unconfirmed = launches.awaitStart(handle) {
+        val session = sessions.currentComponent(handle.sessionId) ?: return@awaitStart null
+        when (val result = session.board.completeSnapshot(RESERVATION_BOARD)) {
+          is Outcome.Success -> result.value.takeIf { sessions.isCurrent(session) }?.also { session.board.refresh() }
+          is Outcome.Failure -> {
+            diagnostics.record("desktop_launch_confirmation_read_failed")
+            null
+          }
+        }
+      }
+      if (unconfirmed) diagnostics.record("desktop_launch_not_started")
+    }
     return outcome
   }
 
