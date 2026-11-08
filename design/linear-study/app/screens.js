@@ -34,7 +34,8 @@
   const agentAvatar = (it) => (it.agent ? S.Avatar({ name: it.agent, initials: agentOf(it.agent).initials, color: agentOf(it.agent).color, tip: `${it.agent}${it.model ? ' · ' + it.model : ''}${it.effort ? ' · ' + it.effort : ''}` }) : '');
   const lifeLabel = (it) => S.Label({ text: LIFE[it.lifecycle][0], color: LIFE[it.lifecycle][1], tint: true, dot: false });
   const stepText = (it) => (it.planning ? `${it.planned}/${it.total} plans saved` : it.step + (it.exec ? ' · ' + it.exec : ''));
-  const rowKey = (it) => (it.kind === 'goal' ? it.id : it.kind === 'operation' ? it.op : it.phase);
+  /* A monitor run is keyed by its PR ("monitor #482"), as design/monitor-run names it. */
+  const rowKey = (it) => (it.kind === 'goal' ? it.id : it.kind === 'operation' ? it.op : it.monRun ? `${it.phase} #${it.monRun.pr.num}` : it.phase);
   const itemBy = (id) => D.items.find((x) => x.id === id);
   function lookup(id) {
     const it = itemBy(id) || (D.valRoutes || []).find((x) => x.id === id) || (D.stateExamples || []).find((x) => x.id === id);
@@ -439,6 +440,7 @@
         const facts = [a.exit ? ['Exit', esc(a.exit)] : null, a.fixCommit ? ['Fix commit', `<span class="mono">${esc(a.fixCommit)}</span>`] : null].filter(Boolean);
         return S.Box(rows) + (facts.length ? S.PeekFacts(facts) : '');
       }
+      case 'monCycles': case 'ciBoard': case 'repair': case 'publish': return monPeekBlock(st, it, b);
       case 'qaLive': return qaLiveBlock(st, it);
       case 'qaRun': return `<div class="sb-qlive">${b.rounds ? S.QaRounds({ rounds: b.rounds }) : ''}${S.QaPreview({ kind: 'ended', at: b.at, label: `QA preview, last frame at ${b.at}` })}${S.QaShots({ files: b.shots, total: b.total })}${S.QaStageList({ summary: `All ${D.QA_STAGES.length} stages ran`, time: b.time })}</div>`;
       case 'qaResults': return it.goalQa ? qaResults(st, it.goalQa, { fixLoop: true, fixing: b.fixing, running: it.lifecycle === 'active' && !it.goalQa.outcome }).body : S.Box('<div class="sb-result-missing">No QA result is available for this run.</div>');
@@ -459,7 +461,7 @@
     const parts = [
       c.now && ['now', 'wait'].includes(state) ? S.PeekPart({ title: c.nowTitle || (state === 'wait' ? 'Waiting on' : 'Now'), live: state === 'now', body: blocks(c.now) }) : '',
       c.made && c.made.length ? S.PeekPart({ title: c.madeTitle || 'Produced', end, control: !!(sortable && end), body: blocks(c.made) }) : '',
-      c.results ? S.PeekPart({ title: 'Results', body: blocks(c.results) }) : '',
+      c.results ? S.PeekPart({ title: c.resultsTitle || 'Results', end: c.resultsEnd ? esc(c.resultsEnd) : '', body: blocks(c.results) }) : '',
     ];
     const ag = c.agent ? agentOf(c.agent) : null;
     return S.PhasePeek({ id, state, tone: c.tone, title: c.title, word: c.word, why: c.why,
@@ -915,6 +917,243 @@
     const showAll = st.feedAll.has(it.id), hidden = showAll ? 0 : Math.max(0, all.length - FEED_MAX);
     out.push(S.VerifySection({ id: 'sec-val-activity', title: 'Activity', count: all.length, body: all.length ? S.ActivityFeed({ entries: all.slice(hidden), hidden, act: 'feed-all', arg: it.id }) : S.Box(S.BoxNote({ text: 'No activity recorded for this run.' })) }));
     return S.ValidationDoc(out);
+  }
+
+  /* ---------- Monitor run (design/monitor-run; desktop MonitorDocument, MonitorCyclesGrid, MonitorCiBoard,
+   * MonitorRepairPanel, MonitorConflictPanel, MonitorPublishReceipt) ---------- */
+  /* A standalone monitor phase renders its own document, in the mock's order: the header (status pill, "monitor", the phase
+   * and fresh pills, "#482" and the PR title, repository, branch → base, Cancel and Open PR), the outcome card (one
+   * sentence for now; Pull request, Head, Checks and the Repair cap pips), Cycles (one row per CI round: CI, Repair,
+   * Publish), the panel of the selected cell and Activity. The panel opens on the live step, else the step the run ended
+   * on. The Goal finish monitor and monitor_fix cards reuse the grid and the panels. */
+  const isMonitorRun = (it) => it.kind === 'phase' && it.phase === 'monitor' && !!it.monRun;
+  const MON_ORDER = ['pass', 'fail', 'pending', 'queued', 'skipping', 'cancel'];
+  const MON_SEG = { pass: 'done', fail: 'failed', pending: 'active', queued: 'pending', skipping: 'skipped', cancel: 'skipped' };
+  const MON_EV = { neutral: 'var(--fg-faint)', failed: 'var(--st-failed)', active: 'var(--st-active)', done: 'var(--st-done)', blocked: 'var(--st-blocked)', merged: 'var(--data-5)' };
+  const monCount = (checks, b) => checks.filter((c) => c.bucket === b).length;
+  const monSorted = (checks) => checks.slice().sort((a, b) => MON_ORDER.indexOf(a.bucket) - MON_ORDER.indexOf(b.bucket));
+  /* Open state is a toggle over a default: a fixing check's log starts open, the passed group starts folded unless every
+   * check passed. st.monOpen and st.monFold hold the keys the operator flipped. */
+  const monFlip = (set, key, dflt) => (set.has(key) ? !dflt : dflt);
+  /* A step that was live when the run stopped (paused, failed, canceled) no longer breathes. */
+  const monState = (live, step) => (step.state === 'now' && !live ? 'stopped' : step.state);
+  const monAgent = (name) => agentOf(name) || { initials: '?', color: 'var(--fg-faint)' };
+  function monCell(step, cyc, run, o) {
+    const last = run.cycles[run.cycles.length - 1] === cyc;
+    if (!step) {
+      if (o.kind === 'fix') return { empty: last ? (cyc.ci && ['done', 'merged'].includes(cyc.ci.state) ? 'Not needed' : run.capped ? 'Cap reached' : 'Starts on a failure') : '—' };
+      return { empty: cyc.fix && last ? (cyc.fix.outcome === 'unresolved' ? 'Nothing to publish' : 'After the fix') : '—' };
+    }
+    const state = monState(o.live, step);
+    let word, sub, bar = null;
+    if (step.kind === 'ci') {
+      const n = step.checks.length, p = monCount(step.checks, 'pass'), f = monCount(step.checks, 'fail');
+      word = state === 'now' ? (n ? (o.compact ? `${p}/${n} passed` : `${p} of ${n} passed`) : 'Waiting for checks') : state === 'stopped' ? `${p} of ${n} passed` : state === 'done' ? `All ${n} passed` : state === 'conflict' ? 'Merge conflict' : state === 'merged' ? 'PR merged' : `${f} failed`;
+      const lead = step.checks.find((c) => c.bucket === 'fail');
+      sub = `<span class="mono">${esc(step.head)}</span> · ${lead && state === 'fail' ? esc(lead.name) : esc(step.dur)}`;
+      bar = monSorted(step.checks).map((c) => (state !== 'now' && c.bucket === 'pending' ? 'queued' : c.bucket));
+    } else if (step.kind === 'conflict') {
+      const done = step.files.filter((f) => f.state === 'resolved').length;
+      word = state === 'now' ? `${done} of ${step.files.length} resolved` : `Merged ${step.base}`;
+      sub = `${esc(step.agent)} · ${state === 'now' ? 'merging ' + esc(step.base) : step.files.length + ' conflicts'} · ${esc(step.dur)}`;
+    } else if (step.kind === 'fix') {
+      word = state === 'now' ? 'Fixing' : step.outcome === 'unresolved' ? 'Unresolved' : step.prOnly ? 'Edited PR' : state === 'stopped' ? 'Stopped' : 'Fixed';
+      const fc = step.files.length;
+      sub = `${esc(step.agent)} · ${step.prOnly ? 'no files' : fc ? `${fc} ${fc === 1 ? 'file' : 'files'}` : 'no change'} · ${esc(step.dur)}`;
+    } else if (step.kind === 'pub') {
+      const c = step.steps.find((x) => x.commit).commit;
+      word = state === 'now' ? 'Pushing' : step.merge ? 'Pushed merge' : 'Pushed';
+      sub = `<span class="mono">${esc(c.sha)}</span> · ${state === 'now' ? esc(step.dur) : c.parents.length > 1 ? '2 parents' : esc(step.dur)}`;
+    } else {
+      word = 'PR edited'; sub = `${esc(step.field)} · no push`;
+    }
+    return { word, sub, bar, tone: state, live: state === 'now', sel: o.sel, act: o.act, arg: o.arg };
+  }
+  function monitorCycles(it, run, o) {
+    const live = o.live, sel = o.sel;
+    return S.MonitorCycles({ compact: o.compact, label: `Cycles of the monitor run on #${run.pr.num}`,
+      rows: run.cycles.map((c) => ({ n: c.n, at: c.at, cells: ['ci', 'fix', 'pub'].map((kind) => {
+        const key = `c${c.n}.${kind}`;
+        return monCell(c[kind], c, run, { kind, live, compact: o.compact, sel: sel === key, act: o.act ? o.act : 'mon-cell', arg: o.arg ? o.arg(kind) : `${it.id}|${key}` });
+      }) })),
+      foot: o.compact ? null : [['loop', `${run.cycles.length} ${run.cycles.length === 1 ? 'cycle' : 'cycles'}`], ['upload', `${run.cycles.filter((c) => c.pub).length} published`], ['clock', 'polls every 30s']] });
+  }
+  function monCheck(st, it, c, scope, o) {
+    const key = `${it.id}|${scope}:${c.name}`;
+    const open = !!c.log && monFlip(st.monOpen, key, !!o.openLogs);
+    const state = o.frozen && c.bucket === 'pending' ? 'stale' : c.bucket;
+    return S.MonitorCheckRow({ name: c.name, job: c.job, state, time: c.time, why: c.why ? md(c.why) : null, rerun: c.rerun,
+      ext: { act: 'toast', arg: `Opened the ${c.name} job on GitHub` }, act: c.log ? 'mon-log' : null, arg: key, open,
+      log: c.log ? S.LogTail({ lines: c.log, run: c.run, actions: [S.LinkButton({ label: 'Copy', act: 'copy', arg: c.log.map((l) => l[1]).join('\n') }), S.LinkButton({ label: 'Full log', icon: 'external', act: 'toast', arg: 'Opened the job log on GitHub' })] }) : '' });
+  }
+  function monFoldGroup(st, it, scope, label, names, rows, dflt) {
+    const key = `${it.id}|${scope}:fold`;
+    const open = monFlip(st.monFold, key, dflt);
+    return S.MonitorGroup({ label, count: names.length, fold: { act: 'mon-fold', arg: key, open } }) + (open ? rows() : S.FoldLine({ text: names.join(', '), act: 'mon-fold', arg: key }));
+  }
+  /* The CI board: the head and poll line, one bar segment per check and the tally, then Failed, Running (Unfinished once the
+   * step settled), Waiting, Skipped and Cancelled, then Passed folded to one line, and what happens next. `bare` drops the
+   * box head for a PhasePeek card, whose part title says the same. */
+  function monCiBoard(st, it, step, scope, o) {
+    const live = o.live, frozen = monState(live, step) !== 'now';
+    const n = step.checks.length;
+    const tally = [['pass', 'passed', 'var(--st-done)'], ['fail', 'failed', 'var(--st-failed)'], ['pending', frozen ? 'unfinished' : 'running', frozen ? 'var(--fg-muted)' : 'var(--st-active)'], ['queued', 'queued', 'var(--fg-faint)']]
+      .filter(([b]) => monCount(step.checks, b)).map(([b, word, color]) => ({ n: monCount(step.checks, b), word, color }));
+    const sum = S.MonitorSummary([
+      S.MonitorLine({ icon: 'commit', html: `Head ${S.ShaChip({ sha: step.head })} <span class="faint">${esc(step.headNote)}</span>`, end: step.next && !frozen ? `${S.Icon('refresh', 'xs')}<span>read ${esc(step.polled)} · next ${esc(step.next)}</span>` : `<span>${esc(step.polled)}</span>` }),
+      n ? S.SegmentBar({ equal: true, segs: monSorted(step.checks).map((c) => ({ n: 1, tone: frozen && c.bucket === 'pending' ? 'pending' : MON_SEG[c.bucket] })), label: `${n} checks` }) : '',
+      n ? S.CheckTally({ items: tally }) : '',
+      step.mergeable === 'conflicting' ? S.MonitorLine({ icon: 'merge', color: 'var(--st-blocked)', html: 'GitHub reports the PR as <b>conflicting</b> with main' }) : '',
+      step.state === 'merged' ? S.MonitorLine({ icon: 'merge', color: 'var(--data-5)', html: `PR merged into main at ${esc(step.mergedAt || '')}` }) : '',
+    ]);
+    let rows = '';
+    if (!n && step.registering) {
+      rows = S.MonitorCheckRow({ name: `No checks reported on ${step.head} yet`, job: `Empty read ${step.registering.reads} of 2 · the second can confirm at ${step.registering.until} at the earliest`, state: 'queued', time: step.dur, plain: true });
+    } else {
+      [['fail', 'Failed'], ['pending', frozen ? 'Unfinished' : 'Running'], ['queued', 'Waiting'], ['skipping', 'Skipped'], ['cancel', 'Cancelled']].forEach(([b, label]) => {
+        const list = step.checks.filter((c) => c.bucket === b);
+        if (list.length) rows += S.MonitorGroup({ label, count: list.length }) + list.map((c) => monCheck(st, it, c, scope, { frozen })).join('');
+      });
+      const passed = step.checks.filter((c) => c.bucket === 'pass');
+      if (passed.length) rows += monFoldGroup(st, it, scope, 'Passed', passed.map((c) => c.name), () => passed.map((c) => monCheck(st, it, c, scope, { frozen })).join(''), passed.length === n);
+    }
+    const word = { now: 'Watching', stopped: 'Stopped', done: 'Passed', fail: 'Failed', conflict: 'Conflicting', merged: 'Merged' }[monState(live, step)];
+    const next = step.next_ ? S.NextLine({ html: md(step.next_) }) : '';
+    if (o.bare) return S.Box([sum, rows, next]);
+    return S.MonitorBox({ icon: 'eye', title: `CI on ${step.head}`, sub: `${word} · ${esc(step.since)} · ${esc(step.dur)}`, end: [S.LinkButton({ label: 'Checks on GitHub', icon: 'external', act: 'toast', arg: `Opened github.com/${it.monRun ? it.monRun.pr.slug : 'skill-bill/skill-bill'}/pull/${it.monRun ? it.monRun.pr.num : 482}/checks` })], body: [sum, rows, next] });
+  }
+  function monGates(gates) {
+    return gates.map(([name, b, time, cmd]) => S.MonitorCheckRow({ name, job: cmd, state: b === 'pending' ? 'pending' : b, time: b === 'queued' ? 'after merge' : time, mono: true })).join('');
+  }
+  function monAgentLine(step, live) {
+    const a = monAgent(step.agent);
+    const html = step.summary ? md(step.summary) : live && step.signal ? `<span class="is-live">${esc(step.signal)}</span> <span class="faint">· ${esc(step.ago)}</span>` : esc(step.agent);
+    return S.RepairAgent({ initials: a.initials, color: a.color, html, sub: `${step.agent} · ${step.model}`, action: live ? S.Button({ label: 'Watch agent', act: 'toast', arg: 'Opened the agent session' }) : '' });
+  }
+  /* A repair: the agent and what it is doing (or its explanation), the failing check with its log, the files it changed, the
+   * local gates and what happens next. A repair that only edited the PR says so instead of listing files. */
+  function monFixPanel(st, it, step, scope, o) {
+    const live = monState(o.live, step) === 'now';
+    const ins = step.files.reduce((t, f) => t + (f.ins || 0), 0), del = step.files.reduce((t, f) => t + (f.del || 0), 0);
+    const outcome = step.outcome ? S.MonBadge({ text: `Repair outcome: ${step.outcome}`, tone: step.outcome === 'fixed' ? 'ok' : 'warn' }) : '';
+    const when = [live ? 'running' : step.state === 'blocked' ? 'stopped' : monState(o.live, step) === 'stopped' ? 'stopped' : 'finished', step.since, step.dur].filter(Boolean).map(esc).join(' · ');
+    const fixing = S.MonitorGroup({ label: 'Fixing' }) + step.fixing.map((c) => monCheck(st, it, c, `${scope}:fx`, { openLogs: true })).join('');
+    const box1 = S.MonitorBox({ icon: 'wrench', title: `Repair ${step.repair}`, sub: when, end: [outcome], body: [monAgentLine(step, live), fixing] });
+    const fileRows = step.prOnly ? S.BoxNote({ text: 'No repository file changed. The repair edited the PR title.' })
+      : step.files.length ? step.files.map((f) => S.ChangedFileRow(f)).join('')
+      : S.BoxNote({ text: step.outcome === 'unresolved' ? 'No file changed. The agent found no repository fix for this failure.' : 'No file changed yet.' });
+    const box2 = S.MonitorBox({ icon: 'pencil', title: step.prOnly ? 'Pull request' : 'Files changed',
+      sub: step.prOnly ? 'edited with gh pr edit' : step.files.length ? `${step.files.length} files · <span class="ins">+${ins}</span> <span class="del">−${del}</span> · from the edit journal` : 'none',
+      end: [step.files.length ? S.LinkButton({ label: 'Open diff', act: 'toast', arg: 'Opened the repair diff' }) : '', step.worktree ? S.LinkButton({ label: 'Worktree', act: 'toast', arg: `Opened ${step.worktree}` }) : ''], body: fileRows });
+    const box3 = step.gates.length ? S.MonitorBox({ icon: 'check', title: 'Local checks', sub: 'build and validation gates in the worktree', end: live ? [] : ['<span>CI decides; these only allow the push</span>'],
+      body: [monGates(step.gates), step.next_ && live ? S.NextLine({ html: md(step.next_) }) : ''] }) : '';
+    return box1 + box2 + box3;
+  }
+  /* A merge repair: the base and its tip, resolved over conflicted files, the agent, each conflicted file with its hunks and
+   * both sides, the files git merged cleanly (folded), then the local gates. */
+  function monConflictPanel(st, it, step, scope, o) {
+    const live = monState(o.live, step) === 'now';
+    const done = step.files.filter((f) => f.state === 'resolved').length;
+    const sum = S.MonitorSummary([
+      S.MonitorLine({ icon: 'branch', html: `Merging ${S.ShaChip({ sha: `${step.base}@${step.baseSha}` })} into <span class="mono">${esc(it.branch || '')}</span>`, end: `${step.ahead} commits on ${esc(step.base)}` }),
+      S.ResolveBar({ done, total: step.files.length }),
+      S.CheckTally({ items: [{ n: done, word: 'resolved', color: 'var(--st-done)' }, step.files.length - done ? { n: step.files.length - done, word: 'conflicted', color: 'var(--st-blocked)' } : null, { n: step.auto.length, word: 'merged cleanly', color: 'var(--fg-faint)' }].filter(Boolean) }),
+    ]);
+    const a = monAgent(step.agent);
+    const files = step.files.map((f) => S.ConflictFileRow({ path: f.path, state: f.state, live: live && f.live, hunks: f.hunks, binary: f.binary, liveText: `${step.agent} is editing this file`,
+      sides: f.ours ? S.SideBySide({ items: [['THIS PR', md(f.ours)], [step.base.toUpperCase(), md(f.theirs)]] }) : '' })).join('');
+    const auto = monFoldGroup(st, it, `${scope}:auto`, 'Merged cleanly', step.auto.map((p) => p.split('/').pop()), () => step.auto.map((p) => S.ChangedFileRow({ path: p, stat: false, icon: 'file' })).join(''), false);
+    const box1 = S.MonitorBox({ icon: 'merge', title: `Repair ${step.repair} · merge ${step.base}`, sub: [live ? 'running' : 'finished', step.since, step.dur].map(esc).join(' · '),
+      end: [step.outcome ? S.MonBadge({ text: 'Repair outcome: fixed', tone: 'ok' }) : ''],
+      body: [sum, S.RepairAgent({ initials: a.initials, color: a.color, html: step.summary ? md(step.summary) : live ? `<span class="is-live">${esc(step.signal)}</span> <span class="faint">· ${esc(step.ago)}</span>` : esc(step.agent), sub: `${step.agent} · ${step.model}`, action: live ? S.Button({ label: 'Watch agent', act: 'toast', arg: 'Opened the agent session' }) : '' }),
+        S.MonitorGroup({ label: 'Conflicted files' }), files, auto] });
+    const box2 = S.MonitorBox({ icon: 'check', title: 'Local checks', sub: 'run once every conflict is resolved', body: [monGates(step.gates), step.next_ && live ? S.NextLine({ html: md(step.next_) }) : ''] });
+    return box1 + box2;
+  }
+  /* commit_push: staged, the commit (sha, message, one or two parents), the guarded push, the acknowledged head; steps that
+   * have not happened wait dashed. The commit's files follow. A PR-only repair shows the field before and after, the
+   * unchanged head and the grace window. */
+  function monPublishPanel(st, it, step, scope, o) {
+    const live = monState(o.live, step) === 'now';
+    if (step.kind === 'prEdit') {
+      return S.MonitorBox({ icon: 'tag', title: `Publish repair ${step.repair} · PR edit`, sub: ['done', step.since, step.dur].map(esc).join(' · '), end: ['<span>no commit, no push</span>'],
+        body: S.PublishSteps({ steps: [
+          { state: 'done', title: `Edited the PR ${step.field}`, when: step.since, html: S.SideBySide({ flush: true, items: [['BEFORE', esc(step.from)], ['AFTER', esc(step.to)]] }) },
+          { state: 'done', title: 'Head unchanged', html: `PR head stays ${S.ShaChip({ sha: step.head })}. Nothing to push.` },
+          { state: o.live ? 'now' : 'done', title: 'Grace window', when: `until ${step.grace}`, html: `Failures count again once a check runs after the edit, or at ${esc(step.grace)}.` },
+        ] }) });
+    }
+    const steps = step.steps.map((x) => Object.assign({}, x, { state: x.state === 'now' && !o.live ? 'wait' : x.state, html: x.html ? md(x.html) : null,
+      commit: x.commit ? Object.assign({}, x.commit, { act: 'copy', arg: x.commit.sha }) : null }));
+    const box1 = S.MonitorBox({ icon: 'upload', title: `Publish repair ${step.repair}`, sub: [live ? 'running' : 'done', step.since, step.dur].filter(Boolean).map(esc).join(' · '), end: ['<span>the runtime commits and pushes, not the agent</span>'], body: S.PublishSteps({ steps }) });
+    const box2 = step.files.length ? S.MonitorBox({ icon: 'file', title: 'In this commit', sub: `${step.files.length} files`, end: [S.LinkButton({ label: 'Commit on GitHub', icon: 'external', act: 'toast', arg: 'Opened the commit on GitHub' })], body: step.files.map((f) => S.ChangedFileRow(f)).join('') }) : '';
+    return box1 + box2;
+  }
+  function monStepPanel(st, it, step, scope, o) {
+    if (step.kind === 'ci') return monCiBoard(st, it, step, scope, o);
+    if (step.kind === 'fix') return monFixPanel(st, it, step, scope, o);
+    if (step.kind === 'conflict') return monConflictPanel(st, it, step, scope, o);
+    return monPublishPanel(st, it, step, scope, o);
+  }
+  const monSelKey = (st, it) => st.monSel[it.id] || it.monRun.sel;
+  function monitorHeader(st, it) {
+    const r = repoOf(it.repo), run = it.monRun;
+    const life = { active: ['Active', 'active'], blocked: ['Blocked', 'blocked'], terminal: ['Finished', 'neutral'] }[it.lifecycle] || [LIFE[it.lifecycle][0], 'faint'];
+    const ro = it.refreshFailed ? {} : (it.runOptions || {});
+    const actions = [it.lifecycle === 'active' ? S.Button({ label: 'Cancel', icon: 'x', variant: 'danger', act: 'cancel', arg: it.id, disabled: !ro.canCancel }) : '',
+      S.Button({ label: 'Open PR', icon: 'pr', trail: 'external', act: 'toast', arg: `Opened github.com/${run.pr.slug}/pull/${run.pr.num}` })];
+    return S.VerifyHeader({ status: { word: life[0], tone: life[1] }, key: 'monitor', kind: 'phase',
+      pills: it.lifecycle === 'active' ? [it.refreshFailed ? { word: 'stale', tone: 'faint' } : { word: 'fresh', tone: 'active' }] : [],
+      html: `<span class="num">#${run.pr.num}</span>${esc(it.title)}`,
+      meta: [{ icon: 'folder', text: r.path, act: 'toast', arg: `Opened ${r.path}` }, { icon: 'branch', html: `<span class="mono">${esc(it.branch)}</span> <span class="arrow">→</span> <span class="mono">${esc(run.pr.base)}</span>` }],
+      actions });
+  }
+  const MON_LIFE_HERO = { paused: ['Paused', 'blocked', 'pause'], failed: ['Failed', 'failed', 'x'], canceled: ['Canceled', 'faint', 'x'], idle: ['Pending', 'faint', 'pause'] };
+  function monitorCard(st, it) {
+    const run = it.monRun, live = it.lifecycle === 'active';
+    const h = run.hero && (MON_LIFE_HERO[it.lifecycle] ? null : run.hero);
+    const fallback = MON_LIFE_HERO[it.lifecycle] || ['Stopped', 'faint', 'pause'];
+    const last = run.cycles[run.cycles.length - 1].ci, cs = last.checks;
+    const left = [['fail', 'failed'], ['pending', monState(live, last) === 'now' ? 'running' : 'unfinished'], ['queued', 'queued']].map(([b, w]) => (monCount(cs, b) ? `${monCount(cs, b)} ${w}` : '')).filter(Boolean).join(' · ');
+    const pushed = run.cycles.filter((c) => c.pub).length, full = run.cap >= 3;
+    const prState = run.prState || 'open';
+    const ro = it.refreshFailed ? {} : (it.runOptions || {});
+    const relaunch = !h && ro.canLaunch ? S.OutcomeActions([S.Button({ label: ro.launchLabel || 'Monitor again', icon: 'refresh', variant: 'primary', act: 'launch', arg: it.id })]) : '';
+    const acts = relaunch || h && h.acts ? relaunch || S.OutcomeActions(h.acts.map(([label, icon, ext, primary]) => S.Button({ label, icon, trail: ext ? 'external' : null, variant: primary ? 'primary' : null, act: primary ? 'launch' : 'toast', arg: primary ? it.id : label }))) : '';
+    return S.RunOutcome({ tone: h ? h.tone : fallback[1], icon: h ? h.icon : fallback[2], live: !!(h && h.live && live), aria: 'Monitor outcome',
+      label: `<b>${esc(h ? h.word : fallback[0])}</b><span>· ${run.step && it.lifecycle !== 'terminal' ? `<span class="mono">${esc(it.lifecycle === 'active' || h ? run.step : 'monitor')}</span>` : 'finished'}</span>`,
+      head: md(h ? h.head : (it.reason || it.summary || '')), text: h ? md(h.text) : '', signal: h && live ? h.signal : null, extra: acts,
+      when: { value: live ? S.Clock({ ms: it.goalMs, live: it.live, t0: D.T0, secs: true }) : esc(valDur(it.goalMs)), note: live ? 'active' : 'total' },
+      cells: [
+        { key: 'Pull request', value: `${S.Icon('pr', 'xs')}#${run.pr.num}`, sub: `${esc(prState)} → ${esc(run.pr.base)}` },
+        { key: 'Head', value: `<span class="mono">${esc(run.head)}</span>`, sub: pushed ? `${pushed} ${pushed === 1 ? 'repair' : 'repairs'} published` : 'as opened' },
+        { key: 'Checks', value: cs.length ? `${monCount(cs, 'pass')} / ${cs.length}` : '—', sub: !cs.length ? 'none reported yet' : left || 'all passed' },
+        { key: 'Repair cap', value: `${S.CapPips({ used: run.cap, cap: 3 })}<span>${run.cap} of 3</span>`, sub: esc(run.capNote || (full ? 'stopped' : 'failed repairs')) },
+      ] });
+  }
+  function monitorDoc(st, it) {
+    const run = it.monRun, live = it.lifecycle === 'active';
+    const key = monSelKey(st, it);
+    const [cn, kind] = key.split('.');
+    const cyc = run.cycles.find((c) => `c${c.n}` === cn);
+    const step = cyc && cyc[kind];
+    const out = [monitorHeader(st, it), monitorCard(st, it)];
+    out.push(S.VerifySection({ id: 'sec-mon-cycles', title: 'Cycles', count: run.cycles.length, end: [esc('A failure starts a repair; a published repair starts the next cycle')], body: monitorCycles(it, run, { live, sel: key }) }));
+    if (step) {
+      const label = { ci: 'CI', fix: 'Repair', pub: 'Publish' }[kind], id = { ci: 'monitor', fix: 'monitor_fix', pub: 'commit_push' }[kind];
+      out.push(S.VerifySection({ id: 'sec-mon-step', html: `Cycle ${cyc.n} · ${label} <span class="mono">${id}</span>`, end: monState(live, step) === 'now' ? ['<span class="is-live">live</span>'] : [], body: monStepPanel(st, it, step, key, { live }) }));
+    }
+    out.push(S.VerifySection({ id: 'sec-mon-activity', title: 'Activity', count: run.activity.length, body: S.EventLines(run.activity.map(([t, html, tone]) => [t, html, MON_EV[tone]])) }));
+    return S.MonitorDoc(out);
+  }
+  /* Goal finish cards: the cycles grid in compact form (a cell opens the monitor or monitor_fix tab) and the step panels
+   * without the CI box head. The goal's run is it.finish.monitor ({ cycles, cap }). */
+  function monPeekBlock(st, it, b) {
+    const live = it.lifecycle === 'active';
+    const run = { cycles: b.cycles, pr: D.MON.PR, capped: false };
+    if (b.kind === 'monCycles') return monitorCycles(it, run, { live, compact: true, sel: null, act: 'peek-pill', arg: (kind) => `${it.id}|finish|${kind === 'ci' ? 'monitor' : 'monitor_fix'}` });
+    if (b.kind === 'ciBoard') return monCiBoard(st, it, b.step, `finish:${b.step.head}`, { live, bare: true });
+    return monStepPanel(st, it, b.step, `finish:${b.kind}:${b.step.repair || ''}`, { live });
   }
 
   /* ---------- Plan run (design/plan-detail; desktop feature/detail PlanDocument, PlanStatus, PlanNowCard, PlanActivity,
@@ -1526,28 +1765,29 @@
 
     const parts = [];
     /* Validation and Verify runs have their own documents (design/validation-run, design/verify-run). */
-    const val = isValidationRun(it), ver = !!it.verifyRun, plan = isPlanRun(it);
+    const val = isValidationRun(it), ver = !!it.verifyRun, plan = isPlanRun(it), mon = isMonitorRun(it);
     if (ver) parts.push(verifyDoc(st, it));
     else if (val) parts.push(validationDoc(st, it));
+    else if (mon) parts.push(monitorDoc(st, it));
     else parts.push(S.DocHeader({
       eyebrow: [plan ? planBadge(it) : lifeLabel(it), it.stalled ? S.Label({ text: 'Stalled', color: 'var(--st-blocked)', tint: true, dot: false }) : '', S.IdTag(rowKey(it)), it.issue && !goal ? S.IdTag(it.issue) : '', S.Label({ text: kindWord(it), dot: false }), it.lifecycle !== 'terminal' ? S.Label({ text: it.fresh && !it.refreshFailed ? 'fresh' : 'stale', color: it.fresh && !it.refreshFailed ? 'var(--st-done)' : 'var(--fg-faint)' }) : '', plan && it.model ? S.Label({ text: `${it.model}${it.effort ? ` · ${it.effort} effort` : ''}`, dot: false }) : ''],
       title: it.title, sub: location, actions: [runActions(st, it)],
     }));
     /* Validation runs get no strip: their live card already names the running check command. */
-    const build = !val && !ver && buildOf(st, it);
+    const build = !val && !ver && !mon && buildOf(st, it);
     if (build) parts.push(S.BuildStrip(build));
     if (it.pauseRequested && !val) parts.push(S.Hint({ tone: 'info', icon: 'pause', text: 'Pause recorded. The goal pauses at its next checkpoint.' }));
-    if (it.reason && !val && !ver && !plan) parts.push(S.ReasonBlock({ label: 'Run reason', text: it.reason, color: LIFE[it.lifecycle][1], open: st.reasonOpen.has(it.id), act: 'reason-toggle', arg: it.id }));
-    if (!val) parts.push(decisionPanel(st, it));
+    if (it.reason && !val && !ver && !plan && !mon) parts.push(S.ReasonBlock({ label: 'Run reason', text: it.reason, color: LIFE[it.lifecycle][1], open: st.reasonOpen.has(it.id), act: 'reason-toggle', arg: it.id }));
+    if (!val && !mon) parts.push(decisionPanel(st, it));
     if (plan) parts.push(...planParts(st, it));
     /* A standalone QA run's results come first: they are what the operator reads in a QA report. */
     if (it.qa) { const r = qaResults(st, it.qa, { running: it.lifecycle === 'active' }); parts.push(secBlock(st, 'qa-results', { id: 'sec-qa-results', cls: 'sb-sec--qa', title: 'QA results', badge: r.verdict, body: r.body })); }
-    if (!val && !ver && !plan) parts.push(metrics);
+    if (!val && !ver && !plan && !mon) parts.push(metrics);
     if (subs) parts.push(subtaskSection(st, it, !pane));
     if (goal && it.planning) parts.push(secBlock(st, 'subtasks', { title: 'Subtasks', count: `${it.planned}/${it.total} plans saved`, body: S.Hint({ text: 'Subtasks appear here once their plans are saved.' }) }));
     if (goal && it.pipeline && !it.planning) parts.push(secBlock(st, 'pipeline', { title: 'Phase pipeline', body: S.PhasePipeline(pipelineSteps(it)) }));
-    if (!goal && !plan && (it.steps || []).length > 1) parts.push(secBlock(st, 'pipeline', { title: 'Phase pipeline', body: S.PhasePipeline(it.steps.map(([label, state]) => ({ label, state, count: state === 'now' ? it.exec : null }))) }));
-    if (!plan && !ver && !val) parts.push(activitySection(st, it));
+    if (!goal && !plan && !mon && (it.steps || []).length > 1) parts.push(secBlock(st, 'pipeline', { title: 'Phase pipeline', body: S.PhasePipeline(it.steps.map(([label, state]) => ({ label, state, count: state === 'now' ? it.exec : null }))) }));
+    if (!plan && !ver && !val && !mon) parts.push(activitySection(st, it));
     /* Standalone phases and operations keep their own validation, phase results and spec bundle in the document. */
     if (!goal && it.validation) parts.push(secBlock(st, 'validation', { title: 'Validation', body: S.Box(it.validation.map(([n, ok, checks]) => S.FindingRow({ ref: `Subtask ${n}`, title: `${ok ? 'passed' : 'failed'} · ${checks} checks`, state: ok ? 'passed' : 'failed', stateColor: ok ? 'var(--st-done)' : 'var(--st-failed)' }))) }));
     if (!goal && it.phaseResults) {
@@ -2070,6 +2310,7 @@
     qaView, qaResults, qaLiveBlock, peekCard, finishResults, devicePanel, usageData,
     isPlanRun, planStrip, planNow, planTeaser, planActivity, planBundle, planTranscript, planBriefing, PLAN_STAGES,
     specOf, specPath, specControl, specMenuItems, specPanelItems, specProject, specAgent, specBar, get specRows() { return specRows; },
+    isMonitorRun, monitorDoc, monitorCard, monitorCycles, monStepPanel, monCiBoard,
     isValidationRun, shapeReport, validationCard, validationDoc, valDur, verifyOutcome, checkRow, valDefaultParts, valDefaultChecks, checkExpandable, verifyCtx, verifyState, fixItems, verifyFixText, verifyQaDemo, VSTEP, devicePanelView, deviceTrigger, deviceOptions, devicePickable, deviceList,
     get rows() { return rows; },
   };
