@@ -1,13 +1,16 @@
 package dev.skillbill.desktop.core.data.chat
 
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ChatTurnRunnerTest {
   @Test
-  fun `alias lookup launches the available executable once with literal arguments`() {
+  fun `POSIX alias lookup launches the available executable once with literal arguments`() {
+    assumeTrue(Files.isExecutable(Path.of("/bin/sh")), "Requires the POSIX login shell under test")
     val directory = Files.createTempDirectory("chat-alias")
     try {
       val executable = directory.resolve("available agent")
