@@ -3,7 +3,6 @@ package dev.skillbill.desktop.core.ui.changes
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
-import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.border
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.widthIn
@@ -21,7 +20,8 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.layeredShadow
+import dev.skillbill.desktop.core.designsystem.component.SbElevation
+import dev.skillbill.desktop.core.designsystem.component.sbOverlaySurface
 import kotlin.math.roundToInt
 
 internal val STRIP_HEIGHT = 46.dp
@@ -76,9 +76,7 @@ internal fun StripTipSurface(position: androidx.compose.ui.geometry.Offset, cont
       }
     }
   }
-  val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(7.dp)
   Popup(popupPositionProvider = provider, properties = PopupProperties(focusable = false)) {
-    Column(Modifier.widthIn(max = 320.dp).layeredShadow(SkillBillTheme.shadows.popover, shape).clip(shape).background(colors.bgOverlay, shape).border(1.dp, colors.borderStrong, shape).padding(horizontal = 9.dp, vertical = 7.dp)) { content() }
+    Column(Modifier.widthIn(max = 320.dp).sbOverlaySurface(SbElevation.Popover).padding(horizontal = 9.dp, vertical = 7.dp)) { content() }
   }
 }

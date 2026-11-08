@@ -1,7 +1,5 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +26,7 @@ import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.domain.model.ActivityGroup
 import dev.skillbill.desktop.core.domain.model.ActivityGroupKind
 import dev.skillbill.desktop.core.domain.model.ActivityResult
@@ -141,8 +140,10 @@ internal fun ActivityTimeline(
       }
       general.forEach { group ->
         key(group.id) {
-          Column(Modifier.fillMaxWidth().border(1.dp, SkillBillTheme.colors.border, RoundedCornerShape(8.dp)).padding(vertical = 4.dp)) {
-            group.blocks.forEach { ActivityBlockRow(it, now, onCopyReason = onCopyReason) }
+          SbBox {
+            Column(Modifier.padding(vertical = 4.dp)) {
+              group.blocks.forEach { ActivityBlockRow(it, now, onCopyReason = onCopyReason) }
+            }
           }
         }
       }

@@ -27,8 +27,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
+import dev.skillbill.desktop.core.designsystem.component.SbControlSize
+import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.ChatImage
@@ -53,9 +54,9 @@ internal fun ImagePreviewChip(number: Int, image: ChatImage) {
   val focus = remember { FocusRequester() }
   val close = { open = false }
   Box {
-    ChatPill(
+    SbLabel(
       imageLabel(number),
-      Modifier.focusRequester(focus).pointerHoverIcon(PointerIcon.Hand).clickable(role = Role.Button, onClickLabel = "Preview image $number") { open = true },
+      modifier = Modifier.focusRequester(focus).pointerHoverIcon(PointerIcon.Hand).clickable(role = Role.Button, onClickLabel = "Preview image $number") { open = true },
     )
     if (open) ShellLayer(close)
     SbPopover(expanded = open, onDismissRequest = close, returnFocusTo = focus) { ImagePreview(number, image) }

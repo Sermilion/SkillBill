@@ -1,3 +1,8 @@
+## [2026-11-07] Preserve work-area composition across panel branches
+Context: Extracting ContentPanel splits ShellFrame's work area between a frameless drawer Box and a framed panel at the drawer breakpoint.
+Decision: Remember movable content and invoke it from both branches.
+Reason: Separate direct content calls would give the work area different composition positions and reset remembered state on breakpoint crossings. The spec requires preserving that state.
+
 ## [2026-11-07] Ask for proposal changes before replacing an operation card
 Context: Adjust immediately reran the original verify or pr-review-fix request, giving the operator no chance to explain the intended revision.
 Decision: Adjust asks a question in the current chat. Its next reply starts a replacement proposal using the original launch settings and separate revision instructions; the replacement still needs an explicit Confirm click.

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-INSTALL_SH="$REPO_ROOT/install.sh"
+SOURCE_REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT=""
+INSTALL_SH=""
 
 FAKE_HOME=""
 RELEASE_DIR=""
@@ -19,6 +20,14 @@ cleanup() {
   local d; for d in "${WORK_TMPDIRS[@]+"${WORK_TMPDIRS[@]}"}"; do rm -rf "$d"; done
 }
 trap cleanup EXIT
+
+REPO_ROOT="$(mktemp -d)"
+WORK_TMPDIRS+=("$REPO_ROOT")
+cp "$SOURCE_REPO_ROOT/install.sh" "$SOURCE_REPO_ROOT/uninstall.sh" "$SOURCE_REPO_ROOT/LICENSE" "$REPO_ROOT/"
+cp -R "$SOURCE_REPO_ROOT/skills" "$SOURCE_REPO_ROOT/platform-packs" "$SOURCE_REPO_ROOT/orchestration" "$SOURCE_REPO_ROOT/agent-addons" "$REPO_ROOT/"
+mkdir -p "$REPO_ROOT/scripts"
+cp "$SOURCE_REPO_ROOT/scripts/desktop_source_install_smoke_test.sh" "$REPO_ROOT/scripts/"
+INSTALL_SH="$REPO_ROOT/install.sh"
 
 pass() { printf '[PASS] %s\n' "$1"; }
 fail() { printf '[FAIL] %s\n' "$1" >&2; exit 1; }
@@ -121,7 +130,7 @@ case "$cmd" in
     echo "skill-bill version 0.0.0-smoke"
     ;;
 
-  "install")
+  "install"|"install --help")
     if has_flag "--help" "${cmd_parts[@]}"; then
       echo "  replay-last-selection   replay the last successful install selection"
       echo "  reconcile               reconcile authored source"
@@ -130,6 +139,25 @@ case "$cmd" in
       echo "  codex-roots             list codex config roots"
       echo "  detect-agents           detect configured agents"
     fi
+    ;;
+
+  "install replay-last-selection")
+    python3 - "${home_dir:-$HOME}" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+home = Path(sys.argv[1])
+selection = json.loads((home / ".skill-bill/install-selection.json").read_text())
+for agent in selection["selected_agents"]:
+    print(f"agent\t{agent}\t{home / ('.' + agent)}")
+platforms = selection["platform_pack_selection"]
+print(f"platform-mode\t{platforms['mode']}")
+for slug in platforms["selected_slugs"]:
+    print(f"platform\t{slug}")
+print(f"telemetry\t{selection['telemetry_level']}")
+print("mcp\t" + ("register" if selection["mcp_registration"]["register"] else "skip"))
+PY
     ;;
 
   "install reconcile")

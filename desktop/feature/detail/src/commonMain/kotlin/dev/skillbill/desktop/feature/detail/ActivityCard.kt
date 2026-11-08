@@ -1,7 +1,6 @@
 package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +21,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.Role
@@ -31,10 +29,15 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.SkillBillRadius
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
+import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.domain.model.ActivityBlock
@@ -43,7 +46,6 @@ import dev.skillbill.desktop.core.domain.model.ActivityFact
 import dev.skillbill.desktop.core.domain.model.ActivityGroup
 import dev.skillbill.desktop.core.domain.model.ActivityPhase
 import dev.skillbill.desktop.core.domain.model.ActivityStatus
-import dev.skillbill.desktop.core.ui.changes.hairlineTop
 import kotlin.time.Instant
 
 @Composable
@@ -56,9 +58,9 @@ internal fun ActivityCard(
   onToggle: () -> Unit,
 ) {
   val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(8.dp)
+  val shape = RoundedCornerShape(SkillBillRadius.md)
   val source = remember { MutableInteractionSource() }
-  Column(modifier.fillMaxWidth().clip(shape).background(colors.bgPanel).border(1.dp, if (group.status == ActivityStatus.RUNNING) colors.accentRing else colors.border, shape)) {
+  SbBox(modifier, fill = colors.bgPanel, borderColor = if (group.status == ActivityStatus.RUNNING) colors.accentRing else colors.borderSubtle) {
     Row(Modifier.fillMaxWidth().sbFocusRing(source, shape).semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
       .clickable(source, null, role = Role.Button, onClickLabel = if (open) "Collapse activity" else "Expand activity", onClick = onToggle)
       .padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -72,7 +74,7 @@ internal fun ActivityCard(
       }
       Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ActivityText(group.name, Modifier.weight(1f, fill = false), size = 12.5f, sans = true, weight = FontWeight.Medium, color = if (open) colors.fg else colors.fg2)
-        label?.let { ActivityTag(it, group.status == ActivityStatus.RUNNING) }
+        label?.let { SbTag(it, tone = if (group.status == ActivityStatus.RUNNING) colors.accentText else colors.stBlocked) }
       }
       ActivityTime(group.startedAt, now)
       val active = group.activeMilliseconds(now)
@@ -83,7 +85,7 @@ internal fun ActivityCard(
       val agents = (group.phases.mapNotNull { it.agent } + (group.before + group.after).mapNotNull { it.agent }).distinct()
       ActivityText(agents.joinToString(" + "), Modifier.width(104.dp), faint = true)
     }
-    if (open) Column(Modifier.fillMaxWidth().hairlineTop(colors.border)) {
+    if (open) Column(Modifier.fillMaxWidth().hairline(Edge.Top, colors.border)) {
       val entries = remember(group) { activityEntries(group) }
       group.before.forEach { ActivityFactRow(it, now) }
       entries.forEach { entry -> when (entry) {
@@ -100,13 +102,6 @@ internal fun ActivityCard(
       if (entries.isEmpty() && group.before.isEmpty() && group.after.isEmpty()) ActivityText("No phases ran.", Modifier.padding(20.dp), sans = true, faint = true)
     }
   }
-}
-
-@Composable
-private fun ActivityTag(text: String, running: Boolean = false) {
-  val color = if (running) SkillBillTheme.colors.accentText else SkillBillTheme.colors.stBlocked
-  ActivityText(text, Modifier.background(color.copy(alpha = .12f), RoundedCornerShape(4.dp)).border(1.dp, color.copy(alpha = .35f), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
-    size = 10f, weight = FontWeight.Medium, color = color)
 }
 
 @Composable
@@ -141,7 +136,7 @@ private fun ActivityPhaseRow(
   val toggle = if (onToggle != null) Modifier.sbFocusRing(source, RoundedCornerShape(0.dp))
     .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
     .clickable(source, null, role = Role.Button, onClickLabel = if (expanded) "Collapse loop" else "Expand loop", onClick = onToggle) else Modifier
-  Column(Modifier.fillMaxWidth().hairlineTop(colors.borderSubtle).then(toggle).padding(horizontal = 12.dp, vertical = 7.dp)) {
+  Column(Modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).then(toggle).padding(horizontal = 12.dp, vertical = 7.dp)) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       ActivityTime(phase.finishedAt ?: phase.startedAt, now)
       ActivityDot(if (running) ActivityStatus.RUNNING else ActivityStatus.COMPLETE)
@@ -179,7 +174,7 @@ internal fun ActivityBlockRow(
   val expand = if (expanded || truncated) Modifier.sbFocusRing(source, RoundedCornerShape(0.dp))
     .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
     .clickable(source, null, role = Role.Button, onClickLabel = if (expanded) "Collapse block" else "Read full block") { expanded = !expanded } else Modifier
-  Column(Modifier.fillMaxWidth().then(expand).background(colors.stBlocked.copy(alpha = .07f)).drawBehind { drawLine(colors.stBlocked, Offset.Zero, Offset(0f, size.height), 3.dp.toPx()) }.hairlineTop(colors.borderSubtle).padding(horizontal = 12.dp, vertical = 9.dp)) {
+  Column(Modifier.fillMaxWidth().then(expand).background(colors.stBlocked.copy(alpha = .07f)).drawBehind { drawLine(colors.stBlocked, Offset.Zero, Offset(0f, size.height), 3.dp.toPx()) }.hairline(Edge.Top, colors.borderSubtle).padding(horizontal = 12.dp, vertical = 9.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       ActivityTime(block.at, now)
       ActivityDot(ActivityStatus.BLOCKED)
@@ -224,7 +219,7 @@ private fun ActivityExpandable(text: String, lines: Int, modifier: Modifier) {
 @Composable
 private fun ActivityFactRow(fact: ActivityFact, now: Instant) {
   val colors = SkillBillTheme.colors
-  Column(Modifier.fillMaxWidth().hairlineTop(colors.borderSubtle).padding(horizontal = 12.dp, vertical = 7.dp)) {
+  Column(Modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).padding(horizontal = 12.dp, vertical = 7.dp)) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       ActivityTime(fact.at, now)
       ActivityDot(if (fact.running) ActivityStatus.RUNNING else ActivityStatus.COMPLETE)

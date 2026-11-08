@@ -1,13 +1,9 @@
 package dev.skillbill.desktop.feature.changes
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,7 +30,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
@@ -63,7 +58,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.layeredShadow
+import dev.skillbill.desktop.core.designsystem.list.sbRowSurface
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
+import dev.skillbill.desktop.core.designsystem.component.SbElevation
+import dev.skillbill.desktop.core.designsystem.component.sbOverlaySurface
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
@@ -73,8 +72,6 @@ import dev.skillbill.desktop.core.ui.changes.commitTag
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
 import dev.skillbill.desktop.core.ui.changes.filesLabel
-import dev.skillbill.desktop.core.ui.changes.hairlineBottom
-import dev.skillbill.desktop.core.ui.changes.hairlineTop
 
 private val PICKER_WIDTH = 520.dp
 private val PICKER_LIST_MAX = 380.dp
@@ -90,8 +87,6 @@ internal fun ScopePicker(state: ChangesWindowUiState, onAction: (ChangesWindowAc
     CommitPicker(state, onAction, search)
     return
   }
-  val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(10.dp)
   val below = with(LocalDensity.current) { PICKER_BELOW_BUTTON.roundToPx() }
   val close = { onAction(ChangesWindowAction.ClosePicker) }
   val rows = filterSubtasks(state.subtasks, state.pickerQuery)
@@ -113,10 +108,7 @@ internal fun ScopePicker(state: ChangesWindowUiState, onAction: (ChangesWindowAc
     }
     Column(
       Modifier.width(PICKER_WIDTH)
-        .layeredShadow(SkillBillTheme.shadows.popover, shape)
-        .clip(shape)
-        .background(colors.bgOverlay, shape)
-        .border(1.dp, colors.borderStrong, shape)
+        .sbOverlaySurface(SbElevation.Popover)
         .onPreviewKeyEvent { event ->
           if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
           when (event.key) {
@@ -159,7 +151,6 @@ internal fun ScopePicker(state: ChangesWindowUiState, onAction: (ChangesWindowAc
 @Composable
 private fun CommitPicker(state: ChangesWindowUiState, onAction: (ChangesWindowAction) -> Unit, search: FocusRequester) {
   val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(10.dp)
   val rows = filterCommits(state.commits, state.subtasks, state.pickerQuery)
   var keyboardSha by remember(state.pickerQuery) { mutableStateOf<String?>(null) }
   val listState = rememberLazyListState()
@@ -180,8 +171,7 @@ private fun CommitPicker(state: ChangesWindowUiState, onAction: (ChangesWindowAc
       }
     }
     Column(
-      Modifier.width(PICKER_WIDTH).layeredShadow(SkillBillTheme.shadows.popover, shape).clip(shape)
-        .background(colors.bgOverlay, shape).border(1.dp, colors.borderStrong, shape)
+      Modifier.width(PICKER_WIDTH).sbOverlaySurface(SbElevation.Popover)
         .onPreviewKeyEvent { event ->
           if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
           val selectable = rows
@@ -207,7 +197,7 @@ private fun CommitPicker(state: ChangesWindowUiState, onAction: (ChangesWindowAc
         { onAction(ChangesWindowAction.PickerQuery(it)) },
         Modifier.fillMaxWidth().height(38.dp).focusRequester(search),
         singleLine = true, textStyle = style, cursorBrush = SolidColor(colors.fg),
-        decorationBox = { field -> Box(Modifier.fillMaxWidth().hairlineBottom(colors.border).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
+        decorationBox = { field -> Box(Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.border).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
           if (state.pickerQuery.isEmpty()) BasicText("Filter commits by subject, SHA or subtask", style = style.copy(color = colors.fgFaint), maxLines = 1, softWrap = false)
           field()
         } },
@@ -218,8 +208,8 @@ private fun CommitPicker(state: ChangesWindowUiState, onAction: (ChangesWindowAc
           val inScope = (state.scope as? ChangeScope.Commits)?.shas?.contains(commit.sha) == true
           val interaction = remember { MutableInteractionSource() }
           Row(
-            Modifier.fillMaxWidth().background(if (inScope || keyboardSha == commit.sha) colors.bgRaised else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(6.dp))
-              .hoverable(interaction).pointerHoverIcon(PointerIcon.Hand)
+            Modifier.fillMaxWidth().sbRowSurface(interaction, selected = inScope, focused = keyboardSha == commit.sha, shape = RoundedCornerShape(6.dp))
+              .pointerHoverIcon(PointerIcon.Hand)
               .semantics(mergeDescendants = true) {
                 role = Role.Button
                 selected = inScope
@@ -258,7 +248,7 @@ private fun PickerSearch(value: String, onChange: (String) -> Unit, focus: Focus
     textStyle = style,
     cursorBrush = SolidColor(colors.fg),
     decorationBox = { field ->
-      Box(Modifier.fillMaxWidth().hairlineBottom(colors.border).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
+      Box(Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.border).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
         if (value.isEmpty()) BasicText("Filter subtasks by name or number", style = style.copy(color = colors.fgFaint), maxLines = 1, softWrap = false)
         field()
       }
@@ -273,13 +263,7 @@ private fun PickerRow(subtask: ScopeSubtask, stats: SubtaskStats?, inScope: Bool
   val enabled = subtask.selectable
   val pick by rememberUpdatedState(onPick)
   val interaction = remember { MutableInteractionSource() }
-  val hovered by interaction.collectIsHoveredAsState()
   val shape = RoundedCornerShape(6.dp)
-  val background = when {
-    inScope -> colors.accent.copy(alpha = 0.10f)
-    hovered || keyboard -> colors.bgRaised
-    else -> androidx.compose.ui.graphics.Color.Transparent
-  }
   val nameColor = when {
     !enabled -> colors.fgFaint
     inScope -> colors.fg
@@ -287,8 +271,7 @@ private fun PickerRow(subtask: ScopeSubtask, stats: SubtaskStats?, inScope: Bool
   }
   Row(
     Modifier.fillMaxWidth()
-      .background(background, shape)
-      .hoverable(interaction)
+      .sbRowSurface(interaction, selected = inScope, focused = keyboard, shape = shape)
       .then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
       .semantics(mergeDescendants = true) {
         role = Role.Button
@@ -327,7 +310,7 @@ private fun PickerFooter(label: String, onShowAll: () -> Unit) {
   val colors = SkillBillTheme.colors
   val text = changesSans(11f, FontWeight.Normal, colors.fgFaint)
   Row(
-    Modifier.fillMaxWidth().height(28.5.dp).hairlineTop(colors.border).padding(horizontal = 12.dp),
+    Modifier.fillMaxWidth().height(28.5.dp).hairline(Edge.Top, colors.border).padding(horizontal = 12.dp),
     horizontalArrangement = Arrangement.spacedBy(12.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {

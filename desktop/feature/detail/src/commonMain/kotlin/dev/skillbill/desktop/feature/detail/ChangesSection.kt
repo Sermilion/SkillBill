@@ -1,9 +1,7 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,7 +10,6 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,7 +22,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.list.sbRowSurface
 import dev.skillbill.desktop.core.designsystem.component.Hint
+import dev.skillbill.desktop.core.designsystem.component.SbButton
+import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangesState
@@ -34,7 +34,6 @@ import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
 import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
 import dev.skillbill.desktop.core.ui.changes.AddCount
-import dev.skillbill.desktop.core.ui.changes.ChangesButton
 import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.ScopeStateDot
 import dev.skillbill.desktop.core.ui.changes.SubtaskStrip
@@ -60,7 +59,7 @@ internal fun DetailSections.changesSection(changes: ChangesUi, onAction: (Detail
     "Changes",
     count = count,
     countStyle = if (subtasks is SubtaskScopesState.Listed) goalCountStyle else null,
-    actions = { ChangesButton("Open changes", { onAction(DetailAction.OpenChangesWindow()) }, primary = true, leadingIcon = LucideIcons.openWindow) },
+    actions = { SbButton("Open changes", { onAction(DetailAction.OpenChangesWindow()) }, variant = SbButtonVariant.Primary, icon = LucideIcons.openWindow) },
   ) {
     if (subtasks != null) goalChanges(subtasks, onAction) else executionChanges(changes.state)
   }
@@ -131,7 +130,6 @@ private fun LazyListScope.notice(key: String, content: @Composable () -> Unit) {
 private fun RunningRow(subtask: ScopeSubtask, stats: SubtaskStats?, onOpen: (Int) -> Unit) {
   val colors = SkillBillTheme.colors
   val interaction = remember { MutableInteractionSource() }
-  val hovered by interaction.collectIsHoveredAsState()
   val shape = RoundedCornerShape(7.dp)
   val clickable = if (subtask.selectable) {
     Modifier.pointerHoverIcon(PointerIcon.Hand).clickable(interaction, indication = null) { onOpen(subtask.id) }
@@ -140,7 +138,7 @@ private fun RunningRow(subtask: ScopeSubtask, stats: SubtaskStats?, onOpen: (Int
   }
   Row(
     Modifier.padding(top = 14.dp).fillMaxWidth()
-      .background(if (hovered) colors.bgOverlay else colors.bgRaised, shape)
+      .sbRowSurface(interaction, shape = shape)
       .then(clickable)
       .padding(horizontal = 10.dp, vertical = 9.dp),
     horizontalArrangement = Arrangement.spacedBy(10.dp),

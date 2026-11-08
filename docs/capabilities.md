@@ -186,4 +186,3 @@ model/effort, mode and content capabilities before sending a prompt. App rules
 select an offered `allow_once` option; Cursor's remembered options remain unavailable.
 ACP does not supply team-dashboard MCP servers. Work requiring those servers is
 unsupported in this integration; no substitute server or permission is inferred.
-

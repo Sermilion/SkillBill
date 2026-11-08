@@ -1,11 +1,5 @@
 package dev.skillbill.desktop.feature.specs
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.hoverable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,10 +8,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -44,22 +36,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.EmptyState
 import dev.skillbill.desktop.core.designsystem.component.RepoIcon
 import dev.skillbill.desktop.core.designsystem.component.SbButton
@@ -72,13 +58,11 @@ import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.designsystem.component.SbMenu
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
+import dev.skillbill.desktop.core.designsystem.component.SbPickerButton
 import dev.skillbill.desktop.core.designsystem.component.Segmented
 import dev.skillbill.desktop.core.designsystem.component.SegmentedOption
-import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.detail.SidePane
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
-import dev.skillbill.desktop.core.designsystem.icon.SbIcon
-import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.domain.model.SpecTreeState
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.input.ShellLayer
@@ -127,7 +111,20 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
     head = {
       Box {
         val dismiss = { onAction(SpecsAction.DismissProjectMenu) }
-        ProjectPicker(project?.displayName, { onAction(SpecsAction.OpenProjectMenu) })
+        SbPickerButton(
+          { onAction(SpecsAction.OpenProjectMenu) },
+          Modifier.semantics { contentDescription = project?.displayName ?: CHOOSE_PROJECT },
+          open = state.projectMenuOpen,
+        ) {
+          project?.displayName?.let { RepoIcon(it) }
+          BasicText(
+            project?.displayName ?: CHOOSE_PROJECT,
+            Modifier.weight(1f, fill = false),
+            style = SkillBillTheme.type.tSmMedium.copy(color = LocalContentColor.current),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+          )
+        }
         if (state.projectMenuOpen) {
           ShellLayer(dismiss)
           SbPopover(expanded = true, onDismissRequest = dismiss) {
@@ -164,7 +161,7 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
     },
   ) {
     Column(
-      Modifier.fillMaxWidth().rule(bottom = true, colors.borderSubtle).padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 11.dp),
+      Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.borderSubtle).padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 11.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
       Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -215,7 +212,7 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
     }
     if (state.toolbar.selection is ToolbarSelection.Bundle) SpecSelectionBar(
       state, onAction,
-      Modifier.fillMaxWidth().onFocusChanged { shellInput.setFocusSource(ShellInput.SPECS_BAR_SOURCE, it.hasFocus) }.rule(bottom = false, colors.borderSubtle).padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+      Modifier.fillMaxWidth().onFocusChanged { shellInput.setFocusSource(ShellInput.SPECS_BAR_SOURCE, it.hasFocus) }.hairline(Edge.Top, colors.borderSubtle).padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
     )
     state.importDialog?.let { target ->
       ShellLayer { onAction(SpecsAction.DismissImport) }
@@ -233,44 +230,6 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
       }
     }
   }
-}
-
-/** `.sb-pick`: a 24 px bordered button with the repository icon, the project name and a 12 px faint chevron. It has no tooltip. */
-@Composable
-private fun ProjectPicker(name: String?, onClick: () -> Unit) {
-  val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(SkillBillRadius.sm)
-  val interaction = remember { MutableInteractionSource() }
-  val hovered = interaction.collectIsHoveredAsState().value
-  // `.sb-pick` has no transition, so hover switches at once.
-  val fill = if (hovered) colors.bgHover else Color.Transparent
-  val text = if (hovered) colors.fg else colors.fg2
-  Row(
-    Modifier.height(24.dp).background(fill, shape).border(1.dp, colors.border, shape)
-      .hoverable(interaction)
-      .clickable(interaction, indication = null, onClick = onClick)
-      .pointerHoverIcon(PointerIcon.Hand)
-      .sbFocusRing(interaction, shape)
-      .semantics {
-        role = Role.Button
-        contentDescription = name ?: CHOOSE_PROJECT
-      }
-      // 8 px of CSS padding inside the 1 px border.
-      .padding(horizontal = 9.dp),
-    horizontalArrangement = Arrangement.spacedBy(6.dp),
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    name?.let { RepoIcon(it) }
-    BasicText(name ?: CHOOSE_PROJECT, style = SkillBillTheme.type.tSmMedium.copy(color = text), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    CompositionLocalProvider(LocalContentColor provides colors.fgFaint) { SbIcon(LucideIcons.chevronDown, SbIconSize.Xs) }
-  }
-}
-
-/** A 1 px hairline on the bottom or top edge, as the pane's section borders draw it. */
-private fun Modifier.rule(bottom: Boolean, color: Color) = drawBehind {
-  val stroke = 1.dp.toPx()
-  val y = if (bottom) size.height - stroke / 2 else stroke / 2
-  drawLine(color, Offset(0f, y), Offset(size.width, y), stroke)
 }
 
 /** "No specs yet" body with the plan command in mono, as screens.js renders it. */

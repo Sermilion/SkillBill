@@ -1,7 +1,6 @@
 package dev.skillbill.desktop.feature.chat
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -35,10 +33,10 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillColors
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.snipme.highlights.Highlights
 import dev.snipme.highlights.model.BoldHighlight
@@ -55,21 +53,16 @@ import java.awt.datatransfer.StringSelection
 @Composable
 internal fun ChatCodeBlock(code: String, language: String?) {
   val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(SkillBillRadius.md)
   val diff = isDiff(language, code)
-  Column(
-    Modifier.fillMaxWidth().padding(vertical = 4.dp)
-      .border(1.dp, colors.border, shape)
-      .background(colors.bgInset, shape),
-  ) {
+  SbBox(Modifier.padding(vertical = 4.dp), fill = colors.bgInset, header = {
     CodeHeader(code, label = language?.takeIf { it.isNotBlank() } ?: if (diff) "diff" else "code")
+  }) {
     if (diff) DiffBody(code) else HighlightedBody(code, language)
   }
 }
 
 @Composable
 private fun CodeHeader(code: String, label: String) {
-  val colors = SkillBillTheme.colors
   var copied by remember { mutableStateOf(false) }
   LaunchedEffect(copied) {
     if (copied) {
@@ -78,12 +71,11 @@ private fun CodeHeader(code: String, label: String) {
     }
   }
   Row(
-    Modifier.fillMaxWidth().background(colors.bgRaised, RoundedCornerShape(topStart = SkillBillRadius.md, topEnd = SkillBillRadius.md))
-      .padding(start = 10.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+    Modifier.fillMaxWidth().padding(start = 10.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
     horizontalArrangement = Arrangement.SpaceBetween,
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    BasicText(label.lowercase(), style = SkillBillTheme.type.monoSm.copy(color = colors.fgMuted))
+    BasicText(label.lowercase(), style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fgMuted))
     SbIconButton(
       icon = if (copied) LucideIcons.check else LucideIcons.copy,
       label = if (copied) "Copied" else "Copy code",
