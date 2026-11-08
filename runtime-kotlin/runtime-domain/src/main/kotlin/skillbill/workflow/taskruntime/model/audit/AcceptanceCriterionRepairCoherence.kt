@@ -66,8 +66,18 @@ internal object AcceptanceCriterionRepairCoherence {
     return identity && evidence && available
   }
 
-  fun isCoherent(state: AcceptanceCriterionRepairState): Boolean =
-    catalogIsCoherent(state) && progressIsCoherent(state) && outcomesAreCoherent(state) && historyIsCoherent(state)
+  fun isCoherent(state: AcceptanceCriterionRepairState): Boolean {
+    validateAcceptanceCriterionEvidence(state.completedMutations, state.independentChecks)
+    return catalogIsCoherent(state) &&
+      progressIsCoherent(state) &&
+      outcomesAreCoherent(state) &&
+      historyIsCoherent(state) &&
+      validAcceptanceCriterionRepairBudgets(
+        state.repairBudgets,
+        state.completedMutations,
+        state.criteria.map { it.canonicalRef },
+      )
+  }
 
   private fun catalogIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
     val admission =
@@ -155,8 +165,7 @@ internal object AcceptanceCriterionRepairCoherence {
   private fun reservedIsCoherent(state: AcceptanceCriterionRepairState): Boolean =
     state.mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED && !hasExhaustedBudget(state)
 
-  private fun awaitingStageIsCoherent(state: AcceptanceCriterionRepairState): Boolean =
-    awaitingIsCoherent(state) && !hasExhaustedBudget(state)
+  private fun awaitingStageIsCoherent(state: AcceptanceCriterionRepairState): Boolean = awaitingIsCoherent(state)
 
   private fun acceptedIsCoherent(state: AcceptanceCriterionRepairState): Boolean =
     state.mode == AcceptanceCriterionRepairMode.ACCEPTED && state.unresolvedQueue.isEmpty() &&
@@ -171,7 +180,7 @@ internal object AcceptanceCriterionRepairCoherence {
       state.currentCriterionRef == state.pendingAuditRefs.firstOrNull()
 
   private fun hasExhaustedBudget(state: AcceptanceCriterionRepairState): Boolean =
-    AcceptanceCriterionRepairState.hasExhaustedUnresolvedCriterion(state.unresolvedQueue, state.unsuccessfulTotals)
+    state.currentCriterionRef?.let { state.budgetBlocks(it) } ?: false
 
   private fun discoveryIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
     val mode =
@@ -187,8 +196,10 @@ internal object AcceptanceCriterionRepairCoherence {
 
   private fun awaitingIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
     val evidence = !state.completedRepairEvidenceRef.isNullOrBlank() && !state.admittedCheckpointId.isNullOrBlank()
+    val mutation = state.completedMutations.singleOrNull { it.repairAttemptId == state.reservation?.reservationId }
     return state.mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED && evidence &&
-      state.admittedTreeDigest?.isDigest() == true
+      mutation?.terminal == true && mutation.currentTreeDigest == state.admittedTreeDigest &&
+      mutation.currentCheckpointId == state.admittedCheckpointId
   }
 
   private fun reservationIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
@@ -197,10 +208,10 @@ internal object AcceptanceCriterionRepairCoherence {
     val revision = live.revision in 1..state.revision && live.stageRevision in live.revision..state.revision
     val unspent =
       state.outcomes.none { it.reservationId == live.reservationId } &&
-        state.unsuccessfulTotals.getOrDefault(
-          live.criterionRef,
-          0,
-        ) < FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES
+        (
+          state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ||
+            !state.budgetBlocks(live.criterionRef)
+        )
     val capacity =
       state.outcomes.size < AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES &&
         state.sourceTransitions.size < AcceptanceCriterionRepairState.MAX_REPAIR_SOURCE_TRANSITIONS
@@ -222,9 +233,18 @@ internal object AcceptanceCriterionRepairCoherence {
         ref in refs && total in 0..FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES
       }
     if (state.budgetStartOutcomeIndex !in 0..outcomes.size) return false
-    return validTotals && outcomes.drop(state.budgetStartOutcomeIndex).filterNot {
-      it.successful
-    }.groupingBy { it.criterionRef }.eachCount() == totals.filterValues { it > 0 }
+    val settled = state.outcomes.map { it.reservationId }.toSet()
+    val checks = state.independentChecks.filter { it.mutation.repairAttemptId in settled }
+    val expectedTotals =
+      refs.associateWith { ref ->
+        acceptanceCriterionRepairAccounting(
+          ref,
+          state.completedMutations,
+          checks,
+          state.repairBudgets,
+        ).noProgressOutcomes
+      }.filterValues { it > 0 }
+    return validTotals && expectedTotals == totals.filterValues { it > 0 }
   }
 
   private fun outcomeIsCoherent(

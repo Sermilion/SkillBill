@@ -23,6 +23,7 @@ import skillbill.engine.featuretask.slot.state.FeatureTaskRuntimeImplementationT
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.workflow.model.repair.FocusedRepairStrategy
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -69,7 +70,10 @@ internal object ImplementationCriterionHooks :
     val ledger =
       when (val grant = grantReopen(loaded)) {
         is RequiredPhaseWrite.Rejected -> return PhaseLaunchAdmission.WriteRejected(grant)
-        RequiredPhaseWrite.Acknowledged -> loaded.ledger.copy(stored = loaded.ledger.progress.reopenCurrent())
+        RequiredPhaseWrite.Acknowledged ->
+          loaded.ledger.copy(
+            stored = loaded.ledger.progress.reopenCurrent(requireNotNull(reopenIdentity(loaded))),
+          )
         null -> loaded.ledger
       }
     val turn = LaunchedTurn(loaded.run, loaded.access, ledger, loaded.iteration)
@@ -103,10 +107,10 @@ internal object ImplementationCriterionHooks :
 
   private fun exhausted(state: FeatureTaskRuntimeImplementationTurnState.Exhausted): PhaseLaunchAdmission =
     PhaseLaunchAdmission.Block(
-      "Acceptance criterion ${state.criterionId} used all " +
-        "${FeatureTaskRuntimeImplementationProgress.MAX_WORKERS_PER_CRITERION} workers without a satisfied check. " +
+      "Acceptance criterion ${state.criterionId} exhausted its budget after " +
+        "${FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES} independently verified no-progress outcomes. " +
         "Latest gap: ${state.latestGap.trim().removeSuffix(".")}. Resume the workflow explicitly to give " +
-        "${state.criterionId} new workers; closed criteria stay closed.",
+        "${state.criterionId} a fresh budget; closed criteria stay closed.",
       FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
     )
 
@@ -202,7 +206,7 @@ internal object ImplementationCriterionHooks :
   private fun grantReopen(turn: LaunchedTurn): RequiredPhaseWrite? {
     val identity = reopenIdentity(turn) ?: return null
     val progress = turn.ledger.progress
-    val reopened = progress.reopenCurrent() ?: return null
+    val reopened = progress.reopenCurrent(identity) ?: return null
     val criterionId = progress.currentId ?: return null
     return turn.access.record(
       turn,

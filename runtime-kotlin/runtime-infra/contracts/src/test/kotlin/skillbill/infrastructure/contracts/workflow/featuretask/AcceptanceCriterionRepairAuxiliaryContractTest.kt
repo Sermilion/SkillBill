@@ -4,9 +4,11 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_ADOPTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_HANDOFF_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.infrastructure.contracts.locator.AcceptanceCriterionAuditResultSchemaPaths
 import skillbill.infrastructure.contracts.locator.AcceptanceCriterionRepairAdoptionSchemaPaths
 import skillbill.infrastructure.contracts.locator.AcceptanceCriterionRepairHandoffSchemaPaths
@@ -14,13 +16,22 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
 import skillbill.ports.taskruntime.executionplan.FeatureTaskRuntimeExecutionPlanValidator
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimePhaseOutputMigrationResult
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.taskruntime.artifact.upgradeAuditResultFromPrevious
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionCompletedMutation
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionMutationDisposition
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProgressAdmission
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProgressContext
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionResolvedObligation
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import java.math.BigInteger
 import java.security.MessageDigest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionProgressPayloadKeys as ProgressKeys
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys as PhaseKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as PlanKeys
@@ -59,6 +70,8 @@ class AcceptanceCriterionRepairAuxiliaryContractTest {
     AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(valid, "valid")
     listOf(
       valid + (Keys.CONTRACT_VERSION to "9.0"),
+      valid - ProgressKeys.INDEPENDENT_PROGRESS,
+      valid + (Keys.CRITERIA to listOf(criterion() + (Keys.SOURCE_DISPOSITION to "source_closed"))),
       valid - Keys.RESERVATION_ID,
       valid + (Keys.CRITERIA to listOf(criterion(), criterion())),
       valid + (Keys.CURRENT_CRITERION_REF to "AC-002"),
@@ -95,6 +108,9 @@ class AcceptanceCriterionRepairAuxiliaryContractTest {
     val valid =
       identity() +
         mapOf(
+          Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_REPAIR_HANDOFF_CONTRACT_VERSION,
+          ProgressKeys.EVIDENCE_LIFECYCLE to "completed_awaiting_independent_check",
+          ProgressKeys.COMPLETED_MUTATION to completedMutation(),
           Keys.REVISION to 2, Keys.CRITERION_REF to "AC-001",
           Keys
             .STAGE to "repair_completed_awaiting_targeted_verification",
@@ -202,6 +218,269 @@ class AcceptanceCriterionRepairAuxiliaryContractTest {
     }
   }
 
+  @Test
+  fun `comparison definitions resolve locally and bind audit and handoff snapshots`() {
+    val progress = comparison()
+    val valid = audit() + (ProgressKeys.INDEPENDENT_PROGRESS to progress)
+    AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(valid, "comparison")
+    val resolved =
+      mapOf(
+        ProgressKeys.OBLIGATION_ID to "fence",
+        ProgressKeys.OBLIGATION to "Production writes check the transaction fence",
+        ProgressKeys.BASELINE_CITATIONS to listOf("before:src/Store.kt:5"),
+        ProgressKeys.CURRENT_CITATIONS to listOf("after:src/Store.kt:5"),
+      )
+    val partial =
+      progress +
+        mapOf(
+          ProgressKeys.RESOLVED_OBLIGATIONS to listOf(resolved),
+          ProgressKeys.CLASSIFICATION to "verified_partial_progress",
+        )
+    AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(
+      valid + (ProgressKeys.INDEPENDENT_PROGRESS to partial),
+      "partial",
+    )
+    val satisfied =
+      partial +
+        mapOf(
+          ProgressKeys.CLASSIFICATION to "satisfied",
+          ProgressKeys.REMAINING_GAPS to emptyList<String>(),
+        )
+    AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(
+      valid +
+        mapOf(
+          ProgressKeys.INDEPENDENT_PROGRESS to satisfied,
+          Keys.CRITERIA to listOf(criterion() + (Keys.SOURCE_DISPOSITION to "source_closed")),
+        ),
+      "satisfied",
+    )
+    assertFailsWith<SkillBillRuntimeException> {
+      val missingCitation =
+        partial + (
+          ProgressKeys.RESOLVED_OBLIGATIONS to
+            listOf(
+              resolved - ProgressKeys.BASELINE_CITATIONS,
+            )
+        )
+      AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(
+        valid + (ProgressKeys.INDEPENDENT_PROGRESS to missingCitation),
+        "missing-citation",
+      )
+    }
+    listOf(
+      progress - Keys.AUDIT_BINDING_DIGEST,
+      progress + (Keys.CRITERION_REF to "AC-002"),
+      progress + (ProgressKeys.REPAIR_ATTEMPT_ID to "other"),
+      progress + (ProgressKeys.CURRENT_TREE_DIGEST to "0".repeat(64)),
+      progress + (ProgressKeys.CURRENT_CHECKPOINT_ID to "stale"),
+      progress + (ProgressKeys.VERIFICATION_REVISION to 3),
+      progress + (ProgressKeys.PRESERVED_OBLIGATIONS to listOf(mapOf(ProgressKeys.OBLIGATION_ID to "unknown"))),
+      progress + (ProgressKeys.VERIFICATION_REVISION to Long.MAX_VALUE.toBigInteger().add(BigInteger.ONE)),
+      progress + (ProgressKeys.CLASSIFICATION to "verified_partial_progress"),
+    ).forEach { bad ->
+      assertFailsWith<SkillBillRuntimeException> {
+        AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(
+          valid + (ProgressKeys.INDEPENDENT_PROGRESS to bad),
+          "bad",
+        )
+      }
+    }
+  }
+
+  @Test
+  fun `retained comparison binds handoff identity snapshot and lifecycle`() {
+    val progress = comparison()
+    val handoff =
+      identity() +
+        mapOf(
+          Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_REPAIR_HANDOFF_CONTRACT_VERSION,
+          Keys.REVISION to 2,
+          Keys.CRITERION_REF to "AC-001",
+          Keys.STAGE to "repair_completed_awaiting_targeted_verification",
+          Keys.RESERVATION_ID to "reservation", Keys.UNSUCCESSFUL_USED to 1, Keys.UNSUCCESSFUL_REMAINING to 2,
+          Keys.QUEUE_POSITION to 1,
+          Keys.QUEUE_SIZE to 1,
+          Keys.ACTIONABLE_GAP to "Fence missing",
+          Keys.EVIDENCE_REF to "src/Store.kt:5",
+          Keys.DEPENDENCIES to emptyList<Any>(),
+          Keys.PREREQUISITE_FACTS to emptyList<Any>(),
+          ProgressKeys.INDEPENDENT_PROGRESS to progress,
+          ProgressKeys.COMPLETED_MUTATION to completedMutation(),
+          ProgressKeys.EVIDENCE_LIFECYCLE to "checked_evidence_retained",
+        )
+    AcceptanceCriterionRepairAuxiliarySchemaValidator.validateRepairHandoff(handoff, "comparison")
+    assertFailsWith<SkillBillRuntimeException> {
+      AcceptanceCriterionRepairAuxiliarySchemaValidator.validateRepairHandoff(
+        handoff + (Keys.CHECKPOINT_ID to "stale"),
+        "bad",
+      )
+    }
+  }
+
+  @Test
+  fun `historical records remain readable without acquiring comparison authority`() {
+    val previous =
+      (audit() - ProgressKeys.INDEPENDENT_PROGRESS) +
+        (Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION)
+    val oldest =
+      FeatureTaskRuntimeWorkflowArtifactMap.from(
+        (previous - Keys.INTERACTIONS - Keys.RECHECKS) + (Keys.CONTRACT_VERSION to "0.1"),
+      )
+    val upgraded = assertNotNull(oldest.upgradeAuditResultFromPrevious())
+    assertEquals(previous, upgraded)
+    AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(upgraded, "upgraded-previous")
+    val original = JsonCodec.valueToJsonString(previous)
+    AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(previous, "previous")
+    AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(previous, "previous-again")
+    assertEquals(original, JsonCodec.valueToJsonString(previous))
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(
+          previous + (ProgressKeys.INDEPENDENT_PROGRESS to comparison()),
+          "forged-historical-progress",
+        )
+      }
+    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_AUDIT_RESULT_SCHEMA, failure.code)
+    val previousHandoff =
+      identity() +
+        mapOf(
+          Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_REPAIR_HANDOFF_PREVIOUS_CONTRACT_VERSION,
+          Keys.REVISION to 2, Keys.CRITERION_REF to "AC-001", Keys.STAGE to "discovery_admitted",
+          Keys.RESERVATION_ID to null, Keys.UNSUCCESSFUL_USED to 1, Keys.UNSUCCESSFUL_REMAINING to 2,
+          Keys.QUEUE_POSITION to 1, Keys.QUEUE_SIZE to 1, Keys.ACTIONABLE_GAP to "Fence missing",
+          Keys.EVIDENCE_REF to "src/Store.kt:5", Keys.DEPENDENCIES to emptyList<Any>(),
+          Keys.PREREQUISITE_FACTS to emptyList<Any>(),
+        )
+    AcceptanceCriterionRepairAuxiliarySchemaValidator.validateRepairHandoff(previousHandoff, "previous-handoff")
+    assertFailsWith<SkillBillRuntimeException> {
+      AcceptanceCriterionRepairAuxiliarySchemaValidator.validateRepairHandoff(
+        previousHandoff + (ProgressKeys.INDEPENDENT_PROGRESS to comparison()),
+        "forged-historical-handoff",
+      )
+    }
+  }
+
+  @Test
+  fun `only runtime captured independent evidence admits production progress`() {
+    val resolved =
+      AcceptanceCriterionResolvedObligation(
+        "fence",
+        "Production writes check the transaction fence",
+        listOf("before:src/Store.kt:5"),
+        listOf("after:src/Store.kt:5"),
+      )
+    val partial =
+      comparison() +
+        mapOf(
+          ProgressKeys.CLASSIFICATION to "verified_partial_progress",
+          ProgressKeys.RESOLVED_OBLIGATIONS to
+            listOf(
+              mapOf(
+                ProgressKeys.OBLIGATION_ID to resolved.obligationId,
+                ProgressKeys.OBLIGATION to resolved.obligation,
+                ProgressKeys.BASELINE_CITATIONS to resolved.baselineCitations,
+                ProgressKeys.CURRENT_CITATIONS to resolved.currentCitations,
+              ),
+            ),
+        )
+    val payload = audit() + (ProgressKeys.INDEPENDENT_PROGRESS to partial)
+    val context = capturedContext(resolved)
+    assertIs<AcceptanceCriterionProgressAdmission.ClarificationRequired>(
+      AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(
+        payload,
+        "uncaptured",
+      ),
+    )
+    assertIs<AcceptanceCriterionProgressAdmission.Admitted>(
+      AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(
+        payload,
+        "captured",
+        context,
+      ),
+    )
+    listOf(
+      context.copy(checkerOutputId = "worker-output"),
+      context.copy(checkerOutputDigest = "f".repeat(64)),
+      context.copy(catalogId = "other-catalog"),
+      context.copy(specDigest = "0".repeat(64)),
+      context.copy(executionId = "other-execution"),
+      context.copy(checkerExecutionId = "worker"),
+      context.copy(sourceUnchangedDuringCheck = false),
+      context.copy(currentCitations = emptySet()),
+      context.copy(baselineTreeDigest = "0".repeat(64)),
+    ).forEach { counterfeit ->
+      val failure =
+        assertFailsWith<SkillBillRuntimeException> {
+          AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(
+            payload,
+            "counterfeit",
+            counterfeit,
+          )
+        }
+      assertEquals(
+        FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_AUDIT_RESULT_SCHEMA,
+        failure.code,
+      )
+    }
+  }
+
+  private fun capturedContext(resolved: AcceptanceCriterionResolvedObligation): AcceptanceCriterionProgressContext =
+    AcceptanceCriterionProgressContext(
+      "catalog",
+      "a".repeat(64),
+      "execution",
+      "AC-001",
+      "reservation",
+      "worker",
+      "f".repeat(64),
+      "c".repeat(64),
+      "before",
+      "d".repeat(64),
+      "checkpoint",
+      2,
+      "e".repeat(64),
+      "checker",
+      "output:1",
+      "b".repeat(64),
+      true,
+      resolved.baselineCitations.toSet(),
+      resolved.currentCitations.toSet(),
+      emptyList(),
+      listOf(resolved),
+      emptyList(),
+      AcceptanceCriterionCompletedMutation(
+        "catalog", "a".repeat(64), "execution", "AC-001", "reservation", "worker", "worker-output", "f".repeat(64),
+        "c".repeat(64), "before", "d".repeat(64), "checkpoint", emptyList(),
+        terminalDisposition = AcceptanceCriterionMutationDisposition.COMPLETE,
+      ),
+    )
+
+  private fun completedMutation(): Map<String, Any?> =
+    mapOf(
+      Keys.CATALOG_ID to "catalog", Keys.SPEC_DIGEST to "a".repeat(64), Keys.EXECUTION_ID to "execution",
+      Keys.CRITERION_REF to "AC-001", ProgressKeys.REPAIR_ATTEMPT_ID to "reservation",
+      ProgressKeys.WORKER_EXECUTION_ID to "worker", ProgressKeys.WORKER_OUTPUT_ID to "worker-output",
+      ProgressKeys.WORKER_OUTPUT_DIGEST to "f".repeat(64), ProgressKeys.BASELINE_TREE_DIGEST to "c".repeat(64),
+      ProgressKeys.TERMINAL_DISPOSITION to AcceptanceCriterionMutationDisposition.COMPLETE.wireValue,
+      ProgressKeys.LAUNCH_ATTRIBUTION to null,
+      ProgressKeys.BASELINE_CHECKPOINT_ID to "before", ProgressKeys.CURRENT_TREE_DIGEST to "d".repeat(64),
+      ProgressKeys.CURRENT_CHECKPOINT_ID to "checkpoint", ProgressKeys.ESTABLISHED_OBLIGATIONS to emptyList<Any>(),
+    )
+
+  private fun comparison(): Map<String, Any?> =
+    mapOf(
+      Keys.CRITERION_REF to "AC-001", ProgressKeys.REPAIR_ATTEMPT_ID to "reservation",
+      ProgressKeys.BASELINE_TREE_DIGEST to "c".repeat(64), ProgressKeys.CURRENT_TREE_DIGEST to "d".repeat(64),
+      ProgressKeys.BASELINE_CHECKPOINT_ID to "before", ProgressKeys.CURRENT_CHECKPOINT_ID to "checkpoint",
+      ProgressKeys.VERIFICATION_REVISION to 2, Keys.AUDIT_BINDING_DIGEST to "e".repeat(64),
+      ProgressKeys.RESOLVED_OBLIGATIONS to emptyList<Any>(), ProgressKeys.PRESERVED_OBLIGATIONS to emptyList<Any>(),
+      ProgressKeys.REMAINING_GAPS to
+        listOf(
+          "Production fence is still missing",
+        ),
+      ProgressKeys.CLASSIFICATION to "no_progress",
+    )
+
   private fun audit(): Map<String, Any?> =
     identity() +
       mapOf(
@@ -213,7 +492,8 @@ class AcceptanceCriterionRepairAuxiliaryContractTest {
           "b".repeat(
             64,
           ),
-        Keys.CRITERIA to listOf(criterion()), Keys.DEPENDENCIES to emptyList<Any>(),
+        Keys.CRITERIA to listOf(criterion()), ProgressKeys.INDEPENDENT_PROGRESS to comparison(),
+        Keys.DEPENDENCIES to emptyList<Any>(),
         Keys
           .REGRESSED_REFS to emptyList<Any>(),
         Keys.EDGE_CHANGES to emptyList<Any>(),
@@ -227,7 +507,7 @@ class AcceptanceCriterionRepairAuxiliaryContractTest {
     owner: String?,
     regressed: List<String>,
   ): Map<String, Any?> =
-    audit() +
+    (audit() - ProgressKeys.INDEPENDENT_PROGRESS) +
       mapOf(
         Keys.MODE to "interaction_trace",
         Keys.CURRENT_CRITERION_REF to null,
@@ -248,7 +528,7 @@ class AcceptanceCriterionRepairAuxiliaryContractTest {
   private fun criterion(): Map<String, Any?> =
     mapOf(
       Keys.CANONICAL_REF to "AC-001",
-      Keys.SOURCE_DISPOSITION to "source_closed",
+      Keys.SOURCE_DISPOSITION to "source_unresolved",
       Keys
         .VALIDATION_OBLIGATION to "deferred",
       Keys.VALIDATION_OWNER_AVAILABLE to true,

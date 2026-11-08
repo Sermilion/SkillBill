@@ -5,7 +5,6 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationT
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisciplineDirective
-import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
 
 internal object ImplementationPromptSections {
   const val IMPLEMENT_READONLY_REPAIR_SENTENCE: String =
@@ -84,8 +83,7 @@ internal object ImplementationPromptSections {
       turn.latestGap?.let {
         "A fresh read-only check found this criterion unsatisfied after the previous worker. Latest gap: $it "
       }.orEmpty()
-    val cap = FeatureTaskRuntimeImplementationProgress.MAX_WORKERS_PER_CRITERION
-    return "You are worker ${turn.worker} of at most $cap for one acceptance criterion of the selected " +
+    return "You are worker ${turn.worker} for one acceptance criterion of the selected " +
       "governed spec. Implement only this criterion:\n\n" +
       "${turn.criterion}\n\n" +
       "Read the full spec at `${turn.specReference}` for its scope and planned details, and work against the " +

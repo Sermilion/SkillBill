@@ -252,7 +252,7 @@ class FeatureTaskRuntimeImplementationCriteriaTest {
   ) {
     val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(report, report.toString())
     assertEquals("implement", blocked.lastIncompletePhase)
-    assertContains(blocked.blockedReason, "Acceptance criterion AC-002 used all 3 workers")
+    assertContains(blocked.blockedReason, "Acceptance criterion AC-002 exhausted its budget after 3")
     assertContains(blocked.blockedReason, latestGap)
   }
 

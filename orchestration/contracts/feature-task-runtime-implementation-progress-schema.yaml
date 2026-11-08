@@ -1,29 +1,35 @@
-$schema: "https://json-schema.org/draft/2020-12/schema"
-$id: "https://skill-bill.dev/contracts/feature-task-runtime-implementation-progress-schema.yaml"
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://skill-bill.dev/contracts/feature-task-runtime-implementation-progress-schema.yaml
 title: Feature-task runtime implementation progress
-description: >-
-  Durable progress of an implement step that works one acceptance criterion at a time. The runtime
-  reserves a worker slot before each worker launch and closes a criterion only after a fresh read-only
-  check reports it satisfied. Only an absent artifact means no progress; a present payload that fails
-  this contract is corrupt and is never reset.
+description: Durable progress of an implement step that works one acceptance criterion at a time. The runtime reserves a worker slot before each
+  worker launch and closes a criterion only after a fresh read-only check reports it satisfied. Only an absent artifact means no progress; a present
+  payload that fails this contract is corrupt and is never reset.
 type: object
 additionalProperties: false
 required:
-  - contract_version
-  - criterion_ids
-  - current_index
-  - worker_count
-  - launch_count
-  - closed_ids
+- contract_version
+- criterion_ids
+- current_index
+- worker_count
+- launch_count
+- closed_ids
+- completed_mutations
+- independent_checks
+- repair_budgets
+- repair_accounting
+- worker_reservation_id
 properties:
-  contract_version: { const: "0.1" }
+  contract_version:
+    const: '0.2'
   criterion_ids:
     description: Canonical criterion ids in authored order.
     type: array
     minItems: 1
     maxItems: 999
     uniqueItems: true
-    items: { type: string, pattern: "^AC-[0-9]{3}$" }
+    items:
+      type: string
+      pattern: ^AC-[0-9]{3}$
   current_index:
     description: Zero-based cursor into criterion_ids. Equal to the criterion count once every criterion closed.
     type: integer
@@ -33,11 +39,10 @@ properties:
     description: Workers reserved for the current criterion. Zero at the terminal cursor.
     type: integer
     minimum: 0
-    maximum: 3
+    maximum: 2147483647
   launch_count:
-    description: >-
-      Worker and check launches recorded across every criterion. It survives attempt-history pruning, so
-      process-retry accounting on resume does not depend on retained launch records.
+    description: Worker and check launches recorded across every criterion. It survives attempt-history pruning, so process-retry accounting on
+      resume does not depend on retained launch records.
     type: integer
     minimum: 0
   closed_ids:
@@ -45,11 +50,558 @@ properties:
     type: array
     maxItems: 999
     uniqueItems: true
-    items: { type: string, pattern: "^AC-[0-9]{3}$" }
+    items:
+      type: string
+      pattern: ^AC-[0-9]{3}$
+  completed_mutations:
+    type: array
+    maxItems: 4096
+    items: &id001
+      type: object
+      additionalProperties: false
+      required:
+      - catalog_id
+      - spec_digest
+      - execution_id
+      - criterion_ref
+      - repair_attempt_id
+      - worker_execution_id
+      - worker_output_id
+      - worker_output_digest
+      - baseline_tree_digest
+      - baseline_checkpoint_id
+      - current_tree_digest
+      - current_checkpoint_id
+      - established_obligations
+      - terminal_disposition
+      - launch_attribution
+      properties:
+        catalog_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        execution_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        repair_attempt_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        worker_execution_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        worker_output_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        baseline_checkpoint_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        current_checkpoint_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        spec_digest:
+          type: string
+          pattern: ^[a-fA-F0-9]{64}$
+        worker_output_digest:
+          type: string
+          pattern: ^[a-fA-F0-9]{64}$
+        baseline_tree_digest:
+          type: string
+          pattern: ^[a-fA-F0-9]{64}$
+        current_tree_digest:
+          type: string
+          pattern: ^[a-fA-F0-9]{64}$
+        criterion_ref:
+          type: string
+          pattern: ^AC-[0-9]{3}$
+        established_obligations:
+          type: array
+          maxItems: 256
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - obligation_id
+            - obligation
+            - current_citations
+            properties:
+              obligation_id:
+                type: string
+                minLength: 1
+                maxLength: 256
+              obligation:
+                type: string
+                minLength: 1
+                maxLength: 4096
+              current_citations:
+                type: array
+                minItems: 1
+                maxItems: 256
+                items:
+                  type: string
+                  minLength: 1
+                  maxLength: 4096
+        terminal_disposition:
+          enum:
+          - complete
+          - incomplete
+          - no_change
+          - historical_unknown
+        launch_attribution:
+          type:
+          - object
+          - 'null'
+          additionalProperties: false
+          required:
+          - repair_attempt_id
+          - provider
+          - effective_model
+          - effective_effort
+          - execution_plan_ref
+          - launch_ref
+          - reasoning
+          properties:
+            repair_attempt_id:
+              type: string
+              minLength: 1
+              maxLength: 256
+            provider:
+              type: string
+              minLength: 1
+              maxLength: 256
+            effective_model:
+              type: string
+              minLength: 1
+              maxLength: 256
+            effective_effort:
+              type: string
+              minLength: 1
+              maxLength: 256
+            execution_plan_ref:
+              type: string
+              minLength: 1
+              maxLength: 256
+            launch_ref:
+              type: string
+              minLength: 1
+              maxLength: 256
+            reasoning:
+              type: boolean
+  independent_checks:
+    type: array
+    maxItems: 4096
+    items:
+      type: object
+      additionalProperties: false
+      required:
+      - mutation
+      - comparison
+      - context
+      properties:
+        mutation: *id001
+        comparison:
+          type: object
+          additionalProperties: false
+          required:
+          - criterion_ref
+          - repair_attempt_id
+          - baseline_tree_digest
+          - current_tree_digest
+          - baseline_checkpoint_id
+          - current_checkpoint_id
+          - verification_revision
+          - audit_binding_digest
+          - resolved_obligations
+          - preserved_obligations
+          - remaining_gaps
+          - classification
+          properties:
+            criterion_ref:
+              type: string
+              pattern: ^AC-[0-9]{3}$
+            repair_attempt_id:
+              type: string
+              minLength: 1
+              maxLength: 256
+            baseline_tree_digest:
+              type: string
+              pattern: ^[a-fA-F0-9]{64}$
+            current_tree_digest:
+              type: string
+              pattern: ^[a-fA-F0-9]{64}$
+            baseline_checkpoint_id:
+              type: string
+              minLength: 1
+              maxLength: 256
+            current_checkpoint_id:
+              type: string
+              minLength: 1
+              maxLength: 256
+            verification_revision:
+              type: integer
+              minimum: 0
+            audit_binding_digest:
+              type: string
+              pattern: ^[a-fA-F0-9]{64}$
+            resolved_obligations:
+              type: array
+              maxItems: 256
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                - obligation_id
+                - obligation
+                - baseline_citations
+                - current_citations
+                properties:
+                  obligation_id:
+                    type: string
+                    minLength: 1
+                    maxLength: 256
+                  obligation:
+                    type: string
+                    minLength: 1
+                    maxLength: 4096
+                  baseline_citations:
+                    type: array
+                    minItems: 1
+                    maxItems: 256
+                    items:
+                      type: string
+                      minLength: 1
+                  current_citations:
+                    type: array
+                    minItems: 1
+                    maxItems: 256
+                    items:
+                      type: string
+                      minLength: 1
+            preserved_obligations:
+              type: array
+              maxItems: 256
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                - obligation_id
+                - obligation
+                - current_citations
+                properties:
+                  obligation_id:
+                    type: string
+                    minLength: 1
+                    maxLength: 256
+                  obligation:
+                    type: string
+                    minLength: 1
+                    maxLength: 4096
+                  current_citations:
+                    type: array
+                    minItems: 1
+                    maxItems: 256
+                    items:
+                      type: string
+                      minLength: 1
+            remaining_gaps:
+              type: array
+              items:
+                type: string
+                minLength: 1
+                maxLength: 4096
+              maxItems: 256
+            classification:
+              enum:
+              - satisfied
+              - verified_partial_progress
+              - no_progress
+        context:
+          type: object
+          additionalProperties: false
+          required:
+          - catalog_id
+          - execution_id
+          - worker_execution_id
+          - baseline_checkpoint_id
+          - current_checkpoint_id
+          - spec_digest
+          - worker_output_digest
+          - baseline_tree_digest
+          - current_tree_digest
+          - criterion_ref
+          - established_obligations
+          - reservation_id
+          - checker_execution_id
+          - checker_output_id
+          - checker_output_digest
+          - verification_revision
+          - audit_binding_digest
+          - source_unchanged_during_check
+          - baseline_citations
+          - current_citations
+          - verified_resolved_obligations
+          - verified_preserved_obligations
+          properties:
+            catalog_id:
+              type: string
+              minLength: 1
+              maxLength: 256
+            execution_id:
+              type: string
+              minLength: 1
+              maxLength: 256
+            worker_execution_id:
+              type: string
+              minLength: 1
+              maxLength: 256
+            baseline_checkpoint_id:
+              type: string
+              minLength: 1
+              maxLength: 256
+            current_checkpoint_id:
+              type: string
+              minLength: 1
+              maxLength: 256
+            spec_digest:
+              type: string
+              pattern: ^[a-fA-F0-9]{64}$
+            worker_output_digest:
+              type: string
+              pattern: ^[a-fA-F0-9]{64}$
+            baseline_tree_digest:
+              type: string
+              pattern: ^[a-fA-F0-9]{64}$
+            current_tree_digest:
+              type: string
+              pattern: ^[a-fA-F0-9]{64}$
+            criterion_ref:
+              type: string
+              pattern: ^AC-[0-9]{3}$
+            established_obligations:
+              type: array
+              maxItems: 256
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                - obligation_id
+                - obligation
+                - current_citations
+                properties:
+                  obligation_id:
+                    type: string
+                    minLength: 1
+                    maxLength: 256
+                  obligation:
+                    type: string
+                    minLength: 1
+                    maxLength: 4096
+                  current_citations:
+                    type: array
+                    minItems: 1
+                    maxItems: 256
+                    items:
+                      type: string
+                      minLength: 1
+                      maxLength: 4096
+            reservation_id:
+              type: string
+              minLength: 1
+              maxLength: 256
+            checker_execution_id:
+              type: string
+              minLength: 1
+              maxLength: 256
+            checker_output_id:
+              type: string
+              minLength: 1
+              maxLength: 256
+            checker_output_digest:
+              type: string
+              pattern: ^[a-fA-F0-9]{64}$
+            verification_revision:
+              type: integer
+              minimum: 0
+            audit_binding_digest:
+              type: string
+              pattern: ^[a-fA-F0-9]{64}$
+            source_unchanged_during_check:
+              type: boolean
+            baseline_citations:
+              type: array
+              maxItems: 65536
+              items:
+                type: string
+                minLength: 1
+                maxLength: 4096
+            current_citations:
+              type: array
+              maxItems: 65536
+              items:
+                type: string
+                minLength: 1
+                maxLength: 4096
+            verified_resolved_obligations:
+              type: array
+              maxItems: 256
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                - obligation_id
+                - obligation
+                - baseline_citations
+                - current_citations
+                properties:
+                  obligation_id:
+                    type: string
+                    minLength: 1
+                    maxLength: 256
+                  obligation:
+                    type: string
+                    minLength: 1
+                    maxLength: 4096
+                  baseline_citations:
+                    type: array
+                    minItems: 1
+                    maxItems: 256
+                    items:
+                      type: string
+                      minLength: 1
+                  current_citations:
+                    type: array
+                    minItems: 1
+                    maxItems: 256
+                    items:
+                      type: string
+                      minLength: 1
+            verified_preserved_obligations:
+              type: array
+              maxItems: 256
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                - obligation_id
+                - obligation
+                - current_citations
+                properties:
+                  obligation_id:
+                    type: string
+                    minLength: 1
+                    maxLength: 256
+                  obligation:
+                    type: string
+                    minLength: 1
+                    maxLength: 4096
+                  current_citations:
+                    type: array
+                    minItems: 1
+                    maxItems: 256
+                    items:
+                      type: string
+                      minLength: 1
+  worker_reservation_id:
+    type:
+    - string
+    - 'null'
+    minLength: 1
+    maxLength: 256
+  repair_budgets:
+    type: array
+    maxItems: 4096
+    items:
+      type: object
+      additionalProperties: false
+      required:
+      - criterion_ref
+      - retry_identity
+      - start_mutation_index
+      properties:
+        criterion_ref:
+          type: string
+          pattern: ^AC-[0-9]{3}$
+        retry_identity:
+          type: string
+          minLength: 1
+          maxLength: 256
+        start_mutation_index:
+          type: integer
+          minimum: 0
+          maximum: 4096
+  repair_accounting:
+    type: array
+    maxItems: 999
+    items:
+      type: object
+      additionalProperties: false
+      required:
+      - criterion_ref
+      - budget_identity
+      - completed_attempt_ids
+      - no_progress_outcomes
+      - pending_check_attempt_ids
+      - escalation_required
+      - triggering_attempt_ids
+      - escalated_attempt_ids
+      - evidence_missing
+      properties:
+        criterion_ref:
+          type: string
+          pattern: ^AC-[0-9]{3}$
+        budget_identity:
+          type: string
+          minLength: 1
+          maxLength: 256
+        no_progress_outcomes:
+          type: integer
+          minimum: 0
+          maximum: 3
+        escalation_required:
+          type: boolean
+        evidence_missing:
+          type: boolean
+        completed_attempt_ids:
+          type: array
+          maxItems: 4096
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+        pending_check_attempt_ids:
+          type: array
+          maxItems: 4096
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+        triggering_attempt_ids:
+          type: array
+          maxItems: 4096
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+        escalated_attempt_ids:
+          type: array
+          maxItems: 4096
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
 x-coherence-checks:
-  - id: cursor-bounds
-    description: current_index is at most the number of criterion_ids.
-  - id: closed-prefix
-    description: closed_ids equals the criterion_ids prefix before current_index, in order.
-  - id: terminal-count
-    description: worker_count is zero when current_index equals the number of criterion_ids.
+- id: cursor-bounds
+  description: current_index is at most the number of criterion_ids.
+- id: closed-prefix
+  description: closed_ids equals the criterion_ids prefix before current_index, in order.
+- id: terminal-count
+  description: worker_count is zero when current_index equals the number of criterion_ids.

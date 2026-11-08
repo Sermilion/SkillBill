@@ -1,7 +1,5 @@
 package skillbill.workflow.taskruntime.model.audit
 
-import skillbill.workflow.model.repair.FocusedRepairStrategy
-
 enum class AcceptanceCriterionRepairMode(val wireValue: String) {
   INITIAL_DISCOVERY("initial_discovery"),
   CURRENT_CRITERION_TARGETED("current_criterion_targeted"),
@@ -87,6 +85,7 @@ data class AcceptanceCriterionRepairReservation(
   val criterionRef: String,
   val revision: Long,
   val stageRevision: Long = revision,
+  val reasoningRequired: Boolean = false,
 )
 
 data class AcceptanceCriterionRepairOutcome(
@@ -157,10 +156,13 @@ data class AcceptanceCriterionRepairState internal constructor(
   val pendingClarificationQuestion: String? = null,
   val budgetStartOutcomeIndex: Int = 0,
   val interactionTrace: AcceptanceCriterionInteractionTrace = AcceptanceCriterionInteractionTrace.EMPTY,
+  val completedMutations: List<AcceptanceCriterionCompletedMutation> = emptyList(),
+  val independentChecks: List<AcceptanceCriterionCheckedMutation> = emptyList(),
+  val repairBudgets: List<AcceptanceCriterionRepairBudget> = emptyList(),
 ) {
   fun clearPendingClarification(): AcceptanceCriterionRepairState = copy(pendingClarificationQuestion = null)
 
-  fun reopenForOperatorAudit(): AcceptanceCriterionRepairState? {
+  fun reopenForOperatorAudit(retryIdentity: String = "operator:${revision + 1}"): AcceptanceCriterionRepairState? {
     val criterion = currentCriterionRef ?: return null
     if (reservation != null || stage !in
       setOf(
@@ -171,7 +173,7 @@ data class AcceptanceCriterionRepairState internal constructor(
     ) {
       return null
     }
-    val resumed = resetBudgetForOperatorResume()
+    val resumed = resetBudgetForOperatorResume(retryIdentity)
     return resumed.copy(
       mode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
       stage = AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED,
@@ -180,11 +182,19 @@ data class AcceptanceCriterionRepairState internal constructor(
     )
   }
 
-  fun resetBudgetForOperatorResume(): AcceptanceCriterionRepairState {
-    if (stage != AcceptanceCriterionRepairStage.BUDGET_BLOCKED) return this
+  fun resetBudgetForOperatorResume(
+    retryIdentity: String = "operator:${revision + 1}",
+  ): AcceptanceCriterionRepairState {
+    val ref = currentCriterionRef ?: return this
+    val identified = retryIdentity.isNotBlank() && retryIdentity.length <= MAX_REPAIR_ID_LENGTH
+    val available = repairBudgets.size < MAX_REPAIR_OUTCOMES && repairBudgets.none { it.retryIdentity == retryIdentity }
+    val accounting = repairAccounting(ref)
+    val ready = reservation == null && accounting.pendingCheckAttemptIds.isEmpty() && !accounting.evidenceMissing
+    if (!identified || !available || !ready) return this
     return copy(
-      unsuccessfulTotals = emptyMap(),
+      unsuccessfulTotals = unsuccessfulTotals - ref,
       budgetStartOutcomeIndex = outcomes.size,
+      repairBudgets = repairBudgets + AcceptanceCriterionRepairBudget(ref, retryIdentity, completedMutations.size),
       stage =
         if (pendingAuditRefs.isEmpty()) {
           AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
@@ -200,14 +210,22 @@ data class AcceptanceCriterionRepairState internal constructor(
     mode: AcceptanceCriterionRepairMode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
   ): AcceptanceCriterionRepairState? {
     val current = currentCriterionRef ?: return null
-    val available = reservation == null && !hasExhaustedUnresolvedCriterion(unresolvedQueue, unsuccessfulTotals)
-    val validId = reservationId.isNotBlank() && outcomes.none { it.reservationId == reservationId }
+    val available =
+      reservation == null && pendingClarificationQuestion == null &&
+        !budgetBlocks(current) && repairAccounting(current).pendingCheckAttemptIds.isEmpty() &&
+        !repairAccounting(current).evidenceMissing
+    val validId =
+      reservationId.isNotBlank() && outcomes.none { it.reservationId == reservationId } &&
+        completedMutations.none { it.repairAttemptId == reservationId }
     val capacity = outcomes.size < MAX_REPAIR_OUTCOMES && sourceTransitions.size < MAX_REPAIR_SOURCE_TRANSITIONS
     val allowedStage = stage == AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
     if (mode != AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED || !available || !validId) return null
     if (!capacity || !allowedStage) return null
     return copy(
-      reservation = AcceptanceCriterionRepairReservation(reservationId, current, revision + 1, revision + 1),
+      reservation = AcceptanceCriterionRepairReservation(
+        reservationId, current, revision + 1, revision + 1,
+        reasoningRequired = repairAccounting(current).escalationRequired,
+      ),
       mode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
       stage = AcceptanceCriterionRepairStage.REPAIR_RESERVED,
       revision = revision + 1,
@@ -223,42 +241,134 @@ data class AcceptanceCriterionRepairState internal constructor(
     val live = reservation ?: return null
     val validReservation = live.reservationId == reservationId && live.criterionRef == currentCriterionRef
     val validEvidence = evidenceRef.isNotBlank() && treeDigest.isDigest() && checkpointId.isNotBlank()
-    if (stage != AcceptanceCriterionRepairStage.REPAIR_RESERVED || !validReservation || !validEvidence) return null
-    return copy(
-      mode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
-      stage = AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION,
-      completedRepairEvidenceRef = evidenceRef,
-      admittedTreeDigest = treeDigest,
-      admittedCheckpointId = checkpointId,
-      reservation = live.copy(stageRevision = revision + 1),
-      revision = revision + 1,
-    )
+    if (stage !in
+      setOf(
+        AcceptanceCriterionRepairStage.REPAIR_RESERVED,
+        AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION,
+      ) || !validReservation || !validEvidence
+    ) {
+      return null
+    }
+    val mutation = completedMutations.singleOrNull { it.repairAttemptId == reservationId }
+    if (mutation == null || mutation.currentTreeDigest != treeDigest ||
+      mutation.currentCheckpointId != checkpointId
+    ) {
+      return copy(
+        pendingClarificationQuestion = "Terminal worker and source capture are required before verification.",
+        revision = revision + 1,
+      )
+    }
+    return if (stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION) {
+      this
+    } else {
+      copy(
+        mode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
+        stage = AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION,
+        completedRepairEvidenceRef = evidenceRef,
+        admittedTreeDigest = treeDigest,
+        admittedCheckpointId = checkpointId,
+        reservation = live.copy(stageRevision = revision + 1),
+        revision = revision + 1,
+      )
+    }
+  }
+
+  fun retainCompletedMutation(mutation: AcceptanceCriterionCompletedMutation): AcceptanceCriterionRepairState? {
+    mutation.validate()
+    val previous = completedMutations.singleOrNull { it.repairAttemptId == mutation.repairAttemptId }
+    if (previous != null) return if (previous == mutation) this else null
+    val live = reservation ?: return null
+    val identity =
+      mutation.catalogId == catalogId &&
+        mutation.executionId == executionId &&
+        mutation.specDigest == specDigest
+    val attempt = mutation.repairAttemptId == live.reservationId && mutation.criterionRef == live.criterionRef
+    val capture = stage == AcceptanceCriterionRepairStage.REPAIR_RESERVED
+    val inventory =
+      independentChecks.lastOrNull {
+        it.mutation.criterionRef == mutation.criterionRef
+      }?.establishedObligations()
+    val bound = identity && attempt && capture
+    val launchMeetsReservation = when {
+      live.reasoningRequired -> mutation.launchAttribution?.let {
+        it.reasoning && it.validFor(mutation.repairAttemptId)
+      } == true
+      else -> true
+    }
+    val preserved = inventory == null || inventory == mutation.establishedObligations
+    val validCapture = bound && preserved && mutation.terminal && launchMeetsReservation
+    return if (validCapture && completedMutations.size < MAX_REPAIR_OUTCOMES) {
+      copy(
+        completedMutations = completedMutations + mutation,
+        stage = AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION,
+        completedRepairEvidenceRef = mutation.workerOutputId,
+        admittedTreeDigest = mutation.currentTreeDigest,
+        admittedCheckpointId = mutation.currentCheckpointId,
+        reservation = live.copy(stageRevision = revision + 1),
+        revision = revision + 1,
+      )
+    } else {
+      null
+    }
+  }
+
+  fun retainIndependentCheck(check: AcceptanceCriterionCheckedMutation): AcceptanceCriterionRepairState? {
+    check.validate()
+    if (check.mutation !in completedMutations) return null
+    val previous = independentChecks.singleOrNull { it.mutation.repairAttemptId == check.mutation.repairAttemptId }
+    if (previous != null) return if (previous == check) this else null
+    val live = reservation ?: return null
+    val identity =
+      check.mutation.repairAttemptId == live.reservationId && check.comparison.verificationRevision == revision
+    val source =
+      check.comparison.currentTreeDigest == admittedTreeDigest &&
+        check.comparison.currentCheckpointId == admittedCheckpointId
+    val capacity = independentChecks.size < MAX_REPAIR_OUTCOMES
+    return takeIf { identity && source && capacity }?.copy(independentChecks = independentChecks + check)
   }
 
   fun record(outcome: AcceptanceCriterionRepairOutcome): AcceptanceCriterionRepairState? {
     if (!outcome.isValidRepairOutcome()) return null
     val existing = outcomes.firstOrNull { it.reservationId == outcome.reservationId }
     if (existing != null) return if (outcome.replays(existing)) this else null
-    if (!canRecord(outcome)) return null
+    val proof = hasIndependentClosure(outcome)
+    if (!canRecord(outcome) || !proof) return null
     val acceptedOutcome = outcome.boundTo(this)
     return acceptedOutcome.takeIf { it.matchesVerification(this) }?.let(::applyOutcome)
+  }
+
+  private fun hasIndependentClosure(outcome: AcceptanceCriterionRepairOutcome): Boolean {
+    val check = independentChecks.singleOrNull { it.mutation.repairAttemptId == outcome.reservationId } ?: return false
+    if (check.mutation !in completedMutations) return false
+    check.validate()
+    val comparison = check.comparison
+    val checker =
+      check.context.checkerOutputId == outcome.outcomeId &&
+        check.context.checkerOutputDigest == outcome.digest
+    val source =
+      comparison.currentTreeDigest == admittedTreeDigest &&
+        comparison.currentCheckpointId == admittedCheckpointId
+    val revisionMatches =
+      comparison.verificationRevision == revision &&
+        comparison.auditBindingDigest == outcome.auditBindingDigest
+    return checker &&
+      source &&
+      revisionMatches &&
+      (comparison.classification == AcceptanceCriterionProgressClassification.SATISFIED) == outcome.successful
   }
 
   private fun applyOutcome(acceptedOutcome: AcceptanceCriterionRepairOutcome): AcceptanceCriterionRepairState? {
     val outcome = acceptedOutcome
     val totals = unsuccessfulTotals.toMutableMap()
-    if (!outcome.successful) {
-      val next =
-        FocusedRepairStrategy.recordUnsuccessfulOutcome(totals.getOrDefault(outcome.criterionRef, 0))
-          ?: return null
-      totals[outcome.criterionRef] = next
-    }
+    totals[outcome.criterionRef] = repairAccounting(outcome.criterionRef).noProgressOutcomes
+    if (totals[outcome.criterionRef] == 0) totals.remove(outcome.criterionRef)
     val changedCriteria = criteriaAfter(outcome)
     val byRef = changedCriteria.associateBy { it.canonicalRef }
     val queue = stableQueue(changedCriteria, dependencies, byRef) ?: return null
     val pending = if (outcome.successful) pendingAuditRefs - outcome.criterionRef else pendingAuditRefs
     val current = pending.firstOrNull() ?: queue.firstOrNull()
-    val blocked = !outcome.successful && FocusedRepairStrategy.exhausted(totals.getOrDefault(outcome.criterionRef, 0))
+    val budgetReached = current != null && budgetBlocks(current)
+    val blocked = budgetReached && (!outcome.successful || pending.isEmpty())
     return copy(
       criteria = changedCriteria,
       unresolvedQueue = queue,
@@ -352,14 +462,6 @@ data class AcceptanceCriterionRepairState internal constructor(
     const val MAX_DURABLE_UTF8_BYTES: Int = 12_582_912
     const val RESERVATION_UTF8_HEADROOM: Int = 65_536
 
-    internal fun hasExhaustedUnresolvedCriterion(
-      unresolvedQueue: List<String>,
-      unsuccessfulTotals: Map<String, Int>,
-    ): Boolean =
-      unresolvedQueue.any {
-        FocusedRepairStrategy.exhausted(unsuccessfulTotals.getOrDefault(it, 0))
-      }
-
     fun restore(state: AcceptanceCriterionRepairState): AcceptanceCriterionRepairState? =
       state.takeIf { AcceptanceCriterionRepairCoherence.isCoherent(it) }
 
@@ -429,6 +531,7 @@ data class AcceptanceCriterionRepairState internal constructor(
     }
 
     internal const val MAX_CLARIFICATION_LENGTH: Int = 1024
+    internal const val MAX_REPAIR_ID_LENGTH: Int = 256
     internal const val MAX_REPAIR_CRITERIA: Int = 256
     internal const val MAX_REPAIR_DEPENDENCIES: Int = 4096
     internal const val MAX_REPAIR_OUTCOMES: Int = 4096

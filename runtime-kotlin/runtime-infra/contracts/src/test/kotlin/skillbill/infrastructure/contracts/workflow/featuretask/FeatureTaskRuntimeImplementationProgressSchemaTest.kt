@@ -5,6 +5,8 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTAT
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeImplementationProgressSchemaPaths
+import skillbill.workflow.taskruntime.artifact.asImplementationProgressWireMap
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -32,7 +34,7 @@ class FeatureTaskRuntimeImplementationProgressSchemaTest {
   fun `accepts the initial, reserved, advanced, and terminal cursors`() {
     listOf(
       progress(),
-      progress(workerCount = 3),
+      progress(workerCount = 4),
       progress(currentIndex = 1, workerCount = 1),
       progress(currentIndex = 2, workerCount = 0),
     ).forEach { FeatureTaskRuntimeImplementationProgressSchemaValidator.validate(it, SOURCE) }
@@ -41,7 +43,7 @@ class FeatureTaskRuntimeImplementationProgressSchemaTest {
   @Test
   fun `rejects corrupt progress with the typed implementation-progress failure`() {
     listOf(
-      progress() + ("contract_version" to "0.2"),
+      progress() + ("contract_version" to "0.0"),
       progress() + ("attempts" to emptyList<Any>()),
       progress() - "closed_ids",
       progress() - "launch_count",
@@ -52,7 +54,7 @@ class FeatureTaskRuntimeImplementationProgressSchemaTest {
       progress(currentIndex = 1, closed = listOf("AC-002")),
       progress(currentIndex = 1, closed = emptyList()),
       progress(currentIndex = 3),
-      progress(workerCount = 4),
+      progress(workerCount = -1),
       progress(currentIndex = 2, workerCount = 1),
       progress() + ("current_index" to 0.5),
     ).forEach { corrupt ->
@@ -71,14 +73,15 @@ class FeatureTaskRuntimeImplementationProgressSchemaTest {
     workerCount: Int = 0,
     closed: List<String> = ids.take(currentIndex),
   ): Map<String, Any?> =
-    linkedMapOf(
-      "contract_version" to FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_CONTRACT_VERSION,
-      "criterion_ids" to ids,
-      "current_index" to currentIndex,
-      "worker_count" to workerCount,
-      "launch_count" to 0,
-      "closed_ids" to closed,
-    )
+    FeatureTaskRuntimeImplementationProgress.initial(listOf("AC-001", "AC-002")).asImplementationProgressWireMap() +
+      linkedMapOf(
+        "contract_version" to FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_CONTRACT_VERSION,
+        "criterion_ids" to ids,
+        "current_index" to currentIndex,
+        "worker_count" to workerCount,
+        "launch_count" to 0,
+        "closed_ids" to closed,
+      )
 
   private companion object {
     const val SOURCE = "feature_task_runtime_implementation_progress"

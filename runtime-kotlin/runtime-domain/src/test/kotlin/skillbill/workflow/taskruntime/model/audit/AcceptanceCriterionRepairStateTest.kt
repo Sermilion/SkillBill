@@ -1,5 +1,7 @@
 package skillbill.workflow.taskruntime.model.audit
 
+import skillbill.workflow.taskruntime.artifact.asRepairWireMap
+import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -102,9 +104,19 @@ class AcceptanceCriterionRepairStateTest {
     val repaired =
       assertNotNull(
         assertNotNull(queued.reserve("reservation-1"))
-          .completeRepairAwaitingTargetedVerification("reservation-1", "repair:1", "d".repeat(64), "checkpoint:1"),
+          .captureForTest("reservation-1", "repair:1", "d".repeat(64), "checkpoint:1"),
       )
-    val accepted = assertNotNull(repaired.record(outcome("outcome-1", "reservation-1", "AC-002", successful = true)))
+    val accepted =
+      assertNotNull(
+        repaired.recordIndependently(
+          outcome(
+            "outcome-1",
+            "reservation-1",
+            "AC-002",
+            successful = true,
+          ),
+        ),
+      )
 
     assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, accepted.stage, "verification is the only post-repair audit")
     assertEquals(accepted, AcceptanceCriterionRepairState.restore(accepted))
@@ -203,23 +215,25 @@ class AcceptanceCriterionRepairStateTest {
       )!!
     val reserved = initial.reserve("reservation-1")!!
     val verified =
-      reserved.completeRepairAwaitingTargetedVerification(
+      reserved.captureForTest(
         "reservation-1",
         "repair:1",
         "d".repeat(64),
         "checkpoint:1",
       )!!
-    val failed = verified.record(outcome("outcome-1", "reservation-1", "AC-001", successful = false))!!
+    val failed = verified.recordIndependently(outcome("outcome-1", "reservation-1", "AC-001", successful = false))!!
     val reservedAgain = failed.reserve("reservation-2")!!
     val success = outcome("outcome-2", "reservation-2", "AC-001", successful = true)
     val repaired =
-      reservedAgain.completeRepairAwaitingTargetedVerification(
+      reservedAgain.captureForTest(
         "reservation-2",
         "repair:2",
         "d".repeat(64),
         "checkpoint:2",
       )!!
-    val closed = repaired.record(success)!!
+    assertNull(repaired.record(success), "Worker success without an independent check cannot close source")
+    val closed = repaired.recordIndependently(success)!!
+    assertEquals(closed, closed.asRepairWireMap().toAcceptanceCriterionRepairState("closed-proof"))
 
     assertEquals(1, closed.unsuccessfulTotals["AC-001"])
     assertEquals("AC-002", closed.currentCriterionRef)
@@ -272,14 +286,14 @@ class AcceptanceCriterionRepairStateTest {
       val reserved = assertNotNull(state.reserve(reservationId))
       val completed =
         assertNotNull(
-          reserved.completeRepairAwaitingTargetedVerification(
+          reserved.captureForTest(
             reservationId,
             "repair:$reservationId",
             "d".repeat(64),
             "checkpoint:$reservationId",
           ),
         )
-      state = assertNotNull(completed.record(outcome(reservationId, reservationId, ref, successful)))
+      state = assertNotNull(completed.recordIndependently(outcome(reservationId, reservationId, ref, successful)))
       state = assertNotNull(AcceptanceCriterionRepairState.restore(state))
     }
 

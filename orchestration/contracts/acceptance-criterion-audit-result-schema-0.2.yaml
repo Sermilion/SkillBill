@@ -1,0 +1,106 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://skill-bill.dev/contracts/acceptance-criterion-audit-result.yaml
+title: Acceptance criterion audit result
+type: object
+additionalProperties: false
+required: [contract_version, mode, catalog_id, spec_digest, execution_id, tree_digest, checkpoint_id, producing_output_id, producing_output_digest, criteria, dependencies, regressed_refs, edge_changes, interactions, rechecks]
+properties:
+  contract_version: { const: '0.2' }
+  mode: { enum: [initial_discovery, current_criterion_targeted, interaction_trace] }
+  catalog_id: { type: string, minLength: 1, maxLength: 256 }
+  spec_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
+  execution_id: { type: string, minLength: 1, maxLength: 256 }
+  tree_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
+  checkpoint_id: { type: string, minLength: 1, maxLength: 256 }
+  producing_output_id: { type: string, minLength: 1, maxLength: 256 }
+  producing_output_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
+  expected_revision: { type: [integer, 'null'], minimum: 0 }
+  current_criterion_ref: { type: [string, 'null'], pattern: '^AC-[0-9]{3}$' }
+  reservation_id: { type: [string, 'null'], minLength: 1, maxLength: 256 }
+  criteria:
+    type: array
+    minItems: 1
+    maxItems: 256
+    items:
+      type: object
+      additionalProperties: false
+      required: [canonical_ref, source_disposition, validation_obligation, validation_owner_available, evidence_ref]
+      properties:
+        canonical_ref: { type: string, pattern: '^AC-[0-9]{3}$' }
+        source_disposition: { enum: [not_applicable, source_closed, source_unresolved] }
+        validation_obligation: { enum: [required, deferred, not_required] }
+        validation_owner_available: { type: boolean }
+        evidence_ref: { type: string, minLength: 1 }
+  dependencies:
+    type: array
+    maxItems: 4096
+    items:
+      type: object
+      additionalProperties: false
+      required: [dependent_ref, prerequisite_ref, reason, declaring_output_ref, source_evidence_ref]
+      properties:
+        dependent_ref: { type: string, pattern: '^AC-[0-9]{3}$' }
+        prerequisite_ref: { type: string, pattern: '^AC-[0-9]{3}$' }
+        reason: { type: string, minLength: 1, maxLength: 1024 }
+        declaring_output_ref: { type: string, minLength: 1, maxLength: 512 }
+        source_evidence_ref: { type: string, minLength: 1 }
+  regressed_refs:
+    type: array
+    maxItems: 256
+    uniqueItems: true
+    items: { type: string, pattern: '^AC-[0-9]{3}$' }
+  edge_changes:
+    type: array
+    maxItems: 4096
+    items:
+      type: object
+      additionalProperties: false
+      required: [dependent_ref, prerequisite_ref, reason, declaring_output_ref, source_evidence_ref]
+      properties:
+        dependent_ref: { type: string, pattern: '^AC-[0-9]{3}$' }
+        prerequisite_ref: { type: string, pattern: '^AC-[0-9]{3}$' }
+        reason: { type: string, minLength: 1, maxLength: 1024 }
+        declaring_output_ref: { type: string, minLength: 1, maxLength: 512 }
+        source_evidence_ref: { type: string, minLength: 1 }
+  interactions:
+    type: array
+    maxItems: 64
+    items:
+      type: object
+      additionalProperties: false
+      required: [scenario_ref, verdict, owner_ref, trace_ref]
+      properties:
+        scenario_ref:
+          type: string
+          oneOf:
+            - pattern: '^IS-[0-9]{3}$'
+            - pattern: '^AC-[0-9]{3}\+AC-[0-9]{3}$'
+        verdict: { enum: [holds, broken, unknown] }
+        owner_ref: { type: [string, 'null'], pattern: '^AC-[0-9]{3}$' }
+        trace_ref: { type: string, pattern: '\S' }
+      allOf:
+        - if: { properties: { verdict: { const: broken } } }
+          then: { properties: { owner_ref: { type: string } } }
+          else: { properties: { owner_ref: { type: 'null' } } }
+  rechecks:
+    type: array
+    maxItems: 256
+    items:
+      type: object
+      additionalProperties: false
+      required: [criterion_ref, verdict, evidence_ref]
+      properties:
+        criterion_ref: { type: string, pattern: '^AC-[0-9]{3}$' }
+        verdict: { enum: [holds, regressed] }
+        evidence_ref: { type: string, minLength: 1 }
+x-coherence-checks:
+  - id: interaction-trace-binding
+    description: The interactions and rechecks arrays are empty outside interaction_trace mode. In interaction_trace mode regressed_refs equals the union of the owner_ref values of broken interactions and the criterion_ref values of regressed rechecks, and edge_changes is empty.
+  - id: complete-discovery
+    description: Initial discovery contains exactly one source and validation disposition for every authored criterion.
+  - id: targeted-binding
+    description: Targeted output contains only the current criterion and matches its live reservation and expected revision.
+  - id: dependency-availability
+    description: Every declared edge references admitted criteria and has available validation ownership for pending prerequisites.
+  - id: utf8-capacity
+    description: The runtime refuses serialized artifacts above 196608 UTF-8 bytes before persistence.

@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.runner
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
@@ -1064,7 +1064,7 @@ internal fun serialDiscoveryOutput(): String {
   val specDigest = "a".repeat(64)
   val audit =
     mapOf(
-      SharedPayloadKeys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION,
+      SharedPayloadKeys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION,
       Keys.MODE to AcceptanceCriterionRepairMode.INITIAL_DISCOVERY.wireValue,
       Keys.CATALOG_ID to sha256Hex(JsonCodec.valueToJsonString(authored)),
       Keys.SPEC_DIGEST to specDigest,
@@ -1133,7 +1133,7 @@ internal fun serialStructuredAuditOutput(
     }
   val auditResult =
     mapOf(
-      SharedPayloadKeys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION,
+      SharedPayloadKeys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION,
       Keys.MODE to mode.wireValue,
       Keys.CATALOG_ID to current.catalogId,
       Keys.SPEC_DIGEST to current.specDigest,

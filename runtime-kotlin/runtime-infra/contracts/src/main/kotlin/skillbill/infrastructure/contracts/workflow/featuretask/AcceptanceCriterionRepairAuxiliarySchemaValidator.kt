@@ -1,13 +1,16 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.ObjectNode
 import com.networknt.schema.ValidationMessage
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_ADOPTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_HANDOFF_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.invalidAcceptanceCriterionAuditResultSchema
 import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairAdoptionSchema
 import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairHandoffSchema
@@ -23,10 +26,17 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimePhaseOutputMigrationR
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.repair.FocusedRepairStrategy
+import skillbill.workflow.taskruntime.artifact.AcceptanceCriterionEvidenceWire
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionEvidenceLifecycle
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProgressAdmission
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProgressClassification
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProgressContext
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdoptionComposition
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
+import skillbill.workflow.taskruntime.model.audit.admit
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionAuditResultMode
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionVerdict
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionRecheckVerdict
@@ -35,6 +45,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHando
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import java.security.MessageDigest
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionProgressPayloadKeys as ProgressKeys
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys as PhaseKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as PlanKeys
@@ -43,18 +54,48 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
   fun validateAuditResult(
     payload: Map<String, Any?>,
     sourceLabel: String,
-  ) = validate(
-    payload,
-    sourceLabel,
-    SerialRepairSchema(
-      AcceptanceCriterionAuditResultSchemaPaths.CLASSPATH_RESOURCE,
-      AcceptanceCriterionAuditResultSchemaPaths.EXPECTED_SCHEMA_ID,
-      ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION,
-      FeatureTaskRuntimeHandoffProjectionBudget.PLANNING_PROJECTION.maxUtf8Bytes,
-      ::invalidAcceptanceCriterionAuditResultSchema,
-      ::auditResultCoherenceViolation,
-    ),
-  )
+    context: AcceptanceCriterionProgressContext? = null,
+  ): AcceptanceCriterionProgressAdmission? {
+    validate(
+      payload,
+      sourceLabel,
+      SerialRepairSchema(
+        if (payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION) {
+          AcceptanceCriterionAuditResultSchemaPaths.INTERACTION_CLASSPATH_RESOURCE
+        } else {
+          AcceptanceCriterionAuditResultSchemaPaths.CLASSPATH_RESOURCE
+        },
+        AcceptanceCriterionAuditResultSchemaPaths.EXPECTED_SCHEMA_ID,
+        if (payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION) {
+          ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION
+        } else {
+          ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
+        },
+        FeatureTaskRuntimeHandoffProjectionBudget.PLANNING_PROJECTION.maxUtf8Bytes,
+        ::invalidAcceptanceCriterionAuditResultSchema,
+        ::auditResultCoherenceViolation,
+      ),
+    )
+
+    if (!payload.containsKey(ProgressKeys.INDEPENDENT_PROGRESS)) return null
+    if (context != null) {
+      val catalog = context.catalogId == payload[Keys.CATALOG_ID] && context.specDigest == payload[Keys.SPEC_DIGEST]
+      val execution = context.executionId == payload[Keys.EXECUTION_ID]
+      val checker =
+        context.checkerOutputId == payload[Keys.PRODUCING_OUTPUT_ID] &&
+          context.checkerOutputDigest == payload[Keys.PRODUCING_OUTPUT_DIGEST]
+      if (!catalog || !execution || !checker) {
+        throw invalidAcceptanceCriterionAuditResultSchema(sourceLabel, "Checker does not own the captured audit output")
+      }
+    }
+    val fact = (payload[Keys.CRITERIA] as List<*>).single() as Map<*, *>
+    return AcceptanceCriterionEvidenceWire.comparison(
+      FeatureTaskRuntimeWorkflowArtifactMap.from(payload[ProgressKeys.INDEPENDENT_PROGRESS]),
+    ).admit(
+      context,
+      fact[Keys.SOURCE_DISPOSITION] == AcceptanceCriterionSourceDisposition.SOURCE_CLOSED.wireValue,
+    )
+  }
 
   fun validateRepairHandoff(
     payload: Map<String, Any?>,
@@ -63,9 +104,17 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
     payload,
     sourceLabel,
     SerialRepairSchema(
-      AcceptanceCriterionRepairHandoffSchemaPaths.CLASSPATH_RESOURCE,
+      if (payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_REPAIR_HANDOFF_PREVIOUS_CONTRACT_VERSION) {
+        AcceptanceCriterionRepairHandoffSchemaPaths.PREVIOUS_CLASSPATH_RESOURCE
+      } else {
+        AcceptanceCriterionRepairHandoffSchemaPaths.CLASSPATH_RESOURCE
+      },
       AcceptanceCriterionRepairHandoffSchemaPaths.EXPECTED_SCHEMA_ID,
-      ACCEPTANCE_CRITERION_REPAIR_HANDOFF_CONTRACT_VERSION,
+      if (payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_REPAIR_HANDOFF_PREVIOUS_CONTRACT_VERSION) {
+        ACCEPTANCE_CRITERION_REPAIR_HANDOFF_PREVIOUS_CONTRACT_VERSION
+      } else {
+        ACCEPTANCE_CRITERION_REPAIR_HANDOFF_CONTRACT_VERSION
+      },
       FeatureTaskRuntimeHandoffProjectionBudget.PHASE_RECEIPT.maxUtf8Bytes,
       ::invalidAcceptanceCriterionRepairHandoffSchema,
       ::repairHandoffCoherenceViolation,
@@ -119,11 +168,37 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
           expectedSchemaId = schemaId,
           expectedContractVersion = version,
           identityFailure = { reason -> failure(resource, reason, null) },
+          prepareSchemaDocument = { node ->
+            if (resource == AcceptanceCriterionRepairHandoffSchemaPaths.CLASSPATH_RESOURCE) {
+              val audit =
+                ClasspathContractSchemaLoader.readClasspathYamlNode(
+                  AcceptanceCriterionRepairAuxiliarySchemaValidator::class.java.classLoader,
+                  AcceptanceCriterionAuditResultSchemaPaths.CLASSPATH_RESOURCE,
+                  { failure(resource, "Canonical comparison schema is missing.", null) },
+                )
+              val comparison = audit.path("\$defs").path(ProgressKeys.INDEPENDENT_PROGRESS)
+              val properties = node.path("properties") as? ObjectNode
+              if (!comparison.isObject || properties == null) {
+                throw failure(resource, "Canonical comparison definition is missing.", null)
+              }
+              properties.set<JsonNode>(ProgressKeys.INDEPENDENT_PROGRESS, comparison)
+            }
+          },
         ),
       )
     val instance: JsonNode = ClasspathContractSchemaLoader.valueToTree(payload)
     val errors: Set<ValidationMessage> = ClasspathContractSchemaLoader.validate(schema, instance)
-    val reason = if (errors.isNotEmpty()) formatReason(errors) else coherenceViolation(payload)
+    val reason =
+      if (errors.isNotEmpty()) {
+        formatReason(errors)
+      } else {
+        try {
+          coherenceViolation(payload)
+        } catch (cause: SkillBillRuntimeException) {
+          if (cause.code != FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_AUDIT_RESULT_SCHEMA) throw cause
+          throw failure(sourceLabel, cause.message.orEmpty(), cause)
+        }
+      }
     reason?.let { throw failure(sourceLabel, it, null) }
   }
 
@@ -137,7 +212,9 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
       refs.size != refs.toSet().size -> "audit result contains duplicate criteria."
       !tracing && (interactions.isNotEmpty() || rechecks.isNotEmpty()) ->
         "interactions and rechecks are only allowed in interaction_trace mode."
-      else -> modeCoherenceViolation(payload, criteria.size, refs, interactions, rechecks)
+      else ->
+        modeCoherenceViolation(payload, criteria.size, refs, interactions, rechecks)
+          ?: progressCoherenceViolation(payload, false)
     }
   }
 
@@ -155,7 +232,10 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
       AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED.wireValue -> {
         val identity = criteriaCount == 1 && refs.singleOrNull() == payload[Keys.CURRENT_CRITERION_REF]
         val reservation = payload[Keys.RESERVATION_ID] is String && payload[Keys.EXPECTED_REVISION] is Number
-        if (!identity || !reservation) {
+        val comparison =
+          payload.containsKey(ProgressKeys.INDEPENDENT_PROGRESS) ||
+            payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION
+        if (!identity || !reservation || !comparison) {
           "targeted audit result does not bind exactly one current criterion and reservation."
         } else {
           null
@@ -190,22 +270,117 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
   }
 
   private fun repairHandoffCoherenceViolation(payload: Map<String, Any?>): String? {
+    handoffBudgetViolation(payload)?.let { return it }
+    if (payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_REPAIR_HANDOFF_PREVIOUS_CONTRACT_VERSION) return null
+    return handoffLifecycleViolation(payload) ?: completedMutationViolation(payload) ?: progressCoherenceViolation(
+      payload,
+      true,
+    )
+  }
+
+  private fun completedMutationViolation(payload: Map<String, Any?>): String? {
+    val raw = payload[ProgressKeys.COMPLETED_MUTATION] ?: return null
+    val mutation = AcceptanceCriterionEvidenceWire.mutation(FeatureTaskRuntimeWorkflowArtifactMap.from(raw))
+    mutation.validate()
+    val identity = mutation.catalogId == payload[Keys.CATALOG_ID] && mutation.specDigest == payload[Keys.SPEC_DIGEST]
+    val attempt =
+      mutation.criterionRef == payload[Keys.CRITERION_REF] &&
+        mutation.repairAttemptId == payload[Keys.RESERVATION_ID]
+    val source =
+      mutation.currentTreeDigest == payload[Keys.TREE_DIGEST] &&
+        mutation.currentCheckpointId == payload[Keys.CHECKPOINT_ID]
+    val authority = identity && attempt && source
+    if (!authority || mutation.executionId != payload[Keys.EXECUTION_ID]) {
+      return "Completed mutation does not match enclosing handoff authority."
+    }
+    payload[ProgressKeys.INDEPENDENT_PROGRESS]?.let {
+      mutation.validateComparison(
+        AcceptanceCriterionEvidenceWire.comparison(FeatureTaskRuntimeWorkflowArtifactMap.from(it)),
+      )
+    }
+    return null
+  }
+
+  private fun handoffBudgetViolation(payload: Map<String, Any?>): String? {
     val used = (payload[Keys.UNSUCCESSFUL_USED] as Number).toInt()
     val remaining = (payload[Keys.UNSUCCESSFUL_REMAINING] as Number).toInt()
     val position = (payload[Keys.QUEUE_POSITION] as Number).toInt()
     val size = (payload[Keys.QUEUE_SIZE] as Number).toInt()
-    if (used + remaining != FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES) {
-      return "handoff unsuccessful budget does not total three."
+    val awaiting =
+      payload[Keys.STAGE] ==
+        AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION.wireValue
+    return when {
+      used + remaining != FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES ->
+        "handoff unsuccessful budget does not total three."
+      position > size -> "handoff queue position exceeds queue size."
+      awaiting && payload[Keys.RESERVATION_ID] !is String ->
+        "awaiting-verification handoff lacks its live reservation."
+      else -> null
     }
-    if (position > size) return "handoff queue position exceeds queue size."
-    if (payload[Keys.STAGE] ==
-      AcceptanceCriterionRepairStage
-        .REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION.wireValue &&
-      payload[Keys.RESERVATION_ID] !is String
-    ) {
-      return "awaiting-verification handoff lacks its live reservation."
+  }
+
+  private fun handoffLifecycleViolation(payload: Map<String, Any?>): String? {
+    val lifecycle = payload[ProgressKeys.EVIDENCE_LIFECYCLE]
+    val hasComparison = payload.containsKey(ProgressKeys.INDEPENDENT_PROGRESS)
+    val lifecycleCoherent =
+      when (lifecycle) {
+        AcceptanceCriterionEvidenceLifecycle.CHECKED_EVIDENCE_RETAINED.wireValue -> hasComparison
+        AcceptanceCriterionEvidenceLifecycle.NO_COMPLETED_MUTATION.wireValue,
+        AcceptanceCriterionEvidenceLifecycle.COMPLETED_AWAITING_INDEPENDENT_CHECK.wireValue,
+        AcceptanceCriterionEvidenceLifecycle.UNKNOWN_HISTORICAL_AUTHORITY.wireValue,
+        -> !hasComparison
+        else -> false
+      }
+    val completed = lifecycle == AcceptanceCriterionEvidenceLifecycle.COMPLETED_AWAITING_INDEPENDENT_CHECK.wireValue
+    val awaiting =
+      payload[Keys.STAGE] ==
+        AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION.wireValue
+    return when {
+      !lifecycleCoherent -> "handoff evidence lifecycle contradicts retained comparison evidence."
+      completed && !awaiting -> "completed mutation lifecycle requires awaiting targeted verification."
+      else -> null
     }
-    return null
+  }
+
+  private fun progressCoherenceViolation(
+    payload: Map<String, Any?>,
+    handoff: Boolean,
+  ): String? {
+    if (!payload.containsKey(ProgressKeys.INDEPENDENT_PROGRESS)) return null
+    val comparison =
+      AcceptanceCriterionEvidenceWire.comparison(
+        FeatureTaskRuntimeWorkflowArtifactMap.from(payload[ProgressKeys.INDEPENDENT_PROGRESS]),
+      )
+    val criterion = payload[if (handoff) Keys.CRITERION_REF else Keys.CURRENT_CRITERION_REF]
+    val revision = payload[if (handoff) Keys.REVISION else Keys.EXPECTED_REVISION] as? Number
+    val identity = comparison.criterionRef == criterion && comparison.repairAttemptId == payload[Keys.RESERVATION_ID]
+    val snapshot =
+      comparison.currentTreeDigest == payload[Keys.TREE_DIGEST] &&
+        comparison.currentCheckpointId == payload[Keys.CHECKPOINT_ID]
+    val current = revision?.toString()?.toBigDecimalOrNull() == comparison.verificationRevision.toBigDecimal()
+    val dispositionAgrees = handoff || progressDispositionAgrees(payload, comparison.classification)
+    val bound = identity && snapshot
+    return if (bound && current && dispositionAgrees) {
+      null
+    } else {
+      "Comparison does not match its enclosing criterion, reservation, snapshot or source disposition."
+    }
+  }
+
+  private fun progressDispositionAgrees(
+    payload: Map<String, Any?>,
+    classification: AcceptanceCriterionProgressClassification,
+  ): Boolean {
+    val disposition =
+      (payload[Keys.CRITERIA] as? List<*>)?.singleOrNull()
+        .let { it as? Map<*, *> }?.get(Keys.SOURCE_DISPOSITION)
+    val expected =
+      if (classification == AcceptanceCriterionProgressClassification.SATISFIED) {
+        AcceptanceCriterionSourceDisposition.SOURCE_CLOSED
+      } else {
+        AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED
+      }
+    return disposition == expected.wireValue
   }
 
   private fun repairAdoptionCoherenceViolation(
@@ -403,3 +578,5 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
         "${error.instanceLocation?.toString()?.ifBlank { "<root>" } ?: "<root>"}: ${error.message.orEmpty()}"
       } + if (errors.size > MAX_REPORTED_VIOLATIONS) " (+${errors.size - MAX_REPORTED_VIOLATIONS} more)" else ""
 }
+
+internal const val ACCEPTANCE_CRITERION_REPAIR_HANDOFF_PREVIOUS_CONTRACT_VERSION = "0.1"

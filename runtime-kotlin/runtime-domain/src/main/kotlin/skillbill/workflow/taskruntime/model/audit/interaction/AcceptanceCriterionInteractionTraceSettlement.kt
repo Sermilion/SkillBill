@@ -9,6 +9,7 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
 import skillbill.workflow.taskruntime.model.audit.afterProseAudit
+import skillbill.workflow.taskruntime.model.audit.budgetBlocks
 import skillbill.workflow.taskruntime.model.audit.isDigest
 
 data class AcceptanceCriterionInteractionTraceSettlement(
@@ -205,11 +206,14 @@ private fun AcceptanceCriterionRepairState.applyInteractionTrace(
   val queue =
     AcceptanceCriterionRepairState.stableQueue(nextCriteria, dependencies, nextCriteria.associateBy { it.canonicalRef })
       ?: return null
-  val blocked = AcceptanceCriterionRepairState.hasExhaustedUnresolvedCriterion(queue, unsuccessfulTotals)
+  val selectedCriterion = queue.firstOrNull()
+  val blocked =
+    selectedCriterion != null &&
+      budgetBlocks(selectedCriterion)
   return copy(
     criteria = nextCriteria,
     unresolvedQueue = queue,
-    currentCriterionRef = queue.firstOrNull(),
+    currentCriterionRef = selectedCriterion,
     mode =
       if (queue.isEmpty()) {
         AcceptanceCriterionRepairMode.ACCEPTED

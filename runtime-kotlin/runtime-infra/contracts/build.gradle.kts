@@ -208,6 +208,16 @@ governedResources {
     "SKILL-426: canonical acceptance-criterion repair-state schema",
   )
   copy(
+    "copyAcceptanceCriterionRepairStateAccountingPreviousSchema",
+    "acceptance-criterion-repair-state-schema-0.2.yaml",
+    "0AC-103: preserve the previous repair accounting contract",
+  )
+  copy(
+    "copyFeatureTaskRuntimeImplementationProgressPreviousSchema",
+    "feature-task-runtime-implementation-progress-schema-0.1.yaml",
+    "0AC-103: preserve previous implementation progress",
+  )
+  copy(
     "copyAcceptanceCriterionAuditResultSchema",
     "acceptance-criterion-audit-result-schema.yaml",
     "SKILL-426: canonical acceptance-criterion audit-result schema",
@@ -216,6 +226,16 @@ governedResources {
     "copyAcceptanceCriterionRepairHandoffSchema",
     "acceptance-criterion-repair-handoff-schema.yaml",
     "SKILL-426: canonical acceptance-criterion repair-handoff schema",
+  )
+  copy(
+    "copyAcceptanceCriterionAuditResultInteractionSchema",
+    "acceptance-criterion-audit-result-schema-0.2.yaml",
+    "0AC-103: retain audit evidence without independent comparison authority",
+  )
+  copy(
+    "copyAcceptanceCriterionRepairHandoffPreviousSchema",
+    "acceptance-criterion-repair-handoff-schema-0.1.yaml",
+    "0AC-103: retain historical handoffs without independent comparison authority",
   )
   copy(
     "copyAcceptanceCriterionRepairAdoptionSchema",

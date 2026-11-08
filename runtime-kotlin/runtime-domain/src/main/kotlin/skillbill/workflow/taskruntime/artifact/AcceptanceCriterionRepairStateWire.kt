@@ -2,11 +2,23 @@ package skillbill.workflow.taskruntime.artifact
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
+import skillbill.error.shellcontent.invalidAcceptanceCriterionAuditResultSchema
 import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairStateSchema
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionCheckedMutation
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionCompletedMutation
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionEstablishedObligation
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionIndependentProgress
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionInteractionTrace
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionMutationDisposition
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionPreservedObligation
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProgressClassification
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProgressContext
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProseAudit
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAccounting
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairBudget
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairDependency
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairLaunch
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
@@ -14,16 +26,25 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairReser
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairSourceTransition
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionResolvedObligation
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
+import skillbill.workflow.taskruntime.model.audit.repairAccounting
+import skillbill.workflow.taskruntime.model.audit.validateAcceptanceCriterionEvidence
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import java.math.BigDecimal
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionProgressPayloadKeys as ProgressKeys
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 fun AcceptanceCriterionRepairState.asRepairWireMap(): FeatureTaskRuntimeWorkflowArtifactMap =
   FeatureTaskRuntimeWorkflowArtifactMap.from(
     mapOf(
       Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION,
+      ProgressKeys.REPAIR_BUDGETS to repairBudgets.map { AcceptanceCriterionRepairAccountingWire.budget(it) },
+      ProgressKeys.REPAIR_ACCOUNTING to
+        criteria.map {
+          AcceptanceCriterionRepairAccountingWire.accounting(repairAccounting(it.canonicalRef))
+        },
       Keys.CATALOG_ID to catalogId,
       Keys.EXECUTION_ID to executionId,
       Keys.SPEC_DIGEST to specDigest,
@@ -57,6 +78,8 @@ fun AcceptanceCriterionRepairState.asRepairWireMap(): FeatureTaskRuntimeWorkflow
         },
       Keys.PENDING_AUDIT_REFS to pendingAuditRefs,
       Keys.PROSE_AUDITS to proseAudits.map(::proseAuditWire),
+      ProgressKeys.COMPLETED_MUTATIONS to completedMutations.map { AcceptanceCriterionEvidenceWire.mutation(it) },
+      ProgressKeys.INDEPENDENT_CHECKS to independentChecks.map { AcceptanceCriterionEvidenceWire.checked(it) },
       Keys.PENDING_CLARIFICATION_QUESTION to pendingClarificationQuestion,
       Keys.INTERACTION_TRACE to interactionTraceWire(interactionTrace),
     ),
@@ -75,6 +98,7 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
       "repair state must be an object with the supported contract version.",
     )
   }
+  requireRepairEvidenceFields(sourceLabel)
   val restored =
     AcceptanceCriterionRepairState(
       catalogId = string(Keys.CATALOG_ID),
@@ -99,11 +123,54 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
       proseAudits = repairProseAudits(),
       pendingClarificationQuestion = optionalString(Keys.PENDING_CLARIFICATION_QUESTION),
       interactionTrace = repairInteractionTrace(),
+      repairBudgets = AcceptanceCriterionRepairAccountingWire.budgets(this),
+      completedMutations =
+        evidenceRows(ProgressKeys.COMPLETED_MUTATIONS).map {
+          AcceptanceCriterionEvidenceWire.mutation(it)
+        },
+      independentChecks =
+        evidenceRows(
+          ProgressKeys.INDEPENDENT_CHECKS,
+        ).map { AcceptanceCriterionEvidenceWire.checked(it) },
     )
+  validateAcceptanceCriterionEvidence(restored.completedMutations, restored.independentChecks)
+  restored.validateEvidenceOwner(sourceLabel)
+  AcceptanceCriterionRepairAccountingWire.validateAccounting(
+    this,
+    restored.criteria.map { restored.repairAccounting(it.canonicalRef) },
+  )
   return AcceptanceCriterionRepairState.restore(restored) ?: throw invalidAcceptanceCriterionRepairStateSchema(
     sourceLabel,
     "repair state is incoherent.",
   )
+}
+
+private fun FeatureTaskRuntimeWorkflowArtifactMap.requireRepairEvidenceFields(sourceLabel: String) {
+  val fields =
+    setOf(
+      ProgressKeys.COMPLETED_MUTATIONS,
+      ProgressKeys.INDEPENDENT_CHECKS,
+      ProgressKeys.REPAIR_BUDGETS,
+      ProgressKeys.REPAIR_ACCOUNTING,
+    )
+  if (!keys.containsAll(fields)) {
+    throw invalidAcceptanceCriterionRepairStateSchema(sourceLabel, "Current repair evidence fields are required.")
+  }
+}
+
+private fun AcceptanceCriterionRepairState.validateEvidenceOwner(sourceLabel: String) {
+  val ownerMatches =
+    completedMutations.all {
+      val identity = it.catalogId == catalogId && it.executionId == executionId
+      identity && it.specDigest == specDigest
+    }
+  val criterionRefs = criteria.map { it.canonicalRef }.toSet()
+  if (!ownerMatches || completedMutations.any { it.criterionRef !in criterionRefs }) {
+    throw invalidAcceptanceCriterionRepairStateSchema(
+      sourceLabel,
+      "Retained mutation does not belong to this criterion catalog",
+    )
+  }
 }
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.repairBudgetStartOutcomeIndex(): Int =
@@ -235,6 +302,7 @@ private fun reservationWire(value: AcceptanceCriterionRepairReservation): Map<St
     Keys.CRITERION_REF to value.criterionRef,
     Keys.REVISION to value.revision,
     Keys.STAGE_REVISION to value.stageRevision,
+    Keys.REASONING_REQUIRED to value.reasoningRequired,
   )
 
 private fun outcomeWire(value: AcceptanceCriterionRepairOutcome): Map<String, Any?> =
@@ -321,6 +389,7 @@ private fun FeatureTaskRuntimeWorkflowArtifactMap.repairReservation(): Acceptanc
       criterionRef = reservation.requiredString(Keys.CRITERION_REF),
       revision = reservation.requiredLong(Keys.REVISION),
       stageRevision = reservation.requiredLong(Keys.STAGE_REVISION),
+      reasoningRequired = reservation.requiredBoolean(Keys.REASONING_REQUIRED),
     )
   }
 
@@ -440,3 +509,477 @@ private fun optionalRepairString(
   } else {
     throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key must be a string or null.")
   }
+
+object AcceptanceCriterionEvidenceWire {
+  fun mutation(value: AcceptanceCriterionCompletedMutation): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(
+      mapOf(
+        Keys.CATALOG_ID to value.catalogId,
+        Keys.SPEC_DIGEST to value.specDigest,
+        Keys.EXECUTION_ID to value.executionId,
+        Keys.CRITERION_REF to value.criterionRef,
+        ProgressKeys.REPAIR_ATTEMPT_ID to value.repairAttemptId,
+        ProgressKeys.WORKER_EXECUTION_ID to value.workerExecutionId,
+        ProgressKeys.WORKER_OUTPUT_ID to value.workerOutputId,
+        ProgressKeys.WORKER_OUTPUT_DIGEST to value.workerOutputDigest,
+        ProgressKeys.TERMINAL_DISPOSITION to value.terminalDisposition.wireValue,
+        ProgressKeys.LAUNCH_ATTRIBUTION to
+          value.launchAttribution?.let { AcceptanceCriterionRepairAccountingWire.launch(it) },
+        ProgressKeys.BASELINE_TREE_DIGEST to value.baselineTreeDigest,
+        ProgressKeys.BASELINE_CHECKPOINT_ID to value.baselineCheckpointId,
+        ProgressKeys.CURRENT_TREE_DIGEST to value.currentTreeDigest,
+        ProgressKeys.CURRENT_CHECKPOINT_ID to value.currentCheckpointId,
+        ProgressKeys.ESTABLISHED_OBLIGATIONS to value.establishedObligations.map { established(it) },
+      ),
+    )
+
+  fun mutation(value: FeatureTaskRuntimeWorkflowArtifactMap): AcceptanceCriterionCompletedMutation {
+    closed(
+      value,
+      setOf(
+        Keys.CATALOG_ID,
+        Keys.SPEC_DIGEST,
+        Keys.EXECUTION_ID,
+        Keys.CRITERION_REF,
+        ProgressKeys.REPAIR_ATTEMPT_ID,
+        ProgressKeys.WORKER_EXECUTION_ID,
+        ProgressKeys.WORKER_OUTPUT_ID,
+        ProgressKeys.WORKER_OUTPUT_DIGEST,
+        ProgressKeys.TERMINAL_DISPOSITION,
+        ProgressKeys.LAUNCH_ATTRIBUTION,
+        ProgressKeys.BASELINE_TREE_DIGEST,
+        ProgressKeys.BASELINE_CHECKPOINT_ID,
+        ProgressKeys.CURRENT_TREE_DIGEST,
+        ProgressKeys.CURRENT_CHECKPOINT_ID,
+        ProgressKeys.ESTABLISHED_OBLIGATIONS,
+      ),
+    )
+    return AcceptanceCriterionCompletedMutation(
+      catalogId = text(value, Keys.CATALOG_ID),
+      specDigest = text(value, Keys.SPEC_DIGEST),
+      executionId = text(value, Keys.EXECUTION_ID),
+      criterionRef = text(value, Keys.CRITERION_REF),
+      repairAttemptId = text(value, ProgressKeys.REPAIR_ATTEMPT_ID),
+      workerExecutionId = text(value, ProgressKeys.WORKER_EXECUTION_ID),
+      workerOutputId = text(value, ProgressKeys.WORKER_OUTPUT_ID),
+      workerOutputDigest = text(value, ProgressKeys.WORKER_OUTPUT_DIGEST),
+      terminalDisposition =
+        AcceptanceCriterionMutationDisposition.entries.firstOrNull {
+          it.wireValue == text(value, ProgressKeys.TERMINAL_DISPOSITION)
+        } ?: throw invalidAcceptanceCriterionAuditResultSchema("completed-mutation", "Invalid terminal disposition"),
+      launchAttribution =
+        value[ProgressKeys.LAUNCH_ATTRIBUTION]?.let {
+          AcceptanceCriterionRepairAccountingWire.launch(FeatureTaskRuntimeWorkflowArtifactMap.from(repairObject(it)))
+        },
+      baselineTreeDigest = text(value, ProgressKeys.BASELINE_TREE_DIGEST),
+      baselineCheckpointId = text(value, ProgressKeys.BASELINE_CHECKPOINT_ID),
+      currentTreeDigest = text(value, ProgressKeys.CURRENT_TREE_DIGEST),
+      currentCheckpointId = text(value, ProgressKeys.CURRENT_CHECKPOINT_ID),
+      establishedObligations = rows(value, ProgressKeys.ESTABLISHED_OBLIGATIONS).map { established(it) },
+    ).also { it.validate() }
+  }
+
+  fun comparison(value: AcceptanceCriterionIndependentProgress): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(
+      mapOf(
+        Keys.CRITERION_REF to value.criterionRef,
+        ProgressKeys.REPAIR_ATTEMPT_ID to value.repairAttemptId,
+        ProgressKeys.BASELINE_TREE_DIGEST to value.baselineTreeDigest,
+        ProgressKeys.CURRENT_TREE_DIGEST to value.currentTreeDigest,
+        ProgressKeys.BASELINE_CHECKPOINT_ID to value.baselineCheckpointId,
+        ProgressKeys.CURRENT_CHECKPOINT_ID to value.currentCheckpointId,
+        ProgressKeys.VERIFICATION_REVISION to value.verificationRevision,
+        Keys.AUDIT_BINDING_DIGEST to value.auditBindingDigest,
+        ProgressKeys.RESOLVED_OBLIGATIONS to value.resolvedObligations.map { resolved(it) },
+        ProgressKeys.PRESERVED_OBLIGATIONS to value.preservedObligations.map { preserved(it) },
+        ProgressKeys.REMAINING_GAPS to value.remainingGaps.toList(),
+        ProgressKeys.CLASSIFICATION to value.classification.wireValue,
+      ),
+    )
+
+  fun comparison(value: FeatureTaskRuntimeWorkflowArtifactMap): AcceptanceCriterionIndependentProgress {
+    closed(
+      value,
+      setOf(
+        Keys.CRITERION_REF,
+        ProgressKeys.REPAIR_ATTEMPT_ID,
+        ProgressKeys.BASELINE_TREE_DIGEST,
+        ProgressKeys.CURRENT_TREE_DIGEST,
+        ProgressKeys.BASELINE_CHECKPOINT_ID,
+        ProgressKeys.CURRENT_CHECKPOINT_ID,
+        ProgressKeys.VERIFICATION_REVISION,
+        Keys.AUDIT_BINDING_DIGEST,
+        ProgressKeys.RESOLVED_OBLIGATIONS,
+        ProgressKeys.PRESERVED_OBLIGATIONS,
+        ProgressKeys.REMAINING_GAPS,
+        ProgressKeys.CLASSIFICATION,
+      ),
+    )
+    return AcceptanceCriterionIndependentProgress(
+      criterionRef = text(value, Keys.CRITERION_REF),
+      repairAttemptId = text(value, ProgressKeys.REPAIR_ATTEMPT_ID),
+      baselineTreeDigest = text(value, ProgressKeys.BASELINE_TREE_DIGEST),
+      currentTreeDigest = text(value, ProgressKeys.CURRENT_TREE_DIGEST),
+      baselineCheckpointId = text(value, ProgressKeys.BASELINE_CHECKPOINT_ID),
+      currentCheckpointId = text(value, ProgressKeys.CURRENT_CHECKPOINT_ID),
+      verificationRevision = number(value, ProgressKeys.VERIFICATION_REVISION),
+      auditBindingDigest = text(value, Keys.AUDIT_BINDING_DIGEST),
+      resolvedObligations = rows(value, ProgressKeys.RESOLVED_OBLIGATIONS).map { resolved(it) },
+      preservedObligations = rows(value, ProgressKeys.PRESERVED_OBLIGATIONS).map { preserved(it) },
+      remainingGaps = texts(value, ProgressKeys.REMAINING_GAPS),
+      classification =
+        AcceptanceCriterionProgressClassification.entries.firstOrNull {
+          it.wireValue == value[ProgressKeys.CLASSIFICATION]
+        } ?: invalid("Invalid classification"),
+    )
+  }
+
+  fun context(value: AcceptanceCriterionProgressContext): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(
+      mapOf(
+        Keys.CATALOG_ID to value.catalogId,
+        Keys.SPEC_DIGEST to value.specDigest,
+        Keys.EXECUTION_ID to value.executionId,
+        Keys.CRITERION_REF to value.criterionRef,
+        Keys.RESERVATION_ID to value.reservationId,
+        ProgressKeys.WORKER_EXECUTION_ID to value.workerExecutionId,
+        ProgressKeys.WORKER_OUTPUT_DIGEST to value.workerOutputDigest,
+        ProgressKeys.BASELINE_TREE_DIGEST to value.baselineTreeDigest,
+        ProgressKeys.BASELINE_CHECKPOINT_ID to value.baselineCheckpointId,
+        ProgressKeys.CURRENT_TREE_DIGEST to value.currentTreeDigest,
+        ProgressKeys.CURRENT_CHECKPOINT_ID to value.currentCheckpointId,
+        ProgressKeys.VERIFICATION_REVISION to value.verificationRevision,
+        Keys.AUDIT_BINDING_DIGEST to value.auditBindingDigest,
+        ProgressKeys.CHECKER_EXECUTION_ID to value.checkerExecutionId,
+        ProgressKeys.CHECKER_OUTPUT_ID to value.checkerOutputId,
+        ProgressKeys.CHECKER_OUTPUT_DIGEST to value.checkerOutputDigest,
+        ProgressKeys.SOURCE_UNCHANGED_DURING_CHECK to value.sourceUnchangedDuringCheck,
+        ProgressKeys.BASELINE_CITATIONS to value.baselineCitations.toList(),
+        ProgressKeys.CURRENT_CITATIONS to value.currentCitations.toList(),
+        ProgressKeys.ESTABLISHED_OBLIGATIONS to value.establishedObligations.map { established(it) },
+        ProgressKeys.VERIFIED_RESOLVED_OBLIGATIONS to value.verifiedResolvedObligations.map { resolved(it) },
+        ProgressKeys.VERIFIED_PRESERVED_OBLIGATIONS to value.verifiedPreservedObligations.map { preserved(it) },
+      ),
+    )
+
+  fun context(value: FeatureTaskRuntimeWorkflowArtifactMap): AcceptanceCriterionProgressContext {
+    closed(
+      value,
+      setOf(
+        Keys.CATALOG_ID,
+        Keys.SPEC_DIGEST,
+        Keys.EXECUTION_ID,
+        Keys.CRITERION_REF,
+        Keys.RESERVATION_ID,
+        ProgressKeys.WORKER_EXECUTION_ID,
+        ProgressKeys.WORKER_OUTPUT_DIGEST,
+        ProgressKeys.BASELINE_TREE_DIGEST,
+        ProgressKeys.BASELINE_CHECKPOINT_ID,
+        ProgressKeys.CURRENT_TREE_DIGEST,
+        ProgressKeys.CURRENT_CHECKPOINT_ID,
+        ProgressKeys.VERIFICATION_REVISION,
+        Keys.AUDIT_BINDING_DIGEST,
+        ProgressKeys.CHECKER_EXECUTION_ID,
+        ProgressKeys.CHECKER_OUTPUT_ID,
+        ProgressKeys.CHECKER_OUTPUT_DIGEST,
+        ProgressKeys.SOURCE_UNCHANGED_DURING_CHECK,
+        ProgressKeys.BASELINE_CITATIONS,
+        ProgressKeys.CURRENT_CITATIONS,
+        ProgressKeys.ESTABLISHED_OBLIGATIONS,
+        ProgressKeys.VERIFIED_RESOLVED_OBLIGATIONS,
+        ProgressKeys.VERIFIED_PRESERVED_OBLIGATIONS,
+      ),
+    )
+    return AcceptanceCriterionProgressContext(
+      catalogId = text(value, Keys.CATALOG_ID),
+      specDigest = text(value, Keys.SPEC_DIGEST),
+      executionId = text(value, Keys.EXECUTION_ID),
+      criterionRef = text(value, Keys.CRITERION_REF),
+      reservationId = text(value, Keys.RESERVATION_ID),
+      workerExecutionId = text(value, ProgressKeys.WORKER_EXECUTION_ID),
+      workerOutputDigest = text(value, ProgressKeys.WORKER_OUTPUT_DIGEST),
+      baselineTreeDigest = text(value, ProgressKeys.BASELINE_TREE_DIGEST),
+      baselineCheckpointId = text(value, ProgressKeys.BASELINE_CHECKPOINT_ID),
+      currentTreeDigest = text(value, ProgressKeys.CURRENT_TREE_DIGEST),
+      currentCheckpointId = text(value, ProgressKeys.CURRENT_CHECKPOINT_ID),
+      verificationRevision = number(value, ProgressKeys.VERIFICATION_REVISION),
+      auditBindingDigest = text(value, Keys.AUDIT_BINDING_DIGEST),
+      checkerExecutionId = text(value, ProgressKeys.CHECKER_EXECUTION_ID),
+      checkerOutputId = text(value, ProgressKeys.CHECKER_OUTPUT_ID),
+      checkerOutputDigest = text(value, ProgressKeys.CHECKER_OUTPUT_DIGEST),
+      sourceUnchangedDuringCheck =
+        value[ProgressKeys.SOURCE_UNCHANGED_DURING_CHECK] as? Boolean ?: invalid(
+          "Source stability must be a Boolean",
+        ),
+      baselineCitations = texts(value, ProgressKeys.BASELINE_CITATIONS).toSet(),
+      currentCitations = texts(value, ProgressKeys.CURRENT_CITATIONS).toSet(),
+      establishedObligations = rows(value, ProgressKeys.ESTABLISHED_OBLIGATIONS).map { established(it) },
+      verifiedResolvedObligations = rows(value, ProgressKeys.VERIFIED_RESOLVED_OBLIGATIONS).map { resolved(it) },
+      verifiedPreservedObligations = rows(value, ProgressKeys.VERIFIED_PRESERVED_OBLIGATIONS).map { preserved(it) },
+    )
+  }
+
+  private fun established(value: AcceptanceCriterionEstablishedObligation): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(
+      mapOf(
+        ProgressKeys.OBLIGATION_ID to value.obligationId,
+        ProgressKeys.OBLIGATION to value.obligation,
+        ProgressKeys.CURRENT_CITATIONS to value.currentCitations.toList(),
+      ),
+    )
+
+  private fun established(value: FeatureTaskRuntimeWorkflowArtifactMap): AcceptanceCriterionEstablishedObligation {
+    closed(value, setOf(ProgressKeys.OBLIGATION_ID, ProgressKeys.OBLIGATION, ProgressKeys.CURRENT_CITATIONS))
+    return AcceptanceCriterionEstablishedObligation(
+      obligationId = text(value, ProgressKeys.OBLIGATION_ID),
+      obligation = text(value, ProgressKeys.OBLIGATION),
+      currentCitations = texts(value, ProgressKeys.CURRENT_CITATIONS),
+    )
+  }
+
+  private fun resolved(value: AcceptanceCriterionResolvedObligation): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(
+      mapOf(
+        ProgressKeys.OBLIGATION_ID to value.obligationId,
+        ProgressKeys.OBLIGATION to value.obligation,
+        ProgressKeys.BASELINE_CITATIONS to value.baselineCitations.toList(),
+        ProgressKeys.CURRENT_CITATIONS to value.currentCitations.toList(),
+      ),
+    )
+
+  private fun resolved(value: FeatureTaskRuntimeWorkflowArtifactMap): AcceptanceCriterionResolvedObligation {
+    closed(
+      value,
+      setOf(
+        ProgressKeys.OBLIGATION_ID,
+        ProgressKeys.OBLIGATION,
+        ProgressKeys.BASELINE_CITATIONS,
+        ProgressKeys.CURRENT_CITATIONS,
+      ),
+    )
+    return AcceptanceCriterionResolvedObligation(
+      obligationId = text(value, ProgressKeys.OBLIGATION_ID),
+      obligation = text(value, ProgressKeys.OBLIGATION),
+      baselineCitations = texts(value, ProgressKeys.BASELINE_CITATIONS),
+      currentCitations = texts(value, ProgressKeys.CURRENT_CITATIONS),
+    )
+  }
+
+  private fun preserved(value: AcceptanceCriterionPreservedObligation): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(
+      mapOf(
+        ProgressKeys.OBLIGATION_ID to value.obligationId,
+        ProgressKeys.OBLIGATION to value.obligation,
+        ProgressKeys.CURRENT_CITATIONS to value.currentCitations.toList(),
+      ),
+    )
+
+  private fun preserved(value: FeatureTaskRuntimeWorkflowArtifactMap): AcceptanceCriterionPreservedObligation {
+    closed(value, setOf(ProgressKeys.OBLIGATION_ID, ProgressKeys.OBLIGATION, ProgressKeys.CURRENT_CITATIONS))
+    return AcceptanceCriterionPreservedObligation(
+      obligationId = text(value, ProgressKeys.OBLIGATION_ID),
+      obligation = text(value, ProgressKeys.OBLIGATION),
+      currentCitations = texts(value, ProgressKeys.CURRENT_CITATIONS),
+    )
+  }
+
+  fun checked(value: AcceptanceCriterionCheckedMutation): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(
+      mapOf(
+        ProgressKeys.MUTATION to mutation(value.mutation),
+        ProgressKeys.COMPARISON to comparison(value.comparison),
+        ProgressKeys.CONTEXT to context(value.context),
+      ),
+    )
+
+  fun checked(value: FeatureTaskRuntimeWorkflowArtifactMap): AcceptanceCriterionCheckedMutation {
+    closed(value, setOf(ProgressKeys.MUTATION, ProgressKeys.COMPARISON, ProgressKeys.CONTEXT))
+    val completed = mutation(FeatureTaskRuntimeWorkflowArtifactMap.from(value[ProgressKeys.MUTATION]))
+    return AcceptanceCriterionCheckedMutation(
+      completed,
+      comparison(FeatureTaskRuntimeWorkflowArtifactMap.from(value[ProgressKeys.COMPARISON])),
+      context(
+        FeatureTaskRuntimeWorkflowArtifactMap.from(value[ProgressKeys.CONTEXT]),
+      ).copy(completedMutation = completed),
+    ).also { it.validate() }
+  }
+
+  private fun closed(
+    value: FeatureTaskRuntimeWorkflowArtifactMap,
+    fields: Set<String>,
+  ) {
+    if (!value.isObject || value.keys != fields) invalid("Evidence fields do not match the contract")
+  }
+
+  private fun text(
+    value: FeatureTaskRuntimeWorkflowArtifactMap,
+    key: String,
+  ): String = value[key] as? String ?: invalid("$key must be a string")
+
+  private fun texts(
+    value: FeatureTaskRuntimeWorkflowArtifactMap,
+    key: String,
+  ): List<String> =
+    (value[key] as? List<*>)?.map { it as? String ?: invalid("$key contains a non-string") }
+      ?: invalid("$key must be an array")
+
+  private fun rows(
+    value: FeatureTaskRuntimeWorkflowArtifactMap,
+    key: String,
+  ): List<FeatureTaskRuntimeWorkflowArtifactMap> =
+    (value[key] as? List<*>)?.map { FeatureTaskRuntimeWorkflowArtifactMap.from(it) }
+      ?: invalid("$key must be an array")
+
+  private fun number(
+    value: FeatureTaskRuntimeWorkflowArtifactMap,
+    key: String,
+  ): Long = (value[key] as? Number)?.toLongIfExact() ?: invalid("$key must be an exact integer")
+
+  private fun invalid(reason: String): Nothing =
+    throw invalidAcceptanceCriterionAuditResultSchema(
+      "independent-evidence",
+      reason,
+    )
+}
+
+internal fun FeatureTaskRuntimeWorkflowArtifactMap.evidenceRows(
+  key: String,
+): List<FeatureTaskRuntimeWorkflowArtifactMap> =
+  if (!containsKey(key)) {
+    emptyList()
+  } else {
+    (this[key] as? List<*>)?.map { FeatureTaskRuntimeWorkflowArtifactMap.from(it) }
+      ?: throw invalidAcceptanceCriterionRepairStateSchema("independent-evidence", "$key must be an array")
+  }
+
+internal object AcceptanceCriterionRepairAccountingWire {
+  fun budget(value: AcceptanceCriterionRepairBudget): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(
+      mapOf(
+        Keys.CRITERION_REF to value.criterionRef,
+        ProgressKeys.RETRY_IDENTITY to value.retryIdentity,
+        ProgressKeys.START_MUTATION_INDEX to value.startMutationIndex,
+      ),
+    )
+
+  fun budgets(value: FeatureTaskRuntimeWorkflowArtifactMap): List<AcceptanceCriterionRepairBudget> =
+    value.evidenceRows(ProgressKeys.REPAIR_BUDGETS).map {
+      it.closed(setOf(Keys.CRITERION_REF, ProgressKeys.RETRY_IDENTITY, ProgressKeys.START_MUTATION_INDEX))
+      AcceptanceCriterionRepairBudget(
+        it.text(Keys.CRITERION_REF),
+        it.text(ProgressKeys.RETRY_IDENTITY),
+        it.integer(ProgressKeys.START_MUTATION_INDEX),
+      )
+    }
+
+  fun accounting(value: AcceptanceCriterionRepairAccounting): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(
+      mapOf(
+        Keys.CRITERION_REF to value.criterionRef,
+        ProgressKeys.BUDGET_IDENTITY to value.budgetIdentity,
+        ProgressKeys.COMPLETED_ATTEMPT_IDS to value.completedAttemptIds,
+        ProgressKeys.NO_PROGRESS_OUTCOMES to value.noProgressOutcomes,
+        ProgressKeys.PENDING_CHECK_ATTEMPT_IDS to value.pendingCheckAttemptIds,
+        ProgressKeys.ESCALATION_REQUIRED to value.escalationRequired,
+        ProgressKeys.TRIGGERING_ATTEMPT_IDS to value.triggeringAttemptIds,
+        ProgressKeys.ESCALATED_ATTEMPT_IDS to value.escalatedAttemptIds,
+        ProgressKeys.EVIDENCE_MISSING to value.evidenceMissing,
+      ),
+    )
+
+  fun validateAccounting(
+    value: FeatureTaskRuntimeWorkflowArtifactMap,
+    expected: List<AcceptanceCriterionRepairAccounting>,
+  ) {
+    val actual =
+      value.evidenceRows(ProgressKeys.REPAIR_ACCOUNTING).map {
+        it.closed(
+          setOf(
+            Keys.CRITERION_REF,
+            ProgressKeys.BUDGET_IDENTITY,
+            ProgressKeys.COMPLETED_ATTEMPT_IDS,
+            ProgressKeys.NO_PROGRESS_OUTCOMES,
+            ProgressKeys.PENDING_CHECK_ATTEMPT_IDS,
+            ProgressKeys.ESCALATION_REQUIRED,
+            ProgressKeys.TRIGGERING_ATTEMPT_IDS,
+            ProgressKeys.ESCALATED_ATTEMPT_IDS,
+            ProgressKeys.EVIDENCE_MISSING,
+          ),
+        )
+        AcceptanceCriterionRepairAccounting(
+          it.text(Keys.CRITERION_REF),
+          it.text(ProgressKeys.BUDGET_IDENTITY),
+          it.strings(ProgressKeys.COMPLETED_ATTEMPT_IDS),
+          it.integer(ProgressKeys.NO_PROGRESS_OUTCOMES),
+          it.strings(ProgressKeys.PENDING_CHECK_ATTEMPT_IDS),
+          it.flag(ProgressKeys.ESCALATION_REQUIRED),
+          it.strings(ProgressKeys.TRIGGERING_ATTEMPT_IDS),
+          it.strings(ProgressKeys.ESCALATED_ATTEMPT_IDS),
+          it.flag(ProgressKeys.EVIDENCE_MISSING),
+        )
+      }
+    if (actual != expected) invalid("Accounting does not match retained terminal and independent-check evidence")
+  }
+
+  fun launch(value: AcceptanceCriterionRepairLaunch): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(
+      mapOf(
+        ProgressKeys.REPAIR_ATTEMPT_ID to value.attemptId,
+        ProgressKeys.PROVIDER to value.provider,
+        ProgressKeys.EFFECTIVE_MODEL to value.effectiveModel,
+        ProgressKeys.EFFECTIVE_EFFORT to value.effectiveEffort,
+        ProgressKeys.EXECUTION_PLAN_REF to value.executionPlanRef,
+        ProgressKeys.LAUNCH_REF to value.launchRef,
+        ProgressKeys.REASONING to value.reasoning,
+      ),
+    )
+
+  fun launch(value: FeatureTaskRuntimeWorkflowArtifactMap): AcceptanceCriterionRepairLaunch {
+    value.closed(
+      setOf(
+        ProgressKeys.REPAIR_ATTEMPT_ID,
+        ProgressKeys.PROVIDER,
+        ProgressKeys.EFFECTIVE_MODEL,
+        ProgressKeys.EFFECTIVE_EFFORT,
+        ProgressKeys.EXECUTION_PLAN_REF,
+        ProgressKeys.LAUNCH_REF,
+        ProgressKeys.REASONING,
+      ),
+    )
+    return AcceptanceCriterionRepairLaunch(
+      value.text(ProgressKeys.REPAIR_ATTEMPT_ID),
+      value.text(ProgressKeys.PROVIDER),
+      value.text(ProgressKeys.EFFECTIVE_MODEL),
+      value.text(ProgressKeys.EFFECTIVE_EFFORT),
+      value.text(ProgressKeys.EXECUTION_PLAN_REF),
+      value.text(ProgressKeys.LAUNCH_REF),
+      value.flag(ProgressKeys.REASONING),
+    )
+  }
+
+  private fun FeatureTaskRuntimeWorkflowArtifactMap.closed(fields: Set<String>) {
+    if (keys != fields) invalid("Unexpected or missing accounting fields")
+  }
+
+  private fun FeatureTaskRuntimeWorkflowArtifactMap.text(key: String): String =
+    this[key] as? String ?: invalid("$key must be a string")
+
+  private fun FeatureTaskRuntimeWorkflowArtifactMap.integer(key: String): Int {
+    val raw = this[key]
+    return when (raw) {
+      is Int -> raw
+      is Long -> raw.takeIf { it in 0..Int.MAX_VALUE }?.toInt()
+      else -> null
+    } ?: invalid("$key must be an integer")
+  }
+
+  private fun FeatureTaskRuntimeWorkflowArtifactMap.flag(key: String): Boolean =
+    this[key] as? Boolean ?: invalid("$key must be a boolean")
+
+  private fun FeatureTaskRuntimeWorkflowArtifactMap.strings(key: String): List<String> =
+    (this[key] as? List<*>)?.map { it as? String ?: invalid("$key must contain strings") }
+      ?: invalid("$key must be an array")
+
+  private fun invalid(reason: String): Nothing =
+    throw invalidAcceptanceCriterionRepairStateSchema("repair-accounting", reason)
+}

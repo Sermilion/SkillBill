@@ -9,9 +9,11 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
+import skillbill.workflow.taskruntime.model.audit.captureForTest
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionRecheckVerdict.HOLDS
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionRecheckVerdict.REGRESSED
 import skillbill.workflow.taskruntime.model.audit.originalAcceptanceCriterionAlias
+import skillbill.workflow.taskruntime.model.audit.recordIndependently
 import skillbill.workflow.taskruntime.model.audit.recordProseAudit
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -262,11 +264,11 @@ class AcceptanceCriterionInteractionTraceTest {
     val repaired =
       assertNotNull(
         assertNotNull(reopened.reserve("reservation-1"))
-          .completeRepairAwaitingTargetedVerification("reservation-1", "repair:1", "d".repeat(64), "source:2"),
+          .captureForTest("reservation-1", "repair:1", "d".repeat(64), "source:2"),
       )
     val closed =
       assertNotNull(
-        repaired.record(
+        repaired.recordIndependently(
           AcceptanceCriterionRepairOutcome(
             outcomeId = "outcome-1",
             reservationId = "reservation-1",

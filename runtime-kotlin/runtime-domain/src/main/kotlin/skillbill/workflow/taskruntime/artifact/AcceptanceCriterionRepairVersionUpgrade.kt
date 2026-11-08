@@ -1,8 +1,8 @@
 package skillbill.workflow.taskruntime.artifact
 
-import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_PREVIOUS_CONTRACT_VERSION
-import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_INTERACTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionAuditResultMode
@@ -23,7 +23,7 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.upgradeRepairStateFromPrevious(): Feat
   return FeatureTaskRuntimeWorkflowArtifactMap.from(
     this +
       mapOf(
-        Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION,
+        Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_REPAIR_STATE_INTERACTION_CONTRACT_VERSION,
         Keys.INTERACTION_TRACE to emptyInteractionTraceWire(),
       ),
   )
@@ -37,7 +37,7 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.upgradeAuditResultFromPrevious(): Feat
   return FeatureTaskRuntimeWorkflowArtifactMap.from(
     this +
       mapOf(
-        Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION,
+        Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION,
         Keys.INTERACTIONS to emptyList<Any?>(),
         Keys.RECHECKS to emptyList<Any?>(),
       ),

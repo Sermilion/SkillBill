@@ -779,7 +779,7 @@ public class AcceptanceCriterionRepairPersistence(
             mutation.evidenceRef,
             mutation.treeDigest,
             mutation.checkpointId,
-          )?.clearPendingClarification()
+          )
         }
       }
       is AcceptanceCriterionRepairMutation.Outcome ->

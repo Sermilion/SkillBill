@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.persist.acceptance
 
-import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairAuditEvidence
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairMutation
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
@@ -122,7 +122,7 @@ class AcceptanceCriterionRepairAuditAdmissionTest {
   private fun discoveryEvidence(state: AcceptanceCriterionRepairState): FeatureTaskRuntimeWorkflowArtifactMap =
     FeatureTaskRuntimeWorkflowArtifactMap.from(
       mapOf(
-        Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION,
+        Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION,
         Keys.MODE to AcceptanceCriterionRepairMode.INITIAL_DISCOVERY.wireValue,
         Keys.CATALOG_ID to state.catalogId,
         Keys.SPEC_DIGEST to state.specDigest,

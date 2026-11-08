@@ -12,6 +12,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionProgressPayloadKeys as ProgressKeys
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 class AcceptanceCriterionRepairAccountingDecodeTest {
@@ -26,6 +27,20 @@ class AcceptanceCriterionRepairAccountingDecodeTest {
         wire + (Keys.REVISION to Long.MAX_VALUE.toDouble()),
         wire + (Keys.UNSUCCESSFUL_TOTALS to mapOf("AC-001" to 4_294_967_296L)),
         wire + (Keys.CRITERIA to listOf(criterion + (Keys.ORDINAL to 4_294_967_297L))),
+        wire - ProgressKeys.COMPLETED_MUTATIONS,
+        wire - ProgressKeys.INDEPENDENT_CHECKS,
+        wire - ProgressKeys.REPAIR_BUDGETS,
+        wire - ProgressKeys.REPAIR_ACCOUNTING,
+        wire + (
+          ProgressKeys.REPAIR_BUDGETS to
+            listOf(
+              mapOf(
+                Keys.CRITERION_REF to "AC-001",
+                ProgressKeys.RETRY_IDENTITY to "operator-retry",
+                ProgressKeys.START_MUTATION_INDEX to 4_294_967_296L,
+              ),
+            )
+        ),
       )
     assertEquals(state, wire.toAcceptanceCriterionRepairState("valid"))
     for (corrupt in corruptions) {

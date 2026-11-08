@@ -27,6 +27,8 @@ object AcceptanceCriterionRepairStateSchemaPaths {
 }
 
 object AcceptanceCriterionAuditResultSchemaPaths {
+  const val INTERACTION_CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/acceptance-criterion-audit-result-schema-0.2.yaml"
   const val REPO_RELATIVE_PATH: String = "orchestration/contracts/acceptance-criterion-audit-result-schema.yaml"
   const val CLASSPATH_RESOURCE: String =
     "skillbill/infrastructure/contracts/acceptance-criterion-audit-result-schema.yaml"
@@ -34,6 +36,8 @@ object AcceptanceCriterionAuditResultSchemaPaths {
 }
 
 object AcceptanceCriterionRepairHandoffSchemaPaths {
+  const val PREVIOUS_CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/acceptance-criterion-repair-handoff-schema-0.1.yaml"
   const val REPO_RELATIVE_PATH: String = "orchestration/contracts/acceptance-criterion-repair-handoff-schema.yaml"
   const val CLASSPATH_RESOURCE: String =
     "skillbill/infrastructure/contracts/acceptance-criterion-repair-handoff-schema.yaml"

@@ -11,10 +11,12 @@ object FocusedRepairStrategy {
     return when {
       stage == FocusedRepairStage.DISCOVERY -> FocusedRepairAction.Discover
       current == null -> FocusedRepairAction.Accepted
-      stage == FocusedRepairStage.VERIFICATION -> FocusedRepairAction.Verify(current.ref)
-      exhausted(current.unsuccessfulOutcomes) -> FocusedRepairAction.Blocked(current.ref)
-      stage == FocusedRepairStage.PLANNING -> FocusedRepairAction.Plan(current.ref)
-      else -> FocusedRepairAction.Implement(current.ref)
+      stage == FocusedRepairStage.VERIFICATION || current.pendingIndependentCheck || current.evidenceMissing ->
+        FocusedRepairAction.Verify(current.ref)
+      exhausted(current.unsuccessfulOutcomes) && !current.escalatedOpportunityOwed ->
+        FocusedRepairAction.Blocked(current.ref)
+      stage == FocusedRepairStage.PLANNING -> FocusedRepairAction.Plan(current.ref, current.escalationRequired)
+      else -> FocusedRepairAction.Implement(current.ref, current.escalationRequired)
     }
   }
 

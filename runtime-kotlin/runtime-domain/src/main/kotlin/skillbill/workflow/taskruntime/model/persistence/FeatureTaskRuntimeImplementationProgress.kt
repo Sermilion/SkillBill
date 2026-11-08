@@ -1,5 +1,17 @@
 package skillbill.workflow.taskruntime.model.persistence
 
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeImplementationProgressSchema
+import skillbill.workflow.model.repair.FocusedRepairStrategy
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionCheckedMutation
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionCompletedMutation
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProgressClassification
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAccounting
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairBudget
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.acceptanceCriterionRepairAccounting
+import skillbill.workflow.taskruntime.model.audit.terminal
+import skillbill.workflow.taskruntime.model.audit.validAcceptanceCriterionRepairBudgets
+import skillbill.workflow.taskruntime.model.audit.validateAcceptanceCriterionEvidence
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
 
 data class FeatureTaskRuntimeImplementationProgress(
@@ -7,8 +19,20 @@ data class FeatureTaskRuntimeImplementationProgress(
   val currentIndex: Int,
   val workerCount: Int,
   val launchCount: Int = 0,
+  val completedMutations: List<AcceptanceCriterionCompletedMutation> = emptyList(),
+  val independentChecks: List<AcceptanceCriterionCheckedMutation> = emptyList(),
+  val repairBudgets: List<AcceptanceCriterionRepairBudget> = emptyList(),
+  val workerReservationId: String? = null,
 ) {
   init {
+    validateAcceptanceCriterionEvidence(completedMutations, independentChecks)
+    require(validAcceptanceCriterionRepairBudgets(repairBudgets, completedMutations, criterionIds)) {
+      "Repair budget identity or origin is invalid."
+    }
+    require(completedMutations.all { it.criterionRef in criterionIds }) { "Mutation names an unknown criterion." }
+    require(workerReservationId == null || validRepairIdentity(workerReservationId)) {
+      "Worker reservation identity is invalid."
+    }
     val reason = violation(criterionIds, currentIndex, workerCount, launchCount)
     require(reason == null) { reason.orEmpty() }
   }
@@ -19,20 +43,100 @@ data class FeatureTaskRuntimeImplementationProgress(
 
   val currentId: String? get() = criterionIds.getOrNull(currentIndex)
 
-  fun reserveWorker(): FeatureTaskRuntimeImplementationProgress? =
-    takeIf { !complete && workerCount < MAX_WORKERS_PER_CRITERION }?.copy(workerCount = workerCount + 1)
+  fun accounting(ref: String): AcceptanceCriterionRepairAccounting =
+    acceptanceCriterionRepairAccounting(ref, completedMutations, independentChecks, repairBudgets)
 
-  fun launched(): FeatureTaskRuntimeImplementationProgress = copy(launchCount = launchCount + 1)
+  fun reserveWorker(
+    reservationId: String = "$currentId:worker:${workerCount + 1}",
+  ): FeatureTaskRuntimeImplementationProgress? {
+    val ref = currentId ?: return null
+    val accounting = accounting(ref)
+    val ready =
+      accounting.pendingCheckAttemptIds.isEmpty() && !accounting.evidenceMissing &&
+        (!FocusedRepairStrategy.exhausted(accounting.noProgressOutcomes) || accounting.escalatedOpportunityOwed)
+    val previous = completedMutations.lastOrNull { it.criterionRef == ref }
+    val known = workerCount == 0 || previous != null && previous.repairAttemptId == workerReservationId
+    val validId =
+      validRepairIdentity(reservationId) &&
+        completedMutations.none { it.repairAttemptId == reservationId }
+    return takeIf { ready && known && validId && workerCount < Int.MAX_VALUE }
+      ?.copy(workerCount = workerCount + 1, workerReservationId = reservationId)
+  }
 
-  fun closeCurrent(): FeatureTaskRuntimeImplementationProgress? =
-    takeIf { !complete && workerCount > 0 }?.copy(currentIndex = currentIndex + 1, workerCount = 0)
+  fun launched(): FeatureTaskRuntimeImplementationProgress {
+    if (launchCount == Int.MAX_VALUE) {
+      throw invalidFeatureTaskRuntimeImplementationProgressSchema(
+        "implementation-progress",
+        "Launch ordinal capacity exhausted.",
+      )
+    }
+    return copy(launchCount = launchCount + 1)
+  }
 
-  fun reopenCurrent(): FeatureTaskRuntimeImplementationProgress? =
-    takeIf { !complete && workerCount > 0 }?.copy(workerCount = 0)
+  fun retainCompletedMutation(
+    mutation: AcceptanceCriterionCompletedMutation,
+  ): FeatureTaskRuntimeImplementationProgress? {
+    mutation.validate()
+    val previous = completedMutations.singleOrNull { it.repairAttemptId == mutation.repairAttemptId }
+    if (previous != null) return if (previous == mutation) this else null
+    val worker =
+      mutation.criterionRef == currentId && mutation.repairAttemptId == workerReservationId && mutation.terminal
+    val capacity = workerCount > 0 && completedMutations.size < AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES
+    if (!worker || !capacity) {
+      return null
+    }
+    val inventory = independentChecks.lastOrNull { it.mutation.criterionRef == currentId }?.establishedObligations()
+    if (inventory != null && inventory != mutation.establishedObligations) return null
+    val requiresReasoning = accounting(currentId.orEmpty()).escalationRequired
+    if (requiresReasoning && mutation.launchAttribution?.let {
+        it.reasoning && it.validFor(mutation.repairAttemptId)
+      } != true
+    ) return null
+    return copy(completedMutations = completedMutations + mutation)
+  }
+
+  fun retainIndependentCheck(check: AcceptanceCriterionCheckedMutation): FeatureTaskRuntimeImplementationProgress? {
+    check.validate()
+    if (check.mutation !in completedMutations) return null
+    val previous = independentChecks.singleOrNull { it.mutation.repairAttemptId == check.mutation.repairAttemptId }
+    if (previous != null) return if (previous == check) this else null
+    val worker = check.mutation.repairAttemptId == workerReservationId && check.mutation.criterionRef == currentId
+    val capacity = independentChecks.size < AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES
+    return takeIf { worker && capacity }?.copy(independentChecks = independentChecks + check)
+  }
+
+  fun closeCurrent(): FeatureTaskRuntimeImplementationProgress? {
+    val mutation = completedMutations.lastOrNull { it.criterionRef == currentId } ?: return null
+    val check = independentChecks.singleOrNull { it.mutation == mutation } ?: return null
+    check.validate()
+    return takeIf {
+      !complete &&
+        workerCount > 0 &&
+        check.comparison.classification == AcceptanceCriterionProgressClassification.SATISFIED
+    }
+      ?.copy(currentIndex = currentIndex + 1, workerCount = 0, workerReservationId = null)
+  }
+
+  fun reopenCurrent(
+    retryIdentity: String = "operator:${repairBudgets.size + 1}",
+  ): FeatureTaskRuntimeImplementationProgress? {
+    val ref = currentId ?: return null
+    if (repairBudgets.any { it.retryIdentity == retryIdentity }) return this
+    val accounting = accounting(ref)
+    val ready = accounting.pendingCheckAttemptIds.isEmpty() && !accounting.evidenceMissing && workerCount > 0
+    val capacity = repairBudgets.size < AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES
+    return takeIf { ready && capacity && validRepairIdentity(retryIdentity) }?.copy(
+      repairBudgets =
+        repairBudgets +
+          AcceptanceCriterionRepairBudget(
+            ref,
+            retryIdentity,
+            completedMutations.size,
+          ),
+    )
+  }
 
   companion object {
-    const val MAX_WORKERS_PER_CRITERION: Int = 3
-
     fun initial(criterionIds: List<String>): FeatureTaskRuntimeImplementationProgress =
       FeatureTaskRuntimeImplementationProgress(criterionIds, 0, 0)
 
@@ -47,8 +151,7 @@ data class FeatureTaskRuntimeImplementationProgress(
         criterionIds.any { !CRITERION_ID.matches(it) } -> "criterion_ids must contain canonical AC-NNN ids."
         criterionIds.distinct().size != criterionIds.size -> "criterion_ids must be unique."
         currentIndex !in 0..criterionIds.size -> "current_index must lie between 0 and the criterion count."
-        workerCount !in 0..MAX_WORKERS_PER_CRITERION ->
-          "worker_count must lie between 0 and $MAX_WORKERS_PER_CRITERION."
+        workerCount < 0 -> "worker_count must not be negative."
         currentIndex == criterionIds.size && workerCount != 0 -> "worker_count must be 0 once every criterion closed."
         launchCount < 0 -> "launch_count must not be negative."
         else -> null
@@ -57,6 +160,9 @@ data class FeatureTaskRuntimeImplementationProgress(
     private val CRITERION_ID = Regex("^AC-[0-9]{3}$")
   }
 }
+
+private fun validRepairIdentity(value: String): Boolean =
+  value.isNotBlank() && value.length <= AcceptanceCriterionRepairState.MAX_REPAIR_ID_LENGTH
 
 enum class FeatureTaskRuntimeImplementationTurnRole(val wireValue: String) {
   WORKER_LAUNCH("worker-launch"),
@@ -88,8 +194,8 @@ data class FeatureTaskRuntimeImplementationTurnMarker(
   val retryIdentity: String? = null,
 ) {
   init {
-    require(worker in 0..FeatureTaskRuntimeImplementationProgress.MAX_WORKERS_PER_CRITERION) {
-      "Implementation turn worker must lie between 0 and the worker cap, was $worker."
+    require(worker >= 0) {
+      "Implementation turn worker must not be negative, was $worker."
     }
     require((decision != null) == (role == FeatureTaskRuntimeImplementationTurnRole.CHECK_SETTLED)) {
       "Only a settled check carries a decision."
@@ -133,7 +239,7 @@ data class FeatureTaskRuntimeImplementationTurnMarker(
       val criterionId = fields[CRITERION]?.takeIf(String::isNotBlank) ?: return null
       val worker =
         fields[WORKER]?.toIntOrNull()
-          ?.takeIf { it in 0..FeatureTaskRuntimeImplementationProgress.MAX_WORKERS_PER_CRITERION }
+          ?.takeIf { it >= 0 }
       val decision = FeatureTaskRuntimeImplementationCheckDecision.fromWireValue(fields[DECISION])
       val retry = fields[RETRY]?.takeIf(String::isNotBlank)
       val shaped =
@@ -200,9 +306,49 @@ fun featureTaskRuntimeImplementationTurnState(
   records: List<FeatureTaskRuntimeImplementationTurnRecord>,
 ): FeatureTaskRuntimeImplementationTurnState {
   val criterionId = progress.currentId ?: return FeatureTaskRuntimeImplementationTurnState.Complete
-  val turns = records.filter { it.marker.criterionId == criterionId }
+  val accounting = progress.accountingTurnState(criterionId)
+  return when {
+    accounting != null -> accounting
+    progress.workerCount == 0 -> FeatureTaskRuntimeImplementationTurnState.WorkerNeeded(criterionId, 1)
+    else ->
+      implementationWorkerTurnState(progress, records.filter { it.marker.criterionId == criterionId }, criterionId)
+  }
+}
+
+private fun FeatureTaskRuntimeImplementationProgress.accountingTurnState(
+  criterionId: String,
+): FeatureTaskRuntimeImplementationTurnState? {
+  val accounting = accounting(criterionId)
+  return when {
+    accounting.pendingCheckAttemptIds.isNotEmpty() ->
+      FeatureTaskRuntimeImplementationTurnState.CheckOwed(criterionId, workerCount)
+    accounting.evidenceMissing ->
+      FeatureTaskRuntimeImplementationTurnState.Incoherent(
+        "Terminal repair evidence for $criterionId needs clarification.",
+      )
+    FocusedRepairStrategy.exhausted(accounting.noProgressOutcomes) && !accounting.escalatedOpportunityOwed -> {
+      val gap =
+        independentChecks.lastOrNull { it.mutation.criterionRef == criterionId }
+          ?.comparison?.remainingGaps?.joinToString("; ").orEmpty()
+      FeatureTaskRuntimeImplementationTurnState.Exhausted(criterionId, gap)
+    }
+    else -> null
+  }
+}
+
+private fun implementationWorkerTurnState(
+  progress: FeatureTaskRuntimeImplementationProgress,
+  turns: List<FeatureTaskRuntimeImplementationTurnRecord>,
+  criterionId: String,
+): FeatureTaskRuntimeImplementationTurnState {
   val worker = progress.workerCount
-  if (worker == 0) return FeatureTaskRuntimeImplementationTurnState.WorkerNeeded(criterionId, 1)
+  val mutation = progress.completedMutations.singleOrNull { it.repairAttemptId == progress.workerReservationId }
+  val independent = progress.independentChecks.singleOrNull { it.mutation == mutation }
+  if (mutation == null || independent == null) {
+    return FeatureTaskRuntimeImplementationTurnState.Incoherent(
+      "Worker $worker of $criterionId lacks terminal capture or independent comparison evidence.",
+    )
+  }
   val launch =
     turns.indexOfLast {
       it.marker.role == FeatureTaskRuntimeImplementationTurnRole.WORKER_LAUNCH && it.marker.worker == worker
@@ -219,10 +365,12 @@ fun featureTaskRuntimeImplementationTurnState(
   return when (check?.marker?.decision) {
     null -> FeatureTaskRuntimeImplementationTurnState.CheckOwed(criterionId, worker)
     FeatureTaskRuntimeImplementationCheckDecision.UNSATISFIED ->
-      if (worker < FeatureTaskRuntimeImplementationProgress.MAX_WORKERS_PER_CRITERION) {
-        FeatureTaskRuntimeImplementationTurnState.WorkerNeeded(criterionId, worker + 1)
+      if (independent.comparison.classification == AcceptanceCriterionProgressClassification.SATISFIED) {
+        FeatureTaskRuntimeImplementationTurnState.Incoherent("The check marker contradicts retained satisfaction.")
+      } else if (worker == Int.MAX_VALUE) {
+        FeatureTaskRuntimeImplementationTurnState.Incoherent("Worker ordinal capacity exhausted.")
       } else {
-        FeatureTaskRuntimeImplementationTurnState.Exhausted(criterionId, check.attempt.value)
+        FeatureTaskRuntimeImplementationTurnState.WorkerNeeded(criterionId, worker + 1)
       }
     FeatureTaskRuntimeImplementationCheckDecision.SATISFIED ->
       FeatureTaskRuntimeImplementationTurnState.Incoherent(

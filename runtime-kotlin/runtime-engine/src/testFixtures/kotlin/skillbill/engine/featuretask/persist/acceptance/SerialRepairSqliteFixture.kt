@@ -4,7 +4,7 @@ import skillbill.agent.model.PhaseOutput
 import skillbill.application.testProjectStore
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.core.absentDatabaseCheckpoint
@@ -393,7 +393,7 @@ class SerialRepairSqliteFixture(
   ) = AcceptanceCriterionRepairAuditEvidence(
     FeatureTaskRuntimeWorkflowArtifactMap.from(
       mapOf(
-        SharedPayloadKeys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION,
+        SharedPayloadKeys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION,
         Keys.MODE to mode.wireValue,
         Keys.CATALOG_ID to state.catalogId,
         Keys.SPEC_DIGEST to state.specDigest,

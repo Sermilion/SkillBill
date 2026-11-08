@@ -3698,3 +3698,35 @@ instead of being retained. Validate blocks only after `MAX_VALIDATE_ATTEMPTS`
 attempts fail; a pause stops at once. `spendFailedAttempt` counts a failed attempt
 as spent, so the next launch of the phase in the same process starts a new attempt.
 Moved here from source comments to satisfy the Kotlin comment architecture gate.
+
+## [2026-11-09] Count terminal criterion repairs separately from verified stagnation
+
+AC-002 uses the same pure accounting in focused repair and initial criterion
+implementation. A reservation does not count as a repair. A retained terminal
+mutation does, including an incomplete worker or a valid no-change attempt. Its
+independent comparison remains separate. Pending comparisons and unknown historical
+terminal facts prevent another mutation. Identical capture, check and settlement
+replay preserves the original records.
+
+Only independently checked no-progress outcomes consume the criterion's active
+budget. Partial progress preserves earlier charges without adding one. Two checked
+unmet repairs require escalation until satisfaction. Budget renewal preserves this
+requirement, lifetime attempts and actual launch attribution. Exhaustion waits for
+any pending check and an owed escalated mutation with its own independent check.
+The displayed exhaustion total saturates at three while the complete history stays
+intact.
+
+Repair state advances to 0.3 and implementation progress to 0.2. Both serializers
+retain budget origins and compare persisted accounting with the retained evidence.
+The historical repair-state 0.1-to-0.2 conversion remains pinned to 0.2. Packaged
+0.2 repair-state and 0.1 implementation-progress schemas preserve the former shapes.
+Subtask 2 owns their stored-record conversion before strict current decoding and
+projection. It must preserve unknown terminal and launch facts rather than invent
+progress or reasoning launches. Subtasks 3 and 4 own engine capture, independent
+checker acquisition and effective model attribution. These domain changes do not
+install a runtime, convert operator stores or resume a blocked execution.
+
+A1, A2 and A12 keep accounting in domain and storage outside it. A6 keeps the shared
+wire vocabulary in its existing owner. A7 retains typed decode failures and explicit
+transition refusals. G3 and P8 require evidence of pending-check precedence,
+escalation, cumulative charges, replay and retry preservation.

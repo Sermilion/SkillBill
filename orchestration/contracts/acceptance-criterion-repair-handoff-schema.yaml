@@ -3,9 +3,9 @@ $id: https://skill-bill.dev/contracts/acceptance-criterion-repair-handoff.yaml
 title: Acceptance criterion repair handoff
 type: object
 additionalProperties: false
-required: [contract_version, catalog_id, spec_digest, execution_id, revision, criterion_ref, stage, reservation_id, unsuccessful_used, unsuccessful_remaining, queue_position, queue_size, actionable_gap, evidence_ref, tree_digest, checkpoint_id, dependencies, prerequisite_facts]
+required: [contract_version, catalog_id, spec_digest, execution_id, revision, criterion_ref, stage, reservation_id, evidence_lifecycle, unsuccessful_used, unsuccessful_remaining, queue_position, queue_size, actionable_gap, evidence_ref, tree_digest, checkpoint_id, dependencies, prerequisite_facts]
 properties:
-  contract_version: { const: '0.1' }
+  contract_version: { const: '0.2' }
   catalog_id: { type: string, minLength: 1, maxLength: 256 }
   spec_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
   execution_id: { type: string, minLength: 1, maxLength: 256 }
@@ -13,6 +13,7 @@ properties:
   criterion_ref: { type: string, pattern: '^AC-[0-9]{3}$' }
   stage: { enum: [discovery_admitted, repair_reserved, repair_completed_awaiting_targeted_verification] }
   reservation_id: { type: [string, 'null'], minLength: 1, maxLength: 256 }
+  evidence_lifecycle: { enum: [no_completed_mutation, completed_awaiting_independent_check, unknown_historical_authority, checked_evidence_retained] }
   unsuccessful_used: { type: integer, minimum: 0, maximum: 3 }
   unsuccessful_remaining: { type: integer, minimum: 0, maximum: 3 }
   queue_position: { type: integer, minimum: 1, maximum: 256 }
@@ -46,6 +47,70 @@ properties:
         validation_obligation: { enum: [required, deferred, not_required] }
         validation_owner_available: { type: boolean }
         evidence_ref: { type: string, minLength: 1 }
+  completed_mutation:
+    type: object
+    additionalProperties: false
+    required: [catalog_id, spec_digest, execution_id, criterion_ref, repair_attempt_id, worker_execution_id, worker_output_id, worker_output_digest, baseline_tree_digest, baseline_checkpoint_id, current_tree_digest, current_checkpoint_id, established_obligations, terminal_disposition, launch_attribution]
+    properties:
+      catalog_id: { type: string, minLength: 1, maxLength: 256 }
+      execution_id: { type: string, minLength: 1, maxLength: 256 }
+      repair_attempt_id: { type: string, minLength: 1, maxLength: 256 }
+      worker_execution_id: { type: string, minLength: 1, maxLength: 256 }
+      worker_output_id: { type: string, minLength: 1, maxLength: 256 }
+      terminal_disposition: { enum: [complete, incomplete, no_change, historical_unknown] }
+      launch_attribution:
+        type: [object, 'null']
+        additionalProperties: false
+        required: [repair_attempt_id, provider, effective_model, effective_effort, execution_plan_ref, launch_ref, reasoning]
+        properties:
+          repair_attempt_id: { type: string, minLength: 1, maxLength: 256 }
+          provider: { type: string, minLength: 1, maxLength: 256 }
+          effective_model: { type: string, minLength: 1, maxLength: 256 }
+          effective_effort: { type: string, minLength: 1, maxLength: 256 }
+          execution_plan_ref: { type: string, minLength: 1, maxLength: 256 }
+          launch_ref: { type: string, minLength: 1, maxLength: 256 }
+          reasoning: { type: boolean }
+      baseline_checkpoint_id: { type: string, minLength: 1, maxLength: 256 }
+      current_checkpoint_id: { type: string, minLength: 1, maxLength: 256 }
+      spec_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
+      worker_output_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
+      baseline_tree_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
+      current_tree_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
+      criterion_ref: { type: string, pattern: '^AC-[0-9]{3}$' }
+      established_obligations:
+        type: array
+        maxItems: 256
+        items:
+          type: object
+          additionalProperties: false
+          required: [obligation_id, obligation, current_citations]
+          properties:
+            obligation_id: { type: string, minLength: 1, maxLength: 256 }
+            obligation: { type: string, minLength: 1, maxLength: 4096 }
+            current_citations:
+              type: array
+              minItems: 1
+              maxItems: 256
+              items: { type: string, minLength: 1, maxLength: 4096 }
+  independent_progress:
+    $ref: 'acceptance-criterion-audit-result.yaml#/$defs/independent_progress'
+allOf:
+  - if:
+      properties: { evidence_lifecycle: { const: completed_awaiting_independent_check } }
+    then:
+      required: [completed_mutation]
+  - if:
+      properties: { evidence_lifecycle: { enum: [no_completed_mutation, unknown_historical_authority] } }
+    then:
+      not: { required: [completed_mutation] }
+  - if:
+      properties: { evidence_lifecycle: { const: checked_evidence_retained } }
+    then:
+      required: [independent_progress, completed_mutation]
+  - if:
+      properties: { evidence_lifecycle: { enum: [no_completed_mutation, completed_awaiting_independent_check, unknown_historical_authority] } }
+    then:
+      not: { required: [independent_progress] }
 x-coherence-checks:
   - id: current-authority-only
     description: The handoff grants repair authority for exactly the current criterion and carries no mutable owner token.

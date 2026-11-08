@@ -9,10 +9,10 @@ import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.workflow.model.repair.FocusedRepairAction
 import skillbill.workflow.model.repair.FocusedRepairStage
 import skillbill.workflow.model.repair.FocusedRepairStrategy
-import skillbill.workflow.model.repair.RepairTargetProgress
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.repairAccounting
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 
 internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
@@ -66,7 +66,12 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
     requireNotNull(scope)
     requireNotNull(steps)
     if (state.stage == AcceptanceCriterionRepairStage.ACCEPTED) return Routing.Continue
-    if (state.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
+    if (state.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED &&
+      state.currentCriterionRef?.let { ref ->
+        FocusedRepairStrategy.next(listOf(state.repairAccounting(ref).target()), FocusedRepairStage.PLANNING) is
+          FocusedRepairAction.Blocked
+      } == true
+    ) {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(
         context.request,
         context.state,
@@ -127,7 +132,7 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
         else -> FocusedRepairStage.VERIFICATION
       }
     val refs = (state.pendingAuditRefs + state.unresolvedQueue).distinct()
-    val targets = refs.map { RepairTargetProgress(it, state.unsuccessfulTotals.getOrDefault(it, 0)) }
+    val targets = refs.map { state.repairAccounting(it).target() }
     return when (FocusedRepairStrategy.next(targets, stage)) {
       FocusedRepairAction.Discover, is FocusedRepairAction.Verify -> steps.audit
       is FocusedRepairAction.Plan -> steps.planning

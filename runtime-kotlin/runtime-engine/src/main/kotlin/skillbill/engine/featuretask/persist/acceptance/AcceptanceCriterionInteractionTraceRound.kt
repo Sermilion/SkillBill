@@ -22,7 +22,7 @@ import skillbill.workflow.taskruntime.model.audit.interaction.recheckUpdateAfter
 import skillbill.workflow.taskruntime.model.audit.interaction.unknownScenarios
 import skillbill.workflow.taskruntime.model.audit.interaction.withRecheckUpdate
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION as AUDIT_RESULT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION as AUDIT_RESULT_VERSION
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 public object AcceptanceCriterionInteractionTraceRound {
