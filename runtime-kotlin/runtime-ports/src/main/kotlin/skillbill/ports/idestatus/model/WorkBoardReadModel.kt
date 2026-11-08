@@ -2,6 +2,8 @@ package skillbill.ports.idestatus.model
 
 import java.time.Instant
 
+data class WorkBoardInvalidation(val workId: String, val revision: Long)
+
 data class WorkBoardReadModelRow(
   val workId: String,
   val item: WorkBoardItem,

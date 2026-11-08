@@ -233,6 +233,7 @@ public class IdeStatusService(
         pageSize = request.pageSize,
       )
     }
+    WorkBoardReadModelRefresh.refresh(database, workBoardItemProjection, clock, diagnostics)
     val result =
       database.read { unitOfWork ->
         WorkBoardReadModelRead.read(workBoardItemProjection, unitOfWork, request, position)
@@ -865,7 +866,7 @@ internal object WorkBoardReadModelRead {
     val diagnostics = mutableListOf<WorkBoardDiagnostic>()
     val scanRequest = ScanRequest(observedAt, finishedFrom, filter, diagnostics)
     val result =
-      if (unitOfWork.workBoardReadModel.isComplete()) {
+      if (unitOfWork.workBoardReadModel.isComplete() && unitOfWork.workBoardReadModel.pendingInvalidation() == null) {
         readIndexed(projection, unitOfWork, request.pageSize, after, scanRequest)
       } else {
         val scanned = scanCandidates(projection, unitOfWork, scanRequest)

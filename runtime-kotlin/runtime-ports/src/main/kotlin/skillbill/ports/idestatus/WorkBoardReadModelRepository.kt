@@ -1,11 +1,21 @@
 package skillbill.ports.idestatus
 
+import skillbill.ports.idestatus.model.WorkBoardInvalidation
 import skillbill.ports.idestatus.model.WorkBoardReadModelPage
 import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardReadModelRow
 
 /** Persists the board projection used by indexed board reads. */
 interface WorkBoardReadModelRepository {
+  /** Returns the oldest coalesced source invalidation, retained until acknowledged. */
+  fun pendingInvalidation(): WorkBoardInvalidation?
+
+  /** Returns a monotonic source-change fence, including acknowledged invalidations. */
+  fun invalidationRevision(): Long
+
+  /** Acknowledges exactly the invalidation read in the projection snapshot. */
+  fun acknowledge(invalidation: WorkBoardInvalidation)
+
   /** Replaces the persisted projection for one work item. */
   fun upsert(row: WorkBoardReadModelRow)
 

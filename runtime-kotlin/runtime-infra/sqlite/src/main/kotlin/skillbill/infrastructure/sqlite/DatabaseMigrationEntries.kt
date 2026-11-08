@@ -18,6 +18,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.FeedbackEventMigratio
 import skillbill.infrastructure.sqlite.core.migration.area.GoalNoChangeReasonMigration
 import skillbill.infrastructure.sqlite.core.migration.area.GoalTelemetryMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
+import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardInvalidationsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDependencyMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelRebuildMigration
@@ -1061,4 +1062,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 116,
       name = "record-agent-build-runs",
       operation = ::recordAgentBuildRuns,
+    ) +
+    DatabaseMigration(
+      version = 117,
+      name = "defer-work-board-projection",
+      operation = WorkBoardInvalidationsMigration::apply,
     )

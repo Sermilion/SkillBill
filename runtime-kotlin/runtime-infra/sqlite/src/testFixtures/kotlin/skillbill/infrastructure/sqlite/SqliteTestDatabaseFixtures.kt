@@ -6,7 +6,6 @@ import skillbill.infrastructure.sqlite.core.schema.DatabasePaths
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.GoalPlanningPreparationStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.GoalRunnerControlStore
-import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
@@ -101,7 +100,6 @@ fun sqliteSessionFactoryForTests(
   environment: Map<String, String>,
   clock: Clock = Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
   diagnostics: RuntimeDiagnostics = SqliteTestDiagnostics,
-  boardReadModelProjector: WorkBoardReadModelProjector = TestWorkBoardReadModelProjector,
 ): SQLiteDatabaseSessionFactory =
   sqliteDatabaseSessionFactory(
     userHome = userHome,
@@ -109,7 +107,6 @@ fun sqliteSessionFactoryForTests(
     environment = environment,
     clock = clock,
     diagnostics = diagnostics,
-    boardReadModelProjector = boardReadModelProjector,
   )
 
 data class MaintenanceWorkflowSnapshot(

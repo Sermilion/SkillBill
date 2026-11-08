@@ -38,8 +38,10 @@ import skillbill.idestatus.model.IdeStatusRepositoryIdentityFamily
 import skillbill.idestatus.model.IdeStatusRepositoryIdentityPolicy
 import skillbill.idestatus.model.IdeStatusRepositoryIdentitySource
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
-import skillbill.ports.WorkBoardReadModelProjector
+import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.idestatus.AgentBuildRunRepository
 import skillbill.ports.idestatus.IdeStatusValidator
 import skillbill.ports.idestatus.model.AgentBuildHistory
@@ -56,6 +58,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.WorkBoardCompletionSource
 import skillbill.ports.idestatus.model.WorkBoardDiagnostic
 import skillbill.ports.idestatus.model.WorkBoardDiagnosticReason
+import skillbill.ports.idestatus.model.WorkBoardInvalidation
 import skillbill.ports.idestatus.model.WorkBoardItem
 import skillbill.ports.idestatus.model.WorkBoardReadModelRow
 import skillbill.ports.idestatus.model.WorkBoardWindow
@@ -80,6 +83,7 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.time.parsePersistedInstantOrNull
 import java.nio.file.Path
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.Locale
@@ -765,82 +769,131 @@ internal sealed interface WorkDetailMatch {
   data class Problem(val problem: WorkDetailProblem) : WorkDetailMatch
 }
 
-@Inject
-public class WorkBoardReadModelProjection(
-  private val projection: WorkBoardItemProjection,
-  private val diagnostics: RuntimeDiagnostics,
-) : WorkBoardReadModelProjector {
-  override fun refresh(
-    unitOfWork: UnitOfWork,
-    workIds: Set<String>,
-    now: Instant,
+internal object WorkBoardReadModelRefresh {
+  fun refresh(
+    database: DatabaseSessionFactory,
+    projection: WorkBoardItemProjection,
+    clock: Clock,
+    diagnostics: RuntimeDiagnostics,
   ) {
-    val finishedFrom = now.minus(WorkBoardWindow.entries.maxOf { it.duration })
-    val affected = unitOfWork.workList.boardCandidatesAffectedBy(workIds, finishedFrom, now)
-    if (affected.requiresRebuild) {
-      diagnostics.warning("Work board read model refresh exceeded the affected-id bound; rebuilding the projection.")
-      rebuild(unitOfWork, now)
-      return
+    try {
+      repeat(WORK_BOARD_CANDIDATE_BATCH_SIZE) {
+        val prepared =
+          database.read { unit ->
+            val store = unit.workBoardReadModel
+            val invalidation = store.pendingInvalidation() ?: return@read null
+            val observation = unit.databaseFileObservation
+            if (observation == null) {
+              diagnostics.info("Work board projection has no database identity; retaining invalidations.")
+              return@read null
+            }
+            PreparedBoardProjection(
+              invalidation,
+              store.invalidationRevision(),
+              observation,
+              prepare(unit, projection, diagnostics, invalidation.workId, clock.instant()),
+            )
+          }
+        if (prepared == null) {
+          return
+        }
+        val publication =
+          database.transactionFenced(prepared.databaseFileObservation) { unit ->
+            val store = unit.workBoardReadModel
+            if (unit.databaseFileObservation != prepared.databaseFileObservation ||
+              store.invalidationRevision() != prepared.revision || store.pendingInvalidation() != prepared.invalidation
+            ) {
+              return@transactionFenced false
+            }
+            if (prepared.changes.replaceAll) store.deleteAll()
+            prepared.changes.deleted.forEach(store::delete)
+            prepared.changes.rows.forEach(store::upsert)
+            store.acknowledge(prepared.invalidation)
+            store.setComplete(store.pendingInvalidation() == null)
+            true
+          }
+        if (publication !is FencedTransactionResult.Committed || !publication.value) {
+          diagnostics.info(
+            "Work board projection changed during preparation; retaining invalidations for the next read.",
+          )
+          return
+        }
+      }
+      diagnostics.info("Work board projection batch exhausted; remaining invalidations will resume on the next read.")
+    } catch (error: SkillBillRuntimeException) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Work board projection refresh failed; using authoritative board reads and retaining invalidations.",
+        error,
+      )
     }
-    affected.nonCandidates.forEach(unitOfWork.workBoardReadModel::delete)
-    affected.candidates.forEach { id -> projectAndPersist(unitOfWork, id, now, finishedFrom) }
   }
 
-  override fun rebuild(
-    unitOfWork: UnitOfWork,
-    now: Instant,
-  ) {
-    val finishedFrom = now.minus(WorkBoardWindow.entries.maxOf { it.duration })
-    unitOfWork.workBoardReadModel.deleteAll()
-    var afterKey: String? = null
-    while (true) {
-      val rows =
-        unitOfWork.workList.boardCandidates(
-          WorkBoardCandidateQuery(finishedFrom, now, afterKey, WORK_BOARD_CANDIDATE_BATCH_SIZE),
-        )
-      rows.forEach { candidate -> projectAndPersist(unitOfWork, candidate.id, now, finishedFrom) }
-      if (rows.size < WORK_BOARD_CANDIDATE_BATCH_SIZE) break
-      afterKey = rows.last().key
-    }
-    unitOfWork.workBoardReadModel.setComplete(true)
-  }
-
-  private fun projectAndPersist(
-    unitOfWork: UnitOfWork,
+  private fun prepare(
+    unit: UnitOfWork,
+    projection: WorkBoardItemProjection,
+    diagnostics: RuntimeDiagnostics,
     workId: String,
     now: Instant,
-    finishedFrom: Instant,
-  ) {
-    val persisted =
-      try {
+  ): BoardProjectionChanges {
+    val finishedFrom = now.minus(WorkBoardWindow.entries.maxOf { it.duration })
+    val affected = unit.workList.boardCandidatesAffectedBy(setOf(workId), finishedFrom, now)
+    if (affected.requiresRebuild) {
+      diagnostics.info("Work board projection exceeded the affected-id bound; preparing a full read snapshot.")
+    }
+    val ids = if (affected.requiresRebuild) allCandidates(unit, now, finishedFrom) else affected.candidates
+    val deleted = affected.nonCandidates.toMutableSet()
+    val rows =
+      ids.mapNotNull { id ->
         val item =
-          projection.projectBoardCandidate(
-            unitOfWork,
-            workId,
-            BoardProjectionWindow(now, finishedFrom),
-            mutableListOf(),
-            AggregateSkipDiagnostics(),
-          )
+          try {
+            projection.projectBoardCandidate(
+              unit,
+              id,
+              BoardProjectionWindow(now, finishedFrom),
+              mutableListOf(),
+              AggregateSkipDiagnostics(),
+            )
+          } catch (error: SkillBillRuntimeException) {
+            error.rethrowIfDatabaseFailure()
+            RuntimeDiagnosticsBestEffortWarning.record(
+              diagnostics,
+              "seam=work_board_read_model_projection work_id=$id value_used=deleted " +
+                "failure_code=${error.failureCodeLabel()}",
+              error,
+            )
+            null
+          }
         if (item == null) {
-          false
+          deleted.add(id)
+          null
         } else {
-          unitOfWork.workBoardReadModel.upsert(row(workId, item, now))
-          true
+          row(projection, id, item, now)
         }
-      } catch (error: SkillBillRuntimeException) {
-        error.rethrowIfDatabaseFailure()
-        val code = error.failureCodeLabel()?.take(MAX_FAILURE_CODE_CHARS) ?: "unclassified"
-        RuntimeDiagnosticsBestEffortWarning.record(
-          diagnostics,
-          "seam=work_board_read_model_projection work_id=$workId " +
-            "value_expected=projected_row value_used=deleted failure_code=$code",
-        )
-        false
       }
-    if (!persisted) unitOfWork.workBoardReadModel.delete(workId)
+    return BoardProjectionChanges(rows, deleted, affected.requiresRebuild)
   }
 
+  private fun allCandidates(
+    unit: UnitOfWork,
+    now: Instant,
+    finishedFrom: Instant,
+  ): Set<String> =
+    buildSet {
+      var afterKey: String? = null
+      while (true) {
+        val page =
+          unit.workList.boardCandidates(
+            WorkBoardCandidateQuery(finishedFrom, now, afterKey, WORK_BOARD_CANDIDATE_BATCH_SIZE),
+          )
+        addAll(page.map { it.id })
+        if (page.size < WORK_BOARD_CANDIDATE_BATCH_SIZE) break
+        afterKey = page.last().key
+      }
+    }
+
   private fun row(
+    projection: WorkBoardItemProjection,
     workId: String,
     item: WorkBoardItem,
     now: Instant,
@@ -857,11 +910,20 @@ public class WorkBoardReadModelProjection(
       item.membershipDeadline,
     )
   }
-
-  private companion object {
-    const val MAX_FAILURE_CODE_CHARS = 120
-  }
 }
+
+private data class PreparedBoardProjection(
+  val invalidation: WorkBoardInvalidation,
+  val revision: Long,
+  val databaseFileObservation: DatabaseFileObservation,
+  val changes: BoardProjectionChanges,
+)
+
+private data class BoardProjectionChanges(
+  val rows: List<WorkBoardReadModelRow>,
+  val deleted: Set<String>,
+  val replaceAll: Boolean,
+)
 
 private fun workBuildView(
   row: AgentBuildRun,

@@ -275,10 +275,24 @@ initialization path still performs a second identity observation after acquiring
 `DatabaseWriteReadinessTest` exercises the gate through `sqliteSessionFactoryForTests`
 and recording diagnostics instead of production-only counters.
 
-`work_board_read_model_state.complete = 0` marks an unbuilt board read model. Migration 89 resets
-that flag once because older change journals did not retain removed grouping and association
-facts. The first write transaction after upgrade rebuilds all board rows and sets `complete = 1`.
-That rebuild is the read model's initialization boundary. Later writes refresh only changed work ids.
+Board projection never runs inside a source write transaction. Migration 117 creates
+`work_board_invalidations`, seeded from preserved source identities and cached work ids.
+Source change triggers coalesce invalidations by work id, with a monotonic revision
+that survives acknowledgement. File-level journal updates for one workflow therefore
+leave one pending item rather than forcing a full board rebuild.
+
+`WorkBoardReadModelRefresh` consumes pending work before a board read, without a
+background scheduler. It prepares each affected projection under a read snapshot,
+then publishes through a short fenced write transaction. Publication checks database
+file identity and the source-change revision before updating rows and acknowledging
+the exact invalidation. A concurrent change or failed refresh retains pending work.
+The indexed path requires both `complete = 1` and an empty queue; otherwise the board
+uses authoritative source reads. Restart resumes the same durable queue.
+
+`selfManagedWrite` runs its block once. It must not replay an agent phase or another
+operation with committed effects after a later storage failure. SQLite transaction
+admission retains its bounded busy retry. Session-factory transactions record wait
+and hold durations when either reaches one second, using the injected clock.
 
 `:runtime-infra:sqlite` `testFixtures` own cross-module database evidence:
 `establishTemporarySchemaReadiness` returns a temp directory, database path, and

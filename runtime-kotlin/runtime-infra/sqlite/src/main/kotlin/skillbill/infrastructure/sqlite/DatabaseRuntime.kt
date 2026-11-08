@@ -25,7 +25,6 @@ import java.sql.SQLException
 
 internal object DatabaseRuntime {
   const val BUSY_TIMEOUT_MILLIS: Int = 5000
-  const val SELF_MANAGED_WRITE_BUSY_ATTEMPTS: Int = 3
 
   private val writeReadinessGate = DatabaseWriteReadinessGate()
 

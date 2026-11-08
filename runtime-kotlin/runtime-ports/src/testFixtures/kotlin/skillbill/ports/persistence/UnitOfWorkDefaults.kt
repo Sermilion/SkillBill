@@ -55,6 +55,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
 import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandaloneQaChecklistWriteResult
 import skillbill.ports.idestatus.model.ValidationCheckEventRecord
+import skillbill.ports.idestatus.model.WorkBoardInvalidation
 import skillbill.ports.idestatus.model.WorkBoardReadModelPage
 import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardReadModelRow
@@ -252,6 +253,12 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
 }
 
 private class EmptyBoardReadModel : WorkBoardReadModelRepository {
+  override fun pendingInvalidation(): WorkBoardInvalidation? = null
+
+  override fun invalidationRevision(): Long = 0
+
+  override fun acknowledge(invalidation: WorkBoardInvalidation) = Unit
+
   override fun upsert(row: WorkBoardReadModelRow) = Unit
 
   override fun delete(workId: String) = Unit

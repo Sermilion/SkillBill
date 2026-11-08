@@ -2,9 +2,7 @@ package skillbill.engine.work
 
 import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
-import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
@@ -14,13 +12,12 @@ import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.persistence.UnitOfWork
 import java.sql.Connection
-import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class WorkBoardMigrationReadTest {
   @Test
-  fun `first write rebuilds an incomplete board and preserves post heartbeat projection order`() {
+  fun `board reads recover pending projections and preserve post heartbeat order`() {
     establishTemporarySchemaReadiness("board-migration-read").use { fixture ->
       val seed = sqliteDatabaseSessionFactory(fixture.tempDir, fixture.dbPath.toString(), emptyMap(), ideStatusClock)
       val records =
@@ -36,28 +33,19 @@ class WorkBoardMigrationReadTest {
             )
           }
         }
-      val tracker = TrackingBoardProjector()
       val database =
         sqliteDatabaseSessionFactory(
           fixture.tempDir,
           fixture.dbPath.toString(),
           emptyMap(),
           ideStatusClock,
-          boardReadModelProjector = tracker,
         )
       val pageTracker = PageTrackingDatabase(database)
-      val capturedDatabase =
-        object : DatabaseSessionFactory by pageTracker, BoardProjectionCapture {
-          override fun accept(projection: WorkBoardItemProjection) {
-            tracker.delegate = WorkBoardReadModelProjection(projection, NoopRuntimeDiagnostics)
-          }
-        }
-      val service = ideStatusService(capturedDatabase)
+      val service = ideStatusService(pageTracker)
       val request = WorkBoardRequest(observedAt = ideStatusObservedAt, pageSize = 10)
       val before = service.board(request)
       assertEquals(10, before.items.size)
-      assertEquals(0, pageTracker.pageReads)
-      assertEquals(0, tracker.rebuildCount)
+      assertEquals(1, pageTracker.pageReads)
       database.transaction { unit ->
         val record = records.first()
         assertEquals(
@@ -76,10 +64,9 @@ class WorkBoardMigrationReadTest {
           ),
         )
       }
-      assertEquals(1, tracker.rebuildCount)
       assertEquals(100, boardRowCount(fixture.connection))
       val indexed = service.board(request)
-      assertEquals(1, pageTracker.pageReads)
+      assertEquals(2, pageTracker.pageReads)
       assertEquals(11, indexed.candidatesExamined)
       fixture.connection.createStatement().use {
         it.executeUpdate(
@@ -88,7 +75,6 @@ class WorkBoardMigrationReadTest {
       }
       val fallback = service.board(request)
       assertEquals(fallback.items, indexed.items)
-      assertEquals(1, tracker.rebuildCount)
     }
   }
 }
@@ -119,22 +105,3 @@ private fun boardRowCount(connection: Connection): Int =
       rows.getInt(1)
     }
   }
-
-private class TrackingBoardProjector : WorkBoardReadModelProjector {
-  lateinit var delegate: WorkBoardReadModelProjector
-  var rebuildCount = 0
-
-  override fun refresh(
-    unitOfWork: UnitOfWork,
-    workIds: Set<String>,
-    now: Instant,
-  ) = delegate.refresh(unitOfWork, workIds, now)
-
-  override fun rebuild(
-    unitOfWork: UnitOfWork,
-    now: Instant,
-  ) {
-    rebuildCount++
-    delegate.rebuild(unitOfWork, now)
-  }
-}
