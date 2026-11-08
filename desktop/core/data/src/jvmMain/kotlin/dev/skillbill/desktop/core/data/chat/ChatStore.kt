@@ -69,6 +69,7 @@ private object ChatStoreKeys {
   const val NEW_TASK_SESSION_ESTABLISHED = "new_task_session_established"
   const val NEW_TASK_PENDING_TURN_LINE_INDEX = "new_task_pending_turn_line_index"
   const val NEW_TASK_CHANGES_BASELINE = "new_task_changes_baseline"
+  const val NEW_TASK_CHANGES_CAPTURE_ATTEMPTED = "new_task_changes_capture_attempted"
   const val HEAD_SHA = "head_sha"
   const val UNTRACKED_PATHS = "untracked_paths"
   const val STASH_SHA = "stash_sha"
@@ -335,6 +336,7 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
     put(ChatStoreKeys.NEW_TASK_ROOT, newTask.repositoryRoot)
     newTask.baseBranch?.let { put(ChatStoreKeys.NEW_TASK_BASE_BRANCH, it) }
     put(ChatStoreKeys.NEW_TASK_SESSION_ESTABLISHED, newTask.sessionEstablished)
+    put(ChatStoreKeys.NEW_TASK_CHANGES_CAPTURE_ATTEMPTED, newTask.changesCaptureAttempted)
     newTask.pendingTurnLineIndex?.let { put(ChatStoreKeys.NEW_TASK_PENDING_TURN_LINE_INDEX, it) }
     newTask.changesBaseline?.let { baseline ->
       put(ChatStoreKeys.NEW_TASK_CHANGES_BASELINE, buildJsonObject {
@@ -395,6 +397,9 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
         (root[ChatStoreKeys.NEW_TASK_SESSION_ESTABLISHED] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() ?: true,
         (root[ChatStoreKeys.NEW_TASK_PENDING_TURN_LINE_INDEX] as? JsonPrimitive)?.intOrNull,
         decodeChangesBaseline(root[ChatStoreKeys.NEW_TASK_CHANGES_BASELINE], diagnostics),
+        (root[ChatStoreKeys.NEW_TASK_CHANGES_CAPTURE_ATTEMPTED] as? JsonPrimitive)?.content?.toBooleanStrictOrNull()
+          ?: ((root[ChatStoreKeys.NEW_TASK_SESSION_ESTABLISHED] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() != false
+            || root[ChatStoreKeys.NEW_TASK_CHANGES_BASELINE] != null),
       )
     },
     summary = root.string(ChatStoreKeys.SUMMARY)?.takeIf { it.isNotBlank() },

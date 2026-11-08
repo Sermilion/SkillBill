@@ -150,6 +150,7 @@ data class ChatNewTaskContext(
   val sessionEstablished: Boolean = true,
   val pendingTurnLineIndex: Int? = null,
   val changesBaseline: ChatChangesBaseline? = null,
+  val changesCaptureAttempted: Boolean = false,
 )
 
 data class ChatChangesBaseline(

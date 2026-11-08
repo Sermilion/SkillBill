@@ -408,7 +408,7 @@ class NewTaskDraft internal constructor(
     val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay,
       changesBaseline = current.changesBaseline.takeIf { sameRepository },
       resumedChanges = current.changesResumed && sameRepository,
-      changesCaptureAttempted = current.changesCaptureAttempted && sameRepository)
+      changesCaptureAttempted = (current.changesCaptureAttempted || current.started || current.changesBaseline != null) && sameRepository)
     val switched = "Switched to ${chipText(agent)} in ${repo.name}."
     val notice = if (replay != null) "$switched It gets the earlier conversation with your next message." else switched
     next.thread.showCapability(agent)
@@ -453,6 +453,7 @@ class NewTaskDraft internal constructor(
       missing,
       changesBaseline = context.changesBaseline,
       resumedChanges = context.changesBaseline != null,
+      changesCaptureAttempted = context.changesCaptureAttempted || context.sessionEstablished || context.changesBaseline != null,
     )
     val lines = if (retained == null) entry.lines.map(::restored) else emptyList()
     val notice = ChatMessage.Notice("This draft's repository no longer exists: ${context.repositoryRoot}. Discard it to continue.")

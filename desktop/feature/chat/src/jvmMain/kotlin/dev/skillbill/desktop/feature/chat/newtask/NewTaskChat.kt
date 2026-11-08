@@ -87,7 +87,7 @@ internal class NewTaskChat(
   val thread = retainedThread
   val job: Job = SupervisorJob(scope.coroutineContext[Job])
   private val approvalFlow = ChatApprovals(approvals)
-  private val changesTracker = NewTaskChatChanges(changesRepository, scope, dispatcher, repositoryRoot, initialChangesBaseline, resumedChanges, repositoryMissing, changesCaptureAttempted)
+  private val changesTracker = NewTaskChatChanges(changesRepository, scope, dispatcher, repositoryRoot, initialChangesBaseline, resumedChanges, repositoryMissing, changesCaptureAttempted || initiallyStarted || initialChangesBaseline != null)
   val changes: StateFlow<ChatChangesState> = changesTracker.state
   val changesBaseline: ChatChangesBaseline? get() = changesTracker.baseline
   internal val changesResumed: Boolean get() = changesTracker.resumed
@@ -401,7 +401,7 @@ internal class NewTaskChat(
           clock.now(),
           title,
           lines,
-          ChatNewTaskContext(repositoryRoot, baseBranch, started, pendingTurnLineIndex, changesTracker.baseline),
+          ChatNewTaskContext(repositoryRoot, baseBranch, started, pendingTurnLineIndex, changesTracker.baseline, changesTracker.captureAttempted),
         ),
       )
     }
