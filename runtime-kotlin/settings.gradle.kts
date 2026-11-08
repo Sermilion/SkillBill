@@ -3,8 +3,8 @@ pluginManagement {
   includeBuild("../build-identity")
 
   repositories {
-    gradlePluginPortal()
     mavenCentral()
+    gradlePluginPortal()
   }
 }
 
