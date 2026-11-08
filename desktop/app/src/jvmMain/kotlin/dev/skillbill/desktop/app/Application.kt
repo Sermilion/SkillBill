@@ -2,6 +2,7 @@ package dev.skillbill.desktop.app
 
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +48,13 @@ fun main() {
   val window = component.windowComponentFactory.createWindowComponent()
   val uiScale = resolveDesktopUiScale()
   nucleusApplication(backend = NucleusBackend.Awt) {
+    DisposableEffect(component.providerUsageRepository) {
+      onDispose { component.providerUsageRepository.closeUsage() }
+    }
+    fun closeUsageAndExit() {
+      component.providerUsageRepository.closeUsage()
+      exitApplication()
+    }
     var mainVisible by remember { mutableStateOf(true) }
     var focusRequest by remember { mutableStateOf(0) }
     val trayStore = remember { ViewModelStore() }
@@ -58,15 +66,15 @@ fun main() {
           is HostIntent.OpenDetail -> { mainVisible = true; focusRequest++; component.changesWindows.close(); window.navigator.navigate(DetailRoute(intent.item)) }
           HostIntent.OpenSettings -> { mainVisible = true; focusRequest++; component.changesWindows.close(); window.navigator.navigate(SettingsRoute(SettingsPageId.App)) }
           HostIntent.Refresh -> component.workBoardRepository.refresh()
-          HostIntent.Quit -> exitApplication()
+          HostIntent.Quit -> closeUsageAndExit()
         }
       }
     }
-    TrayHost(trayModel, component.trayAvailability, component.hostIntents, uiScale, mainVisible, reducedMotion) { exitApplication() }
+    TrayHost(trayModel, component.trayAvailability, component.hostIntents, uiScale, mainVisible, reducedMotion, ::closeUsageAndExit)
     MainWindow(window, uiScale, reducedMotion, mainVisible, focusRequest, component.changesWindows, component.changesWindowViewModel) {
       if (component.trayAvailability.state.value.canHideToTray) mainVisible = false else {
         component.trayAvailability.unavailable()
-        exitApplication()
+        closeUsageAndExit()
       }
     }
   }

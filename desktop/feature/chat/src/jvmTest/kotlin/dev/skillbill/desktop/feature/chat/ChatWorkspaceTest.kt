@@ -42,6 +42,7 @@ import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
+import dev.skillbill.desktop.core.ui.usage.model.SelectedNewTaskUsageContext
 import dev.skillbill.desktop.feature.chat.newtask.testDatabaseSessionController
 import dev.skillbill.desktop.feature.chat.newtask.unconfinedNewTaskChats
 import dev.skillbill.desktop.feature.chat.newtask.NewTaskRepository
@@ -73,6 +74,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
@@ -98,6 +100,43 @@ class ChatWorkspaceTest {
 
   /** A real directory standing in for a goal worktree; `toRealPath` avoids the macOS `/var` symlink. */
   private fun worktreeDir(): String = Files.createTempDirectory("chat-worktree").toRealPath().also(tempDirs::add).toString()
+
+  @Test
+  fun `selected New task usage keeps the executing agent and follows rotated session`() = runTest {
+    chat.events = { flow { awaitCancellation() } }
+    val chats = NewTaskChats(chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock)
+    chats.chatDispatcher = StandardTestDispatcher(testScheduler)
+    val original = ChatAgent("claude", "model-a", "high", "/profiles/claude-a")
+    val draft = chats.selected.value.apply {
+      repository = NewTaskRepository("/repo", "repo")
+      agentId = "claude"
+      selectedAgent = original
+      text = "start work"
+    }
+    val workspace = workspace(chats)
+    draft.send()
+    runCurrent()
+    val oldSession = checkNotNull(draft.chat.value).sessionId
+    val running = assertIs<SelectedNewTaskUsageContext.Ready>(workspace.selectedNewTaskUsageContext.value)
+    assertEquals(original, running.agent)
+    assertEquals(oldSession, running.logicalSessionId)
+    assertTrue(running.activeWork)
+
+    draft.selectedAgent = ChatAgent("claude", "model-b", "low", "/profiles/claude-b")
+    draft.rebindChat()
+    runCurrent()
+    val retained = assertIs<SelectedNewTaskUsageContext.Ready>(workspace.selectedNewTaskUsageContext.value)
+    assertEquals(original, retained.agent)
+    assertEquals(chat.requests.single().agent, retained.agent)
+
+    draft.stop()
+    runCurrent()
+    val rotated = assertIs<SelectedNewTaskUsageContext.Ready>(workspace.selectedNewTaskUsageContext.value)
+    assertNotEquals(oldSession, rotated.logicalSessionId)
+    assertEquals(rotated.logicalSessionId, draft.chat.value?.sessionIdFlow?.value)
+    assertEquals(original, rotated.agent)
+    workspace.closeAll()
+  }
 
   private fun TestScope.workspace(
     chats: NewTaskChats = unconfinedNewTaskChats(),

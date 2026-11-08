@@ -1,0 +1,264 @@
+package dev.skillbill.desktop.app.usage
+
+import androidx.compose.runtime.snapshots.Snapshot
+import dev.skillbill.desktop.app.navigation.WindowNavigator
+import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.DetailSections
+import dev.skillbill.desktop.core.domain.model.DetailState
+import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
+import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
+import dev.skillbill.desktop.core.domain.usage.UsageRepository
+import dev.skillbill.desktop.core.domain.usage.model.UsageDemand
+import dev.skillbill.desktop.core.domain.usage.model.UsageDemandResult
+import dev.skillbill.desktop.core.domain.usage.model.UsageProfileLookup
+import dev.skillbill.desktop.core.domain.usage.model.UsageProvider
+import dev.skillbill.desktop.core.domain.usage.model.UsageRefreshAvailability
+import dev.skillbill.desktop.core.domain.usage.model.UsageRefreshResult
+import dev.skillbill.desktop.core.domain.usage.model.UsageRequest
+import dev.skillbill.desktop.core.domain.usage.model.UsageResult
+import dev.skillbill.desktop.core.domain.usage.model.UsageSessionStatus
+import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableCode
+import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableReason
+import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
+import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
+import dev.skillbill.desktop.core.testing.RecordingDiagnostics
+import dev.skillbill.desktop.core.testing.workItem
+import dev.skillbill.desktop.core.ui.navigation.DetailRoute
+import dev.skillbill.desktop.core.ui.navigation.SettingsPageId
+import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
+import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
+import dev.skillbill.desktop.core.ui.navigation.WorkRoute
+import dev.skillbill.desktop.core.ui.pane.ChatCommands
+import dev.skillbill.desktop.core.ui.selection.SelectionHolder
+import dev.skillbill.desktop.core.ui.usage.model.SelectedNewTaskUsageContext
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class UsageSidebarModelTest {
+  @Test
+  fun `busy changes preserve the selected context result popup and lease`() = runTest {
+    val fixture = Fixture(this)
+    runCurrent()
+    val before = fixture.model.view.value
+    val lease = fixture.usage.leases.values.single()
+    val selected = fixture.chat.selectedNewTaskUsageContext.value as SelectedNewTaskUsageContext.Ready
+
+    fixture.chat.selectedNewTaskUsageContext.value = selected.copy(activeWork = true)
+    runCurrent()
+
+    assertTrue(fixture.usage.demands.values.single().active)
+    assertSame(lease, fixture.usage.leases.values.single())
+    assertEquals(before.result, fixture.model.view.value.result)
+    assertEquals(before.popupDismissalToken, fixture.model.view.value.popupDismissalToken)
+  }
+
+  @Test
+  fun `detail header refresh keeps its context while updating activity`() = runTest {
+    val fixture = Fixture(this)
+    val item = workItem("run").copy(agentId = "claude", running = false)
+    val detail = MutableStateFlow(DetailState(item, DetailSections.Pending))
+    fixture.details.details = mapOf(item.id to detail)
+    fixture.navigator.navigate(DetailRoute(item))
+    runCurrent()
+    val before = fixture.model.view.value
+    val lease = fixture.usage.leases.values.single()
+
+    detail.value = DetailState(item.copy(title = "Updated title", running = true), DetailSections.Pending)
+    runCurrent()
+
+    assertTrue(fixture.usage.demands.values.single().active)
+    assertSame(lease, fixture.usage.leases.values.single())
+    assertEquals(before.result, fixture.model.view.value.result)
+    assertEquals(before.popupDismissalToken, fixture.model.view.value.popupDismissalToken)
+  }
+
+  @Test
+  fun `window cancellation releases only its own demand and completes cleanup`() = runTest {
+    val fixture = Fixture(this)
+    runCurrent()
+    val demand = fixture.usage.demands.values.single()
+    fixture.usage.acquireDemand(demand.copy(ownerId = "other-window"))
+
+    fixture.windowJob.cancel()
+    runCurrent()
+
+    assertTrue(fixture.windowJob.isCancelled)
+    assertTrue(fixture.windowJob.isCompleted)
+    assertEquals(setOf("other-window"), fixture.usage.demands.keys)
+    assertFalse(fixture.model.view.value.demandEligible)
+  }
+
+  @Test
+  fun `observer failure releases the lease and reports unavailable state`() = runTest {
+    val fixture = Fixture(this)
+    val fail = CompletableDeferred<Unit>()
+    fixture.usage.observations = {
+      flow {
+        emit(fixture.usage.result)
+        fail.await()
+        throw IllegalStateException("source failed")
+      }
+    }
+    runCurrent()
+    assertTrue(fixture.model.view.value.demandEligible)
+
+    fail.complete(Unit)
+    runCurrent()
+
+    assertTrue(fixture.usage.demands.isEmpty())
+    assertFalse(fixture.model.view.value.demandEligible)
+    assertNull(fixture.model.view.value.result)
+    assertEquals("Usage observation failed", fixture.model.view.value.unavailableReason)
+    assertTrue("usage_demand_observation_failed" in fixture.diagnostics.categories)
+  }
+
+  @Test
+  fun `queued manual selection cannot publish on a new Settings entry`() = runTest {
+    val fixture = Fixture(this)
+    fixture.navigator.navigate(WorkRoute(null))
+    runCurrent()
+    fixture.model.chooseManualProvider("claude")
+    fixture.navigator.navigate(SettingsRoute(SettingsPageId.App))
+    Snapshot.sendApplyNotifications()
+    runCurrent()
+
+    assertNull(fixture.model.view.value.provider)
+    assertTrue(fixture.usage.demands.isEmpty())
+    assertFalse(fixture.usage.acquired.any { it.request.profile.provider == UsageProvider.Claude })
+  }
+
+  @Test
+  fun `late profile lookup cannot publish after a database switch`() = runTest {
+    val fixture = Fixture(this)
+    val lookup = CompletableDeferred<UsageProfileLookup>()
+    fixture.usage.profileObservations = {
+      flow { emit(withContext(NonCancellable) { lookup.await() }) }
+    }
+    runCurrent()
+
+    fixture.session.state.value = DatabaseSessionState.Open("/other-db", 2)
+    runCurrent()
+    lookup.complete(UsageProfileLookup(UsageProvider.Codex, null, 1))
+    runCurrent()
+
+    assertNull(fixture.model.view.value.provider)
+    assertTrue(fixture.usage.demands.isEmpty())
+    assertTrue(fixture.usage.acquired.isEmpty())
+  }
+
+  @Test
+  fun `live profile changes replace demand without context reselection`() = runTest {
+    val fixture = Fixture(this)
+    val profile = MutableStateFlow(UsageProfileLookup(UsageProvider.Claude, "/home/a", 1))
+    fixture.usage.profileObservations = { profile }
+    fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(
+      1, ChatAgent("claude", null, null), "chat-session", false,
+    )
+    runCurrent()
+    val originalLease = fixture.usage.leases.values.single()
+    profile.value = UsageProfileLookup(UsageProvider.Claude, "/home/b", 2)
+    runCurrent()
+
+    assertEquals("/home/b", fixture.usage.demands.values.single().request.profile.configurationReference)
+    assertTrue(originalLease !in fixture.usage.leases.values)
+  }
+
+  private class Fixture(test: TestScope) {
+    val windowJob = Job(test.backgroundScope.coroutineContext[Job])
+    val session = TestSession()
+    val navigator = WindowNavigator(session, SelectionHolder())
+    val chat = TestChat()
+    val usage = TestUsageRepository()
+    val diagnostics = RecordingDiagnostics()
+    val details = FakeWorkDetailRepository()
+    val model = UsageSidebarModel(
+      chat, FakeExecutionChatRepository(), details, navigator, session, usage, diagnostics,
+      WindowCoroutineScope(CoroutineScope(test.backgroundScope.coroutineContext + windowJob)),
+    ).apply {
+      setWindowFacts(visible = true, isMinimized = false, focused = true)
+      setSidebarFacts(settings = false, inlineVisible = true, drawerIsOpen = false)
+      setCardHostAttached(true)
+    }
+  }
+}
+
+private class TestSession : DatabaseSessionController {
+  override val state = MutableStateFlow<DatabaseSessionState>(DatabaseSessionState.Open("/db", 1))
+  override fun reopen() = Unit
+}
+
+private class TestChat : ChatCommands {
+  override val shownChatId = MutableStateFlow<String?>(null)
+  override val newTaskDraftOpen = MutableStateFlow(false)
+  override val newTaskOpenChats = MutableStateFlow(1)
+  override val selectedNewTaskUsageContext = MutableStateFlow<SelectedNewTaskUsageContext>(
+    SelectedNewTaskUsageContext.Ready(1, ChatAgent("codex", "actual-model", null), "chat-session", false),
+  )
+  override fun toggleChat(item: WorkItem?) = Unit
+  override fun toggleChatPane() = Unit
+  override fun runReviewAction(item: WorkItem, action: ReviewFindingsAction) = Unit
+  override fun runVerifyFixes(item: WorkItem, brief: String) = Unit
+  override fun prefillGoalIntake(repoRoot: String, branch: String, text: String) = false
+  override fun openChat(item: WorkItem) = Unit
+  override fun closeChats() = Unit
+}
+
+private class TestUsageRepository : UsageRepository {
+  val demands = mutableMapOf<String, UsageDemand>()
+  val acquired = mutableListOf<UsageDemand>()
+  val leases = mutableMapOf<String, Any>()
+  val reason = UsageUnavailableReason(UsageUnavailableCode.ProviderUnavailable)
+  val result = UsageResult.Unavailable(reason)
+  var lookup: suspend (UsageProvider) -> UsageProfileLookup = { UsageProfileLookup(it, null, 1) }
+  var profileObservations: (UsageProvider) -> Flow<UsageProfileLookup> = { provider ->
+    flow { emit(lookup(provider)) }
+  }
+  var observations: () -> Flow<UsageResult> = { MutableStateFlow(result) }
+
+  override suspend fun profileLookup(provider: UsageProvider, selectedProfile: String?, logicalSessionId: String?) = lookup(provider)
+  override fun observeProfileLookup(provider: UsageProvider, selectedProfile: String?, logicalSessionId: String?) =
+    profileObservations(provider)
+  override fun observe(request: UsageRequest) = observations()
+  override fun observeDemand(ownerId: String) = observations()
+  override fun acquireDemand(demand: UsageDemand): UsageDemandResult {
+    acquired += demand
+    demands[demand.ownerId] = demand
+    leases[demand.ownerId] = Any()
+    return UsageDemandResult.Acquired(demand)
+  }
+  override fun updateDemand(demand: UsageDemand): UsageDemandResult {
+    demands[demand.ownerId] = demand
+    return UsageDemandResult.Acquired(demand)
+  }
+  override fun releaseDemand(ownerId: String): UsageDemandResult {
+    demands.remove(ownerId)
+    leases.remove(ownerId)
+    return UsageDemandResult.Released
+  }
+  override fun refresh(request: UsageRequest) = UsageRefreshResult.Disabled(reason)
+  override fun checkDue(ownerId: String) = UsageRefreshResult.Disabled(reason)
+  override fun refreshAvailability(request: UsageRequest) = flowOf(UsageRefreshAvailability.Disabled(reason))
+  override fun recheckSignInAvailability(request: UsageRequest) = flowOf(UsageRefreshAvailability.Disabled(reason))
+  override fun recheckSignIn(request: UsageRequest) = UsageRefreshResult.Disabled(reason)
+  override fun sessionStatus(request: UsageRequest) = UsageSessionStatus.Unavailable
+}

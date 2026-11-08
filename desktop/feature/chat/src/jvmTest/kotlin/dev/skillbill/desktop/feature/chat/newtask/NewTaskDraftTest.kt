@@ -781,11 +781,13 @@ class NewTaskDraftTest {
     assertFalse(oldId in chat.saved)
     val newId = checkNotNull(draft.chat.value).sessionId
     assertNotEquals(oldId, newId)
+    assertEquals(newId, draft.chat.value!!.sessionIdFlow.value)
     assertFalse(chat.saved.getValue(newId).newTask!!.sessionEstablished)
     chat.events = { flowOf(ChatEvent.Completed) }
     draft.say("two")
     runCurrent()
     assertEquals(newId, chat.requests.last().sessionId)
+    assertEquals(newId, draft.chat.value!!.sessionIdFlow.value)
     assertTrue(chat.requests.last().firstTurn)
     draft.close()
   }

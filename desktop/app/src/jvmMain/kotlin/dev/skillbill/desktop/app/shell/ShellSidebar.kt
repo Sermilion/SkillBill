@@ -56,6 +56,7 @@ fun ShellSidebar(
   newTaskDraft: Boolean,
   newTaskOpenChats: Int,
   contributions: List<SidebarContribution>,
+  usage: @Composable () -> Unit = {},
   onNavigate: (AppRoute) -> Unit,
   onOpenCommandMenu: () -> Unit,
   onToggleSpecs: () -> Unit,
@@ -75,6 +76,7 @@ fun ShellSidebar(
       }
     },
     footer = {
+      usage()
       SidebarItem("Specs", onToggleSpecs, icon = LucideIcons.fileText, on = specsOpen, tooltip = "Specs pane", shortcut = "G S")
       SidebarItem("Terminal", onToggleTerminal, icon = LucideIcons.terminal, on = terminalOpen, tooltip = "Terminal", shortcut = "⌃ `")
       SidebarItem("Chats", onToggleChat, icon = LucideIcons.bot, on = chatOpen, tooltip = "Chat pane")

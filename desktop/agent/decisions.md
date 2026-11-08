@@ -3,6 +3,46 @@ Context: Work rows and run details consume WorkBuild, while design-system compon
 Decision: Map runtime builds to WorkBuild in core/data and convert WorkBuild to SbBuild in core/ui/status for both features.
 Reason: core/ui already depends on core/domain and core/designsystem and owns status mapping. This keeps the design system independent of domain models and gives both features one presentation conversion.
 
+## [2026-11-08] Keep production numeric usage disabled until identity is verified
+Context: SKILL-520 authorizes unavailable numeric sources. Codex capability reads work but lack a verified account/workspace binding; Claude events provide session status, and Cursor has no configured verified personal source.
+Decision: Keep production numeric admission closed. Separate profile lookups, verified subjects and session-only scopes; repository admission requires subject, auth-mode, profile/session generation and operation-reservation evidence. Never infer identity from paths, email, tokens or observed response extensions.
+Reason: A parseable quota response or configuration selection cannot establish whose allowance may be displayed. Repository checks preserve account isolation, and fixture readers exercise numeric contracts without authorizing production numbers.
+Revisit when: Separate work verifies the provider identity/source contract and supplies read-only real-account acceptance for numeric activation.
+
+## [2026-11-08] Keep bounded usage processes under the existing process authority
+Context: Codex capability reads need byte/message bounds and cancellable startup. OS process creation can return after the caller stops waiting, while chat has different output and lifetime contracts.
+Decision: Keep process APIs in ChatProcessLauncher.kt through an opt-in bounded mode. Hold one application-wide usage startup slot through owned cleanup, including abandoned late starts, and retain known descendant ownership after parent exit.
+Reason: Moving startup to IO alone cannot prevent a late-created orphan. Separate bounded contracts preserve chat behavior without expanding the process architecture allowlist; retry scheduling remains with the usage coordinator.
+
+## [2026-11-08] Share usage work across windows and close it at application exit
+Context: Several windows can observe one usage subject. A mounted host can be hidden to tray, minimized or inside a closed drawer while another window still needs usage.
+Decision: One app-scoped ProviderUsageRepository owns usage state and a supervised child scope. Each eligible window host owns only its lease; hiding, replacement, observation failure and disposal release it, while activity updates it in place. Application exit closes usage idempotently; tray hiding preserves the owner.
+Reason: Per-window collectors would duplicate reads and cooldowns. Lease release must preserve another window's observation, and cancelling the application scope to stop usage would also cancel unrelated execution work. Activity changes must not discard results or dismiss the popup.
+
+## [2026-11-08] Keep captured usage freshness separate from request scheduling
+Context: A visible subject can switch between active and idle demand after a successful observation, and partial updates can leave older fields untouched.
+Decision: Capture each accepted meter's expected interval for its stale boundary. Recompute request eligibility from current demand without rewriting retained observation times or freshness bases; reset expiry retains the value until another observation.
+Reason: Activity changes must not make old readings appear newly observed. Partial updates must preserve untouched ages, and passing a reset time does not prove the provider restored an allowance.
+
+## [2026-11-08] Bind Claude usage status to the live process generation
+Context: Claude processes survive multiple turns while settings can change. A replaced process can still deliver a late event or completion.
+Decision: Capture the logical session, effective profile and unique generation at process creation. Accept status and revocation only for that generation; revoke on stop and job completion, including cancellation before the lazy reader starts.
+Reason: Current settings do not identify the retained process. Generation checks prevent old events from attaching to another process and prevent an old close from clearing replacement status.
+
+## [2026-11-08] Bind usage context to the chat's executing agent and session
+Context: Same-provider picker changes can leave NewTaskChat executing with its retained profile and model. Cancelling an unstarted first turn rotates its logical session.
+Decision: The always-bound ChatWorkspace publishes the retained chat agent and observable session through ChatCommands. Empty drafts use their matching ready agent; unresolved or mismatched selection publishes no ready context. The repository maps logical sessions to captured process identity.
+Reason: Usage must describe the agent/session sent in ChatTurnRequest. Re-resolving picker settings could describe a different profile, while changing chat rebinding policy would exceed this feature's scope.
+
+## [2026-11-08] Keep usage presentation separate from numeric source admission
+Context: The sidebar must render typed usage while production sources provide no enabled numeric account data.
+Decision: Map admitted repository results to presentation-only design-system inputs in the app. Keep ranking, source eligibility and refresh control with their existing owners; preserve reported value text and clamp only visual progress.
+Reason: Numeric fixtures establish display behavior without proving provider capability. Unknown data must remain unknown, and a clamped track must not rewrite an over-limit value or imply request permission.
+
+## [2026-11-08] Bind usage popup focus to its current context
+Context: Route, provider or visibility changes can remove the usage trigger while a popup or deferred focus callback still exists.
+Decision: Reuse SbPopover and ShellLayer, bind expansion to the window model's context token, and return focus only to the current surviving requester while the popover composition remains active.
+Reason: Escape must close usage before underlying navigation. Context invalidation must release the layer without sending focus to a removed trigger.
 ## [2026-11-07] Preserve work-area composition across panel branches
 Context: Extracting ContentPanel splits ShellFrame's work area between a frameless drawer Box and a framed panel at the drawer breakpoint.
 Decision: Remember movable content and invoke it from both branches.

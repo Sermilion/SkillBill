@@ -63,6 +63,23 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Isolate Gradle user home
+        shell: bash
+        run: echo "GRADLE_USER_HOME=$RUNNER_TEMP/gradle-user-home" >> "$GITHUB_ENV"
+
+      - name: Check Gradle bootstrap retry policy
+        shell: bash
+        run: bash scripts/ci_gradle_bootstrap_test.sh
+
+      - name: Cache Gradle distributions and dependencies
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}
+
+      - name: Bootstrap Gradle distribution
+        shell: bash
+        run: bash scripts/ci_gradle_bootstrap.sh runtime-kotlin
+
       - name: Run Kotlin runtime checks
         run: (cd runtime-kotlin && ./gradlew check --no-build-cache)
 
