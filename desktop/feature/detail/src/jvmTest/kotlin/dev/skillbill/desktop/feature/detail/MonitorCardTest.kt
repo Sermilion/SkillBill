@@ -33,6 +33,25 @@ class MonitorCardTest {
     setContent { SkillBillTheme(reducedMotion = true) { MonitorCard(card.copy(ciCycles = listOf(older, finished)), null, now) } }
     onNodeWithText("Current check").assertExists()
     onNodeWithText("last poll 45s ago").assertDoesNotExist()
+    onNodeWithText("Cycle 1 · Success").assertExists()
+
+    val conflicted = finished.copy(outcome = "conflicted", checks = emptyList())
+    setContent { SkillBillTheme(reducedMotion = true) { MonitorCard(card.copy(ciCycles = listOf(older, conflicted)), null, now) } }
+    onNodeWithText("Current check").assertDoesNotExist()
+    onNodeWithText("Cycle 1 · Conflicted").assertExists()
+
+    val conflictedWithPassingCheck = conflicted.copy(checks = listOf(CiCheck("Passing check", "pass", null, null, null, null)))
+    setContent { SkillBillTheme(reducedMotion = true) { MonitorCard(card.copy(ciCycles = listOf(older, conflictedWithPassingCheck)), null, now) } }
+    onNodeWithText("Passing check").assertExists()
+    onNodeWithText("Cycle 1 · Conflicted").assertExists()
+
+    setContent { SkillBillTheme(reducedMotion = true) { MonitorCard(card.copy(ciCycles = listOf(older, conflictedWithPassingCheck, running)), null, now) } }
+    onNodeWithText("Cycle 1 · Conflicted").assertExists()
+    onNodeWithText("Cycle 2 · Running").assertExists()
+
+    val failed = running.copy(cycle = 3, finishedAt = now, outcome = "failure")
+    setContent { SkillBillTheme(reducedMotion = true) { MonitorCard(card.copy(ciCycles = listOf(older, conflictedWithPassingCheck, failed)), null, now) } }
+    onNodeWithText("Cycle 3 · Failure").assertExists()
   }
 
   @Test
