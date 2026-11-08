@@ -758,6 +758,7 @@ class ProviderUsageRepository(
           subject = UsageObservationSubject.Session(active.scope),
           collectionTime = active.observedAt,
           sourceObservationTime = null,
+          statusObservedAt = active.observedAt,
           source = UsageSource(active.profile.provider, UsageCapability.SessionStatusOnly),
           freshness = UsageFreshness.Current,
           refreshState = UsageRefreshState.Idle,

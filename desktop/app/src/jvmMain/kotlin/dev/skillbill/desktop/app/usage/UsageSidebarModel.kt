@@ -17,6 +17,9 @@ import dev.skillbill.desktop.core.domain.usage.model.UsageDemand
 import dev.skillbill.desktop.core.domain.usage.model.UsageModelSelection
 import dev.skillbill.desktop.core.domain.usage.model.UsageProvider
 import dev.skillbill.desktop.core.domain.usage.model.UsageRequest
+import dev.skillbill.desktop.core.domain.usage.model.UsageRefreshAvailability
+import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableCode
+import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableReason
 import dev.skillbill.desktop.core.domain.usage.model.UsageResult
 import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
@@ -34,7 +37,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
@@ -44,6 +50,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 data class UsageSidebarState(
   val provider: UsageProvider? = null,
@@ -71,14 +79,18 @@ class UsageSidebarModel(
   private val usage: UsageRepository,
   private val diagnostics: Diagnostics,
   windowScope: WindowCoroutineScope,
+  private val clock: Clock = Clock.System,
 ) {
   private val scope = CoroutineScope(windowScope.scope.coroutineContext + SupervisorJob(windowScope.scope.coroutineContext[Job]))
   private val ownerId = "window-${UUID.randomUUID()}"
   private val state = MutableStateFlow(UsageSidebarState())
   val view: StateFlow<UsageSidebarState> = state.asStateFlow()
+  private val presentationTimeState = MutableStateFlow(clock.now())
+  val presentationTime: StateFlow<Instant> = presentationTimeState.asStateFlow()
   private var manualAgentId = "codex"
   private var request: UsageRequest? = null
   private var demandJob: Job? = null
+  private var presentationTimeJob: Job? = null
   private var demandGeneration = 0L
   private var popupToken = 0L
   private var routeGeneration = 0L
@@ -171,10 +183,25 @@ class UsageSidebarModel(
     request?.let(usage::refresh)
   }
 
+  fun refreshAvailability(): Flow<UsageRefreshAvailability> = request?.let(usage::refreshAvailability)
+    ?: flowOf(UsageRefreshAvailability.Disabled(UsageUnavailableReason(UsageUnavailableCode.ProfileUnverified)))
+
+  fun recheckSignInAvailability(): Flow<UsageRefreshAvailability> = request?.let(usage::recheckSignInAvailability)
+    ?: flowOf(UsageRefreshAvailability.Disabled(UsageUnavailableReason(UsageUnavailableCode.ProfileUnverified)))
+
+  fun recheckSignIn() {
+    request?.let(usage::recheckSignIn)
+  }
+
+  fun recordDashboardOpenFailure() {
+    diagnostics.record("usage_dashboard_open_failed")
+  }
+
   fun release() {
     if (released) return
     released = true
     cardHostAttached = false
+    stopPresentationTime()
     replaceContext()
     scope.cancel()
   }
@@ -364,6 +391,7 @@ class UsageSidebarModel(
     val currentRequest = request
     val eligible = currentRequest != null && eligible() && state.value.provider != null
     state.value = state.value.copy(demandEligible = eligible)
+    reconcilePresentationTime(eligible)
     if (!eligible || currentRequest == null) {
       stopDemand()
       return
@@ -400,7 +428,32 @@ class UsageSidebarModel(
     }
   }
 
+  private fun reconcilePresentationTime(eligible: Boolean) {
+    if (!eligible) {
+      stopPresentationTime()
+      return
+    }
+    if (presentationTimeJob?.isActive == true) return
+    presentationTimeState.value = clock.now()
+    presentationTimeJob = scope.launch {
+      try {
+        while (true) {
+          delay(1_000)
+          presentationTimeState.value = clock.now()
+        }
+      } finally {
+        if (presentationTimeJob === coroutineContext[Job]) presentationTimeJob = null
+      }
+    }
+  }
+
+  private fun stopPresentationTime() {
+    presentationTimeJob?.cancel()
+    presentationTimeJob = null
+  }
+
   private fun stopDemand() {
+    stopPresentationTime()
     ++observationGeneration
     demandJob?.cancel()
     demandJob = null

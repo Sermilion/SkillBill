@@ -21,6 +21,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -57,6 +59,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.composite.runAfterCurrentEvent
 import dev.skillbill.desktop.core.designsystem.layeredShadow
 import dev.skillbill.desktop.core.designsystem.menuSpec
+import kotlinx.coroutines.isActive
 
 private val POPOVER_MIN_WIDTH = SkillBillSize.popoverMin
 private val POPOVER_MAX_WIDTH = SkillBillSize.popoverMax
@@ -68,7 +71,7 @@ private val POPOVER_WINDOW_MARGIN = 8.dp
 enum class SbPopoverPlacement { Auto, Above }
 
 @Composable
-fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset = DpOffset.Zero, width: Dp? = null, returnFocusTo: FocusRequester? = null, maxWidth: Dp = POPOVER_MAX_WIDTH, placement: SbPopoverPlacement = SbPopoverPlacement.Auto, arrowKeysMoveFocus: Boolean = true, specMenuKeyboard: Boolean = false, keyboardShortcuts: Map<Key, () -> Unit> = emptyMap(), content: @Composable ColumnScope.() -> Unit) {
+fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset = DpOffset.Zero, width: Dp? = null, returnFocusTo: FocusRequester? = null, maxWidth: Dp = POPOVER_MAX_WIDTH, placement: SbPopoverPlacement = SbPopoverPlacement.Auto, arrowKeysMoveFocus: Boolean = true, specMenuKeyboard: Boolean = false, keyboardShortcuts: Map<Key, () -> Unit> = emptyMap(), title: String = "Menu", content: @Composable ColumnScope.() -> Unit) {
   val density = LocalDensity.current
   val windowWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
   val windowHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
@@ -83,10 +86,19 @@ fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset 
   val gapPx = with(density) { 4.dp.roundToPx() }
   val marginPx = with(density) { POPOVER_WINDOW_MARGIN.roundToPx() }
   var wasExpanded by remember { mutableStateOf(false) }
+  val focusReturnScope = rememberCoroutineScope()
+  val currentReturnFocusTo by rememberUpdatedState(returnFocusTo)
+  val currentExpanded by rememberUpdatedState(expanded)
   val shouldReturnFocus = !expanded && wasExpanded
   SideEffect { wasExpanded = expanded }
   LaunchedEffect(expanded, shouldReturnFocus, returnFocusTo) {
-    if (shouldReturnFocus) returnFocusTo?.let { requester -> runAfterCurrentEvent { runCatching { requester.requestFocus() } } }
+    if (shouldReturnFocus) returnFocusTo?.let { requester ->
+      runAfterCurrentEvent {
+        if (focusReturnScope.isActive && !currentExpanded && currentReturnFocusTo === requester) {
+          runCatching { requester.requestFocus() }
+        }
+      }
+    }
   }
   if (expanded) {
     val shape = RoundedCornerShape(SkillBillRadius.md)
@@ -114,7 +126,7 @@ fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset 
             // The menu's 4px padding sits inside this 1px border.
             .padding(1.dp)
             .verticalScroll(rememberScrollState())
-            .semantics { paneTitle = "Menu" }
+            .semantics { paneTitle = title }
             .focusGroup()
             .focusProperties { onExit = { cancelFocusChange() } }
             .onPreviewKeyEvent {

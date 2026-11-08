@@ -31,6 +31,7 @@ import dev.skillbill.desktop.app.keyboard.ShortcutSheet
 import dev.skillbill.desktop.app.keyboard.KeyPress
 import dev.skillbill.desktop.app.keyboard.ShellKey
 import dev.skillbill.desktop.app.keyboard.toKeyPress
+import dev.skillbill.desktop.app.usage.UsageSidebar
 import dev.skillbill.desktop.core.designsystem.icon.skillBillIcon
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -254,6 +255,7 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
         newTaskDraft = newTaskDraft,
         newTaskOpenChats = newTaskOpenChats,
         contributions = window.entries.flatMap { it.sidebarItems },
+        usage = { UsageSidebar(window.usage) },
         onNavigate = navigate,
         onOpenCommandMenu = window.menu::toggle,
         onToggleSpecs = {
