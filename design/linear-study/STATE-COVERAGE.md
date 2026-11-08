@@ -30,9 +30,11 @@ The lifecycle table has 70 linked cells. N/A cells explain why the runtime does 
 
 The catalog includes the existing plan, validation, QA and Verify scenarios. It adds CI running and failing, a PR opened, clean and finding-bearing reviews, approval, pending Verify and per-type stalled displays. Goal QA has direct links for review needed, passed, not tested, cleanup needed, skipped, unfinished and older reports. Goal assessment has missing, running and open-finding examples.
 
-Nine "Goal QA live" rows cover goal QA while it runs, one per scenario: preparing the checkout, Compose UI tests, display up with no window, live, display restarting, restarted without capture, no display, round 2 after a fix, and finished. Each opens Goal finish on the QA tab.
+Nine "Goal QA live" rows cover goal QA while it runs, one per scenario: preparing the checkout, Compose UI tests, display up with no window, live, display restarting, restarted without capture, no display, round 2 after a fix, and finished. Each opens Goal finish on the qa phase card.
 
-Goal links ending in `/finish/qa` or `/finish/assessment` select Goal finish and its result tab. The wide pane shows the selected result before Execution, Runs and fixes, and spec files. The main document does not repeat it. When the pane is unavailable, the selected Goal finish row shows the same switch inline.
+Goal links ending in `/finish/qa` or `/finish/assessment` select Goal finish and open the qa or goal_assessment phase card; `/<subtask id or finish>/<phase>` opens any phase card. The wide pane shows the selected card before Execution, Runs and fixes, and spec files. The main document does not repeat it. When the pane is unavailable, the selected row shows the same tabs and card inline.
+
+Phase peek rows (design/phase-peek): Subtask blocked at validate, and Goal finish with QA running, qa_fix running, validate running, monitor cycle 2 and done. SKILL-417 subtasks 01 and 02 carry phase cards on the board.
 
 The catalog also links chat tab counts and overflow, the close confirmation, queued messages, all repository-picker scenarios, saved and CLI chat resume, no matching or saved chats, more than 30 saved chats, all seven device lists, and every spec control state and project read state.
 

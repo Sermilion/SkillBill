@@ -140,6 +140,35 @@
   assessing.assessment.findings[0].state = 'OPEN';
   const findings = extra('goal', 'terminal', 'Assessment open findings', { catalogTab: 'assessment' });
   findings.assessment.findings[0].state = 'OPEN';
+  /* Phase peek (design/phase-peek): a subtask stopped at validate, and Goal finish at five moments. `catalogPath` is the
+   * part of the link after the item id: the subtask or finish, then the phase to open. */
+  const P = D.PEEK;
+  const stuck = extra('goal', 'blocked', 'Subtask blocked at validate', { catalogPath: '3/validate', step: 'validate', exec: 'attempt 3', current: 3, done: 2, reason: 'The IntelliJ plugin test needs network access.' });
+  stuck.subtasks.forEach((x) => { x.blocked = null; });
+  stuck.subtasks[1].status = 'complete';
+  stuck.subtasks[2].status = 'blocked';
+  stuck.subtasks[2].phases = { cards: P.sub3, counts: { validate: 'attempt 3' }, states: Object.assign(Object.fromEntries(D.PHASE_ORDER.map((id, i) => [id, i < D.PHASE_ORDER.indexOf('validate') ? 'done' : ''])), { validate: 'wait' }) };
+  stuck.pipeline = { done: D.PHASE_ORDER.slice(0, D.PHASE_ORDER.indexOf('validate')), now: 'validate' };
+  function finishExample(label, phase, states, cards, o) {
+    const it = extra('goal', o.state || 'active', label, { catalogPath: `finish/${phase}`, title: 'Keep QA live preview working across display crashes', branch: 'feat/SKILL-512-qa-live-preview', step: phase, summary: o.summary, agent: 'codex', model: 'gpt-6.1-sol', effort: 'high' });
+    it.subtasks.forEach((x) => { if (x.status !== 'completed_no_change') x.status = 'complete'; x.blocked = null; delete x.phases; });
+    it.done = it.total; it.current = null; delete it.subMs; it.exec = null;
+    it.pipeline = { done: D.PHASE_ORDER.slice(), now: null };
+    const full = Object.fromEntries(D.GOAL_FINISH.map((id) => [id, '']));
+    it.finish = { states: Object.assign(full, states), counts: o.counts || {}, cards };
+    it.finishDone = D.GOAL_FINISH.every((id) => ['done', 'skipped'].includes(it.finish.states[id]));
+    delete it.goalQa; delete it.qaLive; delete it.assessment;
+    it.assessment = clone(P.assessment);
+    if (o.goalQa) it.goalQa = clone(o.goalQa);
+    if (o.qaLive) it.qaLive = clone(o.qaLive);
+    return it;
+  }
+  const F = P.finish;
+  finishExample('Goal finish, QA running', 'qa', { goal_assessment: 'done', qa: 'now' }, { goal_assessment: F.assess, qa: F.qaLive }, { counts: { qa: 'round 1' }, qaLive: P.qaLive, summary: 'goal QA: exercise running app' });
+  finishExample('Goal finish, qa_fix running', 'qa_fix', { goal_assessment: 'done', qa: 'done', qa_fix: 'now' }, { goal_assessment: F.assess, qa: F.qaRound1, qa_fix: F.qaFixNow }, { counts: { qa: 'round 1' }, goalQa: P.qa.round1, summary: 'qa_fix: fixing QA-1' });
+  finishExample('Goal finish, validate running', 'validate', { goal_assessment: 'done', qa: 'done', qa_fix: 'done', validate: 'now' }, { goal_assessment: F.assess, qa: F.qa, qa_fix: F.qaFix, validate: F.valNow }, { counts: { qa: 'round 2' }, goalQa: P.qa.fixed, summary: 'validate: compose screenshot tests' });
+  finishExample('Goal finish, monitor cycle 2', 'monitor', { goal_assessment: 'done', qa: 'done', qa_fix: 'done', validate: 'done', pr: 'done', monitor: 'now', monitor_fix: 'done' }, { goal_assessment: F.assess, qa: F.qa, qa_fix: F.qaFix, validate: F.valDone, pr: F.pr, monitor: F.monNow, monitor_fix: F.monFix }, { counts: { qa: 'round 2', monitor: 'cycle 2' }, goalQa: P.qa.fixed, summary: 'monitor: waiting for CI on #482' });
+  finishExample('Goal finish, done', 'monitor', { goal_assessment: 'done', qa: 'done', qa_fix: 'skipped', validate: 'done', pr: 'done', monitor: 'done', monitor_fix: 'skipped' }, { goal_assessment: F.assess, qa: F.qaClean, validate: F.valDone, pr: F.pr, monitor: F.monDone }, { state: 'terminal', goalQa: P.qa.clean, summary: 'Goal finished. CI passed.' });
   const known = [
     ['Goal', 'Completed with QA and assessment', 'SKILL-416'],
     ['Goal', 'Operator decision', 'NEWS-176'],
@@ -162,8 +191,8 @@
     const S = window.SB, esc = S.esc, catalog = D.STATE_CATALOG;
     const link = (id, label, aria) => {
       const item = X.lookup(id);
-      const tab = item.catalogTab || (id === 'SKILL-416' ? 'qa' : null);
-      return `<a data-state-link href="#detail/${encodeURIComponent(id)}${tab ? `/finish/${tab}` : ''}" aria-label="${esc(aria || label)}">${esc(label)}</a>`;
+      const tab = item.catalogPath || (item.catalogTab || id === 'SKILL-416' ? `finish/${item.catalogTab === 'assessment' ? 'goal_assessment' : 'qa'}` : null);
+      return `<a data-state-link href="#detail/${encodeURIComponent(id)}${tab ? `/${tab}` : ''}" aria-label="${esc(aria || label)}">${esc(label)}</a>`;
     };
     const location = (id) => {
       const item = X.lookup(id);
@@ -195,7 +224,7 @@
       <h2 class="doc-h2">Display states and result variants</h2><p class="t-muted">A completed run can still have findings, missing coverage or failing CI. These examples keep lifecycle and result separate. Verify awaiting confirmation belongs in Needs you.</p>
       <div class="doc-state-table"><table><caption>Work display states and outcomes</caption><thead><tr><th scope="col">Work type</th><th scope="col">Example</th><th scope="col">Location</th></tr></thead><tbody>${variants}</tbody></table></div>
       <h2 class="doc-h2">Chats, devices and specs</h2><div class="doc-state-table"><table><caption>Interactive screen states</caption><thead><tr><th scope="col">View</th><th scope="col">Example</th></tr></thead><tbody>${chats}</tbody></table></div>
-      <h2 class="doc-h2">Source inventory</h2><p class="t-muted">WorkModels.kt and StatusKindMapping.kt define the app's lifecycle and display vocabulary. IdeStatusPolicy.kt defines lifecycle conversion and board membership. PhaseCommand.kt discovers standalone phases from SkeletonDefinition. The seven Operation implementations declare their IDs. VerifyRunState.kt defines Verify's detail states, and DetailsPane.kt owns the Goal finish switch.</p>
+      <h2 class="doc-h2">Source inventory</h2><p class="t-muted">WorkModels.kt and StatusKindMapping.kt define the app's lifecycle and display vocabulary. IdeStatusPolicy.kt defines lifecycle conversion and board membership. PhaseCommand.kt discovers standalone phases from SkeletonDefinition. The seven Operation implementations declare their IDs. VerifyRunState.kt defines Verify's detail states, and DetailsPane.kt owns the Goal finish switch, which this design replaces with phase tabs (design/phase-peek).</p>
       <p class="t-muted">Source paths and checks for this pass are recorded in STATE-COVERAGE.md.</p>
     </div></div>`;
   };

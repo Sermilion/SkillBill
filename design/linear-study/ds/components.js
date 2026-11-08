@@ -110,6 +110,8 @@
     qaCopy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
     qaOpen: '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
     star: '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>',
+    pr: '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M6 8.5v7M18 15.5V9a3 3 0 0 0-3-3h-4"/><path d="m13 3.5-2.5 2.5L13 8.5"/>',
+    list: '<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',
     flag: '<path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/>',
   };
   function Icon(name, size) {
@@ -503,11 +505,92 @@
     ]);
     const passes = (o.reviews || []).map((p) => `<div class="sb-insp-pass"><div class="sb-insp-line"><b>Pass ${p.n}</b><span>· ${esc(p.verdict)}</span><span class="tnum">· ${p.open} unresolved</span></div>${p.findings.length ? `<div class="sb-insp-finds">${p.findings.map(([sev, text, where]) => FindingRow({ compact: true, severity: sev, title: text, meta: `<span class="mono" title="${esc(where)}">${esc(shortPath(where))}</span>` })).join('')}</div>` : ''}</div>`).join('');
     const review = `<div class="sb-insp-sec"><div class="sb-insp-hd">Review</div>${passes || '<span class="sb-insp-none">No review yet</span>'}${o.audit ? `<div class="sb-insp-line"><b>Audit</b><span>· ${esc(o.audit.verdict)}</span></div>${o.audit.summary ? ExpandableText({ text: o.audit.summary, cls: 'sb-insp-note' }) : ''}` : ''}</div>`;
-    return `<div class="sb-insp">${o.title ? `<div class="sb-insp-ti">${esc(o.title)}</div>` : ''}${o.blocked ? Hint({ tone: 'warn', text: o.blocked, fold: true }) : ''}${props}${review}</div>`;
+    /* `phases` (the Phases tabs and their PhasePeek card) follows the properties. When the review phase has a card, `noReview`
+     * drops the Review block: its passes and findings live in that card. */
+    return `<div class="sb-insp">${o.title ? `<div class="sb-insp-ti">${esc(o.title)}</div>` : ''}${o.blocked ? Hint({ tone: 'warn', text: o.blocked, fold: true }) : ''}${props}${o.phases || ''}${o.noReview ? '' : review}</div>`;
   }
-  function PhasePipeline(steps) {
+  /* With `o.tabs` (the details pane) the steps are tabs: a step with `act` opens its PhasePeek card, `selected` draws a ring
+   * outside the state color, a running step leads with a breathing dot and a step without `act` stays inert. Arrow keys,
+   * Home and End move between the steps that open (main.js). `skipped` strikes the label through. */
+  function PhasePipeline(steps, o) {
     track('PhasePipeline');
-    return `<div class="sb-pipe">${steps.map((s, i) => (i && !s.goalStart ? '<span class="sb-pipe-sep"></span>' : (s.goalStart ? '<span style="width:10px"></span>' : '')) + `<span class="${cx('sb-step', s.state, s.goal && 'goal')}"${tipAttrs(s.tip)}>${s.state === 'done' ? Icon('check') : ''}${esc(s.label)}${s.count ? ` · ${esc(s.count)}` : ''}</span>`).join('')}</div>`;
+    o = o || {};
+    const step = (s) => {
+      const lead = s.state === 'done' ? Icon('check') : o.tabs && s.state === 'now' ? '<span class="sb-step-live"></span>' : '';
+      const label = `${lead}${esc(s.label)}${s.count ? ` · ${esc(s.count)}` : ''}`;
+      if (!o.tabs) return `<span class="${cx('sb-step', s.state, s.goal && 'goal')}"${tipAttrs(s.tip)}>${label}</span>`;
+      const can = !!s.act;
+      return `<button type="button" role="tab" class="${cx('sb-step', 'goal', s.state, can && 'can')}" aria-selected="${!!(can && s.selected)}" tabindex="${can && s.selected ? 0 : -1}"${can ? act(s.act, s.arg) : ' aria-disabled="true"'} data-peek-pill="${esc(s.label)}" title="${esc(s.tip || (can ? `Show ${s.label}` : s.state === 'skipped' ? `${s.label} was skipped` : `${s.label} has not started`))}">${label}</button>`;
+    };
+    return `<div class="${cx('sb-pipe', o.tabs && 'sb-pipe--tabs')}"${o.tabs ? ` role="tablist" aria-label="${esc(o.label || 'Phases')}"` : ''}>${steps.map((s, i) => (i && !s.goalStart ? '<span class="sb-pipe-sep"></span>' : (s.goalStart ? '<span style="width:10px"></span>' : '')) + step(s)).join('')}</div>`;
+  }
+
+  /* ---------- Phase peek: the card under the details-pane phase tabs (design/phase-peek) ---------- */
+  const PEEK_TONE = { done: 'var(--st-done)', now: 'var(--st-active)', fail: 'var(--st-failed)', wait: 'var(--st-blocked)', skipped: 'var(--fg-faint)', pending: 'var(--st-pending)' };
+  const PEEK_WORD = { done: 'Done', now: 'Running', fail: 'Failed', wait: 'Blocked', skipped: 'Skipped', pending: 'Pending' };
+  const PEEK_STATUS = { done: 'done', now: 'active', fail: 'failed', wait: 'blocked', skipped: 'skipped', pending: 'pending' };
+  /* The selected phase: a header (status, title, phase id, state word, agent and model, round, time, duration) with an edge
+   * in `tone` (defaults to the state), an optional tinted `why` strip, then `parts` (PeekPart HTML), an Activity timeline
+   * and a `foot` button that opens the phase's full screen. */
+  function PhasePeek(o) {
+    track('PhasePeek');
+    const tone = o.tone || o.state;
+    const meta = [
+      o.agent ? `<span class="who">${o.agent}${esc(o.model || '')}</span>` : '',
+      o.round ? `<span>${esc(o.round)}</span>` : '', o.when ? `<span>${esc(o.when)}</span>` : '',
+    ].filter(Boolean).join('<i>·</i>');
+    const head = `<div class="sb-pk-hd" style="--tone:${PEEK_TONE[tone] || PEEK_TONE.pending}"><span class="st">${StatusIcon(PEEK_STATUS[o.state] || 'pending', 0.5)}</span><span class="nm">${esc(o.title)}<span class="id">${esc(o.id)}</span></span><span class="w">${esc(o.word || PEEK_WORD[o.state] || '')}</span><div class="mt">${meta}</div><span class="du">${esc(o.dur || '')}</span></div>`;
+    const why = o.why ? `<div class="sb-pk-part sb-pk-why" style="--tone:${PEEK_TONE[tone] || PEEK_TONE.pending}"><div class="sb-pk-tx">${o.why}</div></div>` : '';
+    const foot = o.foot ? `<div class="sb-pk-ft"><button type="button" class="sb-pk-btn"${act(o.foot.act, o.foot.arg)}>${esc(o.foot.label)}${Icon(o.foot.external ? 'external' : 'arrowRight', 'xs')}</button></div>` : '';
+    return `<div class="sb-pk" role="tabpanel" aria-label="${esc(o.title)}">${head}${why}${join(o.parts)}${o.activity && o.activity.length ? PeekTimeline(o.activity) : ''}${foot}</div>`;
+  }
+  /* One part of a PhasePeek: a small caps title with an `end` slot (text or a control), then `body`. `live` tints it for Now. */
+  function PeekPart(o) {
+    track('PeekPart');
+    return `<div class="${cx('sb-pk-part', o.live && 'is-live')}"><div class="${cx('sb-pk-ti', o.control && 'has-ctl')}">${esc(o.title)}${o.end ? `<span class="end">${o.end}</span>` : ''}</div>${join(o.body)}</div>`;
+  }
+  /* A line in Now: a pulse (`live`) or an icon, the text (HTML the caller escaped), an optional `keep` tail that never
+   * truncates (+12 −4) and how long ago. */
+  function PeekSignal(o) {
+    track('PeekSignal');
+    const tx = o.keep ? `<span class="tx split"><span class="trunc">${o.html}</span><span class="keep">${o.keep}</span></span>` : `<span class="${cx('tx', o.wrap && 'wrap')}">${o.html}</span>`;
+    return `<div class="sb-pk-sig"><span class="lead">${o.live ? '<span class="pulse"></span>' : Icon(o.icon || 'pencil', 'xs')}</span>${tx}<span class="ago">${esc(o.ago || '')}</span></div>`;
+  }
+  function PeekCmd(text) { track('PeekCmd'); return `<div class="sb-pk-cmd">${Icon('terminal', 'xs')}<span>${esc(text)}</span></div>`; }
+  /* Equal cells, one per check: ok, bad, warn, run (breathing) or empty. */
+  function PeekCells(cells) { track('PeekCells'); return `<div class="sb-pk-cells">${cells.map((c) => `<i class="${esc(c)}"></i>`).join('')}</div>`; }
+  /* A row of numbers: [value, label, tone (ok, bad, warn)]. */
+  function PeekStats(items) {
+    track('PeekStats');
+    return `<div class="sb-pk-stats" style="--n:${items.length}">${items.map(([v, l, t]) => `<div><b class="${esc(t || '')}">${esc(v)}</b><span>${esc(l)}</span></div>`).join('')}</div>`;
+  }
+  /* What a phase produced: an icon, the text (HTML), an `end` note. With `act` the row is a button with an arrow (or the
+   * external mark) on hover. */
+  function PeekOutput(o) {
+    track('PeekOutput');
+    const inner = `${Icon(o.icon || 'file', 'xs')}<span class="tx">${o.html}</span><span class="end">${esc(o.end || '')}${o.act ? Icon(o.external ? 'external' : 'arrowRight', 'xs') : ''}</span>`;
+    return o.act ? `<button type="button" class="sb-pk-out is-btn"${act(o.act, o.arg)}${o.tip ? ` title="${esc(o.tip)}"` : ''}>${inner}</button>` : `<div class="sb-pk-out"${o.tip ? ` title="${esc(o.tip)}"` : ''}>${inner}</div>`;
+  }
+  const PEEK_SEV = { blocker: 'var(--st-failed)', major: 'var(--st-blocked)', high: 'var(--st-blocked)', medium: 'var(--data-1)', minor: 'var(--fg-muted)', low: 'var(--fg-muted)', nit: 'var(--fg-faint)' };
+  const PEEK_FSTATE = { fixed: ['Fixed', 'var(--st-done)'], open: ['Open', 'var(--fg-faint)'], refuted: ['Refuted', 'var(--fg-faint)'] };
+  /* A one-line finding: severity, title (truncated, full in the tooltip) and its state. */
+  function PeekFinding(o) {
+    track('PeekFinding');
+    const f = PEEK_FSTATE[o.state];
+    return `<div class="sb-pk-find" style="--c:${PEEK_SEV[o.severity] || 'var(--fg-faint)'}"><span class="sev">${esc(o.severity)}</span><span class="tx" title="${esc(o.title)}">${esc(o.title)}</span>${f ? `<span class="fs" style="--c:${f[1]}">${f[0]}</span>` : '<span></span>'}</div>`;
+  }
+  /* A check or criterion: ok (green check), bad (red cross), run (spinner) or waiting (ring); the name, its command and time. */
+  function PeekCheck(o) {
+    track('PeekCheck');
+    const g = o.state === 'ok' ? `<span class="g ok">${Icon('check', 'xs')}</span>` : o.state === 'bad' ? `<span class="g bad">${Icon('x', 'xs')}</span>` : o.state === 'run' ? '<span class="spin"></span>' : '<span class="ring"></span>';
+    return `<div class="sb-pk-chk"${o.cmd ? ` title="${esc(o.cmd)}"` : ''}>${g}<span class="tx">${esc(o.name)}${o.cmd ? `<em>${esc(o.cmd)}</em>` : ''}</span><span class="w">${esc(o.time || '')}</span></div>`;
+  }
+  /* Label and value pairs on one wrapping line ("Exit all findings resolved"). Values are HTML. */
+  function PeekFacts(items) { track('PeekFacts'); return `<div class="sb-pk-facts">${items.map(([k, v]) => `<span>${esc(k)} <b>${v}</b></span>`).join('')}</div>`; }
+  /* Activity: [time, html, tone] rows on a thin rail; tone colors the dot (now breathes). */
+  function PeekTimeline(rows) {
+    track('PeekTimeline');
+    return `<div class="sb-pk-part"><div class="sb-pk-ti">Activity</div><div class="sb-pk-tl">${rows.map(([t, html, tone]) => `<div class="${cx('ev', tone === 'now' && 'now')}"><span class="dot" style="--c:${PEEK_TONE[tone] || 'var(--border-strong)'}"></span><span class="tx">${html}</span><span class="t">${esc(t)}</span></div>`).join('')}</div></div>`;
   }
   /* Titled group in the details pane: 11.5px faint title. With `status` ({ state }) the title leads with that StatusIcon
    * and ends with the state's word in its color ("Blocked"); `end` is a free end slot. */
@@ -599,7 +682,7 @@
   function FindingRow(o) {
     track('FindingRow');
     const chips = (o.chips || []).filter(Boolean);
-    return `<div class="${cx('sb-finding', o.compact && 'sb-finding--compact', o.lead != null && 'has-lead')}">${o.lead != null ? `<span class="sb-finding-sel">${o.lead}</span>` : ''}${o.severity ? `<span class="sb-finding-sev" style="--c:${o.sevColor || SEVERITY[o.severity] || 'var(--fg-faint)'}">${esc(o.severity)}</span>` : ''}${o.refHtml || (o.ref ? IdTag(o.ref) : '')}<div class="sb-finding-tx">${ExpandableText({ text: o.title, cls: 'sb-finding-ti' })}${o.meta ? (o.compact ? `<span>${o.meta}</span>` : ExpandableText({ html: o.meta, cls: 'sb-finding-mt' })) : ''}${chips.length ? `<div class="sb-qchips">${chips.join('')}</div>` : ''}${overlap(o.hint)}</div>${o.state ? Label({ text: o.state, color: o.stateColor || 'var(--fg-faint)', dot: true }) : ''}${o.end ? `<span class="sb-finding-end">${o.end}</span>` : ''}</div>`;
+    return `<div class="${cx('sb-finding', o.compact && 'sb-finding--compact', o.stacked && 'sb-finding--stacked', o.lead != null && 'has-lead')}">${o.lead != null ? `<span class="sb-finding-sel">${o.lead}</span>` : ''}${o.severity ? `<span class="sb-finding-sev" style="--c:${o.sevColor || SEVERITY[o.severity] || 'var(--fg-faint)'}">${esc(o.severity)}</span>` : ''}${o.refHtml || (o.ref ? IdTag(o.ref) : '')}<div class="sb-finding-tx">${ExpandableText({ text: o.title, cls: 'sb-finding-ti' })}${o.meta ? (o.compact ? `<span>${o.meta}</span>` : ExpandableText({ html: o.meta, cls: 'sb-finding-mt' })) : ''}${chips.length ? `<div class="sb-qchips">${chips.join('')}</div>` : ''}${overlap(o.hint)}</div>${o.state ? Label({ text: o.state, color: o.stateColor || 'var(--fg-faint)', dot: true }) : ''}${o.end ? `<span class="sb-finding-end">${o.end}</span>` : ''}</div>`;
   }
 
   /* ---------- Activity feed: one line per recorded event, oldest first, icons joined by a connector ---------- */
@@ -1441,6 +1524,7 @@
     Toast, ToastStack, Callout, Hint, EmptyState, SidebarItem, SidebarSection, RepoIcon, Sidebar, WorkspaceSwitcher, UsageWindow, UsageCard, UsagePanel,
     ViewHeader, Pager, GroupHeader, ListRow, SidePane, ReasonBlock, ExpandableText, foldButton, Checklist, FindingRow, EvidenceRow, EvidenceToggle, TerminalPane,
     DocHeader, Section, Box, MetricStrip, SubtaskRow, SubtaskList, SubtaskChip, SubtaskInspector, PhasePipeline,
+    PhasePeek, PeekPart, PeekSignal, PeekCmd, PeekCells, PeekStats, PeekOutput, PeekFinding, PeekCheck, PeekFacts, PeekTimeline,
     PaneSection, Breakdown, ActivityFeed, TreeRow, SettingsHeader, SettingsGroup, SettingRow, TierBadge,
     ConfigRow, TrayPopover,
     ChatStatusMark, ChatTabs, SuggestionChip, ChatMessage, ChatTranscript, ChatPill, Composer, StepLine, NewTaskHome,
