@@ -1,6 +1,8 @@
 package dev.skillbill.desktop.feature.chat
 
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import java.io.File
+import java.io.IOException
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.time.Instant
@@ -12,8 +14,24 @@ private val LEADING_IMAGE = Regex("""^\s*(/\S+\.(png|jpe?g|gif|webp))\s*""", Reg
 private val WHITESPACE = Regex("\\s+")
 
 /** The saved New Task drafts of the repository at [repositoryRoot], in input order; none when no repository is picked. */
-internal fun resumableDrafts(saved: List<ChatHistoryEntry>, repositoryRoot: String?): List<ChatHistoryEntry> =
-  if (repositoryRoot == null) emptyList() else saved.filter { it.newTask?.repositoryRoot == repositoryRoot }
+internal fun resumableDrafts(saved: List<ChatHistoryEntry>, repositoryRoot: String?): List<ChatHistoryEntry> {
+  if (repositoryRoot == null) return emptyList()
+  val canonicalRoots = mutableMapOf<String, String>()
+  fun resolved(root: String): String = canonicalRoots.getOrPut(root) { canonicalRepositoryRoot(root) }
+  val selectedRoot = resolved(repositoryRoot)
+  return saved.filter { entry -> entry.newTask?.repositoryRoot?.let { resolved(it) == selectedRoot } == true }
+}
+
+private fun canonicalRepositoryRoot(root: String): String = try {
+  File(root).canonicalPath
+} catch (error: IOException) {
+  System.getLogger("skillbill.chat.resume").log(
+    System.Logger.Level.WARNING,
+    "Could not resolve saved-chat repository path; using its absolute normalized path: $root",
+    error,
+  )
+  File(root).absoluteFile.normalize().path
+}
 
 /** The screenshot paths at the start of [text], in order, and the text after them. A path later in the text stays in it. */
 internal fun splitLeadingImages(text: String): Pair<List<String>, String> {

@@ -44,6 +44,11 @@ Context: Recent chats and Needs you each own selection. The brief has Up, Down, 
 Decision: The card consumes Up, Down and Enter, and consumes Delete only for a chat absent from the open sessions. Digits, Ctrl, Meta, Alt, open-chat Delete and run Delete pass through. Row and discard controls stay outside Tab traversal, and Recent chats targets Needs you when that card exists.
 Reason: Digit keys are not row shortcuts. Delete discards only a saved chat that is not already open. An open chat resumes onto its tab, and a run has no discard.
 
+## [2026-11-08] Resolve repository aliases when listing saved chats
+Context: Older chats can store a repository through a different filesystem alias than the selected repository.
+Decision: Recent chats and the New Task resume palette compare canonical directory paths, resolving each distinct path once per listing. Resolution failures log a warning and use absolute normalized paths. Saved records retain their original paths.
+Reason: Directory aliases must show the same chats without including other repositories or rewriting saved conversations.
+
 ## [2026-11-07] List Recent chats with the resume palette's repository filter
 Context: The home listed saved chats across repositories, while the resume palette was already limited to the picked repository.
 Decision: Recent chats uses resumableDrafts for the selected chat's repository root and hides when that list is empty, including when no repository is selected. Search chats still opens that scoped palette.
