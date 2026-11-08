@@ -23,7 +23,23 @@ fun executionScopeTarget(workId: String, baseline: ChangeBaseline): ChangeScopeT
   rangesSupported = false,
 )
 
+fun chatScopeTarget(
+  sessionId: String,
+  repositoryRoot: String,
+  baseline: ChatChangesBaseline,
+  timeline: ChangeScopeTimeline,
+): ChangeScopeTarget = ChangeScopeTarget(
+  workId = "chat:" + sessionId,
+  worktreeRoot = repositoryRoot,
+  allBaseline = ChangeBaseline.RunStart(repositoryRoot, baseline.stashSha ?: baseline.headSha, baseline.untrackedPaths),
+  subtasks = emptyList(),
+  rangesSupported = false,
+  timeline = timeline,
+  chat = true,
+)
+
 fun availableScopes(target: ChangeScopeTarget): Set<ScopeKind> {
+  if (target.chat) return setOf(ScopeKind.All, ScopeKind.Uncommitted, ScopeKind.Commits)
   val scopes = if (target.subtasks.isNotEmpty() && target.rangesSupported && target.timeline != null) {
     ScopeKind.entries.toSet()
   } else {
