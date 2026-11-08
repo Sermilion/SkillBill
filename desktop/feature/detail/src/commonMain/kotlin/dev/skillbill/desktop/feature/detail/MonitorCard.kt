@@ -47,7 +47,7 @@ internal fun LinkedCiCheck(check: CiCheck) {
 @Composable
 internal fun MonitorCard(card: PhaseCard, url: String?, now: Instant) {
   val uri = LocalUriHandler.current
-  val latest = card.ciCycles.maxByOrNull { it.cycle }
+  val latest = card.ciCycles.lastOrNull()
   PhasePeek(
     title = "Monitor", phaseId = card.phaseId, state = card.state.toPeekState(), why = card.blockedReason,
     footer = url?.let { PeekFooter("Open checks on GitHub", true) { uri.openUri("${it.trimEnd('/')}/checks") } },
@@ -56,7 +56,7 @@ internal fun MonitorCard(card: PhaseCard, url: String?, now: Instant) {
       card.pullRequestNumber?.let { "CI on #$it" } ?: "CI checks",
       end = latest?.takeIf { it.finishedAt == null }?.let { lastPollLabel(it.observedAt, now) },
     ) { latest?.checks?.forEach { LinkedCiCheck(it) } }
-    val earlier = card.ciCycles.filter { it != latest }.takeLast(5)
+    val earlier = card.ciCycles.dropLast(1).takeLast(5)
     if (earlier.isNotEmpty()) PeekTimeline(earlier.map {
       PeekTimelineRow(formatInstant(it.finishedAt ?: it.observedAt, "HH:mm"), "Cycle ${it.cycle} · ${it.outcome?.let(::humanized) ?: "Running"}", null)
     })
