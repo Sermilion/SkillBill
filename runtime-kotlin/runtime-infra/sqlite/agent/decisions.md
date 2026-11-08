@@ -1,3 +1,8 @@
+## [2026-11-08] Average build durations across the retained history
+Context: The operator requested an average build-duration estimate for every platform pack.
+Decision: Use the arithmetic mean of the newest 20 settled builds per primary repository identity and command, rounded down to milliseconds. Reuse the existing retained rows without changing their schema or deleting history. The shared store and build strip apply this policy to every manifest-declared build tool.
+Reason: Each completion updates the estimate while separate commands and repositories keep separate histories. The first build has no estimate and uses an indeterminate indicator.
+
 ## [2026-11-08] Store build instants as fixed-width UTC milliseconds
 Context: SQLite compares build start, end and history cutoff timestamps as text for ordering and retention.
 Decision: Normalize all build instants and cutoffs to fixed-width UTC text truncated to milliseconds.

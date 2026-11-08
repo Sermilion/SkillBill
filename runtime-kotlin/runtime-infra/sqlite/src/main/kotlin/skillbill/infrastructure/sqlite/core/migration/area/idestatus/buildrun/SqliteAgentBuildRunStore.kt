@@ -107,13 +107,8 @@ internal class SqliteAgentBuildRunStore(
           }
         }
       }
-    return AgentBuildHistory(usualMs = medianMs(settled.map { it.durationMs }), previous = settled.firstOrNull())
+    return AgentBuildHistory(usualMs = averageMs(settled.map { it.durationMs }), previous = settled.firstOrNull())
   }
 
-  private fun medianMs(durations: List<Long>): Long? {
-    if (durations.isEmpty()) return null
-    val sorted = durations.sorted()
-    val middle = sorted.size / 2
-    return if (sorted.size % 2 == 1) sorted[middle] else (sorted[middle - 1] + sorted[middle]) / 2
-  }
+  private fun averageMs(durations: List<Long>): Long? = if (durations.isEmpty()) null else durations.average().toLong()
 }

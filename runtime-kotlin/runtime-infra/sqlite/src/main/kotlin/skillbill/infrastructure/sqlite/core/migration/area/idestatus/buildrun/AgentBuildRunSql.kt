@@ -27,8 +27,6 @@ private const val BUILD_SOURCE = "agent-build-runs"
 
 private const val RETAINED_SETTLED_BUILDS: Int = 20
 
-private const val HISTORY_WINDOW: Int = 5
-
 private val BUILD_INSTANT_FORMAT: DateTimeFormatter =
   DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC)
 
@@ -54,7 +52,8 @@ internal const val ABANDON_OPEN_SQL: String =
 
 internal const val HISTORY_SQL: String =
   "SELECT $OUTCOME, $STARTED_AT, $ENDED_AT FROM $TABLE WHERE $REPOSITORY_IDENTITY = ? AND $COMMAND = ? " +
-    "AND $ENDED_AT IS NOT NULL AND $STARTED_AT < ? ORDER BY $ENDED_AT DESC, $BUILD_ID DESC LIMIT $HISTORY_WINDOW"
+    "AND $ENDED_AT IS NOT NULL AND $STARTED_AT < ? ORDER BY $ENDED_AT DESC, $BUILD_ID DESC " +
+    "LIMIT $RETAINED_SETTLED_BUILDS"
 
 internal fun latestForRunSql(count: Int): String {
   val placeholders = List(count) { "?" }.joinToString()

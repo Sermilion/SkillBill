@@ -2,6 +2,18 @@
 
 package dev.skillbill.desktop.core.designsystem.component
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.runComposeUiTest
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import kotlinx.coroutines.test.runTest
+import kotlin.time.Clock
 import dev.skillbill.desktop.core.designsystem.component.SbBuildMeta.Plain
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -35,6 +47,35 @@ class BuildIndicatorTest {
     finishedAt = finishedAt,
     previous = null,
   )
+
+  @Test
+  @OptIn(ExperimentalTestApi::class)
+  fun `first build shows indeterminate activity then switches to a duration estimate`() = runTest {
+    val ticker = UiTicker(object : Clock { override fun now(): Instant = start }, backgroundScope)
+    runComposeUiTest {
+      mainClock.autoAdvance = false
+      val current = mutableStateOf(build(usualMs = null, elapsedMs = 95_000))
+      setContent {
+        SkillBillTheme(reducedMotion = true) {
+          CompositionLocalProvider(LocalUiTicker provides ticker) { BuildStrip(current.value) }
+        }
+      }
+
+      onNodeWithContentDescription("Build in progress").assert(SemanticsMatcher.expectValue(
+        SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate,
+      ))
+      runOnIdle { current.value = current.value.copy(usualMs = 190_000) }
+      mainClock.advanceTimeByFrame()
+      onNodeWithContentDescription("Build in progress").assertDoesNotExist()
+      onNodeWithContentDescription("Estimated build progress").assert(SemanticsMatcher.expectValue(
+        SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo(.5f, 0f..1f),
+      ))
+      runOnIdle { current.value = current.value.copy(state = SbBuildState.Passed) }
+      mainClock.advanceTimeByFrame()
+      onNodeWithContentDescription("Estimated build progress").assertDoesNotExist()
+      onNodeWithContentDescription("Build in progress").assertDoesNotExist()
+    }
+  }
 
   @Test
   fun `slow tone changes only after elapsed time passes the usual duration`() {

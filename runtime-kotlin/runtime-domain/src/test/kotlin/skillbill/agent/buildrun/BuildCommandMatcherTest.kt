@@ -41,6 +41,50 @@ class BuildCommandMatcherTest {
     )
 
   @Test
+  fun `nested wrappers retain their own version and project kind in one repository`() {
+    val files =
+      FakeFiles(
+        mapOf(
+          "gradle/wrapper/gradle-wrapper.properties" to WRAPPER_PROPERTIES,
+          "runtime-kotlin/gradle/wrapper/gradle-wrapper.properties" to WRAPPER_PROPERTIES.replace("8.10.2", "9.3.0"),
+          "mobile app/gradle/wrapper/gradle-wrapper.properties" to WRAPPER_PROPERTIES.replace("8.10.2", "9.1.0"),
+          "mobile app/app/src/main/AndroidManifest.xml" to "<manifest/>",
+        ),
+      )
+    val matcher = matcher(files)
+    val rootBuild = sample(1, null, "/usr/bin/java", "org.gradle.wrapper.GradleWrapperMain", "check")
+    assertEquals("Gradle 8.10", matcher.match(listOf(rootBuild)).single().toolLabel)
+    val nested =
+      listOf(
+        sample(
+          2,
+          null,
+          "/usr/bin/java",
+          "-classpath",
+          "/repo/runtime-kotlin/gradle/wrapper/gradle-wrapper.jar",
+          "org.gradle.wrapper.GradleWrapperMain",
+          "check",
+        ),
+        sample(
+          3,
+          null,
+          "/usr/bin/java",
+          "-classpath",
+          "/repo/mobile app/gradle/wrapper/gradle-wrapper.jar",
+          "org.gradle.wrapper.GradleWrapperMain",
+          ":app:assembleDebug",
+        ),
+      )
+
+    val matches = matcher.match(nested)
+
+    assertEquals(listOf("Gradle 9.3", "Gradle 9.1"), matches.map(BuildMatch::toolLabel))
+    assertEquals(listOf("Kotlin/JVM", "Android"), matches.map(BuildMatch::projectKind))
+    assertEquals(matches.reversed(), matcher.match(nested.reversed()))
+    assertEquals("Gradle 8.10", matcher.match(listOf(rootBuild)).single().toolLabel)
+  }
+
+  @Test
   fun `gradle wrapper java form picks kotlin without a kmp marker and kmp with one`() {
     val files = FakeFiles(mapOf("gradle/wrapper/gradle-wrapper.properties" to WRAPPER_PROPERTIES))
     val sample =

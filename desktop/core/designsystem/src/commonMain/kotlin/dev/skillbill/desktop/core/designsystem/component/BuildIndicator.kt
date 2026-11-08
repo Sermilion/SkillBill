@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -32,9 +31,12 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -268,13 +270,7 @@ fun BuildStrip(build: SbBuild, modifier: Modifier = Modifier) {
         }
       }
     }
-    build.barRatio(now)?.let { ratio ->
-      val reducedMotion = LocalReducedMotion.current
-      val animatedRatio = animateFloatAsState(ratio, if (reducedMotion) snap() else tween(1_000, easing = LinearEasing), label = "build-progress").value
-      Box(Modifier.fillMaxWidth().height(3.dp).clip(SkillBillRadius.full).background(colors.border).clearAndSetSemantics {}) {
-        Box(Modifier.fillMaxHeight().fillMaxWidth(animatedRatio).background(if (slow) colors.stBlocked else colors.stPlanning, SkillBillRadius.full))
-      }
-    }
+    if (build.state == SbBuildState.Running) BuildProgress(build.barRatio(now), slow)
     val meta = build.metaSegments(now, formatClockTime(build.startedAt))
     FlowRow(
       horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -294,6 +290,39 @@ fun BuildStrip(build: SbBuild, modifier: Modifier = Modifier) {
         }
       }
     }
+  }
+}
+
+@Composable
+private fun BuildProgress(ratio: Float?, slow: Boolean) {
+  val colors = SkillBillTheme.colors
+  val reducedMotion = LocalReducedMotion.current
+  val start = when {
+    ratio != null -> 0f
+    reducedMotion -> .375f
+    else -> rememberInfiniteTransition(label = "build-activity").animateFloat(
+      initialValue = -.25f,
+      targetValue = 1f,
+      animationSpec = infiniteRepeatable(tween(1_200, easing = LinearEasing), RepeatMode.Restart),
+      label = "build-activity-position",
+    ).value
+  }
+  val length = if (ratio == null) .25f else animateFloatAsState(
+    ratio, if (reducedMotion) snap() else tween(1_000, easing = LinearEasing), label = "build-progress",
+  ).value
+  Canvas(
+    Modifier.fillMaxWidth().height(3.dp).clip(SkillBillRadius.full).background(colors.border).semantics {
+      contentDescription = if (ratio == null) "Build in progress" else "Estimated build progress"
+      progressBarRangeInfo = ratio?.let { ProgressBarRangeInfo(it, 0f..1f) } ?: ProgressBarRangeInfo.Indeterminate
+    },
+  ) {
+    drawLine(
+      color = if (slow) colors.stBlocked else colors.stPlanning,
+      start = Offset(start * size.width, size.height / 2),
+      end = Offset((start + length) * size.width, size.height / 2),
+      strokeWidth = size.height,
+      cap = StrokeCap.Round,
+    )
   }
 }
 

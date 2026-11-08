@@ -1,6 +1,7 @@
 package skillbill.agent.buildrun
 
 import skillbill.agent.model.BuildMatchContext
+import skillbill.agent.model.BuildProcessSample
 import skillbill.agent.model.BuildRepositoryFiles
 import skillbill.scaffold.model.BuildToolDeclaration
 import skillbill.scaffold.model.BuildToolVersionSource
@@ -10,6 +11,15 @@ private val PACKAGE_MANAGER = Regex(""""packageManager"\s*:\s*"([^"@]+)@(\d+)"""
 private val GO_DIRECTIVE = Regex("""^go\s+(\d+)\.(\d+)""", RegexOption.MULTILINE)
 private val XCODE_VERSION = Regex("""<key>CFBundleShortVersionString</key>\s*<string>(\d+)""")
 private const val DEFAULT_XCODE_VERSION_PLIST = "/Applications/Xcode.app/Contents/version.plist"
+
+internal fun gradleWrapperProjectRoot(sample: BuildProcessSample): String? {
+  val suffix = "/gradle/wrapper/gradle-wrapper.jar"
+  return sample.arguments.asSequence()
+    .map { it.replace('\\', '/') }
+    .filter { it.startsWith("/") || Regex("^[A-Za-z]:/").containsMatchIn(it) }
+    .firstOrNull { it.endsWith(suffix) }
+    ?.removeSuffix(suffix)
+}
 
 internal fun buildToolLabel(
   declaration: BuildToolDeclaration,

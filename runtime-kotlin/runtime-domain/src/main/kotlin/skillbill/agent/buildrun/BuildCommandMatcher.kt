@@ -5,6 +5,7 @@ import skillbill.agent.model.BuildMatchContext
 import skillbill.agent.model.BuildProcessSample
 import skillbill.agent.model.BuildRepositoryFiles
 import skillbill.scaffold.model.BuildToolDeclaration
+import skillbill.scaffold.model.BuildToolVersionSource
 import skillbill.scaffold.model.PlatformManifest
 
 private val SHELL_WRAPPERS = setOf("sh", "bash", "zsh", "dash")
@@ -15,8 +16,8 @@ class BuildCommandMatcher(
   private val files: BuildRepositoryFiles,
 ) {
   private val declarations: List<BuildToolDeclaration> = packs.flatMap(PlatformManifest::buildTools)
-  private val chosenDeclarations = mutableMapOf<String, BuildToolDeclaration>()
-  private val toolLabels = mutableMapOf<String, String>()
+  private val chosenDeclarations = mutableMapOf<ProjectTool, BuildToolDeclaration>()
+  private val toolLabels = mutableMapOf<ProjectTool, String>()
 
   fun match(samples: List<BuildProcessSample>): List<BuildMatch> {
     val hits = samples.mapNotNull { sample -> classify(sample)?.let { sample.pid to (sample to it) } }.toMap()
@@ -68,7 +69,17 @@ class BuildCommandMatcher(
     sample: BuildProcessSample,
     hit: Hit,
   ): BuildMatch {
-    val declaration = chosenDeclarations.getOrPut(hit.executable) { chooseDeclaration(hit.executable) }
+    val projectRoot =
+      if (declarations.any {
+          it.executable == hit.executable && it.versionSource == BuildToolVersionSource.GRADLE_WRAPPER
+        }
+      ) {
+        gradleWrapperProjectRoot(sample) ?: context.repositoryRoot
+      } else {
+        context.repositoryRoot
+      }
+    val project = ProjectTool(hit.executable, projectRoot)
+    val declaration = chosenDeclarations.getOrPut(project) { chooseDeclaration(hit.executable, projectRoot) }
     val display = declaration.displayExecutable
     return BuildMatch(
       pid = sample.pid,
@@ -77,15 +88,21 @@ class BuildCommandMatcher(
       displayExecutable = display,
       displayCommand = (listOf(display) + hit.remainder).joinToString(" "),
       shortCommand = shortCommand(declaration, hit.remainder),
-      toolLabel = toolLabels.getOrPut(hit.executable) { buildToolLabel(declaration, context, files) },
+      toolLabel =
+        toolLabels.getOrPut(project) {
+          buildToolLabel(declaration, context.copy(repositoryRoot = projectRoot), files)
+        },
       projectKind = declaration.projectKind,
     )
   }
 
-  private fun chooseDeclaration(executable: String): BuildToolDeclaration {
+  private fun chooseDeclaration(
+    executable: String,
+    projectRoot: String,
+  ): BuildToolDeclaration {
     val candidates = declarations.filter { it.executable == executable }
     return candidates.firstOrNull { candidate ->
-      candidate.projectMarkers.any { files.exists(underDirectory(context.repositoryRoot, it)) }
+      candidate.projectMarkers.any { files.exists(underDirectory(projectRoot, it)) }
     } ?: candidates.firstOrNull { it.projectMarkers.isEmpty() } ?: candidates.first()
   }
 
@@ -99,6 +116,8 @@ class BuildCommandMatcher(
       remainder.firstOrNull { !it.startsWith("-") && it !in declaration.shortSkip } ?: return name
     return "$name ${subcommand.substringAfterLast(':')}"
   }
+
+  private data class ProjectTool(val executable: String, val root: String)
 
   private data class Hit(
     val executable: String,

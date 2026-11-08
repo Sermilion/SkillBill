@@ -55,19 +55,20 @@ class AgentBuildRunStoreTest {
     factory.read { unitOfWork -> block(unitOfWork.agentBuildRuns) }
 
   @Test
-  fun `usual is the median of the five newest settled builds and floors an even pair`() {
+  fun `each completion updates the persisted average for its project and command`() {
+    val command = "custom-builder compile"
+    assertNull(read { it.history("repo", command, hour(100)).usualMs })
+    write { it.settled(startRow("first", hour(0), command = command), 100L) }
+    assertEquals(100L, read { it.history("repo", command, hour(100)).usualMs })
+    write { it.settled(startRow("second", hour(1), command = command), 201L) }
+    assertEquals(150L, read { it.history("repo", command, hour(100)).usualMs })
+    write { it.settled(startRow("third", hour(2), command = command), 900L) }
+    assertEquals(400L, read { it.history("repo", command, hour(100)).usualMs })
     write { store ->
-      (0..5).forEach { store.settled(startRow("old-$it", hour(it)), 10_000) }
-      listOf(100L, 500L, 300L, 900L, 700L).forEachIndexed { index, ms ->
-        store.settled(startRow("new-$index", hour(10 + index)), ms)
-      }
-      listOf(100L, 201L, 300L, 999L).forEachIndexed { index, ms ->
-        store.settled(startRow("even-$index", hour(index), command = "./gradlew check"), ms)
-      }
+      store.settled(startRow("other-project", hour(3), command = command).copy(repositoryIdentity = "other"), 99_999)
+      store.settled(startRow("other-command", hour(3), command = "custom-builder test"), 99_999)
     }
-
-    assertEquals(500L, read { it.history("repo", "./gradlew build", hour(100)).usualMs })
-    assertEquals(250L, read { it.history("repo", "./gradlew check", hour(100)).usualMs })
+    assertEquals(400L, read { it.history("repo", command, hour(100)).usualMs })
   }
 
   @Test
@@ -96,20 +97,21 @@ class AgentBuildRunStoreTest {
   @Test
   fun `settle keeps the newest twenty settled builds and never prunes open ones`() {
     write { store ->
-      (0..19).forEach { store.settled(startRow("b$it", hour(it)), 1_000) }
+      (0..19).forEach { store.settled(startRow("b$it", hour(it)), (it + 1) * 1_000L) }
       store.start(startRow("open", hour(0)))
-      store.settled(startRow("b20", hour(20)), 1_000)
+      store.settled(startRow("b20", hour(20)), 21_000)
     }
 
     val remaining = read { store -> (0..20).filter { store.latestForRun(setOf("run-b$it")) != null } }
     assertEquals((1..20).toList(), remaining)
+    assertEquals(11_500L, read { it.history("repo", "./gradlew build", hour(100)).usualMs })
     val open = read { it.latestForRun(setOf("run-open")) }
     assertEquals("open", open?.buildId)
     assertNull(open?.endedAt)
 
     assertFalse(write { it.settle("b20", hour(30), AgentBuildOutcome.FAILED, 1) })
     val kept = read { it.latestForRun(setOf("run-b20")) }
-    assertEquals(hour(20).plusMillis(1_000), kept?.endedAt)
+    assertEquals(hour(20).plusMillis(21_000), kept?.endedAt)
     assertEquals(AgentBuildOutcome.PASSED, kept?.outcome)
   }
 
