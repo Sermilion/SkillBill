@@ -27,7 +27,6 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 @SingleIn(AppScope::class)
 class CursorChatTransport(
   private val host: HostEnvironment,
-  private val launcher: ChatProcessLauncher,
   private val store: ChatStore,
   private val diagnostics: Diagnostics,
   private val liveLauncher: LiveChatProcessLauncher? = null,
@@ -80,7 +79,7 @@ class CursorChatTransport(
     val job = currentCoroutineContext()[Job]
     if (job != null) turns[request.sessionId] = job
     try {
-      emitAll(cursorAcpTurn(live, launcher, authority, store, diagnostics, host.variables["SHELL"],
+      emitAll(cursorAcpTurn(live, authority, store, diagnostics, host.variables["SHELL"],
         environment, request, saved, binding, prompt))
     } finally {
       if (job != null) turns.remove(request.sessionId, job)

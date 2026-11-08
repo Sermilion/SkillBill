@@ -15,7 +15,6 @@ import skillbill.infrastructure.launcher.process.codex.CodexSessionLaunch
 import skillbill.infrastructure.launcher.process.cursor.AcpProvider
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpLaunch
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpMcpDependency
-import skillbill.infrastructure.launcher.process.cursor.CursorPhaseSession
 import skillbill.infrastructure.launcher.process.cursor.CursorSessionChannel
 import skillbill.infrastructure.launcher.process.cursor.cursorAcpDependencyRefusal
 import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalChannelOpening
@@ -489,15 +488,16 @@ internal class ProcessAgentRunAdapter(
       )
     val deadline = approvalEnclosingDeadline(clock, request.timeout)
     val result =
-      CursorPhaseSession(
-        process,
-        processRunner,
-        clock,
-        diagnostics,
-        executableLookup,
-        commandBuilder.launcherCli,
-        provider,
-      ) { openCursorSession(launch, request, command, deadline) }.run()
+      processRunner.run(
+        process.copy(
+          launch =
+            process.launch.copy(
+              stdinText = null,
+              session = AgentRunApprovalChannelOpening { openCursorSession(launch, request, command, deadline) },
+            ),
+          approval = AgentRunProcessApprovalFields(),
+        ),
+      )
     return result.spawnDenied?.let {
       AgentRunLaunchDenied(
         agent,
