@@ -1,3 +1,8 @@
+## [2026-11-08] Version build views on board and detail envelopes
+Context: SKILL-522 adds nullable build data to work-board and work-detail items without changing the embedded IdeStatusSnapshot.
+Decision: Version work-board as 1.3 and work-detail as 1.10, retaining ide-status 0.6. Keep build keys in their shared owner and validate the added objects through the existing schemas.
+Reason: Board and detail wrappers own build data. Their versions identify the changed wire shape without implying a snapshot change; nullable defaults preserve existing model constructors.
+
 ## [2026-11-08] Overlay builds after the main work read
 Context: The injected session-backed build repository owns its database reads, while board projections are persisted separately from build rows.
 Decision: WorkBoardItemProjection owns the build overlay and shared mapper. IdeStatusService applies it after the main database read, using its injected clock. Failures omit build data with a warning.

@@ -4,7 +4,7 @@
 Areas: runtime-domain agent/buildrun, agent/model and scaffold/model; runtime-infra/skills; orchestration/contracts; platform pack manifests
 - MEDIUM feature. Optional runtime-anchored build_tools declarations drive matching for kmp, kotlin, typescript, go, rust and ios. Manifest version stays 1.8; malformed declarations fail with INVALID_MANIFEST_SCHEMA.
 - BuildCommandMatcher recognizes direct commands, script arguments and process markers, excludes shell -c wrappers and counts only the outermost matching ancestor. Project markers select declarations; command text keys history.
-- BuildTracker fixes command-call correlation at build start and distinguishes reused PIDs by start instant. One eligible build receives each command outcome; other builds settle unknown. Finish is idempotent.
+- BuildTracker fixes command-call correlation at build start and distinguishes reused PIDs by start instant. The latest-ended eligible build receives each command outcome; completion-time process membership excludes builds still alive. Other builds settle unknown. Finish is idempotent.
 - BuildCommandMatcher, BuildTracker and BuildRepositoryFiles are reusable. Domain paths are absolute strings; the host adapter owns filesystem conversion and bounded reads. Tool labels come from repository metadata without executing tools.
 - Limits: builds between 250 ms samples may be missed; late STARTED events cannot repair correlation. Codex supplies exit codes, while Claude and Cursor failures retain null exit codes. Missing completion evidence yields unknown.
 Feature flag: N/A
