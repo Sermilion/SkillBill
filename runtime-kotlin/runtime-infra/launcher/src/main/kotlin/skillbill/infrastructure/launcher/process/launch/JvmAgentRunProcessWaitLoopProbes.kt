@@ -3,6 +3,7 @@ package skillbill.infrastructure.launcher.process.launch
 import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunBuildObserver
 import skillbill.ports.agentrun.model.AgentRunDeclaredProgressProbe
 import skillbill.ports.agentrun.model.AgentRunDeclaredProgressSnapshot
 import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
@@ -10,6 +11,7 @@ import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.agentrun.model.AgentRunProgressLabelProbe
 import skillbill.ports.agentrun.model.AgentRunProgressProbe
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
+import java.time.Instant
 
 internal fun ProcessWaitLoop.pollWorkflowProgress(nowNanos: Long) {
   val read = request.probes.progressProbe.readProgressToken(degradation)
@@ -140,6 +142,20 @@ internal fun AgentRunWorktreeEditObserver.safeObserve(degradation: ProcessRunDeg
     .onFailure { failure -> degradation.recordProbeFailure("worktree_edit_observe", failure) }
 }
 
+internal fun ProcessWaitLoop.pollBuildObservation() {
+  val observer = request.probes.buildObserver
+  if (observer === AgentRunBuildObserver.NONE) return
+  observer.safeBuildObserve(degradation) { processes(clock.instant(), tree.samples()) }
+}
+
+internal inline fun AgentRunBuildObserver.safeBuildObserve(
+  degradation: ProcessRunDegradationRecorder,
+  call: AgentRunBuildObserver.() -> Unit,
+) {
+  catchingNonCancellation { call() }
+    .onFailure { failure -> degradation.recordProbeFailure("build_observe", failure) }
+}
+
 internal data class ProbeRead<T>(
   val value: T?,
   val failed: Boolean,
@@ -176,3 +192,10 @@ private inline fun <T> readProbe(
       ProbeRead(value = null, failed = true)
     },
   )
+
+internal fun AgentRunBuildObserver.finishBuildObservation(
+  observedAt: Instant,
+  degradation: ProcessRunDegradationRecorder,
+) {
+  if (this !== AgentRunBuildObserver.NONE) safeBuildObserve(degradation) { finished(observedAt) }
+}

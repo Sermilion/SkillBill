@@ -1,3 +1,8 @@
+## [2026-11-08] Map build presentation in core/ui
+Context: Work rows and run details consume WorkBuild, while design-system components accept SbBuild presentation values.
+Decision: Map runtime builds to WorkBuild in core/data and convert WorkBuild to SbBuild in core/ui/status for both features.
+Reason: core/ui already depends on core/domain and core/designsystem and owns status mapping. This keeps the design system independent of domain models and gives both features one presentation conversion.
+
 ## [2026-11-08] Keep production numeric usage disabled until identity is verified
 Context: SKILL-520 authorizes unavailable numeric sources. Codex capability reads work but lack a verified account/workspace binding; Claude events provide session status, and Cursor has no configured verified personal source.
 Decision: Keep production numeric admission closed. Separate profile lookups, verified subjects and session-only scopes; repository admission requires subject, auth-mode, profile/session generation and operation-reservation evidence. Never infer identity from paths, email, tokens or observed response extensions.

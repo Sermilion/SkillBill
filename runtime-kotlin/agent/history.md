@@ -1,3 +1,15 @@
+## [2026-11-08] SKILL-522 per-run build indicator
+Areas: runtime-domain; runtime-ports; runtime-engine featuretask, operation and work; runtime-goalrunner; runtime-infra skills, launcher, host and sqlite; runtime-contracts; runtime-cli; runtime-core; orchestration/contracts; platform pack manifests; desktop
+- MEDIUM feature. Manifest-driven build matching and per-launch observation feed migration 108's agent_build_runs store. Primary repository identity shares duration history across goal worktrees.
+- BuildCommandMatcher, BuildTracker, AgentBuildRunRepository and AgentRunBuildObserver are reusable. Boundary entries in runtime-domain, runtime-infra/sqlite and runtime-engine featuretask retain their matching, retention and attribution rules.
+- Board and detail overlay current or last builds with median duration and previous-build context. Work-board 1.3 and work-detail 1.10 own nullable build views; ide-status stays 0.6 and pack manifests stay 1.8.
+- Desktop maps build data through core/data and core/ui to reusable BuildChip and BuildStrip components. Validation and Verify documents omit the strip; running and failed builds can show row chips.
+- Final build setup uses downloads.gradle.org for both Gradle 9.3.0 wrappers, a 60000 millisecond runtime wrapper network timeout and Maven Central before the plugin portal in runtime plugin resolution. CLI subprocess fixtures exclude inherited runtime state-directory selection.
+- Compatibility requires desktop read schema 108. Sampling can miss builds shorter than 250 milliseconds; missing command outcomes remain unknown. Runtime-owned gates and prototype hash routes remain outside scope.
+- Detailed presentation and read rules remain in desktop, desktop/core/designsystem and runtime-engine work boundary memory. The supplied warning says validation changed code after QA, so QA's result does not cover the final tree.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-07] SKILL-514 seeded desktop source-run QA
 Areas: runtime-application test fixtures, runtime-core, runtime-contracts, runtime-domain, runtime-engine/specbrowser, runtime-infra/sqlite, orchestration/contracts
 - DesktopFixtureCatalog and DesktopFixtureDatabaseWriter provide reusable QAFIX cases and port-level writes for task workflows, goals, phases, verify runs, standalone phases and spec bundles. Database rows share one UnitOfWork transaction; bundle files follow its commit.

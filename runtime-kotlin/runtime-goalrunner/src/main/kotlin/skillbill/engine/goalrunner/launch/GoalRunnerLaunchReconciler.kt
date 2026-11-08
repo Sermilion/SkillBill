@@ -6,6 +6,7 @@ import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.engine.agentoutput.stderrExcerpt
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.runloop.durable.WorktreeEditJournalWriter
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
 import skillbill.engine.goalrunner.execution.core.SubtaskLaunchRequestArgs
@@ -35,6 +36,7 @@ import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
+import skillbill.ports.agentrun.model.AgentRunBuildObserver
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
@@ -69,6 +71,7 @@ public class GoalRunnerLaunchReconciler(
   private val diagnostics: RuntimeDiagnostics,
   private val projectStore: ProjectStorePort,
   private val childFailureOutputStore: ChildFailureOutputStore,
+  private val buildObserverFactory: AgentBuildObserverFactory,
 ) {
   private data class SubtaskLaunchDependencies(
     val tickReader: GoalRunnerTickProgressReader,
@@ -76,6 +79,7 @@ public class GoalRunnerLaunchReconciler(
     val goalContinuation: SkillRunGoalContinuationContext?,
     val activityStampSink: AgentRunActivityStampSink,
     val worktreeEditObserver: AgentRunWorktreeEditObserver,
+    val buildObserver: AgentRunBuildObserver,
   )
 
   internal fun subtaskLaunchRequest(args: SubtaskLaunchRequestArgs): GoalRunnerSubtaskLaunchRequest {
@@ -114,9 +118,22 @@ public class GoalRunnerLaunchReconciler(
         resolveWorkflowId = { tickReader.progressState()?.subtask?.workflowId },
         resolvePhaseId = { tickReader.progressState()?.childProgress?.currentStepId },
       )
+    val buildObserver =
+      buildObserverFactory.observer(
+        request.repoRoot,
+        { tickReader.progressState()?.subtask?.workflowId },
+        { goalContinuation?.parentWorkflowId },
+      )
     return buildLaunchRequest(
       args,
-      SubtaskLaunchDependencies(tickReader, progressEmitter, goalContinuation, activityStampSink, worktreeEditObserver),
+      SubtaskLaunchDependencies(
+        tickReader,
+        progressEmitter,
+        goalContinuation,
+        activityStampSink,
+        worktreeEditObserver,
+        buildObserver,
+      ),
       spawnAuthorization,
     )
   }
@@ -156,6 +173,7 @@ public class GoalRunnerLaunchReconciler(
           spawnAuthorization = spawnAuthorization,
           activityStampSink = dependencies.activityStampSink,
           worktreeEditObserver = dependencies.worktreeEditObserver,
+          buildObserver = dependencies.buildObserver,
           additionalWritableDirectories = listOf(projectStore.resolve(request.repoRoot).root),
         ),
     )

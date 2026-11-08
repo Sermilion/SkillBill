@@ -27,6 +27,7 @@ import skillbill.application.updatecheck.UpdateCheckService
 import skillbill.application.work.WorkListService
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.di.featurespec.RuntimeFeatureSpecProvides
+import skillbill.di.featuretask.RuntimeAgentBuildProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskSlotProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskValidatorProvides
@@ -161,6 +162,7 @@ abstract class RuntimeComponent(
     RuntimeReviewAddonCatalogProvides,
     RuntimeReviewEvidenceProvides,
     RuntimeDiffCommentProvides,
+    RuntimeAgentBuildProvides,
     RuntimeFeatureTaskProvides,
     RuntimeFeatureTaskSlotProvides,
     RuntimeStandaloneMonitorProvides,

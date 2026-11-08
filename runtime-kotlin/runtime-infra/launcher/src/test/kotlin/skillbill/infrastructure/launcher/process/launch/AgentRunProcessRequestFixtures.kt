@@ -1,6 +1,7 @@
 package skillbill.infrastructure.launcher.process.launch
 
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunBuildObserver
 import skillbill.ports.agentrun.model.AgentRunDeclaredProgressProbe
 import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
 import skillbill.ports.agentrun.model.AgentRunOutputSink
@@ -35,6 +36,7 @@ internal class TestAgentRunProcessRequestBuilder {
   var activityProbe: AgentRunActivityProbe? = null
   var activityStampSink: AgentRunActivityStampSink = AgentRunActivityStampSink.NONE
   var worktreeEditObserver: AgentRunWorktreeEditObserver = AgentRunWorktreeEditObserver.NONE
+  var buildObserver: AgentRunBuildObserver = AgentRunBuildObserver.NONE
   var idlePolicy: AgentRunIdlePolicy = AgentRunIdlePolicy.DB_PROGRESS_ONLY
   var environment: Map<String, String> = emptyMap()
   var inheritEnvironment: Boolean = true
@@ -73,6 +75,7 @@ internal class TestAgentRunProcessRequestBuilder {
           activityProbe = activityProbe,
           activityStampSink = activityStampSink,
           worktreeEditObserver = worktreeEditObserver,
+          buildObserver = buildObserver,
           idlePolicy = idlePolicy,
         ),
       environmentFields =

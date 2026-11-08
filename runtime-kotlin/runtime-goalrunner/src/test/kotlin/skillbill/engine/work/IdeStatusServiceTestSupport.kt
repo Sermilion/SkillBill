@@ -64,6 +64,7 @@ import skillbill.goalrunner.model.history.GoalHistoryCompletion
 import skillbill.goalrunner.model.history.GoalHistoryWriterEntry
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
+import skillbill.infrastructure.sqlite.idestatus.SessionAgentBuildRunRepository
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
@@ -75,6 +76,7 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
+import skillbill.ports.idestatus.AgentBuildRunRepository
 import skillbill.ports.idestatus.IdeStatusValidator
 import skillbill.ports.idestatus.NoopIdeStatusValidator
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
@@ -299,6 +301,7 @@ internal val ideStatusProjectStoreRoot: Path by lazy { Files.createTempDirectory
 internal class IdeStatusServiceTestPorts(
   val qaCapabilities: QaCapabilityResolver = QaCapabilityResolver(RecordingWorkflowGitOperations()) { emptyList() },
   val repositoryEnclosingRootPort: RepositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+  val buildRunRepository: AgentBuildRunRepository? = null,
 )
 
 internal fun ideStatusService(
@@ -357,7 +360,12 @@ internal fun ideStatusService(
       qaCapabilities = ports.qaCapabilities,
       planReports = planReports,
     )
-  val boardProjection = testBoardProjection(projector, ports.repositoryEnclosingRootPort)
+  val boardProjection =
+    testBoardProjection(
+      projector,
+      ports.repositoryEnclosingRootPort,
+      ports.buildRunRepository ?: SessionAgentBuildRunRepository(database),
+    )
   (database as? BoardProjectionCapture)?.accept(boardProjection)
   return IdeStatusService(
     database = database,
@@ -401,7 +409,8 @@ internal fun testWorkBoardItemProjection(database: DatabaseSessionFactory): Work
 
 private fun testBoardProjection(
   projector: IdeStatusProjector,
-  repositoryEnclosingRootPort: RepositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+  repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  buildRunRepository: AgentBuildRunRepository,
 ): WorkBoardItemProjection =
   WorkBoardItemProjection(
     projector,
@@ -410,6 +419,7 @@ private fun testBoardProjection(
     NoopRuntimeDiagnostics,
     repositoryEnclosingRootPort,
     LocalGoalRuntimeStateFileStore(),
+    buildRunRepository,
   )
 
 internal fun fixtureCheckedOutBranch(repoRoot: Path): String? =

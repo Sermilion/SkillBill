@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.BuildStrip
 import dev.skillbill.desktop.core.designsystem.component.EmptyState
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.Hint
@@ -49,6 +50,7 @@ import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.HistoryRoute
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
+import dev.skillbill.desktop.core.ui.status.toSbBuild
 
 /** `.sb-doc` max-width, padding included. */
 private val DOC_MAX_WIDTH = 780.dp
@@ -189,6 +191,11 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
                 }
               }
             }
+          }
+          val build = item.build
+          // HANDOFF 4.1: the build strip sits under the header, except for validation and verify runs.
+          if (build != null && !validationRow && loaded?.detail?.verifyRun == null) sections.item(key = "build-strip") {
+            Column(Modifier.padding(top = DocBlockGap)) { BuildStrip(remember(build) { build.toSbBuild() }) }
           }
           // HANDOFF 9.2 item 5: the pause notice is its own block under the header.
           if (view.pausePending) sections.item(key = "pause-notice") {

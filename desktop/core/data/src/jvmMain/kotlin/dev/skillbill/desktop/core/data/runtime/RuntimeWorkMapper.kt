@@ -6,6 +6,9 @@ import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.PhaseExecution
 import dev.skillbill.desktop.core.domain.model.PhaseExecutionKind
 import dev.skillbill.desktop.core.domain.model.WorkControlIdentity
+import dev.skillbill.desktop.core.domain.model.WorkBuild
+import dev.skillbill.desktop.core.domain.model.WorkBuildPrevious
+import dev.skillbill.desktop.core.domain.model.WorkBuildState
 import dev.skillbill.desktop.core.domain.model.WorkQaOutcome
 import dev.skillbill.desktop.core.domain.model.QaVerdict
 import dev.skillbill.desktop.core.domain.model.WorkDisplayGroup
@@ -29,6 +32,8 @@ import skillbill.ports.idestatus.model.WorkBoardCompletionSource
 import skillbill.ports.idestatus.model.GoalMainCheckoutOutcome
 import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.GoalWorktreeState as RuntimeGoalWorktreeState
+import skillbill.ports.idestatus.model.WorkBuildState as RuntimeWorkBuildState
+import skillbill.ports.idestatus.model.WorkBuildView
 import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.work.model.WorkStoreObservation
 import kotlin.time.toKotlinInstant
@@ -62,13 +67,14 @@ internal class ItemVerdicts(
   val agentId: String? = null,
   val completionSource: WorkBoardCompletionSource? = null,
   val goalWorktree: GoalWorktreeView? = null,
+  val build: WorkBuildView? = null,
 )
 
 internal fun WorkBoardItem.toWorkItem(sessionId: Long): WorkItem = snapshot.toWorkItem(
   ItemVerdicts(
     repositoryRoot, finishedAt, liveSection, displayGroup, displayPriority, requiresAttention, controlEligible, pauseEligible,
     running, recentlyFinishedPhase, doneWithinDay, freshnessDeadline, membershipDeadline, exactPauseReason, controlLease,
-    observation, databaseFileObservation, sessionId, executingAgentId, finishedAtSource, goalWorktree,
+    observation, databaseFileObservation, sessionId, executingAgentId, finishedAtSource, goalWorktree, build,
   ),
 )
 
@@ -78,7 +84,7 @@ internal fun WorkDetailItem.toWorkItem(sessionId: Long): WorkItem = snapshot.toW
     repositoryRoot, finishedAt, liveSection, displayGroup, displayPriority, requiresAttention, controlEligible, pauseEligible,
     running, recentlyFinishedPhase = false, doneWithinDay = false, freshnessDeadline, membershipDeadline = null,
     exactPauseReason, controlLease, observation, databaseFileObservation, sessionId,
-    completionSource = finishedAtSource, goalWorktree = goalWorktree,
+    completionSource = finishedAtSource, goalWorktree = goalWorktree, build = build,
   ),
 )
 
@@ -152,7 +158,31 @@ internal fun IdeStatusSnapshot.toWorkItem(verdicts: ItemVerdicts): WorkItem {
     workflowQaOutcome = workflowQaOutcome?.toDomain(),
     standaloneExecution = execution?.scope == IdeStatusExecutionScope.STANDALONE_PHASE,
     goalWorktree = verdicts.goalWorktree?.toDomainWorktree(),
+    build = verdicts.build?.toDomain(),
   )
+}
+
+internal fun WorkBuildView.toDomain(): WorkBuild = WorkBuild(
+  state = state.toDomain(),
+  command = command,
+  shortCommand = shortCommand,
+  tool = tool,
+  projectKind = projectKind,
+  pid = pid,
+  startedAt = startedAt.toKotlinInstant(),
+  elapsedMs = elapsedMs,
+  elapsedAsOf = elapsedAsOf?.toKotlinInstant(),
+  usualMs = usualMs,
+  exitCode = exitCode,
+  finishedAt = finishedAt?.toKotlinInstant(),
+  previous = previous?.let { WorkBuildPrevious(it.state.toDomain(), it.durationMs, it.finishedAt.toKotlinInstant()) },
+)
+
+private fun RuntimeWorkBuildState.toDomain(): WorkBuildState = when (this) {
+  RuntimeWorkBuildState.RUNNING -> WorkBuildState.Running
+  RuntimeWorkBuildState.PASSED -> WorkBuildState.Passed
+  RuntimeWorkBuildState.FAILED -> WorkBuildState.Failed
+  RuntimeWorkBuildState.FINISHED -> WorkBuildState.Finished
 }
 
 internal fun GoalMainCheckoutOutcome.toDomain(): MainCheckoutOutcome = when (this) {

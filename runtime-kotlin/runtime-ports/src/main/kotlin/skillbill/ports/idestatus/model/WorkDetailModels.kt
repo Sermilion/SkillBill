@@ -98,6 +98,7 @@ data class WorkDetailItem(
   val planSubtaskLatestLines: Map<Int, String> = emptyMap(),
   val standalonePlanProgress: StandalonePlanProgress? = null,
   val verifyRun: VerifyRunDetails? = null,
+  val build: WorkBuildView? = null,
   val qaPreview: QaRunPreview? = null,
   val qaPreviewSubtaskId: Int? = null,
 )

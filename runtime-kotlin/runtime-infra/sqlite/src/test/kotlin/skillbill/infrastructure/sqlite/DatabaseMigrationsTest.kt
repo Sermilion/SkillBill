@@ -2376,6 +2376,7 @@ private val expectedMigrationDefinitions =
     113 to "add-operation-launch-retention",
     114 to "add-operation-confirmation-executions",
     115 to "add-approval-not-required-delivery",
+    116 to "record-agent-build-runs",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

@@ -23,6 +23,7 @@ import skillbill.engine.work.pagination.readStatusStandaloneRecords
 import skillbill.engine.work.pagination.readStatusWorkItems
 import skillbill.engine.work.pagination.skipIncompatibleBoardItem
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.core.rethrowIfDatabaseFailure
 import skillbill.error.shellcontent.InstallFailureCode
@@ -39,7 +40,11 @@ import skillbill.idestatus.model.IdeStatusRepositoryIdentitySource
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.idestatus.AgentBuildRunRepository
 import skillbill.ports.idestatus.IdeStatusValidator
+import skillbill.ports.idestatus.model.AgentBuildHistory
+import skillbill.ports.idestatus.model.AgentBuildOutcome
+import skillbill.ports.idestatus.model.AgentBuildRun
 import skillbill.ports.idestatus.model.GoalMainCheckoutOutcome
 import skillbill.ports.idestatus.model.GoalWorktreeState
 import skillbill.ports.idestatus.model.GoalWorktreeView
@@ -54,6 +59,10 @@ import skillbill.ports.idestatus.model.WorkBoardDiagnosticReason
 import skillbill.ports.idestatus.model.WorkBoardItem
 import skillbill.ports.idestatus.model.WorkBoardReadModelRow
 import skillbill.ports.idestatus.model.WorkBoardWindow
+import skillbill.ports.idestatus.model.WorkBuildPrevious
+import skillbill.ports.idestatus.model.WorkBuildState
+import skillbill.ports.idestatus.model.WorkBuildView
+import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.idestatus.model.WorkDetailProblem
 import skillbill.ports.idestatus.model.WorkDetailProblemCode
 import skillbill.ports.persistence.UnitOfWork
@@ -71,6 +80,7 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.time.parsePersistedInstantOrNull
 import java.nio.file.Path
+import java.time.Duration
 import java.time.Instant
 import java.util.Locale
 
@@ -82,7 +92,55 @@ public class WorkBoardItemProjection(
   private val diagnostics: RuntimeDiagnostics,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val goalRuntimeStateFiles: GoalRuntimeStateFileStore,
+  private val buildRunRepository: AgentBuildRunRepository,
 ) {
+  internal fun withBuilds(
+    items: List<WorkBoardItem>,
+    now: Instant,
+  ): List<WorkBoardItem> =
+    catchingNonCancellation {
+      items.map { item ->
+        item.copy(
+          build = buildView(item.snapshot.execution?.invocationId ?: item.snapshot.workflowId, item.running, now),
+        )
+      }
+    }.getOrElse { error ->
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Work build overlay failed; builds omitted from this board page.",
+        error,
+      )
+      items.map { it.copy(build = null) }
+    }
+
+  internal fun withBuild(
+    item: WorkDetailItem,
+    now: Instant,
+  ): WorkDetailItem =
+    catchingNonCancellation {
+      item.copy(
+        build = buildView(item.snapshot.execution?.invocationId ?: item.snapshot.workflowId, item.running, now),
+      )
+    }.getOrElse { error ->
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Work build overlay failed; build omitted from this detail.",
+        error,
+      )
+      item.copy(build = null)
+    }
+
+  private fun buildView(
+    runId: String?,
+    running: Boolean,
+    now: Instant,
+  ): WorkBuildView? {
+    if (runId == null) return null
+    val row = buildRunRepository.latestForRun(setOf(runId)) ?: return null
+    val history = buildRunRepository.history(row.repositoryIdentity, row.command, row.startedAt)
+    return workBuildView(row, history, running, now)
+  }
+
   internal fun projectBoardCandidate(
     unitOfWork: UnitOfWork,
     id: String,
@@ -804,3 +862,54 @@ public class WorkBoardReadModelProjection(
     const val MAX_FAILURE_CODE_CHARS = 120
   }
 }
+
+private fun workBuildView(
+  row: AgentBuildRun,
+  history: AgentBuildHistory,
+  running: Boolean,
+  now: Instant,
+): WorkBuildView {
+  val endedAt = row.endedAt
+  val state =
+    when {
+      row.outcome == AgentBuildOutcome.UNKNOWN -> WorkBuildState.FINISHED
+      endedAt == null -> if (running) WorkBuildState.RUNNING else WorkBuildState.FINISHED
+      else -> finishedBuildState(row.outcome)
+    }
+  val elapsedAsOf = if (endedAt == null && state == WorkBuildState.RUNNING) now else endedAt
+  val elapsedMs =
+    when {
+      endedAt != null -> Duration.between(row.startedAt, endedAt).toMillis()
+      state == WorkBuildState.RUNNING -> Duration.between(row.startedAt, now).toMillis().coerceAtLeast(0)
+      else -> null
+    }
+  return WorkBuildView(
+    state = state,
+    command = row.command,
+    shortCommand = row.shortCommand,
+    tool = row.tool,
+    projectKind = row.projectKind,
+    pid = row.pid,
+    startedAt = row.startedAt,
+    elapsedMs = elapsedMs,
+    elapsedAsOf = elapsedAsOf,
+    usualMs = history.usualMs,
+    exitCode = row.exitCode,
+    finishedAt = endedAt,
+    previous =
+      history.previous?.let { previous ->
+        WorkBuildPrevious(
+          state = finishedBuildState(previous.outcome),
+          durationMs = previous.durationMs,
+          finishedAt = previous.endedAt,
+        )
+      },
+  )
+}
+
+private fun finishedBuildState(outcome: AgentBuildOutcome?): WorkBuildState =
+  when (outcome) {
+    AgentBuildOutcome.PASSED -> WorkBuildState.PASSED
+    AgentBuildOutcome.FAILED -> WorkBuildState.FAILED
+    AgentBuildOutcome.UNKNOWN, null -> WorkBuildState.FINISHED
+  }

@@ -103,6 +103,7 @@ internal class ProcessWaitLoop(
       }
       catchingNonCancellation { tree.refresh() }
         .onFailure { failure -> degradation.recordCleanupFailure("process_tree_discovery", failure) }
+      pollBuildObservation()
       wait = nextWait()
     }
     return wait

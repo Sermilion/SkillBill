@@ -16,7 +16,8 @@ internal fun isolatedProjectStoreEnvironment(): Map<String, String> =
 internal fun isolatedCliEnvironment(home: Path? = null): Map<String, String> {
   val filtered =
     System.getenv().filterKeys { key ->
-      key != CODEX_HOME_ENV && key != GOAL_CONTINUATION_ENV && key != DATABASE_PATH_ENV
+      key != CODEX_HOME_ENV && key != GOAL_CONTINUATION_ENV &&
+        key != DATABASE_PATH_ENV && key != STATE_DIR_ENVIRONMENT_KEY
     }
   if (home == null) {
     return filtered

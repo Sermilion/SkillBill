@@ -30,6 +30,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalRe
 import skillbill.infrastructure.sqlite.core.migration.area.addReviewFindingActions
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.buildrun.recordAgentBuildRuns
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.pruneWorktreeEditJournalToLatestTick
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaCriteriaSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaFindingsSummary
@@ -1055,4 +1056,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 115,
       name = "add-approval-not-required-delivery",
       operation = ::addApprovalNotRequiredDelivery,
+    ) +
+    DatabaseMigration(
+      version = 116,
+      name = "record-agent-build-runs",
+      operation = ::recordAgentBuildRuns,
     )

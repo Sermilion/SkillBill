@@ -88,6 +88,16 @@ lane_conditions:
 qa_capability:
   platforms: [backend]
   guidance_file: qa/backend-qa.md
+build_tools:
+  - executable: gradlew
+    display_executable: ./gradlew
+    tool: Gradle
+    project_kind: Kotlin/JVM
+    process_markers:
+      - org.gradle.wrapper.GradleWrapperMain
+    short_skip:
+      - clean
+    version_source: gradle_wrapper
 validation_gate:
   full_gate_command:
     - ./gradlew

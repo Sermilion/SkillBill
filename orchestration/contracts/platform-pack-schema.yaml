@@ -418,6 +418,67 @@ properties:
           type: string
           minLength: 1
           maxLength: 200
+  build_tools:
+    type: array
+    x-runtime-anchored: true
+    description: >
+      Optional build tool declarations. Each entry names an executable agents
+      run for this pack's projects and how the runtime labels it. Packs own
+      their executables; the runtime never hard-codes tool names. Absence
+      means the pack declares no build tools; malformed shapes loud-fail.
+    items:
+      type: object
+      additionalProperties: false
+      required:
+        - executable
+        - tool
+        - project_kind
+      properties:
+        executable:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+        display_executable:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+        tool:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+        project_kind:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+        process_markers:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            pattern: "\\S"
+        project_markers:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            pattern: "^[^/\\\\]"
+            not:
+              pattern: "(^|/)\\.\\.(/|$)"
+        short_skip:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            pattern: "\\S"
+        short_subcommand:
+          type: boolean
+        version_source:
+          type: string
+          enum:
+            - gradle_wrapper
+            - package_manager
+            - go_mod
+            - xcode_app
   validation_gate:
     type: object
     additionalProperties: false
@@ -571,6 +632,11 @@ properties:
           pack load and never degrades to an empty ungated set.
 
 x-coherence-checks:
+  build-tools-unique-executable:
+    description: >
+      Within one pack, `build_tools` executables are unique. Two packs may
+      declare the same executable. Enforced in
+      `ShellContentLoader.parseBuildTools`.
   slug-parity:
     description: >
       `platform` must equal the parent directory name

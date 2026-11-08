@@ -2,6 +2,8 @@ package skillbill.infrastructure.launcher.process.launch
 
 import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.host.process.destroyOwnedProcessTree
+import skillbill.ports.agentrun.model.AgentRunOutputStream
+import skillbill.ports.agentrun.model.AgentRunProcessSample
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import java.io.Closeable
 import java.util.concurrent.CompletableFuture
@@ -155,7 +157,40 @@ internal inline fun cleanupStep(
   }
 }
 
-internal class AgentRunProcessTree(val process: Process) {
+internal fun interface ProcessSnapshot {
+  fun sample(handle: ProcessHandle): AgentRunProcessSample?
+}
+
+/** Provides a temporary process sampler to command observation while a process is running. */
+internal interface BuildCompletionSampleBinding {
+  /** Binds [sample] until the returned handle closes. */
+  fun bindCompletionSamples(sample: () -> List<AgentRunProcessSample>): AutoCloseable
+}
+
+/** Receives one notification after an output drain delivers its final decoded text. */
+internal interface AgentRunOutputEndObserver {
+  /** Reports that [stream] has no more output. */
+  fun outputEnded(stream: AgentRunOutputStream)
+}
+
+internal object JdkProcessSnapshot : ProcessSnapshot {
+  override fun sample(handle: ProcessHandle): AgentRunProcessSample? {
+    if (!handle.isAlive) return null
+    val info = handle.info()
+    return AgentRunProcessSample(
+      pid = handle.pid(),
+      parentPid = handle.parent().map(ProcessHandle::pid).orElse(null),
+      command = info.command().orElse(null),
+      arguments = info.arguments().map { it.toList() }.orElse(emptyList()),
+      startedAt = info.startInstant().orElse(null),
+    )
+  }
+}
+
+internal class AgentRunProcessTree(
+  val process: Process,
+  private val snapshot: ProcessSnapshot = JdkProcessSnapshot,
+) {
   private val lock = Any()
   private val descendants = linkedSetOf<ProcessHandle>()
   private var observationComplete = true
@@ -175,6 +210,8 @@ internal class AgentRunProcessTree(val process: Process) {
     }
 
   fun members(): Set<ProcessHandle> = synchronized(lock) { descendants.toSet() }
+
+  fun samples(): List<AgentRunProcessSample> = members().mapNotNull(snapshot::sample)
 
   fun signalGracefully() {
     synchronized(lock) {

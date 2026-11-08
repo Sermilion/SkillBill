@@ -1,7 +1,12 @@
 package skillbill.infrastructure.contracts.workflow.goal
 
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.identity.status.WORK_BOARD_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.status.WORK_DETAIL_CONTRACT_VERSION
+import skillbill.contracts.workflow.identity.status.WorkBoardPayloadKeys
+import skillbill.contracts.workflow.identity.status.WorkBuildPayloadKeys
+import skillbill.contracts.workflow.identity.status.WorkDetailPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkFailureCode
 import skillbill.goalrunner.model.GoalRunnerSubtaskValidationEvidence
@@ -20,6 +25,81 @@ import kotlin.test.assertFailsWith
 
 class WorkPayloadSchemaValidatorTest {
   private val validator = WorkPayloadSchemaValidator()
+
+  @Test
+  fun `board and detail accept build views and reject an unknown build state`() {
+    val snapshot =
+      IdeStatusSnapshot(
+        repositoryIdentity = "repo-root-realpath-v1:/repo",
+        lifecycleState = IdeStatusLifecycleState.IDLE,
+        currentStep = IdeStatusStep("none", "No work"),
+        updatedAt = Instant.EPOCH,
+        freshness = IdeStatusFreshness.FRESH,
+        summary = "No work.",
+        title = "SKILL-1",
+      )
+    val item =
+      mapOf(
+        WorkBoardPayloadKeys.SNAPSHOT to IdeStatusSchemaValidator().toWirePayload(snapshot).toPayload(),
+        WorkBoardPayloadKeys.REPOSITORY_ROOT to "/repo",
+        WorkBoardPayloadKeys.BUILD to buildPayload("passed"),
+      )
+    val board =
+      mapOf(
+        SharedPayloadKeys.CONTRACT_VERSION to WORK_BOARD_CONTRACT_VERSION,
+        WorkBoardPayloadKeys.ITEMS to listOf(item),
+        WorkBoardPayloadKeys.OBSERVED_AT to Instant.EPOCH.toString(),
+        WorkBoardPayloadKeys.FINISHED_WITHIN to "24h",
+        WorkBoardPayloadKeys.DIAGNOSTICS to emptyList<Any>(),
+        WorkBoardPayloadKeys.PAGE_SIZE to 20,
+        WorkBoardPayloadKeys.NEXT_CURSOR to null,
+      )
+    val detail =
+      mapOf(
+        SharedPayloadKeys.CONTRACT_VERSION to WORK_DETAIL_CONTRACT_VERSION,
+        WorkDetailPayloadKeys.OBSERVED_AT to Instant.EPOCH.toString(),
+        WorkDetailPayloadKeys.ITEM to (item + (WorkDetailPayloadKeys.STEP_PIPELINE to emptyList<String>())),
+        WorkDetailPayloadKeys.PAGE_SIZE to 20,
+        WorkDetailPayloadKeys.NEXT_CURSOR to null,
+      )
+
+    validator.validateBoard(JsonCodec.mapToJsonString(board), "build-board")
+    validator.validateDetail(JsonCodec.mapToJsonString(detail), "build-detail")
+    assertFailsWith<SkillBillRuntimeException> {
+      validator.validateBoard(
+        JsonCodec.mapToJsonString(
+          board +
+            (
+              WorkBoardPayloadKeys.ITEMS to
+                listOf(item + (WorkBoardPayloadKeys.BUILD to buildPayload("queued")))
+            ),
+        ),
+        "unknown-build-state",
+      )
+    }
+  }
+
+  private fun buildPayload(state: String) =
+    mapOf(
+      WorkBuildPayloadKeys.STATE to state,
+      WorkBuildPayloadKeys.COMMAND to "./gradlew check",
+      WorkBuildPayloadKeys.SHORT_COMMAND to "check",
+      WorkBuildPayloadKeys.TOOL to "gradle",
+      WorkBuildPayloadKeys.PROJECT_KIND to "gradle",
+      WorkBuildPayloadKeys.PID to 42,
+      WorkBuildPayloadKeys.STARTED_AT to Instant.EPOCH.toString(),
+      WorkBuildPayloadKeys.ELAPSED_MS to 1_000,
+      WorkBuildPayloadKeys.ELAPSED_AS_OF to Instant.EPOCH.plusSeconds(1).toString(),
+      WorkBuildPayloadKeys.USUAL_MS to 2_000,
+      WorkBuildPayloadKeys.EXIT_CODE to 0,
+      WorkBuildPayloadKeys.FINISHED_AT to Instant.EPOCH.plusSeconds(1).toString(),
+      WorkBuildPayloadKeys.PREVIOUS to
+        mapOf(
+          WorkBuildPayloadKeys.STATE to "failed",
+          WorkBuildPayloadKeys.DURATION_MS to 2_500,
+          WorkBuildPayloadKeys.FINISHED_AT to Instant.EPOCH.minusSeconds(1).toString(),
+        ),
+    )
 
   @Test
   fun `invalid JSON at the text boundary retains each contract failure code`() {

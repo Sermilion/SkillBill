@@ -88,6 +88,11 @@ lane_conditions:
 qa_capability:
   platforms: [backend]
   guidance_file: qa/backend-qa.md
+build_tools:
+  - executable: go
+    tool: Go
+    project_kind: Go
+    version_source: go_mod
 validation_gate:
   full_gate_command:
     - go

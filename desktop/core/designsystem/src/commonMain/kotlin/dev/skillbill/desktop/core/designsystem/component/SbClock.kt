@@ -11,7 +11,7 @@ import dev.skillbill.desktop.core.designsystem.tabular
 import kotlin.time.Instant
 
 @OptIn(kotlin.time.ExperimentalTime::class)
-internal fun formatActiveDuration(ms: Long?, showSeconds: Boolean): String {
+fun formatActiveDuration(ms: Long?, showSeconds: Boolean): String {
   if (ms == null) return "—"
   val seconds = (ms / 1_000).coerceAtLeast(0)
   val hours = seconds / 3_600

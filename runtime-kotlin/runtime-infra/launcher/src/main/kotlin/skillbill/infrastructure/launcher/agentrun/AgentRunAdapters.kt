@@ -6,7 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import skillbill.approval.model.ApprovalExecutionMode
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.error.core.catchingNonCancellation
+import skillbill.infrastructure.launcher.agentrun.display.BuildCommandTap
 import skillbill.infrastructure.launcher.agentrun.display.ReadableAgentOutputSink
+import skillbill.infrastructure.launcher.agentrun.display.SerializedBuildObserver
 import skillbill.infrastructure.launcher.process.codex.CodexPhaseSession
 import skillbill.infrastructure.launcher.process.codex.CodexSessionChannel
 import skillbill.infrastructure.launcher.process.codex.CodexSessionLaunch
@@ -37,6 +39,7 @@ import skillbill.install.model.SupportedAgent
 import skillbill.install.model.agentLauncherUnavailableMessage
 import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
+import skillbill.ports.agentrun.model.AgentRunBuildObserver
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
@@ -157,15 +160,36 @@ internal class ProcessAgentRunAdapter(
         is LauncherResolution.Resolved -> built.copy(command = resolution.command)
         is LauncherResolution.Missing -> return unavailableLauncherFacts(request, built, resolution.message)
       }
-    val process = processRequest(command, request)
-    when (command.approvalProtocol) {
-      AgentRunApprovalProtocol.CURSOR_ACP ->
-        return launchAcpSession(request, command, process, cursorDependency, AcpProvider.Cursor)
-      AgentRunApprovalProtocol.JUNIE_ACP ->
-        return launchAcpSession(request, command, process, cursorDependency, AcpProvider.Junie)
-      else -> Unit
+    val displaySink =
+      if (request.captureDisplayOutput) ReadableAgentOutputSink(agent.id, request.outputSink, diagnostics) else null
+    val serializedObserver =
+      request.buildObserver
+        .takeIf { it !== AgentRunBuildObserver.NONE && command.kind == AgentRunCommandKind.AGENT }
+        ?.let(::SerializedBuildObserver)
+    val tap =
+      serializedObserver
+        ?.takeIf { command.streamsProviderEvents }
+        ?.let { observer -> BuildCommandTap(agent.id, displaySink ?: request.outputSink, observer, clock, diagnostics) }
+    val streamRequest =
+      request.copy(
+        outputSink = tap ?: displaySink ?: request.outputSink,
+        buildObserver = serializedObserver ?: AgentRunBuildObserver.NONE,
+        captureDisplayOutput = false,
+      )
+    try {
+      val process = processRequest(command, streamRequest)
+      when (command.approvalProtocol) {
+        AgentRunApprovalProtocol.CURSOR_ACP ->
+          return launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.Cursor)
+        AgentRunApprovalProtocol.JUNIE_ACP ->
+          return launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.Junie)
+        else -> Unit
+      }
+      return launchOtherSession(streamRequest, command, process)
+    } finally {
+      tap?.finish()
+      displaySink?.finish()
     }
-    return launchOtherSession(request, command, process)
   }
 
   private fun launchOtherSession(

@@ -3,6 +3,7 @@ package skillbill.engine.operation.core
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.runner.providerLimitSignal
 import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
 import skillbill.engine.featuretask.slot.PhaseRunner
@@ -27,6 +28,7 @@ import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimit
 public class OperationStepRunner(
   private val runner: PhaseRunner,
   private val gitOperations: WorkflowGitOperations,
+  private val buildObserverFactory: AgentBuildObserverFactory,
 ) {
   internal fun runReadOnly(
     context: OperationContext,
@@ -56,7 +58,7 @@ public class OperationStepRunner(
     session: PhaseStepSession?,
   ): OperationStepResult {
     val before = fingerprint(context) { return OperationStepResult.Refused(it) }
-    val result = launch(stepName, input, session)
+    val result = launch(context, stepName, input, session)
     if (fingerprint(context) { return OperationStepResult.Refused(it) } != before) {
       return OperationStepResult.Failed(readOnlyViolation(stepName))
     }
@@ -72,7 +74,12 @@ public class OperationStepRunner(
     val dirty = dirtyPaths(context) { return OperationStepResult.Refused(it) }
     val before = contentIdentities(context, dirty) { return OperationStepResult.Refused(it) }
     val result =
-      launch(stepName, stepInput(context, stepName, directive, priorValues, EDITING_STEP_POLICY), session = null)
+      launch(
+        context,
+        stepName,
+        stepInput(context, stepName, directive, priorValues, EDITING_STEP_POLICY),
+        session = null,
+      )
     return if (result is OperationStepResult.Settled) withReeditedPaths(context, dirty, before, result) else result
   }
 
@@ -88,13 +95,14 @@ public class OperationStepRunner(
   }
 
   private fun launch(
+    context: OperationContext,
     stepName: String,
     input: PhaseStepInput?,
     session: PhaseStepSession?,
   ): OperationStepResult {
     input ?: return OperationStepResult.Failed("Operation step '$stepName' launches an agent; name one with --agent.")
-    val output =
-      session?.let { runner.run(input, OperationPhaseLaunchState, it) } ?: runner.run(input, OperationPhaseLaunchState)
+    val state = OperationPhaseLaunchState(context, buildObserverFactory)
+    val output = session?.let { runner.run(input, state, it) } ?: runner.run(input, state)
     return when (val failure = failureOf(stepName, output, input, input.policy)) {
       is OperationStepFailure.Failed -> OperationStepResult.Failed(failure.reason)
       is OperationStepFailure.Refused -> OperationStepResult.Refused(failure.refusal)
@@ -227,13 +235,20 @@ internal sealed interface OperationStepResult {
 private fun readOnlyViolation(stepName: String): String =
   "Operation step '$stepName' is read-only but changed the worktree."
 
-private object OperationPhaseLaunchState : PhaseLaunchState {
+private class OperationPhaseLaunchState(
+  private val context: OperationContext,
+  private val buildObserverFactory: AgentBuildObserverFactory,
+) : PhaseLaunchState {
   override val launchPromptContext: String = ""
 
   override fun settlementTarget(attempt: Int): FeatureTaskRuntimePhaseSettlementTarget? = null
 
   override fun launchObservation(stepName: String): PhaseLaunchObservation =
-    PhaseLaunchObservation(AgentRunActivityStampSink.NONE, AgentRunWorktreeEditObserver.NONE)
+    PhaseLaunchObservation(
+      AgentRunActivityStampSink.NONE,
+      AgentRunWorktreeEditObserver.NONE,
+      buildObserver = buildObserverFactory.observer(context.repoRoot, { context.invocationId }, { null }),
+    )
 
   override fun recordTokenUsage(
     stepName: String,

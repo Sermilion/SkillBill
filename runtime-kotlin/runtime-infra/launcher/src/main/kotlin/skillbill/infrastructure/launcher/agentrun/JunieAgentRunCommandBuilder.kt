@@ -85,6 +85,7 @@ internal class JunieAgentRunCommandBuilder(
           runtimeDatabaseEnvironment(request.reviewEvidenceBroker == null, databasePath),
       inheritEnvironment = request.reviewEvidenceBroker == null,
       conversationIsolation = governedReviewConversationIsolation(request),
+      streamsProviderEvents = false,
       idlePolicy = unstreamedLivenessPolicy(request),
       environmentPassthroughKeys =
         if (request.reviewEvidenceBroker != null) JUNIE_PROVIDER_PASSTHROUGH_KEYS else emptySet(),

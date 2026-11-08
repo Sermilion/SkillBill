@@ -1,3 +1,8 @@
+## [2026-11-08] Keep the build indicator spinner private
+Context: The build design needs a borderStrong track, a top-border arc, its own stroke rules and a 900 millisecond turn.
+Decision: BuildChip and BuildStrip share a private BuildSpinner with their own arc, track and reduced-motion rules.
+Reason: SbSpinner couples track and arc color and uses different stroke and start-angle rules. A private spinner matches the build design while preserving existing callers, including the plan-stage extension.
+
 ## [2026-11-07] Share presentation without transferring feature behavior
 Context: SKILL-516 merges repeated drawing across desktop modules whose domain mappings and interaction lifetimes differ.
 Decision: Accept plain values and slots in shared components. Row and overlay surfaces own drawing; callers keep activation, focus, keyboard handling, dismissal and feature decorations. Row callers supply the shared MutableInteractionSource and choose the shape, using RectangleShape for normal ListRow, inbox and file rows. Status and bar callers map domain states; skeleton callers own loading semantics and animation.

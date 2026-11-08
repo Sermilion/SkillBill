@@ -233,9 +233,11 @@ public class IdeStatusService(
         pageSize = request.pageSize,
       )
     }
-    return database.read { unitOfWork ->
-      WorkBoardReadModelRead.read(workBoardItemProjection, unitOfWork, request, position)
-    }
+    val result =
+      database.read { unitOfWork ->
+        WorkBoardReadModelRead.read(workBoardItemProjection, unitOfWork, request, position)
+      }
+    return result.copy(items = workBoardItemProjection.withBuilds(result.items, clock.instant()))
   }
 
   public fun projectBoardSelection(
@@ -244,60 +246,63 @@ public class IdeStatusService(
   ): WorkBoardResult {
     require(ids.size <= request.pageSize)
     val observedAt = request.observedAt ?: clock.instant()
-    return database.read { unitOfWork ->
-      val diagnostics = mutableListOf<WorkBoardDiagnostic>()
-      val skipDiagnostics = AggregateSkipDiagnostics()
-      val items =
-        ids.distinct().mapNotNull { id ->
-          val found = workBoardItemProjection.selectedMatch(id, unitOfWork)
-          val work = found.work
-          val standalone = found.standalone
-          val identity = standalone?.repositoryIdentity ?: work?.repositoryIdentity
-          val root = identity?.let(workBoardItemProjection::decodeRepositoryRoot)
-          if (identity == null || root == null) {
-            diagnostics += workBoardItemProjection.repositoryIdentityDiagnostic(identity, workflowId = id)
-            return@mapNotNull null
-          }
-          val candidates =
-            try {
-              workBoardItemProjection.collectCandidates(
-                unitOfWork,
-                IdeStatusRepositoryResolution.Ok(identity, root),
-                null,
-                observedAt,
-                CandidateRead(
-                  ResolvedWorkCandidates(listOfNotNull(work), listOfNotNull(standalone)),
-                  skipDiagnostics = skipDiagnostics,
-                ),
-              )
-            } catch (error: SkillBillRuntimeException) {
-              return@mapNotNull skipIncompatibleBoardItem(
-                error,
-                diagnostics,
-                skipDiagnostics,
-                this.diagnostics,
-                id,
-              )
+    val result =
+      database.read { unitOfWork ->
+        val diagnostics = mutableListOf<WorkBoardDiagnostic>()
+        val skipDiagnostics = AggregateSkipDiagnostics()
+        val items =
+          ids.distinct().mapNotNull { id ->
+            val found = workBoardItemProjection.selectedMatch(id, unitOfWork)
+            val work = found.work
+            val standalone = found.standalone
+            val identity = standalone?.repositoryIdentity ?: work?.repositoryIdentity
+            val root = identity?.let(workBoardItemProjection::decodeRepositoryRoot)
+            if (identity == null || root == null) {
+              diagnostics += workBoardItemProjection.repositoryIdentityDiagnostic(identity, workflowId = id)
+              return@mapNotNull null
             }
-          val candidate =
-            candidates.singleOrNull()
-              ?: throw invalidWorkListRowError("Selected work candidate cannot be projected.")
-          val context = IdeStatusProjectionContext(unitOfWork, identity, candidate.branchCorrelation, observedAt, root)
-          try {
-            workBoardItemProjection.projectBoardItem(candidate, context, listOfNotNull(work))
-          } catch (error: SkillBillRuntimeException) {
-            skipIncompatibleBoardItem(error, diagnostics, skipDiagnostics, this.diagnostics, id)
+            val candidates =
+              try {
+                workBoardItemProjection.collectCandidates(
+                  unitOfWork,
+                  IdeStatusRepositoryResolution.Ok(identity, root),
+                  null,
+                  observedAt,
+                  CandidateRead(
+                    ResolvedWorkCandidates(listOfNotNull(work), listOfNotNull(standalone)),
+                    skipDiagnostics = skipDiagnostics,
+                  ),
+                )
+              } catch (error: SkillBillRuntimeException) {
+                return@mapNotNull skipIncompatibleBoardItem(
+                  error,
+                  diagnostics,
+                  skipDiagnostics,
+                  this.diagnostics,
+                  id,
+                )
+              }
+            val candidate =
+              candidates.singleOrNull()
+                ?: throw invalidWorkListRowError("Selected work candidate cannot be projected.")
+            val context =
+              IdeStatusProjectionContext(unitOfWork, identity, candidate.branchCorrelation, observedAt, root)
+            try {
+              workBoardItemProjection.projectBoardItem(candidate, context, listOfNotNull(work))
+            } catch (error: SkillBillRuntimeException) {
+              skipIncompatibleBoardItem(error, diagnostics, skipDiagnostics, this.diagnostics, id)
+            }
           }
-        }
-      WorkBoardResult(
-        observedAt,
-        request.finishedWithin,
-        items,
-        diagnostics,
-        pageSize = request.pageSize,
-        observation = unitOfWork.workList.observation(),
-      )
-    }
+        WorkBoardResult(
+          observedAt,
+          request.finishedWithin,
+          items,
+          diagnostics,
+          pageSize = request.pageSize,
+          observation = unitOfWork.workList.observation(),
+        )
+      }
+    return result.copy(items = workBoardItemProjection.withBuilds(result.items, clock.instant()))
   }
 
   public fun detail(request: WorkDetailRequest): WorkDetailResult {
@@ -346,7 +351,8 @@ public class IdeStatusService(
               WorkDetailProblemCode.UNKNOWN_WORK_ITEM,
               "No projectable work item has id '${request.id}'.",
             )
-        val context = IdeStatusProjectionContext(unitOfWork, identity, candidate.branchCorrelation, observedAt, root)
+        val context =
+          IdeStatusProjectionContext(unitOfWork, identity, candidate.branchCorrelation, observedAt, root)
         val projected = projectDetailItem(candidate, context, resolved?.item, request, position)
         nextAnchors = projected.nextAnchors
         WorkDetailResult(
@@ -355,7 +361,8 @@ public class IdeStatusService(
           observation = unitOfWork.workList.observation(),
         )
       }
-    return workDetailPagedResult(result, request, position, nextAnchors)
+    val overlaid = result.item?.let { workBoardItemProjection.withBuild(it, clock.instant()) }
+    return workDetailPagedResult(result.copy(item = overlaid), request, position, nextAnchors)
   }
 
   private fun detailProblem(

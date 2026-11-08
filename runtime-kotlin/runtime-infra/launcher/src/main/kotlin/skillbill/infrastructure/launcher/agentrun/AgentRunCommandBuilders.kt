@@ -37,6 +37,8 @@ internal data class AgentRunCommand(
   val conversationIsolation: ReviewConversationIsolation? = null,
   val outputDecoder: AgentRunOutputDecoder? = null,
   val environmentPassthroughKeys: Set<String> = emptySet(),
+  val kind: AgentRunCommandKind = AgentRunCommandKind.AGENT,
+  val streamsProviderEvents: Boolean = false,
   val approvalProtocol: AgentRunApprovalProtocol? = null,
   val sessionModel: String? = null,
 )
@@ -46,6 +48,11 @@ internal enum class AgentRunApprovalProtocol {
   CODEX_APP_SERVER,
   CURSOR_ACP,
   JUNIE_ACP,
+}
+
+internal enum class AgentRunCommandKind {
+  AGENT,
+  RUNTIME_HARNESS,
 }
 
 internal interface AgentRunCommandBuilder {

@@ -1,3 +1,13 @@
+## [2026-11-08] SKILL-522 per-run build indicator placement
+Areas: desktop/core/domain, core/data, core/ui, core/designsystem, feature/work and feature/detail; runtime build capture and work read contracts
+- MEDIUM feature. Nullable WorkBuild carries current and previous build state, command metadata, timestamps, durations and exit code through board and detail mapping.
+- WorkRow places BuildChip before Stalled for running and failed builds. Passed, finished and absent builds have no row chip.
+- DetailScreen places the keyed BuildStrip immediately below the header and above pause notices for every non-null build, except standalone validation and Verify documents. Those rows can still show chips.
+- WorkBuild.toSbBuild and showsChip in core/ui/status are reusable. Existing commit-signal refresh supplies new snapshots; component-owned LocalUiTicker advances presentation without added polling.
+- Limits: no prototype hash routes, sidebar card, log streaming, cancel control or aggregate statistics. Unknown outcomes use finished, and unknown exit codes omit the exit segment.
+Feature flag: N/A
+Acceptance criteria: 3/3 placement subtask criteria implemented; 5/5 parent criteria implemented across runtime and desktop
+
 ## [2026-11-08] SKILL-520 contextual usage limits
 Areas: desktop/app/usage, desktop/app/shell, desktop/app/di, desktop/core/domain/usage, desktop/core/data/usage, desktop/core/data/chat, desktop/core/data/session, desktop/core/ui, desktop/core/designsystem, desktop/feature/chat
 - MEDIUM feature. Added a usage card above Specs in the fixed sidebar footer and a 316 dp details popup. It follows the selected New task chat or open run; Work and History remember a provider per window. Junie and unknown contextual providers hide the card.
@@ -12,7 +22,6 @@ Areas: desktop/app/usage, desktop/app/shell, desktop/app/di, desktop/core/domain
 - Limits: production numbers, disk caching and historical-account capture remain outside this release; runtime-launched Claude sessions have no event bridge. Dedicated popup lifecycle/external-action coverage and native macOS/Windows checks remain unverified. The supplied environment_unavailable warning records that validation changed code after QA settled, so the published change differs from the tree QA tested; QA does not rerun.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented
-
 ## [2026-11-07] SKILL-525 background chat summaries with marquee
 Areas: desktop/app, desktop/core/data chat, desktop/core/domain, desktop/core/designsystem, desktop/core/testing, desktop/feature/chat and its newtask package
 - MEDIUM feature. Recent chats and /resume rows prefer a saved one-sentence summary, retain their existing title fallback and image suffix, and match summaries in the resume palette filter. Open tabs, transcript headers and chat search keep their titles.

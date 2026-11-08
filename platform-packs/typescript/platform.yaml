@@ -87,6 +87,25 @@ lane_conditions:
 qa_capability:
   platforms: [web, backend]
   guidance_file: qa/backend-web-qa.md
+build_tools:
+  - executable: npm
+    tool: npm
+    project_kind: TypeScript
+    process_markers:
+      - npm-cli.js
+    short_skip:
+      - run
+    version_source: package_manager
+  - executable: pnpm
+    tool: pnpm
+    project_kind: TypeScript
+    process_markers:
+      - pnpm.cjs
+      - pnpm.mjs
+      - pnpm.js
+    short_skip:
+      - run
+    version_source: package_manager
 validation_gate:
   full_gate_command:
     - sh

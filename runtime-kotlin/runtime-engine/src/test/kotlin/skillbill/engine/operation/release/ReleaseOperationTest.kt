@@ -1,5 +1,6 @@
 package skillbill.engine.operation.release
 
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepInput
@@ -71,7 +72,7 @@ class ReleaseOperationTest {
     OperationExecutor(
       OperationRegistry(listOf(ReleaseOperation(git, buildGate))),
       OperationConfirmationGate(proposals, UnavailableOperationCardRepository, git, Clock.systemUTC()),
-      OperationStepRunner(runner, git),
+      OperationStepRunner(runner, git, AgentBuildObserverFactory.NONE),
       projectStore,
       RecordingBranchWorktreeResources(),
       NoOperationCardLifecycle,
@@ -80,7 +81,7 @@ class ReleaseOperationTest {
     OperationExecutor(
       OperationRegistry(listOf(ReleaseOperation(git, buildGate), OtherConfirmableOperation)),
       OperationConfirmationGate(proposals, UnavailableOperationCardRepository, git, Clock.systemUTC()),
-      OperationStepRunner(runner, git),
+      OperationStepRunner(runner, git, AgentBuildObserverFactory.NONE),
       projectStore,
       RecordingBranchWorktreeResources(),
       NoOperationCardLifecycle,

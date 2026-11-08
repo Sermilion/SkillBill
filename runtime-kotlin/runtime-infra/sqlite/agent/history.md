@@ -1,3 +1,14 @@
+## [2026-11-08] SKILL-522 per-repository build history store
+Areas: runtime-infra/sqlite migration, schema and idestatus; runtime-ports idestatus and UnitOfWork; runtime-contracts persistence
+- MEDIUM feature. Migration 108 adds agent_build_runs, indexed lookups and desktop change triggers attributed to parent run when present. DesktopReadSchema.VERSION is 108.
+- AgentBuildRunRepository and its UnitOfWork-backed session adapter are reusable. Settlement writes outcome and end once, then retains the newest 20 settled rows per repository and command in the same transaction; open rows survive pruning.
+- History takes the five most recently ended settled rows that started before the current build. Usual time is their median duration, with even pairs rounded down; previous is the newest row in that window.
+- Fixed-width UTC millisecond timestamps preserve SQLite text ordering. Negative history durations clamp to zero, and store failures propagate to callers.
+- Active rows take lookup priority across run and parent IDs. Abandonment marks unknown without fabricating an end, removes active priority and excludes the row from duration history. Repository history remains outside goal purge.
+- Compatibility: UnitOfWork implementations supply agentBuildRuns, with an empty implementation in testFixtures.
+Feature flag: N/A
+Acceptance criteria: 2/2 store subtask criteria implemented; contributes to parent criterion 2
+
 ## [2026-11-01] SKILL-455 Activity attempt and incident pages
 - Added parent-scoped Activity reads over child workflows and runtime sessions, including blocked attempts with no workflow row.
 - Retains the workflow and event lifecycle statuses separately so the engine chooses the authoritative status.
