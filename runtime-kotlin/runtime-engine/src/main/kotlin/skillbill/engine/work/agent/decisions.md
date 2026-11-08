@@ -1,3 +1,13 @@
+## [2026-11-08] Overlay builds after the main work read
+Context: The injected session-backed build repository owns its database reads, while board projections are persisted separately from build rows.
+Decision: WorkBoardItemProjection owns the build overlay and shared mapper. IdeStatusService applies it after the main database read, using its injected clock. Failures omit build data with a warning.
+Reason: Separate overlay reads keep builds fresh without rewriting board rows and preserve the main result on build-store failure. Projection ownership avoids another IdeStatusService dependency; up to two indexed reads per item is the accepted cost.
+
+## [2026-11-08] Require work-item liveness for running build presentation
+Context: A runtime crash can leave a build row with no end timestamp, so row openness alone cannot prove a build still runs.
+Decision: Present an open row as running only while its work item is live. Unknown outcomes and open rows on finished items become finished without inventing an end timestamp or elapsed time.
+Reason: Existing work-item liveness supplies execution evidence. An unfinished durable row must not leave the desktop displaying a build as active indefinitely.
+
 ## [2026-11-07] Show a Cursor grok launch on the activity model list
 Context: Activity keeps a phase model only when the id belongs to the attempt's agent. Claude matches `claude*`, Codex matches `gpt*`, and every other agent was dropped. A Cursor audit attempt records `grok-4.7-high-fast`, and the execution matrix records `cursor-grok-*`.
 Decision: A Cursor attempt keeps a model that starts with `grok` or `cursor-`. A `gpt*` or `claude*` id on that attempt stays hidden.

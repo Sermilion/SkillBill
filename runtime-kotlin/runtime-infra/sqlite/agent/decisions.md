@@ -1,3 +1,8 @@
+## [2026-11-08] Store build instants as fixed-width UTC milliseconds
+Context: SQLite compares build start, end and history cutoff timestamps as text for ordering and retention.
+Decision: Normalize all build instants and cutoffs to fixed-width UTC text truncated to milliseconds.
+Reason: Variable fractional precision in ISO instant text can reverse lexical ordering. Fixed width preserves chronological ordering, and milliseconds match the duration unit.
+
 ## [2026-11-03] Signal diff comments without joining the board topic catalog
 Context: Comment writes must invalidate desktop readers without making comments a primary board topic.
 Decision: Add `DIFF_COMMENTS_TOPIC` to `SIGNALLED_TOPICS` only, seed its revision row on migrate and fresh install, and register both comment tables for desktop change triggers.

@@ -1,3 +1,13 @@
+## [2026-11-08] SKILL-522 per-run build indicator placement
+Areas: desktop/core/domain, core/data, core/ui, core/designsystem, feature/work and feature/detail; runtime build capture and work read contracts
+- MEDIUM feature. Nullable WorkBuild carries current and previous build state, command metadata, timestamps, durations and exit code through board and detail mapping.
+- WorkRow places BuildChip before Stalled for running and failed builds. Passed, finished and absent builds have no row chip.
+- DetailScreen places the keyed BuildStrip immediately below the header and above pause notices for every non-null build, except standalone validation and Verify documents. Those rows can still show chips.
+- WorkBuild.toSbBuild and showsChip in core/ui/status are reusable. Existing commit-signal refresh supplies new snapshots; component-owned LocalUiTicker advances presentation without added polling.
+- Limits: no prototype hash routes, sidebar card, log streaming, cancel control or aggregate statistics. Unknown outcomes use finished, and unknown exit codes omit the exit segment.
+Feature flag: N/A
+Acceptance criteria: 3/3 placement subtask criteria implemented; 5/5 parent criteria implemented across runtime and desktop
+
 ## [2026-11-07] SKILL-517 QA device picker in sidebar
 Areas: desktop/app/shell/qadevice, desktop/core/data, desktop/core/domain, desktop/core/datastore, desktop/core/designsystem, desktop/feature/chat, desktop/feature/settings; runtime-engine, runtime-cli, runtime-goalrunner, runtime-contracts, runtime-ports, runtime-infra/workflow
 - MEDIUM feature. The sidebar footer has an upward device picker, and the New Task QA chip names the saved pick. Ready devices and stopped AVDs are pickable; leased, unauthorized, offline and unsupported devices are disabled.

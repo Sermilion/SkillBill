@@ -1,3 +1,8 @@
+## [2026-11-08] Keep the build indicator spinner private
+Context: The build design needs a borderStrong track, a top-border arc, its own stroke rules and a 900 millisecond turn.
+Decision: BuildChip and BuildStrip share a private BuildSpinner with their own arc, track and reduced-motion rules.
+Reason: SbSpinner couples track and arc color and uses different stroke and start-angle rules. A private spinner matches the build design while preserving existing callers, including the plan-stage extension.
+
 ## [2026-11-07] Extend SbSpinner without changing existing callers
 Context: The plan stage strip needs a track ring, a shorter arc and different turn durations. QA, validation and chat already use SbSpinner.
 Decision: Add durationMillis, trackAlpha and arcSweep with defaults of 1000 milliseconds, no track and a 270-degree arc. Plan callers supply their own values; reduced motion holds rotation at zero.

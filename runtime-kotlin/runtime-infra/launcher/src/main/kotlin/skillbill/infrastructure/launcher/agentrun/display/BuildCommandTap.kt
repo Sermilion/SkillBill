@@ -99,11 +99,11 @@ internal class SerializedBuildObserver(private val delegate: AgentRunBuildObserv
 }
 
 internal class BuildCommandTap(
-  agent: String,
+  private val agent: String,
   private val delegate: AgentRunOutputSink,
   private val observer: SerializedBuildObserver,
   private val clock: Clock,
-  diagnostics: RuntimeDiagnostics,
+  private val diagnostics: RuntimeDiagnostics,
 ) : AgentRunOutputSink, AgentRunOutputEndObserver {
   private var decoder = ProviderActivityDecoder(agent, diagnostics)
   private val mapper = ObjectMapper()

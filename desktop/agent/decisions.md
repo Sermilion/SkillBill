@@ -1,3 +1,8 @@
+## [2026-11-08] Map build presentation in core/ui
+Context: Work rows and run details consume WorkBuild, while design-system components accept SbBuild presentation values.
+Decision: Map runtime builds to WorkBuild in core/data and convert WorkBuild to SbBuild in core/ui/status for both features.
+Reason: core/ui already depends on core/domain and core/designsystem and owns status mapping. This keeps the design system independent of domain models and gives both features one presentation conversion.
+
 ## [2026-11-07] Keep QA discovery explicit and picks owned by settings
 Context: The sidebar and New Task chip display the same persisted pick while device availability and leases can change independently.
 Decision: AppSettingsRepository owns the pick. Window-scoped QaDevicePickerState owns cancellable discovery on open and explicit refresh. Preserve a missing pick and match an AVD pick to its running emulator.

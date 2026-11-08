@@ -1,3 +1,14 @@
+## [2026-11-08] SKILL-522 build views on board and detail
+Areas: runtime-engine work; runtime-ports idestatus models; runtime-contracts identity/status; runtime-cli work; runtime-infra/contracts; orchestration/contracts
+- MEDIUM feature. Both board paths and detail overlay the latest build after their main database reads return. Invocation identity precedes workflow identity; parent-run matching exposes child builds on goal items.
+- WorkBuildView, WorkBuildPrevious and the CLI build mapper are reusable. History uses the build row's repository, command and start cutoff so the current build stays outside its own usual time and previous result.
+- Open rows report running only for live work items. Unknown outcomes or open rows on finished items report finished; missing ends retain null completion and elapsed values.
+- Build-read failures omit build data for the board page or detail and emit a best-effort warning. Cancellation propagates.
+- Work-board advances to 1.3 and work-detail to 1.10 with optional nullable build views, shared keys and schema validation. Ide-status remains 0.6.
+- Limits: the overlay can issue two indexed reads per item and does not rewrite persisted board projections.
+Feature flag: N/A
+Acceptance criteria: 3/3 read-surface subtask criteria implemented; covers parent criterion 3
+
 ## [2026-11-06] SKILL-506 Verify run detail projection
 Areas: runtime-engine work and Verify operation, runtime-ports idestatus and telemetry, runtime-infra/sqlite, QA report mapping
 - Work detail projects typed Verify artifacts, criteria, findings, QA results, verdict, supersession and stale reason for Verify runs.

@@ -1,3 +1,19 @@
+## [2026-11-08] Build paths cross runtime-domain as strings
+Context: Build matching needs repository and Xcode metadata paths, while runtime-domain forbids java.nio imports.
+Decision: BuildMatchContext and BuildRepositoryFiles carry absolute host path strings. The runtime-infra adapter converts them with Path.of.
+Reason: Filesystem types belong to infrastructure. String paths preserve matching behavior without adding a domain dependency on host filesystem APIs.
+
+## [2026-11-08] Fix build correlation at first observation
+Context: Process samples and command events arrive separately, and a build can predate or outlive its launching command call.
+Decision: At build start, choose the most recent eligible call mentioning the executable and retain that correlation. Deliver command events before process samples.
+Reason: Fixed correlation makes settlement deterministic. A STARTED event arriving after first observation cannot retroactively claim the build, which then settles unknown without completion evidence.
+Revisit when: Provider STARTED events routinely arrive after the first process sample.
+
+## [2026-11-08] Use observed command results for descendant build outcomes
+Context: JDK descendant ProcessHandle data has no exit status. Codex command results carry exit codes; Claude and Cursor report success or failure only.
+Decision: Use correlated provider completion for outcomes. Record successful Claude and Cursor calls as passed with exit 0, failures with exit null and missing completions as unknown.
+Reason: Process timing cannot establish an exit code. Keeping unknown distinct avoids inventing failure codes or treating missing evidence as success.
+
 ## [2026-11-06] Keep fence-parsing rationale outside Kotlin comments
 Context: Validation found non-interface KDoc on MarkdownFences and a line comment in PlanBundleSpecText, which the comment architecture guard rejects.
 Decision: Keep this rationale here and remove the source comments. Heading parsers ignore headings inside fenced examples. An unclosed fence marks every line as outside so it cannot hide the rest of a spec.

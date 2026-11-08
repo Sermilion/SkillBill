@@ -53,37 +53,7 @@ class AgentBuildRecorderTest {
         environment = emptyMap(),
         diagnostics = NoopRuntimeDiagnostics,
       )
-    database.transaction {
-      it.agentBuildRuns.start(
-        AgentBuildRunStart(
-          buildId = "stale",
-          runId = "run-1",
-          parentRunId = null,
-          repositoryIdentity = "primary",
-          command = "old command",
-          shortCommand = "old",
-          tool = "cargo",
-          projectKind = "Rust",
-          pid = 10,
-          startedAt = Instant.EPOCH,
-        ),
-      )
-      it.agentBuildRuns.start(
-        AgentBuildRunStart(
-          buildId = "abandoned-only",
-          runId = "abandoned-only-run",
-          parentRunId = null,
-          repositoryIdentity = "primary",
-          command = "old command",
-          shortCommand = "old",
-          tool = "cargo",
-          projectKind = "Rust",
-          pid = 11,
-          startedAt = Instant.EPOCH.plusSeconds(1),
-        ),
-      )
-      it.agentBuildRuns.abandonOpen("abandoned-only-run")
-    }
+    database.transaction { seedStaleBuilds(it.agentBuildRuns) }
     val observer = recorder(SessionAgentBuildRunRepository(database))
     val startedAt = Instant.parse("2026-11-07T11:59:58Z")
     val endedAt = Instant.parse("2026-11-07T12:00:01Z")
@@ -155,6 +125,38 @@ class AgentBuildRecorderTest {
     assertEquals(secondStart, latest.startedAt)
     assertEquals(secondStart.plusSeconds(1), latest.endedAt)
     assertEquals(1_000L, store.history("primary", "cargo build", secondStart.plusSeconds(2)).usualMs)
+  }
+
+  private fun seedStaleBuilds(store: AgentBuildRunRepository) {
+    store.start(
+      AgentBuildRunStart(
+        buildId = "stale",
+        runId = "run-1",
+        parentRunId = null,
+        repositoryIdentity = "primary",
+        command = "old command",
+        shortCommand = "old",
+        tool = "cargo",
+        projectKind = "Rust",
+        pid = 10,
+        startedAt = Instant.EPOCH,
+      ),
+    )
+    store.start(
+      AgentBuildRunStart(
+        buildId = "abandoned-only",
+        runId = "abandoned-only-run",
+        parentRunId = null,
+        repositoryIdentity = "primary",
+        command = "old command",
+        shortCommand = "old",
+        tool = "cargo",
+        projectKind = "Rust",
+        pid = 11,
+        startedAt = Instant.EPOCH.plusSeconds(1),
+      ),
+    )
+    store.abandonOpen("abandoned-only-run")
   }
 
   private fun runImplement(
