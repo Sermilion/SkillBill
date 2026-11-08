@@ -401,6 +401,7 @@ internal class ProcessAgentRunAdapter(
         activityProbe = WorktreeActivityProbe(command.workingDirectory),
         activityStampSink = request.activityStampSink,
         worktreeEditObserver = request.worktreeEditObserver,
+        buildObserver = request.buildObserver,
         idlePolicy = command.idlePolicy,
       ),
     environmentFields =

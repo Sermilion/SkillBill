@@ -3,13 +3,20 @@ package skillbill.infrastructure.launcher.agentrun
 import skillbill.contracts.time.JvmSystemClock
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
 import skillbill.infrastructure.host.scratch.testAgentRunScratchRoot
+import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRequest
+import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
+import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRunner
 import skillbill.infrastructure.launcher.process.launch.JvmAgentRunProcessRunner
 import skillbill.infrastructure.launcher.process.launch.testAgentRunProcessRequest
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.agentrun.model.AgentRunBuildObserver
+import skillbill.ports.agentrun.model.AgentRunCommandEvent
+import skillbill.ports.agentrun.model.AgentRunProcessSample
 import skillbill.ports.agentrun.model.AgentRunProgressEmitter
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -18,6 +25,64 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 class AgentRunLauncherActivityTest {
+  @Test
+  fun `every provider forwards silent build process observations to the launch observer`() {
+    listOf(SupportedAgent.CODEX, SupportedAgent.CLAUDE, SupportedAgent.CURSOR, SupportedAgent.JUNIE).forEach { agent ->
+      val received = mutableListOf<List<AgentRunProcessSample>>()
+      val observer =
+        object : AgentRunBuildObserver {
+          override fun processes(
+            observedAt: Instant,
+            samples: List<AgentRunProcessSample>,
+          ) {
+            received += samples
+          }
+
+          override fun command(event: AgentRunCommandEvent) = Unit
+
+          override fun finished(observedAt: Instant) = Unit
+        }
+      val samples =
+        listOf(
+          AgentRunProcessSample(
+            42L,
+            1L,
+            "java",
+            listOf("org.gradle.wrapper.GradleWrapperMain", "check"),
+            Instant.EPOCH,
+          ),
+        )
+      val runner =
+        object : AgentRunProcessRunner {
+          override fun run(request: AgentRunProcessRequest): AgentRunProcessResult {
+            request.probes.buildObserver.processes(Instant.EPOCH, samples)
+            request.probes.buildObserver.finished(Instant.EPOCH)
+            return AgentRunProcessResult(
+              0,
+              "",
+              stderr = "",
+              timedOut = false,
+              interrupted = false,
+              spawnFailed = false,
+            )
+          }
+        }
+      val adapter =
+        requireNotNull(
+          headlessAgentRunAdapters(
+            runner,
+            ALL_EXECUTABLES_AVAILABLE,
+            diagnostics = NoopRuntimeDiagnostics,
+            clock = LAUNCH_TEST_CLOCK,
+          )[agent],
+        )
+
+      adapter.launchFacts(skillRunRequest().copy(promptOverride = "Validate this project", buildObserver = observer))
+
+      assertEquals(listOf(samples), received, "build observations for $agent")
+    }
+  }
+
   @Test
   fun `a faulty emitter never fails the run`() {
     val result =

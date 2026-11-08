@@ -193,9 +193,27 @@ private inline fun <T> readProbe(
     },
   )
 
+internal fun AgentRunBuildObserver.bindBuildSamples(
+  tree: AgentRunProcessTree,
+  degradation: ProcessRunDegradationRecorder,
+): AutoCloseable? =
+  catchingNonCancellation {
+    (this as? BuildCompletionSampleBinding)?.bindCompletionSamples {
+      tree.refresh()
+      tree.samples()
+    }
+  }.onFailure { failure -> degradation.recordProbeFailure("build_sample_binding", failure) }.getOrNull()
+
 internal fun AgentRunBuildObserver.finishBuildObservation(
   observedAt: Instant,
   degradation: ProcessRunDegradationRecorder,
+  sampleBinding: AutoCloseable? = null,
 ) {
-  if (this !== AgentRunBuildObserver.NONE) safeBuildObserve(degradation) { finished(observedAt) }
+  try {
+    if (this !== AgentRunBuildObserver.NONE) safeBuildObserve(degradation) { finished(observedAt) }
+  } finally {
+    cleanupStep({ failure -> degradation.recordCleanupFailure("build_sample_binding_close", failure) }) {
+      sampleBinding?.close()
+    }
+  }
 }

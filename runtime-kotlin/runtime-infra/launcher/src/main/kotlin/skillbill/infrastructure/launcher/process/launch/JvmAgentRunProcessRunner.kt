@@ -425,7 +425,9 @@ class JvmAgentRunProcessRunner(
     var waitResult: Result<ProcessWait>? = null
     var primaryFailure: Throwable? = null
     var cleanupFailure: Throwable? = null
+    var buildSampleBinding: AutoCloseable? = null
     try {
+      buildSampleBinding = request.probes.buildObserver.bindBuildSamples(tree, degradation)
       mcpStartupObservedAtStart = request.probes.mcpStartupProbe.readStartupObserved(degradation).value == true
       resources.stdout.start()
       resources.stderr.start()
@@ -444,7 +446,7 @@ class JvmAgentRunProcessRunner(
       rethrow(failure)
     } finally {
       val finishObservation = {
-        request.probes.buildObserver.finishBuildObservation(clock.instant(), degradation)
+        request.probes.buildObserver.finishBuildObservation(clock.instant(), degradation, buildSampleBinding)
         exportRunDegradationEvidence(degradation, request.launch.outputSink)
       }
       cleanupFailure = releaseStartedProcessResources(resources, approval, waitResult, degradation, finishObservation)
