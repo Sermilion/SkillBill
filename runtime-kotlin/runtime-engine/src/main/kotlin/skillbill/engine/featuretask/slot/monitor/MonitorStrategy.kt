@@ -32,6 +32,7 @@ import java.nio.file.Path
 public class MonitorStrategy(
   private val identityLookup: PullRequestIdentityLookup,
   checksLookup: PullRequestChecksLookup,
+  private val publicationGate: MonitorRepairPublicationGate,
 ) : PhaseStrategy(),
   MonitorRepairCapability by MonitorRepairRoles {
   private val watcher = PullRequestCiWatcher(identityLookup, checksLookup)
@@ -104,9 +105,12 @@ public class MonitorStrategy(
         state: PhaseMonitorStepBinding,
         outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
       ): PhaseStepOutputCheck =
-        state
-          .publishRepair(run, identityLookup, fixBrief.conflictBaseBranch(run.request.issueKey))
-          ?.let { PhaseStepOutputCheck.Block(it) }
+        publicationGate
+          .verify(run.request.repoRoot, state.resolvedBranch()?.baseBranch)
+          .publicationBlockingCheck()
+          ?: state
+            .publishRepair(run, identityLookup, fixBrief.conflictBaseBranch(run.request.issueKey))
+            ?.let { PhaseStepOutputCheck.Block(it) }
           ?: PhaseStepOutputCheck.Accept
     }
 
@@ -193,7 +197,11 @@ public class MonitorStrategy(
         "substitute for investigating the cause. If investigation cannot establish a repository or pull request " +
         "fix, settle blocked with the failed check URL, the evidence inspected, and the unresolved cause or " +
         "missing evidence, even if all local checks pass. Unavailable CI logs, missing secrets, or an " +
-        "infrastructure outage also require a block with the concrete obstacle. Do not commit or push. The " +
+        "infrastructure outage also require a block with the concrete obstacle. Before publishing, the runtime " +
+        "scans the branch's changed files for unresolved conflict-marker blocks and reruns the repository's full " +
+        "validation gate; a remaining marker or any gate failure sends the repair back to you with that evidence, " +
+        "and nothing is committed or pushed until both pass, so resolve every conflict and fix every failing " +
+        "check, including failures unrelated to the recorded one. Do not commit or push. The " +
         "runtime commits and pushes a completed repair and owns subsequent CI confirmation. In natural prose, " +
         "explain the CI failure, its cause, the repository or pull request change, and local check results. " +
         "Local validation is not a claim that CI passed. Never weaken assertions, suppress findings, disable " +

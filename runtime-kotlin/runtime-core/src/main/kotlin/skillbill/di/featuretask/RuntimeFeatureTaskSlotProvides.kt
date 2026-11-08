@@ -21,6 +21,7 @@ import skillbill.engine.featuretask.slot.intake.FeatureTaskRuntimePlanIntake
 import skillbill.engine.featuretask.slot.intake.LegacySpecReplanIntake
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
+import skillbill.engine.featuretask.slot.monitor.RuntimeMonitorRepairPublicationGate
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
@@ -79,11 +80,12 @@ internal interface RuntimeFeatureTaskSlotProvides {
     prDescription: PrDescriptionStrategy,
     monitor: MonitorStrategy,
     standaloneMonitor: StandaloneMonitorService,
+    publicationGate: RuntimeMonitorRepairPublicationGate,
   ): PullRequestPhaseStrategies =
     PullRequestPhaseStrategies(
       prDescription,
       monitor,
-      StandaloneMonitorStrategy(standaloneMonitor),
+      StandaloneMonitorStrategy(standaloneMonitor, publicationGate),
       StandaloneMonitorPublicationStrategy(standaloneMonitor),
     )
 

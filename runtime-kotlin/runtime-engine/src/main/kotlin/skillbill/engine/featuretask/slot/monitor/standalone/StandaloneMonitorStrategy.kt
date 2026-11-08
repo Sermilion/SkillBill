@@ -19,6 +19,8 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
+import skillbill.engine.featuretask.slot.monitor.MonitorRepairPublicationGate
+import skillbill.engine.featuretask.slot.monitor.publicationBlockingCheck
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedValidateAgentPhaseTask
 import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorStepBinding
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -29,6 +31,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 
 public class StandaloneMonitorStrategy(
   private val service: StandaloneMonitorService,
+  private val publicationGate: MonitorRepairPublicationGate,
 ) : PhaseStrategy(),
   MonitorRepairCapability by MonitorRepairRoles {
   private val policies =
@@ -94,11 +97,19 @@ public class StandaloneMonitorStrategy(
         context: PhaseStepOutputContext,
         state: PhaseStandaloneMonitorStepBinding,
         outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-      ): PhaseStepOutputCheck =
-        state
-          .publishStandaloneRepair(run, service.operations, reportsFixedRepair(outputMap))
+      ): PhaseStepOutputCheck {
+        val fixed = reportsFixedRepair(outputMap)
+        if (fixed) {
+          publicationGate
+            .verify(run.request.repoRoot, state.resolvedBranch()?.baseBranch)
+            .publicationBlockingCheck()
+            ?.let { return it }
+        }
+        return state
+          .publishStandaloneRepair(run, service.operations, fixed)
           ?.let { PhaseStepOutputCheck.Block(it) }
           ?: PhaseStepOutputCheck.Accept
+      }
     }
 
   override fun directiveFor(stepId: String): String {

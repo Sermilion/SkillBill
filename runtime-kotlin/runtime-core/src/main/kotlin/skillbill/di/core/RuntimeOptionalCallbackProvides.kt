@@ -1,6 +1,7 @@
 package skillbill.di.core
 import me.tatarka.inject.annotations.Provides
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
+import skillbill.engine.featuretask.slot.monitor.RuntimeMonitorRepairPublicationGate
 import skillbill.infrastructure.host.process.InstallerProcessAdapter
 import skillbill.infrastructure.http.HttpInstallerScriptFetchAdapter
 import skillbill.infrastructure.launcher.agentrun.FileSystemAgentRunLauncher
@@ -43,10 +44,12 @@ internal interface RuntimeOptionalCallbackProvides {
   fun monitorStrategy(
     callbacks: OptionalCallbacks,
     pullRequestChecksLookup: PullRequestChecksLookup,
+    publicationGate: RuntimeMonitorRepairPublicationGate,
   ): MonitorStrategy =
     MonitorStrategy(
       callbacks.pullRequestIdentityLookup ?: GhPullRequestIdentityLookup(includeMergeState = true),
       pullRequestChecksLookup,
+      publicationGate,
     )
 
   @Provides

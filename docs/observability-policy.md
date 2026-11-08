@@ -50,6 +50,12 @@ these seams:
   when a caller enumerates with `enforceContractVersion=false` (reconcile's LOCAL side and
   installed-workspace baseline status) and a stale `const` violation is tolerated instead of
   raising `ContractVersionMismatchError`
+- monitor repair publication gate: when no single platform pack declares a full validation gate,
+  `RuntimeMonitorRepairPublicationGate` records `seam=monitor_repair_full_gate
+  value_expected=runtime_full_validation_gate value_used=agent_reported_checks` with the cause before
+  publishing on the agent's reported checks; when no merge base with the base branch resolves, it records
+  `seam=monitor_repair_conflict_scan value_expected=branch_changes_since_merge_base
+  value_used=working_tree_changes_only` and scans only uncommitted and untracked files
 - worktree edit journal measure: `WorktreeEditJournalWriter.observe` when
   `worktreeNumstat` is non-OK records
   `seam=worktree_edit_journal_measure value_expected=numstat value_used=skipped` and skips the tick

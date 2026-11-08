@@ -29,6 +29,7 @@ import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStr
 import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
+import skillbill.engine.featuretask.slot.monitor.PassingMonitorRepairPublicationGate
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
@@ -116,7 +117,8 @@ class PhaseStrategyCompositionTest {
         dbPathOverride = home.resolve("metrics.db").toString(),
         environment = emptyMap(),
       )
-    val standaloneMonitor = StandaloneMonitorStrategy(UnavailableStandaloneMonitorService.service)
+    val standaloneMonitor =
+      StandaloneMonitorStrategy(UnavailableStandaloneMonitorService.service, PassingMonitorRepairPublicationGate)
     return strategies +
       listOf(
         standaloneMonitor,
@@ -150,6 +152,7 @@ class PhaseStrategyCompositionTest {
     MonitorStrategy(
       OpenPullRequestIdentityLookup(NoopWorkflowGitOperations),
       PassingPullRequestChecksLookup,
+      PassingMonitorRepairPublicationGate,
     )
 
   private val strategies =

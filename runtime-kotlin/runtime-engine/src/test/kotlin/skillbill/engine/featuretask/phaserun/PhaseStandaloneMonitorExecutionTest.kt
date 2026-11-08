@@ -15,6 +15,9 @@ import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runner.facts
 import skillbill.engine.featuretask.runner.phaseIdFromPrompt
 import skillbill.engine.featuretask.runner.telemetryRunnerHarness
+import skillbill.engine.featuretask.slot.monitor.MonitorRepairPublicationGate
+import skillbill.engine.featuretask.slot.monitor.MonitorRepairPublicationVerdict
+import skillbill.engine.featuretask.slot.monitor.PassingMonitorRepairPublicationGate
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
 import skillbill.engine.featuretask.slot.state.PhaseCommitStepBinding
@@ -88,6 +91,7 @@ class PhaseStandaloneMonitorExecutionTest {
   private var repairOutcome = FIXED
   private var pullRequestTitle = "title 0"
   private var repairEdits: ((Int) -> String)? = null
+  private var publicationGate: MonitorRepairPublicationGate = PassingMonitorRepairPublicationGate
   private val launcher =
     RuntimeRecordingLauncher { request ->
       val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
@@ -166,6 +170,43 @@ class PhaseStandaloneMonitorExecutionTest {
     listOf(PULL_REQUEST_URL, headSha, baseSha, cwd.toString(), "build", "assertion failed in FeatureTest").forEach {
       assertTrue(it in prompt, "the repair brief must carry $it")
     }
+  }
+
+  @Test
+  fun `a fixed repair the publication gate rejects is repaired again and published only after the gate passes`() {
+    failingHeads += headSha
+    var gateCalls = 0
+    publicationGate =
+      MonitorRepairPublicationGate { gateRoot, _ ->
+        gateCalls += 1
+        assertEquals(repairCwds.last(), gateRoot, "the gate verifies the owned repair worktree")
+        assertEquals(headSha, forkHead(), "nothing is published before the gate passes")
+        if (gateCalls == 1) {
+          MonitorRepairPublicationVerdict.RepairAgain("Full gate failed: ktlint FeatureTest.kt:3")
+        } else {
+          MonitorRepairPublicationVerdict.Publishable
+        }
+      }
+
+    val result = run()
+
+    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertEquals(2, gateCalls)
+    assertEquals(2, repairPrompts.size)
+    assertTrue("Full gate failed: ktlint FeatureTest.kt:3" in repairPrompts.last(), repairPrompts.last())
+    assertEquals("class Fix2", git(fork, "show", "${forkHead()}:Fix.kt"))
+  }
+
+  @Test
+  fun `a fixed repair the publication gate cannot verify blocks and is never published`() {
+    failingHeads += headSha
+    publicationGate = MonitorRepairPublicationGate { _, _ -> MonitorRepairPublicationVerdict.Refused("gate crashed") }
+
+    val result = run()
+
+    val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
+    assertTrue("gate crashed" in blocked.reason, blocked.reason)
+    assertEquals(headSha, forkHead(), "an unverified repair must not reach the pull request head")
   }
 
   @Test
@@ -521,6 +562,7 @@ class PhaseStandaloneMonitorExecutionTest {
         launcher = launcher,
         gitOperationsOverride = GitWorkflowGitOperations(),
         standaloneMonitorService = service,
+        monitorPublicationGate = publicationGate,
       )
     val harness = telemetryRunnerHarness(runtimeConfig = config, databaseFactory = { database })
     val preparer =
