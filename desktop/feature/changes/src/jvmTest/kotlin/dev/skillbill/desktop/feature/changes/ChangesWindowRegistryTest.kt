@@ -18,7 +18,7 @@ class ChangesWindowRegistryTest {
     assertEquals(1, registry.current.value?.focusRequest)
 
     registry.open(second, ChangeScope.All)
-    assertEquals(second.id, registry.current.value?.item?.id)
+    assertEquals(second.id, registry.current.value?.source?.id)
     assertEquals(0, registry.current.value?.focusRequest)
 
     registry.close()

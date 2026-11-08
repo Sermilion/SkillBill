@@ -1,7 +1,6 @@
 package dev.skillbill.desktop.feature.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,20 +11,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.navigation.Crumb
+import dev.skillbill.desktop.core.designsystem.navigation.ContentPanel
 import dev.skillbill.desktop.core.designsystem.navigation.Sidebar
 import dev.skillbill.desktop.core.designsystem.navigation.SidebarItem
 import dev.skillbill.desktop.core.designsystem.navigation.SidebarSection
@@ -47,7 +44,6 @@ fun SettingsScreen(
   val colors = SkillBillTheme.colors
   val groups = pages.pages.groupBy { it.contribution.group }
   val selected = pages.pages.firstOrNull { it.contribution.id == route.page }
-  val shape = RoundedCornerShape(SkillBillRadius.lg)
   Row(Modifier.fillMaxSize().background(colors.bgFrame)) {
     Sidebar(
       top = {
@@ -66,11 +62,7 @@ fun SettingsScreen(
         }
       },
     )
-    Box(
-      Modifier.weight(1f).fillMaxHeight().padding(top = 8.dp, end = 8.dp, bottom = 8.dp).clip(shape).background(colors.bgPanel)
-        // `.sb-main` content starts inside its 1px border; Compose's border does not inset content.
-        .border(1.dp, colors.borderSubtle, shape).padding(1.dp),
-    ) {
+    ContentPanel(Modifier.weight(1f).fillMaxHeight().padding(top = 8.dp, end = 8.dp, bottom = 8.dp)) {
       Column(Modifier.fillMaxSize()) {
         ViewHeader(
           listOf(

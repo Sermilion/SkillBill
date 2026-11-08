@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import dev.skillbill.desktop.core.domain.model.selectedSubtaskIds
 import dev.skillbill.desktop.core.domain.model.touchCount
 
@@ -53,3 +54,8 @@ fun changesWindowTitle(item: WorkItem): String =
 /** Goal titles often start with their own `[KEY]`; the window title already names the key. */
 private fun String.withoutIssueKey(key: String?): String =
   if (key != null && startsWith("[$key]")) removePrefix("[$key]").trim() else this
+
+fun changesWindowTitle(source: ChangesSource): String = when (source) {
+  is ChangesSource.Work -> changesWindowTitle(source.item)
+  is ChangesSource.Chat -> "Changes · ${source.title}"
+}

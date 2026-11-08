@@ -2,7 +2,6 @@ package dev.skillbill.desktop.app.shell
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -10,18 +9,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.dp
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.layeredShadow
 import dev.skillbill.desktop.core.designsystem.menuSpec
+import dev.skillbill.desktop.core.designsystem.navigation.ContentPanel
 
 private val PANEL_INSET = 8.dp
 private const val DRAWER_HIDDEN_SHIFT = 1.05f
@@ -40,20 +38,21 @@ fun ShellFrame(
   content: @Composable () -> Unit,
 ) {
   val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(SkillBillRadius.lg)
   val inlineSidebar = sidebar != null && !drawerMode
+  val panelContent = remember(content) { movableContentOf(content) }
   Box(Modifier.fillMaxSize().background(colors.bgFrame)) {
     if (sidebar == null) {
       content()
     } else {
       Row(Modifier.fillMaxSize()) {
         if (inlineSidebar) sidebar.invoke()
-        val panel = if (drawerMode) Modifier.background(colors.bgPanel)
-        else Modifier.padding(start = 0.dp, top = PANEL_INSET, end = PANEL_INSET, bottom = PANEL_INSET)
-          .clip(shape).background(colors.bgPanel).border(1.dp, colors.borderSubtle, shape)
-          // `.sb-main`'s content sits inside its 1px border; Modifier.border draws over the content instead of insetting it.
-          .padding(1.dp)
-        Box(Modifier.weight(1f).fillMaxHeight().then(panel)) { content() }
+        if (drawerMode) {
+          Box(Modifier.weight(1f).fillMaxHeight().background(colors.bgPanel)) { panelContent() }
+        } else {
+          ContentPanel(
+            Modifier.weight(1f).fillMaxHeight().padding(top = PANEL_INSET, end = PANEL_INSET, bottom = PANEL_INSET),
+          ) { panelContent() }
+        }
       }
     }
     // `.sb-side` slides between translateX(-105%) and none over --dur, so it stays drawn while it slides out.

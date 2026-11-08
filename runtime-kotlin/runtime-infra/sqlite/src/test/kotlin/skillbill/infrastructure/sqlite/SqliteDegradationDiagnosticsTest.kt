@@ -72,7 +72,6 @@ class SqliteDegradationDiagnosticsTest {
           },
           "test-runtime-version",
           BlockIncidentSchemaValidator(),
-          lazy { TestWorkBoardReadModelProjector },
         )
       }
     assertEquals("userHome", error.fieldName)

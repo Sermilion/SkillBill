@@ -5,8 +5,6 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -15,12 +13,13 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -51,12 +50,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
-import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.composite.runAfterCurrentEvent
-import dev.skillbill.desktop.core.designsystem.layeredShadow
 import dev.skillbill.desktop.core.designsystem.menuSpec
+import kotlinx.coroutines.isActive
 
 private val POPOVER_MIN_WIDTH = SkillBillSize.popoverMin
 private val POPOVER_MAX_WIDTH = SkillBillSize.popoverMax
@@ -65,10 +62,10 @@ private val POPOVER_WIDTH_MARGIN = 12.dp
 // placePopover keeps the panel 8px inside the window.
 private val POPOVER_WINDOW_MARGIN = 8.dp
 
-enum class SbPopoverPlacement { Auto, Above }
+enum class SbPopoverPlacement { Auto, Above, AboveEnd }
 
 @Composable
-fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset = DpOffset.Zero, width: Dp? = null, returnFocusTo: FocusRequester? = null, maxWidth: Dp = POPOVER_MAX_WIDTH, placement: SbPopoverPlacement = SbPopoverPlacement.Auto, arrowKeysMoveFocus: Boolean = true, specMenuKeyboard: Boolean = false, keyboardShortcuts: Map<Key, () -> Unit> = emptyMap(), content: @Composable ColumnScope.() -> Unit) {
+fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset = DpOffset.Zero, width: Dp? = null, returnFocusTo: FocusRequester? = null, maxWidth: Dp = POPOVER_MAX_WIDTH, placement: SbPopoverPlacement = SbPopoverPlacement.Auto, arrowKeysMoveFocus: Boolean = true, specMenuKeyboard: Boolean = false, keyboardShortcuts: Map<Key, () -> Unit> = emptyMap(), title: String = "Menu", content: @Composable ColumnScope.() -> Unit) {
   val density = LocalDensity.current
   val windowWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
   val windowHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
@@ -83,13 +80,21 @@ fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset 
   val gapPx = with(density) { 4.dp.roundToPx() }
   val marginPx = with(density) { POPOVER_WINDOW_MARGIN.roundToPx() }
   var wasExpanded by remember { mutableStateOf(false) }
+  val focusReturnScope = rememberCoroutineScope()
+  val currentReturnFocusTo by rememberUpdatedState(returnFocusTo)
+  val currentExpanded by rememberUpdatedState(expanded)
   val shouldReturnFocus = !expanded && wasExpanded
   SideEffect { wasExpanded = expanded }
   LaunchedEffect(expanded, shouldReturnFocus, returnFocusTo) {
-    if (shouldReturnFocus) returnFocusTo?.let { requester -> runAfterCurrentEvent { runCatching { requester.requestFocus() } } }
+    if (shouldReturnFocus) returnFocusTo?.let { requester ->
+      runAfterCurrentEvent {
+        if (focusReturnScope.isActive && !currentExpanded && currentReturnFocusTo === requester) {
+          runCatching { requester.requestFocus() }
+        }
+      }
+    }
   }
   if (expanded) {
-    val shape = RoundedCornerShape(SkillBillRadius.md)
     Popup(
       popupPositionProvider = PopoverPositionProvider(offsetPx, gapPx, marginPx, placement),
       onDismissRequest = onDismissRequest,
@@ -108,13 +113,11 @@ fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset 
       ) {
         Column(
           Modifier.widthIn(min = panelMinWidth, max = panelMaxWidth).heightIn(max = maxHeight)
-            .layeredShadow(SkillBillTheme.shadows.popover, shape)
-            .background(SkillBillTheme.colors.bgOverlay, shape)
-            .border(1.dp, SkillBillTheme.colors.borderStrong, shape)
+            .sbOverlaySurface()
             // The menu's 4px padding sits inside this 1px border.
             .padding(1.dp)
             .verticalScroll(rememberScrollState())
-            .semantics { paneTitle = "Menu" }
+            .semantics { paneTitle = title }
             .focusGroup()
             .focusProperties { onExit = { cancelFocusChange() } }
             .onPreviewKeyEvent {
@@ -158,12 +161,17 @@ fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset 
 
 internal class PopoverPositionProvider(private val offset: IntOffset, private val gap: Int, private val margin: Int, private val placement: SbPopoverPlacement) : PopupPositionProvider {
   override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
-    val left = if (layoutDirection == LayoutDirection.Ltr) anchorBounds.left else anchorBounds.right - popupContentSize.width
+    val left = when {
+      placement == SbPopoverPlacement.AboveEnd && layoutDirection == LayoutDirection.Rtl -> anchorBounds.left
+      placement == SbPopoverPlacement.AboveEnd -> anchorBounds.right - popupContentSize.width
+      layoutDirection == LayoutDirection.Rtl -> anchorBounds.right - popupContentSize.width
+      else -> anchorBounds.left
+    }
     val below = anchorBounds.bottom + gap + offset.y
     val top = when (placement) {
       // placePopover flips to `top - height - 8`: the anchor's top edge, 8px clear, without the downward gap or offset.
       SbPopoverPlacement.Auto -> if (below + popupContentSize.height <= windowSize.height - margin) below else anchorBounds.top - popupContentSize.height - margin
-      SbPopoverPlacement.Above -> (anchorBounds.top - popupContentSize.height - gap + offset.y).takeIf { it >= margin } ?: below
+      SbPopoverPlacement.Above, SbPopoverPlacement.AboveEnd -> (anchorBounds.top - popupContentSize.height - gap + offset.y).takeIf { it >= margin } ?: below
     }
     return IntOffset((left + offset.x).coerceIn(margin, (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin)), top.coerceIn(margin, (windowSize.height - popupContentSize.height - margin).coerceAtLeast(margin)))
   }

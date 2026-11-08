@@ -1,6 +1,5 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -26,14 +24,15 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.BuildStrip
 import dev.skillbill.desktop.core.designsystem.component.EmptyState
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.detail.rememberSectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.Section
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -51,6 +50,7 @@ import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.HistoryRoute
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
+import dev.skillbill.desktop.core.ui.status.toSbBuild
 
 /** `.sb-doc` max-width, padding included. */
 private val DOC_MAX_WIDTH = 780.dp
@@ -192,6 +192,11 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
                 }
               }
             }
+          }
+          val build = item.build
+          // HANDOFF 4.1: the build strip sits under the header, except for validation and verify runs.
+          if (build != null && !validationRow && loaded?.detail?.verifyRun == null) sections.item(key = "build-strip") {
+            Column(Modifier.padding(top = DocBlockGap)) { BuildStrip(remember(build) { build.toSbBuild() }) }
           }
           // HANDOFF 9.2 item 5: the pause notice is its own block under the header.
           if (view.pausePending) sections.item(key = "pause-notice") {
@@ -335,9 +340,8 @@ private fun DetailSections.qaDocument(
 
 private fun DetailSections.placeholder(key: String, height: Dp) {
   item(key = key) {
-    val shape = RoundedCornerShape(SkillBillRadius.md)
-    Box(Modifier.padding(top = DocBlockGap).fillMaxWidth().heightIn(min = height).border(1.dp, SkillBillTheme.colors.borderSubtle, shape).padding(12.dp), contentAlignment = Alignment.TopStart) {
-      BasicText("Loading", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
+    SbBox(Modifier.padding(top = DocBlockGap).heightIn(min = height)) {
+      BasicText("Loading", Modifier.padding(12.dp), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
     }
   }
 }

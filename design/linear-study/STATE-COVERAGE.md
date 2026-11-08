@@ -48,7 +48,7 @@ The catalog also links chat tab counts and overflow, the close confirmation, que
 - Confirm criteria, Stop, Resume, Discard, Adjust intake and the fix-routing controls remain available in the design. Chat remains a confirmation path.
 - The queue popup, device picker, live goal QA stages and preview states, process program name in QA leftovers and plan retry control remain design additions awaiting implementation where the app has no equivalent.
 
-Standalone mocks remain in place. Delete each only after the operator confirms its synced version.
+Duplicate standalone mocks have been removed. Activity, Changes window and Diff comments are incorporated here, and their standalone copies have been removed. The New task and QA device brief requirements are preserved in HANDOFF.md, sections 9.10 and 9.11.
 
 ## Verification
 
@@ -59,3 +59,17 @@ A separate New task interaction check covers queue removal and Undo, clear confi
 Components and Foundations rendered through their full scroll heights without JavaScript errors. JavaScript syntax checks and `git diff --check` passed.
 
 These checks verify prototype behavior and browser layout. They do not prove pixel parity with a running Compose app. No desktop build or runtime run was launched for this pass.
+
+## Integrated Activity and Changes coverage
+
+The States catalog now includes five Activity scenarios, a scoped Changes window example and four Diff comments scenarios. Normal Work navigation embeds Activity in the selected goal detail. Its Changes overview and header open a context-specific Changes window, with comments on the selected file's diff. Chat and Verify open that same window with their own context. The catalog retains the original historical and synthetic records for comparison.
+
+Activity includes grouped phases, folded fix loops, blocked incidents, idle gaps, summary metrics and a clickable duration timeline. Changes includes the overview strip, subtask search, range selection, scoped files and diffs. Diff comments includes pending reviews, replies, edits, deletion confirmation, resolve, decline, reopen and the agent review and fix outcomes.
+
+Browser checks for this integration covered the 225 States links, all ten imported scenarios, the goal, chat and Verify entry points, and opening the prototype directly with `file://`. Interaction checks covered Activity expansion and filtering, keyboard group toggles, subtask search and keyboard selection, Shift-click ranges, file filtering, review submission, pending-comment editing, replies, resolve, decline, reopen and deletion confirmation. Review and scope state survived navigation. The three imported views had no document-level horizontal overflow at 1440 and 900 px widths, and their screenshots were inspected. No JavaScript errors were reported. JavaScript syntax, local HTML asset references and whitespace checks passed. These checks cover the prototype, not the Compose app or runtime.
+
+Browser checks for embedding started from plain `index.html` over `file://` and used the Work rows, header buttons and overview columns. They covered inline Activity, both goal examples, scope selection after reopening, comment submission and preservation, returning to the selected goal, keyboard dismissal and focus containment, chat and Verify context, and 1440 and 900 px layouts. The document had no horizontal overflow and no JavaScript errors.
+
+State checks covered pause requested while still active, immediate pause, resume, cancel, relaunch, and the goal lifecycle fixtures. Activity and Changes use the parent lifecycle for unfinished subtasks. Paused, blocked, failed, canceled, skipped and pending keep separate labels and styles. Completed work retains its recorded state. Goal finish phase cards also appear in Activity. Contextual timelines show known phase durations without inferring calendar dates or idle intervals from clock labels.
+
+Filtering to zero files clears the selected diff. Runs and chats without subtasks cannot enter a subtask range. A last edit does not imply uncommitted changes. Multi-file review checks covered drafting on two files, publishing both together, revisiting either file, and closing and reopening the window.

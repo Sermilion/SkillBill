@@ -46,6 +46,7 @@ import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
@@ -66,6 +67,7 @@ internal fun ChatTranscript(
   modifier: Modifier = Modifier,
   allowStartActions: Boolean = true,
   allowSuggestedActions: Boolean = true,
+  startIssueKey: String? = null,
   footer: (@Composable () -> Unit)? = null,
   approvals: ChatApprovalActions? = null,
   operationCards: ChatOperationCardActions? = null,
@@ -98,7 +100,7 @@ internal fun ChatTranscript(
     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
   ) {
     items(messages) { message ->
-      ChatMessageRow(message, agent, !busy && supported && !gone && allowSuggestedActions && message === messages.lastOrNull { !it.isCard }, mode, allowStartActions, approvals, operationCards, onAction)
+      ChatMessageRow(message, agent, !busy && supported && !gone && allowSuggestedActions && message === messages.lastOrNull { !it.isCard }, mode, allowStartActions, startIssueKey, approvals, operationCards, onAction)
     }
     if (footer != null) item(key = "chat-footer", contentType = "footer") { footer() }
   }
@@ -124,6 +126,7 @@ private fun ChatMessageRow(
   actionsEnabled: Boolean,
   mode: ChatPermissionMode,
   allowStartActions: Boolean,
+  startIssueKey: String?,
   approvals: ChatApprovalActions?,
   operationCards: ChatOperationCardActions?,
   onAction: ((ChatMessage.Agent, ChatSuggestedAction) -> Unit)?,
@@ -135,7 +138,7 @@ private fun ChatMessageRow(
     is ChatMessage.Approval -> ChatApprovalCard(message, approvals)
     is ChatMessage.OperationCard -> ChatOperationCard(message, operationCards)
     is ChatMessage.Operator -> OperatorMessage(message)
-    is ChatMessage.Agent -> AgentTurn(message, agent, actionsEnabled, mode, allowStartActions, onAction?.let { act -> { action: ChatSuggestedAction -> act(message, action) } })
+    is ChatMessage.Agent -> AgentTurn(message, agent, actionsEnabled, mode, allowStartActions, startIssueKey, onAction?.let { act -> { action: ChatSuggestedAction -> act(message, action) } })
     is ChatMessage.Notice -> if (message.confirmation) {
       Callout(
         tone = FeedbackTone.Success,
@@ -167,19 +170,17 @@ private fun StateCard(message: ChatMessage.StateLine) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val tone = stateTone(state, colors)
-  val shape = RoundedCornerShape(SkillBillRadius.md)
-  Row(
-    Modifier.fillMaxWidth().border(1.dp, colors.border, shape).background(colors.bgRaised, shape).padding(12.dp),
-    horizontalArrangement = Arrangement.spacedBy(10.dp),
-  ) {
-    CompositionLocalProvider(LocalContentColor provides tone) { SbIcon(stateIcon(state), SbIconSize.Md, modifier = Modifier.padding(top = 2.dp)) }
-    SelectionContainer {
-      Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        BasicText(
-          listOfNotNull(state.name, message.phase?.let { "on $it" }).joinToString(" "),
-          style = type.tBaseMedium.copy(color = colors.fg),
-        )
-        message.detail?.let { BasicText(it, style = type.tSm.copy(color = colors.fgMuted)) }
+  SbBox(fill = colors.bgRaised) {
+    Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+      CompositionLocalProvider(LocalContentColor provides tone) { SbIcon(stateIcon(state), SbIconSize.Md, modifier = Modifier.padding(top = 2.dp)) }
+      SelectionContainer {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+          BasicText(
+            listOfNotNull(state.name, message.phase?.let { "on $it" }).joinToString(" "),
+            style = type.tBaseMedium.copy(color = colors.fg),
+          )
+          message.detail?.let { BasicText(it, style = type.tSm.copy(color = colors.fgMuted)) }
+        }
       }
     }
   }
@@ -234,6 +235,7 @@ private fun AgentTurn(
   actionsEnabled: Boolean,
   mode: ChatPermissionMode,
   allowStartActions: Boolean,
+  startIssueKey: String?,
   onAction: ((ChatSuggestedAction) -> Unit)?,
 ) {
   val colors = SkillBillTheme.colors
@@ -259,7 +261,7 @@ private fun AgentTurn(
     if (message.text.isNotEmpty()) ChatMarkdown(message.text, Modifier.fillMaxWidth())
     if (!message.streaming && message.text.isNotEmpty()) MessageCopyButton(message.text)
     val actions = if (allowStartActions) message.actions else message.actions.filter { it.start == null }
-    if (onAction != null && !message.streaming && actions.isNotEmpty()) ChatActionButtons(actions, actionsEnabled, mode, onAction)
+    if (onAction != null && !message.streaming && actions.isNotEmpty()) ChatActionButtons(actions, actionsEnabled, mode, startIssueKey, onAction)
   }
 }
 

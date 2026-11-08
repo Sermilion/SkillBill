@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompletion
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
@@ -192,6 +193,7 @@ public class FeatureTaskRuntimeRunLoopDurableLaunch(
   private val worktreeEditJournalWriter: WorktreeEditJournalWriter,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
   private val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
+  private val buildObserverFactory: AgentBuildObserverFactory,
 ) {
   internal fun planSubtasksFanOut(
     facts: FeatureTaskRuntimeRunFacts,
@@ -227,6 +229,12 @@ public class FeatureTaskRuntimeRunLoopDurableLaunch(
           repoRoot = facts.repoRoot,
           resolveWorkflowId = { facts.workflowId },
           resolvePhaseId = { stepName },
+        ),
+      buildObserver =
+        buildObserverFactory.observer(
+          facts.repoRoot,
+          { facts.workflowId },
+          { facts.goalContinuation?.parentWorkflowId },
         ),
     )
 }

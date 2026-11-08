@@ -163,6 +163,10 @@ class DataStoreAppSettingsRepository(
     Outcome.Failure(SettingsRejection.ReadFailed)
   }
 
+  override suspend fun setDefaultAgent(agentId: String?) = edit {
+    if (agentId.isNullOrBlank()) it.remove(AppPreferenceKeys.DEFAULT_AGENT) else it[AppPreferenceKeys.DEFAULT_AGENT] = agentId.trim()
+  }
+
   override suspend fun setNotification(kind: NotificationKind, enabled: Boolean) =
     edit { it[AppPreferenceKeys.notificationKey(kind)] = enabled }
 

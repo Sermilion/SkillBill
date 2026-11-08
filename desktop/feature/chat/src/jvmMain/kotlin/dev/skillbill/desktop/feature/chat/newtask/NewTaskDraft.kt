@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
@@ -15,6 +16,7 @@ import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.toNewTaskKind
 import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
+import dev.skillbill.desktop.core.domain.repository.ChatChangesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
@@ -53,6 +55,7 @@ data class NewTaskOffer(
   val choices: List<String> = emptyList(),
   val action: ChatSuggestedAction? = null,
   val started: String? = null,
+  val selectedKey: String? = null,
 )
 
 private val GOAL_KINDS = setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)
@@ -69,6 +72,7 @@ class NewTaskDraft internal constructor(
   private val clock: Clock,
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
   private val savedChats: NewTaskSavedChats = NewTaskSavedChats(chats, windowScope.scope, toasts),
+  private val changesRepository: ChatChangesRepository = UnavailableChatChanges,
 ) {
   private val scope = windowScope.scope
   private val cardOwners = IdentityHashMap<ChatThread, NewTaskChat>()
@@ -106,10 +110,26 @@ class NewTaskDraft internal constructor(
   var text: String by mutableStateOf("")
   internal var images: List<ChatImage> by mutableStateOf(emptyList())
     private set
-  var repository: NewTaskRepository? by mutableStateOf(null)
+  private var repositoryState: NewTaskRepository? by mutableStateOf(null)
+  private var acceptedKeyState: String? by mutableStateOf(null)
+  internal var issueKeyProposals: List<String> by mutableStateOf(emptyList())
+    private set
+  var repository: NewTaskRepository?
+    get() = repositoryState
+    set(value) {
+      if (repositoryState?.root != value?.root) {
+        acceptedKeyState = null
+        issueKeyProposals = emptyList()
+        offerState.value = NewTaskOffer()
+      }
+      repositoryState = value
+    }
   var addedRepositories: List<NewTaskRepository> by mutableStateOf(emptyList())
   var baseBranch: String by mutableStateOf("")
   var agentId: String? by mutableStateOf(null)
+
+  /** True once the operator picks an agent for this draft; until then it follows the default agent setting. */
+  internal var agentChosen = false
   var selectedAgent: ChatAgent? by mutableStateOf(null)
 
   internal val chat: StateFlow<NewTaskChat?> = chatState.asStateFlow()
@@ -118,6 +138,9 @@ class NewTaskDraft internal constructor(
   internal fun operationCardActions(current: NewTaskChat): ChatOperationCardActions = cards.actions(current.thread)
 
   internal val offer: StateFlow<NewTaskOffer> = offerState.asStateFlow()
+
+  internal val acceptedIssueKey: String?
+    get() = acceptedKeyState.takeIf { chatState.value?.repositoryRoot == repository?.root }
   internal var cursorMcpDependency by mutableStateOf(CursorMcpDependency.Unspecified)
 
   /** Every repository's saved drafts, newest first, as of the latest [refreshSaved]. */
@@ -175,7 +198,7 @@ class NewTaskDraft internal constructor(
     cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
   ) {
     val current = chatState.value ?: open(UUID.randomUUID().toString(), checkNotNull(repository).root, baseBranch.ifBlank { null }, checkNotNull(selectedAgent))
-    offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, started = null)
+    offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, started = null, selectedKey = null)
     if (action == null && attachments.isEmpty() && cards.submitAdjustment(current.thread, submitted)) {
       if (text == submitted) text = ""
       return
@@ -185,6 +208,11 @@ class NewTaskDraft internal constructor(
       action,
       images = attachments,
       onAccepted = {
+        if (chatState.value === current && repository?.root == current.repositoryRoot) {
+          val selection = listOf(ChatMessage.Operator(submitted, action))
+          newTaskOperatorIdentity(selection)?.let { acceptedKeyState = it.uppercase() }
+          issueKeyProposals = (newTaskIssueKeyProposals(selection) + issueKeyProposals).distinct()
+        }
         if (action == null) {
           if (text == submitted) text = ""
           if (images == attachments) images = emptyList()
@@ -245,15 +273,16 @@ class NewTaskDraft internal constructor(
     startRequest(kind, keyChoice, target, selectedAction, offerFieldValue, current)
   }
 
-  internal fun retryPrefix(keyChoice: String) {
+  internal fun selectIssueKey(keyChoice: String) {
     val pending = offerState.value
     val kind = pending.prefixKind ?: return
+    if (newTaskStartArgumentIdentity(keyChoice)?.let(NEW_TASK_COMPLETE_KEY::matches) != true) return
     val current = chatState.value
     if (kind !in GOAL_KINDS || closing || pending.starting || current?.thread?.busy?.value == true) return
     if (current == null || pending.started != null) return
     if (selectedAgent == null || repository == null) return
-    offerState.value = pending.copy(starting = true)
-    startRequest(kind, keyChoice, null, pending.action, null, current)
+    acceptedKeyState = keyChoice.trim().uppercase()
+    offerState.value = pending.copy(selectedKey = acceptedKeyState)
   }
 
   private fun startRequest(
@@ -266,6 +295,11 @@ class NewTaskDraft internal constructor(
   ) {
     val agent = checkNotNull(selectedAgent)
     val root = checkNotNull(repository).root
+    if (current != null && current.repositoryRoot != root) {
+      scope.launch { showStartProblem(current, kind, "The repository changed. Open a chat for the selected repository and choose its issue key.") }
+      offerState.value = NewTaskOffer()
+      return
+    }
     val transcript = current?.thread?.transcript?.value.orEmpty()
     val requirements = if (kind in GOAL_KINDS && action != null) action.instruction else {
       listOfNotNull(action?.instruction, newTaskRequirements(transcript))
@@ -274,7 +308,7 @@ class NewTaskDraft internal constructor(
     }
     val title = if (kind in GOAL_KINDS && action != null) action.title else action?.title ?: current?.let { newTaskTitle(transcript) }
     val argumentIdentity = newTaskStartArgumentIdentity(keyChoice)
-    val resolvedKey = if (kind in GOAL_KINDS) argumentIdentity ?: newTaskOperatorIdentity(transcript) else keyChoice
+    val resolvedKey = if (kind in GOAL_KINDS && keyChoice == null) acceptedIssueKey else argumentIdentity ?: keyChoice
     val reuseRequested = kind in GOAL_KINDS && resolvedKey != null &&
       newTaskReuseRequested(transcript, resolvedKey, offerFieldValue, offerKeyEdit, current, root)
     val expectedSessionId = current?.databaseSessionId ?: if (current == null) {
@@ -323,7 +357,7 @@ class NewTaskDraft internal constructor(
           }
           is NewTaskStartOutcome.NeedsKey -> {
             if (ownsChat(current)) {
-              offerState.value = NewTaskOffer(starting = true, prefixKind = kind, choices = outcome.choices, action = action)
+              offerState.value = NewTaskOffer(starting = true, prefixKind = kind, choices = (issueKeyProposals + outcome.choices).distinct(), action = action)
             } else {
               toasts.show(ToastMessage(ToastTone.Problem, "Choose an issue key to start this run."))
             }
@@ -398,7 +432,11 @@ class NewTaskDraft internal constructor(
       ?: NewTaskReplay(current.agent.agentId, current.repositoryRoot, current.baseBranch, lines))
       .takeIf { newTaskReplayPreamble(it, repo.root, branch) != null }
     current.end()
-    val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay)
+    val sameRepository = current.repositoryRoot == repo.root
+    val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay,
+      changesBaseline = current.changesBaseline.takeIf { sameRepository },
+      resumedChanges = current.changesResumed && sameRepository,
+      changesCaptureAttempted = (current.changesCaptureAttempted || current.started || current.changesBaseline != null) && sameRepository)
     val switched = "Switched to ${chipText(agent)} in ${repo.name}."
     val notice = if (replay != null) "$switched It gets the earlier conversation with your next message." else switched
     next.thread.showCapability(agent)
@@ -441,6 +479,9 @@ class NewTaskDraft internal constructor(
       context.sessionEstablished,
       context.pendingTurnLineIndex,
       missing,
+      changesBaseline = context.changesBaseline,
+      resumedChanges = context.changesBaseline != null,
+      changesCaptureAttempted = context.changesCaptureAttempted || context.sessionEstablished || context.changesBaseline != null,
     )
     val lines = if (retained == null) entry.lines.map(::restored) else emptyList()
     val notice = ChatMessage.Notice("This draft's repository no longer exists: ${context.repositoryRoot}. Discard it to continue.")
@@ -471,6 +512,9 @@ class NewTaskDraft internal constructor(
     pendingTurnLineIndex: Int? = null,
     missing: Boolean = false,
     replay: NewTaskReplay? = null,
+    changesBaseline: ChatChangesBaseline? = null,
+    resumedChanges: Boolean = false,
+    changesCaptureAttempted: Boolean = false,
   ): NewTaskChat {
     val thread = retainedThreads.getOrPut(sessionId) { ChatThread(clock) }
     val saveLock = saveLocks.getOrPut(sessionId) { Mutex() }
@@ -493,6 +537,10 @@ class NewTaskDraft internal constructor(
       thread,
       saveLock,
       { sessionId !in invalidDrafts && retainedThreads[sessionId] === thread },
+      changesRepository,
+      changesBaseline,
+      resumedChanges,
+      changesCaptureAttempted,
     ).also {
       clearChatFeedback()
       chatState.value = it
@@ -505,6 +553,8 @@ class NewTaskDraft internal constructor(
     current.end()
     if (chatState.value === current) {
       chatState.value = null
+      acceptedKeyState = null
+      issueKeyProposals = emptyList()
       clearChatFeedback()
     }
     scope.launch {
@@ -585,7 +635,7 @@ class NewTaskDraft internal constructor(
   private fun clearChatFeedback() {
     offerKeyEdit = null
     lastOfferFieldValue = null
-    offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, started = null)
+    offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, started = null, selectedKey = null)
   }
 }
 

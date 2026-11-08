@@ -42,11 +42,6 @@ internal fun codexAppServerTurn(
     onCard: (ApprovalCard) -> Unit,
   ) -> CodexChatApprovalOpening,
 ): Flow<ChatEvent> = channelFlow {
-  codexAppServerCompatibility(command, request, diagnostics)?.let { reason ->
-    diagnostics.record("chat.codex_app_server_incompatible")
-    send(ChatEvent.Failed(ChatFailure.ApprovalUnsupported, reason))
-    return@channelFlow
-  }
   val input = Channel<ChatProcessInput>(Channel.UNLIMITED) { it.written.complete(false) }
   val output = Channel<ChatProcessOutput>(Channel.UNLIMITED)
   val readerRef = AtomicReference<kotlinx.coroutines.Job?>()
@@ -93,9 +88,7 @@ internal fun codexAppServerTurn(
   try {
     val (activeThread, activeTurn) = withTimeout(30_000) {
     val settings = codexChatSettings(command, request)
-    rpc.call("initialize", CodexAppServerProtocol.initializeParams()) { result ->
-      CodexAppServerProtocol.identityRefusal(result)?.let { throw CodexSessionFailure(it) }
-    }
+    rpc.call("initialize", CodexAppServerProtocol.initializeParams()) { }
     if (!input.writeAndAwait(CodexAppServerProtocol.initializedNotification().toString())) {
       throw CodexSessionFailure("Codex initialization delivery is uncertain; it will not be replayed.")
     }

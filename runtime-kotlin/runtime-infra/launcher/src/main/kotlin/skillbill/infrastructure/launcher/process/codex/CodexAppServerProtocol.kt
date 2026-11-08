@@ -38,16 +38,6 @@ object CodexAppServerProtocol {
 
   fun initializedNotification(): JsonObject = buildJsonObject { put(K.METHOD, K.INITIALIZED) }
 
-  fun identityRefusal(result: JsonObject): String? {
-    val identity = result.text(K.USER_AGENT).orEmpty()
-    val supported = Regex("(?:^|[/ ])${Regex.escape(CODEX_PROTOCOL_VERSION)}(?:$|[ )])").containsMatchIn(identity)
-    return if (supported) {
-      null
-    } else {
-      "Codex app-server identity is incompatible with the supported $CODEX_PROTOCOL_VERSION protocol."
-    }
-  }
-
   fun threadMethod(savedThread: String?): String =
     if (savedThread == null) K.THREAD_START_METHOD else K.THREAD_RESUME_METHOD
 

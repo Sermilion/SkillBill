@@ -7,7 +7,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
-import java.awt.Desktop
 import java.io.IOException
 import java.net.URI
 import java.net.URISyntaxException
@@ -24,14 +23,12 @@ import java.nio.file.Path
 @Inject
 @ContributesBinding(AppScope::class)
 class GitConfigRepositoryWebPages(private val diagnostics: Diagnostics) : RepositoryWebPages {
+  private val browser = RepositoryBrowserLauncher(diagnostics)
+
   override suspend fun openBranch(repositoryRoot: String, branch: String): OpenOutcome = withContext(Dispatchers.IO) {
     try {
       val remote = originRemote(Path.of(repositoryRoot)) ?: return@withContext notOpened("detail.branch_page.no_origin")
-      if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-        return@withContext notOpened("detail.branch_page.browse_unsupported")
-      }
-      Desktop.getDesktop().browse(RepositoryWebLinks.url(remote, branch))
-      OpenOutcome.Opened
+      browser.open(RepositoryWebLinks.url(remote, branch))
     } catch (_: IOException) {
       notOpened("detail.branch_page.io")
     } catch (_: IllegalArgumentException) {

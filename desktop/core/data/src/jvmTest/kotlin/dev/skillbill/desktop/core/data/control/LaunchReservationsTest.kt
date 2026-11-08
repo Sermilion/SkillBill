@@ -9,12 +9,17 @@ import dev.skillbill.desktop.core.domain.model.StandaloneRelaunch
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 private const val KEY = "SKILL-1"
@@ -114,6 +119,91 @@ class LaunchReservationsTest {
     launches.onBoard(SESSION, page(paused.copy(lifecycle = Lifecycle.Active, running = true)))
     runCurrent()
     assertEquals(emptySet(), launches.keys.value)
+  }
+
+  @Test
+  fun `an accepted resume with no board change becomes available again after ten seconds`() = runTest {
+    val launches = reservations()
+    val handle = assertIs<ReservationAdmission.Reserved>(reserve(launches)).handle
+    launches.settle(handle, succeeded = true)
+    var refreshed = false
+    val confirmation = async {
+      launches.awaitStart(handle) {
+        refreshed = true
+        page(paused)
+      }
+    }
+    runCurrent()
+
+    advanceTimeBy(9_999)
+    runCurrent()
+    assertFalse(refreshed)
+    assertEquals(setOf(KEY), launches.keys.value)
+
+    advanceTimeBy(1)
+    runCurrent()
+    assertTrue(refreshed)
+    assertTrue(confirmation.await())
+    assertEquals(emptySet(), launches.keys.value)
+    assertIs<ReservationAdmission.Reserved>(reserve(launches))
+  }
+
+  @Test
+  fun `the ten second check confirms a running execution rather than reporting a failed resume`() = runTest {
+    val launches = reservations()
+    val handle = assertIs<ReservationAdmission.Reserved>(reserve(launches)).handle
+    launches.settle(handle, succeeded = true)
+    val confirmation = async {
+      launches.awaitStart(handle) { page(paused.copy(lifecycle = Lifecycle.Active, running = true)) }
+    }
+    runCurrent()
+
+    advanceTimeBy(10_000)
+    runCurrent()
+
+    assertFalse(confirmation.await())
+    assertEquals(emptySet(), launches.keys.value)
+  }
+
+  @Test
+  fun `a failed status read keeps admission reserved and retries at the next ten second check`() = runTest {
+    val launches = reservations()
+    val handle = assertIs<ReservationAdmission.Reserved>(reserve(launches)).handle
+    launches.settle(handle, succeeded = true)
+    var available = false
+    val confirmation = async { launches.awaitStart(handle) { if (available) page(paused) else null } }
+    runCurrent()
+
+    advanceTimeBy(10_000)
+    runCurrent()
+    assertFalse(confirmation.isCompleted)
+    assertEquals(setOf(KEY), launches.keys.value)
+
+    available = true
+    advanceTimeBy(10_000)
+    runCurrent()
+    assertTrue(confirmation.await())
+    assertEquals(emptySet(), launches.keys.value)
+  }
+
+  @Test
+  fun `a delayed confirmation cannot release a newer resume reservation`() = runTest {
+    val launches = reservations()
+    val old = assertIs<ReservationAdmission.Reserved>(reserve(launches)).handle
+    launches.settle(old, succeeded = true)
+    val read = CompletableDeferred<BoardPage>()
+    val confirmation = async { launches.awaitStart(old) { read.await() } }
+    runCurrent()
+    advanceTimeBy(10_000)
+    runCurrent()
+
+    launches.release(old)
+    assertIs<ReservationAdmission.Reserved>(reserve(launches))
+    read.complete(page(paused))
+    runCurrent()
+
+    assertFalse(confirmation.await())
+    assertEquals(setOf(KEY), launches.keys.value)
   }
 
   @Test

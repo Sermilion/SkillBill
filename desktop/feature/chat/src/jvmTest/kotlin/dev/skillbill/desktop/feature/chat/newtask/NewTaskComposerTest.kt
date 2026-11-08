@@ -227,11 +227,11 @@ class NewTaskComposerTest {
 
     val read = ChatToolCall("read", "Read", "View.kt", "Read the view")
     send(ChatEvent.ToolUse(read))
-    onNodeWithText("Reading files...").assertExists()
+    onNodeWithText("Reading View.kt").assertExists()
 
     send(ChatEvent.ToolResult(read.id, "contents", false))
     send(ChatEvent.TextDelta("Done."))
-    onNodeWithText("Responding...").assertExists()
+    onNodeWithText("Working...").assertExists()
 
     send(ChatEvent.Completed)
     waitUntil { draft.chat.value?.thread?.busy?.value == false }

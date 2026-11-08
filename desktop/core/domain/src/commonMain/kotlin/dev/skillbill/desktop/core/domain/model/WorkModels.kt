@@ -16,6 +16,27 @@ enum class WorkLiveSection { NeedsYou, Goals, Phases, Operations }
 
 enum class GoalWorktreeState { Active, Retained, Removed }
 
+enum class WorkBuildState { Running, Passed, Failed, Finished }
+
+data class WorkBuildPrevious(val state: WorkBuildState, val durationMs: Long, val finishedAt: Instant)
+
+/** The runtime's current or last build for the run, null when no build tool command was seen. */
+data class WorkBuild(
+  val state: WorkBuildState,
+  val command: String,
+  val shortCommand: String,
+  val tool: String,
+  val projectKind: String,
+  val pid: Long,
+  val startedAt: Instant,
+  val elapsedMs: Long?,
+  val elapsedAsOf: Instant?,
+  val usualMs: Long?,
+  val exitCode: Int?,
+  val finishedAt: Instant?,
+  val previous: WorkBuildPrevious?,
+)
+
 /** What happened to the main checkout when the goal's worktree was removed. */
 enum class MainCheckoutOutcome { CheckedOut, SkippedUncommittedChanges, Failed }
 
@@ -111,6 +132,7 @@ data class WorkItem(
   val standaloneExecution: Boolean = false,
   val goalWorktree: GoalWorktree? = null,
   val launchWarning: String? = null,
+  val build: WorkBuild? = null,
 ) {
   val checkoutRoot: String get() = goalWorktree?.takeIf { it.state != GoalWorktreeState.Removed }?.path ?: repositoryRoot
 }

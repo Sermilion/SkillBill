@@ -27,6 +27,7 @@ import skillbill.application.updatecheck.UpdateCheckService
 import skillbill.application.work.WorkListService
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.di.featurespec.RuntimeFeatureSpecProvides
+import skillbill.di.featuretask.RuntimeAgentBuildProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskSlotProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskValidatorProvides
@@ -74,7 +75,6 @@ import skillbill.engine.operation.core.OperationExecutor
 import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.specbrowser.SpecBrowserService
 import skillbill.engine.work.IdeStatusService
-import skillbill.engine.work.WorkBoardReadModelProjection
 import skillbill.engine.work.changes.scope.WorkChangeScopesService
 import skillbill.engine.work.control.WorkControlService
 import skillbill.engine.work.observation.WorkObservationService
@@ -96,11 +96,11 @@ import skillbill.infrastructure.sqlite.workerlease.SQLiteRuntimeWorkerLeases
 import skillbill.infrastructure.sqlite.workflow.goalrunner.archive.SqliteGoalArchiveSnapshotPort
 import skillbill.infrastructure.workflow.git.branches.GitRepositoryBranchesAdapter
 import skillbill.infrastructure.workflow.git.changes.GitWorkChangesAdapter
+import skillbill.infrastructure.workflow.git.changes.GitWorkTreeSnapshotAdapter
 import skillbill.infrastructure.workflow.git.lineage.GitRepositoryLineage
 import skillbill.model.EnvironmentContext
 import skillbill.model.RepositoryRoot
 import skillbill.model.RuntimeVersion
-import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.approval.ApprovalOwnerAuthority
@@ -141,6 +141,7 @@ import skillbill.ports.telemetry.transport.RemoteTransportPort
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
 import skillbill.ports.validation.RepoValidationGateway
 import skillbill.ports.workchanges.WorkChangesPort
+import skillbill.ports.workchanges.WorkTreeSnapshotPort
 import skillbill.ports.workflow.WorkflowArtifactWireEncoder
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.gitops.RepositoryBranchesPort
@@ -162,6 +163,7 @@ abstract class RuntimeComponent(
     RuntimeReviewAddonCatalogProvides,
     RuntimeReviewEvidenceProvides,
     RuntimeDiffCommentProvides,
+    RuntimeAgentBuildProvides,
     RuntimeFeatureTaskProvides,
     RuntimeFeatureTaskSlotProvides,
     RuntimeStandaloneMonitorProvides,
@@ -266,6 +268,9 @@ abstract class RuntimeComponent(
   fun workChangesPort(adapter: GitWorkChangesAdapter): WorkChangesPort = adapter
 
   @Provides
+  fun workTreeSnapshotPort(adapter: GitWorkTreeSnapshotAdapter): WorkTreeSnapshotPort = adapter
+
+  @Provides
   fun repositoryBranchesPort(adapter: GitRepositoryBranchesAdapter): RepositoryBranchesPort = adapter
 
   @Provides @RuntimeSingleton
@@ -283,13 +288,7 @@ abstract class RuntimeComponent(
       workflowSnapshotValidator,
       runtimeVersion().value,
       blockIncidentContractValidator,
-      lazy { boardReadModelProjector() },
     )
-
-  @Provides @RuntimeSingleton
-  fun workBoardReadModelProjector(impl: WorkBoardReadModelProjection): WorkBoardReadModelProjector = impl
-
-  internal abstract fun boardReadModelProjector(): WorkBoardReadModelProjector
 
   @Provides
   fun databaseSessionFactory(factory: SQLiteDatabaseSessionFactory): DatabaseSessionFactory = factory
@@ -325,6 +324,7 @@ abstract class RuntimeComponent(
   abstract val workChangeScopesService: WorkChangeScopesService
   abstract val workActivityService: WorkActivityService
   abstract val workChangesPort: WorkChangesPort
+  abstract val workTreeSnapshotPort: WorkTreeSnapshotPort
   abstract val repositoryBranchesPort: RepositoryBranchesPort
   abstract val checkedOutBranchSource: CheckedOutBranchSource
 

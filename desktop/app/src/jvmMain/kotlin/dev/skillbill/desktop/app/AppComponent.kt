@@ -8,18 +8,21 @@ import dev.skillbill.desktop.app.tray.TrayAvailability
 import dev.skillbill.desktop.feature.tray.TrayViewModel
 import dev.skillbill.desktop.core.common.ApplicationCoroutineScope
 import dev.skillbill.desktop.core.common.DatabaseDispatcher
+import dev.skillbill.desktop.core.common.AppDispatchers
 import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.data.chat.ChatSummarizer
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.data.session.DatabaseSessionManager
+import dev.skillbill.desktop.core.data.usage.ProviderUsageRepository
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
+import dev.skillbill.desktop.core.domain.usage.UsageRepository
 import dev.skillbill.desktop.core.domain.model.ChangeScope
-import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import dev.skillbill.desktop.core.ui.changes.ChangesWindows
 import dev.skillbill.desktop.feature.changes.ChangesWindowViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -50,8 +53,10 @@ abstract class AppComponent(
   abstract val workBoardRepository: WorkBoardRepository
   abstract val workControlRepository: WorkControlRepository
   abstract val workDetailRepository: WorkDetailRepository
+  abstract val usageRepository: UsageRepository
+  abstract val providerUsageRepository: ProviderUsageRepository
   abstract val changesWindows: ChangesWindows
-  abstract val changesWindowViewModel: (WorkItem, ChangeScope) -> ChangesWindowViewModel
+  abstract val changesWindowViewModel: (ChangesSource, ChangeScope, String?) -> ChangesWindowViewModel
   abstract val specRepository: SpecRepository
   abstract val windowComponentFactory: WindowComponent.Factory
 }
@@ -61,6 +66,11 @@ interface AppProviders {
   @Provides
   @SingleIn(AppScope::class)
   fun databaseDispatcher(): DatabaseDispatcher = DatabaseDispatcher()
+
+  @Provides
+  @SingleIn(AppScope::class)
+  fun appDispatchers(database: DatabaseDispatcher): AppDispatchers =
+    AppDispatchers(Dispatchers.Main, Dispatchers.IO, database.dispatcher)
 
   @Provides
   fun clock(): Clock = Clock.System

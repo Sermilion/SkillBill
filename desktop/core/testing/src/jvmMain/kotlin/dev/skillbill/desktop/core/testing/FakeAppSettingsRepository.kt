@@ -65,6 +65,9 @@ class FakeAppSettingsRepository(initial: AppSettings = AppSettings.DEFAULT) : Ap
   override suspend fun readQaDevice(): Outcome<QaDevicePick?, SettingsRejection> =
     if (qaDeviceReadFailure) Outcome.Failure(SettingsRejection.ReadFailed) else Outcome.Success(settings.value.qaDevice)
 
+  override suspend fun setDefaultAgent(agentId: String?) =
+    change { it.copy(defaultAgentId = agentId?.trim()?.ifEmpty { null }) }
+
   override suspend fun setNotification(kind: NotificationKind, enabled: Boolean) =
     change { it.copy(notifications = it.notifications + (kind to enabled)) }
 

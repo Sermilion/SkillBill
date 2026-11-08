@@ -31,11 +31,27 @@ public class NewTaskIssueKeyAllocator(
       prefix?.trim()?.uppercase()?.takeIf(PREFIX::matches)
         ?: return NewTaskKeyAllocation.NeedsPrefix(prefixesOf(bundleKeys))
     val keys = bundleKeys + occupiedKeys.mapNotNull(::issueKey)
-    val highest = keys.mapNotNull { numberFor(it, selected) }.maxOrNull() ?: BigInteger.ZERO
-    return NewTaskKeyAllocation.Allocated("$selected-${highest + BigInteger.ONE}")
+    return NewTaskKeyAllocation.Allocated(nextKey(keys, selected))
   }
 
   public fun prefixes(repoRoot: Path): List<String> = prefixesOf(inventory(repoRoot))
+
+  internal fun suggestions(
+    repoRoot: Path,
+    occupiedKeys: Set<String>,
+  ): List<String> {
+    val bundleKeys = inventory(repoRoot)
+    val keys = bundleKeys + occupiedKeys.mapNotNull(::issueKey)
+    return prefixesOf(bundleKeys).map { prefix -> nextKey(keys, prefix) }
+  }
+
+  private fun nextKey(
+    keys: Set<String>,
+    prefix: String,
+  ): String {
+    val highest = keys.mapNotNull { numberFor(it, prefix) }.maxOrNull() ?: BigInteger.ZERO
+    return "$prefix-${highest + BigInteger.ONE}"
+  }
 
   private fun prefixesOf(keys: Set<String>): List<String> =
     keys.map(::prefixOf).filterNot { it == LOCAL_PREFIX }.toSet().sorted()

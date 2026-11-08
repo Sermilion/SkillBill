@@ -22,6 +22,7 @@ import dev.skillbill.desktop.core.domain.model.ExecutionInstance
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.PlanRunReport
 import dev.skillbill.desktop.core.domain.model.PlannedSubtask
+import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.StandalonePlanProgress
 import dev.skillbill.desktop.core.domain.model.StandalonePlanStage
 import dev.skillbill.desktop.core.domain.model.StandalonePlanUnit
@@ -251,6 +252,58 @@ class PlanActionsTest {
   }
 
   @Test
+  fun `Implement disables and explains itself once a goal started for the plan`() = runComposeUiTest {
+    val state = finishedPlanState(planOptions(goalStarted = true))
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        RunActions(runActionsView(state), listOf("claude", "codex"), false, remember { FocusRequester() }) {}
+      }
+    }
+
+    onNodeWithText("Implement").assertIsNotEnabled()
+    onNodeWithText("Agent: claude").assertIsNotEnabled()
+    onNodeWithText("$GOAL_STARTED. Open the goal to follow or resume it.").assertExists()
+    onNodeWithText("Implement turns on when every spec is saved").assertDoesNotExist()
+  }
+
+  @Test
+  fun `a run without a recorded agent offers the default agent when the run allows it`() {
+    val unrecorded = RunOptions(false, false, "Run again", null, listOf("claude", "codex"), null, false)
+    val state = finishedPlanState(unrecorded)
+
+    assertEquals("Choose agent", runActionsView(state).agent?.label)
+    assertEquals("Agent: codex", runActionsView(state.copy(defaultAgentId = "codex")).agent?.label)
+    assertEquals("Choose agent", runActionsView(state.copy(defaultAgentId = "junie")).agent?.label)
+    assertEquals("Agent: claude", runActionsView(finishedPlanState(planOptions(goalStarted = false)).copy(defaultAgentId = "codex")).agent?.label)
+  }
+
+  @Test
+  fun `Implement starts the goal with the agent picked next to it`() = runTest {
+    var current = finishedPlanState(planOptions(goalStarted = false))
+    val agents = mutableListOf<String?>()
+    val repository = object : WorkControlRepository by FakeWorkControlRepository() {
+      override suspend fun startGoal(repoRoot: String, issueKey: String, agentId: String?): ControlOutcome {
+        agents += agentId
+        return ControlOutcome.RequestAccepted
+      }
+    }
+    val controls = DetailControls(backgroundScope, repository, ToastQueue(), {}, {}) { current }
+    val view = runActionsView(current)
+    assertEquals(ControlButton("Agent: claude", true), view.agent)
+    assertTrue(view.implement!!.enabled)
+
+    assertTrue(controls.onAction(ControlsAction.OpenAgentMenu))
+    assertTrue(controls.state.value.agentMenuOpen)
+    assertTrue(controls.onAction(ControlsAction.ChooseAgent("codex")))
+    current = current.copy(controls = controls.state.value)
+    assertEquals("Agent: codex", runActionsView(current).agent?.label)
+    assertTrue(controls.onAction(ControlsAction.ImplementPlan))
+    runCurrent()
+
+    assertEquals(listOf<String?>("codex"), agents)
+  }
+
+  @Test
   fun `a plan with units and no report opens the derived manifest path`() = runComposeUiTest {
     val plan = StandalonePlanProgress(
       null, emptyList(), 0, 1, 1, listOf(1), 5, null, null,
@@ -291,3 +344,15 @@ private fun completedPlan(report: PlanRunReport) = StandalonePlanProgress(
     StandalonePlanUnit(1, "Detail view", "/specs/OAC-86/spec_subtask_1.md", emptyList(), "saved", epoch, epoch, null, null),
   ), null,
 )
+
+private fun planOptions(goalStarted: Boolean) =
+  RunOptions(false, false, "Run again", "claude", listOf("claude", "codex"), null, goalStarted)
+
+private fun finishedPlanState(options: RunOptions): DetailUiState {
+  val base = workItem("plan-invocation", kind = WorkKind.Phase)
+  val item = base.copy(issueKey = "OAC-86", standaloneExecution = true, running = false, lifecycle = Lifecycle.Terminal,
+    finishedAt = epoch, control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"))
+  val report = completedReport()
+  val detail = emptyDetail.copy(executionHistory = listOf(planExecution(report)), standalonePlan = completedPlan(report))
+  return DetailUiState(item, SectionsUi.Loaded(detail, options, emptyMap(), emptySet()), false, epoch)
+}

@@ -87,6 +87,10 @@ lane_conditions:
 qa_capability:
   platforms: [backend]
   guidance_file: qa/backend-qa.md
+build_tools:
+  - executable: cargo
+    tool: Cargo
+    project_kind: Rust
 validation_gate:
   full_gate_command:
     - cargo

@@ -50,6 +50,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
@@ -121,7 +122,7 @@ class RuntimeWorkControlRepository(
   private val settings: AppSettingsRepository,
   private val launches: LaunchReservations,
   private val diagnostics: Diagnostics,
-  appScope: ApplicationCoroutineScope,
+  private val appScope: ApplicationCoroutineScope,
 ) : WorkControlRepository {
   init {
     appScope.scope.launch {
@@ -175,9 +176,11 @@ class RuntimeWorkControlRepository(
       ReservationAdmission.ChangedSession -> return ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
       is ReservationAdmission.Reserved -> admission.handle
     }
+    // A run with a recorded agent keeps it; the default agent only fills a launch that names none.
+    val launchAgent = agentId ?: if (item.agentId == null) readDefaultAgent() else null
     return reserved(handle) {
       runControl(item, "control_launch") { runtime, target ->
-        runtime.workControlService.request(target, WorkControlAction.LAUNCH, agentId, qaDevice).toControlOutcome(ControlKind.LAUNCH, diagnostics)
+        runtime.workControlService.request(target, WorkControlAction.LAUNCH, launchAgent, qaDevice).toControlOutcome(ControlKind.LAUNCH, diagnostics)
       }
     }
   }
@@ -190,6 +193,7 @@ class RuntimeWorkControlRepository(
     }
     if (!sessionIsCurrent(session)) return ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
     if (launches.isReserved(issueKey)) return ControlOutcome.AlreadyLaunching
+    val goalAgent = agentId ?: readDefaultAgent()
     val identity = callInSession(
       session,
       "control_goal_identity",
@@ -231,7 +235,7 @@ class RuntimeWorkControlRepository(
           ?: return@callInSession ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
         when (val result = runtime.databaseSession.transactionFenced(observation) {
           if (!sessionIsCurrent(session)) null
-          else runtime.workControlService.startGoal(Path.of(repoRoot), issueKey, agentId, qaDevice)
+          else runtime.workControlService.startGoal(Path.of(repoRoot), issueKey, goalAgent, qaDevice)
         }) {
           FencedTransactionResult.ChangedTarget -> ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
           is FencedTransactionResult.Committed -> result.value?.toControlOutcome(ControlKind.START_GOAL, diagnostics)
@@ -390,6 +394,16 @@ class RuntimeWorkControlRepository(
         if (request.kind == NewTaskKind.Qa) qaDevice else null,
       )
     }
+  }
+
+  /** The default agent setting, or null when it is unset or unreadable so the runtime's own rule applies. */
+  private suspend fun readDefaultAgent(): String? = try {
+    settings.settings.first().defaultAgentId
+  } catch (cancelled: kotlinx.coroutines.CancellationException) {
+    throw cancelled
+  } catch (_: Exception) {
+    diagnostics.record("desktop_default_agent_unavailable")
+    null
   }
 
   private suspend fun readQaDevice(): Outcome<QaNamedDevice?, SettingsRejection> =
@@ -761,7 +775,7 @@ class RuntimeWorkControlRepository(
 
   private fun sessionIsCurrent(session: DatabaseSessionComponent): Boolean = sessions.isCurrent(session)
 
-  /** Holds [handle] around [request]; the reservation ends on failure, or once the board shows the launch. */
+  /** Holds [handle] until failure, a board change, or a fresh check finds that the launch did not start. */
   private suspend fun reserved(handle: LaunchReservationHandle, request: suspend () -> ControlOutcome): ControlOutcome {
     val outcome = try {
       request()
@@ -771,6 +785,19 @@ class RuntimeWorkControlRepository(
     }
     val succeeded = outcome !is ControlOutcome.Refused && outcome !is ControlOutcome.Failed
     launches.settle(handle, succeeded)
+    if (succeeded) appScope.scope.launch {
+      val unconfirmed = launches.awaitStart(handle) {
+        val session = sessions.currentComponent(handle.sessionId) ?: return@awaitStart null
+        when (val result = session.board.completeSnapshot(RESERVATION_BOARD)) {
+          is Outcome.Success -> result.value.takeIf { sessions.isCurrent(session) }?.also { session.board.refresh() }
+          is Outcome.Failure -> {
+            diagnostics.record("desktop_launch_confirmation_read_failed")
+            null
+          }
+        }
+      }
+      if (unconfirmed) diagnostics.record("desktop_launch_not_started")
+    }
     return outcome
   }
 

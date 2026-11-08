@@ -12,6 +12,7 @@ import dev.skillbill.desktop.core.ui.input.ShellInput
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
 import dev.skillbill.desktop.core.ui.navigation.NewTaskRoute
 import dev.skillbill.desktop.core.ui.pane.ChatCommands
+import dev.skillbill.desktop.core.ui.usage.model.SelectedNewTaskUsageContext
 import dev.skillbill.desktop.core.ui.pane.PaneCommands
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
@@ -68,6 +69,9 @@ class ShellKeyboardEscapeTest {
     override val newTaskDraftOpen = MutableStateFlow(false)
 
     override val newTaskOpenChats = MutableStateFlow(1)
+
+    override val selectedNewTaskUsageContext: StateFlow<SelectedNewTaskUsageContext> =
+      MutableStateFlow(SelectedNewTaskUsageContext.Absent(0))
 
     override fun toggleChat(item: WorkItem?) = Unit
 

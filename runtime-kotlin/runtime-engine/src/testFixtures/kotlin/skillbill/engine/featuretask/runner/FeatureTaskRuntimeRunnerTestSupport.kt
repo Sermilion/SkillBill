@@ -75,6 +75,7 @@ import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPrepara
 import skillbill.engine.featuretask.runloop.durable.WorktreeEditJournalWriter
 import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompletion
 import skillbill.engine.featuretask.runloop.finalization.NoopCommitPushManifestCompletion
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
 import skillbill.engine.featuretask.slot.ApprovingReviewPhaseRunner
 import skillbill.engine.featuretask.slot.OpenPullRequestIdentityLookup
@@ -1123,6 +1124,7 @@ private fun harnessRunner(
           ),
           entry,
           testDecompositionPlanner(),
+          AgentBuildObserverFactory.NONE,
         ),
         deps.database,
         ParallelCodeReviewRunnerResultAssembly(
@@ -1341,6 +1343,7 @@ private class TelemetryExecutePreparedSetup(
           ),
           configuredEntry,
           testDecompositionPlanner(),
+          AgentBuildObserverFactory.NONE,
         ),
         database,
         ParallelCodeReviewRunnerResultAssembly(

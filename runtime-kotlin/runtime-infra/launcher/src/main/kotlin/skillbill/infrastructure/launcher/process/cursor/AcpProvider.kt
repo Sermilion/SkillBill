@@ -9,8 +9,6 @@ data class AcpProvider(
   val authMethodId: String?,
   val mcpDeclarationRequired: Boolean,
 ) {
-  val probeArguments: List<String> get() = acpArguments + "--help"
-
   val seam: String get() = "${id}_acp"
 
   companion object {

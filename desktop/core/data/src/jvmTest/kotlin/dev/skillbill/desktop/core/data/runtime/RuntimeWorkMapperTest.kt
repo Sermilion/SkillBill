@@ -3,6 +3,7 @@ package dev.skillbill.desktop.core.data.runtime
 import dev.skillbill.desktop.core.domain.model.GoalWorktree
 import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
 import dev.skillbill.desktop.core.domain.model.MainCheckoutOutcome
+import dev.skillbill.desktop.core.domain.model.WorkBuildState as DesktopBuildState
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.idestatus.model.IdeStatusFreshness
 import skillbill.idestatus.model.IdeStatusLifecycleState
@@ -12,11 +13,16 @@ import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
 import skillbill.ports.idestatus.model.WorkBoardItem
+import skillbill.ports.idestatus.model.WorkBuildView
+import skillbill.ports.idestatus.model.WorkBuildPrevious
+import skillbill.ports.idestatus.model.WorkBuildState
+import skillbill.ports.idestatus.model.WorkDetailItem
 import java.nio.file.Files
 import java.time.Instant
 import skillbill.ports.idestatus.model.GoalWorktreeState as RuntimeGoalWorktreeState
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.toKotlinInstant
 
 class RuntimeWorkMapperTest {
   @Test
@@ -46,6 +52,36 @@ class RuntimeWorkMapperTest {
     val keyless = board("wf-2", execution, title = "linear-progress-sync").toWorkItem(1L)
 
     assertEquals("[SKILL-452] Linear progress sync" to "Linear progress sync", keyed.title to keyless.title)
+  }
+
+  @Test
+  fun `board and detail builds map into the desktop model`() {
+    val startedAt = Instant.parse("2026-10-01T09:00:00Z")
+    val build = WorkBuildView(
+      WorkBuildState.RUNNING, "./gradlew check", "gradlew check", "gradle", "kotlin", 42L,
+      startedAt, 1_200L, startedAt.plusSeconds(1), 3_000L, null, null,
+      WorkBuildPrevious(WorkBuildState.PASSED, 2_000L, startedAt.minusSeconds(1)),
+    )
+    val execution = IdeStatusExecutionIdentity(IdeStatusExecutionScope.WORKFLOW, "e", "s", "1", "1")
+    val boardItem = board("wf-1", execution).copy(build = build).toWorkItem(1L)
+
+    assertEquals(DesktopBuildState.Running, boardItem.build?.state)
+    assertEquals("./gradlew check", boardItem.build?.command)
+    assertEquals(42L, boardItem.build?.pid)
+    assertEquals(startedAt.toKotlinInstant(), boardItem.build?.startedAt)
+    assertEquals(DesktopBuildState.Passed, boardItem.build?.previous?.state)
+    assertEquals(null, board("wf-2", execution).toWorkItem(1L).build)
+
+    val failedBuild = build.copy(state = WorkBuildState.FAILED, exitCode = 1, previous = null)
+    val detailItem = WorkDetailItem(
+      snapshot = IdeStatusSnapshot(
+        "repo", IdeStatusLifecycleState.ACTIVE, IdeStatusStep("implement", "Implement"), startedAt,
+        IdeStatusFreshness.FRESH, "Implementing", "Feature", workflowId = "wf-3", execution = execution,
+      ),
+      recoveryWorkId = "wf-3", repositoryRoot = "/repo", stepPipeline = emptyList(), build = failedBuild,
+    ).toWorkItem(1L)
+
+    assertEquals(DesktopBuildState.Failed to 1, detailItem.build?.state to detailItem.build?.exitCode)
   }
 
   // The persisted read model can still say ACTIVE after the directory is gone; that must not send work to the dead path.

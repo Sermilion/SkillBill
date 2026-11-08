@@ -8,10 +8,25 @@ import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
+import dev.skillbill.desktop.core.domain.usage.UsageObservationSink
+import dev.skillbill.desktop.core.domain.usage.model.RequestPermission
+import dev.skillbill.desktop.core.domain.usage.model.UsageMeter
+import dev.skillbill.desktop.core.domain.usage.model.UsageProfileLookup
+import dev.skillbill.desktop.core.domain.usage.model.UsageRequest
+import dev.skillbill.desktop.core.domain.usage.model.UsageResult
+import dev.skillbill.desktop.core.domain.usage.model.UsageSessionStatus
+import dev.skillbill.desktop.core.data.usage.ProviderUsageRepository
+import dev.skillbill.desktop.core.data.usage.UsageProfileResolver
+import dev.skillbill.desktop.core.data.usage.codex.CodexUsageReader
+import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableCode
+import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableReason
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
@@ -19,6 +34,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -32,9 +48,20 @@ import java.util.Collections
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 class ClaudeChatTransportRunTest {
+  private val usageClock = object : Clock {
+    override fun now() = Instant.fromEpochMilliseconds(10_000)
+  }
+
+  private val unusedCodexReader = CodexUsageReader { _ ->
+    UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.ProviderUnavailable))
+  }
+
   // One scripted claude process: the test reads what the app writes to stdin and decides what stdout prints.
   private class FakeClaude(
     val holdStop: CompletableDeferred<Unit>? = null,
@@ -112,16 +139,32 @@ class ClaudeChatTransportRunTest {
     }
   }
 
-  private fun TestScope.transport(claude: FakeClaude, diagnostics: RecordingDiagnostics = RecordingDiagnostics()) = ClaudeChatTransport(
-    HostEnvironment(mapOf("SHELL" to "/bin/bash"), "/home/operator", ""),
-    FakeAppSettingsRepository(),
-    claude,
-    { _, root, _, _, writeLine, stopProcess, onCard ->
-      ChatApprovalOpening.Opened(ClaudeChatApproval(root, writeLine, stopProcess, diagnostics, onCard))
-    },
-    diagnostics,
-    ApplicationCoroutineScope(backgroundScope),
-  )
+  private fun TestScope.transport(claude: FakeClaude, diagnostics: RecordingDiagnostics = RecordingDiagnostics()): ClaudeChatTransport {
+    val host = HostEnvironment(mapOf("SHELL" to "/bin/bash"), "/home/operator", "")
+    val settings = FakeAppSettingsRepository()
+    val profiles = UsageProfileResolver(host)
+    val repository = ProviderUsageRepository(
+      profiles,
+      settings,
+      unusedCodexReader,
+      ApplicationCoroutineScope(backgroundScope),
+      usageClock,
+    )
+    return ClaudeChatTransport(
+      host,
+      settings,
+      claude,
+      { _, root, _, _, writeLine, stopProcess, onCard ->
+        ChatApprovalOpening.Opened(ClaudeChatApproval(root, writeLine, stopProcess, diagnostics, onCard))
+      },
+      diagnostics,
+      ApplicationCoroutineScope(backgroundScope),
+      profiles,
+      repository,
+      usageClock,
+    )
+  }
+
 
   // A background build the agent started used to die when its turn's process exited, and nothing reported back.
   @Test
@@ -294,7 +337,26 @@ class ClaudeChatTransportRunTest {
   @Test
   fun `a turn's user frame is held until the provider answers initialize`() {
     val diagnostics = RecordingDiagnostics()
-    val session = ClaudeLiveSession(ChatProcessBinding(ChatPermissionMode.Act, ""), "/work/skill-bill", diagnostics) {}
+    val session = ClaudeLiveSession(
+      ChatProcessBinding(ChatPermissionMode.Act, ""),
+      "/work/skill-bill",
+      diagnostics,
+      "session-1",
+      1,
+      object : UsageObservationSink {
+        override fun bindSession(logicalSessionId: String, profile: UsageProfileLookup, processGeneration: Long) = Unit
+        override fun recordSessionStatus(
+          logicalSessionId: String,
+          processGeneration: Long,
+          permission: RequestPermission,
+          warning: Boolean,
+          observedAt: Instant,
+          meters: List<UsageMeter>,
+        ) = Unit
+        override fun revokeSession(logicalSessionId: String, processGeneration: Long) = Unit
+      },
+      Clock.System,
+    ) {}
     session.approval = ClaudeChatApproval("/work/skill-bill", { true }, {}, diagnostics, onCard = {})
 
     session.send("uuid-1", "operator prompt", emptyList())

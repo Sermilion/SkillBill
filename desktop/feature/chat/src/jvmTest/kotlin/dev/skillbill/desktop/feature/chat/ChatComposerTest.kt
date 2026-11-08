@@ -116,12 +116,12 @@ class ChatComposerTest {
       runOnIdle { session.agentState.value = ChatAgent("codex", null, null) }
       onNodeWithText("Thinking...").assertExists()
       runOnIdle { session.appendDelta("Answer") }
-      onNodeWithText("Responding...").assertExists()
+      onNodeWithText("Working...").assertExists()
       val edit = ChatToolCall("edit", "edit", "View.kt", null)
       runOnIdle { session.appendTool(edit) }
-      onNodeWithText("Editing files...").assertExists()
+      onNodeWithText("Editing View.kt").assertExists()
       runOnIdle { session.recordToolResult(ChatEvent.ToolResult(edit.id, "done", false)) }
-      onNodeWithText("Working on changes...").assertExists()
+      onNodeWithText("Working...").assertExists()
       runOnIdle {
         session.endStreaming()
         session.busyState.value = false

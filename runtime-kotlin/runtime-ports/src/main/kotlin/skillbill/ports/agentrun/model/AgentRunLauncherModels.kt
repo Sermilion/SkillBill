@@ -52,6 +52,7 @@ data class SkillRunRequest(
   val cursorMcpDependency: CursorMcpDependencyRequirement = CursorMcpDependencyRequirement.Unspecified,
   val validationCheckInvocationId: String? = null,
   val captureDisplayOutput: Boolean = false,
+  val buildObserver: AgentRunBuildObserver = AgentRunBuildObserver.NONE,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

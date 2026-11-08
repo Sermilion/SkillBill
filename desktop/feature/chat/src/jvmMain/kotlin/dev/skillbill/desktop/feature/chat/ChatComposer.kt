@@ -34,6 +34,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.component.SbMenu
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
@@ -265,7 +266,13 @@ internal fun AgentPicker(agent: ChatAgent?, agents: List<String>, enabled: Boole
       .clickable(enabled = canOpen, onClickLabel = "Change agent") { open = true }
       .then(if (why != null) Modifier.semantics { stateDescription = why } else Modifier)
     val chip = @Composable {
-      ChatPill(chipText(agent), mono = true, icon = LucideIcons.cpu, maxWidth = 220.dp, modifier = chipModifier)
+      SbLabel(
+        chipText(agent),
+        style = SbLabelStyle.Mono,
+        icon = LucideIcons.cpu,
+        maxWidth = 220.dp,
+        modifier = chipModifier,
+      )
     }
     if (why != null) SbTooltip(why) { chip() } else chip()
     if (open && canOpen) {

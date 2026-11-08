@@ -146,7 +146,7 @@ class HeadlessAgentRunAdapterTest {
   }
 
   @Test
-  fun `launch outside approval cards reaches codex compatibility admission`() {
+  fun `launch outside approval cards starts codex directly`() {
     val runner = RecordingAgentRunProcessRunner()
     val launcher =
       FileSystemAgentRunLauncher(
@@ -172,7 +172,8 @@ class HeadlessAgentRunAdapterTest {
         )
 
       assertFalse(outcome is UnsupportedAgentRunLaunch)
-      assertEquals(listOf("codex", "--version"), runner.requests.single().launch.command)
+      assertEquals("app-server", runner.requests.single().launch.command[1])
+      assertNotNull(runner.requests.single().launch.session)
     } finally {
       directory.toFile().deleteRecursively()
     }

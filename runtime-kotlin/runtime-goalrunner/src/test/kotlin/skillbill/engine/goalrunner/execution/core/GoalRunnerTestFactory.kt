@@ -22,6 +22,7 @@ import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.testStandalonePhasePublisher
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.runloop.durable.WorktreeEditJournalWriter
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.slot.intake.LegacySpecIntake
 import skillbill.engine.featuretask.slot.testPhaseStrategies
@@ -397,6 +398,7 @@ private fun testGoalRunnerLoopAssembler(
       wiring.diagnostics,
       testProjectStore,
       ChildFailureOutputStore { _, _, _ -> "test.log" },
+      AgentBuildObserverFactory.NONE,
     )
   val launchPrepare =
     GoalRunnerSubtaskLaunchPrepare(

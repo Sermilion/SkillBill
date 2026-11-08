@@ -16,6 +16,19 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalTestApi::class)
 class ChatActionButtonsTest {
   @Test
+  fun `goal start shows the accepted key while preserving the original action`() = runComposeUiTest {
+    val action = ChatSuggestedAction("Run phase:goal", "Implement the change", ChatPermissionMode.Act, NewTaskActionKind.Goal)
+    val chosen = mutableListOf<ChatSuggestedAction>()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        ChatActionButtons(listOf(action), true, ChatPermissionMode.Act, startIssueKey = "SKILL-530") { chosen += it }
+      }
+    }
+    onNodeWithText("Run phase:goal SKILL-530").performClick()
+    assertEquals(listOf(action), chosen)
+  }
+
+  @Test
   fun `buttons identify the chosen instruction and make pause behavior visible while preventing repeat clicks`() = runComposeUiTest {
     val file = ChatSuggestedAction("File an issue", "File an issue for this execution.", ChatPermissionMode.ReadOnly)
     val push = ChatSuggestedAction("Push with lease", "Push this execution's branch with a verified lease.", ChatPermissionMode.Act)

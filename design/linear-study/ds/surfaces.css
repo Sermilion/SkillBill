@@ -1,0 +1,13 @@
+:host {
+  display: block; width: 100%; min-width: 0; color-scheme: dark;
+  --bgFrame: var(--bg-frame); --bgPanel: var(--bg-panel); --bgRaised: var(--bg-raised);
+  --bgOverlay: var(--bg-overlay); --bgInset: var(--bg-inset); --borderStrong: var(--border-strong);
+  --fg2: var(--fg-2); --muted: var(--fg-muted); --faint: var(--fg-faint); --accentText: var(--accent-text);
+  --done: var(--st-done); --failed: var(--st-failed); --blocked: var(--st-blocked); --planning: var(--st-planning);
+  --idle: var(--fg-faint); --doneBar: #4E5A50; --sans: var(--font-sans); --mono: var(--font-mono); --display: var(--font-sans);
+  --bg-window: #0E0E11; --bg-control: #1F1F24; --border-hover: #4A4A54;
+  --addBg: rgba(63,185,80,.15); --delBg: rgba(240,85,91,.15); --hunkBg: var(--bg-raised);
+  --diff-add: var(--addBg); --diff-del: var(--delBg); --diff-hunk: var(--bg-raised);
+  --gutter: 52px;
+}
+.surface-body { font-family: var(--font-sans); color: var(--fg); }

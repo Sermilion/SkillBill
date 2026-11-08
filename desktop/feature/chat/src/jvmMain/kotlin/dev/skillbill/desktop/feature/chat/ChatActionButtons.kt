@@ -1,29 +1,25 @@
 package dev.skillbill.desktop.feature.chat
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
@@ -37,6 +33,7 @@ internal fun ChatActionButtons(
   actions: List<ChatSuggestedAction>,
   enabled: Boolean,
   mode: ChatPermissionMode,
+  startIssueKey: String? = null,
   onAction: (ChatSuggestedAction) -> Unit,
 ) {
   val colors = SkillBillTheme.colors
@@ -45,8 +42,11 @@ internal fun ChatActionButtons(
     actions.forEachIndexed { index, action ->
       // A start never pauses the execution: on a running one the click only explains the refusal.
       val pause = mode == ChatPermissionMode.ReadOnly && action.mode == ChatPermissionMode.Act && action.start == null
+      val label = if (startIssueKey != null && action.start in setOf(NewTaskActionKind.Goal, NewTaskActionKind.Plan)) {
+        "${action.label} $startIssueKey"
+      } else action.label
       ActionRow(
-        label = if (pause) "Pause and ${action.label.replaceFirstChar { it.lowercase() }}" else action.label,
+        label = if (pause) "Pause and ${action.label.replaceFirstChar { it.lowercase() }}" else label,
         action = action,
         pause = pause,
         primary = index == 0,
@@ -59,27 +59,25 @@ internal fun ChatActionButtons(
 @Composable
 private fun ActionRow(label: String, action: ChatSuggestedAction, pause: Boolean, primary: Boolean, enabled: Boolean, onClick: () -> Unit) {
   val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(SkillBillRadius.md)
   SbTooltip(action.instruction) {
-    Row(
-      Modifier.fillMaxWidth().alpha(if (enabled) 1f else .5f)
-        .border(1.dp, if (primary) colors.borderStrong else colors.border, shape)
-        .background(if (primary) colors.bgRaised else Color.Transparent, shape)
+    SbBox(
+      Modifier.alpha(if (enabled) 1f else .5f)
         .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-        .then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
-        .padding(horizontal = 10.dp, vertical = 8.dp),
-      horizontalArrangement = Arrangement.spacedBy(10.dp),
-      verticalAlignment = Alignment.CenterVertically,
+        .then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier),
+      fill = if (primary) colors.bgRaised else null,
+      borderColor = if (primary) colors.borderStrong else colors.borderSubtle,
     ) {
-      val icon = if (action.mode == ChatPermissionMode.Act) LucideIcons.zap else LucideIcons.search
-      CompositionLocalProvider(LocalContentColor provides if (primary) colors.accentText else colors.fgMuted) { SbIcon(icon, SbIconSize.Sm) }
-      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        BasicText(label, style = SkillBillTheme.type.tSm.copy(color = if (primary) colors.fg else colors.fg2))
-        actionHint(action)?.let { hint ->
-          BasicText(hint, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted))
+      Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        val icon = if (action.mode == ChatPermissionMode.Act) LucideIcons.zap else LucideIcons.search
+        CompositionLocalProvider(LocalContentColor provides if (primary) colors.accentText else colors.fgMuted) { SbIcon(icon, SbIconSize.Sm) }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+          BasicText(label, style = SkillBillTheme.type.tSm.copy(color = if (primary) colors.fg else colors.fg2))
+          actionHint(action)?.let { hint ->
+            BasicText(hint, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted))
+          }
         }
+        ModeBadge(action.mode, pause)
       }
-      ModeBadge(action.mode, pause)
     }
   }
 }

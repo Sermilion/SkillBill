@@ -19,3 +19,12 @@ internal class SelectedAgentHomes(private val claudeConfigDir: String?, userHome
     return mapOf(AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR to value)
   }
 }
+
+internal fun claudeEnvironment(variables: Map<String, String>, homes: Map<String, String>): Map<String, String> {
+  val environment = variables + homes
+  return if (homes[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR]?.isEmpty() == true) {
+    environment - AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR
+  } else {
+    environment
+  }
+}

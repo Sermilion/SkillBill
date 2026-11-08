@@ -64,6 +64,17 @@ internal fun agentCommand(binary: String, arguments: List<String>, shell: String
   return agentInvocation(binary, shell) + arguments
 }
 
+internal fun agentCommand(binaries: List<String>, arguments: List<String>, shell: String?): List<String> {
+  require(binaries.isNotEmpty())
+  if (binaries.size == 1) return agentCommand(binaries.single(), arguments, shell)
+  val loginShell = if (!shell.isNullOrBlank() && File(shell).name in posixShells) shell else "/bin/sh"
+  val candidates = binaries.indices.joinToString(" ") { "\"\$${it + 1}\"" }
+  val resolve = "chosen=\"\$1\"; for candidate in $candidates; do " +
+    "if command -v \"\$candidate\" >/dev/null 2>&1; then chosen=\"\$candidate\"; break; fi; done; " +
+    "shift ${binaries.size}; exec \"\$chosen\" \"\$@\""
+  return listOf(loginShell, "-l", "-c", resolve, "skill-bill-agent") + binaries + arguments
+}
+
 internal fun agentInvocation(binary: String, shell: String?): List<String> {
   if (shell.isNullOrBlank()) return listOf(binary)
   val loginShell = if (File(shell).name in posixShells) shell else "/bin/sh"

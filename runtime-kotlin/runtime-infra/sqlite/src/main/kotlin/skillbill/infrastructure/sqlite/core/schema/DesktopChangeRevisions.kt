@@ -354,7 +354,18 @@ private val DESKTOP_CHANGE_TABLES =
       keys = column("invocation_id"),
       installedLater = true,
     ),
+<<<<<<< HEAD
     DesktopChangeTable("monitor_ci_cycles", PHASE_TOPICS, keys = column(WORKFLOW_ID), installedLater = true),
+=======
+    DesktopChangeTable(
+      AgentBuildRunsKeys.TABLE,
+      DesktopReadSchema.TOPICS,
+      keys = { row ->
+        "SELECT COALESCE($row.${AgentBuildRunsKeys.PARENT_RUN_ID}, $row.${AgentBuildRunsKeys.RUN_ID}) AS k"
+      },
+      installedLater = true,
+    ),
+>>>>>>> origin/main
   )
 
 internal fun installWorkBoardChangeTriggers(connection: Connection) {

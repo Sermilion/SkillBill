@@ -50,6 +50,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -143,6 +144,10 @@ class DetailViewModel(
   init {
     selection.select(null)
     controls.state.onEach { controls -> mutableState.update { it.copy(controls = controls) } }.launchIn(viewModelScope)
+    settings.settings.map { it.defaultAgentId }.distinctUntilChanged()
+      .onEach { agent -> mutableState.update { it.copy(defaultAgentId = agent) } }
+      .catch { mutableState.update { it.copy(defaultAgentId = null) } }
+      .launchIn(viewModelScope)
     settings.favoriteWork.onEach { result ->
       when (result) {
         is Outcome.Success -> {

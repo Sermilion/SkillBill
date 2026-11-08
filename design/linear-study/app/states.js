@@ -13,7 +13,7 @@
     { id: 'validation', label: 'Validation', kind: 'phase', seed: 'ph-sb-validation', complete: 'ph-sb-validation-done', paused: 'ph-sb-val-limit', canceled: 'ph-sb-val-411' },
     { id: 'qa', label: 'QA', kind: 'phase', seed: 'ph-pay-qa', complete: 'ph-atl-qa' },
     { id: 'pr', label: 'PR', kind: 'phase', seed: 'ph-atl-pr' },
-    { id: 'monitor', label: 'Monitor', kind: 'phase' },
+    { id: 'monitor', label: 'Monitor', kind: 'phase', seed: 'ph-sb-monitor', complete: 'ph-sb-mon-green', blocked: 'ph-sb-mon-cap' },
     { id: 'verify', label: 'Verify', kind: 'operation', seed: 'op-verify', complete: 'op-verify-fixes', blocked: 'op-verify-confirm', canceled: 'op-verify-stopped' },
     { id: 'pr-review-fix', label: 'PR review fix', kind: 'operation', seed: 'op-prfix', confirm: true },
     { id: 'unit-test-value-check', label: 'Unit test value check', kind: 'operation' },
@@ -63,6 +63,8 @@
     if (type.id === 'validation' && !type[state] && state !== 'terminal') {
       item.valRun = Object.assign(clone(D.VAL.waiting || D.VAL.running), { liveChecks: false, checks: [], outcome: null, result: null, branchRuns: [], runSeq: 1, activity: state === 'active' ? 'Reading the project checks' : item.reason });
     }
+    /* A monitor run in a state the mock has no snapshot for keeps the seed's cycles; its card speaks for the lifecycle. */
+    if (type.id === 'monitor' && !type[state] && !['active', 'terminal'].includes(state)) item.monRun = Object.assign(clone(item.monRun), { hero: null });
     if (state !== 'active') item.steps = (item.steps || []).map(([label, status]) => [label, state === 'terminal' ? 'done' : status === 'now' ? state === 'failed' ? 'fail' : '' : status]);
     if (type.id === 'qa' && state !== 'terminal') { delete item.qa; item.steps = [['qa', state === 'active' ? 'now' : state === 'failed' ? 'fail' : '']]; }
     if (type.id === 'review' && state !== 'terminal') delete item.phaseResults;
@@ -103,8 +105,6 @@
   extra('goal', 'active', 'Pause requested', { pauseRequested: true });
   types.filter((t) => t.id !== 'update-check').forEach((type) => extra(type.id, 'active', 'Stalled', { stalled: true, live: false }));
   types.filter((t) => t.confirm).forEach((type) => extra(type.id, 'blocked', 'Awaiting confirmation', { summary: 'A proposal is ready. Confirm it in chat before changes run.', reason: 'Awaiting confirmation. Review the proposed changes in chat.', runOptions: { canLaunch: false, canCancel: false }, awaitingConfirmation: true }));
-  extra('monitor', 'active', 'CI running', { summary: 'CI is running. 3 of 5 checks passed.', step: 'monitor', steps: [['pr', 'done'], ['monitor', 'now']] });
-  extra('monitor', 'blocked', 'CI failing', { summary: 'CI failed. A repository secret needs attention.', reason: 'The deployment check cannot read its repository secret. Restore access, then monitor again.' });
   extra('pr', 'terminal', 'PR opened', { summary: 'Pull request opened. CI is pending.', steps: [['pr', 'done']] });
   extra('review', 'terminal', 'Review clean', { phaseResults: { passes: [{ n: 1, verdict: 'approved', open: 0, findings: [] }] }, summary: 'Review approved. No findings.' });
   extra('review', 'terminal', 'Review findings', { phaseResults: { passes: [{ n: 1, verdict: 'changes requested', open: 1, findings: [['Major', 'A canceled request still writes its result into the next selection.', 'DetailReads.kt:88']] }] }, summary: 'Review finished. 1 finding remains open.' });
@@ -182,6 +182,9 @@
     ['Validation', 'Passed with checks', 'ph-sb-validation-done'], ['Validation', 'Repairs in report', 'ph-sb-val-repairs'],
     ['Validation', 'Coverage gaps', 'ph-sb-val-413'], ['Validation', 'Blocked, report only', 'ph-za-val-report'], ['Validation', 'Blocked with checks', 'ph-za-validation'],
     ['Validation', 'Provider limit', 'ph-sb-val-limit'], ['Validation', 'Canceled', 'ph-sb-val-411'],
+    ['Monitor', 'CI running', 'ph-sb-mon-ci'], ['Monitor', 'Repair running', 'ph-sb-monitor'], ['Monitor', 'Publishing the repair', 'ph-sb-mon-publish'],
+    ['Monitor', 'Merge conflict repair', 'ph-sb-mon-conflict'], ['Monitor', 'Waiting for checks to register', 'ph-sb-mon-wait'], ['Monitor', 'Repair edited the PR only', 'ph-sb-mon-pr-edit'],
+    ['Monitor', 'CI green', 'ph-sb-mon-green'], ['Monitor', 'Repair cap reached', 'ph-sb-mon-cap'], ['Monitor', 'Repair unresolved', 'ph-sb-mon-unresolved'], ['Monitor', 'PR merged while watching', 'ph-sb-mon-merged'],
     ['Verify', 'Awaiting criteria confirmation', 'op-verify-confirm'], ['Verify', 'No numbered criteria', 'op-verify-nocrit'],
     ['Verify', 'Approved with fixes and QA', 'op-verify-fixes'], ['Verify', 'Request changes with selection', 'op-verify-085'],
     ['Verify', 'Stopped', 'op-verify-stopped'], ['Verify', 'Superseded', 'op-verify-superseded'],
@@ -204,11 +207,16 @@
     }).join('')}</tr>`).join('');
     const variants = catalog.special.map((row) => `<tr><th scope="row">${esc(row.type)}</th><td>${X.statusIcon(X.lookup(row.id))} ${link(row.id, row.label)}</td><td>${esc(location(row.id))}</td></tr>`).join('');
     const chats = [
+      ...['real', 'one', 'running', 'long', 'phase'].map((id, i) => ['Activity', ['Recorded run', 'One subtask', 'Running', '33 subtasks', 'Standalone phase'][i], `activity/${id}`]),
+      ['Changes', 'Subtask scopes and ranges', 'changes'],
+      ...['Writing a review', 'Review added', 'After phase review', 'After review fixes'].map((label, i) => ['Diff comments', label, `comments/${i + 1}`]),
       ['New task', 'Home', 'new-task'], ['New task', 'Two idle chats', 'new-task/state/two'],
       ['New task', 'Replying in the background', 'new-task/state/busy'], ['New task', 'Mixed repositories', 'new-task/state/mixed'],
       ['New task', 'Nine open chats', 'new-task/state/many'], ['New task', 'Twenty chats with overflow', 'new-task/state/lots'],
       ['New task', 'Confirm closing a replying chat', 'new-task/state/closing'], ['New task', 'Few recent chats', 'new-task/state/few'],
       ['New task', 'Queued messages', 'new-task/queue'],
+      ['Chat changes', 'Chat with changes', 'new-task/state/changes'],
+      ...['none', 'few', 'many', 'resumed'].map((id) => ['Chat changes', { none: 'No changes yet', few: 'Three files', many: 'Seventeen files', resumed: 'Resumed chat' }[id], `new-task/changes/${id}`]),
       ...['pending', 'firstRun', 'noAgent', 'noRepo', 'detectionFailed'].map((id) => ['New task', { pending: 'Board read pending', firstRun: 'First run, ready', noAgent: 'No agent detected', noRepo: 'Choose a repository', detectionFailed: 'Agent detection failed' }[id], `new-task/state/${id}`]),
       ...['default', 'longBranch', 'firstRun', 'manyRepos', 'noMatch', 'loading', 'branchError', 'badFolder'].map((id) => ['Repository picker', { default: 'Default', longBranch: 'Long branch name', firstRun: 'No repository', manyRepos: 'Many repositories', noMatch: 'No matching branch', loading: 'Reading branches', branchError: 'Branch read failed', badFolder: 'Folder is not a repository' }[id], `new-task/picker/${id}`]),
       ...['default', 'cli', 'noMatch', 'empty', 'many'].map((id) => ['Resume chat', { default: 'Saved chats', cli: 'Agent CLI session', noMatch: 'No matching chat', empty: 'No saved chats', many: 'More than 30 chats' }[id], `new-task/resume/${id}`]),

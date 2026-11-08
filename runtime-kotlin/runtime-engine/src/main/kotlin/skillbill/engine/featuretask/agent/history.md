@@ -1,3 +1,15 @@
+## [2026-11-08] SKILL-522 build capture across agent launches
+Areas: runtime-engine featuretask and operation; runtime-goalrunner launch; runtime-ports agentrun; runtime-infra launcher, host and sqlite; runtime-core wiring; runtime-cli subprocess fixtures
+- MEDIUM feature. Durable phases, standalone phases, operations and direct goal-agent launches observe descendant processes and provider command events through per-launch recorders, independently of display observation.
+- AgentRunBuildObserver and AgentBuildObserverFactory are reusable. Lazy run and parent attribution retains pending events; primary repository identity shares history across goal worktrees. Durable mappings use PID and start instant.
+- Provider capability and launch kind select capture. Command events queue for wait-loop delivery; terminal events carry process-membership samples, and final output flushes before settlement. Continuations reset tracker and decoder state.
+- Setup, observation and persistence failures emit diagnostics without replacing the launch result. Cancellation propagates. Repository metadata reads are bounded and memoized per recorder.
+- CLI subprocess fixtures filter inherited runtime state-directory selection alongside database, continuation and Codex-home overrides. Project-store fixtures supply their own temporary state directory.
+- Limits: 250 ms sampling can miss short builds; absent command evidence settles observed builds unknown. Runtime-harness capture avoids duplicate phase rows, and runtime-owned gate processes remain outside capture.
+- Run-scoped stale-row abandonment can mark a concurrent sibling's open row unknown when planning units share a run ID. Planning agents remain instructed not to build.
+Feature flag: N/A
+Acceptance criteria: 4/4 capture subtask criteria implemented; completes parent criterion 2 with the store
+
 ## [2026-11-07] SKILL-517 runtime QA device channel
 Areas: runtime-engine featuretask QA and work/control; runtime-cli phase and goal; runtime-goalrunner QA; runtime-contracts QA; desktop/core/data/control; docs/runtime-command-guidance
 - MEDIUM feature. Standalone QA and goal launches accept --qa-device with serial: or avd: values. Parsing rejects duplicate selectors, unknown prefixes, blank or oversized values, whitespace, control characters and leading dashes.

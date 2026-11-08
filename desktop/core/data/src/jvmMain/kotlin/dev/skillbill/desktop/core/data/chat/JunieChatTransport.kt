@@ -31,7 +31,6 @@ private const val PROMPT_LIMIT = 120_000
 @SingleIn(AppScope::class)
 class JunieChatTransport(
   private val host: HostEnvironment,
-  private val launcher: ChatProcessLauncher,
   private val store: ChatStore,
   private val diagnostics: Diagnostics,
   private val liveLauncher: LiveChatProcessLauncher? = null,
@@ -59,7 +58,7 @@ class JunieChatTransport(
     if (job != null) turns[request.sessionId] = job
     try {
       emitAll(
-        cursorAcpTurn(live, launcher, authority, store, diagnostics, host.variables["SHELL"], environment, request,
+        cursorAcpTurn(live, authority, store, diagnostics, host.variables["SHELL"], environment, request,
           saved = null, binding = null, prompt = prompt, provider = AcpProvider.Junie).onEach { event ->
           when (event) {
             is ChatEvent.TextDelta -> reply.append(event.text)

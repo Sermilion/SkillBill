@@ -1542,7 +1542,7 @@ run_runtime_cli() {
 runtime_cli_supports_selection_replay() {
   local runtime_bin="$1"
   [[ -x "$runtime_bin" ]] || return 1
-  "$runtime_bin" install --help 2>/dev/null | grep -q "replay-last-selection"
+  "$runtime_bin" install --help 2>/dev/null | grep "replay-last-selection" >/dev/null
 }
 
 build_selection_replay_runtime_cli() {

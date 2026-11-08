@@ -115,7 +115,6 @@ internal class CursorChatGeneration(
 
 internal fun cursorAcpTurn(
   live: LiveChatProcessLauncher,
-  probes: ChatProcessLauncher,
   authority: ChatApprovalAuthority,
   store: ChatStore,
   diagnostics: Diagnostics,
@@ -144,27 +143,9 @@ internal fun cursorAcpTurn(
   val outputs = Channel<ChatProcessOutput>(Channel.UNLIMITED)
   val events = Channel<ChatEvent>(Channel.UNLIMITED)
   val readerRef = AtomicReference<kotlinx.coroutines.Job?>()
-  var executable: String? = null
   val aliases = skillbill.install.model.AGENT_LAUNCHER_CLIS[
     if (cursor) skillbill.install.model.SupportedAgent.CURSOR else skillbill.install.model.SupportedAgent.JUNIE,
   ]?.executables.orEmpty()
-  for (alias in aliases) {
-    val probe = ChatCommand(agentCommand(alias, provider.probeArguments, shell),
-      request.scope.repositoryRoot, environment, "")
-    var usable = false
-    try {
-      withTimeout(30_000) {
-        probes.run(probe).collect { if (it is ChatProcessOutput.Exited && it.code == 0) usable = true }
-      }
-    } catch (_: TimeoutCancellationException) { diagnostics.record("chat.${provider.seam}_probe_timeout") }
-    if (usable) { executable = alias; break }
-    diagnostics.record("chat.${provider.seam}_alias_unavailable")
-  }
-  if (executable == null) {
-    send(ChatEvent.Failed(ChatFailure.ApprovalUnsupported,
-      "No declared ${provider.name} executable supplies ACP stdio. The chat was not started."))
-    return@channelFlow
-  }
   // ACP streams text chunks without message ids, so a text run after a tool call starts a new message.
   var textOpen = false
   val protocol = CursorAcpSession(
@@ -231,7 +212,7 @@ internal fun cursorAcpTurn(
     return@channelFlow
   }
   val generation = (opening as CursorChatApprovalOpening.Opened).generation
-  val command = ChatCommand(agentCommand(executable, provider.acpArguments, shell), request.scope.repositoryRoot, environment, "")
+  val command = ChatCommand(agentCommand(aliases, provider.acpArguments, shell), request.scope.repositoryRoot, environment, "")
   val reader = launch(start = CoroutineStart.LAZY) {
     try { live.openAcknowledged(command, inputs).collect { outputs.send(it) } }
     finally { outputs.close() }

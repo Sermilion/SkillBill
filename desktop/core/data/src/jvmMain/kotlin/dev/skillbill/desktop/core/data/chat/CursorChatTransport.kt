@@ -3,6 +3,7 @@ package dev.skillbill.desktop.core.data.chat
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
+import dev.skillbill.desktop.core.data.usage.cursorEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatScope
@@ -21,11 +22,11 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 
+
 @Inject
 @SingleIn(AppScope::class)
 class CursorChatTransport(
   private val host: HostEnvironment,
-  private val launcher: ChatProcessLauncher,
   private val store: ChatStore,
   private val diagnostics: Diagnostics,
   private val liveLauncher: LiveChatProcessLauncher? = null,
@@ -59,11 +60,12 @@ class CursorChatTransport(
         "The saved Cursor session is unavailable. Start an explicit new chat; history was not replaced."))
       return@flow
     }
-    val environment = host.variables + mapOf("HOME" to (host.variables["HOME"] ?: host.userHome)) + request.agent.profile
-      ?.let { mapOf(AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR to it) }.orEmpty()
+    val environment = cursorEnvironment(host.variables, request.agent.profile) +
+      mapOf("HOME" to (host.variables["HOME"] ?: host.userHome))
     val binding = CursorSessionBinding(
       environment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR] ?: environment["HOME"].orEmpty(),
       Path.of(request.scope.repositoryRoot).toAbsolutePath().normalize().toString(),
+
     )
     if (saved != null && store.cursorSessionBinding(request.sessionId) != binding) {
       emit(ChatEvent.Failed(ChatFailure.ProcessFailed,
@@ -77,7 +79,7 @@ class CursorChatTransport(
     val job = currentCoroutineContext()[Job]
     if (job != null) turns[request.sessionId] = job
     try {
-      emitAll(cursorAcpTurn(live, launcher, authority, store, diagnostics, host.variables["SHELL"],
+      emitAll(cursorAcpTurn(live, authority, store, diagnostics, host.variables["SHELL"],
         environment, request, saved, binding, prompt))
     } finally {
       if (job != null) turns.remove(request.sessionId, job)

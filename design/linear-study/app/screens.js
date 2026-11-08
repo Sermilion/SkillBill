@@ -34,7 +34,8 @@
   const agentAvatar = (it) => (it.agent ? S.Avatar({ name: it.agent, initials: agentOf(it.agent).initials, color: agentOf(it.agent).color, tip: `${it.agent}${it.model ? ' · ' + it.model : ''}${it.effort ? ' · ' + it.effort : ''}` }) : '');
   const lifeLabel = (it) => S.Label({ text: LIFE[it.lifecycle][0], color: LIFE[it.lifecycle][1], tint: true, dot: false });
   const stepText = (it) => (it.planning ? `${it.planned}/${it.total} plans saved` : it.step + (it.exec ? ' · ' + it.exec : ''));
-  const rowKey = (it) => (it.kind === 'goal' ? it.id : it.kind === 'operation' ? it.op : it.phase);
+  /* A monitor run is keyed by its PR ("monitor #482"), as design/monitor-run names it. */
+  const rowKey = (it) => (it.kind === 'goal' ? it.id : it.kind === 'operation' ? it.op : it.monRun ? `${it.phase} #${it.monRun.pr.num}` : it.phase);
   const itemBy = (id) => D.items.find((x) => x.id === id);
   function lookup(id) {
     const it = itemBy(id) || (D.valRoutes || []).find((x) => x.id === id) || (D.stateExamples || []).find((x) => x.id === id);
@@ -92,7 +93,7 @@
         })) }),
       ],
       footer: [
-        usage ? S.UsageCard(Object.assign({}, usage, { windows: usage.windows.map((w) => ({ label: w.label, remaining: w.remaining })), act: 'usage-toggle', expanded: !!st.popover && st.popover.type === 'usage' })) : '',
+        S.UsageCard(Object.assign({}, usage, { act: 'usage-toggle', expanded: !!st.popover && st.popover.type === 'usage' })),
         S.SidebarItem({ icon: 'fileText', label: 'Specs', act: 'specs-toggle', on: st.specsOpen, tip: 'Specs pane', kbd: 'G S' }),
         S.SidebarItem({ icon: 'terminal', label: 'Terminal', act: 'term-toggle', on: st.termOpen, tip: 'Terminal', kbd: '⌃ `' }),
         S.SidebarItem({ icon: 'sliders', label: 'Settings', act: 'nav', arg: 'settings', tip: 'Settings', kbd: 'G ,' }),
@@ -102,21 +103,26 @@
     });
   }
 
+  /* The card follows the open run or selected chat. A tab picked in that context holds until the context's agent changes, and a
+   * context with no known agent keeps the last provider shown. */
   function usageData(st) {
     const contextual = st.view === 'detail' || st.view === 'newtask';
     const run = st.view === 'detail' ? lookup(st.detailId) : null;
     const agent = st.view === 'newtask' ? ntChat(st).agent : run && (run.agent || (run.runOptions || {}).agentId);
-    const provider = contextual ? D.USAGE.providers.find((p) => p.toLowerCase() === agent) : st.usage.provider;
-    if (!provider) return null;
-    const context = contextual ? st.view === 'detail' ? 'This run' : 'This chat' : null;
-    const scenario = (provider === 'Cursor' ? D.USAGE.cursorScenarios : D.USAGE.scenarios)[st.usage.scenario];
-    const data = provider === 'Claude' && st.usage.scenario === 'normal'
-      ? Object.assign({}, scenario, { note: 'Session resets in 3h 40m', windows: [{ label: '5-hour', remaining: 64, reset: 'Resets today at 17:56' }, { label: 'Weekly', remaining: 81, reset: 'Resets Mon, Nov 9 at 12:00' }] })
-      : scenario;
-    return Object.assign({}, data, { provider, context, providers: D.USAGE.providers, account: D.USAGE.accounts[provider], note: st.usage.scenario === 'normal' && st.usage.refreshed ? 'Just checked' : data.note });
+    const fromContext = contextual ? D.USAGE.providers.find((p) => p.toLowerCase() === agent) : null;
+    const override = st.usage.override && st.usage.override.agent === agent ? st.usage.override.provider : null;
+    const provider = override || fromContext || (contextual ? st.usage.last || st.usage.provider : st.usage.provider);
+    if (fromContext && !override) st.usage.last = fromContext;
+    const scenario = st.usage.scenario;
+    const data = (provider === 'Cursor' || provider === 'Junie') && !['signedout', 'loading'].includes(scenario) ? D.USAGE[provider.toLowerCase()]
+      : provider === 'Claude' && D.USAGE.claude[scenario] ? D.USAGE.claude[scenario]
+      : D.USAGE.scenarios[scenario];
+    const colors = Object.fromEntries(D.USAGE.providers.map((p) => [p, D.AGENTS[p.toLowerCase()].color]));
+    const agents = D.AGENT_CHOICES.map((name) => ({ name, label: name.slice(0, 1).toUpperCase() + name.slice(1), initials: D.AGENTS[name].initials, color: D.AGENTS[name].color }));
+    return Object.assign({}, data, { provider, contextAgent: contextual ? agent : null, color: colors[provider], colors, providers: D.USAGE.providers, agents, defaultAgent: st.prefs.defaultAgent });
   }
 
-  /* ---------- QA device (sidebar footer; design/qa-device-picker, variant A "Switcher row") ---------- */
+  /* ---------- QA device (sidebar footer; QA device design, variant A "Switcher row") ---------- */
   /* `list` is one of D.QA_DEVICES.lists (null when adb is not found); `selected` is a device id or 'auto'. Let QA choose
    * keeps today's behavior: the QA pack picks a free ready device or boots an AVD. A stopped AVD can be picked and QA boots
    * it when the run starts. Unauthorized, offline and leased devices show but cannot be picked. */
@@ -266,7 +272,7 @@
     const p = it.pipeline;
     return D.PHASE_ORDER.map((id) => {
       if (p.done.includes(id)) return { label: id, state: 'done' };
-      if (id === p.now) return { label: id, state: p.failed ? 'fail' : it.lifecycle === 'blocked' ? 'wait' : it.lifecycle === 'active' ? 'now' : '', count: it.exec };
+      if (id === p.now) return { label: id, state: p.failed || it.lifecycle === 'failed' ? 'fail' : it.lifecycle === 'canceled' ? 'skipped' : it.lifecycle === 'active' && it.live ? 'now' : 'wait', count: it.exec };
       return { label: id, state: '' };
     });
   }
@@ -370,7 +376,7 @@
    * assessment and QA results (they replace the app's Assessment / QA switch). Selection per item and list:
    * st.peekSel["<id>|<subtask id or finish>"]. Default: the running or stopped phase, else the last phase that ran. */
   function finishStates(it) {
-    if (it.finish && it.finish.states) return it.finish.states;
+    if (it.finish && it.finish.states) return phaseDisplayStates(it, it.finish.states);
     const out = {};
     D.GOAL_FINISH.forEach((id) => { out[id] = it.finishDone ? 'done' : ''; });
     if (!it.finishDone) {
@@ -382,6 +388,8 @@
   /* The Goal finish row and pane title: running, waiting, done or pending. */
   function finishState(it) {
     const v = Object.values(finishStates(it));
+    if (v.includes('wait') && it.lifecycle === 'paused') return 'paused';
+    if (v.includes('skipped') && it.lifecycle === 'canceled') return 'canceled';
     return v.includes('now') ? 'active' : v.includes('wait') ? 'blocked' : v.includes('fail') ? 'failed' : it.finishDone ? 'done' : 'pending';
   }
   const QA_CARD_TONE = { failed: 'fail', blocked: 'wait', done: 'done', faint: 'skipped' };
@@ -400,12 +408,20 @@
     }
     return null;
   }
+  function phaseDisplayStates(it, states) {
+    return Object.fromEntries(Object.entries(states).map(([phase, value]) => [phase, value === 'now' && (it.lifecycle !== 'active' || !it.live) ? it.lifecycle === 'failed' ? 'fail' : it.lifecycle === 'canceled' ? 'skipped' : 'wait' : value]));
+  }
+  function subDisplayState(it, sub) {
+    if (sub.status === 'completed_no_change') return 'no_change';
+    const value = window.DesignFlow.subtaskState(it, sub);
+    return ({ running: 'active', complete: 'done', waiting: 'pending', stopped: 'canceled' })[value] || value;
+  }
   function subPhaseStates(it, s) {
-    if (s.phases && s.phases.states) return s.phases.states;
+    if (s.phases && s.phases.states) return phaseDisplayStates(it, s.phases.states);
     const out = {};
     if (s.status === 'complete' || s.status === 'completed_no_change') D.PHASE_ORDER.forEach((id) => { out[id] = 'done'; });
     else if (!isFinished(it) && s.id === it.current && it.pipeline && !it.planning) pipelineSteps(it).forEach((p) => { out[p.label] = p.state; });
-    return out;
+    return phaseDisplayStates(it, out);
   }
   function subPhaseCounts(it, s) {
     if (s.phases && s.phases.counts) return s.phases.counts;
@@ -439,6 +455,7 @@
         const facts = [a.exit ? ['Exit', esc(a.exit)] : null, a.fixCommit ? ['Fix commit', `<span class="mono">${esc(a.fixCommit)}</span>`] : null].filter(Boolean);
         return S.Box(rows) + (facts.length ? S.PeekFacts(facts) : '');
       }
+      case 'monCycles': case 'ciBoard': case 'repair': case 'publish': return monPeekBlock(st, it, b);
       case 'qaLive': return qaLiveBlock(st, it);
       case 'qaRun': return `<div class="sb-qlive">${b.rounds ? S.QaRounds({ rounds: b.rounds }) : ''}${S.QaPreview({ kind: 'ended', at: b.at, label: `QA preview, last frame at ${b.at}` })}${S.QaShots({ files: b.shots, total: b.total })}${S.QaStageList({ summary: `All ${D.QA_STAGES.length} stages ran`, time: b.time })}</div>`;
       case 'qaResults': return it.goalQa ? qaResults(st, it.goalQa, { fixLoop: true, fixing: b.fixing, running: it.lifecycle === 'active' && !it.goalQa.outcome }).body : S.Box('<div class="sb-result-missing">No QA result is available for this run.</div>');
@@ -453,13 +470,14 @@
     }
   }
   function peekCard(st, it, id, c, state) {
-    const blocks = (list) => (list || []).map((b) => peekBlock(st, it, b)).join('');
+    if (['now', 'wait', 'skipped', 'fail'].includes(state) && it.lifecycle !== 'active' && c.now) c = { ...c, word: LIFE[it.lifecycle][0], nowTitle: 'Last activity' };
+    const blocks = (list) => (list || []).map((b) => peekBlock(st, it, b.kind === 'signal' && !it.live ? { ...b, live: false } : b)).join('');
     const sortable = c.madeEnd && c.madeEnd.sort;
     const end = sortable ? (it.assessment && it.assessment.findings.length > 1 ? S.Segmented({ act: 'assess-order', value: st.assessOrder || 'default', items: [{ id: 'default', label: 'Default' }, { id: 'priority', label: 'Priority' }, { id: 'status', label: 'Status' }] }) : '') : c.madeEnd ? esc(c.madeEnd) : '';
     const parts = [
       c.now && ['now', 'wait'].includes(state) ? S.PeekPart({ title: c.nowTitle || (state === 'wait' ? 'Waiting on' : 'Now'), live: state === 'now', body: blocks(c.now) }) : '',
       c.made && c.made.length ? S.PeekPart({ title: c.madeTitle || 'Produced', end, control: !!(sortable && end), body: blocks(c.made) }) : '',
-      c.results ? S.PeekPart({ title: 'Results', body: blocks(c.results) }) : '',
+      c.results ? S.PeekPart({ title: c.resultsTitle || 'Results', end: c.resultsEnd ? esc(c.resultsEnd) : '', body: blocks(c.results) }) : '',
     ];
     const ag = c.agent ? agentOf(c.agent) : null;
     return S.PhasePeek({ id, state, tone: c.tone, title: c.title, word: c.word, why: c.why,
@@ -487,7 +505,7 @@
       const key = String(s.id);
       const current = !finished && s.id === it.current;
       const meta = [s.commit ? S.ShortId({ value: s.commit, label: 'commit' }) : '', current && it.live ? subClock(it) : '', s.status === 'completed_no_change' ? S.Label({ text: 'no change', dot: false }) : ''];
-      return S.SubtaskRow({ num: pad(s.id), state: SUB_STATE[s.status], frac: 0.5, title: s.title, current, selected: key === sel, meta, act: 'sub-select', arg: `${it.id}|${key}`, body: inline && key === sel ? subtaskInspector(st, it, s, true) : '', expanded: open });
+      return S.SubtaskRow({ num: pad(s.id), state: subDisplayState(it, s), frac: 0.5, title: s.title, current, selected: key === sel, meta, act: 'sub-select', arg: `${it.id}|${key}`, body: inline && key === sel ? subtaskInspector(st, it, s, true) : '', expanded: open });
     });
     const fin = finishStates(it), finCounts = (it.finish && it.finish.counts) || {};
     rows.push(S.SubtaskRow({ num: '··', state: finishState(it), title: 'Goal finish', selected: sel === 'finish', meta: [], act: 'sub-select', arg: `${it.id}|finish`, body: inline && sel === 'finish' ? finishResults(st, it) : S.PhasePipeline(D.GOAL_FINISH.map((id) => ({ label: id, state: fin[id] || '', count: finCounts[id] || null, goal: true }))), expanded: open }));
@@ -497,7 +515,7 @@
     const sel = selectedSub(st, it);
     if (sel === 'finish') return finishResults(st, it);
     const s = it.subtasks.find((x) => String(x.id) === sel);
-    return S.PaneSection({ title: `Subtask ${pad(s.id)}`, status: { state: SUB_STATE[s.status], frac: 0.5 }, body: subtaskInspector(st, it, s, false) });
+    return S.PaneSection({ title: `Subtask ${pad(s.id)}`, status: { state: subDisplayState(it, s), frac: 0.5 }, body: subtaskInspector(st, it, s, false) });
   }
   /* Spec files: the goal-level files only (subtask specs open from the inspector), manifest, spec.md, then by name. */
   function specFilesPane(it) {
@@ -569,12 +587,10 @@
   function activitySection(st, it) {
     const all = activityEntries(it);
     if (!all.length) return '';
-    const showAll = st.feedAll.has(it.id);
-    const hidden = showAll ? 0 : Math.max(0, all.length - FEED_MAX);
-    return secBlock(st, 'activity', { title: 'Activity', count: all.length, body: S.ActivityFeed({ entries: all.slice(hidden), hidden, act: 'feed-all', arg: it.id }) });
+    return secBlock(st, 'activity', { title: 'Activity', body: `<sb-design-surface screen="activity" embedded="detail" work="${esc(it.id)}"></sb-design-surface>` });
   }
 
-  /* ---------- QA results (design/qa-results; desktop feature/detail QaResultsView, QaResultsSection, QaUnblock) ---------- */
+  /* ---------- QA results (QA results design; desktop feature/detail QaResultsView, QaResultsSection, QaUnblock) ---------- */
   /* The verdict word and the sentence come from counts, never from the agent's prose. Open findings, things QA left behind,
    * untested areas and Unblock entries need the reader; fixed findings, passed checks, run details and the full report fold.
    * `q` is a GoalQaResult or a standalone run's QA facts (data.js QA); `o`: { fixLoop (goal QA), running }. */
@@ -692,7 +708,7 @@
    * without one draws no evidence chips. Returns the verdict for the section's end slot and the body. */
   /* `namesOnly` draws evidence chips that name files and open nothing; `select(findingId)` adds a checkbox, a Chat or Goal
    * switch and a shared-code hint per open finding, and `selectHead` a Select all row. A Verify run's QA step no longer
-   * uses them: it renders VerifyQa (design/verify-run). */
+   * uses them: it renders VerifyQa (Verify run design). */
   function qaResults(st, q, o) {
     o = o || {};
     const v = qaView(q, o);
@@ -731,7 +747,7 @@
     };
   }
 
-  /* ---------- Validation run (design/validation-run, Redesign; desktop feature/detail ValidationDocument,
+  /* ---------- Validation run (validation run design, Redesign; desktop feature/detail ValidationDocument,
    * ValidationOutcomeCard, ValidationChecksSection, ValidationReport, ValidationReportParts, ValidationBranchRunsSection) ---------- */
   /* A standalone validation phase renders its own document, in the mock's order: the header, the outcome card (it replaces
    * the Step and Phase elapsed tiles: the step is always validate, so the tile and the one-stage pipeline said nothing),
@@ -917,7 +933,244 @@
     return S.ValidationDoc(out);
   }
 
-  /* ---------- Plan run (design/plan-detail; desktop feature/detail PlanDocument, PlanStatus, PlanNowCard, PlanActivity,
+  /* ---------- Monitor run (design/monitor-run; desktop MonitorDocument, MonitorCyclesGrid, MonitorCiBoard,
+   * MonitorRepairPanel, MonitorConflictPanel, MonitorPublishReceipt) ---------- */
+  /* A standalone monitor phase renders its own document, in the mock's order: the header (status pill, "monitor", the phase
+   * and fresh pills, "#482" and the PR title, repository, branch → base, Cancel and Open PR), the outcome card (one
+   * sentence for now; Pull request, Head, Checks and the Repair cap pips), Cycles (one row per CI round: CI, Repair,
+   * Publish), the panel of the selected cell and Activity. The panel opens on the live step, else the step the run ended
+   * on. The Goal finish monitor and monitor_fix cards reuse the grid and the panels. */
+  const isMonitorRun = (it) => it.kind === 'phase' && it.phase === 'monitor' && !!it.monRun;
+  const MON_ORDER = ['pass', 'fail', 'pending', 'queued', 'skipping', 'cancel'];
+  const MON_SEG = { pass: 'done', fail: 'failed', pending: 'active', queued: 'pending', skipping: 'skipped', cancel: 'skipped' };
+  const MON_EV = { neutral: 'var(--fg-faint)', failed: 'var(--st-failed)', active: 'var(--st-active)', done: 'var(--st-done)', blocked: 'var(--st-blocked)', merged: 'var(--data-5)' };
+  const monCount = (checks, b) => checks.filter((c) => c.bucket === b).length;
+  const monSorted = (checks) => checks.slice().sort((a, b) => MON_ORDER.indexOf(a.bucket) - MON_ORDER.indexOf(b.bucket));
+  /* Open state is a toggle over a default: a fixing check's log starts open, the passed group starts folded unless every
+   * check passed. st.monOpen and st.monFold hold the keys the operator flipped. */
+  const monFlip = (set, key, dflt) => (set.has(key) ? !dflt : dflt);
+  /* A step that was live when the run stopped (paused, failed, canceled) no longer breathes. */
+  const monState = (live, step) => (step.state === 'now' && !live ? 'stopped' : step.state);
+  const monAgent = (name) => agentOf(name) || { initials: '?', color: 'var(--fg-faint)' };
+  function monCell(step, cyc, run, o) {
+    const last = run.cycles[run.cycles.length - 1] === cyc;
+    if (!step) {
+      if (o.kind === 'fix') return { empty: last ? (cyc.ci && ['done', 'merged'].includes(cyc.ci.state) ? 'Not needed' : run.capped ? 'Cap reached' : 'Starts on a failure') : '—' };
+      return { empty: cyc.fix && last ? (cyc.fix.outcome === 'unresolved' ? 'Nothing to publish' : 'After the fix') : '—' };
+    }
+    const state = monState(o.live, step);
+    let word, sub, bar = null;
+    if (step.kind === 'ci') {
+      const n = step.checks.length, p = monCount(step.checks, 'pass'), f = monCount(step.checks, 'fail');
+      word = state === 'now' ? (n ? (o.compact ? `${p}/${n} passed` : `${p} of ${n} passed`) : 'Waiting for checks') : state === 'stopped' ? `${p} of ${n} passed` : state === 'done' ? `All ${n} passed` : state === 'conflict' ? 'Merge conflict' : state === 'merged' ? 'PR merged' : `${f} failed`;
+      const lead = step.checks.find((c) => c.bucket === 'fail');
+      sub = `<span class="mono">${esc(step.head)}</span> · ${lead && state === 'fail' ? esc(lead.name) : esc(step.dur)}`;
+      bar = monSorted(step.checks).map((c) => (state !== 'now' && c.bucket === 'pending' ? 'queued' : c.bucket));
+    } else if (step.kind === 'conflict') {
+      const done = step.files.filter((f) => f.state === 'resolved').length;
+      word = state === 'now' ? `${done} of ${step.files.length} resolved` : `Merged ${step.base}`;
+      sub = `${esc(step.agent)} · ${state === 'now' ? 'merging ' + esc(step.base) : step.files.length + ' conflicts'} · ${esc(step.dur)}`;
+    } else if (step.kind === 'fix') {
+      word = state === 'now' ? 'Fixing' : step.outcome === 'unresolved' ? 'Unresolved' : step.prOnly ? 'Edited PR' : state === 'stopped' ? 'Stopped' : 'Fixed';
+      const fc = step.files.length;
+      sub = `${esc(step.agent)} · ${step.prOnly ? 'no files' : fc ? `${fc} ${fc === 1 ? 'file' : 'files'}` : 'no change'} · ${esc(step.dur)}`;
+    } else if (step.kind === 'pub') {
+      const c = step.steps.find((x) => x.commit).commit;
+      word = state === 'now' ? 'Pushing' : step.merge ? 'Pushed merge' : 'Pushed';
+      sub = `<span class="mono">${esc(c.sha)}</span> · ${state === 'now' ? esc(step.dur) : c.parents.length > 1 ? '2 parents' : esc(step.dur)}`;
+    } else {
+      word = 'PR edited'; sub = `${esc(step.field)} · no push`;
+    }
+    return { word, sub, bar, tone: state, live: state === 'now', sel: o.sel, act: o.act, arg: o.arg };
+  }
+  function monitorCycles(it, run, o) {
+    const live = o.live, sel = o.sel;
+    return S.MonitorCycles({ compact: o.compact, label: `Cycles of the monitor run on #${run.pr.num}`,
+      rows: run.cycles.map((c) => ({ n: c.n, at: c.at, cells: ['ci', 'fix', 'pub'].map((kind) => {
+        const key = `c${c.n}.${kind}`;
+        return monCell(c[kind], c, run, { kind, live, compact: o.compact, sel: sel === key, act: o.act ? o.act : 'mon-cell', arg: o.arg ? o.arg(kind) : `${it.id}|${key}` });
+      }) })),
+      foot: o.compact ? null : [['loop', `${run.cycles.length} ${run.cycles.length === 1 ? 'cycle' : 'cycles'}`], ['upload', `${run.cycles.filter((c) => c.pub).length} published`], ['clock', 'polls every 30s']] });
+  }
+  function monCheck(st, it, c, scope, o) {
+    const key = `${it.id}|${scope}:${c.name}`;
+    const open = !!c.log && monFlip(st.monOpen, key, !!o.openLogs);
+    const state = o.frozen && c.bucket === 'pending' ? 'stale' : c.bucket;
+    return S.MonitorCheckRow({ name: c.name, job: c.job, state, time: c.time, why: c.why ? md(c.why) : null, rerun: c.rerun,
+      ext: { act: 'toast', arg: `Opened the ${c.name} job on GitHub` }, act: c.log ? 'mon-log' : null, arg: key, open,
+      log: c.log ? S.LogTail({ lines: c.log, run: c.run, actions: [S.LinkButton({ label: 'Copy', act: 'copy', arg: c.log.map((l) => l[1]).join('\n') }), S.LinkButton({ label: 'Full log', icon: 'external', act: 'toast', arg: 'Opened the job log on GitHub' })] }) : '' });
+  }
+  function monFoldGroup(st, it, scope, label, names, rows, dflt) {
+    const key = `${it.id}|${scope}:fold`;
+    const open = monFlip(st.monFold, key, dflt);
+    return S.MonitorGroup({ label, count: names.length, fold: { act: 'mon-fold', arg: key, open } }) + (open ? rows() : S.FoldLine({ text: names.join(', '), act: 'mon-fold', arg: key }));
+  }
+  /* The CI board: the head and poll line, one bar segment per check and the tally, then Failed, Running (Unfinished once the
+   * step settled), Waiting, Skipped and Cancelled, then Passed folded to one line, and what happens next. `bare` drops the
+   * box head for a PhasePeek card, whose part title says the same. */
+  function monCiBoard(st, it, step, scope, o) {
+    const live = o.live, frozen = monState(live, step) !== 'now';
+    const n = step.checks.length;
+    const tally = [['pass', 'passed', 'var(--st-done)'], ['fail', 'failed', 'var(--st-failed)'], ['pending', frozen ? 'unfinished' : 'running', frozen ? 'var(--fg-muted)' : 'var(--st-active)'], ['queued', 'queued', 'var(--fg-faint)']]
+      .filter(([b]) => monCount(step.checks, b)).map(([b, word, color]) => ({ n: monCount(step.checks, b), word, color }));
+    const sum = S.MonitorSummary([
+      S.MonitorLine({ icon: 'commit', html: `Head ${S.ShaChip({ sha: step.head })} <span class="faint">${esc(step.headNote)}</span>`, end: step.next && !frozen ? `${S.Icon('refresh', 'xs')}<span>read ${esc(step.polled)} · next ${esc(step.next)}</span>` : `<span>${esc(step.polled)}</span>` }),
+      n ? S.SegmentBar({ equal: true, segs: monSorted(step.checks).map((c) => ({ n: 1, tone: frozen && c.bucket === 'pending' ? 'pending' : MON_SEG[c.bucket] })), label: `${n} checks` }) : '',
+      n ? S.CheckTally({ items: tally }) : '',
+      step.mergeable === 'conflicting' ? S.MonitorLine({ icon: 'merge', color: 'var(--st-blocked)', html: 'GitHub reports the PR as <b>conflicting</b> with main' }) : '',
+      step.state === 'merged' ? S.MonitorLine({ icon: 'merge', color: 'var(--data-5)', html: `PR merged into main at ${esc(step.mergedAt || '')}` }) : '',
+    ]);
+    let rows = '';
+    if (!n && step.registering) {
+      rows = S.MonitorCheckRow({ name: `No checks reported on ${step.head} yet`, job: `Empty read ${step.registering.reads} of 2 · the second can confirm at ${step.registering.until} at the earliest`, state: 'queued', time: step.dur, plain: true });
+    } else {
+      [['fail', 'Failed'], ['pending', frozen ? 'Unfinished' : 'Running'], ['queued', 'Waiting'], ['skipping', 'Skipped'], ['cancel', 'Cancelled']].forEach(([b, label]) => {
+        const list = step.checks.filter((c) => c.bucket === b);
+        if (list.length) rows += S.MonitorGroup({ label, count: list.length }) + list.map((c) => monCheck(st, it, c, scope, { frozen })).join('');
+      });
+      const passed = step.checks.filter((c) => c.bucket === 'pass');
+      if (passed.length) rows += monFoldGroup(st, it, scope, 'Passed', passed.map((c) => c.name), () => passed.map((c) => monCheck(st, it, c, scope, { frozen })).join(''), passed.length === n);
+    }
+    const word = { now: 'Watching', stopped: 'Stopped', done: 'Passed', fail: 'Failed', conflict: 'Conflicting', merged: 'Merged' }[monState(live, step)];
+    const next = step.next_ ? S.NextLine({ html: md(step.next_) }) : '';
+    if (o.bare) return S.Box([sum, rows, next]);
+    return S.MonitorBox({ icon: 'eye', title: `CI on ${step.head}`, sub: `${word} · ${esc(step.since)} · ${esc(step.dur)}`, end: [S.LinkButton({ label: 'Checks on GitHub', icon: 'external', act: 'toast', arg: `Opened github.com/${it.monRun ? it.monRun.pr.slug : 'skill-bill/skill-bill'}/pull/${it.monRun ? it.monRun.pr.num : 482}/checks` })], body: [sum, rows, next] });
+  }
+  function monGates(gates) {
+    return gates.map(([name, b, time, cmd]) => S.MonitorCheckRow({ name, job: cmd, state: b === 'pending' ? 'pending' : b, time: b === 'queued' ? 'after merge' : time, mono: true })).join('');
+  }
+  function monAgentLine(step, live) {
+    const a = monAgent(step.agent);
+    const html = step.summary ? md(step.summary) : live && step.signal ? `<span class="is-live">${esc(step.signal)}</span> <span class="faint">· ${esc(step.ago)}</span>` : esc(step.agent);
+    return S.RepairAgent({ initials: a.initials, color: a.color, html, sub: `${step.agent} · ${step.model}`, action: live ? S.Button({ label: 'Watch agent', act: 'toast', arg: 'Opened the agent session' }) : '' });
+  }
+  /* A repair: the agent and what it is doing (or its explanation), the failing check with its log, the files it changed, the
+   * local gates and what happens next. A repair that only edited the PR says so instead of listing files. */
+  function monFixPanel(st, it, step, scope, o) {
+    const live = monState(o.live, step) === 'now';
+    const ins = step.files.reduce((t, f) => t + (f.ins || 0), 0), del = step.files.reduce((t, f) => t + (f.del || 0), 0);
+    const outcome = step.outcome ? S.MonBadge({ text: `Repair outcome: ${step.outcome}`, tone: step.outcome === 'fixed' ? 'ok' : 'warn' }) : '';
+    const when = [live ? 'running' : step.state === 'blocked' ? 'stopped' : monState(o.live, step) === 'stopped' ? 'stopped' : 'finished', step.since, step.dur].filter(Boolean).map(esc).join(' · ');
+    const fixing = S.MonitorGroup({ label: 'Fixing' }) + step.fixing.map((c) => monCheck(st, it, c, `${scope}:fx`, { openLogs: true })).join('');
+    const box1 = S.MonitorBox({ icon: 'wrench', title: `Repair ${step.repair}`, sub: when, end: [outcome], body: [monAgentLine(step, live), fixing] });
+    const fileRows = step.prOnly ? S.BoxNote({ text: 'No repository file changed. The repair edited the PR title.' })
+      : step.files.length ? step.files.map((f) => S.ChangedFileRow(f)).join('')
+      : S.BoxNote({ text: step.outcome === 'unresolved' ? 'No file changed. The agent found no repository fix for this failure.' : 'No file changed yet.' });
+    const box2 = S.MonitorBox({ icon: 'pencil', title: step.prOnly ? 'Pull request' : 'Files changed',
+      sub: step.prOnly ? 'edited with gh pr edit' : step.files.length ? `${step.files.length} files · <span class="ins">+${ins}</span> <span class="del">−${del}</span> · from the edit journal` : 'none',
+      end: [step.files.length ? S.LinkButton({ label: 'Open diff', act: 'toast', arg: 'Opened the repair diff' }) : '', step.worktree ? S.LinkButton({ label: 'Worktree', act: 'toast', arg: `Opened ${step.worktree}` }) : ''], body: fileRows });
+    const box3 = step.gates.length ? S.MonitorBox({ icon: 'check', title: 'Local checks', sub: 'build and validation gates in the worktree', end: live ? [] : ['<span>CI decides; these only allow the push</span>'],
+      body: [monGates(step.gates), step.next_ && live ? S.NextLine({ html: md(step.next_) }) : ''] }) : '';
+    return box1 + box2 + box3;
+  }
+  /* A merge repair: the base and its tip, resolved over conflicted files, the agent, each conflicted file with its hunks and
+   * both sides, the files git merged cleanly (folded), then the local gates. */
+  function monConflictPanel(st, it, step, scope, o) {
+    const live = monState(o.live, step) === 'now';
+    const done = step.files.filter((f) => f.state === 'resolved').length;
+    const sum = S.MonitorSummary([
+      S.MonitorLine({ icon: 'branch', html: `Merging ${S.ShaChip({ sha: `${step.base}@${step.baseSha}` })} into <span class="mono">${esc(it.branch || '')}</span>`, end: `${step.ahead} commits on ${esc(step.base)}` }),
+      S.ResolveBar({ done, total: step.files.length }),
+      S.CheckTally({ items: [{ n: done, word: 'resolved', color: 'var(--st-done)' }, step.files.length - done ? { n: step.files.length - done, word: 'conflicted', color: 'var(--st-blocked)' } : null, { n: step.auto.length, word: 'merged cleanly', color: 'var(--fg-faint)' }].filter(Boolean) }),
+    ]);
+    const a = monAgent(step.agent);
+    const files = step.files.map((f) => S.ConflictFileRow({ path: f.path, state: f.state, live: live && f.live, hunks: f.hunks, binary: f.binary, liveText: `${step.agent} is editing this file`,
+      sides: f.ours ? S.SideBySide({ items: [['THIS PR', md(f.ours)], [step.base.toUpperCase(), md(f.theirs)]] }) : '' })).join('');
+    const auto = monFoldGroup(st, it, `${scope}:auto`, 'Merged cleanly', step.auto.map((p) => p.split('/').pop()), () => step.auto.map((p) => S.ChangedFileRow({ path: p, stat: false, icon: 'file' })).join(''), false);
+    const box1 = S.MonitorBox({ icon: 'merge', title: `Repair ${step.repair} · merge ${step.base}`, sub: [live ? 'running' : 'finished', step.since, step.dur].map(esc).join(' · '),
+      end: [step.outcome ? S.MonBadge({ text: 'Repair outcome: fixed', tone: 'ok' }) : ''],
+      body: [sum, S.RepairAgent({ initials: a.initials, color: a.color, html: step.summary ? md(step.summary) : live ? `<span class="is-live">${esc(step.signal)}</span> <span class="faint">· ${esc(step.ago)}</span>` : esc(step.agent), sub: `${step.agent} · ${step.model}`, action: live ? S.Button({ label: 'Watch agent', act: 'toast', arg: 'Opened the agent session' }) : '' }),
+        S.MonitorGroup({ label: 'Conflicted files' }), files, auto] });
+    const box2 = S.MonitorBox({ icon: 'check', title: 'Local checks', sub: 'run once every conflict is resolved', body: [monGates(step.gates), step.next_ && live ? S.NextLine({ html: md(step.next_) }) : ''] });
+    return box1 + box2;
+  }
+  /* commit_push: staged, the commit (sha, message, one or two parents), the guarded push, the acknowledged head; steps that
+   * have not happened wait dashed. The commit's files follow. A PR-only repair shows the field before and after, the
+   * unchanged head and the grace window. */
+  function monPublishPanel(st, it, step, scope, o) {
+    const live = monState(o.live, step) === 'now';
+    if (step.kind === 'prEdit') {
+      return S.MonitorBox({ icon: 'tag', title: `Publish repair ${step.repair} · PR edit`, sub: ['done', step.since, step.dur].map(esc).join(' · '), end: ['<span>no commit, no push</span>'],
+        body: S.PublishSteps({ steps: [
+          { state: 'done', title: `Edited the PR ${step.field}`, when: step.since, html: S.SideBySide({ flush: true, items: [['BEFORE', esc(step.from)], ['AFTER', esc(step.to)]] }) },
+          { state: 'done', title: 'Head unchanged', html: `PR head stays ${S.ShaChip({ sha: step.head })}. Nothing to push.` },
+          { state: o.live ? 'now' : 'done', title: 'Grace window', when: `until ${step.grace}`, html: `Failures count again once a check runs after the edit, or at ${esc(step.grace)}.` },
+        ] }) });
+    }
+    const steps = step.steps.map((x) => Object.assign({}, x, { state: x.state === 'now' && !o.live ? 'wait' : x.state, html: x.html ? md(x.html) : null,
+      commit: x.commit ? Object.assign({}, x.commit, { act: 'copy', arg: x.commit.sha }) : null }));
+    const box1 = S.MonitorBox({ icon: 'upload', title: `Publish repair ${step.repair}`, sub: [live ? 'running' : 'done', step.since, step.dur].filter(Boolean).map(esc).join(' · '), end: ['<span>the runtime commits and pushes, not the agent</span>'], body: S.PublishSteps({ steps }) });
+    const box2 = step.files.length ? S.MonitorBox({ icon: 'file', title: 'In this commit', sub: `${step.files.length} files`, end: [S.LinkButton({ label: 'Commit on GitHub', icon: 'external', act: 'toast', arg: 'Opened the commit on GitHub' })], body: step.files.map((f) => S.ChangedFileRow(f)).join('') }) : '';
+    return box1 + box2;
+  }
+  function monStepPanel(st, it, step, scope, o) {
+    if (step.kind === 'ci') return monCiBoard(st, it, step, scope, o);
+    if (step.kind === 'fix') return monFixPanel(st, it, step, scope, o);
+    if (step.kind === 'conflict') return monConflictPanel(st, it, step, scope, o);
+    return monPublishPanel(st, it, step, scope, o);
+  }
+  const monSelKey = (st, it) => st.monSel[it.id] || it.monRun.sel;
+  function monitorHeader(st, it) {
+    const r = repoOf(it.repo), run = it.monRun;
+    const life = { active: ['Active', 'active'], blocked: ['Blocked', 'blocked'], terminal: ['Finished', 'neutral'] }[it.lifecycle] || [LIFE[it.lifecycle][0], 'faint'];
+    const ro = it.refreshFailed ? {} : (it.runOptions || {});
+    const actions = [it.lifecycle === 'active' ? S.Button({ label: 'Cancel', icon: 'x', variant: 'danger', act: 'cancel', arg: it.id, disabled: !ro.canCancel }) : '',
+      S.Button({ label: 'Open PR', icon: 'pr', trail: 'external', act: 'toast', arg: `Opened github.com/${run.pr.slug}/pull/${run.pr.num}` })];
+    return S.VerifyHeader({ status: { word: life[0], tone: life[1] }, key: 'monitor', kind: 'phase',
+      pills: it.lifecycle === 'active' ? [it.refreshFailed ? { word: 'stale', tone: 'faint' } : { word: 'fresh', tone: 'active' }] : [],
+      html: `<span class="num">#${run.pr.num}</span>${esc(it.title)}`,
+      meta: [{ icon: 'folder', text: r.path, act: 'toast', arg: `Opened ${r.path}` }, { icon: 'branch', html: `<span class="mono">${esc(it.branch)}</span> <span class="arrow">→</span> <span class="mono">${esc(run.pr.base)}</span>` }],
+      actions });
+  }
+  const MON_LIFE_HERO = { paused: ['Paused', 'blocked', 'pause'], failed: ['Failed', 'failed', 'x'], canceled: ['Canceled', 'faint', 'x'], idle: ['Pending', 'faint', 'pause'] };
+  function monitorCard(st, it) {
+    const run = it.monRun, live = it.lifecycle === 'active';
+    const h = run.hero && (MON_LIFE_HERO[it.lifecycle] ? null : run.hero);
+    const fallback = MON_LIFE_HERO[it.lifecycle] || ['Stopped', 'faint', 'pause'];
+    const last = run.cycles[run.cycles.length - 1].ci, cs = last.checks;
+    const left = [['fail', 'failed'], ['pending', monState(live, last) === 'now' ? 'running' : 'unfinished'], ['queued', 'queued']].map(([b, w]) => (monCount(cs, b) ? `${monCount(cs, b)} ${w}` : '')).filter(Boolean).join(' · ');
+    const pushed = run.cycles.filter((c) => c.pub).length, full = run.cap >= 3;
+    const prState = run.prState || 'open';
+    const ro = it.refreshFailed ? {} : (it.runOptions || {});
+    const relaunch = !h && ro.canLaunch ? S.OutcomeActions([S.Button({ label: ro.launchLabel || 'Monitor again', icon: 'refresh', variant: 'primary', act: 'launch', arg: it.id })]) : '';
+    const acts = relaunch || h && h.acts ? relaunch || S.OutcomeActions(h.acts.map(([label, icon, ext, primary]) => S.Button({ label, icon, trail: ext ? 'external' : null, variant: primary ? 'primary' : null, act: primary ? 'launch' : 'toast', arg: primary ? it.id : label }))) : '';
+    return S.RunOutcome({ tone: h ? h.tone : fallback[1], icon: h ? h.icon : fallback[2], live: !!(h && h.live && live), aria: 'Monitor outcome',
+      label: `<b>${esc(h ? h.word : fallback[0])}</b><span>· ${run.step && it.lifecycle !== 'terminal' ? `<span class="mono">${esc(it.lifecycle === 'active' || h ? run.step : 'monitor')}</span>` : 'finished'}</span>`,
+      head: md(h ? h.head : (it.reason || it.summary || '')), text: h ? md(h.text) : '', signal: h && live ? h.signal : null, extra: acts,
+      when: { value: live ? S.Clock({ ms: it.goalMs, live: it.live, t0: D.T0, secs: true }) : esc(valDur(it.goalMs)), note: live ? 'active' : 'total' },
+      cells: [
+        { key: 'Pull request', value: `${S.Icon('pr', 'xs')}#${run.pr.num}`, sub: `${esc(prState)} → ${esc(run.pr.base)}` },
+        { key: 'Head', value: `<span class="mono">${esc(run.head)}</span>`, sub: pushed ? `${pushed} ${pushed === 1 ? 'repair' : 'repairs'} published` : 'as opened' },
+        { key: 'Checks', value: cs.length ? `${monCount(cs, 'pass')} / ${cs.length}` : '—', sub: !cs.length ? 'none reported yet' : left || 'all passed' },
+        { key: 'Repair cap', value: `${S.CapPips({ used: run.cap, cap: 3 })}<span>${run.cap} of 3</span>`, sub: esc(run.capNote || (full ? 'stopped' : 'failed repairs')) },
+      ] });
+  }
+  function monitorDoc(st, it) {
+    const run = it.monRun, live = it.lifecycle === 'active';
+    const key = monSelKey(st, it);
+    const [cn, kind] = key.split('.');
+    const cyc = run.cycles.find((c) => `c${c.n}` === cn);
+    const step = cyc && cyc[kind];
+    const out = [monitorHeader(st, it), monitorCard(st, it)];
+    out.push(S.VerifySection({ id: 'sec-mon-cycles', title: 'Cycles', count: run.cycles.length, end: [esc('A failure starts a repair; a published repair starts the next cycle')], body: monitorCycles(it, run, { live, sel: key }) }));
+    if (step) {
+      const label = { ci: 'CI', fix: 'Repair', pub: 'Publish' }[kind], id = { ci: 'monitor', fix: 'monitor_fix', pub: 'commit_push' }[kind];
+      out.push(S.VerifySection({ id: 'sec-mon-step', html: `Cycle ${cyc.n} · ${label} <span class="mono">${id}</span>`, end: monState(live, step) === 'now' ? ['<span class="is-live">live</span>'] : [], body: monStepPanel(st, it, step, key, { live }) }));
+    }
+    out.push(S.VerifySection({ id: 'sec-mon-activity', title: 'Activity', count: run.activity.length, body: S.EventLines(run.activity.map(([t, html, tone]) => [t, html, MON_EV[tone]])) }));
+    return S.MonitorDoc(out);
+  }
+  /* Goal finish cards: the cycles grid in compact form (a cell opens the monitor or monitor_fix tab) and the step panels
+   * without the CI box head. The goal's run is it.finish.monitor ({ cycles, cap }). */
+  function monPeekBlock(st, it, b) {
+    const live = it.lifecycle === 'active';
+    const run = { cycles: b.cycles, pr: D.MON.PR, capped: false };
+    if (b.kind === 'monCycles') return monitorCycles(it, run, { live, compact: true, sel: null, act: 'peek-pill', arg: (kind) => `${it.id}|finish|${kind === 'ci' ? 'monitor' : 'monitor_fix'}` });
+    if (b.kind === 'ciBoard') return monCiBoard(st, it, b.step, `finish:${b.step.head}`, { live, bare: true });
+    return monStepPanel(st, it, b.step, `finish:${b.kind}:${b.step.repair || ''}`, { live });
+  }
+
+  /* ---------- Plan run (plan run design; desktop feature/detail PlanDocument, PlanStatus, PlanNowCard, PlanActivity,
    * PlanSubtasks, PlanOutput, PlanImplementation) ---------- */
   /* A standalone plan reads top down: the stage strip (the only place with stage status and time), one Now block (or the
    * blocked callout), Activity, the Spec bundle with a row per subtask spec, the Transcript and the Briefing. */
@@ -1128,7 +1381,7 @@
     return [planStrip(it), planNow(it), planActivity(st, it), planBundle(st, it), planTranscript(st, it), planBriefing(st, it)];
   }
 
-  /* ---------- Verify run (design/verify-run; desktop feature/detail VerifyDocument, VerifyHeader, VerifyOutcomeCard,
+  /* ---------- Verify run (Verify run design; desktop feature/detail VerifyDocument, VerifyHeader, VerifyOutcomeCard,
    * VerifyCriteriaSection, VerifyStepsTimeline, VerifyReceiptBody, VerifyFixSelection, VerifyFixControls) ---------- */
   /* A Verify run reads top down: what the change does, the outcome card (verdict and four counts that jump to their
    * evidence), the acceptance criteria it grades, the steps with their receipts, Activity, and a selection bar for fixes. */
@@ -1525,29 +1778,31 @@
     ]);
 
     const parts = [];
-    /* Validation and Verify runs have their own documents (design/validation-run, design/verify-run). */
-    const val = isValidationRun(it), ver = !!it.verifyRun, plan = isPlanRun(it);
+    /* Validation and Verify runs have their own documents (validation run design, Verify run design). */
+    const val = isValidationRun(it), ver = !!it.verifyRun, plan = isPlanRun(it), mon = isMonitorRun(it);
     if (ver) parts.push(verifyDoc(st, it));
     else if (val) parts.push(validationDoc(st, it));
+    else if (mon) parts.push(monitorDoc(st, it));
     else parts.push(S.DocHeader({
       eyebrow: [plan ? planBadge(it) : lifeLabel(it), it.stalled ? S.Label({ text: 'Stalled', color: 'var(--st-blocked)', tint: true, dot: false }) : '', S.IdTag(rowKey(it)), it.issue && !goal ? S.IdTag(it.issue) : '', S.Label({ text: kindWord(it), dot: false }), it.lifecycle !== 'terminal' ? S.Label({ text: it.fresh && !it.refreshFailed ? 'fresh' : 'stale', color: it.fresh && !it.refreshFailed ? 'var(--st-done)' : 'var(--fg-faint)' }) : '', plan && it.model ? S.Label({ text: `${it.model}${it.effort ? ` · ${it.effort} effort` : ''}`, dot: false }) : ''],
-      title: it.title, sub: location, actions: [runActions(st, it)],
+      title: it.title, sub: location, actions: [runActions(st, it), S.Button({ label: 'Open changes', icon: 'diff', act: 'changes-open', arg: it.id, id: `changes-open-${it.id}` })],
     }));
     /* Validation runs get no strip: their live card already names the running check command. */
-    const build = !val && !ver && buildOf(st, it);
+    const build = !val && !ver && !mon && buildOf(st, it);
     if (build) parts.push(S.BuildStrip(build));
     if (it.pauseRequested && !val) parts.push(S.Hint({ tone: 'info', icon: 'pause', text: 'Pause recorded. The goal pauses at its next checkpoint.' }));
-    if (it.reason && !val && !ver && !plan) parts.push(S.ReasonBlock({ label: 'Run reason', text: it.reason, color: LIFE[it.lifecycle][1], open: st.reasonOpen.has(it.id), act: 'reason-toggle', arg: it.id }));
-    if (!val) parts.push(decisionPanel(st, it));
+    if (it.reason && !val && !ver && !plan && !mon) parts.push(S.ReasonBlock({ label: 'Run reason', text: it.reason, color: LIFE[it.lifecycle][1], open: st.reasonOpen.has(it.id), act: 'reason-toggle', arg: it.id }));
+    if (!val && !mon) parts.push(decisionPanel(st, it));
     if (plan) parts.push(...planParts(st, it));
     /* A standalone QA run's results come first: they are what the operator reads in a QA report. */
     if (it.qa) { const r = qaResults(st, it.qa, { running: it.lifecycle === 'active' }); parts.push(secBlock(st, 'qa-results', { id: 'sec-qa-results', cls: 'sb-sec--qa', title: 'QA results', badge: r.verdict, body: r.body })); }
-    if (!val && !ver && !plan) parts.push(metrics);
+    if (!val && !ver && !plan && !mon) parts.push(metrics);
     if (subs) parts.push(subtaskSection(st, it, !pane));
     if (goal && it.planning) parts.push(secBlock(st, 'subtasks', { title: 'Subtasks', count: `${it.planned}/${it.total} plans saved`, body: S.Hint({ text: 'Subtasks appear here once their plans are saved.' }) }));
     if (goal && it.pipeline && !it.planning) parts.push(secBlock(st, 'pipeline', { title: 'Phase pipeline', body: S.PhasePipeline(pipelineSteps(it)) }));
-    if (!goal && !plan && (it.steps || []).length > 1) parts.push(secBlock(st, 'pipeline', { title: 'Phase pipeline', body: S.PhasePipeline(it.steps.map(([label, state]) => ({ label, state, count: state === 'now' ? it.exec : null }))) }));
-    if (!plan && !ver && !val) parts.push(activitySection(st, it));
+    if (!goal && !plan && !mon && (it.steps || []).length > 1) parts.push(secBlock(st, 'pipeline', { title: 'Phase pipeline', body: S.PhasePipeline(it.steps.map(([label, state]) => ({ label, state, count: state === 'now' ? it.exec : null }))) }));
+    if (goal) parts.push(secBlock(st, 'changes', { title: 'Changes', body: `<sb-design-surface screen="changes" embedded="overview" work="${esc(it.id)}"></sb-design-surface>` }));
+    if (!plan && !ver && !val && !mon) parts.push(activitySection(st, it));
     /* Standalone phases and operations keep their own validation, phase results and spec bundle in the document. */
     if (!goal && it.validation) parts.push(secBlock(st, 'validation', { title: 'Validation', body: S.Box(it.validation.map(([n, ok, checks]) => S.FindingRow({ ref: `Subtask ${n}`, title: `${ok ? 'passed' : 'failed'} · ${checks} checks`, state: ok ? 'passed' : 'failed', stateColor: ok ? 'var(--st-done)' : 'var(--st-failed)' }))) }));
     if (!goal && it.phaseResults) {
@@ -1584,7 +1839,7 @@
     return workArea(st, header, `<div class="sb-scroll" data-scroll="history">${body}</div>`);
   }
 
-  /* ---------- Specs pane (design/specs-panel, variant A "selection bar"; desktop feature/specs SpecsPane, SpecsTree,
+  /* ---------- Specs pane (specs pane design, variant A "selection bar"; desktop feature/specs SpecsPane, SpecsTree,
    * SpecSelectionBar, SpecsMenuModel, PurgeConfirmationDialog) ---------- */
   /* One object, one action list: right-click, the row's ⋯, the bar's ⋯ and ⌘K show the same spec actions in the same order.
    * The bar promotes one primary action chosen by state. Run verdicts follow SpecBundleControlPolicy.kt. */
@@ -1927,6 +2182,7 @@
       ? S.ChatPill({ icon: 'folder', html: c.repo ? repoAndBranch(c.repo, baseBranch(c)) : 'Choose repository', need: !c.repo, chevron: 'chevronDown', act: 'pk-toggle', expanded: pop.type === 'target', id: 'nt-target', tip: 'Change repository or base branch' })
       : S.ChatPill({ icon: 'folder', html: repoAndBranch(c.repo, baseBranch(c)), tip: `${c.repo} / ${baseBranch(c)}` });
     const model = agentModel(c.agent);
+    const chg = chatChanges(c);
     const agentPill = S.ChatPill({ lead: agentDot(c.agent), text: model ? `${c.agent} · ${model}` : c.agent, chevron: 'chevronDown', act: 'nt-agent-menu', expanded: pop.type === 'nt-agent', disabled: !!c.stream, tip: c.stream ? 'Wait for the current reply to finish' : 'Change agent' });
     return S.Composer({
       id: 'composer-' + c.id, chatId: c.id, value: c.draft, label: `Message for ${chatLabel(c)}`,
@@ -1935,7 +2191,7 @@
       hint: qaDeviceName(st) ? 'QA runs use the device picked in the sidebar.' : null,
       queue: n ? S.ChatPill({ sans: true, text: `${n} ${n === 1 ? 'message' : 'messages'} queued`, chevron: 'chevronsUpDown', act: 'q-toggle', expanded: pop.type === 'queue', id: 'nt-queue' }) : '',
       pills: [repoPill, agentPill],
-      actions: [c.stream ? S.Button({ label: 'Stop', size: 'sm', act: 'chat-stop', tip: 'Stop the reply. Queued messages return to the draft.' }) : '', ntSendButton(c)],
+      actions: [chg ? S.ChatChangesPill(Object.assign({ act: 'chg-toggle', expanded: pop.type === 'changes', id: 'nt-changes' }, chg)) : '', c.stream ? S.Button({ label: 'Stop', size: 'sm', act: 'chat-stop', tip: 'Stop the reply. Queued messages return to the draft.' }) : '', ntSendButton(c)],
     });
   }
   function newTask(st) {
@@ -2010,12 +2266,23 @@
     const filter = st.nt.chats.length > 8 ? S.FilterBar({ id: 'chat-menu-q', value: st.nt.menuQ, placeholder: `Filter ${st.nt.chats.length} open chats`, input: 'chat-menu-q' }) : '';
     return filter + S.Menu({ items: list.length ? list.map((c) => ({ lead: S.ChatStatusMark(chatStatus(c)), label: chatLabel(c), end: esc(c.repo || ''), checked: c === ntChat(st), act: 'chat-select', arg: c.id })) : [{ head: 'No open chat matches.' }] });
   }
+  /* The chat's changes against its baseline with line totals, or null before it changed a file (no pill then). */
+  function chatChanges(c) {
+    const x = c && c.changes;
+    if (!x || !x.files.length) return null;
+    const files = x.files.map(([status, path, ins, del]) => ({ status, path, ins, del }));
+    return Object.assign({}, x, { list: files, files: files.length, ins: files.reduce((n, f) => n + f.ins, 0), del: files.reduce((n, f) => n + f.del, 0) });
+  }
+  function changesPanel(st) {
+    const chg = chatChanges(ntChat(st));
+    return chg ? S.ChatChangesPanel(Object.assign({}, chg, { files: chg.list, act: 'chg-open' })) : '';
+  }
   function queuePanel(st) {
     const c = ntChat(st), q = st.nt.q;
     return S.QueuePanel({ count: c.queue.length, clearArmed: q.clearArmed, undo: q.undo && q.undo.chat === c.id ? q.undo.text : null, rows: c.queue.map((m, i) => S.QueuedRow({ index: i, text: m.text, next: i === 0, images: m.images, action: m.action, kb: i === q.kb, act: 'q-remove', arg: m.id })) });
   }
 
-  /* /resume (ResumePalette, variant B of design/resume-chat-picker): saved chats of the composer's repository, newest first,
+  /* /resume (ResumePalette, variant B of resume picker design): saved chats of the composer's repository, newest first,
    * the first 30 until a filter or Show all. `o`: { repo, saved, q, active, showAll }. */
   const RESUME_LIMIT = 30;
   const resumeGroup = (m) => (m < 8 * 60 ? 'Today' : m < 32 * 60 ? 'Yesterday' : m < 7 * 1440 ? 'This week' : 'Older');
@@ -2056,20 +2323,34 @@
   }
   const resumePalette = (st) => resumePaletteView({ repo: ntChat(st).repo, saved: st.nt.saved, q: st.dialog.q, active: st.dialog.active, showAll: st.dialog.showAll });
 
+  function changesWindow(view) {
+    const model = window.DesignFlow.changesFor(view.work);
+    return `<div class="sb-changes-layer"><section class="sb-changes-dialog" role="dialog" aria-modal="true" aria-labelledby="changes-title"><header class="sb-changes-header"><div><h2 id="changes-title">Changes</h2><span class="t-muted">${esc(model.goal)}</span></div><span class="l-grow"></span><span class="t-faint">Hover a diff line to add a review comment</span>${S.Button({ label: 'Close changes', icon: 'x', act: 'changes-close', id: 'changes-close' })}</header><sb-design-surface screen="changes" embedded="window" work="${esc(view.work)}"${view.scope ? ` scope="${esc(JSON.stringify(view.scope))}"` : ''}${view.file ? ` file="${esc(view.file)}"` : ''}></sb-design-surface></section></div>`;
+  }
+
+  function designSurface(st) {
+    const labels = { activity: 'Recorded activity', changes: 'Changes window', comments: 'Diff comments' };
+    const scenarios = { activity: ['real', 'one', 'running', 'long', 'phase'], changes: [], comments: ['1', '2', '3', '4'] };
+    const scenario = scenarios[st.view].includes(st.surfaceScenario) ? st.surfaceScenario : '';
+    const controls = Object.entries(labels).map(([id, label]) => S.Button({ label, act: 'surface', arg: id, variant: st.view === id ? 'primary' : 'ghost', size: 'sm' }));
+    return `<div class="sb-surface-page"><div class="sb-surface-nav">${S.Button({ label: 'Back to work', icon: 'arrowLeft', act: 'nav', arg: 'work', variant: 'ghost', size: 'sm' })}<span class="l-grow"></span>${controls.join('')}</div><div class="sb-surface-intro"><h1>${labels[st.view]}</h1><p>Interactive sample records. These examples do not change files or start runs.</p></div><div class="sb-surface-scroll" data-scroll="surface"><sb-design-surface screen="${st.view}" scenario="${esc(scenario)}"></sb-design-surface></div></div>`;
+  }
+
   /* ---------- page ---------- */
   function app(st) {
-    const views = { work, detail, history, settings: settingsPage, newtask: newTask };
+    const views = { work, detail, history, settings: settingsPage, newtask: newTask, activity: designSurface, changes: designSurface, comments: designSurface };
     return shell(st, (views[st.view] || work)(st));
   }
 
   window.Screens = {
-    buildOf, app, work, detail, history, settingsPage, specsPane, terminal, tierOf, lookup, itemBy, subKeys, selectedSub, paneShown,
+    subPhaseStates, finishStates, buildOf, app, work, detail, history, changesWindow, settingsPage, specsPane, terminal, tierOf, lookup, itemBy, subKeys, selectedSub, paneShown,
     statusIcon, stepText, clock, rowKey, repoOf, agentOf, LIFE, SECTIONS, resumable, controllable, pauseEligible, recoveryOffered,
-    newTask, ntChat, chatLabel, chatStatus, chatEmpty, ntSendButton, pickerItems, targetPicker, targetPickerView, chatMenu, chatTabMenu, queuePanel,
+    newTask, ntChat, chatLabel, chatStatus, chatEmpty, ntSendButton, pickerItems, targetPicker, targetPickerView, chatMenu, chatTabMenu, queuePanel, chatChanges, changesPanel,
     resumeListing, resumePalette, resumePaletteView,
     qaView, qaResults, qaLiveBlock, peekCard, finishResults, devicePanel, usageData,
     isPlanRun, planStrip, planNow, planTeaser, planActivity, planBundle, planTranscript, planBriefing, PLAN_STAGES,
     specOf, specPath, specControl, specMenuItems, specPanelItems, specProject, specAgent, specBar, get specRows() { return specRows; },
+    isMonitorRun, monitorDoc, monitorCard, monitorCycles, monStepPanel, monCiBoard,
     isValidationRun, shapeReport, validationCard, validationDoc, valDur, verifyOutcome, checkRow, valDefaultParts, valDefaultChecks, checkExpandable, verifyCtx, verifyState, fixItems, verifyFixText, verifyQaDemo, VSTEP, devicePanelView, deviceTrigger, deviceOptions, devicePickable, deviceList,
     get rows() { return rows; },
   };

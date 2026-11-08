@@ -32,13 +32,14 @@ import dev.skillbill.desktop.app.keyboard.ShortcutSheet
 import dev.skillbill.desktop.app.keyboard.KeyPress
 import dev.skillbill.desktop.app.keyboard.ShellKey
 import dev.skillbill.desktop.app.keyboard.toKeyPress
+import dev.skillbill.desktop.app.usage.UsageSidebar
 import dev.skillbill.desktop.core.designsystem.icon.skillBillIcon
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ToastStack
 import dev.skillbill.desktop.core.designsystem.navigation.LocalSidebarToggle
 import dev.skillbill.desktop.core.domain.model.ChangeScope
-import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import dev.skillbill.desktop.core.ui.changes.ChangesWindows
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
@@ -52,6 +53,8 @@ import dev.skillbill.desktop.feature.changes.ChangesWindowViewModel
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.awt.GraphicsEnvironment
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
 
 private const val MIN_WINDOW_WIDTH = 560
 private const val MIN_WINDOW_HEIGHT = 420
@@ -88,11 +91,12 @@ fun ApplicationScope.MainWindow(
   visible: Boolean,
   focusRequest: Int,
   changes: ChangesWindows,
-  createChangesViewModel: (WorkItem, ChangeScope) -> ChangesWindowViewModel,
+  createChangesViewModel: (ChangesSource, ChangeScope, String?) -> ChangesWindowViewModel,
   onCloseRequest: () -> Unit,
 ) {
   DisposableEffect(window) {
     onDispose {
+      window.usage.release()
       window.terminal.close()
       window.specsPane.close()
       window.chat.closeChats()
@@ -105,12 +109,13 @@ fun ApplicationScope.MainWindow(
   val changesEntry by changes.current.collectAsState()
   val changesKeys = remember { ChangesWindowKeys() }
   val closeScope = rememberCoroutineScope()
+  val windowState = rememberWindowState(size = remember(uiScale) { comfortableWindowSize(uiScale) }, position = WindowPosition(Alignment.Center))
   Window(
     onCloseRequest = { closeScope.launch { if (window.chat.closeChatsSafely()) onCloseRequest() } },
     visible = visible,
     title = "Skill Bill",
     icon = skillBillIcon(),
-    state = rememberWindowState(size = remember(uiScale) { comfortableWindowSize(uiScale) }, position = WindowPosition(Alignment.Center)),
+    state = windowState,
     onPreviewKeyEvent = onPreviewKeyEvent@{ event ->
       // The Changes panel is modal: its keys win, and no shell shortcut fires under it.
       if (changesEntry != null) return@onPreviewKeyEvent changesKeys.handle(event)
@@ -134,6 +139,27 @@ fun ApplicationScope.MainWindow(
     },
   ) {
     val awtWindow = this.window
+    DisposableEffect(awtWindow, windowState, visible) {
+      fun publish(focused: Boolean = awtWindow.isFocused) = window.usage.setWindowFacts(visible, windowState.isMinimized, focused)
+      val windowListener = object : WindowAdapter() {
+        override fun windowIconified(e: WindowEvent) = publish()
+        override fun windowDeiconified(e: WindowEvent) = publish()
+        override fun windowOpened(e: WindowEvent) = publish()
+        override fun windowClosing(e: WindowEvent) = publish()
+        override fun windowGainedFocus(e: WindowEvent) = publish(true)
+        override fun windowLostFocus(e: WindowEvent) = publish(false)
+      }
+      publish()
+      awtWindow.addWindowListener(windowListener)
+      awtWindow.addWindowFocusListener(windowListener)
+      onDispose {
+        awtWindow.removeWindowListener(windowListener)
+        awtWindow.removeWindowFocusListener(windowListener)
+      }
+    }
+    LaunchedEffect(visible, windowState.isMinimized) {
+      window.usage.setWindowFacts(visible, windowState.isMinimized, awtWindow.isFocused)
+    }
     SideEffect { awtWindow.minimumSize = uiScale.windowDimension(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT) }
     LaunchedEffect(visible, focusRequest) {
       if (visible) {
@@ -162,7 +188,7 @@ fun ApplicationScope.MainWindow(
               CommandMenu(window)
               if (panes.shortcutsOpen) ShortcutSheet { panes.shortcutsOpen = false }
               changesEntry?.let { entry ->
-                key(entry.item.id) { ChangesOverlay(entry, changesKeys, createChangesViewModel, changes::close) }
+                key(entry.source.id) { ChangesOverlay(entry, changesKeys, createChangesViewModel, changes::close) }
               }
               ToastStack(window.toasts.host)
             }
@@ -230,6 +256,7 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
         newTaskDraft = newTaskDraft,
         newTaskOpenChats = newTaskOpenChats,
         contributions = window.entries.flatMap { it.sidebarItems },
+        usage = { UsageSidebar(window.usage) },
         onNavigate = navigate,
         onOpenCommandMenu = window.menu::toggle,
         onToggleSpecs = {
@@ -247,6 +274,13 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
         qaDeviceSwitcher = { QaDeviceSwitcher(window.qaDevice) },
       )
     }
+  }
+  SideEffect {
+    window.usage.setSidebarFacts(
+      settings = topRoute is SettingsRoute,
+      inlineVisible = sidebar != null && !drawerMode,
+      drawerIsOpen = sidebar != null && drawerMode && panes.drawerOpen,
+    )
   }
   ShellFrame(sidebar, drawerMode, panes.drawerOpen, onDismissDrawer = { panes.drawerOpen = false }) {
     WorkArea(drawerMode, right, bottom, rightWidth = if (chatShown) null else SkillBillSize.specsPane) {

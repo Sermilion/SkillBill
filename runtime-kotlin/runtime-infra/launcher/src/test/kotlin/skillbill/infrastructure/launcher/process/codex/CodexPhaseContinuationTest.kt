@@ -23,7 +23,7 @@ import kotlin.time.Duration.Companion.seconds
 
 class CodexPhaseContinuationTest {
   @Test
-  fun `schema probes and continued turns consume one original deadline`() {
+  fun `continued turns consume one original deadline`() {
     val directory = Files.createTempDirectory("codex-deadline")
     try {
       val clock = SessionClock()
@@ -31,7 +31,7 @@ class CodexPhaseContinuationTest {
       val request =
         AgentRunProcessRequest(
           AgentRunProcessLaunchFields(listOf("codex", "app-server"), directory),
-          timing = AgentRunProcessTimingFields(timeout = 10.seconds, operationDeadline = 9.seconds),
+          timing = AgentRunProcessTimingFields(timeout = 6.seconds, operationDeadline = 5.seconds),
         )
       val runner =
         scriptedRunner(clock, turns) { index ->
@@ -90,21 +90,9 @@ class CodexPhaseContinuationTest {
   ): AgentRunProcessRunner =
     object : AgentRunProcessRunner {
       override fun run(request: AgentRunProcessRequest): AgentRunProcessResult =
-        when {
-          request.launch.command.last() == "--version" -> {
-            clock.advance(2)
-            result("codex-cli 0.166.0")
-          }
-          "generate-json-schema" in request.launch.command -> {
-            clock.advance(2)
-            writeCodexSchemaFixture(Path.of(request.launch.command.last()))
-            result("")
-          }
-          else ->
-            runAgentRunContinuations(request, clock) { next ->
-              turns += next
-              turn(turns.size)
-            }
+        runAgentRunContinuations(request, clock) { next ->
+          turns += next
+          turn(turns.size)
         }
     }
 

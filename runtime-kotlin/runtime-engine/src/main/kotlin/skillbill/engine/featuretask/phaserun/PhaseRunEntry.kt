@@ -1,20 +1,13 @@
 package skillbill.engine.featuretask.phaserun
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResultAssembly
-import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phaserun.monitor.MonitorAttemptTarget
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparation
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparationRequest
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
-import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
-import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.qualitygate.goalBuildDefinitionId
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
-import skillbill.engine.featuretask.runloop.state.PhaseAttemptHistory
-import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
@@ -48,9 +41,7 @@ import java.util.concurrent.CancellationException
 
 @Inject
 public class PhaseRunEntry(
-  private val strategies: PhaseStrategyLookup,
-  private val reviewResultAssembly: ParallelCodeReviewRunnerResultAssembly,
-  private val lifecycleTelemetry: LifecycleTelemetryService,
+  private val stateFactory: InMemoryPhaseRunStateFactory,
   private val diagnostics: RuntimeDiagnostics,
   private val clock: Clock,
   private val intakeResolver: PhaseRunIntakeResolver,
@@ -586,30 +577,8 @@ public class PhaseRunEntry(
         "Goal finalization requires branch '$expectedBranch'; current branch is '${branch?.branch.orEmpty()}'.",
       )
     }
-    val progress =
-      FeatureTaskRuntimeRunState(
-        initialRecords = request.goalQualityPhaseProgress?.phaseRecords.orEmpty(),
-        transitions = executionPlan.phaseTraversal(),
-        initialAttemptHistory = qualityAttemptHistory(request),
-        initialQaRepairState = request.goalQualityPhaseProgress?.qaRepairState,
-        stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
-        resumeRulesFn = strategies.resumeRules(executionPlan),
-      )
     val records = inMemoryRecords(request, workflowId, branch, standalone, invocationId)
-    val state =
-      InMemoryPhaseRunState(
-        facts = facts,
-        executionPlan = executionPlan,
-        progress = progress,
-        records = records,
-        telemetry = FeatureTaskRuntimeRunObservability(records, facts, diagnostics),
-        invocationId = invocationId,
-        strategies = strategies,
-        reviewResultAssembly = reviewResultAssembly,
-        lifecycleTelemetry = lifecycleTelemetry,
-        clock = clock,
-        runLoopEntry = runLoopEntry,
-      )
+    val state = stateFactory.create(facts, executionPlan, records, invocationId)
     val report = runLoopEntry.run(runLoopEntry.context(facts, state))
     return resultOf(report, state, records)
   }
@@ -791,12 +760,6 @@ private data class PhaseRunSetup(
 private fun newInvocationId(): String = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}"
 
 private const val INVOCATION_ID_PREFIX = "phr-"
-
-private fun qualityAttemptHistory(request: PhaseRunRequest): PhaseAttemptHistory =
-  PhaseAttemptHistory(
-    request.goalQualityPhaseProgress?.phaseLedger.orEmpty(),
-    request.goalQualityPhaseProgress?.attemptHighWaterMarks.orEmpty(),
-  )
 
 private data class SourceMatch(
   val phaseId: String,

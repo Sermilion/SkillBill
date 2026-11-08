@@ -1,3 +1,87 @@
+## [2026-11-08] Size the usage card to its rows and name each empty state
+Context: The card reserved two meter rows, so Codex with one weekly window and Cursor by name showed blank space. "No usage data" covered loading, failed reads and Claude before its first reply alike.
+Decision: The card holds the header plus one row per window up to two, one row for a message, and no rows for a name-only agent. Empty states say what is happening: "Loading…" while Codex reads, "Couldn't read usage" after a failed read, "Refresh delayed" when throttled, and "Shows after the next Claude reply" before Claude has reported.
+Reason: Blank rows read as missing data, and a generic "no data" hides whether to wait, retry or send a message.
+Supersedes: The fixed two-row height from "Keep the usage card fixed and on the last valid agent". The card still keeps the last valid agent and reading.
+
+## [2026-11-08] Show Cursor and Junie on the usage card by name only
+Context: Cursor and Junie have no readable usage source. The Cursor CLI has no usage command, its plan numbers sit behind undocumented cursor.com endpoints that need the session token from Cursor's own storage, and Junie exposes no quota at all. The card showed "No usage data" for both.
+Decision: UsageProvider covers only Codex and Claude. When the open chat or run uses Cursor or Junie, the card shows the agent's name and nothing else, asks for no usage, and its popup keeps the Codex and Claude tabs and the default agent picker without Refresh or Dashboard. A tab picked there holds until the context changes agent. The last Codex or Claude agent and reading stay for when a usage agent returns.
+Reason: An empty or "no data" state for an agent that can never report reads as a fault. The card is still the place to switch the shown provider and set the default agent.
+Supersedes: The Cursor and Junie tabs and "No usage data" states from "Keep the usage card fixed and on the last valid agent".
+
+## [2026-11-08] Admit Codex limits for the account the app-server reports
+Context: The Codex usage card never showed numbers. The collector treated the `account/updated` notice that Codex sends on every startup as an account change, and it dropped valid `account/rateLimits/read` responses because numeric admission was closed.
+Decision: Each read runs a fresh app-server process, so the collector ignores `account/updated` and trusts the `account/read` response. A `chatgpt` account becomes a verified subject keyed by the `accountId` from the rate-limit response, or the account email when that is absent, and each rate-limit window becomes a percentage meter with its reset. The collector reports a pull capability, so the existing coordinator schedules reads and enables Refresh.
+Reason: The app-server answers for the profile the app launched it with, and the repository still checks the reservation, profile and subject before admitting a reading. An API-key account stays unsupported.
+Supersedes: "Keep production numeric usage disabled until identity is verified" for Codex. Cursor stays closed.
+
+## [2026-11-08] Keep the usage card fixed and on the last valid agent
+Context: The card cleared to no provider on every route change and context reload, so it disappeared and reappeared, and its provider tabs were disabled outside Work and History.
+Decision: The card keeps a fixed height with two meter slots and keeps the last valid agent and reading when the context names no supported agent. Failed or unverified reads never replace a shown reading. The tabs always work; a manual pick holds until the run or chat changes agent. Meter order is ranked in the data layer, shortest window first.
+Reason: Layout shifts in the sidebar footer read as constant switching, and a failed refresh is not news worth replacing real numbers for.
+
+## [2026-11-08] Store a default agent in app settings
+Context: New task drafts started on the first detected agent, and board, detail and spec launches without a recorded agent needed a manual pick.
+Decision: `AppSettings.defaultAgentId`, chosen in the usage popup, starts new drafts and follows untouched empty drafts. The detail and spec agent pickers show it when a run has no recorded agent and allows it, and the control repository passes it only when a launch names no agent and the item has none recorded.
+Reason: A recorded agent and the runtime's per-phase overrides must keep winning; the default only fills gaps.
+
+## [2026-11-08] Show Claude rate-limit windows as meters and keep the last reading per profile
+Context: The Claude usage card showed only "Usage unavailable". Claude's `rate_limit_event` carries `unifiedWindows` (five_hour, seven_day, with utilization and resetsAt), but the decoder kept only `status`, and a New task draft with no live process had no reading at all.
+Decision: ClaudeLiveSession maps each unified window, or the top-level `rateLimitType` window on older CLIs, to a percentage meter with its reset and rolling period. The repository ranks them into card and popup meters and keeps the latest status per Claude profile lookup, which a request without a live status for that profile shows with its age.
+Reason: The app launched the process with the profile it records, so that process's own events describe that profile's account; no path, token or email is used to infer identity. A profile can switch accounts between sessions, so the carried reading shows its observation age and is replaced by the next event.
+Supersedes: "Keep production numeric usage disabled until identity is verified" for Claude session events only. Codex and Cursor stay closed.
+
+## [2026-11-08] Map build presentation in core/ui
+Context: Work rows and run details consume WorkBuild, while design-system components accept SbBuild presentation values.
+Decision: Map runtime builds to WorkBuild in core/data and convert WorkBuild to SbBuild in core/ui/status for both features.
+Reason: core/ui already depends on core/domain and core/designsystem and owns status mapping. This keeps the design system independent of domain models and gives both features one presentation conversion.
+
+## [2026-11-08] Keep production numeric usage disabled until identity is verified
+Context: SKILL-520 authorizes unavailable numeric sources. Codex capability reads work but lack a verified account/workspace binding; Claude events provide session status, and Cursor has no configured verified personal source.
+Decision: Keep production numeric admission closed. Separate profile lookups, verified subjects and session-only scopes; repository admission requires subject, auth-mode, profile/session generation and operation-reservation evidence. Never infer identity from paths, email, tokens or observed response extensions.
+Reason: A parseable quota response or configuration selection cannot establish whose allowance may be displayed. Repository checks preserve account isolation, and fixture readers exercise numeric contracts without authorizing production numbers.
+Revisit when: Separate work verifies the provider identity/source contract and supplies read-only real-account acceptance for numeric activation.
+
+## [2026-11-08] Keep bounded usage processes under the existing process authority
+Context: Codex capability reads need byte/message bounds and cancellable startup. OS process creation can return after the caller stops waiting, while chat has different output and lifetime contracts.
+Decision: Keep process APIs in ChatProcessLauncher.kt through an opt-in bounded mode. Hold one application-wide usage startup slot through owned cleanup, including abandoned late starts, and retain known descendant ownership after parent exit.
+Reason: Moving startup to IO alone cannot prevent a late-created orphan. Separate bounded contracts preserve chat behavior without expanding the process architecture allowlist; retry scheduling remains with the usage coordinator.
+
+## [2026-11-08] Share usage work across windows and close it at application exit
+Context: Several windows can observe one usage subject. A mounted host can be hidden to tray, minimized or inside a closed drawer while another window still needs usage.
+Decision: One app-scoped ProviderUsageRepository owns usage state and a supervised child scope. Each eligible window host owns only its lease; hiding, replacement, observation failure and disposal release it, while activity updates it in place. Application exit closes usage idempotently; tray hiding preserves the owner.
+Reason: Per-window collectors would duplicate reads and cooldowns. Lease release must preserve another window's observation, and cancelling the application scope to stop usage would also cancel unrelated execution work. Activity changes must not discard results or dismiss the popup.
+
+## [2026-11-08] Keep captured usage freshness separate from request scheduling
+Context: A visible subject can switch between active and idle demand after a successful observation, and partial updates can leave older fields untouched.
+Decision: Capture each accepted meter's expected interval for its stale boundary. Recompute request eligibility from current demand without rewriting retained observation times or freshness bases; reset expiry retains the value until another observation.
+Reason: Activity changes must not make old readings appear newly observed. Partial updates must preserve untouched ages, and passing a reset time does not prove the provider restored an allowance.
+
+## [2026-11-08] Bind Claude usage status to the live process generation
+Context: Claude processes survive multiple turns while settings can change. A replaced process can still deliver a late event or completion.
+Decision: Capture the logical session, effective profile and unique generation at process creation. Accept status and revocation only for that generation; revoke on stop and job completion, including cancellation before the lazy reader starts.
+Reason: Current settings do not identify the retained process. Generation checks prevent old events from attaching to another process and prevent an old close from clearing replacement status.
+
+## [2026-11-08] Bind usage context to the chat's executing agent and session
+Context: Same-provider picker changes can leave NewTaskChat executing with its retained profile and model. Cancelling an unstarted first turn rotates its logical session.
+Decision: The always-bound ChatWorkspace publishes the retained chat agent and observable session through ChatCommands. Empty drafts use their matching ready agent; unresolved or mismatched selection publishes no ready context. The repository maps logical sessions to captured process identity.
+Reason: Usage must describe the agent/session sent in ChatTurnRequest. Re-resolving picker settings could describe a different profile, while changing chat rebinding policy would exceed this feature's scope.
+
+## [2026-11-08] Keep usage presentation separate from numeric source admission
+Context: The sidebar must render typed usage while production sources provide no enabled numeric account data.
+Decision: Map admitted repository results to presentation-only design-system inputs in the app. Keep ranking, source eligibility and refresh control with their existing owners; preserve reported value text and clamp only visual progress.
+Reason: Numeric fixtures establish display behavior without proving provider capability. Unknown data must remain unknown, and a clamped track must not rewrite an over-limit value or imply request permission.
+
+## [2026-11-08] Bind usage popup focus to its current context
+Context: Route, provider or visibility changes can remove the usage trigger while a popup or deferred focus callback still exists.
+Decision: Reuse SbPopover and ShellLayer, bind expansion to the window model's context token, and return focus only to the current surviving requester while the popover composition remains active.
+Reason: Escape must close usage before underlying navigation. Context invalidation must release the layer without sending focus to a removed trigger.
+## [2026-11-07] Preserve work-area composition across panel branches
+Context: Extracting ContentPanel splits ShellFrame's work area between a frameless drawer Box and a framed panel at the drawer breakpoint.
+Decision: Remember movable content and invoke it from both branches.
+Reason: Separate direct content calls would give the work area different composition positions and reset remembered state on breakpoint crossings. The spec requires preserving that state.
+
 ## [2026-11-07] Ask for proposal changes before replacing an operation card
 Context: Adjust immediately reran the original verify or pr-review-fix request, giving the operator no chance to explain the intended revision.
 Decision: Adjust asks a question in the current chat. Its next reply starts a replacement proposal using the original launch settings and separate revision instructions; the replacement still needs an explicit Confirm click.

@@ -5,7 +5,7 @@ type: object
 additionalProperties: false
 required: [contract_version, observed_at, item, page_size, next_cursor]
 properties:
-  contract_version: {type: string, const: "1.9"}
+  contract_version: {type: string, const: "1.10"}
   page_size: {type: integer, minimum: 1, maximum: 100}
   next_cursor: {type: [string, "null"], minLength: 1}
   observed_at: {type: string, format: date-time}
@@ -35,6 +35,8 @@ allOf:
       not:
         required: [problem]
 $defs:
+  build: { type: object, additionalProperties: false, required: [state, command, short_command, tool, project_kind, pid, started_at, elapsed_ms, elapsed_as_of, usual_ms, exit_code, finished_at, previous], properties: { state: {type: string, enum: [running, passed, failed, finished]}, command: {type: string, minLength: 1}, short_command: {type: string, minLength: 1}, tool: {type: string, minLength: 1}, project_kind: {type: string, minLength: 1}, pid: {type: integer, minimum: 0}, started_at: {type: string, format: date-time}, elapsed_ms: {type: [integer, "null"], minimum: 0}, elapsed_as_of: {type: [string, "null"], format: date-time}, usual_ms: {type: [integer, "null"], minimum: 0}, exit_code: {type: [integer, "null"]}, finished_at: {type: [string, "null"], format: date-time}, previous: { anyOf: [ { $ref: "#/$defs/build_previous" }, { type: "null"} ] } } }
+  build_previous: { type: object, additionalProperties: false, required: [state, duration_ms, finished_at], properties: { state: {type: string, enum: [passed, failed, finished]}, duration_ms: {type: integer, minimum: 0}, finished_at: {type: string, format: date-time} } }
   item:
     type: object
     additionalProperties: true
@@ -46,6 +48,7 @@ $defs:
       finished_at_source:
         type: [string, "null"]
         enum: [standalone_finished_at, workflow_completion, goal_completion, goal_state_entry, estimated_goal_state_entry, null]
+      build: { anyOf: [ { $ref: "#/$defs/build" }, { type: "null" } ] }
       feature_title: {type: string}
       subtasks: {type: array, maxItems: 100, description: "One page of up to 100 goal subtasks, whatever page_size was requested.", items: {type: object}}
       phases: {type: array, items: {type: object}}

@@ -5,6 +5,7 @@ import skillbill.contracts.persistence.WorkBoardReadModelKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
+import skillbill.ports.idestatus.model.WorkBoardInvalidation
 import skillbill.ports.idestatus.model.WorkBoardReadModelKey
 import skillbill.ports.idestatus.model.WorkBoardReadModelPage
 import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
@@ -16,6 +17,28 @@ internal class SqliteWorkBoardReadModelStore(
   private val connection: Connection,
   private val diagnostics: RuntimeDiagnostics,
 ) : WorkBoardReadModelRepository {
+  override fun pendingInvalidation(): WorkBoardInvalidation? =
+    connection.createStatement().use { statement ->
+      statement.executeQuery(
+        "SELECT work_id, revision FROM ${WorkBoardInvalidationKeys.TABLE} ORDER BY revision LIMIT 1",
+      ).use { rows -> if (rows.next()) WorkBoardInvalidation(rows.getString(1), rows.getLong(2)) else null }
+    }
+
+  override fun invalidationRevision(): Long =
+    connection.prepareStatement("SELECT seq FROM sqlite_sequence WHERE name = ?").use { statement ->
+      statement.setString(1, WorkBoardInvalidationKeys.TABLE)
+      statement.executeQuery().use { rows -> if (rows.next()) rows.getLong(1) else 0 }
+    }
+
+  override fun acknowledge(invalidation: WorkBoardInvalidation) {
+    connection.prepareStatement(
+      "DELETE FROM ${WorkBoardInvalidationKeys.TABLE} WHERE work_id = ? AND revision = ?",
+    ).use { statement ->
+      statement.bindAll(invalidation.workId, invalidation.revision)
+      statement.executeUpdate()
+    }
+  }
+
   override fun upsert(row: WorkBoardReadModelRow) {
     connection.prepareStatement(
       """
@@ -196,4 +219,8 @@ internal class SqliteWorkBoardReadModelStore(
         }
       }
     }
+}
+
+internal object WorkBoardInvalidationKeys {
+  const val TABLE = "work_board_invalidations"
 }

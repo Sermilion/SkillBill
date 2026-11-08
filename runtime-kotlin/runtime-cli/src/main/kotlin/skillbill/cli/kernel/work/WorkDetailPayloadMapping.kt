@@ -43,6 +43,7 @@ internal fun workDetailItemWireMap(
     put(WorkBoardPayloadKeys.REPOSITORY_ROOT, item.repositoryRoot)
     put(WorkBoardPayloadKeys.FINISHED_AT, item.finishedAt?.toString())
     put(WorkBoardPayloadKeys.FINISHED_AT_SOURCE, item.finishedAtSource?.wireValue)
+    put(WorkDetailPayloadKeys.BUILD, item.build?.let(::workBuildWireMap))
     put(
       DecompositionPlanningPayloadKeys.DEPENDENCIES,
       item.dependencies.map { entry ->

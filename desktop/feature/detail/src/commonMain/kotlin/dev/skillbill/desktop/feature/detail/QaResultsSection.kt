@@ -1,9 +1,7 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,13 +11,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,19 +24,23 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.list.sbRowSurface
 import dev.skillbill.desktop.core.designsystem.component.rememberRuntimeText
+import dev.skillbill.desktop.core.designsystem.component.SbDivider
+import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
+import dev.skillbill.desktop.core.designsystem.detail.GroupLabel
 import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
+import dev.skillbill.desktop.core.designsystem.status.StatusDot
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 
@@ -54,25 +53,37 @@ internal fun DetailSections.qaResultsSection(key: String, title: String, view: Q
       BasicText(view.sentence, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
     }
     if (view.open.isNotEmpty()) {
+<<<<<<< HEAD
       item(key = "$key-open-label") { QaGroupLabel(view.openLabel, view.open.size) }
+=======
+      item(key = "$key-open-label") {
+        GroupLabel("Needs you", count = view.open.size.toString(), modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+      }
+>>>>>>> origin/main
       view.open.forEachIndexed { index, row ->
         item(key = qaFindingRowKey(row.id)) { QaFindingItem(row, index, view.open.size, state, "$base:f:${row.id}", onAction, view.evidenceMode) }
       }
     }
     if (view.left.isNotEmpty()) {
-      item(key = "$key-left-label") { QaGroupLabel("Left behind", view.left.size) }
+      item(key = "$key-left-label") {
+        GroupLabel("Left behind", count = view.left.size.toString(), modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+      }
       view.left.forEachIndexed { index, row ->
         item(key = "$key-left-$index") { QaLeftItem(row, index, view.left.size, onAction) }
       }
     }
     if (view.notTested.isNotEmpty()) {
-      item(key = "$key-gap-label") { QaGroupLabel("Not tested", view.notTested.size) }
+      item(key = "$key-gap-label") {
+        GroupLabel("Not tested", count = view.notTested.size.toString(), modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+      }
       view.notTested.forEachIndexed { index, row ->
         item(key = "$key-gap-$index") { QaGapItem(row, index, view.notTested.size, state, "$base:g:$index", onAction, view.evidenceMode) }
       }
     }
     if (view.unblock.isNotEmpty()) {
-      item(key = "$key-unblock-label") { QaGroupLabel("Unblock", view.unblock.size) }
+      item(key = "$key-unblock-label") {
+        GroupLabel("Unblock", count = view.unblock.size.toString(), modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+      }
       view.unblock.forEachIndexed { index, entry ->
         item(key = "$key-unblock-$index") { QaUnblockItem(entry, index, view.unblock.size, onAction, view.evidenceMode) }
       }
@@ -84,7 +95,7 @@ internal fun DetailSections.qaResultsSection(key: String, title: String, view: Q
       folds.forEachIndexed { index, fold ->
         item(key = "$key-fold-$index") {
           Column(Modifier.fillMaxWidth().sbBoxSegment(index, folds.size)) {
-            if (index > 0) QaRowRule()
+            if (index > 0) SbDivider()
             fold()
           }
         }
@@ -115,22 +126,42 @@ internal fun QaResultsContent(
     } else BasicText(view.sentence, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
     if (view.open.isNotEmpty()) {
       beforeFindings()
+<<<<<<< HEAD
       QaGroupLabel(view.openLabel, view.open.size)
+=======
+      GroupLabel(
+        "Needs you",
+        count = view.open.size.toString(),
+        modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
+      )
+>>>>>>> origin/main
       view.open.forEachIndexed { index, row ->
         QaFindingItem(row, index, view.open.size, state, "$base:f:${row.id}", onAction, view.evidenceMode)
         findingExtra(row)
       }
     }
     if (view.left.isNotEmpty()) {
-      QaGroupLabel("Left behind", view.left.size)
+      GroupLabel(
+        "Left behind",
+        count = view.left.size.toString(),
+        modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
+      )
       view.left.forEachIndexed { index, row -> QaLeftItem(row, index, view.left.size, onAction) }
     }
     if (view.notTested.isNotEmpty()) {
-      QaGroupLabel("Not tested", view.notTested.size)
+      GroupLabel(
+        "Not tested",
+        count = view.notTested.size.toString(),
+        modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
+      )
       view.notTested.forEachIndexed { index, row -> QaGapItem(row, index, view.notTested.size, state, "$base:g:$index", onAction, view.evidenceMode) }
     }
     if (view.unblock.isNotEmpty()) {
-      QaGroupLabel("Unblock", view.unblock.size)
+      GroupLabel(
+        "Unblock",
+        count = view.unblock.size.toString(),
+        modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
+      )
       view.unblock.forEachIndexed { index, entry -> QaUnblockItem(entry, index, view.unblock.size, onAction, view.evidenceMode) }
       QaUnblockOpen(onAction)
     }
@@ -139,7 +170,7 @@ internal fun QaResultsContent(
       Spacer(Modifier.height(16.dp))
       folds.forEachIndexed { index, fold ->
         Column(Modifier.fillMaxWidth().sbBoxSegment(index, folds.size)) {
-          if (index > 0) QaRowRule()
+          if (index > 0) SbDivider()
           fold()
         }
       }
@@ -173,28 +204,14 @@ private fun QaVerdictMark(view: QaResultsView) {
     QaResultsTone.Done -> colors.stDone
     QaResultsTone.Faint -> colors.fgMuted
   }
-  Box(Modifier.size(8.dp).background(color, CircleShape).clearAndSetSemantics { })
+  StatusDot(color, Modifier.clearAndSetSemantics { })
   BasicText(view.word, style = SkillBillTheme.type.tSmMedium.copy(color = color), maxLines = 1)
-}
-
-@Composable
-private fun QaGroupLabel(label: String, count: Int) {
-  val colors = SkillBillTheme.colors
-  Row(Modifier.padding(top = 16.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-    BasicText(label, Modifier.semantics { heading() }, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted))
-    BasicText(count.toString(), style = SkillBillTheme.type.tXs.copy(color = colors.fgFaint, fontWeight = FontWeight.Normal))
-  }
-}
-
-@Composable
-private fun QaRowRule() {
-  Box(Modifier.fillMaxWidth().height(1.dp).background(SkillBillTheme.colors.borderSubtle))
 }
 
 @Composable
 private fun QaUnblockItem(entry: QaUnblockEntry, index: Int, count: Int, onAction: (DetailAction) -> Unit, mode: QaEvidenceMode) {
   Column(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
-    if (index > 0) QaRowRule()
+    if (index > 0) SbDivider()
     QaItemHead(LucideIcons.warn, SkillBillTheme.colors.stBlocked, null, entry.capability, null, entry.target?.let { "Target: $it" }, null) {}
     if (entry.remedy != null || entry.tried != null || entry.evidencePaths.isNotEmpty() || entry.snippet != null) {
       Column(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -202,7 +219,7 @@ private fun QaUnblockItem(entry: QaUnblockEntry, index: Int, count: Int, onActio
         entry.tried?.let { QaField("Tried", it) }
         if (entry.evidencePaths.isNotEmpty() || entry.snippet != null) {
           QaEvidenceChips(entry.evidencePaths, entry.evidenceDirectory, onAction, mode) {
-            entry.snippet?.let { snippet -> QaChip("Copy for qa.md", LucideIcons.copy) { onAction(DetailAction.Copy(snippet)) } }
+            entry.snippet?.let { snippet -> SbTag("Copy for qa.md", icon = LucideIcons.copy, onClick = { onAction(DetailAction.Copy(snippet)) }) }
           }
         }
       }
@@ -213,9 +230,9 @@ private fun QaUnblockItem(entry: QaUnblockEntry, index: Int, count: Int, onActio
 @Composable
 private fun QaUnblockOpen(onAction: (DetailAction) -> Unit) {
   Row(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp)) {
-    QaChip("Open qa.md", LucideIcons.external, description = "Open .skill-bill/phases/qa.md") {
+    SbTag("Open qa.md", Modifier.semantics { contentDescription = "Open .skill-bill/phases/qa.md" }, icon = LucideIcons.external, onClick = {
       onAction(DetailAction.OpenQaPhaseInstructions)
-    }
+    })
   }
 }
 
@@ -224,10 +241,8 @@ private fun QaUnblockOpen(onAction: (DetailAction) -> Unit) {
 private fun qaHeadModifier(open: Boolean?, onToggle: () -> Unit): Modifier {
   if (open == null) return Modifier
   val interaction = remember { MutableInteractionSource() }
-  val hovered by interaction.collectIsHoveredAsState()
-  val colors = SkillBillTheme.colors
   return Modifier
-    .background(if (hovered) colors.bgHover else Color.Transparent)
+    .sbRowSurface(interaction, shape = RoundedCornerShape(SkillBillRadius.xs))
     .sbFocusRing(interaction, RoundedCornerShape(SkillBillRadius.xs))
     .pointerHoverIcon(PointerIcon.Hand)
     .clickable(interaction, indication = null, role = Role.Button, onClick = onToggle)
@@ -296,7 +311,7 @@ private fun QaEvidenceChips(paths: List<String>, directory: String?, onAction: (
     when (mode) {
       QaEvidenceMode.Invocation -> if (directory != null) paths.forEach { path -> EvidenceChip(path) { onAction(DetailAction.OpenQaEvidence(path, directory)) } }
       QaEvidenceMode.VerifyNamesOnly -> paths.forEach { path ->
-        BasicText(fileName(path), Modifier.background(SkillBillTheme.colors.bgHover, RoundedCornerShape(SkillBillRadius.xs)).padding(horizontal = 7.dp, vertical = 4.dp), style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted))
+        SbTag(fileName(path))
       }
     }
     extra()
@@ -310,15 +325,20 @@ private fun QaFindingItem(row: QaFindingRow, index: Int, count: Int, state: Sect
   val expandable = row.expected != null || row.steps != null || hasEvidence
   val open = expandable && !state.isCollapsed(part, default = true)
   Column(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
+<<<<<<< HEAD
     if (index > 0) QaRowRule()
     QaItemHead(LucideIcons.alert, if (row.state == "Fixing") colors.stBlocked else colors.stFailed, row.id, row.title, row.state, row.observed, open.takeIf { expandable }) { state.toggle(part, default = true) }
+=======
+    if (index > 0) SbDivider()
+    QaItemHead(LucideIcons.alert, colors.stFailed, row.id, row.title, row.state, row.observed, open.takeIf { expandable }) { state.toggle(part, default = true) }
+>>>>>>> origin/main
     if (open) {
       Column(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         row.expected?.let { QaField("Expected", it) }
         row.steps?.let { QaField("Steps", it) }
         if (hasEvidence || row.copySteps != null) {
           QaEvidenceChips(row.evidencePaths, row.evidenceDirectory, onAction, mode) {
-            row.copySteps?.let { steps -> QaChip("Copy steps", LucideIcons.copy) { onAction(DetailAction.Copy(steps)) } }
+            row.copySteps?.let { steps -> SbTag("Copy steps", icon = LucideIcons.copy, onClick = { onAction(DetailAction.Copy(steps)) }) }
           }
         }
       }
@@ -332,7 +352,7 @@ private fun QaGapItem(row: QaDetailRow, index: Int, count: Int, state: SectionCo
   val expandable = row.evidencePaths.isNotEmpty() && (row.evidenceDirectory != null || mode == QaEvidenceMode.VerifyNamesOnly)
   val open = expandable && !state.isCollapsed(part, default = true)
   Column(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
-    if (index > 0) QaRowRule()
+    if (index > 0) SbDivider()
     QaItemHead(LucideIcons.info, colors.stBlocked, null, row.title, null, row.detail.takeIf { it.isNotBlank() }, open.takeIf { expandable }) { state.toggle(part, default = true) }
     if (open) {
       Column(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp)) { QaEvidenceChips(row.evidencePaths, row.evidenceDirectory, onAction, mode) }
@@ -344,11 +364,11 @@ private fun QaGapItem(row: QaDetailRow, index: Int, count: Int, state: SectionCo
 private fun QaLeftItem(row: QaLeftRow, index: Int, count: Int, onAction: (DetailAction) -> Unit) {
   val colors = SkillBillTheme.colors
   Column(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
-    if (index > 0) QaRowRule()
+    if (index > 0) SbDivider()
     QaItemHead(LucideIcons.warn, colors.stBlocked, null, row.title, null, row.detail.takeIf { it.isNotBlank() }, null) {}
     row.copyText?.let { text ->
       Row(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp)) {
-        QaChip(row.copyLabel, LucideIcons.copy) { onAction(DetailAction.Copy(text)) }
+        SbTag(row.copyLabel, icon = LucideIcons.copy, onClick = { onAction(DetailAction.Copy(text)) })
       }
     }
   }
@@ -377,7 +397,7 @@ private fun QaListFoldItem(fold: QaListFold, state: SectionCollapse, part: Strin
   val open = !state.isCollapsed(part, default = true)
   QaFoldHead("${fold.label} · ${fold.rows.size}", fold.preview, LucideIcons.check, colors.stDone, open) { state.toggle(part, default = true) }
   if (open) {
-    QaRowRule()
+    SbDivider()
     Column(Modifier.padding(start = 34.dp, end = 12.dp, top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
       fold.rows.forEach { row ->
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -398,15 +418,15 @@ private fun QaReportItem(report: QaReportFold, reportPath: String?, state: Secti
   if (!open) {
     report.firstParagraph?.let {
       BasicText(rememberRuntimeText(it), Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp), style = SkillBillTheme.type.tSm.copy(color = colors.fg2))
-      QaRowRule()
+      SbDivider()
     }
   }
   QaFoldHead("Full report", report.preview, LucideIcons.fileText, colors.fgFaint, open) { state.toggle(part, default = true) }
   if (open) {
-    QaRowRule()
+    SbDivider()
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
       ReportText(report.text)
-      reportPath?.let { path -> QaChip("Open report.md", LucideIcons.external) { onAction(DetailAction.OpenQaReport(path)) } }
+      reportPath?.let { path -> SbTag("Open report.md", icon = LucideIcons.external, onClick = { onAction(DetailAction.OpenQaReport(path)) }) }
     }
   }
 }

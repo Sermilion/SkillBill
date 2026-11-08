@@ -24,6 +24,7 @@ import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.core.ui.board.ShellBoard
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.feature.chat.RESUME_COMMAND
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +33,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -119,6 +121,10 @@ class NewTaskViewModel(
       .onEach { name -> mutableState.update { it.copy(qaDeviceName = name) } }
       .catch { diagnostics.record("desktop_qa_device_pick_unavailable") }
       .launchIn(viewModelScope)
+    settings.settings.map { it.defaultAgentId }.distinctUntilChanged().drop(1)
+      .onEach { followDefaultAgent(chats.selected.value) }
+      .catch { diagnostics.record("desktop_default_agent_unavailable") }
+      .launchIn(viewModelScope)
     val first = draft
     readBranches(first)
     viewModelScope.launch { observeBoard(loadRepositories()) }
@@ -152,6 +158,7 @@ class NewTaskViewModel(
       NewTaskAction.AddRepository -> addRepository(target)
       is NewTaskAction.ChooseAgent -> {
         target.cursorMcpDependency = CursorMcpDependency.Unspecified
+        target.agentChosen = true
         target.agentId = action.agentId
         readAgent(target) { resolveAgent(target, action.agentId) }
       }
@@ -203,6 +210,16 @@ class NewTaskViewModel(
     readBranches(selected)
     val resolved = selected.selectedAgent != null && selected.selectedAgent?.agentId == selected.agentId
     if (!resolved && selected !in agentReads) readAgent(selected) { resolveAgent(selected, selected.agentId ?: defaultAgentId()) }
+    else if (resolved) followDefaultAgent(selected)
+  }
+
+  /** Moves a draft that has no conversation and no operator pick onto the current default agent. */
+  private fun followDefaultAgent(target: NewTaskDraft) {
+    if (target.agentChosen || target.chat.value != null) return
+    readAgent(target) {
+      val next = defaultAgentId() ?: return@readAgent
+      if (next != target.agentId && !target.agentChosen && target.chat.value == null) resolveAgent(target, next)
+    }
   }
 
   private fun send(target: NewTaskDraft) {
@@ -248,6 +265,14 @@ class NewTaskViewModel(
   private suspend fun defaultAgentId(): String? {
     val agents = mutableState.value.agents
     if (agents.isEmpty()) return null
+    val stored = try {
+      settings.settings.first().defaultAgentId
+    } catch (cancelled: CancellationException) {
+      throw cancelled
+    } catch (_: Exception) {
+      null // The settings observer already records the failure.
+    }
+    stored?.let { id -> agents.firstOrNull { it.equals(id, ignoreCase = true) } }?.let { return it }
     val detected = (config.detectedAgentsRead() as? DetectedAgentsRead.Success)?.agents.orEmpty()
     return agents.firstOrNull { id -> detected.any { it.name.equals(id, ignoreCase = true) } } ?: agents.first()
   }

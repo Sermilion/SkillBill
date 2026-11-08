@@ -61,6 +61,20 @@ declared_files:
 qa_capability:
   platforms: [android, desktop]
   guidance_file: qa/kmp-qa.md
+build_tools:
+  - executable: gradlew
+    display_executable: ./gradlew
+    tool: Gradle
+    project_kind: Android
+    process_markers:
+      - org.gradle.wrapper.GradleWrapperMain
+    project_markers:
+      - app/src/main/AndroidManifest.xml
+      - androidApp/src/main/AndroidManifest.xml
+      - composeApp/src/androidMain
+    short_skip:
+      - clean
+    version_source: gradle_wrapper
 validation_gate:
   full_gate_command:
     - ./gradlew

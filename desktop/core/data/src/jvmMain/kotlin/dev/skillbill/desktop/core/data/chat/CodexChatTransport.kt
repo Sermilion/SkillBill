@@ -3,6 +3,7 @@ package dev.skillbill.desktop.core.data.chat
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
+import dev.skillbill.desktop.core.data.usage.codexEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatScope
@@ -52,6 +53,7 @@ class CodexChatTransport(
           ),
         )
         return@flow
+
       }
       val thread = savedThread ?: if (request.firstTurn) null else {
         diagnostics.record("chat.codex_thread_missing")
@@ -79,10 +81,8 @@ class CodexChatTransport(
         val command = ChatCommand(
           argv = agentCommand("codex", listOf("app-server"), host.variables["SHELL"]),
           workingDirectory = request.scope.repositoryRoot,
-          environment =
-            host.variables + request.agent.profile?.let { mapOf(AgentHomeEnvironmentKeys.CODEX_HOME to it) }.orEmpty(),
+          environment = codexEnvironment(host.variables, request.agent.profile),
           stdin = "",
-          probeInvocation = agentInvocation("codex", host.variables["SHELL"]),
         )
         emitAll(
           codexAppServerTurn(

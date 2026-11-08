@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionP
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.model.EnvironmentContext
+import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
@@ -71,6 +72,7 @@ fun writeDesktopFixture(
       } ?: error("Unable to resolve a nonblank checkout HEAD for desktop fixture: ${checkoutRoot.toAbsolutePath()}")
     DesktopFixtureDatabaseWriter(runtime.databaseSession, runtime.projectStorePort, clock, checkoutRoot)
       .write(descriptor, commitSha)
+      .also { runtime.ideStatusService.board(WorkBoardRequest(observedAt = clock.instant())) }
   } finally {
     (runtime as? AutoCloseable)?.close()
   }

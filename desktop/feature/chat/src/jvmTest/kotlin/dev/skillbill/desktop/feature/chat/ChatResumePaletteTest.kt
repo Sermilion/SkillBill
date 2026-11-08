@@ -3,8 +3,10 @@ package dev.skillbill.desktop.feature.chat
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
+import java.nio.file.Files
 import java.time.LocalDateTime
 import java.time.ZoneId
+import org.junit.jupiter.api.Assumptions.assumeFalse
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Instant
@@ -57,6 +59,41 @@ class ChatResumePaletteTest {
     val summarized = entry("1", "/x/a.png fix it").copy(summary = "Adds retry to the upload worker")
     val entries = listOf(summarized, entry("2", "fix it too"))
     assertEquals(listOf("1"), resumeListing(entries, "upload", showAll = false) { null }.shown.map { it.sessionId })
+  }
+
+  @Test
+  fun `resumableDrafts matches directory aliases without mixing repositories or changing order`() {
+    assumeFalse(System.getProperty("os.name").startsWith("Windows"), "Directory symlinks require privileges on Windows")
+    val directory = Files.createTempDirectory("chat-repository-alias")
+    val alias = directory.resolve("alias")
+    try {
+      val repository = Files.createDirectory(directory.resolve("repository"))
+      Files.createSymbolicLink(alias, repository)
+      val other = Files.createDirectory(directory.resolve("other"))
+      val drafts = listOf(
+        entry("old", root = alias.toString()),
+        entry("other", root = other.toString()),
+        entry("new", root = repository.toString()),
+        entry("run"),
+      )
+      assertEquals(listOf("old", "new"), resumableDrafts(drafts, repository.toString()).map { it.sessionId })
+      assertEquals(listOf("old", "new"), resumableDrafts(drafts, alias.toString()).map { it.sessionId })
+    } finally {
+      Files.deleteIfExists(alias)
+      directory.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `resumableDrafts normalizes missing repository paths and retains their chats`() {
+    val directory = Files.createTempDirectory("chat-missing-repository")
+    try {
+      val missing = directory.resolve("missing")
+      val drafts = listOf(entry("old", root = missing.resolve(".").toString()), entry("other", root = directory.resolve("other").toString()))
+      assertEquals(listOf("old"), resumableDrafts(drafts, missing.toString()).map { it.sessionId })
+    } finally {
+      Files.delete(directory)
+    }
   }
 
   // New Task's palette must show only the picked repository's drafts.

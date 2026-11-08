@@ -4,7 +4,9 @@ import dev.skillbill.desktop.core.common.ApplicationCoroutineScope
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
-import dev.skillbill.desktop.core.data.session.SelectedAgentHomes
+import dev.skillbill.desktop.core.data.usage.UsageProfileResolver
+import dev.skillbill.desktop.core.domain.usage.UsageObservationSink
+import dev.skillbill.desktop.core.domain.usage.model.UsageProfileLookup
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
@@ -12,6 +14,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.filter
@@ -27,6 +30,8 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.nio.file.Path
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.time.Clock
 
 /**
  * Keeps one `claude -p` process per chat session in the execution's worktree, with permission requests answered through a
@@ -43,6 +48,9 @@ class ClaudeChatTransport internal constructor(
   private val approvals: ChatApprovalOpener,
   private val diagnostics: Diagnostics,
   appScope: ApplicationCoroutineScope,
+  private val usageProfiles: UsageProfileResolver,
+  private val usageSink: UsageObservationSink,
+  private val clock: Clock,
 ) : ChatTransport {
   @Inject
   constructor(
@@ -52,7 +60,10 @@ class ClaudeChatTransport internal constructor(
     approvals: ChatApprovalAuthority,
     diagnostics: Diagnostics,
     appScope: ApplicationCoroutineScope,
-  ) : this(host, settings, launcher, ChatApprovalOpener(approvals::open), diagnostics, appScope)
+    usageProfiles: UsageProfileResolver,
+    usageSink: UsageObservationSink,
+    clock: Clock,
+  ) : this(host, settings, launcher, ChatApprovalOpener(approvals::open), diagnostics, appScope, usageProfiles, usageSink, clock)
 
   override val agentId = "claude"
   override val approvalCapable = true
@@ -61,18 +72,20 @@ class ClaudeChatTransport internal constructor(
   private val sessions = ConcurrentHashMap<String, ClaudeLiveSession>()
   private val stopping = ConcurrentHashMap<String, Job>()
   private val unpromptedEvents = MutableSharedFlow<Pair<String, ChatEvent>>(extraBufferCapacity = UNPROMPTED_BUFFER)
+  private val processGenerations = AtomicLong()
 
   override fun run(request: ChatTurnRequest): Flow<ChatEvent> = flow {
-    val homes = SelectedAgentHomes(request.agent.profile ?: settings.settings.first().claudeConfigDir, host.userHome).current()
+    val selectedProfile = request.agent.profile ?: settings.settings.first().claudeConfigDir
+    val profile = usageProfiles.claude(selectedProfile)
     val command = ChatCommand(
       argv = agentCommand("claude", claudeArguments(request), host.variables["SHELL"]),
       workingDirectory = request.scope.repositoryRoot,
-      environment = claudeEnvironment(host.variables, homes),
+      environment = profile.environment,
       stdin = "",
     )
     val uuid = UUID.randomUUID().toString()
     val sink = Channel<ChatEvent>(Channel.UNLIMITED)
-    val binding = ChatProcessBinding(request.mode, homes[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR].orEmpty())
+    val binding = ChatProcessBinding(request.mode, profile.environment[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR].orEmpty())
     // A live process serves only the mode and profile its generation was opened for: a changed turn replaces it, and
     // the replaced generation's outstanding requests are cancelled when its job ends. `--resume` keeps the conversation.
     // It also keeps the directory it started in, so a turn in another directory needs a new process.
@@ -80,7 +93,7 @@ class ClaudeChatTransport internal constructor(
       ?.takeIf { it.binding != binding || it.workingDirectory != command.workingDirectory }
       ?.let { stop(request.sessionId, it) }
     awaitStopped(request.sessionId)
-    val session = registered(request, command, binding, uuid, sink)
+    val session = registered(request.sessionId, command, binding, uuid, sink, profile.lookup)
     session.send(uuid, request.prompt, request.images)
     var answered = false
     try {
@@ -101,16 +114,17 @@ class ClaudeChatTransport internal constructor(
   }
 
   private fun registered(
-    request: ChatTurnRequest,
+    sessionId: String,
     command: ChatCommand,
     binding: ChatProcessBinding,
     uuid: String,
     sink: Channel<ChatEvent>,
+    profile: UsageProfileLookup,
   ): ClaudeLiveSession {
-    val sessionId = request.sessionId
     while (true) {
+      scope.ensureActive()
       var created: ClaudeLiveSession? = null
-      val session = sessions.computeIfAbsent(sessionId) { open(sessionId, command, binding).also { created = it } }
+      val session = sessions.computeIfAbsent(sessionId) { open(sessionId, command, binding, profile).also { created = it } }
       if (session.register(uuid, sink)) {
         created?.job?.start()
         return session
@@ -119,18 +133,27 @@ class ClaudeChatTransport internal constructor(
     }
   }
 
-  /**
-   * Each process gets its own broker generation before it starts. A process that cannot be given one is never started:
-   * the turn that needed it fails with the reason instead.
-   */
-  private fun open(sessionId: String, command: ChatCommand, binding: ChatProcessBinding): ClaudeLiveSession {
-    val session =
-      ClaudeLiveSession(binding, command.workingDirectory, diagnostics) { event -> unpromptedEvents.tryEmit(sessionId to event) }
+  private fun open(
+    sessionId: String,
+    command: ChatCommand,
+    binding: ChatProcessBinding,
+    profile: UsageProfileLookup,
+  ): ClaudeLiveSession {
+    val processGeneration = processGenerations.incrementAndGet()
+    usageSink.bindSession(sessionId, profile, processGeneration)
+    val session = ClaudeLiveSession(
+      binding,
+      command.workingDirectory,
+      diagnostics,
+      sessionId,
+      processGeneration,
+      usageSink,
+      clock,
+    ) { event -> unpromptedEvents.tryEmit(sessionId to event) }
     val opening = approvals.open(
       sessionId = sessionId,
       repositoryRoot = command.workingDirectory,
       mode = binding.mode,
-      // The child's effective home: claudeEnvironment already dropped the default-home sentinel from this map.
       profileIdentity = claudeProfileIdentity(
         command.environment[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR],
         runCatching { Path.of(host.userHome) }.getOrNull(),
@@ -169,13 +192,17 @@ class ClaudeChatTransport internal constructor(
       } finally {
         watchdog?.cancel()
         sessions.remove(sessionId, session)
-        session.abandon()
       }
+    }
+    session.job.invokeOnCompletion {
+      usageSink.revokeSession(sessionId, processGeneration)
+      session.abandon()
     }
     return session
   }
 
   private fun stop(sessionId: String, session: ClaudeLiveSession) {
+    usageSink.revokeSession(sessionId, session.processGeneration)
     val job = session.job
     stopping[sessionId] = job
     job.invokeOnCompletion { stopping.remove(sessionId, job) }

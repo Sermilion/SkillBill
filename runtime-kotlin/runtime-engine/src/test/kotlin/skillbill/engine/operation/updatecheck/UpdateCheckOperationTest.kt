@@ -4,6 +4,7 @@ import skillbill.application.system.SystemService
 import skillbill.application.updatecheck.UpdateCheckService
 import skillbill.application.updatecheck.model.RECOMMENDED_INSTALL_COMMAND
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
@@ -127,7 +128,7 @@ class UpdateCheckOperationTest {
           NoopWorkflowGitOperations,
           Clock.systemUTC(),
         ),
-        OperationStepRunner(UnlaunchablePhaseRunner, NoopWorkflowGitOperations),
+        OperationStepRunner(UnlaunchablePhaseRunner, NoopWorkflowGitOperations, AgentBuildObserverFactory.NONE),
         FixedProjectStorePort(home.resolve("project-store")),
         RecordingBranchWorktreeResources(),
         NoOperationCardLifecycle,

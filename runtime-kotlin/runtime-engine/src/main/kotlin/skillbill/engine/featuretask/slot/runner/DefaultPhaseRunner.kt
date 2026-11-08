@@ -132,11 +132,16 @@ public class DefaultPhaseRunner(
   ): GoalRunnerSubtaskLaunchRequest {
     val facts = input.facts
     val readOnly = input.policy.readOnlyIdle
+    val launchObservation = state.launchObservation(input.stepName)
     val observation =
       if (facts.observeLaunch) {
-        state.launchObservation(input.stepName)
+        launchObservation
       } else {
-        PhaseLaunchObservation(AgentRunActivityStampSink.NONE, AgentRunWorktreeEditObserver.NONE)
+        PhaseLaunchObservation(
+          AgentRunActivityStampSink.NONE,
+          AgentRunWorktreeEditObserver.NONE,
+          buildObserver = launchObservation.buildObserver,
+        )
       }
     val liveChecksInvocation = facts.liveChecks?.takeIf { it.agentCapable }?.invocationId
     return GoalRunnerSubtaskLaunchRequest(
@@ -164,6 +169,7 @@ public class DefaultPhaseRunner(
           approval = AgentRunApprovalRequirement.Owned(facts.approvalRunId),
           activityStampSink = observation.activityStampSink,
           worktreeEditObserver = observation.worktreeEditObserver,
+          buildObserver = observation.buildObserver,
           progressEmitter =
             observation.progressEmitter?.let { callback -> AgentRunProgressEmitter(callback) }
               ?: AgentRunProgressEmitter.NONE,

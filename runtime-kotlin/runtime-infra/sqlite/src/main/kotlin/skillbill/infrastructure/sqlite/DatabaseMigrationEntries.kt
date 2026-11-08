@@ -19,6 +19,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.FeedbackEventMigratio
 import skillbill.infrastructure.sqlite.core.migration.area.GoalNoChangeReasonMigration
 import skillbill.infrastructure.sqlite.core.migration.area.GoalTelemetryMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
+import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardInvalidationsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDependencyMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelRebuildMigration
@@ -33,6 +34,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIn
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_DETAILS_COLUMN
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.SqliteQaDetailsKeys
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.buildrun.recordAgentBuildRuns
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.pruneWorktreeEditJournalToLatestTick
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaCriteriaSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaFindingsSummary
@@ -1062,6 +1064,7 @@ internal val databaseMigrations: List<DatabaseMigration> =
     ) +
     DatabaseMigration(
       version = 116,
+<<<<<<< HEAD
       name = "record-monitor-ci-cycles",
       operation = ::recordMonitorCiCycles,
     ) +
@@ -1116,4 +1119,13 @@ internal val databaseMigrations: List<DatabaseMigration> =
           )
         }
       },
+=======
+      name = "record-agent-build-runs",
+      operation = ::recordAgentBuildRuns,
+    ) +
+    DatabaseMigration(
+      version = 117,
+      name = "defer-work-board-projection",
+      operation = WorkBoardInvalidationsMigration::apply,
+>>>>>>> origin/main
     )

@@ -15,6 +15,7 @@ import skillbill.engine.featuretask.phaserun.monitor.MonitorTargetResolver
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionPreparer
 import skillbill.engine.featuretask.phaserun.qa.qaStandalonePhaseRun
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.runner.EnabledRuntimeTelemetrySettingsProvider
 import skillbill.engine.featuretask.runner.RUNNER_TEST_PROJECT_STORE
 import skillbill.engine.featuretask.runner.SlotBaselineSqlite
@@ -117,22 +118,29 @@ fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
   PhaseRunEntry(
     statusPublisherFactory =
       testStandalonePhasePublisher(database, clock, NoopRuntimeDiagnostics),
-    strategies = strategies,
-    reviewResultAssembly =
-      ParallelCodeReviewRunnerResultAssembly(
-        GoalRunnerSubtaskLauncher { error("A phase run must not launch an integration pass.") },
-        ReviewContextEnvelopeValidator { _, _ -> },
-        RuntimeOwnedPersistenceBoundary(database, NoopRuntimeDiagnostics),
-        clock,
-      ),
-    lifecycleTelemetry =
-      LifecycleTelemetryService(
-        database,
-        EnabledRuntimeTelemetrySettingsProvider,
-        clock,
-        NoopRuntimeDiagnostics,
-        workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
-        reviewAttributionPort = EmptyReviewAttributionPort,
+    stateFactory =
+      InMemoryPhaseRunStateFactory(
+        strategies = strategies,
+        reviewResultAssembly =
+          ParallelCodeReviewRunnerResultAssembly(
+            GoalRunnerSubtaskLauncher { error("A phase run must not launch an integration pass.") },
+            ReviewContextEnvelopeValidator { _, _ -> },
+            RuntimeOwnedPersistenceBoundary(database, NoopRuntimeDiagnostics),
+            clock,
+          ),
+        lifecycleTelemetry =
+          LifecycleTelemetryService(
+            database,
+            EnabledRuntimeTelemetrySettingsProvider,
+            clock,
+            NoopRuntimeDiagnostics,
+            workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+            reviewAttributionPort = EmptyReviewAttributionPort,
+          ),
+        diagnostics = diagnostics,
+        clock = clock,
+        runLoopEntry = runLoopEntry,
+        buildObserverFactory = AgentBuildObserverFactory.NONE,
       ),
     diagnostics = diagnostics,
     clock = clock,

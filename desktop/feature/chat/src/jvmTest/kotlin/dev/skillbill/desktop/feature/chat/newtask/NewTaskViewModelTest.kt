@@ -114,7 +114,7 @@ class NewTaskViewModelTest {
 
     assertEquals(NewTaskChatLayout.Tabs, model.state.value.newTaskChatLayout)
     assertEquals(null, model.state.value.qaDeviceName)
-    assertEquals(listOf("desktop_new_task_chat_layout_unavailable", "desktop_qa_device_pick_unavailable"), diagnostics.categories)
+    assertEquals(listOf("desktop_new_task_chat_layout_unavailable", "desktop_qa_device_pick_unavailable", "desktop_default_agent_unavailable"), diagnostics.categories)
     model.viewModelScope.cancel()
   }
 
@@ -277,6 +277,31 @@ class NewTaskViewModelTest {
 
     assertEquals("codex", draft.agentId)
     assertEquals("codex", model.state.value.agent?.agentId)
+    model.viewModelScope.cancel()
+  }
+
+  @Test
+  fun `a fresh draft starts on the default agent and follows it until the operator picks one`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val chats = unconfinedNewTaskChats()
+    val draft = chats.selected.value
+    val settings = FakeAppSettingsRepository()
+    settings.setDefaultAgent("claude")
+    val chat = FakeExecutionChatRepository(supported = setOf("claude", "codex"))
+    val model = NewTaskViewModel(chats, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, chat, detecting("Codex"), FIXED_CLOCK, settings, RecordingDiagnostics())
+    advanceUntilIdle()
+    assertEquals("claude", draft.agentId)
+
+    settings.setDefaultAgent("codex")
+    advanceUntilIdle()
+    assertEquals("codex", draft.agentId)
+
+    model.onAction(NewTaskAction.ChooseAgent("claude"))
+    advanceUntilIdle()
+    settings.setDefaultAgent("codex")
+    settings.setDefaultAgent(null)
+    advanceUntilIdle()
+    assertEquals("claude", draft.agentId)
     model.viewModelScope.cancel()
   }
 

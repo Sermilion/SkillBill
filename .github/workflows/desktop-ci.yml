@@ -11,6 +11,7 @@ on:
       - "runtime-kotlin/**"
       - "build-identity/**"
       - ".github/workflows/desktop-ci.yml"
+      - "scripts/ci_gradle_bootstrap*.sh"
 
 permissions:
   contents: read
@@ -40,7 +41,16 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-          cache: gradle
+      - name: Isolate Gradle user home
+        run: echo "GRADLE_USER_HOME=$RUNNER_TEMP/gradle-user-home" >> "$GITHUB_ENV"
+      - name: Check Gradle bootstrap retry policy
+        run: bash scripts/ci_gradle_bootstrap_test.sh
+      - name: Cache Gradle distributions and dependencies
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}
+      - name: Bootstrap Gradle distributions
+        run: bash scripts/ci_gradle_bootstrap.sh runtime-kotlin desktop
       - name: Install Linux desktop build dependencies
         if: runner.os == 'Linux'
         run: |

@@ -5,10 +5,8 @@ import org.sqlite.SQLiteException
 import skillbill.error.core.DatabaseAccessOperation
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
-import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
@@ -18,7 +16,6 @@ import java.nio.file.Path
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
-import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,53 +27,23 @@ import kotlin.test.assertTrue
 
 class SQLiteDatabaseSessionFactoryTest {
   @Test
-  fun `cancelled self-managed projection invalidates the read model without replaying committed writes`() {
-    val tempDir = Files.createTempDirectory("skillbill-projection-cancellation")
-    val cancellation = CancellationException("projection cancelled")
-    val projector =
-      object : WorkBoardReadModelProjector {
-        override fun refresh(
-          unitOfWork: UnitOfWork,
-          workIds: Set<String>,
-          now: Instant,
-        ) {
-          throw cancellation
-        }
-
-        override fun rebuild(
-          unitOfWork: UnitOfWork,
-          now: Instant,
-        ) {
-          unitOfWork.workBoardReadModel.setComplete(true)
-        }
-      }
-    val database =
-      sqliteDatabaseSessionFactory(
-        userHome = tempDir,
-        dbPathOverride = tempDir.resolve("metrics.db").toString(),
-        environment = emptyMap(),
-        boardReadModelProjector = projector,
-      )
-    database.transaction { }
-    assertTrue(database.read { it.workBoardReadModel.isComplete() })
+  fun `self-managed writes commit once and retain board invalidation without projecting`() {
+    val tempDir = Files.createTempDirectory("skillbill-deferred-projection")
+    val database = boundDatabase(tempDir, tempDir.resolve("metrics.db"))
     var writes = 0
-
-    val failure =
-      assertFailsWith<CancellationException> {
-        database.selfManagedWrite {
-          writes++
-          it.workflowStates.saveFeatureTaskWorkflow(workflowRecord("wftr-projection-cancellation"), RUNTIME)
-        }
+    val result =
+      database.selfManagedWrite {
+        writes++
+        it.workflowStates.saveFeatureTaskWorkflow(workflowRecord("wftr-deferred-projection"), RUNTIME)
+        "phase completed"
       }
-
-    assertSame(cancellation, failure)
+    assertEquals("phase completed", result)
     assertEquals(1, writes)
     database.read {
       assertFalse(it.workBoardReadModel.isComplete())
-      assertEquals("running", it.workflowStates.getFeatureTaskWorkflow("wftr-projection-cancellation")?.workflowStatus)
+      assertEquals("wftr-deferred-projection", it.workBoardReadModel.pendingInvalidation()?.workId)
+      assertEquals("running", it.workflowStates.getFeatureTaskWorkflow("wftr-deferred-projection")?.workflowStatus)
     }
-    database.transaction { }
-    assertTrue(database.read { it.workBoardReadModel.isComplete() })
   }
 
   @Test
@@ -189,35 +156,24 @@ class SQLiteDatabaseSessionFactoryTest {
   }
 
   @Test
-  fun `self-managed write retries a busy failure and does not retry other failures`() {
+  fun `self-managed writes never replay committed source progress after a later busy error`() {
     val tempDir = Files.createTempDirectory("skillbill-self-managed-busy")
     val database = boundDatabase(tempDir, tempDir.resolve("metrics.db"))
-    var busyCalls = 0
-
-    val result =
-      database.selfManagedWrite {
-        busyCalls += 1
-        if (busyCalls == 1) {
-          throw SQLiteException(
-            "[SQLITE_BUSY] The database file is locked (database is locked)",
-            SQLiteErrorCode.SQLITE_BUSY,
-          )
-        }
-        "written"
-      }
-
-    var otherCalls = 0
-    val error =
-      assertFailsWith<IllegalStateException> {
-        database.selfManagedWrite {
-          otherCalls += 1
-          error("constraint violated")
+    var calls = 0
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        database.selfManagedWrite { unit ->
+          calls++
+          unit.workflowStates.saveFeatureTaskWorkflow(workflowRecord("committed-before-busy"), RUNTIME)
+          throw SQLiteException("busy", SQLiteErrorCode.SQLITE_BUSY)
         }
       }
-    assertEquals("written", result)
-    assertEquals(2, busyCalls)
-    assertEquals(1, otherCalls)
-    assertEquals("constraint violated", error.message)
+    assertEquals(DatabaseFailureCode.BUSY, failure.code)
+    assertEquals(1, calls)
+    database.read {
+      assertEquals("running", it.workflowStates.getFeatureTaskWorkflow("committed-before-busy")?.workflowStatus)
+      assertEquals("committed-before-busy", it.workBoardReadModel.pendingInvalidation()?.workId)
+    }
   }
 
   @Test

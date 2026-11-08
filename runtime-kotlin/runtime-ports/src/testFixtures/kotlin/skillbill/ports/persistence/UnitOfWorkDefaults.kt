@@ -32,8 +32,13 @@ import skillbill.ports.goalrunner.UnavailableUnaddressedFindingsRepository
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
 import skillbill.ports.idestatus.AgentActivityStampRepository
+import skillbill.ports.idestatus.AgentBuildRunRepository
 import skillbill.ports.idestatus.EmptyAgentActivityStampRepository
+<<<<<<< HEAD
 import skillbill.ports.idestatus.EmptyMonitorCiCycleRepository
+=======
+import skillbill.ports.idestatus.EmptyAgentBuildRunRepository
+>>>>>>> origin/main
 import skillbill.ports.idestatus.EmptyWorktreeEditJournalRepository
 import skillbill.ports.idestatus.MonitorCiCycleRepository
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
@@ -55,6 +60,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
 import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandaloneQaChecklistWriteResult
 import skillbill.ports.idestatus.model.ValidationCheckEventRecord
+import skillbill.ports.idestatus.model.WorkBoardInvalidation
 import skillbill.ports.idestatus.model.WorkBoardReadModelPage
 import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardReadModelRow
@@ -75,7 +81,11 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
   open override val unaddressedFindings: UnaddressedFindingsRepository = UnavailableUnaddressedFindingsRepository
   open override val agentActivityStamps: AgentActivityStampRepository = EmptyAgentActivityStampRepository
   open override val worktreeEditJournal: WorktreeEditJournalRepository = EmptyWorktreeEditJournalRepository
+<<<<<<< HEAD
   open override val monitorCiCycles: MonitorCiCycleRepository = EmptyMonitorCiCycleRepository
+=======
+  open override val agentBuildRuns: AgentBuildRunRepository = EmptyAgentBuildRunRepository
+>>>>>>> origin/main
   open override val standalonePhaseStatuses: StandalonePhaseStatusRepository =
     object : StandalonePhaseStatusRepository {
       override fun register(request: StandalonePhaseStatusRegistration): StandalonePhaseStatusRecord =
@@ -252,6 +262,12 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
 }
 
 private class EmptyBoardReadModel : WorkBoardReadModelRepository {
+  override fun pendingInvalidation(): WorkBoardInvalidation? = null
+
+  override fun invalidationRevision(): Long = 0
+
+  override fun acknowledge(invalidation: WorkBoardInvalidation) = Unit
+
   override fun upsert(row: WorkBoardReadModelRow) = Unit
 
   override fun delete(workId: String) = Unit

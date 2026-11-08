@@ -23,10 +23,42 @@ import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 
 @Composable
-internal fun NewTaskPrefixPrompt(choices: List<String>, enabled: Boolean, onChoose: (String) -> Unit) {
+internal fun NewTaskIssueKeyPrompt(
+  choices: List<String>,
+  selectedKey: String?,
+  linkedKeys: List<String>,
+  enabled: Boolean,
+  onChoose: (String) -> Unit,
+  onStart: () -> Unit,
+) {
+  var value by remember { mutableStateOf("") }
+  val valid = NEW_TASK_COMPLETE_KEY.matches(value.trim())
   Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    Callout(tone = FeedbackTone.Info, body = "Choose an issue prefix or key to start this run.")
-    IssuePrefixPicker(choices, enabled, onChoose)
+    Callout(tone = FeedbackTone.Info, body = "Choose a complete issue key. Suggestions are not selected automatically.")
+    if (choices.isNotEmpty()) {
+      BasicText("Suggested issue keys", style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted))
+      SbMenu(choices.map { choice ->
+        val source = if (choice in linkedKeys) "supplied Linear issue" else "next local project key"
+        SbMenuEntry.Item("$choice from $source", {
+          value = choice
+          onChoose(choice)
+        }, mono = true, enabled = enabled)
+      })
+    }
+    SbInput(
+      value,
+      { value = it },
+      modifier = Modifier.fillMaxWidth().gatesShortcutsWhileFocused(),
+      placeholder = "Complete issue key",
+      isError = value.isNotBlank() && !valid,
+      enabled = enabled,
+      onSubmit = { if (enabled && valid) onChoose(value.trim()) },
+    )
+    SbButton("Use issue key", { onChoose(value.trim()) }, size = SbControlSize.Small, enabled = enabled && valid)
+    selectedKey?.let { key ->
+      Callout(tone = FeedbackTone.Info, body = "Selected issue key: $key")
+      SbButton("Start run $key", onStart, size = SbControlSize.Small, enabled = enabled && value.trim().equals(key, ignoreCase = true))
+    }
   }
 }
 

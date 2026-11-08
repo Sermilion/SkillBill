@@ -26,6 +26,7 @@ import skillbill.engine.featuretask.phaserun.testStandalonePhasePublisher
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
 import skillbill.engine.featuretask.qa.report.QaReportSettlement
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepInput
@@ -44,7 +45,6 @@ import skillbill.engine.operation.core.OperationStepRunner
 import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
-import skillbill.infrastructure.sqlite.TestWorkBoardReadModelProjector
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalRepository
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.model.EnvironmentContext
@@ -137,7 +137,6 @@ internal class VerifyOperationHarness : AutoCloseable {
       WorkflowStateSchemaValidator(),
       "test-runtime-version",
       BlockIncidentContractValidator { },
-      lazy { TestWorkBoardReadModelProjector },
     )
   private val executor: OperationExecutor
   private val workflows: WorkflowService
@@ -211,7 +210,7 @@ internal class VerifyOperationHarness : AutoCloseable {
       OperationExecutor(
         OperationRegistry(listOf(verify)),
         OperationConfirmationGate(proposals, UnavailableOperationCardRepository, git, clock),
-        OperationStepRunner(runner, git),
+        OperationStepRunner(runner, git, AgentBuildObserverFactory.NONE),
         FixedProjectStorePort(projectStoreRoot),
         RecordingBranchWorktreeResources(),
         NoOperationCardLifecycle,

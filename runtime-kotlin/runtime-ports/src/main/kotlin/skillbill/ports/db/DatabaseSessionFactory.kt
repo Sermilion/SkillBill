@@ -38,5 +38,6 @@ interface DatabaseSessionFactory {
       }
     }
 
+  /** Runs self-managed operations once. Committed effects are never replayed after a failure. */
   fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T
 }

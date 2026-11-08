@@ -76,7 +76,7 @@ class AgentRunLauncherProcessTest {
   }
 
   @Test
-  fun `a Junie phase probes ACP and runs it over stdio instead of passing the prompt on argv`() {
+  fun `a Junie phase starts ACP directly without passing the prompt on argv`() {
     val runner = RecordingAgentRunProcessRunner()
     val request = skillRunRequest(goalContinuation = null).copy(promptOverride = AGENT_RUN_LAUNCHER_PHASE_PROMPT)
 
@@ -89,8 +89,7 @@ class AgentRunLauncherProcessTest {
       )[SupportedAgent.JUNIE],
     ).launch(request)
 
-    val (probe, session) = runner.requests
-    assertEquals(listOf("--acp", "--help"), probe.launch.command.drop(1))
+    val session = runner.requests.single()
     assertEquals(listOf("--acp"), session.launch.command.drop(1))
     assertEquals(null, session.launch.stdinText)
     assertTrue(runner.requests.none { AGENT_RUN_LAUNCHER_PHASE_PROMPT in it.launch.command })

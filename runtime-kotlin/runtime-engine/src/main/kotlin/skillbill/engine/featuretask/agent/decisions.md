@@ -1,3 +1,28 @@
+## [2026-11-08] Serialize build observation with completion-time membership
+Context: Output-drain threads decode command events while the process wait loop owns polling and launch settlement.
+Decision: Queue command events and failures for wait-loop delivery. Capture descendant membership at command completion and flush final output before recorder settlement.
+Reason: Recorder and SQLite access need one delivery thread. Completion-time membership separates ended builds from processes still alive, and final output can contain the only outcome evidence.
+
+## [2026-11-08] Select build capture by command protocol and launch kind
+Context: Codex can emit JSON with display streaming disabled. Goal continuations launch a runtime harness whose phase agents already capture builds.
+Decision: Command builders declare provider-event capability and agent or runtime-harness kind. Tap capable agent output and suppress outer harness capture.
+Reason: Display flags do not describe the output protocol. Using them would lose Codex outcomes, while capturing the outer harness would duplicate phase-agent builds.
+
+## [2026-11-08] Resolve build attribution independently of display observation
+Context: Child workflow identity can resolve after launch, and standalone phases or operations can disable ordinary launch observation.
+Decision: Use lazy run and parent resolvers, retain pending build events and pass recorders through every agent launch path. Key history by primary repository identity.
+Reason: Builds need their owning workflow or invocation without depending on display activity. Primary identity prevents goal worktrees from splitting repository history.
+
+## [2026-11-08] Preserve agent results when build capture fails
+Context: Catalog loading, process sampling, matching and persistence can fail during an otherwise usable agent launch.
+Decision: Diagnose capture failures without replacing the launch result, propagate cancellation and reset capture state for continuation processes.
+Reason: Build capture is observational. It must expose its failures without failing the agent's work or carrying completed process state into the next launch.
+
+## [2026-11-08] Retain run-scoped stale-build abandonment
+Context: Each recorder abandons open rows on its first attributed process poll, and concurrent planning units can share a run ID.
+Decision: Keep run-scoped abandonOpen cleanup for build capture.
+Reason: Cleanup clears rows from crashed launches. It can mark a sibling's live row unknown, but planning agents are instructed not to build.
+Revisit when: Concurrent units sharing a run ID are expected to run builds.
 ## [2026-11-07] Publish a conflict repair that merged a base which moved since
 Context: In SKILL-516 the monitor_fix agent merged `origin/main` and resolved conflicts while three more commits landed on main. The guard only accepted a `MERGE_HEAD` that reached the current `origin/main`, so the runtime blocked a valid two-parent merge and asked the operator to redo it.
 Decision: The guard also accepts an in-progress merge whose `MERGE_HEAD` is an older commit on `origin/<base>`, as long as HEAD does not already contain it. If the pull request still conflicts after publication, the next monitor round merges the newer tip.

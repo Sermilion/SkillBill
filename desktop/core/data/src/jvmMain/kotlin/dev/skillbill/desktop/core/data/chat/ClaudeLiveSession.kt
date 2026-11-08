@@ -1,9 +1,11 @@
 package dev.skillbill.desktop.core.data.chat
 
 import dev.skillbill.desktop.core.common.Diagnostics
+import dev.skillbill.desktop.core.domain.usage.UsageObservationSink
 import dev.skillbill.desktop.core.domain.model.ApprovalCard
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.usage.model.RequestPermission
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import kotlinx.coroutines.CompletableDeferred
@@ -12,6 +14,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.onFailure
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
@@ -19,6 +22,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import java.util.Base64
+import kotlin.time.Clock
 
 /**
  * What a live process was started for: its permission mode and effective Claude config directory (empty means the
@@ -36,6 +40,10 @@ internal class ClaudeLiveSession(
   val binding: ChatProcessBinding,
   val workingDirectory: String,
   private val diagnostics: Diagnostics,
+  private val logicalSessionId: String,
+  val processGeneration: Long,
+  private val usageSink: UsageObservationSink,
+  private val clock: Clock,
   private val unprompted: (ChatEvent) -> Unit,
 ) {
   val input = Channel<ChatProcessInput>(Channel.UNLIMITED) { it.written.complete(false) }
@@ -58,6 +66,7 @@ internal class ClaudeLiveSession(
   private var reply: ChatReplyStream? = null
   private var streamStarted = false
   private var wroteText = false
+  private var usageDiagnosticRecorded = false
 
   /** Routes the reply to the message [uuid] into [sink]; false once the process ended, so the caller starts a new one. */
   fun register(uuid: String, sink: SendChannel<ChatEvent>): Boolean = synchronized(lock) {
@@ -135,6 +144,10 @@ internal class ClaudeLiveSession(
       }
     }
     val root = parseStreamLine(text)
+    if (root?.string("type") == RATE_LIMIT_EVENT) {
+      observeRateLimit(root)
+      return
+    }
     if (root != null && root.string("type") == "control_request") {
       approval?.handle(root, text) ?: diagnostics.record("chat.control_request_without_approval")
       return
@@ -173,6 +186,39 @@ internal class ClaudeLiveSession(
     }
     if (events.any { it is ChatEvent.TextDelta }) wroteText = true
     events.forEach(::emit)
+  }
+
+  private fun observeRateLimit(root: JsonObject) {
+    val eventSessionId = root.string("session_id")
+    val info = root.obj("rate_limit_info")
+    val status = info?.string("status")
+    if (("session_id" in root && eventSessionId != logicalSessionId) || info == null || status == null) {
+      recordUsageDiagnostic()
+      return
+    }
+    val permission = when (status) {
+      "allowed", "allowed_warning" -> RequestPermission.Allowed
+      "rejected" -> RequestPermission.Rejected
+      else -> {
+        recordUsageDiagnostic()
+        return
+      }
+    }
+    val observedAt = clock.now()
+    usageSink.recordSessionStatus(
+      logicalSessionId,
+      processGeneration,
+      permission,
+      status == "allowed_warning",
+      observedAt,
+      claudeRateLimitMeters(info, observedAt),
+    )
+  }
+
+  private fun recordUsageDiagnostic() {
+    if (usageDiagnosticRecorded) return
+    usageDiagnosticRecorded = true
+    diagnostics.record("usage.claude_event_invalid")
   }
 
   private fun failMalformedStream(failure: ChatEvent.Failed) {
@@ -255,6 +301,8 @@ internal class ClaudeLiveSession(
     pending.values.toList().also { pending.clear() }
   }.also { input.cancel() }
 }
+
+private const val RATE_LIMIT_EVENT = "rate_limit_event"
 
 private fun userMessage(uuid: String, text: String, images: List<ChatImage>): String = buildJsonObject {
   put("type", "user")

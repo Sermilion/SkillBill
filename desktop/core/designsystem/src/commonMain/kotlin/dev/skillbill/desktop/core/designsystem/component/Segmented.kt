@@ -7,11 +7,8 @@ import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,11 +36,12 @@ import dev.skillbill.desktop.core.designsystem.composite.handCursor
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.designsystem.tabular
+import dev.skillbill.desktop.core.designsystem.status.StatusDot
 
 private val SEGMENT_HEIGHT = 22.dp
 private val TAB_HEIGHT = 24.dp
 
-data class SegmentedOption<T>(val value: T, val label: String, val icon: ImageVector? = null, val enabled: Boolean = true, val tooltip: String? = null)
+data class SegmentedOption<T>(val value: T, val label: String, val icon: ImageVector? = null, val enabled: Boolean = true, val tooltip: String? = null, val count: Int? = null, val lead: (@Composable () -> Unit)? = null)
 data class ViewTab<T>(val value: T, val label: String, val icon: ImageVector? = null, val count: Int? = null, val attention: Boolean = false)
 
 @Composable
@@ -73,8 +71,10 @@ fun <T> Segmented(options: List<SegmentedOption<T>>, selected: T, modifier: Modi
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
       ) {
         CompositionLocalProvider(LocalContentColor provides foreground) {
+          option.lead?.invoke()
           option.icon?.let { SbIcon(it, SbIconSize.Sm) }
           BasicText(option.label, style = SkillBillTheme.type.tSmMedium.copy(color = foreground, lineHeight = 1.em), maxLines = 1, softWrap = false)
+          option.count?.let { BasicText(it.toString(), style = SkillBillTheme.type.tSmMedium.tabular().copy(color = colors.fgFaint, lineHeight = 1.em), maxLines = 1) }
         }
       } }
       if (option.tooltip != null) SbTooltip(option.tooltip) { item() } else item()
@@ -82,10 +82,15 @@ fun <T> Segmented(options: List<SegmentedOption<T>>, selected: T, modifier: Modi
   }
 }
 
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun <T> ViewTabs(tabs: List<ViewTab<T>>, selected: T, onSelect: (T) -> Unit) {
-  FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+  ViewTabs(tabs = tabs, selected = selected, onSelect = onSelect, modifier = Modifier)
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun <T> ViewTabs(tabs: List<ViewTab<T>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
+  FlowRow(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
     tabs.forEach { tab ->
       val active = tab.value == selected
       val source = remember(tab.value) { MutableInteractionSource() }
@@ -108,7 +113,7 @@ fun <T> ViewTabs(tabs: List<ViewTab<T>>, selected: T, onSelect: (T) -> Unit) {
           tab.icon?.let { SbIcon(it, SbIconSize.Sm) }
           BasicText(tab.label, style = SkillBillTheme.type.tSmMedium.copy(color = color, lineHeight = 1.em), maxLines = 1, softWrap = false)
           tab.count?.let { BasicText(it.toString(), style = SkillBillTheme.type.tSmMedium.tabular().copy(color = colors.fgFaint, lineHeight = 1.em), maxLines = 1) }
-          if (tab.attention) Box(Modifier.size(6.dp).background(colors.stBlocked, CircleShape))
+          if (tab.attention) StatusDot(colors.stBlocked)
         }
       }
     }

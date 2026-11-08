@@ -40,11 +40,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.Callout
+import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.hoverSpec
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.feature.chat.ChatApprovalActions
 import dev.skillbill.desktop.feature.chat.ChatTranscript
@@ -62,6 +65,7 @@ internal class NewTaskScreenHost(
   val onOpenRun: (WorkItem) -> Unit,
   val onShowAllWork: () -> Unit,
   val onStart: ((String, String?, ChatSuggestedAction?) -> Unit)? = null,
+  val onOpenChatChanges: (ChangesSource.Chat, String?) -> Unit = { _, _ -> },
 )
 
 @Composable
@@ -136,16 +140,22 @@ private fun ColumnScope.NewTaskChatContent(
         mode = ChatPermissionMode.Act,
         modifier = Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = COMPOSER_MAX_WIDTH),
         allowStartActions = host.onStart != null,
+        startIssueKey = draft.acceptedIssueKey,
         allowSuggestedActions = !offer.starting,
         footer = if (offer.prefixKind != null) {
           {
-            NewTaskPrefixPrompt(
+            NewTaskIssueKeyPrompt(
               offer.choices,
+              selectedKey = offer.selectedKey,
+              linkedKeys = draft.issueKeyProposals,
               enabled = !chatBusy && !offer.starting && offer.started == null,
-              onChoose = draft::retryPrefix,
+              onChoose = draft::selectIssueKey,
+              onStart = { draft.start(checkNotNull(offer.prefixKind), keyChoice = offer.selectedKey, action = offer.action) },
             )
           }
-        } else null,
+        } else draft.acceptedIssueKey?.let { key ->
+          { Callout(tone = FeedbackTone.Info, body = "Selected issue key: $key") }
+        },
         approvals = ChatApprovalActions(
           live = chat.approvalLive.collectAsState().value,
           onDecide = chat::decideApproval,
@@ -180,7 +190,7 @@ private fun ColumnScope.NewTaskChatContent(
         qaDeviceName = state.qaDeviceName,
       )
     }
-    NewTaskComposer(state, draft, focus, host.now, onAction = onAction)
+    NewTaskComposer(state, draft, focus, host.now, onOpenChanges = host.onOpenChatChanges, onAction = onAction)
   }
 }
 

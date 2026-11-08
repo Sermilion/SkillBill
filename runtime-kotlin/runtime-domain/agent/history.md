@@ -1,5 +1,15 @@
 # Boundary History — runtime-domain
 
+## [2026-11-08] SKILL-522 per-run build indicator matching and tracking
+Areas: runtime-domain agent/buildrun, agent/model and scaffold/model; runtime-infra/skills; orchestration/contracts; platform pack manifests
+- MEDIUM feature. Optional runtime-anchored build_tools declarations drive matching for kmp, kotlin, typescript, go, rust and ios. Manifest version stays 1.8; malformed declarations fail with INVALID_MANIFEST_SCHEMA.
+- BuildCommandMatcher recognizes direct commands, script arguments and process markers, excludes shell -c wrappers and counts only the outermost matching ancestor. Project markers select declarations; command text keys history.
+- BuildTracker fixes command-call correlation at build start and distinguishes reused PIDs by start instant. The latest-ended eligible build receives each command outcome; completion-time process membership excludes builds still alive. Other builds settle unknown. Finish is idempotent.
+- BuildCommandMatcher, BuildTracker and BuildRepositoryFiles are reusable. Domain paths are absolute strings; the host adapter owns filesystem conversion and bounded reads. Tool labels come from repository metadata without executing tools.
+- Limits: builds between 250 ms samples may be missed; late STARTED events cannot repair correlation. Codex supplies exit codes, while Claude and Cursor failures retain null exit codes. Missing completion evidence yields unknown.
+Feature flag: N/A
+Acceptance criteria: 3/3 matching and tracking subtask criteria implemented; covers parent criterion 1
+
 ## [2026-11-05] SKILL-452 subtask 1 — Shared pause vocabulary
 Areas: runtime-domain workflow/taskruntime/validation; runtime-engine featuretask runner and DefaultPhaseRunner classify
 - FeatureTaskRuntimeProviderLimitDetector adds case-insensitive usage_limit_exceeded and scans the full inspected tail for reset and Codex try-again-at hints; earliest match wins; compilation RateLimiter tails still yield null.

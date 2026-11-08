@@ -12,9 +12,12 @@ import skillbill.contracts.time.JvmSystemClock
 import skillbill.infrastructure.host.jvm.hostPath
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
 import skillbill.infrastructure.host.scratch.testAgentRunScratchRoot
+import skillbill.ports.agentrun.model.AgentRunBuildObserver
+import skillbill.ports.agentrun.model.AgentRunCommandEvent
 import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
+import skillbill.ports.agentrun.model.AgentRunProcessSample
 import skillbill.ports.agentrun.model.AgentRunProgressProbe
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
@@ -33,6 +36,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 import java.util.Optional
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
@@ -45,6 +49,39 @@ import java.util.stream.Stream
 import kotlin.coroutines.cancellation.CancellationException
 
 class JvmAgentRunProcessRunnerTest {
+  @Test
+  fun `build observer failures do not change the launch result`() {
+    val calls = mutableListOf<String>()
+    val observer =
+      object : AgentRunBuildObserver {
+        override fun processes(
+          observedAt: Instant,
+          samples: List<AgentRunProcessSample>,
+        ) {
+          calls += "processes"
+          error("observer failed")
+        }
+
+        override fun command(event: AgentRunCommandEvent) = Unit
+
+        override fun finished(observedAt: Instant) {
+          calls += "finished"
+          error("observer failed")
+        }
+      }
+    val result =
+      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
+        testAgentRunProcessRequest(listOf("sh", "-c", "exit 0"), Path.of(".")) {
+          buildObserver = observer
+        },
+      )
+
+    assertEquals(0, result.exitStatus)
+    assertTrue(result.stderr.contains("build_observe"))
+    assertEquals("processes", calls.first())
+    assertEquals("finished", calls.last())
+  }
+
   @Test
   fun `stdin delivery failure is reported without using the output sink`() {
     val recorder = ProcessRunDegradationRecorder()

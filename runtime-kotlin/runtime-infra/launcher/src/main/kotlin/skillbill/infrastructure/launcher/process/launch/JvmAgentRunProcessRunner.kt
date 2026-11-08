@@ -425,7 +425,9 @@ class JvmAgentRunProcessRunner(
     var waitResult: Result<ProcessWait>? = null
     var primaryFailure: Throwable? = null
     var cleanupFailure: Throwable? = null
+    var buildSampleBinding: AutoCloseable? = null
     try {
+      buildSampleBinding = request.probes.buildObserver.bindBuildSamples(tree, degradation)
       mcpStartupObservedAtStart = request.probes.mcpStartupProbe.readStartupObserved(degradation).value == true
       resources.stdout.start()
       resources.stderr.start()
@@ -443,12 +445,11 @@ class JvmAgentRunProcessRunner(
       primaryFailure = failure
       rethrow(failure)
     } finally {
-      approval?.let { channel ->
-        catchingNonCancellation { channel.finish() }
-          .onFailure { failure -> degradation.recordCleanupFailure("approval_generation_finish", failure) }
+      val finishObservation = {
+        request.probes.buildObserver.finishBuildObservation(clock.instant(), degradation, buildSampleBinding)
+        exportRunDegradationEvidence(degradation, request.launch.outputSink)
       }
-      cleanupFailure = catchingNonCancellation { resources.lifetime.release(waitResult) }.exceptionOrNull()
-      exportRunDegradationEvidence(degradation, request.launch.outputSink)
+      cleanupFailure = releaseStartedProcessResources(resources, approval, waitResult, degradation, finishObservation)
       if (primaryFailure != null && cleanupFailure != null && cleanupFailure !== primaryFailure) {
         primaryFailure.addSuppressed(cleanupFailure)
       }
@@ -469,6 +470,26 @@ class JvmAgentRunProcessRunner(
         sessionCapture = (approval as? AgentRunSessionChannel)?.capture(),
       ),
     )
+  }
+
+  private fun releaseStartedProcessResources(
+    resources: ProcessResources,
+    approval: AgentRunApprovalChannel?,
+    waitResult: Result<ProcessWait>?,
+    degradation: ProcessRunDegradationRecorder,
+    finishObservation: () -> Unit,
+  ): Throwable? {
+    var cleanupFailure: Throwable? = null
+    try {
+      approval?.let { channel ->
+        catchingNonCancellation { channel.finish() }
+          .onFailure { failure -> degradation.recordCleanupFailure("approval_generation_finish", failure) }
+      }
+      cleanupFailure = catchingNonCancellation { resources.lifetime.release(waitResult) }.exceptionOrNull()
+    } finally {
+      finishObservation()
+    }
+    return cleanupFailure
   }
 
   private fun openStdin(

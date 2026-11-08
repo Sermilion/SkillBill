@@ -96,8 +96,14 @@
     devices: '<rect width="10" height="14" x="3" y="8" rx="2"/><path d="M5 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2h-2.4"/><path d="M8 18h.01"/>',
     wifi: '<path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/>',
     minus: '<path d="M5 12h14"/>',
+    /* Monitor run glyphs (design/monitor-run): a repair, a push, a merge, a PR field edit and the CI loop. */
+    wrench: '<path d="M14 6a4 4 0 0 0 5 5l-9 9-3-3 9-9a4 4 0 0 1-2-2z"/>',
+    upload: '<path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 20h16"/>',
+    merge: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 7v10"/><path d="M6 7c0 4 5 5 10 5"/>',
+    tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="7.5" r="1"/>',
+    loop: '<path d="m17 2 3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="m7 22-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>',
     gap: '<circle cx="12" cy="12" r="8" stroke-dasharray="3 3.2"/>',
-    /* QA results glyphs, drawn as design/qa-results draws them: an open finding, something left behind, a report or run
+    /* QA results glyphs, drawn as QA results design draws them: an open finding, something left behind, a report or run
      * details row, and the check, file, image, copy and open marks on its rows and chips. */
     video: '<path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
     videoOff: '<path d="M10.66 6H14a2 2 0 0 1 2 2v2.5l5.248-3.062A.5.5 0 0 1 22 7.87v8.196"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><path d="m2 2 20 20"/>',
@@ -186,7 +192,7 @@
     track('Button');
     const v = o.variant || 'secondary';
     const cls = cx('sb-btn', v !== 'secondary' && 'sb-btn--' + v, o.size === 'sm' && 'sb-btn--sm');
-    return `<button type="button" class="${cls}"${act(o.act, o.arg)}${o.disabled ? ' disabled' : ''}${tipAttrs(o.tip, o.tipKbd)}${o.id ? ` id="${esc(o.id)}"` : ''}>${o.icon ? Icon(o.icon) : ''}${o.label ? `<span>${esc(o.label)}</span>` : ''}${o.count != null ? `<span class="sb-btn-n">${esc(o.count)}</span>` : ''}${o.kbd ? Kbd(o.kbd) : ''}</button>`;
+    return `<button type="button" class="${cls}"${act(o.act, o.arg)}${o.disabled ? ' disabled' : ''}${tipAttrs(o.tip, o.tipKbd)}${o.id ? ` id="${esc(o.id)}"` : ''}>${o.icon ? Icon(o.icon) : ''}${o.label ? `<span>${esc(o.label)}</span>` : ''}${o.trail ? Icon(o.trail) : ''}${o.count != null ? `<span class="sb-btn-n">${esc(o.count)}</span>` : ''}${o.kbd ? Kbd(o.kbd) : ''}</button>`;
   }
   function IconButton(o) {
     track('IconButton');
@@ -350,10 +356,11 @@
   }
 
   /* ---------- Toast (also used for OS notifications) ---------- */
+  /* A toast: lead icon, title, body, optional actions, and × (`close`: { act, arg }) to dismiss it before it times out. */
   function Toast(o) {
     track('Toast');
     const lead = o.system ? BrandMark(18) : (o.state ? StatusIcon(o.state, o.frac) : Icon(o.icon || 'checkCircle'));
-    return `<div class="sb-toast" role="status">${lead}<div class="sb-toast-tx">${o.app ? `<div class="sb-toast-app"><span>${esc(o.app)}</span><span>${esc(o.when || 'now')}</span></div>` : ''}<div class="sb-toast-ti">${esc(o.title)}</div>${o.body ? `<div class="sb-toast-bd">${esc(o.body)}</div>` : ''}</div>${o.actions ? `<div class="sb-toast-ac">${join(o.actions)}</div>` : ''}</div>`;
+    return `<div class="sb-toast" role="status">${lead}<div class="sb-toast-tx">${o.app ? `<div class="sb-toast-app"><span>${esc(o.app)}</span><span>${esc(o.when || 'now')}</span></div>` : ''}<div class="sb-toast-ti">${esc(o.title)}</div>${o.body ? `<div class="sb-toast-bd">${esc(o.body)}</div>` : ''}</div>${o.actions ? `<div class="sb-toast-ac">${join(o.actions)}</div>` : ''}${o.close ? IconButton({ icon: 'x', label: 'Dismiss', act: o.close.act, arg: o.close.arg, size: 'sm', cls: 'sb-toast-x' }) : ''}</div>`;
   }
 
   function ToastStack(items) { track('ToastStack'); return `<div class="sb-toasts">${join(items)}</div>`; }
@@ -398,22 +405,41 @@
     return `<nav class="sb-side" aria-label="Main">${o.top}<div class="sb-side-items" data-scroll="sidebar">${join(o.items)}</div><div class="sb-side-foot">${join(o.footer)}</div></nav>`;
   }
 
+  /* Green while most of the window is left, yellow around half, red as it runs out. Mixed in Oklab like the app's lerp. */
+  function usageColor(used) {
+    const left = Math.max(0, Math.min(100, 100 - used));
+    return left >= 50
+      ? `color-mix(in oklab, var(--st-done) ${(left - 50) * 2}%, var(--data-1))`
+      : `color-mix(in oklab, var(--data-1) ${left * 2}%, var(--st-failed))`;
+  }
+  /* One window. The card puts the countdown after the label; `detailed` rows give the reset its own line with the clock time. */
   function UsageWindow(o) {
     track('UsageWindow');
-    const known = Number.isFinite(o.remaining);
-    const tone = !known || o.stale ? 'muted' : o.remaining === 0 ? 'empty' : o.remaining <= 15 ? 'low' : 'normal';
-    return `<span class="sb-usage-window is-${tone}"><span class="sb-usage-line"><span>${esc(o.label)}</span><b>${known ? esc(o.remaining) + '% left' : esc(o.loading ? 'Checking' : 'Unavailable')}</b></span><span class="sb-usage-track"${known ? ` role="meter" aria-label="${esc(o.label + (o.stale ? ', last known remaining allowance' : ', remaining allowance'))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${o.remaining}"` : ' aria-hidden="true"'}>${known ? `<i style="width:${Math.min(100, Math.max(0, o.remaining))}%"></i>` : ''}</span>${o.reset ? `<span class="sb-usage-reset">${esc(o.reset)}</span>` : ''}</span>`;
+    const used = Math.max(0, Math.min(100, o.used));
+    const label = !o.detailed && o.resetIn ? `${o.label} · ${o.resetIn}` : o.label;
+    const reset = o.detailed && o.resetIn ? (o.resetIn === 'now' ? 'Resetting' : ['Resets in ' + o.resetIn, o.resetAt].filter(Boolean).join(' · ')) : '';
+    return `<span class="sb-usage-window" style="--usage-color:${usageColor(o.used)}"><span class="sb-usage-line"><span class="trunc">${esc(label)}</span><b>${esc(o.used)}%</b></span><span class="sb-usage-track" role="meter" aria-label="${esc(o.label + ', ' + o.used + '% used')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${used}"><i style="width:${used}%"></i></span>${reset ? `<span class="sb-usage-reset">${esc(reset)}</span>` : ''}</span>`;
   }
 
+  /* Fixed height: the agent name and two window slots, whatever the state. A message fills the first slot when there are no windows. */
   function UsageCard(o) {
     track('UsageCard');
-    return `<button type="button" id="${esc(o.id || 'usage-card')}" class="sb-usage-card"${act(o.act, o.arg)} aria-haspopup="dialog" aria-expanded="${!!o.expanded}" aria-label="${esc(o.provider + ' usage limits, ' + o.status + (o.context ? ', following ' + o.context.toLowerCase() : '') + '. View details')}"><span class="sb-usage-heading"><span>Usage limits</span>${o.context ? `<span class="sb-usage-context">${esc(o.context)}</span>` : ''}${Icon('chevronRight', 'xs')}</span><span class="sb-usage-provider"><b>${esc(o.provider)}</b><span class="${o.tone ? 'is-' + esc(o.tone) : ''}">${esc(o.status)}</span></span>${join(o.windows.map((w) => UsageWindow(Object.assign({}, w, { stale: o.stale, loading: o.loading }))))}<span class="sb-usage-note">${esc(o.note)}</span></button>`;
+    const windows = (o.windows || []).slice(0, 2);
+    const slots = [0, 1].map((i) => `<span class="sb-usage-slot">${windows[i] ? UsageWindow(windows[i]) : i === 0 && o.message ? `<span class="sb-usage-empty">${esc(o.message)}</span>` : ''}</span>`).join('');
+    return `<button type="button" id="${esc(o.id || 'usage-card')}" class="sb-usage-card"${act(o.act, o.arg)} aria-haspopup="dialog" aria-expanded="${!!o.expanded}" aria-label="${esc(o.provider + ' usage limits. View details')}"><span class="sb-usage-provider" style="--c:${o.color || 'var(--fg)'}"><b>${esc(o.provider)}</b>${Icon('chevronRight', 'xs')}</span>${slots}</button>`;
   }
 
+  /* Provider tabs, every window with when it resets, the default agent and Refresh / Dashboard. Nothing else. */
   function UsagePanel(o) {
     track('UsagePanel');
     const id = esc(o.id || 'usage');
-    return `<section class="sb-usage-panel" aria-labelledby="${id}-title"><div class="sb-usage-panel-head"><b id="${id}-title">Usage limits</b>${IconButton({ icon: 'x', label: 'Close usage details', act: 'usage-close', id: id + '-close', size: 'sm' })}</div><div class="sb-usage-tabs" role="group" aria-label="Provider">${o.providers.map((p) => `<button type="button" id="${id}-provider-${esc(p)}"${act('usage-provider', p)} aria-pressed="${o.provider === p}"${o.context && o.provider !== p ? ' disabled' : ''} class="${o.provider === p ? 'on' : ''}">${esc(p)}</button>`).join('')}</div><div class="sb-usage-panel-body">${o.context ? `<p class="sb-usage-following">Following ${esc(o.context.toLowerCase())}</p>` : ''}<div class="sb-usage-account"><b>${esc(o.provider)}</b><span>${esc(o.account)}</span></div>${o.message ? `<p class="sb-usage-message" role="status">${esc(o.message)}</p>` : ''}${join(o.windows.map((w) => UsageWindow(Object.assign({}, w, { stale: o.stale, loading: o.loading }))))}</div><div class="sb-usage-panel-foot"><span>${esc(o.note)}</span>${Button({ icon: 'refresh', label: 'Refresh', act: 'usage-refresh', size: 'sm', variant: 'ghost', disabled: o.loading })}</div><div class="sb-usage-sample">Sample data for design review</div></section>`;
+    const tabs = o.providers.map((p) => `<button type="button" id="${id}-provider-${esc(p)}"${act('usage-provider', p)} aria-pressed="${o.provider === p}" class="${o.provider === p ? 'on' : ''}" style="--c:${(o.colors || {})[p] || 'var(--fg)'}">${esc(p)}</button>`).join('');
+    const body = (o.windows || []).length
+      ? join(o.windows.map((w) => UsageWindow(Object.assign({}, w, { detailed: true }))))
+      : `<p class="sb-usage-empty" role="status">${esc(o.message || '')}</p>`;
+    const agents = (o.agents || []).map((a) => `<button type="button" id="${id}-default-${esc(a.name)}"${act('usage-default-agent', a.name)} role="radio" aria-checked="${o.defaultAgent === a.name}" class="${o.defaultAgent === a.name ? 'on' : ''}" style="--c:${a.color}"${tipAttrs(o.defaultAgent === a.name ? 'Default for new work. Click to clear' : 'Use ' + a.label + ' for new chats, goals and phases')}>${Avatar({ name: a.name, initials: a.initials, color: a.color, size: 'sm', tip: a.label })}<span>${esc(a.label)}</span></button>`).join('');
+    const defaults = agents ? `<div class="sb-usage-default"><span>Default agent</span><div class="sb-usage-tabs sb-usage-agents" role="radiogroup" aria-label="Default agent for new chats, goals and phases">${agents}</div></div>` : '';
+    return `<section class="sb-usage-panel" aria-labelledby="${id}-title"><div class="sb-usage-panel-head"><b id="${id}-title">Usage limits</b>${IconButton({ icon: 'x', label: 'Close usage details', act: 'usage-close', id: id + '-close', size: 'sm' })}</div><div class="sb-usage-tabs" role="group" aria-label="Provider">${tabs}</div><div class="sb-usage-panel-body">${body}</div>${defaults}<div class="sb-usage-panel-foot">${Button({ icon: 'refresh', label: o.signedOut ? 'Recheck sign-in' : 'Refresh', act: 'usage-refresh', size: 'sm', variant: 'ghost', disabled: o.loading })}${o.provider === 'Junie' ? '' : Button({ label: 'Dashboard', act: 'noop', size: 'sm', variant: 'ghost' })}</div></section>`;
   }
   function WorkspaceSwitcher(o) {
     track('WorkspaceSwitcher');
@@ -849,6 +875,37 @@
       ${o.undo ? `<div class="sb-queue-undo" role="status"><span>${esc(o.undo)}</span><span class="l-grow"></span>${Button({ label: 'Undo', variant: 'ghost', size: 'sm', act: 'q-undo', kbd: '⌘ Z' })}</div>` : ''}
       <div class="sb-queue-ft"><span>Sends in order when the current reply ends</span><span class="l-grow"></span>${Kbd('↑ ↓ Del')}</div></div>`;
   }
+  /* What this chat changed in its checkout, on the composer's right next to Send: file count and line totals. It opens
+   * ChatChangesPanel. Absent until the chat has changed a file. `o`: { files, ins, del, expanded, act, since }. */
+  function ChatChangesPill(o) {
+    track('ChatChangesPill');
+    const html = `${o.files} ${o.files === 1 ? 'file' : 'files'} <span class="ins">+${o.ins}</span> <span class="del">−${o.del}</span>`;
+    return `<span class="sb-chg-anchor">${ChatPill({ icon: 'diff', html, chevron: 'chevronsUpDown', act: o.act, expanded: o.expanded, id: o.id, tip: `Files this chat changed since ${o.since}` })}</span>`;
+  }
+  const chgDir = (parts) => (parts.length > 3 ? `${parts[0]}/…/${parts.slice(-2).join('/')}` : parts.join('/'));
+  /* One changed file: status letter (A added, M modified, D deleted, R renamed), file name, its folder shortened from the
+   * middle, and its line counts. A click opens the Changes window on that file. */
+  function ChatChangeRow(o) {
+    track('ChatChangeRow');
+    const parts = o.path.split('/');
+    const name = parts.pop();
+    const word = { A: 'Added', M: 'Modified', D: 'Deleted', R: 'Renamed' }[o.status];
+    return `<button type="button" class="sb-chg-row"${act(o.act, o.path)} title="${esc(o.path)}"><span class="st is-${esc(o.status)}" aria-label="${word}">${esc(o.status)}</span><span class="nm"><b>${esc(name)}</b>${parts.length ? `<span class="dir">${esc(chgDir(parts))}</span>` : ''}</span><span class="num tnum">${o.ins ? `<span class="ins">+${o.ins}</span>` : ''}${o.del ? `<span class="del">−${o.del}</span>` : ''}</span></button>`;
+  }
+  /* The popup behind ChatChangesPill: Changes with the count and totals and Open diff, a note on a resumed chat (its
+   * baseline is the first session's, so edits made while it was closed count), at most `limit` files (the rest are one
+   * "N more files" row into the Changes window), then since when, commits and uncommitted edits. */
+  function ChatChangesPanel(o) {
+    track('ChatChangesPanel');
+    const limit = o.limit || 6;
+    const rows = o.files.slice(0, limit).map((f) => ChatChangeRow(Object.assign({ act: o.act }, f)));
+    const more = o.files.length - limit;
+    const made = [o.commits ? `${o.commits} ${o.commits === 1 ? 'commit' : 'commits'}` : '', o.uncommitted ? 'uncommitted edits' : ''].filter(Boolean).join(' and ');
+    return `<div class="sb-chg" aria-label="Changes in this chat"><div class="sb-chg-hd"><b>Changes</b><span class="n">${o.files.length} ${o.files.length === 1 ? 'file' : 'files'}</span><span class="tot tnum"><span class="ins">+${o.ins}</span> <span class="del">−${o.del}</span></span><span class="l-grow"></span>${Button({ label: 'Open diff', icon: 'external', variant: 'ghost', size: 'sm', act: o.act, arg: '' })}</div>
+      ${o.resumed ? `<div class="sb-chg-note">${Icon('history', 'xs')}<span>Counted from when this chat started on ${esc(o.resumed)}. Edits made while it was closed are included.</span></div>` : ''}
+      <div class="sb-chg-list" role="list">${rows.join('')}${more > 0 ? `<button type="button" class="sb-chg-more"${act(o.act, '')}>${more} more ${more === 1 ? 'file' : 'files'} in the diff${Icon('arrowRight', 'xs')}</button>` : ''}</div>
+      <div class="sb-chg-ft"><span>Since ${esc(o.since)}${made ? ` · ${made}` : ''}</span></div></div>`;
+  }
   /* One saved chat in the resume palette: title with screenshot and CLI glyphs and the filter match in amber, age, then branch
    * and agent. Click selects it, a double click resumes it. */
   function ResumeRow(o) {
@@ -1034,7 +1091,7 @@
   }
 
   /* ---------- Run outcome: the card a validation or Verify run opens with, and the parts under it ---------- */
-  const RUN_TONE = { done: 'var(--st-done)', active: 'var(--st-active)', blocked: 'var(--st-blocked)', failed: 'var(--st-failed)', neutral: 'var(--fg-2)', faint: 'var(--fg-faint)', accent: 'var(--accent-text)' };
+  const RUN_TONE = { merged: 'var(--data-5)', done: 'var(--st-done)', active: 'var(--st-active)', blocked: 'var(--st-blocked)', failed: 'var(--st-failed)', neutral: 'var(--fg-2)', faint: 'var(--fg-faint)', accent: 'var(--accent-text)' };
   /* A bar split into segments. `segs` [{ n, tone }] grow by n (a Verify score: green fine, amber needs a look, red blocking,
    * in that order); `equal` draws one 5px segment per check instead, where a running check breathes and a skipped one is
    * hatched. With no segment it draws the empty track, so bars in a row stay aligned. Tones: done, blocked, failed, active,
@@ -1115,7 +1172,7 @@
     return `<div class="sb-selbar" role="region" aria-label="${esc(o.label || 'Selected')}"><div class="sb-selbar-tx"><b>${esc(o.title)}</b>${o.sub ? `<span class="sub">${esc(o.sub)}</span>` : ''}${o.note ? `<span class="note">${Icon('link', 'xs')}<span>${o.note}</span></span>` : ''}</div><div class="sb-selbar-ac">${join(o.actions)}</div></div>`;
   }
 
-  /* ---------- Validation run document (design/validation-run) ---------- */
+  /* ---------- Validation run document (validation run design) ---------- */
   /* The column a validation run renders in. It takes the Verify column's metrics (VerifyDoc: header rhythm, 12px buttons,
    * bordered boxes, the outcome card at a 1.45 line height) and sets the outcome card to the validation design: label 2px
    * above the head, text 6px under it at 1.55, the signal 8px, the tally 6px and the check bar 12px below. The flag
@@ -1130,7 +1187,7 @@
   /* A 16px tag in the tone's color on a 14% tint: "reported by the agent" beside the Checks title. Tones as Badge. */
   function Tag(o) { track('Tag'); return `<span class="sb-tag" style="--c:${VTONE[o.tone] || o.color || VTONE.faint}">${esc(o.text)}</span>`; }
   /* Text that acts like a link: 11.5px in the accent, underlined on hover. Expand all and Collapse all on a report. */
-  function LinkButton(o) { track('LinkButton'); return `<button type="button" class="sb-linkbtn"${act(o.act, o.arg)}>${esc(o.label)}</button>`; }
+  function LinkButton(o) { track('LinkButton'); return `<button type="button" class="sb-linkbtn"${act(o.act, o.arg)}>${esc(o.label)}${o.icon ? Icon(o.icon, 'xs') : ''}</button>`; }
   /* One faint line inside a Box that holds a section's place: "Waiting for the agent to list its checks." */
   function BoxNote(o) { track('BoxNote'); return `<div class="sb-boxnote">${esc(o.text)}</div>`; }
   /* The text of a report part: consecutive lines join into a paragraph, numbered and bullet lists (an item indented two or
@@ -1173,7 +1230,156 @@
     return `<button type="button" class="${cx('sb-vrun', o.current && 'is-cur')}"${o.current ? ' aria-current="true"' : ''}${act(o.act, o.arg)}>${inner}</button>`;
   }
 
-  /* ---------- Verify run document (design/verify-run) ---------- */
+
+  /* ---------- Monitor run document (design/monitor-run) ---------- */
+  /* The column a monitor run renders in. It is a ValidationDoc too, so the header, the outcome card, boxes and sections take
+   * the validation metrics; .sb-mondoc adds what differs: the PR number before the title, a breathing signal dot, the
+   * actions row inside the card and the cap pips in its last cell. */
+  function MonitorDoc(children) { track('MonitorDoc'); return `<div class="sb-vdoc sb-valdoc sb-mondoc">${join(children)}</div>`; }
+  const MON_TONE = { now: 'var(--st-active)', done: 'var(--st-done)', fail: 'var(--st-failed)', conflict: 'var(--st-blocked)', blocked: 'var(--st-blocked)', merged: 'var(--data-5)', stopped: 'var(--fg-faint)' };
+  /* The repair cap as `cap` 10px squares, `used` of them filled orange; red once all are used ("3 of 3"). */
+  function CapPips(o) {
+    track('CapPips');
+    const cap = o.cap || 3;
+    return `<span class="${cx('sb-mon-pips', o.used >= cap && 'is-full')}" role="img" aria-label="${esc(`${o.used} of ${cap} failed repairs`)}">${Array.from({ length: cap }, (_, i) => `<i class="${i < o.used ? 'on' : ''}"></i>`).join('')}</span>`;
+  }
+  /* Buttons inside a RunOutcome, 12px under its text: Monitor again, Open worktree, Open failing job, Open PR. */
+  function OutcomeActions(buttons) { track('OutcomeActions'); return `<div class="sb-mon-acts">${join(buttons)}</div>`; }
+  /* One row per CI round of a monitor run and a column per step: CI (monitor), Repair (monitor_fix), Publish (commit_push).
+   * A cell has a 2px edge in its tone, the result in a few words, one faint line (the head sha in mono, the failing check,
+   * the agent and time) and, for CI, one small bar per check (passed, failed, running, queued). The live cell breathes a dot
+   * after its word; the selected cell sits on the accent tint with a ring. `empty` cells hold a faint line ("Starts on a
+   * failure", "After the fix", "Cap reached"). With `act` a cell is a button. `compact` drops the step ids and narrows the
+   * cycle column for the details pane. `foot` is [icon, text] pairs under the grid. */
+  function MonitorCycles(o) {
+    track('MonitorCycles');
+    const head = [[o.compact ? '#' : 'Cycle', null], ['CI', 'monitor'], ['Repair', 'monitor_fix'], ['Publish', 'commit_push']]
+      .map(([t, id], i) => `<div class="${cx('gh', i && 'col')}">${esc(t)}${id && !o.compact ? `<span class="id">${id}</span>` : ''}</div>`).join('');
+    const cell = (c, first) => {
+      if (!c || c.empty != null) return `<div class="${cx('cell is-empty', first && 'first')}">${esc((c && c.empty) || '—')}</div>`;
+      const bar = c.bar ? `<span class="bar">${c.bar.length ? c.bar.map((b) => `<i class="is-${esc(b)}"></i>`).join('') : '<i></i><i></i><i></i>'}</span>` : '';
+      const inner = `<span class="w"><span>${esc(c.word)}</span></span><span class="s">${c.sub || ''}</span>${bar}`;
+      const cls = cx('cell', first && 'first', c.live && 'is-live', c.sel && 'is-sel');
+      const style = ` style="--c:${MON_TONE[c.tone] || 'var(--fg-faint)'}"`;
+      return c.act ? `<button type="button" class="${cls}"${style}${act(c.act, c.arg)} aria-pressed="${!!c.sel}">${inner}</button>` : `<div class="${cls}"${style}>${inner}</div>`;
+    };
+    const rows = o.rows.map((r, i) => `<div class="${cx('gn', !i && 'first')}">${esc(r.n)}<small>${esc(r.at)}</small></div>${r.cells.map((c) => cell(c, !i)).join('')}`).join('');
+    const foot = o.foot ? `<div class="sb-mon-gfoot">${o.foot.map(([icon, text]) => `<span>${Icon(icon, 'xs')}${esc(text)}</span>`).join('')}</div>` : '';
+    return `<div class="${cx('sb-mon-grid', o.compact && 'is-compact')}" role="group" aria-label="${esc(o.label || 'Monitor cycles')}">${head}${rows}</div>${foot}`;
+  }
+  /* A bordered box with a raised head line: a 12px glyph, the bold title, a faint `sub` (HTML) and an `end` slot (links,
+   * a badge). The CI board, a repair, its files, the local checks and the publish receipt each sit in one. */
+  function MonitorBox(o) {
+    track('MonitorBox');
+    return `<div class="sb-box sb-mon-box"><div class="sb-mon-bh">${Icon(o.icon || 'info', 'xs')}<b>${esc(o.title)}</b>${o.sub ? `<span class="sub">${o.sub}</span>` : ''}${o.end ? `<span class="end">${join(o.end)}</span>` : ''}</div>${join(o.body)}</div>`;
+  }
+  /* The summary band at the top of a MonitorBox: lines (MonitorLine), a SegmentBar or ResolveBar and a CheckTally, 8px apart. */
+  function MonitorSummary(children) { track('MonitorSummary'); return `<div class="sb-mon-sum">${join(children)}</div>`; }
+  /* One line in a MonitorSummary: a 12px glyph, the text (HTML) and a faint `end` (the last and next poll, commits on the
+   * base). `color` tints the whole line (orange for a conflicting PR, purple once merged). */
+  function MonitorLine(o) {
+    track('MonitorLine');
+    return `<div class="sb-mon-line"${o.color ? ` style="color:${o.color}"` : ''}>${Icon(o.icon || 'commit', 'xs')}<span>${o.html}</span>${o.end ? `<span class="end">${o.end}</span>` : ''}</div>`;
+  }
+  /* A short sha in mono on an 18px chip. With `act` it is a button (copy). */
+  function ShaChip(o) {
+    track('ShaChip');
+    const inner = `${o.icon ? Icon('commit', 'xs') : ''}${esc(o.sha)}`;
+    return o.act ? `<button type="button" class="sb-mon-sha"${act(o.act, o.arg)}${tipAttrs(o.tip || `Copy ${o.sha}`)}>${inner}</button>` : `<span class="sb-mon-sha">${inner}</span>`;
+  }
+  /* A 16px tag in mono on a tint: "Repair outcome: fixed" (ok), "2 of 3 hunks left" (warn), "rerun" (ok). */
+  function MonBadge(o) { track('MonBadge'); return `<span class="${cx('sb-mon-badge', o.tone && 'is-' + o.tone)}">${esc(o.text)}</span>`; }
+  /* A small caps group label inside a box: Failed 1, Running 2, Waiting 1, Passed 3, Fixing, Conflicted files. With `fold`
+   * ({ act, arg }) a chevron before it opens or folds the group. */
+  function MonitorGroup(o) {
+    track('MonitorGroup');
+    return `<div class="sb-mon-group">${o.fold ? `<button type="button" class="fd" aria-expanded="${!!o.fold.open}"${act(o.fold.act, o.fold.arg)} aria-label="${esc(`${o.fold.open ? 'Fold' : 'Show'} ${o.label}`)}">${Icon('chevronRight', 'xs')}</button>` : ''}${esc(o.label)}${o.count != null ? `<span>${esc(o.count)}</span>` : ''}</div>`;
+  }
+  /* A folded group as one line: a green check, the names on one faint line and "show". The whole line opens the group. */
+  function FoldLine(o) {
+    track('FoldLine');
+    return `<div class="sb-mon-row"><button type="button" class="sb-mon-rh"${act(o.act, o.arg)}><span class="gl"><span class="ic" style="--c:var(--st-done)">${Icon('check')}</span></span><span class="bd"><span class="sub is-flush">${esc(o.text)}</span></span><span class="side"><span class="w">show</span></span></button></div>`;
+  }
+  /* One CI check: a 13px glyph (check, cross, a spinner while running, a dashed ring while queued, a ring once unfinished at
+   * the final read, a dash when skipped or cancelled), the name, its workflow and runner in faint text with "running",
+   * "queued for a runner" or "unfinished at the final read", the failure in one line (`why`, HTML), then "rerun", the
+   * time, an external mark that opens the job and, with a log, a chevron. Open, the LogTail shows under it. Failing rows
+   * sit on a red tint, running rows on a green one. */
+  const MCHK = { pass: ['Passed', 'check', 'var(--st-done)'], fail: ['Failed', 'x', 'var(--st-failed)'], skipping: ['Skipped', 'minus', 'var(--fg-faint)'], cancel: ['Cancelled', 'minus', 'var(--fg-faint)'], pending: ['Running'], queued: ['Queued'], stale: ['Unfinished'] };
+  function MonitorCheckRow(o) {
+    track('MonitorCheckRow');
+    const [word, icon, color] = MCHK[o.state] || MCHK.queued;
+    const glyph = o.state === 'pending' ? '<span class="spin"></span>' : o.state === 'queued' ? '<span class="ring is-dash"></span>' : o.state === 'stale' ? '<span class="ring"></span>' : `<span class="ic" style="--c:${color}">${Icon(icon)}</span>`;
+    const tail = o.mono || o.plain ? '' : o.state === 'pending' ? ' · running' : o.state === 'queued' ? ' · queued for a runner' : o.state === 'stale' ? ' · unfinished at the final read' : '';
+    const ext = o.ext ? `<span class="ext" role="button" tabindex="0"${act(o.ext.act, o.ext.arg)}${tipAttrs('Open job on GitHub')}>${Icon('external', 'xs')}</span>` : '';
+    const side = `<span class="side">${o.rerun ? MonBadge({ text: 'rerun', tone: 'ok' }) : ''}<span class="w">${o.state === 'queued' && !o.time ? 'waiting' : esc(o.time || '')}</span>${ext}${o.act ? Icon('chevronRight', 'xs') : ''}</span>`;
+    const main = `<span class="gl" title="${word}">${glyph}</span><span class="bd"><span class="nm">${esc(o.name)}</span><span class="${cx('sub', o.mono && 'is-mono')}">${esc(o.job || '')}${tail}</span>${o.why ? `<span class="why">${o.why}</span>` : ''}</span>${side}`;
+    const head = o.act ? `<button type="button" class="sb-mon-rh" aria-expanded="${!!o.open}"${act(o.act, o.arg)}>${main}</button>` : `<div class="sb-mon-rh">${main}</div>`;
+    return `<div class="${cx('sb-mon-row', 'is-' + o.state)}">${head}${o.open && o.log ? o.log : ''}</div>`;
+  }
+  /* The failed-job log tail the runtime fetches for the repair brief: a mono head ("Failed-job log tail · run N", Copy and
+   * Full log), then the lines on an inset. Error lines sit on a red tint with a 2px red edge; context lines are faint. */
+  function LogTail(o) {
+    track('LogTail');
+    return `<div class="sb-mon-log"><div class="hd">${Icon('terminal', 'xs')}<span class="lb">Failed-job log tail${o.run ? ` · run ${esc(o.run)}` : ''}</span><span class="end">${join(o.actions)}</span></div><pre>${o.lines.map(([cls, t]) => `<span class="${esc(cls || '')}">${esc(t)}</span>`).join('')}</pre></div>`;
+  }
+  /* What happens next, on an inset strip at the foot of a box: an arrow and one sentence (HTML). */
+  function NextLine(o) { track('NextLine'); return `<div class="sb-mon-next">${Icon('arrowRight', 'xs')}<span>${o.html}</span></div>`; }
+  /* The agent doing a repair: a 24px avatar in the agent's color, the line (its live signal in green, or its explanation
+   * when finished, HTML), the agent and model under it, and an `action` (Watch agent) on the right. */
+  function RepairAgent(o) {
+    track('RepairAgent');
+    return `<div class="sb-mon-agent"><span class="av" style="--c:${o.color}">${esc(o.initials)}</span><div class="mn"><div class="tx">${o.html}</div><div class="sub">${esc(o.sub)}</div></div><span class="ac">${o.action || ''}</span></div>`;
+  }
+  /* A file a repair changed, from the edit journal: a glyph (pencil while edited, image for a binary), the path in faint mono
+   * with the file name in fg (ellipsis at the start), +/− or "binary", and how long ago; the file being edited now sits on
+   * a green tint and says "editing". */
+  function ChangedFileRow(o) {
+    track('ChangedFileRow');
+    const parts = String(o.path).split('/'), name = parts.pop();
+    const stat = o.binary ? '<span class="faint">binary</span>' : `<span class="ins">+${esc(o.ins)}</span> <span class="del">−${esc(o.del)}</span>`;
+    return `<div class="${cx('sb-mon-file', o.live && 'is-live')}">${Icon(o.icon || (o.live ? 'pencil' : o.binary ? 'image' : 'file'), 'xs')}<span class="path" title="${esc(o.path)}">${parts.length ? `<span class="dir"><bdi>${esc(parts.join('/'))}/</bdi></span>` : ''}<b>${esc(name)}</b></span><span class="st">${o.stat === false ? '' : stat}</span><span class="ago">${o.live ? 'editing' : esc(o.ago || '')}</span></div>`;
+  }
+  /* A bar of resolved (green) over still conflicted (orange) files. */
+  function ResolveBar(o) {
+    track('ResolveBar');
+    return `<div class="sb-mon-res" role="img" aria-label="${esc(`${o.done} of ${o.total} resolved`)}"><i style="width:${(o.done / o.total) * 100}%"></i><i class="c" style="width:${((o.total - o.done) / o.total) * 100}%"></i></div>`;
+  }
+  /* Two short notes side by side on insets, each under a mono caps label: what this PR and the base changed in a conflicted
+   * file, a PR field before and after an edit. */
+  function SideBySide(o) {
+    track('SideBySide');
+    return `<div class="${cx('sb-mon-sides', o.flush && 'is-flush')}">${o.items.map(([k, html]) => `<div class="side"><b>${esc(k)}</b>${html}</div>`).join('')}</div>`;
+  }
+  /* A file in a merge repair: its glyph (green check resolved, orange warning conflicted, a spinner while the agent edits
+   * it), the path, "claude is editing this file", its hunks as 8px squares (green resolved, orange open) and a badge
+   * (resolved, "1 of 3 hunks left", "1 of 1 binary left"); `sides` (SideBySide) under it. */
+  function ConflictFileRow(o) {
+    track('ConflictFileRow');
+    const parts = String(o.path).split('/'), name = parts.pop();
+    const left = o.hunks.filter((h) => !h).length;
+    const glyph = o.state === 'resolved' ? `<span class="ic" style="--c:var(--st-done)">${Icon('check')}</span>` : o.live ? '<span class="spin"></span>' : `<span class="ic" style="--c:var(--st-blocked)">${Icon('warn')}</span>`;
+    const badge = o.state === 'resolved' ? MonBadge({ text: 'resolved', tone: 'ok' }) : MonBadge({ text: `${left} of ${o.hunks.length} ${o.binary ? 'binary' : o.hunks.length === 1 ? 'hunk' : 'hunks'} left`, tone: 'warn' });
+    return `<div class="${cx('sb-mon-row', o.state === 'conflict' && 'is-conflict')}"><div class="sb-mon-rh"><span class="gl">${glyph}</span><span class="bd"><span class="path" title="${esc(o.path)}"><span class="dir"><bdi>${esc(parts.join('/'))}/</bdi></span><b>${esc(name)}</b></span>${o.live ? `<span class="sub is-live">${esc(o.liveText || 'The agent is editing this file')}</span>` : ''}</span><span class="side"><span class="hunks">${o.hunks.map((h) => `<i class="${h ? 'on' : ''}"></i>`).join('')}</span>${badge}</span></div>${o.sides || ''}</div>`;
+  }
+  /* A repair's publication on a rail: each step a 17px node (done check, now breathing, wait dashed), the title, its time,
+   * then the detail (HTML) or a `commit`: the sha chip, its parents with what each is (PR head, main tip) and the message on
+   * a 2px rule. */
+  function PublishSteps(o) {
+    track('PublishSteps');
+    return `<div class="sb-mon-steps">${o.steps.map((x) => {
+      const c = x.commit;
+      const detail = c ? `${ShaChip({ sha: c.sha, icon: true, act: c.act, arg: c.arg })} <span class="pars"><span class="faint">parent${c.parents.length > 1 ? 's' : ''}</span>${c.parents.map(([sha, note]) => `${ShaChip({ sha })}<span class="faint">${esc(note)}</span>`).join('')}</span><div class="msg">${esc(c.msg)}</div>` : (x.html || '');
+      return `<div class="${cx('st', 'is-' + x.state)}"><span class="nd">${x.state === 'done' ? Icon('check', 'xs') : x.state === 'fail' ? Icon('x', 'xs') : ''}</span><span class="ti">${esc(x.title)}</span><span class="wh">${esc(x.when || '')}</span><div class="dt">${detail}</div></div>`;
+    }).join('')}</div>`;
+  }
+  /* A monitor run's activity: the time in mono on the left, a 7px dot in the tone, the line (HTML). */
+  function EventLines(rows) {
+    track('EventLines');
+    return `<div class="sb-mon-acts-list">${rows.map(([t, html, color]) => `<div class="ev" style="--c:${color || 'var(--fg-faint)'}"><span class="t">${esc(t)}</span><span class="d"></span><span class="tx">${html}</span></div>`).join('')}</div>`;
+  }
+
+  /* ---------- Verify run document (Verify run design) ---------- */
   /* The column a Verify run renders in. It keeps the mock's rhythm (header lines 8, 6 and 12px apart, the summary and the
    * outcome card 20px below, each section 24px below the last) instead of the document's 28px gap, and sets the shared parts
    * it holds (Button, Checkbox, Box, Segmented, RunOutcome) to the mock's metrics. */
@@ -1187,7 +1393,7 @@
   function VerifyHeader(o) {
     track('VerifyHeader');
     const meta = (o.meta || []).filter(Boolean).map((m) => {
-      const text = `<span class="${cx(m.mono && 'mono')}">${esc(m.text)}</span>`;
+      const text = `<span class="${cx(m.mono && 'mono')}">${m.html != null ? m.html : esc(m.text)}</span>`;
       const inner = m.act ? `<button type="button" class="${cx('mi', m.link && 'is-link')}"${act(m.act, m.arg)}${tipAttrs(m.tip)}>${text}</button>` : text;
       return `<span class="it"${!m.act && m.tip ? ` title="${esc(m.tip)}"` : ''}>${Icon(m.icon, 'xs')}${inner}</span>`;
     }).join('');
@@ -1215,7 +1421,7 @@
    * then the body. It never collapses. Without `title` it only spaces its body (Activity). */
   function VerifySection(o) {
     track('VerifySection');
-    const hd = o.title ? `<div class="hd"><h2>${esc(o.title)}</h2>${o.count != null ? `<span class="n">${esc(o.count)}</span>` : ''}${o.end ? `<span class="end">${join(o.end)}</span>` : ''}</div>` : '';
+    const hd = o.title || o.html ? `<div class="hd"><h2>${o.html != null ? o.html : esc(o.title)}</h2>${o.count != null ? `<span class="n">${esc(o.count)}</span>` : ''}${o.end ? `<span class="end">${join(o.end)}</span>` : ''}</div>` : '';
     return `<section class="sb-vsec"${o.id ? ` id="${esc(o.id)}"` : ''}>${hd}${o.sub ? `<p class="sub">${esc(o.sub)}</p>` : ''}${join(o.body)}</section>`;
   }
   /* An 18px tag in mono capitals on a 14% tint of its tone: a criterion grade (Met, Partial, Missing, To confirm, Not
@@ -1356,7 +1562,7 @@
       <div class="sb-devpop-ft"><span>${o.checking ? 'Checking…' : 'Checked just now'}</span><span class="l-grow"></span>${Kbd('↑ ↓ ↵')}</div></div>`;
   }
 
-  /* ---------- Plan run: a standalone plan phase (design/plan-detail; desktop PlanStatus, PlanNowCard, PlanActivity, PlanSubtasks) ---------- */
+  /* ---------- Plan run: a standalone plan phase (plan run design; desktop PlanStatus, PlanNowCard, PlanActivity, PlanSubtasks) ---------- */
   /* One glyph per stage or unit state: queued (dashed ring), now (green spinner), quiet (slow orange spinner), done (green
    * check), blocked (orange warning). */
   function planGlyph(state) {
@@ -1463,7 +1669,7 @@
     return `<button type="button" class="sb-brief"${act(o.act, o.arg)} aria-label="Expand briefing"><span class="flow">${flow}</span><span class="legend">${o.legend.map((l) => `<span><i class="${l.cls}"></i>${esc(l.text)}</span>`).join('')}</span><span class="facts">${o.facts.map((f) => `<span class="${cx('f', f.tone && 'is-' + f.tone)}">${Icon(f.icon, 'xs')}<span>${f.key ? `<span class="k">${esc(f.key)}</span> ` : ''}${f.html}</span></span>`).join('')}</span><span class="pills">${o.pills.map((p) => `<span class="${cx('pill', p.strong && 'strong')}">${esc(p.text)}</span>`).join('')}</span><span class="fade"></span><span class="cta">${Icon('chevronDown', 'xs')}${esc(o.cta)}</span></button>`;
   }
 
-  /* ---------- Specs pane (design/specs-panel, variant A; desktop SpecSelectionBar) ---------- */
+  /* ---------- Specs pane (specs pane design, variant A; desktop SpecSelectionBar) ---------- */
   /* The selected spec docked at the bottom of the Specs pane: key, title, progress and the favorite star; the status and agent
    * pills, the actions button and the one primary action the runtime allows; then a note (the pause notice, or the reason
    * run controls are off). notes: [{ text, tone (error) }]. */
@@ -1528,7 +1734,7 @@
     PaneSection, Breakdown, ActivityFeed, TreeRow, SettingsHeader, SettingsGroup, SettingRow, TierBadge,
     ConfigRow, TrayPopover,
     ChatStatusMark, ChatTabs, SuggestionChip, ChatMessage, ChatTranscript, ChatPill, Composer, StepLine, NewTaskHome,
-    InboxList, InboxRow, FilterBar, TargetPicker, QueuedRow, QueuePanel, ResumeRow, ResumePalette,
+    InboxList, InboxRow, FilterBar, TargetPicker, QueuedRow, QueuePanel, ChatChangesPill, ChatChangeRow, ChatChangesPanel, ResumeRow, ResumePalette,
     QaVerdict, QaChip, QaItem, QaFold, QaResults, QaLive, QaPreview, QaStageList, QaShots, QaRounds, ReportText, DeviceSwitcher, DeviceOption, DevicePanel,
     SegmentBar, CheckTally, RunOutcome, CheckRow, StepTimeline, WorkSummary, SelectAll, SelectionBar,
     ValidationDoc, FlagStrip, Tag, LinkButton, BoxNote, ReportPart, BranchRun,
@@ -1536,5 +1742,7 @@
     ReceiptFinding, TestValueRow, BadgeGrid, MiniRule, KeyValues, CheckLines, DirBars, TextLink, VerifyQa,
     StageStrip, PlanNow, FeedFilter, PlanFeed, BoxHead, PlanBundle, Transcript, FactList, BriefFold, BriefBody, BriefingTeaser, SpecBar, PropPill,
     BuildChip, BuildStrip,
+    MonitorDoc, CapPips, OutcomeActions, MonitorCycles, MonitorBox, MonitorSummary, MonitorLine, ShaChip, MonBadge, MonitorGroup, FoldLine,
+    MonitorCheckRow, LogTail, NextLine, RepairAgent, ChangedFileRow, ResolveBar, SideBySide, ConflictFileRow, PublishSteps, EventLines,
   };
 })();

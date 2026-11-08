@@ -64,6 +64,8 @@ internal fun goalContinuationCommand(
     timeout = request.timeout,
     environment = goalContinuationEnvironment(request) + runtimeDatabaseEnvironment(true, databasePath),
     idlePolicy = unstreamedLivenessPolicy(request),
+    kind = AgentRunCommandKind.RUNTIME_HARNESS,
+    streamsProviderEvents = false,
   )
 }
 
