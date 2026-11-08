@@ -16,11 +16,8 @@ import skillbill.ports.goalrunner.UnaddressedFindingsRepository
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
 import skillbill.ports.idestatus.AgentActivityStampRepository
-<<<<<<< HEAD
-import skillbill.ports.idestatus.MonitorCiCycleRepository
-=======
 import skillbill.ports.idestatus.AgentBuildRunRepository
->>>>>>> origin/main
+import skillbill.ports.idestatus.MonitorCiCycleRepository
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
@@ -54,11 +51,8 @@ interface UnitOfWork : GoalRunnerPersistenceSession {
   val unaddressedFindings: UnaddressedFindingsRepository
   val agentActivityStamps: AgentActivityStampRepository
   val worktreeEditJournal: WorktreeEditJournalRepository
-<<<<<<< HEAD
-  val monitorCiCycles: MonitorCiCycleRepository
-=======
   val agentBuildRuns: AgentBuildRunRepository
->>>>>>> origin/main
+  val monitorCiCycles: MonitorCiCycleRepository
   val standalonePhaseStatuses: StandalonePhaseStatusRepository
   val rejectedOutputDiagnostics: RejectedOutputDiagnosticRepository
   val rejectedOutputDiagnosticPermissions: RejectedOutputDiagnosticPermissions
