@@ -33,6 +33,7 @@ private data class ProcessReferences(
 internal object ProcessLauncherRules {
   private val launcherNames = setOf("Process", "ProcessBuilder", "ProcessHandle", "Runtime", "PtyProcess", "PtyProcessBuilder")
   private val allowedLaunchers = setOf(
+    "feature/detail/src/jvmMain/kotlin/dev/skillbill/desktop/feature/detail/RepositoryBrowserLauncher.kt",
     "app/src/jvmMain/kotlin/dev/skillbill/desktop/app/motion/OsReducedMotionReader.kt",
     "app/src/jvmMain/kotlin/dev/skillbill/desktop/app/host/ShellEnvironment.kt",
     "feature/terminal/src/jvmMain/kotlin/dev/skillbill/desktop/feature/terminal/PtyShellLauncher.kt",

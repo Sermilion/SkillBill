@@ -1,3 +1,8 @@
+## [2026-11-08] Fall back to the Linux URL handler for branch links
+Context: Java Desktop can report BROWSE unsupported on Linux with a configured default browser.
+Decision: Try Java browsing first, then invoke xdg-open with the encoded URL as one argument on Linux. Approve only RepositoryBrowserLauncher in the process-launch guard. Bound its wait and destroy an unfinished launcher on cancellation or timeout.
+Reason: Branch links must work when Java cannot integrate with the desktop. Record fallback use and failures without logging repository URLs.
+
 ## [2026-11-07] Order the plan document from the stage strip down
 Context: The mock puts current stage and activity before saved plan files, and SKILL-518 excludes changes to other run types.
 Decision: Order the standalone plan as stage strip, one Now block or blocked callout, Activity, Spec bundle, Transcript and Briefing. Keep incident controls immediately after the callout and use plan-local section headers and callout styling.
