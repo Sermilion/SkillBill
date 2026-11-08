@@ -389,9 +389,14 @@ class ProviderUsageRepository(
         else if (!acquisition.admitted) {
           acquisition.admitted = true
           val retainedBefore = lookupSubjects[profile]?.let(subjectObservations::get)
-          admitCodexResult(acquisition, result, selectedModel).also { admitted ->
+          admitCodexResult(acquisition, result, selectedModel).let { admitted ->
+            val effectiveResult = effectiveTransientResult(profile, result, admitted)
             val subject = lookupSubjects[profile]
-            publish(profile, subject?.let(subjectObservations::get))
+            publish(
+              profile,
+              subject?.let(subjectObservations::get),
+              effectiveResult.takeIf { result is UsageResult.TransientFailure && it is UsageResult.SignInRequired },
+            )
             acquisition.eligible = false
             if (acquisitions[key] === acquisition) acquisitions.remove(key)
             if (result is UsageResult.Snapshot || result is UsageResult.Partial || result is UsageResult.EmptySuccess) {
@@ -436,13 +441,24 @@ class ProviderUsageRepository(
               updateAvailability(profile, UsageRefreshAvailability.Disabled(unavailableReason(admitted)))
               trimCapabilityResults()
             }
-            publishResult(profile, admitted)
+            publishResult(profile, effectiveResult)
             if (result !is UsageResult.TransientFailure && result !is UsageResult.Throttled &&
               result !is UsageResult.Snapshot && result !is UsageResult.Partial && result !is UsageResult.EmptySuccess) {
               refreshCoordinator.settle(profile, acquisition.reservationId)
             }
+            effectiveResult
           }
-        } else lookupSubjects[profile]?.let(subjectObservations::get)?.let { UsageResult.Snapshot(project(it, selectedModel), OmissionSemantics.OmittedFieldsAreUnchanged) } ?: result
+        } else effectiveTransientResult(
+          profile,
+          result,
+          lookupSubjects[profile]?.let(subjectObservations::get)
+            ?.let { UsageResult.Snapshot(project(it, selectedModel), OmissionSemantics.OmittedFieldsAreUnchanged) }
+            ?: result,
+        ).also { effective ->
+          if (result is UsageResult.TransientFailure && effective is UsageResult.SignInRequired) {
+            publishResult(profile, effective)
+          }
+        }
       }
     } finally {
       synchronized(acquisitionLock) {
@@ -873,6 +889,12 @@ class ProviderUsageRepository(
     if (!closed.get()) availability.value = availability.value + (profile to state)
   }
 
+  private fun effectiveTransientResult(profile: UsageProfileLookup, result: UsageResult, admitted: UsageResult): UsageResult =
+    if (result is UsageResult.TransientFailure && profiles.codex(profile.configurationReference).lookup == profile) {
+      synchronized(acquisitionLock) { capabilityResults[profile] }
+        ?.takeIf { it is UsageResult.SignInRequired } ?: admitted
+    } else admitted
+
   private fun isCurrentAcquisition(acquisition: Acquisition): Boolean =
     !closed.get() && acquisitions[acquisition.key] === acquisition && acquisition.eligible &&
       (acquisition.references.isNotEmpty() || hasReference(acquisition.key.profile)) &&
@@ -1113,7 +1135,7 @@ class ProviderUsageRepository(
     publishResult(profile, result)
   }
 
-  private fun publish(profile: UsageProfileLookup, observation: UsageObservation?) {
+  private fun publish(profile: UsageProfileLookup, observation: UsageObservation?, result: UsageResult? = null) {
     if (observation == null) {
       subjectSnapshots.value = subjectSnapshots.value - profile
       publishResult(profile, capabilityResults[profile] ?: unavailableCodex())
@@ -1123,7 +1145,7 @@ class ProviderUsageRepository(
       val projected = project(observation, null)
       recordStaleTransition(previous, projected)
       subjectSnapshots.value = subjectSnapshots.value + (profile to projected)
-      publishResult(profile, UsageResult.Snapshot(projected, OmissionSemantics.OmittedFieldsAreUnchanged))
+      publishResult(profile, result ?: UsageResult.Snapshot(projected, OmissionSemantics.OmittedFieldsAreUnchanged))
       scheduleExpiry(profile, observation)
     }
   }
