@@ -6,7 +6,6 @@ import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
-import skillbill.ports.projectstore.FixedProjectStorePort
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -37,7 +36,6 @@ class AgentLauncherPreflightTest {
       executableLookup = lookup,
       diagnostics = NoopRuntimeDiagnostics,
       clock = LAUNCH_TEST_CLOCK,
-      projectStore = FixedProjectStorePort(Files.createTempDirectory("launcher-project-store")),
     )
 
   @Test
@@ -51,7 +49,6 @@ class AgentLauncherPreflightTest {
         executableLookup = executablesAvailable(),
         diagnostics = NoopRuntimeDiagnostics,
         clock = LAUNCH_TEST_CLOCK,
-        projectStore = FixedProjectStorePort(Files.createTempDirectory("launcher-project-store")),
       )
 
     val facts = adapter.launchFacts(request())
@@ -82,7 +79,6 @@ class AgentLauncherPreflightTest {
         executableLookup = executablesAvailable("cursor-agent"),
         diagnostics = NoopRuntimeDiagnostics,
         clock = LAUNCH_TEST_CLOCK,
-        projectStore = FixedProjectStorePort(Files.createTempDirectory("launcher-project-store")),
       )
 
     val facts = adapter.launchFacts(request())
@@ -106,7 +102,6 @@ class AgentLauncherPreflightTest {
         executableLookup = executablesAvailable("agent", "cursor-agent"),
         diagnostics = NoopRuntimeDiagnostics,
         clock = LAUNCH_TEST_CLOCK,
-        projectStore = FixedProjectStorePort(Files.createTempDirectory("launcher-project-store")),
       )
 
     adapter.launch(request())

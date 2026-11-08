@@ -9,7 +9,6 @@ import skillbill.infrastructure.launcher.process.launch.AgentRunProcessTimingFie
 import skillbill.infrastructure.launcher.process.launch.runAgentRunContinuations
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
-import skillbill.ports.projectstore.FixedProjectStorePort
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -18,14 +17,13 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 class CodexPhaseContinuationTest {
   @Test
-  fun `schema probes and continued turns consume one original deadline`() {
+  fun `continued turns consume one original deadline`() {
     val directory = Files.createTempDirectory("codex-deadline")
     try {
       val clock = SessionClock()
@@ -33,21 +31,14 @@ class CodexPhaseContinuationTest {
       val request =
         AgentRunProcessRequest(
           AgentRunProcessLaunchFields(listOf("codex", "app-server"), directory),
-          timing = AgentRunProcessTimingFields(timeout = 10.seconds, operationDeadline = 9.seconds),
+          timing = AgentRunProcessTimingFields(timeout = 6.seconds, operationDeadline = 5.seconds),
         )
       val runner =
         scriptedRunner(clock, turns) { index ->
           clock.advance(if (index == 1) 2 else 4)
           exhausted()
         }
-      val session =
-        CodexPhaseSession(
-          request,
-          runner,
-          clock,
-          NoopRuntimeDiagnostics,
-          FixedProjectStorePort(Files.createTempDirectory("codex-project-store")),
-        ) { error("unused") }
+      val session = CodexPhaseSession(request, runner, clock, NoopRuntimeDiagnostics) { error("unused") }
 
       val result = session.run(launch(directory))
 
@@ -79,14 +70,7 @@ class CodexPhaseContinuationTest {
         val turns = mutableListOf<AgentRunProcessRequest>()
         val request = AgentRunProcessRequest(AgentRunProcessLaunchFields(listOf("codex", "app-server"), directory))
         val runner = scriptedRunner(clock, turns) { index -> if (index == 1) exhausted() else failure }
-        val session =
-          CodexPhaseSession(
-            request,
-            runner,
-            clock,
-            NoopRuntimeDiagnostics,
-            FixedProjectStorePort(Files.createTempDirectory("codex-project-store")),
-          ) { error("unused") }
+        val session = CodexPhaseSession(request, runner, clock, NoopRuntimeDiagnostics) { error("unused") }
 
         val result = session.run(launch(directory))
 
@@ -99,56 +83,6 @@ class CodexPhaseContinuationTest {
     }
   }
 
-  @Test
-  fun `schema inspection stays in the project store and cleans up after success or probe failure`() {
-    val directory = Files.createTempDirectory("codex-schema-location")
-    try {
-      val checkout = Files.createDirectory(directory.resolve("checkout"))
-      val store = directory.resolve("projects").resolve("test-project")
-      Files.writeString(checkout.resolve("source.kt"), "existing source")
-      for (probeSucceeds in listOf(true, false)) {
-        var schemaDirectory: Path? = null
-        val runner =
-          object : AgentRunProcessRunner {
-            override fun run(request: AgentRunProcessRequest): AgentRunProcessResult =
-              when {
-                request.launch.command.last() == "--version" -> result("codex-cli 0.166.0")
-                "generate-json-schema" in request.launch.command -> {
-                  val output = Path.of(request.launch.command.last())
-                  schemaDirectory = output
-                  assertEquals(store.resolve("scratch"), output.parent)
-                  writeCodexSchemaFixture(output)
-                  result("").copy(exitStatus = if (probeSucceeds) 0 else 1)
-                }
-                else -> {
-                  assertTrue(Files.isDirectory(requireNotNull(schemaDirectory)))
-                  Files.list(checkout).use { paths ->
-                    assertEquals(listOf("source.kt"), paths.map { it.fileName.toString() }.toList())
-                  }
-                  result("done")
-                }
-              }
-          }
-        val request = AgentRunProcessRequest(AgentRunProcessLaunchFields(listOf("codex", "app-server"), checkout))
-        val session =
-          CodexPhaseSession(request, runner, SessionClock(), NoopRuntimeDiagnostics, FixedProjectStorePort(store)) {
-            error("unused")
-          }
-
-        val outcome = session.run(launch(checkout))
-
-        assertEquals(if (probeSucceeds) 0 else 1, outcome.exitStatus)
-        assertFalse(Files.exists(requireNotNull(schemaDirectory)))
-        Files.list(checkout).use { paths ->
-          assertEquals(listOf("source.kt"), paths.map { it.fileName.toString() }.toList())
-        }
-        assertEquals("existing source", Files.readString(checkout.resolve("source.kt")))
-      }
-    } finally {
-      directory.toFile().deleteRecursively()
-    }
-  }
-
   private fun scriptedRunner(
     clock: SessionClock,
     turns: MutableList<AgentRunProcessRequest>,
@@ -156,21 +90,9 @@ class CodexPhaseContinuationTest {
   ): AgentRunProcessRunner =
     object : AgentRunProcessRunner {
       override fun run(request: AgentRunProcessRequest): AgentRunProcessResult =
-        when {
-          request.launch.command.last() == "--version" -> {
-            clock.advance(2)
-            result("codex-cli 0.166.0")
-          }
-          "generate-json-schema" in request.launch.command -> {
-            clock.advance(2)
-            writeCodexSchemaFixture(Path.of(request.launch.command.last()))
-            result("")
-          }
-          else ->
-            runAgentRunContinuations(request, clock) { next ->
-              turns += next
-              turn(turns.size)
-            }
+        runAgentRunContinuations(request, clock) { next ->
+          turns += next
+          turn(turns.size)
         }
     }
 

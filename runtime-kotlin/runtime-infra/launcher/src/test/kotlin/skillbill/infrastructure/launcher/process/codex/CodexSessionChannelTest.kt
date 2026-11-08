@@ -36,7 +36,7 @@ class CodexSessionChannelTest {
     val channel = channel(savedThread = "thread-1")
     try {
       channel.attach(SessionProcess())
-      channel.observe("""{"id":1,"result":{"userAgent":"codex_cli_rs/0.166.0 (test)"}}""" + "\n")
+      channel.observe("""{"id":1,"result":{"userAgent":"codex_cli_rs/9.0.0 (test)"}}""" + "\n")
       channel.observe(threadResponse())
       channel.observe("""{"id":3,"result":{"turn":{"id":"turn-1","status":"inProgress"}}}""" + "\n")
       channel.observe(
@@ -132,21 +132,18 @@ class CodexSessionChannelTest {
   }
 
   @Test
-  fun `incompatible server and changed resume identity never receive a mutating turn`() {
-    for (badVersion in listOf(true, false)) {
-      val process = SessionProcess()
-      val channel = channel(savedThread = "saved-thread")
-      try {
-        channel.attach(process)
-        val version = if (badVersion) "0.166.01" else "0.166.0"
-        channel.observe("""{"id":1,"result":{"userAgent":"codex_cli_rs/$version (test)"}}""" + "\n")
-        if (!badVersion) channel.observe(threadResponse())
-        assertFalse(assertNotNull(channel.outcome()).completed)
-        assertFalse(process.stdin.toString().contains("turn/start"))
-        assertFalse(process.stdin.toString().contains("thread/start"))
-      } finally {
-        channel.finish()
-      }
+  fun `changed resume identity never receives a mutating turn`() {
+    val process = SessionProcess()
+    val channel = channel(savedThread = "saved-thread")
+    try {
+      channel.attach(process)
+      channel.observe("""{"id":1,"result":{"userAgent":"codex_cli_rs/9.0.0 (test)"}}""" + "\n")
+      channel.observe(threadResponse())
+      assertFalse(assertNotNull(channel.outcome()).completed)
+      assertFalse(process.stdin.toString().contains("turn/start"))
+      assertFalse(process.stdin.toString().contains("thread/start"))
+    } finally {
+      channel.finish()
     }
   }
 

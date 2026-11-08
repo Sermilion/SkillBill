@@ -83,7 +83,6 @@ class CodexChatTransport(
           workingDirectory = request.scope.repositoryRoot,
           environment = codexEnvironment(host.variables, request.agent.profile),
           stdin = "",
-          probeInvocation = agentInvocation("codex", host.variables["SHELL"]),
         )
         emitAll(
           codexAppServerTurn(

@@ -2,7 +2,6 @@ package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
 import skillbill.infrastructure.host.scratch.testAgentRunScratchRoot
-import skillbill.infrastructure.launcher.process.codex.writeCodexSchemaFixture
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRequest
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRunner
@@ -11,9 +10,7 @@ import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
-import skillbill.ports.projectstore.FixedProjectStorePort
 import java.nio.file.Files
-import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -30,37 +27,30 @@ class CodexPhaseSessionTest {
       val fakeCommand = listOf(bashExecutable().toString(), script.toString())
       val runner =
         object : AgentRunProcessRunner {
-          override fun run(request: AgentRunProcessRequest): AgentRunProcessResult =
-            when {
-              request.launch.command.last() == "--version" -> success("codex-cli 0.166.0")
-              "generate-json-schema" in request.launch.command -> {
-                writeCodexSchemaFixture(Path.of(request.launch.command.last()))
-                success("")
-              }
-              else ->
-                worker.run(
-                  request.copy(
-                    launch =
-                      request.launch.copy(
-                        command = fakeCommand,
-                        continuation =
-                          request.launch.continuation?.let { next ->
-                            { result -> next(result)?.copy(command = fakeCommand) }
-                          },
-                      ),
+          override fun run(request: AgentRunProcessRequest): AgentRunProcessResult {
+            assertEquals("app-server", request.launch.command[1])
+            return worker.run(
+              request.copy(
+                launch =
+                  request.launch.copy(
+                    command = fakeCommand,
+                    continuation =
+                      request.launch.continuation?.let { next ->
+                        { result -> next(result)?.copy(command = fakeCommand) }
+                      },
                   ),
-                )
-            }
+              ),
+            )
+          }
         }
       val adapter =
         requireNotNull(
-          HeadlessAgentRunAdapterFactory(
+          headlessAgentRunAdapters(
             runner,
             ALL_EXECUTABLES_AVAILABLE,
             diagnostics = NoopRuntimeDiagnostics,
             clock = LAUNCH_TEST_CLOCK,
-            projectStore = FixedProjectStorePort(Files.createTempDirectory("launcher-project-store")),
-          ).create()[SupportedAgent.CODEX],
+          )[SupportedAgent.CODEX],
         )
       val result =
         adapter.launchFacts(
@@ -86,16 +76,6 @@ class CodexPhaseSessionTest {
       directory.toFile().deleteRecursively()
     }
   }
-
-  private fun success(text: String) =
-    AgentRunProcessResult(
-      0,
-      text,
-      stderr = "",
-      timedOut = false,
-      interrupted = false,
-      spawnFailed = false,
-    )
 
   private fun providerScript(): String =
     """

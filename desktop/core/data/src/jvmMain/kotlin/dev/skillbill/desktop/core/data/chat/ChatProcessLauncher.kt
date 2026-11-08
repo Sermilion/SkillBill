@@ -2,11 +2,10 @@ package dev.skillbill.desktop.core.data.chat
 
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.di.AppScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedSendChannelException
@@ -28,6 +27,7 @@ import kotlinx.coroutines.runInterruptible
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
+import java.util.concurrent.TimeUnit
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -40,7 +40,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -53,7 +52,6 @@ data class ChatCommand(
   val workingDirectory: String,
   val environment: Map<String, String>,
   val stdin: String,
-  val probeInvocation: List<String> = argv,
 )
 
 /** What a chat process produces: stdout [Line]s, a possible [StdoutEnded], then [Exited] or [StartFailed]. */
@@ -215,54 +213,6 @@ class ProcessLiveChatLauncher(private val diagnostics: Diagnostics) : LiveChatPr
     }
   }
 }
-
-internal suspend fun runChatProcessProbe(command: ChatCommand, argv: List<String>): ChatProcessProbeResult {
-  val processBuilder = ProcessBuilder(argv).directory(File(command.workingDirectory))
-  processBuilder.redirectErrorStream(true)
-  processBuilder.environment().clear()
-  processBuilder.environment().putAll(command.environment)
-  val process = try {
-    processBuilder.start()
-  } catch (failure: IOException) {
-    return ChatProcessProbeResult(-1, failure.message.orEmpty())
-  }
-  val output = StringBuilder()
-  val drain = Thread({
-    process.inputStream.bufferedReader().use { reader ->
-      val buffer = CharArray(2048)
-      while (true) {
-        val count = reader.read(buffer)
-        if (count < 0) break
-        synchronized(output) { output.append(buffer, 0, count) }
-      }
-    }
-  }, "chat-process-probe-output").apply {
-    isDaemon = true
-    start()
-  }
-  val job = currentCoroutineContext().job
-  val cancellation = job.invokeOnCompletion { cause ->
-    if (cause is kotlinx.coroutines.CancellationException) process.destroyForcibly()
-  }
-  return try {
-    process.outputStream.close()
-    val completed = process.waitFor(30, TimeUnit.SECONDS)
-    if (!completed) {
-      process.destroyForcibly()
-      drain.join(1000)
-      return ChatProcessProbeResult(-1, "")
-    }
-    drain.join(1000)
-    currentCoroutineContext().ensureActive()
-    ChatProcessProbeResult(process.exitValue(), synchronized(output) { output.toString() })
-  } finally {
-    cancellation.dispose()
-    if (process.isAlive) process.destroyForcibly()
-    drain.join(1000)
-  }
-}
-
-internal data class ChatProcessProbeResult(val exitCode: Int, val stdout: String)
 
 private fun stdoutLines(process: Process): ReceiveChannel<String> {
   val lines = Channel<String>(Channel.BUFFERED)

@@ -134,7 +134,7 @@ internal class CodexSessionChannel(
       return
     }
     when (expectedResponse) {
-      INITIALIZE_ID -> initialize(result)
+      INITIALIZE_ID -> initialize()
       THREAD_ID -> openThread(result)
       TURN_ID -> openTurn(result)
     }
@@ -142,8 +142,7 @@ internal class CodexSessionChannel(
 
   private fun serverRequest(message: JsonObject) = approvals.request(message)
 
-  private fun initialize(result: JsonObject) {
-    CodexAppServerProtocol.identityRefusal(result)?.let { return stop(it) }
+  private fun initialize() {
     if (!write(CodexAppServerProtocol.initializedNotification())) return
     expectedResponse = THREAD_ID
     sendRequest(
