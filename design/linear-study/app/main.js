@@ -25,7 +25,7 @@
     ],
     chosenAgent: {}, prereqs: new Set(), recovered: new Set(), secCollapse: {}, reasonOpen: new Set(),
     /* Subtask index: selection per goal ('3' or 'finish'), inline expansion per goal (narrow windows), open breakdowns, full activity feeds */
-    subSel: {}, subOpen: {}, finishTab: {}, bdOpen: new Set(), feedAll: new Set(), narrow: false,
+    subSel: {}, subOpen: {}, peekSel: {}, bdOpen: new Set(), feedAll: new Set(), narrow: false,
     settingsPage: 'general', agent: 'claude', cfgOpen: null, draft: null, matrix: JSON.parse(JSON.stringify(D.MATRIX)), phaseTiers: {},
     compaction: { enabled: true, window: 400000, pct: 70, phases: { review: { window: 600000, pct: 60 } } }, budget: D.BUDGET.map((r) => r.slice()),
     prefs: { dbPath: '', dbDraft: '', claudeDir: '~/.claude', retention: '24h', login: true, notify: Object.fromEntries(D.NOTIFICATIONS.map(([id, , on]) => [id, on])), specType: 'local', gradleWrapper: '', telemetry: 'anonymous' },
@@ -97,9 +97,12 @@
       }
     }
     if (r.id) st.detailId = r.id;
-    if (r.id && r.inspector === 'finish') {
-      st.subSel[r.id] = 'finish'; st.subOpen[r.id] = true;
-      st.finishTab[r.id] = r.resultTab === 'qa' ? 'qa' : 'assessment';
+    /* #detail/<id>/<subtask id | finish>/<phase> selects a subtask or Goal finish and opens one phase card in the details
+     * pane. The older /finish/assessment and /finish/qa links open the goal_assessment and qa cards. */
+    if (r.id && r.inspector) {
+      st.subSel[r.id] = r.inspector; st.subOpen[r.id] = true;
+      const phase = r.resultTab === 'assessment' ? 'goal_assessment' : r.resultTab;
+      if (phase) st.peekSel[`${r.id}|${r.inspector}`] = phase;
       st.propsOpen = true; st.specsOpen = false;
     }
     if (r.build) st.build = r.build;
@@ -380,6 +383,7 @@
     if (p.type === 'target') return X.targetPicker(st);
     if (p.type === 'queue') return X.queuePanel(st);
     if (p.type === 'chats') return X.chatMenu(st);
+    if (p.type === 'chat-tab') return X.chatTabMenu(st, p.arg);
     if (p.type === 'devices') return X.devicePanel(st);
     if (p.type === 'usage') {
       const usage = X.usageData(st);
@@ -829,7 +833,14 @@
     /* key|default: a toggle sticks per section key, so it holds while paging between items */
     /* Goal assessment order; it holds while paging, like section collapse. */
     'assess-order'(id) { st.assessOrder = id; render(); },
-    'finish-tab'(arg) { const [id, tab] = arg.split('|'); st.finishTab[id] = tab; render(); },
+    /* Phase tabs in the details pane: open that phase's card and keep focus on its tab. */
+    'peek-pill'(arg) {
+      const [id, key, phase] = arg.split('|');
+      st.peekSel[`${id}|${key}`] = phase;
+      render();
+      const el = root.querySelector(`[data-act="peek-pill"][data-arg="${CSS.escape(arg)}"]`);
+      if (el) el.focus({ preventScroll: true });
+    },
     'sec-collapse'(arg) { const [key, def] = arg.split('|'); const now = key in st.secCollapse ? st.secCollapse[key] : def === '1'; st.secCollapse[key] = !now; render(); },
     /* An ExpandableText without caller state: flip the fold in place; the next render folds it again. */
     'fold-toggle'(a, el) {
@@ -1229,7 +1240,7 @@
     'chat-close'(id) { const c = chatById(id); st.popover = null; if (!c) return render(); if (c.stream) { st.dialog = { type: 'chat-close', arg: c.id }; return render(); } closeChat(c); },
     'chat-close-confirm'(id) { const c = chatById(id); if (c) closeChat(c); },
     'chat-reopen'(id) { const c = st.nt.closed[id]; if (!c) return; delete st.nt.closed[id]; st.nt.chats.push(c); st.toasts = []; renderToasts(); if (st.view !== 'newtask') go('newtask'); selectChat(c.id); },
-    'chat-discard'() { const c = ntCur(); stopReply(c); st.nt.saved = st.nt.saved.filter((x) => x.sessionId !== c.session); removeChat(c); st.popover = null; focusComposer(); render(); },
+    'chat-discard'(id) { const c = (id != null && chatById(id)) || ntCur(); stopReply(c); st.nt.saved = st.nt.saved.filter((x) => x.sessionId !== c.session); removeChat(c); st.popover = null; focusComposer(); render(); },
     'chat-menu'(a, el) { st.nt.menuQ = ''; st.popover = Object.assign({ type: 'chats', focus: st.nt.chats.length > 8 ? 'chat-menu-q' : null }, anchorPos(el)); render(); },
     /* Send; while a reply runs, Queue; with an empty draft and messages queued, Send now. "/resume" opens the resume palette. */
     'chat-send'() {
@@ -1356,6 +1367,11 @@
     const el = e.target.closest('[data-ctx]');
     if (!el) return;
     e.preventDefault();
+    if (el.dataset.ctx.startsWith('chat:')) {
+      /* Shift+F10 and the menu key fire contextmenu with no pointer position, so the menu opens under the tab. */
+      const at = e.clientX || e.clientY ? { x: e.clientX, y: e.clientY, top: e.clientY } : anchorPos(el);
+      st.popover = Object.assign({ type: 'chat-tab', arg: el.dataset.ctx.slice(5) }, at); render(); return;
+    }
     if (el.dataset.ctx.startsWith('spec:')) {
       const path = el.dataset.ctx.slice(5), sp = X.specOf(path);
       st.specSel = path;
@@ -1391,6 +1407,16 @@
     if (tab && keep) { const v = input.value.trim(); tab.customName = v || null; }
     st.termRenaming = null; render();
   }
+  /* Phase tabs: arrow keys move between the phases that open a card; Home and End jump to the first and last. */
+  root.addEventListener('keydown', (e) => {
+    const tab = e.target.closest && e.target.closest('[data-act="peek-pill"]');
+    if (!tab || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    const tabs = [...tab.closest('[role="tablist"]').querySelectorAll('[data-act="peek-pill"]')];
+    let i = tabs.indexOf(tab);
+    i = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : Math.max(0, Math.min(tabs.length - 1, i + (e.key === 'ArrowRight' ? 1 : -1)));
+    e.preventDefault(); e.stopPropagation();
+    A['peek-pill'](tabs[i].dataset.arg);
+  }, true);
   root.addEventListener('keydown', (e) => {
     if (e.target.id !== 'term-rename-in') return;
     if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); commitRename(e.target, true); }

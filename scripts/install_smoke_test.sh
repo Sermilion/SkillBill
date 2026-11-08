@@ -110,6 +110,13 @@ has_flag() {
 
 case "$cmd" in
   "--check-packaged-contracts") exit 0 ;;
+  "install migrate-legacy-config") exit 0 ;;
+  "install migrate-data")
+    if [[ "${SKILL_BILL_TEST_MIGRATION_FAILS:-0}" == "1" ]]; then
+      echo "Persisted data migration failed; original data retained." >&2
+      exit 1
+    fi
+    ;;
   "version")
     echo "skill-bill version 0.0.0-smoke"
     ;;
@@ -873,17 +880,40 @@ STATE_FILES=(
   "smoke-workflow.db-journal"
   "backups/snapshot.db"
   "backups/maintenance-report.json"
+  "desktop/chats/saved-chat.json"
+  "desktop/settings.preferences_pb"
+  "desktop-settings.json"
+  "projects/existing/specs/EXISTING-1/spec.md"
+  "projects/existing/config.yaml"
+  "goals/existing/EXISTING-1/checkout/unpublished-work.txt"
+  "recovery/existing.json"
 )
 mkdir -p "$STATE_FIXTURE/backups" "$FAKE_HOME/.skill-bill"
 for state_file in "${STATE_FILES[@]}"; do
+  mkdir -p "$(dirname "$STATE_FIXTURE/$state_file")"
   printf 'retained data for %s\n' "$state_file" > "$STATE_FIXTURE/$state_file"
 done
 cp -R "$STATE_FIXTURE/." "$FAKE_HOME/.skill-bill/"
-run_install "$FAKE_HOME"
-for state_file in "${STATE_FILES[@]}"; do
-  cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "reinstall changed $state_file"
+for install_attempt in 1 2; do
+  run_install "$FAKE_HOME"
+  for state_file in "${STATE_FILES[@]}"; do
+    cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "reinstall $install_attempt changed $state_file"
+  done
 done
-pass "reinstall preserves databases, SQLite journals, and backups"
+pass "repeated installation preserves runs, project data, chats, settings, databases, journals, and backups"
+
+MIGRATION_RUNTIME_COPY="$STATE_FIXTURE/previous-runtime-cli"
+cp "$FAKE_HOME/.skill-bill/runtime/runtime-cli/bin/runtime-cli" "$MIGRATION_RUNTIME_COPY"
+MIGRATION_FAILURE_STATUS=0
+MIGRATION_FAILURE_OUTPUT="$(run_install "$FAKE_HOME" SKILL_BILL_TEST_MIGRATION_FAILS=1)" || MIGRATION_FAILURE_STATUS=$?
+[[ "$MIGRATION_FAILURE_STATUS" -ne 0 ]] || fail "installer activated a runtime after migration failed"
+[[ "$MIGRATION_FAILURE_OUTPUT" == *"Installation stopped before runtime activation"* ]] || fail "migration failure was not reported"
+[[ "$MIGRATION_FAILURE_OUTPUT" != *"Installation complete"* ]] || fail "migration failure reported installation success"
+cmp "$MIGRATION_RUNTIME_COPY" "$FAKE_HOME/.skill-bill/runtime/runtime-cli/bin/runtime-cli" || fail "migration failure replaced the existing runtime"
+for state_file in "${STATE_FILES[@]}"; do
+  cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "migration failure changed $state_file"
+done
+pass "failed migration preserves the existing runtime and all saved user data"
 DESKTOP_APP="$(desktop_app_target "$FAKE_HOME")"
 DESKTOP_EXECUTABLE="$(desktop_app_executable "$DESKTOP_APP")"
 assert_file_exists "desktop app launcher installed" "$DESKTOP_EXECUTABLE"
@@ -935,7 +965,11 @@ env -u SKILL_BILL_GOAL_CONTINUATION -u SKILL_BILL_SKIP_PREINSTALL_UNINSTALL -u C
   SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD=1 \
   bash "$REPO_ROOT/uninstall.sh"
 for state_file in "${STATE_FILES[@]}"; do
-  cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "uninstall changed $state_file"
+  case "$state_file" in
+    *.db|*.db-wal|*.db-shm|*.db-journal|backups/*|projects/*)
+      cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "uninstall changed $state_file"
+      ;;
+  esac
 done
 pass "uninstall preserves databases, SQLite journals, and backups"
 for install_entry in runtime installed-skills skills platform-packs orchestration agent-addons baseline-manifest.json .stale-cache; do

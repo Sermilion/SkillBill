@@ -88,9 +88,11 @@ internal class ClaudeLiveSession(
       openReply()
       return
     }
+    val decoded = decodeClaudeLine(text)
     val events = buildList {
+      if (ChatEvent.MessageStarted in decoded) wroteText = false
       if (wroteText && root?.startsClaudeTextBlock() == true) add(ChatEvent.TextDelta(TEXT_BLOCK_SEPARATOR))
-      addAll(decodeClaudeLine(text))
+      addAll(decoded)
     }
     if (events.isEmpty()) return
     if (target == null && !unpromptedOpen) {

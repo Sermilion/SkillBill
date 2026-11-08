@@ -2,6 +2,60 @@
 Context: Work rows and run details consume WorkBuild, while design-system components accept SbBuild presentation values.
 Decision: Map runtime builds to WorkBuild in core/data and convert WorkBuild to SbBuild in core/ui/status for both features.
 Reason: core/ui already depends on core/domain and core/designsystem and owns status mapping. This keeps the design system independent of domain models and gives both features one presentation conversion.
+## [2026-11-07] Keep summary writes separate and stamp the summarized snapshot
+Context: Conversation saves rewrite the chat file, and a new turn or discard can happen while a background summary runs.
+Decision: saveChat preserves stored summary fields and ignores the entry's summary. Only saveSummary changes them, under the store lock on an existing file, with the snapshot's updated_at as summary_source_updated_at_ms and no change to the stored updated_at.
+Reason: Ordinary saves must not erase summaries. Stamping a newer stored time would mark old content current; preserving updated_at keeps Recent chats order, and refusing a missing file prevents a discarded chat from reappearing.
+Revisit when: Other callers need to edit or clear summaries, or summaries must incorporate turns saved during a call.
+
+## [2026-11-07] Recover stale summaries at startup instead of tray quit
+Context: Tray Quit exits without closing chats, and the shutdown hook signals live agent processes, so a summary started at quit would die.
+Decision: Start one app-scoped serial queue and sweep at most 20 stale chats, newest first, once at launch. Chat close, leaving an idle chat and window close request summaries; per-reply saves and hiding the pane do not.
+Reason: Persisted staleness lets the next launch recover unfinished work without delaying quit or racing process shutdown. App scope lets window-close requests finish while hidden to the tray, and the startup cap bounds agent spend after a long gap.
+Revisit when: Quit can wait for background work, or the newest-20 cap leaves needed summaries missing.
+
+## [2026-11-07] Restrict summary calls and use an explicit cheap-model map
+Context: Saved transcripts are untrusted input, and summary calls bill the chat's own agent account.
+Decision: Run separate one-shot commands outside repositories with Claude haiku, Codex gpt-6-luna or Cursor gpt-5.4-nano-none. Use tool-less, read-only or ask-mode arguments, omit session-resume and permission-bypass flags, and skip unmapped agents with chat.summary_unsupported_agent.
+Reason: Transcript instructions must not gain tool or write authority or disturb the chat's resume state. Junie has no confirmed cheap model, so guessing could select an expensive model or fail.
+Alternatives considered: Reusing ChatTransport.run would carry the chat's full permissions and save agent session state.
+Revisit when: Agent models or CLI flags change, or a cheap Junie model is confirmed.
+
+## [2026-11-07] Use a stationary ellipsis for summaries under reduced motion
+Context: Summary rows must scroll sideways when text overflows, while the app also supports LocalReducedMotion.
+Decision: SbMarqueeText applies continuous basicMarquee only when reduced motion is off. Reduced motion renders one stationary ellipsized line; fallback titles retain their existing rendering.
+Reason: Following the existing reduced-motion gate avoids scrolling for operators who disable motion and still leaves readable truncated text.
+Revisit when: The design calls for wrapping or another overflow treatment under reduced motion.
+
+## [2026-11-07] Bind preview lifetime to the visible selected QA execution
+Context: Historical runs can retain framebuffer files, concurrent runs can be active, and a detail ViewModel can survive route disposal.
+Decision: Derive the request from the selected standalone desktop QA execution and current database session. Require visible route and pane authorization, clear frames on request changes, cancel the former observer and reject late generations. Terminal selections never read a source.
+Reason: File presence and ViewModel lifetime do not establish that the operator is viewing an active run. The selected execution and current visibility must authorize every published frame.
+
+## [2026-11-07] Confine framebuffer opens through directory handles
+Context: Preview reads must remain inside the selected invocation even if a path changes between validation and opening.
+Decision: Traverse the invocation and fixed preview child through scoped SecureDirectoryStream handles, reject symlinks and open the final regular file read-only without following links. Refuse the source when secure directory streams are unavailable.
+Reason: Path-string validation alone cannot confine the actual open. Directory-relative handles preserve that boundary during path replacement and close on every exit.
+
+## [2026-11-07] Use only the invocation-owned private framebuffer
+Context: QA can use an existing display when private capture is unavailable, but preview must never expose the operator's visible display.
+Decision: Capture only the registered owner-only live-preview child through private Xvfb -fbdir. Registration refusal disables capture. Reuse the existing resource registry and stop producer processes before releasing the child.
+Reason: Exact invocation ownership isolates concurrent runs and preserves retained-resource and cancellation cleanup behavior. Existing-display QA fallback supplies no authorized preview source.
+## [2026-11-07] Force the Linux source-run software renderer
+Context: SKILL-514 QA reported an X11 visual lookup crash during the source-run launch. QA-2 remains open after three repair attempts.
+Decision: Select Skiko SOFTWARE_COMPAT for Linux source runs through both the JVM property and SKIKO_RENDER_API.
+Reason: SKIKO_RENDER_API takes precedence over an inherited renderer setting, so the environment override is required to force the selected renderer.
+
+## [2026-11-07] Stamp copied source-run identities as one launch pair
+Context: A QA checkout can differ from the installed runtime. Dirty build identities require a matching commit and a shared non-empty install run id.
+Decision: Stage runtime-cli and prepared app resources from the same checkout, then stamp only the copied identity records with one fresh source-run UUID on every execution.
+Reason: BuildIdentityPlugin reads the install run id during configuration and omits it for clean trees. Stamping the staged pair supplies the dirty-build identity without changing gate rules or real-install behavior.
+
+## [2026-11-07] Isolate source-run settings and child-agent state
+Context: Desktop settings live under user.home without an environment override. A saved database path can override SKILL_BILL_DB, and blank TERM lets startup import login-shell exports.
+Decision: Recreate a scratch home for each QA launch, redirect JVM and child-process state and temp paths there, and set TERM to `dumb` only when inherited TERM is blank.
+Reason: Overriding SKILL_BILL_STATE_DIR alone leaves the operator's settings and database reachable. The TERM fallback preserves launch overrides. Scratch agent configuration means QA agents do not inherit the operator's login.
+Alternatives considered: Keeping the real user.home would require a production settings-path override, outside the spec's real-install constraints.
 
 ## [2026-11-07] Keep QA discovery explicit and picks owned by settings
 Context: The sidebar and New Task chip display the same persisted pick while device availability and leases can change independently.

@@ -49,7 +49,9 @@ public class SpecBrowserService(
     require(files.realPath(checkout.resolve(".git")) != null) { "Path '$repoRoot' is not inside a Git checkout." }
     val location = projectStore.resolve(checkout)
     val name = displayName(checkout, location.projectId)
-    return SpecBrowserProject(location.projectId, name, location.specsRoot, checkout)
+    val entry = catalog.list().firstOrNull { it.projectId == location.projectId }
+    return entry?.let { project(it, checkout) }
+      ?: SpecBrowserProject(location.projectId, name, location.specsRoot, checkout, listOf(checkout))
   }
 
   public fun snapshot(
@@ -59,7 +61,7 @@ public class SpecBrowserService(
     val project = locate(projectId, preferredRepoRoot)
     val specsRoot = project?.specsRoot ?: return missingProjectSnapshot(projectId)
     val read = treeReader.read(specsRoot)
-    val live = project.repoRoot?.let { liveGoals.overrides(it, liveCandidates(read.roots)) }.orEmpty()
+    val live = liveGoals.overrides(checkoutRoots(project), liveCandidates(read.roots)).orEmpty()
     val tree = resolveSpecTree(read.roots, live)
     return SpecBrowserSnapshot(project, tree.roots, tree.counts, tree.anyInProgress, read.failure)
   }
@@ -85,7 +87,7 @@ public class SpecBrowserService(
         issueKey == null -> unavailableFacts(null, NO_KEY_REASON, treeStatus)
         repoRoot == null -> unavailableFacts(issueKey, NO_CHECKOUT_REASON, treeStatus)
         !database.databaseExists() -> unavailableFacts(issueKey, NO_DATABASE_REASON, treeStatus)
-        else -> availableFacts(issueKey, repoRoot, treeStatus)
+        else -> availableFacts(issueKey, project, treeStatus)
       }
     return specBundleControl(facts)
   }
@@ -110,7 +112,7 @@ public class SpecBrowserService(
       when {
         realDirectory != realRoot.resolve(specsRoot.relativize(directory)) -> LINKED_BUNDLE_REASON
         !isBundleDirectory(realDirectory) -> NOT_A_BUNDLE_REASON
-        goalHoldsBundle(project.repoRoot, realDirectory) -> LIVE_BUNDLE_REASON
+        goalHoldsBundle(checkoutRoots(project), realDirectory) -> LIVE_BUNDLE_REASON
         else -> null
       }
     return refusal?.let(SpecBundleDeletion::Refused) ?: deleteDirectory(realDirectory)
@@ -124,12 +126,12 @@ public class SpecBrowserService(
     }
 
   private fun goalHoldsBundle(
-    repoRoot: Path?,
+    checkoutRoots: List<Path>,
     directory: Path,
   ): Boolean {
     val manifest = manifestCache.read(directory.resolve(DECOMPOSITION_MANIFEST_FILENAME))
     val issueKey = rawSpecBundle(directory.fileName.toString(), manifest).issueKey ?: return false
-    return repoRoot != null && holdsRunner(liveGoals.goal(repoRoot, issueKey))
+    return liveGoals.goals(checkoutRoots, issueKey).any(::holdsRunner)
   }
 
   private fun isBundleDirectory(directory: Path): Boolean =
@@ -138,16 +140,17 @@ public class SpecBrowserService(
 
   private fun availableFacts(
     issueKey: String,
-    repoRoot: Path,
+    project: SpecBrowserProject,
     treeStatus: SpecBrowserStatus,
   ): SpecBundleControlFacts {
-    val everStarted = goals.hasStarted(issueKey, repoRoot)
+    val roots = checkoutRoots(project)
+    val everStarted = roots.any { goals.hasStarted(issueKey, it) }
     return SpecBundleControlFacts(
       issueKey = issueKey,
       unavailableReason = null,
       everStarted = everStarted,
       treeStatus = treeStatus,
-      live = liveGoals.controlFacts(repoRoot, issueKey),
+      live = liveGoals.controlFacts(roots, issueKey),
     )
   }
 
@@ -176,7 +179,13 @@ public class SpecBrowserService(
     if (preferredRepoRoot == null) return null
     val location = projectStore.resolve(preferredRepoRoot)
     return location.takeIf { it.projectId == projectId }?.let {
-      SpecBrowserProject(projectId, displayName(preferredRepoRoot, projectId), it.specsRoot, preferredRepoRoot)
+      SpecBrowserProject(
+        projectId,
+        displayName(preferredRepoRoot, projectId),
+        it.specsRoot,
+        preferredRepoRoot,
+        listOf(preferredRepoRoot),
+      )
     }
   }
 
@@ -188,13 +197,16 @@ public class SpecBrowserService(
       preferredRepoRoot?.takeIf { projectStore.resolve(it).projectId == entry.projectId }
         ?: entry.checkoutRoots.firstOrNull()
     val name = displayName(repoRoot ?: entry.lastCheckoutRoot, entry.projectId)
-    return SpecBrowserProject(entry.projectId, name, entry.specsRoot, repoRoot)
+    return SpecBrowserProject(entry.projectId, name, entry.specsRoot, repoRoot, entry.checkoutRoots.distinct())
   }
 
   private fun displayName(
     repoRoot: Path?,
     projectId: String,
   ): String = repoRoot?.fileName?.toString() ?: projectId
+
+  private fun checkoutRoots(project: SpecBrowserProject): List<Path> =
+    (listOfNotNull(project.repoRoot) + project.checkoutRoots).distinct()
 
   private fun missingProjectSnapshot(projectId: String): SpecBrowserSnapshot =
     SpecBrowserSnapshot(

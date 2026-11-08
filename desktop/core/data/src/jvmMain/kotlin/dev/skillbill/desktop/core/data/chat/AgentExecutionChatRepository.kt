@@ -35,6 +35,7 @@ class AgentExecutionChatRepository(
   private val store: ChatStore,
   private val catalog: AgentSessionCatalog,
   private val diagnostics: Diagnostics,
+  private val summarizer: ChatSummarizer,
 ) : ExecutionChatRepository {
   private val resolver = ChatAgentResolver(runtimeConfig::machineConfig, diagnostics)
 
@@ -79,4 +80,8 @@ class AgentExecutionChatRepository(
     withContext(Dispatchers.IO) { store.newTaskDrafts(limit) }
 
   override suspend fun deleteSavedChat(sessionId: String) = withContext(Dispatchers.IO) { store.delete(sessionId) }
+
+  override fun requestSummary(sessionId: String) = summarizer.request(sessionId)
+
+  override val summaryUpdates: Flow<String> get() = summarizer.updates
 }

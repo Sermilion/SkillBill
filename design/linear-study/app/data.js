@@ -26,7 +26,8 @@
   const AGENT_CHOICES = ['claude', 'codex', 'cursor', 'junie'];
 
   const PHASE_ORDER = ['preplan', 'plan', 'implement', 'simplify', 'audit', 'review', 'build', 'validate', 'write_history', 'commit_push'];
-  const GOAL_FINISH = ['pr', 'monitor', 'monitor_fix'];
+  /* Goal finish phases in run order, as the app lists them (FeatureTaskRuntimePhaseIds). */
+  const GOAL_FINISH = ['goal_assessment', 'qa', 'qa_fix', 'validate', 'pr', 'monitor', 'monitor_fix'];
 
   /* Subtask builders (WorkSubtask + SubtaskDependency + SubtaskValidation + SubtaskPhaseResults + PlannedSubtask.specPath).
    * `id` and `spec` come from the position. Ages (`*Ago`) are seconds before now and stand in for the model's Instants. */
@@ -40,7 +41,8 @@
   const bundle = (n) => ['traceability.md', ...Array.from({ length: n }, (_, i) => `spec_subtask_${n - i}.md`), 'spec.md', 'decomposition-manifest.yaml'];
 
   /* QA results, shaped like the desktop's GoalQaResult and an execution's qaVerdict, qaReportText and qaDetails (QaRunDetails):
-   * outcome (passed | findings | skipped | incomplete | attempted, null while nothing settled), findings ({ id, title, fixed,
+   * outcome (passed | findings | skipped | incomplete | attempted, null while nothing settled), reportPreview (design only: the
+   * closed Full report line), findings ({ id, title, fixed,
    * observed, expected, steps, evidencePaths }), reportText, reason, failureKind, and details ({ reportPath,
    * invocationDirectory, skipReason, assertions ({ outcome passed | failed | not_exercised, title, detail, evidencePaths }),
    * coverage ({ kind, verdict, reason }), retainedResources ({ kind, identity }), temporaryEdits ({ path, detail,
@@ -1002,7 +1004,234 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
     },
   };
 
+  /* Goal QA while it runs: the stage QA is on, the live preview and the screenshots it has saved.
+   * Stage names follow the desktop target in platform-packs/kmp/qa/kmp-qa.md. `video` marks the stages where the preview can
+   * show frames. The runtime does not report stages yet; see R6 in HANDOFF.md. Sample data modeled on the
+   * SKILL-516 QA runs of 2026-11-07. */
+  const QA_STAGES = [
+    { id: 'prepare', name: 'Prepare checkout' },
+    { id: 'uitests', name: 'Compose UI tests', headless: true },
+    { id: 'display', name: 'Start private display' },
+    { id: 'launch', name: 'Launch app', video: true },
+    { id: 'exercise', name: 'Exercise running app', video: true },
+    { id: 'report', name: 'Write report' },
+    { id: 'cleanup', name: 'Clean up' },
+  ];
+  const QA_LIVE_DONE = { prepare: '0:52', uitests: '7:31', display: '0:09', launch: '1:22' };
+  /* Each scenario: `at` (the stage QA is on), `states` overrides (warn, skip), `times` for finished stages, `lines` (one
+   * detail line per stage), `preview` (later, waiting, live, reconnect, nocapture, none, ended), `shots` (evidence/ file
+   * names, oldest first), `callout`, `hint` and `rounds` for the goal QA fix loop. */
+  const QA_LIVE = {
+    prepare: { label: 'Preparing the checkout', elapsed: '0:38', at: 'prepare',
+      lines: { prepare: 'Isolating app data under `qa-7c1e/home`' }, preview: { kind: 'later', reachAt: 'launch' } },
+    uitests: { label: 'Compose UI tests', elapsed: '5:12', at: 'uitests', times: { prepare: '0:52' },
+      lines: { uitests: 'Running `:feature:detail:jvmTest --rerun-tasks` · 3 of 6 test classes' },
+      preview: { kind: 'later', reachAt: 'launch', why: 'UI tests run without a display. Video starts when QA launches the app, after these tests and the display start.' },
+      hint: 'The last QA run on this repository reached Launch app 9m 40s in.' },
+    display: { label: 'Display up, app not drawn', elapsed: '10:05', at: 'launch', times: { prepare: '0:52', uitests: '7:31', display: '0:09' },
+      lines: { display: 'Display `:97` with capture · framebuffer protected', launch: 'Gradle is building `:desktop:app:run` · waiting for the window' },
+      preview: { kind: 'waiting', text: 'Display :97 is ready. Waiting for the app window.', sub: 'Frames appear when the app draws its first window.' } },
+    live: { label: 'Live', elapsed: '13:48', at: 'exercise', times: QA_LIVE_DONE,
+      lines: { exercise: 'Criterion 3 of 5 · clicking "QA" in the finish tabs' },
+      preview: { kind: 'live', caption: 'Criterion 3 of 5', info: ':97 · 1600×1000' }, shots: ['app-start.png', 'finish-tabs.png', 'qa-tab-open.png'] },
+    restart: { label: 'Display restarting', elapsed: '12:31', at: 'exercise', times: QA_LIVE_DONE, states: { exercise: 'warn' },
+      lines: { exercise: 'Display `:97` exited with SIGBUS at 21:59:40. QA is restarting it with capture.' },
+      preview: { kind: 'reconnect', text: 'The display crashed at 21:59:40. QA is restarting it. Video resumes when the app draws again.' }, shots: ['app-start.png', 'finish-tabs.png'] },
+    nocapture: { label: 'Restarted without capture', elapsed: '15:02', at: 'exercise', times: QA_LIVE_DONE, states: { exercise: 'warn' },
+      lines: { exercise: 'Running on display `:98` without capture · screenshots only' },
+      preview: { kind: 'nocapture', text: 'QA restarted the display without capture, so there is no video for the rest of this attempt. Screenshots below still update.' },
+      callout: { text: 'Display `:97` crashed at 21:30 with SIGBUS. QA restarted it as `:98` without `-fbdir`, which breaks the rule in kmp-qa.md. QA will record this as a live-preview limitation.', chip: { icon: 'qaFile', label: 'xvfb.log', mono: true } },
+      shots: ['app-start.png', 'finish-tabs.png', 'after-restart.png'] },
+    nodisplay: { label: 'No display', elapsed: '9:40', at: 'report', times: { prepare: '0:52', uitests: '7:31' }, states: { display: 'skip', launch: 'skip', exercise: 'skip' },
+      lines: { display: 'No Xvfb on this machine · listed under Unblock', report: 'Writing `report.md`' },
+      preview: { kind: 'none', text: 'QA could not start a private display. It ran the Compose UI tests only.' },
+      callout: { text: 'Install `xorg-server-xvfb` so QA can run the app on a private display. The report lists this under Unblock.', chip: { icon: 'qaOpen', label: 'Open Unblock' } } },
+    fixloop: { label: 'Round 2 after a fix', elapsed: '3:05', at: 'prepare', round: 2,
+      lines: { prepare: 'Reusing isolated data from round 1' }, preview: { kind: 'later', reachAt: 'launch' },
+      hint: 'Round 1 reached Launch app 9m 40s in.',
+      rounds: [{ icon: 'qaBug', label: 'QA 1 · 1 finding', state: 'done' }, { icon: 'check', label: 'qa_fix', state: 'done' }, { label: 'QA 2', state: 'now' }] },
+    ended: { label: 'Finished', elapsed: '18:22', done: true,
+      times: Object.assign({}, QA_LIVE_DONE, { exercise: '6:40', report: '1:20', cleanup: '0:28' }),
+      preview: { kind: 'ended', at: '22:05' }, shots: ['app-start.png', 'finish-tabs.png', 'qa-tab-open.png', 'preview-blank.png', 'resize-900.png'] },
+  };
+
+
+  /* ---------- Phase peek (design/phase-peek): one card per phase under the details-pane phase tabs ----------
+   * A card: title, agent, model (with effort), round, when, dur, word (overrides the state word), tone (overrides the
+   * edge color), why (HTML strip), nowTitle and now (blocks while it runs or waits), madeTitle, madeEnd (text, or
+   * { sort: true } for the assessment order control) and made (blocks), results (blocks), activity ([time, html, tone])
+   * and open ({ label, toast, external }) for the footer button. Blocks: signal, edit, cmd, cells, text, stats, out,
+   * finds, checks, facts; and for goal finish: assessment (it.assessment), qaLive (it.qaLive), qaRun, qaResults
+   * (it.goalQa), qaWait and qaFinding. Sources: phase records, settlement envelopes, the edit journal,
+   * agent_activity_stamps and the phase receipts (HANDOFF.md 4.1). Monitor CI checks are not persisted yet. */
+  const PEEK = (function () {
+    const OPUS = 'claude-opus-5-5 · high', SONNET = 'claude-sonnet-5-5 · high', GPT = 'gpt-6.1-sol · high';
+    const path = (p) => `<span class="mono" title="${p}">${p.split('/').pop()}</span>`;
+    function subCards(o) {
+      return {
+        preplan: { title: 'Preplan', agent: 'claude', model: OPUS, when: o.t[0], dur: '1m 52s', made: [{ kind: 'text', html: o.preplan }],
+          activity: [[o.t[0], 'Started · <em>attempt 1</em>'], [o.t[1], 'Settled <em>· done</em>', 'done']] },
+        plan: { title: 'Plan', agent: 'claude', model: OPUS, when: o.t[1], dur: '3m 05s',
+          made: [{ kind: 'out', items: [{ icon: 'fileText', html: `<span class="mono">${o.spec}</span>`, end: `${o.criteria} criteria`, toast: `Opened ${o.spec}` }] }, { kind: 'text', html: o.plan }],
+          activity: [[o.t[1], 'Started'], [o.t[2], `Wrote ${o.spec}`, 'done']] },
+        implement: { title: 'Implement', agent: 'claude', model: SONNET, round: o.implRound || 'attempt 1', when: o.t[2], dur: o.implDur || '14m 20s', madeEnd: 'from the edit journal',
+          made: [
+            { kind: 'stats', items: [[String(o.files.length), 'files'], [`+${o.ins}`, 'added', 'ok'], [`−${o.del}`, 'removed', 'bad'], [String(o.newFiles), 'new']] },
+            { kind: 'out', items: o.files.slice(0, 4).map(([p, i, d, n]) => ({ icon: n ? 'file' : 'pencil', html: `${path(p)}${n ? ' <em>new</em>' : ''}`, end: `+${i} −${d}`, tip: p, toast: `Opened ${p.split('/').pop()} in the diff` })) },
+          ].concat(o.files.length > 4 ? [{ kind: 'text', html: `<span class="note">${o.files.length - 4} more files in Changes</span>` }] : []),
+          activity: o.implAct, open: { label: 'Open changes', toast: 'Opened the Changes window filtered to implement' } },
+        simplify: { title: 'Simplify', agent: 'claude', model: SONNET, when: o.t[3], dur: '4m 41s',
+          made: [{ kind: 'stats', items: [['3', 'files'], ['+18', 'added', 'ok'], ['−56', 'removed', 'bad'], ['−38', 'net']] }, { kind: 'text', html: o.simplify }],
+          activity: [[o.t[3], 'Started'], [o.t[4], 'Settled <em>· done</em>', 'done']] },
+        audit: { title: 'Audit', agent: 'claude', model: OPUS, when: o.t[4], dur: '2m 10s', word: 'Satisfied', madeTitle: 'Acceptance criteria', madeEnd: `${o.audit.length} of ${o.audit.length} covered`,
+          made: [{ kind: 'checks', rows: o.audit.map((c) => [c, 'ok']) }], activity: [[o.t[4], 'Started'], [o.t[5], 'Verdict <b>satisfied</b>', 'done']] },
+      };
+    }
+    const S2 = {
+      t: ['08:12', '08:14', '08:17', '08:52', '08:57', '08:59'],
+      preplan: 'Change sits in <b>IdeStatusService</b> and its presenter. Risk: the lease check reads the parent snapshot before the child settles. Plan keeps the poll interval as it is.',
+      spec: 'spec_subtask_02.md', criteria: 3,
+      plan: 'Three criteria: the live goal phase wins after a child finishes, a finished child label clears on the next poll, and the lease check runs once per poll.',
+      files: [['runtime/src/main/kotlin/dev/skillbill/ide/IdeStatusService.kt', 128, 42], ['runtime/src/main/kotlin/dev/skillbill/ide/IdeStatusPresenter.kt', 31, 9], ['runtime/src/test/kotlin/dev/skillbill/ide/IdeStatusServiceTest.kt', 96, 0, true], ['runtime/src/main/kotlin/dev/skillbill/ide/GoalPhaseSnapshot.kt', 22, 4], ['runtime/src/main/kotlin/dev/skillbill/ide/LeaseCheck.kt', 6, 11], ['runtime/src/test/kotlin/dev/skillbill/ide/fixtures/GoalSnapshots.kt', 40, 0, true]],
+      ins: 323, del: 66, newFiles: 2, implRound: 'attempt 2', implDur: '21m 02s',
+      implAct: [['08:17', 'Attempt 1 started'], ['08:38', 'Attempt 1 hit the 20 min timeout <em>· relaunched</em>', 'wait'], ['08:39', 'Attempt 2 started'], ['08:52', 'Settled <em>· 6 files, +323 −66</em>', 'done']],
+      simplify: 'Merged two snapshot lookups into <span class="mono">GoalPhaseSnapshot.current()</span> and dropped an unused lease cache.',
+      audit: ['Live goal phase wins after a child finishes', 'Finished child label clears on the next poll', 'Lease check runs once per poll'],
+    };
+    const S1 = {
+      t: ['21:38', '21:40', '21:44', '22:10', '22:15', '22:17'],
+      preplan: 'Status store already keeps the workflow id. Only the execution row is missing, so the change stays in one table and its reader.',
+      spec: 'spec_subtask_01.md', criteria: 2,
+      plan: 'Two criteria: the store keeps the execution for a standalone phase, and a restart reads it back.',
+      files: [['runtime/src/main/kotlin/dev/skillbill/status/StandaloneStatusStore.kt', 64, 18], ['runtime/src/main/kotlin/dev/skillbill/status/StandaloneStatusMigration.kt', 41, 0, true], ['runtime/src/test/kotlin/dev/skillbill/status/StandaloneStatusStoreTest.kt', 88, 3]],
+      ins: 193, del: 21, newFiles: 1, implDur: '25m 48s',
+      implAct: [['21:44', 'Started'], ['22:10', 'Settled <em>· 3 files, +193 −21</em>', 'done']],
+      simplify: 'Folded the row mapper into the store and removed a duplicate null check.',
+      audit: ['Store keeps the execution for a standalone phase', 'A restart reads the execution back'],
+    };
+    const reviewNow = {
+      title: 'Review', agent: 'claude', model: 'claude-opus-5-5 · xhigh', round: 'pass 2', when: 'since 09:31', dur: '17m 20s',
+      now: [{ kind: 'signal', live: true, text: 'Verifying 3 review findings', ago: '14s ago' }, { kind: 'edit', agent: 'claude', path: 'runtime/src/main/kotlin/dev/skillbill/ide/IdeStatusService.kt', ins: 12, del: 4, ago: '2m ago' }],
+      madeTitle: 'Pass 1 findings', madeEnd: 'changes requested',
+      made: [{ kind: 'finds', rows: [['major', 'The status reads the child phase after the parent snapshot is replaced', 'fixed'], ['minor', 'The lease check runs twice per poll', 'fixed'], ['minor', 'A finished child keeps its phase label for one poll', 'open']] }],
+      activity: [['09:14', 'Pass 1 started'], ['09:22', 'Pass 1 <b>changes requested</b> <em>· 3 findings</em>', 'wait'], ['09:23', 'Fix 1 <em>· 2 files, +31 −12</em>', 'done'], ['09:31', 'Pass 2 started', 'now']],
+      open: { label: 'Open review', toast: 'Opened review run rv-5c21 for subtask 02' },
+    };
+    const tail1 = {
+      review: { title: 'Review', agent: 'claude', model: 'claude-opus-5-5 · xhigh', round: 'pass 1', when: '22:17', dur: '6m 12s', word: 'Approved',
+        made: [{ kind: 'text', html: 'Approved on the first pass. No findings.' }], activity: [['22:17', 'Pass 1 started'], ['22:23', 'Pass 1 <b>approved</b>', 'done']],
+        open: { label: 'Open review', toast: 'Opened review run rv-19aa for subtask 01' } },
+      build: { title: 'Build', agent: 'claude', model: SONNET, when: '22:23', dur: '3m 02s', word: 'Passed', madeTitle: 'Build receipt',
+        made: [{ kind: 'cmd', text: './gradlew :runtime:assemble' }, { kind: 'stats', items: [['passed', 'result', 'ok'], ['3m 02s', 'took'], ['0', 'warnings']] }],
+        activity: [['22:23', 'Started'], ['22:26', 'Build passed', 'done']] },
+      validate: { title: 'Validate', agent: 'claude', model: SONNET, when: '22:26', dur: '5m 40s', word: 'Passed', madeTitle: 'Checks', madeEnd: '4 of 4 passed',
+        made: [{ kind: 'checks', rows: [['Unit tests', 'ok', '2m 51s', ':runtime:test'], ['Detekt', 'ok', '41s', ':runtime:detekt'], ['ktlint', 'ok', '18s', 'ktlintCheck'], ['Contract tests', 'ok', '1m 50s', ':contracts:test']] }],
+        activity: [['22:26', 'Started'], ['22:32', 'Validation passed <em>· 4 checks</em>', 'done']] },
+      write_history: { title: 'Write history', agent: 'claude', model: SONNET, when: '22:32', dur: '48s', madeTitle: 'History receipt',
+        made: [{ kind: 'out', items: [{ icon: 'history', html: '<span class="mono">history/2026-10.md</span>', end: '1 entry', toast: 'Opened history/2026-10.md' }] }, { kind: 'stats', items: [['yes', 'written', 'ok'], ['2', 'decisions'], ['1', 'path']] }],
+        activity: [['22:32', 'Started'], ['22:33', 'Wrote 1 entry, 2 decisions', 'done']] },
+      commit_push: { title: 'Commit and push', agent: 'claude', model: SONNET, when: '22:33', dur: '22s', madeTitle: 'Commit',
+        made: [{ kind: 'out', items: [{ icon: 'commit', html: '<span class="mono">a41c9e2d</span> Keep the workflow execution in the standalone status store', toast: 'Copied a41c9e2d31400fb0f88b0c0c93e893410f9e06c2' }, { icon: 'branch', html: 'Pushed to <span class="mono">feat/SKILL-417-keep-ide-status…</span>', end: '4 paths' }] }],
+        activity: [['22:33', 'Committed 4 paths'], ['22:33', 'Pushed', 'done']] },
+    };
+    const validateBlocked = {
+      title: 'Validate', agent: 'claude', model: SONNET, round: 'attempt 3', when: 'since 10:50', dur: '21m 14s',
+      why: '<b>Blocked:</b> the IntelliJ plugin test needs a JetBrains IDE download, and the sandbox has no network. Three attempts hit the same error.',
+      now: [{ kind: 'signal', icon: 'list', wrap: true, text: 'Waits for you: allow network for the plugin test, or skip that check for this subtask.' }],
+      madeTitle: 'Checks', madeEnd: '3 passed · 1 failed',
+      made: [{ kind: 'cells', cells: ['ok', 'ok', 'ok', 'bad'] }, { kind: 'checks', rows: [['Unit tests', 'ok', '2m 40s', ':runtime:test'], ['Detekt', 'ok', '44s', ':runtime:detekt'], ['VS Code extension tests', 'ok', '1m 12s', 'npm test'], ['IntelliJ plugin tests', 'bad', 'exit 1', ':intellij:test']] }],
+      activity: [['10:50', 'Attempt 1 <em>· plugin test failed, exit 1</em>', 'fail'], ['10:58', 'Attempt 2 <em>· same error</em>', 'fail'], ['11:06', 'Attempt 3 <em>· same error</em>', 'fail'], ['11:11', 'Blocked, waiting for you', 'wait']],
+      open: { label: 'Open validation run', toast: 'Opened the validation run detail' },
+    };
+
+    /* Goal finish. goal_assessment and qa read the goal's assessment, goalQa and qaLive records; these cards add the header and activity. */
+    const DIR = '/home/you/.skill-bill/qa/SkillBill-65f9b9859e5144f1/qa-7c1e/';
+    const CHECKS = ['Pills open a card', 'Running phase opens by default', 'QA card shows the live preview', 'Preview survives a display restart', 'Toast clears the composer', 'Arrow keys move between pills'];
+    const REPORT = 'Verdict: passed\n\nI exercised the goal finish pane on the desktop app: the phase pills, the QA card while QA ran, and the card after a display restart. Round 1 found one problem; qa_fix fixed it and round 2 passed.\n\n## Coverage\n\n- desktop: passed\n- android: skipped [reason: empty_scope]\n- backend: skipped [reason: empty_scope]\n- web: skipped [reason: empty_scope]';
+    const QA1 = { id: 'QA-1', title: 'Toast overlaps the composer on a 1280px window', observed: 'the "Copied" toast covered the send button for 2 seconds.', expected: 'Toasts sit above the composer and never cover its buttons.', steps: '1. Resize the window to 1280×800\n2. Copy a commit id from the pane\n3. Look at the composer', evidencePaths: [DIR + 'evidence/toast-composer.png'] };
+    const checks = (n) => CHECKS.slice(0, n).map((t) => asserted('passed', t, 'Exercised through the running app and matched the acceptance criterion.', []));
+    const coverage = [cov('desktop', 'passed'), ...outOfScope(['android', 'backend', 'web'])];
+    const qaRec = (key, outcome, fixAttempts, findings, n) => ({ runKey: key, outcome, fixAttempts, reportText: REPORT, reportPreview: 'I exercised the goal finish pane on the desktop app…', findings, details: { reportPath: DIR + 'report.md', invocationDirectory: DIR, assertions: checks(n), coverage } });
+    const qa = {
+      fixed: qaRec('goal-qa-SKILL-512', 'passed', 1, [Object.assign({}, QA1, { fixed: true })], 6),
+      round1: qaRec('goal-qa-SKILL-512-r1', 'findings', 0, [QA1], 5),
+      clean: qaRec('goal-qa-SKILL-512-clean', 'passed', 0, [], 6),
+    };
+    const assessment = { state: 'COMPLETED', round: 1, fixRan: true, exit: 'all findings resolved', fixCommit: '5e0c7a19', findings: [
+      { ref: 'GA-001', severity: 'Minor', path: 'ClipboardImagePaste.kt', line: 58, scenario: 'Paste ignores images over 8 MB and shows no message.', verification: 'REFUTED', state: 'REFUTED' },
+      { ref: 'GA-002', severity: 'Major', path: 'QaPreviewHost.kt', line: 112, scenario: 'The live preview stops drawing frames after the display reconnects.', verification: 'CONFIRMED', state: 'FIXED' },
+      { ref: 'GA-003', severity: 'Major', path: 'QaStageList.kt', line: 40, scenario: 'Stage times reset to zero when the QA tab is opened again.', verification: 'CONFIRMED', state: 'FIXED' },
+    ] };
+    const qaLive = { label: 'Live', elapsed: '13:48', at: 'exercise', round: 1, times: { prepare: '0:52', uitests: '7:31', display: '0:09', launch: '1:22' },
+      lines: { exercise: 'Criterion 3 of 6 · opening the QA card while QA runs' }, preview: { kind: 'live', caption: 'Criterion 3 of 6', info: ':97 · 1600×1000' },
+      shots: ['app-start.png', 'finish-pane.png', 'qa-card-open.png'] };
+    const SHOTS = ['app-start.png', 'finish-pane.png', 'qa-card-open.png', 'stage-list.png', 'resize-900.png', 'toast-composer.png'];
+    const qaRun = (rounds, total, at, time) => ({ kind: 'qaRun', rounds, total, at, time, shots: SHOTS.slice(-3).reverse() });
+    const valChecks = (last) => [['Unit tests', 'ok', '3m 10s', ':desktop:app:test'], ['Detekt', 'ok', '52s', 'detektAll'], ['ktlint', 'ok', '20s', 'ktlintCheck'], ['Compose screenshot tests', last, last === 'run' ? '1m 40s' : '2m 31s', ':desktop:app:verifyRoborazzi'], ['Contract tests', last === 'run' ? 'wait' : 'ok', last === 'run' ? '' : '1m 05s', ':contracts:test']];
+    const monChecks = [['build-desktop (ubuntu)', 'ok', '6m 02s'], ['build-desktop (macos)', 'run', '7m 40s'], ['runtime-tests', 'ok', '9m 15s'], ['lint', 'ok', '1m 22s'], ['screenshot-diff', 'bad', '3m 48s']];
+    const valNow = {
+      title: 'Validate', agent: 'codex', model: GPT, round: 'attempt 1', when: 'since 11:22', dur: '6m 02s',
+      now: [{ kind: 'cells', cells: ['ok', 'ok', 'ok', 'run', ''] }, { kind: 'signal', live: true, text: 'Check 4 of 5 · Compose screenshot tests', ago: '1m 40s' }, { kind: 'cmd', text: './gradlew :desktop:app:verifyRoborazzi' }],
+      madeTitle: 'Checks', madeEnd: '3 passed · 1 running · 1 waiting', made: [{ kind: 'checks', rows: valChecks('run') }],
+      activity: [['11:22', 'Started <em>· 5 checks from the validation receipt</em>'], ['11:27', '3 checks passed', 'done'], ['11:27', 'Compose screenshot tests running', 'now']],
+      open: { label: 'Open validation run', toast: 'Opened the validation run detail' },
+    };
+    const monNow = {
+      title: 'Monitor', agent: 'codex', model: GPT, round: 'cycle 2', when: 'since 11:44', dur: '12m 30s',
+      now: [{ kind: 'signal', live: true, text: 'Waiting for build-desktop (macos)', ago: '20s ago' }, { kind: 'signal', icon: 'list', text: 'gh pr checks 482 · 3 passed, 1 running', ago: '45s ago' }],
+      madeTitle: 'CI on #482', madeEnd: 'last poll 45s ago', made: [{ kind: 'checks', rows: monChecks.map((c) => (c[0] === 'screenshot-diff' ? ['screenshot-diff', 'ok', '3m 51s'] : c)) }],
+      activity: [['11:32', 'Cycle 1 started'], ['11:41', '<b>screenshot-diff</b> failed', 'fail'], ['11:42', 'monitor_fix pushed <span class="mono">9b2f0c44</span>', 'done'], ['11:44', 'Cycle 2 started', 'now']],
+      open: { label: 'Open checks on GitHub', external: true, toast: 'Opened github.com/skill-bill/skill-bill/pull/482/checks' },
+    };
+    const finish = {
+      assess: { title: 'Goal assessment', agent: 'codex', model: GPT, round: 'round 1', when: '10:48', dur: '9m 30s', word: 'Completed', madeTitle: 'Findings', madeEnd: { sort: true },
+        made: [{ kind: 'assessment' }],
+        activity: [['10:48', 'Round 1 started'], ['10:55', '3 findings <em>· 2 major, 1 minor</em>', 'wait'], ['10:56', 'GA-001 refuted <em>· 8 MB limit shows a toast</em>'], ['10:57', 'Fixed GA-002 and GA-003 <em>· 5e0c7a19</em>', 'done']] },
+      qaLive: { title: 'QA', agent: 'codex', model: 'gpt-6-luna · medium', round: 'round 1', when: 'since 10:58', dur: '13m 48s', nowTitle: 'Live', now: [{ kind: 'qaLive' }], madeTitle: 'Results', made: [{ kind: 'qaWait' }],
+        activity: [['10:58', 'Started on <span class="mono">:desktop:app</span>'], ['11:06', 'Compose UI tests passed <em>· 7:31</em>', 'done'], ['11:08', 'App launched <em>· video on</em>', 'done'], ['11:09', 'Exercising criterion 3 of 6', 'now']] },
+      qaRound1: { title: 'QA', agent: 'codex', model: 'gpt-6-luna · medium', round: 'round 1', when: '10:58', dur: '12m 10s', word: '1 problem · fixing', tone: 'wait', madeTitle: 'Run', madeEnd: 'qa-7c1e',
+        made: [qaRun([{ icon: 'qaBug', label: 'QA 1 · 1 finding', state: 'done' }, { label: 'qa_fix', state: 'now' }, { label: 'QA 2', state: 'pending' }], 11, '11:10', '16:40')],
+        results: [{ kind: 'qaResults', fixing: true }],
+        activity: [['10:58', 'Round 1 started on <span class="mono">:desktop:app</span>'], ['11:08', 'App launched <em>· video on</em>', 'done'], ['11:10', '<b>1 finding</b> <em>· QA-1</em>', 'wait'], ['11:10', 'Handed to qa_fix']] },
+      qa: { title: 'QA', agent: 'codex', model: 'gpt-6-luna · medium', round: 'round 2', when: '10:58', dur: '18m 04s', word: 'Passed after fixes', madeTitle: 'Run', madeEnd: 'qa-7c1e',
+        made: [qaRun([{ icon: 'qaBug', label: 'QA 1 · 1 finding', state: 'done' }, { icon: 'check', label: 'qa_fix', state: 'done' }, { icon: 'check', label: 'QA 2', state: 'done' }], 14, '11:16', '18:04')],
+        results: [{ kind: 'qaResults' }],
+        activity: [['10:58', 'Round 1 started on <span class="mono">:desktop:app</span>'], ['11:10', 'Round 1 <b>1 finding</b> <em>· QA-1</em>', 'wait'], ['11:16', 'qa_fix fixed QA-1', 'done'], ['11:17', 'Round 2 started'], ['11:22', 'Round 2 <b>passed</b> <em>· 6 checks</em>', 'done']] },
+      qaClean: { title: 'QA', agent: 'codex', model: 'gpt-6-luna · medium', round: 'round 1', when: '10:58', dur: '16m 40s', word: 'Passed', madeTitle: 'Run', madeEnd: 'qa-7c1e',
+        made: [qaRun(null, 11, '11:16', '16:40')], results: [{ kind: 'qaResults' }],
+        activity: [['10:58', 'Started on <span class="mono">:desktop:app</span>'], ['11:15', 'Passed <em>· 6 checks, no findings</em>', 'done']] },
+      qaFixNow: { title: 'QA fix', agent: 'claude', model: SONNET, round: 'attempt 1 of 3', when: 'since 11:10', dur: '4m 05s',
+        now: [{ kind: 'signal', live: true, text: 'Fixing QA-1 · Toast overlaps the composer', ago: '12s ago' }, { kind: 'edit', agent: 'claude', path: 'desktop/feature/chat/src/commonMain/kotlin/ComposerToastHost.kt', ins: 14, del: 3, ago: '40s ago' }],
+        madeTitle: 'Fixing', made: [{ kind: 'qaFinding', finding: QA1, state: 'Fixing', tone: 'blocked' }, { kind: 'facts', items: [['Next', 'QA round 2 on the fixed tree']] }],
+        activity: [['11:10', 'Started <em>· 1 open finding</em>'], ['11:12', 'Reproduced QA-1 at 1280×800'], ['11:13', 'Editing ComposerToastHost.kt', 'now']] },
+      qaFix: { title: 'QA fix', agent: 'claude', model: SONNET, round: 'attempt 1 of 3', when: '11:10', dur: '6m 11s', word: 'Fixed',
+        made: [{ kind: 'qaFinding', finding: QA1, state: 'Fixed', tone: 'done' }, { kind: 'out', items: [{ icon: 'pencil', html: path('desktop/feature/chat/src/commonMain/kotlin/ComposerToastHost.kt'), end: '+14 −3' }, { icon: 'commit', html: '<span class="mono">c0d4e8f1</span> Lift the toast above the composer', toast: 'Copied c0d4e8f1' }] }],
+        activity: [['11:10', 'Started <em>· 1 open finding</em>'], ['11:16', 'Fixed QA-1 <em>· tested tree c0d4e8f1</em>', 'done']] },
+      valNow,
+      valDone: Object.assign({}, valNow, { when: '11:22', dur: '8m 46s', word: 'Passed', now: null, madeEnd: '5 of 5 passed', made: [{ kind: 'checks', rows: valChecks('ok') }], activity: [['11:22', 'Started'], ['11:31', 'Validation passed <em>· 5 checks</em>', 'done']] }),
+      pr: { title: 'Pull request', agent: 'codex', model: GPT, when: '11:31', dur: '1m 12s', word: 'Opened',
+        made: [{ kind: 'out', items: [{ icon: 'pr', html: '<b>#482</b> Keep QA live preview working across display crashes', external: true, toast: 'Opened github.com/skill-bill/skill-bill/pull/482' }, { icon: 'branch', html: '<span class="mono">feat/SKILL-512-qa-live-preview</span> → <span class="mono">main</span>' }] }],
+        activity: [['11:31', 'Started'], ['11:32', 'Created PR <b>#482</b>', 'done']] },
+      monNow,
+      monDone: Object.assign({}, monNow, { round: 'cycle 1', when: '11:32', dur: '9m 05s', word: 'Green', now: null, madeEnd: 'all passed', made: [{ kind: 'checks', rows: monChecks.map((c) => [c[0], 'ok', c[2]]) }], activity: [['11:32', 'Cycle 1 started'], ['11:41', 'All 5 checks passed', 'done']] }),
+      monFix: { title: 'Monitor fix', agent: 'claude', model: SONNET, round: 'repair 1', when: '11:41', dur: '1m 50s',
+        why: 'Fixed <b>screenshot-diff</b>. The preview test baseline still had the old reconnect banner.',
+        made: [{ kind: 'out', items: [{ icon: 'image', html: path('desktop/app/src/test/snapshots/QaPreview_reconnect.png'), end: 'updated' }, { icon: 'commit', html: '<span class="mono">9b2f0c44</span> Refresh the reconnect banner baseline', toast: 'Copied 9b2f0c44' }] }],
+        activity: [['11:41', 'Started <em>· 1 failing check</em>'], ['11:42', 'Pushed <span class="mono">9b2f0c44</span>', 'done']] },
+    };
+    return {
+      sub1: Object.assign(subCards(S1), tail1),
+      sub2: Object.assign(subCards(S2), { review: reviewNow }),
+      sub3: Object.assign(subCards(S2), { review: Object.assign({}, tail1.review, { when: '10:41' }), build: Object.assign({}, tail1.build, { when: '10:47' }), validate: validateBlocked }),
+      finish, qa, assessment, qaLive,
+    };
+  })();
+  (function () {
+    const it = items.find((x) => x.id === 'SKILL-417');
+    it.subtasks[0].phases = { cards: PEEK.sub1, note: '58m total' };
+    it.subtasks[1].phases = { cards: PEEK.sub2 };
+  })();
   window.DATA = { T0, REPOS, AGENTS, AGENT_CHOICES, PHASE_ORDER, GOAL_FINISH, items, history, valRoutes, projects, specs, NOTIFICATIONS, CLAUDE_DIRS, PHASE_GROUPS, MATRIX, BUDGET,
     REPO_BRANCHES, LONG_BRANCH, CHAT_HISTORY, NEW_TASK_CHATS, NEW_TASK_SELECTED, CHAT_REPLIES, NEW_TASK_STEPS, QUICK_STARTS,
-    QA, QA_DEVICES, VAL, VERIFY, USAGE, BUILD };
+    QA, QA_DEVICES, QA_STAGES, QA_LIVE, VAL, VERIFY, USAGE, BUILD, PEEK };
 })();

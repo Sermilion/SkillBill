@@ -118,7 +118,7 @@ class PhaseMonitorRunTest {
   }
 
   @Test
-  fun `a completed repair without a source change blocks without claiming a failed repair commit`() {
+  fun `repairs that publish no change retry three times before blocking`() {
     initFeatureBranch()
     editSourceOnRepair = false
     val result =
@@ -129,8 +129,37 @@ class PhaseMonitorRunTest {
     val blocked = assertIs<PhaseRunResult.Blocked>(result)
     assertTrue("published no source, merge, or pull request change" in blocked.reason, blocked.reason)
     assertTrue("validate (https://ci.example/run)" in blocked.reason, blocked.reason)
-    assertTrue("CI-confirmed failed repair" !in blocked.reason, blocked.reason)
-    assertEquals(listOf(MONITOR_FIX), launchedPhaseIds())
+    assertTrue("3 unsuccessful repair attempt(s)" in blocked.reason, blocked.reason)
+    assertEquals(List(3) { MONITOR_FIX }, launchedPhaseIds())
+  }
+
+  @Test
+  fun `a repair that publishes no change gets another chance to fix the failing check`() {
+    initFeatureBranch()
+    var repairs = 0
+    val repairLauncher =
+      repairLauncher {
+        repairs += 1
+        if (repairs == 2) Files.writeString(repoRoot.resolve("ci-fix.txt"), "Fix CI\n")
+      }
+    val checks =
+      PullRequestChecksLookup { _, _ ->
+        PullRequestChecks.Reported(
+          listOf(
+            PullRequestCheck(
+              "validate",
+              if (repairs < 2) CheckBucket.FAIL else CheckBucket.PASS,
+              "https://ci.example/run",
+            ),
+          ),
+        )
+      }
+
+    val result = entry(checks = checks, agentLauncher = repairLauncher).runMonitor("SKILL-904")
+
+    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertEquals(List(2) { MONITOR_FIX }, launchedPhaseIds(repairLauncher))
+    assertEquals("Fix CI", git(origin, "show", "$FEATURE_BRANCH:ci-fix.txt"))
   }
 
   @Test
@@ -233,6 +262,33 @@ class PhaseMonitorRunTest {
     val publishedParents = git(origin, "rev-list", "--parents", "-n", "1", FEATURE_BRANCH).split(" ").drop(1)
     assertEquals(2, publishedParents.size, publishedParents.toString())
     assertTrue(baseTip in publishedParents, publishedParents.toString())
+  }
+
+  @Test
+  fun `a merge conflict repair publishes a merge of a base that moved during the repair, then merges the new tip`() {
+    initFeatureBranch()
+    val staleTip = advanceRemoteMain()
+    var latestTip = staleTip
+    var repairs = 0
+    val repairLauncher =
+      repairLauncher {
+        repairs += 1
+        git(repoRoot, "fetch", "origin", "main")
+        git(repoRoot, "merge", "--no-commit", "--no-ff", "origin/main")
+        if (repairs == 1) {
+          latestTip = advanceRemoteMain("moved-base.txt")
+          git(repoRoot, "fetch", "origin", "main")
+        }
+      }
+    val identity: PullRequestIdentityLookup = { repo, branch -> conflictingUntilMerged(latestTip).lookup(repo, branch) }
+
+    val result = entry(identity = identity, agentLauncher = repairLauncher).runMonitor("SKILL-904")
+
+    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertEquals(2, repairs)
+    val published = git(origin, "rev-parse", FEATURE_BRANCH)
+    git(origin, "merge-base", "--is-ancestor", staleTip, published)
+    git(origin, "merge-base", "--is-ancestor", latestTip, published)
   }
 
   @Test
@@ -511,14 +567,18 @@ class PhaseMonitorRunTest {
     git(repoRoot, "push", "-u", "origin", FEATURE_BRANCH)
   }
 
-  private fun advanceRemoteMain(): String {
+  private fun advanceRemoteMain(fileName: String = "base.txt"): String {
     val writer = root.resolve("base-writer")
-    git(root, "clone", "--branch", "main", origin.toString(), writer.toString())
-    git(writer, "config", "user.email", "phase-monitor@example.com")
-    git(writer, "config", "user.name", "Phase Monitor")
-    git(writer, "config", "commit.gpgsign", "false")
-    Files.writeString(writer.resolve("base.txt"), "base\n")
-    git(writer, "add", "base.txt")
+    if (Files.exists(writer)) {
+      git(writer, "pull", "--ff-only", "origin", "main")
+    } else {
+      git(root, "clone", "--branch", "main", origin.toString(), writer.toString())
+      git(writer, "config", "user.email", "phase-monitor@example.com")
+      git(writer, "config", "user.name", "Phase Monitor")
+      git(writer, "config", "commit.gpgsign", "false")
+    }
+    Files.writeString(writer.resolve(fileName), "base\n")
+    git(writer, "add", fileName)
     git(writer, "commit", "-m", "Advance base")
     git(writer, "push", "origin", "main")
     return git(writer, "rev-parse", "HEAD")

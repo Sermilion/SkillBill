@@ -58,7 +58,13 @@ Top-level custom fields are allowed. Runtime-consumed fields need `x-runtime-anc
 
 Every YAML under `orchestration/contracts/` is a runtime contract. New contracts: Draft 2020-12 schema in YAML → Kotlin `*_CONTRACT_VERSION` → parity test → a failure-code entry in the owner's `RuntimeFailureCode` enum, thrown as `SkillBillRuntimeException` → loud-fail at every parse seam. Detail: `runtime-kotlin/ARCHITECTURE.md`.
 
-Schema bumps loud-fail legacy records; runtime quarantines and regenerates in-band. Feature-task producers of bounded planning projections, `preplan`, `plan`, and `implement`, re-enter their own fix loop if completed output fails the projection contract.
+Every schema change must ship a migration path for existing persisted data in the same change. Compatible changes must prove that existing records remain readable; version bumps or incompatible changes require explicit migration steps. Validate the source and migrated records, apply coupled updates atomically, and make repeated migration safe. Preserve run identity, completed work, commits, checkpoints, and history. Cover the previous supported version with a regression test, and retain earlier migration steps so older supported records can reach the current version.
+
+Installation and upgrades must preserve all existing runs and persisted user and runtime data. Apply required migrations automatically before the new installation reads or resumes that data. A failed migration must preserve the original data and leave a usable recovery path; installation must not reset, discard, or replace existing data with defaults. Verify upgrade behavior against populated previous-version stores, including interrupted migration and repeated installation.
+
+Run migrations before strict current-version validation and before board or status projection. Unsupported or corrupt records must retain their original data and remain visible with a typed error and recovery guidance. A schema mismatch must not hide an existing run, reset completed work, or regenerate durable evidence as a substitute for migration. Derived caches may be rebuilt from preserved source records after migration; any quarantine or regeneration must retain the original data and emit a diagnostic.
+
+Producer-side gate: feature-task phases owning a bounded planning projection (`preplan`, `plan`, `implement`) re-enter their own fix loop when completed output fails the projection contract.
 
 ## Add-ons
 
@@ -88,16 +94,7 @@ No tests may depend on wall-clock time or thread scheduling. Ban real sleeps, in
 
 ## Desktop QA
 
-Desktop refuses runtimes from another commit. Dirty builds also need matching `SKILL_BILL_INSTALL_RUN_ID`. Never use the operator's installed runtime for QA. Run these commands from `desktop/` in the QA checkout, in order, with one exported run id. Separate Gradle calls are required: `:app:run` can read the runtime record before `installDist` writes it.
-
-```sh
-export SKILL_BILL_INSTALL_RUN_ID=qa-<invocation id>
-./gradlew :runtime-kotlin:runtime-cli:installDist
-SKILL_BILL_STATE_DIR=<dir>/state SKILL_BILL_REVIEW_DB=<dir>/state/review-metrics.db ../runtime-kotlin/runtime-cli/build/install/runtime-cli/bin/runtime-cli stats
-SKILL_BILL_RUNTIME_DIR=$PWD/../runtime-kotlin/runtime-cli/build/install SKILL_BILL_STATE_DIR=<dir>/state SKILL_BILL_REVIEW_DB=<dir>/state/review-metrics.db JAVA_TOOL_OPTIONS="-Duser.home=<dir>/home -Djava.io.tmpdir=<dir>/tmp" ./gradlew :app:run
-```
-
-`stats` creates the isolated store; without it the board reports "The selected database does not exist". Use `SKILL_BILL_REVIEW_DB`; `SKILL_BILL_DB` does nothing. An isolated home's New task screen reports "Not ready: no agent found", as expected.
+QA launches with `cd desktop && ./gradlew :app:runFromSource`. It builds the same-checkout runtime, prepares matching build identities and uses a scratch home under `desktop/app/build/source-run/`. Keep QA state in the scratch paths documented in `desktop/QA.md`; never point QA at the operator's installed runtime.
 
 ## Comments
 

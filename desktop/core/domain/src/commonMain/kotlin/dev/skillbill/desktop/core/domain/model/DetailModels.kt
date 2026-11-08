@@ -102,6 +102,7 @@ data class Detail(
   val validationBranchRuns: List<ValidationBranchRun> = emptyList(),
   val selectedValidationResult: String? = null,
   val selectedExecution: ExecutionInstance? = null,
+  val goalQaPreview: GoalQaPreview? = null,
   val planActivity: List<PlanAgentActivity> = emptyList(),
   val planOutputLines: List<PlanOutputLine> = emptyList(),
   val planOutputTail: List<String> = emptyList(),

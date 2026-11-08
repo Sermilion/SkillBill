@@ -21,9 +21,11 @@ import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.navigation.LocalSidebarToggle
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
 import dev.skillbill.desktop.core.ui.input.ShellInput
 import kotlinx.coroutines.cancel
@@ -49,7 +51,7 @@ class NewTaskChatTabsTest {
       setContent {
         SkillBillTheme(reducedMotion = true) {
           CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-            Box(Modifier.width(400.dp)) { NewTaskChatTabs(items, chats.selected.value, chats::select, chats::requestClose, chats::newChat) }
+            Box(Modifier.width(400.dp)) { NewTaskChatTabs(items, chats.selected.value, chats::select, chats::requestClose, chats::discard, chats::newChat) }
           }
         }
       }
@@ -78,6 +80,50 @@ class NewTaskChatTabsTest {
   }
 
   @Test
+  fun `right-click and Shift+F10 open a tab menu that offers Discard only once the chat has a conversation`() = runComposeUiTest {
+    val scope = TestScope()
+    try {
+      val chats = scope.testNewTaskChats()
+      val drafts = listOf(chats.selected.value, chats.newChat())
+      val items = listOf(
+        OpenChatItem(drafts[0], "Fix footer", "repo-a", "Claude", NewTaskChatStatus.Idle, hasConversation = true),
+        OpenChatItem(drafts[1], "Empty chat", "repo-b", "Claude", NewTaskChatStatus.Idle),
+      )
+      val discarded = mutableListOf<NewTaskDraft>()
+      var toggles = 0
+      setContent {
+        SkillBillTheme(reducedMotion = true) {
+          CompositionLocalProvider(LocalShellInput provides ShellInput(), LocalSidebarToggle provides { toggles++ }) {
+            Box(Modifier.width(1200.dp)) { NewTaskChatTabs(items, chats.selected.value, chats::select, chats::requestClose, { discarded += it }, chats::newChat) }
+          }
+        }
+      }
+      waitForIdle()
+
+      onNodeWithContentDescription("Toggle sidebar").performClick()
+      assertEquals(1, toggles)
+
+      onNodeWithText("Fix footer").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+      onNodeWithText("Fix footer").performKeyInput {
+        keyDown(Key.ShiftLeft)
+        pressKey(Key.F10)
+        keyUp(Key.ShiftLeft)
+      }
+      onNodeWithText("Discard").performClick()
+      waitForIdle()
+      assertEquals(listOf(drafts[0]), discarded)
+      onNodeWithText("Discard").assertDoesNotExist()
+
+      onNodeWithText("Empty chat").performMouseInput { rightClick() }
+      onNodeWithText("Close").assertExists()
+      onNodeWithText("Discard").assertDoesNotExist()
+    } finally {
+      scope.backgroundScope.cancel()
+      scope.cancel()
+    }
+  }
+
+  @Test
   fun `overflow control is absent when tabs fit`() = runComposeUiTest {
     val scope = TestScope()
     try {
@@ -87,7 +133,7 @@ class NewTaskChatTabsTest {
       setContent {
         SkillBillTheme(reducedMotion = true) {
           CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-            Box(Modifier.width(1200.dp)) { NewTaskChatTabs(items, chats.selected.value, chats::select, chats::requestClose, chats::newChat) }
+            Box(Modifier.width(1200.dp)) { NewTaskChatTabs(items, chats.selected.value, chats::select, chats::requestClose, chats::discard, chats::newChat) }
           }
         }
       }
@@ -116,7 +162,7 @@ class NewTaskChatTabsTest {
       setContent {
         SkillBillTheme(reducedMotion = true) {
           CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-            Box(Modifier.width(1200.dp)) { NewTaskChatTabs(items, chats.selected.value, chats::select, chats::requestClose, chats::newChat) }
+            Box(Modifier.width(1200.dp)) { NewTaskChatTabs(items, chats.selected.value, chats::select, chats::requestClose, chats::discard, chats::newChat) }
           }
         }
       }

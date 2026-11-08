@@ -63,14 +63,14 @@ internal fun resumeGroup(updatedAt: Instant, now: Instant, zone: ZoneId = ZoneId
 internal data class ResumeListing(val shown: List<ChatHistoryEntry>, val total: Int)
 
 /**
- * Filters [entries] by [query] on title, branch and agent, keeping input order. A blank query shows the first
+ * Filters [entries] by [query] on summary, title, branch and agent, keeping input order. A blank query shows the first
  * [RESUME_LIMIT] unless [showAll]; a non-blank query shows every match.
  */
 internal fun resumeListing(entries: List<ChatHistoryEntry>, query: String, showAll: Boolean, branchOf: (ChatHistoryEntry) -> String?): ResumeListing {
   val q = query.trim()
   if (q.isEmpty()) return ResumeListing(if (showAll) entries else entries.take(RESUME_LIMIT), entries.size)
   val matches = entries.filter { entry ->
-    listOfNotNull(resumeTitle(entry).text, entry.title, branchOf(entry), agentName(entry.agent), entry.agent.agentId)
+    listOfNotNull(entry.summary, resumeTitle(entry).text, entry.title, branchOf(entry), agentName(entry.agent), entry.agent.agentId)
       .any { it.contains(q, ignoreCase = true) }
   }
   return ResumeListing(matches, matches.size)

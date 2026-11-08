@@ -17,6 +17,7 @@ public data class SpecBundleControl(
   val everStarted: Boolean,
   val workflowId: String?,
   val repositoryIdentity: String?,
+  val ownerRepoRoot: String?,
   val canStart: Boolean,
   val startLabel: String,
   val canPause: Boolean,

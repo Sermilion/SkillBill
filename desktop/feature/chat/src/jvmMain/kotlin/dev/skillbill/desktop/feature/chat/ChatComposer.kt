@@ -13,14 +13,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -48,11 +46,8 @@ import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.feature.chat.newtask.IssuePrefixPicker
 import java.io.File
-import java.io.IOException
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * The active chat's input. Enter sends and Shift+Enter starts a new line; "Pause and act" shows only while the execution runs.
@@ -83,9 +78,8 @@ internal fun ChatComposer(
   val text = workspace.drafts[id].orEmpty()
   val command = text.trim().takeIf { it in CHAT_COMMANDS }
   val images = workspace.pastedImages[id].orEmpty()
-  val scope = rememberCoroutineScope()
   val ready = command != null || (supported && !gone && (text.isNotBlank() || images.isNotEmpty()))
-  val sendNow = stoppable && queued.isNotEmpty() && text.isBlank() && supported && !gone
+  val sendNow = stoppable && queued.isNotEmpty() && text.isBlank() && images.isEmpty() && supported && !gone
   fun run(command: String) {
     workspace.drafts.remove(id)
     when (command) {
@@ -112,20 +106,6 @@ internal fun ChatComposer(
     submit(workspace::send)
     gate.pressed(workspace.now(), viaEnter)
   }
-  // Returns true, consuming the key, only when the clipboard holds an image; a text paste falls through to the field.
-  fun pasteImage(event: KeyEvent): Boolean {
-    if (!event.isPasteShortcut() || !supported || gone) return false
-    val pasted = clipboard.read() ?: return false
-    scope.launch {
-      val image = try {
-        withContext(encodeContext) { normalizedChatImage(pasted) }
-      } catch (_: IOException) {
-        null
-      }
-      if (image != null) workspace.addPastedImage(id, image)
-    }
-    return true
-  }
   Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     ChatActivityPill(session.thread, gone)
     prefixChoice?.takeIf { !gone }?.let { pending ->
@@ -138,9 +118,10 @@ internal fun ChatComposer(
       SbInput(
         text, { workspace.drafts[id] = it },
         modifier = Modifier.fillMaxWidth()
+          .pasteChatImages(supported && !gone, clipboard, encodeContext) { workspace.addPastedImage(id, it) }
           .onPreviewKeyEvent { event ->
             if (event.key == Key.Enter && event.type == KeyEventType.KeyUp) gate.enterReleased()
-            pasteImage(event)
+            false
           }
           .focusRequester(focus)
           .gatesShortcutsWhileFocused(),
@@ -160,8 +141,8 @@ internal fun ChatComposer(
     if (images.isNotEmpty()) {
       Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         // The remove control leaves with its chip, so focus returns to the input for the next paste.
-        images.forEachIndexed { index, _ ->
-          ImageChip(index + 1, onRemove = {
+        images.forEachIndexed { index, image ->
+          ImageChip(index + 1, image, onRemove = {
             workspace.removePastedImage(id, index)
             focus.requestFocus()
           })

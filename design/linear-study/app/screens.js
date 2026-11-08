@@ -319,34 +319,165 @@
     const t = it.subtasks.find((x) => x.id === d.id);
     return { num: pad(d.id), optional: d.optional, lead: S.StatusIcon(SUB_STATE[t.status], 0.5), act: 'sub-select', arg: `${it.id}|${d.id}`, tip: `Subtask ${pad(d.id)}: ${t.title}${d.optional ? ' (optional)' : ''}` };
   };
-  function subtaskInspector(it, s, inline) {
+  function subtaskInspector(st, it, s, inline) {
     const neededBy = it.subtasks.filter((x) => x.deps.some((d) => d.id === s.id)).map((x) => ({ id: x.id, optional: x.deps.find((d) => d.id === s.id).optional }));
+    const cards = (s.phases && s.phases.cards) || {};
     return S.SubtaskInspector({
+      phases: subPhaseSection(st, it, s), noReview: !!cards.review,
       title: inline ? null : s.title, blocked: s.blocked, commit: s.commit,
       spec: s.spec, specAct: 'open-file', specArg: specArg(it, s),
       deps: s.deps.map((d) => subChip(it, d)), neededBy: neededBy.map((d) => subChip(it, d)),
       validation: s.validation, reviews: s.reviews, audit: s.audit,
     });
   }
-  /* Goal finish uses the app's Assessment / QA switch, including missing results. */
-  function finishInspector(it) {
-    return S.PhasePipeline(D.GOAL_FINISH.map((label) => ({ label, state: it.finishDone ? 'done' : '', goal: true })));
+  /* Goal QA while it runs: `it.qaLive` names the stage, the preview state and the screenshots. Above
+   * the results on the QA tab; after QA ends the stage list folds to one row and the verdict heads the block. */
+  function qaLiveBlock(st, it) {
+    const q = it.qaLive, stages = D.QA_STAGES;
+    const atI = stages.findIndex((s) => s.id === q.at);
+    const stateOf = (s, i) => (q.states && q.states[s.id]) || (q.done || i < atI ? 'done' : i === atI ? 'now' : 'pending');
+    const p = q.preview, cur = stages[atI];
+    const videoNow = ['live', 'reconnect', 'waiting'].includes(p.kind);
+    const rows = stages.map((s, i) => {
+      const k = stateOf(s, i);
+      return { name: s.name, state: k, time: (q.times || {})[s.id] || (k === 'now' || k === 'warn' ? 'now' : ''), line: q.lines && q.lines[s.id] ? qaInline(q.lines[s.id]) : '',
+        tag: s.video ? 'video' : s.headless ? 'headless' : null, tagOn: !!s.video && (k === 'now' || k === 'warn') && videoNow };
+    });
+    let preview;
+    if (p.kind === 'later') {
+      const reach = stages.find((s) => s.id === p.reachAt), n = stages.indexOf(reach) - atI;
+      preview = { kind: 'later', title: `Video starts at ${reach.name}`, text: p.why || `QA is on ${cur.name}. ${n === 1 ? 'One stage' : `${n} stages`} to go before the app opens.` };
+    } else if (p.kind === 'waiting') preview = { kind: 'waiting', title: p.text, text: p.sub };
+    else if (p.kind === 'none') preview = { kind: 'none', title: 'No video for this run', text: p.text };
+    else preview = Object.assign({}, p);
+    preview.label = p.kind === 'live' ? `Live preview of the app under QA, ${p.caption}` : `QA preview: ${preview.title || preview.text || (p.kind === 'ended' ? `last frame at ${p.at}` : '')}`;
+    const v = q.done && it.goalQa ? qaView(it.goalQa, { fixLoop: true }) : null;
+    const warn = cur && stateOf(cur, atI) === 'warn';
+    const word = v ? v.word : cur.name, tone = v ? v.tone : warn ? 'blocked' : 'active';
+    return S.QaLive({
+      word, tone, meta: q.done ? `${q.elapsed} total` : `stage ${atI + 1} of ${stages.length} · ${q.elapsed}`,
+      sub: `${q.round ? `Round ${q.round} · ` : ''}Invocation <span class="mono">qa-7c1e</span>`,
+      targets: [{ label: 'desktop · :desktop:app', tone }],
+      rounds: q.rounds, preview, hint: q.hint,
+      callout: q.callout ? S.Callout({ tone: 'warn', body: qaInline(q.callout.text), actions: [S.QaChip(Object.assign({ act: q.callout.chip.mono ? 'open-file' : 'toast', arg: q.callout.chip.mono ? `qa-7c1e/${q.callout.chip.label}` : q.callout.chip.label }, q.callout.chip))] }) : '',
+      shots: q.shots ? { files: q.shots.slice(-3).reverse(), total: q.shots.length } : null,
+      stages: q.done ? { summary: `All ${stages.length} stages ran`, time: q.elapsed } : { stages: rows },
+    });
   }
-  function goalResultSection(st, it, tab) {
-    if (tab === 'qa' && it.goalQa) {
-      const r = qaResults(st, it.goalQa, { fixLoop: true, running: it.lifecycle === 'active' });
-      return secBlock(st, 'goal-qa', { id: 'sec-goal-qa', cls: 'sb-sec--qa', title: 'Goal QA', badge: r.verdict, body: r.body });
+  /* ---------- Phase tabs and PhasePeek cards (design/phase-peek) ----------
+   * The details pane lists a subtask's phases, or Goal finish's, as tabs. A phase that ran and has a card opens it; the
+   * card shows what the phase is doing now, what it produced and its activity. goal_assessment and qa cards hold the full
+   * assessment and QA results (they replace the app's Assessment / QA switch). Selection per item and list:
+   * st.peekSel["<id>|<subtask id or finish>"]. Default: the running or stopped phase, else the last phase that ran. */
+  function finishStates(it) {
+    if (it.finish && it.finish.states) return it.finish.states;
+    const out = {};
+    D.GOAL_FINISH.forEach((id) => { out[id] = it.finishDone ? 'done' : ''; });
+    if (!it.finishDone) {
+      if (it.assessment && it.assessment.state === 'RUNNING') out.goal_assessment = 'now';
+      else if (it.qaLive) { out.goal_assessment = 'done'; out.qa = it.qaLive.done ? 'done' : 'now'; }
     }
-    if (tab === 'assessment' && it.assessment) {
+    return out;
+  }
+  /* The Goal finish row and pane title: running, waiting, done or pending. */
+  function finishState(it) {
+    const v = Object.values(finishStates(it));
+    return v.includes('now') ? 'active' : v.includes('wait') ? 'blocked' : v.includes('fail') ? 'failed' : it.finishDone ? 'done' : 'pending';
+  }
+  const QA_CARD_TONE = { failed: 'fail', blocked: 'wait', done: 'done', faint: 'skipped' };
+  /* A recorded card, or one built from the goal's assessment and QA records (no agent or timing then). */
+  function finishCard(it, id) {
+    const c = it.finish && it.finish.cards && it.finish.cards[id];
+    if (c) return c;
+    if (id === 'goal_assessment' && (it.assessment || it.catalogTab === 'assessment')) {
       const a = it.assessment;
-      return secBlock(st, 'goal-assessment', { id: 'sec-goal-assessment', title: 'Goal assessment', count: `${a.state === 'COMPLETED' ? 'Completed' : 'Running'} · round ${a.round}`, end: a.findings.length > 1 ? [S.Segmented({ act: 'assess-order', value: st.assessOrder || 'default', items: [{ id: 'default', label: 'Default' }, { id: 'priority', label: 'Priority' }, { id: 'status', label: 'Status' }] })] : [], body: S.Box(assessOrder(a.findings, st.assessOrder).map((f) => S.FindingRow({ severity: f.severity, ref: f.ref, title: f.scenario, meta: `<span class="mono">${esc(f.path)}:${f.line}</span> · ${esc(f.verification.toLowerCase())}`, state: f.state === 'FIXED' ? 'Fixed' : f.state === 'REFUTED' ? 'Refuted' : 'Open', stateColor: f.state === 'FIXED' ? 'var(--st-done)' : 'var(--fg-faint)' }))) });
+      return { title: 'Goal assessment', word: a ? (a.state === 'COMPLETED' ? 'Completed' : 'Running') : 'No result', round: a ? `round ${a.round}` : null, madeTitle: 'Findings', madeEnd: { sort: true }, made: [{ kind: 'assessment' }] };
     }
-    const title = tab === 'qa' ? 'Goal QA' : 'Goal assessment';
-    return S.PaneSection({ title, body: S.Box(`<div class="sb-result-missing">No ${tab === 'qa' ? 'QA' : 'assessment'} result is available for this run.</div>`) });
+    if (id === 'qa' && (it.goalQa || it.qaLive || it.catalogTab === 'qa')) {
+      if (it.qaLive && !it.qaLive.done) return { title: 'QA', round: `round ${it.qaLive.round || 1}`, nowTitle: 'Live', now: [{ kind: 'qaLive' }], madeTitle: 'Results', made: [{ kind: 'qaWait' }] };
+      const v = it.goalQa ? qaView(it.goalQa, { fixLoop: true }) : null;
+      return { title: 'QA', word: v ? v.word : 'No result', tone: v ? QA_CARD_TONE[v.tone] : 'skipped', madeTitle: 'Run', made: it.qaLive ? [{ kind: 'qaLive' }] : [], results: [{ kind: 'qaResults' }] };
+    }
+    return null;
+  }
+  function subPhaseStates(it, s) {
+    if (s.phases && s.phases.states) return s.phases.states;
+    const out = {};
+    if (s.status === 'complete' || s.status === 'completed_no_change') D.PHASE_ORDER.forEach((id) => { out[id] = 'done'; });
+    else if (!isFinished(it) && s.id === it.current && it.pipeline && !it.planning) pipelineSteps(it).forEach((p) => { out[p.label] = p.state; });
+    return out;
+  }
+  function subPhaseCounts(it, s) {
+    if (s.phases && s.phases.counts) return s.phases.counts;
+    return !isFinished(it) && s.id === it.current && it.pipeline && it.pipeline.now ? { [it.pipeline.now]: it.exec } : {};
+  }
+  function peekTabs(st, it, key, order, states, counts, cardOf, label) {
+    const can = (id) => !!states[id] && !!cardOf(id);
+    const live = order.find((id) => ['now', 'fail', 'wait'].includes(states[id]) && can(id));
+    const ran = order.filter((id) => states[id] === 'done' && can(id));
+    const pick = st.peekSel[`${it.id}|${key}`];
+    const sel = pick && can(pick) ? pick : live || ran[ran.length - 1] || null;
+    const tabs = S.PhasePipeline(order.map((id) => ({ label: id, state: states[id] || '', count: counts[id] || null, act: can(id) ? 'peek-pill' : null, arg: `${it.id}|${key}|${id}`, selected: id === sel })), { tabs: true, label });
+    return { tabs, card: sel ? peekCard(st, it, sel, cardOf(sel), states[sel]) : '' };
+  }
+  function peekBlock(st, it, b) {
+    switch (b.kind) {
+      case 'signal': return S.PeekSignal({ live: b.live, icon: b.icon, wrap: b.wrap, html: esc(b.text), ago: b.ago });
+      case 'edit': return S.PeekSignal({ icon: 'pencil', html: `${esc(b.agent)} edited <span class="path" title="${esc(b.path)}">${esc(b.path.split('/').pop())}</span>`, keep: `<span class="ins">+${b.ins}</span> <span class="del">−${b.del}</span>`, ago: b.ago });
+      case 'cmd': return S.PeekCmd(b.text);
+      case 'cells': return S.PeekCells(b.cells);
+      case 'text': return `<div class="sb-pk-tx">${b.html}</div>`;
+      case 'stats': return S.PeekStats(b.items);
+      case 'out': return b.items.map((o) => S.PeekOutput({ icon: o.icon, html: o.html, end: o.end, tip: o.tip, external: o.external, act: o.toast ? 'toast' : null, arg: o.toast })).join('');
+      case 'finds': return b.rows.map(([severity, title, state]) => S.PeekFinding({ severity, title, state })).join('');
+      case 'checks': return b.rows.map(([name, state, time, cmd]) => S.PeekCheck({ name, state, time, cmd })).join('');
+      case 'facts': return S.PeekFacts(b.items);
+      case 'assessment': {
+        const a = it.assessment;
+        if (!a) return S.Box('<div class="sb-result-missing">No assessment result is available for this run.</div>');
+        const rows = assessOrder(a.findings, st.assessOrder).map((f) => S.FindingRow({ stacked: true, severity: f.severity, ref: f.ref, title: f.scenario, meta: `<span class="mono">${esc(f.path)}:${f.line}</span> · ${esc(f.verification.toLowerCase())}`, state: f.state === 'FIXED' ? 'Fixed' : f.state === 'REFUTED' ? 'Refuted' : 'Open', stateColor: f.state === 'FIXED' ? 'var(--st-done)' : 'var(--fg-faint)' }));
+        const facts = [a.exit ? ['Exit', esc(a.exit)] : null, a.fixCommit ? ['Fix commit', `<span class="mono">${esc(a.fixCommit)}</span>`] : null].filter(Boolean);
+        return S.Box(rows) + (facts.length ? S.PeekFacts(facts) : '');
+      }
+      case 'qaLive': return qaLiveBlock(st, it);
+      case 'qaRun': return `<div class="sb-qlive">${b.rounds ? S.QaRounds({ rounds: b.rounds }) : ''}${S.QaPreview({ kind: 'ended', at: b.at, label: `QA preview, last frame at ${b.at}` })}${S.QaShots({ files: b.shots, total: b.total })}${S.QaStageList({ summary: `All ${D.QA_STAGES.length} stages ran`, time: b.time })}</div>`;
+      case 'qaResults': return it.goalQa ? qaResults(st, it.goalQa, { fixLoop: true, fixing: b.fixing, running: it.lifecycle === 'active' && !it.goalQa.outcome }).body : S.Box('<div class="sb-result-missing">No QA result is available for this run.</div>');
+      case 'qaWait': return '<div class="sb-qlive-wait">Results appear here when QA writes its report.</div>';
+      case 'qaFinding': {
+        const f = b.finding, key = `peek:${it.id}:${f.id}:${b.state}`;
+        const dir = f.evidencePaths.map((p) => S.QaChip({ icon: 'qaImage', label: qaFile(p), mono: true, tip: p, act: 'open-file', arg: p }));
+        return S.Box([S.QaItem({ glyph: 'qaBug', tone: b.tone, ref: f.id, title: f.title, state: b.state, line: qaInline(capFirst(f.observed)), act: 'qa-toggle', arg: key, open: st.qaOpen.has(key),
+          fields: [['Expected', qaInline(f.expected)], ['Steps', qaInline(f.steps)]], chips: [...dir, S.QaChip({ icon: 'qaCopy', label: 'Copy steps', act: 'copy', arg: f.steps })] })]);
+      }
+      default: return '';
+    }
+  }
+  function peekCard(st, it, id, c, state) {
+    const blocks = (list) => (list || []).map((b) => peekBlock(st, it, b)).join('');
+    const sortable = c.madeEnd && c.madeEnd.sort;
+    const end = sortable ? (it.assessment && it.assessment.findings.length > 1 ? S.Segmented({ act: 'assess-order', value: st.assessOrder || 'default', items: [{ id: 'default', label: 'Default' }, { id: 'priority', label: 'Priority' }, { id: 'status', label: 'Status' }] }) : '') : c.madeEnd ? esc(c.madeEnd) : '';
+    const parts = [
+      c.now && ['now', 'wait'].includes(state) ? S.PeekPart({ title: c.nowTitle || (state === 'wait' ? 'Waiting on' : 'Now'), live: state === 'now', body: blocks(c.now) }) : '',
+      c.made && c.made.length ? S.PeekPart({ title: c.madeTitle || 'Produced', end, control: !!(sortable && end), body: blocks(c.made) }) : '',
+      c.results ? S.PeekPart({ title: 'Results', body: blocks(c.results) }) : '',
+    ];
+    const ag = c.agent ? agentOf(c.agent) : null;
+    return S.PhasePeek({ id, state, tone: c.tone, title: c.title, word: c.word, why: c.why,
+      agent: ag ? S.Avatar({ name: c.agent, initials: ag.initials, color: ag.color, size: 'sm' }) : '', model: c.model || c.agent || '',
+      round: c.round, when: c.when, dur: c.dur, parts, activity: c.activity,
+      foot: c.open ? { label: c.open.label, act: 'toast', arg: c.open.toast || c.open.label, external: c.open.external } : null });
+  }
+  function subPhaseSection(st, it, s) {
+    const states = subPhaseStates(it, s), cards = (s.phases && s.phases.cards) || {};
+    const p = peekTabs(st, it, String(s.id), D.PHASE_ORDER, states, subPhaseCounts(it, s), (id) => cards[id], `Phases of subtask ${pad(s.id)}`);
+    const vals = D.PHASE_ORDER.map((id) => states[id]);
+    const ran = vals.filter((v) => v === 'done').length;
+    const note = (s.phases && s.phases.note) || (vals.some(Boolean) && ran < vals.length ? `${ran} of ${vals.length}` : '');
+    return `<div class="sb-peek-sec"><div class="sb-pane-ti"><span>Phases</span>${note ? `<span class="end">${esc(note)}</span>` : ''}</div>${p.tabs}${p.card || '<div class="sb-peek-none">No phase has run yet.</div>'}</div>`;
   }
   function finishResults(st, it) {
-    const tab = st.finishTab[it.id] || 'assessment';
-    return `<div class="sb-finish-results"><div class="sb-finish-tabs">${S.Segmented({ act: 'finish-tab', value: tab, items: [{ id: 'assessment', label: 'Assessment', arg: `${it.id}|assessment` }, { id: 'qa', label: 'QA', arg: `${it.id}|qa` }] })}</div>${S.PaneSection({ title: 'Goal finish', status: { state: it.finishDone ? 'done' : 'pending' }, body: finishInspector(it) })}${goalResultSection(st, it, tab)}</div>`;
+    const p = peekTabs(st, it, 'finish', D.GOAL_FINISH, finishStates(it), (it.finish && it.finish.counts) || {}, (id) => finishCard(it, id), 'Goal finish phases');
+    return `<div class="sb-finish-results">${S.PaneSection({ title: 'Goal finish', status: { state: finishState(it) }, body: `<div class="sb-peek-sec">${p.tabs}${p.card || '<div class="sb-peek-none">No phase has run yet.</div>'}</div>` })}</div>`;
   }
   function subtaskSection(st, it, inline) {
     const sel = selectedSub(st, it);
@@ -356,16 +487,17 @@
       const key = String(s.id);
       const current = !finished && s.id === it.current;
       const meta = [s.commit ? S.ShortId({ value: s.commit, label: 'commit' }) : '', current && it.live ? subClock(it) : '', s.status === 'completed_no_change' ? S.Label({ text: 'no change', dot: false }) : ''];
-      return S.SubtaskRow({ num: pad(s.id), state: SUB_STATE[s.status], frac: 0.5, title: s.title, current, selected: key === sel, meta, act: 'sub-select', arg: `${it.id}|${key}`, body: inline && key === sel ? subtaskInspector(it, s, true) : '', expanded: open });
+      return S.SubtaskRow({ num: pad(s.id), state: SUB_STATE[s.status], frac: 0.5, title: s.title, current, selected: key === sel, meta, act: 'sub-select', arg: `${it.id}|${key}`, body: inline && key === sel ? subtaskInspector(st, it, s, true) : '', expanded: open });
     });
-    rows.push(S.SubtaskRow({ num: '··', state: it.finishDone ? 'done' : 'pending', title: 'Goal finish', selected: sel === 'finish', meta: [], act: 'sub-select', arg: `${it.id}|finish`, body: inline && sel === 'finish' ? finishResults(st, it) : S.PhasePipeline(D.GOAL_FINISH.map((id) => ({ label: id, state: it.finishDone ? 'done' : '', goal: true }))), expanded: open }));
+    const fin = finishStates(it), finCounts = (it.finish && it.finish.counts) || {};
+    rows.push(S.SubtaskRow({ num: '··', state: finishState(it), title: 'Goal finish', selected: sel === 'finish', meta: [], act: 'sub-select', arg: `${it.id}|finish`, body: inline && sel === 'finish' ? finishResults(st, it) : S.PhasePipeline(D.GOAL_FINISH.map((id) => ({ label: id, state: fin[id] || '', count: finCounts[id] || null, goal: true }))), expanded: open }));
     return secBlock(st, 'subtasks', { title: 'Subtasks', count: `${it.done}/${it.total}`, end: [S.ProgressRing(it.done, it.total, { text: false })], body: S.SubtaskList({ label: `Subtasks of ${it.id}`, rows }) }, it.subtasks.length > 10);
   }
   function inspectorPane(st, it) {
     const sel = selectedSub(st, it);
     if (sel === 'finish') return finishResults(st, it);
     const s = it.subtasks.find((x) => String(x.id) === sel);
-    return S.PaneSection({ title: `Subtask ${pad(s.id)}`, status: { state: SUB_STATE[s.status], frac: 0.5 }, body: subtaskInspector(it, s, false) });
+    return S.PaneSection({ title: `Subtask ${pad(s.id)}`, status: { state: SUB_STATE[s.status], frac: 0.5 }, body: subtaskInspector(st, it, s, false) });
   }
   /* Spec files: the goal-level files only (subtask specs open from the inspector), manifest, spec.md, then by name. */
   function specFilesPane(it) {
@@ -510,9 +642,9 @@
     const unfinished = unsettled || outcome === 'incomplete';
     const report = (q.reportText || '').trim();
     const skipToken = d.skipReason || (report.match(/^reason:[ \t]*([a-z_]+)/im) || [])[1] || null;
-    const word = o.running && unsettled ? 'Running' : n.open || outcome === 'findings' ? 'Needs your review' : outcome === 'skipped' ? 'Skipped'
+    const word = o.fixing && n.open ? 'Fixing' : o.running && unsettled ? 'Running' : n.open || outcome === 'findings' ? 'Needs your review' : outcome === 'skipped' ? 'Skipped'
       : unfinished && !report ? 'Did not finish' : n.untested || unfinished ? 'Incomplete' : n.left ? 'Passed, cleanup needed' : n.fixed ? 'Passed after fixes' : 'Passed';
-    const tone = { Running: 'faint', 'Needs your review': 'failed', 'Did not finish': 'failed', Skipped: skipToken === 'empty_scope' ? 'faint' : 'blocked', Incomplete: 'blocked', 'Passed, cleanup needed': 'blocked' }[word] || (tagged ? 'done' : 'faint');
+    const tone = { Running: 'faint', Fixing: 'blocked', 'Needs your review': 'failed', 'Did not finish': 'failed', Skipped: skipToken === 'empty_scope' ? 'faint' : 'blocked', Incomplete: 'blocked', 'Passed, cleanup needed': 'blocked' }[word] || (tagged ? 'done' : 'faint');
     const kinds = {};
     retained.forEach((r) => { kinds[r.kind] = (kinds[r.kind] || 0) + 1; });
     const leftList = joinedList([...Object.entries(kinds).map(([k, c]) => (k === 'process' ? (c === 1 ? '1 process running' : `${c} processes running`) : counted(c, humanized(k)))), ...(edits.length ? [counted(edits.length, 'temporary edit')] : [])]);
@@ -521,6 +653,7 @@
     const passedLine = !tagged ? 'QA passed. This run has no tagged checks.' : n.passed === 1 ? 'The 1 check passed.' : `All ${n.passed} checks passed.`;
     const body = {
       Running: () => ['QA is still running.', n.open ? `It has ${counted(n.open, 'open problem')} so far.` : null],
+      Fixing: () => [`QA found ${counted(n.open, 'problem')}. qa_fix is working on ${n.open === 1 ? 'it' : 'them'}, then QA runs again.`, checks],
       'Needs your review': () => (n.open ? [`${o.fixLoop ? 'QA could not fix' : 'QA found'} ${counted(n.open, 'problem')}${n.untested ? ` and could not test ${things}` : ''}.`, checks] : ['QA reported problems but listed none of them. Open the full report.']),
       Skipped: () => [skipToken === 'empty_scope' ? 'QA skipped this change. No acceptance criterion describes behavior it can exercise.' : skipToken ? `QA skipped this change because ${skipPhrase(skipToken)}.` : 'QA skipped this change and did not say what was missing.'],
       'Did not finish': () => ['QA stopped before it wrote a report, so this change has no QA result.'],
@@ -549,7 +682,7 @@
       fixed: fixed.length ? fixed.map((f) => ({ title: `${f.id} ${f.title}`, name: f.title, detail: capFirst(f.observed || ''), evidence: f.evidencePaths || [] })) : null,
       passed: passed.length ? passed.map(gapRow) : null,
       runDetails: [q.failureKind ? capFirst(humanized(q.failureKind)) : null, q.reason].filter(Boolean).join('\n') || null,
-      report: report ? { text: q.reportText, preview: noChecks ? 'No tagged checks in this run' : 'Isolation, cleanup and the agent’s notes', first: noChecks ? firstParagraph(report) : null } : null,
+      report: report ? { text: q.reportText, preview: q.reportPreview || (noChecks ? 'No tagged checks in this run' : 'Isolation, cleanup and the agent’s notes'), first: noChecks ? firstParagraph(report) : null } : null,
       /* An older run has no stored report path; its report.md sits in the run directory. */
       reportPath: d.reportPath || (dir ? dir.replace(/\/?$/, '/') + 'report.md' : null), targets,
       unblock: outcome === 'incomplete' || outcome === 'skipped' || notTested.length ? qaUnblock(q.reportText) : [],
@@ -569,7 +702,7 @@
       : o.namesOnly ? paths.map((p) => S.QaChip({ icon: /\.(png|jpe?g|webp|mp4)$/i.test(p) ? 'qaImage' : 'qaFile', label: qaFile(p), mono: true, tip: `${p}. The QA run directory is not stored, so this file does not open.` })) : []);
     const copy = (label, text) => S.QaChip({ icon: 'qaCopy', label, act: 'copy', arg: text });
     const needs = v.open.map((f) => S.QaItem(Object.assign({
-      glyph: 'qaBug', tone: 'failed', ref: f.id, title: shortenPaths(f.title), state: f.state, line: f.observed && qaInline(f.observed),
+      glyph: 'qaBug', tone: o.fixing ? 'blocked' : 'failed', ref: f.id, title: shortenPaths(f.title), state: o.fixing ? 'Fixing' : f.state, line: f.observed && qaInline(f.observed),
       fields: [['Expected', f.expected && qaInline(f.expected)], ['Steps', f.steps && qaInline(f.steps)]],
       chips: [...evidence(f.evidence), f.steps ? copy('Copy steps', f.steps.replace(/`/g, '')) : ''],
     }, f.expected || f.steps || ((v.dir || o.namesOnly) && f.evidence.length) ? toggle('f:' + f.id) : {}, o.select ? o.select(f.id) : {})));
@@ -592,7 +725,7 @@
     return {
       verdict: S.QaVerdict({ tone: v.tone, word: v.word }),
       body: S.QaResults({ sentence: v.sentence, targets: v.targets, folds, groups: [
-        { label: 'Needs you', items: needs, head: o.selectHead || null }, { label: 'Left behind', items: left }, { label: 'Not tested', items: gaps },
+        { label: o.fixing ? 'Sent to qa_fix' : 'Needs you', items: needs, head: o.selectHead || null }, { label: 'Left behind', items: left }, { label: 'Not tested', items: gaps },
         { label: 'Unblock', items: unblock, foot: S.QaChip({ icon: 'qaOpen', label: 'Open qa.md', act: 'open-file', arg: '.skill-bill/phases/qa.md', tip: 'Opens .skill-bill/phases/qa.md. The app never writes it.' }) },
       ] }),
     };
@@ -1385,7 +1518,7 @@
 
     const location = `<div class="l-row g-1 l-wrap">${S.Button({ label: r.path, icon: 'folder', size: 'sm', variant: 'ghost', act: 'toast', arg: `Opened ${r.path}` })}${it.branch ? S.Button({ label: it.branch, icon: 'branch', size: 'sm', variant: 'ghost', act: 'toast', arg: `Opened ${r.web}/tree/${it.branch}` }) : `<span class="t-faint" style="font-size:var(--t-sm)">no branch</span>`}</div>`;
     const metrics = S.MetricStrip([
-      goal ? (it.planning ? { label: 'Goal stage', value: 'Planning' } : finished ? { label: 'Subtasks', value: `${it.done || 0}`, unit: `/ ${it.total || 0}`, note: 'complete' } : { label: 'Subtask', value: `${it.current}`, unit: `/ ${it.total}`, note: `${it.done} complete · ${it.total - it.done - 1} pending` }) : { label: 'Step', value: `<span class="mono" style="font-size:var(--t-md)">${esc(it.step)}</span>`, note: it.exec ? esc(it.exec) : '&nbsp;' },
+      goal ? (it.planning ? { label: 'Goal stage', value: 'Planning' } : finished || it.current == null ? { label: 'Subtasks', value: `${it.done || 0}`, unit: `/ ${it.total || 0}`, note: 'complete' } : { label: 'Subtask', value: `${it.current}`, unit: `/ ${it.total}`, note: `${it.done} complete · ${it.total - it.done - 1} pending` }) : { label: 'Step', value: `<span class="mono" style="font-size:var(--t-md)">${esc(it.step)}</span>`, note: it.exec ? esc(it.exec) : '&nbsp;' },
       goal ? { label: 'Phase', value: esc(it.planning ? 'plan' : it.step), note: it.planning ? `${it.planned}/${it.total} plans saved` : esc(it.exec || ' ') } : null,
       finished ? { label: 'Total run time', value: S.fmtDur(it.goalMs), note: `finished ${esc(it.finishedAt || '')}` } : { label: goal ? 'Goal active' : it.kind === 'operation' ? 'Operation elapsed' : 'Phase elapsed', value: clock(it), note: it.live ? 'ticking' : 'last known duration' },
       goal && it.subMs != null && !finished ? { label: 'Subtask active', value: subClock(it), note: it.live ? 'ticking' : 'last known duration' } : null,
@@ -1430,7 +1563,7 @@
       crumbs: [{ label: 'Work', act: 'nav', arg: 'work' }, sec ? { label: sec[1], act: 'section', arg: sec[0] } : { label: 'History', act: 'nav', arg: 'history' }, { label: rowKey(it) }],
       actions: [idx >= 0 ? S.Pager({ index: idx, total: liveList.length }) : '', it.refreshFailed ? S.StaleIndicator() : '', ...paneToggles(st), S.IconButton({ icon: 'panelRight', label: 'Toggle details', kbd: '⌘ I', act: 'toggle-props', on: st.propsOpen })],
     });
-    const body = `<div class="sb-split"><div class="sb-scroll" data-scroll="detail"><div class="sb-doc">${parts.join('')}</div></div>${pane ? `<aside class="sb-pane${goal && (!subs || selectedSub(st, it) === 'finish') ? ' sb-pane--wide' : ''}" aria-label="Details">${props}</aside>` : ''}</div>`;
+    const body = `<div class="sb-split"><div class="sb-scroll" data-scroll="detail"><div class="sb-doc">${parts.join('')}</div></div>${pane ? `<aside class="sb-pane${goal ? ' sb-pane--wide' : ''}" aria-label="Details">${props}</aside>` : ''}</div>`;
     return workArea(st, header, body);
   }
 
@@ -1808,11 +1941,18 @@
   function newTask(st) {
     const c = ntChat(st);
     const tabs = S.ChatTabs({ count: st.nt.chats.length, tabs: st.nt.chats.map((t, i) => ({ id: t.id, label: chatLabel(t), status: chatStatus(t), on: i === st.nt.active, tip: `${chatLabel(t)} · ${t.repo || 'no repository'} · ${t.agent}` })) });
-    const header = S.ViewHeader({
-      crumbs: c.lines.length ? [{ label: 'New task' }, { label: chatLabel(c) }] : [{ label: 'New task' }],
-      actions: [c.lines.length ? S.Button({ label: 'Discard', size: 'sm', act: 'chat-discard', tip: 'Close this chat and remove it from Recent chats' }) : '', ...paneToggles(st)],
-    });
-    return workArea(st, header, tabs + (chatEmpty(c) ? ntHome(st, c) : ntTranscript(c)) + ntComposer(st, c));
+    /* No view header: the tab strip is the top of the screen, and Discard lives in each tab's right-click menu (chatTabMenu). */
+    return workArea(st, '', tabs + (chatEmpty(c) ? ntHome(st, c) : ntTranscript(c)) + ntComposer(st, c));
+  }
+  /* A chat tab's right-click menu (NewTaskChatTabMenu). Discard shows once the chat has messages: it closes the chat and removes it
+   * from Recent chats, where Close keeps it there. */
+  function chatTabMenu(st, id) {
+    const c = st.nt.chats.find((x) => String(x.id) === String(id));
+    if (!c) return '';
+    return S.Menu({ items: [
+      { icon: 'x', label: 'Close', kbd: '⌘ W', act: 'chat-close', arg: c.id },
+      c.lines.length ? { icon: 'trash', label: 'Discard', act: 'chat-discard', arg: c.id, danger: true } : null,
+    ].filter(Boolean) });
   }
 
   /* Repository and base branch picker (NewTaskRepositoryPicker). Picking a repository keeps it open and moves to the branch
@@ -1925,9 +2065,9 @@
   window.Screens = {
     buildOf, app, work, detail, history, settingsPage, specsPane, terminal, tierOf, lookup, itemBy, subKeys, selectedSub, paneShown,
     statusIcon, stepText, clock, rowKey, repoOf, agentOf, LIFE, SECTIONS, resumable, controllable, pauseEligible, recoveryOffered,
-    newTask, ntChat, chatLabel, chatStatus, chatEmpty, ntSendButton, pickerItems, targetPicker, targetPickerView, chatMenu, queuePanel,
+    newTask, ntChat, chatLabel, chatStatus, chatEmpty, ntSendButton, pickerItems, targetPicker, targetPickerView, chatMenu, chatTabMenu, queuePanel,
     resumeListing, resumePalette, resumePaletteView,
-    qaView, qaResults, devicePanel, usageData,
+    qaView, qaResults, qaLiveBlock, peekCard, finishResults, devicePanel, usageData,
     isPlanRun, planStrip, planNow, planTeaser, planActivity, planBundle, planTranscript, planBriefing, PLAN_STAGES,
     specOf, specPath, specControl, specMenuItems, specPanelItems, specProject, specAgent, specBar, get specRows() { return specRows; },
     isValidationRun, shapeReport, validationCard, validationDoc, valDur, verifyOutcome, checkRow, valDefaultParts, valDefaultChecks, checkExpandable, verifyCtx, verifyState, fixItems, verifyFixText, verifyQaDemo, VSTEP, devicePanelView, deviceTrigger, deviceOptions, devicePickable, deviceList,

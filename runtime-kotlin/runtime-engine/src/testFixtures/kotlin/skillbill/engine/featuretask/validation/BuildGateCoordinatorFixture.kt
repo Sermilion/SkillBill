@@ -9,6 +9,8 @@ import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.process.ShutdownHookPort
+import skillbill.ports.process.ShutdownHookRegistration
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 
@@ -17,6 +19,7 @@ fun FeatureTaskRuntimeBuildGateCoordinator(
   runner: ValidationGateRunner,
   repoLocalConfig: RepoLocalConfigPort,
   diagnostics: RuntimeDiagnostics,
+  shutdownHooks: ShutdownHookPort = NoShutdownHooks,
 ): FeatureTaskRuntimeBuildGateCoordinator {
   val strategies = statusProjectionPhaseStrategies()
   val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
@@ -27,5 +30,7 @@ fun FeatureTaskRuntimeBuildGateCoordinator(
       FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
       FeatureTaskRuntimeExecutionPlanCompatibility(codec, strategies), diagnostics,
     )
-  return FeatureTaskRuntimeBuildGateCoordinator(resolver, runner, repoLocalConfig, diagnostics, plans)
+  return FeatureTaskRuntimeBuildGateCoordinator(resolver, runner, repoLocalConfig, diagnostics, plans, shutdownHooks)
 }
+
+val NoShutdownHooks: ShutdownHookPort = ShutdownHookPort { ShutdownHookRegistration { true } }

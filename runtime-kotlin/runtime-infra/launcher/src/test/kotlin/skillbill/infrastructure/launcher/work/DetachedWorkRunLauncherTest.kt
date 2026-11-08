@@ -70,6 +70,31 @@ class DetachedWorkRunLauncherTest {
   }
 
   @Test
+  fun `new phase and operation iterations replace stopped owners but refuse an already running iteration`() {
+    for (arguments in listOf(listOf("phase", "validation"), listOf("operation", "verify", "requirements"))) {
+      val home = Files.createTempDirectory("new-runtime-iteration")
+      executable(home, "#!/bin/sh\nuntil [ -e release ]; do :; done", "skill-bill")
+      val runtime = launcherWithoutStartupGrace(home)
+      val request = runtimeRequest(home).copy(kind = WorkRunLaunchKind.RuntimeCommand(arguments))
+      val first = assertIs<WorkRunLaunchResult.Started>(runtime.start(request))
+      try {
+        assertIs<WorkRunLaunchResult.Refused>(runtime.start(request))
+      } finally {
+        Files.createFile(home.resolve("release"))
+        assertEquals(0, assertNotNull(first.exit).toCompletableFuture().get().code)
+      }
+      Files.delete(home.resolve("release"))
+      val next = assertIs<WorkRunLaunchResult.Started>(runtime.start(request))
+      try {
+        assertIs<WorkRunLaunchResult.Refused>(runtime.start(request))
+      } finally {
+        Files.createFile(home.resolve("release"))
+        assertEquals(0, assertNotNull(next.exit).toCompletableFuture().get().code)
+      }
+    }
+  }
+
+  @Test
   fun `the host agent home reaches a runtime command when the run recorded none`() {
     val home = Files.createTempDirectory("host-agent-home")
     executable(home, RECORD_AGENT_HOME, "skill-bill")

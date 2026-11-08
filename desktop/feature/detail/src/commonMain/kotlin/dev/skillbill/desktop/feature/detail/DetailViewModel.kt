@@ -15,12 +15,15 @@ import dev.skillbill.desktop.core.domain.model.DetailListOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
+import dev.skillbill.desktop.core.domain.model.QaPreviewRequest
+import dev.skillbill.desktop.core.domain.model.QaPreviewState
 import dev.skillbill.desktop.core.domain.model.StandaloneRelaunch
 import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
 import dev.skillbill.desktop.core.domain.model.selectableSubtaskIds
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.liveRows
+import dev.skillbill.desktop.core.domain.repository.QaPreviewRepository
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.repository.WorkActivityRepository
 import dev.skillbill.desktop.core.domain.repository.WorkChangeScopesRepository
@@ -47,6 +50,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -87,6 +92,7 @@ class DetailViewModel(
   workControls: WorkControlRepository,
   private val toasts: ToastQueue,
   private val settings: AppSettingsRepository,
+  private val qaPreview: QaPreviewRepository,
 ) : ViewModel() {
   private val mutableState = MutableStateFlow(
     DetailUiState(
@@ -128,6 +134,11 @@ class DetailViewModel(
   private val verifyFixActions = VerifyFixActions(viewModelScope, settings, toasts, mutableState) { effectChannel.trySend(it) }
   private val verifyAgainLauncher = VerifyAgainLauncher(viewModelScope, workControls, session, toasts, mutableState)
 
+  override fun onCleared() {
+    updatePreviewInputs { it.copy(qaPreviewVisible = false) }
+    super.onCleared()
+  }
+
   init {
     selection.select(null)
     controls.state.onEach { controls -> mutableState.update { it.copy(controls = controls) } }.launchIn(viewModelScope)
@@ -151,9 +162,10 @@ class DetailViewModel(
       }
     }.launchIn(viewModelScope)
     session.state.map { (it as? DatabaseSessionState.Open)?.sessionId }.distinctUntilChanged().onEach { sessionId ->
-      if (resolvedSessionId != sessionId) invalidateFavoriteForSessionChange()
+      if (resolvedSessionId != sessionId) invalidateFavoriteForSessionChange() else updatePreviewInputs { it }
     }.launchIn(viewModelScope)
     observe()
+    observeQaPreview()
     observeChanges()
     observeActivity()
     board.observe(ShellBoard.query).onEach { boardState ->
@@ -165,7 +177,7 @@ class DetailViewModel(
           row.pauseRequested != latestBoardRow.pauseRequested || row.stepLabel != latestBoardRow.stepLabel
         )
       if (row != null) latestBoardRow = row
-      mutableState.update { state ->
+      updatePreviewInputs { state ->
         val header = row?.let(state.header::withBoardVerdicts) ?: state.header
         state.copy(header = header, boardPosition = boardPosition(boardState, state.header.id))
       }
@@ -214,6 +226,10 @@ class DetailViewModel(
   }
 
   fun onAction(action: DetailAction) {
+    if (action is DetailAction.SetQaPreviewVisible) {
+      updatePreviewInputs { it.copy(qaPreviewVisible = action.visible) }
+      return
+    }
     if (!state.value.itemResolved && action != DetailAction.Retry && action !is DetailAction.Navigate) return
     if (action is DetailAction.ToggleFix || action is DetailAction.SetFixRoute || action is DetailAction.ToggleSelectAllFixes ||
       action == DetailAction.ClearFixSelection || action == DetailAction.FixInChat || action == DetailAction.StartGoalWithFixes ||
@@ -229,7 +245,7 @@ class DetailViewModel(
       is DetailAction.ToggleQaCase -> toggleQaCase(action.key)
       is DetailAction.ToggleValidationCheck -> toggleValidationCheck(action.key)
       is DetailAction.SetAllQaCases -> mutableState.update { current -> current.copy(qaCaseOverrides = current.qaCaseOverrides + action.keys.associateWith { action.open }) }
-      is DetailAction.SelectQaRun -> if (action.invocationId != null) mutableState.update { it.copy(selectedQaRun = action.invocationId) }
+      is DetailAction.SelectQaRun -> if (action.invocationId != null) updatePreviewInputs { it.copy(selectedQaRun = action.invocationId) }
       is DetailAction.OpenQaReport -> open(FILE_NOT_OPENED) { specs.openFileInDefaultApp(action.path) }
       is DetailAction.OpenQaEvidence -> open(FILE_NOT_OPENED) { specs.openFileUnder(action.path, action.invocationDirectory) }
       DetailAction.OpenQaPhaseInstructions -> openQaPhaseInstructions()
@@ -261,6 +277,55 @@ class DetailViewModel(
 
   private fun loadedDetail() = (state.value.sections as? SectionsUi.Loaded)?.detail
 
+  private fun observeQaPreview() {
+    viewModelScope.launch {
+      mutableState.map { it.qaPreviewRequest to it.qaPreviewGeneration }.distinctUntilChanged().collectLatest { (request, generation) ->
+        if (!isCurrentPreview(request, generation)) return@collectLatest
+        if (request == null || !request.active) return@collectLatest
+        qaPreview.observe(request).collect { preview ->
+          mutableState.update { current ->
+            if (current.qaPreviewGeneration == generation && current.qaPreviewRequest == request &&
+              currentPreviewRequest(current) == request
+            ) current.copy(qaPreview = preview) else current
+          }
+        }
+      }
+    }
+  }
+
+  private fun updatePreviewInputs(transform: (DetailUiState) -> DetailUiState) {
+    mutableState.update { current ->
+      val updated = transform(current)
+      val request = currentPreviewRequest(updated)
+      if (request == current.qaPreviewRequest) updated else updated.copy(
+        qaPreviewRequest = request,
+        qaPreviewGeneration = current.qaPreviewGeneration + 1,
+        qaPreview = if (request?.active == true) QaPreviewState.Waiting(QaPreviewState.Reason.SourceUnavailable) else QaPreviewState.Ended,
+      )
+    }
+  }
+
+  private fun currentPreviewRequest(detailState: DetailUiState): QaPreviewRequest? {
+    val openSessionId = (session.state.value as? DatabaseSessionState.Open)?.sessionId ?: return null
+    val detail = (detailState.sections as? SectionsUi.Loaded)?.detail ?: return null
+    if (!detailState.qaPreviewVisible || !detailState.itemResolved ||
+      detailState.header.control.sessionId != openSessionId
+    ) return null
+    val preview = selectedQaPreview(detailState.header, detail, detailState.selectedQaRun, detailState.subtaskChoice.key) ?: return null
+    return QaPreviewRequest(
+      sessionId = openSessionId,
+      workId = detailState.header.id,
+      invocationId = preview.invocationId,
+      invocationDirectory = preview.directory,
+      active = preview.active,
+    )
+  }
+
+  private fun isCurrentPreview(request: QaPreviewRequest?, generation: Long): Boolean {
+    val current = mutableState.value
+    return current.qaPreviewGeneration == generation && current.qaPreviewRequest == request && currentPreviewRequest(current) == request
+  }
+
   private fun openNewerVerifyRun(id: String) {
     viewModelScope.launch {
       when (val resolution = detail.resolve(id)) {
@@ -288,7 +353,7 @@ class DetailViewModel(
 
   private fun chooseSubtask(choice: SubtaskChoice) {
     subtaskSelections.set(item.id, choice)
-    mutableState.update { it.copy(subtaskChoice = choice) }
+    updatePreviewInputs { it.copy(subtaskChoice = choice) }
   }
 
   /** Inline, selecting the selected row again folds or unfolds its inspector; any other selection opens it. */
@@ -327,7 +392,7 @@ class DetailViewModel(
     if (resolved) resolvedSessionId = currentSessionId
     val header = read.header.withBoardVerdicts(latestBoardRow)
     if (resolved) selection.select(header)
-    mutableState.update { current ->
+    updatePreviewInputs { current ->
       val retained = current.itemResolved && resolvedSessionId != null && resolvedSessionId == currentSessionId &&
         current.header.control.sessionId == currentSessionId
       val sections = when (val sections = read.sections) {
@@ -417,7 +482,7 @@ class DetailViewModel(
     favoriteRequest?.cancel()
     favoriteRequest = null
     favoriteWrite = null
-    mutableState.update { it.copy(itemResolved = false, sections = SectionsUi.Pending, favorite = false, favoriteAvailable = false, favoriteInFlight = false) }
+    updatePreviewInputs { it.copy(itemResolved = false, sections = SectionsUi.Pending, favorite = false, favoriteAvailable = false, favoriteInFlight = false) }
   }
 
   private fun isCurrentFavoriteWrite(write: FavoriteWrite): Boolean = favoriteWrite === write &&

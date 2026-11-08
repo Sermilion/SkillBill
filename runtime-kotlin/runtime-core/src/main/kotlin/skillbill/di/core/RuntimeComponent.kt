@@ -7,6 +7,7 @@ import skillbill.application.config.ConfigResolutionService
 import skillbill.application.config.RuntimeConfigEditService
 import skillbill.application.install.ExternalAddonOverlayService
 import skillbill.application.install.ExternalPlatformPackResolutionService
+import skillbill.application.install.InstallDatabasePreparation
 import skillbill.application.install.InstallService
 import skillbill.application.learning.LearningService
 import skillbill.application.review.diffcomment.DiffCommentService
@@ -339,6 +340,7 @@ abstract class RuntimeComponent(
   abstract val runtimeConfigEditService: RuntimeConfigEditService
   abstract val externalAgentAddonSourceConfigPort: ExternalAgentAddonSourceConfigPort
   abstract val installService: InstallService
+  abstract val installDatabasePreparation: InstallDatabasePreparation
   abstract val externalAddonOverlayService: ExternalAddonOverlayService
   abstract val externalPlatformPackResolutionService: ExternalPlatformPackResolutionService
   abstract val agentRunLauncher: AgentRunLauncher

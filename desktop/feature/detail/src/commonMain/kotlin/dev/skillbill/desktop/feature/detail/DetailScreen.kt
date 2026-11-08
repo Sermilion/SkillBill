@@ -70,7 +70,9 @@ internal class DetailScreenHost(
   val chatPaneOpen: Boolean = false,
   val chatShortcut: String = "",
   val onToggleChat: () -> Unit = {},
-)
+) {
+  val detailsPaneVisible: Boolean get() = detailsPaneOpen && !specsOpen && !chatPaneOpen
+}
 
 private fun sectionCrumb(section: WorkLiveSection?): String = when (section) {
   WorkLiveSection.NeedsYou -> "Needs you"
@@ -208,7 +210,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         }
       }
       DetailPeek(
-        open = host.detailsPaneOpen && !host.specsOpen && !host.chatPaneOpen,
+        open = host.detailsPaneVisible,
         wide = (state.sections as? SectionsUi.Loaded)?.detail?.let {
           selectedSubtask(item, it, state.subtaskChoice.key) == SubtaskKey.GoalFinish
         } == true,

@@ -56,6 +56,25 @@ Its `phase:<name>` forms run `skill-bill phase <name>`, and its `operation:<name
 forms run `skill-bill operation <name>`, relaying one operator confirmation.
 `skill-bill goal status` stays CLI-only; no skill wraps it.
 
+## New phase and operation iteration priority
+
+An explicit new phase or operation iteration takes priority over an earlier paused,
+cancelled, idle or blocked iteration for the same target. Historical results and
+unfinished work do not reserve admission for an inactive iteration. A new iteration
+does not preempt a running execution or steal a held resource lock. Preserve earlier
+run identities, results and completed work; a fresh request does not erase history
+or answer a parked operation's confirmation proposal.
+
+Standalone monitor admission applies this rule under its target lock. A recorded
+settlement identifies an inactive invocation even when the hosting process remains
+alive. An unsettled owner requires same-host positive process-death evidence.
+Archive the prior ownership record before advancing its generation. Discard verified
+owned cancelled work; preserve other unfinished resources with their archived
+ownership record and report their location. They no longer block a fresh monitor.
+An undrained repair child remains protected until its shutdown is established.
+Shared phase and operation launch completion includes ownership cleanup, so a new
+iteration cannot race a completion notification that still holds the launch lock.
+
 ## Standalone review finding actions
 
 The desktop review detail has an Actions section with "Fix findings" and "Verify
@@ -141,9 +160,19 @@ the runner clears the ambiguity itself.
 
 The same command handles a goal that blocks with "The outcome of goal-quality
 step '<step>#<attempt>' is unknown". That happens when the runner died during an
-agent-backed QA or validation step, before the step recorded its outcome. The
+agent-backed QA or QA fix step, before the step recorded its outcome. The
 command retires the unsettled quality execution, and the next goal run admits a
 fresh one.
+
+A goal run never needs this command for an interrupted validation step.
+Validate only has to make the build green on the current tree, so the next run
+starts it again on whatever the tree holds. Other interrupted mutating steps
+keep the block.
+
+Validate blocks for one reason: three attempts in a row failed to make the
+build green. Any failed attempt, whether the agent settled blocked, its process
+died or its output was unusable, starts a fresh attempt. A provider-limit pause
+still pauses at once.
 
 The command refuses while a runner holds the goal, and when the parent has
 neither ambiguous nor unsettled quality state. It does not change subtasks,
@@ -418,16 +447,11 @@ retain the existing failure behavior. This applies to standalone and workflow
 validation and the local validation performed during monitor repair; remote CI
 results keep their existing completion rules.
 
-A monitor retry rechecks an abandoned owner's retained `publication_unknown` state
-under the admission lock after confirming that the previous owner process is dead
-on the same host.
-It uses the resolved PR head remote to verify publication before removing owned
-resources. Dirty, untracked, unpublished, or unverifiable work remains retained.
-Explicit stale recovery uses the same resolved remote. Retention after an
-undrained repair child continues to block retry. A resolved monitor target
-that fails admission or setup records a blocked attempt with its exact PR and
-head branch. Its worktree path stays absent until a worktree exists, so desktop
-launch following can select the failure and display its reason.
+Monitor retries follow the new-iteration priority rule above. Explicit stale recovery
+uses the resolved remote when verifying publication. A resolved monitor target that
+fails admission or setup records a blocked attempt with its exact PR and head branch.
+Its worktree path stays absent until a worktree exists, so desktop launch following
+can select the failure and display its reason.
 
 Standalone phases print step transitions while running. Their final output retains
 every completed step's result in execution order, so `phase pr` reports the created
@@ -524,10 +548,15 @@ Decomposed goal runs use `same_branch_commit_per_subtask`: each completed subtas
 
 ## Goal CI monitoring
 
-Monitoring counts distinct published repair commits only after CI fails on those
-commits. Resume reconstructs qualified failures from retained runtime producer,
-completion, publication, and Git evidence. Repeated observations of a commit keep
-one failure. A later repair replacing the latest phase record does not erase a
+Monitoring counts distinct published repair commits after CI fails on those
+commits. A completed repair that publishes no change while CI still fails also
+consumes one of the three attempts and returns to repair instead of blocking
+immediately. These failures use the monitor attempt identity, so separate no-change
+repairs count separately even on the same commit. Resume derives them from the
+existing completed repair, publication and monitor evidence without rewriting
+records. Resume reconstructs qualified failures from retained runtime producer,
+completion, publication, and Git evidence. Repeated observations of a published
+repair commit keep one failure. A later repair replacing the latest phase record does not erase a
 previously qualified failure. Missing or contradictory history stays unknown, does not add a failure, and does not exhaust the cap. Missing monitor output blocks cap-sensitive resume. Initial CI failure, pending checks, unassociated observations, and merge conflicts do not consume this budget. Green checks complete monitoring only when the observed PR head matches the latest completed pushed publication.
 
 Before choosing a host or container for CI repair, read the applicable `AGENTS.md`

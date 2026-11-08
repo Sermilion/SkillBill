@@ -7,6 +7,7 @@ public data class SpecBrowserProject(
   val displayName: String,
   val specsRoot: Path?,
   val repoRoot: Path?,
+  val checkoutRoots: List<Path> = listOfNotNull(repoRoot),
 )
 
 public data class SpecBrowserCounts(

@@ -51,6 +51,14 @@ class ChatResumePaletteTest {
     assertEquals("1 chat", resumeCount(byBranch))
   }
 
+  // A row shows its summary, so a filter that cannot find words in it hides the chat the operator is looking at.
+  @Test
+  fun `resumeListing matches a word found only in the summary`() {
+    val summarized = entry("1", "/x/a.png fix it").copy(summary = "Adds retry to the upload worker")
+    val entries = listOf(summarized, entry("2", "fix it too"))
+    assertEquals(listOf("1"), resumeListing(entries, "upload", showAll = false) { null }.shown.map { it.sessionId })
+  }
+
   // New Task's palette must show only the picked repository's drafts.
   @Test
   fun `resumableDrafts keeps only the picked repository`() {

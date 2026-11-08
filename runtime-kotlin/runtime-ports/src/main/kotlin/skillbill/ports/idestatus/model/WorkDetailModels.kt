@@ -11,6 +11,7 @@ import skillbill.review.model.ReviewFindingAction
 import skillbill.review.model.ReviewFindingStatus
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.taskruntime.model.qa.QaRunDetails
+import skillbill.workflow.taskruntime.model.qa.QaRunPreview
 import java.time.Instant
 
 enum class WorkDetailProblemCode(val wireValue: String) {
@@ -98,6 +99,8 @@ data class WorkDetailItem(
   val standalonePlanProgress: StandalonePlanProgress? = null,
   val verifyRun: VerifyRunDetails? = null,
   val build: WorkBuildView? = null,
+  val qaPreview: QaRunPreview? = null,
+  val qaPreviewSubtaskId: Int? = null,
 )
 
 data class WorkValidationBranchRun(

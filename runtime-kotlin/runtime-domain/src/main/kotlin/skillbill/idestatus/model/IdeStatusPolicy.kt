@@ -49,6 +49,7 @@ enum class IdeStatusDurableWorkflowState(val wireValue: String) {
   FAILED("failed"),
   COMPLETED("completed"),
   ABANDONED("abandoned"),
+  TIMED_OUT("timed_out"),
   COMPLETE("complete"),
   SKIPPED("skipped"),
   ;
@@ -164,6 +165,7 @@ object IdeStatusPolicy {
         IdeStatusDurableWorkflowState.PAUSED -> IdeStatusLifecycleState.PAUSED
         IdeStatusDurableWorkflowState.BLOCKED -> IdeStatusLifecycleState.BLOCKED
         IdeStatusDurableWorkflowState.FAILED -> IdeStatusLifecycleState.FAILED
+        IdeStatusDurableWorkflowState.TIMED_OUT -> IdeStatusLifecycleState.FAILED
         IdeStatusDurableWorkflowState.ABANDONED -> IdeStatusLifecycleState.CANCELED
         IdeStatusDurableWorkflowState.COMPLETED,
         IdeStatusDurableWorkflowState.COMPLETE, IdeStatusDurableWorkflowState.SKIPPED,

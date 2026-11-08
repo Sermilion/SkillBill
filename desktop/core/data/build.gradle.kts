@@ -18,6 +18,7 @@ kotlin {
     // compileOnly is invisible to tests, which run the runtime types they construct.
     implementation("dev.skillbill:runtime-core")
     implementation("dev.skillbill:runtime-contracts")
+    implementation("dev.skillbill:runtime-domain")
     implementation(projects.core.testing)
     implementation(libs.kotlinx.coroutines.test)
   }

@@ -215,7 +215,7 @@ class InstallerShellReuseLastSelectionTest {
     |if [[ "${'$'}{1:-}" == "install" && "${'$'}{2:-}" == "apply" ]]; then
     |  exit 0
     |fi
-    |if [[ "${'$'}{1:-}" == "install" && "${'$'}{2:-}" == "migrate-legacy-config" ]]; then
+    |if [[ "${'$'}{1:-}" == "install" && ( "${'$'}{2:-}" == "migrate-legacy-config" || "${'$'}{2:-}" == "migrate-data" ) ]]; then
     |  exit 0
     |fi
     |if [[ "${'$'}{1:-}" == "install" && "${'$'}{2:-}" == "reconcile" ]]; then

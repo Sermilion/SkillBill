@@ -37,6 +37,10 @@ import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.feature.chat.AgentPicker
 import dev.skillbill.desktop.feature.chat.ChatActivityPill
+import dev.skillbill.desktop.feature.chat.ClipboardImageReader
+import dev.skillbill.desktop.feature.chat.ImageChip
+import dev.skillbill.desktop.feature.chat.SystemClipboardImageReader
+import dev.skillbill.desktop.feature.chat.pasteChatImages
 import dev.skillbill.desktop.feature.chat.ResumePalette
 import dev.skillbill.desktop.feature.chat.ResumeScope
 import dev.skillbill.desktop.feature.chat.RESUME_COMMAND
@@ -44,6 +48,8 @@ import dev.skillbill.desktop.feature.chat.SendNowGate
 import dev.skillbill.desktop.feature.chat.resumableDrafts
 import kotlin.time.Clock
 import kotlin.time.Instant
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.Dispatchers
 
 internal val COMPOSER_MAX_WIDTH = 728.dp
 private val COMPOSER_INPUT_MIN_HEIGHT = 64.dp
@@ -56,7 +62,11 @@ private val REPOSITORY_PICKER_WIDTH = 620.dp
 
 /** The task input with repository, agent, Send, Stop and Send now. Enter and Send share one condition; a busy turn queues the next message. */
 @Composable
-internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: FocusRequester = remember { FocusRequester() }, now: () -> Instant = Clock.System::now, onAction: (NewTaskAction) -> Unit) {
+internal fun NewTaskComposer(
+  state: NewTaskUiState, draft: NewTaskDraft, focus: FocusRequester = remember { FocusRequester() }, now: () -> Instant = Clock.System::now,
+  clipboard: ClipboardImageReader = SystemClipboardImageReader, encodeContext: CoroutineContext = Dispatchers.Default,
+  onAction: (NewTaskAction) -> Unit,
+) {
   LaunchedEffect(focus) { focus.requestFocus() }
   val focusManager = LocalFocusManager.current
   val chat by draft.chat.collectAsState()
@@ -66,7 +76,7 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
   val gate = remember(chat) { SendNowGate() }
   val offer by draft.offer.collectAsState()
   val ready = !offer.starting && draft.canSend()
-  val sendNow = stoppable && queued.isNotEmpty() && draft.text.isBlank() && !offer.starting
+  val sendNow = stoppable && queued.isNotEmpty() && draft.text.isBlank() && draft.images.isEmpty() && !offer.starting
   val pickersDisabledWhy = when {
     busy -> PICKERS_DISABLED_BUSY
     offer.starting -> PICKERS_DISABLED_STARTING
@@ -98,6 +108,7 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
       SbInput(
         draft.text, { onAction(NewTaskAction.TextChanged(it)) },
         modifier = Modifier.fillMaxWidth().focusRequester(focus).gatesShortcutsWhileFocused()
+          .pasteChatImages(!offer.starting && chat?.repositoryMissing != true, clipboard, encodeContext, draft::addPastedImage)
           .onPreviewKeyEvent {
             if (it.key == Key.Enter && it.type == KeyEventType.KeyUp) gate.enterReleased()
             false
@@ -113,6 +124,16 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
           resumableDrafts(saved, draft.repository?.root), now(), ResumeScope(draft.repository?.name, worktree = false),
           { it.newTask?.baseBranch }, focus, { onAction(NewTaskAction.ResumeDraft(it)) }, { onAction(NewTaskAction.DismissResume) },
         )
+      }
+    }
+    if (draft.images.isNotEmpty()) {
+      Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        draft.images.forEachIndexed { index, image ->
+          ImageChip(index + 1, image, onRemove = {
+            draft.removePastedImage(index)
+            focus.requestFocus()
+          })
+        }
       }
     }
     if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")

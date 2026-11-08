@@ -23,6 +23,10 @@ Context: Each recorder abandons open rows on its first attributed process poll, 
 Decision: Keep run-scoped abandonOpen cleanup for build capture.
 Reason: Cleanup clears rows from crashed launches. It can mark a sibling's live row unknown, but planning agents are instructed not to build.
 Revisit when: Concurrent units sharing a run ID are expected to run builds.
+## [2026-11-07] Publish a conflict repair that merged a base which moved since
+Context: In SKILL-516 the monitor_fix agent merged `origin/main` and resolved conflicts while three more commits landed on main. The guard only accepted a `MERGE_HEAD` that reached the current `origin/main`, so the runtime blocked a valid two-parent merge and asked the operator to redo it.
+Decision: The guard also accepts an in-progress merge whose `MERGE_HEAD` is an older commit on `origin/<base>`, as long as HEAD does not already contain it. If the pull request still conflicts after publication, the next monitor round merges the newer tip.
+Reason: A stale base merge still keeps the base as a parent, so publishing it is progress, not a flattened merge. Requiring base commits HEAD lacks keeps each uncharged repair round moving the branch forward.
 
 ## [2026-11-07] Keep the QA device separate from requirements and durable goal inputs
 Context: SKILL-517 needs an operator-selected device for standalone and goal QA. Standalone QA treats intake as requirements, and goal QA takes no operator text.
@@ -840,3 +844,11 @@ phase recorder rejects oversized generated trace evidence before its owner-fence
 output correction can reuse the attempt. Settlement guidance identifies an ok response as receipt
 pending runtime validation, not completed workflow authority. Limits and existing saved state remain
 unchanged.
+
+## [2026-11-07] Retry completed CI repairs that publish no change
+
+Context: SKILL-453 stopped after a repair claimed completion without publishing a fix, although the failing CI checks remained actionable.
+
+Decision: A qualified completed repair with unchanged publication and failing CI consumes one monitor repair attempt and returns to repair. Derive its identity from the monitor attempt, retaining the existing cap and evidence checks. Reconstruct the same identities from retained completion, producer, publication and Git evidence on resume; existing published repair identities remain unchanged. No durable shape or version changes are required.
+
+Alternatives considered: retrying without accounting can loop forever; blocking on the first no-change repair prevents recovery within the existing allowance.

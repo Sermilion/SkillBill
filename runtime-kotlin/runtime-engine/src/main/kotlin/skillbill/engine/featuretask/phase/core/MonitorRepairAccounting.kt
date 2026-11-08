@@ -98,7 +98,10 @@ public class MonitorRepairAccounting(
             unqualifiedMonitorFailure(output.iteration)
             evidenceUnavailable = true
           }
-          RepairPublicationAssociation.Unavailable, RepairPublicationAssociation.Unchanged -> {
+          RepairPublicationAssociation.Unchanged -> {
+            failedRepairs[output.iteration] = unchangedRepairKey(output.iteration)
+          }
+          RepairPublicationAssociation.Unavailable -> {
             unqualifiedMonitorFailure(output.iteration)
             evidenceUnavailable = true
           }
@@ -514,5 +517,13 @@ public class MonitorRepairAccounting(
       "Monitor repair accounting could not establish an association: $reason.",
     )
     return RepairPublicationAssociation.Unavailable
+  }
+
+  internal companion object {
+    private const val UNCHANGED_REPAIR_PREFIX = "unchanged-repair:"
+
+    internal fun unchangedRepairKey(monitorAttempt: Int): String = "$UNCHANGED_REPAIR_PREFIX$monitorAttempt"
+
+    internal fun isUnchangedRepairKey(key: String): Boolean = key.startsWith(UNCHANGED_REPAIR_PREFIX)
   }
 }

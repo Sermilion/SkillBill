@@ -20,10 +20,10 @@ internal object QaRunDetailsMapping {
     val skipReason = skipReasonOf(producedReason) ?: report?.reason
     val retained = previous?.retainedResources.orEmpty()
     if (report == null) {
-      return if (skipReason == null && retained.isEmpty()) {
+      return if (skipReason == null && retained.isEmpty() && previous?.preview == null) {
         null
       } else {
-        QaRunDetails(skipReason = skipReason, retainedResources = retained)
+        QaRunDetails(skipReason = skipReason, retainedResources = retained, preview = previous?.preview)
       }
     }
     return reported(report).copy(
@@ -31,6 +31,7 @@ internal object QaRunDetailsMapping {
       invocationDirectory = invocationDirectoryOf(evidencePrefix, reportPath),
       skipReason = skipReason,
       retainedResources = retained,
+      preview = previous?.preview,
     )
   }
 

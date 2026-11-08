@@ -51,6 +51,7 @@ import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
 import skillbill.ports.idestatus.IdeStatusValidator
 import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
@@ -88,6 +89,7 @@ import skillbill.ports.work.model.WorkItemKind
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
+import skillbill.workflow.taskruntime.model.qa.QaRunPreview
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 import java.time.Instant
@@ -413,6 +415,8 @@ public class IdeStatusService(
         goalFinishPipeline = goalRead?.page?.let { detailGoalFinishPipeline(context, goalStatus) }.orEmpty(),
         runtimeStatus = runtimeRead?.status,
         goalStatus = goalStatus,
+        qaPreview = detailQaPreview(goalStatus, context.unitOfWork.featureTaskQaOutcomes),
+        qaPreviewSubtaskId = goalStatus?.currentSubtaskId.takeIf { goalStatus?.currentChildWorkflowId != null },
         pageOffset = position.offset,
         pageSize = request.pageSize,
         hasMore = moreLists.isNotEmpty() || dependencies?.nextOffset != null,
@@ -439,6 +443,18 @@ public class IdeStatusService(
       request,
       position,
     )
+  }
+
+  private fun detailQaPreview(
+    goalStatus: GoalRunnerStatusProjection?,
+    outcomes: FeatureTaskQaOutcomeRepository,
+  ): QaRunPreview? {
+    val childWorkflowId = goalStatus?.currentChildWorkflowId
+    return if (childWorkflowId != null) {
+      outcomes.find(childWorkflowId)?.details?.preview
+    } else {
+      goalStatus?.goalQaResult?.details?.preview
+    }
   }
 
   private fun detailGoalReads(

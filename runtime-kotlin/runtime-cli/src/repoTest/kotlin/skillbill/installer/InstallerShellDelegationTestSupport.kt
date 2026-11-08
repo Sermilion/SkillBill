@@ -472,7 +472,7 @@ internal object InstallerShellFixtures {
   private val fakeRuntimeCliCleanupCaseBlock: String =
     """
     |case "${'$'}{1:-} ${'$'}{2:-}" in
-    |  "install migrate-legacy-config") exit 0 ;;
+    |  "install migrate-legacy-config"|"install migrate-data") exit 0 ;;
     |  "install clear-state")
     |    state_root="${'$'}{SKILL_BILL_STATE_DIR:-${'$'}home/.skill-bill}"
     |    rm -rf "${'$'}state_root/installed-skills" \

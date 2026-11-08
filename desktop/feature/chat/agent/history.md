@@ -1,3 +1,10 @@
+## [2026-11-07] Paste images in New Task and run chats
+Areas: desktop/feature/chat production and JVM tests
+- Both composers use the same Cmd/Ctrl+V image handler. Text paste still reaches the text field, and image encoding runs off the UI thread.
+- New Task drafts hold pending images and send them through the queue, transcript and agent request, including image-only messages. Saved drafts retain image labels without persisting image bytes.
+- Pending image chips open previews. Escape closes a preview and restores focus to its chip; removing the chip returns focus to the input.
+- Pending images keep Queue available instead of Send now. Stop returns queued images to the draft in both chat types.
+
 ## [2026-11-07] SKILL-515 match New Task tabs and home
 Areas: desktop/feature/chat newtask production and JVM tests
 - The 36dp strip has 8dp horizontal and 4dp top padding. Selected tabs join the panel over the hairline with rounded tops, square bottoms and a 1dp top-and-side border. Unselected hover fill stops 1dp above the hairline; offscreen DstIn masks fade tab content separately.

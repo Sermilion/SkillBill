@@ -132,7 +132,7 @@ class GitMonitorResourcesLifecycleTest {
   }
 
   @Test
-  fun `dirty, untracked, and unpublished work is retained with its reason and path and blocks the next admission`() {
+  fun `a new iteration reclaims paused blocked and idle ownership while preserving unfinished work`() {
     val cases =
       listOf(
         RetentionCase("untracked", MonitorRetentionReason.UNTRACKED_FILES) { _, tree ->
@@ -151,7 +151,16 @@ class GitMonitorResourcesLifecycleTest {
       val worktree = prepare(fixture, fence)
       mutate(fixture, worktree)
 
-      val settlement = assertIs<MonitorSettlement.Retained>(resources.settle(fence))
+      val outcome =
+        when (name) {
+          "untracked" -> MonitorOutcomeKind.PAUSED
+          "dirty" -> MonitorOutcomeKind.BLOCKED
+          else -> MonitorOutcomeKind.COMPLETED
+        }
+      val settlement =
+        assertIs<MonitorSettlement.Retained>(
+          resources.settle(MonitorSettleRequest(fence, MonitorPrimaryOutcome(outcome, name))),
+        )
 
       assertEquals(reason, settlement.reason, name)
       assertEquals(worktree.path, settlement.path, name)
@@ -159,13 +168,100 @@ class GitMonitorResourcesLifecycleTest {
       val record = assertNotNull(MonitorAdmissionFiles.read(fence.directory))
       assertEquals(MonitorOwnershipState.RETAINED, record.state, name)
       assertEquals(reason, record.retention?.reason, name)
-      val blocked = assertIs<MonitorAcquisition.Blocked>(acquireFor(resources, fixture))
-      assertEquals(MonitorAdmissionBlock.RETAINED_WORK, blocked.reason, name)
+      val next = acquiredFence(acquireFor(resources, fixture))
+      assertEquals(fence.generation + 1, next.generation)
+      assertEquals(record, MonitorAdmissionFiles.read(fence.directory.resolve("history").resolve("1")))
+      assertTrue(Files.exists(worktree.path), name)
+      val fresh = prepare(fixture, next)
+      assertEquals(fixture.headSha, runGit(fresh.path, "rev-parse", "HEAD"))
+      assertEquals(MonitorSettlement.Released, resources.settle(next))
+      assertTrue(Files.exists(worktree.path), name)
     }
   }
 
   @Test
-  fun `unknown publication from an abandoned owner is rechecked only with positive death evidence`() {
+  fun `cancellation discards unfinished work and unpublished commits and admits a fresh monitor`() {
+    val fixture = fixture()
+    val callerBefore = fixture.snapshot()
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val worktree = prepare(fixture, fence)
+    fixture.commitFile("local.txt", "unpublished", worktree.path)
+    Files.writeString(worktree.path.resolve("feature.txt"), "unfinished")
+    Files.writeString(worktree.path.resolve("scratch.txt"), "untracked")
+
+    val outcome = MonitorPrimaryOutcome(MonitorOutcomeKind.CANCELLED, "operator cancelled")
+    assertEquals(MonitorSettlement.Released, resources.settle(MonitorSettleRequest(fence, outcome)))
+
+    assertFalse(Files.exists(worktree.path))
+    assertEquals(emptyList(), fixture.refs("refs/skill-bill"))
+    assertEquals(emptyList(), fixture.refs("refs/heads/skill-bill"))
+    assertEquals(callerBefore, fixture.snapshot())
+    val released = assertNotNull(MonitorAdmissionFiles.read(fence.directory))
+    assertEquals(MonitorOwnershipState.RELEASED, released.state)
+    assertEquals(outcome, released.outcome)
+    val next = acquiredFence(acquireFor(resources, fixture))
+    val freshWorktree = prepare(fixture, next)
+    assertEquals(fixture.headSha, runGit(freshWorktree.path, "rev-parse", "HEAD"))
+    assertEquals(MonitorSettlement.Released, resources.settle(next))
+  }
+
+  @Test
+  fun `a new iteration reclaims settled cancelled ownership even while its host process remains alive`() {
+    val fixture = fixture()
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val worktree = prepare(fixture, fence)
+    Files.writeString(worktree.path.resolve("feature.txt"), "cancelled edit")
+    assertIs<MonitorSettlement.Retained>(resources.settle(fence))
+    val legacy =
+      assertNotNull(MonitorAdmissionFiles.read(fence.directory)).copy(
+        outcome = MonitorPrimaryOutcome(MonitorOutcomeKind.CANCELLED, "cancelled before upgrade"),
+      )
+    MonitorAdmissionFiles.write(fence.directory, legacy)
+
+    inspector.inspection = FeatureTaskRuntimeProcessInspection.ExactLive
+
+    val next = acquiredFence(acquireFor(resources, fixture))
+    assertEquals(fence.generation + 1, next.generation)
+    assertFalse(Files.exists(worktree.path))
+    assertFalse("refs/heads/${worktree.branch}" in fixture.refs("refs/heads/skill-bill"))
+    assertEquals(MonitorSettlement.Released, resources.settle(next))
+    assertEquals(emptyList(), fixture.refs("refs/skill-bill"))
+    val repeated = acquiredFence(acquireFor(resources, fixture))
+    val repeatedWorktree = prepare(fixture, repeated)
+    Files.writeString(repeatedWorktree.path.resolve("feature.txt"), "cancelled again")
+    assertIs<MonitorSettlement.Retained>(resources.settle(repeated))
+    MonitorAdmissionFiles.write(
+      repeated.directory,
+      assertNotNull(MonitorAdmissionFiles.read(repeated.directory)).copy(outcome = legacy.outcome),
+    )
+    inspector.inspection = FeatureTaskRuntimeProcessInspection.NotRunning
+    assertIs<MonitorStaleRecovery.Recovered>(resources.recoverStale(staleRequest(fixture, repeated.ownerToken)))
+    assertFalse(Files.exists(repeatedWorktree.path))
+    assertEquals(legacy.outcome, MonitorAdmissionFiles.read(repeated.directory)?.outcome)
+  }
+
+  @Test
+  fun `cancellation refuses to discard a worktree switched to a foreign branch`() {
+    val fixture = fixture()
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val worktree = prepare(fixture, fence)
+    runGit(worktree.path, "checkout", "-b", "operator-work")
+    Files.writeString(worktree.path.resolve("feature.txt"), "operator edit")
+
+    val result =
+      resources.settle(
+        MonitorSettleRequest(fence, MonitorPrimaryOutcome(MonitorOutcomeKind.CANCELLED, "cancelled")),
+      )
+
+    assertEquals(MonitorRetentionReason.UNOWNED_RESOURCE, assertIs<MonitorSettlement.Retained>(result).reason)
+    assertEquals("operator edit", Files.readString(worktree.path.resolve("feature.txt")))
+    val next = acquiredFence(acquireFor(resources, fixture))
+    assertEquals("operator edit", Files.readString(worktree.path.resolve("feature.txt")))
+    assertEquals(MonitorSettlement.Released, resources.settle(next))
+  }
+
+  @Test
+  fun `ownership without a settled outcome is reclaimed only with positive death evidence`() {
     val fixture = fixture()
     val fence = acquiredFence(acquireFor(resources, fixture))
     val worktree = prepare(fixture, fence)
@@ -178,6 +274,11 @@ class GitMonitorResourcesLifecycleTest {
         MonitorSettleRequest(fence, MonitorPrimaryOutcome(MonitorOutcomeKind.ABANDONED, "owner ended before settling")),
       )
     assertEquals(MonitorRetentionReason.PUBLICATION_UNKNOWN, assertIs<MonitorSettlement.Retained>(retained).reason)
+    MonitorAdmissionFiles.write(
+      fence.directory,
+      assertNotNull(MonitorAdmissionFiles.read(fence.directory)).copy(outcome = null),
+    )
+    inspector.inspection = FeatureTaskRuntimeProcessInspection.ExactLive
     assertIs<MonitorAcquisition.Blocked>(acquireFor(resources, fixture))
     assertTrue(Files.exists(worktree.path))
     Files.move(offline, fixture.remote)
@@ -191,22 +292,6 @@ class GitMonitorResourcesLifecycleTest {
       assertTrue(Files.exists(worktree.path))
     }
     inspector.inspection = FeatureTaskRuntimeProcessInspection.NotRunning
-    Files.writeString(worktree.path.resolve("published.txt"), "unfinished")
-    assertIs<MonitorAcquisition.Blocked>(acquireFor(resources, fixture))
-    assertEquals("unfinished", Files.readString(worktree.path.resolve("published.txt")))
-    runGit(worktree.path, "restore", "published.txt")
-    MonitorAdmissionFiles.write(
-      fence.directory,
-      assertNotNull(MonitorAdmissionFiles.read(fence.directory)).copy(
-        retention =
-          MonitorRetentionRecord(
-            MonitorRetentionReason.PUBLICATION_UNKNOWN,
-            "publication needs verification",
-            worktree.path.toString(),
-          ),
-      ),
-    )
-
     val next = acquiredFence(acquireFor(resources, fixture))
     assertEquals(fence.generation + 1, next.generation)
     assertFalse(Files.exists(worktree.path))
@@ -218,6 +303,7 @@ class GitMonitorResourcesLifecycleTest {
     val fixture = fixture()
     val fence = acquiredFence(acquireFor(resources, fixture))
     val worktree = prepare(fixture, fence)
+    Files.writeString(worktree.path.resolve("feature.txt"), "child still editing")
     val retained =
       resources.settle(
         MonitorSettleRequest(
@@ -406,6 +492,7 @@ class GitMonitorResourcesLifecycleTest {
     runGit(fixture.caller, "update-ref", staleRef, fixture.headSha)
     val directory = craftStaleOwnership(fixture, STALE_TOKEN, listOf(staleRef))
     val request = staleRequest(fixture, STALE_TOKEN)
+    inspector.inspection = FeatureTaskRuntimeProcessInspection.ExactLive
 
     val blocked = assertIs<MonitorAcquisition.Blocked>(acquireFor(resources, fixture))
     assertEquals(MonitorAdmissionBlock.STALE_OWNER, blocked.reason)
@@ -430,6 +517,35 @@ class GitMonitorResourcesLifecycleTest {
     assertEquals(emptyList(), fixture.refs("refs/skill-bill"))
     assertEquals(MonitorOwnershipState.RELEASED, assertNotNull(MonitorAdmissionFiles.read(directory)).state)
     assertEquals(2, acquiredFence(acquireFor(resources, fixture)).generation)
+  }
+
+  @Test
+  fun `a new iteration reclaims a dead stale owner without an explicit recovery token`() {
+    val fixture = fixture()
+    val directory = craftStaleOwnership(fixture, STALE_TOKEN, emptyList())
+    val original = assertNotNull(MonitorAdmissionFiles.read(directory))
+
+    val next = acquiredFence(acquireFor(resources, fixture))
+
+    assertEquals(2, next.generation)
+    assertEquals(original, MonitorAdmissionFiles.read(directory.resolve("history").resolve("1")))
+    assertEquals(MonitorSettlement.Released, resources.settle(next))
+  }
+
+  @Test
+  fun `a failed ownership archive preserves the previous run and releases admission for a retry`() {
+    val fixture = fixture()
+    val directory = craftStaleOwnership(fixture, STALE_TOKEN, emptyList())
+    val original = assertNotNull(MonitorAdmissionFiles.read(directory))
+    Files.writeString(directory.resolve("history"), "unavailable")
+
+    val failure = assertFailsWith<SkillBillRuntimeException> { acquireFor(resources, fixture) }
+    assertEquals(StandaloneMonitorFailureCode.OWNERSHIP_IO_FAILED, failure.code)
+    assertEquals(original, MonitorAdmissionFiles.read(directory))
+    Files.delete(directory.resolve("history"))
+    val next = acquiredFence(acquireFor(resources, fixture))
+    assertEquals(2, next.generation)
+    assertEquals(MonitorSettlement.Released, resources.settle(next))
   }
 
   @Test
