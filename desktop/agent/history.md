@@ -1,3 +1,18 @@
+## [2026-11-08] SKILL-520 contextual usage limits
+Areas: desktop/app/usage, desktop/app/shell, desktop/app/di, desktop/core/domain/usage, desktop/core/data/usage, desktop/core/data/chat, desktop/core/data/session, desktop/core/ui, desktop/core/designsystem, desktop/feature/chat
+- Added a usage card above Specs in the fixed sidebar footer and a 316 dp details popup. It follows the selected New task chat or open run; Work and History remember a provider per window. Junie and unknown contextual providers hide the card.
+- Typed usage separates unverified profile lookups, verified account/workspace subjects and session-only status. Exact decimal amounts retain units, currency, periods and observation times; missing data cannot imply unlimited allowance or request permission. UsageRepository and UsageObservationSink are reusable contracts.
+- Codex capability acquisition uses the selected execution environment and a separate bounded ChatProcessLauncher mode. UTF-8 input has a 256 KiB line cap, 1 MiB response budget and 32-message queue; startup/initialize and reads have deadlines, and one application-wide startup slot stays owned through cleanup.
+- Production numeric admission remains closed. Codex reports explicit capability/identity outcomes, Claude supplies only nonnumeric status from existing desktop sessions, and Cursor has no supported personal snapshot. Fixtures do not authorize a production numeric source.
+- Claude status captures the effective profile, logical session and process generation before decoding chat events. Stop and completion revoke that generation, so late events and closes cannot alter a replacement process's status.
+- One app-scoped ProviderUsageRepository shares bounded in-memory state, reservations, demand and refresh coordination. Source floors, cooldowns, backoff and authentication suspension govern work; the last visible lease stops pull work and application exit closes the supervised usage owner.
+- UsageObservationMerge, UsageMeterRanking and UsageRefreshPolicy are reusable. Revision checks protect newer fields from older pulls; partial results preserve untouched ages, and reset expiry labels retained values without refilling them. Captured freshness remains separate from current scheduling demand.
+- Window-scoped UsageSidebarModel follows route/database generations and the executing chat agent/session. Hidden, minimized, Settings and closed-drawer hosts release their leases; activity updates preserve context. Run scope says Current local account because historical identity is unverified.
+- UsageCard, UsagePanel and UsageMeterRow are reusable presentation components. The card shows at most two ranked meters and details show all; reported values remain intact while visual progress clamps. SbPopover and ShellLayer bind dismissal and conditional focus return to the current context.
+- Limits: production numbers, disk caching and historical-account capture remain outside this release; runtime-launched Claude sessions have no event bridge. Dedicated popup lifecycle/external-action interaction coverage and native macOS/Windows checks remain unverified. The supplied QA/validation warning is environment_unavailable.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-06] SKILL-513 docked, resizable chat pane with persisted width
 Areas: desktop/app, desktop/core/datastore, desktop/core/domain, desktop/core/testing, desktop/core/ui, desktop/feature/chat
 - Chat is a docked right pane in the work area, not a floating overlay. It takes the shared right slot while open outside Settings; otherwise the specs pane keeps its rule. WorkArea takes an optional right width.
