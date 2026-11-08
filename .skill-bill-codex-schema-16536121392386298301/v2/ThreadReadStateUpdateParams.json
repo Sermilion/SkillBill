@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "ThreadReadStateOperation": {
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "read"
+              ],
+              "title": "ReadThreadReadStateOperationType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "ReadThreadReadStateOperation",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "unread"
+              ],
+              "title": "UnreadThreadReadStateOperationType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "UnreadThreadReadStateOperation",
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "properties": {
+    "expectedRevision": {
+      "description": "Revision of the row or transcript actually seen. Conflicts require a fresh user action.",
+      "type": "string"
+    },
+    "operation": {
+      "$ref": "#/definitions/ThreadReadStateOperation"
+    },
+    "threadId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "expectedRevision",
+    "operation",
+    "threadId"
+  ],
+  "title": "ThreadReadStateUpdateParams",
+  "type": "object"
+}

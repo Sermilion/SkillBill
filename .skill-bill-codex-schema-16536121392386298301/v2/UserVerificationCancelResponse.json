@@ -1,0 +1,6 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Acknowledges the cancellation signal; native work may still be finishing. Unknown or finished requests are a no-op, and completed effects are not rolled back.",
+  "title": "UserVerificationCancelResponse",
+  "type": "object"
+}

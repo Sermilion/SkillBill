@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "credentialFile": {
+      "description": "Absolute path to a credential file on the app-server host. Omit or pass `null` to clear the active user configuration's override and use ADC. If another configuration layer would still supply a credential file, setup fails without saving changes.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "location": {
+      "description": "Vertex AI location. Omission or null selects `global`.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "projectId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "projectId"
+  ],
+  "title": "GcpSetupParams",
+  "type": "object"
+}

@@ -149,6 +149,14 @@ data class ChatNewTaskContext(
   val baseBranch: String?,
   val sessionEstablished: Boolean = true,
   val pendingTurnLineIndex: Int? = null,
+  val changesBaseline: ChatChangesBaseline? = null,
+)
+
+data class ChatChangesBaseline(
+  val headSha: String,
+  val untrackedPaths: List<String>,
+  val stashSha: String?,
+  val takenAt: Instant,
 )
 
 /**

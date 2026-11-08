@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
@@ -15,8 +16,11 @@ import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.OperationCardReference
 import dev.skillbill.desktop.core.domain.model.OperationCardState
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
@@ -64,6 +68,11 @@ private object ChatStoreKeys {
   const val NEW_TASK_BASE_BRANCH = "new_task_base_branch"
   const val NEW_TASK_SESSION_ESTABLISHED = "new_task_session_established"
   const val NEW_TASK_PENDING_TURN_LINE_INDEX = "new_task_pending_turn_line_index"
+  const val NEW_TASK_CHANGES_BASELINE = "new_task_changes_baseline"
+  const val HEAD_SHA = "head_sha"
+  const val UNTRACKED_PATHS = "untracked_paths"
+  const val STASH_SHA = "stash_sha"
+  const val TAKEN_AT = "taken_at"
   const val FAILURE = "failure"
   const val ACTIONS = "actions"
   const val SELECTED_ACTION = "selected_action"
@@ -327,6 +336,14 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
     newTask.baseBranch?.let { put(ChatStoreKeys.NEW_TASK_BASE_BRANCH, it) }
     put(ChatStoreKeys.NEW_TASK_SESSION_ESTABLISHED, newTask.sessionEstablished)
     newTask.pendingTurnLineIndex?.let { put(ChatStoreKeys.NEW_TASK_PENDING_TURN_LINE_INDEX, it) }
+    newTask.changesBaseline?.let { baseline ->
+      put(ChatStoreKeys.NEW_TASK_CHANGES_BASELINE, buildJsonObject {
+        put(ChatStoreKeys.HEAD_SHA, baseline.headSha)
+        put(ChatStoreKeys.UNTRACKED_PATHS, buildJsonArray { baseline.untrackedPaths.forEach { add(it) } })
+        baseline.stashSha?.let { put(ChatStoreKeys.STASH_SHA, it) }
+        put(ChatStoreKeys.TAKEN_AT, baseline.takenAt.toEpochMilliseconds())
+      })
+    }
   }
   chat.summary?.let { put(ChatStoreKeys.SUMMARY, it) }
   chat.summarySourceUpdatedAt?.let { put(ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT, it.toEpochMilliseconds()) }
@@ -377,11 +394,41 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
         root.string(ChatStoreKeys.NEW_TASK_BASE_BRANCH),
         (root[ChatStoreKeys.NEW_TASK_SESSION_ESTABLISHED] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() ?: true,
         (root[ChatStoreKeys.NEW_TASK_PENDING_TURN_LINE_INDEX] as? JsonPrimitive)?.intOrNull,
+        decodeChangesBaseline(root[ChatStoreKeys.NEW_TASK_CHANGES_BASELINE], diagnostics),
       )
     },
     summary = root.string(ChatStoreKeys.SUMMARY)?.takeIf { it.isNotBlank() },
     summarySourceUpdatedAt = (root[ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT] as? JsonPrimitive)?.longOrNull?.let(Instant::fromEpochMilliseconds),
   )
+}
+
+private fun decodeChangesBaseline(element: JsonElement?, diagnostics: Diagnostics): ChatChangesBaseline? {
+  if (element == null || element == JsonNull) return null
+  val baseline = element as? JsonObject
+  if (baseline == null) {
+    diagnostics.record("chat.changes_baseline_unreadable")
+    return null
+  }
+  val headSha = baseline.string(ChatStoreKeys.HEAD_SHA)
+  val paths = (baseline[ChatStoreKeys.UNTRACKED_PATHS] as? JsonArray)
+    ?.takeIf { array -> array.all { element -> (element as? JsonPrimitive)?.isString == true } }
+    ?.map { (it as JsonPrimitive).content }
+  val takenAtValue = baseline[ChatStoreKeys.TAKEN_AT] as? JsonPrimitive
+  val takenAt = takenAtValue?.takeIf { !it.isString }?.longOrNull
+  val stashShaValue = baseline[ChatStoreKeys.STASH_SHA]
+  val stashSha = when {
+    stashShaValue == null || stashShaValue == JsonNull -> null
+    (stashShaValue as? JsonPrimitive)?.isString == true -> (stashShaValue as JsonPrimitive).content
+    else -> {
+      diagnostics.record("chat.changes_baseline_unreadable")
+      return null
+    }
+  }
+  if (headSha == null || paths == null || takenAt == null) {
+    diagnostics.record("chat.changes_baseline_unreadable")
+    return null
+  }
+  return ChatChangesBaseline(headSha, paths, stashSha, Instant.fromEpochMilliseconds(takenAt))
 }
 
 private fun OperationCardReference.toJson(): JsonObject = buildJsonObject {

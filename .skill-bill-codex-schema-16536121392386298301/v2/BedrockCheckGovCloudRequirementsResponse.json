@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Advisory check of the current Bedrock configuration after login or setup.",
+  "properties": {
+    "isGovCloud": {
+      "description": "Whether the active Bedrock authentication resolves to a GovCloud region.",
+      "type": "boolean"
+    },
+    "shouldWarn": {
+      "description": "Whether GovCloud is selected and the managed requirements miss the baseline. A false value is not a general certification of the network configuration.",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "isGovCloud",
+    "shouldWarn"
+  ],
+  "title": "BedrockCheckGovCloudRequirementsResponse",
+  "type": "object"
+}

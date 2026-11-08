@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Public metadata for a created or reused local credential. The caller completes backend registration; this response does not establish server enrollment. Older app-servers omit the metadata fields; callers must check both before registration.",
+  "properties": {
+    "algorithm": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "credentialId": {
+      "type": "string"
+    },
+    "publicKey": {
+      "description": "Unpadded base64url of the SubjectPublicKeyInfo DER encoding.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "credentialId"
+  ],
+  "title": "UserVerificationEnrollResponse",
+  "type": "object"
+}

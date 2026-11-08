@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "cachedInputTokens": {
+      "format": "int64",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "inputTokens": {
+      "format": "int64",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "outputTokens": {
+      "format": "int64",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "responseId": {
+      "type": "string"
+    },
+    "sourceTurnId": {
+      "type": "string"
+    },
+    "text": {
+      "description": "Assistant text from the response, or null if it attempted a tool call or completed without text.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "responseId",
+    "sourceTurnId"
+  ],
+  "title": "ThreadSampleResponse",
+  "type": "object"
+}

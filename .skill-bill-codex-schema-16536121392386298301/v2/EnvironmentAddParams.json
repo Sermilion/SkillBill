@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "EnvironmentSkillsParams": {
+      "properties": {
+        "required": {
+          "description": "Exact catalog names that must be available from this environment.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "properties": {
+    "authBearerToken": {
+      "description": "Optional raw bearer token for executor authentication, including reconnects. Requires a secure transport or a loopback destination.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "connectTimeoutMs": {
+      "description": "Optional WebSocket connection timeout. The server default applies when omitted.",
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "environmentId": {
+      "type": "string"
+    },
+    "execServerUrl": {
+      "type": "string"
+    },
+    "skills": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/EnvironmentSkillsParams"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Required skills supplied by this environment, checked before model inference."
+    },
+    "websocketRequestId": {
+      "description": "Optional X-Request-ID for the direct WebSocket upgrade, including reconnects. Requires a secure transport or a loopback destination.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "environmentId",
+    "execServerUrl"
+  ],
+  "title": "EnvironmentAddParams",
+  "type": "object"
+}

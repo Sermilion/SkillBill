@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "EXPERIMENTAL - retrieve a bounded set of persisted items from one turn.",
+  "properties": {
+    "itemIds": {
+      "description": "Item IDs to retrieve. Supply 1 to 100 IDs.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "threadId": {
+      "type": "string"
+    },
+    "turnId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "itemIds",
+    "threadId",
+    "turnId"
+  ],
+  "title": "ThreadItemsReadParams",
+  "type": "object"
+}

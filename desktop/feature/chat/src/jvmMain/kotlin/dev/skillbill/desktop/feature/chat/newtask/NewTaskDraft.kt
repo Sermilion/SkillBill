@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
@@ -15,6 +16,7 @@ import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.toNewTaskKind
 import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
+import dev.skillbill.desktop.core.domain.repository.ChatChangesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
@@ -69,6 +71,7 @@ class NewTaskDraft internal constructor(
   private val clock: Clock,
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
   private val savedChats: NewTaskSavedChats = NewTaskSavedChats(chats, windowScope.scope, toasts),
+  private val changesRepository: ChatChangesRepository = UnavailableChatChanges,
 ) {
   private val scope = windowScope.scope
   private val cardOwners = IdentityHashMap<ChatThread, NewTaskChat>()
@@ -401,7 +404,11 @@ class NewTaskDraft internal constructor(
       ?: NewTaskReplay(current.agent.agentId, current.repositoryRoot, current.baseBranch, lines))
       .takeIf { newTaskReplayPreamble(it, repo.root, branch) != null }
     current.end()
-    val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay)
+    val sameRepository = current.repositoryRoot == repo.root
+    val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay,
+      changesBaseline = current.changesBaseline.takeIf { sameRepository },
+      resumedChanges = current.changesResumed && sameRepository,
+      changesCaptureAttempted = current.changesCaptureAttempted && sameRepository)
     val switched = "Switched to ${chipText(agent)} in ${repo.name}."
     val notice = if (replay != null) "$switched It gets the earlier conversation with your next message." else switched
     next.thread.showCapability(agent)
@@ -444,6 +451,8 @@ class NewTaskDraft internal constructor(
       context.sessionEstablished,
       context.pendingTurnLineIndex,
       missing,
+      changesBaseline = context.changesBaseline,
+      resumedChanges = context.changesBaseline != null,
     )
     val lines = if (retained == null) entry.lines.map(::restored) else emptyList()
     val notice = ChatMessage.Notice("This draft's repository no longer exists: ${context.repositoryRoot}. Discard it to continue.")
@@ -474,6 +483,9 @@ class NewTaskDraft internal constructor(
     pendingTurnLineIndex: Int? = null,
     missing: Boolean = false,
     replay: NewTaskReplay? = null,
+    changesBaseline: ChatChangesBaseline? = null,
+    resumedChanges: Boolean = false,
+    changesCaptureAttempted: Boolean = false,
   ): NewTaskChat {
     val thread = retainedThreads.getOrPut(sessionId) { ChatThread(clock) }
     val saveLock = saveLocks.getOrPut(sessionId) { Mutex() }
@@ -496,6 +508,10 @@ class NewTaskDraft internal constructor(
       thread,
       saveLock,
       { sessionId !in invalidDrafts && retainedThreads[sessionId] === thread },
+      changesRepository,
+      changesBaseline,
+      resumedChanges,
+      changesCaptureAttempted,
     ).also {
       clearChatFeedback()
       chatState.value = it

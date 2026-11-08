@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "ThreadGoalMutationOrigin": {
+      "description": "Distinguishes explicit user actions from automatic goal lifecycle mutations.",
+      "enum": [
+        "user",
+        "automatic"
+      ],
+      "type": "string"
+    },
+    "ThreadGoalStatus": {
+      "enum": [
+        "active",
+        "paused",
+        "blocked",
+        "usageLimited",
+        "budgetLimited",
+        "complete"
+      ],
+      "type": "string"
+    }
+  },
+  "properties": {
+    "objective": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "origin": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ThreadGoalMutationOrigin"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Missing provenance does not supply user authorization."
+    },
+    "status": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ThreadGoalStatus"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "threadId": {
+      "type": "string"
+    },
+    "tokenBudget": {
+      "format": "int64",
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "threadId"
+  ],
+  "title": "ThreadGoalSetParams",
+  "type": "object"
+}

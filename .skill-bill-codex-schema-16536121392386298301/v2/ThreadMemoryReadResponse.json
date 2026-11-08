@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "summary": {
+      "description": "Summary from the thread's selected memory version. Null when memory use is disabled or the selected summary is missing, unreadable, or blank.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "title": "ThreadMemoryReadResponse",
+  "type": "object"
+}

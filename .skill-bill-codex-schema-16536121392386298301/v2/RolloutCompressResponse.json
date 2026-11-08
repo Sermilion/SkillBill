@@ -1,0 +1,6 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Acknowledges the compression trigger, not completion. Existing maintenance locks and cooldowns can cause the background pass to skip without doing work.",
+  "title": "RolloutCompressResponse",
+  "type": "object"
+}

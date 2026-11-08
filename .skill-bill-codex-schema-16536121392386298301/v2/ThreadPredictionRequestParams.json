@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "sourceTurnId": {
+      "type": "string"
+    },
+    "threadId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "sourceTurnId",
+    "threadId"
+  ],
+  "title": "ThreadPredictionRequestParams",
+  "type": "object"
+}

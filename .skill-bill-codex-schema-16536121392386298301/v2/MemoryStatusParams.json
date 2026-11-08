@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "minConsolidatedThreads": {
+      "description": "Required distinct consolidated threads. Defaults to 20; supported range is 1..=4096.",
+      "format": "uint32",
+      "minimum": 0.0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "title": "MemoryStatusParams",
+  "type": "object"
+}

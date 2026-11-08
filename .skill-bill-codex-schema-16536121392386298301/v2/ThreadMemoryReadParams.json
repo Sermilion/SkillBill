@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "threadId": {
+      "description": "The thread must already be started or resumed.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "threadId"
+  ],
+  "title": "ThreadMemoryReadParams",
+  "type": "object"
+}

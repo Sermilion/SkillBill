@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "ReasoningEffort": {
+      "description": "A non-empty reasoning effort value advertised by the model.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "ThreadSource": {
+      "type": "string"
+    }
+  },
+  "properties": {
+    "disableMcp": {
+      "description": "Disable MCP servers when the inherited window uses incremental tools on Responses Lite.",
+      "type": "boolean"
+    },
+    "effort": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ReasoningEffort"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Applied only when the provider and model support cache-preserving reasoning-effort updates."
+    },
+    "expectedTurnId": {
+      "description": "The loaded source's latest completed, failed, or interrupted turn. Stale or active sources are rejected.",
+      "type": "string"
+    },
+    "prompt": {
+      "type": "string"
+    },
+    "responsesapiClientMetadata": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional metadata to enrich Codex's ResponsesAPI turn metadata.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "threadId": {
+      "type": "string"
+    },
+    "threadSource": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ThreadSource"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "turnTrigger": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "expectedTurnId",
+    "prompt",
+    "threadId"
+  ],
+  "title": "ThreadSampleParams",
+  "type": "object"
+}
