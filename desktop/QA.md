@@ -21,6 +21,17 @@ Standalone QA uses the selected run in its history pager. Only desktop targets w
 a private file-backed Xvfb display supply frames. Earlier runs without preview metadata
 have no preview.
 
+Xvfb owns `live-preview/Xvfb_screen0`. Screenshot tools must write separate files
+under the invocation's `evidence/` directory. Writing a screenshot into the live
+framebuffer can truncate its memory-mapped storage and crash Xvfb with `SIGBUS`.
+Protect the ready framebuffer with `chmod 400` before launching clients. Xvfb's
+existing memory mapping can still update it, while screenshot tools cannot open
+it for writing. After a display crash, preserve the log and confirm that the old
+process has exited before restoring write permission with `chmod 600` and
+restarting with the same `-fbdir` directory. Protect the replacement framebuffer,
+register the replacement process and relaunch the app on its new display number.
+A retry without `-fbdir` cannot supply live preview and must report that limitation.
+
 ## Seeded data
 
 Every `runFromSource` launch regenerates the fixture through the runtime's own migrations with

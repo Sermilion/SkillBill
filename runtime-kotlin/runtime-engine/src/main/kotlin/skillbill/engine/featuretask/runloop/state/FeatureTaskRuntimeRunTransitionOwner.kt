@@ -194,6 +194,13 @@ public class FeatureTaskRuntimeRunTransitionOwner internal constructor(
     return write
   }
 
+  internal fun spendFailedAttempt(
+    phaseId: String,
+    attemptCount: Int,
+  ) {
+    progress.recordSpentAttempt(phaseId, attemptCount)
+  }
+
   internal fun applyPersistedPhaseCompletion(
     output: FeatureTaskRuntimePhaseOutput,
     reviewPassNumber: Int?,

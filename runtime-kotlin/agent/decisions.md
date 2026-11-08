@@ -3606,3 +3606,43 @@ A7 preserves loud refusal; A8 keeps the fixture environment explicit. G3 retains
 rejection evidence, and G7 and P7 require this recorded contract correction. The checks assume
 exclusive use of the QA output directories during a task; they do not claim to defeat concurrent
 malicious replacement of ancestor directories.
+
+## [2026-11-07] Cancelled standalone monitors discard owned repair work
+
+Cancellation ends the repair attempt and discards its verified owned worktree,
+branch and refs, including uncommitted files and unpublished commits. Retaining
+those resources used to block a fresh monitor on the same target. Other outcomes
+keep the existing retention policy. Cleanup still checks ownership and waits for
+repair-child shutdown. Admission and explicit stale recovery clean older cancelled
+retained records only after same-host positive process-death evidence; unknown
+publication that may represent an undrained child continues to block. No ownership
+record schema changes or replacements with defaults are required.
+
+## [2026-11-07] Keep merge-repair rationale outside function KDoc
+
+Moved the existing `MonitorMergeRepairGuard` rationale here to satisfy the Kotlin
+comment architecture gate. A repair is publishable when HEAD already contains
+`origin/<base>`, or an in-progress merge brings base commits HEAD lacks. The base
+can move while the agent resolves conflicts, so `MERGE_HEAD` may be an older base
+commit than the current `origin/<base>`. Publishing that merge keeps the base as a
+parent and makes progress; a later monitor round merges the newer tip if the PR
+still conflicts.
+
+## [2026-11-08] New iterations supersede inactive ownership
+
+New phase and operation iterations take priority over paused, cancelled, idle and
+blocked predecessors for the same target. They do not preempt running owners or
+consume parked confirmation proposals. The shared detached launcher completes its
+exit notification after ownership cleanup, preventing a new launch from racing
+the old admission-lock cleanup.
+
+Monitor admission was the retained-work exception. Under its target lock, a saved
+settlement now establishes inactivity even when the host process remains alive.
+Without a settled outcome, same-host positive process-death evidence is required.
+Archive the existing record under `history/<generation>/ownership.json` before
+advancing the generation. Preserve unfinished non-cancelled resources and their
+history; discard verified owned cancelled work. An undrained child remains protected.
+This supersedes the earlier requirement to manually resolve non-cancelled retained
+work before a fresh monitor can start. Archived records use the unchanged ownership
+contract and keep their original identities and evidence; repeated reconciliation
+reuses the first validated archive and never resets history to defaults.

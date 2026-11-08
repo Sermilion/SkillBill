@@ -10,20 +10,33 @@ internal fun WorkflowGitOperations.unmergedConflictBaseReason(
 ): String? {
   val remoteBase = "origin/$baseBranch"
   val baseSha =
-    resolveCommit(repoRoot, "refs/remotes/$remoteBase") as? WorkflowGitOperationResult.Ok
+    (resolveCommit(repoRoot, "refs/remotes/$remoteBase") as? WorkflowGitOperationResult.Ok)?.value?.trim()
       ?: return "The merge-conflict repair cannot be published: '$remoteBase' does not resolve to a commit. " +
         "Fetch '$baseBranch' from origin and merge it before publishing."
-  val head = headCommitSha(repoRoot) as? WorkflowGitOperationResult.Ok
-  val mergeHead = resolveCommit(repoRoot, MERGE_HEAD) as? WorkflowGitOperationResult.Ok
+  val head = (headCommitSha(repoRoot) as? WorkflowGitOperationResult.Ok)?.value?.trim()
+  val mergeHead = (resolveCommit(repoRoot, MERGE_HEAD) as? WorkflowGitOperationResult.Ok)?.value?.trim()
   val merged =
-    listOfNotNull(head, mergeHead).any { candidate -> reaches(repoRoot, baseSha.value, candidate.value) }
+    head != null && reaches(repoRoot, baseSha, head) ||
+      mergeHead != null && mergesBaseProgress(repoRoot, baseSha, mergeHead, head)
   return if (merged) {
     null
   } else {
     "The merge-conflict repair cannot be published: neither HEAD nor an in-progress merge contains " +
-      "'$remoteBase' (${baseSha.value.trim()}). Publishing it would leave the pull request conflicting. Merge " +
+      "'$remoteBase' ($baseSha). Publishing it would leave the pull request conflicting. Merge " +
       "'$remoteBase' with `git merge --no-commit --no-ff $remoteBase` and leave the merge in progress."
   }
+}
+
+private fun WorkflowGitOperations.mergesBaseProgress(
+  repoRoot: Path,
+  baseSha: String,
+  mergeHead: String,
+  head: String?,
+): Boolean {
+  if (reaches(repoRoot, baseSha, mergeHead)) return true
+  val isBaseCommit = reaches(repoRoot, mergeHead, baseSha)
+  val alreadyInHead = head != null && reaches(repoRoot, mergeHead, head)
+  return isBaseCommit && !alreadyInHead
 }
 
 private fun WorkflowGitOperations.reaches(

@@ -64,7 +64,7 @@ public class GoalQualityBuildBoundary public constructor(
   ): GoalQualityExecutionRecord {
     var current = quality
     var execution = requireNotNull(current.execution)
-    validateRetainedQualityWork(execution, request)
+    validateRetainedQualityWork(execution)
     if (needsCurrentSourceBuild(execution)) {
       reenterInitialBuild(state, request, execution)?.let { current = it }
       execution = requireNotNull(current.execution)
@@ -163,10 +163,7 @@ public class GoalQualityBuildBoundary public constructor(
       execution.hasAcceptedQaSource(currentSource, it)
     } == true
 
-  private fun validateRetainedQualityWork(
-    execution: GoalQualityExecution,
-    request: GoalRunnerRunRequest,
-  ) {
+  private fun validateRetainedQualityWork(execution: GoalQualityExecution) {
     val plans = requireNotNull(execution.executionPlans)
     val progress = requireNotNull(execution.progress)
     val agentId = requireNotNull(execution.governingInputs).effectiveAgentId
@@ -180,10 +177,7 @@ public class GoalQualityBuildBoundary public constructor(
         retained.second,
         plan,
         "${execution.parentWorkflowId}:${execution.invocationId}",
-      ) {
-        definitionId == SkeletonDefinition.VALIDATION.id &&
-          validationInputSourceUnchanged(gitOperations, execution, request)
-      }
+      )
     }
   }
 

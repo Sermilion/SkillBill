@@ -10,6 +10,10 @@ import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
 import skillbill.engine.featuretask.runner.telemetryRunnerHarness
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.validation.repoLocalConfig
+import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
+import skillbill.install.model.SupportedAgent
+import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
@@ -19,12 +23,17 @@ import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolderKind
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeRelease
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.scaffold.model.PlatformManifest
+import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -151,6 +160,92 @@ class PhaseValidationRunTest {
     assertTrue(result.targetReport.any { repoRoot.toString() in it && "dirty" in it }, result.targetReport.toString())
   }
 
+  @Test
+  fun `validation relaunches after a failed attempt and completes once the build is green`() {
+    var attempt = 0
+    val launcher =
+      RuntimeRecordingLauncher {
+        if (++attempt < 3) failedValidationLaunch() else facts(validJsonOutput(PHASE_VALIDATE))
+      }
+    val result = assertIs<PhaseRunResult.Completed>(goalEntry(launcher))
+
+    assertEquals(listOf(PHASE_VALIDATE), result.completedStepIds)
+    assertEquals(3, launcher.requests.size)
+  }
+
+  @Test
+  fun `validation blocks only after three failed attempts`() {
+    val launcher = RuntimeRecordingLauncher { failedValidationLaunch() }
+    val result = assertIs<PhaseRunResult.Blocked>(goalEntry(launcher))
+
+    assertEquals(3, launcher.requests.size)
+    assertContains(result.reason, "after 3 attempts")
+  }
+
+  @Test
+  fun `goal validation interrupted mid attempt runs again on resume`() {
+    val started = Instant.parse("2026-11-07T21:53:10.032Z")
+    val start =
+      FeatureTaskRuntimePhaseLedgerEntry(
+        FeatureTaskRuntimePhaseLedgerAction.START,
+        1,
+        started,
+        PHASE_VALIDATE,
+        1,
+        "claude",
+      )
+    var latest =
+      GoalQualityPhaseProgress(
+        phaseRecords =
+          mapOf(
+            PHASE_VALIDATE to
+              FeatureTaskRuntimePhaseRecord(
+                PHASE_VALIDATE,
+                WorkflowStepStatus.RUNNING,
+                1,
+                started,
+                resolvedAgentId = "claude",
+              ),
+          ),
+        phaseLedger = listOf(start, start.copy(sequenceNumber = 2, timestamp = started.plusMillis(722))),
+        revision = 2,
+      )
+    val launcher = launcher { validJsonOutput(PHASE_VALIDATE) }
+    val fixture = fixture(launcher, mutableListOf(), emptyList(), manifests = emptyList())
+    val request =
+      validationRequest().copy(
+        acceptedGoalQualityAgentId = "claude",
+        goalQualityPhaseProgress = latest,
+        persistGoalQualityPhaseProgress = { progress, _ ->
+          latest = progress
+          true
+        },
+        latestGoalQualityPhaseProgress = { latest },
+        terminalGoalQualityContentFingerprint = { "validation-checkpoint" },
+        acceptedGoalQualitySourceFingerprint = { "validation-checkpoint" },
+      )
+    val plan = fixture.plans().resolveGoalQualityExecutionPlan(request, "goal-parent")
+
+    val result =
+      fixture.entry().runForGoalQuality(
+        request,
+        "goal-parent",
+        "phr-quality",
+        branchSetup.gitOperations.currentBranchValue,
+        plan,
+      )
+
+    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertEquals(1, launcher.requests.size)
+  }
+
+  private fun goalEntry(launcher: RuntimeRecordingLauncher): PhaseRunResult =
+    entry(launcher, mutableListOf(), emptyList(), manifests = emptyList())
+      .runForGoal(validationRequest(), "goal-parent", branchSetup.gitOperations.currentBranchValue)
+
+  private fun failedValidationLaunch() =
+    agentRunLaunchFacts(agent = SupportedAgent.CLAUDE, termination = AgentRunTermination.Exited(1))
+
   private fun validationPack(): PlatformManifest =
     kotlinPackWithValidationGate().let { pack ->
       pack.copy(
@@ -182,7 +277,15 @@ class PhaseValidationRunTest {
     results: List<ValidationGateRunResult>,
     manifests: List<PlatformManifest> = listOf(validationPack()),
     runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
-  ): PhaseRunEntry {
+  ): PhaseRunEntry = fixture(launcher, gateRequests, results, manifests, runLoopEntry).entry()
+
+  private fun fixture(
+    launcher: RuntimeRecordingLauncher,
+    gateRequests: MutableList<ValidationGateRunRequest>,
+    results: List<ValidationGateRunResult>,
+    manifests: List<PlatformManifest> = listOf(validationPack()),
+    runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
+  ): PhaseRunEntryFixture {
     var resultIndex = 0
     val config =
       RuntimeHarnessConfig(
@@ -226,6 +329,6 @@ class PhaseValidationRunTest {
       clock,
       harness.runLoopEntry.delegateTo(runLoopEntry),
       branchWorktrees = branchWorktrees,
-    ).entry()
+    )
   }
 }

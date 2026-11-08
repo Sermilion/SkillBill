@@ -64,7 +64,6 @@ public data class PhaseRunRequest(
   public val persistGoalQualityPhaseProgress: ((GoalQualityPhaseProgress, String?) -> Boolean)? = null,
   public val terminalGoalQualityContentFingerprint: (() -> String)? = null,
   public val acceptedGoalQualitySourceFingerprint: (() -> String)? = null,
-  public val goalQualityInputSourceUnchanged: (() -> Boolean)? = null,
   public val acceptedGoalQualityQaSourceWitness: ((GoalQualityPhaseProgress) -> GoalQualityQaSourceWitness?)? = null,
   public val goalQualityValidationOccurrence: Int = 0,
   internal val latestGoalQualityPhaseProgress: (() -> GoalQualityPhaseProgress)? = null,

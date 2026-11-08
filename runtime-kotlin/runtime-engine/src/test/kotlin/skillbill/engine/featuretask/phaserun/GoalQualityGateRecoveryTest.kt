@@ -149,31 +149,20 @@ class GoalQualityGateRecoveryTest {
   }
 
   @Test
-  fun `an interrupted validation attempt may run again only while its input source is unchanged`() {
+  fun `an interrupted validation attempt always runs again`() {
     val validate = record.copy(phaseId = "validate")
-    val progress =
-      GoalQualityPhaseProgress(phaseRecords = mapOf("validate" to validate), phaseLedger = qaStarts("validate"))
-
-    validateRetained(progress, SkeletonDefinition.VALIDATION) { true }
-    val failure =
-      assertFailsWith<SkillBillRuntimeException> {
-        validateRetained(progress, SkeletonDefinition.VALIDATION) { false }
-      }
-    assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'validate#1' is unknown")
-  }
-
-  @Test
-  fun `an unchanged source does not resume a validation attempt after earlier accepted work`() {
-    val validate = record.copy(phaseId = "validate", attemptCount = 2)
-    val ledger = qaStarts("validate").map { it.copy(attemptCount = 2) }
-    val failure =
-      assertFailsWith<SkillBillRuntimeException> {
-        validateRetained(
-          GoalQualityPhaseProgress(phaseRecords = mapOf("validate" to validate), phaseLedger = ledger),
-          SkeletonDefinition.VALIDATION,
-        ) { true }
-      }
-    assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'validate#2' is unknown")
+    val retry = validate.copy(attemptCount = 2)
+    val retryStarts = qaStarts("validate").map { it.copy(attemptCount = 2) }
+    val retryTerminal =
+      retryStarts.last().copy(
+        action = FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
+        sequenceNumber = 11,
+      )
+    listOf(
+      GoalQualityPhaseProgress(phaseRecords = mapOf("validate" to validate), phaseLedger = qaStarts("validate")),
+      GoalQualityPhaseProgress(phaseRecords = mapOf("validate" to validate)),
+      GoalQualityPhaseProgress(phaseRecords = mapOf("validate" to retry), phaseLedger = retryStarts + retryTerminal),
+    ).forEach { progress -> validateRetained(progress, SkeletonDefinition.VALIDATION) }
   }
 
   private fun qaStarts(phaseId: String) = listOf(first.copy(phaseId = phaseId), second.copy(phaseId = phaseId))
@@ -181,7 +170,6 @@ class GoalQualityGateRecoveryTest {
   private fun validateRetained(
     progress: GoalQualityPhaseProgress,
     definition: SkeletonDefinition = SkeletonDefinition.GOAL_QA,
-    inputSourceUnchanged: () -> Boolean = { false },
   ) {
     val resolver = resolver()
     val plan =
@@ -189,7 +177,7 @@ class GoalQualityGateRecoveryTest {
         PhaseRunRequest(definitionId = definition.id, repoRoot = home, invokedAgentId = "codex"),
         "goal-parent",
       )
-    resolver.validateRetainedRunningPhases(progress, plan, "goal-parent:quality-invocation", inputSourceUnchanged)
+    resolver.validateRetainedRunningPhases(progress, plan, "goal-parent:quality-invocation")
   }
 
   private fun resolver(): PhaseRunPlanResolver {
