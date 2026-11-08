@@ -22,10 +22,6 @@ internal class AgentValidateGateCycle(
 ) {
   private var stoppedAttempt: PhaseOutcome? = null
 
-  /**
-   * Validate has one job: make the build green on the current tree. Any failed attempt, whatever stopped it,
-   * starts a fresh one. Validate blocks only after [MAX_VALIDATE_ATTEMPTS] attempts fail; a pause stops at once.
-   */
   internal fun run(run: PhaseRun): PhaseOutcome {
     call.acceptedExecution.requireAcceptedStep(run, call.strategyId)
     var failed: PhaseOutcome? = null

@@ -573,37 +573,10 @@ public class PhaseRunEntry(
     expectedBranch: String? = null,
     standalone: MonitorPreparation.Prepared? = null,
   ): PhaseRunResult {
-    val acceptedExecutionPlan = request.acceptedGoalQualityPlanText
-    val definition = SkeletonDefinition.byId(request.definitionId)
-    if (definition.runStateKind != SkeletonRunStateKind.IN_MEMORY) {
-      throw InMemorySkeletonDefinitionRequiredError(definition.id)
-    }
-    val branch =
-      standalone
-        ?.context
-        ?.let { FeatureTaskRuntimeResolvedBranch(branch = it.worktree.branch, baseBranch = it.target.base.ref) }
-        ?: plans.currentBranch(request)
-    val intake = intakeResolver.resolve(definition, request, branch?.branch)
-    val liveChecksInvocation = invocationId.takeIf { standaloneValidation(request, definition, workflowId) }
-    val resolutionFacts =
-      InMemoryPhaseRunFacts(request, definition, intake, workflowId, standalone?.context, liveChecksInvocation)
-    val executionPlan =
-      acceptedExecutionPlan?.let { encoded ->
-        plans.validateGoalQualityExecutionPlan(
-          encoded,
-          request.definitionId,
-          requireNotNull(request.acceptedGoalQualityAgentId),
-        )
-      } ?: plans.resolveExecutionPlan(request, workflowId, branch, resolutionFacts)
-    val facts =
-      InMemoryPhaseRunFacts(
-        request.copy(acceptedGoalQualityExecutionPlan = executionPlan.takeIf { acceptedExecutionPlan != null }),
-        definition,
-        intake,
-        workflowId,
-        standalone?.context,
-        liveChecksInvocation,
-      )
+    val setup = phaseRunSetup(request, invocationId, workflowId, standalone)
+    val branch = setup.branch
+    val executionPlan = setup.executionPlan
+    val facts = setup.facts
     if (expectedBranch != null && branch?.branch != expectedBranch) {
       return PhaseRunResult.Blocked(
         invocationId,
@@ -639,6 +612,55 @@ public class PhaseRunEntry(
       )
     val report = runLoopEntry.run(runLoopEntry.context(facts, state))
     return resultOf(report, state, records)
+  }
+
+  private fun phaseRunSetup(
+    request: PhaseRunRequest,
+    invocationId: String,
+    workflowId: String,
+    standalone: MonitorPreparation.Prepared?,
+  ): PhaseRunSetup {
+    val acceptedExecutionPlan = request.acceptedGoalQualityPlanText
+    val definition = SkeletonDefinition.byId(request.definitionId)
+    if (definition.runStateKind != SkeletonRunStateKind.IN_MEMORY) {
+      throw InMemorySkeletonDefinitionRequiredError(definition.id)
+    }
+    val branch =
+      standalone
+        ?.context
+        ?.let { FeatureTaskRuntimeResolvedBranch(branch = it.worktree.branch, baseBranch = it.target.base.ref) }
+        ?: plans.currentBranch(request)
+    val intake = intakeResolver.resolve(definition, request, branch?.branch)
+    val liveChecksInvocation = invocationId.takeIf { standaloneValidation(request, definition, workflowId) }
+    val resolutionFacts =
+      InMemoryPhaseRunFacts(
+        request,
+        definition,
+        intake,
+        workflowId,
+        standalone?.context,
+        invocationId,
+        liveChecksInvocation,
+      )
+    val executionPlan =
+      acceptedExecutionPlan?.let { encoded ->
+        plans.validateGoalQualityExecutionPlan(
+          encoded,
+          request.definitionId,
+          requireNotNull(request.acceptedGoalQualityAgentId),
+        )
+      } ?: plans.resolveExecutionPlan(request, workflowId, branch, resolutionFacts)
+    val facts =
+      InMemoryPhaseRunFacts(
+        request.copy(acceptedGoalQualityExecutionPlan = executionPlan.takeIf { acceptedExecutionPlan != null }),
+        definition,
+        intake,
+        workflowId,
+        standalone?.context,
+        invocationId,
+        liveChecksInvocation,
+      )
+    return PhaseRunSetup(branch, executionPlan, facts)
   }
 
   private fun inMemoryRecords(
@@ -759,6 +781,12 @@ public class PhaseRunEntry(
       request.acceptedGoalQualityPlanText == null &&
       request.goalQualityInvocationId == null
 }
+
+private data class PhaseRunSetup(
+  val branch: FeatureTaskRuntimeResolvedBranch?,
+  val executionPlan: ResolvedPhaseExecutionPlan,
+  val facts: InMemoryPhaseRunFacts,
+)
 
 private fun newInvocationId(): String = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}"
 

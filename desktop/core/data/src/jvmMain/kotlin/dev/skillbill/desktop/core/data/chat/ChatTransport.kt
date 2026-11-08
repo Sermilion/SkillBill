@@ -16,6 +16,9 @@ import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
 interface ChatTransport {
   val agentId: String
 
+  /** Whether this agent's chat answers permission requests through an operator approval card. */
+  val approvalCapable: Boolean get() = false
+
   fun run(request: ChatTurnRequest): Flow<ChatEvent>
 
   /** Replies the agent starts on its own between turns; a transport that runs one process per turn has none. */

@@ -1,3 +1,13 @@
+## [2026-11-07] Ask for proposal changes before replacing an operation card
+Context: Adjust immediately reran the original verify or pr-review-fix request, giving the operator no chance to explain the intended revision.
+Decision: Adjust asks a question in the current chat. Its next reply starts a replacement proposal using the original launch settings and separate revision instructions; the replacement still needs an explicit Confirm click.
+Reason: The operator expects to describe the changes before seeing another confirmation card. Repeating the original request cannot express that revision.
+
+## [2026-11-07] Start operator chats in Act independently of execution lifecycle
+Context: Chats attached to active executions inherited ReadOnly permissions, preventing ordinary edit and QA requests from being approved.
+Decision: Launch opening and follow-up operator chat turns in Act for every agent. Execution lifecycle only coordinates optional pause-and-act actions. Permission cards represent structured harness permission requests; ordinary questions use the question UI or prose.
+Reason: Operators use chat to act on repository work. A running execution must not silently turn that chat into a read-only session, and an agent asking a question must not manufacture a tool permission request.
+
 ## [2026-11-07] Keep summary writes separate and stamp the summarized snapshot
 Context: Conversation saves rewrite the chat file, and a new turn or discard can happen while a background summary runs.
 Decision: saveChat preserves stored summary fields and ignores the entry's summary. Only saveSummary changes them, under the store lock on an existing file, with the snapshot's updated_at as summary_source_updated_at_ms and no change to the stored updated_at.
@@ -297,6 +307,7 @@ Revisit when: Cursor messages are needed in the transcript; they sit in a SQLite
 Context: The operator asked for the chat to do anything the execution agent can, with no limits added by the app, and for chat on codex, cursor and junie. Read-only turns were denying `gh pr view` and similar commands.
 Decision: Claude turns pass --dangerously-skip-permissions and drop --restricted, --tools, --allowedTools, --permission-mode and --permission-prompts. Codex turns pass --dangerously-bypass-approvals-and-sandbox with shell_environment_policy.inherit=all, Cursor turns pass --force, --trust and --approve-mcps, and Junie runs headless as the launcher runs it. ReadOnly and Act still pick the scope prompt and drive pause-and-act, but limit no tools. Codex and Cursor resume the thread or chat id their first turn reported, held in memory per chat session. Junie's text output carries no session id, so each Junie turn sends the earlier exchanges of the chat, newest first up to 120,000 characters. The operator can switch a chat's agent from the composer chip; the switch takes that agent's REASONING-tier model, or the CLI default, and starts a new agent session with the full snapshot.
 Reason: Executions already run these agents with permission checks off, so a stricter chat only blocked the operator. A switched agent cannot resume another agent's session.
+Superseded by: SKILL-453 operator approvals are broker-owned and host-controlled (2026-11-07)
 Supersedes: "Allow shell commands in chat act mode", "Run chat turns restricted, prompt-free and without the prompt snapshot" (the snapshot flag stays off), the read-only profile in "Let the chat workspace own pause, act and resume", and "Show unsupported chat agents instead of switching to Claude" for codex, cursor and junie.
 
 ## [2026-10-31] Return executable chat suggestions as reply metadata
@@ -472,3 +483,20 @@ Reason: SwingPanel otherwise paints above Compose content regardless of composab
 Context: Review publishing needs a short success message tied to the comment bar and diff context.
 Decision: Render the review toast in the Changes diff pane and expire it after 2.6 seconds through the view-model coroutine delay.
 Reason: The application toast stack has a fixed 5-second lifetime and appears outside the review context.
+
+## [2026-11-07] Keep every chat free of app-imposed permission and workflow gates
+Context: Chat prompt rules made ordinary requests wait for action buttons, issue-key acceptance or a pause even though the chat transports expose the execution agent's tools.
+Decision: New-task and execution chat prompts carry repository or execution context and optional action-button formatting. They permit direct shell, CLI, MCP, Git, gh and file-edit requests without adding chat-specific approval steps, key-confirmation gates, execution-only scope limits or mode-dependent instructions. ReadOnly and Act remain UI coordination metadata for optional pause-and-act actions; transports no longer inject them into prompts or operator messages. Provider launch permissions and runtime command contracts retain their own owners.
+Reason: Conversation context and button formatting must not reduce what the operator can ask the chat agent to do. This supersedes earlier decisions that used chat mode to select prompt guidance or required button-only launches.
+
+## [2026-11-07] Route interactive Codex approvals to operator cards
+Context: Act chat explicitly selected `auto_review`, so commands could be approved without a card or denied for lacking specific authorization before the operator could review their payload.
+Decision: Use `on-request` with `approvalsReviewer: user` for Act chat thread start, resume and turn start. Admit these fields against the installed schema for all three methods. Keep other runtime callers on their existing settings.
+Reason: Provider approval requests must reach the existing live card broker before execution. This uses the provider's human-review protocol rather than interpreting rejection text, replaying a denied action or bypassing managed restrictions.
+Superseded by: Default all provider launches to native permission bypass (2026-11-07)
+
+## [2026-11-07] Keep Cursor and Junie chat on interactive ACP permissions
+Context: Cursor Act chat added `--auto-review`, which let the provider decide tool requests before the operator-card broker saw them. Junie already used its standard `--acp` command.
+Decision: Both chat transports launch the provider's standard ACP arguments. Remove Cursor's automatic-review argument override. Verify that publishing requests from either provider produce full pending cards and send no permission response until an operator decision is delivered.
+Reason: Interactive permission decisions belong to the operator. Retain provider-issued options, session identity checks, read-only mode and unsupported-interaction handling.
+Superseded by: Default all provider launches to native permission bypass (2026-11-07)

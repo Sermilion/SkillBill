@@ -46,6 +46,7 @@ import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
+import dev.skillbill.desktop.feature.chat.ChatApprovalActions
 import dev.skillbill.desktop.feature.chat.ChatTranscript
 import dev.skillbill.desktop.feature.chat.chipText
 import dev.skillbill.desktop.feature.chat.resumableDrafts
@@ -145,6 +146,12 @@ private fun ColumnScope.NewTaskChatContent(
             )
           }
         } else null,
+        approvals = ChatApprovalActions(
+          live = chat.approvalLive.collectAsState().value,
+          onDecide = chat::decideApproval,
+          onDismiss = chat::dismissApproval,
+        ),
+        operationCards = draft.operationCardActions(chat),
       ) { _, action ->
         val start = action.start
         if (start == null) {

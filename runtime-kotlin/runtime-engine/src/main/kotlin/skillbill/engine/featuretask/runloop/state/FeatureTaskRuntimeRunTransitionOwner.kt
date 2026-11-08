@@ -194,7 +194,6 @@ public class FeatureTaskRuntimeRunTransitionOwner internal constructor(
     return write
   }
 
-  /** Counts a failed attempt as spent, so the next launch of [phaseId] in this process starts a new attempt. */
   internal fun spendFailedAttempt(
     phaseId: String,
     attemptCount: Int,

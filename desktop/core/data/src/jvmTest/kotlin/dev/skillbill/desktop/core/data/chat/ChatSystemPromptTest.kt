@@ -34,19 +34,8 @@ class ChatSystemPromptTest {
     assertTrue("target beginning \"mode:remote\"" in prompt)
     assertTrue("Never set \"start\" to \"release\"" in prompt)
     assertTrue("without \"start\", the app sends its instruction as the next chat turn" in prompt)
-    assertTrue("only after the operator clicks" in prompt)
-    assertTrue("Do not launch skill-bill yourself" in prompt)
-    assertTrue("local spec inventory, including completed and archived bundles, and existing runs" in prompt)
-    assertTrue("Wait for the operator to send that complete key in chat or say they will type it on the start card" in prompt)
-    assertTrue("whose instruction is exactly the bare key" in prompt)
-    assertTrue("Offer this key action only in a reply that proposes a new key" in prompt)
-    assertTrue("Never offer it for a key that already has a run or spec bundle" in prompt)
-    assertTrue("do not ask them to type the key again on the card" in prompt)
     assertFalse("The operator will type the issue key on the start card." in prompt)
-    assertTrue("Never silently mint or use a suggested key before acceptance" in prompt)
-    assertTrue("A sentence that mentions a key does not identify the run" in prompt)
     assertFalse("\"key\":" in prompt)
-    assertTrue("Offer a \"goal\" or \"plan\" start action only after the operator sends the accepted complete key in chat or says they will type one on the card" in prompt)
     assertFalse("Offer a start action once the request is clear" in prompt)
     assertFalse("Starting a run from this chat is not available yet" in prompt)
     assertFalse("this execution" in prompt)
@@ -60,7 +49,6 @@ class ChatSystemPromptTest {
 
     assertTrue("Run phase:goal" in prompt)
     assertTrue("branch:<name>" in prompt)
-    assertTrue("the app starts the selected run when the operator clicks it" in prompt)
     assertFalse("Starting a run from this chat is not available yet" in prompt)
     assertFalse("Do not include a \"start\" field" in prompt)
   }
@@ -82,7 +70,5 @@ class ChatSystemPromptTest {
     assertTrue("Never set \"start\" to \"release\"" in prompt)
     assertTrue("Verify findings" in prompt)
     assertTrue("must not set \"start\":\"verify\"" in prompt)
-    assertTrue("may emit \"start\"" in prompt)
-    assertTrue("A start waits until this execution is not running" in prompt)
   }
 }

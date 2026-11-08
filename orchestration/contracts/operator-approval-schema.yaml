@@ -1,0 +1,117 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://skill-bill.dev/contracts/operator-approval-schema.yaml
+title: Operator approval record
+type: object
+required:
+  - contract_version
+  - approval_id
+  - repository_identity
+  - checkout_root
+  - run_id
+  - process_generation
+  - provider
+  - provider_request_id
+  - provider_session_id
+  - title
+  - reason
+  - subject
+  - input_text
+  - options
+  - action_fingerprint
+  - authority_scope
+  - created_at
+  - deadline_at
+  - state
+  - decision_source
+  - selected_option_id
+  - rule_id
+  - provider_payload
+properties:
+  contract_version:
+    const: '1.0'
+  approval_id: {type: string, minLength: 1}
+  repository_identity: {type: string, minLength: 1}
+  checkout_root: {type: string, minLength: 1}
+  run_id: {type: string, minLength: 1}
+  process_generation: {type: string, minLength: 1}
+  provider: {type: string, minLength: 1}
+  provider_request_id:
+    oneOf:
+      - {type: string}
+      - {type: integer}
+  provider_session_id: {type: [string, 'null']}
+  title: {type: string}
+  reason: {type: [string, 'null']}
+  subject: {type: string}
+  input_text: {type: string}
+  options:
+    type: array
+    items:
+      $ref: '#/$defs/approvalOption'
+  action_fingerprint: {type: [string, 'null']}
+  authority_scope:
+    oneOf:
+      - {$ref: '#/$defs/authorityScope'}
+      - {type: 'null'}
+  created_at: {type: string, format: date-time}
+  deadline_at: {type: string, format: date-time}
+  state:
+    $ref: '#/$defs/approvalState'
+  decision_source:
+    oneOf:
+      - {$ref: '#/$defs/decisionSource'}
+      - {type: 'null'}
+  selected_option_id: {type: [string, 'null']}
+  rule_id: {type: [string, 'null']}
+  provider_payload: {type: string}
+additionalProperties: false
+$defs:
+  approvalOption:
+    type: object
+    required: [option_id, label, kind]
+    properties:
+      option_id: {type: string}
+      label: {type: string}
+      kind: {type: string}
+    additionalProperties: false
+  authorityScope:
+    type: object
+    required: [profile_identity, protocol_revision, action_kind, working_directory, action_fingerprint]
+    properties:
+      profile_identity: {type: string}
+      protocol_revision: {type: string}
+      action_kind: {type: string}
+      working_directory: {type: string}
+      action_fingerprint: {type: string}
+    additionalProperties: false
+  approvalState:
+    type: string
+    enum: [pending, allowed, denied, cancelled, expired, unsupported, process_ended]
+  decisionSource:
+    type: string
+    enum: [operator_once, operator_rule, stored_rule]
+  approvalRuleRecord:
+    type: object
+    required:
+      - rule_id
+      - repository_identity
+      - provider
+      - profile_identity
+      - protocol_revision
+      - action_kind
+      - working_directory
+      - action_fingerprint
+      - created_at
+      - revoked_at
+    properties:
+      rule_id: {type: string}
+      repository_identity: {type: string}
+      provider: {type: string}
+      profile_identity: {type: string}
+      protocol_revision: {type: string}
+      action_kind: {type: string}
+      working_directory: {type: string}
+      action_fingerprint: {type: string}
+      created_at: {type: string, format: date-time}
+      revoked_at: {type: [string, 'null'], format: date-time}
+    additionalProperties: false

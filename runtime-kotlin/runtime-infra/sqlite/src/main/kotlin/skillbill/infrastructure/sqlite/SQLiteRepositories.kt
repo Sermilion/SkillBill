@@ -2,6 +2,7 @@ package skillbill.infrastructure.sqlite
 
 import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
+import skillbill.infrastructure.sqlite.approval.SqliteApprovalStore
 import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRecoveryRepository
 import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRepository
 import skillbill.infrastructure.sqlite.blockincident.SqliteProductReportRepository
@@ -11,6 +12,7 @@ import skillbill.infrastructure.sqlite.diagnostics.FileRejectedOutputDiagnosticP
 import skillbill.infrastructure.sqlite.diagnostics.SqliteRejectedOutputDiagnosticRepository
 import skillbill.infrastructure.sqlite.goal.UnaddressedFindingsRuntime
 import skillbill.infrastructure.sqlite.idestatus.SqliteWorkBoardReadModelStore
+import skillbill.infrastructure.sqlite.operation.SqliteOperationCardStore
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalStore
 import skillbill.infrastructure.sqlite.review.accounting.loadReviewAccounting
 import skillbill.infrastructure.sqlite.review.accounting.persistImportedReview
@@ -41,6 +43,7 @@ import skillbill.learnings.model.LearningRecord
 import skillbill.learnings.model.LearningSourceValidation
 import skillbill.learnings.model.RejectedLearningSourceOutcome
 import skillbill.learnings.model.UpdateLearningRequest
+import skillbill.ports.approval.ApprovalStore
 import skillbill.ports.blockincident.BlockIncidentContractValidator
 import skillbill.ports.blockincident.BlockIncidentRecoveryRepository
 import skillbill.ports.blockincident.BlockIncidentRepository
@@ -63,6 +66,7 @@ import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.learning.model.LearningResolution
+import skillbill.ports.operation.OperationCardRepository
 import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.model.GoalPurgeTableCounts
@@ -115,6 +119,8 @@ internal class SQLiteUnitOfWork(
     SqliteFeatureTaskPhaseSettlementStore(connection, clock, diagnostics)
   override val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository = SqliteFeatureTaskQaOutcomeStore(connection)
   override val operationProposals: OperationProposalRepository = SqliteOperationProposalStore(connection)
+  override val operationCards: OperationCardRepository = SqliteOperationCardStore(connection)
+  override val approvals: ApprovalStore = SqliteApprovalStore(connection, diagnostics)
   override val blockIncidents: BlockIncidentRepository =
     SqliteBlockIncidentRepository(connection, clock, blockIncidentContractValidator, diagnostics)
   override val blockIncidentRecoveries: BlockIncidentRecoveryRepository =

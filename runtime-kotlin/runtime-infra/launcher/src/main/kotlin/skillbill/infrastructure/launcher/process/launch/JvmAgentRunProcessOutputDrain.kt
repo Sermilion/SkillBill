@@ -93,6 +93,7 @@ internal class Utf8Drain(
   internal val onChunkRead: (String) -> Unit,
   private val flushOutputStreamOnEnd: Boolean = false,
   private val awaitWorker: (Thread, Long) -> Unit = { worker, millis -> worker.join(millis) },
+  internal val onStreamEnd: (() -> Unit)? = null,
 ) {
   private val output = ByteArrayOutputStream(INITIAL_OUTPUT_BUFFER_BYTES)
 
@@ -162,6 +163,8 @@ internal class Utf8Drain(
           workerFailure = workerFailure ?: interrupted
         } finally {
           workerCompleted = true
+          catchingNonCancellation { onStreamEnd?.invoke() }
+            .onFailure { failure -> workerFailure = workerFailure ?: failure }
         }
       }
     }

@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.common.ApplicationCoroutineScope
 import dev.skillbill.desktop.core.common.DatabaseDispatcher
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.di.AppScope
+import dev.skillbill.desktop.core.data.chat.installApprovalShutdownHook
 import dev.skillbill.desktop.core.data.runtime.BoardPage
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
@@ -26,7 +27,7 @@ class DatabaseSessionManager(
   factory: ComponentSessionGraphFactory,
   settings: AppSettingsRepository,
   dispatcher: DatabaseDispatcher,
-  diagnostics: Diagnostics,
+  private val diagnostics: Diagnostics,
   private val reservations: LaunchReservations,
   appScope: ApplicationCoroutineScope,
 ) : DatabaseSessionController {
@@ -46,7 +47,24 @@ class DatabaseSessionManager(
   val sessions: StateFlow<DatabaseSessionComponent?> =
     lifecycle.current.map { it?.graph?.component }.stateIn(appScope.scope, SharingStarted.Eagerly, null)
 
-  fun start(): Job = lifecycle.start()
+  fun start(): Job {
+    // Covers exitApplication, tray Quit, window close and SIGTERM; an abrupt kill is bounded by the lease and deadlines instead.
+    installApprovalShutdownHook(::shutdown)
+    return lifecycle.start()
+  }
+
+  /**
+   * App close: ends the open session's approval owner generations and operator registrations while its database is
+   * still usable, so outstanding requests are cancelled instead of left to expire. Blocking and short.
+   */
+  internal fun shutdown() {
+    val graph = lifecycle.coordinate { open -> open?.graph as? RuntimeSessionGraph } ?: return
+    try {
+      graph.releaseApprovals()
+    } catch (_: RuntimeException) {
+      diagnostics.record("approval.shutdown_release_failed")
+    }
+  }
 
   override fun reopen() = lifecycle.reopen()
 

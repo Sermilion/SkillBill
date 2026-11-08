@@ -121,7 +121,6 @@ public class PhaseRunPlanResolver(
   ) {
     progress.phaseRecords.values.filter { record ->
       retainedRunningPhase(progress, plan, record) &&
-        // Validate only has to make the build green on the current tree, so an interrupted attempt reruns.
         strategies.qualityGateOperation(plan, record.phaseId) != PhaseQualityGateOperation.AgentValidation
     }.forEach { record ->
       val envelopeAccepted =

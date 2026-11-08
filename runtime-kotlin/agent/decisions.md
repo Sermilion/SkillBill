@@ -1,3 +1,28 @@
+## [2026-11-07] Keep proposal revisions separate from operation targets
+Context: A verify proposal may use a spec path as its target, while the operator's adjustment is free-form text.
+Decision: Carry revisions as an optional operation-start input and append one separate operator-instruction argument. Preserve the original target, agent, profile and checkout, and retain the revised argument list in the existing launch context.
+Reason: Appending revision text to a spec target changes the parsed file path. Separate instructions reach criteria extraction without changing confirmation authority or requiring a storage migration.
+
+## [2026-11-07] Consume operation confirmation before execution
+Context: A parked operation must not be confirmable through output the chat agent can echo or by repeated card clicks.
+Decision: Bind confirmation to a persisted proposal card and consume it with compare-and-swap before execution; reject raw confirm/select starts and unoffered pr-review-fix choices.
+Reason: Only the operator card action admits execution and a consumed proposal cannot run twice. A crash after consumption may leave the result uncertain.
+
+## [2026-11-07] Do not replay a consumed confirmation after owner death
+Context: The owner can die after consuming a confirmation but before reporting whether the operation ran.
+Decision: When death is verified, settle the card as consumed_uncertain and refuse replay; if liveness is unknown, leave it confirming.
+Reason: Replaying a possibly half-run operation risks duplicate effects, while treating an unverifiable owner as dead risks concurrent execution.
+
+## [2026-11-07] Classify parked launches by exit code and launch identity
+Context: Desktop needs to associate detached parked operations with their persisted proposal cards.
+Decision: Map exit code 4 to awaiting_confirmation and pass the launch id to link the run with saved launch context; preserve the CLI exit and text contract.
+Reason: The exit code identifies the parked state without parsing prose, and launch identity locates the card without changing existing CLI consumers.
+
+## [2026-11-07] Restore operation cards from their durable row
+Context: Chat history can outlive a card state change or process restart.
+Decision: Persist only card identity in chat history and re-read the card from the store on resume.
+Reason: The store remains the current source of truth, so resumed cards show current state and do not act on stale copies.
+
 ## [2026-11-07] Keep projection and quality-ledger rationale outside Kotlin comments
 Context: Validation found KDoc on runtime model and helper declarations outside interfaces.
 Decision: Keep their behavior unchanged and record the rationale here, as the source-comment rule requires.
@@ -3607,6 +3632,12 @@ rejection evidence, and G7 and P7 require this recorded contract correction. The
 exclusive use of the QA output directories during a task; they do not claim to defeat concurrent
 malicious replacement of ancestor directories.
 
+## [2026-11-07] Keep approved command failures inside the Codex turn
+
+Context: An approved command can exit non-zero while resolving a merge or repairing a build. Ending the turn on that result prevents the agent from completing its repair.
+
+Decision: Treat an executed command's failure as a tool result. A declined action or a provider or protocol failure can still end the turn. The Codex session-channel regression tests cover successful approval followed by a failed command.
+
 ## [2026-11-07] Cancelled standalone monitors discard owned repair work
 
 Cancellation ends the repair attempt and discards its verified owned worktree,
@@ -3646,3 +3677,12 @@ This supersedes the earlier requirement to manually resolve non-cancelled retain
 work before a fresh monitor can start. Archived records use the unchanged ownership
 contract and keep their original identities and evidence; repeated reconciliation
 reuses the first validated archive and never resets history to defaults.
+
+## [2026-11-08] Keep validate-retry rationale outside comments
+
+Validate has one job: make the build green on the current tree. Any failed attempt,
+whatever stopped it, starts a fresh one, and an interrupted running attempt reruns
+instead of being retained. Validate blocks only after `MAX_VALIDATE_ATTEMPTS`
+attempts fail; a pause stops at once. `spendFailedAttempt` counts a failed attempt
+as spent, so the next launch of the phase in the same process starts a new attempt.
+Moved here from source comments to satisfy the Kotlin comment architecture gate.

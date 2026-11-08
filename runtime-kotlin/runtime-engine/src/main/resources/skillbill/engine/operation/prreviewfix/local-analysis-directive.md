@@ -28,6 +28,8 @@ Proposed reply:
   <reply text>
 ```
 
+Write the `Thread`, `Options:` and `Proposed reply:` lines exactly as shown, without markdown headings, bold or bullets; the runtime reads them to build the operator's selectable options.
+
 Option 1 is always recommended. Include the file, line and comment body wherever a verdict depends on it. After the matrix, add **Informational** and **Already handled** sections. Ask the operator to select threads and options, then stop without editing.
 
 ## Reply Style — strict

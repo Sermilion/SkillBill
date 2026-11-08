@@ -203,7 +203,10 @@ internal fun infraFailureReason(
 internal fun providerLimitSignal(facts: AgentRunLaunchFacts): FeatureTaskRuntimeProviderLimitSignal? {
   val exited = facts.termination as? AgentRunTermination.Exited ?: return null
   if (exited.code == 0) return null
-  return FeatureTaskRuntimeProviderLimitDetector.detect(facts.stderr, facts.stdout)
+  return when (val evidence = facts.sessionFailureEvidence) {
+    null -> FeatureTaskRuntimeProviderLimitDetector.detect(facts.stderr, facts.stdout)
+    else -> evidence.diagnostic?.let { FeatureTaskRuntimeProviderLimitDetector.detect(it, "") }
+  }
 }
 
 internal fun providerLimitPauseReason(

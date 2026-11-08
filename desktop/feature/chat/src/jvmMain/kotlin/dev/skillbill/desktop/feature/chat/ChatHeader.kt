@@ -18,11 +18,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.SbButton
+import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
+import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 
 /** The execution the chat is about, as of the latest read: title, state, phase and branch. */
 @Composable
-internal fun ChatHeader(session: ChatSession) {
+internal fun ChatHeader(session: ChatSession, onOpenApprovals: () -> Unit) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val item by session.header.collectAsState()
@@ -37,6 +40,8 @@ internal fun ChatHeader(session: ChatSession) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
       item.issueKey?.let { BasicText(it, style = type.monoSm.copy(color = colors.fgMuted)) }
       BasicText(rememberRuntimeText(item.title), Modifier.weight(1f), style = type.tBaseMedium.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
+      // Every permission request of this repository, including runs no chat is attached to, in one tab.
+      SbButton("Approvals", onOpenApprovals, variant = SbButtonVariant.Ghost, size = SbControlSize.Small, icon = LucideIcons.shield)
     }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       ChatPill(state.name, tone = stateTone(state, colors), dot = true)

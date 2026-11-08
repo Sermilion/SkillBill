@@ -126,6 +126,6 @@ class ChatSummarizer(
       SelectedAgentHomes(profile ?: settings.settings.first().claudeConfigDir, host.userHome).current(),
     )
     "codex" -> host.variables + profile?.let { mapOf(AgentHomeEnvironmentKeys.CODEX_HOME to it) }.orEmpty()
-    else -> host.variables + profile?.let { mapOf(CURSOR_CONFIG_DIR to it) }.orEmpty()
+    else -> host.variables + profile?.let { mapOf(AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR to it) }.orEmpty()
   }
 }

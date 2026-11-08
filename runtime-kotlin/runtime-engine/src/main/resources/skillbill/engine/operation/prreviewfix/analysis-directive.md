@@ -51,7 +51,7 @@ Capture per thread: `id`, `isResolved`, `isOutdated`, `path`, `line`, ordered co
 For each actionable thread, render:
 
 ```
-Thread <thread-id> — <path>:<line>
+Thread <ordinal> — <path>:<line>
 Summary: <one-line summary of what the reviewer said>
 Verdict: agree | partial | disagree
 Rationale: <why this verdict, citing the code or constraint>
@@ -63,6 +63,8 @@ Options:
 Proposed reply:
   <reply text — see Reply Style below>
 ```
+
+Write the `Thread`, `Options:` and `Proposed reply:` lines exactly as shown, without markdown headings, bold or bullets; the runtime reads them to build the operator's selectable options.
 
 Group already-handled and informational threads at the end in a separate section.
 
@@ -96,6 +98,8 @@ Proposed reply:
 
 Option 1 is always the recommended one. Use the runtime's ordinals (`T1`, `T2`,
 ...) as the thread labels; the operator selects by them.
+
+Write the `Thread`, `Options:` and `Proposed reply:` lines exactly as shown, without markdown headings, bold or bullets; the runtime reads them to build the operator's selectable options.
 
 After the matrix, add two sections:
 

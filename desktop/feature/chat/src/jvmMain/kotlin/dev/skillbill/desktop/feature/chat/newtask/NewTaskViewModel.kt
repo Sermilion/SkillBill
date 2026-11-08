@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.DetectedAgentsRead
 import dev.skillbill.desktop.core.domain.model.RepositoryBranches
 import dev.skillbill.desktop.core.domain.model.RepositoryBranchesRead
@@ -131,10 +132,14 @@ class NewTaskViewModel(
   fun onAction(action: NewTaskAction) {
     val target = draft
     when (action) {
-      is NewTaskAction.TextChanged -> target.text = action.text
+      is NewTaskAction.TextChanged -> {
+        if (target.text != action.text) target.cursorMcpDependency = CursorMcpDependency.Unspecified
+        target.text = action.text
+      }
       is NewTaskAction.ChooseBaseBranch -> {
         if (!canChangeContext(target)) return
         pathCheck?.cancel()
+        target.cursorMcpDependency = CursorMcpDependency.Unspecified
         target.baseBranch = action.branch
         target.rebindChat()
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
@@ -146,6 +151,7 @@ class NewTaskViewModel(
       is NewTaskAction.SubmitRepositoryPath -> submitPath(target, action.path)
       NewTaskAction.AddRepository -> addRepository(target)
       is NewTaskAction.ChooseAgent -> {
+        target.cursorMcpDependency = CursorMcpDependency.Unspecified
         target.agentId = action.agentId
         readAgent(target) { resolveAgent(target, action.agentId) }
       }
@@ -289,6 +295,7 @@ class NewTaskViewModel(
   private fun selectRepository(target: NewTaskDraft, repository: NewTaskRepository, listed: RepositoryBranches? = null) {
     if (!canChangeContext(target)) return
     pathCheck?.cancel()
+    target.cursorMcpDependency = CursorMcpDependency.Unspecified
     if (repository.root != target.repository?.root) target.baseBranch = ""
     target.repository = repository
     target.rebindChat()

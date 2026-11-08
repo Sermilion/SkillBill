@@ -444,10 +444,18 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
             recorder.complete(output(repair, verdict, "The production repair is complete.")),
           )
           assertEquals(
-            AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION,
+            if (verdict == null) {
+              AcceptanceCriterionRepairStage.REPAIR_RESERVED
+            } else {
+              AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION
+            },
             scope.snapshot?.stage,
           )
-          assertNull(scope.snapshot?.pendingClarificationQuestion)
+          if (verdict == null) {
+            assertNotNull(scope.snapshot?.pendingClarificationQuestion)
+          } else {
+            assertNull(scope.snapshot?.pendingClarificationQuestion)
+          }
           val verification = phase(f, "audit", index + 2)
           assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(verification))
           val rejected = output(verification, "progress", "The claimed repair still loses the causal incident.")

@@ -1,6 +1,11 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.OperationCardDetailsView
+import dev.skillbill.desktop.core.domain.model.OperationCardState
+import dev.skillbill.desktop.core.domain.model.OperationCardView
+import dev.skillbill.desktop.core.domain.model.NewTaskKind
+import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
@@ -8,6 +13,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
@@ -72,7 +78,7 @@ class NewTaskDraftTest {
   private val chat = FakeExecutionChatRepository()
   private val root = createTempDirectory("new-task-repo").toString()
 
-  private fun TestScope.draft(chats: ExecutionChatRepository = chat) = NewTaskDraft(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+  private fun TestScope.draft(chats: ExecutionChatRepository = chat, controls: FakeWorkControlRepository = FakeWorkControlRepository()) = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
     chatDispatcher = StandardTestDispatcher(testScheduler)
     repository = NewTaskRepository(root, "repo")
     baseBranch = "main"
@@ -83,6 +89,39 @@ class NewTaskDraftTest {
   private fun NewTaskDraft.say(message: String) {
     text = message
     send()
+  }
+
+  @Test
+  fun `new task chat answers Adjust with a revised verify card without sending a normal agent turn`() = runTest {
+    val original = OperationCardView(
+      "old-token", "old-launch", "verify", OperationCardState.AwaitingConfirmation, "Original proposal",
+      OperationCardDetailsView.Verify(emptyList(), "SKILL-1", "/repo/spec.md", "branch", "local", "full"),
+      null, null, canConfirm = true,
+    )
+    val revised = original.copy(token = "new-token", launchId = "new-launch", summary = "Revised proposal")
+    val controls = FakeWorkControlRepository().apply {
+      operationCards[original.launchId] = original
+      operationCards[revised.launchId] = revised
+      newTaskOutcome = NewTaskStartOutcome.AwaitingConfirmation("SKILL-1", NewTaskKind.Verify, original.launchId)
+    }
+    val draft = draft(controls = controls)
+    draft.say("Verify this branch")
+    runCurrent()
+    draft.start(NewTaskKind.Verify, target = "spec:/repo/spec.md")
+    runCurrent()
+    val current = checkNotNull(draft.chat.value)
+    draft.operationCardActions(current).onAdjust(original.token)
+    runCurrent()
+    assertEquals(1, controls.newTaskRequests.size)
+
+    controls.newTaskOutcome = NewTaskStartOutcome.AwaitingConfirmation("SKILL-1", NewTaskKind.Verify, revised.launchId)
+    draft.say("Exclude deployment")
+    runCurrent()
+
+    assertEquals(1, chat.requests.size)
+    assertEquals("Exclude deployment", controls.newTaskRequests.last().proposalChanges)
+    assertEquals(revised, current.thread.operationCard(revised.token)?.card)
+    assertEquals("", draft.text)
   }
 
   @Test
@@ -248,6 +287,25 @@ class NewTaskDraftTest {
 
     assertEquals(listOf(true, true, false), chat.requests.map { it.firstTurn })
     assertEquals(1, chat.requests.map { it.sessionId }.distinct().size)
+    draft.close()
+  }
+
+  @Test
+  fun `a refused new task restores the submitted MCP declaration with its text`() = runTest {
+    val reply = Channel<ChatEvent>(Channel.UNLIMITED)
+    chat.events = { flow { for (event in reply) emit(event) } }
+    val draft = draft()
+    draft.cursorMcpDependency = CursorMcpDependency.TeamDashboardRequired
+    draft.say("use the team server")
+    runCurrent()
+    draft.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
+
+    reply.send(ChatEvent.Failed(ChatFailure.AgentUnsupported, null))
+    reply.close()
+    runCurrent()
+
+    assertEquals("use the team server", draft.text)
+    assertEquals(CursorMcpDependency.TeamDashboardRequired, draft.cursorMcpDependency)
     draft.close()
   }
 
@@ -769,6 +827,7 @@ class NewTaskDraftTest {
     val draft = draft()
     draft.say("first")
     runCurrent()
+    draft.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
     draft.say("q1")
     draft.say("q2")
     runCurrent()
@@ -777,6 +836,7 @@ class NewTaskDraftTest {
     runCurrent()
     assertEquals(1, chat.requests.size)
     assertEquals("q1\n\nq2\n\nexisting", draft.text)
+    assertEquals(CursorMcpDependency.Unspecified, draft.cursorMcpDependency)
     replies[0].close()
     runCurrent()
     draft.close()
