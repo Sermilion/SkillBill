@@ -194,6 +194,8 @@ class ChatChangeReadsTest {
     git("init", "-q", "-b", "main")
     git("config", "user.email", "test@example.com")
     git("config", "user.name", "Test")
+    // Windows runners enable autocrlf system-wide; the fixtures compare exact LF bytes.
+    git("config", "core.autocrlf", "false")
     names.forEach { write(it, "initial\n") }
     git("add", ".")
     git("commit", "-q", "-m", "initial")

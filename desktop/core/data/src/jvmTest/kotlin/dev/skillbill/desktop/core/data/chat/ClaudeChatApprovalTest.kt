@@ -6,7 +6,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class ClaudeChatApprovalTest {
   private val diagnostics = RecordingDiagnostics()
@@ -37,19 +36,21 @@ class ClaudeChatApprovalTest {
     assertEquals("req-9", response["request_id"]?.jsonPrimitive?.content)
   }
 
-  // Without a bound owner generation no card can answer, so the request is denied rather than left pending.
+  // Without a bound owner generation no card can answer, so the native bypass allows the original input.
   @Test
-  fun `a permission request without an owner generation is denied`() {
+  fun `a permission request without an owner generation is allowed with its original input`() {
     val written = mutableListOf<String>()
-    val approval = approval(writeLine = { written += it; true }, stopProcess = {})
+    var stops = 0
+    val approval = approval(writeLine = { written += it; true }, stopProcess = { stops++ })
     val line =
       """{"type":"control_request","request_id":"req-1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"ls"}}}"""
 
     approval.handle(parse(line), line)
 
     val body = parse(written.single()).getValue("response").jsonObject.getValue("response").jsonObject
-    assertEquals("deny", body["behavior"]?.jsonPrimitive?.content)
-    assertTrue(body["message"]?.jsonPrimitive?.content.orEmpty().startsWith("Operator approval is unavailable"))
+    assertEquals("allow", body["behavior"]?.jsonPrimitive?.content)
+    assertEquals(parse("""{"command":"ls"}"""), body["updatedInput"])
+    assertEquals(0, stops)
   }
 
   private fun approval(writeLine: (String) -> Boolean, stopProcess: () -> Unit) =
