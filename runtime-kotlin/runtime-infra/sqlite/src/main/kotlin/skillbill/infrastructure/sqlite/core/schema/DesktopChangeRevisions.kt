@@ -354,9 +354,7 @@ private val DESKTOP_CHANGE_TABLES =
       keys = column("invocation_id"),
       installedLater = true,
     ),
-<<<<<<< HEAD
     DesktopChangeTable("monitor_ci_cycles", PHASE_TOPICS, keys = column(WORKFLOW_ID), installedLater = true),
-=======
     DesktopChangeTable(
       AgentBuildRunsKeys.TABLE,
       DesktopReadSchema.TOPICS,
@@ -365,7 +363,6 @@ private val DESKTOP_CHANGE_TABLES =
       },
       installedLater = true,
     ),
->>>>>>> origin/main
   )
 
 internal fun installWorkBoardChangeTriggers(connection: Connection) {

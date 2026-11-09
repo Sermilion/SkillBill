@@ -53,13 +53,7 @@ internal fun DetailSections.qaResultsSection(key: String, title: String, view: Q
       BasicText(view.sentence, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
     }
     if (view.open.isNotEmpty()) {
-<<<<<<< HEAD
-      item(key = "$key-open-label") { QaGroupLabel(view.openLabel, view.open.size) }
-=======
-      item(key = "$key-open-label") {
-        GroupLabel("Needs you", count = view.open.size.toString(), modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
-      }
->>>>>>> origin/main
+      item(key = "$key-open-label") { GroupLabel(view.openLabel, count = view.open.size.toString(), modifier = Modifier.padding(top = 16.dp, bottom = 6.dp)) }
       view.open.forEachIndexed { index, row ->
         item(key = qaFindingRowKey(row.id)) { QaFindingItem(row, index, view.open.size, state, "$base:f:${row.id}", onAction, view.evidenceMode) }
       }
@@ -126,15 +120,7 @@ internal fun QaResultsContent(
     } else BasicText(view.sentence, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
     if (view.open.isNotEmpty()) {
       beforeFindings()
-<<<<<<< HEAD
-      QaGroupLabel(view.openLabel, view.open.size)
-=======
-      GroupLabel(
-        "Needs you",
-        count = view.open.size.toString(),
-        modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
-      )
->>>>>>> origin/main
+      GroupLabel(view.openLabel, count = view.open.size.toString(), modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
       view.open.forEachIndexed { index, row ->
         QaFindingItem(row, index, view.open.size, state, "$base:f:${row.id}", onAction, view.evidenceMode)
         findingExtra(row)
@@ -325,13 +311,8 @@ private fun QaFindingItem(row: QaFindingRow, index: Int, count: Int, state: Sect
   val expandable = row.expected != null || row.steps != null || hasEvidence
   val open = expandable && !state.isCollapsed(part, default = true)
   Column(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
-<<<<<<< HEAD
-    if (index > 0) QaRowRule()
-    QaItemHead(LucideIcons.alert, if (row.state == "Fixing") colors.stBlocked else colors.stFailed, row.id, row.title, row.state, row.observed, open.takeIf { expandable }) { state.toggle(part, default = true) }
-=======
     if (index > 0) SbDivider()
-    QaItemHead(LucideIcons.alert, colors.stFailed, row.id, row.title, row.state, row.observed, open.takeIf { expandable }) { state.toggle(part, default = true) }
->>>>>>> origin/main
+    QaItemHead(LucideIcons.alert, if (row.state == "Fixing") colors.stBlocked else colors.stFailed, row.id, row.title, row.state, row.observed, open.takeIf { expandable }) { state.toggle(part, default = true) }
     if (open) {
       Column(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         row.expected?.let { QaField("Expected", it) }

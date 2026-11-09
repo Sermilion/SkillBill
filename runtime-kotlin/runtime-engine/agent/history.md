@@ -1,14 +1,14 @@
 ## [2026-11-08] SKILL-527 durable monitor cycles and goal QA evidence
 Areas: runtime-engine featuretask monitor and QA; runtime-ports; runtime-infra/sqlite and workflow; runtime-domain; runtime-contracts; runtime-core; runtime-cli; platform-pack QA guidance
-- MEDIUM feature. Migration 116 adds monitor_ci_cycles keyed by workflow and cycle. Monitor writes start, throttled full-check observations and terminal outcomes, including check completion times and repair attribution.
+- MEDIUM feature. Migration 118 adds monitor_ci_cycles keyed by workflow and cycle. Monitor writes start, throttled full-check observations and terminal outcomes, including check completion times and repair attribution.
 - MonitorFixBrief reads the latest workflow cycle instead of issue-keyed memory, preserving failing checks and the conflict base branch across restart. Goal cycles use the parent workflow identity.
 - Non-conflict cycle writes record best-effort diagnostics. Failure to persist a conflicted outcome or read its publication context blocks repair rather than bypassing the base-branch merge check.
 - MonitorCiCycleRecorder is reusable. Cycle records own check DTOs to avoid a ports package cycle, and purge and archive restoration include the new table.
 - Goal QA retains actual QA and qa_fix invocation occurrences, stages, screenshots and a last frame through the existing outcome repository, without adding a goal runForGoal phase-record sink.
-- Migration 117 imports embedded QA occurrences into versioned storage while preserving source records. Legacy details remain readable; unsupported history versions fail with recovery guidance. Desktop read schema advances to 117.
+- Migration 119 imports embedded QA occurrences into versioned storage while preserving source records. Legacy details remain readable; unsupported history versions fail with recovery guidance. Desktop read schema advances to 119.
 - Invocation-bound progress and screenshot commands retain bounded PNG/JPEG evidence before cleanup. Registered frame capture rejects uniform blank images; pack QA guidance registers all screenshots.
-- Limits: cycle ordering loads one workflow's rows into Kotlin. Unrecoverable old QA history remains unavailable, and headless or no-display runs may lack a retained frame.
-- Migration numbering follows the existing 115 baseline, replacing the spec's proposed 109. No feature flag or standalone monitor ledger change.
+- Limits: cycle ordering loads one workflow's rows into Kotlin, and each row stores at most 200 checks. Unrecoverable old QA history stays unavailable; headless runs may lack a frame.
+- Migration numbering follows the integrated 117 baseline, replacing the spec's proposed 109. The standalone monitor ledger is unchanged.
 Feature flag: N/A
 Acceptance criteria: 4/4 implemented across the parent feature
 

@@ -17,10 +17,10 @@ import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
 import skillbill.ports.idestatus.AgentActivityStampRepository
 import skillbill.ports.idestatus.AgentBuildRunRepository
-import skillbill.ports.idestatus.MonitorCiCycleRepository
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
+import skillbill.ports.idestatus.monitor.MonitorCiCycleRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.operation.OperationCardRepository
 import skillbill.ports.operation.OperationProposalRepository

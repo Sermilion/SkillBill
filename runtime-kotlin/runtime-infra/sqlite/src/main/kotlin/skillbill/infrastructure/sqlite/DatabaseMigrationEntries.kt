@@ -49,6 +49,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStand
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaReport
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneReviewRunId
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.recordValidationCheckEvents
+import skillbill.infrastructure.sqlite.core.migration.area.monitor.recordMonitorCiCycles
 import skillbill.infrastructure.sqlite.core.migration.area.operation.OperationProposalsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationConfirmationExecutions
 import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationLaunchRetention
@@ -64,7 +65,6 @@ import skillbill.infrastructure.sqlite.core.migration.area.recordDiffComments
 import skillbill.infrastructure.sqlite.core.migration.area.recordGoalAssessmentCounts
 import skillbill.infrastructure.sqlite.core.migration.area.recordGoalBlockedReason
 import skillbill.infrastructure.sqlite.core.migration.area.recordGoalSubtaskTraceProbeCounts
-import skillbill.infrastructure.sqlite.core.migration.area.recordMonitorCiCycles
 import skillbill.infrastructure.sqlite.core.migration.area.requireGoalPlanningPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.diagnosticevidence.rekeyDiagnosticEvidenceByRepairTurn
 import skillbill.infrastructure.sqlite.core.migration.dropDelegatedReviewLifecycleTables
@@ -1064,12 +1064,21 @@ internal val databaseMigrations: List<DatabaseMigration> =
     ) +
     DatabaseMigration(
       version = 116,
-<<<<<<< HEAD
+      name = "record-agent-build-runs",
+      operation = ::recordAgentBuildRuns,
+    ) +
+    DatabaseMigration(
+      version = 117,
+      name = "defer-work-board-projection",
+      operation = WorkBoardInvalidationsMigration::apply,
+    ) +
+    DatabaseMigration(
+      version = 118,
       name = "record-monitor-ci-cycles",
       operation = ::recordMonitorCiCycles,
     ) +
     DatabaseMigration(
-      version = 117,
+      version = 119,
       name = "record-qa-panel-occurrences",
       operation = { connection ->
         connection.createStatement().use { statement ->
@@ -1119,13 +1128,4 @@ internal val databaseMigrations: List<DatabaseMigration> =
           )
         }
       },
-=======
-      name = "record-agent-build-runs",
-      operation = ::recordAgentBuildRuns,
-    ) +
-    DatabaseMigration(
-      version = 117,
-      name = "defer-work-board-projection",
-      operation = WorkBoardInvalidationsMigration::apply,
->>>>>>> origin/main
     )

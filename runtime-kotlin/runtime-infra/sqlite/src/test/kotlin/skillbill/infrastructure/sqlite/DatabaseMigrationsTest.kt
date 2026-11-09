@@ -2376,13 +2376,10 @@ private val expectedMigrationDefinitions =
     113 to "add-operation-launch-retention",
     114 to "add-operation-confirmation-executions",
     115 to "add-approval-not-required-delivery",
-<<<<<<< HEAD
-    116 to "record-monitor-ci-cycles",
-    117 to "record-qa-panel-occurrences",
-=======
     116 to "record-agent-build-runs",
     117 to "defer-work-board-projection",
->>>>>>> origin/main
+    118 to "record-monitor-ci-cycles",
+    119 to "record-qa-panel-occurrences",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

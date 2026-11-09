@@ -63,14 +63,11 @@ import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
 import skillbill.ports.goalrunner.model.GoalArchiveTableRow
 import skillbill.ports.idestatus.AgentActivityStampRepository
-<<<<<<< HEAD
-import skillbill.ports.idestatus.MonitorCiCycleRepository
-=======
 import skillbill.ports.idestatus.AgentBuildRunRepository
->>>>>>> origin/main
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
+import skillbill.ports.idestatus.monitor.MonitorCiCycleRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.learning.model.LearningResolution
 import skillbill.ports.operation.OperationCardRepository
@@ -158,12 +155,9 @@ internal class SQLiteUnitOfWork(
     AgentActivityStampStore(connection)
   override val worktreeEditJournal: WorktreeEditJournalRepository =
     WorktreeEditJournalStore(connection)
-<<<<<<< HEAD
   override val monitorCiCycles: MonitorCiCycleRepository = MonitorCiCycleStore(connection)
-=======
   override val agentBuildRuns: AgentBuildRunRepository =
     SqliteAgentBuildRunStore(connection, diagnostics, transactionActive)
->>>>>>> origin/main
   override val standalonePhaseStatuses: StandalonePhaseStatusRepository =
     StandalonePhaseStatusStore(connection, clock, diagnostics, transactionActive)
   override val rejectedOutputDiagnostics: RejectedOutputDiagnosticRepository =

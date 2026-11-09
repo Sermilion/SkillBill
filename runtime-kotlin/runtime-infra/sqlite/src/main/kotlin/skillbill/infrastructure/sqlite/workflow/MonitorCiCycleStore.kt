@@ -3,11 +3,11 @@ package skillbill.infrastructure.sqlite.workflow
 import skillbill.contracts.JsonCodec
 import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.ports.idestatus.MonitorCiCycleRepository
 import skillbill.ports.idestatus.model.MonitorCiCheckBucket
 import skillbill.ports.idestatus.model.MonitorCiCycleCheck
 import skillbill.ports.idestatus.model.MonitorCiCycleOutcome
 import skillbill.ports.idestatus.model.MonitorCiCycleRecord
+import skillbill.ports.idestatus.monitor.MonitorCiCycleRepository
 import java.sql.Connection
 import java.sql.ResultSet
 import java.time.Instant

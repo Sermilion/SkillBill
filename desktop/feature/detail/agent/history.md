@@ -7,8 +7,8 @@ Areas: desktop/feature/detail, desktop/core/designsystem, desktop/core/domain, d
 - Goal cards show assessment, retained QA, validation, PR and monitor facts. QA includes actual QA and qa_fix rounds, Live, retained frames, screenshot inventory and folded stages.
 - Runtime and data projections supply facts and ordering. Phase activity shows the latest five supplied events; monitor activity includes the current cycle and earlier outcomes.
 - Footer links use existing spec, branch and GitHub targets. Unsupported review, validation-run and Changes destinations remain omitted.
-- Limits: unrecoverable earlier QA evidence stays unavailable; headless runs may have no frame. Paired desktop and runtime must agree on read schema 117.
-- QA limitation: validate changed code after QA settled, so the published change differs from the tree QA tested. This entry claims implementation coverage only.
+- Limits: unrecoverable earlier QA evidence stays unavailable; headless runs may have no frame. Paired desktop and runtime must agree on read schema 119.
+- QA limitation: validate changed code after QA settled, so the final tree differs from the tree QA tested. This entry claims implementation coverage only.
 Feature flag: N/A
 Acceptance criteria: 4/4 implemented across the parent feature
 

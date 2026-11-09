@@ -1,6 +1,7 @@
 package skillbill.ports.idestatus
 
 import skillbill.ports.idestatus.model.MonitorCiCycleRecord
+import skillbill.ports.idestatus.monitor.MonitorCiCycleRepository
 
 object EmptyMonitorCiCycleRepository : MonitorCiCycleRepository {
   override fun upsert(

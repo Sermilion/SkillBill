@@ -3,7 +3,7 @@ package skillbill.infrastructure.sqlite
 import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.idestatus.model.AgentActivityStamp
-import skillbill.infrastructure.sqlite.core.migration.area.recordMonitorCiCycles
+import skillbill.infrastructure.sqlite.core.migration.area.monitor.recordMonitorCiCycles
 import skillbill.infrastructure.sqlite.workflow.MonitorCiCycleStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.AgentActivityStampStore
 import skillbill.ports.idestatus.model.MonitorCiCycleRecord

@@ -1,4 +1,4 @@
-package skillbill.ports.idestatus
+package skillbill.ports.idestatus.monitor
 
 import skillbill.ports.idestatus.model.MonitorCiCycleRecord
 

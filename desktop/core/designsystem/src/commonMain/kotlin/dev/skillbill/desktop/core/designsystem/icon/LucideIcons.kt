@@ -10,12 +10,6 @@ import androidx.compose.ui.unit.dp
 
 /** Lucide-derived paths are licensed under the ISC terms in composeResources/files/LICENSE-lucide.txt. */
 object LucideIcons {
-  val arrowRight: ImageVector by lazy {
-    imageVector("arrowRight") {
-      path("M5 12h14")
-      path("m12 5 7 7-7 7")
-    }
-  }
   val star: ImageVector by lazy {
     imageVector("star") {
       path("m12 3 2.75 5.58 6.16.9-4.45 4.34 1.05 6.13L12 17.06l-5.51 2.89 1.05-6.13L3.09 9.48l6.16-.9L12 3Z")
