@@ -85,6 +85,13 @@ internal object CursorPermissionRequests {
     return options.takeIf { it.map(CursorPermissionOption::id).distinct().size == it.size }
   }
 
+  fun allowOnceOptionId(message: JsonObject): String? {
+    val entries = message.obj(K.PARAMS)?.get(K.OPTIONS) as? JsonArray ?: return null
+    val parsed = entries.mapNotNull(::option)
+    return parsed.firstOrNull { it.kind == CursorPermissionKind.ALLOW_ONCE.wireValue }?.id
+      ?: parsed.firstOrNull { it.kind == CursorPermissionKind.ALLOW_ALWAYS.wireValue }?.id
+  }
+
   private fun option(value: JsonElement): CursorPermissionOption? {
     val objectValue = value as? JsonObject ?: return null
     val id = objectValue.text(K.OPTION_ID)?.takeIf(String::isNotBlank)

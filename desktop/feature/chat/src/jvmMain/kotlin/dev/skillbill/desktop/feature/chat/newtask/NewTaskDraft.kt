@@ -143,14 +143,14 @@ class NewTaskDraft internal constructor(
 
   internal val acceptedIssueKey: String?
     get() = acceptedKeyState.takeIf { chatState.value?.repositoryRoot == repository?.root }
-  internal var cursorMcpDependency by mutableStateOf(CursorMcpDependency.Unspecified)
+  internal var cursorMcpDependency by mutableStateOf(CursorMcpDependency.ProjectUserOnly)
 
   /** Every repository's saved drafts, newest first, as of the latest [refreshSaved]. */
   internal val saved: StateFlow<List<ChatHistoryEntry>> = savedChats.saved
 
   internal fun addPastedImage(image: ChatImage) {
     if (closing) return
-    cursorMcpDependency = CursorMcpDependency.Unspecified
+    cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
     images = images + image
   }
 
@@ -182,8 +182,8 @@ class NewTaskDraft internal constructor(
     val returned = chatState.value?.stop().orEmpty()
     if (returned.isNotEmpty()) {
       cursorMcpDependency = if (text.isBlank() && images.isEmpty()) {
-        returned.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.Unspecified
-      } else CursorMcpDependency.Unspecified
+        returned.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.ProjectUserOnly
+      } else CursorMcpDependency.ProjectUserOnly
       text = restoredDraft(returned, text)
       images = returned.flatMap { it.images } + images
     }
@@ -197,7 +197,7 @@ class NewTaskDraft internal constructor(
     submitted: String,
     action: ChatSuggestedAction?,
     attachments: List<ChatImage> = emptyList(),
-    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
+    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly,
   ) {
     val current = chatState.value ?: open(UUID.randomUUID().toString(), checkNotNull(repository).root, baseBranch.ifBlank { null }, checkNotNull(selectedAgent))
     offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, started = null, selectedKey = null)

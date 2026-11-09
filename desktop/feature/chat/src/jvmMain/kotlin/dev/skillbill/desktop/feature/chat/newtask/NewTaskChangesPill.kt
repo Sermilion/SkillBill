@@ -70,6 +70,7 @@ internal fun NewTaskChangesPill(changes: ChatChanges, since: String, expanded: B
 
 @Composable
 internal fun ChatChangesAnchor(chat: NewTaskChat?, state: ChatChangesState, composerFocus: FocusRequester, now: () -> Instant, onOpenChanges: (ChangesSource.Chat, String?) -> Unit = { _, _ -> }) {
+  LaunchedEffect(chat) { chat?.observeChanges() }
   val pillFocus = remember { FocusRequester() }
   var open by remember(chat) { mutableStateOf(false) }
   val shown = state as? ChatChangesState.Shown

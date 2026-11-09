@@ -13,6 +13,21 @@ Context: Wildcard approval must match checkout-relative path strings before prov
 Decision: Keep ApprovalMatchFacts path rules lexical only; no java.nio or filesystem resolution in runtime-domain.
 Reason: Adapters own absolute path normalization; the matcher must stay pure and testable without I/O.
 
+## [2026-11-09] Map Cursor CLI model slugs to the advertised ACP variant
+Context: Cursor `--list-models` and `execution_matrix` use slugs such as `composer-2.5` and `cursor-grok-4.6-high`. ACP `session/new` advertises one parameterized value per base (`composer-2.5[fast=true]`) and accepts only those exact strings. Exact-match selection stopped the session before the prompt.
+Decision: `resolveAcpModel` uses an exact advertised value when present. Otherwise it strips the `cursor-` prefix, treats `auto` as `default`, and peels trailing effort or speed tokens until a base has exactly one advertised variant. Ambiguous and unknown bases stay unresolved and still stop. `session/set_config_option` and `session/set_model` send that selected variant, not the original slug. Tests pin the 2026-11-09 `session/new` advertised set.
+Reason: When ACP offers only one variant for a base, there is no other value that can honor a slug's effort or speed. Guessing among multiple variants would pick the wrong model.
+Revisit when: ACP advertises multiple variants per base, or `--list-models` IDs match advertised values.
+
+## [2026-11-09] Hosts never stop a worker for a tool or extension request
+Context: SKILL-453 required Cursor ACP unknown blocking extensions to cancel and stop the process so a plan was never auto-approved. Cursor still sends `cursor/update_todos` as a JSON-RPC request with an id, so SKILL-529 `audit_plan_fix` exited. Codex unsupported families declined or stopped, and Claude denied `AskUserQuestion` / `ExitPlanMode` and denied when no operator channel existed.
+Decision: Runtime bypass launches use native headless CLIs, not the app-server or ACP approval hosts. Codex uses `exec` with `--dangerously-bypass-approvals-and-sandbox`, Cursor uses print mode with force, trust, MCP approval and disabled sandbox flags, Junie uses its headless text CLI, and Claude keeps its native print transport. Skill-bill does not answer, skip, cancel or reject tool requests on these paths. The native harness controls tool execution and may apply its own restrictions.
+
+With an operator owner, supported permission cards wait for the operator. Unsupported Codex interactions settle as unsupported and send their method-specific non-authorizing response once. Failed response delivery remains uncertain and is never replayed. Claude approval registration failures deny the action, and malformed or stale owned ACP permission requests are cancelled. These paths never fall back to granting an owned action. Native bypass runs open no host session or operator owner, so neither card persistence nor these host response adapters can gate their calls. Parked verify and pr-review-fix confirmation stay separate.
+
+Reason: Skill-bill must not add a tool refusal policy on top of native bypass. Using native CLIs removes the interception point instead of guessing successful responses for unknown methods. Hosted chats still need valid response shapes. A host cannot fabricate answers or claim that an operator approved an unsupported interaction. A1 keeps provider response formats in launcher adapters, A7 requires observable bypass and cancellation responses, and response delivery stays owned and unreplayed.
+Revisit when: A new provider method needs a response adapter or operators request additional interactive question handling.
+
 ## [2026-11-08] Keep run launches outside chat approval cards
 Context: Desktop resume and rerun selected a direct agent harness that the detached launcher refused because it had no operator approval channel. The operator clarified that permission cards belong only to chats, and runs use native permission bypass.
 Decision: Launch recorded goal and phase commands through the runtime. Remove the unused direct-harness launch path and classify phase agent requests as OutsideApproval. Keep chat approval handling and parked-operation proposal confirmation unchanged.
@@ -3738,3 +3753,17 @@ A1 and A2 keep process lifetime and settlement in the launcher adapter. A7 keeps
 cleanup degradation observable. A11 limits settlement helpers to that module.
 Deterministic process handles cover EOF shutdown, forced cleanup and a surviving
 child without waiting for real process deadlines.
+
+## 2026-11-09 Retain build observations for total duration
+
+Keep build rows after settlement so the desktop can total a run's build time across
+commands and count overlapping processes once. The usual-time history still reads
+only the latest twenty settled observations per repository and command. Run totals
+use existing timestamps, so installation needs no database rewrite. Previously
+pruned observations cannot be reconstructed. An observation without a known end
+makes the total unavailable once its run stops, rather than inventing a duration.
+
+The optional `total_elapsed_ms` and `total_elapsed_as_of` fields extend the board
+and detail build payloads without changing their required fields or versions.
+Older payloads remain valid and default to an absent total. Repeated reads derive
+the total without mutating stored runs, identities or timestamps.

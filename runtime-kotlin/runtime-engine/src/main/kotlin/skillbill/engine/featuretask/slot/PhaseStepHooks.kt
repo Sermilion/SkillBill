@@ -680,6 +680,13 @@ public class PhaseBoundStepHooks<B : PhaseAcceptedStepExecution> internal constr
   private val hooks: PhaseStepHooks<B>,
   private val binding: B,
 ) {
+  internal fun settleCompletedRound(
+    context: PhaseStepOutputContext,
+    capture: ValidatedOutputCapture,
+    attested: NormalizedFeatureTaskRuntimePhaseOutput,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): AttemptResult? = hooks.settleCompletedRound(context, capture, attested, outputMap)
+
   internal fun beforeAgentLaunch(
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,

@@ -309,7 +309,7 @@ internal class CodexAppServerRpc(
     if (item == null) return null
     val id = item.string("id") ?: return null
     return when (val type = item.string("type")) {
-      null, "agentMessage", "reasoning", "todoList" -> null
+      null, "userMessage", "agentMessage", "reasoning", "todoList" -> null
       "commandExecution" -> item.string("command").orEmpty().let { ChatToolCall(id, "shell", it, it, item.string("cwd")) }
       "fileChange" -> {
         val changes = (item["changes"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }

@@ -87,8 +87,9 @@ private fun resolveCursorMcpDependency(
     return null
   }
   return when (request.takeIf { it != CursorMcpDependencyRequirement.Unspecified } ?: environmentRequirement) {
-    CursorMcpDependencyRequirement.Unspecified -> CursorAcpMcpDependency.Unspecified
-    CursorMcpDependencyRequirement.ProjectUserOnly -> CursorAcpMcpDependency.ProjectUserOnly
+    CursorMcpDependencyRequirement.Unspecified,
+    CursorMcpDependencyRequirement.ProjectUserOnly,
+    -> CursorAcpMcpDependency.ProjectUserOnly
     CursorMcpDependencyRequirement.TeamDashboardRequired -> CursorAcpMcpDependency.TeamDashboardRequired
   }
 }
@@ -119,12 +120,12 @@ internal class ProcessAgentRunAdapter(
             diagnostics.warning("seam=agent_run outcome=cursor_capability_declaration_invalid provider=${agent.id}")
             return UnsupportedAgentRunLaunch(
               agent,
-              "Cursor MCP dependency declaration is missing, invalid, or conflicts with " +
+              "Cursor MCP dependency declaration is invalid or conflicts with " +
                 "$CURSOR_MCP_DEPENDENCY_ENV; the phase was not started.",
             )
           }
       } else {
-        CursorAcpMcpDependency.Unspecified
+        CursorAcpMcpDependency.ProjectUserOnly
       }
     if (cardRequiredCursor) {
       cursorAcpDependencyRefusal(cursorDependency)?.let { reason ->

@@ -128,11 +128,10 @@ internal fun cursorAcpTurn(
 ): Flow<ChatEvent> = channelFlow {
   val cursor = provider == AcpProvider.Cursor
   val dependency = when (request.cursorMcpDependency) {
-    CursorMcpDependency.Unspecified -> CursorAcpMcpDependency.Unspecified
     CursorMcpDependency.ProjectUserOnly -> CursorAcpMcpDependency.ProjectUserOnly
     CursorMcpDependency.TeamDashboardRequired -> CursorAcpMcpDependency.TeamDashboardRequired
   }
-  if (provider.mcpDeclarationRequired) {
+  if (provider.lacksTeamDashboardMcp) {
     cursorAcpDependencyRefusal(dependency)?.let { reason ->
       diagnostics.record("chat.cursor_mcp_dependency_refused")
       send(ChatEvent.Failed(ChatFailure.AgentUnsupported, reason))

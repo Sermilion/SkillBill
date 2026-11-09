@@ -1,15 +1,27 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import dev.skillbill.desktop.core.domain.model.ChatChanges
+import dev.skillbill.desktop.core.domain.model.ChatChangesRead
+import dev.skillbill.desktop.core.domain.model.ChangeScopeTimeline
+import dev.skillbill.desktop.core.domain.model.ChangedFile
+import dev.skillbill.desktop.core.domain.model.ChangeStatus
+import dev.skillbill.desktop.core.domain.repository.ChatChangesRepository
 import dev.skillbill.desktop.core.domain.model.ChatBaselineCapture
 import dev.skillbill.desktop.core.domain.model.ChatChangedPaths
 import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatProjectWorktrees
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.testing.FakeChatChangesRepository
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlin.test.assertTrue
+import kotlin.test.assertIs
 import kotlin.test.assertEquals
 import kotlin.time.Instant
 
@@ -122,7 +134,77 @@ class NewTaskChatChangesTest {
     assertEquals(setOf("/work/new/file.kt"), changes.attributedPaths)
   }
 
-  private fun tracker(repository: FakeChatChangesRepository, scope: TestScope, initialBaseline: ChatChangesBaseline?, initialPaths: Set<String>?) =
+  @Test
+  fun `visible chat discovers edits during a running command and refreshes attributed files while idle`() = runTest {
+    val repository = FakeChatChangesRepository(captureResult = ChatBaselineCapture.Captured(baseline))
+    val changes = tracker(repository, this, null, null)
+    changes.beginTurn(false)
+    backgroundScope.launch { changes.observe() }
+    runCurrent()
+    repository.changedPathsResult = ChatChangedPaths.Listed(setOf("a.kt"))
+    repository.readResult = listedChanges(1)
+
+    advanceTimeBy(1_000)
+    runCurrent()
+
+    assertEquals(setOf("a.kt"), changes.attributedPaths)
+    assertEquals(1, assertIs<ChatChangesState.Shown>(changes.state.value).changes.insertions)
+    changes.endTurn()
+    repository.changedPathsResult = ChatChangedPaths.Listed(setOf("unrelated.kt"))
+    repository.readResult = listedChanges(4)
+    advanceTimeBy(1_000)
+    runCurrent()
+    assertEquals(setOf("a.kt"), changes.attributedPaths)
+    assertEquals(4, assertIs<ChatChangesState.Shown>(changes.state.value).changes.insertions)
+    changes.end()
+    repository.readResult = listedChanges(9)
+    advanceTimeBy(1_000)
+    runCurrent()
+    assertEquals(4, assertIs<ChatChangesState.Shown>(changes.state.value).changes.insertions)
+  }
+
+  @Test
+  fun `refresh requests let a slow git read finish and then publish the latest changes`() = runTest {
+    val readStarted = CompletableDeferred<Unit>()
+    val readFinished = CompletableDeferred<Unit>()
+    val releaseRead = CompletableDeferred<Unit>()
+    val fake = FakeChatChangesRepository(captureResult = ChatBaselineCapture.Captured(baseline))
+    val repository = object : ChatChangesRepository by fake {
+      override suspend fun read(repositoryRoot: String, baseline: ChatChangesBaseline, paths: Set<String>?): ChatChangesRead {
+        val result = fake.readResult
+        if (!readStarted.isCompleted) {
+          readStarted.complete(Unit)
+          releaseRead.await()
+          readFinished.complete(Unit)
+        }
+        return result
+      }
+    }
+    val changes = tracker(repository, this, null, null)
+    changes.beginTurn(false)
+    fake.changedPathsResult = ChatChangedPaths.Listed(setOf("a.kt"))
+    fake.readResult = listedChanges(1)
+    changes.refresh()
+    readStarted.await()
+    fake.readResult = listedChanges(5)
+    changes.refresh()
+    releaseRead.complete(Unit)
+    testScheduler.advanceUntilIdle()
+
+    assertTrue(readFinished.isCompleted)
+    assertEquals(5, assertIs<ChatChangesState.Shown>(changes.state.value).changes.insertions)
+    fake.readResult = ChatChangesRead.Unavailable("git temporarily unavailable")
+    changes.refresh()
+    testScheduler.advanceUntilIdle()
+    assertEquals(5, assertIs<ChatChangesState.Shown>(changes.state.value).changes.insertions)
+  }
+
+  private fun listedChanges(insertions: Int) = ChatChangesRead.Listed(
+    ChatChanges(listOf(ChangedFile("a.kt", null, ChangeStatus.Modified, insertions, 0)), insertions, 0, 0, true,
+      "baseline", ChangeScopeTimeline("baseline", "baseline", emptyList())),
+  )
+
+  private fun tracker(repository: ChatChangesRepository, scope: TestScope, initialBaseline: ChatChangesBaseline?, initialPaths: Set<String>?) =
     NewTaskChatChanges(
       repository, scope, StandardTestDispatcher(scope.testScheduler), "/work/app", initialBaseline,
       resumed = initialBaseline != null, repositoryMissing = false, captureAttempted = initialBaseline != null, initialAttributedPaths = initialPaths,

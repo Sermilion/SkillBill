@@ -25,7 +25,6 @@ import skillbill.ports.approval.model.ApprovalPendingWait
 import skillbill.ports.approval.model.ApprovalRegistrationCommand
 import skillbill.ports.approval.model.ApprovalRegistrationResult
 import java.time.Clock
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
 const val CLAUDE_APPROVAL_PROVIDER = "claude"
@@ -49,8 +48,6 @@ class ClaudeApprovalRequests(
   private val clock: Clock,
 ) {
   private val owner = AtomicReference<ApprovalOwnerSession?>()
-
-  private val interactionRequestIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
   fun bind(session: ApprovalOwnerSession) {
     owner.set(session)
@@ -105,8 +102,6 @@ class ClaudeApprovalRequests(
         original != null -> ClaudeHostFrames.allow(requestId, original)
         settled.state == ApprovalState.ALLOWED ->
           ClaudeHostFrames.deny(requestId, "The approved input could not be restored, so the action was not run.")
-        (requestId as? JsonPrimitive)?.content in interactionRequestIds ->
-          ClaudeHostFrames.deny(requestId, INTERACTION_MESSAGE)
         else -> ClaudeHostFrames.deny(requestId, denialMessage(settled.state))
       }
     announce("operator approval ${settled.state.wireValue}: ${settled.title}")
@@ -117,23 +112,21 @@ class ClaudeApprovalRequests(
     requestId: JsonPrimitive,
     frame: PermissionFrame,
   ) {
-    val session = owner.get() ?: return deny(requestId, UNAVAILABLE_MESSAGE)
+    val session = owner.get()
+    if (session == null) {
+      record("seam=claude_permission outcome=bypass_allowed tool=${frame.toolName}")
+      if (!write(ClaudeHostFrames.allow(requestId, frame.input))) {
+        stop("An allow could not be delivered to the provider.")
+      }
+      return
+    }
     val tool = classify(frame.toolName)
-    val interaction = tool.actionClass == ApprovalActionClass.PROVIDER_INTERACTION
-    if (interaction) interactionRequestIds.add(requestId.content)
     catchingNonCancellation {
       val registered = session.register(command(session.key, requestId.content, frame, tool))
       registered.request()?.let(onCard)
-      if (interaction && registered is ApprovalRegistrationResult.Registered) {
-        session.resolveByProvider(
-          registered.request.approvalId,
-          registered.request.providerRequestId,
-          ApprovalProviderDisposition.INTERACTION_REQUIRED,
-        )
-      }
     }.onFailure { failure ->
       record("Approval registration failed: ${failure.message.orEmpty()}")
-      deny(requestId, UNAVAILABLE_MESSAGE)
+      deny(requestId, "Approval registration failed, so the action was not run.")
     }
   }
 
@@ -190,12 +183,7 @@ class ClaudeApprovalRequests(
       canonicalInput = canonicalInput,
       actionClass = tool.actionClass,
       writeCapable = tool.writeCapable,
-      providerDisposition =
-        if (tool.actionClass == ApprovalActionClass.PROVIDER_INTERACTION) {
-          ApprovalProviderDisposition.INTERACTION_REQUIRED
-        } else {
-          ApprovalProviderDisposition.NONE
-        },
+      providerDisposition = ApprovalProviderDisposition.NONE,
       enclosingDeadline = null,
       matchFacts = matchFacts(toolName, frame.input),
     )
@@ -232,7 +220,6 @@ class ClaudeApprovalRequests(
 
   private fun classify(toolName: String): ToolClass =
     when {
-      toolName in INTERACTION_TOOLS -> ToolClass(ApprovalActionClass.PROVIDER_INTERACTION, writeCapable = false)
       toolName == BASH_TOOL -> ToolClass(ApprovalActionClass.ORDINARY_COMMAND, writeCapable = true)
       toolName in NETWORK_TOOLS -> ToolClass(ApprovalActionClass.NETWORK_OR_CREDENTIAL, writeCapable = false)
       toolName in READ_ONLY_TOOLS -> ToolClass(ApprovalActionClass.ORDINARY_TOOL, writeCapable = false)
@@ -262,10 +249,6 @@ class ClaudeApprovalRequests(
     const val INITIALIZE_REQUEST_ID = "skill-bill-init"
     const val PERMISSION_SUBTYPE = "can_use_tool"
     val PRETTY_JSON = Json { prettyPrint = true }
-    val INTERACTION_TOOLS = setOf("AskUserQuestion", "ExitPlanMode")
-    const val INTERACTION_MESSAGE =
-      "This tool needs interactive input that the approval card cannot supply; ask the operator in your reply " +
-        "instead. In read-only chat, switch to Act to leave plan mode."
     const val ALLOW_OPTION_ID = "allow_once"
     const val DENY_OPTION_ID = "deny"
     const val SCOPE_FINGERPRINT_PLACEHOLDER = "pending"
@@ -278,6 +261,6 @@ class ClaudeApprovalRequests(
     const val UNAVAILABLE_MESSAGE =
       "Operator approval is unavailable for this request: no operator surface can answer it, so the action was not run."
     val NETWORK_TOOLS = setOf("WebFetch", "WebSearch")
-    val READ_ONLY_TOOLS = setOf("Read", "Glob", "Grep", "LS", "TodoWrite")
+    val READ_ONLY_TOOLS = setOf("Read", "Glob", "Grep", "LS", "TodoWrite", "AskUserQuestion", "ExitPlanMode")
   }
 }

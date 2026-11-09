@@ -95,7 +95,7 @@ class AgentBuildRunStoreTest {
   }
 
   @Test
-  fun `settle keeps the newest twenty settled builds and never prunes open ones`() {
+  fun `history uses twenty builds while run totals retain every command`() {
     write { store ->
       (0..19).forEach { store.settled(startRow("b$it", hour(it)), (it + 1) * 1_000L) }
       store.start(startRow("open", hour(0)))
@@ -103,7 +103,8 @@ class AgentBuildRunStoreTest {
     }
 
     val remaining = read { store -> (0..20).filter { store.latestForRun(setOf("run-b$it")) != null } }
-    assertEquals((1..20).toList(), remaining)
+    assertEquals((0..20).toList(), remaining)
+    assertEquals(21, read { it.buildsForRun((0..20).map { number -> "run-b$number" }.toSet()).size })
     assertEquals(11_500L, read { it.history("repo", "./gradlew build", hour(100)).usualMs })
     val open = read { it.latestForRun(setOf("run-open")) }
     assertEquals("open", open?.buildId)

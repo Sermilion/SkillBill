@@ -1,6 +1,9 @@
 package skillbill.engine.featuretask.runloop.attempt
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibility
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilitySnapshot
+import skillbill.engine.featuretask.phase.planning.PlanBundleTarget
 import skillbill.engine.featuretask.runloop.checkpoint.RuntimeCommitUpstreamHeadRecovery
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
@@ -10,6 +13,8 @@ import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
 import skillbill.engine.featuretask.runloop.observability.continuation
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
+import skillbill.engine.featuretask.runloop.planning.FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement
+import skillbill.engine.featuretask.runloop.planning.PlanBundleStagingPromotion
 import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
 import skillbill.engine.featuretask.runloop.state.repositoryObservations
 import skillbill.engine.featuretask.slot.PhaseLoopContext
@@ -26,6 +31,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseFindingEvidenceContext
 import skillbill.engine.featuretask.slot.attempt.PhaseImplementationLaunchContext
 import skillbill.engine.featuretask.slot.attempt.PhaseImplementationOutputContext
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
+import skillbill.engine.featuretask.slot.attempt.PhasePlanningLaunchContext
 import skillbill.engine.featuretask.slot.attempt.PhasePlanningOutputContext
 import skillbill.engine.featuretask.slot.attempt.PhasePlanningTraversalContext
 import skillbill.engine.featuretask.slot.attempt.PhasePullRequestLaunchHookContext
@@ -47,6 +53,7 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
       PhaseStepHookContextKind.FINDING_VERIFICATION -> FindingLaunchView(this)
       PhaseStepHookContextKind.PULL_REQUEST -> PullRequestLaunchView(this)
       PhaseStepHookContextKind.IMPLEMENTATION -> ImplementationLaunchView(this)
+      PhaseStepHookContextKind.PLANNING -> PlanningLaunchView(this, run)
       else -> LaunchView(this)
     }
   }
@@ -115,10 +122,41 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
     }
   }
 
+  private class PlanningLaunchView(
+    private val context: PhaseAttemptLaunchRuntimeContext,
+    private val run: PhaseRun,
+  ) : LaunchView(context),
+    PhasePlanningLaunchContext {
+    override fun captureBundleFeasibility(repairing: Boolean): PlanBundleFeasibilitySnapshot {
+      val planner = context.decompositionPlanner
+      val target = PlanBundleStagingPromotion.targetFor(planner, run)
+      if (repairing && target is PlanBundleTarget.Staged) {
+        PlanBundleStagingPromotion.seed(planner, target, diagnostics, run.resolvedAgent.resolvedAgentId)
+      }
+      val snapshot = PlanBundleFeasibility.capture(planner, request.repoRoot, request.issueKey)
+      val directory = if (target is PlanBundleTarget.Staged) target.directory else target?.directory
+      return snapshot.copy(repairDirectory = directory.takeIf { repairing })
+    }
+  }
+
   private class PlanningOutputView(
     private val context: PhaseOutputSettlementContext,
   ) : OutputView(context),
     PhasePlanningOutputContext {
+    override fun settleBundleFeasibility(
+      capture: ValidatedOutputCapture,
+      attested: NormalizedFeatureTaskRuntimePhaseOutput,
+      before: PlanBundleFeasibilitySnapshot,
+      repairing: Boolean,
+    ): AttemptResult? =
+      FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement.settle(
+        context,
+        capture,
+        attested,
+        before,
+        repairing,
+      )
+
     override fun settleAuthoredBundle(capture: ValidatedOutputCapture): AttemptResult? {
       val rejection = PlanDecompositionStop.recordAuthoredBundleOrRejection(context, capture) ?: return null
       if (rejection.repairable) return AttemptResult.PlanBundleRejected(rejection.reason, capture.fileManifest)

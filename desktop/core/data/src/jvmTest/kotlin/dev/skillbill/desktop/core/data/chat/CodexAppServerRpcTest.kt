@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
 import skillbill.approval.model.ApprovalProviderDisposition
 import skillbill.contracts.approval.ApprovalProviderRequestId
@@ -25,6 +26,26 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class CodexAppServerRpcTest {
+  @Test
+  fun `user message items do not appear as tools`() = runTest {
+    val approval = CodexChatApproval({ true }, {}, RecordingDiagnostics(), {}, "/checkout")
+    approval.bind(Owner())
+    approval.bindTurn("thread", "turn")
+    val output = Channel<ChatProcessOutput>(Channel.UNLIMITED)
+    val events = mutableListOf<ChatEvent>()
+    val rpc = CodexAppServerRpc(Channel(Channel.UNLIMITED), output, RecordingDiagnostics(), { events += it }, approval)
+    for (method in listOf("item/started", "item/completed")) {
+      output.send(line("""{"method":"$method","params":{"threadId":"thread","turnId":"turn","item":{"id":"user","type":"userMessage","content":[{"type":"text","text":"Hello"}]}}}"""))
+    }
+    output.send(line("""{"method":"item/completed","params":{"threadId":"thread","turnId":"turn","item":{"id":"reply","type":"agentMessage","text":"Hello back."}}}"""))
+    output.send(line("""{"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed"}}}"""))
+
+    rpc.drainTurn("thread", "turn")
+    approval.release()
+
+    assertEquals(listOf(ChatEvent.MessageStarted, ChatEvent.TextDelta("Hello back."), ChatEvent.Completed), events)
+  }
+
   // A merge conflict, red build or failing test is something the agent repairs, so the turn must not end on it.
   @Test
   fun `an approved command that exits non-zero is a tool result and the turn still completes`() {

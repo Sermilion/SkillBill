@@ -161,7 +161,7 @@ fun PeekTimeline(rows: List<PeekTimelineRow>) {
           Box(Modifier.padding(start = 7.dp).size(7.dp).background(colors.bgRaised, CircleShape), contentAlignment = Alignment.Center) {
             Box(Modifier.size(5.dp).then(if (row.tone == PeekState.Now) Modifier.sbPulse() else Modifier).background(dotColor, CircleShape))
           }
-          BasicText(row.text, Modifier.weight(1f), style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted))
+          PeekActivityText(row.text, Modifier.weight(1f))
           BasicText(row.time, style = SkillBillTheme.type.t2xs.copy(color = colors.fgFaint), maxLines = 1)
         }
       }

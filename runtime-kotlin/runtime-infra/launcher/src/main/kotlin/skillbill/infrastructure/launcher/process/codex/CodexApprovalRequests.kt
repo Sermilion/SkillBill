@@ -42,7 +42,7 @@ class CodexApprovalRequests(
   private val cleared = mutableSetOf<ApprovalProviderRequestId>()
   private val items = LinkedHashMap<CodexItemIdentity, JsonObject>()
   private val terminalItems = LinkedHashMap<CodexItemIdentity, JsonObject>()
-  private val unsupported = CodexUnsupportedApprovals(checkout, owner::get, write, onCard, stop)
+  private val unsupported = CodexUnsupportedApprovals(checkout, owner::get, write, onCard, stop, record)
 
   fun bind(session: ApprovalOwnerSession) {
     owner.set(session)
@@ -85,7 +85,7 @@ class CodexApprovalRequests(
     val method = message.text(K.METHOD) ?: return stop("Codex sent a blocking request without a method.")
     val params = message.obj(K.PARAMS) ?: return stop("Codex sent malformed approval parameters.")
     val supported = method in SUPPORTED_METHODS && params[K.NETWORK_APPROVAL_CONTEXT].nonNull() == null
-    if (!supported) {
+    if (!supported || owner.get() == null) {
       unsupported.handle(message, thread, turn)
       return
     }

@@ -196,6 +196,22 @@ executable spec. Do not silently relax it or defer an impossible requirement to 
 later worker. Apply this check to the whole spec, including Scope, Non-Goals,
 Dependency Notes, Validation Strategy, and Implementation Details.
 
+## Subtask dependency feasibility
+
+Check every subtask at the repository state that will exist when it finishes, with
+only its completed dependencies available. Never assign acceptance criteria,
+interaction scenarios, validation evidence, or production activation that needs
+work owned by a later subtask. Parent outcome criteria apply to the completed goal,
+not to every child. State each deferred outcome's owning subtask in Dependency Notes.
+
+When a new contract requires migration or evidence acquisition, order those
+prerequisites before consumer activation. A contract-only subtask must leave active
+callers and persisted data usable through the existing path until adoption is ready.
+If that cannot be done safely, combine the coupled work or reorder the subtasks.
+Do not plan a child that needs a later child's evidence to pass its own gates.
+Required project checks still run in full for each child. A deferred integration is
+not permission to waive failures, weaken evidence rules, or disable regression tests.
+
 ## Spec Format Contract
 
 Every parent and subtask spec is read back by the runtime

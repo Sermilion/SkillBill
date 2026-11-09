@@ -143,9 +143,9 @@ class CodexChatApprovalTest {
     )
     requests.forEach { harness.approval.handleServerRequest(it, emptyMap()) }
     assertEquals(3, harness.cards.size)
-    assertEquals("decline", harness.frames[0].obj("result")?.string("decision"))
+    assertEquals("cancel", harness.frames[0].obj("result")?.string("decision"))
     assertEquals(obj("""{"permissions":{},"scope":"turn"}"""), harness.frames[1].obj("result"))
-    assertEquals(obj("""{"action":"decline","content":null}"""), harness.frames[2].obj("result"))
+    assertEquals(obj("""{"action":"cancel"}"""), harness.frames[2].obj("result"))
     assertTrue(harness.cards.all { it.options.none { option -> option.kind == "allow" } })
     assertContains(harness.cards[2].inputText, "complete reason")
     assertFalse(harness.stopped)

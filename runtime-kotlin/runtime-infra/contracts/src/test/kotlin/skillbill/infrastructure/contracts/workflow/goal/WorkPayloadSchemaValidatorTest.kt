@@ -65,6 +65,7 @@ class WorkPayloadSchemaValidatorTest {
 
     validator.validateBoard(JsonCodec.mapToJsonString(board), "build-board")
     validator.validateDetail(JsonCodec.mapToJsonString(detail), "build-detail")
+    validateTotalBuildPayloads(board, detail, item)
     assertFailsWith<SkillBillRuntimeException> {
       validator.validateBoard(
         JsonCodec.mapToJsonString(
@@ -75,6 +76,35 @@ class WorkPayloadSchemaValidatorTest {
             ),
         ),
         "unknown-build-state",
+      )
+    }
+  }
+
+  private fun validateTotalBuildPayloads(
+    board: Map<String, Any?>,
+    detail: Map<String, Any?>,
+    item: Map<String, Any?>,
+  ) {
+    listOf(null, 3_000L).forEach { total ->
+      val totalBuild =
+        buildPayload("passed") +
+          mapOf(
+            WorkBuildPayloadKeys.TOTAL_ELAPSED_MS to total,
+            WorkBuildPayloadKeys.TOTAL_ELAPSED_AS_OF to null,
+          )
+      val totalItem = item + (WorkBoardPayloadKeys.BUILD to totalBuild)
+      validator.validateBoard(
+        JsonCodec.mapToJsonString(board + (WorkBoardPayloadKeys.ITEMS to listOf(totalItem))),
+        "total-board",
+      )
+      validator.validateDetail(
+        JsonCodec.mapToJsonString(
+          detail + (
+            WorkDetailPayloadKeys.ITEM to
+              (totalItem + (WorkDetailPayloadKeys.STEP_PIPELINE to emptyList<String>()))
+          ),
+        ),
+        "total-detail",
       )
     }
   }

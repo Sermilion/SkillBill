@@ -146,7 +146,7 @@ class ChatWorkspace(
   // A paste still normalizing when its chat closes must not leave an orphan entry behind.
   internal fun addPastedImage(id: String, image: ChatImage) {
     if (id !in sessions) return
-    cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
+    cursorMcpDependencies[id] = CursorMcpDependency.ProjectUserOnly
     pastedImages[id] =pastedImages[id].orEmpty() + image
   }
 
@@ -437,7 +437,7 @@ class ChatWorkspace(
   }
 
   /** Asks the agent about the execution, in the mode its state allows now; it never changes the execution. */
-  fun send(id: String, text: String, images: List<ChatImage> = emptyList(), cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified) {
+  fun send(id: String, text: String, images: List<ChatImage> = emptyList(), cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly) {
     enqueue(id, QueuedChatMessage(text, null, pauseAndAct = false, images = images, cursorMcpDependency = cursorMcpDependency))
   }
 
@@ -460,7 +460,7 @@ class ChatWorkspace(
    * or its tab closes. The relaunch is skipped when, after the turn, the execution is already running, finished or gone.
    * On an execution that is not running it is a plain [send].
    */
-  fun pauseAndAct(id: String, text: String, images: List<ChatImage> = emptyList(), cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified) {
+  fun pauseAndAct(id: String, text: String, images: List<ChatImage> = emptyList(), cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly) {
     enqueue(id, QueuedChatMessage(text, null, pauseAndAct = true, images = images, cursorMcpDependency = cursorMcpDependency))
   }
 
@@ -475,8 +475,8 @@ class ChatWorkspace(
     val queued = session.queuedState.value
     if (queued.isNotEmpty()) {
       cursorMcpDependencies[id] = if (drafts[id].isNullOrBlank() && pastedImages[id].isNullOrEmpty()) {
-        queued.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.Unspecified
-      } else CursorMcpDependency.Unspecified
+        queued.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.ProjectUserOnly
+      } else CursorMcpDependency.ProjectUserOnly
       session.queuedState.value = emptyList()
       drafts[id] = restoredDraft(queued, drafts[id].orEmpty())
       val restoredImages = queued.flatMap { it.images }
@@ -563,7 +563,7 @@ class ChatWorkspace(
   fun switchAgent(id: String, agentId: String) {
     val session = sessions[id] ?: return
     if (session.busyState.value || session.agentState.value?.agentId == agentId) return
-    cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
+    cursorMcpDependencies[id] = CursorMcpDependency.ProjectUserOnly
     session.busyState.value = true
     session.stoppableState.value = false
     launchTurn(session) {
@@ -584,7 +584,7 @@ class ChatWorkspace(
    */
   fun clear(id: String) {
     val session = sessions[id] ?: return
-    cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
+    cursorMcpDependencies[id] = CursorMcpDependency.ProjectUserOnly
     pastedImages.remove(id)
     session.resumeChoicesState.value = null
     session.prefixChoiceState.value = null
@@ -623,7 +623,7 @@ class ChatWorkspace(
    */
   fun resume(id: String, entry: ChatHistoryEntry) {
     val session = sessions[id] ?: return
-    cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
+    cursorMcpDependencies[id] = CursorMcpDependency.ProjectUserOnly
     session.resumeChoicesState.value = null
     session.prefixChoiceState.value = null
     if (session.goneState.value || (entry.executionId != null && entry.executionId != session.item.id)) return

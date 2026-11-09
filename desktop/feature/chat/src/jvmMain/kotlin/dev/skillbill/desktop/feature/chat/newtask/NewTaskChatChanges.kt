@@ -12,12 +12,13 @@ import java.nio.file.Path
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.currentCoroutineContext
+import kotlin.time.Duration.Companion.seconds
 
 internal sealed interface ChatChangesState {
   data object None : ChatChangesState
@@ -54,6 +55,7 @@ internal class NewTaskChatChanges(
   val state: StateFlow<ChatChangesState> = mutableState.asStateFlow()
   private val lock = Any()
   private var readJob: Job? = null
+  private var readRequested = false
   private var ended = false
   val captureAttempted: Boolean get() = attempted
 
@@ -151,25 +153,67 @@ internal class NewTaskChatChanges(
     currentBaseline = previous.copy(projectId = captured.projectId, worktrees = captured.worktrees + retained)
   }
 
+  suspend fun observe() {
+    while (synchronized(lock) { !ended }) {
+      refresh()
+      delay(1.seconds)
+    }
+  }
+
   fun refresh() {
-    val baseline = currentBaseline ?: return
     if (repositoryMissing) return
     synchronized(lock) {
-      if (ended) return
-      readJob?.cancel()
-      val paths = attributed
+      if (ended || currentBaseline == null) return
+      readRequested = true
+      if (readJob?.isActive == true) return
       val job = scope.launch(dispatcher, start = kotlinx.coroutines.CoroutineStart.LAZY) {
-        val state = try {
-          when (val result = repository.read(repositoryRoot, baseline, paths)) {
-            is ChatChangesRead.Listed -> if (result.changes.files.isNotEmpty()) ChatChangesState.Shown(result.changes, baseline, resumed, paths) else ChatChangesState.None
-            is ChatChangesRead.Unavailable -> ChatChangesState.None
+        val owner = currentCoroutineContext()[Job]
+        try {
+          while (true) {
+            val pending = synchronized(lock) {
+              if (ended || !readRequested) {
+                if (readJob === owner) readJob = null
+                false
+              } else {
+                readRequested = false
+                true
+              }
+            }
+            if (!pending) break
+            readCurrentChanges(owner)
           }
-        } catch (cancelled: CancellationException) { throw cancelled }
-        val completedJob = currentCoroutineContext()[Job]
-        synchronized(lock) { if (!ended && readJob === completedJob && completedJob?.isActive != false) mutableState.value = state }
+        } finally {
+          synchronized(lock) { if (readJob === owner) readJob = null }
+        }
       }
       readJob = job
       job.start()
+    }
+  }
+
+  private suspend fun readCurrentChanges(owner: Job?) {
+    val turn = synchronized(lock) { turnStart }
+    val start = synchronized(lock) {
+      turn?.let { if (it.worktrees.isEmpty()) it else it.copy(worktrees = it.worktrees.filterKeys { root -> root in usedRoots }) }
+    }
+    if (start != null) {
+      when (val result = repository.changedPaths(repositoryRoot, start)) {
+        is ChatChangedPaths.Listed -> synchronized(lock) {
+          if (!ended && turnStart === turn) attributed = attributed?.plus(result.paths)
+        }
+        is ChatChangedPaths.Unavailable -> Unit
+      }
+    }
+    val (baseline, paths) = synchronized(lock) { (currentBaseline ?: return) to attributed }
+    val state = when (val result = repository.read(repositoryRoot, baseline, paths)) {
+      is ChatChangesRead.Listed -> if (result.changes.files.isNotEmpty()) ChatChangesState.Shown(result.changes, baseline, resumed, paths) else ChatChangesState.None
+      is ChatChangesRead.Unavailable -> return
+    }
+    synchronized(lock) {
+      if (!ended && readJob === owner && owner?.isActive != false) {
+        if (currentBaseline == baseline && attributed == paths) mutableState.value = state
+        else readRequested = true
+      }
     }
   }
 
@@ -177,6 +221,7 @@ internal class NewTaskChatChanges(
     ended = true
     turnOpen = false
     turnStart = null
+    readRequested = false
     readJob?.cancel()
     readJob = null
   }

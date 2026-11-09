@@ -10,7 +10,9 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibility
 import skillbill.engine.featuretask.phase.planning.PlanBundleSnapshots
+import skillbill.engine.featuretask.phase.planning.planBundleImmutableManifestHash
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.goal.goalRepositoryIdentityCandidates
@@ -20,7 +22,6 @@ import skillbill.engine.goalrunner.plan.PlanSubtasksReplan
 import skillbill.engine.goalrunner.plan.StandalonePlanLaunch
 import skillbill.engine.goalrunner.plan.StandalonePlanResult
 import skillbill.engine.goalrunner.plan.StandalonePlanRun
-import skillbill.engine.goalrunner.planning.context.goalPlanningImmutableDecompositionHash
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
 import skillbill.engine.goalrunner.planning.outcome.canonicalStore
@@ -66,7 +67,7 @@ public class PlanWorkflowGoalPlanningSource(
   private val database: DatabaseSessionFactory,
   private val repositories: RepositoryEnclosingRootPort,
   private val fileStore: DecompositionManifestStore,
-  planner: FeatureTaskRuntimeDecompositionPlanner,
+  private val planner: FeatureTaskRuntimeDecompositionPlanner,
   private val legacyPreparations: GoalPlanningPreparationCheckpoint,
   private val replannedChildren: GoalReplannedChildCleanup,
   private val progressRecorder: GoalPlanningProgressRecorder,
@@ -82,7 +83,7 @@ public class PlanWorkflowGoalPlanningSource(
     return if (scope.planned.isEmpty()) {
       GoalPlanningSweepOutcome.PreparedAll()
     } else {
-      fromPlanWorkflow(scope) ?: fromLegacyTables(scope) ?: runPlanSkeleton(scope)
+      fromPlanWorkflow(scope) ?: runPlanSkeleton(scope)
     }
   }
 
@@ -111,11 +112,25 @@ public class PlanWorkflowGoalPlanningSource(
     plan: LinkedPlan,
   ): GoalPlanningSweepOutcome.PreparedAll? {
     if (scope.pending.any { !plan.unitComplete(scope, it) }) return null
+    val snapshot =
+      PlanBundleFeasibility.capture(
+        planner,
+        scope.canonicalRepository,
+        scope.state.manifest.issueKey,
+      )
+    if (!PlanBundleFeasibility.approved(
+        snapshot,
+        plan.records[PLAN_SUBTASKS_STEP_ID],
+        PLAN_SUBTASKS_STEP_ID,
+      )
+    ) {
+      return null
+    }
     val descriptors = scope.descriptors(recordedHash = { null }) ?: return null
     val provenance =
       GoalPlanningContractProvenance(
         parentSpecHash = plan.bundle.parentSpecSha256,
-        decompositionManifestHash = goalPlanningImmutableDecompositionHash(scope.state.manifest),
+        decompositionManifestHash = planBundleImmutableManifestHash(scope.state.manifest),
         planningContractId = GOAL_PLANNING_PREPARATION_SCHEMA_ID,
       )
     return GoalPlanningSweepOutcome.PreparedAll(scope.identity, provenance, descriptors, plan.workflowId)
@@ -128,35 +143,6 @@ public class PlanWorkflowGoalPlanningSource(
     val unit = bundle.subtask(subtask.id) ?: return false
     val unitRecord = records[FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitRecordId(subtask.id)]
     return snapshots.unitComplete(scope.canonicalRepository, unit, unitRecord)
-  }
-
-  private fun fromLegacyTables(scope: PlanningScope): GoalPlanningSweepOutcome.PreparedAll? =
-    try {
-      legacyPrepared(scope)
-    } catch (_: SkillBillRuntimeException) {
-      null
-    }
-
-  private fun legacyPrepared(scope: PlanningScope): GoalPlanningSweepOutcome.PreparedAll? {
-    val shared =
-      (legacyPreparations.findSharedPreplanResult(scope.identity) as? SharedGoalPreplanLookupResult.Found)
-        ?.checkpoint
-        ?: return null
-    val storedHashes = legacyStoredHashes(scope) ?: return null
-    val descriptors = scope.descriptors(recordedHash = storedHashes::get) ?: return null
-    return GoalPlanningSweepOutcome.PreparedAll(scope.identity, shared.provenance, descriptors, null)
-  }
-
-  private fun legacyStoredHashes(scope: PlanningScope): Map<Int, String>? {
-    val storedHashes = mutableMapOf<Int, String>()
-    scope.planned.forEach { subtask ->
-      val governedPath = scope.governedPathOf(subtask) ?: return null
-      val stored = legacyPreparations.findStoredSubtaskPlan(scope.identity, subtask.id, governedPath)
-      if (stored != null) storedHashes[subtask.id] = stored.subSpecHash
-      val matches = stored != null && stored.manifestOrder == scope.orderOf(subtask)
-      if (subtask in scope.pending && !(matches && stored.subSpecHash == scope.diskHashOf(subtask))) return null
-    }
-    return storedHashes
   }
 
   private fun runPlanSkeleton(scope: PlanningScope): GoalPlanningSweepOutcome {

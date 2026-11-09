@@ -31,21 +31,30 @@ import kotlin.test.assertTrue
 
 class CursorAcpSessionTest {
   @Test
-  fun `missing or team dashboard dependencies refuse before any ACP request`() {
-    for (dependency in listOf(CursorAcpMcpDependency.Unspecified, CursorAcpMcpDependency.TeamDashboardRequired)) {
-      val harness = Harness(dependency = dependency)
+  fun `team dashboard dependency refuses before any ACP request`() {
+    val harness = Harness(dependency = CursorAcpMcpDependency.TeamDashboardRequired)
 
-      harness.session.start()
+    harness.session.start()
 
-      assertNotNull(harness.session.outcome()?.failure)
-      assertTrue(harness.frames.isEmpty())
-      harness.session.close()
-    }
+    assertNotNull(harness.session.outcome()?.failure)
+    assertTrue(harness.frames.isEmpty())
+    harness.session.close()
+  }
+
+  @Test
+  fun `an undeclared Cursor launch starts as project and user configuration only`() {
+    val harness = Harness(dependency = CursorAcpLaunch("/repo", "p", null, null).mcpDependency)
+
+    harness.session.start()
+
+    assertNull(harness.session.outcome())
+    assertEquals(JsonPrimitive("initialize"), harness.frames.single()[CursorAcpKeys.METHOD])
+    harness.session.close()
   }
 
   @Test
   fun `Junie enables Brave mode before prompting and retains cards for actual provider requests`() {
-    val harness = Harness(dependency = CursorAcpMcpDependency.Unspecified, provider = AcpProvider.Junie)
+    val harness = Harness(dependency = CursorAcpMcpDependency.TeamDashboardRequired, provider = AcpProvider.Junie)
     harness.session.start()
     harness.respond("""{"protocolVersion":1,"agentCapabilities":{},"authMethods":[{"id":"cursor_login"}]}""")
     assertEquals(JsonPrimitive("session/new"), harness.frames.last()[CursorAcpKeys.METHOD])
@@ -202,6 +211,32 @@ class CursorAcpSessionTest {
   }
 
   @Test
+  fun `a CLI model slug selects the advertised variant of its base model before prompting`() {
+    val harness = Harness(model = "composer-2.5")
+    harness.session.start()
+    harness.respond("""{"protocolVersion":1,"agentCapabilities":{},"authMethods":[{"id":"cursor_login"}]}""")
+    harness.respond("{}")
+    harness.respond(
+      """{"sessionId":"s","configOptions":[{"id":"model","category":"model",""" +
+        """"currentValue":"gpt-5.4-nano[reasoning=medium]","options":[""" +
+        """{"value":"gpt-5.4-nano[reasoning=medium]"},{"value":"composer-2.5[fast=true]"}]}],""" +
+        """"modes":{"availableModes":[{"id":"agent"}]}}""",
+    )
+
+    val selection = harness.frames.last()
+    assertEquals(JsonPrimitive("session/set_config_option"), selection[CursorAcpKeys.METHOD])
+    assertContains(selection.toString(), "\"value\":\"composer-2.5[fast=true]\"")
+    harness.respond(
+      """{"configOptions":[{"id":"model","category":"model","currentValue":"composer-2.5[fast=true]"}]}""",
+    )
+    harness.respond("{}")
+    assertEquals(JsonPrimitive("session/prompt"), harness.frames.last()[CursorAcpKeys.METHOD])
+    harness.respond("""{"stopReason":"end_turn"}""")
+    assertEquals("composer-2.5[fast=true]", harness.session.outcome()?.model)
+    harness.session.close()
+  }
+
+  @Test
   fun `incompatible ACP version stops before authentication or session creation`() {
     val harness = Harness()
     harness.session.start()
@@ -215,18 +250,57 @@ class CursorAcpSessionTest {
   }
 
   @Test
-  fun `blocking extensions cancel their method and terminate instead of hanging or approving a plan`() {
-    for (method in listOf("cursor/ask_question", "cursor/create_plan", "future/blocker")) {
-      val harness = Harness()
-      harness.open()
-      harness.permission("4", "a", "pending")
-      harness.session.observe(
-        """{"jsonrpc":"2.0","id":"extension","method":"$method",""" +
-          """"params":{"sessionId":"s","title":"full question"}}""",
+  fun `extension requests are answered and leave the session running`() {
+    val cases =
+      listOf(
+        """{"jsonrpc":"2.0","id":"todos","method":"cursor/update_todos",""" +
+          """"params":{"toolCallId":"call-1","todos":[{"id":"inspect-ac002",""" +
+          """"content":"Inspect AC-002","status":"in_progress"}],"merge":false}}""" to "accepted",
+        """{"jsonrpc":"2.0","id":"ask","method":"cursor/ask_question",""" +
+          """"params":{"sessionId":"s","title":"full question"}}""" to "skipped",
+        """{"jsonrpc":"2.0","id":"plan","method":"cursor/create_plan",""" +
+          """"params":{"sessionId":"s","title":"full question"}}""" to "accepted",
+        """{"jsonrpc":"2.0","id":"future","method":"future/blocker",""" +
+          """"params":{"sessionId":"s","title":"full question"}}""" to "accepted",
       )
-      assertContains(assertNotNull(harness.session.outcome()?.failure), method)
-      assertTrue(harness.events.any { it is CursorAcpEvent.Unsupported && "full question" in it.payload })
-      assertFalse(harness.frames.filter { it[CursorAcpKeys.RESULT] != null }.any { "selected" in it.toString() })
+    for (provider in listOf(AcpProvider.Cursor, AcpProvider.Junie)) {
+      for ((payload, outcome) in cases) {
+        val harness = Harness(provider = provider)
+        if (provider == AcpProvider.Cursor) {
+          harness.open()
+        } else {
+          harness.session.start()
+          harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+          harness.respond("""{"sessionId":"s"}""")
+          harness.respond("""{"configOptions":[{"id":"brave_mode","currentValue":true}]}""")
+        }
+        harness.session.observe(payload)
+        assertNull(harness.session.outcome())
+        assertTrue(harness.events.none { it is CursorAcpEvent.Unsupported })
+        assertContains(harness.frames.last { it[CursorAcpKeys.RESULT] != null }.toString(), outcome)
+        harness.session.close()
+      }
+    }
+  }
+
+  @Test
+  fun `a permission without an operator channel selects allow once and keeps running`() {
+    for (provider in listOf(AcpProvider.Cursor, AcpProvider.Junie)) {
+      val harness = Harness(bindOwner = false, provider = provider)
+      if (provider == AcpProvider.Cursor) {
+        harness.open()
+      } else {
+        harness.session.start()
+        harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+        harness.respond("""{"sessionId":"s"}""")
+        harness.respond("""{"configOptions":[{"id":"brave_mode","currentValue":true}]}""")
+      }
+      harness.permission("9", "shell", "git status")
+      assertNull(harness.session.outcome())
+      assertTrue(harness.owner.requests.isEmpty())
+      val result = harness.frames.last { it[CursorAcpKeys.RESULT] != null }.toString()
+      assertContains(result, "selected")
+      assertContains(result, "once-shell")
       harness.session.close()
     }
   }
@@ -269,6 +343,23 @@ class CursorAcpSessionTest {
   }
 
   @Test
+  fun `an owned permission for a different session is cancelled without approval or termination`() {
+    val harness = Harness()
+    harness.open()
+    harness.session.observe(
+      """{"jsonrpc":"2.0","id":19,"method":"session/request_permission","params":{"sessionId":"stale",
+"toolCall":{"toolCallId":"shell"},"options":[{"optionId":"yes","name":"Allow","kind":"allow_once"}]}}""",
+    )
+    assertNull(harness.session.outcome())
+    assertTrue(harness.owner.requests.isEmpty())
+    assertEquals(
+      Json.parseToJsonElement("""{"outcome":{"outcome":"cancelled"}}"""),
+      harness.frames.last()[CursorAcpKeys.RESULT],
+    )
+    harness.session.close()
+  }
+
+  @Test
   fun `missing one time option cancels while rule deliveries always select offered allow once`() {
     val harness = Harness()
     harness.open()
@@ -294,6 +385,7 @@ class CursorAcpSessionTest {
     dependency: CursorAcpMcpDependency = CursorAcpMcpDependency.ProjectUserOnly,
     provider: AcpProvider = AcpProvider.Cursor,
     checkout: String = "/checkout",
+    bindOwner: Boolean = true,
   ) {
     val frames = mutableListOf<JsonObject>()
     val events = mutableListOf<CursorAcpEvent>()
@@ -322,8 +414,10 @@ class CursorAcpSessionTest {
       )
 
     init {
-      session.bind(owner)
-      owner.deliver = session::deliver
+      if (bindOwner) {
+        session.bind(owner)
+        owner.deliver = session::deliver
+      }
     }
 
     fun open() {

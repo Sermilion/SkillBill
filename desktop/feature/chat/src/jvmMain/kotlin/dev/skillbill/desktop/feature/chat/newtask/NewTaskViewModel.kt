@@ -139,13 +139,13 @@ class NewTaskViewModel(
     val target = draft
     when (action) {
       is NewTaskAction.TextChanged -> {
-        if (target.text != action.text) target.cursorMcpDependency = CursorMcpDependency.Unspecified
+        if (target.text != action.text) target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
         target.text = action.text
       }
       is NewTaskAction.ChooseBaseBranch -> {
         if (!canChangeContext(target)) return
         pathCheck?.cancel()
-        target.cursorMcpDependency = CursorMcpDependency.Unspecified
+        target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
         target.baseBranch = action.branch
         target.rebindChat()
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
@@ -157,7 +157,7 @@ class NewTaskViewModel(
       is NewTaskAction.SubmitRepositoryPath -> submitPath(target, action.path)
       NewTaskAction.AddRepository -> addRepository(target)
       is NewTaskAction.ChooseAgent -> {
-        target.cursorMcpDependency = CursorMcpDependency.Unspecified
+        target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
         target.agentChosen = true
         target.agentId = action.agentId
         readAgent(target) { resolveAgent(target, action.agentId) }
@@ -320,7 +320,7 @@ class NewTaskViewModel(
   private fun selectRepository(target: NewTaskDraft, repository: NewTaskRepository, listed: RepositoryBranches? = null) {
     if (!canChangeContext(target)) return
     pathCheck?.cancel()
-    target.cursorMcpDependency = CursorMcpDependency.Unspecified
+    target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
     if (repository.root != target.repository?.root) target.baseBranch = ""
     target.repository = repository
     target.rebindChat()

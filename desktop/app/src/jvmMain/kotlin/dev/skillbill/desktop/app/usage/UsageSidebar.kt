@@ -58,6 +58,7 @@ import dev.skillbill.desktop.core.designsystem.usage.usageAgentColor
 import dev.skillbill.desktop.core.domain.usage.model.UsageProvider
 import dev.skillbill.desktop.core.domain.usage.model.UsageRefreshAvailability
 import dev.skillbill.desktop.core.domain.usage.model.UsageResult
+import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableCode
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 
 @Composable
@@ -68,13 +69,15 @@ fun UsageSidebar(model: UsageSidebarModel, modifier: Modifier = Modifier) {
   var expanded by remember { mutableStateOf(false) }
   var openedForToken by remember { mutableStateOf<Long?>(null) }
   val uriHandler = LocalUriHandler.current
-  val signInRequired = state.result is UsageResult.SignInRequired
+  val signInRequired = state.result is UsageResult.SignInRequired ||
+    (state.result as? UsageResult.Snapshot)?.value?.refreshFailure?.code == UsageUnavailableCode.ProfileUnverified
   val availabilityFlow = remember(model, state.requestVersion, signInRequired) {
     if (signInRequired) model.recheckSignInAvailability() else model.refreshAvailability()
   }
   val refreshAvailability by availabilityFlow.collectAsState(initial = null)
   val ui = state.toUsageUiState(now)
   val defaultAgent by model.defaultAgent.collectAsState()
+  val refreshAction = { if (signInRequired) model.recheckSignIn() else model.refresh() }
   val refreshAllowed = state.demandEligible && refreshAvailability == UsageRefreshAvailability.Ready
 
   DisposableEffect(model) {
@@ -88,7 +91,11 @@ fun UsageSidebar(model: UsageSidebarModel, modifier: Modifier = Modifier) {
   UsageCard(ui, onOpen = {
     openedForToken = state.popupDismissalToken
     expanded = true
-  }, modifier = modifier.padding(bottom = 10.dp).focusRequester(focusRequester).semantics { contentDescription = "${ui.provider} usage limits. View details" })
+  }, modifier = modifier.padding(bottom = 10.dp).focusRequester(focusRequester).semantics { contentDescription = "${ui.provider} usage limits. View details" },
+    onRefresh = refreshAction.takeIf { state.nameOnlyAgent == null && state.provider != null },
+    refreshEnabled = refreshAllowed,
+    refreshLabel = if (refreshAvailability == UsageRefreshAvailability.Checking) "Checking" else "Refresh",
+  )
   if (expanded) ShellLayer { expanded = false }
   SbPopover(
     expanded = expanded,
@@ -110,7 +117,7 @@ fun UsageSidebar(model: UsageSidebarModel, modifier: Modifier = Modifier) {
         if (state.nameOnlyAgent == null) Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
           SbButton(
             if (signInRequired) "Recheck sign-in" else "Refresh",
-            { if (signInRequired) model.recheckSignIn() else model.refresh() },
+            refreshAction,
             enabled = refreshAllowed,
             size = SbControlSize.Small,
             variant = SbButtonVariant.Ghost,

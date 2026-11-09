@@ -80,7 +80,7 @@ fun PhasePeek(
     endControl?.let { control ->
       Box(Modifier.align(Alignment.End).padding(start = 10.dp, end = 10.dp, bottom = 8.dp)) { control() }
     }
-    if (!why.isNullOrBlank()) BasicText(why, Modifier.fillMaxWidth().drawBehind { drawRect(toneColor.copy(alpha = .10f)) }.padding(9.dp), style = SkillBillTheme.type.tXs.copy(color = colors.fg2))
+    if (!why.isNullOrBlank()) PeekActivityText(why, Modifier.fillMaxWidth().drawBehind { drawRect(toneColor.copy(alpha = .10f)) }.padding(9.dp), color = colors.fg2)
     Column(Modifier.fillMaxWidth(), content = parts)
     if (activity.isNotEmpty()) PeekTimeline(activity)
     footer?.let { f -> Row(Modifier.fillMaxWidth().background(colors.bgPanel).border(1.dp, colors.borderSubtle).padding(8.dp), horizontalArrangement = Arrangement.End) { SbButton(f.label, f.onClick, icon = if (f.external) LucideIcons.external else LucideIcons.arrowRight, size = dev.skillbill.desktop.core.designsystem.component.SbControlSize.Small) } }

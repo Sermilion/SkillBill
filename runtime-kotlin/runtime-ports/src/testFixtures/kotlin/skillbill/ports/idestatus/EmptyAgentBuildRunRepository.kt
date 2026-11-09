@@ -21,6 +21,8 @@ object EmptyAgentBuildRunRepository : AgentBuildRunRepository {
 
   override fun latestForRun(runIds: Set<String>): AgentBuildRun? = null
 
+  override fun buildsForRun(runIds: Set<String>): List<AgentBuildRun> = emptyList()
+
   override fun history(
     repositoryIdentity: String,
     command: String,

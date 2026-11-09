@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisciplineDirective
+import skillbill.engine.featuretask.phase.prompt.directives.subtaskEvidenceBoundaryDirective
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
 import skillbill.engine.featuretask.slot.PhaseLoopCapability
@@ -159,6 +160,8 @@ internal object InlineReviewDirective {
           "Do not run `./gradlew check`, the pack collect-all gate, or `skill-bill phase validation`; " +
             "validate owns those.",
         )
+        appendLine()
+        appendLine(subtaskEvidenceBoundaryDirective)
         appendLine()
         appendLine(projectAuthoringDisciplineDirective())
         appendLine()

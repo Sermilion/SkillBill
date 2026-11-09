@@ -20,7 +20,10 @@ class CursorAgentRunTransportTest {
         "arrives last, so a capped drain spends its budget on the preamble",
     )
     assertEquals(
-      listOf("agent", "--force", "--trust", "--approve-mcps", "--sandbox", "disabled", "acp"),
+      listOf(
+        "agent", "--print", "--sandbox", "disabled", "--force", "--trust", "--approve-mcps",
+        "--workspace", "/tmp/skillbill-agent-run", "--output-format", "json",
+      ),
       command.command,
     )
   }
@@ -29,7 +32,8 @@ class CursorAgentRunTransportTest {
   fun `a streamed launch still requests the per-event transport`() {
     val command = CursorAgentRunCommandBuilder().build(request().copy(streamOutputForLiveness = true))
 
-    assertEquals(AgentRunApprovalProtocol.CURSOR_ACP, command.approvalProtocol)
+    assertEquals(null, command.approvalProtocol)
+    assertTrue(command.command.contains("stream-json"))
     assertTrue(command.command.contains("--force"))
   }
 

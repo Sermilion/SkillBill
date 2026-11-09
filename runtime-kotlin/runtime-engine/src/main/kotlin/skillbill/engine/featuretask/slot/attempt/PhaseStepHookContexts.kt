@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.attempt
 
 import skillbill.application.review.spec.SpecIntentProjectionResolver
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilitySnapshot
 import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationBoundaryMemory
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
@@ -97,7 +98,18 @@ internal interface PhaseFindingEvidenceContext {
   val specIntentProjectionResolver: SpecIntentProjectionResolver
 }
 
+internal interface PhasePlanningLaunchContext : PhaseAttemptLaunchHookContext {
+  fun captureBundleFeasibility(repairing: Boolean): PlanBundleFeasibilitySnapshot
+}
+
 internal interface PhasePlanningOutputContext : PhaseStepOutputContext {
+  fun settleBundleFeasibility(
+    capture: ValidatedOutputCapture,
+    attested: NormalizedFeatureTaskRuntimePhaseOutput,
+    before: PlanBundleFeasibilitySnapshot,
+    repairing: Boolean,
+  ): AttemptResult?
+
   fun settleAuthoredBundle(capture: ValidatedOutputCapture): AttemptResult?
 
   fun withAuthoredParentSpecPath(

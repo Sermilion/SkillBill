@@ -90,6 +90,7 @@ internal class NewTaskChat(
   private val approvalFlow = ChatApprovals(approvals)
   private val changesTracker = NewTaskChatChanges(changesRepository, scope, dispatcher, repositoryRoot, initialChangesBaseline, resumedChanges, repositoryMissing, changesCaptureAttempted || initiallyStarted || initialChangesBaseline != null, changesAttributedPaths)
   val changes: StateFlow<ChatChangesState> = changesTracker.state
+  suspend fun observeChanges() = changesTracker.observe()
   val changesBaseline: ChatChangesBaseline? get() = changesTracker.baseline
   internal val changesResumed: Boolean get() = changesTracker.resumed
   internal val changesCaptureAttempted: Boolean get() = changesTracker.captureAttempted
@@ -153,7 +154,7 @@ internal class NewTaskChat(
     action: ChatSuggestedAction? = null,
     images: List<ChatImage> = emptyList(),
     onAccepted: () -> Unit = {},
-    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
+    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly,
     onRejected: (() -> Unit)? = null,
   ) {
     if ((text.isBlank() && images.isEmpty()) || repositoryMissing || closing) return
@@ -346,6 +347,7 @@ internal class NewTaskChat(
         pendingReplay = null
       }
       if (event is ChatEvent.ToolUse) changesTracker.recordTool(event.call)
+      if (event is ChatEvent.ToolResult) changesTracker.refresh()
       thread.show(agent, event)
       if (opening && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
     }
@@ -367,6 +369,7 @@ internal class NewTaskChat(
       changesTracker.beginTurn(started)
     }
     if (event is ChatEvent.ToolUse) changesTracker.recordTool(event.call)
+    if (event is ChatEvent.ToolResult) changesTracker.refresh()
     thread.show(thread.agentState.value, event)
     if (event !is ChatEvent.Completed && event !is ChatEvent.Failed) return
     if (ownTurn) {

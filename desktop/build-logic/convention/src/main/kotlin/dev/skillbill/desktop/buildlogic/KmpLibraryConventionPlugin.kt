@@ -3,6 +3,7 @@ package dev.skillbill.desktop.buildlogic
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.tasks.testing.Test
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.withType
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
@@ -25,6 +26,8 @@ class KmpLibraryConventionPlugin : Plugin<Project> {
     tasks.withType<Test>().configureEach {
       useJUnitPlatform()
       maxHeapSize = "1g"
+      // CI logs carry only the failure; without the full format they show no assertion message.
+      testLogging { exceptionFormat = TestExceptionFormat.FULL }
     }
   }
 }

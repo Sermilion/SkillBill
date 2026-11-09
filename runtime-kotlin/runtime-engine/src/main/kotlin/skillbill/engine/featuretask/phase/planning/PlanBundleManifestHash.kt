@@ -1,4 +1,4 @@
-package skillbill.engine.goalrunner.planning.context
+package skillbill.engine.featuretask.phase.planning
 
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.executionModel
@@ -11,7 +11,7 @@ import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.decomposition.model.DecompositionManifest
 
-internal fun goalPlanningImmutableDecompositionHash(manifest: DecompositionManifest): String {
+public fun planBundleImmutableManifestHash(manifest: DecompositionManifest): String {
   val immutable =
     linkedMapOf<String, Any?>(
       SharedPayloadKeys.CONTRACT_VERSION to manifest.contractVersion,

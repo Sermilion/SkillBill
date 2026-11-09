@@ -7,7 +7,7 @@ data class AcpProvider(
   val name: String,
   val acpArguments: List<String>,
   val authMethodId: String?,
-  val mcpDeclarationRequired: Boolean,
+  val lacksTeamDashboardMcp: Boolean,
 ) {
   val seam: String get() = "${id}_acp"
 
@@ -18,7 +18,7 @@ data class AcpProvider(
         "Cursor",
         listOf("--force", "--trust", "--approve-mcps", "--sandbox", "disabled", "acp"),
         CursorAcpKeys.CURSOR_LOGIN,
-        mcpDeclarationRequired = true,
+        lacksTeamDashboardMcp = true,
       )
 
     val Junie =
@@ -27,7 +27,7 @@ data class AcpProvider(
         "Junie",
         listOf("--acp"),
         authMethodId = null,
-        mcpDeclarationRequired = false,
+        lacksTeamDashboardMcp = false,
       )
   }
 }

@@ -30,6 +30,7 @@ internal class CodexUnsupportedApprovals(
   private val write: (JsonObject) -> Boolean,
   private val onCard: (ApprovalRequestRecord) -> Unit,
   private val stop: (String) -> Unit,
+  private val record: (String) -> Unit,
 ) {
   private val lock = Any()
   private val entries = LinkedHashMap<ApprovalProviderRequestId, UnsupportedCodexRequest>()
@@ -42,15 +43,37 @@ internal class CodexUnsupportedApprovals(
     val id = message[K.ID].unsupportedId() ?: return stop("Codex sent an unsupported request with a malformed id.")
     val method = (message[K.METHOD] as? JsonPrimitive)?.content.orEmpty()
     val params = message[K.PARAMS] as? JsonObject ?: return stop("Codex sent malformed unsupported request parameters.")
+    val session = owner()
+    val body = response(method, params, allow = session == null)
+    if (session == null) {
+      record("seam=codex_request outcome=bypass_response method=$method")
+      if (!writeResponse(id, body)) stop("Codex request response could not be delivered.")
+      return
+    }
     val requestThread = (params[K.THREAD_ID] as? JsonPrimitive)?.content
     val requestTurn = (params[K.TURN_ID] as? JsonPrimitive)?.content
     if (!matches(requestThread, threadId) || !matches(requestTurn, turnId)) {
-      return stop("Codex sent an unsupported request for a different thread or turn.")
+      record("seam=codex_request outcome=stale_request_cancelled method=$method")
+      if (!writeResponse(id, body)) stop("Codex stale request response could not be delivered.")
+      return
     }
-    val session = owner() ?: return stop("Codex requested unsupported interaction without an operator channel.")
     val request = request(message, session, id, threadId)
-    if (admit(request, negative(method, params))) register(session, request, id)
+    if (admit(request, body)) {
+      register(session, request)
+      session.resolveByProvider(request.approvalId, id, ApprovalProviderDisposition.INTERACTION_REQUIRED)
+    }
   }
+
+  private fun writeResponse(
+    id: ApprovalProviderRequestId,
+    body: JsonObject,
+  ): Boolean =
+    write(
+      buildJsonObject {
+        put(K.ID, id.unsupportedJson())
+        body.forEach { (key, value) -> put(key, value) }
+      },
+    )
 
   private fun request(
     message: JsonObject,
@@ -95,24 +118,19 @@ internal class CodexUnsupportedApprovals(
 
   private fun admit(
     request: ApprovalRequestRecord,
-    negative: JsonObject?,
+    body: JsonObject,
   ): Boolean =
     synchronized(lock) {
       val id = request.providerRequestId
       val previous = entries[id]
       when {
-        previous != null -> {
-          if (previous.request.providerPayload != request.providerPayload) {
-            stop("Codex reused a request id with changed content.")
-          }
-          false
-        }
+        previous != null -> false
         entries.size >= MAX_ENTRIES -> {
           stop("Codex exceeded unsupported request capacity.")
           false
         }
         else -> {
-          entries[id] = UnsupportedCodexRequest(request, negative)
+          entries[id] = UnsupportedCodexRequest(request, body)
           true
         }
       }
@@ -121,7 +139,6 @@ internal class CodexUnsupportedApprovals(
   private fun register(
     session: ApprovalOwnerSession,
     request: ApprovalRequestRecord,
-    id: ApprovalProviderRequestId,
   ) {
     val registered =
       catchingNonCancellation {
@@ -139,44 +156,35 @@ internal class CodexUnsupportedApprovals(
     when (registered) {
       is ApprovalRegistrationResult.Registered -> onCard(registered.request)
       is ApprovalRegistrationResult.Refused -> onCard(registered.request)
-      is ApprovalRegistrationResult.AutoAllowed -> return stop("An unsupported Codex request cannot be auto-approved.")
-      ApprovalRegistrationResult.IdentityConflict -> return stop("Codex unsupported request identity conflicted.")
+      is ApprovalRegistrationResult.AutoAllowed -> onCard(registered.request)
+      ApprovalRegistrationResult.IdentityConflict -> return
     }
-    session.resolveByProvider(request.approvalId, id, ApprovalProviderDisposition.INTERACTION_REQUIRED)
   }
 
   fun deliver(settled: ApprovalRequestRecord): ApprovalDeliveryState? =
     synchronized(lock) {
       val entry = entries[settled.providerRequestId] ?: return null
       if (entry.cleared) return ApprovalDeliveryState.NOT_REQUIRED
-      if (entry.sent ||
-        !sameApprovalRegistrationPayload(
+      if (!sameApprovalRegistrationPayload(
           entry.request,
           settled,
-        ) || settled.state == ApprovalState.ALLOWED
+        )
       ) {
         return ApprovalDeliveryState.UNCERTAIN
       }
-      entry.sent = true
-      val body = entry.negative
-      if (body == null) {
-        stop(
-          "No documented safe response exists for this Codex request; its process " +
-            "was stopped.",
-        )
-        return ApprovalDeliveryState.UNCERTAIN
+      entry.delivery?.let {
+        return if (it == ApprovalDeliveryState.WRITTEN) ApprovalDeliveryState.NOT_REQUIRED else it
       }
+      if (settled.state == ApprovalState.PENDING) return ApprovalDeliveryState.UNCERTAIN
+      val body = entry.body
       val frame =
         buildJsonObject {
           put(K.ID, settled.providerRequestId.unsupportedJson())
-          put(K.RESULT, body)
+          body.forEach { (key, value) -> put(key, value) }
         }
-      if (write(frame)) {
-        ApprovalDeliveryState.WRITTEN
-      } else {
-        stop("Codex refusal delivery is uncertain; it will not be replayed.")
-        ApprovalDeliveryState.UNCERTAIN
-      }
+      val delivered = if (write(frame)) ApprovalDeliveryState.WRITTEN else ApprovalDeliveryState.UNCERTAIN
+      entry.delivery = delivered
+      delivered
     }
 
   fun clear() {
@@ -195,42 +203,56 @@ internal class CodexUnsupportedApprovals(
     actual: String,
   ): Boolean = provided == null || provided == actual
 
-  private fun negative(
+  private fun response(
     method: String,
     params: JsonObject,
-  ): JsonObject? =
-    when (method) {
-      K.ITEM_COMMAND_APPROVAL -> {
-        val available = params[K.AVAILABLE_DECISIONS]
-        val decisions =
-          if (available == null || available == JsonNull) {
-            CODEX_DEFAULT_APPROVAL_DECISIONS
-          } else {
-            (available as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.takeIf { it.isString }?.content }
+    allow: Boolean,
+  ): JsonObject {
+    val result =
+      when (method) {
+        K.ITEM_COMMAND_APPROVAL, K.ITEM_FILE_APPROVAL -> {
+          val available = params[K.AVAILABLE_DECISIONS]
+          val decisions =
+            if (available == null || available == JsonNull) {
+              CODEX_DEFAULT_APPROVAL_DECISIONS
+            } else {
+              (available as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.takeIf { it.isString }?.content }
+            }
+          val preferred = if (allow) listOf(K.ACCEPT, K.ACCEPT_FOR_SESSION) else listOf(K.CANCEL, K.DECLINE)
+          val decision = preferred.firstOrNull { it in decisions } ?: return unsupportedResponse(method)
+          buildJsonObject { put(K.PROVIDER_DECISION, decision) }
+        }
+        K.PERMISSIONS_APPROVAL ->
+          buildJsonObject {
+            put(K.PERMISSIONS, if (allow) params[K.PERMISSIONS] ?: buildJsonObject {} else buildJsonObject {})
+            put(K.SCOPE, K.TURN)
           }
-        val decision = listOf(K.DECLINE, K.CANCEL).firstOrNull { it in decisions }
-        decision?.let { buildJsonObject { put(K.PROVIDER_DECISION, it) } }
+        K.MCP_ELICITATION -> buildJsonObject { put(K.ACTION, K.CANCEL) }
+        K.TOOL_REQUEST_USER_INPUT -> buildJsonObject { put(K.ANSWERS, buildJsonObject {}) }
+        else -> return unsupportedResponse(method)
       }
-      K.PERMISSIONS_APPROVAL ->
+    return buildJsonObject { put(K.RESULT, result) }
+  }
+
+  private fun unsupportedResponse(method: String): JsonObject =
+    buildJsonObject {
+      put(
+        K.ERROR,
         buildJsonObject {
-          put(K.PERMISSIONS, buildJsonObject {})
-          put(K.SCOPE, "turn")
-        }
-      K.MCP_ELICITATION ->
-        buildJsonObject {
-          put(K.ACTION, K.DECLINE)
-          put(K.CONTENT, JsonNull)
-        }
-      else -> null
+          put(K.CODE, METHOD_NOT_FOUND)
+          put(K.MESSAGE, "Unsupported Codex request: $method")
+        },
+      )
     }
 
   private companion object {
     const val MAX_ENTRIES = 1024
+    const val METHOD_NOT_FOUND = -32601
   }
 }
 
-private class UnsupportedCodexRequest(val request: ApprovalRequestRecord, val negative: JsonObject?) {
-  var sent = false
+private class UnsupportedCodexRequest(val request: ApprovalRequestRecord, val body: JsonObject) {
+  var delivery: ApprovalDeliveryState? = null
   var cleared = false
 }
 

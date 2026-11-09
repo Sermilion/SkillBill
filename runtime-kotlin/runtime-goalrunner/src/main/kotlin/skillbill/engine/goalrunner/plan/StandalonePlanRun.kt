@@ -10,7 +10,9 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibility
 import skillbill.engine.featuretask.phaserun.StandalonePhaseLaunch
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusEventSink
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
@@ -289,6 +291,22 @@ public class StandalonePlanRun(
     }
     val (id, terminal) = completed
     if (terminal != null && intake == null) {
+      val feasibility = PlanBundleFeasibility.capture(decompositionPlanner, repoRoot, issueKey)
+      val record =
+        database.read { unitOfWork ->
+          unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, id)?.let {
+            decodePhaseRecords(it.artifacts)[FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS]
+          }
+        }
+      if (!PlanBundleFeasibility.approved(
+          feasibility,
+          record,
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
+        )
+      ) {
+        val settledIds = feasibility.settledSubtaskIds
+        return replanSubtasks(PlanSubtasksReplan(issueKey, id, repoRoot, settledIds), inputFor)
+      }
       val result =
         StandalonePlanResult.Completed(
           id,

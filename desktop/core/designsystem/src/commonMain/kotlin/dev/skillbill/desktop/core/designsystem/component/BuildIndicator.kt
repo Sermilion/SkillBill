@@ -84,6 +84,8 @@ data class SbBuild(
   val exitCode: Int?,
   val finishedAt: Instant?,
   val previous: SbBuildPrevious?,
+  val totalElapsedMs: Long? = null,
+  val totalElapsedAsOf: Instant? = null,
 ) {
   internal fun elapsedAt(now: Instant): Long? {
     val elapsed = if (state == SbBuildState.Running) {
@@ -132,6 +134,10 @@ data class SbBuild(
   }
 
   internal fun metaSegments(now: Instant, startedText: String): List<SbBuildMeta> = buildList {
+    totalElapsedMs?.let { elapsed ->
+      val total = elapsed + (totalElapsedAsOf?.let { (now - it).inWholeMilliseconds.coerceAtLeast(0) } ?: 0)
+      add(Plain("Total build ${formatActiveDuration(total, true)}"))
+    }
     add(Kind(projectKind))
     add(Plain(tool))
     add(Plain("pid $pid"))
@@ -230,7 +236,7 @@ fun BuildChip(build: SbBuild, modifier: Modifier = Modifier) {
 fun BuildStrip(build: SbBuild, modifier: Modifier = Modifier) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
-  val now = rememberBuildNow(build.state == SbBuildState.Running || build.finishedAt != null || build.previous != null)
+  val now = rememberBuildNow(build.state == SbBuildState.Running || build.totalElapsedAsOf != null || build.finishedAt != null || build.previous != null)
   val tone = build.tone(now)
   val failed = tone == SbBuildTone.Failed
   val slow = tone == SbBuildTone.Slow

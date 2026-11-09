@@ -379,6 +379,13 @@ the earlier default of routing every eligible permission prompt to the operator.
 Read-only phase instructions still constrain the requested work; they do not
 select a restrictive provider sandbox by default.
 
+Runtime launches outside chat approvals use the native headless CLIs. Skill-bill
+does not host their tool requests and must not add a deny, cancel, skip or
+unsupported-method response. The native harness owns tool execution and any
+provider refusal. Codex uses `exec` with native bypass, Cursor uses its print
+transport with force and trust flags, and Junie uses its headless text transport.
+Claude already uses its native print transport outside chat approvals.
+
 Approval cards apply only to chats. The chat broker remains connected for genuine
 permission requests a harness still emits. Runs launch through the runtime with
 native permission bypass and do not require an operator approval channel. A run
@@ -590,6 +597,17 @@ or `cleanup_failed`. `goal status` shows the path, reason, detail, and the exact
 `git worktree remove --force <path>` command. `goal purge` refuses when a retained
 worktree has work. A goal branch checked out in another checkout blocks the goal.
 
+A goal child requires evidence only for its own acceptance criteria and completed
+dependencies. Planning must order migration and evidence acquisition before strict
+consumer activation, or keep existing entry points compatible until adoption.
+Audit, review, finding verification, and validation must not demand work or evidence
+explicitly assigned to a later subtask. They trace each alleged gap to its owning
+criterion and subtask, and retain deferred work as context without claiming it is
+complete. Current regressions still require repair and every required project check
+still runs. A child must keep existing callers and persisted data usable; deferral
+never waives failures or weakens evidence rules. Final goal assessment requires all
+parent outcomes after the subtasks finish.
+
 Every non-skipped goal child runs `audit -> review -> validate -> write_history`, so each subtask runs the full project validation gate and records its own validation result. Goal children no longer run `qa` or `qa_fix`. After every child completes, goal finalization runs `goal_assessment -> build -> qa when enabled and build usable -> validate -> write_history -> commit_push -> pr -> monitor`. The goal-level build is the initial compile-only cycle after assessment; it does not make build mandatory for every standalone phase or child launch. The build-selection rules below still govern standalone and child execution.
 
 The assessment stage uses the same focused repair strategy as audit. Initial discovery runs once. Independent verification admits material source defects at every severity, then the runtime settles one defect, broken interaction scenario, or unrestored regression at a time. A read-only repair plan covers the selected item's remaining defect class and sibling production paths. `goal_assessment_fix` implements that plan on the goal branch and reports `<ref>: fixed: <files and how>` or `<ref>: not fixed: <reason>`. Neither planning nor source repair builds, tests, commits or pushes. Each completed source repair receives a local round commit, then independent source verification checks the next round, including after the third unsuccessful repair. There is no full validation between repairs. A repair claim or changed file alone never accepts an item. Accepted items are not re-audited and discovery does not repeat. Each item has three unsuccessful repair outcomes; failed and no-change repairs count. Exhaustion records `persistent_finding` and blocks before goal quality or publication. Missing assessors, incomplete verifier verdicts, unreadable records, and unrecorded repair commits settle `assessment_unavailable` and also block. The record's `unavailable_reason`, the block message, and `skill-bill goal status` name the cause. `converged` requires every material source item to be independently settled. Test-value notes remain report-only. A normal reload preserves the queue, accepted dispositions, repair plans, prior outcomes, and budgets. `skill-bill goal resume <KEY>` explicitly reopens a blocked assessment and grants a fresh allowance after exhaustion while retaining earlier outcomes and evidence. A recorded accepted exit skips assessment on resume. Goals without changes record `skipped_no_changes`. Superseded assessment records are quarantined with diagnostic evidence and regenerated through fresh discovery under the current accounting contract. Historical assessment validation values remain facts about their original round and do not prove current final quality. A goal resume retains accepted repairs and consumed repair budgets, then resumes any missing current-source build, QA, or validation evidence from the retained quality execution. Historical quality outcomes are adopted only through the explicit compatibility rules; missing or conflicting identities remain ambiguous, and an unknown in-flight outcome keeps the existing recovery path described below.
@@ -770,6 +788,16 @@ The shared runtime instruction is `slot/plan/planning-feasibility.md` in the eng
 resources; preplan, bundle planning and subtask planning all receive its body,
 including the model-specific strategy variants.
 
+Planning keeps a concise component inventory in its existing digest and implementation
+plan. It distinguishes existing behavior, authorized local components to build or extend,
+and unavailable external capabilities. Every missing local component has an implementation
+owner, consuming criteria and dependency order. Criterion sizing includes that work,
+caller wiring, contracts and required migrations, even when their files do not exist yet.
+Shared prerequisites have one implementation owner and precede dependent behavior;
+decomposition preserves usable intermediate states. Missing assigned code is implementation
+work and does not by itself justify a block. Planners reconcile this inventory against
+the final tasks before declaring them ready. This adds no output schema or runtime gate.
+
 The digest is the starting evidence, not a prohibition on resolving a critical gap.
 Planning may use targeted read-only lookups for a missing or contradictory fact that
 determines implementability. It does not repeat discovery or widen file-write
@@ -890,3 +918,20 @@ Both packaged runtime entry points accept `--check-packaged-contracts`. This
 database-free check compares producer pins with resources inside that candidate
 image. Installation stages CLI and MCP candidates and checks both before
 promoting either image. A parity failure leaves both installed runtimes intact.
+
+## Bundle feasibility before implementation
+
+After `plan_subtasks` writes the implementation details, a fresh review checks the whole bundle against
+its dependency order. Every criterion must describe a passing state achievable with that subtask and
+its declared earlier dependencies. Scope and non-goals cannot forbid required wiring, migration,
+evidence capture, or validation repairs. Strict consumers stay compatible or inactive until their
+migration and evidence producers are available.
+
+The runtime requires approval of every criterion and binds it to the parent, immutable manifest fields,
+and full subtask text. Missing, partial, malformed, or stale approval cannot release implementation.
+A contradiction returns the pending specs to a planning repair session, then a fresh read-only review.
+This uses the existing bounded planning correction budget. Repair preserves parent bytes, manifest,
+completed and skipped specs, execution identities, commits, and history. An unrepairable conflict blocks
+with its clauses and missing prerequisite. Old completed plans remain readable and reopen planning for
+review before implementation; their unit plans and completed work remain intact. Execution status
+updates alone do not invalidate approval.

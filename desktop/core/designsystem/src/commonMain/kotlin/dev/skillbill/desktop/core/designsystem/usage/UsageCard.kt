@@ -32,6 +32,9 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.SbButton
+import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
+import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.agentDataSlot
 import dev.skillbill.desktop.core.designsystem.component.dataColor
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
@@ -43,7 +46,7 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 /** The most meter rows the card shows; the popup lists every window. */
 const val USAGE_CARD_METER_SLOTS = 2
 
-private val HeaderHeight = 18.dp
+private val HeaderHeight = 24.dp
 private val SlotHeight = 26.dp
 private val Gap = 8.dp
 private val Padding = 12.dp
@@ -64,7 +67,14 @@ fun usageAgentColor(agentId: String?): Color =
   agentId?.let { SkillBillTheme.colors.dataColor(agentDataSlot(it)) } ?: SkillBillTheme.colors.fg
 
 @Composable
-fun UsageCard(state: UsageUiState, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+fun UsageCard(
+  state: UsageUiState,
+  onOpen: () -> Unit,
+  modifier: Modifier = Modifier,
+  onRefresh: (() -> Unit)? = null,
+  refreshEnabled: Boolean = true,
+  refreshLabel: String = "Refresh",
+) {
   val colors = SkillBillTheme.colors
   val interaction = remember { MutableInteractionSource() }
   val hovered by interaction.collectIsHoveredAsState()
@@ -82,6 +92,11 @@ fun UsageCard(state: UsageUiState, onOpen: () -> Unit, modifier: Modifier = Modi
     Row(Modifier.fillMaxWidth().height(HeaderHeight), verticalAlignment = Alignment.CenterVertically) {
       BasicText(state.provider, style = SkillBillTheme.type.tSmMedium.copy(color = usageAgentColor(state.agentId)), maxLines = 1, overflow = TextOverflow.Ellipsis)
       Spacer(Modifier.weight(1f))
+      if (onRefresh != null) SbButton(
+        refreshLabel, onRefresh, enabled = refreshEnabled,
+        size = SbControlSize.Small, variant = SbButtonVariant.Ghost,
+        tooltip = "Refresh ${state.provider} usage",
+      )
       CompositionLocalProvider(LocalContentColor provides colors.fgFaint) { SbIcon(LucideIcons.chevronRight, SbIconSize.Xs) }
     }
     val meters = state.meters.take(USAGE_CARD_METER_SLOTS)

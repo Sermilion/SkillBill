@@ -226,6 +226,8 @@ See active goals and finished runs across repositories. The work list shows each
 
 Open a subtask's details to inspect its spec file, dependencies, review findings, audit status, and execution information.
 
+**USB status display.** The optional [Linux display companion](scripts/usb-display/README.md) puts the tray counters and run details on a Turing 3.5-inch USB screen, with automatic paging.
+
 **CLI.** Run these from the repository that owns the goal:
 
 | Command | Effect |

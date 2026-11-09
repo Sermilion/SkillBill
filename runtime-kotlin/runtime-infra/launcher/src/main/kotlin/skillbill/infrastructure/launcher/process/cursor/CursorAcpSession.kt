@@ -26,7 +26,7 @@ data class CursorAcpLaunch(
   val mode: String?,
   val savedSession: String? = null,
   val images: List<CursorAcpImage> = emptyList(),
-  val mcpDependency: CursorAcpMcpDependency = CursorAcpMcpDependency.Unspecified,
+  val mcpDependency: CursorAcpMcpDependency = CursorAcpMcpDependency.ProjectUserOnly,
   val provider: AcpProvider = AcpProvider.Cursor,
 ) {
   constructor(
@@ -36,15 +36,13 @@ data class CursorAcpLaunch(
     mode: String?,
     savedSession: String?,
     images: List<CursorAcpImage>,
-  ) : this(cwd, prompt, model, mode, savedSession, images, CursorAcpMcpDependency.Unspecified)
+  ) : this(cwd, prompt, model, mode, savedSession, images, CursorAcpMcpDependency.ProjectUserOnly)
 }
 
-enum class CursorAcpMcpDependency { Unspecified, ProjectUserOnly, TeamDashboardRequired }
+enum class CursorAcpMcpDependency { ProjectUserOnly, TeamDashboardRequired }
 
 fun cursorAcpDependencyRefusal(dependency: CursorAcpMcpDependency): String? =
   when (dependency) {
-    CursorAcpMcpDependency.Unspecified ->
-      "Declare whether this Cursor request needs team-dashboard MCP servers; the missing declaration prevents launch."
     CursorAcpMcpDependency.TeamDashboardRequired ->
       "Cursor ACP does not provide team-dashboard MCP servers; this request is unsupported and was not started."
     CursorAcpMcpDependency.ProjectUserOnly -> null
@@ -85,6 +83,7 @@ class CursorAcpSession(
   private var sessionId: String? = launch.savedSession
   private var capabilities = JsonObject(emptyMap())
   private var model: String? = null
+  private var selectedModel: String? = null
   private var pendingConfigId: String? = null
   private var pendingConfigValue: String? = null
   private var pendingConfigIsMode = false
@@ -110,7 +109,7 @@ class CursorAcpSession(
   }
 
   fun start() {
-    if (launch.provider.mcpDeclarationRequired) {
+    if (launch.provider.lacksTeamDashboardMcp) {
       cursorAcpDependencyRefusal(launch.mcpDependency)?.let {
         record("seam=$seam outcome=dependency_unsupported")
         return stop(it)
@@ -164,7 +163,7 @@ class CursorAcpSession(
       K.SESSION_NEW, K.SESSION_LOAD -> acquired(body)
       K.SESSION_SET_CONFIG -> acceptConfiguration(body)
       K.SESSION_SET_MODEL -> {
-        model = launch.model
+        model = selectedModel
         selectMode()
       }
       K.SESSION_SET_MODE -> prompt()
@@ -187,7 +186,7 @@ class CursorAcpSession(
     } else if (pendingConfigIsMode) {
       prompt()
     } else {
-      model = launch.model
+      model = selectedModel
       selectMode()
     }
   }
@@ -264,49 +263,62 @@ class CursorAcpSession(
     config: JsonObject,
     requested: String,
   ) {
-    if (!configValues(config[K.OPTIONS]).contains(requested)) {
-      return stop(
-        "$providerName does not advertise the selected model/effort '$requested'; no " +
-          "prompt was sent.",
-      )
-    }
-    if (config.text(K.CURRENT_VALUE) == requested) {
-      model = requested
+    val selected =
+      resolveModel(requested, configValues(config[K.OPTIONS]).toList())
+        ?: return stop(
+          "$providerName does not advertise the selected model/effort '$requested'; no " +
+            "prompt was sent.",
+        )
+    if (config.text(K.CURRENT_VALUE) == selected) {
+      model = selected
       return selectMode()
     }
     pendingConfigId = config.text(K.ID)
-    pendingConfigValue = requested
+    pendingConfigValue = selected
     pendingConfigIsMode = false
     send(
       K.SESSION_SET_CONFIG,
       buildJsonObject {
         put(K.SESSION_ID, sessionId)
         put(K.CONFIG_ID, config.text(K.ID))
-        put(K.VALUE, requested)
+        put(K.VALUE, selected)
       },
     )
   }
 
   private fun selectLegacyModel(requested: String) {
     val models = setup.obj(K.MODELS)
-    val offered = (models?.get(K.AVAILABLE_MODELS) as? JsonArray).orEmpty()
-    if (offered.none { (it as? JsonObject)?.text(K.MODEL_ID) == requested }) {
-      return stop(
-        "$providerName does not advertise the selected model/effort '$requested'; no " +
-          "prompt was sent.",
-      )
-    }
-    if (models?.text(K.CURRENT_MODEL_ID) == requested) {
-      model = requested
+    val offered =
+      (models?.get(K.AVAILABLE_MODELS) as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.text(K.MODEL_ID) }
+    val selected =
+      resolveModel(requested, offered)
+        ?: return stop(
+          "$providerName does not advertise the selected model/effort '$requested'; no " +
+            "prompt was sent.",
+        )
+    if (models?.text(K.CURRENT_MODEL_ID) == selected) {
+      model = selected
       return selectMode()
     }
     send(
       K.SESSION_SET_MODEL,
       buildJsonObject {
         put(K.SESSION_ID, sessionId)
-        put(K.MODEL_ID, requested)
+        put(K.MODEL_ID, selected)
       },
     )
+  }
+
+  private fun resolveModel(
+    requested: String,
+    advertised: List<String>,
+  ): String? {
+    val selected = resolveAcpModel(requested, advertised) ?: return null
+    if (selected != requested) {
+      record("seam=$seam outcome=model_variant_resolved requested=$requested selected=$selected")
+    }
+    selectedModel = selected
+    return selected
   }
 
   private fun selectMode() {
@@ -440,27 +452,46 @@ class CursorAcpSession(
     message: JsonObject,
     method: String,
   ) {
-    if (!ready || message.obj(K.PARAMS)?.text(K.SESSION_ID)?.let { it != sessionId } == true) {
-      return stop("$providerName sent a blocking request outside the active prompt/session.")
-    }
+    val id = message[K.ID] ?: return stop("$providerName blocking request has no identity.")
     if (method == K.REQUEST_PERMISSION) {
-      val owner = permissions ?: return stop("$providerName requested permission without a live operator channel.")
-      owner.request(message)
+      val owner = permissions
+      if (owner != null) {
+        owner.request(message)
+      } else {
+        reply(id, permissionAllowResult(message))
+      }
       return
     }
-    onEvent(CursorAcpEvent.Unsupported(method, message.toString()))
-    record("seam=$seam outcome=unsupported_blocking method=$method")
-    val id = message[K.ID] ?: return stop("$providerName blocking request has no identity.")
-    if (method == K.ASK_QUESTION || method == K.CREATE_PLAN) {
-      write(
+    reply(id, cursorExtensionAcceptance(method, message.obj(K.PARAMS)))
+    record("seam=$seam outcome=extension_accepted method=$method")
+  }
+
+  private fun permissionAllowResult(message: JsonObject): JsonObject {
+    val optionId = CursorPermissionRequests.allowOnceOptionId(message)
+    val outcome = if (optionId == null) "permission_unavailable_cancelled" else "permission_auto_allowed"
+    record("seam=$seam outcome=$outcome")
+    return buildJsonObject {
+      put(
+        K.OUTCOME,
         buildJsonObject {
-          put(K.JSONRPC, "2.0")
-          put(K.ID, id)
-          put(K.RESULT, buildJsonObject { put(K.OUTCOME, buildJsonObject { put(K.OUTCOME, "cancelled") }) })
+          put(K.OUTCOME, if (optionId == null) K.CANCELLED else K.SELECTED)
+          optionId?.let { put(K.OPTION_ID, it) }
         },
       )
     }
-    stop("$providerName requested unsupported interaction '$method'; it was not approved. ${message.obj(K.PARAMS)}")
+  }
+
+  private fun reply(
+    id: JsonElement,
+    result: JsonObject,
+  ) {
+    write(
+      buildJsonObject {
+        put(K.JSONRPC, "2.0")
+        put(K.ID, id)
+        put(K.RESULT, result)
+      },
+    )
   }
 
   fun textSnapshot(): String = synchronized(lock) { text.toString() }
@@ -556,6 +587,62 @@ class CursorAcpSession(
     val OPENING_TIMEOUT: Duration = Duration.ofSeconds(30)
   }
 }
+
+private fun cursorExtensionAcceptance(
+  method: String,
+  params: JsonObject?,
+): JsonObject =
+  when (method) {
+    K.UPDATE_TODOS ->
+      buildJsonObject {
+        put(
+          K.OUTCOME,
+          buildJsonObject {
+            put(K.OUTCOME, K.ACCEPTED)
+            put(K.TODOS, params?.get(K.TODOS) ?: JsonArray(emptyList()))
+          },
+        )
+      }
+    K.TASK ->
+      buildJsonObject {
+        put(
+          K.OUTCOME,
+          buildJsonObject {
+            put(K.OUTCOME, K.COMPLETED)
+            params?.get(K.AGENT_ID)?.let { put(K.AGENT_ID, it) }
+            params?.get(K.DURATION_MS)?.let { put(K.DURATION_MS, it) }
+          },
+        )
+      }
+    K.GENERATE_IMAGE -> {
+      val path = params?.text(K.FILE_PATH)
+      buildJsonObject {
+        put(
+          K.OUTCOME,
+          if (path == null) {
+            buildJsonObject { put(K.OUTCOME, K.CANCELLED) }
+          } else {
+            buildJsonObject {
+              put(K.OUTCOME, K.GENERATED)
+              put(K.FILE_PATH, path)
+            }
+          },
+        )
+      }
+    }
+    K.ASK_QUESTION ->
+      buildJsonObject {
+        put(K.OUTCOME, buildJsonObject { put(K.OUTCOME, K.SKIPPED) })
+      }
+    K.CREATE_PLAN ->
+      buildJsonObject {
+        put(K.OUTCOME, buildJsonObject { put(K.OUTCOME, K.ACCEPTED) })
+      }
+    else ->
+      buildJsonObject {
+        put(K.OUTCOME, buildJsonObject { put(K.OUTCOME, K.ACCEPTED) })
+      }
+  }
 
 internal fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 
