@@ -3,6 +3,7 @@ package dev.skillbill.desktop.feature.terminal
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 
 class TerminalTabsTest {
   @Test
@@ -36,6 +37,52 @@ class TerminalTabsTest {
     assertEquals(1, state.without(setOf(2)).activeId)
     assertEquals(2, state.activated(3).without(setOf(3)).activeId)
     assertEquals(2, state.activated(1).without(setOf(1)).activeId)
+  }
+
+  @Test
+  fun `opening the pane for a run shows the tab that started in its checkout`() {
+    val hidden = TerminalTabsState()
+      .withTab(TerminalTab(1, "/work/api", "api"))
+      .withTab(TerminalTab(2, "/home/me", "~"))
+      .copy(paneOpen = false)
+
+    val shown = hidden.shownIn("/work/api")
+
+    assertEquals(1L, shown?.activeId)
+    assertEquals(true, shown?.paneOpen)
+  }
+
+  @Test
+  fun `opening the pane keeps the active tab when it started in the selected checkout`() {
+    val hidden = TerminalTabsState()
+      .withTab(TerminalTab(1, "/work/api", "api"))
+      .withTab(TerminalTab(2, "/work/api", "api"))
+      .withTab(TerminalTab(3, "/home/me", "~"))
+      .activated(1)
+      .copy(paneOpen = false)
+
+    assertEquals(1L, hidden.shownIn("/work/api")?.activeId)
+    assertEquals(2L, hidden.activated(3).shownIn("/work/api")?.activeId)
+  }
+
+  @Test
+  fun `opening the pane for a run without a matching tab asks for a new tab`() {
+    val hidden = TerminalTabsState().withTab(TerminalTab(1, "/home/me", "~")).copy(paneOpen = false)
+
+    assertNull(hidden.shownIn("/work/goal-worktree"))
+    assertNull(TerminalTabsState().shownIn("/work/api"))
+    assertNull(TerminalTabsState().shownIn(null))
+  }
+
+  @Test
+  fun `opening the pane with nothing selected shows the tabs as they were`() {
+    val hidden = TerminalTabsState()
+      .withTab(TerminalTab(1, "/work/api", "api"))
+      .withTab(TerminalTab(2, "/home/me", "~"))
+      .activated(1)
+      .copy(paneOpen = false)
+
+    assertEquals(hidden.copy(paneOpen = true), hidden.shownIn(null))
   }
 
   @Test

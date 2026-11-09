@@ -152,10 +152,9 @@ class TerminalWorkspace(
 
   override fun toggleTerminal() {
     val current = tabs.value
-    when {
-      current.tabs.isEmpty() -> addTab(startSelection.current)
-      else -> update(current.copy(paneOpen = !current.paneOpen))
-    }
+    if (current.paneOpen) return update(current.copy(paneOpen = false))
+    val root = startSelection.current
+    current.shownIn(root.directory?.toString())?.let(::update) ?: addTab(root)
   }
 
   override fun newTerminalTab() = addTab(startSelection.current)

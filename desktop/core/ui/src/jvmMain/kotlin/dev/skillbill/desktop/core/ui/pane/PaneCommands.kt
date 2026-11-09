@@ -17,7 +17,10 @@ interface PaneCommands {
   /** True while a terminal widget holds the keyboard focus; single-key shortcuts are off then. */
   val terminalFocused: StateFlow<Boolean>
 
-  /** Opens the pane, with a new tab when it has none, or hides it; hiding keeps every shell. */
+  /**
+   * Hides an open pane, keeping every shell. Opening it shows the latest selection's checkout: a tab that started there, else a
+   * new one; with nothing selected it shows the tabs as they were, or a new tab in home when there are none.
+   */
   fun toggleTerminal()
 
   fun newTerminalTab()
