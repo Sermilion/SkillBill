@@ -116,7 +116,7 @@ private fun openChatChanges(chat: NewTaskChat?, dispatch: (ChangesSource.Chat, S
   val source = ChangesSource.Chat(
     sessionId,
     chatChangesWindowTitle(currentChat.thread.transcript.value),
-    chatScopeTarget(sessionId, currentChat.repositoryRoot, current.baseline, current.changes.timeline),
+    chatScopeTarget(sessionId, currentChat.repositoryRoot, current.baseline, current.changes.timeline, current.paths),
   )
   dispatch(source, path)
 }

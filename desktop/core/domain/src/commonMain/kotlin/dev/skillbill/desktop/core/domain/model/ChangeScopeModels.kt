@@ -61,6 +61,7 @@ data class ChangeScopeTarget(
   val timeline: ChangeScopeTimeline? = null,
   val timelineProblem: TimelineProblem? = null,
   val chat: Boolean = false,
+  val paths: Set<String>? = null,
 )
 
 sealed interface ScopeRead {

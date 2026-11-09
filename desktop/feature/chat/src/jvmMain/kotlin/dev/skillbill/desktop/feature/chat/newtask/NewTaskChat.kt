@@ -79,6 +79,7 @@ internal class NewTaskChat(
   initialChangesBaseline: ChatChangesBaseline? = null,
   resumedChanges: Boolean = false,
   changesCaptureAttempted: Boolean = false,
+  changesAttributedPaths: Set<String>? = null,
 ) {
   private val sessionIdState = MutableStateFlow(initialSessionId)
   val sessionIdFlow: StateFlow<String> = sessionIdState.asStateFlow()
@@ -87,11 +88,12 @@ internal class NewTaskChat(
   val thread = retainedThread
   val job: Job = SupervisorJob(scope.coroutineContext[Job])
   private val approvalFlow = ChatApprovals(approvals)
-  private val changesTracker = NewTaskChatChanges(changesRepository, scope, dispatcher, repositoryRoot, initialChangesBaseline, resumedChanges, repositoryMissing, changesCaptureAttempted || initiallyStarted || initialChangesBaseline != null)
+  private val changesTracker = NewTaskChatChanges(changesRepository, scope, dispatcher, repositoryRoot, initialChangesBaseline, resumedChanges, repositoryMissing, changesCaptureAttempted || initiallyStarted || initialChangesBaseline != null, changesAttributedPaths)
   val changes: StateFlow<ChatChangesState> = changesTracker.state
   val changesBaseline: ChatChangesBaseline? get() = changesTracker.baseline
   internal val changesResumed: Boolean get() = changesTracker.resumed
   internal val changesCaptureAttempted: Boolean get() = changesTracker.captureAttempted
+  internal val changesAttributedPaths: Set<String>? get() = changesTracker.attributedPaths
 
   /** True only while the approval feed holds this window's operator registration for the draft's repository. */
   val approvalLiveState = MutableStateFlow(false)
@@ -223,6 +225,7 @@ internal class NewTaskChat(
     try {
       withContext(NonCancellable) {
         if (stopped && !started) rotateSession()
+        changesTracker.endTurn()
         if (!save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
         changesTracker.refresh()
       }
@@ -259,6 +262,7 @@ internal class NewTaskChat(
       try {
         thread.endStreaming()
         thread.append(ChatMessage.Notice(STOPPED_NOTICE))
+        withContext(NonCancellable) { changesTracker.endTurn() }
         if (!save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
         changesTracker.refresh()
       } finally {
@@ -285,6 +289,7 @@ internal class NewTaskChat(
     turnRunning = false
     thread.stoppableState.value = false
     thread.busyState.value = false
+    changesTracker.endTurn()
     val saved = save()
     if (!saved) {
       closing = false
@@ -316,7 +321,7 @@ internal class NewTaskChat(
   }
 
   private suspend fun runTurn(text: String, images: List<ChatImage>, cursorMcpDependency: CursorMcpDependency, onRejected: (() -> Unit)?) {
-    changesTracker.captureBeforeFirstTurn(started)
+    changesTracker.beginTurn(started)
     if (!save()) {
       thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
       onRejected?.invoke()
@@ -358,12 +363,14 @@ internal class NewTaskChat(
     if (ownTurn) {
       thread.busyState.value = true
       thread.stoppableState.value = true
+      changesTracker.beginTurn(started)
     }
     thread.show(thread.agentState.value, event)
     if (event !is ChatEvent.Completed && event !is ChatEvent.Failed) return
     if (ownTurn) {
       thread.busyState.value = false
       thread.stoppableState.value = false
+      withContext(NonCancellable) { changesTracker.endTurn() }
     }
     if (!save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
     changesTracker.refresh()
@@ -401,7 +408,7 @@ internal class NewTaskChat(
           clock.now(),
           title,
           lines,
-          ChatNewTaskContext(repositoryRoot, baseBranch, started, pendingTurnLineIndex, changesTracker.baseline, changesTracker.captureAttempted),
+          ChatNewTaskContext(repositoryRoot, baseBranch, started, pendingTurnLineIndex, changesTracker.baseline, changesTracker.captureAttempted, changesTracker.attributedPaths),
         ),
       )
     }

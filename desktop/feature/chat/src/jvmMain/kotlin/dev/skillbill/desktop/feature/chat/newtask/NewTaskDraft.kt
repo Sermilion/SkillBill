@@ -436,7 +436,8 @@ class NewTaskDraft internal constructor(
     val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay,
       changesBaseline = current.changesBaseline.takeIf { sameRepository },
       resumedChanges = current.changesResumed && sameRepository,
-      changesCaptureAttempted = (current.changesCaptureAttempted || current.started || current.changesBaseline != null) && sameRepository)
+      changesCaptureAttempted = (current.changesCaptureAttempted || current.started || current.changesBaseline != null) && sameRepository,
+      changesAttributedPaths = current.changesAttributedPaths.takeIf { sameRepository })
     val switched = "Switched to ${chipText(agent)} in ${repo.name}."
     val notice = if (replay != null) "$switched It gets the earlier conversation with your next message." else switched
     next.thread.showCapability(agent)
@@ -482,6 +483,7 @@ class NewTaskDraft internal constructor(
       changesBaseline = context.changesBaseline,
       resumedChanges = context.changesBaseline != null,
       changesCaptureAttempted = context.changesCaptureAttempted || context.sessionEstablished || context.changesBaseline != null,
+      changesAttributedPaths = context.changesAttributedPaths,
     )
     val lines = if (retained == null) entry.lines.map(::restored) else emptyList()
     val notice = ChatMessage.Notice("This draft's repository no longer exists: ${context.repositoryRoot}. Discard it to continue.")
@@ -515,6 +517,7 @@ class NewTaskDraft internal constructor(
     changesBaseline: ChatChangesBaseline? = null,
     resumedChanges: Boolean = false,
     changesCaptureAttempted: Boolean = false,
+    changesAttributedPaths: Set<String>? = null,
   ): NewTaskChat {
     val thread = retainedThreads.getOrPut(sessionId) { ChatThread(clock) }
     val saveLock = saveLocks.getOrPut(sessionId) { Mutex() }
@@ -541,6 +544,7 @@ class NewTaskDraft internal constructor(
       changesBaseline,
       resumedChanges,
       changesCaptureAttempted,
+      changesAttributedPaths,
     ).also {
       clearChatFeedback()
       chatState.value = it
