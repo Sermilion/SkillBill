@@ -1,10 +1,10 @@
 package skillbill.infrastructure.launcher.process.cursor
 
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import skillbill.approval.model.ApprovalActionClass
 import skillbill.approval.model.ApprovalProviderDisposition
 import skillbill.contracts.CanonicalJson
 import skillbill.contracts.approval.ApprovalProviderRequestId
@@ -51,14 +51,15 @@ internal class CursorAcpPermissions(
   }
 
   fun request(message: JsonObject) {
-    val decoded =
-      CursorPermissionRequests.decode(message, session)
-        ?: return stop("${provider.name} sent a malformed or mismatched permission request.")
+    val decoded = CursorPermissionRequests.decode(message, session)
+    if (decoded == null) {
+      writeSelected(message[K.ID], CursorPermissionRequests.allowOnceOptionId(message))
+      return
+    }
     if (!admit(decoded.id, CanonicalJson.encode(message))) return
     val merged = synchronized(lock) { merge(tools[decoded.toolId], decoded.tool) }
     val waiting = CursorPermissionRequests.build(owner.key, cwd, decoded, merged, provider)
     synchronized(lock) { pending[decoded.id] = waiting }
-    val ordinary = waiting.actionClass != ApprovalActionClass.PROVIDER_INTERACTION
     val registration =
       catchingNonCancellation {
         owner.register(
@@ -67,20 +68,37 @@ internal class CursorAcpPermissions(
             waiting.canonical,
             waiting.actionClass,
             waiting.writeCapable,
-            if (ordinary) ApprovalProviderDisposition.NONE else ApprovalProviderDisposition.INTERACTION_REQUIRED,
+            ApprovalProviderDisposition.NONE,
             null,
           ),
         )
       }.getOrElse { return stop("${provider.name} approval registration failed: ${it.message.orEmpty()}") }
     show(registration)
-    val safeOption = waiting.options.any { it.kind in ONE_TIME_KINDS }
-    if (!ordinary || !safeOption) {
-      owner.resolveByProvider(
-        waiting.request.approvalId,
-        decoded.id,
-        ApprovalProviderDisposition.INTERACTION_REQUIRED,
-      )
-    }
+  }
+
+  private fun writeSelected(
+    id: JsonElement?,
+    optionId: String?,
+  ) {
+    if (id == null) return
+    write(
+      buildJsonObject {
+        put(K.JSONRPC, "2.0")
+        put(K.ID, id)
+        put(
+          K.RESULT,
+          buildJsonObject {
+            put(
+              K.OUTCOME,
+              buildJsonObject {
+                put(K.OUTCOME, K.SELECTED)
+                optionId?.let { put(K.OPTION_ID, it) }
+              },
+            )
+          },
+        )
+      },
+    )
   }
 
   private fun admit(
@@ -150,7 +168,7 @@ internal class CursorAcpPermissions(
               put(
                 K.OUTCOME,
                 buildJsonObject {
-                  put(K.OUTCOME, if (choice == null) "cancelled" else "selected")
+                  put(K.OUTCOME, if (choice == null) K.CANCELLED else K.SELECTED)
                   choice?.let { put(K.OPTION_ID, it.id) }
                 },
               )
@@ -202,7 +220,6 @@ internal class CursorAcpPermissions(
 
   private companion object {
     const val LIMIT = 1024
-    val ONE_TIME_KINDS = setOf(CursorPermissionKind.ALLOW_ONCE.wireValue, CursorPermissionKind.REJECT_ONCE.wireValue)
   }
 }
 

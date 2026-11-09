@@ -438,27 +438,43 @@ class CursorAcpSession(
     message: JsonObject,
     method: String,
   ) {
-    if (!ready || message.obj(K.PARAMS)?.text(K.SESSION_ID)?.let { it != sessionId } == true) {
-      return stop("$providerName sent a blocking request outside the active prompt/session.")
-    }
+    val id = message[K.ID] ?: return stop("$providerName blocking request has no identity.")
     if (method == K.REQUEST_PERMISSION) {
-      val owner = permissions ?: return stop("$providerName requested permission without a live operator channel.")
-      owner.request(message)
+      val owner = permissions
+      if (owner != null) {
+        owner.request(message)
+      } else {
+        reply(id, permissionAllowResult(message))
+        record("seam=$seam outcome=permission_auto_allowed")
+      }
       return
     }
-    onEvent(CursorAcpEvent.Unsupported(method, message.toString()))
-    record("seam=$seam outcome=unsupported_blocking method=$method")
-    val id = message[K.ID] ?: return stop("$providerName blocking request has no identity.")
-    if (method == K.ASK_QUESTION || method == K.CREATE_PLAN) {
-      write(
+    reply(id, cursorExtensionAcceptance(method, message.obj(K.PARAMS)))
+    record("seam=$seam outcome=extension_accepted method=$method")
+  }
+
+  private fun permissionAllowResult(message: JsonObject): JsonObject =
+    buildJsonObject {
+      put(
+        K.OUTCOME,
         buildJsonObject {
-          put(K.JSONRPC, "2.0")
-          put(K.ID, id)
-          put(K.RESULT, buildJsonObject { put(K.OUTCOME, buildJsonObject { put(K.OUTCOME, "cancelled") }) })
+          put(K.OUTCOME, K.SELECTED)
+          CursorPermissionRequests.allowOnceOptionId(message)?.let { put(K.OPTION_ID, it) }
         },
       )
     }
-    stop("$providerName requested unsupported interaction '$method'; it was not approved. ${message.obj(K.PARAMS)}")
+
+  private fun reply(
+    id: JsonElement,
+    result: JsonObject,
+  ) {
+    write(
+      buildJsonObject {
+        put(K.JSONRPC, "2.0")
+        put(K.ID, id)
+        put(K.RESULT, result)
+      },
+    )
   }
 
   fun textSnapshot(): String = synchronized(lock) { text.toString() }
@@ -554,6 +570,62 @@ class CursorAcpSession(
     val OPENING_TIMEOUT: Duration = Duration.ofSeconds(30)
   }
 }
+
+private fun cursorExtensionAcceptance(
+  method: String,
+  params: JsonObject?,
+): JsonObject =
+  when (method) {
+    K.UPDATE_TODOS ->
+      buildJsonObject {
+        put(
+          K.OUTCOME,
+          buildJsonObject {
+            put(K.OUTCOME, K.ACCEPTED)
+            put(K.TODOS, params?.get(K.TODOS) ?: JsonArray(emptyList()))
+          },
+        )
+      }
+    K.TASK ->
+      buildJsonObject {
+        put(
+          K.OUTCOME,
+          buildJsonObject {
+            put(K.OUTCOME, K.COMPLETED)
+            params?.get(K.AGENT_ID)?.let { put(K.AGENT_ID, it) }
+            params?.get(K.DURATION_MS)?.let { put(K.DURATION_MS, it) }
+          },
+        )
+      }
+    K.GENERATE_IMAGE -> {
+      val path = params?.text(K.FILE_PATH)
+      buildJsonObject {
+        put(
+          K.OUTCOME,
+          if (path == null) {
+            buildJsonObject { put(K.OUTCOME, K.CANCELLED) }
+          } else {
+            buildJsonObject {
+              put(K.OUTCOME, K.GENERATED)
+              put(K.FILE_PATH, path)
+            }
+          },
+        )
+      }
+    }
+    K.ASK_QUESTION ->
+      buildJsonObject {
+        put(K.OUTCOME, buildJsonObject { put(K.OUTCOME, K.SKIPPED) })
+      }
+    K.CREATE_PLAN ->
+      buildJsonObject {
+        put(K.OUTCOME, buildJsonObject { put(K.OUTCOME, K.ACCEPTED) })
+      }
+    else ->
+      buildJsonObject {
+        put(K.OUTCOME, buildJsonObject { put(K.OUTCOME, K.ACCEPTED) })
+      }
+  }
 
 internal fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 

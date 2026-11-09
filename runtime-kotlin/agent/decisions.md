@@ -1,3 +1,9 @@
+## [2026-11-09] Hosts never stop a worker for a tool or extension request
+Context: SKILL-453 required Cursor ACP unknown blocking extensions to cancel and stop the process so a plan was never auto-approved. Cursor still sends `cursor/update_todos` as a JSON-RPC request with an id, so SKILL-529 `audit_plan_fix` exited. Codex unsupported families declined or stopped, and Claude denied `AskUserQuestion` / `ExitPlanMode` and denied when no operator channel existed.
+Decision: Cursor and Junie ACP answer every inbound method+id. Todo/task/image requests are accepted, questions are skipped, plans and unknown extensions are accepted, and the prompt keeps running. `session/request_permission` without an operator channel selects an offered allow-once option. With a live chat channel the card still waits for the operator. Codex runtime unsupported requests write accept instead of decline or stop. Claude allows interaction tools and allows when no operator channel exists. Parked verify and pr-review-fix confirmation stay separate.
+Reason: Skill-bill must not refuse provider tool calls. Ignoring a JSON-RPC request hangs the agent; stopping it kills the run. Documented allow/skip/accept results keep the worker alive.
+Revisit when: A new blocking extension has no documented result body, or operators want a selectable restrictive host policy.
+
 ## [2026-11-08] Keep run launches outside chat approval cards
 Context: Desktop resume and rerun selected a direct agent harness that the detached launcher refused because it had no operator approval channel. The operator clarified that permission cards belong only to chats, and runs use native permission bypass.
 Decision: Launch recorded goal and phase commands through the runtime. Remove the unused direct-harness launch path and classify phase agent requests as OutsideApproval. Keep chat approval handling and parked-operation proposal confirmation unchanged.
