@@ -14,6 +14,7 @@ import kotlin.coroutines.cancellation.CancellationException
 internal data class ProcessRunReleaseSnapshot(
   val interrupted: Boolean,
   val outputCaptureIncomplete: Boolean,
+  val processTreeExited: Boolean,
   val stdoutCapture: Utf8DrainCapture,
   val stderrCapture: Utf8DrainCapture,
 )
@@ -38,16 +39,19 @@ internal class ProcessRunLifetime(
       CleanupState(
         interrupted = waitResult?.exceptionOrNull() is InterruptedException || Thread.currentThread().isInterrupted,
       )
-    terminateIfNeeded(waitResult?.getOrNull(), cleanupState)
+    catchingNonCancellation { tree.refresh() }
+      .onFailure { failure -> degradation.recordCleanupFailure("process_tree_discovery", failure) }
     closeStream(process.outputStream, "stdin_stream_close")
+    terminateIfNeeded(waitResult?.getOrNull(), cleanupState)
     val stdoutIncomplete = joinDrain(stdout, "stdout_drain_join", cleanupState)
     val stderrIncomplete = joinDrain(stderr, "stderr_drain_join", cleanupState)
     closeStream(process.inputStream, "stdout_stream_close")
     closeStream(process.errorStream, "stderr_stream_close")
-    recordProcessCleanup()
+    val processTreeExited = recordProcessCleanup()
     val snapshot =
       ProcessRunReleaseSnapshot(
         interrupted = cleanupState.interrupted,
+        processTreeExited = processTreeExited,
         outputCaptureIncomplete =
           stdoutIncomplete || stderrIncomplete ||
             stdout.workerFailure != null || stderr.workerFailure != null,
@@ -70,20 +74,12 @@ internal class ProcessRunLifetime(
     catchingNonCancellation { tree.refresh() }
       .onFailure { failure -> degradation.recordCleanupFailure("process_tree_discovery", failure) }
     if (wait?.finished == true && treeHasExited("process_tree_exit_check")) return
+    if (wait?.sessionSettled == true && !state.interrupted && awaitTreeExit(state)) return
     if (!treeHasExited("process_tree_exit_check")) {
       catchingNonCancellation { tree.signalForcibly() }
         .onFailure { failure -> degradation.recordCleanupFailure("process_destroy_wait", failure) }
     }
-    val exited =
-      try {
-        catchingNonCancellation { tree.awaitExit(DESTROY_WAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS) }
-          .onFailure { failure -> degradation.recordCleanupFailure("process_destroy_wait", failure) }
-          .getOrDefault(false)
-      } catch (interrupted: InterruptedException) {
-        degradation.recordCleanupFailure("process_destroy_wait", interrupted)
-        state.interrupted = true
-        false
-      }
+    val exited = awaitTreeExit(state)
     if (!exited) {
       degradation.recordCleanupFailure(
         "process_destroy_wait",
@@ -91,6 +87,17 @@ internal class ProcessRunLifetime(
       )
     }
   }
+
+  private fun awaitTreeExit(state: CleanupState): Boolean =
+    try {
+      catchingNonCancellation { tree.awaitExit(DESTROY_WAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS) }
+        .onFailure { failure -> degradation.recordCleanupFailure("process_destroy_wait", failure) }
+        .getOrDefault(false)
+    } catch (interrupted: InterruptedException) {
+      degradation.recordCleanupFailure("process_destroy_wait", interrupted)
+      state.interrupted = true
+      false
+    }
 
   private fun treeHasExited(seam: String): Boolean =
     catchingNonCancellation { tree.confirmedExited() }
@@ -120,8 +127,9 @@ internal class ProcessRunLifetime(
       true
     }
 
-  private fun recordProcessCleanup() {
-    if (!treeHasExited("process_cleanup_exit_check")) {
+  private fun recordProcessCleanup(): Boolean {
+    val exited = treeHasExited("process_cleanup_exit_check")
+    if (!exited) {
       degradation.recordCleanupFailure(
         "process_cleanup",
         IllegalStateException("owned child process tree remained alive after cleanup"),
@@ -129,6 +137,7 @@ internal class ProcessRunLifetime(
     } else {
       liveProcesses.remove(tree)
     }
+    return exited
   }
 
   fun cachedRelease(): ProcessRunReleaseSnapshot =
