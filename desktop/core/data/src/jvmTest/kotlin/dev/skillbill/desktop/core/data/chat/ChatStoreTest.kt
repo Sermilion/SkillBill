@@ -2,6 +2,7 @@ package dev.skillbill.desktop.core.data.chat
 
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
@@ -184,6 +185,20 @@ class ChatStoreTest {
     assertEquals(ChatHistoryLine(ChatHistoryRole.Operator, "continue"), entry.lines[0])
     assertEquals(ChatHistoryLine(ChatHistoryRole.Agent, "done"), entry.lines[1])
     assertEquals(listOf("chat.store_malformed_action"), diagnostics.categories)
+  }
+
+  @Test
+  fun `attributed paths survive a restart and a chat saved without them reads as unattributed`() {
+    val diagnostics = RecordingDiagnostics()
+    val store = ChatStore(host, diagnostics, Clock.System)
+    val baseline = ChatChangesBaseline("head", emptyList(), "stash", Instant.fromEpochMilliseconds(5))
+    store.saveChat(entry("attributed", 10).copy(executionId = null, newTask = ChatNewTaskContext("/work/app", "main", changesBaseline = baseline, changesAttributedPaths = setOf("b.kt", "a.kt"))))
+    store.saveChat(entry("legacy", 11).copy(executionId = null, newTask = ChatNewTaskContext("/work/app", "main", changesBaseline = baseline)))
+
+    val restored = ChatStore(host, diagnostics, Clock.System).newTaskDrafts().associate { it.sessionId to it.newTask?.changesAttributedPaths }
+
+    assertEquals(mapOf("legacy" to null, "attributed" to setOf("a.kt", "b.kt")), restored)
+    assertEquals(emptyList(), diagnostics.categories)
   }
 
   @Test
