@@ -222,20 +222,76 @@ class CursorAcpSessionTest {
   }
 
   @Test
-  fun `blocking extensions cancel their method and terminate instead of hanging or approving a plan`() {
-    for (method in listOf("cursor/ask_question", "cursor/create_plan", "future/blocker")) {
-      val harness = Harness()
-      harness.open()
-      harness.permission("4", "a", "pending")
-      harness.session.observe(
-        """{"jsonrpc":"2.0","id":"extension","method":"$method",""" +
-          """"params":{"sessionId":"s","title":"full question"}}""",
+  fun `extension requests are answered and leave the session running`() {
+    val cases =
+      listOf(
+        """{"jsonrpc":"2.0","id":"todos","method":"cursor/update_todos",""" +
+          """"params":{"toolCallId":"call-1","todos":[{"id":"inspect-ac002",""" +
+          """"content":"Inspect AC-002","status":"in_progress"}],"merge":false}}""" to "accepted",
+        """{"jsonrpc":"2.0","id":"ask","method":"cursor/ask_question",""" +
+          """"params":{"sessionId":"s","title":"full question"}}""" to "skipped",
+        """{"jsonrpc":"2.0","id":"plan","method":"cursor/create_plan",""" +
+          """"params":{"sessionId":"s","title":"full question"}}""" to "accepted",
+        """{"jsonrpc":"2.0","id":"future","method":"future/blocker",""" +
+          """"params":{"sessionId":"s","title":"full question"}}""" to "accepted",
       )
-      assertContains(assertNotNull(harness.session.outcome()?.failure), method)
-      assertTrue(harness.events.any { it is CursorAcpEvent.Unsupported && "full question" in it.payload })
-      assertFalse(harness.frames.filter { it[CursorAcpKeys.RESULT] != null }.any { "selected" in it.toString() })
+    for (provider in listOf(AcpProvider.Cursor, AcpProvider.Junie)) {
+      for ((payload, outcome) in cases) {
+        val harness = Harness(provider = provider)
+        if (provider == AcpProvider.Cursor) {
+          harness.open()
+        } else {
+          harness.session.start()
+          harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+          harness.respond("""{"sessionId":"s"}""")
+          harness.respond("""{"configOptions":[{"id":"brave_mode","currentValue":true}]}""")
+        }
+        harness.session.observe(payload)
+        assertNull(harness.session.outcome())
+        assertTrue(harness.events.none { it is CursorAcpEvent.Unsupported })
+        assertContains(harness.frames.last { it[CursorAcpKeys.RESULT] != null }.toString(), outcome)
+        harness.session.close()
+      }
+    }
+  }
+
+  @Test
+  fun `a permission without an operator channel selects allow once and keeps running`() {
+    for (provider in listOf(AcpProvider.Cursor, AcpProvider.Junie)) {
+      val harness = Harness(bindOwner = false, provider = provider)
+      if (provider == AcpProvider.Cursor) {
+        harness.open()
+      } else {
+        harness.session.start()
+        harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+        harness.respond("""{"sessionId":"s"}""")
+        harness.respond("""{"configOptions":[{"id":"brave_mode","currentValue":true}]}""")
+      }
+      harness.permission("9", "shell", "git status")
+      assertNull(harness.session.outcome())
+      assertTrue(harness.owner.requests.isEmpty())
+      val result = harness.frames.last { it[CursorAcpKeys.RESULT] != null }.toString()
+      assertContains(result, "selected")
+      assertContains(result, "once-shell")
       harness.session.close()
     }
+  }
+
+  @Test
+  fun `an owned permission for a different session is cancelled without approval or termination`() {
+    val harness = Harness()
+    harness.open()
+    harness.session.observe(
+      """{"jsonrpc":"2.0","id":19,"method":"session/request_permission","params":{"sessionId":"stale",
+"toolCall":{"toolCallId":"shell"},"options":[{"optionId":"yes","name":"Allow","kind":"allow_once"}]}}""",
+    )
+    assertNull(harness.session.outcome())
+    assertTrue(harness.owner.requests.isEmpty())
+    assertEquals(
+      Json.parseToJsonElement("""{"outcome":{"outcome":"cancelled"}}"""),
+      harness.frames.last()[CursorAcpKeys.RESULT],
+    )
+    harness.session.close()
   }
 
   @Test
@@ -263,6 +319,7 @@ class CursorAcpSessionTest {
     model: String? = null,
     dependency: CursorAcpMcpDependency = CursorAcpMcpDependency.ProjectUserOnly,
     provider: AcpProvider = AcpProvider.Cursor,
+    bindOwner: Boolean = true,
   ) {
     val frames = mutableListOf<JsonObject>()
     val events = mutableListOf<CursorAcpEvent>()
@@ -291,8 +348,10 @@ class CursorAcpSessionTest {
       )
 
     init {
-      session.bind(owner)
-      owner.deliver = session::deliver
+      if (bindOwner) {
+        session.bind(owner)
+        owner.deliver = session::deliver
+      }
     }
 
     fun open() {

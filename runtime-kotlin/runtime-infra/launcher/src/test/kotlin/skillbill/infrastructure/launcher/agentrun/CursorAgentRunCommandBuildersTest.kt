@@ -15,31 +15,34 @@ import kotlin.time.Duration.Companion.seconds
 
 class CursorAgentRunCommandBuildersTest {
   @Test
-  fun `cursor normal launch carries prompt checkout and negotiated model without forced print flags`() {
+  fun `cursor bypass launch carries prompt checkout model and native bypass flags`() {
     val command = CursorAgentRunCommandBuilder().build(request(model = "model", effort = "high"))
     assertEquals(
-      listOf("agent", "--force", "--trust", "--approve-mcps", "--sandbox", "disabled", "acp"),
+      listOf(
+        "agent", "--print", "--sandbox", "disabled", "--force", "--trust", "--approve-mcps",
+        "--workspace", "/tmp/skillbill-agent-run", "--output-format", "json", "--model", "model[effort=high]",
+      ),
       command.command,
     )
     assertEquals("model[effort=high]", command.sessionModel)
     assertEquals("/tmp/skillbill-agent-run", command.workingDirectory.toString())
     assertEquals("Phase: implement", command.stdinText)
     assertEquals(3.seconds, command.timeout)
-    assertEquals(AgentRunApprovalProtocol.CURSOR_ACP, command.approvalProtocol)
+    assertNull(command.approvalProtocol)
   }
 
   @Test
-  fun `cursor ACP launch retains provider output liveness without print transport flags`() {
+  fun `cursor bypass launch streams provider events without a host session`() {
     val builder = CursorAgentRunCommandBuilder()
     val command =
       builder.build(
         request().copy(streamProviderOutput = true, streamOutputForLiveness = true),
       )
 
-    assertEquals(
-      listOf("agent", "--force", "--trust", "--approve-mcps", "--sandbox", "disabled", "acp"),
-      command.command,
-    )
+    assertContains(command.command, "--print")
+    assertContains(command.command, "stream-json")
+    assertContains(command.command, "--stream-partial-output")
+    assertNull(command.approvalProtocol)
     assertEquals(AgentRunIdlePolicy.OUTPUT_EXTENDED, command.idlePolicy)
   }
 
@@ -54,7 +57,7 @@ class CursorAgentRunCommandBuildersTest {
         "indistinguishable from " +
         "finished turns at harvest time",
     )
-    assertEquals(AgentRunApprovalProtocol.CURSOR_ACP, command.approvalProtocol)
+    assertNull(command.approvalProtocol)
     assertEquals(AgentRunIdlePolicy.HEARTBEAT_EXTENDED, command.idlePolicy)
   }
 

@@ -379,6 +379,13 @@ the earlier default of routing every eligible permission prompt to the operator.
 Read-only phase instructions still constrain the requested work; they do not
 select a restrictive provider sandbox by default.
 
+Runtime launches outside chat approvals use the native headless CLIs. Skill-bill
+does not host their tool requests and must not add a deny, cancel, skip or
+unsupported-method response. The native harness owns tool execution and any
+provider refusal. Codex uses `exec` with native bypass, Cursor uses its print
+transport with force and trust flags, and Junie uses its headless text transport.
+Claude already uses its native print transport outside chat approvals.
+
 Approval cards apply only to chats. The chat broker remains connected for genuine
 permission requests a harness still emits. Runs launch through the runtime with
 native permission bypass and do not require an operator approval channel. A run

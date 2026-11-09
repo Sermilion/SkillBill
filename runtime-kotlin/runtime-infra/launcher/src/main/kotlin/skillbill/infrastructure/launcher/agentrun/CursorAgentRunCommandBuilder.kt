@@ -6,6 +6,7 @@ import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFie
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.model.ReviewLaunchIsolationStrategy
@@ -69,7 +70,11 @@ internal class CursorAgentRunCommandBuilder(
           runtimeDatabaseEnvironment(!isReviewLaunch, databasePath),
       inheritEnvironment = !isReviewLaunch,
       conversationIsolation = governedReviewConversationIsolation(request),
-      approvalProtocol = if (isReviewLaunch) null else approvalProtocol,
+      approvalProtocol =
+        approvalProtocol.takeIf {
+          !isReviewLaunch && request.approval is AgentRunApprovalRequirement.Owned
+        },
+      streamsProviderEvents = true,
       sessionModel = sessionModel,
       idlePolicy =
         when {
@@ -89,7 +94,7 @@ internal class CursorAgentRunCommandBuilder(
   ): List<String> =
     buildList {
       add("agent")
-      if (!isReviewLaunch) {
+      if (!isReviewLaunch && request.approval is AgentRunApprovalRequirement.Owned) {
         addAll(AcpProvider.Cursor.acpArguments)
         return@buildList
       }
