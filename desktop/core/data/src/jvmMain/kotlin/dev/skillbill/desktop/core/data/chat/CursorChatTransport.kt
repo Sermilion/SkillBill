@@ -38,7 +38,6 @@ class CursorChatTransport(
 
   override fun run(request: ChatTurnRequest): Flow<ChatEvent> = flow {
     val dependency = when (request.cursorMcpDependency) {
-      CursorMcpDependency.Unspecified -> CursorAcpMcpDependency.Unspecified
       CursorMcpDependency.ProjectUserOnly -> CursorAcpMcpDependency.ProjectUserOnly
       CursorMcpDependency.TeamDashboardRequired -> CursorAcpMcpDependency.TeamDashboardRequired
     }

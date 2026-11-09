@@ -17,7 +17,7 @@ data class ChatAgent(
 /** Provider permission scope; operator chats start in [Act], independently of execution lifecycle. */
 enum class ChatPermissionMode { ReadOnly, Act }
 
-enum class CursorMcpDependency { Unspecified, ProjectUserOnly, TeamDashboardRequired }
+enum class CursorMcpDependency { ProjectUserOnly, TeamDashboardRequired }
 
 /** What a chat is about: one [Execution], or [NewTask] work with no execution yet. [repositoryRoot] is where the agent runs. */
 sealed interface ChatScope {
@@ -59,7 +59,7 @@ data class ChatTurnRequest(
   val mode: ChatPermissionMode,
   val prompt: String,
   val images: List<ChatImage> = emptyList(),
-  val cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
+  val cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly,
 )
 
 /** The run a new-task action starts when clicked; [wire] is its value in the action block and on the start chips. */

@@ -169,7 +169,7 @@ internal class ChatTurns(
     text: String,
     prefix: String? = null,
     images: List<ChatImage> = emptyList(),
-    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
+    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly,
   ): Boolean {
     val agent = session.agentState.value ?: resolve(session, read) ?: run {
       session.append(ChatMessage.Notice(NO_AGENT_NOTICE))

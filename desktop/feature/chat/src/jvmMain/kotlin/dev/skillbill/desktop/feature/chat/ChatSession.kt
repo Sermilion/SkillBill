@@ -23,7 +23,7 @@ internal data class QueuedChatMessage(
   val action: ChatSuggestedAction?,
   val pauseAndAct: Boolean,
   val images: List<ChatImage> = emptyList(),
-  val cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
+  val cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly,
   val onRejected: (() -> Unit)? = null,
 )
 

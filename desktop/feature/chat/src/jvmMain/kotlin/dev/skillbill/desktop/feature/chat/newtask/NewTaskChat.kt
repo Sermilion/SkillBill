@@ -153,7 +153,7 @@ internal class NewTaskChat(
     action: ChatSuggestedAction? = null,
     images: List<ChatImage> = emptyList(),
     onAccepted: () -> Unit = {},
-    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
+    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly,
     onRejected: (() -> Unit)? = null,
   ) {
     if ((text.isBlank() && images.isEmpty()) || repositoryMissing || closing) return

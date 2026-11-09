@@ -29,21 +29,30 @@ import kotlin.test.assertTrue
 
 class CursorAcpSessionTest {
   @Test
-  fun `missing or team dashboard dependencies refuse before any ACP request`() {
-    for (dependency in listOf(CursorAcpMcpDependency.Unspecified, CursorAcpMcpDependency.TeamDashboardRequired)) {
-      val harness = Harness(dependency = dependency)
+  fun `team dashboard dependency refuses before any ACP request`() {
+    val harness = Harness(dependency = CursorAcpMcpDependency.TeamDashboardRequired)
 
-      harness.session.start()
+    harness.session.start()
 
-      assertNotNull(harness.session.outcome()?.failure)
-      assertTrue(harness.frames.isEmpty())
-      harness.session.close()
-    }
+    assertNotNull(harness.session.outcome()?.failure)
+    assertTrue(harness.frames.isEmpty())
+    harness.session.close()
+  }
+
+  @Test
+  fun `an undeclared Cursor launch starts as project and user configuration only`() {
+    val harness = Harness(dependency = CursorAcpLaunch("/repo", "p", null, null).mcpDependency)
+
+    harness.session.start()
+
+    assertNull(harness.session.outcome())
+    assertEquals(JsonPrimitive("initialize"), harness.frames.single()[CursorAcpKeys.METHOD])
+    harness.session.close()
   }
 
   @Test
   fun `Junie enables Brave mode before prompting and retains cards for actual provider requests`() {
-    val harness = Harness(dependency = CursorAcpMcpDependency.Unspecified, provider = AcpProvider.Junie)
+    val harness = Harness(dependency = CursorAcpMcpDependency.TeamDashboardRequired, provider = AcpProvider.Junie)
     harness.session.start()
     harness.respond("""{"protocolVersion":1,"agentCapabilities":{},"authMethods":[{"id":"cursor_login"}]}""")
     assertEquals(JsonPrimitive("session/new"), harness.frames.last()[CursorAcpKeys.METHOD])

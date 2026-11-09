@@ -829,7 +829,7 @@ class NewTaskDraftTest {
     val draft = draft()
     draft.say("first")
     runCurrent()
-    draft.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
+    draft.cursorMcpDependency = CursorMcpDependency.TeamDashboardRequired
     draft.say("q1")
     draft.say("q2")
     runCurrent()
@@ -838,7 +838,7 @@ class NewTaskDraftTest {
     runCurrent()
     assertEquals(1, chat.requests.size)
     assertEquals("q1\n\nq2\n\nexisting", draft.text)
-    assertEquals(CursorMcpDependency.Unspecified, draft.cursorMcpDependency)
+    assertEquals(CursorMcpDependency.ProjectUserOnly, draft.cursorMcpDependency)
     replies[0].close()
     runCurrent()
     draft.close()

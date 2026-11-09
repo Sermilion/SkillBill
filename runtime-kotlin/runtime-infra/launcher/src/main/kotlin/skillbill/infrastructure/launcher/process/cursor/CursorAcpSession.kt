@@ -26,7 +26,7 @@ data class CursorAcpLaunch(
   val mode: String?,
   val savedSession: String? = null,
   val images: List<CursorAcpImage> = emptyList(),
-  val mcpDependency: CursorAcpMcpDependency = CursorAcpMcpDependency.Unspecified,
+  val mcpDependency: CursorAcpMcpDependency = CursorAcpMcpDependency.ProjectUserOnly,
   val provider: AcpProvider = AcpProvider.Cursor,
 ) {
   constructor(
@@ -36,15 +36,13 @@ data class CursorAcpLaunch(
     mode: String?,
     savedSession: String?,
     images: List<CursorAcpImage>,
-  ) : this(cwd, prompt, model, mode, savedSession, images, CursorAcpMcpDependency.Unspecified)
+  ) : this(cwd, prompt, model, mode, savedSession, images, CursorAcpMcpDependency.ProjectUserOnly)
 }
 
-enum class CursorAcpMcpDependency { Unspecified, ProjectUserOnly, TeamDashboardRequired }
+enum class CursorAcpMcpDependency { ProjectUserOnly, TeamDashboardRequired }
 
 fun cursorAcpDependencyRefusal(dependency: CursorAcpMcpDependency): String? =
   when (dependency) {
-    CursorAcpMcpDependency.Unspecified ->
-      "Declare whether this Cursor request needs team-dashboard MCP servers; the missing declaration prevents launch."
     CursorAcpMcpDependency.TeamDashboardRequired ->
       "Cursor ACP does not provide team-dashboard MCP servers; this request is unsupported and was not started."
     CursorAcpMcpDependency.ProjectUserOnly -> null
@@ -110,7 +108,7 @@ class CursorAcpSession(
   }
 
   fun start() {
-    if (launch.provider.mcpDeclarationRequired) {
+    if (launch.provider.lacksTeamDashboardMcp) {
       cursorAcpDependencyRefusal(launch.mcpDependency)?.let {
         record("seam=$seam outcome=dependency_unsupported")
         return stop(it)

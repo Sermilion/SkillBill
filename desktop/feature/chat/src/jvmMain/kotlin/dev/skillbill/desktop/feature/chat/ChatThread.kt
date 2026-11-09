@@ -62,7 +62,7 @@ internal class ChatThread(private val clock: Clock) {
       action = pending.singleOrNull()?.action,
       pauseAndAct = pending.any { it.pauseAndAct },
       images = pending.flatMap { it.images },
-      cursorMcpDependency = pending.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.Unspecified,
+      cursorMcpDependency = pending.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.ProjectUserOnly,
       onRejected = pending.mapNotNull { it.onRejected }.takeIf { it.isNotEmpty() }?.let { callbacks ->
         { callbacks.forEach { callback -> callback() } }
       },

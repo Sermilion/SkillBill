@@ -72,7 +72,7 @@ internal fun ChatComposer(
   val gone by session.gone.collectAsState()
   val coordinationMode by session.coordinationMode.collectAsState()
   val id = session.id
-  val cursorMcpDependency = workspace.cursorMcpDependencies[id] ?: CursorMcpDependency.Unspecified
+  val cursorMcpDependency = workspace.cursorMcpDependencies[id] ?: CursorMcpDependency.ProjectUserOnly
   val choices by session.resumeChoices.collectAsState()
   val queued by session.queued.collectAsState()
   val prefixChoice by session.prefixChoice.collectAsState()
@@ -122,7 +122,7 @@ internal fun ChatComposer(
       SbInput(
         text, {
           if (workspace.drafts[id] != it) {
-            workspace.cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
+            workspace.cursorMcpDependencies[id] = CursorMcpDependency.ProjectUserOnly
           }
           workspace.drafts[id] = it
         },
@@ -212,7 +212,6 @@ internal fun CursorMcpPicker(
 ) {
   var open by remember { mutableStateOf(false) }
   val label = when (value) {
-    CursorMcpDependency.Unspecified -> "MCP scope: choose"
     CursorMcpDependency.ProjectUserOnly -> "MCP scope: project/user only"
     CursorMcpDependency.TeamDashboardRequired -> "MCP scope: team dashboard"
   }
@@ -223,14 +222,6 @@ internal fun CursorMcpPicker(
       SbPopover(expanded = true, onDismissRequest = { open = false }, placement = SbPopoverPlacement.Above) {
         SbMenu(
           listOf(
-            SbMenuEntry.Item(
-              "Choose later",
-              {
-                open = false
-                onChoose(CursorMcpDependency.Unspecified)
-              },
-              checked = value == CursorMcpDependency.Unspecified,
-            ),
             SbMenuEntry.Item(
               "Project/user configuration only",
               {
