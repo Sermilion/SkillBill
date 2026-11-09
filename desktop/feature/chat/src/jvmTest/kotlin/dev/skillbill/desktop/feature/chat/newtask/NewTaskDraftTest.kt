@@ -1,5 +1,13 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
+import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
+import dev.skillbill.desktop.core.testing.FakeChatChangesRepository
+import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
+import dev.skillbill.desktop.core.domain.model.ChatBaselineCapture
+import dev.skillbill.desktop.core.domain.repository.ChatChangesRepository
+import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.OperationCardDetailsView
 import dev.skillbill.desktop.core.domain.model.OperationCardState
@@ -70,7 +78,7 @@ internal fun testDatabaseSessionController(sessionId: Long? = 1L): DatabaseSessi
 
 internal fun testNewTaskDraft() = NewTaskDraft(
   FakeExecutionChatRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
-  WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
+  WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics(),
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -78,12 +86,160 @@ class NewTaskDraftTest {
   private val chat = FakeExecutionChatRepository()
   private val root = createTempDirectory("new-task-repo").toString()
 
-  private fun TestScope.draft(chats: ExecutionChatRepository = chat, controls: FakeWorkControlRepository = FakeWorkControlRepository()) = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+  private fun TestScope.draft(chats: ExecutionChatRepository = chat, controls: FakeWorkControlRepository = FakeWorkControlRepository(), changes: ChatChangesRepository = UnavailableChatChanges) = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, changesRepository = changes, diagnostics = RecordingDiagnostics()).apply {
     chatDispatcher = StandardTestDispatcher(testScheduler)
     repository = NewTaskRepository(root, "repo")
     baseBranch = "main"
     agentId = "claude"
     selectedAgent = this@NewTaskDraftTest.chat.agent
+  }
+
+  @Test
+  fun `a reply flow closed without a terminal event leaves no streaming segment`() = runTest {
+    chat.events = { flowOf(ChatEvent.TextDelta("Partial reply")) }
+    val draft = draft()
+    draft.say("question")
+    runCurrent()
+    val thread = draft.chat.value!!.thread
+    val reply = thread.transcript.value.filterIsInstance<ChatMessage.Agent>().single()
+    assertEquals("Partial reply", reply.text)
+    assertFalse(reply.streaming)
+    assertFalse(thread.busy.value)
+    draft.dispose()
+  }
+
+  @Test
+  fun `draft flush rebind and disposal keep unresolved originals reachable until warning confirmed retry`() = runTest {
+    chat.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
+    chat.steeringResult = { ChatSteeringResult.DeliveryUncertain(it.deliveryId, "Awaiting acknowledgement") }
+    var turns = 0
+    chat.events = {
+      turns++
+      if (turns == 1) flow { emit(ChatEvent.TextDelta("reply")); awaitCancellation() } else flowOf(ChatEvent.Completed)
+    }
+    val changes = FakeChatChangesRepository(ChatBaselineCapture.Captured(ChatChangesBaseline("head", emptyList(), null, Clock.System.now())))
+    val draft = draft(changes = changes)
+    draft.say("question")
+    runCurrent()
+    val current = draft.chat.value!!
+    val image = ChatImage(byteArrayOf(3), "image/png")
+    draft.text = "retained"
+    draft.addPastedImage(image)
+    draft.send()
+    draft.sendNow()
+    runCurrent()
+    val deliveryId = current.thread.delivery.value!!.deliveryId
+    draft.say("ordinary")
+    draft.stop()
+    runCurrent()
+    assertEquals("ordinary", draft.text)
+    assertEquals("retained", current.thread.delivery.value!!.text)
+    assertFalse(current.flush())
+    assertFalse(draft.close())
+    assertFalse(draft.discard())
+    draft.baseBranch = "other"
+    draft.rebindChat()
+    assertTrue(draft.chat.value === current)
+    assertEquals("main", current.baseBranch)
+    draft.dispose()
+    runCurrent()
+    assertTrue(draft.chat.value === current)
+    assertTrue(current.thread.delivery.value!!.images.single() === image)
+    assertEquals(1, chat.requests.size)
+    assertTrue(chat.ended.contains(current.sessionId))
+    val readsBeforeRetry = changes.readCalls.size
+    draft.say("later")
+    current.retryDelivery(deliveryId)
+    runCurrent()
+    assertEquals(2, chat.requests.size)
+    assertTrue(changes.readCalls.size > readsBeforeRetry)
+    assertEquals("retained\n\nlater", chat.requests.last().prompt)
+    assertEquals("main", (chat.requests.last().scope as ChatScope.NewTask).baseBranch)
+    assertTrue(chat.requests.last().images.single() === image)
+    chat.retainedSteering.value = mapOf((current.sessionId to deliveryId) to
+      ChatSteeringUpdate(current.sessionId, ChatSteeringResult.Accepted(deliveryId)))
+    runCurrent()
+    assertEquals(2, chat.requests.size)
+    assertEquals(1, chat.retiredSteering.count { it.third == deliveryId })
+  }
+
+  @Test
+  fun `discard delivery after direct draft disposal permits final close without replay`() = runTest {
+    chat.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
+    chat.steeringResult = { ChatSteeringResult.DeliveryUncertain(it.deliveryId, "Awaiting acknowledgement") }
+    chat.events = { flow { emit(ChatEvent.TextDelta("reply")); awaitCancellation() } }
+    val draft = draft()
+    draft.say("question")
+    runCurrent()
+    draft.say("retained")
+    draft.sendNow()
+    runCurrent()
+    val current = draft.chat.value!!
+    val deliveryId = current.thread.delivery.value!!.deliveryId
+    draft.dispose()
+    runCurrent()
+    current.discardDelivery(deliveryId)
+    runCurrent()
+    assertFalse(current.thread.hasDeliveryClaim())
+    assertTrue(draft.close())
+    runCurrent()
+    assertEquals(null, draft.chat.value)
+    assertEquals(1, chat.requests.size)
+  }
+
+  @Test
+  fun `live draft delivery retains uncertainty through completion and late acknowledgement`() = runTest {
+    chat.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
+    chat.steeringResult = { ChatSteeringResult.DeliveryUncertain(it.deliveryId, "Awaiting acknowledgement") }
+    val complete = CompletableDeferred<Unit>()
+    chat.events = { flow { emit(ChatEvent.TextDelta("Before")); complete.await(); emit(ChatEvent.Completed) } }
+    val draft = draft()
+    draft.say("question")
+    runCurrent()
+    draft.say("guidance")
+    draft.sendNow()
+    draft.sendNow()
+    draft.say("later")
+    runCurrent()
+    val current = draft.chat.value!!
+    assertEquals(1, chat.steeringRequests.size)
+    assertEquals(1, chat.requests.size)
+    assertTrue(chat.ended.isEmpty())
+    complete.complete(Unit)
+    runCurrent()
+    assertEquals(1, chat.requests.size)
+    assertTrue(current.thread.hasDeliveryClaim())
+    val request = chat.steeringRequests.single()
+    chat.retainedSteering.value = mapOf((request.sessionId to request.deliveryId) to
+      ChatSteeringUpdate(request.sessionId, ChatSteeringResult.Accepted(request.deliveryId)))
+    runCurrent()
+    assertFalse(current.thread.hasDeliveryClaim())
+    assertEquals(2, chat.requests.size)
+    assertEquals(1, current.thread.transcript.value.filterIsInstance<ChatMessage.Operator>().count { it.text == "guidance" })
+    assertEquals("later", chat.requests.last().prompt.takeLast(5))
+  }
+
+  @Test
+  fun `live draft fallback during unprompted output waits for normal completion without interruption`() = runTest {
+    chat.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
+    chat.steeringResult = { ChatSteeringResult.NoActiveTurn(it.deliveryId, "No active reply") }
+    val draft = draft()
+    draft.say("question")
+    runCurrent()
+    val current = draft.chat.value!!
+    chat.unpromptedEvents.emit(current.sessionId to ChatEvent.TextDelta("Background output"))
+    runCurrent()
+    draft.say("guidance")
+    draft.sendNow()
+    runCurrent()
+    assertEquals(1, chat.steeringRequests.size)
+    assertEquals(listOf("guidance"), current.thread.queued.value.map { it.text })
+    assertEquals(1, chat.requests.size)
+    assertTrue(chat.ended.isEmpty())
+    chat.unpromptedEvents.emit(current.sessionId to ChatEvent.Completed)
+    runCurrent()
+    assertEquals(2, chat.requests.size)
+    assertTrue(current.thread.queued.value.isEmpty())
   }
 
   private fun NewTaskDraft.say(message: String) {
@@ -171,7 +327,7 @@ class NewTaskDraftTest {
     val second = first.copy(sessionId = "second-discard", title = "Fix footer")
     chat.saved[first.sessionId] = first
     chat.saved[second.sessionId] = second
-    val draft = NewTaskDraft(chat, FakeWorkControlRepository(), testDatabaseSessionController(), toasts, WindowCoroutineScope(backgroundScope), Clock.System)
+    val draft = NewTaskDraft(chat, FakeWorkControlRepository(), testDatabaseSessionController(), toasts, WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics())
 
     draft.refreshSaved()
     runCurrent()
@@ -221,7 +377,7 @@ class NewTaskDraftTest {
       }
     }
     val toasts = ToastQueue()
-    val draft = NewTaskDraft(repository, FakeWorkControlRepository(), testDatabaseSessionController(), toasts, WindowCoroutineScope(backgroundScope), Clock.System)
+    val draft = NewTaskDraft(repository, FakeWorkControlRepository(), testDatabaseSessionController(), toasts, WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics())
     draft.refreshSaved()
     runCurrent()
     assertEquals(listOf(entry), draft.saved.value)
@@ -320,7 +476,7 @@ class NewTaskDraftTest {
     val sessionId = chat.requests.single().sessionId
     assertTrue(sessionId in chat.saved)
 
-    val next = NewTaskDraft(chat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System)
+    val next = NewTaskDraft(chat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics())
     next.chatDispatcher = StandardTestDispatcher(testScheduler)
     next.repository = NewTaskRepository(root, "repo")
     next.refreshSaved()
@@ -362,7 +518,7 @@ class NewTaskDraftTest {
     assertEquals(suggestions, saved.lines[1].actions)
     assertEquals(selected, saved.lines[2].selectedAction)
 
-    val next = NewTaskDraft(chat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System)
+    val next = NewTaskDraft(chat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics())
     next.chatDispatcher = StandardTestDispatcher(testScheduler)
     next.repository = NewTaskRepository(root, "repo")
     next.resume(saved)
@@ -432,7 +588,7 @@ class NewTaskDraftTest {
       selectedAgent = this@NewTaskDraftTest.chat.agent
     }
     val workspace = ChatWorkspace(
-      chat, FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(), chats,
+      chat, FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(), chats, diagnostics = RecordingDiagnostics(),
     )
     draft.say("add export")
     runCurrent()

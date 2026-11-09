@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.key.Key
@@ -101,7 +102,7 @@ class NewTaskHomeTest {
     chats.saved[app.sessionId] = app
     chats.saved[appOther.sessionId] = appOther
     chats.saved[lib.sessionId] = lib
-    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics())
     val draft = open.selected.value
     val actions = mutableListOf<NewTaskAction>()
     draft.repository = NewTaskRepository("/work/app", "app")
@@ -136,7 +137,7 @@ class NewTaskHomeTest {
     val other = savedDraft(chats, "other-app", "/work/app", Instant.fromEpochSeconds(1), "Other app chat")
     chats.saved[app.sessionId] = app
     chats.saved[other.sessionId] = other
-    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics())
     open.selected.value.repository = NewTaskRepository("/work/app", "app")
     open.resume(app)
     open.newChat()
@@ -162,7 +163,7 @@ class NewTaskHomeTest {
       savedDraft(repository, "keyboard-$index", "/work/app", Instant.fromEpochSeconds(index.toLong()), "Keyboard $index")
     }
     entries.forEach { repository.saved[it.sessionId] = it }
-    val open = NewTaskChats(repository, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val open = NewTaskChats(repository, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics())
     open.selected.value.repository = NewTaskRepository("/work/app", "app")
     open.resume(entries.first())
     open.newChat()
@@ -190,7 +191,7 @@ class NewTaskHomeTest {
     val repository = FakeExecutionChatRepository()
     val saved = savedDraft(repository, "focus-chat", "/work/app", Instant.fromEpochSeconds(0), "Focus chat")
     repository.saved[saved.sessionId] = saved
-    val chats = NewTaskChats(repository, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val chats = NewTaskChats(repository, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics())
     chats.selected.value.repository = NewTaskRepository("/work/app", "app")
     chats.refreshSaved()
     val runs = listOf(workItem("SKILL-1", reason = "First pause"), workItem("SKILL-2", reason = "Second pause"))
@@ -230,7 +231,7 @@ class NewTaskHomeTest {
       savedDraft(chats, "draft-$index", "/work/app", Instant.fromEpochSeconds(index.toLong()), "Draft $index")
     }
     drafts.forEach { chats.saved[it.sessionId] = it }
-    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics())
     val draft = open.selected.value
     val actions = mutableListOf<NewTaskAction>()
     draft.repository = NewTaskRepository("/work/app", "app")
@@ -255,7 +256,7 @@ class NewTaskHomeTest {
   fun `chat shortcuts add, select, cycle and close chats`() = runComposeUiTest {
     val chats = FakeExecutionChatRepository()
     chats.events = { flow { awaitCancellation() } }
-    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics())
     open.chatDispatcher = Dispatchers.Unconfined
     val first = open.selected.value
     setContent {
@@ -456,7 +457,7 @@ class NewTaskHomeTest {
       events = { flowOf(ChatEvent.SuggestedActions(listOf(action)), ChatEvent.Completed) }
     }
     val controls = FakeWorkControlRepository().apply { newTaskOutcome = NewTaskStartOutcome.NeedsKey(listOf("APP")) }
-    val open = NewTaskChats(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val open = NewTaskChats(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics())
     val draft = open.selected.value.apply {
       chatDispatcher = Dispatchers.Unconfined
       repository = NewTaskRepository("/work/app", "app")

@@ -8,6 +8,9 @@ import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.usage.model.RequestPermission
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -44,6 +47,7 @@ internal class ClaudeLiveSession(
   val processGeneration: Long,
   private val usageSink: UsageObservationSink,
   private val clock: Clock,
+  private val steeringUpdate: (ChatSteeringResult) -> Unit = {},
   private val unprompted: (ChatEvent) -> Unit,
 ) {
   val input = Channel<ChatProcessInput>(Channel.UNLIMITED) { it.written.complete(false) }
@@ -59,7 +63,29 @@ internal class ClaudeLiveSession(
   private val pending = HashMap<String, SendChannel<ChatEvent>>()
   private var closed = false
   private var initialized = false
-  private val held = ArrayList<String>()
+  private val held = ArrayList<ChatProcessInput>()
+
+  private val steering = ClaudeSteeringDeliveries(lock, { !closed && initialized && reply != null }, { !closed }, steeringUpdate, diagnostics)
+
+  suspend fun steer(request: ChatSteeringRequest): ChatSteeringResult {
+    val prepared = synchronized(lock) {
+      val prepared = steering.prepare(request) { uuid -> userMessage(uuid, request.text, request.images) }
+        ?: return ChatSteeringResult.NoActiveTurn(request.deliveryId, "Claude has no initialized active reply")
+      input.trySend(prepared.frame).onFailure { prepared.frame.written.complete(false) }
+      prepared
+    }
+    try {
+      prepared.frame.written.await()
+    } catch (cancelled: CancellationException) {
+      steering.resolve(prepared)
+      throw cancelled
+    }
+    return steering.resolve(prepared)
+  }
+
+  fun settleSteering(deliveryId: String): ChatSteeringResult = steering.resolveDelivery(deliveryId)
+
+  fun retireSteering(deliveryId: String) = steering.retire(deliveryId)
 
   private var target: SendChannel<ChatEvent>? = null
   private var unpromptedOpen = false
@@ -79,7 +105,7 @@ internal class ClaudeLiveSession(
   fun send(uuid: String, text: String, images: List<ChatImage>) {
     val frame = ChatProcessInput(userMessage(uuid, text, images))
     synchronized(lock) {
-      if (initialized) input.trySend(frame).onFailure { frame.written.complete(false) } else held.add(frame.line)
+      if (initialized) input.trySend(frame).onFailure { frame.written.complete(false) } else held.add(frame)
     }
   }
 
@@ -88,8 +114,7 @@ internal class ClaudeLiveSession(
     synchronized(lock) {
       if (initialized) return
       initialized = true
-      held.forEach { line ->
-        val frame = ChatProcessInput(line)
+      held.forEach { frame ->
         input.trySend(frame).onFailure { frame.written.complete(false) }
       }
       held.clear()
@@ -115,8 +140,8 @@ internal class ClaudeLiveSession(
     when (output) {
       is ChatProcessOutput.Line -> line(output.text)
       is ChatProcessOutput.StdoutEnded -> Unit
-      is ChatProcessOutput.Exited -> exited(exitFailure(output.code, output.stderrTail))
-      is ChatProcessOutput.StartFailed -> exited(ChatEvent.Failed(ChatFailure.ProcessFailed, output.message))
+      is ChatProcessOutput.Exited -> synchronized(lock) { exited(exitFailure(output.code, output.stderrTail)) }
+      is ChatProcessOutput.StartFailed -> synchronized(lock) { exited(ChatEvent.Failed(ChatFailure.ProcessFailed, output.message)) }
     }
   }
 
@@ -134,22 +159,30 @@ internal class ClaudeLiveSession(
   }
 
   private fun line(text: String) {
-    if (synchronized(lock) { closed }) return
-    // The login shell's profile can print to stdout before claude starts; only lines after the first JSON object are the stream.
-    if (!streamStarted) {
-      streamStarted = text.trimStart().startsWith("{")
+    val root = synchronized(lock) {
+      if (closed) return
+      // The login shell's profile can print to stdout before claude starts; only lines after the first JSON object are the stream.
       if (!streamStarted) {
-        if (text.isNotBlank()) diagnostics.record("chat.login_output_skipped")
-        return
+        streamStarted = text.trimStart().startsWith("{")
+        if (!streamStarted) {
+          if (text.isNotBlank()) diagnostics.record("chat.login_output_skipped")
+          return
+        }
       }
-    }
-    val root = parseStreamLine(text)
-    if (root?.string("type") == RATE_LIMIT_EVENT) {
-      observeRateLimit(root)
-      return
+      parseStreamLine(text)
     }
     if (root != null && root.string("type") == "control_request") {
       approval?.handle(root, text) ?: diagnostics.record("chat.control_request_without_approval")
+      return
+    }
+    synchronized(lock) {
+      if (!closed) sessionLine(text, root)
+    }
+  }
+
+  private fun sessionLine(text: String, root: JsonObject?) {
+    if (root?.string("type") == RATE_LIMIT_EVENT) {
+      observeRateLimit(root)
       return
     }
     if (root != null && root.string("type") == "control_response") {
@@ -161,7 +194,12 @@ internal class ClaudeLiveSession(
       return
     }
     if (root != null && root.string("type") == "user" && (root["isReplay"] as? JsonPrimitive)?.booleanOrNull == true) {
-      val sink = synchronized(lock) { root.string("uuid")?.let(pending::remove) } ?: return
+      val uuid = root.string("uuid") ?: return
+      if (steering.acknowledge(uuid)) return
+      val sink = synchronized(lock) { pending.remove(uuid) } ?: run {
+        diagnostics.record("chat.steering_unknown_replay")
+        return
+      }
       if (unpromptedOpen) emit(ChatEvent.Completed)
       target = sink
       openReply()
@@ -228,6 +266,7 @@ internal class ClaudeLiveSession(
     synchronized(lock) {
       if (closed) return
       closed = true
+      steering.settle()
       active = target to reply
       reportUnprompted = target == null && pending.isEmpty()
       waiting = pending.values.toList()
@@ -257,7 +296,8 @@ internal class ClaudeLiveSession(
    * neither opens nor closes a reply, so a card arriving between turns never leaves a turn waiting for a completion. Only
    * the reader calls it, from the control request it is handling.
    */
-  fun showCard(card: ApprovalCard) {
+  fun showCard(card: ApprovalCard) = synchronized(lock) {
+    if (closed) return@synchronized
     val event = ChatEvent.ApprovalRequested(card)
     val sink = target
     if (sink != null) sink.trySend(event) else unprompted(event)
@@ -275,6 +315,7 @@ internal class ClaudeLiveSession(
       if (sink != null) sink.trySend(shown) else unprompted(shown)
     }
     if (event is ChatEvent.Completed || event is ChatEvent.Failed) {
+      steering.settle()
       target?.close()
       target = null
       unpromptedOpen = false
@@ -298,6 +339,9 @@ internal class ClaudeLiveSession(
 
   private fun close(): List<SendChannel<ChatEvent>> = synchronized(lock) {
     closed = true
+    steering.settle()
+    held.forEach { it.revokeBeforeWrite(); it.written.complete(false) }
+    held.clear()
     pending.values.toList().also { pending.clear() }
   }.also { input.cancel() }
 }

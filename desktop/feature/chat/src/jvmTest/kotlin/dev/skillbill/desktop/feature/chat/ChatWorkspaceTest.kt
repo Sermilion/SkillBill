@@ -1,11 +1,14 @@
 package dev.skillbill.desktop.feature.chat
 
+import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import androidx.compose.runtime.snapshots.Snapshot
 import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
 import dev.skillbill.desktop.core.domain.model.OperationCardDetailsView
 import dev.skillbill.desktop.core.domain.model.OperationCardState
 import dev.skillbill.desktop.core.domain.model.OperationCardView
+import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
@@ -51,6 +54,7 @@ import dev.skillbill.desktop.feature.chat.newtask.testNewTaskChats
 import kotlin.test.assertNotNull
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -102,9 +106,29 @@ class ChatWorkspaceTest {
   private fun worktreeDir(): String = Files.createTempDirectory("chat-worktree").toRealPath().also(tempDirs::add).toString()
 
   @Test
+  fun `an immediately replayed reply has its observer identity before collection starts`() = runTest {
+    val item = workItem("SKILL-530")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    val repository = object : ExecutionChatRepository by chat {
+      override fun unprompted(sessionId: String) = flowOf(ChatEvent.TextDelta("Already replying"), ChatEvent.Completed)
+    }
+    val workspace = ChatWorkspace(
+      repository, details, controls, testDatabaseSessionController(),
+      WindowCoroutineScope(CoroutineScope(backgroundScope.coroutineContext + Dispatchers.Unconfined)),
+      clock, panes, selection, unconfinedNewTaskChats(), diagnostics = RecordingDiagnostics(),
+    )
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    assertTrue(session.transcript.value.filterIsInstance<ChatMessage.Agent>().any { it.text == "Already replying" })
+    assertTrue(workspace.closeAll())
+    assertTrue(session.job.isCancelled)
+  }
+
+  @Test
   fun `selected New task usage keeps the executing agent and follows rotated session`() = runTest {
     chat.events = { flow { awaitCancellation() } }
-    val chats = NewTaskChats(chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock)
+    val chats = NewTaskChats(chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock, diagnostics = RecordingDiagnostics())
     chats.chatDispatcher = StandardTestDispatcher(testScheduler)
     val original = ChatAgent("claude", "model-a", "high", "/profiles/claude-a")
     val draft = chats.selected.value.apply {
@@ -143,7 +167,7 @@ class ChatWorkspaceTest {
     repository: ExecutionChatRepository = chat,
   ): ChatWorkspace {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    return ChatWorkspace(repository, details, controls, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, chats)
+    return ChatWorkspace(repository, details, controls, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, chats, diagnostics = RecordingDiagnostics())
   }
 
   // A window that closes while one New task chat could not be saved, or a retry that leaves the rest open.
@@ -206,7 +230,7 @@ class ChatWorkspaceTest {
   @Test
   fun `goal intake rejects an empty composer when a conversation exists for the same or another repository`() = runTest {
     val chats = NewTaskChats(
-      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock,
+      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock, diagnostics = RecordingDiagnostics(),
     )
     val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
@@ -244,7 +268,7 @@ class ChatWorkspaceTest {
   fun `goal intake rejects an empty composer while its conversation turn is active`() = runTest {
     chat.events = { flow { awaitCancellation() } }
     val chats = NewTaskChats(
-      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock,
+      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock, diagnostics = RecordingDiagnostics(),
     )
     val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
@@ -274,7 +298,7 @@ class ChatWorkspaceTest {
   @Test
   fun `goal intake rejects an empty composer when a conversation has been resumed`() = runTest {
     val chats = NewTaskChats(
-      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock,
+      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock, diagnostics = RecordingDiagnostics(),
     )
     val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
@@ -300,6 +324,53 @@ class ChatWorkspaceTest {
     assertEquals("resumed-session", draft.chat.value?.sessionId)
     assertEquals(transcript, conversation.thread.transcript.value)
     workspace.closeAll()
+  }
+
+  @Test
+  fun `checkout change retains an acquired follow up but drains a revoked pending write only after moving context`() = runTest {
+    for (uncertain in listOf(true, false)) {
+      val repository = FakeExecutionChatRepository()
+      repository.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
+      val result = CompletableDeferred<ChatSteeringResult>()
+      repository.steeringResult = { result.await() }
+      repository.settledSteering = { _, id ->
+        if (uncertain) ChatSteeringResult.DeliveryUncertain(id, "write acquired")
+        else ChatSteeringResult.NoActiveTurn(id, "revoked before write")
+      }
+      val worktree = worktreeDir()
+      val active = workItem("SKILL-530-$uncertain").copy(repositoryRoot = "/repo",
+        goalWorktree = GoalWorktree(worktree, GoalWorktreeState.Active, null, null))
+      val detail = MutableStateFlow(loaded(active))
+      details.details = mapOf(active.id to detail)
+      val workspace = workspace(repository = repository)
+      workspace.open(active)
+      runCurrent()
+      val session = workspace.session(active.id)!!
+      repository.unpromptedEvents.emit(session.sessionId to ChatEvent.TextDelta("Background"))
+      runCurrent()
+      val image = ChatImage(byteArrayOf(1), "image/png")
+      workspace.send(active.id, "retained", images = listOf(image))
+      workspace.sendNow(active.id)
+      runCurrent()
+      repository.unpromptedEvents.emit(session.sessionId to ChatEvent.Completed)
+      runCurrent()
+      assertEquals(1, repository.requests.size)
+      detail.value = loaded(active.copy(goalWorktree = active.goalWorktree?.copy(state = GoalWorktreeState.Removed)))
+      runCurrent()
+      if (uncertain) {
+        assertTrue(repository.moveCalls.isEmpty())
+        assertEquals(1, repository.requests.size)
+        assertTrue(session.thread.delivery.value!!.images.single() === image)
+        workspace.retryDelivery(active.id, session.thread.delivery.value!!.deliveryId)
+        runCurrent()
+      }
+      assertEquals(listOf(worktree to "/repo"), repository.moveCalls)
+      assertEquals(2, repository.requests.size)
+      assertEquals("/repo", (repository.requests.last().scope as ChatScope.Execution).repositoryRoot)
+      assertTrue(repository.requests.last().images.single() === image)
+      assertFalse(session.thread.hasDeliveryClaim())
+      assertTrue(workspace.closeAll())
+    }
   }
 
   @Test
@@ -1510,7 +1581,7 @@ class ChatWorkspaceTest {
     }
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val workspace = ChatWorkspace(
-      chat, details, controls, closedDb, WindowCoroutineScope(backgroundScope), clock, panes, selection, unconfinedNewTaskChats(),
+      chat, details, controls, closedDb, WindowCoroutineScope(backgroundScope), clock, panes, selection, unconfinedNewTaskChats(), diagnostics = RecordingDiagnostics(),
     )
     workspace.open(item)
     runCurrent()

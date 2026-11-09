@@ -4,7 +4,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
-/** Keeps a double tap or a held Enter key from ending a turn: each refused press restarts [window], and Enter also needs a key-up. */
+/** Keeps a double tap or a held Enter key from issuing Send now twice: each refused press restarts [window], and Enter also needs a key-up. */
 internal class SendNowGate(private val window: Duration = 500.milliseconds) {
   private var lastPress: Instant? = null
   private var enterDown = false

@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import dev.skillbill.desktop.core.common.Diagnostics
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -73,6 +74,7 @@ class NewTaskDraft internal constructor(
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
   private val savedChats: NewTaskSavedChats = NewTaskSavedChats(chats, windowScope.scope, toasts),
   private val changesRepository: ChatChangesRepository = UnavailableChatChanges,
+  private val diagnostics: Diagnostics,
 ) {
   private val scope = windowScope.scope
   private val cardOwners = IdentityHashMap<ChatThread, NewTaskChat>()
@@ -381,14 +383,15 @@ class NewTaskDraft internal constructor(
     if (closing) return false
     val current = chatState.value ?: return false
     val saveLock = saveLocks[current.sessionId]
-    invalidDrafts += current.sessionId
-    retainedThreads.remove(current.sessionId)
-    saveLocks.remove(current.sessionId)
-    synchronized(cardOwners) { cardOwners.remove(current.thread) }
-    leave(current) {
+    if (current.thread.deferDestructiveAction("discard this draft")) return false
+    return leave(current, beforeLeave = {
+      invalidDrafts += current.sessionId
+      retainedThreads.remove(current.sessionId)
+      saveLocks.remove(current.sessionId)
+      synchronized(cardOwners) { cardOwners.remove(current.thread) }
+    }) {
       saveLock?.withLock { chats.deleteSavedChat(current.sessionId) } ?: chats.deleteSavedChat(current.sessionId)
     }
-    return true
   }
 
   /** Discards [entry], allowing undo unless it is the open chat. */
@@ -407,10 +410,7 @@ class NewTaskDraft internal constructor(
     val current = chatState.value ?: return true
     closing = true
     return try {
-      if (!current.flush()) false else {
-        leave(current) {}
-        true
-      }
+      if (!current.flush()) false else leave(current) {}
     } finally {
       closing = false
     }
@@ -421,6 +421,7 @@ class NewTaskDraft internal constructor(
   /** Opens a new agent session on the current repository, branch and agent, keeping the transcript. */
   internal fun rebindChat() {
     val current = chatState.value ?: return
+    if (current.thread.deferDestructiveAction("change the draft context")) return
     val agent = selectedAgent ?: return
     val repo = repository ?: return
     if (closing || current.repositoryMissing || current.thread.busy.value || offerState.value.starting) return
@@ -431,7 +432,7 @@ class NewTaskDraft internal constructor(
     val replay = (current.pendingReplay?.takeIf { !current.started }
       ?: NewTaskReplay(current.agent.agentId, current.repositoryRoot, current.baseBranch, lines))
       .takeIf { newTaskReplayPreamble(it, repo.root, branch) != null }
-    current.end()
+    if (!current.end()) return
     val sameRepository = current.repositoryRoot == repo.root
     val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay,
       changesBaseline = current.changesBaseline.takeIf { sameRepository },
@@ -443,7 +444,7 @@ class NewTaskDraft internal constructor(
     next.thread.replaceTranscript(lines + ChatMessage.Notice(notice))
     scope.launch {
       current.job.join()
-      if (!cards.hasOutstanding(current.thread)) {
+      if (!cards.hasOutstanding(current.thread) && !current.thread.hasDeliveryClaim()) {
         val lock = saveLocks[previousId]
         if (lock != null) {
           lock.withLock {
@@ -497,7 +498,7 @@ class NewTaskDraft internal constructor(
   }
 
   internal fun dispose() {
-    chatState.value?.end()
+    if (chatState.value?.end() == false) return
     chatState.value = null
     images = emptyList()
     clearChatFeedback()
@@ -516,6 +517,7 @@ class NewTaskDraft internal constructor(
     resumedChanges: Boolean = false,
     changesCaptureAttempted: Boolean = false,
   ): NewTaskChat {
+    val openedDatabaseSessionId = (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
     val thread = retainedThreads.getOrPut(sessionId) { ChatThread(clock) }
     val saveLock = saveLocks.getOrPut(sessionId) { Mutex() }
     return NewTaskChat(
@@ -523,7 +525,7 @@ class NewTaskDraft internal constructor(
       scope,
       clock,
       sessionId,
-      (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId,
+      openedDatabaseSessionId,
       root,
       branch,
       agent,
@@ -541,6 +543,8 @@ class NewTaskDraft internal constructor(
       changesBaseline,
       resumedChanges,
       changesCaptureAttempted,
+      diagnostics,
+      { openedDatabaseSessionId != null && (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId == openedDatabaseSessionId },
     ).also {
       clearChatFeedback()
       chatState.value = it
@@ -549,8 +553,9 @@ class NewTaskDraft internal constructor(
   }
 
   // Waits for the cancelled turn first, so a save it had in flight cannot recreate a deleted draft or miss the refreshed list.
-  private fun leave(current: NewTaskChat, afterEnd: suspend () -> Unit) {
-    current.end()
+  private fun leave(current: NewTaskChat, beforeLeave: () -> Unit = {}, afterEnd: suspend () -> Unit): Boolean {
+    if (!current.end()) return false
+    beforeLeave()
     if (chatState.value === current) {
       chatState.value = null
       acceptedKeyState = null
@@ -562,6 +567,7 @@ class NewTaskDraft internal constructor(
       afterEnd()
       refreshSaved()
     }
+    return true
   }
 
   private fun ownsChat(current: NewTaskChat?): Boolean = current != null && chatState.value === current

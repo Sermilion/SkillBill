@@ -132,7 +132,7 @@ class NewTaskViewModelTest {
       ChatNewTaskContext("/work/app", "main"),
     )
     chatRepo.saved[entry.sessionId] = entry
-    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK)
+    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, diagnostics = RecordingDiagnostics())
     val draft = chats.selected.value
     val model = NewTaskViewModel(chats, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, chatRepo, detecting("claude"), FIXED_CLOCK, FakeAppSettingsRepository(), RecordingDiagnostics())
     runCurrent()
@@ -163,14 +163,14 @@ class NewTaskViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val events = MutableSharedFlow<ChatEvent>()
     val chatRepository = FakeExecutionChatRepository().apply { this.events = { events } }
-    val chats = NewTaskChats(chatRepository, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK)
+    val chats = NewTaskChats(chatRepository, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, diagnostics = RecordingDiagnostics())
     val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/app", "app")
       agentId = "claude"
       text = "add export"
     }
-    val workspace = ChatWorkspace(chatRepository, FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, ShellPanes(), SelectionHolder(), chats)
+    val workspace = ChatWorkspace(chatRepository, FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, ShellPanes(), SelectionHolder(), chats, diagnostics = RecordingDiagnostics())
     val first = viewModel(FakeWorkBoardRepository(loadedBoard()), chats)
     advanceUntilIdle()
     first.onAction(NewTaskAction.Send)
@@ -329,7 +329,7 @@ class NewTaskViewModelTest {
   fun `choosing another agent after a chat rebinds that chat`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val chatRepo = FakeExecutionChatRepository(supported = setOf("claude", "codex"))
-    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK)
+    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, diagnostics = RecordingDiagnostics())
     val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository(createTempDirectory("new-task-repo").toString(), "repo")
@@ -474,7 +474,7 @@ class NewTaskViewModelTest {
   fun `repository and branch picker changes after a reply rebind and replay the chat`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val chatRepo = FakeExecutionChatRepository().apply { events = { flowOf(ChatEvent.TextDelta("answer"), ChatEvent.Completed) } }
-    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK)
+    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, diagnostics = RecordingDiagnostics())
     val repository = NewTaskRepository(createTempDirectory("new-task-repo").toString(), "repo")
     val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
@@ -678,7 +678,7 @@ class NewTaskViewModelTest {
       replies += reply
       flow { for (event in reply) emit(event) }
     }
-    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK)
+    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, diagnostics = RecordingDiagnostics())
     val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository(createTempDirectory("new-task-repo").toString(), "repo")

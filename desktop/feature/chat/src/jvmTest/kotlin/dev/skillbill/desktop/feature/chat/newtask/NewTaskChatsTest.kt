@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
@@ -38,7 +39,7 @@ import kotlin.time.Clock
 /** A window's open chats for tests that never send. */
 internal fun unconfinedNewTaskChats() = NewTaskChats(
   FakeExecutionChatRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
-  WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
+  WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics(),
 )
 
 /** A window's open chats on the test scheduler. */
@@ -46,7 +47,7 @@ internal fun TestScope.testNewTaskChats(
   chat: ExecutionChatRepository = FakeExecutionChatRepository(),
   controls: WorkControlRepository = FakeWorkControlRepository(),
   toasts: ToastQueue = ToastQueue(),
-): NewTaskChats = NewTaskChats(chat, controls, testDatabaseSessionController(), toasts, WindowCoroutineScope(backgroundScope), Clock.System).apply {
+): NewTaskChats = NewTaskChats(chat, controls, testDatabaseSessionController(), toasts, WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics()).apply {
   chatDispatcher = StandardTestDispatcher(testScheduler)
 }
 

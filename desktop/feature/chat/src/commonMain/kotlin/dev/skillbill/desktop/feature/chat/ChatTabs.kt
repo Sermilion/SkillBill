@@ -19,6 +19,17 @@ data class ChatToolEntry(
   val finishedAt: Instant? = null,
 )
 
+enum class ChatDeliveryStatus { Pending, Uncertain }
+
+data class ChatDeliveryView(
+  val deliveryId: String,
+  val text: String,
+  val images: List<ChatImage>,
+  val status: ChatDeliveryStatus = ChatDeliveryStatus.Pending,
+  val reason: String = "Waiting for Claude to acknowledge this follow-up.",
+  val blockedAction: String? = null,
+)
+
 /** One line of a chat transcript. */
 sealed interface ChatMessage {
   /** The templated execution state shown before the agent answers; [detail] is the reason, stall time or progress. */
@@ -28,7 +39,7 @@ sealed interface ChatMessage {
    * An operator message; [action] is the suggested action it came from, whose instruction is [text]. [images] were pasted with it
    * and live in memory for the session only.
    */
-  data class Operator(val text: String, val action: ChatSuggestedAction? = null, val images: List<ChatImage> = emptyList()) : ChatMessage
+  data class Operator(val text: String, val action: ChatSuggestedAction? = null, val images: List<ChatImage> = emptyList(), val deliveryId: String? = null) : ChatMessage
 
   /** An agent answer; [streaming] while its turn runs, [tools] in the order the agent used them. */
   data class Agent(

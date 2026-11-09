@@ -95,6 +95,7 @@ internal class ChatTurns(
     val header = state?.header ?: session.item
     session.item = header
     followRoot(session)
+    if (session.thread.hasDeliveryClaim()) return null
     session.coordinationModeState.value = coordinationModeFor(header)
     if (sections is DetailSections.Loaded) return ExecutionRead(header, sections.detail, sections.runOptions)
     session.append(ChatMessage.Notice(UNREADABLE_NOTICE))
@@ -104,6 +105,7 @@ internal class ChatTurns(
   /** Follows a removed worktree, then ends the agent session when the started root is not the one the next turn runs in. */
   suspend fun followRoot(session: ChatSession) {
     followWorktree(session)
+    if (session.thread.hasDeliveryClaim()) return
     if (session.item.goalWorktree != null && session.started && session.startedRoot != session.item.workingRoot()) {
       chat.end(session.sessionId)
       session.restart(UUID.randomUUID().toString())
@@ -115,6 +117,15 @@ internal class ChatTurns(
    * root and posts the notice. A started Claude or Codex session whose move had no failure keeps its id and resumes in the root.
    */
   suspend fun followWorktree(session: ChatSession) {
+    val replacing = worktreeGone(session.item) && !session.worktreeRemovedNoticed ||
+      session.started && session.startedRoot != session.item.workingRoot()
+    if (replacing && session.thread.hasDeliveryClaim()) {
+      session.steering?.detach { chat.end(session.sessionId) } ?: chat.end(session.sessionId)
+      if (session.thread.deferDestructiveAction("change the chat checkout")) {
+        session.recoveryOnly = true
+        return
+      }
+    }
     if (worktreeGone(session.item) && !session.worktreeRemovedNoticed) moveSessions(session)
     followMainCheckout(session)
   }
@@ -154,9 +165,14 @@ internal class ChatTurns(
 
   fun markGone(session: ChatSession) {
     if (session.goneState.value) return
+    session.recoveryOnly = true
+    if (session.thread.hasDeliveryClaim()) {
+      session.steering?.detach { chat.end(session.sessionId) } ?: chat.end(session.sessionId)
+      session.thread.deferDestructiveAction("leave this execution")
+    }
     session.goneState.value = true
-    if (session.queuedState.value.isNotEmpty()) {
-      session.queuedState.value = emptyList()
+    if (session.thread.hasQueuedMessages()) {
+      session.thread.clearQueuedEntries()
       session.append(ChatMessage.Notice("Queued messages were not sent because this execution is no longer in the open database."))
     }
     session.append(ChatMessage.Notice(GONE_NOTICE))
@@ -260,7 +276,7 @@ internal class ChatTurns(
     session.append(ChatMessage.Notice(STOPPED_NOTICE))
     val agent = session.agentState.value
     when {
-      !session.started -> session.restart(UUID.randomUUID().toString())
+      !session.started && !session.thread.hasDeliveryClaim() && !session.recoveryOnly -> session.restart(UUID.randomUUID().toString())
       agent != null -> save(session, agent)
     }
   }

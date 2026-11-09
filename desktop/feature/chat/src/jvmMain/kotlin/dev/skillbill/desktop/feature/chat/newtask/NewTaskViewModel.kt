@@ -157,6 +157,7 @@ class NewTaskViewModel(
       is NewTaskAction.SubmitRepositoryPath -> submitPath(target, action.path)
       NewTaskAction.AddRepository -> addRepository(target)
       is NewTaskAction.ChooseAgent -> {
+        if (!canChangeContext(target)) return
         target.cursorMcpDependency = CursorMcpDependency.Unspecified
         target.agentChosen = true
         target.agentId = action.agentId
@@ -387,6 +388,7 @@ class NewTaskViewModel(
   }
 
   private fun canChangeContext(target: NewTaskDraft): Boolean {
+    if (target.chat.value?.thread?.deferDestructiveAction("change the draft context") == true) return false
     val current = target.chat.value
     return current?.repositoryMissing != true && current?.thread?.busy?.value != true && !target.offer.value.starting
   }

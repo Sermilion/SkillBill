@@ -3,6 +3,10 @@ package dev.skillbill.desktop.core.data.chat
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
+import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
+import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import me.tatarka.inject.annotations.IntoSet
@@ -18,6 +22,18 @@ interface ChatTransport {
 
   /** Whether this agent's chat answers permission requests through an operator approval card. */
   val approvalCapable: Boolean get() = false
+
+  val steeringPolicy: ChatSteeringPolicy get() = ChatSteeringPolicy.LegacySendNow
+
+  suspend fun steer(request: ChatSteeringRequest): ChatSteeringResult =
+    ChatSteeringResult.Unsupported(request.deliveryId, "Live delivery is unavailable")
+
+  fun steeringUpdates(sessionId: String): Flow<ChatSteeringUpdate> = emptyFlow()
+
+  fun settleSteering(sessionId: String, deliveryId: String): ChatSteeringResult =
+    ChatSteeringResult.DeliveryUncertain(deliveryId, "Delivery could not be confirmed; the follow-up remains retained")
+
+  fun retireSteering(sessionId: String, deliveryId: String) = Unit
 
   fun run(request: ChatTurnRequest): Flow<ChatEvent>
 

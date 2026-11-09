@@ -79,6 +79,8 @@ internal class NewTaskChatChanges(
     }
   }
 
+  fun resume() = synchronized(lock) { ended = false }
+
   fun end() = synchronized(lock) {
     ended = true
     readJob?.cancel()

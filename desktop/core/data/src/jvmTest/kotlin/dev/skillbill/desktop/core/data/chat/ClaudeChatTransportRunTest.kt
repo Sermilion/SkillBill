@@ -1,5 +1,8 @@
 package dev.skillbill.desktop.core.data.chat
 
+import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
+import kotlin.test.assertIs
 import dev.skillbill.desktop.core.common.ApplicationCoroutineScope
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatEvent
@@ -42,6 +45,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.Collections
@@ -101,6 +105,10 @@ class ClaudeChatTransportRunTest {
       opened += command
       launch {
         for (message in input) {
+          if (!message.acquireWrite()) {
+            message.written.complete(false)
+            continue
+          }
           try {
             if (INITIALIZE_REQUEST in message.line) {
               loginOutput.forEach { stdout.send(ChatProcessOutput.Line(it)) }
@@ -163,6 +171,40 @@ class ClaudeChatTransportRunTest {
       repository,
       usageClock,
     )
+  }
+
+  @Test
+  fun `live follow up keeps the original collector and retains acknowledgement until retirement`() = runTest {
+    val claude = FakeClaude()
+    val transport = transport(claude)
+    val request = chatRequest()
+    val original = async { transport.run(request).toList() }
+    val (uuid, _) = claude.nextMessage()
+    claude.print(replay(uuid), textDelta("Before"))
+    val delivery = async { transport.steer(ChatSteeringRequest(request.sessionId, "claude", "delivery", "Guidance")) }
+    val (followUp, text) = claude.nextMessage()
+    assertEquals("Guidance", text)
+    assertIs<ChatSteeringResult.DeliveryUncertain>(delivery.await())
+    claude.print(replay(followUp), textDelta("After"))
+    assertEquals(ChatSteeringResult.Accepted("delivery"), transport.steeringUpdates(request.sessionId).first { it.result is ChatSteeringResult.Accepted }.result)
+    transport.retireSteering(request.sessionId, "delivery")
+    val imageDelivery = async {
+      transport.steer(ChatSteeringRequest(request.sessionId, "claude", "image-only", "", listOf(ChatImage(byteArrayOf(1, 2), "image/png"))))
+    }
+    val imageFrame = Json.parseToJsonElement(claude.stdin.receive()).jsonObject
+    val imageUuid = imageFrame.getValue("uuid").jsonPrimitive.content
+    val content = imageFrame.getValue("message").jsonObject.getValue("content").jsonArray
+    assertEquals("image", content.single().jsonObject.getValue("type").jsonPrimitive.content)
+    assertIs<ChatSteeringResult.DeliveryUncertain>(imageDelivery.await())
+    claude.print(replay(imageUuid), """{"type":"result","subtype":"success","is_error":false}""")
+    val events = original.await()
+    assertEquals(listOf("Before", "After"), events.filterIsInstance<ChatEvent.TextDelta>().map { it.text })
+    val update = transport.steeringUpdates(request.sessionId).first()
+    assertEquals(ChatSteeringResult.Accepted("image-only"), update.result)
+    assertEquals(1, claude.opened.size)
+    assertFalse(claude.stopped.isCompleted)
+    transport.retireSteering(request.sessionId, "image-only")
+    transport.end(request.sessionId)
   }
 
 

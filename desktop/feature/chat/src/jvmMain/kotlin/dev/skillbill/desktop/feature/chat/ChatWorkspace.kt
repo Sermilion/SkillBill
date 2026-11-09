@@ -1,5 +1,7 @@
 package dev.skillbill.desktop.feature.chat
 
+import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
+import dev.skillbill.desktop.core.common.Diagnostics
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshotFlow
 import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
@@ -36,6 +38,7 @@ import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.chat.newtask.NewTaskChats
 import dev.skillbill.desktop.feature.chat.newtask.NewTaskRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -122,6 +125,7 @@ class ChatWorkspace(
   private val selection: SelectionHolder,
   private val newTask: NewTaskChats,
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
+  private val diagnostics: Diagnostics,
 ) : ChatCommands {
   internal val cursorMcpDependencies = mutableStateMapOf<String, CursorMcpDependency>()
   private val scope = windowScope.scope
@@ -267,6 +271,7 @@ class ChatWorkspace(
   private fun start(item: WorkItem, id: String, opening: Boolean) {
     val session = ChatSession(item, UUID.randomUUID().toString(), SupervisorJob(scope.coroutineContext[Job]), clock, id)
     sessions[id] = session
+    session.databaseSessionId = (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
     followUnprompted(session)
     followApprovals(session)
     session.append(stateCard(item))
@@ -317,7 +322,13 @@ class ChatWorkspace(
       observeActive()
       return
     }
-    val session = sessions.remove(id) ?: return
+    val session = sessions[id] ?: return
+    if (session.thread.deferDestructiveAction("close this chat")) {
+      activate(id)
+      setPaneOpen(true)
+      return
+    }
+    sessions.remove(id)
     drafts.remove(id)
     cursorMcpDependencies.remove(id)
     pastedImages.remove(id)
@@ -332,6 +343,11 @@ class ChatWorkspace(
 
   /** Ends every chat, and every New task chat's agent process with its saved draft kept. Resumes are cancelled first, so a quit mid-act leaves the execution paused rather than half resumed. */
   suspend fun closeAll(): Boolean {
+    sessions.values.firstOrNull { it.thread.deferDestructiveAction("close all chats") }?.let {
+      activate(it.id)
+      setPaneOpen(true)
+      return false
+    }
     if (!newTask.closeAll()) return false
     closeExecutionChats()
     return true
@@ -340,21 +356,58 @@ class ChatWorkspace(
   private fun closeExecutionChats() {
     resumeJobs.toList().forEach { it.cancel() }
     resumeJobs.clear()
-    observer?.cancel()
-    observer = null
-    sessions.values.forEach {
-      val idle = !it.busyState.value
-      it.job.cancel()
-      chat.end(it.sessionId)
-      if (idle) chat.requestSummary(it.sessionId)
+    sessions.values.toList().forEach { session ->
+      if (session.thread.hasDeliveryClaim()) {
+        synchronized(session) {
+          session.recoveryOnly = true
+          session.steering?.detach { chat.end(session.sessionId) } ?: chat.end(session.sessionId)
+          session.thread.deferDestructiveAction("close this chat")
+          session.turnJob?.cancel()
+          session.resumeJob?.cancel()
+          session.job.children.forEach { it.cancel() }
+          session.thread.endStreaming()
+          session.busyState.value = false
+          session.stoppableState.value = false
+        }
+      }
+      if (!session.thread.hasDeliveryClaim()) close(session.id)
     }
-    sessions.clear()
-    cursorMcpDependencies.clear()
-    approvalTabs.values.forEach { it.job.cancel() }
-    approvalTabs.clear()
-    drafts.clear()
-    pastedImages.clear()
-    tabState.value = ChatTabsState()
+    approvalTabs.keys.toList().forEach(::close)
+    observeActive()
+  }
+
+  internal fun retryDelivery(id: String, deliveryId: String) {
+    val session = sessions[id] ?: return
+    synchronized(session) {
+      val open = databaseSession.state.value as? DatabaseSessionState.Open
+      if (open == null || open.sessionId != session.databaseSessionId || session.gone.value) {
+        session.append(ChatMessage.Notice("The database session changed or the execution is gone. Keep this follow-up for reference or discard it, then open a new chat."))
+        return
+      }
+      if (session.steering?.recover(deliveryId, retry = true) == true) {
+        if (session.recoveryOnly) {
+          followUnprompted(session)
+          followApprovals(session)
+        }
+        session.recoveryOnly = false
+        drainQueue(session)
+      }
+    }
+  }
+
+  internal fun discardDelivery(id: String, deliveryId: String) {
+    val session = sessions[id] ?: return
+    synchronized(session) {
+      if (session.steering?.recover(deliveryId, retry = false) == true) {
+        val open = databaseSession.state.value as? DatabaseSessionState.Open
+        if (session.recoveryOnly && open != null && open.sessionId == session.databaseSessionId && !session.gone.value) {
+          followUnprompted(session)
+          followApprovals(session)
+          session.recoveryOnly = false
+        }
+        drainQueue(session)
+      }
+    }
   }
 
   fun executeAction(id: String, reply: ChatMessage.Agent, action: ChatSuggestedAction) {
@@ -472,12 +525,12 @@ class ChatWorkspace(
   fun stop(id: String) {
     val session = sessions[id] ?: return
     if (!session.stoppableState.value) return
-    val queued = session.queuedState.value
+    session.steering?.settle()
+    val queued = session.thread.takeOrdinaryQueuedEntries()
     if (queued.isNotEmpty()) {
       cursorMcpDependencies[id] = if (drafts[id].isNullOrBlank() && pastedImages[id].isNullOrEmpty()) {
         queued.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.Unspecified
       } else CursorMcpDependency.Unspecified
-      session.queuedState.value = emptyList()
       drafts[id] = restoredDraft(queued, drafts[id].orEmpty())
       val restoredImages = queued.flatMap { it.images }
       if (restoredImages.isNotEmpty()) pastedImages[id] = restoredImages + pastedImages[id].orEmpty()
@@ -485,14 +538,26 @@ class ChatWorkspace(
     interrupt(session)
   }
 
-  /** Ends the running reply; the completion drain then sends all queued messages as one turn. */
+  /** Delivers queued guidance using the provider's policy. Stop remains a separate action. */
   fun sendNow(id: String) {
     val session = sessions[id] ?: return
-    if (!session.stoppableState.value || session.queuedState.value.isEmpty()) return
-    interrupt(session)
+    if (session.recoveryOnly || !session.stoppableState.value || !session.thread.hasQueuedMessages()) return
+    val agent = session.agentState.value ?: run {
+      diagnostics.record("chat.steering_agent_unavailable")
+      session.append(ChatMessage.Notice("Follow-up queued because no chat agent is selected."))
+      return
+    }
+    if (chat.steeringPolicy(agent.agentId) == ChatSteeringPolicy.LegacySendNow) {
+      interrupt(session)
+    } else {
+      (session.steering ?: ChatSteeringDelivery(chat, diagnostics, session.thread, CoroutineScope(scope.coroutineContext + session.job), session,
+        { captured -> sessions[id] === session && session.job.isActive && session.sessionId == captured },
+        { drainQueue(session) }).also { session.steering = it }).send(session.sessionId, agent.agentId)
+    }
   }
 
   private fun interrupt(session: ChatSession) {
+    session.steering?.settle()
     session.stoppableState.value = false
     session.thread.dropUnprompted = true
     val running = session.turnJob
@@ -562,6 +627,7 @@ class ChatWorkspace(
    */
   fun switchAgent(id: String, agentId: String) {
     val session = sessions[id] ?: return
+    if (session.thread.deferDestructiveAction("switch agents")) return
     if (session.busyState.value || session.agentState.value?.agentId == agentId) return
     cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
     session.busyState.value = true
@@ -584,12 +650,13 @@ class ChatWorkspace(
    */
   fun clear(id: String) {
     val session = sessions[id] ?: return
+    if (session.thread.deferDestructiveAction("clear this chat")) return
     cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
     pastedImages.remove(id)
     session.resumeChoicesState.value = null
     session.prefixChoiceState.value = null
     if (session.goneState.value) return
-    session.queuedState.value = emptyList()
+    session.thread.clearQueuedEntries()
     val running = session.turnJob
     session.busyState.value = true
     session.stoppableState.value = false
@@ -623,11 +690,12 @@ class ChatWorkspace(
    */
   fun resume(id: String, entry: ChatHistoryEntry) {
     val session = sessions[id] ?: return
+    if (session.thread.deferDestructiveAction("resume another chat")) return
     cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
     session.resumeChoicesState.value = null
     session.prefixChoiceState.value = null
     if (session.goneState.value || (entry.executionId != null && entry.executionId != session.item.id)) return
-    session.queuedState.value = emptyList()
+    session.thread.clearQueuedEntries()
     val running = session.turnJob
     session.busyState.value = true
     session.stoppableState.value = false
@@ -686,7 +754,7 @@ class ChatWorkspace(
     val session = sessions[id] ?: return
     if (session.goneState.value || (message.text.isBlank() && message.images.isEmpty())) return
     session.prefixChoiceState.value = null
-    session.queuedState.update { it + message }
+    session.thread.enqueue(message)
     drainQueue(session)
   }
 
@@ -698,10 +766,10 @@ class ChatWorkspace(
     cursorMcpDependencies[id] = cursorMcpDependency
   }
 
-  private fun drainQueue(session: ChatSession) {
-    if (!session.job.isActive || session.busyState.value || session.turnJob != null || session.resumeJob != null || session.goneState.value) return
-    val message = session.thread.takeQueuedMessage() ?: return
-    if (message.action == null && cards(session).submitAdjustment(session.thread, message.text)) return
+  private fun drainQueue(session: ChatSession) = synchronized(session) {
+    if (session.recoveryOnly || !session.job.isActive || session.busyState.value || session.turnJob != null || session.resumeJob != null || session.goneState.value) return@synchronized
+    val message = session.thread.takeQueuedMessage() ?: return@synchronized
+    if (message.action == null && cards(session).submitAdjustment(session.thread, message.text)) return@synchronized
     session.busyState.value = true
     session.append(ChatMessage.Operator(message.text, message.action, message.images))
     if (message.pauseAndAct) pauseAndAct(session, message.text, message.images, message.cursorMcpDependency) else send(session, message.text, message.images, message.cursorMcpDependency)
@@ -825,27 +893,43 @@ class ChatWorkspace(
 
   // Shows the replies the agent starts on its own, for whichever agent session the chat continues now.
   private fun followUnprompted(session: ChatSession) {
-    scope.launch(session.job) {
-      session.sessionIds.collectLatest { id ->
-        chat.unprompted(id).collect {
-          turns.unprompted(session, it)
-          drainQueue(session)
+    synchronized(session) {
+      if (session.unpromptedObserver?.isActive == true) return
+      lateinit var observer: Job
+      observer = scope.launch(session.job, start = CoroutineStart.LAZY) {
+        session.sessionIds.collectLatest { id ->
+          chat.unprompted(id).collect {
+            if (session.unpromptedObserver === observer && sessions[session.id] === session && session.job.isActive) {
+              turns.unprompted(session, it)
+              drainQueue(session)
+            }
+          }
         }
       }
+      session.unpromptedObserver = observer
+      observer.invokeOnCompletion { synchronized(session) { if (session.unpromptedObserver === observer) session.unpromptedObserver = null } }
+      observer.start()
     }
   }
 
   // Collecting the feed is what makes this window the repository's operator consumer, so it lives exactly as long as the chat.
   private fun followApprovals(session: ChatSession) {
-    scope.launch(session.job) {
-      approvalFlow.follow(
-        thread = session.thread,
-        live = session.approvalLiveState,
-        repositoryRoot = { session.item.workingRoot() },
-        // The chat's own process requests, and the execution's phase requests, whose run is the execution itself.
-        owns = { it.key.runId == session.sessionId || it.key.runId == session.item.id },
-        changed = { turns.approvalChanged(session) },
-      )
+    synchronized(session) {
+      if (session.approvalObserver?.isActive == true) return
+      lateinit var observer: Job
+      observer = scope.launch(session.job, start = CoroutineStart.LAZY) {
+        approvalFlow.follow(
+          thread = session.thread,
+          live = session.approvalLiveState,
+          repositoryRoot = { session.item.workingRoot() },
+          // The chat's own process requests, and the execution's phase requests, whose run is the execution itself.
+          owns = { it.key.runId == session.sessionId || it.key.runId == session.item.id },
+          changed = { if (session.approvalObserver === observer && sessions[session.id] === session && session.job.isActive) turns.approvalChanged(session) },
+        )
+      }
+      session.approvalObserver = observer
+      observer.invokeOnCompletion { synchronized(session) { if (session.approvalObserver === observer) session.approvalObserver = null } }
+      observer.start()
     }
   }
 
@@ -935,7 +1019,10 @@ class ChatWorkspace(
           } else if (state.sections !is DetailSections.Pending) {
             it.item = state.header
             // A refresh during a streaming turn leaves the live process alone; the next accept follows the removed worktree.
-            if (it.turnJob == null) turns.followRoot(it)
+            if (it.turnJob == null) {
+              turns.followRoot(it)
+              drainQueue(it)
+            }
             val title = state.header.issueKey ?: state.header.title
             tabState.update { s -> s.copy(tabs = s.tabs.map { t -> if (t.executionId == it.item.id) t.copy(title = title) else t }) }
             it.coordinationModeState.value = coordinationModeFor(state.header)

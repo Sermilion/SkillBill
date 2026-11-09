@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
@@ -111,6 +112,7 @@ class NewTaskChats(
   private val clock: Clock,
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
   private val changesRepository: ChatChangesRepository = UnavailableChatChanges,
+  private val diagnostics: Diagnostics,
 ) {
   private val scope = windowScope.scope
   private val savedChats = NewTaskSavedChats(chats, scope, toasts)
@@ -189,6 +191,10 @@ class NewTaskChats(
 
   /** Closes [draft], or asks first when its agent is still replying. */
   fun requestClose(draft: NewTaskDraft) {
+    if (draft.chat.value?.thread?.deferDestructiveAction("close this draft") == true) {
+      select(draft)
+      return
+    }
     if (draft.chat.value?.thread?.busy?.value == true) pendingCloseState.value = draft else scope.launch { close(draft) }
   }
 
@@ -326,7 +332,7 @@ class NewTaskChats(
   }
 
   private fun create(): NewTaskDraft {
-    val draft = NewTaskDraft(chats, workControls, databaseSession, toasts, windowScope, clock, approvals, savedChats, changesRepository)
+    val draft = NewTaskDraft(chats, workControls, databaseSession, toasts, windowScope, clock, approvals, savedChats, changesRepository, diagnostics)
     draft.chatDispatcher = chatDispatcher
     replyWatches[draft] = watchReplies(draft)
     return draft

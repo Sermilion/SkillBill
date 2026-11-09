@@ -237,10 +237,13 @@ internal class ClaudeChatApproval(
     return generations.admit(this)
   }
 
-  /** Database-session close: releases the owner session, cancelling its requests, then stops the process it served. */
+  /** Database-session close: classify and stop the process before releasing the owner session and its requests. */
   override fun end() {
-    release()
-    stopProcess()
+    try {
+      stopProcess()
+    } finally {
+      release()
+    }
   }
 
   fun initializeFrame(): String = requests.initializeFrame().toString()

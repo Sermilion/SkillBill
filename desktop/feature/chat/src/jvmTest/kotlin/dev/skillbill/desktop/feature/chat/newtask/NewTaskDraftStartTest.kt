@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
@@ -131,7 +132,7 @@ class NewTaskDraftStartTest {
   fun `refusal and success both keep the conversation`() = runTest {
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository()
-    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics()).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/repo", "repo")
       agentId = "claude"
@@ -166,7 +167,7 @@ class NewTaskDraftStartTest {
     }
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository()
-    val draft = NewTaskDraft(chats, controls, sessions, ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+    val draft = NewTaskDraft(chats, controls, sessions, ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics()).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/repo", "repo")
       agentId = "claude"
@@ -197,7 +198,7 @@ class NewTaskDraftStartTest {
   fun `goal and plan starts refuse an active chat turn`() = runTest {
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flow { awaitCancellation() } } }
     val controls = FakeWorkControlRepository()
-    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics()).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/repo", "repo")
       agentId = "claude"
@@ -227,7 +228,7 @@ class NewTaskDraftStartTest {
         return result.await()
       }
     }
-    val draft = NewTaskDraft(chats, workControls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+    val draft = NewTaskDraft(chats, workControls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics()).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/repo", "repo")
       agentId = "claude"
@@ -264,7 +265,7 @@ class NewTaskDraftStartTest {
         return result.await()
       }
     }
-    val draft = NewTaskDraft(chats, workControls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+    val draft = NewTaskDraft(chats, workControls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics()).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/repo", "repo")
       agentId = "claude"
@@ -289,7 +290,7 @@ class NewTaskDraftStartTest {
     val chats = FakeExecutionChatRepository()
     val controls = FakeWorkControlRepository()
     controls.newTaskOutcome = NewTaskStartOutcome.Started("monitor", NewTaskKind.Monitor)
-    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics()).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/repo", "repo")
       agentId = "claude"
@@ -345,7 +346,7 @@ class NewTaskDraftStartTest {
     }
     val controls = FakeWorkControlRepository()
     val draft = NewTaskDraft(
-      chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System,
+      chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics(),
     ).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/repo", "repo")
@@ -451,7 +452,7 @@ class NewTaskDraftStartTest {
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository()
     val failure = CompletableDeferred<String?>()
-    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics()).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/repo", "repo")
       agentId = "claude"
@@ -478,7 +479,7 @@ class NewTaskDraftStartTest {
   fun `monitor start trims the target before launch`() = runTest {
     val chats = FakeExecutionChatRepository()
     val controls = FakeWorkControlRepository()
-    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics()).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/repo", "repo")
       agentId = "claude"
@@ -494,7 +495,7 @@ class NewTaskDraftStartTest {
   fun `standalone refusal and goal refusal both go to the chat`() = runTest {
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository()
-    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics()).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/repo", "repo")
       agentId = "claude"
@@ -534,7 +535,7 @@ class NewTaskDraftStartTest {
     val controls = FakeWorkControlRepository()
     val firstRoot = createTempDirectory("first-repo").also { it.toFile().deleteOnExit() }.toString()
     val secondRoot = createTempDirectory("second-repo").also { it.toFile().deleteOnExit() }.toString()
-    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics()).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository(firstRoot, "first")
       agentId = "claude"
@@ -690,7 +691,7 @@ class NewTaskDraftStartTest {
     controls: WorkControlRepository,
     operatorText: String = "Add export",
   ): NewTaskDraft {
-    return NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+    return NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics()).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/repo", "repo")
       agentId = "claude"
