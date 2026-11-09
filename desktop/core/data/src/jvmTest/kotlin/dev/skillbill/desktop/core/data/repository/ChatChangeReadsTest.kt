@@ -4,6 +4,9 @@ import dev.skillbill.desktop.core.domain.model.ChatBaselineCapture
 import dev.skillbill.desktop.core.domain.model.ChatChangedPaths
 import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatChangesRead
+import dev.skillbill.desktop.core.domain.model.ChangeBaseline
+import dev.skillbill.desktop.core.domain.model.chatScopeTarget
+import dev.skillbill.desktop.core.data.runtime.toPort
 import skillbill.di.core.OptionalCallbacks
 import skillbill.di.core.RuntimeComponent
 import skillbill.di.core.RuntimeContext
@@ -13,9 +16,14 @@ import skillbill.di.core.create
 import skillbill.model.EnvironmentContext
 import java.io.File
 import java.nio.file.Files
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import skillbill.ports.workchanges.model.WorkChangeListResult
+import skillbill.ports.workchanges.model.WorkFileDiffResult
 import kotlin.time.Clock
 
 class ChatChangeReadsTest {
@@ -58,6 +66,101 @@ class ChatChangeReadsTest {
     assertEquals(listOf("b.kt", "d.kt"), everything.files.map { it.path })
   }
 
+  @AfterTest
+  fun cleanUp() {
+    home.toFile().deleteRecursively()
+  }
+
+  @Test
+  fun `fast forwarding main during a turn does not attribute upstream changes to the chat`() {
+    committed("a.kt", "b.kt")
+    remoteAtHead()
+    val baseline = snapshot()
+    git("checkout", "-q", "-b", "incoming")
+    write("a.kt", "upstream edit\n")
+    write("upstream.kt", "upstream file\n")
+    git("add", ".")
+    git("commit", "-q", "-m", "upstream")
+    remoteAtHead()
+    git("checkout", "-q", "main")
+    git("merge", "--ff-only", "incoming")
+
+    assertEquals(ChatChangedPaths.Listed(emptySet()), reads.changedPaths(repo.path, baseline))
+    val result = assertIs<ChatChangesRead.Listed>(reads.read(repo.path, baseline, null)).changes
+    assertTrue(result.files.isEmpty())
+    assertEquals(0, result.insertions)
+    assertEquals(0, result.deletions)
+    assertEquals(0, result.commitCount)
+    assertFalse(result.uncommitted)
+  }
+
+  @Test
+  fun `pull and chat edits in the same file keep only chat lines in counts and the changes window`() {
+    committed("a.kt", "b.kt")
+    write("a.kt", (1..20).joinToString("") { "line $it\n" })
+    git("add", ".")
+    git("commit", "-q", "-m", "long file")
+    remoteAtHead()
+    write("b.kt", "dirty before chat\n")
+    val baseline = snapshot()
+    git("stash", "push", "-q")
+    git("checkout", "-q", "-b", "incoming")
+    write("a.kt", (1..20).joinToString("") { if (it == 2) "upstream line\n" else "line $it\n" })
+    git("add", ".")
+    git("commit", "-q", "-m", "upstream")
+    remoteAtHead()
+    git("checkout", "-q", "main")
+    git("merge", "--ff-only", "incoming")
+    git("stash", "pop", "-q")
+    write("a.kt", File(repo, "a.kt").readText().replace("line 18\n", "chat line\n"))
+    git("add", "a.kt")
+    git("commit", "-q", "-m", "chat edit")
+    write("a.kt", File(repo, "a.kt").readText() + "uncommitted chat line\n")
+
+    assertEquals(ChatChangedPaths.Listed(setOf("a.kt")), reads.changedPaths(repo.path, baseline))
+    val result = assertIs<ChatChangesRead.Listed>(reads.read(repo.path, baseline, setOf("a.kt"))).changes
+    assertEquals(listOf("a.kt"), result.files.map { it.path })
+    assertEquals(2, result.insertions)
+    assertEquals(1, result.deletions)
+    assertEquals(1, result.commitCount)
+    assertEquals(listOf("chat edit"), result.timeline.commits.map { it.subject })
+    assertTrue(result.uncommitted)
+    val target = chatScopeTarget("session", repo.path, baseline, result.timeline, setOf("a.kt"), result.comparisonBaseSha)
+    val comparison = assertIs<ChangeBaseline.RunStart>(target.allBaseline)
+    val listed = assertIs<WorkChangeListResult.Listed>(runtime.workChangesPort.changes(comparison.toPort()))
+    assertEquals(result.insertions, listed.insertions)
+    assertEquals(result.deletions, listed.deletions)
+    val patch = assertIs<WorkFileDiffResult.Patch>(runtime.workChangesPort.fileDiff(repo.path, listed.baseSha, listed.files.single())).text
+    assertTrue("+chat line" in patch)
+    assertTrue("+uncommitted chat line" in patch)
+    assertFalse("+upstream line" in patch)
+    assertEquals("dirty before chat\n", File(repo, "b.kt").readText())
+    assertEquals(" M a.kt\n M b.kt", gitOutput("status", "--short"))
+  }
+
+  @Test
+  fun `an upstream conflict with the prechat snapshot reports unavailable without modifying files`() {
+    committed("a.kt")
+    remoteAtHead()
+    write("a.kt", "prechat edit\n")
+    val baseline = snapshot()
+    git("checkout", "--", "a.kt")
+    write("a.kt", "upstream edit\n")
+    git("add", ".")
+    git("commit", "-q", "-m", "upstream")
+    remoteAtHead()
+
+    assertIs<ChatChangedPaths.Unavailable>(reads.changedPaths(repo.path, baseline))
+    assertIs<ChatChangesRead.Unavailable>(reads.read(repo.path, baseline, null))
+    assertEquals("upstream edit\n", File(repo, "a.kt").readText())
+    assertEquals("", gitOutput("status", "--porcelain"))
+  }
+
+  private fun remoteAtHead() {
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+  }
+
   private fun snapshot(): ChatChangesBaseline = assertIs<ChatBaselineCapture.Captured>(reads.capture(repo.path)).baseline
 
   private fun committed(vararg names: String) {
@@ -71,9 +174,12 @@ class ChatChangeReadsTest {
 
   private fun write(name: String, text: String) = File(repo, name).writeText(text)
 
-  private fun git(vararg args: String) {
+  private fun git(vararg args: String) { gitOutput(*args) }
+
+  private fun gitOutput(vararg args: String): String {
     val process = ProcessBuilder(listOf("git", *args)).directory(repo).redirectErrorStream(true).start()
     val output = process.inputStream.bufferedReader().readText()
     check(process.waitFor() == 0) { output }
+    return output.trimEnd()
   }
 }

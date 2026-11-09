@@ -8,6 +8,7 @@ data class ChatChanges(
   val uncommitted: Boolean,
   val headSha: String,
   val timeline: ChangeScopeTimeline,
+  val comparisonBaseSha: String? = null,
 )
 
 sealed interface ChatBaselineCapture {

@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.infrastructure.workflow.process.gitTimedOutError
 import skillbill.infrastructure.workflow.process.runGitProcess
 import skillbill.ports.workchanges.WorkTreeSnapshotPort
+import skillbill.ports.workchanges.model.WorkTreeComparisonResult
 import skillbill.ports.workchanges.model.WorkTreeSnapshotResult
 import java.nio.file.Path
 
@@ -19,6 +20,12 @@ class GitWorkTreeSnapshotAdapter : WorkTreeSnapshotPort {
       is BaseRead.Failed -> WorkTreeSnapshotResult.Failed(head.message)
     }
   }
+
+  override fun comparisonBaseline(
+    worktreeRoot: String,
+    headSha: String,
+    snapshotSha: String?,
+  ): WorkTreeComparisonResult = integrateSnapshotUpstream(Path.of(worktreeRoot), headSha, snapshotSha)
 
   private fun captureAtHead(
     root: Path,
