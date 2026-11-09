@@ -162,12 +162,15 @@ class ChatChangeReadsTest {
     val sibling = home.resolve("linked").toFile()
     git("worktree", "add", "-q", "-b", "linked", sibling.path)
     File(sibling, "a.kt").writeText("pre-existing dirty edit\n")
+    // Changed paths of a linked checkout come from git, which uses forward slashes on Windows too;
+    // worktree roots keep the native form.
+    val siblingGitRoot = sibling.path.replace('\\', '/')
     val baseline = snapshot()
     write("b.kt", "chat in original\n")
     File(sibling, "b.kt").writeText("chat in linked\nextra line\n")
 
     val changed = assertIs<ChatChangedPaths.Listed>(reads.changedPaths(repo.path, baseline))
-    assertEquals(setOf("b.kt", sibling.path + "/b.kt"), changed.paths)
+    assertEquals(setOf("b.kt", "$siblingGitRoot/b.kt"), changed.paths)
     val result = assertIs<ChatChangesRead.Listed>(reads.read(repo.path, baseline, changed.paths)).changes
     assertEquals(2, result.files.size)
     assertEquals(3, result.insertions)
@@ -194,6 +197,8 @@ class ChatChangeReadsTest {
     git("init", "-q", "-b", "main")
     git("config", "user.email", "test@example.com")
     git("config", "user.name", "Test")
+    // Windows runners enable autocrlf system-wide; the fixtures compare exact LF bytes.
+    git("config", "core.autocrlf", "false")
     names.forEach { write(it, "initial\n") }
     git("add", ".")
     git("commit", "-q", "-m", "initial")
