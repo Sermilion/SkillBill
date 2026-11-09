@@ -94,7 +94,7 @@ class TerminalWorkspace(
   private val sessions = ConcurrentHashMap<Long, TerminalSession>()
   private var nextId = 1L
   private var heightWrite: Job? = null
-  private var selected: SelectedRoot = SelectedRoot.None
+  private val startSelection = TerminalStartSelection()
   private var font: Font? = null
 
   private val open = MutableStateFlow(false)
@@ -143,13 +143,7 @@ class TerminalWorkspace(
 
   init {
     scope.launch {
-      selection.item.collect { item ->
-        if (item != null) {
-          selected = item.toSelectedRoot()
-        } else if (selected is SelectedRoot.Work) {
-          selected = SelectedRoot.None
-        }
-      }
+      selection.item.collect { item -> startSelection.itemSelected(item?.toSelectedRoot()) }
     }
     KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(chords)
     live += this
@@ -159,20 +153,20 @@ class TerminalWorkspace(
   override fun toggleTerminal() {
     val current = tabs.value
     when {
-      current.tabs.isEmpty() -> addTab(selected)
+      current.tabs.isEmpty() -> addTab(startSelection.current)
       else -> update(current.copy(paneOpen = !current.paneOpen))
     }
   }
 
-  override fun newTerminalTab() = addTab(selected)
+  override fun newTerminalTab() = addTab(startSelection.current)
 
   override fun openTerminal(directory: Path?) = addTab(directory)
 
   override fun openTerminal(item: WorkItem) = addTab(item.toSelectedRoot())
 
-  override fun specProjectSelected(checkout: Path?) {
-    selected = SelectedRoot.Spec(checkout)
-  }
+  override fun specProjectSelected(checkout: Path?) = startSelection.specProjectSelected(checkout)
+
+  override fun chatRepositorySelected(root: Path?) = startSelection.chatRepositorySelected(root)
 
   override fun closeTerminals() {
     KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(chords)
@@ -300,22 +294,6 @@ class TerminalWorkspace(
 
   private fun closeSessions() {
     sessions.keys.toList().forEach { id -> sessions.remove(id)?.close() }
-  }
-
-  // The window's current selection: a work item's repository root, or the selected spec project's checkout.
-  private sealed interface SelectedRoot {
-    val directory: Path?
-    val fallbackRoot: Path?
-    val notice: String? get() = null
-
-    data class Work(override val directory: Path, override val fallbackRoot: Path? = null, override val notice: String? = null) : SelectedRoot
-
-    data class Spec(override val directory: Path?) : SelectedRoot { override val fallbackRoot: Path? = null }
-
-    data object None : SelectedRoot {
-      override val directory: Path? = null
-      override val fallbackRoot: Path? = null
-    }
   }
 
   private companion object {
