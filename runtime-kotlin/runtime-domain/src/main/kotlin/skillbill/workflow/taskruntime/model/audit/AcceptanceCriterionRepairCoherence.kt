@@ -79,6 +79,10 @@ internal object AcceptanceCriterionRepairCoherence {
       )
   }
 
+  fun historicalIsCoherent(state: AcceptanceCriterionRepairState): Boolean =
+    catalogIsCoherent(state) && progressIsCoherent(state, true) &&
+      outcomesAreCoherent(state, true) && historyIsCoherent(state)
+
   private fun catalogIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
     val admission =
       AcceptanceCriterionRepairAdmission(
@@ -106,7 +110,10 @@ internal object AcceptanceCriterionRepairCoherence {
       state.currentCriterionRef == (pending.firstOrNull() ?: state.unresolvedQueue.firstOrNull())
   }
 
-  private fun progressIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
+  private fun progressIsCoherent(
+    state: AcceptanceCriterionRepairState,
+    historical: Boolean = false,
+  ): Boolean {
     val reserved =
       state.stage == AcceptanceCriterionRepairStage.REPAIR_RESERVED ||
         state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION
@@ -118,19 +125,32 @@ internal object AcceptanceCriterionRepairCoherence {
     if (!awaiting && hasEvidence) return false
     if (reserved != (state.reservation != null)) return false
     if (readonly && (state.reservation != null || state.pendingAuditRefs.isEmpty())) return false
-    return stageIsCoherent(state) && reservationIsCoherent(state) && interactionTraceIsCoherent(state)
+    return stageIsCoherent(state, historical) && reservationIsCoherent(state, historical) &&
+      interactionTraceIsCoherent(state)
   }
 
-  private fun stageIsCoherent(state: AcceptanceCriterionRepairState): Boolean =
+  private fun stageIsCoherent(
+    state: AcceptanceCriterionRepairState,
+    historical: Boolean,
+  ): Boolean =
     when (state.stage) {
-      AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED -> discoveryIsCoherent(state)
+      AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED -> discoveryIsCoherent(state, historical)
       AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED -> readOnlyAuditIsRequired(state)
-      AcceptanceCriterionRepairStage.REPAIR_RESERVED -> reservedIsCoherent(state)
-      AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION -> awaitingStageIsCoherent(state)
+      AcceptanceCriterionRepairStage.REPAIR_RESERVED ->
+        state.mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED && !hasExhaustedBudget(state, historical)
+      AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
+        if (historical) historicalAwaitingIsCoherent(state) else awaitingStageIsCoherent(state)
       AcceptanceCriterionRepairStage.ACCEPTED -> acceptedIsCoherent(state)
-      AcceptanceCriterionRepairStage.BUDGET_BLOCKED -> budgetIsBlocked(state)
+      AcceptanceCriterionRepairStage.BUDGET_BLOCKED ->
+        state.mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED &&
+          state.currentCriterionRef != null && hasExhaustedBudget(state, historical)
       AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED -> acceptedIsCoherent(state)
     }
+
+  private fun historicalAwaitingIsCoherent(state: AcceptanceCriterionRepairState): Boolean =
+    state.mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED &&
+      !state.completedRepairEvidenceRef.isNullOrBlank() && !state.admittedCheckpointId.isNullOrBlank() &&
+      state.admittedTreeDigest?.isDigest() == true && !hasExhaustedBudget(state, true)
 
   private fun interactionTraceIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
     val trace = state.interactionTrace
@@ -162,31 +182,39 @@ internal object AcceptanceCriterionRepairCoherence {
         refs.all(pattern::matches)
     }
 
-  private fun reservedIsCoherent(state: AcceptanceCriterionRepairState): Boolean =
-    state.mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED && !hasExhaustedBudget(state)
-
   private fun awaitingStageIsCoherent(state: AcceptanceCriterionRepairState): Boolean = awaitingIsCoherent(state)
 
   private fun acceptedIsCoherent(state: AcceptanceCriterionRepairState): Boolean =
     state.mode == AcceptanceCriterionRepairMode.ACCEPTED && state.unresolvedQueue.isEmpty() &&
       state.pendingAuditRefs.isEmpty()
 
-  private fun budgetIsBlocked(state: AcceptanceCriterionRepairState): Boolean =
-    state.mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED && state.currentCriterionRef != null &&
-      hasExhaustedBudget(state)
-
   private fun readOnlyAuditIsRequired(state: AcceptanceCriterionRepairState): Boolean =
     state.mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED &&
       state.currentCriterionRef == state.pendingAuditRefs.firstOrNull()
 
-  private fun hasExhaustedBudget(state: AcceptanceCriterionRepairState): Boolean =
-    state.currentCriterionRef?.let { state.budgetBlocks(it) } ?: false
+  private fun hasExhaustedBudget(
+    state: AcceptanceCriterionRepairState,
+    historical: Boolean = false,
+  ): Boolean =
+    if (historical) {
+      state.unresolvedQueue.any {
+        state.unsuccessfulTotals.getOrDefault(
+          it,
+          0,
+        ) >= FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES
+      }
+    } else {
+      state.currentCriterionRef?.let { state.budgetBlocks(it) } ?: false
+    }
 
-  private fun discoveryIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
+  private fun discoveryIsCoherent(
+    state: AcceptanceCriterionRepairState,
+    historical: Boolean,
+  ): Boolean {
     val mode =
       state.mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED ||
         state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY && hasNoRepairHistory(state)
-    val budget = !hasExhaustedBudget(state)
+    val budget = !hasExhaustedBudget(state, historical)
     return mode && budget && state.unresolvedQueue.isNotEmpty()
   }
 
@@ -202,7 +230,10 @@ internal object AcceptanceCriterionRepairCoherence {
       mutation.currentCheckpointId == state.admittedCheckpointId
   }
 
-  private fun reservationIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
+  private fun reservationIsCoherent(
+    state: AcceptanceCriterionRepairState,
+    historical: Boolean,
+  ): Boolean {
     val live = state.reservation ?: return true
     val identity = live.criterionRef == state.currentCriterionRef && live.reservationId.isNotBlank()
     val revision = live.revision in 1..state.revision && live.stageRevision in live.revision..state.revision
@@ -210,7 +241,14 @@ internal object AcceptanceCriterionRepairCoherence {
       state.outcomes.none { it.reservationId == live.reservationId } &&
         (
           state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ||
-            !state.budgetBlocks(live.criterionRef)
+            if (historical) {
+              state.unsuccessfulTotals.getOrDefault(
+                live.criterionRef,
+                0,
+              ) < FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES
+            } else {
+              !state.budgetBlocks(live.criterionRef)
+            }
         )
     val capacity =
       state.outcomes.size < AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES &&
@@ -218,7 +256,10 @@ internal object AcceptanceCriterionRepairCoherence {
     return identity && revision && unspent && capacity
   }
 
-  private fun outcomesAreCoherent(state: AcceptanceCriterionRepairState): Boolean {
+  private fun outcomesAreCoherent(
+    state: AcceptanceCriterionRepairState,
+    historical: Boolean = false,
+  ): Boolean {
     val outcomes = state.outcomes
     val unique =
       outcomes.map { it.reservationId }.distinct().size == outcomes.size &&
@@ -236,14 +277,19 @@ internal object AcceptanceCriterionRepairCoherence {
     val settled = state.outcomes.map { it.reservationId }.toSet()
     val checks = state.independentChecks.filter { it.mutation.repairAttemptId in settled }
     val expectedTotals =
-      refs.associateWith { ref ->
-        acceptanceCriterionRepairAccounting(
-          ref,
-          state.completedMutations,
-          checks,
-          state.repairBudgets,
-        ).noProgressOutcomes
-      }.filterValues { it > 0 }
+      if (historical) {
+        state.outcomes.drop(state.budgetStartOutcomeIndex).filterNot { it.successful }
+          .groupingBy { it.criterionRef }.eachCount()
+      } else {
+        refs.associateWith { ref ->
+          acceptanceCriterionRepairAccounting(
+            ref,
+            state.completedMutations,
+            checks,
+            state.repairBudgets,
+          ).noProgressOutcomes
+        }.filterValues { it > 0 }
+      }
     return validTotals && expectedTotals == totals.filterValues { it > 0 }
   }
 

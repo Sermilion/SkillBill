@@ -110,20 +110,20 @@ class GoalRunnerStatusProjectionDegradationTest {
   @Test
   fun `audit outcome never treats an unknown verdict as passing`() {
     val record = auditRecord()
-    assertEquals(GoalRunnerSubtaskAuditOutcome.PASSED, subtaskAuditOutcome(record, null, emptyList(), "satisfied"))
-    assertEquals(GoalRunnerSubtaskAuditOutcome.FAILED, subtaskAuditOutcome(record, null, emptyList(), "advance"))
+    assertEquals(GoalRunnerSubtaskAuditOutcome.PASSED, subtaskAuditOutcome(record, null, "satisfied"))
+    assertEquals(GoalRunnerSubtaskAuditOutcome.FAILED, subtaskAuditOutcome(record, null, "advance"))
     assertEquals(
       GoalRunnerSubtaskAuditOutcome.UNKNOWN,
-      subtaskAuditOutcome(record, null, emptyList(), "future_verdict"),
+      subtaskAuditOutcome(record, null, "future_verdict"),
     )
-    assertEquals(GoalRunnerSubtaskAuditOutcome.UNKNOWN, subtaskAuditOutcome(record, null, emptyList(), null))
+    assertEquals(GoalRunnerSubtaskAuditOutcome.UNKNOWN, subtaskAuditOutcome(record, null, null))
     assertEquals(
       GoalRunnerSubtaskAuditOutcome.RUNNING,
-      subtaskAuditOutcome(auditRecord(WorkflowStepStatus.RUNNING), null, emptyList(), "satisfied"),
+      subtaskAuditOutcome(auditRecord(WorkflowStepStatus.RUNNING), null, "satisfied"),
     )
     assertEquals(
       GoalRunnerSubtaskAuditOutcome.FAILED,
-      subtaskAuditOutcome(auditRecord(WorkflowStepStatus.BLOCKED), null, emptyList(), "satisfied"),
+      subtaskAuditOutcome(auditRecord(WorkflowStepStatus.BLOCKED), null, "satisfied"),
     )
   }
 

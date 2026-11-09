@@ -80,7 +80,16 @@ class AcceptanceCriterionRepairAccountingTest {
   @Test
   fun `owed escalated mutation and its check precede exhaustion then explicit retry retains escalation`() {
     var state = initial()
-    for (number in 1..3) state = finish(state, "attempt-$number", AcceptanceCriterionProgressClassification.NO_PROGRESS)
+    for (number in 1..3) {
+      state =
+        finish(
+          state,
+          "attempt-$number",
+          AcceptanceCriterionProgressClassification.NO_PROGRESS,
+          reasoning = number >= 3,
+        )
+    }
+    state = state.withUnknownLastLaunch()
     assertEquals(3, state.unsuccessfulTotals["AC-001"])
     assertEquals(AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED, state.stage)
     assertEquals(state, AcceptanceCriterionRepairState.restore(state))
@@ -193,8 +202,15 @@ class AcceptanceCriterionRepairAccountingTest {
   fun `another exhausted criterion does not block the queue head but blocks when selected`() {
     var state = finish(initial(2), "first-satisfied", AcceptanceCriterionProgressClassification.SATISFIED)
     for (number in 1..3) {
-      state = finish(state, "second-$number", AcceptanceCriterionProgressClassification.NO_PROGRESS)
+      state =
+        finish(
+          state,
+          "second-$number",
+          AcceptanceCriterionProgressClassification.NO_PROGRESS,
+          reasoning = number >= 3,
+        )
     }
+    state = state.withUnknownLastLaunch()
     state = finish(state, "second-satisfied", AcceptanceCriterionProgressClassification.SATISFIED, reasoning = true)
     val targets =
       listOf(
@@ -225,6 +241,66 @@ class AcceptanceCriterionRepairAccountingTest {
     assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, selected.stage)
     assertEquals(selected, selected.asRepairWireMap().toAcceptanceCriterionRepairState("next-exhausted-criterion"))
     assertNull(selected.reserve("second-forbidden"))
+  }
+
+  @Test
+  fun `conflicting terminal captures and checks fail without replacing lifetime evidence`() {
+    val captured =
+      assertNotNull(assertNotNull(initial().reserve("worker-1")).retainCompletedMutation(mutation("worker-1")))
+    val original = captured.completedMutations.single()
+    assertFailsWith<SkillBillRuntimeException> {
+      captured.retainCompletedMutation(original.copy(currentCheckpointId = "different-checkpoint"))
+    }
+    val check = checked(original, captured.revision, AcceptanceCriterionProgressClassification.NO_PROGRESS)
+    val retained = assertNotNull(captured.retainIndependentCheck(check))
+    assertFailsWith<SkillBillRuntimeException> {
+      retained.retainIndependentCheck(check.copy(context = check.context.copy(checkerOutputDigest = "a".repeat(64))))
+    }
+    val progress =
+      assertNotNull(FeatureTaskRuntimeImplementationProgress.initial(listOf("AC-001")).reserveWorker("worker-1"))
+    val implemented = assertNotNull(progress.retainCompletedMutation(original))
+    assertFailsWith<SkillBillRuntimeException> {
+      implemented.retainCompletedMutation(original.copy(currentCheckpointId = "different-checkpoint"))
+    }
+    val checkedProgress = assertNotNull(implemented.retainIndependentCheck(check))
+    assertFailsWith<SkillBillRuntimeException> {
+      checkedProgress.retainIndependentCheck(
+        check.copy(context = check.context.copy(checkerOutputDigest = "a".repeat(64))),
+      )
+    }
+    assertEquals(listOf(original), captured.completedMutations)
+    assertEquals(listOf(check), checkedProgress.independentChecks)
+  }
+
+  @Test
+  fun `ordinal overflow and terminal history capacity refuse instead of wrapping or discarding work`() {
+    assertFailsWith<SkillBillRuntimeException> { initial().copy(revision = Long.MAX_VALUE).reserve("overflow") }
+    val progress = FeatureTaskRuntimeImplementationProgress.initial(listOf("AC-001"))
+    assertFailsWith<SkillBillRuntimeException> { progress.copy(workerCount = Int.MAX_VALUE).reserveWorker("overflow") }
+    assertFailsWith<SkillBillRuntimeException> { progress.copy(launchCount = Int.MAX_VALUE).launched() }
+    val retained = (1..AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES).map { mutation("historical-$it") }
+    val state = initial().copy(completedMutations = retained)
+    assertFailsWith<SkillBillRuntimeException> { state.retainCompletedMutation(mutation("new-worker")) }
+    val fullProgress = progress.copy(completedMutations = retained)
+    assertFailsWith<SkillBillRuntimeException> { fullProgress.retainCompletedMutation(mutation("new-worker")) }
+    assertEquals(retained, state.completedMutations)
+    assertEquals(retained, fullProgress.completedMutations)
+  }
+
+  private fun AcceptanceCriterionRepairState.withUnknownLastLaunch(): AcceptanceCriterionRepairState {
+    val historical = completedMutations.last().copy(launchAttribution = null)
+    return copy(
+      completedMutations = completedMutations.dropLast(1) + historical,
+      independentChecks =
+        independentChecks.map {
+          if (it.mutation.repairAttemptId == historical.repairAttemptId) {
+            it.copy(mutation = historical, context = it.context.copy(completedMutation = historical))
+          } else {
+            it
+          }
+        },
+      stage = AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED,
+    )
   }
 
   private fun initial(count: Int = 1): AcceptanceCriterionRepairState {

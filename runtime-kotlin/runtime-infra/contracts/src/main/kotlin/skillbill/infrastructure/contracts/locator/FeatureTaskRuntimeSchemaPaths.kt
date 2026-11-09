@@ -18,6 +18,10 @@ object FeatureTaskRuntimeExecutionPlanSchemaPaths {
 }
 
 object AcceptanceCriterionRepairStateSchemaPaths {
+  const val PREVIOUS_CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/acceptance-criterion-repair-state-schema-0.1.yaml"
+  const val INTERACTION_CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/acceptance-criterion-repair-state-schema-0.2.yaml"
   const val REPO_RELATIVE_PATH: String =
     "orchestration/contracts/acceptance-criterion-repair-state-schema.yaml"
   const val CLASSPATH_RESOURCE: String =
@@ -27,6 +31,8 @@ object AcceptanceCriterionRepairStateSchemaPaths {
 }
 
 object AcceptanceCriterionAuditResultSchemaPaths {
+  const val PREVIOUS_CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/acceptance-criterion-audit-result-schema-0.1.yaml"
   const val INTERACTION_CLASSPATH_RESOURCE: String =
     "skillbill/infrastructure/contracts/acceptance-criterion-audit-result-schema-0.2.yaml"
   const val REPO_RELATIVE_PATH: String = "orchestration/contracts/acceptance-criterion-audit-result-schema.yaml"
@@ -148,6 +154,8 @@ object FeatureTaskRuntimeImplementationAttemptSchemaPaths {
 }
 
 object FeatureTaskRuntimeImplementationProgressSchemaPaths {
+  const val PREVIOUS_CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/feature-task-runtime-implementation-progress-schema-0.1.yaml"
   const val REPO_RELATIVE_PATH: String =
     "orchestration/contracts/feature-task-runtime-implementation-progress-schema.yaml"
   const val CLASSPATH_RESOURCE: String =

@@ -1,6 +1,9 @@
 package skillbill.workflow.taskruntime.artifact
 
+import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_CONTRACT_VERSION
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeImplementationProgressSchema
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.validAcceptanceCriterionRepairBudgets
@@ -29,13 +32,28 @@ fun FeatureTaskRuntimeImplementationProgress.asImplementationProgressWireMap(): 
       ProgressKeys.COMPLETED_MUTATIONS to completedMutations.map { AcceptanceCriterionEvidenceWire.mutation(it) },
       ProgressKeys.INDEPENDENT_CHECKS to independentChecks.map { AcceptanceCriterionEvidenceWire.checked(it) },
     ),
-  )
+  ).also { it.validateImplementationSize("implementation-progress") }
 
 fun FeatureTaskRuntimeWorkflowArtifactMap.toImplementationProgress(
+  sourceLabel: String,
+): FeatureTaskRuntimeImplementationProgress =
+  try {
+    decodeImplementationProgress(sourceLabel)
+  } catch (cause: SkillBillRuntimeException) {
+    when (cause.code) {
+      FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_AUDIT_RESULT_SCHEMA,
+      FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_REPAIR_STATE_SCHEMA,
+      -> throw invalidFeatureTaskRuntimeImplementationProgressSchema(sourceLabel, cause.message.orEmpty(), cause)
+      else -> throw cause
+    }
+  }
+
+private fun FeatureTaskRuntimeWorkflowArtifactMap.decodeImplementationProgress(
   sourceLabel: String,
 ): FeatureTaskRuntimeImplementationProgress {
   fun invalid(reason: String): Nothing =
     throw invalidFeatureTaskRuntimeImplementationProgressSchema(sourceLabel, reason)
+  validateImplementationSize(sourceLabel)
   if (!isObject) invalid("progress must be an object.")
   val unexpected = keys - PROGRESS_FIELDS
   if (unexpected.isNotEmpty()) invalid("progress carries unsupported fields ${unexpected.sorted()}.")
@@ -90,10 +108,10 @@ private fun FeatureTaskRuntimeWorkflowArtifactMap.workerReservationId(sourceLabe
   return id
 }
 
-private fun FeatureTaskRuntimeWorkflowArtifactMap.ids(key: String): List<String>? =
+internal fun FeatureTaskRuntimeWorkflowArtifactMap.ids(key: String): List<String>? =
   (this[key] as? List<*>)?.map { it as? String ?: return null }
 
-private fun FeatureTaskRuntimeWorkflowArtifactMap.exactInt(key: String): Int? {
+internal fun FeatureTaskRuntimeWorkflowArtifactMap.exactInt(key: String): Int? {
   val number = this[key] as? Number ?: return null
   return try {
     BigDecimal(number.toString()).intValueExact()
@@ -118,3 +136,14 @@ private val PROGRESS_FIELDS =
     Keys.LAUNCH_COUNT,
     Keys.CLOSED_IDS,
   )
+
+internal fun FeatureTaskRuntimeWorkflowArtifactMap.validateImplementationSize(sourceLabel: String) {
+  if (JsonCodec.valueToJsonString(this).toByteArray(Charsets.UTF_8).size >
+    AcceptanceCriterionRepairState.MAX_DURABLE_UTF8_BYTES
+  ) {
+    throw invalidFeatureTaskRuntimeImplementationProgressSchema(
+      sourceLabel,
+      "Durable progress exceeds its UTF-8 capacity.",
+    )
+  }
+}

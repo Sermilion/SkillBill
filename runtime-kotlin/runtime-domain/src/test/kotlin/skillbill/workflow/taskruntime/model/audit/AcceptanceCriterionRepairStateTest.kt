@@ -1,9 +1,11 @@
 package skillbill.workflow.taskruntime.model.audit
 
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
@@ -238,7 +240,7 @@ class AcceptanceCriterionRepairStateTest {
     assertEquals(1, closed.unsuccessfulTotals["AC-001"])
     assertEquals("AC-002", closed.currentCriterionRef)
     assertEquals(closed, closed.record(success))
-    assertNull(closed.record(success.copy(digest = "a".repeat(64))))
+    assertFailsWith<SkillBillRuntimeException> { closed.record(success.copy(digest = "a".repeat(64))) }
   }
 
   @Test

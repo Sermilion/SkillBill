@@ -14,11 +14,10 @@ import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.isPreContractAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionAuditAttempt
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
-import skillbill.workflow.taskruntime.model.audit.auditAttempts
+import skillbill.workflow.taskruntime.model.audit.history.auditHistory
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -31,20 +30,18 @@ internal fun projectSubtaskAudit(
 ): GoalRunnerSubtaskAuditResult? {
   if (record == null) return null
   val state = readAuditState(artifacts, degradation)
-  val attempts = state?.auditAttempts().orEmpty()
-  val outcome = subtaskAuditOutcome(record, state, attempts, conclusion?.verdict) ?: return null
+  val history = state?.auditHistory()
+  val attempts = history?.attempts.orEmpty()
+  val outcome = subtaskAuditOutcome(record, state, conclusion?.verdict) ?: return null
   val criteria =
     state?.criteria.orEmpty()
       .filter { it.sourceDisposition != AcceptanceCriterionSourceDisposition.NOT_APPLICABLE }
       .map { criterion ->
         val fixedAttempt =
           if (criterion.sourceDisposition == AcceptanceCriterionSourceDisposition.SOURCE_CLOSED) {
-            val repairIds = attempts.filter { it.number >= 2 }.mapTo(hashSetOf()) { it.id }
-            state?.sourceTransitions?.lastOrNull {
-              it.criterionRef == criterion.canonicalRef &&
-                it.toDisposition == AcceptanceCriterionSourceDisposition.SOURCE_CLOSED &&
-                it.producingId in repairIds
-            }?.producingId?.let { id -> attempts.lastOrNull { it.id == id }?.number }
+            val repairId =
+              history?.closures?.singleOrNull { it.criterionRef == criterion.canonicalRef }?.repairAttemptId
+            attempts.singleOrNull { it.id == repairId }?.number
           } else {
             null
           }
@@ -117,7 +114,6 @@ private fun readAuditState(
 internal fun subtaskAuditOutcome(
   record: FeatureTaskRuntimePhaseRecord?,
   state: AcceptanceCriterionRepairState?,
-  attempts: List<AcceptanceCriterionAuditAttempt>,
   verdict: String?,
 ): GoalRunnerSubtaskAuditOutcome? =
   when {
@@ -126,7 +122,7 @@ internal fun subtaskAuditOutcome(
     state?.stage == AcceptanceCriterionRepairStage.ACCEPTED -> GoalRunnerSubtaskAuditOutcome.PASSED
     auditBlocked(record, state) ->
       GoalRunnerSubtaskAuditOutcome.FAILED
-    state != null && attempts.isNotEmpty() &&
+    state != null &&
       state.criteria.any { it.sourceDisposition == AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED } ->
       GoalRunnerSubtaskAuditOutcome.FAILED
     state != null -> GoalRunnerSubtaskAuditOutcome.RUNNING

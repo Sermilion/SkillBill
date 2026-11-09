@@ -2,6 +2,8 @@ package skillbill.workflow.taskruntime.artifact
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.invalidAcceptanceCriterionAuditResultSchema
 import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairStateSchema
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionCheckedMutation
@@ -83,12 +85,22 @@ fun AcceptanceCriterionRepairState.asRepairWireMap(): FeatureTaskRuntimeWorkflow
       Keys.PENDING_CLARIFICATION_QUESTION to pendingClarificationQuestion,
       Keys.INTERACTION_TRACE to interactionTraceWire(interactionTrace),
     ),
-  )
+  ).also { it.validateDurableSize("serial-repair") }
 
 fun FeatureTaskRuntimeWorkflowArtifactMap.isPreContractAcceptanceCriterionRepairState(): Boolean =
   isObject && !containsKey(Keys.CONTRACT_VERSION)
 
 fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
+  sourceLabel: String,
+): AcceptanceCriterionRepairState =
+  try {
+    decodeCurrentRepairState(sourceLabel)
+  } catch (cause: SkillBillRuntimeException) {
+    if (cause.code != FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_AUDIT_RESULT_SCHEMA) throw cause
+    throw invalidAcceptanceCriterionRepairStateSchema(sourceLabel, cause.message.orEmpty(), cause)
+  }
+
+private fun FeatureTaskRuntimeWorkflowArtifactMap.decodeCurrentRepairState(
   sourceLabel: String,
 ): AcceptanceCriterionRepairState {
   validateDurableSize(sourceLabel)
@@ -99,40 +111,8 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
     )
   }
   requireRepairEvidenceFields(sourceLabel)
-  val restored =
-    AcceptanceCriterionRepairState(
-      catalogId = string(Keys.CATALOG_ID),
-      executionId = string(Keys.EXECUTION_ID),
-      specDigest = string(Keys.SPEC_DIGEST),
-      criteria = repairCriteria(),
-      dependencies = repairDependencies(),
-      unresolvedQueue = stringList(Keys.UNRESOLVED_QUEUE),
-      currentCriterionRef = optionalString(Keys.CURRENT_CRITERION_REF),
-      reservation = repairReservation(),
-      outcomes = repairOutcomes(),
-      unsuccessfulTotals = repairTotals(),
-      budgetStartOutcomeIndex = repairBudgetStartOutcomeIndex(),
-      revision = requiredLong(Keys.REVISION),
-      mode = requiredEnum(Keys.MODE, AcceptanceCriterionRepairMode.entries) { it.wireValue },
-      stage = requiredEnum(Keys.STAGE, AcceptanceCriterionRepairStage.entries) { it.wireValue },
-      completedRepairEvidenceRef = optionalString(Keys.COMPLETED_REPAIR_EVIDENCE_REF),
-      admittedTreeDigest = optionalString(Keys.ADMITTED_TREE_DIGEST),
-      admittedCheckpointId = optionalString(Keys.ADMITTED_CHECKPOINT_ID),
-      sourceTransitions = repairTransitions(),
-      pendingAuditRefs = optionalStringList(Keys.PENDING_AUDIT_REFS),
-      proseAudits = repairProseAudits(),
-      pendingClarificationQuestion = optionalString(Keys.PENDING_CLARIFICATION_QUESTION),
-      interactionTrace = repairInteractionTrace(),
-      repairBudgets = AcceptanceCriterionRepairAccountingWire.budgets(this),
-      completedMutations =
-        evidenceRows(ProgressKeys.COMPLETED_MUTATIONS).map {
-          AcceptanceCriterionEvidenceWire.mutation(it)
-        },
-      independentChecks =
-        evidenceRows(
-          ProgressKeys.INDEPENDENT_CHECKS,
-        ).map { AcceptanceCriterionEvidenceWire.checked(it) },
-    )
+  val restored = decodeRepairStateFields()
+  requireKnownRepairFields(restored.asRepairWireMap(), sourceLabel)
   validateAcceptanceCriterionEvidence(restored.completedMutations, restored.independentChecks)
   restored.validateEvidenceOwner(sourceLabel)
   AcceptanceCriterionRepairAccountingWire.validateAccounting(
@@ -143,6 +123,88 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
     sourceLabel,
     "repair state is incoherent.",
   )
+}
+
+internal fun FeatureTaskRuntimeWorkflowArtifactMap.decodeRepairStateFields(
+  historical: Boolean = false,
+): AcceptanceCriterionRepairState =
+  AcceptanceCriterionRepairState(
+    catalogId = string(Keys.CATALOG_ID),
+    executionId = string(Keys.EXECUTION_ID),
+    specDigest = string(Keys.SPEC_DIGEST),
+    criteria = repairCriteria(),
+    dependencies = repairDependencies(),
+    unresolvedQueue = stringList(Keys.UNRESOLVED_QUEUE),
+    currentCriterionRef = optionalString(Keys.CURRENT_CRITERION_REF),
+    reservation = repairReservation(historical),
+    outcomes = repairOutcomes(),
+    unsuccessfulTotals = repairTotals(),
+    budgetStartOutcomeIndex = repairBudgetStartOutcomeIndex(),
+    revision = requiredLong(Keys.REVISION),
+    mode = requiredEnum(Keys.MODE, AcceptanceCriterionRepairMode.entries) { it.wireValue },
+    stage = requiredEnum(Keys.STAGE, AcceptanceCriterionRepairStage.entries) { it.wireValue },
+    completedRepairEvidenceRef = optionalString(Keys.COMPLETED_REPAIR_EVIDENCE_REF),
+    admittedTreeDigest = optionalString(Keys.ADMITTED_TREE_DIGEST),
+    admittedCheckpointId = optionalString(Keys.ADMITTED_CHECKPOINT_ID),
+    sourceTransitions = repairTransitions(),
+    pendingAuditRefs = optionalStringList(Keys.PENDING_AUDIT_REFS),
+    proseAudits = repairProseAudits(),
+    pendingClarificationQuestion = optionalString(Keys.PENDING_CLARIFICATION_QUESTION),
+    interactionTrace =
+      if (historical &&
+        !containsKey(
+          Keys.INTERACTION_TRACE,
+        )
+      ) {
+        AcceptanceCriterionInteractionTrace()
+      } else {
+        repairInteractionTrace()
+      },
+    repairBudgets = if (historical) emptyList() else AcceptanceCriterionRepairAccountingWire.budgets(this),
+    completedMutations =
+      if (historical) {
+        emptyList()
+      } else {
+        evidenceRows(ProgressKeys.COMPLETED_MUTATIONS).map {
+          AcceptanceCriterionEvidenceWire.mutation(it)
+        }
+      },
+    independentChecks =
+      if (historical) {
+        emptyList()
+      } else {
+        evidenceRows(
+          ProgressKeys.INDEPENDENT_CHECKS,
+        ).map { AcceptanceCriterionEvidenceWire.checked(it) }
+      },
+  )
+
+internal fun FeatureTaskRuntimeWorkflowArtifactMap.requireKnownRepairFields(
+  expected: FeatureTaskRuntimeWorkflowArtifactMap,
+  sourceLabel: String,
+) {
+  if ((keys - expected.keys).isNotEmpty()) {
+    throw invalidAcceptanceCriterionRepairStateSchema(sourceLabel, "Unexpected repair-state fields.")
+  }
+  expected.forEach { (key, value) ->
+    val actual = this[key]
+    when {
+      value is Map<*, *> && actual is Map<*, *> ->
+        FeatureTaskRuntimeWorkflowArtifactMap.from(actual).requireKnownRepairFields(
+          FeatureTaskRuntimeWorkflowArtifactMap.from(value),
+          "$sourceLabel.$key",
+        )
+      value is List<*> && actual is List<*> ->
+        value.forEachIndexed { index, row ->
+          if (row is Map<*, *>) {
+            FeatureTaskRuntimeWorkflowArtifactMap.from(actual.getOrNull(index)).requireKnownRepairFields(
+              FeatureTaskRuntimeWorkflowArtifactMap.from(row),
+              "$sourceLabel.$key[$index]",
+            )
+          }
+        }
+    }
+  }
 }
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.requireRepairEvidenceFields(sourceLabel: String) {
@@ -181,7 +243,7 @@ private fun FeatureTaskRuntimeWorkflowArtifactMap.repairBudgetStartOutcomeIndex(
     0
   }
 
-private fun FeatureTaskRuntimeWorkflowArtifactMap.validateDurableSize(sourceLabel: String) {
+internal fun FeatureTaskRuntimeWorkflowArtifactMap.validateDurableSize(sourceLabel: String) {
   if (
     JsonCodec.valueToJsonString(this).toByteArray(Charsets.UTF_8).size >
     AcceptanceCriterionRepairState.MAX_DURABLE_UTF8_BYTES
@@ -250,7 +312,7 @@ private fun Map<String, Any?>.requiredInt(key: String): Int =
     ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key is invalid.")
 
 private fun Map<String, Any?>.requiredLong(key: String): Long =
-  (this[key] as? Number)?.toLong() ?: throw invalidAcceptanceCriterionRepairStateSchema(
+  (this[key] as? Number)?.toLongIfExact() ?: throw invalidAcceptanceCriterionRepairStateSchema(
     "serial-repair",
     "$key is invalid.",
   )
@@ -381,7 +443,9 @@ private fun FeatureTaskRuntimeWorkflowArtifactMap.repairDependencies(): List<Acc
     )
   }
 
-private fun FeatureTaskRuntimeWorkflowArtifactMap.repairReservation(): AcceptanceCriterionRepairReservation? =
+private fun FeatureTaskRuntimeWorkflowArtifactMap.repairReservation(
+  historical: Boolean,
+): AcceptanceCriterionRepairReservation? =
   this[Keys.RESERVATION]?.let { raw ->
     val reservation = repairObject(raw)
     AcceptanceCriterionRepairReservation(
@@ -389,7 +453,7 @@ private fun FeatureTaskRuntimeWorkflowArtifactMap.repairReservation(): Acceptanc
       criterionRef = reservation.requiredString(Keys.CRITERION_REF),
       revision = reservation.requiredLong(Keys.REVISION),
       stageRevision = reservation.requiredLong(Keys.STAGE_REVISION),
-      reasoningRequired = reservation.requiredBoolean(Keys.REASONING_REQUIRED),
+      reasoningRequired = if (historical) false else reservation.requiredBoolean(Keys.REASONING_REQUIRED),
     )
   }
 
@@ -447,19 +511,22 @@ private fun FeatureTaskRuntimeWorkflowArtifactMap.repairTransitions(): List<Acce
   }
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.repairProseAudits(): List<AcceptanceCriterionProseAudit> =
-  (this[Keys.PROSE_AUDITS] as? List<*>)?.map { raw ->
-    val audit = repairObject(raw)
-    AcceptanceCriterionProseAudit(
-      id = audit.requiredString(Keys.ID),
-      revision = audit.requiredLong(Keys.REVISION),
-      criterionRef = audit.optionalString(Keys.CRITERION_REF),
-      satisfied = audit.requiredBoolean(Keys.SATISFIED),
-      digest = audit.requiredString(Keys.DIGEST),
-      prose = audit.requiredString(Keys.PROSE),
-      treeDigest = audit.requiredString(Keys.TREE_DIGEST),
-      checkpointId = audit.requiredString(Keys.CHECKPOINT_ID),
-    )
-  } ?: emptyList()
+  if (!containsKey(Keys.PROSE_AUDITS)) {
+    emptyList()
+  } else {
+    objectList(Keys.PROSE_AUDITS).map { audit ->
+      AcceptanceCriterionProseAudit(
+        id = audit.requiredString(Keys.ID),
+        revision = audit.requiredLong(Keys.REVISION),
+        criterionRef = audit.optionalString(Keys.CRITERION_REF),
+        satisfied = audit.requiredBoolean(Keys.SATISFIED),
+        digest = audit.requiredString(Keys.DIGEST),
+        prose = audit.requiredString(Keys.PROSE),
+        treeDigest = audit.requiredString(Keys.TREE_DIGEST),
+        checkpointId = audit.requiredString(Keys.CHECKPOINT_ID),
+      )
+    }
+  }
 
 private fun interactionTraceWire(value: AcceptanceCriterionInteractionTrace): Map<String, Any?> =
   mapOf(

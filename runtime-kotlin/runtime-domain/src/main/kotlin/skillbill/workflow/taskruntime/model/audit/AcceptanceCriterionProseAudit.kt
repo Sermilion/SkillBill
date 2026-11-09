@@ -4,6 +4,8 @@ import skillbill.error.shellcontent.invalidAcceptanceCriterionAuditResultSchema
 import skillbill.workflow.model.repair.FocusedRepairStrategy
 import skillbill.workflow.model.repair.RepairTargetProgress
 
+internal const val UNKNOWN_AUDIT_SUFFIX: String = ":trace:unknown"
+
 data class AcceptanceCriterionProseAudit(
   val id: String,
   val revision: Long,
@@ -15,19 +17,25 @@ data class AcceptanceCriterionProseAudit(
   val checkpointId: String,
 )
 
-fun AcceptanceCriterionRepairState.retainProseProgress(): AcceptanceCriterionRepairState = copy(revision = revision + 1)
+fun AcceptanceCriterionRepairState.retainProseProgress(): AcceptanceCriterionRepairState =
+  copy(
+    revision = nextRevision(),
+  )
 
 fun AcceptanceCriterionRepairState.retainClarification(question: String): AcceptanceCriterionRepairState? {
   val readable = question.trim().take(AcceptanceCriterionRepairState.MAX_CLARIFICATION_LENGTH)
   if (readable.isBlank()) return null
-  return copy(revision = revision + 1, pendingClarificationQuestion = readable)
+  return copy(revision = nextRevision(), pendingClarificationQuestion = readable)
 }
 
 fun AcceptanceCriterionRepairState.recordProseAudit(
   audit: AcceptanceCriterionProseAudit,
 ): AcceptanceCriterionRepairState? {
   val existing = proseAudits.firstOrNull { it.id == audit.id }
-  if (existing != null) return if (existing == audit) this else null
+  if (existing != null) {
+    if (existing != audit) throw invalidAcceptanceCriterionAuditResultSchema("prose-audit", "Conflicting audit replay.")
+    return this
+  }
   return when {
     !canAdmitProseAudit(audit) -> null
     mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY &&
@@ -117,11 +125,13 @@ internal fun openCriteriaNamedIn(prose: String): Set<String>? =
     ?.let { listed -> CRITERION_ID.findAll(listed).map { it.value.uppercase() }.toSet() }
 
 private fun AcceptanceCriterionRepairState.canAdmitProseAudit(audit: AcceptanceCriterionProseAudit): Boolean {
-  val current = reservation == null && audit.revision == revision + 1
+  val current = reservation == null && audit.revision == nextRevision()
   val evidence = audit.prose.isNotBlank() && audit.checkpointId.isNotBlank()
   val digests = audit.digest.isDigest() && audit.treeDigest.isDigest()
-  val capacity = proseAudits.size < AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES
-  return current && evidence && digests && capacity
+  if (proseAudits.size >= AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES) {
+    throw invalidAcceptanceCriterionAuditResultSchema("prose-audit", "Audit history capacity exhausted.")
+  }
+  return current && evidence && digests
 }
 
 private fun AcceptanceCriterionRepairState.applyFocusedAudit(
@@ -308,6 +318,16 @@ fun AcceptanceCriterionIndependentProgress.admit(
     )
   }
   return AcceptanceCriterionProgressAdmission.Admitted(this)
+}
+
+internal fun AcceptanceCriterionIndependentProgress.validateHistoricalContext(
+  context: AcceptanceCriterionProgressContext,
+) {
+  validateShape()
+  context.validateChecker()
+  validateBinding(context)
+  validateAttestations(context)
+  validatePreservation(context.establishedObligations)
 }
 
 private fun AcceptanceCriterionProgressContext.validateChecker() {
@@ -751,8 +771,11 @@ val AcceptanceCriterionCompletedMutation.terminal: Boolean
 
 fun AcceptanceCriterionRepairState.repairAccounting(ref: String): AcceptanceCriterionRepairAccounting =
   acceptanceCriterionRepairAccounting(ref, completedMutations, independentChecks, repairBudgets).let { accounting ->
-    if (ref != currentCriterionRef || pendingClarificationQuestion == null) accounting
-    else accounting.copy(evidenceMissing = true)
+    if (ref != currentCriterionRef || pendingClarificationQuestion == null) {
+      accounting
+    } else {
+      accounting.copy(evidenceMissing = true)
+    }
   }
 
 internal fun AcceptanceCriterionRepairState.budgetBlocks(ref: String): Boolean {

@@ -208,6 +208,16 @@ governedResources {
     "SKILL-426: canonical acceptance-criterion repair-state schema",
   )
   copy(
+    "copyAcceptanceCriterionRepairStateOriginalSchema",
+    "acceptance-criterion-repair-state-schema-0.1.yaml",
+    "0AC-103: preserve original repair-state interpretation",
+  )
+  copy(
+    "copyAcceptanceCriterionAuditResultOriginalSchema",
+    "acceptance-criterion-audit-result-schema-0.1.yaml",
+    "0AC-103: preserve original audit-result interpretation",
+  )
+  copy(
     "copyAcceptanceCriterionRepairStateAccountingPreviousSchema",
     "acceptance-criterion-repair-state-schema-0.2.yaml",
     "0AC-103: preserve the previous repair accounting contract",

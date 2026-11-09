@@ -1,0 +1,12 @@
+package skillbill.workflow.taskruntime.artifact
+
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_PREVIOUS_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
+
+fun FeatureTaskRuntimeWorkflowArtifactMap.isPreviousVersionAcceptanceCriterionRepairState(): Boolean =
+  isObject && this[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
+
+fun FeatureTaskRuntimeWorkflowArtifactMap.isPreviousVersionAcceptanceCriterionAuditResult(): Boolean =
+  isObject && this[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_AUDIT_RESULT_PREVIOUS_CONTRACT_VERSION

@@ -1,3 +1,13 @@
+## [2026-11-09] Historical repair reads preserve unavailable authority
+Context: Repair state 0.1 and 0.2 and implementation progress 0.1 predate terminal-worker and reasoning-launch facts. Some pinned shapes also admit source comparisons.
+Decision: Historical readers validate the original shape and historical accounting before returning typed historical facts. They preserve optional comparisons separately from the current state ledger. A retained capture without terminal facts has HISTORICAL_UNKNOWN disposition and no launch attribution. Reading it grants no current repair completion, escalation discharge or budget relief. The explicit 0.1-to-0.2 interaction upgrade validates both shapes. Store conversion and its transaction owner remain with subtask 2.
+Reason: A stored comparison cannot prove terminal worker completion or a reasoning launch that its contract never recorded. Current restore rules still require their current contract.
+
+## [2026-11-09] Repair history rows end before the next captured mutation
+Context: Replaying source transitions and prose audits in separate batches can reopen a criterion after a later successful repair. Selecting the latest closure identity also loses attribution when an interaction confirms an earlier repair.
+Decision: Reduce source transitions and focused observations in revision order, counting a transition and its same-revision observation once. A row includes the observation interval after its repair and before the next captured mutation, with that next capture excluded. The final row includes the retained observation tail. Pending checks do not close source work. Unknown capture boundaries do not borrow a later repair's closure. Closure attribution follows the completed mutation behind outcome or prose closure, persists through closed-to-closed confirmation, and clears on reopening. Both history and goal status consume this domain projection.
+Reason: Observations affect source disposition but create no completed repairs. Fixed-attempt attribution needs the repair identity from the current closed interval, rather than an observation ordinal or the final state's latest mutation.
+
 ## [2026-11-08] Build paths cross runtime-domain as strings
 Context: Build matching needs repository and Xcode metadata paths, while runtime-domain forbids java.nio imports.
 Decision: BuildMatchContext and BuildRepositoryFiles carry absolute host path strings. The runtime-infra adapter converts them with Path.of.

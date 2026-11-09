@@ -16,12 +16,13 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
 import skillbill.ports.taskruntime.executionplan.FeatureTaskRuntimeExecutionPlanValidator
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimePhaseOutputMigrationResult
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
-import skillbill.workflow.taskruntime.artifact.upgradeAuditResultFromPrevious
+import skillbill.workflow.taskruntime.artifact.historical.upgradeAuditResultFromPrevious
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionCompletedMutation
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionMutationDisposition
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProgressAdmission
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProgressContext
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionResolvedObligation
+import skillbill.workflow.taskruntime.model.audit.terminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import java.math.BigInteger
 import java.security.MessageDigest
@@ -33,6 +34,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionProgressPayloadKeys as ProgressKeys
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
+import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimeImplementationProgressPayloadKeys as ImplKeys
 import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys as PhaseKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as PlanKeys
 
@@ -326,7 +328,14 @@ class AcceptanceCriterionRepairAuxiliaryContractTest {
       FeatureTaskRuntimeWorkflowArtifactMap.from(
         (previous - Keys.INTERACTIONS - Keys.RECHECKS) + (Keys.CONTRACT_VERSION to "0.1"),
       )
+    val historical = AcceptanceCriterionRepairAuxiliarySchemaValidator.readHistoricalAuditResult(oldest, "original")
+    assertEquals("reservation", historical.reservationId)
+    assertEquals("AC-001", historical.criteria.single().criterionRef)
+    assertEquals(null, historical.interactions)
     val upgraded = assertNotNull(oldest.upgradeAuditResultFromPrevious())
+    val restored = AcceptanceCriterionRepairAuxiliarySchemaValidator.readHistoricalAuditResult(upgraded, "interaction")
+    assertEquals(historical.criteria, restored.criteria)
+    assertEquals(emptyList(), restored.interactions)
     assertEquals(previous, upgraded)
     AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(upgraded, "upgraded-previous")
     val original = JsonCodec.valueToJsonString(previous)
@@ -421,6 +430,29 @@ class AcceptanceCriterionRepairAuxiliaryContractTest {
         FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_AUDIT_RESULT_SCHEMA,
         failure.code,
       )
+    }
+  }
+
+  @Test
+  fun `pinned progress schema admits retained captures without current terminal authority`() {
+    val oldMutation = completedMutation() - ProgressKeys.TERMINAL_DISPOSITION - ProgressKeys.LAUNCH_ATTRIBUTION
+    val payload =
+      mapOf(
+        ImplKeys.CONTRACT_VERSION to "0.1",
+        ImplKeys.CRITERION_IDS to listOf("AC-001"),
+        ImplKeys.CURRENT_INDEX to 0,
+        ImplKeys.CLOSED_IDS to emptyList<String>(),
+        ImplKeys.WORKER_COUNT to 1,
+        ImplKeys.LAUNCH_COUNT to 2,
+        ProgressKeys.COMPLETED_MUTATIONS to listOf(oldMutation),
+      )
+    val decoded = FeatureTaskRuntimeImplementationProgressSchemaValidator.validatePrevious(payload, "old-capture")
+    val mutation = assertNotNull(decoded.completedMutations).single()
+    assertFalse(mutation.terminal)
+    assertEquals(null, decoded.independentChecks)
+    assertEquals("checkpoint", mutation.currentCheckpointId)
+    assertFailsWith<SkillBillRuntimeException> {
+      FeatureTaskRuntimeImplementationProgressSchemaValidator.validate(payload, "not-current")
     }
   }
 

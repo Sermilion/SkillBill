@@ -1,5 +1,8 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_INTERACTION_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionProgressPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
@@ -111,6 +114,7 @@ class AcceptanceCriterionRepairStateSchemaValidatorTest {
         ),
       )
     val valid = state.asRepairWireMap()
+    assertPreviousReadable(valid)
     AcceptanceCriterionRepairStateSchemaValidator.validate(valid, "valid")
     val legacy = valid - Keys.BUDGET_START_OUTCOME_INDEX
     AcceptanceCriterionRepairStateSchemaValidator.validate(legacy, "before-budget-reset-support")
@@ -136,6 +140,34 @@ class AcceptanceCriterionRepairStateSchemaValidatorTest {
         AcceptanceCriterionRepairStateSchemaValidator
           .validate(corrupt, "corrupt")
       }
+    }
+  }
+
+  private fun assertPreviousReadable(valid: Map<String, Any?>) {
+    val previous =
+      valid -
+        setOf(
+          AcceptanceCriterionProgressPayloadKeys.COMPLETED_MUTATIONS,
+          AcceptanceCriterionProgressPayloadKeys.INDEPENDENT_CHECKS,
+          AcceptanceCriterionProgressPayloadKeys.REPAIR_BUDGETS,
+          AcceptanceCriterionProgressPayloadKeys.REPAIR_ACCOUNTING,
+        ) + (Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_REPAIR_STATE_INTERACTION_CONTRACT_VERSION)
+    val original =
+      previous - Keys.INTERACTION_TRACE +
+        (Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION)
+    listOf(original, previous).forEach { pinned ->
+      val read = AcceptanceCriterionRepairStateSchemaValidator.validatePrevious(pinned, "pinned-previous")
+      assertEquals(pinned[Keys.CONTRACT_VERSION], read.contractVersion)
+      assertEquals(valid[Keys.EXECUTION_ID], read.state.executionId)
+    }
+    assertFailsWith<SkillBillRuntimeException> {
+      AcceptanceCriterionRepairStateSchemaValidator.validatePrevious(valid, "current-is-not-previous")
+    }
+    assertFailsWith<SkillBillRuntimeException> {
+      AcceptanceCriterionRepairStateSchemaValidator.validatePrevious(
+        previous + (Keys.REVISION to 0.5),
+        "corrupt-previous",
+      )
     }
   }
 }

@@ -5,6 +5,7 @@ import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPT_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_PREVIOUS_CONTRACT_VERSION
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeImplementationAttemptSchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeImplementationProgressSchema
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
@@ -12,7 +13,9 @@ import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeImplementationAttemptSchemaPaths
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeImplementationProgressSchemaPaths
 import skillbill.infrastructure.contracts.review.MAX_REPORTED_VIOLATIONS
+import skillbill.workflow.taskruntime.artifact.historical.toHistoricalImplementationProgress
 import skillbill.workflow.taskruntime.artifact.toImplementationProgress
+import skillbill.workflow.taskruntime.model.audit.history.AcceptanceCriterionHistoricalImplementationProgress
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 object FeatureTaskRuntimeImplementationAttemptSchemaValidator {
@@ -94,15 +97,39 @@ object FeatureTaskRuntimeImplementationProgressSchemaValidator {
     FeatureTaskRuntimeWorkflowArtifactMap.from(payload).toImplementationProgress(sourceLabel)
   }
 
+  fun validatePrevious(
+    payload: Map<String, Any?>,
+    sourceLabel: String,
+  ): AcceptanceCriterionHistoricalImplementationProgress {
+    val errors =
+      ClasspathContractSchemaLoader.validate(
+        progressSchema(
+          FeatureTaskRuntimeImplementationProgressSchemaPaths.PREVIOUS_CLASSPATH_RESOURCE,
+          FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_PREVIOUS_CONTRACT_VERSION,
+        ),
+        ClasspathContractSchemaLoader.valueToTree(payload),
+      )
+    if (errors.isNotEmpty()) {
+      throw invalidFeatureTaskRuntimeImplementationProgressSchema(
+        sourceLabel,
+        errors.joinToString(" | ") { it.message },
+      )
+    }
+    return FeatureTaskRuntimeWorkflowArtifactMap.from(payload).toHistoricalImplementationProgress(sourceLabel)
+  }
+
   private const val MAX_PROGRESS_VIOLATIONS: Int = 3
 }
 
-private fun progressSchema(): JsonSchema =
+private fun progressSchema(
+  resource: String = FeatureTaskRuntimeImplementationProgressSchemaPaths.CLASSPATH_RESOURCE,
+  version: String = FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_CONTRACT_VERSION,
+): JsonSchema =
   ClasspathContractSchemaLoader.compiledSchema(
     CompiledSchemaRequest(
-      cacheKey = FeatureTaskRuntimeImplementationProgressSchemaPaths.CLASSPATH_RESOURCE,
+      cacheKey = resource,
       classLoader = FeatureTaskRuntimeImplementationProgressSchemaValidator::class.java.classLoader,
-      classpathResource = FeatureTaskRuntimeImplementationProgressSchemaPaths.CLASSPATH_RESOURCE,
+      classpathResource = resource,
       missingResource = {
         invalidFeatureTaskRuntimeImplementationProgressSchema(
           sourceLabel = FeatureTaskRuntimeImplementationProgressSchemaPaths.CLASSPATH_RESOURCE,
@@ -120,7 +147,7 @@ private fun progressSchema(): JsonSchema =
       },
       loadFailureLogger = {},
       expectedSchemaId = FeatureTaskRuntimeImplementationProgressSchemaPaths.EXPECTED_SCHEMA_ID,
-      expectedContractVersion = FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_CONTRACT_VERSION,
+      expectedContractVersion = version,
       identityFailure = { reason ->
         invalidFeatureTaskRuntimeImplementationProgressSchema(
           sourceLabel = FeatureTaskRuntimeImplementationProgressSchemaPaths.CLASSPATH_RESOURCE,

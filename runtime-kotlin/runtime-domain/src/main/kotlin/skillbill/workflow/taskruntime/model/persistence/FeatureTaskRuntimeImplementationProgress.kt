@@ -50,6 +50,12 @@ data class FeatureTaskRuntimeImplementationProgress(
     reservationId: String = "$currentId:worker:${workerCount + 1}",
   ): FeatureTaskRuntimeImplementationProgress? {
     val ref = currentId ?: return null
+    if (workerCount == Int.MAX_VALUE) {
+      throw invalidFeatureTaskRuntimeImplementationProgressSchema(
+        "implementation-progress",
+        "Worker ordinal capacity exhausted.",
+      )
+    }
     val accounting = accounting(ref)
     val ready =
       accounting.pendingCheckAttemptIds.isEmpty() && !accounting.evidenceMissing &&
@@ -59,7 +65,7 @@ data class FeatureTaskRuntimeImplementationProgress(
     val validId =
       validRepairIdentity(reservationId) &&
         completedMutations.none { it.repairAttemptId == reservationId }
-    return takeIf { ready && known && validId && workerCount < Int.MAX_VALUE }
+    return takeIf { ready && known && validId }
       ?.copy(workerCount = workerCount + 1, workerReservationId = reservationId)
   }
 
@@ -78,31 +84,56 @@ data class FeatureTaskRuntimeImplementationProgress(
   ): FeatureTaskRuntimeImplementationProgress? {
     mutation.validate()
     val previous = completedMutations.singleOrNull { it.repairAttemptId == mutation.repairAttemptId }
-    if (previous != null) return if (previous == mutation) this else null
+    if (previous != null) {
+      if (previous != mutation) {
+        throw invalidFeatureTaskRuntimeImplementationProgressSchema(
+          "repair-evidence",
+          "Conflicting terminal mutation replay.",
+        )
+      }
+      return this
+    }
+    if (completedMutations.size >= AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES) {
+      throw invalidFeatureTaskRuntimeImplementationProgressSchema(
+        "repair-evidence",
+        "Completed mutation capacity exhausted.",
+      )
+    }
+    return takeIf { acceptsMutationCapture(mutation) }?.copy(completedMutations = completedMutations + mutation)
+  }
+
+  private fun acceptsMutationCapture(mutation: AcceptanceCriterionCompletedMutation): Boolean {
     val worker =
       mutation.criterionRef == currentId && mutation.repairAttemptId == workerReservationId && mutation.terminal
-    val capacity = workerCount > 0 && completedMutations.size < AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES
-    if (!worker || !capacity) {
-      return null
-    }
     val inventory = independentChecks.lastOrNull { it.mutation.criterionRef == currentId }?.establishedObligations()
-    if (inventory != null && inventory != mutation.establishedObligations) return null
-    val requiresReasoning = accounting(currentId.orEmpty()).escalationRequired
-    if (requiresReasoning && mutation.launchAttribution?.let {
-        it.reasoning && it.validFor(mutation.repairAttemptId)
-      } != true
-    ) return null
-    return copy(completedMutations = completedMutations + mutation)
+    val preserved = inventory == null || inventory == mutation.establishedObligations
+    val launch = mutation.launchAttribution
+    val escalated = launch != null && launch.reasoning && launch.validFor(mutation.repairAttemptId)
+    val reasoning = !accounting(currentId.orEmpty()).escalationRequired || escalated
+    return worker && workerCount > 0 && preserved && reasoning
   }
 
   fun retainIndependentCheck(check: AcceptanceCriterionCheckedMutation): FeatureTaskRuntimeImplementationProgress? {
     check.validate()
     if (check.mutation !in completedMutations) return null
     val previous = independentChecks.singleOrNull { it.mutation.repairAttemptId == check.mutation.repairAttemptId }
-    if (previous != null) return if (previous == check) this else null
+    if (previous != null) {
+      if (previous != check) {
+        throw invalidFeatureTaskRuntimeImplementationProgressSchema(
+          "repair-evidence",
+          "Conflicting independent check replay.",
+        )
+      }
+      return this
+    }
+    if (independentChecks.size >= AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES) {
+      throw invalidFeatureTaskRuntimeImplementationProgressSchema(
+        "repair-evidence",
+        "Independent check capacity exhausted.",
+      )
+    }
     val worker = check.mutation.repairAttemptId == workerReservationId && check.mutation.criterionRef == currentId
-    val capacity = independentChecks.size < AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES
-    return takeIf { worker && capacity }?.copy(independentChecks = independentChecks + check)
+    return takeIf { worker }?.copy(independentChecks = independentChecks + check)
   }
 
   fun closeCurrent(): FeatureTaskRuntimeImplementationProgress? {
@@ -124,8 +155,10 @@ data class FeatureTaskRuntimeImplementationProgress(
     if (repairBudgets.any { it.retryIdentity == retryIdentity }) return this
     val accounting = accounting(ref)
     val ready = accounting.pendingCheckAttemptIds.isEmpty() && !accounting.evidenceMissing && workerCount > 0
-    val capacity = repairBudgets.size < AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES
-    return takeIf { ready && capacity && validRepairIdentity(retryIdentity) }?.copy(
+    if (repairBudgets.size >= AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES) {
+      throw invalidFeatureTaskRuntimeImplementationProgressSchema("repair-budget", "Budget history capacity exhausted.")
+    }
+    return takeIf { ready && validRepairIdentity(retryIdentity) }?.copy(
       repairBudgets =
         repairBudgets +
           AcceptanceCriterionRepairBudget(

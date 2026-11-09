@@ -7,6 +7,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_PREVIOUS_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_ADOPTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_HANDOFF_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
@@ -27,6 +28,7 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.repair.FocusedRepairStrategy
 import skillbill.workflow.taskruntime.artifact.AcceptanceCriterionEvidenceWire
+import skillbill.workflow.taskruntime.artifact.historical.toHistoricalAuditResult
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionEvidenceLifecycle
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProgressAdmission
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProgressClassification
@@ -37,6 +39,7 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
 import skillbill.workflow.taskruntime.model.audit.admit
+import skillbill.workflow.taskruntime.model.audit.history.AcceptanceCriterionHistoricalAuditResult
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionAuditResultMode
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionVerdict
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionRecheckVerdict
@@ -60,13 +63,17 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
       payload,
       sourceLabel,
       SerialRepairSchema(
-        if (payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION) {
+        if (payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_AUDIT_RESULT_PREVIOUS_CONTRACT_VERSION) {
+          AcceptanceCriterionAuditResultSchemaPaths.PREVIOUS_CLASSPATH_RESOURCE
+        } else if (payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION) {
           AcceptanceCriterionAuditResultSchemaPaths.INTERACTION_CLASSPATH_RESOURCE
         } else {
           AcceptanceCriterionAuditResultSchemaPaths.CLASSPATH_RESOURCE
         },
         AcceptanceCriterionAuditResultSchemaPaths.EXPECTED_SCHEMA_ID,
-        if (payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION) {
+        if (payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_AUDIT_RESULT_PREVIOUS_CONTRACT_VERSION) {
+          ACCEPTANCE_CRITERION_AUDIT_RESULT_PREVIOUS_CONTRACT_VERSION
+        } else if (payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION) {
           ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION
         } else {
           ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
@@ -77,6 +84,10 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
       ),
     )
 
+    if (payload[Keys.CONTRACT_VERSION] != ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION) {
+      FeatureTaskRuntimeWorkflowArtifactMap.from(payload).toHistoricalAuditResult(sourceLabel)
+      return null
+    }
     if (!payload.containsKey(ProgressKeys.INDEPENDENT_PROGRESS)) return null
     if (context != null) {
       val catalog = context.catalogId == payload[Keys.CATALOG_ID] && context.specDigest == payload[Keys.SPEC_DIGEST]
@@ -95,6 +106,14 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
       context,
       fact[Keys.SOURCE_DISPOSITION] == AcceptanceCriterionSourceDisposition.SOURCE_CLOSED.wireValue,
     )
+  }
+
+  fun readHistoricalAuditResult(
+    payload: Map<String, Any?>,
+    sourceLabel: String,
+  ): AcceptanceCriterionHistoricalAuditResult {
+    validateAuditResult(payload, sourceLabel)
+    return FeatureTaskRuntimeWorkflowArtifactMap.from(payload).toHistoricalAuditResult(sourceLabel)
   }
 
   fun validateRepairHandoff(
@@ -234,7 +253,8 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
         val reservation = payload[Keys.RESERVATION_ID] is String && payload[Keys.EXPECTED_REVISION] is Number
         val comparison =
           payload.containsKey(ProgressKeys.INDEPENDENT_PROGRESS) ||
-            payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION
+            payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_AUDIT_RESULT_INTERACTION_CONTRACT_VERSION ||
+            payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_AUDIT_RESULT_PREVIOUS_CONTRACT_VERSION
         if (!identity || !reservation || !comparison) {
           "targeted audit result does not bind exactly one current criterion and reservation."
         } else {

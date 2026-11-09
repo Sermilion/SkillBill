@@ -11,6 +11,7 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDispo
 import skillbill.workflow.taskruntime.model.audit.afterProseAudit
 import skillbill.workflow.taskruntime.model.audit.budgetBlocks
 import skillbill.workflow.taskruntime.model.audit.isDigest
+import skillbill.workflow.taskruntime.model.audit.nextRevision
 
 data class AcceptanceCriterionInteractionTraceSettlement(
   val outputId: String,
@@ -46,12 +47,12 @@ fun AcceptanceCriterionRepairState.requireInteractionTrace(
   val pending = if (traced) retraceRefs(buildable) else targets.map { it.scenarioRef }
   if (pending.isEmpty() && trace.pendingRechecks.isEmpty()) {
     if (traced) return this
-    return copy(interactionTrace = trace.copy(tracedSpecDigest = specDigest), revision = revision + 1)
+    return copy(interactionTrace = trace.copy(tracedSpecDigest = specDigest), revision = nextRevision())
   }
   return copy(
     stage = AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED,
     interactionTrace = trace.copy(pendingScenarioRefs = pending),
-    revision = revision + 1,
+    revision = nextRevision(),
   )
 }
 
@@ -133,7 +134,7 @@ private fun AcceptanceCriterionRepairState.interactionAudit(
 ): AcceptanceCriterionProseAudit =
   AcceptanceCriterionProseAudit(
     id = traceAuditId(settlement.outputId, owner),
-    revision = revision + 1,
+    revision = nextRevision(),
     criterionRef = owner,
     satisfied = false,
     digest = settlement.outputDigest,
@@ -148,7 +149,7 @@ private fun AcceptanceCriterionRepairState.confirmingAudit(
 ): AcceptanceCriterionProseAudit =
   AcceptanceCriterionProseAudit(
     id = recheckAuditId(settlement.outputId, recheck.criterionRef),
-    revision = revision + 1,
+    revision = nextRevision(),
     criterionRef = recheck.criterionRef,
     satisfied = true,
     digest = settlement.outputDigest,
@@ -164,7 +165,7 @@ private fun AcceptanceCriterionRepairState.unknownAudit(
   if (unknown.isEmpty()) return null
   return AcceptanceCriterionProseAudit(
     id = unknownAuditId(settlement.outputId),
-    revision = revision + 1,
+    revision = nextRevision(),
     criterionRef = null,
     satisfied = false,
     digest = settlement.outputDigest,
@@ -229,7 +230,7 @@ private fun AcceptanceCriterionRepairState.applyInteractionTrace(
     proseAudits = proseAudits + audits.all,
     sourceTransitions = sourceTransitions + transitions,
     interactionTrace = interactionTrace.after(settlement.entries, specDigest),
-    revision = revision + 1,
+    revision = nextRevision(),
   )
 }
 

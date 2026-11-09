@@ -1,5 +1,7 @@
 package skillbill.workflow.taskruntime.model.audit
 
+import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairStateSchema
+
 enum class AcceptanceCriterionRepairMode(val wireValue: String) {
   INITIAL_DISCOVERY("initial_discovery"),
   CURRENT_CRITERION_TARGETED("current_criterion_targeted"),
@@ -162,7 +164,7 @@ data class AcceptanceCriterionRepairState internal constructor(
 ) {
   fun clearPendingClarification(): AcceptanceCriterionRepairState = copy(pendingClarificationQuestion = null)
 
-  fun reopenForOperatorAudit(retryIdentity: String = "operator:${revision + 1}"): AcceptanceCriterionRepairState? {
+  fun reopenForOperatorAudit(retryIdentity: String = "operator:${nextRevision()}"): AcceptanceCriterionRepairState? {
     val criterion = currentCriterionRef ?: return null
     if (reservation != null || stage !in
       setOf(
@@ -178,18 +180,21 @@ data class AcceptanceCriterionRepairState internal constructor(
       mode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
       stage = AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED,
       pendingAuditRefs = (listOf(criterion) + pendingAuditRefs).distinct(),
-      revision = resumed.revision + 1,
+      revision = resumed.nextRevision(),
     )
   }
 
   fun resetBudgetForOperatorResume(
-    retryIdentity: String = "operator:${revision + 1}",
+    retryIdentity: String = "operator:${nextRevision()}",
   ): AcceptanceCriterionRepairState {
     val ref = currentCriterionRef ?: return this
     val identified = retryIdentity.isNotBlank() && retryIdentity.length <= MAX_REPAIR_ID_LENGTH
     val available = repairBudgets.size < MAX_REPAIR_OUTCOMES && repairBudgets.none { it.retryIdentity == retryIdentity }
     val accounting = repairAccounting(ref)
     val ready = reservation == null && accounting.pendingCheckAttemptIds.isEmpty() && !accounting.evidenceMissing
+    if (repairBudgets.size >= MAX_REPAIR_OUTCOMES && repairBudgets.none { it.retryIdentity == retryIdentity }) {
+      throw invalidAcceptanceCriterionRepairStateSchema("repair-budget", "Budget history capacity exhausted.")
+    }
     if (!identified || !available || !ready) return this
     return copy(
       unsuccessfulTotals = unsuccessfulTotals - ref,
@@ -201,7 +206,7 @@ data class AcceptanceCriterionRepairState internal constructor(
         } else {
           AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED
         },
-      revision = revision + 1,
+      revision = nextRevision(),
     )
   }
 
@@ -220,15 +225,25 @@ data class AcceptanceCriterionRepairState internal constructor(
     val capacity = outcomes.size < MAX_REPAIR_OUTCOMES && sourceTransitions.size < MAX_REPAIR_SOURCE_TRANSITIONS
     val allowedStage = stage == AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
     if (mode != AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED || !available || !validId) return null
-    if (!capacity || !allowedStage) return null
+    if (!capacity) {
+      throw invalidAcceptanceCriterionRepairStateSchema(
+        "repair-evidence",
+        "Repair history capacity exhausted.",
+      )
+    }
+    if (!allowedStage) return null
     return copy(
-      reservation = AcceptanceCriterionRepairReservation(
-        reservationId, current, revision + 1, revision + 1,
-        reasoningRequired = repairAccounting(current).escalationRequired,
-      ),
+      reservation =
+        AcceptanceCriterionRepairReservation(
+          reservationId,
+          current,
+          nextRevision(),
+          nextRevision(),
+          reasoningRequired = repairAccounting(current).escalationRequired,
+        ),
       mode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
       stage = AcceptanceCriterionRepairStage.REPAIR_RESERVED,
-      revision = revision + 1,
+      revision = nextRevision(),
     )
   }
 
@@ -255,7 +270,7 @@ data class AcceptanceCriterionRepairState internal constructor(
     ) {
       return copy(
         pendingClarificationQuestion = "Terminal worker and source capture are required before verification.",
-        revision = revision + 1,
+        revision = nextRevision(),
       )
     }
     return if (stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION) {
@@ -267,8 +282,8 @@ data class AcceptanceCriterionRepairState internal constructor(
         completedRepairEvidenceRef = evidenceRef,
         admittedTreeDigest = treeDigest,
         admittedCheckpointId = checkpointId,
-        reservation = live.copy(stageRevision = revision + 1),
-        revision = revision + 1,
+        reservation = live.copy(stageRevision = nextRevision()),
+        revision = nextRevision(),
       )
     }
   }
@@ -276,8 +291,38 @@ data class AcceptanceCriterionRepairState internal constructor(
   fun retainCompletedMutation(mutation: AcceptanceCriterionCompletedMutation): AcceptanceCriterionRepairState? {
     mutation.validate()
     val previous = completedMutations.singleOrNull { it.repairAttemptId == mutation.repairAttemptId }
-    if (previous != null) return if (previous == mutation) this else null
+    if (previous != null) {
+      if (previous != mutation) {
+        throw invalidAcceptanceCriterionRepairStateSchema(
+          "repair-evidence",
+          "Conflicting terminal mutation replay.",
+        )
+      }
+      return this
+    }
+    if (completedMutations.size >= AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES) {
+      throw invalidAcceptanceCriterionRepairStateSchema("repair-evidence", "Completed mutation capacity exhausted.")
+    }
     val live = reservation ?: return null
+    return if (acceptsMutationCapture(mutation, live)) {
+      copy(
+        completedMutations = completedMutations + mutation,
+        stage = AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION,
+        completedRepairEvidenceRef = mutation.workerOutputId,
+        admittedTreeDigest = mutation.currentTreeDigest,
+        admittedCheckpointId = mutation.currentCheckpointId,
+        reservation = live.copy(stageRevision = nextRevision()),
+        revision = nextRevision(),
+      )
+    } else {
+      null
+    }
+  }
+
+  private fun acceptsMutationCapture(
+    mutation: AcceptanceCriterionCompletedMutation,
+    live: AcceptanceCriterionRepairReservation,
+  ): Boolean {
     val identity =
       mutation.catalogId == catalogId &&
         mutation.executionId == executionId &&
@@ -289,34 +334,34 @@ data class AcceptanceCriterionRepairState internal constructor(
         it.mutation.criterionRef == mutation.criterionRef
       }?.establishedObligations()
     val bound = identity && attempt && capture
-    val launchMeetsReservation = when {
-      live.reasoningRequired -> mutation.launchAttribution?.let {
-        it.reasoning && it.validFor(mutation.repairAttemptId)
-      } == true
-      else -> true
-    }
+    val launchMeetsReservation =
+      when {
+        live.reasoningRequired ->
+          mutation.launchAttribution?.let {
+            it.reasoning && it.validFor(mutation.repairAttemptId)
+          } == true
+        else -> true
+      }
     val preserved = inventory == null || inventory == mutation.establishedObligations
-    val validCapture = bound && preserved && mutation.terminal && launchMeetsReservation
-    return if (validCapture && completedMutations.size < MAX_REPAIR_OUTCOMES) {
-      copy(
-        completedMutations = completedMutations + mutation,
-        stage = AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION,
-        completedRepairEvidenceRef = mutation.workerOutputId,
-        admittedTreeDigest = mutation.currentTreeDigest,
-        admittedCheckpointId = mutation.currentCheckpointId,
-        reservation = live.copy(stageRevision = revision + 1),
-        revision = revision + 1,
-      )
-    } else {
-      null
-    }
+    return bound && preserved && mutation.terminal && launchMeetsReservation
   }
 
   fun retainIndependentCheck(check: AcceptanceCriterionCheckedMutation): AcceptanceCriterionRepairState? {
     check.validate()
     if (check.mutation !in completedMutations) return null
     val previous = independentChecks.singleOrNull { it.mutation.repairAttemptId == check.mutation.repairAttemptId }
-    if (previous != null) return if (previous == check) this else null
+    if (previous != null) {
+      if (previous != check) {
+        throw invalidAcceptanceCriterionRepairStateSchema(
+          "repair-evidence",
+          "Conflicting independent check replay.",
+        )
+      }
+      return this
+    }
+    if (independentChecks.size >= AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES) {
+      throw invalidAcceptanceCriterionRepairStateSchema("repair-evidence", "Independent check capacity exhausted.")
+    }
     val live = reservation ?: return null
     val identity =
       check.mutation.repairAttemptId == live.reservationId && check.comparison.verificationRevision == revision
@@ -330,7 +375,12 @@ data class AcceptanceCriterionRepairState internal constructor(
   fun record(outcome: AcceptanceCriterionRepairOutcome): AcceptanceCriterionRepairState? {
     if (!outcome.isValidRepairOutcome()) return null
     val existing = outcomes.firstOrNull { it.reservationId == outcome.reservationId }
-    if (existing != null) return if (outcome.replays(existing)) this else null
+    if (existing != null) {
+      if (!outcome.replays(existing)) {
+        throw invalidAcceptanceCriterionRepairStateSchema("repair-evidence", "Conflicting outcome replay.")
+      }
+      return this
+    }
     val proof = hasIndependentClosure(outcome)
     if (!canRecord(outcome) || !proof) return null
     val acceptedOutcome = outcome.boundTo(this)
@@ -383,7 +433,7 @@ data class AcceptanceCriterionRepairState internal constructor(
       admittedTreeDigest = null,
       admittedCheckpointId = null,
       sourceTransitions = sourceTransitionsAfter(outcome),
-      revision = revision + 1,
+      revision = nextRevision(),
     )
   }
 
@@ -417,7 +467,7 @@ data class AcceptanceCriterionRepairState internal constructor(
       sourceTransitions +
         AcceptanceCriterionRepairSourceTransition(
           criterionRef = outcome.criterionRef,
-          revision = revision + 1,
+          revision = nextRevision(),
           fromDisposition = AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED,
           toDisposition = AcceptanceCriterionSourceDisposition.SOURCE_CLOSED,
           producingId = outcome.outcomeId,
@@ -584,3 +634,10 @@ data class AcceptanceCriterionAuditAttempt(
   val passed: Boolean,
   val uncoveredCount: Int,
 )
+
+internal fun AcceptanceCriterionRepairState.nextRevision(): Long {
+  if (revision == Long.MAX_VALUE) {
+    throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "Revision capacity exhausted.")
+  }
+  return revision + 1
+}

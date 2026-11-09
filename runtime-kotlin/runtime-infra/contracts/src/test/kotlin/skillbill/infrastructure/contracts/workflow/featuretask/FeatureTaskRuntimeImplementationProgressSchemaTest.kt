@@ -1,7 +1,10 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionProgressPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_PREVIOUS_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimeImplementationProgressPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeImplementationProgressSchemaPaths
@@ -64,6 +67,34 @@ class FeatureTaskRuntimeImplementationProgressSchemaTest {
         }
       assertEquals(FeatureTaskRuntimeFailureCode.INVALID_IMPLEMENTATION_PROGRESS_SCHEMA, failure.code)
       assertContains(failure.message.orEmpty(), SOURCE)
+    }
+  }
+
+  @Test
+  fun `pinned old progress stays readable without granting current evidence authority`() {
+    val keys = FeatureTaskRuntimeImplementationProgressPayloadKeys
+    val evidence = AcceptanceCriterionProgressPayloadKeys
+    val previous =
+      progress() -
+        setOf(
+          evidence.COMPLETED_MUTATIONS,
+          evidence.INDEPENDENT_CHECKS,
+          evidence.REPAIR_BUDGETS,
+          evidence.REPAIR_ACCOUNTING,
+          evidence.WORKER_RESERVATION_ID,
+        ) + (keys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_PREVIOUS_CONTRACT_VERSION)
+    FeatureTaskRuntimeImplementationProgressSchemaValidator.validatePrevious(previous, SOURCE)
+    assertFailsWith<SkillBillRuntimeException> {
+      FeatureTaskRuntimeImplementationProgressSchemaValidator.validate(previous, SOURCE)
+    }
+    assertFailsWith<SkillBillRuntimeException> {
+      FeatureTaskRuntimeImplementationProgressSchemaValidator.validatePrevious(
+        previous + (keys.WORKER_COUNT to 4),
+        SOURCE,
+      )
+    }
+    assertFailsWith<SkillBillRuntimeException> {
+      FeatureTaskRuntimeImplementationProgressSchemaValidator.validatePrevious(progress(), SOURCE)
     }
   }
 
