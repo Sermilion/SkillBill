@@ -94,6 +94,22 @@ class BuildTrackerTest {
     assertEquals(BuildOutcome.FAILED to 1, (settled as BuildTrackerEvent.Settled).let { it.outcome to it.exitCode })
   }
 
+  @Test
+  fun `a script launched probe settles on disappearance without waiting for the agent to finish`() {
+    val tracker = BuildTracker(clock)
+    tracker.command(call("script", BuildCommandEventKind.STARTED, second = 0, text = "bash scripts/bootstrap.sh"))
+    tracker.observe(listOf(match(7)), at(1))
+
+    val settled = tracker.observe(emptyList(), at(2)).single() as BuildTrackerEvent.Settled
+
+    assertEquals(BuildOutcome.UNKNOWN to null, settled.outcome to settled.exitCode)
+    assertEquals(at(2), settled.endedAt)
+    assertEquals(1_000L, settled.durationMs)
+    assertEquals(emptyList(), tracker.observe(emptyList(), at(3)))
+    assertEquals(emptyList(), tracker.command(call("script", BuildCommandEventKind.COMPLETED, 0, second = 4)))
+    assertEquals(emptyList(), tracker.finish(at(5)))
+  }
+
   private fun at(seconds: Long): Instant = t0.plusSeconds(seconds)
 
   private fun call(

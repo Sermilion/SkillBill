@@ -127,6 +127,37 @@ class AgentBuildRecorderTest {
     assertEquals(1_000L, store.history("primary", "cargo build", secondStart.plusSeconds(2)).usualMs)
   }
 
+  @Test
+  fun `an ended script probe stops hiding the live build before the agent finishes`() {
+    val database =
+      sqliteDatabaseSessionFactory(
+        databaseHome,
+        environment = emptyMap(),
+        diagnostics = NoopRuntimeDiagnostics,
+      )
+    val store = SessionAgentBuildRunRepository(database)
+    val observer = recorder(store)
+    val start = Instant.parse("2026-11-07T12:00:00Z")
+    val build = AgentRunProcessSample(20, null, "cargo", listOf("build"), start)
+    val probe = AgentRunProcessSample(21, null, "cargo", listOf("--version"), start.plusSeconds(1))
+    observer.processes(start, listOf(build))
+    observer.command(
+      AgentRunCommandEvent("script", "bash scripts/bootstrap.sh", AgentRunCommandEventKind.STARTED, null, start),
+    )
+    observer.processes(start.plusSeconds(1), listOf(build, probe))
+    assertEquals(21, store.latestForRun(setOf("goal-1"))?.pid?.toInt())
+
+    observer.processes(start.plusSeconds(2), listOf(build))
+
+    val visible = assertNotNull(store.latestForRun(setOf("goal-1")))
+    assertEquals(20, visible.pid.toInt())
+    assertNull(visible.endedAt)
+    val history = store.history("primary", "cargo --version", start.plusSeconds(3))
+    assertEquals(AgentBuildOutcome.UNKNOWN, history.previous?.outcome)
+    assertEquals(start.plusSeconds(2), history.previous?.endedAt)
+    assertEquals(1_000L, history.previous?.durationMs)
+  }
+
   private fun seedStaleBuilds(store: AgentBuildRunRepository) {
     store.start(
       AgentBuildRunStart(

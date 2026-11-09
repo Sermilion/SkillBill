@@ -36,7 +36,9 @@ class BuildTracker(private val clock: Clock) {
       builds += build
       newBuilds += build
     }
-    val settlements = reconcileCalls()
+    val settlements =
+      reconcileCalls() +
+        builds.filter { it.callId == null && it.endedAt != null && !it.settled }.map(::settleUnknown)
     val existingSettlements = settlements.filter { event -> existing.any { it.matches(event) } }
     val newSettlements = settlements - existingSettlements.toSet()
     return existingSettlements + newBuilds.map(::started) + newSettlements
