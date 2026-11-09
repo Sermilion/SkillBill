@@ -199,6 +199,9 @@ class ChatChangeReadsTest {
     git("config", "user.name", "Test")
     // Windows runners enable autocrlf system-wide; the fixtures compare exact LF bytes.
     git("config", "core.autocrlf", "false")
+    // Developer and self-hosted runner configs may sign every commit; fixtures must not need a key.
+    git("config", "commit.gpgsign", "false")
+    git("config", "tag.gpgsign", "false")
     names.forEach { write(it, "initial\n") }
     git("add", ".")
     git("commit", "-q", "-m", "initial")
