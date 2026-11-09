@@ -151,6 +151,7 @@ data class ChatNewTaskContext(
   val pendingTurnLineIndex: Int? = null,
   val changesBaseline: ChatChangesBaseline? = null,
   val changesCaptureAttempted: Boolean = false,
+  val changesAttributedPaths: Set<String>? = null,
 )
 
 data class ChatChangesBaseline(

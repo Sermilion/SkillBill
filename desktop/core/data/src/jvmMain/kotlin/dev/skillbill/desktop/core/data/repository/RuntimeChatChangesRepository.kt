@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.data.session.DatabaseSessionManager
 import dev.skillbill.desktop.core.domain.model.ChatBaselineCapture
+import dev.skillbill.desktop.core.domain.model.ChatChangedPaths
 import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatChangesRead
 import dev.skillbill.desktop.core.domain.repository.ChatChangesRepository
@@ -34,12 +35,22 @@ class RuntimeChatChangesRepository(
     }
   }
 
-  override suspend fun read(repositoryRoot: String, baseline: ChatChangesBaseline): ChatChangesRead = withContext(Dispatchers.IO) {
+  override suspend fun read(repositoryRoot: String, baseline: ChatChangesBaseline, paths: Set<String>?): ChatChangesRead = withContext(Dispatchers.IO) {
     gitReadLock.mutex.withLock {
       val runtime = sessions.sessions.value?.runtime
       val result = if (runtime == null) ChatChangesRead.Unavailable("No database session is open.")
-      else ChatChangeReads(runtime.workTreeSnapshotPort, runtime.workChangesPort, clock).read(repositoryRoot, baseline)
+      else ChatChangeReads(runtime.workTreeSnapshotPort, runtime.workChangesPort, clock).read(repositoryRoot, baseline, paths)
       if (result is ChatChangesRead.Unavailable) diagnostics.record(CHANGES_UNAVAILABLE)
+      result
+    }
+  }
+
+  override suspend fun changedPaths(repositoryRoot: String, since: ChatChangesBaseline): ChatChangedPaths = withContext(Dispatchers.IO) {
+    gitReadLock.mutex.withLock {
+      val runtime = sessions.sessions.value?.runtime
+      val result = if (runtime == null) ChatChangedPaths.Unavailable("No database session is open.")
+      else ChatChangeReads(runtime.workTreeSnapshotPort, runtime.workChangesPort, clock).changedPaths(repositoryRoot, since)
+      if (result is ChatChangedPaths.Unavailable) diagnostics.record(TURN_CHANGES_UNAVAILABLE)
       result
     }
   }
@@ -47,5 +58,6 @@ class RuntimeChatChangesRepository(
   private companion object {
     const val BASELINE_UNAVAILABLE = "chat.changes_baseline_unavailable"
     const val CHANGES_UNAVAILABLE = "chat.changes_unavailable"
+    const val TURN_CHANGES_UNAVAILABLE = "chat.turn_changes_unavailable"
   }
 }

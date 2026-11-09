@@ -19,3 +19,11 @@ sealed interface ChatChangesRead {
   data class Listed(val changes: ChatChanges) : ChatChangesRead
   data class Unavailable(val reason: String) : ChatChangesRead
 }
+
+sealed interface ChatChangedPaths {
+  data class Listed(val paths: Set<String>) : ChatChangedPaths
+  data class Unavailable(val reason: String) : ChatChangedPaths
+}
+
+fun List<ChangedFile>.attributedTo(paths: Set<String>?): List<ChangedFile> =
+  if (paths == null) this else filter { it.path in paths || it.oldPath in paths }

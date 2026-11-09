@@ -70,6 +70,7 @@ private object ChatStoreKeys {
   const val NEW_TASK_PENDING_TURN_LINE_INDEX = "new_task_pending_turn_line_index"
   const val NEW_TASK_CHANGES_BASELINE = "new_task_changes_baseline"
   const val NEW_TASK_CHANGES_CAPTURE_ATTEMPTED = "new_task_changes_capture_attempted"
+  const val NEW_TASK_CHANGES_ATTRIBUTED_PATHS = "new_task_changes_attributed_paths"
   const val HEAD_SHA = "head_sha"
   const val UNTRACKED_PATHS = "untracked_paths"
   const val STASH_SHA = "stash_sha"
@@ -346,6 +347,9 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
         put(ChatStoreKeys.TAKEN_AT, baseline.takenAt.toEpochMilliseconds())
       })
     }
+    newTask.changesAttributedPaths?.let { paths ->
+      put(ChatStoreKeys.NEW_TASK_CHANGES_ATTRIBUTED_PATHS, buildJsonArray { paths.sorted().forEach { add(it) } })
+    }
   }
   chat.summary?.let { put(ChatStoreKeys.SUMMARY, it) }
   chat.summarySourceUpdatedAt?.let { put(ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT, it.toEpochMilliseconds()) }
@@ -400,11 +404,21 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
         (root[ChatStoreKeys.NEW_TASK_CHANGES_CAPTURE_ATTEMPTED] as? JsonPrimitive)?.content?.toBooleanStrictOrNull()
           ?: ((root[ChatStoreKeys.NEW_TASK_SESSION_ESTABLISHED] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() != false
             || root[ChatStoreKeys.NEW_TASK_CHANGES_BASELINE] != null),
+        decodeAttributedPaths(root[ChatStoreKeys.NEW_TASK_CHANGES_ATTRIBUTED_PATHS], diagnostics),
       )
     },
     summary = root.string(ChatStoreKeys.SUMMARY)?.takeIf { it.isNotBlank() },
     summarySourceUpdatedAt = (root[ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT] as? JsonPrimitive)?.longOrNull?.let(Instant::fromEpochMilliseconds),
   )
+}
+
+private fun decodeAttributedPaths(element: JsonElement?, diagnostics: Diagnostics): Set<String>? {
+  if (element == null || element == JsonNull) return null
+  val paths = (element as? JsonArray)
+    ?.takeIf { array -> array.all { (it as? JsonPrimitive)?.isString == true } }
+    ?.map { (it as JsonPrimitive).content }
+  if (paths == null) diagnostics.record("chat.changes_attributed_paths_unreadable")
+  return paths?.toSet()
 }
 
 private fun decodeChangesBaseline(element: JsonElement?, diagnostics: Diagnostics): ChatChangesBaseline? {

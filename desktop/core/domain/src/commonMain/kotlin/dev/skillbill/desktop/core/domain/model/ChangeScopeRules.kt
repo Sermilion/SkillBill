@@ -28,6 +28,7 @@ fun chatScopeTarget(
   repositoryRoot: String,
   baseline: ChatChangesBaseline,
   timeline: ChangeScopeTimeline,
+  paths: Set<String>?,
 ): ChangeScopeTarget = ChangeScopeTarget(
   workId = "chat:" + sessionId,
   worktreeRoot = repositoryRoot,
@@ -36,6 +37,7 @@ fun chatScopeTarget(
   rangesSupported = false,
   timeline = timeline,
   chat = true,
+  paths = paths,
 )
 
 fun availableScopes(target: ChangeScopeTarget): Set<ScopeKind> {
