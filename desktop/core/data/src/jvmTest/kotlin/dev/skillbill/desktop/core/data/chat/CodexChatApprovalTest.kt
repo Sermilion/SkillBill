@@ -72,11 +72,12 @@ class CodexChatApprovalTest {
     val checkout = Files.createTempDirectory("codex-facts").toRealPath()
     try {
       val harness = Harness(checkout = checkout.toString())
+      val checkoutJson = jsonPathLiteral(checkout.toString())
       val wrapped =
         obj(
           """{"id":10,"method":"item/commandExecution/requestApproval",""" +
             """"params":{"threadId":"thread","turnId":"turn","itemId":"wrap",""" +
-            """"command":"bash -lc 'git status --short'","cwd":"$checkout",""" +
+            """"command":"bash -lc 'git status --short'","cwd":"$checkoutJson",""" +
             """"commandActions":[{"type":"unknown","command":"bash -lc 'git status --short'"}]}}""",
         )
       harness.approval.handleServerRequest(wrapped, emptyMap())
@@ -85,7 +86,7 @@ class CodexChatApprovalTest {
         obj(
           """{"id":11,"method":"item/commandExecution/requestApproval",""" +
             """"params":{"threadId":"thread","turnId":"turn","itemId":"quote",""" +
-            """"command":"bash -lc \"git status\"","cwd":"$checkout",""" +
+            """"command":"bash -lc \"git status\"","cwd":"$checkoutJson",""" +
             """"commandActions":[{"type":"unknown","command":"bash -lc \"git status\""}]}}""",
         )
       harness.approval.handleServerRequest(quoted, emptyMap())
@@ -94,28 +95,29 @@ class CodexChatApprovalTest {
         obj(
           """{"id":14,"method":"item/commandExecution/requestApproval",""" +
             """"params":{"threadId":"thread","turnId":"turn","itemId":"tab",""" +
-            """"command":"bash\t-lc 'git status'","cwd":"$checkout",""" +
+            """"command":"bash\t-lc 'git status'","cwd":"$checkoutJson",""" +
             """"commandActions":[{"type":"unknown","command":"bash\t-lc 'git status'"}]}}""",
         )
       harness.approval.handleServerRequest(tabulated, emptyMap())
       assertEquals(null, harness.owner.commands.last().matchFacts)
       val diff = "+patch"
       val file =
-        obj("""{"type":"fileChange","id":"grant","changes":[{"path":"$checkout/a","kind":{"type":"update"},"diff":${JsonPrimitive(diff)}}]}""")
+        obj("""{"type":"fileChange","id":"grant","changes":[{"path":"$checkoutJson/a","kind":{"type":"update"},"diff":${JsonPrimitive(diff)}}]}""")
       harness.approval.handleServerRequest(
         obj(
-          """{"id":12,"method":"item/fileChange/requestApproval","params":{"threadId":"thread","turnId":"turn","itemId":"grant","grantRoot":"$checkout"}}""",
+          """{"id":12,"method":"item/fileChange/requestApproval","params":{"threadId":"thread","turnId":"turn","itemId":"grant","grantRoot":"$checkoutJson"}}""",
         ),
         mapOf(codexItemKey("thread", "turn", "grant") to file),
       )
       assertEquals(null, harness.owner.commands.last().matchFacts)
       val outside = Files.createTempDirectory("codex-outside").toRealPath()
       try {
+        val outsideJson = jsonPathLiteral(outside.toString())
         harness.approval.handleServerRequest(
           obj(
             """{"id":13,"method":"item/commandExecution/requestApproval",""" +
               """"params":{"threadId":"thread","turnId":"turn","itemId":"away",""" +
-              """"command":"git status","cwd":"$outside",""" +
+              """"command":"git status","cwd":"$outsideJson",""" +
               """"commandActions":[{"type":"unknown","command":"git status"}]}}""",
           ),
           emptyMap(),
@@ -188,6 +190,8 @@ class CodexChatApprovalTest {
   }
 
   private companion object {
+    fun jsonPathLiteral(path: String): String = path.replace('\\', '/')
+
     fun obj(raw: String): JsonObject = Json.parseToJsonElement(raw).jsonObject
     fun command(network: Boolean = false): JsonObject = obj("""{"id":7,"method":"item/commandExecution/requestApproval","params":{"threadId":"thread","turnId":"turn","itemId":"cmd","command":"git status","cwd":"/checkout","commandActions":[{"type":"unknown","command":"git status"}],"availableDecisions":null${if (network) ",\"networkApprovalContext\":{\"host\":\"example.test\"}" else ""}}}""")
   }
