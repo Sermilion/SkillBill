@@ -1,10 +1,13 @@
 package dev.skillbill.desktop.core.data.chat
 
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
 import skillbill.approval.model.ApprovalProviderDisposition
 import skillbill.contracts.approval.ApprovalProviderRequestId
@@ -44,6 +47,43 @@ class CodexAppServerRpcTest {
 
     val failure = assertIs<ChatEvent.Failed>(events.last())
     assertContains(failure.detail.orEmpty(), "declined")
+  }
+
+  @Test
+  fun `steering replies share the turn reader and rejection leaves the turn usable`() = runTest {
+    val input = Channel<ChatProcessInput>(Channel.UNLIMITED)
+    val output = Channel<ChatProcessOutput>(Channel.UNLIMITED)
+    val events = mutableListOf<ChatEvent>()
+    val approval = CodexChatApproval({ true }, {}, RecordingDiagnostics(), {}, "/checkout")
+    val rpc = CodexAppServerRpc(input, output, RecordingDiagnostics(), { events += it }, approval)
+    val drain = launch { rpc.drainTurn("thread", "turn") }
+
+    val rejected = async {
+      rpc.steer("delivery-1", "thread", "turn", emptyList(), { acquire -> acquire() }, { register -> register() }, {})
+    }
+    acknowledgeWrite(input.receive())
+    output.send(line("""{"id":1,"error":{"code":-32602,"message":"turn busy"}}"""))
+    assertIs<ChatSteeringResult.Rejected>(rejected.await())
+
+    val accepted = async {
+      rpc.steer("delivery-2", "thread", "turn", emptyList(), { acquire -> acquire() }, { register -> register() }, {})
+    }
+    acknowledgeWrite(input.receive())
+    output.send(line("""{"method":"item/agentMessage/delta","params":{"threadId":"thread","turnId":"turn","itemId":"message","delta":"Still running"}}"""))
+    output.send(line("""{"id":2,"result":{"turnId":"turn"}}"""))
+    output.send(line("""{"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed"}}}"""))
+
+    assertIs<ChatSteeringResult.Accepted>(accepted.await())
+    drain.join()
+    assertTrue(ChatEvent.TextDelta("Still running") in events)
+    assertEquals(ChatEvent.Completed, events.last())
+    approval.release()
+    output.close()
+  }
+
+  private fun acknowledgeWrite(input: ChatProcessInput) {
+    assertTrue(input.acquireWrite())
+    input.written.complete(true)
   }
 
   private fun approvedCommandTurn(decision: ApprovalState, completion: String): List<ChatEvent> = runBlocking {
