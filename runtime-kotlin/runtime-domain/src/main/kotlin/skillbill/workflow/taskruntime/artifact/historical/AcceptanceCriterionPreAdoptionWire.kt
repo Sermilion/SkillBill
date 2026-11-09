@@ -5,7 +5,6 @@ import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STAT
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_PREVIOUS_CONTRACT_VERSION
 import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairStateSchema
-import skillbill.error.shellcontent.invalidFeatureTaskRuntimeImplementationProgressSchema
 import skillbill.workflow.taskruntime.artifact.asImplementationProgressWireMap
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.implementationFields
@@ -31,6 +30,7 @@ fun AcceptanceCriterionRepairState.asEngineRepairWireMap(): FeatureTaskRuntimeWo
   fields.remove(ProgressKeys.REPAIR_ACCOUNTING)
   fields.remove(ProgressKeys.COMPLETED_MUTATIONS)
   fields.remove(ProgressKeys.INDEPENDENT_CHECKS)
+  retainedHistory?.writeInto(fields)
   fields[RepairKeys.RESERVATION] = (fields[RepairKeys.RESERVATION] as? Map<*, *>)?.minus(RepairKeys.REASONING_REQUIRED)
   return FeatureTaskRuntimeWorkflowArtifactMap.from(fields).also { it.toHistoricalRepairState("serial-repair") }
 }
@@ -42,17 +42,14 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.toEngineRepairState(sourceLabel: Strin
   if (this[RepairKeys.CONTRACT_VERSION] != ACCEPTANCE_CRITERION_REPAIR_STATE_INTERACTION_CONTRACT_VERSION) {
     throw invalidAcceptanceCriterionRepairStateSchema(
       sourceLabel,
-      "Run the supported historical version recovery first.",
+      "Prepare the database before reading historical repair state. Original source must remain retained.",
     )
   }
   val historical = toHistoricalRepairState(sourceLabel)
-  if (!historical.completedMutations.isNullOrEmpty() || !historical.independentChecks.isNullOrEmpty()) {
-    throw invalidAcceptanceCriterionRepairStateSchema(
-      sourceLabel,
-      "Retained historical evidence requires the deferred evidence migration. Original records must be preserved.",
-    )
-  }
-  return historical.state.copy(accountingPolicy = AcceptanceCriterionAccountingPolicy.PRE_ADOPTION)
+  return historical.state.copy(
+    retainedHistory = historical.retainedHistory(),
+    accountingPolicy = AcceptanceCriterionAccountingPolicy.PRE_ADOPTION,
+  )
 }
 
 fun FeatureTaskRuntimeImplementationProgress.asEngineProgressWireMap(): FeatureTaskRuntimeWorkflowArtifactMap {
@@ -66,6 +63,7 @@ fun FeatureTaskRuntimeImplementationProgress.asEngineProgressWireMap(): FeatureT
   fields.remove(ProgressKeys.WORKER_RESERVATION_ID)
   fields.remove(ProgressKeys.COMPLETED_MUTATIONS)
   fields.remove(ProgressKeys.INDEPENDENT_CHECKS)
+  retainedHistory?.writeInto(fields)
   return FeatureTaskRuntimeWorkflowArtifactMap.from(fields).also {
     it.toHistoricalImplementationProgress("implementation-progress")
   }
@@ -78,17 +76,12 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.toEngineImplementationProgress(
     return toImplementationProgress(sourceLabel)
   }
   val historical = toHistoricalImplementationProgress(sourceLabel)
-  if (!historical.completedMutations.isNullOrEmpty() || !historical.independentChecks.isNullOrEmpty()) {
-    throw invalidFeatureTaskRuntimeImplementationProgressSchema(
-      sourceLabel,
-      "Retained historical evidence requires the deferred evidence migration. Original records must be preserved.",
-    )
-  }
   return FeatureTaskRuntimeImplementationProgress(
     historical.criterionIds,
     historical.currentIndex,
     historical.workerCount,
     historical.launchCount,
+    retainedHistory = historical.retainedHistory(),
     accountingPolicy = AcceptanceCriterionAccountingPolicy.PRE_ADOPTION,
   )
 }

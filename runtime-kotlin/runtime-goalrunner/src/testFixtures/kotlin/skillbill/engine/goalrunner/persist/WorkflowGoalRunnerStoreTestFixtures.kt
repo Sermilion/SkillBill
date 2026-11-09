@@ -35,6 +35,7 @@ import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.ReadyRuntimeDatabaseReadiness
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.projectstore.FixedProjectStorePort
@@ -110,6 +111,7 @@ fun engineWorkflowGoalRunnerManifestStore(
       NoopRuntimeDiagnostics,
       ContractFeatureTaskRuntimePhaseOutputMigration(),
       NoopFeatureTaskRuntimeWorkerSupervisor,
+      databaseReadiness = ReadyRuntimeDatabaseReadiness,
     )
   val historyEvidence =
     GoalChildHistoryEvidenceStore(

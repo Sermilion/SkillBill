@@ -5,6 +5,8 @@ import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.workflow.taskruntime.artifact.AcceptanceCriterionEvidenceWire
 import skillbill.workflow.taskruntime.artifact.asImplementationProgressWireMap
 import skillbill.workflow.taskruntime.artifact.toImplementationProgress
+import skillbill.workflow.taskruntime.model.audit.history.AcceptanceCriterionMigrationAdmission
+import skillbill.workflow.taskruntime.model.audit.history.AcceptanceCriterionMigrationContext
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -55,6 +57,58 @@ class AcceptanceCriterionIndependentProgressTest {
         AcceptanceCriterionMutationDisposition.COMPLETE,
       ),
     )
+
+  @Test
+  fun `exhausted migrated debt survives renewal and requires a real escalated terminal round plus independent check`() {
+    val migration =
+      AcceptanceCriterionMigrationContext(
+        "repair",
+        "AC-001",
+        "historical-budget",
+        3,
+        true,
+        true,
+        true,
+      )
+    val empty = acceptanceCriterionRepairAccounting("AC-001", emptyList(), emptyList(), emptyList())
+    assertEquals(
+      AcceptanceCriterionMigrationAdmission.RECONCILIATION_REQUIRED,
+      migration.admission(empty, emptyList(), emptyList()),
+    )
+    val reconciled = migration.copy(reconciliationRequired = false)
+    assertEquals(
+      AcceptanceCriterionMigrationAdmission.ESCALATED_MUTATION,
+      reconciled.admission(empty, emptyList(), emptyList(), renewedBudget = true),
+    )
+    val mutation =
+      assertNotNull(context.completedMutation).copy(
+        launchAttribution =
+          AcceptanceCriterionRepairLaunch(
+            "reservation",
+            "codex",
+            "configured-reasoning-model",
+            "high",
+            "execution-plan",
+            "launch",
+            true,
+          ),
+      )
+    val pending = acceptanceCriterionRepairAccounting("AC-001", listOf(mutation), emptyList(), emptyList())
+    assertEquals(
+      AcceptanceCriterionMigrationAdmission.CHECK_REQUIRED,
+      reconciled.admission(pending, listOf(mutation), emptyList()),
+    )
+    val checked = AcceptanceCriterionCheckedMutation(mutation, comparison, context.copy(completedMutation = mutation))
+    val accounting = acceptanceCriterionRepairAccounting("AC-001", listOf(mutation), listOf(checked), emptyList())
+    assertEquals(
+      AcceptanceCriterionMigrationAdmission.EXHAUSTED,
+      reconciled.admission(accounting, listOf(mutation), listOf(checked)),
+    )
+    assertEquals(
+      AcceptanceCriterionMigrationAdmission.MUTATION,
+      reconciled.admission(accounting, listOf(mutation), listOf(checked), renewedBudget = true),
+    )
+  }
 
   @Test
   fun `only a bound independent production comparison earns progress`() {

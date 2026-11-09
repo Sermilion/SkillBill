@@ -8,8 +8,10 @@ import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestProjectionReader
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
 import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
+import skillbill.engine.migration.RetainedWorkflowProjection
 import skillbill.engine.work.IdeStatusProjector
 import skillbill.engine.work.IdeStatusService
+import skillbill.engine.work.RetainedWorkflowBoardProjection
 import skillbill.engine.work.WorkBoardItemProjection
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
@@ -22,6 +24,7 @@ import skillbill.infrastructure.sqlite.idestatus.SessionAgentBuildRunRepository
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.EmptyRetainedWorkflowReader
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.idestatus.NoopIdeStatusValidator
@@ -201,7 +204,12 @@ private class SnapshotFixture(
     val component =
       RuntimeComponent::class.create(
         RuntimeContext(
-          environment = EnvironmentContext(environment = emptyMap(), userHome = home),
+          environment =
+            EnvironmentContext(
+              environment = emptyMap(),
+              userHome = home,
+              dbPathOverride = dbPath.toString(),
+            ),
           transport = TransportContext(),
           workflowOps = WorkflowOpsContext(),
           callbacks = OptionalCallbacks(),
@@ -216,6 +224,11 @@ private class SnapshotFixture(
       )
     val projector =
       IdeStatusProjector(
+        retainedProjection =
+          RetainedWorkflowBoardProjection(
+            EmptyRetainedWorkflowReader,
+            RetainedWorkflowProjection(EmptyRetainedWorkflowReader, NoopRuntimeDiagnostics),
+          ),
         workflowSnapshotValidator = NoopSnapshotValidator,
         goalRunnerStatusService = component.goalRunnerStatusService,
         featureTaskRuntimeStatusService = component.featureTaskRuntimeStatusService,
@@ -230,7 +243,11 @@ private class SnapshotFixture(
       ideStatusValidator = NoopIdeStatusValidator,
       branchSource = CheckedOutBranchSource { "feat/SKILL-999-snapshot" },
       clock = Clock.fixed(observedAt, ZoneOffset.UTC),
-      repositoryEnclosingRootPort = CanonicalRepositoryRoot,
+      retainedProjection =
+        RetainedWorkflowBoardProjection(
+          EmptyRetainedWorkflowReader,
+          RetainedWorkflowProjection(EmptyRetainedWorkflowReader, NoopRuntimeDiagnostics),
+        ),
       featureTaskRuntimeStatusService = component.featureTaskRuntimeStatusService,
       goalRunnerStatusService = component.goalRunnerStatusService,
       workBoardItemProjection =
@@ -242,6 +259,10 @@ private class SnapshotFixture(
           CanonicalRepositoryRoot,
           LocalGoalRuntimeStateFileStore(),
           SessionAgentBuildRunRepository(database),
+          RetainedWorkflowBoardProjection(
+            EmptyRetainedWorkflowReader,
+            RetainedWorkflowProjection(EmptyRetainedWorkflowReader, NoopRuntimeDiagnostics),
+          ),
         ),
       diagnostics = NoopRuntimeDiagnostics,
       incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, Clock.fixed(observedAt, ZoneOffset.UTC)),

@@ -1,0 +1,35 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://skill-bill.dev/contracts/acceptance-criterion-migration.yaml
+title: Retained criterion migration source and context
+type: object
+additionalProperties: false
+required: [contract_version, workflow_id, original_artifacts_json, source_digest, steps, contexts]
+properties:
+  contract_version: { const: '0.1' }
+  workflow_id: { type: string, minLength: 1 }
+  original_artifacts_json: { type: string, minLength: 1 }
+  source_digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+  steps:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [family, source_version, target_version]
+      properties:
+        family: { type: string, minLength: 1 }
+        source_version: { type: string, minLength: 1 }
+        target_version: { type: string, minLength: 1 }
+  contexts:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [family, criterion_ref, budget_identity, historical_charges, attribution_unknown, reconciliation_required, escalation_owed]
+      properties:
+        family: { type: string, minLength: 1 }
+        criterion_ref: { type: string, pattern: '^AC-[0-9]{3}$' }
+        budget_identity: { type: string, minLength: 1 }
+        historical_charges: { type: integer, minimum: 0 }
+        attribution_unknown: { type: boolean }
+        reconciliation_required: { type: boolean }
+        escalation_owed: { type: boolean }

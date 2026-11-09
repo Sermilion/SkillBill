@@ -10,6 +10,8 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.history.AcceptanceCriterionMigrationAdmission
+import skillbill.workflow.taskruntime.model.audit.history.AcceptanceCriterionMigrationContext
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceSettlement
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
@@ -99,31 +101,6 @@ public fun OwningTransactionResult.Refusal.toRepairRefusal(): AcceptanceCriterio
     OwningTransactionResult.Refusal.ACTIVE_SESSION -> AcceptanceCriterionRepairRefusal.ACTIVE_SESSION
     OwningTransactionResult.Refusal.UNSUPPORTED -> AcceptanceCriterionRepairRefusal.OWNING_SESSION_UNAVAILABLE
   }
-
-internal sealed interface AcceptanceCriterionRepairVersionPlan {
-  data object NotSuperseded : AcceptanceCriterionRepairVersionPlan
-
-  data class Unrecoverable(val family: String, val version: String) : AcceptanceCriterionRepairVersionPlan
-
-  class Recovery(
-    val families: List<String>,
-    val regenerated: Map<String, Any?>,
-    val rejectedRecord: ByteArray,
-    val detail: String,
-  ) : AcceptanceCriterionRepairVersionPlan
-}
-
-public sealed interface AcceptanceCriterionRepairVersionRecoveryResult {
-  public data object Unchanged : AcceptanceCriterionRepairVersionRecoveryResult
-
-  public data class Recovered(
-    val families: List<String>,
-  ) : AcceptanceCriterionRepairVersionRecoveryResult
-
-  public data class Refused(
-    val reason: AcceptanceCriterionRepairRefusal,
-  ) : AcceptanceCriterionRepairVersionRecoveryResult
-}
 
 public sealed interface AcceptanceCriterionRepairHydration {
   public data class Present(val state: AcceptanceCriterionRepairState) : AcceptanceCriterionRepairHydration
@@ -258,6 +235,11 @@ public sealed interface AcceptanceCriterionRepairStatusRead {
   public data object PreContract : AcceptanceCriterionRepairStatusRead
 
   public data class SupersededVersion(val version: String) : AcceptanceCriterionRepairStatusRead
+
+  public data class MigrationRequired(
+    val contexts: List<AcceptanceCriterionMigrationContext>,
+    val decisions: List<AcceptanceCriterionMigrationAdmission>,
+  ) : AcceptanceCriterionRepairStatusRead
 }
 
 public sealed interface AcceptanceCriterionRepairWriteResult {

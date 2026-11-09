@@ -23,9 +23,14 @@ import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvaria
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
 import skillbill.engine.featuretask.testing.decodeWorkflowArtifactsForTest
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
+import skillbill.engine.migration.RetainedWorkflowProjection
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.EmptyRetainedWorkflowReader
+import skillbill.ports.db.ReadyRuntimeDatabaseReadiness
+import skillbill.ports.db.RetainedWorkflowReader
+import skillbill.ports.db.RuntimeDatabaseReadiness
 import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -1277,7 +1282,10 @@ private fun diagnosticSignal(
     recordedAt = "2026-08-12T20:19:51Z",
   )
 
-internal fun statusHarness(): StatusHarness {
+internal fun statusHarness(
+  databaseReadiness: RuntimeDatabaseReadiness = ReadyRuntimeDatabaseReadiness,
+  retainedReader: RetainedWorkflowReader = EmptyRetainedWorkflowReader,
+): StatusHarness {
   val repository = StatusInMemoryWorkflowRepository()
   val database = StatusFakeDatabaseSessionFactory(repository)
   val recorder =
@@ -1312,6 +1320,8 @@ internal fun statusHarness(): StatusHarness {
       ),
       runInvariantsStore,
       decomposeTerminalRecorder,
+      databaseReadiness = databaseReadiness,
+      retainedProjection = RetainedWorkflowProjection(retainedReader, NoopRuntimeDiagnostics),
     ),
     repository,
     FeatureTaskRuntimeGoalContinuationRecorder(database, NoopRuntimeDiagnostics, testHarnessClock),

@@ -9,6 +9,7 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProgressCla
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAccounting
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairBudget
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRetainedHistory
 import skillbill.workflow.taskruntime.model.audit.acceptanceCriterionRepairAccounting
 import skillbill.workflow.taskruntime.model.audit.terminal
 import skillbill.workflow.taskruntime.model.audit.validAcceptanceCriterionRepairBudgets
@@ -25,6 +26,7 @@ data class FeatureTaskRuntimeImplementationProgress(
   val repairBudgets: List<AcceptanceCriterionRepairBudget> = emptyList(),
   val workerReservationId: String? = null,
   val accountingPolicy: AcceptanceCriterionAccountingPolicy = AcceptanceCriterionAccountingPolicy.VERIFIED_EVIDENCE,
+  val retainedHistory: AcceptanceCriterionRetainedHistory? = null,
 ) {
   init {
     if (accountingPolicy == AcceptanceCriterionAccountingPolicy.PRE_ADOPTION) {

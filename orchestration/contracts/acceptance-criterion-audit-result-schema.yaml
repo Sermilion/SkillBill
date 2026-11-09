@@ -5,6 +5,7 @@ type: object
 additionalProperties: false
 required: [contract_version, mode, catalog_id, spec_digest, execution_id, tree_digest, checkpoint_id, producing_output_id, producing_output_digest, criteria, dependencies, regressed_refs, edge_changes, interactions, rechecks]
 properties:
+  migration_source_version: { const: '0.2' }
   contract_version: { const: '0.3' }
   mode: { enum: [initial_discovery, current_criterion_targeted, interaction_trace] }
   catalog_id: { type: string, minLength: 1, maxLength: 256 }
@@ -101,7 +102,9 @@ allOf:
         mode: { const: current_criterion_targeted }
       required: [mode]
     then:
-      required: [independent_progress]
+      anyOf:
+        - required: [independent_progress]
+        - required: [migration_source_version]
   - if:
       properties:
         mode: { enum: [initial_discovery, interaction_trace] }

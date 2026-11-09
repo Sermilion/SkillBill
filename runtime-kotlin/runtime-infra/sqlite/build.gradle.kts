@@ -6,6 +6,7 @@ plugins {
 
 dependencies {
   implementation(project(":runtime-domain"))
+  implementation(project(":runtime-infra:contracts"))
   implementation(project(":runtime-ports"))
   implementation(project(":runtime-contracts"))
   implementation(libs.kotlin.inject.runtime)

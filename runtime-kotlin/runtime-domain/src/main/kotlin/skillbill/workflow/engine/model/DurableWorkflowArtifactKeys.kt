@@ -98,3 +98,6 @@ internal const val RUNTIME_REPOSITORY_EVIDENCE_ARTIFACT_KEY = "repository_eviden
 internal const val DECOMPOSITION_RUNTIME_ARTIFACT_KEY: String = "decomposition_runtime"
 internal const val DECOMPOSITION_MANIFEST_PROJECTION_FAILURE_ARTIFACT_KEY: String =
   "decomposition_manifest_projection_failure"
+
+internal const val FEATURE_TASK_RUNTIME_CRITERION_MIGRATION_ARTIFACT_KEY: String =
+  "feature_task_runtime_criterion_migration"

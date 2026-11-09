@@ -24,6 +24,12 @@ governedResources {
   destination.set("skillbill/infrastructure/contracts")
 
   copy(
+    "copyAcceptanceCriterionMigrationSchema",
+    "acceptance-criterion-migration-schema.yaml",
+    "0AC-103: retained migration source and context",
+  )
+
+  copy(
     "copyAgentAddonSchema",
     "agent-addon-schema.yaml",
     "SKILL-122: canonical agent-addon schema",

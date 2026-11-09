@@ -43,6 +43,7 @@ import skillbill.engine.goalrunner.persist.quality.GoalQualityAdmissionRequest
 import skillbill.engine.goalrunner.persist.quality.GoalQualityBuildSourceProof
 import skillbill.engine.goalrunner.persist.quality.GoalQualityPhaseProgressWrite
 import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
+import skillbill.engine.migration.RetainedWorkflowProjection
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
 import skillbill.engine.work.model.toStatusWireMap
@@ -66,6 +67,10 @@ import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.infrastructure.sqlite.idestatus.SessionAgentBuildRunRepository
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.EmptyRetainedWorkflowReader
+import skillbill.ports.db.ReadyRuntimeDatabaseReadiness
+import skillbill.ports.db.RetainedWorkflowReader
+import skillbill.ports.db.RuntimeDatabaseReadiness
 import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -302,6 +307,8 @@ internal class IdeStatusServiceTestPorts(
   val qaCapabilities: QaCapabilityResolver = QaCapabilityResolver(RecordingWorkflowGitOperations()) { emptyList() },
   val repositoryEnclosingRootPort: RepositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
   val buildRunRepository: AgentBuildRunRepository? = null,
+  val databaseReadiness: RuntimeDatabaseReadiness = ReadyRuntimeDatabaseReadiness,
+  val retainedReader: RetainedWorkflowReader = EmptyRetainedWorkflowReader,
 )
 
 internal fun ideStatusService(
@@ -311,15 +318,8 @@ internal fun ideStatusService(
   snapshotValidator: WorkflowSnapshotValidator = acceptingIdeStatusSnapshotValidator,
   ports: IdeStatusServiceTestPorts = IdeStatusServiceTestPorts(),
 ): IdeStatusService {
-  val phaseRecorder =
-    featureTaskRuntimePhaseRecorder(
-      database,
-      snapshotValidator,
-      AcceptingFeatureTaskRuntimeWireArtifactValidator,
-      AcceptingFeatureTaskRuntimeWireArtifactValidator,
-      testHarnessClock,
-      NoopRuntimeDiagnostics,
-    )
+  val retainedReader = ports.retainedReader
+  val phaseRecorder = statusPhaseRecorder(database, snapshotValidator)
   val runtimeWorkflowPersistence =
     FeatureTaskRuntimeWorkflowPersistence(database, snapshotValidator, featureTaskRuntimeWireArtifactValidatorForTest())
   val runtimeStatusService =
@@ -332,6 +332,8 @@ internal fun ideStatusService(
           runtimeWorkflowPersistence,
         ),
       decomposeTerminalRecorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
+      databaseReadiness = ports.databaseReadiness,
+      retainedProjection = RetainedWorkflowProjection(retainedReader, NoopRuntimeDiagnostics),
     )
   val goalStatusService =
     testGoalRunnerStatusService(
@@ -349,22 +351,24 @@ internal fun ideStatusService(
             },
         ),
     )
-  val planReports = testPlanReports(manifestStore)
   val projector =
     IdeStatusProjector(
+      retainedProjection =
+        retainedBoardProjection(retainedReader),
       workflowSnapshotValidator = snapshotValidator,
       goalRunnerStatusService = goalStatusService,
       featureTaskRuntimeStatusService = runtimeStatusService,
       manifestStore = GoalRunnerManifestProjectionReader(manifestStore),
       diagnostics = NoopRuntimeDiagnostics,
       qaCapabilities = ports.qaCapabilities,
-      planReports = planReports,
+      planReports = testPlanReports(manifestStore),
     )
   val boardProjection =
     testBoardProjection(
       projector,
       ports.repositoryEnclosingRootPort,
       ports.buildRunRepository ?: SessionAgentBuildRunRepository(database),
+      retainedReader,
     )
   (database as? BoardProjectionCapture)?.accept(boardProjection)
   return IdeStatusService(
@@ -373,7 +377,8 @@ internal fun ideStatusService(
     ideStatusValidator = EmitShapeValidator,
     branchSource = CheckedOutBranchSource(::fixtureCheckedOutBranch),
     clock = ideStatusClock,
-    repositoryEnclosingRootPort = ports.repositoryEnclosingRootPort,
+    retainedProjection =
+      retainedBoardProjection(retainedReader),
     featureTaskRuntimeStatusService = runtimeStatusService,
     goalRunnerStatusService = goalStatusService,
     workBoardItemProjection = boardProjection,
@@ -381,6 +386,18 @@ internal fun ideStatusService(
     incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, ideStatusClock),
   )
 }
+
+private fun statusPhaseRecorder(
+  database: DatabaseSessionFactory,
+  snapshotValidator: WorkflowSnapshotValidator,
+) = featureTaskRuntimePhaseRecorder(
+  database,
+  snapshotValidator,
+  AcceptingFeatureTaskRuntimeWireArtifactValidator,
+  AcceptingFeatureTaskRuntimeWireArtifactValidator,
+  testHarnessClock,
+  NoopRuntimeDiagnostics,
+)
 
 private fun testPlanReports(manifestStore: GoalRunnerManifestStore) =
   StandalonePlanReportBuilder(
@@ -411,6 +428,7 @@ private fun testBoardProjection(
   projector: IdeStatusProjector,
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   buildRunRepository: AgentBuildRunRepository,
+  retainedReader: RetainedWorkflowReader,
 ): WorkBoardItemProjection =
   WorkBoardItemProjection(
     projector,
@@ -420,6 +438,7 @@ private fun testBoardProjection(
     repositoryEnclosingRootPort,
     LocalGoalRuntimeStateFileStore(),
     buildRunRepository,
+    RetainedWorkflowBoardProjection(retainedReader, RetainedWorkflowProjection(retainedReader, NoopRuntimeDiagnostics)),
   )
 
 internal fun fixtureCheckedOutBranch(repoRoot: Path): String? =
@@ -1099,3 +1118,6 @@ internal fun List<StandalonePhaseStatusRecord>.eligiblePage(
   val anchor = page.after?.let { after -> sliced.indexOfFirst { it.invocationId == after.invocationId } } ?: -1
   return sliced.drop(anchor + 1).take(page.limit)
 }
+
+private fun retainedBoardProjection(reader: RetainedWorkflowReader) =
+  RetainedWorkflowBoardProjection(reader, RetainedWorkflowProjection(reader, NoopRuntimeDiagnostics))

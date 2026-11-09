@@ -11,9 +11,12 @@ import skillbill.engine.work.eligibility.workLiveSection
 import skillbill.engine.work.eligibility.workPauseEligible
 import skillbill.engine.work.eligibility.workPolicy
 import skillbill.engine.work.eligibility.workRequiresAttention
+import skillbill.engine.work.failure.IdeStatusProblemSnapshots
+import skillbill.engine.work.failure.toIdeFamily
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.model.IdeStatusQueryWork
 import skillbill.engine.work.model.IdeStatusRepositoryResolution
+import skillbill.engine.work.model.IdeStatusSelectionTier
 import skillbill.engine.work.observation.workerOwnership
 import skillbill.engine.work.pagination.AggregateSkipDiagnostics
 import skillbill.engine.work.pagination.CANDIDATE_ROW_LOOKUPS
@@ -27,6 +30,7 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.core.rethrowIfDatabaseFailure
 import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
@@ -77,6 +81,7 @@ import skillbill.ports.work.model.WORK_BOARD_CANDIDATE_BATCH_SIZE
 import skillbill.ports.work.model.WorkBoardCandidateQuery
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.ports.work.model.WorkStatusCandidateRejectedRow
 import skillbill.ports.workflow.goalstate.GoalRuntimeStateFileStore
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
@@ -97,7 +102,35 @@ public class WorkBoardItemProjection(
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val goalRuntimeStateFiles: GoalRuntimeStateFileStore,
   private val buildRunRepository: AgentBuildRunRepository,
+  private val retainedProjection: RetainedWorkflowBoardProjection,
 ) {
+  internal fun resolveRepositoryIdentity(repoRootArg: String): IdeStatusRepositoryResolution {
+    val resolvedStart =
+      catchingNonCancellation {
+        repositoryEnclosingRootPort.canonicalPath(Path.of(repoRootArg))
+      }.getOrNull()
+        ?: return IdeStatusRepositoryResolution.Invalid("Repository root cannot be resolved: $repoRootArg")
+    val gitRoot =
+      findGitRoot(resolvedStart, repositoryEnclosingRootPort)
+        ?: return IdeStatusRepositoryResolution.Invalid("Path is not inside a Git repository: $repoRootArg")
+    val canonicalGitRoot = repositoryEnclosingRootPort.canonicalPath(gitRoot)
+    val identity = repositoryEnclosingRootPort.repositoryIdentity(canonicalGitRoot)
+    return if (
+      identity.isBlank() ||
+      !identity.startsWith(FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX)
+    ) {
+      IdeStatusRepositoryResolution.Missing(
+        "Could not form canonical repository identity for: $repoRootArg",
+      )
+    } else {
+      IdeStatusRepositoryResolution.Ok(
+        identity = identity,
+        repoRoot = canonicalGitRoot,
+        monitorIdentity = repositoryEnclosingRootPort.primaryRepositoryIdentity(canonicalGitRoot),
+      )
+    }
+  }
+
   internal fun withBuilds(
     items: List<WorkBoardItem>,
     now: Instant,
@@ -155,13 +188,19 @@ public class WorkBoardItemProjection(
     val (observedAt, finishedFrom) = window
     var found: WorkDetailMatch.Found? = null
     return try {
-      found = detailMatch(id, unitOfWork) as? WorkDetailMatch.Found ?: return null
-      if (isPlanPhaseOfListedGoal(found, unitOfWork)) return null
+      found = detailMatch(id, unitOfWork) as? WorkDetailMatch.Found
+      if (found == null || isPlanPhaseOfListedGoal(found, unitOfWork)) return null
       val identity = found.standalone?.repositoryIdentity ?: found.work?.repositoryIdentity
       val root = identity?.let(::decodeRepositoryRoot)
       if (identity == null || root == null) {
         diagnostics += repositoryIdentityDiagnostic(identity, workflowId = id)
-        return null
+        return retainedProjection.item(
+          id,
+          observedAt,
+          invalidWorkListRowError(
+            "Saved work has no usable repository identity.",
+          ),
+        )
       }
       val work = listOfNotNull(found.work)
       val candidates =
@@ -175,47 +214,69 @@ public class WorkBoardItemProjection(
             skipDiagnostics = skipDiagnostics,
           ),
         )
-      candidates.singleOrNull()?.let { candidate ->
-        projectRetainedBoardItem(
-          candidate,
-          IdeStatusProjectionContext(unitOfWork, identity, null, observedAt, root),
-          work,
-          finishedFrom,
-          diagnostics,
-        )
-      }
+      val candidate =
+        candidates.singleOrNull()
+          ?: throw invalidWorkListRowError("Saved work candidate cannot be projected.")
+      projectRetainedBoardItem(
+        candidate,
+        IdeStatusProjectionContext(unitOfWork, identity, null, observedAt, root),
+        work,
+        finishedFrom,
+        diagnostics,
+      )
     } catch (error: SkillBillRuntimeException) {
+      error.rethrowIfDatabaseFailure()
+      val retained = retainedProjection.item(id, observedAt, error)
+      if (retained != null) {
+        diagnostics +=
+          WorkBoardDiagnostic(
+            WorkBoardDiagnosticReason.INCOMPATIBLE_RECORD,
+            retained.snapshot.repositoryIdentity,
+            id,
+          )
+        return retained
+      }
       if (!error.isInvalidWorkflowStateFailure() || found == null) {
         skipIncompatibleBoardItem(error, diagnostics, skipDiagnostics, this.diagnostics, id)
       } else {
-        val resolved = found.work
-        val identity = resolved?.repositoryIdentity
-        val root = identity?.let(::decodeRepositoryRoot)
-        if (resolved == null || identity == null || root == null) throw error
-        this.diagnostics.warning(
-          "seam=$IDE_STATUS_STATUS_SEAM value_expected=readable_row value_used=blocked_record workflow_id=$id " +
-            "failure_code=${error.failureCodeLabel()} error=${error.message.orEmpty()}",
-        )
-        val snapshot =
-          IdeStatusProblemSnapshots.blockedWorkRecord(
-            identity,
-            observedAt,
-            resolved.item,
-            error.message.orEmpty(),
-          )
-        ideStatusValidator.validate(snapshot, "work-board:$id")
-        WorkBoardItem(
-          snapshot = snapshot,
-          repositoryRoot = root.toString(),
-          liveSection = workLiveSection(snapshot, null),
-          requiresAttention = workRequiresAttention(snapshot),
-          displayGroup = workDisplayGroup(snapshot, null),
-          displayPriority = workDisplayPriority(snapshot, null),
-          observation = unitOfWork.workList.observation(),
-          databaseFileObservation = unitOfWork.databaseFileObservation,
-        )
+        blockedBoardItem(unitOfWork, id, window, found, error)
       }
     }
+  }
+
+  private fun blockedBoardItem(
+    unitOfWork: UnitOfWork,
+    id: String,
+    window: BoardProjectionWindow,
+    found: WorkDetailMatch.Found,
+    error: SkillBillRuntimeException,
+  ): WorkBoardItem {
+    val resolved = found.work
+    val identity = resolved?.repositoryIdentity
+    val root = identity?.let(::decodeRepositoryRoot)
+    if (resolved == null || identity == null || root == null) throw error
+    this.diagnostics.warning(
+      "seam=$IDE_STATUS_STATUS_SEAM value_expected=readable_row value_used=blocked_record workflow_id=$id " +
+        "failure_code=${error.failureCodeLabel()} error=${error.message.orEmpty()}",
+    )
+    val snapshot =
+      IdeStatusProblemSnapshots.blockedWorkRecord(
+        identity,
+        window.observedAt,
+        resolved.item,
+        error.message.orEmpty(),
+      )
+    ideStatusValidator.validate(snapshot, "work-board:$id")
+    return WorkBoardItem(
+      snapshot = snapshot,
+      repositoryRoot = root.toString(),
+      liveSection = workLiveSection(snapshot, null),
+      requiresAttention = workRequiresAttention(snapshot),
+      displayGroup = workDisplayGroup(snapshot, null),
+      displayPriority = workDisplayPriority(snapshot, null),
+      observation = unitOfWork.workList.observation(),
+      databaseFileObservation = unitOfWork.databaseFileObservation,
+    )
   }
 
   internal fun projectRetainedBoardItem(
@@ -256,6 +317,14 @@ public class WorkBoardItemProjection(
     work: List<ResolvedWorkItem>,
   ): WorkBoardItem {
     val projection = projector.project(candidate, context.copy(branchCorrelation = candidate.branchCorrelation))
+    projection.migrationDiagnostic?.let { diagnostic ->
+      return retainedProjection.item(diagnostic, context.observedAt).copy(
+        snapshot = projection.snapshot,
+        repositoryRoot = context.repoRoot.toString(),
+        observation = context.unitOfWork.workList.observation(),
+        databaseFileObservation = context.unitOfWork.databaseFileObservation,
+      )
+    }
     val snapshot =
       if (projection.snapshot.problem?.code == IdeStatusProblemCode.INCOMPATIBLE_RECORD) {
         projection.snapshot.copy(
@@ -515,22 +584,17 @@ public class WorkBoardItemProjection(
   ): List<IdeStatusCandidate> {
     val resolved = read.resolved
     val queryWork = read.queryWork
-    val work = resolved?.work?.map { it.item } ?: readStatusWorkItems(unitOfWork, queryWork)
+    val rejectedRows = read.rejectedRows
+    val work = resolved?.work?.map { it.item } ?: readStatusWorkItems(unitOfWork, queryWork, rejectedRows)
     val issueKeysWithGoals =
       work
         .filter { it.workflowKind == WorkItemKind.FEATURE_GOAL }
         .mapNotNull { it.issueKey?.uppercase() }
         .toSet()
+    val effectiveRead = read.copy(observedAt = observedAt, listedGoalIssueKeys = issueKeysWithGoals)
     val workflowCandidates =
-      work.mapNotNull { item ->
-        queryWork?.statement()
-        if (isExcludedGoalChild(routeScopeFor(item, unitOfWork), item.issueKey, issueKeysWithGoals)) {
-          null
-        } else {
-          if (resolved == null) repeat(CANDIDATE_ROW_LOOKUPS) { queryWork?.statement() }
-          toCandidateOrSkip(item, unitOfWork, repository, branch, read)
-        }
-      }
+      work.mapNotNull { item -> candidateForCollection(item, unitOfWork, repository, branch, effectiveRead) } +
+        rejectedRows.mapNotNull { rejectedCandidate(it, repository, observedAt) }
     val standaloneRecords =
       resolved?.standalone
         ?: readStatusStandaloneRecords(unitOfWork, repository, branch, observedAt, queryWork)
@@ -567,6 +631,71 @@ public class WorkBoardItemProjection(
     return workflowCandidates.filterNot { it.workflowId in standaloneWorkflowIds } + standaloneCandidates
   }
 
+  private fun candidateForCollection(
+    item: WorkItem,
+    unitOfWork: UnitOfWork,
+    repository: IdeStatusRepositoryResolution.Ok,
+    branch: String?,
+    read: CandidateRead,
+  ): IdeStatusCandidate? =
+    try {
+      read.queryWork?.statement()
+      if (isExcludedGoalChild(routeScopeFor(item, unitOfWork), item.issueKey, read.listedGoalIssueKeys)) {
+        null
+      } else {
+        if (read.resolved == null) repeat(CANDIDATE_ROW_LOOKUPS) { read.queryWork?.statement() }
+        toCandidateOrSkip(item, unitOfWork, repository, branch, read)
+      }
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowIfDatabaseFailure()
+      if (error.code != WorkflowFailureCode.INVALID_WORK_LIST_ROW && !error.isInvalidWorkflowStateFailure()) throw error
+      rejectedCandidate(
+        WorkStatusCandidateRejectedRow(item.workflowId, item.workflowId, error.code, error.message.orEmpty()),
+        repository,
+        read.observedAt ?: item.stateEnteredAt,
+      ) ?: throw error
+    }
+
+  private fun rejectedCandidate(
+    row: WorkStatusCandidateRejectedRow,
+    repository: IdeStatusRepositoryResolution.Ok,
+    observedAt: Instant,
+  ): IdeStatusCandidate? {
+    val failure = SkillBillRuntimeException(row.failureCode, row.detail)
+    val sourceDiagnostic =
+      row.takeUnless { it.workflowId == "<unknown>" }
+        ?.let { retainedProjection.diagnostic(it.workflowId, failure) } ?: return null
+    val diagnostic =
+      if (sourceDiagnostic.record.workflowBranchCorrelation == null) {
+        sourceDiagnostic.copy(
+          guidance = sourceDiagnostic.guidance + " Branch correlation is unavailable for this retained row.",
+        )
+      } else {
+        sourceDiagnostic
+      }
+    val retainedIdentity = retainedProjection.repositoryIdentity(diagnostic)
+    if (retainedIdentity != null && retainedIdentity != repository.identity) return null
+    val family =
+      when (diagnostic.record.workKind) {
+        WorkItemKind.FEATURE_GOAL -> IdeStatusWorkflowFamily.FEATURE_GOAL
+        WorkItemKind.FEATURE_TASK_PROSE, WorkItemKind.FEATURE_TASK_RUNTIME ->
+          IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME
+        WorkItemKind.FEATURE_VERIFY, null -> return null
+      }
+    return IdeStatusCandidate(
+      workflowId = diagnostic.record.workflowId,
+      workflowFamily = family,
+      issueKey = diagnostic.record.issueKey,
+      currentState = "blocked",
+      lifecycleState = IdeStatusLifecycleState.BLOCKED,
+      selectionTier = IdeStatusSelectionTier.BLOCKED,
+      updatedAt = observedAt,
+      startedAt = null,
+      branchCorrelation = diagnostic.record.workflowBranchCorrelation,
+      migrationDiagnostic = diagnostic,
+    )
+  }
+
   internal fun toCandidateOrSkip(
     item: WorkItem,
     unitOfWork: UnitOfWork,
@@ -583,7 +712,17 @@ public class WorkBoardItemProjection(
         read.resolved?.work?.firstOrNull { it.item.workflowId == item.workflowId },
       )
     } catch (error: SkillBillRuntimeException) {
-      if (error.code != InstallFailureCode.INVALID_IDE_STATUS_SCHEMA) throw error
+      if (
+        error.code != InstallFailureCode.INVALID_IDE_STATUS_SCHEMA &&
+        error.code != WorkflowFailureCode.INVALID_WORK_LIST_ROW && !error.isInvalidWorkflowStateFailure()
+      ) {
+        throw error
+      }
+      rejectedCandidate(
+        WorkStatusCandidateRejectedRow(item.workflowId, item.workflowId, error.code, error.message.orEmpty()),
+        repository,
+        read.observedAt ?: item.stateEnteredAt,
+      )?.let { return it }
       read.skipDiagnostics.emit(diagnostics, IDE_STATUS_STATUS_SEAM, item.workflowId, null, error)
       null
     }
@@ -787,6 +926,9 @@ internal data class CandidateRead(
   val resolved: ResolvedWorkCandidates? = null,
   val queryWork: IdeStatusQueryWork? = null,
   val skipDiagnostics: AggregateSkipDiagnostics = AggregateSkipDiagnostics(),
+  val rejectedRows: MutableList<WorkStatusCandidateRejectedRow> = mutableListOf(),
+  val observedAt: Instant? = null,
+  val listedGoalIssueKeys: Set<String> = emptySet(),
 )
 
 internal data class ResolvedWorkCandidates(
@@ -899,6 +1041,9 @@ internal object WorkBoardReadModelRefresh {
           deleted.add(id)
           null
         } else {
+          item.migrationDiagnostic?.let { diagnostic ->
+            throw SkillBillRuntimeException(diagnostic.failureCode, diagnostic.guidance)
+          }
           row(projection, id, item, now)
         }
       }
@@ -1006,3 +1151,15 @@ private fun finishedBuildState(outcome: AgentBuildOutcome?): WorkBuildState =
     AgentBuildOutcome.FAILED -> WorkBuildState.FAILED
     AgentBuildOutcome.UNKNOWN, null -> WorkBuildState.FINISHED
   }
+
+private fun findGitRoot(
+  start: Path,
+  repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+): Path? {
+  var candidate: Path? = start
+  while (candidate != null) {
+    if (repositoryEnclosingRootPort.optionalRealPath(candidate.resolve(".git")) != null) return candidate
+    candidate = candidate.parent
+  }
+  return null
+}

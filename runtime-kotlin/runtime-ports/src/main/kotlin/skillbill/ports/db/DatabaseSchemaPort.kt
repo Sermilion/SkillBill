@@ -1,5 +1,7 @@
 package skillbill.ports.db
 
+import skillbill.ports.db.model.DatabaseReadinessObservation
+
 interface DatabaseSchemaPort {
   /**
    * Creates or migrates the runtime database so read-only consumers, such as the desktop app,
@@ -18,4 +20,7 @@ interface DatabaseSchemaPort {
    * Returns false when no database exists yet and refuses newer or unrecognized schemas.
    */
   fun hasPendingMigrations(): Boolean
+
+  /** Observes the selected store and compatibility state without changing it. */
+  fun observeReadiness(): DatabaseReadinessObservation
 }

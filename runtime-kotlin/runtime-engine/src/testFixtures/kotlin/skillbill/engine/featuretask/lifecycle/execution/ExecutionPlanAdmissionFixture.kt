@@ -20,6 +20,7 @@ import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.ReadyRuntimeDatabaseReadiness
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
@@ -116,6 +117,7 @@ class ExecutionPlanAdmissionFixture(
       diagnostics,
       ContractFeatureTaskRuntimePhaseOutputMigration(),
       supervisor,
+      databaseReadiness = ReadyRuntimeDatabaseReadiness,
     )
 
   fun seed(

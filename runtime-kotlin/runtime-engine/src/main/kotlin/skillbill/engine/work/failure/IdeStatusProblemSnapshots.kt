@@ -1,12 +1,14 @@
-package skillbill.engine.work
+package skillbill.engine.work.failure
 
 import skillbill.idestatus.model.IdeStatusFreshness
 import skillbill.idestatus.model.IdeStatusLifecycleState
+import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.idestatus.model.IdeStatusProblem
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
 import skillbill.ports.work.model.WorkItem
+import skillbill.ports.work.model.WorkItemKind
 import java.time.Instant
 
 internal object IdeStatusProblemSnapshots {
@@ -172,4 +174,12 @@ internal fun IdeStatusSnapshot.exitCode(): Int =
     IdeStatusProblemCode.NO_MATCHING_WORK,
     null,
     -> 0
+  }
+
+internal fun WorkItemKind.toIdeFamily(): IdeStatusWorkflowFamily? =
+  when (this) {
+    WorkItemKind.FEATURE_TASK_PROSE -> null
+    WorkItemKind.FEATURE_TASK_RUNTIME -> IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME
+    WorkItemKind.FEATURE_VERIFY -> IdeStatusWorkflowFamily.FEATURE_VERIFY
+    WorkItemKind.FEATURE_GOAL -> IdeStatusWorkflowFamily.FEATURE_GOAL
   }

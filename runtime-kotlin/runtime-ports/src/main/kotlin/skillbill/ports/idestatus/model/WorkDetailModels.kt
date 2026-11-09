@@ -15,6 +15,7 @@ import skillbill.workflow.taskruntime.model.qa.QaRunPreview
 import java.time.Instant
 
 enum class WorkDetailProblemCode(val wireValue: String) {
+  INCOMPATIBLE_RECORD("incompatible_record"),
   ABSENT_DATABASE("absent_database"),
   UNKNOWN_WORK_ITEM("unknown_work_item"),
   AMBIGUOUS_WORK_ITEM("ambiguous_work_item"),

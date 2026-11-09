@@ -94,6 +94,7 @@ import skillbill.infrastructure.sqlite.SQLiteDatabaseSchema
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.workerlease.SQLiteRuntimeWorkerLeases
 import skillbill.infrastructure.sqlite.workflow.goalrunner.archive.SqliteGoalArchiveSnapshotPort
+import skillbill.infrastructure.sqlite.workflow.retained.SQLiteRetainedWorkflowReader
 import skillbill.infrastructure.workflow.git.branches.GitRepositoryBranchesAdapter
 import skillbill.infrastructure.workflow.git.changes.GitWorkChangesAdapter
 import skillbill.infrastructure.workflow.git.lineage.GitRepositoryLineage
@@ -115,6 +116,8 @@ import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.db.DatabaseReadConnections
 import skillbill.ports.db.DatabaseSchemaPort
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.RetainedWorkflowReader
+import skillbill.ports.db.RuntimeDatabaseReadiness
 import skillbill.ports.db.RuntimeWorkerLeaseQuery
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.editor.FileEditorLauncherPort
@@ -296,6 +299,12 @@ abstract class RuntimeComponent(
   @Provides
   fun databaseSchemaPort(adapter: SQLiteDatabaseSchema): DatabaseSchemaPort = adapter
 
+  @Provides @RuntimeSingleton
+  fun runtimeDatabaseReadiness(preparation: InstallDatabasePreparation): RuntimeDatabaseReadiness = preparation
+
+  @Provides
+  fun retainedWorkflowReader(adapter: SQLiteRetainedWorkflowReader): RetainedWorkflowReader = adapter
+
   @Provides
   fun runtimeWorkerLeaseQuery(adapter: SQLiteRuntimeWorkerLeases): RuntimeWorkerLeaseQuery = adapter
 
@@ -387,5 +396,6 @@ abstract class RuntimeComponent(
   abstract val ideStatusService: IdeStatusService
   abstract val databaseSession: DatabaseSessionFactory
   abstract val databaseReadConnections: DatabaseReadConnections
+  abstract val databaseReadiness: RuntimeDatabaseReadiness
   abstract val databaseSchema: DatabaseSchemaPort
 }

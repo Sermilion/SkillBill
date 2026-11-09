@@ -15,6 +15,8 @@ import skillbill.engine.work.eligibility.workLiveSection
 import skillbill.engine.work.eligibility.workPauseEligible
 import skillbill.engine.work.eligibility.workRequiresAttention
 import skillbill.engine.work.eligibility.workRunning
+import skillbill.engine.work.failure.IdeStatusProblemSnapshots
+import skillbill.engine.work.failure.exitCode
 import skillbill.engine.work.incident.WorkIncidentProjectionBuilder
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.model.IdeStatusQueryWork
@@ -27,7 +29,6 @@ import skillbill.engine.work.pagination.GoalPageRead
 import skillbill.engine.work.pagination.ProjectedDetailItem
 import skillbill.engine.work.pagination.RuntimePhasePageRead
 import skillbill.engine.work.pagination.STATUS_READ_ATTEMPTS
-import skillbill.engine.work.pagination.WorkBoardPagePosition
 import skillbill.engine.work.pagination.WorkDetailAnchor
 import skillbill.engine.work.pagination.WorkDetailPagePosition
 import skillbill.engine.work.pagination.detailNextAnchors
@@ -36,7 +37,6 @@ import skillbill.engine.work.pagination.goalSubtaskPageLimit
 import skillbill.engine.work.pagination.includesDetailList
 import skillbill.engine.work.pagination.invalidWorkPaginationRequest
 import skillbill.engine.work.pagination.skipIncompatibleBoardItem
-import skillbill.engine.work.pagination.workBoardNextCursor
 import skillbill.engine.work.pagination.workBoardPagePosition
 import skillbill.engine.work.pagination.workDetailPagePosition
 import skillbill.engine.work.pagination.workDetailPagedResult
@@ -44,16 +44,19 @@ import skillbill.engine.work.validation.withValidationBranchRuns
 import skillbill.engine.work.verify.VerifyRunDetailsProjection
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
+import skillbill.error.core.rethrowIfDatabaseFailure
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.RuntimeDatabaseReadinessResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
 import skillbill.ports.idestatus.IdeStatusValidator
 import skillbill.ports.idestatus.model.GoalWorktreeView
+import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseOutputLine
 import skillbill.ports.idestatus.model.StandalonePhaseOutputSnapshot
@@ -61,10 +64,8 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePlanProgress
 import skillbill.ports.idestatus.model.WorkBoardCompletionSource
 import skillbill.ports.idestatus.model.WorkBoardDiagnostic
+import skillbill.ports.idestatus.model.WorkBoardDiagnosticReason
 import skillbill.ports.idestatus.model.WorkBoardItem
-import skillbill.ports.idestatus.model.WorkBoardReadModelKey
-import skillbill.ports.idestatus.model.WorkBoardReadModelPage
-import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.idestatus.model.WorkBoardResult
 import skillbill.ports.idestatus.model.WorkDetailItem
@@ -77,11 +78,8 @@ import skillbill.ports.idestatus.model.WorkDetailResult
 import skillbill.ports.idestatus.model.WorkDetailRuntimeStatus
 import skillbill.ports.idestatus.model.WorkExecutionInstance
 import skillbill.ports.persistence.UnitOfWork
-import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.work.WorkListRepository
-import skillbill.ports.work.model.WORK_BOARD_CANDIDATE_BATCH_SIZE
-import skillbill.ports.work.model.WorkBoardCandidateQuery
 import skillbill.ports.work.model.WorkGoalDependencyPage
 import skillbill.ports.work.model.WorkGoalSubtaskPage
 import skillbill.ports.work.model.WorkItem
@@ -93,10 +91,6 @@ import skillbill.workflow.taskruntime.model.qa.QaRunPreview
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 import java.time.Instant
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
-import java.util.Locale
 
 @Inject
 public class IdeStatusService(
@@ -106,15 +100,18 @@ public class IdeStatusService(
   private val ideStatusValidator: IdeStatusValidator,
   private val branchSource: CheckedOutBranchSource,
   private val clock: Clock,
-  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val retainedProjection: RetainedWorkflowBoardProjection,
   private val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService,
   private val goalRunnerStatusService: GoalRunnerStatusPort,
   private val diagnostics: RuntimeDiagnostics,
   private val incidentProjectionBuilder: WorkIncidentProjectionBuilder,
 ) {
+  public fun initializeReadiness(): RuntimeDatabaseReadinessResult =
+    featureTaskRuntimeStatusService.initializeReadiness()
+
   public fun status(request: IdeStatusRequest): IdeStatusResult {
     val observedAt = request.observedAt ?: clock.instant()
-    val identityResult = resolveRepositoryIdentity(request.repoRoot, repositoryEnclosingRootPort)
+    val identityResult = workBoardItemProjection.resolveRepositoryIdentity(request.repoRoot)
     if (identityResult is IdeStatusRepositoryResolution.Invalid) {
       return emit(IdeStatusProblemSnapshots.invalidRepositoryInput(observedAt, identityResult.message))
     }
@@ -128,33 +125,36 @@ public class IdeStatusService(
       return emit(IdeStatusProblemSnapshots.absentDatabase(repositoryIdentity, observedAt))
     }
 
-    val currentBranch = branchSource.checkedOutBranch(repository.repoRoot)
-    val queryWork = IdeStatusQueryWork()
-    return try {
-      fencedStatus(repository, currentBranch, observedAt, queryWork)
-    } catch (error: SkillBillRuntimeException) {
-      when {
-        error.code == WorkflowFailureCode.INVALID_WORK_LIST_ROW ->
-          emit(
-            IdeStatusProblemSnapshots.incompatibleRecord(
-              repositoryIdentity = repositoryIdentity,
-              observedAt = observedAt,
-              message = error.message ?: "Incompatible work-list record.",
-            ),
-            queryWork,
-          )
-        error.isInvalidWorkflowStateFailure() ->
-          emit(
-            IdeStatusProblemSnapshots.incompatibleRecord(
-              repositoryIdentity = repositoryIdentity,
-              observedAt = observedAt,
-              message = error.message ?: "Incompatible workflow record.",
-            ),
-            queryWork,
-          )
-        else -> throw error
-      }
+    val refusal = readinessStatus(repositoryIdentity, observedAt)
+    return if (refusal != null) {
+      emit(refusal)
+    } else {
+      fencedStatus(
+        repository,
+        branchSource.checkedOutBranch(repository.repoRoot),
+        observedAt,
+        IdeStatusQueryWork(),
+      )
     }
+  }
+
+  private fun readinessStatus(
+    repositoryIdentity: String,
+    observedAt: Instant,
+  ): IdeStatusSnapshot? {
+    val readiness = featureTaskRuntimeStatusService.initializeReadiness()
+    if (readiness is RuntimeDatabaseReadinessResult.Ready && !readiness.existing) {
+      return IdeStatusProblemSnapshots.absentDatabase(repositoryIdentity, observedAt)
+    }
+    if (readiness is RuntimeDatabaseReadinessResult.Refused) {
+      val item = retainedProjection.repositoryItem(repositoryIdentity, observedAt, readiness.failure)
+      return item?.snapshot ?: IdeStatusProblemSnapshots.incompatibleRecord(
+        repositoryIdentity,
+        observedAt,
+        readiness.failure.message.orEmpty(),
+      )
+    }
+    return null
   }
 
   private fun fencedStatus(
@@ -163,20 +163,34 @@ public class IdeStatusService(
     observedAt: Instant,
     queryWork: IdeStatusQueryWork,
   ): IdeStatusResult {
-    repeat(STATUS_READ_ATTEMPTS) { attempt ->
-      if (attempt > 0) queryWork.retry()
-      database.read { unitOfWork ->
-        statusAttempt(unitOfWork, repository, currentBranch, observedAt, queryWork)
-      }?.let { return it }
+    return try {
+      repeat(STATUS_READ_ATTEMPTS) { attempt ->
+        if (attempt > 0) queryWork.retry()
+        database.read { unitOfWork ->
+          statusAttempt(unitOfWork, repository, currentBranch, observedAt, queryWork)
+        }?.let { return it }
+      }
+      emit(
+        IdeStatusProblemSnapshots.incompatibleRecord(
+          repositoryIdentity = repository.identity,
+          observedAt = observedAt,
+          message = "Work changed during the status read; retry.",
+        ),
+        queryWork,
+      )
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowIfDatabaseFailure()
+      if (error.code != WorkflowFailureCode.INVALID_WORK_LIST_ROW && !error.isInvalidWorkflowStateFailure()) throw error
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Work status cannot restore a saved record; reporting the retained schema failure.",
+        error,
+      )
+      emit(
+        IdeStatusProblemSnapshots.incompatibleRecord(repository.identity, observedAt, error.message.orEmpty()),
+        queryWork,
+      )
     }
-    return emit(
-      IdeStatusProblemSnapshots.incompatibleRecord(
-        repositoryIdentity = repository.identity,
-        observedAt = observedAt,
-        message = "Work changed during the status read; retry.",
-      ),
-      queryWork,
-    )
   }
 
   private fun statusAttempt(
@@ -218,7 +232,22 @@ public class IdeStatusService(
     val monitorRecord = selected.standaloneStatus?.takeIf { it.monitorTarget != null }
     val selectedContext =
       monitorRecord?.let { context.copy(repositoryIdentity = it.repositoryIdentity) } ?: context
-    return emit(projector.project(candidate = selected, context = selectedContext).snapshot, queryWork)
+    val snapshot =
+      try {
+        projector.project(candidate = selected, context = selectedContext).snapshot
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowIfDatabaseFailure()
+        if (error.code != WorkflowFailureCode.INVALID_WORK_LIST_ROW && !error.isInvalidWorkflowStateFailure()) {
+          throw error
+        }
+        val retained = retainedProjection.item(selected.workflowId, observedAt, error) ?: throw error
+        retained.snapshot.copy(
+          workflowFamily = selected.workflowFamily,
+          branchCorrelation = selected.branchCorrelation,
+          execution = selected.execution,
+        )
+      }
+    return emit(snapshot, queryWork)
   }
 
   public fun board(request: WorkBoardRequest): WorkBoardResult {
@@ -233,18 +262,56 @@ public class IdeStatusService(
         pageSize = request.pageSize,
       )
     }
+    val readiness = featureTaskRuntimeStatusService.initializeReadiness()
+    if (readiness is RuntimeDatabaseReadinessResult.Ready && !readiness.existing) {
+      return WorkBoardResult(
+        observedAt,
+        request.finishedWithin,
+        emptyList(),
+        absentDatabase = true,
+        pageSize = request.pageSize,
+      )
+    }
+    if (readiness is RuntimeDatabaseReadinessResult.Refused) {
+      return retainedProjection.board(
+        request,
+        observedAt,
+        readiness.failure,
+      )
+    }
     WorkBoardReadModelRefresh.refresh(database, workBoardItemProjection, clock, diagnostics)
     val result =
       database.read { unitOfWork ->
         WorkBoardReadModelRead.read(workBoardItemProjection, unitOfWork, request, position)
       }
-    return result.copy(items = workBoardItemProjection.withBuilds(result.items, clock.instant()))
+    return result.copy(
+      items =
+        retainedProjection.attach(
+          workBoardItemProjection.withBuilds(result.items, clock.instant()),
+          observedAt,
+        ),
+    )
   }
 
   public fun projectBoardSelection(
     ids: List<String>,
     request: WorkBoardRequest,
   ): WorkBoardResult {
+    val readiness = featureTaskRuntimeStatusService.initializeReadiness()
+    if (readiness is RuntimeDatabaseReadinessResult.Ready && !readiness.existing) {
+      val observedAt = request.observedAt ?: clock.instant()
+      return WorkBoardResult(observedAt, request.finishedWithin, emptyList(), pageSize = request.pageSize)
+    }
+    if (readiness is RuntimeDatabaseReadinessResult.Refused) {
+      require(ids.size <= request.pageSize)
+      val observedAt = request.observedAt ?: clock.instant()
+      return WorkBoardResult(
+        observedAt,
+        request.finishedWithin,
+        ids.distinct().mapNotNull { retainedProjection.item(it, observedAt, readiness.failure) },
+        pageSize = request.pageSize,
+      )
+    }
     require(ids.size <= request.pageSize)
     val observedAt = request.observedAt ?: clock.instant()
     val result =
@@ -253,45 +320,18 @@ public class IdeStatusService(
         val skipDiagnostics = AggregateSkipDiagnostics()
         val items =
           ids.distinct().mapNotNull { id ->
-            val found = workBoardItemProjection.selectedMatch(id, unitOfWork)
-            val work = found.work
-            val standalone = found.standalone
-            val identity = standalone?.repositoryIdentity ?: work?.repositoryIdentity
-            val root = identity?.let(workBoardItemProjection::decodeRepositoryRoot)
-            if (identity == null || root == null) {
-              diagnostics += workBoardItemProjection.repositoryIdentityDiagnostic(identity, workflowId = id)
-              return@mapNotNull null
-            }
-            val candidates =
-              try {
-                workBoardItemProjection.collectCandidates(
-                  unitOfWork,
-                  IdeStatusRepositoryResolution.Ok(identity, root),
-                  null,
-                  observedAt,
-                  CandidateRead(
-                    ResolvedWorkCandidates(listOfNotNull(work), listOfNotNull(standalone)),
-                    skipDiagnostics = skipDiagnostics,
-                  ),
-                )
-              } catch (error: SkillBillRuntimeException) {
-                return@mapNotNull skipIncompatibleBoardItem(
-                  error,
-                  diagnostics,
-                  skipDiagnostics,
-                  this.diagnostics,
-                  id,
-                )
-              }
-            val candidate =
-              candidates.singleOrNull()
-                ?: throw invalidWorkListRowError("Selected work candidate cannot be projected.")
-            val context =
-              IdeStatusProjectionContext(unitOfWork, identity, candidate.branchCorrelation, observedAt, root)
             try {
-              workBoardItemProjection.projectBoardItem(candidate, context, listOfNotNull(work))
+              selectedBoardItem(unitOfWork, id, observedAt, skipDiagnostics)
             } catch (error: SkillBillRuntimeException) {
-              skipIncompatibleBoardItem(error, diagnostics, skipDiagnostics, this.diagnostics, id)
+              error.rethrowIfDatabaseFailure()
+              retainedProjection.item(id, observedAt, error)?.also {
+                diagnostics +=
+                  WorkBoardDiagnostic(
+                    WorkBoardDiagnosticReason.INCOMPATIBLE_RECORD,
+                    it.snapshot.repositoryIdentity,
+                    id,
+                  )
+              } ?: skipIncompatibleBoardItem(error, diagnostics, skipDiagnostics, this.diagnostics, id)
             }
           }
         WorkBoardResult(
@@ -303,7 +343,46 @@ public class IdeStatusService(
           observation = unitOfWork.workList.observation(),
         )
       }
-    return result.copy(items = workBoardItemProjection.withBuilds(result.items, clock.instant()))
+    return result.copy(
+      items =
+        retainedProjection.attach(
+          workBoardItemProjection.withBuilds(result.items, clock.instant()),
+          observedAt,
+        ),
+    )
+  }
+
+  private fun selectedBoardItem(
+    unitOfWork: UnitOfWork,
+    id: String,
+    observedAt: Instant,
+    skipDiagnostics: AggregateSkipDiagnostics,
+  ): WorkBoardItem {
+    val found = workBoardItemProjection.selectedMatch(id, unitOfWork)
+    val work = found.work
+    val standalone = found.standalone
+    val identity = standalone?.repositoryIdentity ?: work?.repositoryIdentity
+    val root = identity?.let(workBoardItemProjection::decodeRepositoryRoot)
+    if (identity == null || root == null) {
+      throw invalidWorkListRowError("Selected work '$id' has no usable repository identity.")
+    }
+    val candidates =
+      workBoardItemProjection.collectCandidates(
+        unitOfWork,
+        IdeStatusRepositoryResolution.Ok(identity, root),
+        null,
+        observedAt,
+        CandidateRead(
+          ResolvedWorkCandidates(listOfNotNull(work), listOfNotNull(standalone)),
+          skipDiagnostics = skipDiagnostics,
+        ),
+      )
+    val candidate =
+      candidates.singleOrNull()
+        ?: throw invalidWorkListRowError("Selected work candidate cannot be projected.")
+    val context =
+      IdeStatusProjectionContext(unitOfWork, identity, candidate.branchCorrelation, observedAt, root)
+    return workBoardItemProjection.projectBoardItem(candidate, context, listOfNotNull(work))
   }
 
   public fun detail(request: WorkDetailRequest): WorkDetailResult {
@@ -313,64 +392,121 @@ public class IdeStatusService(
       return detailProblem(observedAt, WorkDetailProblemCode.ABSENT_DATABASE, "Skill Bill database is not present.")
         .copy(pageSize = request.pageSize)
     }
+    val readiness = featureTaskRuntimeStatusService.initializeReadiness()
+    if (readiness is RuntimeDatabaseReadinessResult.Ready && !readiness.existing) {
+      return detailProblem(
+        observedAt,
+        WorkDetailProblemCode.ABSENT_DATABASE,
+        "Skill Bill database is not present.",
+      ).copy(pageSize = request.pageSize)
+    }
+    if (readiness is RuntimeDatabaseReadinessResult.Refused) {
+      val item = retainedProjection.item(request.id, observedAt, readiness.failure)
+      return if (item == null) {
+        detailProblem(observedAt, WorkDetailProblemCode.INCOMPATIBLE_RECORD, readiness.failure.message.orEmpty())
+      } else {
+        WorkDetailResult(observedAt, item = retainedDetailItem(item, request.id), pageSize = request.pageSize)
+      }
+    }
+    return preparedDetail(request, position)
+  }
+
+  private fun preparedDetail(
+    request: WorkDetailRequest,
+    position: WorkDetailPagePosition,
+  ): WorkDetailResult {
+    val observedAt = position.observedAt
     var nextAnchors: Map<WorkDetailList, WorkDetailAnchor> = emptyMap()
     val result =
-      database.read { unitOfWork ->
-        if (request.cursor != null && position.anchor == null &&
-          position.observation != unitOfWork.workList.observation()
-        ) {
-          invalidWorkPaginationRequest("Work changed. Refresh the detail.")
+      try {
+        database.read { unitOfWork ->
+          readDetail(unitOfWork, request, position).also { nextAnchors = it.second }.first
         }
-        val match = workBoardItemProjection.detailMatch(request.id, unitOfWork)
-        if (match is WorkDetailMatch.Problem) {
-          return@read WorkDetailResult(observedAt, problem = match.problem)
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowIfDatabaseFailure()
+        if (error.code != WorkflowFailureCode.INVALID_WORK_LIST_ROW && !error.isInvalidWorkflowStateFailure()) {
+          throw error
         }
-        val found = match as WorkDetailMatch.Found
-        val resolved = found.work
-        val standalone = found.standalone
-        val identity = standalone?.repositoryIdentity ?: resolved?.repositoryIdentity
-        val root = identity?.let(workBoardItemProjection::decodeRepositoryRoot)
-        if (identity == null || root == null) {
-          return@read detailProblem(
-            observedAt,
-            WorkDetailProblemCode.INVALID_REPOSITORY_IDENTITY,
-            "Work item '${request.id}' has no usable repository identity.",
-          )
-        }
-        val candidates =
-          workBoardItemProjection.collectCandidates(
-            unitOfWork,
-            IdeStatusRepositoryResolution.Ok(identity, root),
-            null,
-            observedAt,
-            CandidateRead(ResolvedWorkCandidates(listOfNotNull(resolved), listOfNotNull(standalone))),
-          )
-        val candidate =
-          candidates.singleOrNull()
-            ?: return@read detailProblem(
-              observedAt,
-              WorkDetailProblemCode.UNKNOWN_WORK_ITEM,
-              "No projectable work item has id '${request.id}'.",
-            )
-        val context =
-          IdeStatusProjectionContext(unitOfWork, identity, candidate.branchCorrelation, observedAt, root)
-        val projected = projectDetailItem(candidate, context, resolved?.item, request, position)
-        nextAnchors = projected.nextAnchors
-        WorkDetailResult(
+        val retained = retainedProjection.item(request.id, observedAt, error) ?: throw error
+        WorkDetailResult(observedAt, item = retainedDetailItem(retained, request.id), pageSize = request.pageSize)
+      }
+    if (result.item == null && result.problem?.code == WorkDetailProblemCode.UNKNOWN_WORK_ITEM) {
+      val retained =
+        retainedProjection.item(
+          request.id,
           observedAt,
-          item = projected.item,
-          observation = unitOfWork.workList.observation(),
+          invalidWorkListRowError("Retained work could not be projected from its current source."),
+        )
+      if (retained != null) {
+        return WorkDetailResult(
+          observedAt,
+          item = retainedDetailItem(retained, request.id),
+          pageSize = request.pageSize,
         )
       }
-    val overlaid = result.item?.let { workBoardItemProjection.withBuild(it, clock.instant()) }
+    }
+    val overlaid =
+      result.item?.let { item ->
+        if (item.snapshot.problem?.code == IdeStatusProblemCode.INCOMPATIBLE_RECORD) {
+          item
+        } else {
+          workBoardItemProjection.withBuild(item, clock.instant())
+        }
+      }
     return workDetailPagedResult(result.copy(item = overlaid), request, position, nextAnchors)
   }
 
-  private fun detailProblem(
-    observedAt: Instant,
-    code: WorkDetailProblemCode,
-    message: String,
-  ): WorkDetailResult = WorkDetailResult(observedAt, problem = WorkDetailProblem(code, message))
+  private fun readDetail(
+    unitOfWork: UnitOfWork,
+    request: WorkDetailRequest,
+    position: WorkDetailPagePosition,
+  ): Pair<WorkDetailResult, Map<WorkDetailList, WorkDetailAnchor>> {
+    val observedAt = position.observedAt
+    if (request.cursor != null && position.anchor == null &&
+      position.observation != unitOfWork.workList.observation()
+    ) {
+      invalidWorkPaginationRequest("Work changed. Refresh the detail.")
+    }
+    val match = workBoardItemProjection.detailMatch(request.id, unitOfWork)
+    if (match is WorkDetailMatch.Problem) {
+      return WorkDetailResult(observedAt, problem = match.problem) to emptyMap()
+    }
+    val found = match as WorkDetailMatch.Found
+    val resolved = found.work
+    val standalone = found.standalone
+    val identity = standalone?.repositoryIdentity ?: resolved?.repositoryIdentity
+    val root = identity?.let(workBoardItemProjection::decodeRepositoryRoot)
+    if (identity == null || root == null) {
+      return detailProblem(
+        observedAt,
+        WorkDetailProblemCode.INVALID_REPOSITORY_IDENTITY,
+        "Work item '${request.id}' has no usable repository identity.",
+      ) to emptyMap()
+    }
+    val candidates =
+      workBoardItemProjection.collectCandidates(
+        unitOfWork,
+        IdeStatusRepositoryResolution.Ok(identity, root),
+        null,
+        observedAt,
+        CandidateRead(ResolvedWorkCandidates(listOfNotNull(resolved), listOfNotNull(standalone))),
+      )
+    val candidate =
+      candidates.singleOrNull()
+        ?: return detailProblem(
+          observedAt,
+          WorkDetailProblemCode.UNKNOWN_WORK_ITEM,
+          "No projectable work item has id '${request.id}'.",
+        ) to emptyMap()
+    val context =
+      IdeStatusProjectionContext(unitOfWork, identity, candidate.branchCorrelation, observedAt, root)
+    val projected = projectDetailItem(candidate, context, resolved?.item, request, position)
+    return WorkDetailResult(
+      observedAt,
+      item = projected.item,
+      observation = unitOfWork.workList.observation(),
+    ) to projected.nextAnchors
+  }
 
   private fun projectDetailItem(
     candidate: IdeStatusCandidate,
@@ -381,8 +517,27 @@ public class IdeStatusService(
   ): ProjectedDetailItem {
     val projection = projector.project(candidate, context)
     val snapshot = projection.snapshot
-    val incidentSet = detailIncidents(candidate, context, snapshot)
-    val standalone = candidate.standaloneStatus
+    projection.migrationDiagnostic?.let { diagnostic ->
+      val retained =
+        retainedProjection.item(diagnostic, context.observedAt).copy(
+          snapshot = snapshot,
+          repositoryRoot = context.repoRoot.toString(),
+        )
+      return ProjectedDetailItem(retainedDetailItem(retained, request.id), emptyMap())
+    }
+    return candidate.projectReadableDetailItem(context, item, request, position, projection)
+  }
+
+  private fun IdeStatusCandidate.projectReadableDetailItem(
+    context: IdeStatusProjectionContext,
+    item: WorkItem?,
+    request: WorkDetailRequest,
+    position: WorkDetailPagePosition,
+    projection: IdeStatusProjection,
+  ): ProjectedDetailItem {
+    val snapshot = projection.snapshot
+    val incidentSet = detailIncidents(this, context, snapshot)
+    val standalone = standaloneStatus
     val completion = detailCompletion(snapshot, standalone, item, context.unitOfWork)
     val goalReads = detailGoalReads(context, item, standalone, request, position)
     val goalRead = goalReads.goalRead
@@ -393,7 +548,7 @@ public class IdeStatusService(
     val runtimeRead = goalReads.runtimeRead
     val history =
       detailExecutionHistory(
-        candidate,
+        this,
         context,
         request,
         position,
@@ -404,7 +559,7 @@ public class IdeStatusService(
     val detailItem =
       WorkDetailItem(
         snapshot = snapshot,
-        recoveryWorkId = standalone?.invocationId ?: candidate.workflowId,
+        recoveryWorkId = standalone?.invocationId ?: workflowId,
         executionHistory = history.take(request.pageSize),
         selectedExecution = workSelectedExecution(standalone, context.unitOfWork),
         repositoryRoot = context.repoRoot.toString(),
@@ -427,13 +582,13 @@ public class IdeStatusService(
         observation = context.unitOfWork.workList.observation(),
         exactPauseReason = projection.exactPauseReason,
         databaseFileObservation = context.unitOfWork.databaseFileObservation,
-        controlLease = context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).executionLease,
+        controlLease = context.unitOfWork.goalRunnerControls.controlState(workflowId).executionLease,
         incident = incidentSet.incident,
         incidentHistory = incidentSet.incidentHistory,
         changeBaseline = detailChangeBaseline(standalone, goalRead?.page?.manifest, item, goalWorktree, context),
         goalWorktree = goalWorktree,
         standalonePlanProgress = detailPlanProgress(standalone, context, position, planOutput),
-        verifyRun = VerifyRunDetailsProjection.project(candidate, context.unitOfWork),
+        verifyRun = VerifyRunDetailsProjection.project(this, context.unitOfWork),
       ).withDerivedStatus().withPlanOutput(planOutput).withValidationBranchRuns(standalone, context.unitOfWork)
     val nextAnchors =
       detailPageNextAnchors(history.take(request.pageSize), goalRead, validationRead, dependencies, runtimeRead)
@@ -754,7 +909,7 @@ public class IdeStatusService(
   ): RuntimePhasePageRead? {
     val after = (position.anchor as? WorkDetailAnchor.Phase)?.afterPhaseId
     val limit = if (request.includesDetailList(WorkDetailList.PHASES)) request.pageSize else 0
-    return featureTaskRuntimeStatusService.phasePage(workflowId, after, limit, position.offset)?.let { page ->
+    return featureTaskRuntimeStatusService.phasePagePrepared(workflowId, after, limit, position.offset)?.let { page ->
       if (after != null && after !in page.phaseIds) invalidWorkPaginationRequest("Unknown phase anchor.")
       val status = page.status
       val briefings =
@@ -812,7 +967,10 @@ public class IdeStatusService(
   ): List<IdeStatusCandidate> {
     if (branch == null) return candidates
     if (protectedBranchName(branch) != null) return candidates
-    return candidates.filter { candidate -> IdeStatusBranchScope.matchesCandidate(candidate, branch) }
+    return candidates.filter { candidate ->
+      candidate.migrationDiagnostic != null && candidate.branchCorrelation == null ||
+        IdeStatusBranchScope.matchesCandidate(candidate, branch)
+    }
   }
 
   private fun emit(
@@ -848,247 +1006,22 @@ internal val GOAL_FINISH_PIPELINE =
     FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
   )
 
-internal object WorkBoardReadModelRead {
-  fun read(
-    projection: WorkBoardItemProjection,
-    unitOfWork: UnitOfWork,
-    request: WorkBoardRequest,
-    position: WorkBoardPagePosition,
-  ): WorkBoardResult {
-    val observedAt = position.observedAt
-    val observation = unitOfWork.workList.observation()
-    if (request.cursor != null && position.observation != observation) {
-      invalidWorkPaginationRequest("Work changed. Refresh the board.")
-    }
-    val after = position.afterKey?.let(::decodePosition)
-    val finishedFrom = observedAt.minus(request.finishedWithin.duration)
-    val filter = normalizeFilter(request.filter)
-    val diagnostics = mutableListOf<WorkBoardDiagnostic>()
-    val scanRequest = ScanRequest(observedAt, finishedFrom, filter, diagnostics)
-    val result =
-      if (unitOfWork.workBoardReadModel.isComplete() && unitOfWork.workBoardReadModel.pendingInvalidation() == null) {
-        readIndexed(projection, unitOfWork, request.pageSize, after, scanRequest)
-      } else {
-        val scanned = scanCandidates(projection, unitOfWork, scanRequest)
-        val ordered = scanned.items.sortedWith { left, right -> PROJECTED_ORDER.compare(left.position, right.position) }
-        val eligible = ordered.filter { after == null || PROJECTED_ORDER.compare(it.position, after) > 0 }
-        BoardPage(eligible.take(request.pageSize), eligible.size > request.pageSize, scanned.examined)
-      }
-    val page = result.items
-    val hasNext = result.hasNext
-    val examined = result.examined
-    val nextCursor =
-      page.lastOrNull()?.takeIf { hasNext }?.let {
-        workBoardNextCursor(request, observedAt, encodePosition(it.position), observation)
-      }
-    return WorkBoardResult(
-      observedAt = observedAt,
-      finishedWithin = request.finishedWithin,
-      items =
-        page.map {
-          it.item.copy(observation = observation, databaseFileObservation = unitOfWork.databaseFileObservation)
-        },
-      diagnostics = diagnostics,
-      pageSize = request.pageSize,
-      nextCursor = nextCursor,
-      observation = observation,
-      candidatesExamined = examined,
-    )
-  }
-
-  private fun readIndexed(
-    projection: WorkBoardItemProjection,
-    unitOfWork: UnitOfWork,
-    pageSize: Int,
-    after: ProjectedBoardPosition?,
-    request: ScanRequest,
-  ): BoardPage {
-    val indexed = mutableListOf<ProjectedBoardItem>()
-    var indexedAfter =
-      after?.let {
-        WorkBoardReadModelKey(it.displayPriority, formatReadModelInstant(it.updatedAt), it.workId)
-      }
-    var examined = 0
-    var moreRows = true
-    var hasNext = false
-    while (moreRows && indexed.size <= pageSize) {
-      val limit = pageSize + 1 - indexed.size
-      val entries =
-        unitOfWork.workBoardReadModel.page(
-          WorkBoardReadModelPageQuery(request.finishedFrom, request.filter, indexedAfter, limit),
-        ).entries
-      examined += entries.size
-      moreRows = entries.size == limit
-      entries.mapNotNull { entry -> indexedItem(projection, unitOfWork, entry, request) }
-        .filter { after == null || PROJECTED_ORDER.compare(it.position, after) > 0 }
-        .let(indexed::addAll)
-      indexedAfter = entries.lastOrNull()?.key ?: break
-      hasNext = indexed.size > pageSize
-    }
-    val ordered = indexed.sortedWith { left, right -> PROJECTED_ORDER.compare(left.position, right.position) }
-    return BoardPage(ordered.take(pageSize), hasNext, examined)
-  }
-
-  private fun indexedItem(
-    projection: WorkBoardItemProjection,
-    unitOfWork: UnitOfWork,
-    entry: WorkBoardReadModelPage.Entry,
-    request: ScanRequest,
-  ): ProjectedBoardItem? {
-    val row = (entry as? WorkBoardReadModelPage.Entry.Decoded)?.row
-    val needsProjection =
-      row == null || row.reprojectAt?.let { !it.isAfter(request.observedAt) } == true ||
-        row.membershipDeadline?.let { !it.isAfter(request.observedAt) } == true
-    val item =
-      if (needsProjection) {
-        projection.projectBoardCandidate(
-          unitOfWork,
-          entry.workId,
-          BoardProjectionWindow(request.observedAt, request.finishedFrom),
-          request.diagnostics,
-          AggregateSkipDiagnostics(),
-        )
-      } else {
-        row.item
-      } ?: return null
-    val projectedId = projection.boardId(item)
-    if (projectedId == null || projectedId != entry.workId || '\n' in projectedId) {
-      invalidWorkPaginationRequest("Work changed. Refresh the board.")
-    }
-    if (item.finishedAt?.isAfter(
-        request.observedAt,
-      ) == true || !projection.matchesFilter(item, request.filter)
-    ) {
-      return null
-    }
-    return ProjectedBoardItem(
-      item,
-      projectedId,
-      ProjectedBoardPosition(item.displayPriority, item.snapshot.updatedAt, entry.workId),
-    )
-  }
-
-  private data class BoardPage(val items: List<ProjectedBoardItem>, val hasNext: Boolean, val examined: Int)
-
-  private fun scanCandidates(
-    projection: WorkBoardItemProjection,
-    unitOfWork: UnitOfWork,
-    request: ScanRequest,
-  ): BoardScanResult {
-    val observedAt = request.observedAt
-    val finishedFrom = request.finishedFrom
-    val filter = request.filter
-    val diagnostics = request.diagnostics
-    val skipDiagnostics = AggregateSkipDiagnostics()
-    val projected = mutableListOf<ProjectedBoardItem>()
-    val seenIds = mutableSetOf<String>()
-    var candidateCursor: String? = null
-    var examined = 0
-
-    while (true) {
-      val rows =
-        unitOfWork.workList.boardCandidates(
-          WorkBoardCandidateQuery(
-            finishedFrom = finishedFrom,
-            observedAt = observedAt,
-            afterKey = candidateCursor,
-            limit = WORK_BOARD_CANDIDATE_BATCH_SIZE,
-          ),
-        )
-      if (rows.isEmpty()) break
-      candidateCursor = rows.last().key
-      for (row in rows) {
-        if (seenIds.add(row.id)) {
-          examined++
-          val item =
-            projection.projectBoardCandidate(
-              unitOfWork,
-              row.id,
-              BoardProjectionWindow(observedAt, finishedFrom),
-              diagnostics,
-              skipDiagnostics,
-            )
-          if (item != null) {
-            val projectedId = projection.boardId(item)
-            if (projectedId == null || projectedId != row.id || '\n' in projectedId) {
-              invalidWorkPaginationRequest("Work changed. Refresh the board.")
-            }
-            if (item.finishedAt?.isAfter(observedAt) != true && projection.matchesFilter(item, filter)) {
-              projected += ProjectedBoardItem(item, projectedId)
-            }
-          }
-        }
-      }
-    }
-
-    return BoardScanResult(projected, examined)
-  }
-
-  private data class BoardScanResult(val items: List<ProjectedBoardItem>, val examined: Int)
-
-  private data class ScanRequest(
-    val observedAt: Instant,
-    val finishedFrom: Instant,
-    val filter: String?,
-    val diagnostics: MutableList<WorkBoardDiagnostic>,
+private fun retainedDetailItem(
+  item: WorkBoardItem,
+  recoveryWorkId: String = requireNotNull(item.snapshot.workflowId),
+): WorkDetailItem =
+  WorkDetailItem(
+    snapshot = item.snapshot,
+    recoveryWorkId = recoveryWorkId,
+    repositoryRoot = item.repositoryRoot,
+    stepPipeline = emptyList(),
+    liveSection = item.liveSection,
+    requiresAttention = true,
+    exactPauseReason = item.exactPauseReason,
   )
 
-  private fun normalizeFilter(value: String?): String? =
-    value?.trim()?.lowercase(Locale.ROOT)?.takeIf(String::isNotEmpty)
-
-  private fun encodePosition(position: ProjectedBoardPosition): String =
-    listOf(
-      PROJECTED_CURSOR_PREFIX.trimEnd('\n'),
-      position.displayPriority.toString(),
-      formatReadModelInstant(position.updatedAt),
-      position.workId,
-    )
-      .joinToString("\n")
-
-  private fun decodePosition(value: String): ProjectedBoardPosition {
-    val parts = value.split('\n', limit = POSITION_FIELD_COUNT)
-    if (!validPositionFields(parts)) {
-      invalidWorkPaginationRequest("Work changed. Refresh the board.")
-    }
-    val priority = parts[1].toIntOrNull() ?: invalidWorkPaginationRequest("Work changed. Refresh the board.")
-    if (priority.toString() != parts[1]) invalidWorkPaginationRequest("Work changed. Refresh the board.")
-    val updatedAt =
-      try {
-        Instant.parse(parts[2]).takeIf { it.toString() == parts[2] || formatReadModelInstant(it) == parts[2] }
-          ?: invalidWorkPaginationRequest("Work changed. Refresh the board.")
-      } catch (_: DateTimeParseException) {
-        invalidWorkPaginationRequest("Work changed. Refresh the board.")
-      }
-    return ProjectedBoardPosition(priority, updatedAt, parts[POSITION_WORK_ID_INDEX])
-  }
-
-  private fun validPositionFields(parts: List<String>): Boolean =
-    parts.size == POSITION_FIELD_COUNT && parts[0] == PROJECTED_CURSOR_PREFIX.trimEnd('\n') &&
-      validPositionWorkId(parts[POSITION_WORK_ID_INDEX])
-
-  private fun validPositionWorkId(id: String): Boolean = id.isNotBlank() && '\n' !in id
-
-  private fun formatReadModelInstant(value: Instant): String = READ_MODEL_INSTANT_FORMATTER.format(value)
-
-  private data class ProjectedBoardItem(
-    val item: WorkBoardItem,
-    val workId: String,
-    private val indexedPosition: ProjectedBoardPosition? = null,
-  ) {
-    val position: ProjectedBoardPosition
-      get() = indexedPosition ?: ProjectedBoardPosition(item.displayPriority, item.snapshot.updatedAt, workId)
-  }
-
-  private data class ProjectedBoardPosition(val displayPriority: Int, val updatedAt: Instant, val workId: String)
-
-  private val PROJECTED_ORDER =
-    compareBy<ProjectedBoardPosition> { it.displayPriority }
-      .thenByDescending { it.updatedAt }
-      .thenBy { it.workId }
-
-  private const val PROJECTED_CURSOR_PREFIX = "p\n"
-  private const val POSITION_FIELD_COUNT = 4
-  private const val POSITION_WORK_ID_INDEX = 3
-  private val READ_MODEL_INSTANT_FORMATTER =
-    DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss.SSSSSSSSS'Z'").withZone(ZoneOffset.UTC)
-}
+private fun detailProblem(
+  observedAt: Instant,
+  code: WorkDetailProblemCode,
+  message: String,
+): WorkDetailResult = WorkDetailResult(observedAt, problem = WorkDetailProblem(code, message))

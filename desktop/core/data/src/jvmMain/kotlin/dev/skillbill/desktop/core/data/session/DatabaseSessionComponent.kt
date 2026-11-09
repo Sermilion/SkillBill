@@ -36,6 +36,7 @@ import skillbill.di.core.create
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.FencedTransactionResult
+import skillbill.ports.db.model.RuntimeDatabaseReadinessResult
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesSubcomponent
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
@@ -50,6 +51,7 @@ import kotlin.time.Clock
 @SingleIn(DatabaseSessionScope::class)
 interface DatabaseSessionComponent {
   val selection: SessionSelectionHolder
+  val diagnostics: Diagnostics
   val purgeIdentity: SessionPurgeIdentity
   val runtime: RuntimeComponent
   val reads: RuntimeReads
@@ -202,7 +204,14 @@ class RuntimeSessionGraph internal constructor(val component: DatabaseSessionCom
   // Ordinary reads never migrate, so an older existing store is upgraded once here. A missing store is not created.
   override fun open(): Job {
     val runtime = component.runtime
-    runtime.databaseSchema.migrateExistingDatabase()
+    when (val readiness = runtime.databaseReadiness.prepareExisting()) {
+      is RuntimeDatabaseReadinessResult.Ready -> Unit
+      is RuntimeDatabaseReadinessResult.Refused -> {
+        component.diagnostics.record("desktop_database_readiness_refused_${readiness.failure.code}")
+        component.purgeIdentity.initialize(null)
+        return component.signals.start()
+      }
+    }
     val protection = when (val result = runtime.databaseSession.acquireDatabasePathProtection()) {
       is DatabasePathProtectionResult.Acquired -> result.protection
       is DatabasePathProtectionResult.Unavailable -> {

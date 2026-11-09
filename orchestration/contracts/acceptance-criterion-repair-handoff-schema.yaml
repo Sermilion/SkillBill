@@ -5,6 +5,7 @@ type: object
 additionalProperties: false
 required: [contract_version, catalog_id, spec_digest, execution_id, revision, criterion_ref, stage, reservation_id, evidence_lifecycle, unsuccessful_used, unsuccessful_remaining, queue_position, queue_size, actionable_gap, evidence_ref, tree_digest, checkpoint_id, dependencies, prerequisite_facts]
 properties:
+  migration_source_version: { const: '0.1' }
   contract_version: { const: '0.2' }
   catalog_id: { type: string, minLength: 1, maxLength: 256 }
   spec_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }

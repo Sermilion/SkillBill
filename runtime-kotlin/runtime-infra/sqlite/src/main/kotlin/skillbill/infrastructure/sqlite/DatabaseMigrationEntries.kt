@@ -30,6 +30,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalOw
 import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalRecordsAndRules
 import skillbill.infrastructure.sqlite.core.migration.area.addReviewFindingActions
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
+import skillbill.infrastructure.sqlite.core.migration.area.criterion.AcceptanceCriterionArtifactsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.buildrun.recordAgentBuildRuns
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.pruneWorktreeEditJournalToLatestTick
@@ -1067,4 +1068,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 117,
       name = "defer-work-board-projection",
       operation = WorkBoardInvalidationsMigration::apply,
+    ) +
+    DatabaseMigration(
+      version = 118,
+      name = "prepare-preserved-criterion-artifact-compatibility",
+      operation = AcceptanceCriterionArtifactsMigration::prepareCompatible,
     )

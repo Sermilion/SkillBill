@@ -42,6 +42,14 @@ public class WorkCancellation(
   private val launcher: WorkRunLauncher,
 ) {
   public fun cancel(target: WorkRunTarget): WorkControlResult {
+    val readiness = status.initializeReadiness()
+    if (!readiness.admitsWorkControl()) {
+      return WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)
+    }
+    return cancelPrepared(target)
+  }
+
+  private fun cancelPrepared(target: WorkRunTarget): WorkControlResult {
     val item =
       database.read { matchingRun(status, target) }
         ?: return WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
@@ -87,6 +95,10 @@ public class WorkCancellation(
     goal: Boolean,
     interrupted: Interruption,
   ): WorkControlResult {
+    val readiness = status.initializeReadiness()
+    if (!readiness.admitsWorkControl()) {
+      return WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)
+    }
     val operation = operation@{ unit: UnitOfWork ->
       if (!stopGoalHarness(goal, target, unit)) {
         return@operation WorkControlResult.Rejected(WorkControlRejection.TERMINATION_INCOMPLETE)
@@ -94,14 +106,7 @@ public class WorkCancellation(
       val current =
         status.detail(WorkDetailRequest(target.id)).item
           ?: return@operation WorkControlResult.Rejected(WorkControlRejection.NOT_FOUND)
-      val identityMatches =
-        current.snapshot.repositoryIdentity == target.repositoryIdentity &&
-          current.snapshot.execution?.executionId == target.executionId
-      val revisionMatches = goal || interrupted is Interruption.Reserved || matchingRun(status, target) != null
-      if (!identityMatches || !revisionMatches) {
-        return@operation WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
-      }
-      if (interrupted is Interruption.Reserved && ownerChanged(target, current, interrupted.ownership)) {
+      if (!cancellationIdentityMatches(current, target, goal, interrupted)) {
         return@operation WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
       }
       if (goal && current.goalStatus?.executionLiveness == ExecutionLiveness.LIVE) {
@@ -113,6 +118,25 @@ public class WorkCancellation(
       FencedTransactionResult.ChangedTarget -> WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
       is FencedTransactionResult.Committed -> result.value
     }
+  }
+
+  private fun cancellationIdentityMatches(
+    current: WorkDetailItem,
+    target: WorkRunTarget,
+    goal: Boolean,
+    interrupted: Interruption,
+  ): Boolean {
+    val identityMatches =
+      current.snapshot.repositoryIdentity == target.repositoryIdentity &&
+        current.snapshot.execution?.executionId == target.executionId
+    val revisionMatches = goal || interrupted is Interruption.Reserved || matchingRun(status, target) != null
+    if (!identityMatches || !revisionMatches) {
+      return false
+    }
+    if (interrupted is Interruption.Reserved && ownerChanged(target, current, interrupted.ownership)) {
+      return false
+    }
+    return true
   }
 
   private fun stopGoalHarness(

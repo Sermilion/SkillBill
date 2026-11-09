@@ -5,7 +5,6 @@ import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.engine.featuretask.lifecycle.continuation.agentAttributionFromPhaseState
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStatusRead
@@ -23,7 +22,11 @@ import skillbill.engine.featuretask.runloop.durable.LEGACY_QUALITY_GATE_SELECTIO
 import skillbill.engine.featuretask.slot.PhaseReportedGate
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
+import skillbill.engine.migration.RetainedWorkflowProjection
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.migration.AcceptanceCriterionMigrationFailureCode
+import skillbill.ports.db.RuntimeDatabaseReadiness
+import skillbill.ports.db.model.RuntimeDatabaseReadinessResult
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.repair.FocusedRepairStrategy
 import skillbill.workflow.model.workflowStepStatus
@@ -49,15 +52,57 @@ public class FeatureTaskRuntimeStatusService(
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   private val runInvariantsStore: FeatureTaskRuntimeRunInvariantsStore,
   private val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
+  private val databaseReadiness: RuntimeDatabaseReadiness,
+  private val retainedProjection: RetainedWorkflowProjection,
 ) {
   internal val history = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)
 
+  public fun initializeReadiness(): RuntimeDatabaseReadinessResult = databaseReadiness.initializeRead()
+
   public fun status(request: FeatureTaskRuntimeStatusRequest): FeatureTaskRuntimeStatusProjection? {
-    val records = recorder.loadPhaseRecords(request.workflowId)?.withoutPlanSubtaskUnitRecords() ?: return null
-    val decomposeTerminal = decomposeTerminalRecorder.loadDecomposeTerminal(request.workflowId)
-    val ledger = statusPhaseHistory(recorder.phaseQuery, request.workflowId, records, history)
-    val workflowCurrentStepId = recorder.phaseQuery.currentStepId(request.workflowId)
-    return buildStatusProjection(request, records, decomposeTerminal, ledger, workflowCurrentStepId)
+    val readiness = initializeReadiness()
+    if (readiness is RuntimeDatabaseReadinessResult.Ready && !readiness.existing) return null
+    if (readiness is RuntimeDatabaseReadinessResult.Refused) {
+      return retainedStatus(
+        request.workflowId,
+        readiness.failure,
+      )
+    }
+    return readPreparedStatus(request)
+  }
+
+  public fun readPreparedStatus(request: FeatureTaskRuntimeStatusRequest): FeatureTaskRuntimeStatusProjection? {
+    when (val observed = databaseReadiness.observeRead()) {
+      is RuntimeDatabaseReadinessResult.Ready -> if (!observed.existing) return null
+      is RuntimeDatabaseReadinessResult.Refused -> return retainedStatus(request.workflowId, observed.failure)
+    }
+    return try {
+      val records = recorder.loadPhaseRecords(request.workflowId)?.withoutPlanSubtaskUnitRecords() ?: return null
+      val decomposeTerminal = decomposeTerminalRecorder.loadDecomposeTerminal(request.workflowId)
+      val ledger = statusPhaseHistory(recorder.phaseQuery, request.workflowId, records, history)
+      val workflowCurrentStepId = recorder.phaseQuery.currentStepId(request.workflowId)
+      buildStatusProjection(request, records, decomposeTerminal, ledger, workflowCurrentStepId)
+    } catch (failure: SkillBillRuntimeException) {
+      retainedStatus(request.workflowId, failure) ?: throw failure
+    }
+  }
+
+  private fun retainedStatus(
+    workflowId: String,
+    failure: SkillBillRuntimeException,
+  ): FeatureTaskRuntimeStatusProjection? {
+    val diagnostic = retainedProjection.diagnostic(workflowId, failure) ?: return null
+    return FeatureTaskRuntimeStatusProjection(
+      workflowId = workflowId,
+      featureSize = null,
+      phases = emptyList(),
+      completeCount = 0,
+      pendingCount = 0,
+      blockedCount = 1,
+      currentPhaseId = diagnostic.record.currentStepId,
+      criterionExplanation = diagnostic.guidance,
+      migrationDiagnostic = diagnostic,
+    )
   }
 
   internal fun phaseBriefingTexts(
@@ -77,7 +122,33 @@ public class FeatureTaskRuntimeStatusService(
     limit: Int,
     offset: Int = 0,
   ): FeatureTaskRuntimePhasePage? {
-    val projection = status(FeatureTaskRuntimeStatusRequest(workflowId)) ?: return null
+    val readiness = initializeReadiness()
+    if (readiness is RuntimeDatabaseReadinessResult.Ready && !readiness.existing) return null
+    if (readiness is RuntimeDatabaseReadinessResult.Refused) {
+      return retainedStatus(workflowId, readiness.failure)?.let { emptyPhasePage(it) }
+    }
+    return phasePagePrepared(workflowId, afterPhaseId, limit, offset)
+  }
+
+  internal fun phasePagePrepared(
+    workflowId: String,
+    afterPhaseId: String?,
+    limit: Int,
+    offset: Int = 0,
+  ): FeatureTaskRuntimePhasePage? {
+    val projection = readPreparedStatus(FeatureTaskRuntimeStatusRequest(workflowId)) ?: return null
+    return page(projection, afterPhaseId, limit, offset)
+  }
+
+  private fun emptyPhasePage(projection: FeatureTaskRuntimeStatusProjection): FeatureTaskRuntimePhasePage =
+    FeatureTaskRuntimePhasePage(projection, emptyList(), false)
+
+  private fun page(
+    projection: FeatureTaskRuntimeStatusProjection,
+    afterPhaseId: String?,
+    limit: Int,
+    offset: Int,
+  ): FeatureTaskRuntimePhasePage {
     val phaseIds = projection.phases.map { it.phaseId }
     val start =
       if (afterPhaseId == null) {
@@ -211,17 +282,38 @@ public class FeatureTaskRuntimeStatusService(
         ),
       degradedDiagnostic = degradedDiagnosticStatus(request.workflowId),
       operatorDecisionPause = operatorDecisionPause(parts.records),
-      criterionExplanation =
-        when (val repair = acceptanceRepair) {
-          null -> null
-          is AcceptanceCriterionRepairStatusRead.Current -> acceptanceCriterionRepairExplanation(repair.state)
-          AcceptanceCriterionRepairStatusRead.PreContract -> PRE_CONTRACT_REPAIR_EXPLANATION
-          is AcceptanceCriterionRepairStatusRead.SupersededVersion ->
-            "Acceptance repair state is stored at contract ${repair.version}; the next owned run quarantines " +
-              "the original record and regenerates it at $ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION"
+      migrationDiagnostic =
+        if (acceptanceRepair is AcceptanceCriterionRepairStatusRead.MigrationRequired) {
+          retainedProjection.diagnostic(
+            request.workflowId,
+            SkillBillRuntimeException(
+              AcceptanceCriterionMigrationFailureCode.MIGRATION_RECONCILIATION_REQUIRED,
+              "Historical criterion facts require read-only reconciliation before mutation",
+            ),
+          )
+        } else {
+          null
         },
+      criterionExplanation = repairStatusExplanation(acceptanceRepair),
     )
   }
+
+  private fun repairStatusExplanation(acceptanceRepair: AcceptanceCriterionRepairStatusRead?): String? =
+    when (val repair = acceptanceRepair) {
+      null -> null
+      is AcceptanceCriterionRepairStatusRead.Current -> acceptanceCriterionRepairExplanation(repair.state)
+      AcceptanceCriterionRepairStatusRead.PreContract -> PRE_CONTRACT_REPAIR_EXPLANATION
+      is AcceptanceCriterionRepairStatusRead.MigrationRequired ->
+        "Retained historical repair requires read-only reconciliation before mutation. " +
+          repair.contexts.zip(repair.decisions).joinToString("; ") { (context, decision) ->
+            "${context.criterionRef}: $decision, historical charges ${context.historicalCharges}, " +
+              "escalation owed ${context.escalationOwed}"
+          }
+      is AcceptanceCriterionRepairStatusRead.SupersededVersion ->
+        "Acceptance repair state is stored at contract ${repair.version}. " +
+          "Prepare the database with no active workers before resuming. Original records and completed work " +
+          "remain retained; use a supporting runtime to resolve any typed migration refusal."
+    }
 
   private fun acceptanceCriterionRepairExplanation(state: AcceptanceCriterionRepairState): String {
     val current = state.currentCriterionRef?.let { ref -> state.criteria.firstOrNull { it.canonicalRef == ref } }

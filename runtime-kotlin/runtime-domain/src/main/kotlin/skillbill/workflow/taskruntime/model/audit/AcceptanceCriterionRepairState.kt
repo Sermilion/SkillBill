@@ -163,6 +163,7 @@ data class AcceptanceCriterionRepairState internal constructor(
   val independentChecks: List<AcceptanceCriterionCheckedMutation> = emptyList(),
   val repairBudgets: List<AcceptanceCriterionRepairBudget> = emptyList(),
   val accountingPolicy: AcceptanceCriterionAccountingPolicy = AcceptanceCriterionAccountingPolicy.VERIFIED_EVIDENCE,
+  val retainedHistory: AcceptanceCriterionRetainedHistory? = null,
 ) {
   fun clearPendingClarification(): AcceptanceCriterionRepairState = copy(pendingClarificationQuestion = null)
 
@@ -705,3 +706,14 @@ enum class AcceptanceCriterionAccountingPolicy {
   PRE_ADOPTION,
   VERIFIED_EVIDENCE,
 }
+
+data class AcceptanceCriterionHistoricalCheck(
+  val mutation: AcceptanceCriterionCompletedMutation,
+  val comparison: AcceptanceCriterionIndependentProgress,
+  val context: AcceptanceCriterionProgressContext,
+)
+
+data class AcceptanceCriterionRetainedHistory(
+  val mutations: List<AcceptanceCriterionCompletedMutation>,
+  val checks: List<AcceptanceCriterionHistoricalCheck>,
+)

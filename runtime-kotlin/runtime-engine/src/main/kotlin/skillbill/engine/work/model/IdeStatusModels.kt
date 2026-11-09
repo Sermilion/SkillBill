@@ -2,6 +2,7 @@ package skillbill.engine.work.model
 
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
+import skillbill.ports.db.model.RetainedWorkflowDiagnostic
 import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
@@ -33,6 +34,7 @@ internal data class IdeStatusCandidate(
   val execution: IdeStatusExecutionIdentity? = null,
   val branchCorrelation: String? = null,
   val standaloneStatus: StandalonePhaseStatusRecord? = null,
+  val migrationDiagnostic: RetainedWorkflowDiagnostic? = null,
 )
 
 internal sealed class IdeStatusRepositoryResolution {

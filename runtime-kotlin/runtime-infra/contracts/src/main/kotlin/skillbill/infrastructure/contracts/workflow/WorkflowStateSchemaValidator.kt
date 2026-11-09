@@ -13,6 +13,7 @@ import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.WorkflowStateSnapshotWireMapper
 import skillbill.infrastructure.contracts.locator.WorkflowStateSchemaPaths
 import skillbill.infrastructure.contracts.locator.logSchemaLoadFailure
+import skillbill.infrastructure.contracts.workflow.featuretask.preservation.AcceptanceCriterionMigrationCodec
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import java.util.logging.Level
@@ -26,6 +27,7 @@ class WorkflowStateSchemaValidator : WorkflowSnapshotValidator {
     snapshot: WorkflowStateSnapshot,
     slug: String,
   ) {
+    AcceptanceCriterionMigrationCodec.validateRetained(snapshot.workflowId, snapshot.artifacts)
     validate(WorkflowStateSnapshotWireMapper.wireMap(snapshot), slug)
   }
 

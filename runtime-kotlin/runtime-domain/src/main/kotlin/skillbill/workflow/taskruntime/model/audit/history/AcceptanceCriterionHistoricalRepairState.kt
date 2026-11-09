@@ -1,6 +1,7 @@
 package skillbill.workflow.taskruntime.model.audit.history
 
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionCompletedMutation
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionHistoricalCheck
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 
 data class AcceptanceCriterionHistoricalRepairState(

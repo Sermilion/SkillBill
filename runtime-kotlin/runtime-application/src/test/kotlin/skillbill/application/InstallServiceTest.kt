@@ -4,6 +4,7 @@ import skillbill.application.install.InstallDatabasePreparation
 import skillbill.application.install.InstallService
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.databaseBusy
+import skillbill.error.migration.AcceptanceCriterionMigrationFailureCode
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidInstallPlanSchemaError
 import skillbill.install.model.InstallAgentDefaultTarget
@@ -47,6 +48,8 @@ import skillbill.install.model.WindowsSymlinkPreflightState
 import skillbill.install.model.selectedPlatformSlugs
 import skillbill.ports.db.DatabaseSchemaPort
 import skillbill.ports.db.RuntimeWorkerLeaseQuery
+import skillbill.ports.db.model.DatabaseReadinessObservation
+import skillbill.ports.db.model.RuntimeDatabaseReadinessResult
 import skillbill.ports.db.model.RuntimeWorkerLease
 import skillbill.ports.install.InstallPlanWireValidator
 import skillbill.ports.install.apply.InstallApplyExecutionPort
@@ -97,6 +100,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -416,6 +420,43 @@ class InstallServiceTest {
     assertEquals(InstallApplyIssueKind.DATABASE_MIGRATION_DEFERRED, warning.kind)
     assertTrue("phase plan (plan-live)" in warning.message)
     assertFalse("wftr-exited" in warning.message)
+  }
+
+  @Test
+  fun `direct read readiness retains live-worker refusal before touching the database`() {
+    val schema = RecordingDatabaseSchemaPort(pendingMigrations = true)
+    val preparation =
+      databasePreparation(
+        schema,
+        FixedWorkerLeases(listOf(workerLease("active-old-runtime", 101))),
+        FixedProcessInspector(mapOf(101L to FeatureTaskRuntimeProcessInspection.ForeignHost)),
+      )
+    val refused = assertIs<RuntimeDatabaseReadinessResult.Refused>(preparation.prepareExisting())
+    assertEquals(AcceptanceCriterionMigrationFailureCode.MIGRATION_WORKER_ACTIVE, refused.failure.code)
+    assertEquals(0, schema.migrateCalls)
+    assertTrue(refused.failure.message.orEmpty().contains("Keep the existing runtime"))
+  }
+
+  @Test
+  fun `direct readiness returns conversion failures with the original typed cause and never creates a database`() {
+    val failure =
+      SkillBillRuntimeException(
+        AcceptanceCriterionMigrationFailureCode.ARTIFACT_MIGRATION_REFUSED,
+        "retained-source conversion failed",
+      )
+    val schema =
+      object : DatabaseSchemaPort {
+        override fun ensureDatabaseReady(): Unit = error("must not create a store for read readiness")
+
+        override fun hasPendingMigrations(): Boolean = true
+
+        override fun migrateExistingDatabase(): Boolean = throw failure
+
+        override fun observeReadiness(): DatabaseReadinessObservation =
+          error("Failed preparation must not observe readiness")
+      }
+    val refused = assertIs<RuntimeDatabaseReadinessResult.Refused>(databasePreparation(schema).prepareExisting())
+    assertEquals(failure, refused.failure)
   }
 
   private fun workerLease(
@@ -772,6 +813,8 @@ class InstallServiceTest {
   }
 
   private object UnsupportedDatabaseSchemaPort : DatabaseSchemaPort {
+    override fun observeReadiness(): DatabaseReadinessObservation = error("observeReadiness is not part of this test")
+
     override fun ensureDatabaseReady(): Unit = error("ensureDatabaseReady is not part of this test")
 
     override fun migrateExistingDatabase(): Boolean = error("migrateExistingDatabase is not part of this test")
@@ -791,6 +834,9 @@ class InstallServiceTest {
     override fun migrateExistingDatabase(): Boolean = error("migrateExistingDatabase is not part of this test")
 
     override fun hasPendingMigrations(): Boolean = pendingMigrations
+
+    override fun observeReadiness(): DatabaseReadinessObservation =
+      DatabaseReadinessObservation(true, null, null, pendingMigrations)
   }
 
   private class FailingDatabaseSchemaPort(private val failure: SkillBillRuntimeException) : DatabaseSchemaPort {
@@ -799,6 +845,8 @@ class InstallServiceTest {
     override fun migrateExistingDatabase(): Boolean = error("migrateExistingDatabase is not part of this test")
 
     override fun hasPendingMigrations(): Boolean = false
+
+    override fun observeReadiness(): DatabaseReadinessObservation = throw failure
   }
 
   private class FixedWorkerLeases(private val leases: List<RuntimeWorkerLease>) : RuntimeWorkerLeaseQuery {

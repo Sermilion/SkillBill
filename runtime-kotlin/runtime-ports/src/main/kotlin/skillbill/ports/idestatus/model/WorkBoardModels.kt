@@ -3,6 +3,7 @@ package skillbill.ports.idestatus.model
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.idestatus.model.IdeStatusDisplayGroup
+import skillbill.ports.db.model.RetainedWorkflowDiagnostic
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.work.model.WorkStoreObservation
 import java.time.Duration
@@ -66,6 +67,7 @@ data class WorkBoardItem(
   val executingAgentId: String? = null,
   val goalWorktree: GoalWorktreeView? = null,
   val build: WorkBuildView? = null,
+  val migrationDiagnostic: RetainedWorkflowDiagnostic? = null,
 )
 
 data class WorkBoardDiagnostic(

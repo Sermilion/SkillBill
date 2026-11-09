@@ -19,6 +19,16 @@ internal fun FeatureTaskRuntimeStatusProjection?.toRuntimeStatusCliMap(workflowI
       "pending_count" to it.pendingCount,
       "blocked_count" to it.blockedCount,
       "current_phase" to it.currentPhaseId,
+      "criterion_explanation" to it.criterionExplanation,
+      "migration_diagnostic" to
+        it.migrationDiagnostic?.let { diagnostic ->
+          linkedMapOf(
+            SharedPayloadKeys.WORKFLOW_ID to diagnostic.record.workflowId,
+            "failure_code" to diagnostic.failureCode.toString(),
+            "source_location" to diagnostic.record.source.location,
+            "guidance" to diagnostic.guidance,
+          )
+        },
       "resolved_branch" to it.resolvedBranch,
       "finalizing_agent_id" to it.finalizingAgentId,
       "gate_run_count" to it.gateRunCount,
@@ -58,6 +68,8 @@ internal fun FeatureTaskRuntimeStatusProjection?.toRuntimeStatusCliMap(workflowI
     "pending_count" to 0,
     "blocked_count" to 0,
     "current_phase" to null,
+    "criterion_explanation" to null,
+    "migration_diagnostic" to null,
     "resolved_branch" to null,
     "finalizing_agent_id" to null,
     "degraded_diagnostic" to null,

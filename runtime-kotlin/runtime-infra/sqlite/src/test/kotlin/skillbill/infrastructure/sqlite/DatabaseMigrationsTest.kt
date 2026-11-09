@@ -2378,6 +2378,7 @@ private val expectedMigrationDefinitions =
     115 to "add-approval-not-required-delivery",
     116 to "record-agent-build-runs",
     117 to "defer-work-board-projection",
+    118 to "prepare-preserved-criterion-artifact-compatibility",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

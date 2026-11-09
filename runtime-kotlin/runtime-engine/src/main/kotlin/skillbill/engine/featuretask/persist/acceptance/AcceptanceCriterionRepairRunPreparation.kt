@@ -6,7 +6,6 @@ import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairBinding
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairHydration
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRefusal
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
-import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairVersionRecoveryResult
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairWriteResult
 import java.nio.file.Path
 
@@ -21,9 +20,8 @@ public class AcceptanceCriterionRepairRunPreparation(
     data class Refused(val reason: AcceptanceCriterionRepairRefusal) : Prepared
   }
 
-  internal fun recoverSupersededVersion(
-    worker: AcquiredFeatureTaskRuntimeWorker,
-  ): AcceptanceCriterionRepairVersionRecoveryResult = versionRecovery.recoverSupersededVersion(worker)
+  internal fun requirePreparedVersions(worker: AcquiredFeatureTaskRuntimeWorker): Unit =
+    versionRecovery.requirePreparedVersions(worker)
 
   internal fun prepare(
     worker: AcquiredFeatureTaskRuntimeWorker,

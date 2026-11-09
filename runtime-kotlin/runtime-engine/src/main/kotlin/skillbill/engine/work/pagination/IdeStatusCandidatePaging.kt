@@ -12,6 +12,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkStatusCandidateQuery
+import skillbill.ports.work.model.WorkStatusCandidateRejectedRow
 import java.time.Instant
 
 internal const val STATUS_CANDIDATE_PAGE_SIZE = 100
@@ -31,16 +32,20 @@ private val liveWorkflowStates: Set<String> =
 internal fun readStatusWorkItems(
   unitOfWork: UnitOfWork,
   queryWork: IdeStatusQueryWork?,
+  rejectedRows: MutableList<WorkStatusCandidateRejectedRow>? = null,
 ): List<WorkItem> {
   val items = mutableListOf<WorkItem>()
+  var examined = 0
   var afterKey: String? = null
-  while (items.size < STATUS_CANDIDATE_BUDGET) {
-    val limit = minOf(STATUS_CANDIDATE_PAGE_SIZE, STATUS_CANDIDATE_BUDGET - items.size)
+  while (examined < STATUS_CANDIDATE_BUDGET) {
+    val limit = minOf(STATUS_CANDIDATE_PAGE_SIZE, STATUS_CANDIDATE_BUDGET - examined)
     val page = unitOfWork.workList.statusCandidates(WorkStatusCandidateQuery(afterKey, limit, liveWorkflowStates))
-    queryWork?.page(page.items.size)
+    queryWork?.page(page.examinedCount)
     items += page.items
+    rejectedRows?.addAll(page.rejectedRows)
+    examined += page.examinedCount
     afterKey = page.lastKey
-    if (page.items.size < limit) return items
+    if (page.examinedCount < limit) return items
   }
   queryWork?.exhaustedBudget()
   return items
@@ -53,10 +58,10 @@ internal fun readLiveIssueKeys(unitOfWork: UnitOfWork): Set<String> {
   while (read < STATUS_CANDIDATE_BUDGET) {
     val limit = minOf(STATUS_CANDIDATE_PAGE_SIZE, STATUS_CANDIDATE_BUDGET - read)
     val page = unitOfWork.workList.statusCandidates(WorkStatusCandidateQuery(afterKey, limit, liveWorkflowStates))
-    read += page.items.size
+    read += page.examinedCount
     val live = page.items.takeWhile { it.currentState in liveWorkflowStates }
     live.mapNotNullTo(keys) { it.issueKey }
-    if (live.size < page.items.size || page.items.size < limit) return keys
+    if (live.size < page.items.size || page.examinedCount < limit) return keys
     afterKey = page.lastKey
   }
   return keys

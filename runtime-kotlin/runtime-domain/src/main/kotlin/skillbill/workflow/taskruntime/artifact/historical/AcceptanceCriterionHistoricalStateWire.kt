@@ -14,10 +14,10 @@ import skillbill.workflow.taskruntime.artifact.requireKnownRepairFields
 import skillbill.workflow.taskruntime.artifact.validateDurableSize
 import skillbill.workflow.taskruntime.artifact.validateImplementationSize
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionCompletedMutation
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionHistoricalCheck
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCoherence
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
-import skillbill.workflow.taskruntime.model.audit.history.AcceptanceCriterionHistoricalCheck
 import skillbill.workflow.taskruntime.model.audit.history.AcceptanceCriterionHistoricalImplementationProgress
 import skillbill.workflow.taskruntime.model.audit.history.AcceptanceCriterionHistoricalRepairState
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap

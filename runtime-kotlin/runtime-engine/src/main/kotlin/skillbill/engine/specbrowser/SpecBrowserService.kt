@@ -13,6 +13,7 @@ import skillbill.engine.specbrowser.model.SpecBundleDeletion
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.WorkRunActions
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.projectstore.ProjectCatalogPort
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.projectstore.model.ProjectCatalogEntry
@@ -36,10 +37,11 @@ public class SpecBrowserService(
   private val goals: GoalIssueStartedReader,
   private val repositories: RepositoryEnclosingRootPort,
   private val files: GoalRuntimeStateFileStore,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   private val manifestCache = SpecManifestCache(manifests, validator)
   private val treeReader = SpecTreeReader(manifests, manifestCache)
-  private val liveGoals = SpecLiveGoalReader(database, status, runs, repositories)
+  private val liveGoals = SpecLiveGoalReader(database, status, runs, repositories, diagnostics)
 
   public fun projects(): List<SpecBrowserProject> = catalog.list().filter { it.hasSpecs }.map { project(it, null) }
 

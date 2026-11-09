@@ -1,15 +1,11 @@
 package skillbill.engine.work
 
-import skillbill.engine.work.model.IdeStatusRepositoryResolution
-import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.persistence.UnitOfWork
-import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.work.model.IssueRepositoryIdentityLookup
 import skillbill.ports.work.model.WorkItem
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
-import java.nio.file.Path
 
 internal class IdeStatusRepositoryCorrelation(
   private val unitOfWork: UnitOfWork,
@@ -64,46 +60,4 @@ internal class IdeStatusRepositoryCorrelation(
       is IssueRepositoryIdentityLookup.Ambiguous -> repositoryIdentity in lookup.repositoryIdentities
     }
   }
-}
-
-internal fun resolveRepositoryIdentity(
-  repoRootArg: String,
-  repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
-): IdeStatusRepositoryResolution {
-  val resolvedStart =
-    catchingNonCancellation {
-      repositoryEnclosingRootPort.canonicalPath(Path.of(repoRootArg))
-    }.getOrNull()
-      ?: return IdeStatusRepositoryResolution.Invalid("Repository root cannot be resolved: $repoRootArg")
-  val gitRoot =
-    findGitRoot(resolvedStart, repositoryEnclosingRootPort)
-      ?: return IdeStatusRepositoryResolution.Invalid("Path is not inside a Git repository: $repoRootArg")
-  val canonicalGitRoot = repositoryEnclosingRootPort.canonicalPath(gitRoot)
-  val identity = repositoryEnclosingRootPort.repositoryIdentity(canonicalGitRoot)
-  return if (
-    identity.isBlank() ||
-    !identity.startsWith(FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX)
-  ) {
-    IdeStatusRepositoryResolution.Missing(
-      "Could not form canonical repository identity for: $repoRootArg",
-    )
-  } else {
-    IdeStatusRepositoryResolution.Ok(
-      identity = identity,
-      repoRoot = canonicalGitRoot,
-      monitorIdentity = repositoryEnclosingRootPort.primaryRepositoryIdentity(canonicalGitRoot),
-    )
-  }
-}
-
-private fun findGitRoot(
-  start: Path,
-  repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
-): Path? {
-  var candidate: Path? = start
-  while (candidate != null) {
-    if (repositoryEnclosingRootPort.optionalRealPath(candidate.resolve(".git")) != null) return candidate
-    candidate = candidate.parent
-  }
-  return null
 }

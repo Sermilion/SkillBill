@@ -33,6 +33,7 @@ public class FeatureTaskRuntimeExecutionEntry(
   private val identities: FeatureTaskExecutionIdentityResolver,
 ) {
   internal fun admit(request: FeatureTaskRuntimeRunRequest): AdmittedFeatureTaskRuntimeExecution {
+    admission.prepareDatabase()
     val root = repositories.canonicalPath(request.repoRoot)
     val expected =
       identities.expected(

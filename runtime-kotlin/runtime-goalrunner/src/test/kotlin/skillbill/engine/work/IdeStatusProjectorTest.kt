@@ -13,8 +13,11 @@ import skillbill.engine.goalrunner.execution.core.goalRunnerDefaultPhaseRecorder
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestProjectionReader
 import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
+import skillbill.engine.migration.RetainedWorkflowProjection
 import skillbill.goalrunner.model.GoalRunnerAssessmentResult
 import skillbill.goalrunner.model.GoalRunnerAssessmentState
+import skillbill.ports.db.EmptyRetainedWorkflowReader
+import skillbill.ports.db.ReadyRuntimeDatabaseReadiness
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.projectstore.FixedProjectStorePort
@@ -90,6 +93,11 @@ class IdeStatusProjectorTest {
         featureTaskRuntimeWireArtifactValidatorForTest(),
       )
     return IdeStatusProjector(
+      retainedProjection =
+        RetainedWorkflowBoardProjection(
+          EmptyRetainedWorkflowReader,
+          RetainedWorkflowProjection(EmptyRetainedWorkflowReader, NoopRuntimeDiagnostics),
+        ),
       workflowSnapshotValidator = acceptingIdeStatusSnapshotValidator,
       goalRunnerStatusService = testGoalRunnerStatusService(EmptyManifestStore, EmptyOutcomeStore),
       featureTaskRuntimeStatusService =
@@ -98,6 +106,8 @@ class IdeStatusProjectorTest {
           persistence,
           FeatureTaskRuntimeRunInvariantsStore(database, persistence),
           FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
+          databaseReadiness = ReadyRuntimeDatabaseReadiness,
+          retainedProjection = RetainedWorkflowProjection(EmptyRetainedWorkflowReader, NoopRuntimeDiagnostics),
         ),
       manifestStore = GoalRunnerManifestProjectionReader(EmptyManifestStore),
       diagnostics =

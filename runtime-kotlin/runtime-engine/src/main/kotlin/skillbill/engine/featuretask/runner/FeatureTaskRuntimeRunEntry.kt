@@ -19,7 +19,6 @@ import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInpu
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairBinding
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRefusal
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
-import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairVersionRecoveryResult
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
@@ -124,10 +123,7 @@ public class FeatureTaskRuntimeRunEntry(
         (goalContinuation?.codeReviewMode ?: request.requestedCodeReviewMode)
           ?.let { RuntimeReviewSelection.valueOf(it.name) },
     ) { admittedExecution, acquiredWorker ->
-      val recovery = repairPreparation.recoverSupersededVersion(acquiredWorker)
-      if (recovery is AcceptanceCriterionRepairVersionRecoveryResult.Refused) {
-        return@runOwned versionRecoveryRefusal(request, acquiredWorker, specPath, recovery)
-      }
+      repairPreparation.requirePreparedVersions(acquiredWorker)
       val requestedQaSelection = if (goalContinuation != null) goalContinuation.qaSelection else request.qaSelection
       if (requestedQaSelection != null && requestedQaSelection != admittedExecution.plan.qaSelection) {
         return@runOwned changedQaSelectionRefusal(request, acquiredWorker, specPath, admittedExecution)
@@ -224,24 +220,6 @@ public class FeatureTaskRuntimeRunEntry(
       blockedReason =
         "Cannot change QA selection on resume; the recorded selection is " +
           "'${admittedExecution.plan.qaSelection?.wireValue ?: "not composed"}'.",
-      completedPhaseIds = emptyList(),
-      resolvedBranch = null,
-    )
-
-  private fun versionRecoveryRefusal(
-    input: FeatureTaskRuntimeRunInput,
-    worker: AcquiredFeatureTaskRuntimeWorker,
-    specPath: Path,
-    refusal: AcceptanceCriterionRepairVersionRecoveryResult.Refused,
-  ): FeatureTaskRuntimeRunReport.Blocked =
-    FeatureTaskRuntimeRunReport.Blocked(
-      issueKey = input.issueKey,
-      workflowId = worker.workflowId,
-      featureSize = runInvariantsSource.read(specPath).requireInvariants().featureSize.name,
-      lastIncompletePhase = worker.currentStepId,
-      blockedReason =
-        "Cannot regenerate the stored acceptance repair state at the current contract version; " +
-          "recovery was refused (${refusal.reason.wireValue}). Retry the run once the workflow is quiescent.",
       completedPhaseIds = emptyList(),
       resolvedBranch = null,
     )

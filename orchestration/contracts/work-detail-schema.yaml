@@ -18,7 +18,7 @@ properties:
     additionalProperties: false
     required: [code, message]
     properties:
-      code: {type: string, enum: [absent_database, unknown_work_item, ambiguous_work_item, invalid_repository_identity]}
+      code: {type: string, enum: [incompatible_record, absent_database, unknown_work_item, ambiguous_work_item, invalid_repository_identity]}
       message: {type: string, minLength: 1}
 allOf:
   - if:

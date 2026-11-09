@@ -26,6 +26,7 @@ import skillbill.engine.work.eligibility.workControlEligible
 import skillbill.engine.work.eligibility.workPauseEligible
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.FencedTransactionResult
+import skillbill.ports.db.model.RuntimeDatabaseReadinessResult
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.persistence.UnitOfWork
@@ -61,8 +62,16 @@ public class WorkControlService(
     recovery.recover(workId, incidentToken, incidentRevision, confirmedPrerequisites, agentId)
 
   public fun options(target: WorkRunTarget): WorkRunOptions? =
-    database.read { unit ->
-      matchingRun(status, target)?.let { runs.options(it, unit) }
+    run {
+      val readiness = status.initializeReadiness()
+      if (readiness is RuntimeDatabaseReadinessResult.Refused ||
+        readiness is RuntimeDatabaseReadinessResult.Ready && !readiness.existing
+      ) {
+        return@run null
+      }
+      database.read { unit ->
+        matchingRun(status, target)?.let { runs.options(it, unit) }
+      }
     }
 
   public fun options(item: WorkDetailItem): WorkRunOptions? =
@@ -217,41 +226,49 @@ public class WorkControlService(
     action: WorkControlAction,
     storeIsCurrent: () -> Boolean,
   ): WorkControlResult.Rejected? =
-    database.read { unit ->
-      val observation = unit.workList.observation()
-      if (!storeIsCurrent() || target.observation != null && target.observation.storeId != observation.storeId) {
-        return@read WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
+    run {
+      val readiness = status.initializeReadiness()
+      if (readiness is RuntimeDatabaseReadinessResult.Refused ||
+        readiness is RuntimeDatabaseReadinessResult.Ready && !readiness.existing
+      ) {
+        return@run WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)
       }
-      if (unit.workList.findByWorkflowId(target.workflowId).isEmpty()) {
-        return@read WorkControlResult.Rejected(WorkControlRejection.UNKNOWN_TARGET)
-      }
-      val item =
-        status.projectBoardSelection(listOf(target.workflowId), WorkBoardRequest()).items.singleOrNull()
-          ?: return@read WorkControlResult.Rejected(WorkControlRejection.UNKNOWN_TARGET)
-      val snapshot = item.snapshot
-      val lease = unit.goalRunnerControls.controlState(target.workflowId).executionLease
-      val actual =
-        WorkControlTarget(
-          snapshot.workflowId.orEmpty(), snapshot.repositoryIdentity,
-          Path.of(item.repositoryRoot).normalize(), snapshot.issueKey.orEmpty(), snapshot.execution?.executionId,
-          snapshot.execution?.statusRevision, snapshot.execution?.statusStoreId, snapshot.execution?.runSequence,
-          snapshot.updatedAt, lease?.ownerToken, lease?.generation,
-          observation.takeIf { target.observation != null },
-          item.databaseFileObservation,
-        )
-      val expected =
-        target.copy(
-          repositoryRoot = target.repositoryRoot.normalize(),
-          statusRevision = actual.statusRevision,
-          updatedAt = actual.updatedAt,
-          observation = actual.observation,
-        )
-      when {
-        actual != expected ->
-          WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
-        !(if (action == WorkControlAction.PAUSE) workPauseEligible(snapshot) else workControlEligible(snapshot)) ->
-          WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)
-        else -> null
+      database.read { unit ->
+        val observation = unit.workList.observation()
+        if (!storeIsCurrent() || target.observation != null && target.observation.storeId != observation.storeId) {
+          return@read WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
+        }
+        if (unit.workList.findByWorkflowId(target.workflowId).isEmpty()) {
+          return@read WorkControlResult.Rejected(WorkControlRejection.UNKNOWN_TARGET)
+        }
+        val item =
+          status.projectBoardSelection(listOf(target.workflowId), WorkBoardRequest()).items.singleOrNull()
+            ?: return@read WorkControlResult.Rejected(WorkControlRejection.UNKNOWN_TARGET)
+        val snapshot = item.snapshot
+        val lease = unit.goalRunnerControls.controlState(target.workflowId).executionLease
+        val actual =
+          WorkControlTarget(
+            snapshot.workflowId.orEmpty(), snapshot.repositoryIdentity,
+            Path.of(item.repositoryRoot).normalize(), snapshot.issueKey.orEmpty(), snapshot.execution?.executionId,
+            snapshot.execution?.statusRevision, snapshot.execution?.statusStoreId, snapshot.execution?.runSequence,
+            snapshot.updatedAt, lease?.ownerToken, lease?.generation,
+            observation.takeIf { target.observation != null },
+            item.databaseFileObservation,
+          )
+        val expected =
+          target.copy(
+            repositoryRoot = target.repositoryRoot.normalize(),
+            statusRevision = actual.statusRevision,
+            updatedAt = actual.updatedAt,
+            observation = actual.observation,
+          )
+        when {
+          actual != expected ->
+            WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
+          !(if (action == WorkControlAction.PAUSE) workPauseEligible(snapshot) else workControlEligible(snapshot)) ->
+            WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)
+          else -> null
+        }
       }
     }
 }

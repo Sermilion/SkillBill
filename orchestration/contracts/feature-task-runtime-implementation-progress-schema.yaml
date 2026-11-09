@@ -19,6 +19,7 @@ required:
 - repair_accounting
 - worker_reservation_id
 properties:
+  migration_source_version: { const: '0.1' }
   contract_version:
     const: '0.2'
   criterion_ids:

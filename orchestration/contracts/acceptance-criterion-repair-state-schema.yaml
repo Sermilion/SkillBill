@@ -28,6 +28,7 @@ required:
 - repair_budgets
 - repair_accounting
 properties:
+  migration_source_version: { const: '0.2' }
   contract_version:
     const: '0.3'
   catalog_id:

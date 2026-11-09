@@ -21,6 +21,8 @@ import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
 import skillbill.error.shellcontent.retiredStandaloneWorkflowError
+import skillbill.ports.db.RuntimeDatabaseReadiness
+import skillbill.ports.db.model.RuntimeDatabaseReadinessResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
@@ -40,6 +42,8 @@ import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.artifact.historical.toMigrationProvenance
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseExecutionOrigin
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
@@ -54,7 +58,21 @@ public class FeatureTaskRuntimeExecutionAdmission(
   private val diagnostics: RuntimeDiagnostics,
   private val phaseOutputMigration: FeatureTaskRuntimePhaseOutputMigration,
   private val supervisor: FeatureTaskRuntimeWorkerSupervisor,
+  private val databaseReadiness: RuntimeDatabaseReadiness,
 ) {
+  internal fun prepareDatabase() {
+    when (val result = databaseReadiness.prepareExisting()) {
+      is RuntimeDatabaseReadinessResult.Ready -> Unit
+      is RuntimeDatabaseReadinessResult.Refused -> {
+        diagnostics.warning(
+          "seam=execution_admission readiness=refused failure_code=${result.failure.code} " +
+            "value_used=retained_source",
+        )
+        throw result.failure
+      }
+    }
+  }
+
   internal fun admit(
     states: WorkflowStateRepository,
     workflowId: String,
@@ -93,8 +111,18 @@ public class FeatureTaskRuntimeExecutionAdmission(
         states.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
           ?: throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "missing workflow")
       requireMatchingIdentity(identity, row, workflowId, expectedIdentity)
-      val checkedInputs = inputs.frozen()
       val initialSnapshot = row.toSnapshot()
+      val migrationContext =
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CRITERION_MIGRATION
+          .value(initialSnapshot.artifacts)
+          ?.let {
+            FeatureTaskRuntimeWorkflowArtifactMap.from(it).toMigrationProvenance(
+              workflowId,
+              expectedWorkflowId = workflowId,
+            ).contexts
+          }
+          .orEmpty()
+      val checkedInputs = inputs.frozen()
       val ownsGoalPlanningImport =
         identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD &&
           DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.contains(initialSnapshot.artifacts)
@@ -124,6 +152,7 @@ public class FeatureTaskRuntimeExecutionAdmission(
         requireNotNull(descriptor),
         supportedExecution.recordedMonitorSemantics,
         phaseOutputs.receipt ?: currentReceipt(),
+        criterionMigrationContext = migrationContext,
       ).let { accepted ->
         states.getFeatureTaskRuntimeWorkerOwnership(workflowId)?.let { accepted.withWorkerOwnership(it) }
           ?: accepted

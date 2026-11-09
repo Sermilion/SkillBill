@@ -130,7 +130,7 @@ object RuntimeModuleCatalog {
       "runtime-infra:sqlite" to
         ModuleEdgeExpectation(
           api = emptySet(),
-          implementation = setOf("runtime-contracts", "runtime-domain", "runtime-ports"),
+          implementation = setOf("runtime-contracts", "runtime-domain", "runtime-ports", "runtime-infra:contracts"),
         ),
       "runtime-cli" to
         ModuleEdgeExpectation(

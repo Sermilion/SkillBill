@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.model.core
 
+import skillbill.ports.db.model.RetainedWorkflowDiagnostic
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
 
@@ -40,6 +41,7 @@ public data class FeatureTaskRuntimeStatusProjection(
   public val degradedDiagnostic: FeatureTaskRuntimeDegradedDiagnosticStatus? = null,
   public val operatorDecisionPause: FeatureTaskRuntimeOperatorDecisionPause? = null,
   public val criterionExplanation: String? = null,
+  public val migrationDiagnostic: RetainedWorkflowDiagnostic? = null,
 )
 
 public data class FeatureTaskRuntimeOperatorDecisionPause(

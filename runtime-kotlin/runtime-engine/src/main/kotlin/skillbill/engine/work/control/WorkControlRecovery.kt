@@ -53,6 +53,7 @@ public class WorkControlRecovery(
 
   private fun runTarget(id: String): WorkRunTarget? {
     val item = status.detail(WorkDetailRequest(id)).item ?: return null
+    if (item.snapshot.problem != null) return null
     val observation = item.databaseFileObservation ?: return null
     return WorkRunTarget(
       id,
@@ -178,6 +179,18 @@ public class WorkControlRecovery(
   }
 
   private fun launchResumed(
+    requested: WorkRunTarget,
+    attempt: BlockIncidentRecoveryAttempt,
+    agentId: String?,
+  ): WorkControlResult {
+    val readiness = status.initializeReadiness()
+    if (!readiness.admitsWorkControl()) {
+      return WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)
+    }
+    return launchPrepared(requested, attempt, agentId)
+  }
+
+  private fun launchPrepared(
     requested: WorkRunTarget,
     attempt: BlockIncidentRecoveryAttempt,
     agentId: String?,

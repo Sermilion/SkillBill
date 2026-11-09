@@ -5,8 +5,8 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.normalizeIssueKey
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionMigrationKeys
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStatusRead
-import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairVersionPlan
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStepWireUpdate
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
@@ -39,11 +39,13 @@ import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.historical.asEngineRepairWireMap
 import skillbill.workflow.taskruntime.artifact.historical.toEngineImplementationProgress
 import skillbill.workflow.taskruntime.artifact.historical.toEngineRepairState
+import skillbill.workflow.taskruntime.artifact.historical.toMigrationProvenance
 import skillbill.workflow.taskruntime.artifact.isPreContractAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionAuditResult
 import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.toQaRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.acceptanceCriterionRepairAccounting
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
@@ -226,6 +228,29 @@ public class FeatureTaskRuntimeWorkflowPersistence
           } else {
             null
           }
+        val provenance =
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CRITERION_MIGRATION.value(record.artifacts)
+            ?.let {
+              FeatureTaskRuntimeWorkflowArtifactMap.from(it).toMigrationProvenance(
+                workflowId,
+                expectedWorkflowId = workflowId,
+              )
+            }
+        if (payload?.containsKey(AcceptanceCriterionMigrationKeys.MIGRATION_SOURCE_VERSION) == true) {
+          val contexts =
+            provenance?.contexts?.filter { it.family == family.label() }
+              ?: throw invalidWorkflowStateSchemaError("Strict migrated repair lacks its retained migration context.")
+          return@read AcceptanceCriterionRepairStatusRead.MigrationRequired(
+            contexts,
+            contexts.map { context ->
+              context.admission(
+                acceptanceCriterionRepairAccounting(context.criterionRef, emptyList(), emptyList(), emptyList()),
+                emptyList(),
+                emptyList(),
+              )
+            },
+          )
+        }
         if (payload?.isPreContractAcceptanceCriterionRepairState() == true) {
           validateSerialArtifacts(record.artifacts - family.label())
           return@read AcceptanceCriterionRepairStatusRead.PreContract
@@ -361,30 +386,6 @@ public class FeatureTaskRuntimeWorkflowPersistence
                   ),
                 ),
               ),
-            sessionId = record.sessionId.orEmpty(),
-          ),
-        )
-      workflowSnapshotValidator.validate(updated, updated.workflowName)
-      validateSerialArtifacts(updated.artifacts)
-      states.save(WorkflowFamily.TASK_RUNTIME, updated)
-    }
-
-    internal fun persistAcquiredRepairVersionRecovery(
-      states: WorkflowStateRepository,
-      record: WorkflowStateSnapshot,
-      recovery: AcceptanceCriterionRepairVersionPlan.Recovery,
-      quarantinePatch: Map<String, Any?>?,
-    ) {
-      validateSerialArtifacts(record.artifacts - recovery.families.toSet())
-      val updated =
-        engine.updateRecord(
-          WorkflowFamily.TASK_RUNTIME.definition,
-          record,
-          WorkflowUpdateInput(
-            workflowStatus = record.workflowStatus,
-            currentStepId = record.currentStepId,
-            stepUpdates = WorkflowStepUpdates.from(null),
-            artifactsPatch = WorkflowArtifactPatch.from(recovery.regenerated + quarantinePatch.orEmpty()),
             sessionId = record.sessionId.orEmpty(),
           ),
         )

@@ -49,6 +49,7 @@ public class FeatureTaskRuntimeWorkerCoordinator(
     requestedReviewSelection: RuntimeReviewSelection? = null,
     block: (AdmittedFeatureTaskRuntimeExecution, AcquiredFeatureTaskRuntimeWorker) -> T,
   ): T {
+    executionAdmission.prepareDatabase()
     val acquired = acquireOrRecover(workflowId, effectiveInputs, expectedIdentity, requestedReviewSelection)
     val ownership = acquired.ownership
     val heartbeats = supervisor.startHeartbeat(heartbeatPlan(workflowId)) { heartbeat(ownership) }

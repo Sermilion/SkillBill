@@ -14,6 +14,7 @@ import skillbill.idestatus.model.IdeStatusFreshness
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
+import skillbill.ports.idestatus.model.WorkDetailProblemCode
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode
@@ -25,6 +26,26 @@ import kotlin.test.assertFailsWith
 
 class WorkPayloadSchemaValidatorTest {
   private val validator = WorkPayloadSchemaValidator()
+
+  @Test
+  fun `detail accepts migration refusal and every existing problem code without changing the response version`() {
+    WorkDetailProblemCode.entries.forEach { code ->
+      val payload =
+        mapOf(
+          SharedPayloadKeys.CONTRACT_VERSION to WORK_DETAIL_CONTRACT_VERSION,
+          WorkDetailPayloadKeys.OBSERVED_AT to Instant.EPOCH.toString(),
+          WorkDetailPayloadKeys.ITEM to null,
+          WorkDetailPayloadKeys.PAGE_SIZE to 20,
+          WorkDetailPayloadKeys.NEXT_CURSOR to null,
+          WorkDetailPayloadKeys.PROBLEM to
+            mapOf(
+              WorkDetailPayloadKeys.CODE to code.wireValue,
+              WorkDetailPayloadKeys.MESSAGE to "Retained source requires recovery.",
+            ),
+        )
+      validator.validateDetail(JsonCodec.mapToJsonString(payload), "detail-problem-${code.wireValue}")
+    }
+  }
 
   @Test
   fun `board and detail accept build views and reject an unknown build state`() {

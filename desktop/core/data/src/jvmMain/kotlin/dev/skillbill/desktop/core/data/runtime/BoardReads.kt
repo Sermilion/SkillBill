@@ -68,13 +68,15 @@ internal class RuntimeBoardReads(
   private suspend fun readComplete(query: BoardQuery): BoardPage? = reads.read("board_reservations") { _ ->
     val first = reads.ideStatusService.board(query.request(cursor = null))
     if (first.absentDatabase) return@read null
-    checkNotNull(first.observation) { "The complete board read has no store observation." }
+    val retainedOnly = first.observation == null && first.items.all { it.migrationDiagnostic != null }
+    check(first.observation != null || retainedOnly) { "The complete board read has no store observation." }
     val items = first.items.mapTo(mutableListOf()) { it.toWorkItem(sessionId) }
     var cursor = first.nextCursor
     while (cursor != null) {
       try {
         val next = reads.ideStatusService.board(query.request(cursor))
-        if (next.observation == null || next.observation != first.observation) {
+        val retainedPage = retainedOnly && next.observation == null && next.items.all { it.migrationDiagnostic != null }
+        if (!retainedPage && (next.observation == null || next.observation != first.observation)) {
           throw IllegalStateException("The board changed while its complete snapshot was being read.")
         }
         next.items.mapTo(items) { it.toWorkItem(sessionId) }

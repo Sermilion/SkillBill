@@ -29,6 +29,7 @@ import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.projectstore.ProjectCatalogPort
 import skillbill.ports.projectstore.model.ProjectCatalogEntry
@@ -469,6 +470,7 @@ class SpecBrowserServiceTest {
         GoalRunnerIssueStartedReader(manifests),
         TestRepositoryEnclosingRoot,
         LocalGoalRuntimeStateFileStore(),
+        NoopRuntimeDiagnostics,
       ),
     )
   }

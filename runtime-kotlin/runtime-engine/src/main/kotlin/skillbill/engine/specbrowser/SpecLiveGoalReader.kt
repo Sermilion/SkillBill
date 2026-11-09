@@ -1,6 +1,7 @@
 package skillbill.engine.specbrowser
 
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goal.goalRepositoryIdentityCandidates
 import skillbill.engine.goal.goalRepositoryRootFromIdentity
 import skillbill.engine.work.IdeStatusService
@@ -11,6 +12,8 @@ import skillbill.engine.work.pagination.readLiveIssueKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.RuntimeDatabaseReadinessResult
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.persistence.UnitOfWork
@@ -35,12 +38,14 @@ internal class SpecLiveGoalReader(
   private val status: IdeStatusService,
   private val runs: WorkRunActions,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   fun overrides(
     checkoutRoots: List<Path>,
     candidates: LiveCandidates,
   ): Map<String, LiveGoal> {
     if (candidates.unfinished.isEmpty() && candidates.finished.isEmpty()) return emptyMap()
+    if (!readinessAllowsRead()) return emptyMap()
     val identities = identities(checkoutRoots)
     return database.readIfPresent { unit ->
       val finishedWithLiveWork =
@@ -55,6 +60,7 @@ internal class SpecLiveGoalReader(
     checkoutRoots: List<Path>,
     issueKey: String,
   ): ControlLive? {
+    if (!readinessAllowsRead()) return null
     val identities = identities(checkoutRoots)
     return database.readIfPresent { unit ->
       val candidates = parentWorkflowCandidates(unit, identities, issueKey)
@@ -81,6 +87,7 @@ internal class SpecLiveGoalReader(
     checkoutRoots: List<Path>,
     issueKey: String,
   ): List<LiveGoal> {
+    if (!readinessAllowsRead()) return emptyList()
     val identities = identities(checkoutRoots)
     return database.readIfPresent { unit -> liveGoals(unit, identities, issueKey) }.orEmpty()
   }
@@ -92,6 +99,19 @@ internal class SpecLiveGoalReader(
   ): LiveGoal? =
     liveGoals(unit, identities, key).let { goals ->
       goals.firstOrNull { lifecycleActive(it.lifecycle) } ?: goals.firstOrNull()
+    }
+
+  private fun readinessAllowsRead(): Boolean =
+    when (val readiness = status.initializeReadiness()) {
+      is RuntimeDatabaseReadinessResult.Refused -> {
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "Spec browser live-goal read stopped because database readiness was refused.",
+          readiness.failure,
+        )
+        false
+      }
+      is RuntimeDatabaseReadinessResult.Ready -> readiness.existing
     }
 
   private fun liveGoals(

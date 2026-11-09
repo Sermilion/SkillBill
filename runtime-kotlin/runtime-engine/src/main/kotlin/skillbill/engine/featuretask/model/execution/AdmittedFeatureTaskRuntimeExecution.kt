@@ -5,6 +5,7 @@ import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
+import skillbill.workflow.taskruntime.model.audit.history.AcceptanceCriterionMigrationContext
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 
 public class AdmittedFeatureTaskRuntimeExecution internal constructor(
@@ -15,6 +16,7 @@ public class AdmittedFeatureTaskRuntimeExecution internal constructor(
   public val recordedMonitorSemantics: RecordedMonitorExecutionSemantics,
   internal val migrationReceipt: RuntimeMigrationReceipt,
   public val workerOwnership: FeatureTaskRuntimeWorkerOwnership? = null,
+  public val criterionMigrationContext: List<AcceptanceCriterionMigrationContext> = emptyList(),
 ) {
   private val descriptorValue = descriptor
 
@@ -32,5 +34,6 @@ public class AdmittedFeatureTaskRuntimeExecution internal constructor(
       recordedMonitorSemantics,
       migrationReceipt,
       ownership,
+      criterionMigrationContext,
     )
 }

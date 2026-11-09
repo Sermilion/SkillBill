@@ -51,6 +51,7 @@ import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.idestatus.model.WorktreeEditSummary
 import skillbill.idestatus.model.summary
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.RuntimeDatabaseReadinessResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
@@ -140,8 +141,9 @@ public class GoalRunnerStatusProjectionAssembler(
   internal fun projectWorkflow(
     parentWorkflowId: String,
     request: GoalRunnerStatusRequest,
-  ): GoalRunnerStatusProjection? =
-    try {
+  ): GoalRunnerStatusProjection? {
+    if (!statusDatabaseReady(runtimeStatusService, diagnostics)) return null
+    return try {
       database.read { unit ->
         require(request.completedSubtaskValidationIds.orEmpty().size <= WorkPaginationLimits.MAX_PAGE_SIZE)
         require(request.phaseResultSubtaskIds.orEmpty().size <= WorkPaginationLimits.MAX_PAGE_SIZE)
@@ -203,6 +205,7 @@ public class GoalRunnerStatusProjectionAssembler(
       Thread.currentThread().interrupt()
       throw interrupted
     }
+  }
 
   public fun reconcileSubtaskPage(
     parentWorkflowId: String,
@@ -896,7 +899,7 @@ public class GoalRunnerStatusProjectionAssembler(
     val workflowId = childWorkflowId?.takeIf(String::isNotBlank) ?: return null
     val statusService = runtimeStatusService ?: return null
     return try {
-      statusService.status(
+      statusService.readPreparedStatus(
         FeatureTaskRuntimeStatusRequest(
           workflowId = workflowId,
         ),
@@ -1074,3 +1077,20 @@ internal fun storedReviewPassFindings(
         status = if (status == ReviewFindingStatus.OPEN && !actionable) ReviewFindingStatus.REJECTED else status,
       )
     }
+
+private fun statusDatabaseReady(
+  runtimeStatusService: FeatureTaskRuntimeStatusService?,
+  diagnostics: RuntimeDiagnostics,
+): Boolean {
+  val readiness = runtimeStatusService?.initializeReadiness()
+  if (readiness is RuntimeDatabaseReadinessResult.Refused) {
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "Goal status projection stopped because database readiness was refused.",
+      readiness.failure,
+    )
+    return false
+  }
+  if (readiness is RuntimeDatabaseReadinessResult.Ready && !readiness.existing) return false
+  return true
+}

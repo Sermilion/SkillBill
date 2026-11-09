@@ -10,6 +10,8 @@ import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESUL
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_PREVIOUS_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_ADOPTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_HANDOFF_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_HANDOFF_PREVIOUS_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionMigrationKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.invalidAcceptanceCriterionAuditResultSchema
@@ -59,6 +61,12 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
     sourceLabel: String,
     context: AcceptanceCriterionProgressContext? = null,
   ): AcceptanceCriterionProgressAdmission? {
+    if (payload.containsKey(AcceptanceCriterionMigrationKeys.MIGRATION_SOURCE_VERSION)) {
+      throw invalidAcceptanceCriterionAuditResultSchema(
+        sourceLabel,
+        "Retained historical audit requires migration-context reconciliation before use",
+      )
+    }
     validate(
       payload,
       sourceLabel,
@@ -119,26 +127,34 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
   fun validateRepairHandoff(
     payload: Map<String, Any?>,
     sourceLabel: String,
-  ) = validate(
-    payload,
-    sourceLabel,
-    SerialRepairSchema(
-      if (payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_REPAIR_HANDOFF_PREVIOUS_CONTRACT_VERSION) {
-        AcceptanceCriterionRepairHandoffSchemaPaths.PREVIOUS_CLASSPATH_RESOURCE
-      } else {
-        AcceptanceCriterionRepairHandoffSchemaPaths.CLASSPATH_RESOURCE
-      },
-      AcceptanceCriterionRepairHandoffSchemaPaths.EXPECTED_SCHEMA_ID,
-      if (payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_REPAIR_HANDOFF_PREVIOUS_CONTRACT_VERSION) {
-        ACCEPTANCE_CRITERION_REPAIR_HANDOFF_PREVIOUS_CONTRACT_VERSION
-      } else {
-        ACCEPTANCE_CRITERION_REPAIR_HANDOFF_CONTRACT_VERSION
-      },
-      FeatureTaskRuntimeHandoffProjectionBudget.PHASE_RECEIPT.maxUtf8Bytes,
-      ::invalidAcceptanceCriterionRepairHandoffSchema,
-      ::repairHandoffCoherenceViolation,
-    ),
-  )
+  ) {
+    if (payload.containsKey(AcceptanceCriterionMigrationKeys.MIGRATION_SOURCE_VERSION)) {
+      throw invalidAcceptanceCriterionRepairHandoffSchema(
+        sourceLabel,
+        "Retained historical handoff requires migration-context reconciliation before use",
+      )
+    }
+    validate(
+      payload,
+      sourceLabel,
+      SerialRepairSchema(
+        if (payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_REPAIR_HANDOFF_PREVIOUS_CONTRACT_VERSION) {
+          AcceptanceCriterionRepairHandoffSchemaPaths.PREVIOUS_CLASSPATH_RESOURCE
+        } else {
+          AcceptanceCriterionRepairHandoffSchemaPaths.CLASSPATH_RESOURCE
+        },
+        AcceptanceCriterionRepairHandoffSchemaPaths.EXPECTED_SCHEMA_ID,
+        if (payload[Keys.CONTRACT_VERSION] == ACCEPTANCE_CRITERION_REPAIR_HANDOFF_PREVIOUS_CONTRACT_VERSION) {
+          ACCEPTANCE_CRITERION_REPAIR_HANDOFF_PREVIOUS_CONTRACT_VERSION
+        } else {
+          ACCEPTANCE_CRITERION_REPAIR_HANDOFF_CONTRACT_VERSION
+        },
+        FeatureTaskRuntimeHandoffProjectionBudget.PHASE_RECEIPT.maxUtf8Bytes,
+        ::invalidAcceptanceCriterionRepairHandoffSchema,
+        ::repairHandoffCoherenceViolation,
+      ),
+    )
+  }
 
   fun validateRepairAdoption(
     payload: Map<String, Any?>,
@@ -598,5 +614,3 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
         "${error.instanceLocation?.toString()?.ifBlank { "<root>" } ?: "<root>"}: ${error.message.orEmpty()}"
       } + if (errors.size > MAX_REPORTED_VIOLATIONS) " (+${errors.size - MAX_REPORTED_VIOLATIONS} more)" else ""
 }
-
-internal const val ACCEPTANCE_CRITERION_REPAIR_HANDOFF_PREVIOUS_CONTRACT_VERSION = "0.1"

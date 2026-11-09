@@ -5,16 +5,16 @@ import skillbill.workflow.taskruntime.artifact.AcceptanceCriterionEvidenceWire
 import skillbill.workflow.taskruntime.artifact.accounting.evidenceRows
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionCompletedMutation
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionEstablishedObligation
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionHistoricalCheck
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionMutationDisposition
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
-import skillbill.workflow.taskruntime.model.audit.history.AcceptanceCriterionHistoricalCheck
 import skillbill.workflow.taskruntime.model.audit.validateHistoricalContext
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionProgressPayloadKeys as Keys
 
 internal object AcceptanceCriterionHistoricalEvidenceWire {
   fun mutations(payload: FeatureTaskRuntimeWorkflowArtifactMap): List<AcceptanceCriterionCompletedMutation> =
-    payload.evidenceRows(Keys.COMPLETED_MUTATIONS).map(::mutation)
+    payload.evidenceRows(Keys.COMPLETED_MUTATIONS).map(::mutation).distinct()
 
   fun checks(payload: FeatureTaskRuntimeWorkflowArtifactMap): List<AcceptanceCriterionHistoricalCheck> =
     payload.evidenceRows(Keys.INDEPENDENT_CHECKS).map { row ->
@@ -35,7 +35,7 @@ internal object AcceptanceCriterionHistoricalEvidenceWire {
       mutation.validateContext(context)
       comparison.validateHistoricalContext(context)
       AcceptanceCriterionHistoricalCheck(mutation, comparison, context)
-    }
+    }.distinct()
 
   fun validate(
     mutations: List<AcceptanceCriterionCompletedMutation>,
