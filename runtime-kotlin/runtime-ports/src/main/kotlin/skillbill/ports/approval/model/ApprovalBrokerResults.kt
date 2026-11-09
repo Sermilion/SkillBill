@@ -3,6 +3,7 @@ package skillbill.ports.approval.model
 import skillbill.approval.model.ApprovalActionClass
 import skillbill.approval.model.ApprovalExecutionMode
 import skillbill.approval.model.ApprovalGrantRefusal
+import skillbill.approval.model.ApprovalMatchFacts
 import skillbill.approval.model.ApprovalProviderDisposition
 import skillbill.contracts.approval.ApprovalRequestRecord
 import java.time.Instant
@@ -14,6 +15,7 @@ data class ApprovalRegistrationCommand(
   val writeCapable: Boolean,
   val providerDisposition: ApprovalProviderDisposition,
   val enclosingDeadline: Instant?,
+  val matchFacts: ApprovalMatchFacts? = null,
 )
 
 data class ApprovalOwnerRegistration(

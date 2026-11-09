@@ -120,6 +120,11 @@ internal fun addOperatorApprovalOwnerLeaseExpiry(connection: Connection) {
   }
 }
 
+internal fun addApprovalRulePatterns(connection: Connection) {
+  DatabaseColumnMigrations.ensureColumn(connection, "approval_rules", "pattern", "TEXT")
+  DatabaseColumnMigrations.ensureColumn(connection, "approval_requests", "match_facts_json", "TEXT")
+}
+
 internal fun addApprovalNotRequiredDelivery(connection: Connection) {
   connection.createStatement().use { statement ->
     statement.execute(

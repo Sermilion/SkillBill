@@ -139,6 +139,7 @@ data class ApprovalRuleRecord(
   val actionFingerprint: String,
   val createdAt: String,
   val revokedAt: String? = null,
+  val pattern: String? = null,
 )
 
 enum class ApprovalState(val wireValue: String) {
