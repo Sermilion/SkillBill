@@ -209,6 +209,32 @@ class CursorAcpSessionTest {
   }
 
   @Test
+  fun `a CLI model slug selects the advertised variant of its base model before prompting`() {
+    val harness = Harness(model = "composer-2.5")
+    harness.session.start()
+    harness.respond("""{"protocolVersion":1,"agentCapabilities":{},"authMethods":[{"id":"cursor_login"}]}""")
+    harness.respond("{}")
+    harness.respond(
+      """{"sessionId":"s","configOptions":[{"id":"model","category":"model",""" +
+        """"currentValue":"gpt-5.4-nano[reasoning=medium]","options":[""" +
+        """{"value":"gpt-5.4-nano[reasoning=medium]"},{"value":"composer-2.5[fast=true]"}]}],""" +
+        """"modes":{"availableModes":[{"id":"agent"}]}}""",
+    )
+
+    val selection = harness.frames.last()
+    assertEquals(JsonPrimitive("session/set_config_option"), selection[CursorAcpKeys.METHOD])
+    assertContains(selection.toString(), "\"value\":\"composer-2.5[fast=true]\"")
+    harness.respond(
+      """{"configOptions":[{"id":"model","category":"model","currentValue":"composer-2.5[fast=true]"}]}""",
+    )
+    harness.respond("{}")
+    assertEquals(JsonPrimitive("session/prompt"), harness.frames.last()[CursorAcpKeys.METHOD])
+    harness.respond("""{"stopReason":"end_turn"}""")
+    assertEquals("composer-2.5[fast=true]", harness.session.outcome()?.model)
+    harness.session.close()
+  }
+
+  @Test
   fun `incompatible ACP version stops before authentication or session creation`() {
     val harness = Harness()
     harness.session.start()

@@ -83,6 +83,7 @@ class CursorAcpSession(
   private var sessionId: String? = launch.savedSession
   private var capabilities = JsonObject(emptyMap())
   private var model: String? = null
+  private var selectedModel: String? = null
   private var pendingConfigId: String? = null
   private var pendingConfigValue: String? = null
   private var pendingConfigIsMode = false
@@ -162,7 +163,7 @@ class CursorAcpSession(
       K.SESSION_NEW, K.SESSION_LOAD -> acquired(body)
       K.SESSION_SET_CONFIG -> acceptConfiguration(body)
       K.SESSION_SET_MODEL -> {
-        model = launch.model
+        model = selectedModel
         selectMode()
       }
       K.SESSION_SET_MODE -> prompt()
@@ -185,7 +186,7 @@ class CursorAcpSession(
     } else if (pendingConfigIsMode) {
       prompt()
     } else {
-      model = launch.model
+      model = selectedModel
       selectMode()
     }
   }
@@ -262,49 +263,62 @@ class CursorAcpSession(
     config: JsonObject,
     requested: String,
   ) {
-    if (!configValues(config[K.OPTIONS]).contains(requested)) {
-      return stop(
-        "$providerName does not advertise the selected model/effort '$requested'; no " +
-          "prompt was sent.",
-      )
-    }
-    if (config.text(K.CURRENT_VALUE) == requested) {
-      model = requested
+    val selected =
+      resolveModel(requested, configValues(config[K.OPTIONS]).toList())
+        ?: return stop(
+          "$providerName does not advertise the selected model/effort '$requested'; no " +
+            "prompt was sent.",
+        )
+    if (config.text(K.CURRENT_VALUE) == selected) {
+      model = selected
       return selectMode()
     }
     pendingConfigId = config.text(K.ID)
-    pendingConfigValue = requested
+    pendingConfigValue = selected
     pendingConfigIsMode = false
     send(
       K.SESSION_SET_CONFIG,
       buildJsonObject {
         put(K.SESSION_ID, sessionId)
         put(K.CONFIG_ID, config.text(K.ID))
-        put(K.VALUE, requested)
+        put(K.VALUE, selected)
       },
     )
   }
 
   private fun selectLegacyModel(requested: String) {
     val models = setup.obj(K.MODELS)
-    val offered = (models?.get(K.AVAILABLE_MODELS) as? JsonArray).orEmpty()
-    if (offered.none { (it as? JsonObject)?.text(K.MODEL_ID) == requested }) {
-      return stop(
-        "$providerName does not advertise the selected model/effort '$requested'; no " +
-          "prompt was sent.",
-      )
-    }
-    if (models?.text(K.CURRENT_MODEL_ID) == requested) {
-      model = requested
+    val offered =
+      (models?.get(K.AVAILABLE_MODELS) as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.text(K.MODEL_ID) }
+    val selected =
+      resolveModel(requested, offered)
+        ?: return stop(
+          "$providerName does not advertise the selected model/effort '$requested'; no " +
+            "prompt was sent.",
+        )
+    if (models?.text(K.CURRENT_MODEL_ID) == selected) {
+      model = selected
       return selectMode()
     }
     send(
       K.SESSION_SET_MODEL,
       buildJsonObject {
         put(K.SESSION_ID, sessionId)
-        put(K.MODEL_ID, requested)
+        put(K.MODEL_ID, selected)
       },
     )
+  }
+
+  private fun resolveModel(
+    requested: String,
+    advertised: List<String>,
+  ): String? {
+    val selected = resolveAcpModel(requested, advertised) ?: return null
+    if (selected != requested) {
+      record("seam=$seam outcome=model_variant_resolved requested=$requested selected=$selected")
+    }
+    selectedModel = selected
+    return selected
   }
 
   private fun selectMode() {

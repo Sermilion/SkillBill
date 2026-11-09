@@ -29,7 +29,7 @@ class CursorChatTransport(
   private val host: HostEnvironment,
   private val store: ChatStore,
   private val diagnostics: Diagnostics,
-  private val liveLauncher: LiveChatProcessLauncher? = null,
+  private val liveLauncher: LiveChatProcessLauncher,
   private val approvalAuthority: ChatApprovalAuthority? = null,
 ) : ChatTransport {
   override val agentId = "cursor"
@@ -48,9 +48,9 @@ class CursorChatTransport(
     }
     val live = liveLauncher
     val authority = approvalAuthority
-    if (live == null || authority == null) {
+    if (authority == null) {
       emit(ChatEvent.Failed(ChatFailure.ApprovalUnsupported,
-        "Cursor ACP requires a live process and operator approval channel; the chat was not started."))
+        "Cursor ACP requires an operator approval channel; the chat was not started."))
       return@flow
     }
     val saved = store.agentSession(request.sessionId)
