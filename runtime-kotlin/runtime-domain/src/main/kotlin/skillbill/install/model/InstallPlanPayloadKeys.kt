@@ -8,6 +8,7 @@ object InstallPlanPayloadKeys {
   const val STAGING_ROOT: String = "staging_root"
   const val STAGING: String = "staging"
   const val TELEMETRY_LEVEL: String = "telemetry_level"
+  const val INSTALLATION_PROFILE: String = "installation_profile"
   const val MCP_REGISTRATION: String = "mcp_registration"
   const val RUNTIME_DISTRIBUTION: String = "runtime_distribution"
   const val WINDOWS_SYMLINK_PREFLIGHT: String = "windows_symlink_preflight"

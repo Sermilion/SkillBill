@@ -61,6 +61,11 @@ governedResources {
     "SKILL-52: canonical install-plan schema",
   )
   copy(
+    "copyPreviousInstallPlanSchema",
+    "install-plan-v0.3-schema.yaml",
+    "SKILL-532: retained install-plan 0.3 compatibility schema",
+  )
+  copy(
     "copyDecompositionManifestSchema",
     "decomposition-manifest-schema.yaml",
     "SKILL-52: canonical decomposition manifest schema",

@@ -4,6 +4,8 @@ import skillbill.contracts.install.INSTALL_PLAN_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.contracts.install.InstallPlanSchemaValidator
+import skillbill.install.model.InstallPlanPayloadKeys
+import skillbill.install.model.InstallationProfile
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -54,6 +56,7 @@ class InstallPlanSchemaViolationsTest {
         "staging_root" to "/home/user/.skill-bill/installed-skills",
         "staging" to staging,
         "telemetry_level" to "anonymous",
+        InstallPlanPayloadKeys.INSTALLATION_PROFILE to InstallationProfile.ORDINARY.wireValue,
         "mcp_registration" to
           linkedMapOf(
             "register" to true,

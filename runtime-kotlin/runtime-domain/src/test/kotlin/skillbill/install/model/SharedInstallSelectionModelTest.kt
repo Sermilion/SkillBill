@@ -8,7 +8,13 @@ class SharedInstallSelectionModelTest {
   @Test
   fun `shared install selection contains only runtime install choices`() {
     assertEquals(
-      setOf("selectedAgents", "platformPackSelection", "telemetryLevel", "mcpRegistrationChoice"),
+      setOf(
+        "installationProfile",
+        "selectedAgents",
+        "platformPackSelection",
+        "telemetryLevel",
+        "mcpRegistrationChoice",
+      ),
       SharedInstallSelection::class.java.declaredFields
         .filterNot { field -> field.isSynthetic }
         .mapTo(mutableSetOf()) { field -> field.name },

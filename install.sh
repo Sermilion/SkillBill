@@ -27,6 +27,12 @@ RUNTIME_LAUNCHER_BIN_DIR="${SKILL_BILL_BIN_DIR:-$HOME/.local/bin}"
 INSTALL_SOURCE="auto"
 RELEASE_TAG="${SKILL_BILL_RELEASE_TAG:-}"
 REUSE_LAST_SELECTION=0
+GITHUB_REQUESTED=0
+INSTALL_DESKTOP_REQUESTED=0
+PLATFORM_INPUT_SET=0
+TELEMETRY_INPUT_SET=0
+EXPLICIT_PLATFORM_INPUT=""
+EXPLICIT_TELEMETRY_INPUT=""
 CLEAN_INSTALL=0
 DESKTOP_APP_INSTALL_RESULT="not installed"
 RELEASE_REPO="${SKILL_BILL_RELEASE_REPO:-Sermilion/skill-bill}"
@@ -80,15 +86,18 @@ fi
 declare -a SUPPORTED_AGENTS=(claude codex junie cursor)
 declare -a AGENT_NAMES=()
 declare -a AGENT_PATHS=()
+declare -a PLATFORM_SLUGS=()
 declare -a RUNTIME_INSTALL_ARGS=()
 
 AGENT_SELECTION_MODE="manual"
 TELEMETRY_LEVEL="anonymous"
 MCP_REGISTRATION="register"
+PLATFORM_MODE="all"
+INSTALLATION_PROFILE="ordinary"
 
 usage() {
   cat <<USAGE
-Usage: ./install.sh [--from-source] [--release TAG] [--reuse-last-selection]
+Usage: ./install.sh [--from-source] [--release TAG] [--reuse-last-selection] [--github] [--platform-packs SLUGS] [--telemetry LEVEL]
 
 By default a local checkout builds and installs from source. A standalone
 downloaded installer uses checksum-verified prebuilt release images.
@@ -103,9 +112,11 @@ Options:
                            Ignores --release. Requires a JDK.
   --release TAG            Install a specific release tag instead of the latest
                            published runtime release. Ignored with --from-source.
-  --reuse-last-selection   Reuse the latest successful agent, telemetry,
-                           and MCP choices from ~/.skill-bill. All platform
-                           packs are installed on every run.
+  --github                 Install without desktop interaction or desktop setup.
+  --platform-packs SLUGS   Select comma-separated platform pack slugs.
+  --telemetry LEVEL        Set telemetry to off, anonymous, or full.
+  --reuse-last-selection   Reuse the latest successful agent, platform,
+                           telemetry and MCP choices from ~/.skill-bill.
   --clean                  Wipe ~/.skill-bill/skills/, ~/.skill-bill/platform-packs/,
                            and ~/.skill-bill/orchestration/ before staging the
                            candidate tree. Useful for a clean-slate install.
@@ -128,6 +139,7 @@ parse_args() {
         shift
         ;;
       --install-desktop-app)
+        INSTALL_DESKTOP_REQUESTED=1
         shift
         ;;
       --no-desktop-app)
@@ -137,6 +149,40 @@ parse_args() {
       --clean)
         CLEAN_INSTALL=1
         shift
+        ;;
+      --github)
+        GITHUB_REQUESTED=1
+        shift
+        ;;
+      --platform-packs)
+        if [[ $# -lt 2 || "$2" == -* ]]; then err "--platform-packs requires comma-separated slugs."; exit 1; fi
+        local value="$2"
+        [[ -n "$(trim_string "$value")" ]] || { err "--platform-packs cannot be empty."; exit 1; }
+        local -a segments=()
+        if [[ "$value" == ,* || "$value" == *, || "$value" == *,,* ]]; then
+          err "--platform-packs cannot contain empty segments."
+          exit 1
+        fi
+        IFS=, read -r -a segments <<< "$value"
+        local segment
+        local joined=""
+        for segment in "${segments[@]}"; do
+          segment="$(trim_string "$segment")"
+          [[ -n "$segment" ]] || { err "--platform-packs cannot contain empty segments."; exit 1; }
+          joined="${joined:+$joined,}$segment"
+        done
+        if [[ "$PLATFORM_INPUT_SET" -eq 1 && "$EXPLICIT_PLATFORM_INPUT" != "$joined" ]]; then err "Conflicting --platform-packs values."; exit 1; fi
+        PLATFORM_INPUT_SET=1
+        EXPLICIT_PLATFORM_INPUT="$joined"
+        shift 2
+        ;;
+      --telemetry)
+        if [[ $# -lt 2 || "$2" == -* ]]; then err "--telemetry requires off, anonymous, or full."; exit 1; fi
+        local telemetry_value="$(trim_string "$2")"
+        case "$telemetry_value" in off|anonymous|full) ;; *) err "Invalid telemetry level '$2'."; exit 1 ;; esac
+        if [[ "$TELEMETRY_INPUT_SET" -eq 1 && "$EXPLICIT_TELEMETRY_INPUT" != "$telemetry_value" ]]; then err "Conflicting --telemetry values."; exit 1; fi
+        TELEMETRY_INPUT_SET=1; EXPLICIT_TELEMETRY_INPUT="$telemetry_value"
+        shift 2
         ;;
       --release)
         if [[ $# -lt 2 || -z "$(trim_string "$2")" ]]; then
@@ -167,6 +213,10 @@ parse_args() {
         ;;
     esac
   done
+  if [[ "$GITHUB_REQUESTED" -eq 1 && "$INSTALL_DESKTOP_REQUESTED" -eq 1 ]]; then
+    err "--github cannot be combined with --install-desktop-app."
+    exit 1
+  fi
 }
 
 local_source_checkout_available() {
@@ -1539,15 +1589,16 @@ run_runtime_cli() {
   SKILL_BILL_RUNTIME_EXECUTABLE="$RUNTIME_CLI_BIN" "$RUNTIME_CLI_BIN" --home "$HOME" "$@"
 }
 
-runtime_cli_supports_selection_replay() {
+runtime_cli_supports_install_selection() {
   local runtime_bin="$1"
   [[ -x "$runtime_bin" ]] || return 1
-  "$runtime_bin" install --help 2>/dev/null | grep "replay-last-selection" >/dev/null
+  "$runtime_bin" install --help 2>/dev/null | grep "resolve-install-selection" >/dev/null
 }
 
 build_selection_replay_runtime_cli() {
   if [[ "${SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD:-}" == "1" ]]; then
-    return 1
+    [[ -x "$RUNTIME_CLI_BUILD_BIN" ]] || return 1
+    return 0
   fi
 
   local gradlew="$RUNTIME_KOTLIN_DIR/gradlew"
@@ -1557,21 +1608,21 @@ build_selection_replay_runtime_cli() {
 
   ensure_build_jvm || return 1
 
-  info "Preparing source runtime CLI for saved selection replay..."
+  info "Preparing source runtime CLI for install selection resolution..."
+  rm -rf "$RUNTIME_KOTLIN_DIR/runtime-cli/build/install/runtime-cli" || return 1
   (
     cd "$RUNTIME_KOTLIN_DIR"
     ./gradlew -q :runtime-cli:installDist
-  )
+  ) || return 1
+  locate_packaged_runtime_bin "$RUNTIME_CLI_BUILD_BIN" "CLI" || return 1
 }
 
-# The already-installed runtime CLI (RUNTIME_CLI_BIN) is a leftover from whatever
-# release is currently on disk, but replay validates the platform-pack manifests
-# from the release being installed NOW ($PLATFORM_PACKS_DIR, already bootstrapped
-# to the new bundle by this point). When a release bumps the platform-pack shell
-# contract version, the old installed CLI rejects the new manifests before it ever
-# gets replaced. Fetch the matching prebuilt CLI for THIS release into the scratch
-# work dir (never the durable install dir, so a failed/offline fetch never disturbs
-# the existing install) and prefer it over the stale installed binary.
+# Selection resolution must run on the matching candidate CLI for this install
+# attempt against the current $PLATFORM_PACKS_DIR manifests. On source installs,
+# that is a scratch installDist build from this checkout. On prebuilt installs,
+# it is the checksum-verified release CLI unpacked into scratch. The durable
+# installed CLI (RUNTIME_CLI_BIN) is never used. SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD
+# reuses a seeded RUNTIME_CLI_BUILD_BIN the same way the packaged runtime copy path does.
 REPLAY_RUNTIME_CLI_BIN=""
 REPLAY_RUNTIME_CLI_FETCH_ATTEMPTED=0
 fetch_prebuilt_runtime_cli_for_replay() {
@@ -1596,18 +1647,28 @@ fetch_prebuilt_runtime_cli_for_replay() {
 
 run_selection_runtime_cli() {
   local runtime_bin=""
-  if runtime_cli_supports_selection_replay "$RUNTIME_CLI_BUILD_BIN"; then
-    runtime_bin="$RUNTIME_CLI_BUILD_BIN"
-  elif fetch_prebuilt_runtime_cli_for_replay 1>&2 && runtime_cli_supports_selection_replay "$REPLAY_RUNTIME_CLI_BIN"; then
+  if [[ "${SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD:-}" == "1" ]]; then
+    if [[ -x "$RUNTIME_CLI_BUILD_BIN" ]] && runtime_cli_supports_install_selection "$RUNTIME_CLI_BUILD_BIN"; then
+      runtime_bin="$RUNTIME_CLI_BUILD_BIN"
+    else
+      err "Cannot resolve install selections before promotion: SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD=1 requires an executable candidate runtime CLI at $RUNTIME_CLI_BUILD_BIN that supports 'install resolve-install-selection'."
+      exit 1
+    fi
+  elif [[ "$INSTALL_SOURCE" == "source" ]]; then
+    if build_selection_replay_runtime_cli 1>&2 && runtime_cli_supports_install_selection "$RUNTIME_CLI_BUILD_BIN"; then
+      runtime_bin="$RUNTIME_CLI_BUILD_BIN"
+    else
+      err "Cannot resolve install selections before promotion: failed to build a source runtime CLI from this checkout."
+      err "Building requires Java 21+, the Gradle wrapper, and a runtime-cli that supports 'install resolve-install-selection'."
+      exit 1
+    fi
+  elif fetch_prebuilt_runtime_cli_for_replay 1>&2 && runtime_cli_supports_install_selection "$REPLAY_RUNTIME_CLI_BIN"; then
     runtime_bin="$REPLAY_RUNTIME_CLI_BIN"
-  elif runtime_cli_supports_selection_replay "$RUNTIME_CLI_BIN"; then
-    runtime_bin="$RUNTIME_CLI_BIN"
-  elif build_selection_replay_runtime_cli 1>&2 && runtime_cli_supports_selection_replay "$RUNTIME_CLI_BUILD_BIN"; then
+  elif build_selection_replay_runtime_cli 1>&2 && runtime_cli_supports_install_selection "$RUNTIME_CLI_BUILD_BIN"; then
     runtime_bin="$RUNTIME_CLI_BUILD_BIN"
   else
-    err "Cannot reuse saved install selections: no Skill Bill runtime CLI is available before cleanup."
-    err "The runtime CLI must support 'install replay-last-selection'."
-    err "Run ./install.sh without --reuse-last-selection to choose install options again."
+    err "Cannot resolve install selections before promotion: no checksum-verified release runtime CLI is available, and a source runtime CLI could not be built from this checkout."
+    err "The runtime CLI must support 'install resolve-install-selection'."
     exit 1
   fi
   SKILL_BILL_RUNTIME_EXECUTABLE="$runtime_bin" "$runtime_bin" --home "$HOME" "$@"
@@ -2492,17 +2553,35 @@ prompt_for_agent_selection() {
   fi
 }
 
+telemetry_prompt_default_label() {
+  case "$TELEMETRY_LEVEL" in
+    anonymous) printf 'anonymous' ;;
+    full) printf 'full' ;;
+    off) printf 'off' ;;
+    *) printf 'anonymous' ;;
+  esac
+}
+
+should_prompt_for_telemetry_preference() {
+  [[ "$INSTALLATION_PROFILE" == "github" ]] && return 1
+  [[ "$TELEMETRY_INPUT_SET" -eq 1 ]] && return 1
+  current_telemetry_level_from_config >/dev/null 2>&1 && return 1
+  return 0
+}
+
 prompt_for_telemetry_preference() {
   local input
   local normalized
+  local default_label
+  default_label="$(telemetry_prompt_default_label)"
 
   while true; do
     echo ""
     info "Choose a telemetry level. You can change it later with the Skill Bill telemetry command."
-    printf "  1. anonymous (default) - aggregate counts, no content\n"
+    printf "  1. anonymous - aggregate counts, no content\n"
     printf "  2. full - includes finding details, learnings, rejection notes\n"
     printf "  3. off - no telemetry\n"
-    printf "${CYAN}▸${NC} Enter telemetry level [1]: "
+    printf "${CYAN}▸${NC} Enter telemetry level [$default_label]: "
     if ! read_prompt_input input; then
       input=""
     fi
@@ -2510,7 +2589,11 @@ prompt_for_telemetry_preference() {
     normalized="$(printf '%s' "$(trim_string "$input")" | tr '[:upper:]' '[:lower:]')"
     case "$normalized" in
       ""|1|anonymous)
-        TELEMETRY_LEVEL="anonymous"
+        if [[ -z "$(trim_string "$input")" ]]; then
+          TELEMETRY_LEVEL="$default_label"
+        else
+          TELEMETRY_LEVEL="anonymous"
+        fi
         return 0
         ;;
       2|full)
@@ -2528,46 +2611,27 @@ prompt_for_telemetry_preference() {
   done
 }
 
-replay_last_install_selection() {
-  local output
-  local error_output
-  local stderr_file
+apply_install_selection_replay_output() {
+  local output="$1"
   local kind
   local value
   local extra
 
-  stderr_file="$(mktemp)"
-  if ! output="$(
-    run_selection_runtime_cli install replay-last-selection \
-      --skills "$SKILLS_DIR" \
-      --platform-packs "$PLATFORM_PACKS_DIR" 2>"$stderr_file"
-  )"; then
-    err "Cannot reuse saved install selections."
-    if [[ -n "$(trim_string "$output")" ]]; then
-      err "$(trim_string "$output")"
-    fi
-    error_output="$(trim_string "$(cat "$stderr_file")")"
-    rm -f "$stderr_file"
-    if [[ -n "$error_output" ]]; then
-      err "$error_output"
-    fi
-    err "Run ./install.sh without --reuse-last-selection to choose install options again."
-    exit 1
-  fi
-  rm -f "$stderr_file"
-
   AGENT_SELECTION_MODE="manual"
   AGENT_NAMES=()
   AGENT_PATHS=()
+  PLATFORM_MODE="all"
+  PLATFORM_SLUGS=()
   TELEMETRY_LEVEL="anonymous"
   MCP_REGISTRATION="register"
+  INSTALLATION_PROFILE="ordinary"
 
   while IFS=$'\t' read -r kind value extra; do
     [[ -z "${kind:-}" ]] && continue
     case "$kind" in
       agent)
         if [[ -z "${value:-}" || -z "${extra:-}" ]]; then
-          err "Cannot reuse saved install selections: malformed replay agent entry."
+          err "Cannot resolve install selections: malformed replay agent entry."
           exit 1
         fi
         AGENT_NAMES+=("$value")
@@ -2576,19 +2640,26 @@ replay_last_install_selection() {
       platform-mode)
         case "$value" in
           none|selected|all)
-            :
+            PLATFORM_MODE="$value"
             ;;
           *)
-            err "Cannot reuse saved install selections: unknown platform mode '$value'."
+            err "Cannot resolve install selections: unknown platform mode '$value'."
             exit 1
             ;;
         esac
         ;;
+      installation-profile)
+        case "$value" in
+          ordinary|github) INSTALLATION_PROFILE="$value" ;;
+          *) err "Cannot resolve install selections: unknown installation profile '$value'."; exit 1 ;;
+        esac
+        ;;
       platform)
         if [[ -z "${value:-}" ]]; then
-          err "Cannot reuse saved install selections: malformed replay platform entry."
+          err "Cannot resolve install selections: malformed replay platform entry."
           exit 1
         fi
+        PLATFORM_SLUGS+=("$value")
         ;;
       telemetry)
         case "$value" in
@@ -2596,7 +2667,7 @@ replay_last_install_selection() {
             TELEMETRY_LEVEL="$value"
             ;;
           *)
-            err "Cannot reuse saved install selections: unknown telemetry level '$value'."
+            err "Cannot resolve install selections: unknown telemetry level '$value'."
             exit 1
             ;;
         esac
@@ -2607,38 +2678,82 @@ replay_last_install_selection() {
             MCP_REGISTRATION="$value"
             ;;
           *)
-            err "Cannot reuse saved install selections: unknown MCP registration choice '$value'."
+            err "Cannot resolve install selections: unknown MCP registration choice '$value'."
             exit 1
             ;;
         esac
         ;;
       *)
-        err "Cannot reuse saved install selections: unknown replay field '$kind'."
+        err "Cannot resolve install selections: unknown replay field '$kind'."
         exit 1
         ;;
     esac
   done <<< "$output"
 
-  if value="$(current_telemetry_level_from_config)"; then
-    if [[ "$value" != "$TELEMETRY_LEVEL" ]]; then
-      info "Preserving current telemetry config level '$value' instead of saved install selection '$TELEMETRY_LEVEL'."
-    fi
-    TELEMETRY_LEVEL="$value"
-  else
-    telemetry_config_status=$?
-    if [[ "$telemetry_config_status" -ne 1 ]]; then
-      err "Cannot reuse saved install selections: current telemetry configuration could not be read or validated."
-      exit 1
-    fi
-  fi
-
-  if [[ ${#AGENT_NAMES[@]} -eq 0 ]]; then
-    err "Cannot reuse saved install selections: saved selection has no agents."
-    err "Run ./install.sh without --reuse-last-selection to choose install options again."
+  if [[ "$PLATFORM_MODE" == "selected" && ${#PLATFORM_SLUGS[@]} -eq 0 ]] ||
+    [[ "$PLATFORM_MODE" != "selected" && ${#PLATFORM_SLUGS[@]} -gt 0 ]]; then
+    err "Cannot resolve install selections: platform mode and saved platforms disagree."
     exit 1
   fi
-  info "Installing all platform packs, regardless of saved platform choices."
-  ok "Reusing latest successful install selections from $SKILL_BILL_STATE_DIR/install-selection.json"
+}
+
+resolve_install_choices() {
+  local output
+  local error_output
+  local stderr_file
+  local -a resolve_args=(
+    install
+    resolve-install-selection
+    --skills "$SKILLS_DIR"
+    --platform-packs "$PLATFORM_PACKS_DIR"
+  )
+  local slug
+
+  [[ "$REUSE_LAST_SELECTION" -eq 1 ]] && resolve_args+=(--reuse-last-selection)
+  [[ "$GITHUB_REQUESTED" -eq 1 ]] && resolve_args+=(--github)
+  if [[ "$TELEMETRY_INPUT_SET" -eq 1 ]]; then
+    resolve_args+=(--telemetry "$EXPLICIT_TELEMETRY_INPUT")
+  fi
+  if [[ "$PLATFORM_INPUT_SET" -eq 1 ]]; then
+    local -a explicit_slugs=()
+    IFS=, read -r -a explicit_slugs <<< "$EXPLICIT_PLATFORM_INPUT"
+    for slug in "${explicit_slugs[@]}"; do
+      slug="$(trim_string "$slug")"
+      [[ -n "$slug" ]] || continue
+      resolve_args+=(--platform "$slug")
+    done
+  fi
+
+  stderr_file="$(mktemp)"
+  if ! output="$(
+    run_selection_runtime_cli "${resolve_args[@]}" 2>"$stderr_file"
+  )"; then
+    err "Cannot resolve install selections before promotion."
+    if [[ -n "$(trim_string "$output")" ]]; then
+      err "$(trim_string "$output")"
+    fi
+    error_output="$(trim_string "$(cat "$stderr_file")")"
+    rm -f "$stderr_file"
+    if [[ -n "$error_output" ]]; then
+      err "$error_output"
+    fi
+    exit 1
+  fi
+  rm -f "$stderr_file"
+
+  apply_install_selection_replay_output "$output"
+
+  if [[ "$INSTALLATION_PROFILE" == "github" && ${#AGENT_NAMES[@]} -eq 0 ]]; then
+    err "Cannot install with GitHub profile: no usable agent was detected."
+    exit 1
+  fi
+
+  if [[ "$REUSE_LAST_SELECTION" -eq 1 ]]; then
+    info "Reusing saved platform mode '$PLATFORM_MODE'$(format_platform_slugs)."
+    ok "Resolved install selections (including saved choices) from $SKILL_BILL_STATE_DIR/install-selection.json"
+  else
+    info "Resolved install platform mode '$PLATFORM_MODE'$(format_platform_slugs) for profile '$INSTALLATION_PROFILE'."
+  fi
 }
 
 build_runtime_install_args() {
@@ -2651,7 +2766,8 @@ build_runtime_install_args() {
     --skills "$SKILL_BILL_STATE_DIR/skills"
     --platform-packs "$SKILL_BILL_STATE_DIR/platform-packs"
     --agent-mode "$AGENT_SELECTION_MODE"
-    --platform-mode all
+    --installation-profile "$INSTALLATION_PROFILE"
+    --platform-mode "$PLATFORM_MODE"
     --telemetry "$TELEMETRY_LEVEL"
     --mcp "$MCP_REGISTRATION"
     --replace-existing-skill-bill-links
@@ -2663,6 +2779,12 @@ build_runtime_install_args() {
     --runtime-launcher-bin-dir "$RUNTIME_LAUNCHER_BIN_DIR"
     --runtime-mcp-bin "$RUNTIME_MCP_BIN"
   )
+
+  if [[ "$PLATFORM_MODE" == "selected" ]]; then
+    for i in "${!PLATFORM_SLUGS[@]}"; do
+      RUNTIME_INSTALL_ARGS+=(--platform "${PLATFORM_SLUGS[$i]}")
+    done
+  fi
 
   if [[ "$AGENT_SELECTION_MODE" == "manual" && ${#AGENT_NAMES[@]} -gt 0 ]]; then
     for i in "${!AGENT_NAMES[@]}"; do
@@ -2766,12 +2888,21 @@ selected_agent_label() {
   format_agent_list "${AGENT_NAMES[@]}"
 }
 
+format_platform_slugs() {
+  local joined=""
+  local slug
+  for slug in "${PLATFORM_SLUGS[@]}"; do
+    joined="${joined:+$joined,}$slug"
+  done
+  if [[ "$PLATFORM_MODE" == "selected" ]]; then
+    printf ' (%s)' "$joined"
+  fi
+}
+
 run_full_install() {
   bundle_bootstrap_if_needed
   print_install_plan
-  if [[ "$REUSE_LAST_SELECTION" -eq 1 ]]; then
-    replay_last_install_selection
-  fi
+  resolve_install_choices
   cleanup_retired_ide_plugins
   # A dirty tree has no exact source identity, so both builds of this run share
   # one run id and only match each other.
@@ -2779,14 +2910,16 @@ run_full_install() {
   DEFER_RUNTIME_ACTIVATION=1
   install_runtime_distributions || return 1
   DEFER_RUNTIME_ACTIVATION=0
-  if ! stage_selected_desktop_app; then
-    report_unstaged_desktop_app
-    discard_staged_runtime
-    return 1
-  fi
-  if ! verify_staged_build_identities; then
-    discard_staged_runtime
-    return 1
+  if [[ "$INSTALLATION_PROFILE" != "github" ]]; then
+    if ! stage_selected_desktop_app; then
+      report_unstaged_desktop_app
+      discard_staged_runtime
+      return 1
+    fi
+    if ! verify_staged_build_identities; then
+      discard_staged_runtime
+      return 1
+    fi
   fi
   migrate_legacy_config_to_durable_path || {
     discard_staged_runtime
@@ -2812,10 +2945,10 @@ run_full_install() {
   info "Supported agents: claude, codex, junie, cursor"
   if [[ "$REUSE_LAST_SELECTION" -eq 1 ]]; then
     info "Install behavior: reuse saved choices, then delegate planning and apply to the Kotlin runtime."
-  else
+  elif [[ "$INSTALLATION_PROFILE" != "github" ]]; then
     info "Install behavior: collect choices, then delegate planning and apply to the Kotlin runtime."
     prompt_for_agent_selection
-    prompt_for_telemetry_preference
+    if should_prompt_for_telemetry_preference; then prompt_for_telemetry_preference; fi
   fi
   install_runtime_launchers
   build_runtime_install_args
@@ -2823,7 +2956,7 @@ run_full_install() {
   echo ""
   info "Plugin:         $PLUGIN_DIR"
   info "Agents:         $(selected_agent_label)"
-  info "Platforms:      all"
+  info "Platforms:      $PLATFORM_MODE$(format_platform_slugs)"
   info "Telemetry:      $TELEMETRY_LEVEL"
   info "MCP:            $MCP_REGISTRATION"
   if [[ "$REUSE_LAST_SELECTION" -eq 1 ]]; then
@@ -2833,7 +2966,7 @@ run_full_install() {
 
   apply_external_addon_overlay
   apply_runtime_install
-  if ! activate_staged_desktop_app; then
+  if [[ "$INSTALLATION_PROFILE" != "github" ]] && ! activate_staged_desktop_app; then
     err "Installation incomplete: the required desktop app step failed. $DESKTOP_APP_INSTALL_RESULT."
     return 1
   fi
@@ -2842,11 +2975,15 @@ run_full_install() {
   echo ""
   info "Source of truth: $PLUGIN_DIR/skills/"
   info "Staging cache:   $SKILL_BILL_STATE_DIR/installed-skills"
-  info "Platforms:       all"
+  info "Platforms:       $PLATFORM_MODE$(format_platform_slugs)"
   info "Launchers:       $RUNTIME_LAUNCHER_BIN_DIR/skill-bill, $RUNTIME_LAUNCHER_BIN_DIR/skill-bill-mcp"
   info "Telemetry:       $TELEMETRY_LEVEL"
   info "MCP:             $MCP_REGISTRATION"
-  info "Desktop app:     $DESKTOP_APP_INSTALL_RESULT"
+  if [[ "$INSTALLATION_PROFILE" == "github" ]]; then
+    info "Desktop app:     skipped for GitHub profile"
+  else
+    info "Desktop app:     $DESKTOP_APP_INSTALL_RESULT"
+  fi
   if [[ "$REUSE_LAST_SELECTION" -eq 1 ]]; then
     info "Selections:      reused latest successful install selection"
   fi

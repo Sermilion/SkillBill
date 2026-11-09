@@ -15,6 +15,7 @@ import skillbill.install.model.InstallAgentTarget
 import skillbill.install.model.InstallAgentTargetSource
 import skillbill.install.model.InstallPlanRequest
 import skillbill.install.model.InstallTelemetryLevel
+import skillbill.install.model.InstallationProfile
 import skillbill.install.model.InstallationTargetPaths
 import skillbill.install.model.McpRegistrationChoice
 import skillbill.install.model.PlatformPackSelection
@@ -62,6 +63,8 @@ abstract class InstallRequestCommand(
   private val telemetry by option("--telemetry", help = "Telemetry level to configure during apply.")
     .choice(InstallTelemetryLevel.entries.associateBy(InstallTelemetryLevel::id))
     .default(InstallTelemetryLevel.ANONYMOUS)
+  private val installationProfile by option("--installation-profile", help = "Installation profile.")
+    .choice(InstallationProfile.entries.associateBy(InstallationProfile::wireValue))
   private val mcp by option("--mcp", help = "Whether apply should register the runtime MCP server.")
     .choice("register" to true, "skip" to false)
     .default(true)
@@ -172,6 +175,7 @@ abstract class InstallRequestCommand(
         ),
       replaceExistingSkillBillLinks = replaceExistingSkillBillLinks,
       environment = inputs.environment,
+      installationProfile = installationProfile,
     )
   }
 

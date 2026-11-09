@@ -40,6 +40,7 @@ class CliInstallReplayLastSelectionRuntimeTest {
     assertContains(result.stdout, "platform-mode\tselected")
     assertContains(result.stdout, "platform\tkotlin")
     assertContains(result.stdout, "telemetry\tfull")
+    assertContains(result.stdout, "installation-profile\tordinary")
     assertContains(result.stdout, "mcp\tregister")
     assertFalse(result.stdout.contains(staleMcpBin.toString()))
   }
@@ -86,7 +87,7 @@ class CliInstallReplayLastSelectionRuntimeTest {
       )
 
     assertEquals(1, result.exitCode, result.stdout)
-    assertContains(result.stdout, "Install selection record is missing")
+    assertContains(result.stdout, "No successful install selection is saved.")
   }
 
   @Test

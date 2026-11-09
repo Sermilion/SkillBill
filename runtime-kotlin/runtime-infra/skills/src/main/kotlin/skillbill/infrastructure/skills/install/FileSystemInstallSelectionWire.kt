@@ -12,6 +12,7 @@ internal fun SharedInstallSelection.toInstallSelectionJson(): String = JsonCodec
 private fun SharedInstallSelection.toWireMap(): Map<String, Any?> =
   linkedMapOf(
     SharedPayloadKeys.CONTRACT_VERSION to INSTALL_SELECTION_CONTRACT_VERSION,
+    INSTALL_SELECTION_PROFILE_KEY to installationProfile.wireValue,
     "selected_agents" to selectedAgents.map(SupportedAgent::id).sorted(),
     "platform_pack_selection" to platformPackSelection.toWireMap(),
     "telemetry_level" to telemetryLevel.id,
@@ -30,9 +31,19 @@ private fun McpRegistrationChoice.toWireMap(): Map<String, Any?> =
     "runtime_mcp_bin" to runtimeMcpBin?.toString(),
   )
 
-internal const val INSTALL_SELECTION_CONTRACT_VERSION = "1.0"
+internal const val INSTALL_SELECTION_CONTRACT_VERSION = "1.1"
+internal const val INSTALL_SELECTION_PREVIOUS_CONTRACT_VERSION = "1.0"
+internal const val INSTALL_SELECTION_PROFILE_KEY = "installation_profile"
 
 internal val INSTALL_SELECTION_KEYS =
-  setOf("contract_version", "selected_agents", "platform_pack_selection", "telemetry_level", "mcp_registration")
+  setOf(
+    SharedPayloadKeys.CONTRACT_VERSION,
+    INSTALL_SELECTION_PROFILE_KEY,
+    "selected_agents",
+    "platform_pack_selection",
+    "telemetry_level",
+    "mcp_registration",
+  )
+internal val INSTALL_SELECTION_LEGACY_KEYS = INSTALL_SELECTION_KEYS - INSTALL_SELECTION_PROFILE_KEY
 internal val PLATFORM_PACK_SELECTION_KEYS = setOf("mode", "selected_slugs")
 internal val MCP_REGISTRATION_KEYS = setOf("register", "runtime_mcp_bin")

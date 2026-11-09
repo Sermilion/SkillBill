@@ -132,6 +132,7 @@ case "$cmd" in
 
   "install"|"install --help")
     if has_flag "--help" "${cmd_parts[@]}"; then
+      echo "  resolve-install-selection   resolve install choices before promotion"
       echo "  replay-last-selection   replay the last successful install selection"
       echo "  reconcile               reconcile authored source"
       echo "  apply                   apply install"
@@ -139,6 +140,82 @@ case "$cmd" in
       echo "  codex-roots             list codex config roots"
       echo "  detect-agents           detect configured agents"
     fi
+    ;;
+
+  "install resolve-install-selection")
+    reuse=0
+    github=0
+    explicit_telemetry=""
+    platforms=()
+    idx=2
+    while [[ $idx -lt ${#cmd_parts[@]} ]]; do
+      case "${cmd_parts[$idx]}" in
+        --reuse-last-selection) reuse=1; idx=$((idx + 1)) ;;
+        --github) github=1; idx=$((idx + 1)) ;;
+        --telemetry)
+          idx=$((idx + 1))
+          explicit_telemetry="${cmd_parts[$idx]:-}"
+          idx=$((idx + 1))
+          ;;
+        --platform)
+          idx=$((idx + 1))
+          platforms+=("${cmd_parts[$idx]:-}")
+          idx=$((idx + 1))
+          ;;
+        --skills|--platform-packs)
+          idx=$((idx + 2))
+          ;;
+        *) idx=$((idx + 1)) ;;
+      esac
+    done
+    python3 - "${home_dir:-$HOME}" "$reuse" "$github" "$explicit_telemetry" "${platforms[@]+"${platforms[@]}"}" <<'PY'
+import json
+import os
+from pathlib import Path
+import sys
+
+home = Path(sys.argv[1])
+reuse = sys.argv[2] == "1"
+github = sys.argv[3] == "1"
+explicit_telemetry = sys.argv[4]
+explicit_platforms = [slug for slug in sys.argv[5:] if slug]
+selection_path = home / ".skill-bill/install-selection.json"
+saved = json.loads(selection_path.read_text()) if selection_path.is_file() else None
+if reuse and saved is None:
+    print("Cannot reuse saved install selections.")
+    print("Run ./install.sh without --reuse-last-selection.")
+    raise SystemExit(1)
+profile = "github" if github else ((saved or {}).get("installation_profile") or "ordinary")
+if explicit_platforms:
+    print("platform-mode\tselected")
+    for slug in explicit_platforms:
+        print(f"platform\t{slug}")
+elif reuse and saved is not None:
+    platforms = saved["platform_pack_selection"]
+    print(f"platform-mode\t{platforms['mode']}")
+    for slug in platforms["selected_slugs"]:
+        print(f"platform\t{slug}")
+    for agent in saved["selected_agents"]:
+        print(f"agent\t{agent}\t{home / ('.' + agent)}")
+else:
+    print("platform-mode\tall")
+if github and not reuse:
+    print(f"agent\tclaude\t{home / '.claude'}")
+telemetry = explicit_telemetry or os.environ.get("SKILL_BILL_TEST_CURRENT_TELEMETRY")
+if not telemetry:
+    if reuse and saved is not None:
+        telemetry = saved["telemetry_level"]
+    else:
+        telemetry = "anonymous"
+print(f"telemetry\t{telemetry}")
+print(f"installation-profile\t{profile}")
+mcp = "skip"
+if reuse and saved is not None:
+    mcp = "register" if saved["mcp_registration"]["register"] else "skip"
+else:
+    mcp = "register"
+print(f"mcp\t{mcp}")
+PY
     ;;
 
   "install replay-last-selection")
@@ -156,6 +233,7 @@ print(f"platform-mode\t{platforms['mode']}")
 for slug in platforms["selected_slugs"]:
     print(f"platform\t{slug}")
 print(f"telemetry\t{selection['telemetry_level']}")
+print(f"installation-profile\t{selection.get('installation_profile', 'ordinary')}")
 print("mcp\t" + ("register" if selection["mcp_registration"]["register"] else "skip"))
 PY
     ;;
@@ -181,11 +259,6 @@ PY
     ;;
 
   "install apply")
-    if [[ "$(flag_value --platform-mode "${cmd_parts[@]}")" != "all" ]] ||
-      has_flag "--platform" "${cmd_parts[@]}"; then
-      echo "installer must request every platform pack without a slug filter" >&2
-      exit 1
-    fi
     skills_src="$(flag_value --skills "${cmd_parts[@]}")"
     effective_home="${home_dir:-$HOME}"
     if has_flag "--agent-target" "${cmd_parts[@]}"; then

@@ -189,4 +189,5 @@ data class InstallPlanRequest(
   val windowsSymlinkPreflight: WindowsSymlinkPreflight,
   val replaceExistingSkillBillLinks: Boolean = false,
   val environment: Map<String, String> = emptyMap(),
+  val installationProfile: InstallationProfile? = null,
 )

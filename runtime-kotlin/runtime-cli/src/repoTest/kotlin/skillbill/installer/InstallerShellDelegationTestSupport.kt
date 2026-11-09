@@ -156,6 +156,8 @@ internal fun expectedApplyArgs(expected: ExpectedApply): List<String> =
     expected.run.home.resolve(".skill-bill/platform-packs").toString(),
     "--agent-mode",
     expected.agentMode,
+    "--installation-profile",
+    expected.installationProfile,
     "--platform-mode",
     expected.platformMode,
     "--telemetry",
@@ -402,6 +404,79 @@ internal fun parseRuntimeCalls(logPath: Path): List<List<String>> {
   return calls
 }
 
+internal val fakeRuntimeCliSelectionBlocks: String =
+  """
+    |if [[ "${'$'}{1:-}" == "install" && "${'$'}{2:-}" == "--help" ]]; then
+    |  printf '%s\n' "Commands:"
+    |  printf '%s\n' "  resolve-install-selection"
+    |  printf '%s\n' "  replay-last-selection"
+    |  exit 0
+    |fi
+    |if [[ "${'$'}{1:-}" == "telemetry" && "${'$'}{2:-}" == "status" ]]; then
+    |  [[ "${'$'}{SKILL_BILL_TEST_TELEMETRY_STATUS_FAILS:-0}" == "1" ]] && exit 2
+    |  printf 'config_path: %s\n' "${'$'}{home:-${'$'}HOME}/.config/skill-bill/config.json"
+    |  printf 'telemetry_level: %s\n' "${'$'}{SKILL_BILL_TEST_CURRENT_TELEMETRY:-anonymous}"
+    |  exit 0
+    |fi
+    |if [[ "${'$'}{1:-}" == "install" && "${'$'}{2:-}" == "resolve-install-selection" ]]; then
+    |  shift 2
+    |  reuse=0
+    |  github=0
+    |  explicit_telemetry=""
+    |  platforms=()
+    |  while [[ ${'$'}# -gt 0 ]]; do
+    |    case "${'$'}1" in
+    |      --reuse-last-selection) reuse=1; shift ;;
+    |      --github) github=1; shift ;;
+    |      --telemetry) explicit_telemetry="${'$'}{2:-}"; shift 2 ;;
+    |      --platform) platforms+=("${'$'}{2:-}"); shift 2 ;;
+    |      --skills|--platform-packs) shift 2 ;;
+    |      *) shift ;;
+    |    esac
+    |  done
+    |  if [[ "${'$'}{SKILL_BILL_TEST_TELEMETRY_STATUS_FAILS:-0}" == "1" && -z "${'$'}explicit_telemetry" ]]; then
+    |    printf '%s\n' "Current telemetry configuration could not be read or validated."
+    |    exit 1
+    |  fi
+    |  if [[ "${'$'}reuse" -eq 1 && "${'$'}{SKILL_BILL_TEST_REUSE_SELECTION:-ok}" == "missing" ]]; then
+    |    printf '%s\n' "Cannot reuse saved install selections."
+    |    printf '%s\n' "Run ./install.sh without --reuse-last-selection."
+    |    exit 1
+    |  fi
+    |  profile=ordinary
+    |  [[ "${'$'}github" -eq 1 ]] && profile=github
+    |  telemetry="${'$'}{explicit_telemetry:-}"
+    |  if [[ -z "${'$'}telemetry" ]]; then
+    |    if [[ -n "${'$'}{SKILL_BILL_TEST_CURRENT_TELEMETRY:-}" ]]; then
+    |      telemetry="${'$'}SKILL_BILL_TEST_CURRENT_TELEMETRY"
+    |    elif [[ "${'$'}reuse" -eq 1 ]]; then
+    |      telemetry="${'$'}{SKILL_BILL_TEST_REPLAY_TELEMETRY:-full}"
+    |    else
+    |      telemetry=anonymous
+    |    fi
+    |  fi
+    |  if [[ ${'$'}{#platforms[@]} -gt 0 ]]; then
+    |    printf 'platform-mode\tselected\n'
+    |    for slug in "${'$'}{platforms[@]}"; do
+    |      printf 'platform\t%s\n' "${'$'}slug"
+    |    done
+    |  elif [[ "${'$'}reuse" -eq 1 ]]; then
+    |    printf 'agent\tcodex\t%s\n' "${'$'}{home:-${'$'}HOME}/agent-targets/codex"
+    |    printf 'platform-mode\tselected\n'
+    |    printf 'platform\tkotlin\n'
+    |  else
+    |    printf 'platform-mode\tall\n'
+    |  fi
+    |  if [[ "${'$'}github" -eq 1 && "${'$'}reuse" -eq 0 ]]; then
+    |    printf 'agent\tcodex\t%s\n' "${'$'}{home:-${'$'}HOME}/agent-targets/codex"
+    |  fi
+    |  printf 'telemetry\t%s\n' "${'$'}telemetry"
+    |  printf 'installation-profile\t%s\n' "${'$'}profile"
+    |  printf 'mcp\tregister\n'
+    |  exit 0
+    |fi
+  """.trimMargin()
+
 internal object InstallerShellFixtures {
   fun seedAgentAddon(repoRoot: Path) {
     val agentAddon = repoRoot.resolve("agent-addons/review-helper")
@@ -586,6 +661,7 @@ internal object InstallerShellFixtures {
 
   private val fakeInstallerRuntimeMiddleBlocks: String =
     listOf(
+      fakeRuntimeCliSelectionBlocks,
       fakeRuntimeCliAgentPathBlock,
       fakeRuntimeCliApplyBlocks,
       fakeRuntimeCliRootBlocks,
@@ -611,6 +687,7 @@ internal object InstallerShellFixtures {
       homeInit = """home=""""",
       middleBlocks =
         listOf(
+          fakeRuntimeCliSelectionBlocks,
           fakeRuntimeCliAgentPathBlock,
           """
         |if [[ "${'$'}{1:-}" == "install" && ( "${'$'}{2:-}" == "apply" ||\
@@ -804,6 +881,7 @@ internal data class ExpectedApply(
   val platformMode: String,
   val telemetry: String,
   val mcp: String,
+  val installationProfile: String = "ordinary",
 )
 
 internal data class InstallerShellRun(
@@ -1038,6 +1116,7 @@ internal object PrebuiltReleaseStager {
     |  home="${'$'}2"
     |  shift 2
     |fi
+    |$fakeRuntimeCliSelectionBlocks
     |if [[ "${'$'}{1:-}" == "install" && "${'$'}{2:-}" == "agent-path" ]]; then
     |  printf '%s\n' "${'$'}home/agent-targets/${'$'}3"
     |  exit 0

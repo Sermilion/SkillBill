@@ -5,7 +5,9 @@ import skillbill.contracts.install.INSTALL_PLAN_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.contracts.install.InstallPlanSchemaValidator
+import skillbill.install.model.InstallPlanPayloadKeys
 import skillbill.install.model.InstallPlanWireMap
+import skillbill.install.model.InstallationProfile
 import skillbill.ports.install.InstallPlanWireValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
@@ -201,6 +203,7 @@ class SchemaValidatorPortLoudFailTest {
           ),
         ),
       "telemetry_level" to "anonymous",
+      InstallPlanPayloadKeys.INSTALLATION_PROFILE to InstallationProfile.ORDINARY.wireValue,
       "mcp_registration" to
         linkedMapOf<String, Any?>(
           "register" to true,

@@ -1,0 +1,378 @@
+# Install-plan wire schema (canonical source of truth).
+#
+# This file describes the shape of every `InstallPlan` the Skill Bill
+# runtime emits over its CLI / desktop wire (the `installPlanPayload`
+# map produced by `runtime-cli` and the `buildInstallPlanWireMap`
+# helper in `runtime-domain`). It is authored in YAML for human
+# readability and consumed as a JSON Schema (Draft 2020-12) by the
+# Kotlin runtime (`InstallPlanSchemaValidator` in `runtime-infra/contracts`).
+#
+# What lives here vs. in Kotlin:
+#
+# - This file defines TYPES, ENUMS, REQUIRED-VS-OPTIONAL fields, and
+#   VALUE-LEVEL constraints (`telemetry_level` enum, skill-kind enum,
+#   non-empty path strings, etc.) — anything expressible in pure JSON
+#   Schema.
+# - Cross-field "coherence" rules that JSON Schema cannot express
+#   cleanly stay in Kotlin (`InstallPlanBuilder` and surrounding seam
+#   code). Every such rule is named below under `x-coherence-checks`
+#   so the schema document alone fully describes the contract.
+#
+# Versioning rule:
+#
+# - This snapshot pins `contract_version` to `0.3`, matching
+#   `INSTALL_PLAN_PREVIOUS_CONTRACT_VERSION`. Current plans use
+#   `install-plan-schema.yaml` and `INSTALL_PLAN_CONTRACT_VERSION`.
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://skill-bill.dev/contracts/install-plan-v0.3-schema.yaml"
+title: "Install plan wire payload"
+description: >
+  Schema for the install-plan payload that the Skill Bill runtime emits
+  on `skill-bill install plan` and as the planning prefix of
+  `skill-bill install apply`. Describes SHAPE only and never hard-codes
+  caller-specific identifiers (concrete agent paths, host directories,
+  etc.). New install fields ship as long as the wire payload matches
+  this schema and the coherence checks below.
+type: object
+additionalProperties: false
+$defs:
+  # Shared enum: every skill kind the runtime is allowed to emit on the
+  # wire. Mirrors `InstallPlanSkillKind` in
+  # `runtime-kotlin/runtime-domain/.../InstallModels.kt`.
+  skillKind:
+    type: string
+    enum:
+      - base
+      - platform_pack
+  # Shared enum: every install agent id the runtime supports. Mirrors
+  # the `InstallAgent.id` values declared in `InstallModels.kt`. The
+  # `mcp_registration.agents[]` array reuses this enum directly.
+  agentId:
+    type: string
+    enum:
+      - claude
+      - codex
+      - junie
+      - cursor
+  # Shared enum: agent-target source. Mirrors `InstallAgentTargetSource`
+  # — wire form is `name.lowercase()`.
+  agentSource:
+    type: string
+    enum:
+      - detected
+      - manual
+  # Shared enum: telemetry level. Mirrors `InstallTelemetryLevel.id`.
+  telemetryLevel:
+    type: string
+    enum:
+      - "anonymous"
+      - "full"
+      - "off"
+  # Shared enum: Windows symlink preflight state. Mirrors
+  # `WindowsSymlinkPreflightState`; wire form is `name.lowercase()`.
+  windowsSymlinkPreflightState:
+    type: string
+    enum:
+      - not_windows
+      - available
+      - requires_elevation_or_developer_mode
+      - decision_required
+  # Shared enum: Windows symlink decision. Mirrors
+  # `WindowsSymlinkDecision`; wire form is `name.lowercase()`.
+  windowsSymlinkDecision:
+    type: string
+    enum:
+      - not_required
+      - proceed_with_symlinks
+      - require_user_action
+  # Shared shape for every entry in the `agents[]` array.
+  agentTarget:
+    type: object
+    additionalProperties: false
+    required:
+      - agent
+      - path
+      - source
+    properties:
+      agent:
+        $ref: "#/$defs/agentId"
+      path:
+        type: string
+        minLength: 1
+      source:
+        $ref: "#/$defs/agentSource"
+  # Shared shape for every entry in the `platform_packs[]` array.
+  platformPack:
+    type: object
+    additionalProperties: false
+    required:
+      - slug
+      - pack_root
+      - selected
+    properties:
+      slug:
+        type: string
+        minLength: 1
+      pack_root:
+        type: string
+        minLength: 1
+      selected:
+        type: boolean
+  # Shared shape for every entry in the `skills[]` array.
+  plannedSkill:
+    type: object
+    additionalProperties: false
+    required:
+      - name
+      - kind
+      - platform
+      - source_dir
+    properties:
+      name:
+        type: string
+        minLength: 1
+      kind:
+        $ref: "#/$defs/skillKind"
+      # `platform` is null for base skills and the platform slug for
+      # platform-pack-sourced skills. A missing field is not allowed —
+      # the wire emission always includes the key with a `null` value
+      # for base skills — so we declare it via `["string", "null"]`.
+      platform:
+        type: ["string", "null"]
+        minLength: 1
+      source_dir:
+        type: string
+        minLength: 1
+  # Shared shape for every entry in the `staging[]` array.
+  stagingIntent:
+    type: object
+    additionalProperties: false
+    required:
+      - skill_name
+      - source_dir
+      - staging_dir
+      - content_hash
+    properties:
+      skill_name:
+        type: string
+        minLength: 1
+      source_dir:
+        type: string
+        minLength: 1
+      staging_dir:
+        type: string
+        minLength: 1
+      content_hash:
+        type: string
+        minLength: 1
+  # Shared shape for the `mcp_registration` block.
+  mcpRegistration:
+    type: object
+    additionalProperties: false
+    required:
+      - register
+      - runtime_mcp_bin
+      - agents
+    properties:
+      register:
+        type: boolean
+      # Nullable when the caller passes `register=false` and no binary
+      # was supplied; the wire emission always writes the key.
+      runtime_mcp_bin:
+        type: ["string", "null"]
+        minLength: 1
+      agents:
+        type: array
+        items:
+          $ref: "#/$defs/agentId"
+  # Shared shape for the `runtime_distribution` block. Every field
+  # except `runtime_install_root` is nullable on the wire because the
+  # CLI emits keys unconditionally even when the caller did not provide
+  # a value (`Path?.toString()` produces `null`).
+  runtimeDistribution:
+    type: object
+    additionalProperties: false
+    required:
+      - runtime_install_root
+      - runtime_cli_build_dir
+      - runtime_mcp_build_dir
+      - runtime_cli_install_dir
+      - runtime_mcp_install_dir
+      - runtime_launcher_bin_dir
+    properties:
+      runtime_install_root:
+        type: string
+        minLength: 1
+      runtime_cli_build_dir:
+        type: ["string", "null"]
+        minLength: 1
+      runtime_mcp_build_dir:
+        type: ["string", "null"]
+        minLength: 1
+      runtime_cli_install_dir:
+        type: ["string", "null"]
+        minLength: 1
+      runtime_mcp_install_dir:
+        type: ["string", "null"]
+        minLength: 1
+      runtime_launcher_bin_dir:
+        type: ["string", "null"]
+        minLength: 1
+  # Shared shape for the `windows_symlink_preflight` block.
+  windowsSymlinkPreflight:
+    type: object
+    additionalProperties: false
+    required:
+      - state
+      - decision
+      - message
+    properties:
+      state:
+        $ref: "#/$defs/windowsSymlinkPreflightState"
+      decision:
+        $ref: "#/$defs/windowsSymlinkDecision"
+      message:
+        type: string
+required:
+  - status
+  - contract_version
+  - agents
+  - platform_packs
+  - selected_platforms
+  - skills
+  - staging_root
+  - staging
+  - telemetry_level
+  - mcp_registration
+  - runtime_distribution
+  - windows_symlink_preflight
+  - replace_existing_skill_bill_links
+properties:
+  status:
+    type: string
+    minLength: 1
+    description: >
+      Wire-level status emitted by the CLI emission boundary. The CLI
+      currently emits the literal `"planned"` from
+      `installPlanPayload`. Pinned via a non-empty string so future
+      statuses can land without a schema bump.
+  contract_version:
+    type: string
+    minLength: 1
+    const: "0.3"
+    description: >
+      Pinned previous install-plan version. Compatibility ingress
+      validates this snapshot, then normalizes to the current contract.
+  agents:
+    type: array
+    description: >
+      Resolved install-agent targets. The per-skill `oneOf` block under
+      `x-coherence-checks` documents that every `mcp_registration.agents[]`
+      value must also appear here.
+    items:
+      $ref: "#/$defs/agentTarget"
+  platform_packs:
+    type: array
+    description: >
+      Every platform pack discovered under `<repo>/platform-packs`. The
+      `selected_platforms[]` value MUST be a subset of these slugs;
+      coherence rule documented below.
+    items:
+      $ref: "#/$defs/platformPack"
+  selected_platforms:
+    type: array
+    description: >
+      Selected platform slugs. Each entry must appear in
+      `platform_packs[].slug` (coherence rule below).
+    items:
+      type: string
+      minLength: 1
+  skills:
+    type: array
+    description: >
+      All standalone-installable skills. For platform-pack-sourced
+      skills, `platform` is the owning pack's slug; for base skills,
+      `platform` is null.
+    items:
+      $ref: "#/$defs/plannedSkill"
+  staging_root:
+    type: string
+    minLength: 1
+    description: >
+      Root directory where the install plan stages skill content. Every
+      `staging[].staging_dir` starts with this path; the engine
+      enforces the prefix coherence rule.
+  staging:
+    type: array
+    description: >
+      Per-skill staging intents. Every `skill_name` must appear in
+      `skills[].name`; every `staging_dir` must start with
+      `staging_root`; both rules are documented under
+      `x-coherence-checks`.
+    items:
+      $ref: "#/$defs/stagingIntent"
+  telemetry_level:
+    $ref: "#/$defs/telemetryLevel"
+  mcp_registration:
+    $ref: "#/$defs/mcpRegistration"
+  runtime_distribution:
+    $ref: "#/$defs/runtimeDistribution"
+  windows_symlink_preflight:
+    $ref: "#/$defs/windowsSymlinkPreflight"
+  replace_existing_skill_bill_links:
+    type: boolean
+    description: >
+      Mirror of `InstallPlanRequest.replaceExistingSkillBillLinks`.
+      Cleanly threads the caller's intent to the apply seam without a
+      separate flag.
+
+# ---------------------------------------------------------------------------
+# Coherence checks (enforced in Kotlin)
+# ---------------------------------------------------------------------------
+# These rules either cannot be expressed cleanly in JSON Schema or are
+# enforced by the engine before the payload reaches the parse seam.
+# They are documented here so this file alone describes the full
+# contract.
+x-coherence-checks:
+  contract-version-parity:
+    description: >
+      `INSTALL_PLAN_CONTRACT_VERSION` in Kotlin must equal
+      `properties.contract_version.const` in this file. Pinned by
+      `InstallPlanSchemaContractVersionTest`; the parity test fails the
+      build if they diverge.
+  staging-skill-name-membership:
+    description: >
+      Every `staging[].skill_name` value must appear in `skills[].name`.
+      Enforced by `InstallPlanBuilder.buildStagingIntent` which derives
+      `staging` from the same `skills` list, so a violation here means
+      the wire-map construction drifted from the builder.
+  staging-dir-prefixed-by-staging-root:
+    description: >
+      Every `staging[].staging_dir` MUST start with `staging_root`. The
+      builder constructs both from the same `installedSkillsCacheRoot`
+      so a divergence here signals a regression in
+      `installedSkillStagingDir`.
+  mcp-agents-subset-of-agents:
+    description: >
+      Every value in `mcp_registration.agents[]` must appear in
+      `agents[].agent`. The builder copies the resolved
+      `InstallAgentTarget.agent` list into `McpRegistrationIntent.agents`,
+      so a violation here signals that the two emission seams drifted.
+  selected-platforms-subset-of-platform-packs:
+    description: >
+      `selected_platforms ⊆ platform_packs[].slug`. The builder filters
+      the discovered manifests to compute `selectedPlatformSlugs`; a
+      slug here that is not in `platform_packs[]` indicates the builder
+      was bypassed.
+
+# Advisory invariants documented for consumers; not currently enforced by the builder or this schema.
+x-advisory-checks:
+  runtime-distribution-mcp-bin-consistency:
+    description: >
+      When `mcp_registration.register=true` and
+      `mcp_registration.runtime_mcp_bin` is non-null, the resolved
+      binary path SHOULD live under `runtime_distribution.runtime_install_root`
+      (the runtime layout the installer materializes). The builder does
+      not enforce this directly — callers supplying a custom
+      `runtime_mcp_bin` are trusted — but the documentation here pins
+      the expected shape so deploys that diverge can be debugged.

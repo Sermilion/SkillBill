@@ -49,6 +49,8 @@ fun buildInstallPlanWireMap(plan: InstallPlan): InstallPlanWireMap =
           )
         },
       InstallPlanPayloadKeys.TELEMETRY_LEVEL to plan.telemetryLevel.id,
+      InstallPlanPayloadKeys.INSTALLATION_PROFILE to
+        (plan.request.installationProfile ?: InstallationProfile.ORDINARY).wireValue,
       InstallPlanPayloadKeys.MCP_REGISTRATION to
         linkedMapOf(
           InstallPlanPayloadKeys.REGISTER to plan.mcpRegistrationIntent.register,

@@ -2,11 +2,16 @@ package skillbill.cli.install.core
 
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
+import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
+import com.github.ajalt.clikt.parameters.types.choice
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.config.RuntimeConfigEditService
 import skillbill.application.install.InstallService
+import skillbill.application.install.model.InstallSelectionResolutionOutcome
+import skillbill.application.install.model.ResolveInstallSelectionRequest
+import skillbill.application.install.selection.InstallSelectionResolutionService
 import skillbill.application.scaffold.InstallAgentService
 import skillbill.application.uninstall.SkillBillUninstallService
 import skillbill.cli.install.apply.InstallRequestCommand
@@ -200,6 +205,10 @@ class InstallReplayLastSelectionCommand(
     "--skills",
     help = "Base skills root used by the install planning fact collector.",
   ).required()
+  private val validateSavedPlatformSlugs by option(
+    "--validate-saved-platform-slugs",
+    help = "When enabled, reject saved selected slugs that are unavailable in the current discovery set.",
+  ).flag(default = true)
 
   override fun run() {
     try {
@@ -207,15 +216,20 @@ class InstallReplayLastSelectionCommand(
         installSelectionPersistencePort
           .readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(inputs.userHome))
           .selection
+      if (selection == null) {
+        return state.completeText("No successful install selection is saved.\n", emptyMap(), exitCode = 1)
+      }
       val availablePlatformSlugs = installService.discoverPlatformPackSlugs(replayDiscoveryRequest())
-      val staleSlugs = selection.platformPackSelection.selectedSlugs - availablePlatformSlugs
-      if (staleSlugs.isNotEmpty()) {
-        return state.completeText(
-          "Saved install selection references unavailable platform pack slug(s): " +
-            "${staleSlugs.sorted().joinToString(", ")}.\n",
-          emptyMap(),
-          exitCode = 1,
-        )
+      if (validateSavedPlatformSlugs) {
+        val staleSlugs = selection.platformPackSelection.selectedSlugs - availablePlatformSlugs
+        if (staleSlugs.isNotEmpty()) {
+          return state.completeText(
+            "Saved install selection references unavailable platform pack slug(s): " +
+              "${staleSlugs.sorted().joinToString(", ")}.\n",
+            emptyMap(),
+            exitCode = 1,
+          )
+        }
       }
       state.completeText(selection.toReplayText(), emptyMap())
     } catch (error: SkillBillRuntimeException) {
@@ -273,10 +287,81 @@ class InstallReplayLastSelectionCommand(
       append("telemetry\t")
       append(telemetryLevel.id)
       append('\n')
+      append("installation-profile\t")
+      append(installationProfile.wireValue)
+      append('\n')
       append("mcp\t")
       append(if (mcpRegistrationChoice.register) "register" else "skip")
       append('\n')
     }
+}
+
+@Inject
+class InstallResolveInstallSelectionCommand(
+  private val state: CliRunState,
+  private val inputs: CliRunInputs,
+  private val installSelectionResolutionService: InstallSelectionResolutionService,
+) : DocumentedCliCommand(
+    "resolve-install-selection",
+    "Resolve install choices against the current candidate before live promotion.",
+  ) {
+  private val platformPacksRoot by option(
+    "--platform-packs",
+    help = "Platform packs root used to discover and validate platform slugs.",
+  ).required()
+  private val skillsRoot by option(
+    "--skills",
+    help = "Base skills root used by the install planning fact collector.",
+  ).required()
+  private val reuseLastSelection by option(
+    "--reuse-last-selection",
+    help = "Reuse saved pack, telemetry, agent, and MCP choices where explicit shell input does not override them.",
+  ).flag(default = false)
+  private val github by option(
+    "--github",
+    help = "Resolve an unattended GitHub installation profile.",
+  ).flag(default = false)
+  private val telemetry by option(
+    "--telemetry",
+    help = "Explicit telemetry level override.",
+  ).choice(InstallTelemetryLevel.entries.associateBy(InstallTelemetryLevel::id))
+  private val explicitPlatforms by option(
+    "--platform",
+    help = "Explicit selected platform pack slug.",
+  ).multiple()
+
+  override fun run() {
+    try {
+      when (
+        val outcome =
+          installSelectionResolutionService.resolve(
+            ResolveInstallSelectionRequest(
+              home = inputs.userHome,
+              environment = inputs.environment,
+              platformPacksRoot = Path.of(platformPacksRoot),
+              skillsRoot = Path.of(skillsRoot),
+              githubRequested = github,
+              reuseLastSelection = reuseLastSelection,
+              explicitPlatformSlugs = explicitPlatforms.toSet(),
+              explicitTelemetry = telemetry,
+            ),
+          )
+      ) {
+        is InstallSelectionResolutionOutcome.Ready ->
+          state.completeText(
+            installSelectionResolutionService.toReplayText(outcome.selection),
+            emptyMap(),
+          )
+        is InstallSelectionResolutionOutcome.Refused ->
+          state.completeText("${outcome.message}\n", emptyMap(), exitCode = 1)
+      }
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowIfDatabaseFailure()
+      state.completeText("${error.message.orEmpty()}\n", emptyMap(), exitCode = 1)
+    } catch (error: InvalidPathException) {
+      state.completeText("${error.message.orEmpty()}\n", emptyMap(), exitCode = 1)
+    }
+  }
 }
 
 @Inject

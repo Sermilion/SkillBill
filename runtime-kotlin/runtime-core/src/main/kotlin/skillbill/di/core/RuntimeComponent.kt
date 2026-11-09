@@ -10,6 +10,7 @@ import skillbill.application.install.ExternalAddonOverlayService
 import skillbill.application.install.ExternalPlatformPackResolutionService
 import skillbill.application.install.InstallDatabasePreparation
 import skillbill.application.install.InstallService
+import skillbill.application.install.selection.InstallSelectionResolutionService
 import skillbill.application.learning.LearningService
 import skillbill.application.review.diffcomment.DiffCommentService
 import skillbill.application.review.service.ReviewService
@@ -366,6 +367,7 @@ abstract class RuntimeComponent(
   abstract val installMcpRegistrationPort: InstallMcpRegistrationPort
   abstract val installNativeAgentLinkPort: InstallNativeAgentLinkPort
   abstract val installSelectionPersistencePort: InstallSelectionPersistencePort
+  abstract val installSelectionResolutionService: InstallSelectionResolutionService
   abstract val learningService: LearningService
   abstract val diffCommentService: DiffCommentService
   abstract val lifecycleTelemetryService: LifecycleTelemetryService

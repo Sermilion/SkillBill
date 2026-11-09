@@ -8,7 +8,7 @@ data class ReadLatestSuccessfulInstallSelectionRequest(
 )
 
 data class ReadLatestSuccessfulInstallSelectionResult(
-  val selection: SharedInstallSelection,
+  val selection: SharedInstallSelection?,
 )
 
 data class WriteLatestSuccessfulInstallSelectionRequest(

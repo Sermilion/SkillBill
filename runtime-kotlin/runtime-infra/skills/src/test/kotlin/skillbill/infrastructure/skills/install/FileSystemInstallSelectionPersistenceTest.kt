@@ -4,6 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.install.model.InstallTelemetryLevel
+import skillbill.install.model.InstallationProfile
 import skillbill.install.model.McpRegistrationChoice
 import skillbill.install.model.PlatformPackSelection
 import skillbill.install.model.PlatformPackSelectionMode
@@ -20,6 +21,9 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class FileSystemInstallSelectionPersistenceTest {
   @Test
@@ -77,14 +81,19 @@ class FileSystemInstallSelectionPersistenceTest {
     )
     val store = FileSystemInstallSelectionPersistence()
 
+    val originalBytes = Files.readAllBytes(path)
     val selection = store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home)).selection
+    val recovery = path.resolveSibling("${path.fileName}.v1.0.recovery")
 
+    assertNotNull(selection)
+    assertEquals(InstallationProfile.ORDINARY, selection.installationProfile)
     assertEquals(setOf(SupportedAgent.CLAUDE, SupportedAgent.CODEX), selection.selectedAgents)
     assertEquals(PlatformPackSelectionMode.SELECTED, selection.platformPackSelection.mode)
     assertEquals(setOf("kmp", "kotlin"), selection.platformPackSelection.selectedSlugs)
     assertEquals(InstallTelemetryLevel.FULL, selection.telemetryLevel)
     assertEquals(true, selection.mcpRegistrationChoice.register)
     assertEquals(Path.of("/runtime-mcp/bin/runtime-mcp"), selection.mcpRegistrationChoice.runtimeMcpBin?.toPath())
+    assertTrue(Files.readAllBytes(recovery).contentEquals(originalBytes))
 
     store.writeLatestSuccessfulSelection(
       WriteLatestSuccessfulInstallSelectionRequest(installHome = home, selection = selection),
@@ -95,7 +104,8 @@ class FileSystemInstallSelectionPersistenceTest {
       ).orEmpty()
     assertEquals(
       mapOf(
-        "contract_version" to "1.0",
+        "contract_version" to "1.1",
+        "installation_profile" to "ordinary",
         "selected_agents" to listOf("claude", "codex"),
         "platform_pack_selection" to
           mapOf(
@@ -134,9 +144,7 @@ class FileSystemInstallSelectionPersistenceTest {
       selection,
       store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(alternateHome)).selection,
     )
-    assertFailsWith<SkillBillRuntimeException> {
-      store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(firstHome))
-    }.also { assertEquals(InstallFailureCode.MISSING_INSTALL_SELECTION_RECORD, it.code) }
+    assertNull(store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(firstHome)).selection)
   }
 
   @Test
@@ -259,7 +267,8 @@ class FileSystemInstallSelectionPersistenceTest {
         ).orEmpty()
       assertFalse("recentRepoPath" in emittedPayload, caseName)
       assertFalse("firstRun.agents" in emittedPayload, caseName)
-      assertEquals("1.0", emittedPayload["contract_version"], caseName)
+      assertEquals("1.1", emittedPayload["contract_version"], caseName)
+      assertEquals("ordinary", emittedPayload["installation_profile"], caseName)
     }
   }
 
@@ -287,6 +296,7 @@ class FileSystemInstallSelectionPersistenceTest {
       WriteLatestSuccessfulInstallSelectionRequest(installHome = home, selection = selection),
     )
     val replayed = store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home)).selection
+    assertNotNull(replayed)
 
     assertFalse(Files.exists(home.resolve(".cursor")))
     assertEquals(selection, replayed)
@@ -295,16 +305,11 @@ class FileSystemInstallSelectionPersistenceTest {
   }
 
   @Test
-  fun `missing install selection record fails loudly`() {
+  fun `missing install selection record is absent`() {
     val home = Files.createTempDirectory("skillbill-install-selection-missing")
     val store = FileSystemInstallSelectionPersistence()
 
-    val error =
-      assertFailsWith<SkillBillRuntimeException> {
-        store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home))
-      }.also { assertEquals(InstallFailureCode.MISSING_INSTALL_SELECTION_RECORD, it.code) }
-
-    assertContains(error.message.orEmpty(), "install-selection.json")
+    assertNull(store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home)).selection)
   }
 
   @Test
@@ -320,8 +325,7 @@ class FileSystemInstallSelectionPersistenceTest {
         store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home))
       }.also { assertEquals(InstallFailureCode.MALFORMED_INSTALL_SELECTION_RECORD, it.code) }
 
-    assertContains(error.message.orEmpty(), "unknown keys")
-    assertContains(error.message.orEmpty(), "recentRepoPath")
+    assertContains(error.message.orEmpty(), "contract_version")
   }
 
   @Test
@@ -427,6 +431,112 @@ class FileSystemInstallSelectionPersistenceTest {
     assertFailsWith<SkillBillRuntimeException> {
       store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home))
     }.also { assertEquals(InstallFailureCode.UNREADABLE_INSTALL_SELECTION_RECORD, it.code) }
+  }
+
+  @Test
+  fun `populated legacy record migrates to ordinary and retains a byte identical recovery copy`() {
+    val home = Files.createTempDirectory("skillbill-install-selection-migrate")
+    val path = home.resolve(".skill-bill/install-selection.json")
+    Files.createDirectories(path.parent)
+    val legacy = validPayload()
+    Files.writeString(path, legacy)
+    val originalBytes = Files.readAllBytes(path)
+    val store = FileSystemInstallSelectionPersistence()
+
+    val first = store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home)).selection
+    val recovery = path.resolveSibling("${path.fileName}.v1.0.recovery")
+    val migratedBytes = Files.readAllBytes(path)
+
+    assertEquals(InstallationProfile.ORDINARY, first?.installationProfile)
+    assertEquals(setOf(SupportedAgent.CODEX), first?.selectedAgents)
+    assertTrue(Files.readAllBytes(recovery).contentEquals(originalBytes))
+
+    val second = store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home)).selection
+    assertEquals(first, second)
+    assertTrue(Files.readAllBytes(path).contentEquals(migratedBytes))
+    assertTrue(Files.readAllBytes(recovery).contentEquals(originalBytes))
+  }
+
+  @Test
+  fun `matching recovery copy allows migration retry without replacing live bytes on conflict`() {
+    val home = Files.createTempDirectory("skillbill-install-selection-retry")
+    val path = home.resolve(".skill-bill/install-selection.json")
+    Files.createDirectories(path.parent)
+    val legacy = validPayload()
+    Files.writeString(path, legacy)
+    val originalBytes = Files.readAllBytes(path)
+    val recovery = path.resolveSibling("${path.fileName}.v1.0.recovery")
+    Files.write(recovery, originalBytes)
+    val store = FileSystemInstallSelectionPersistence()
+
+    val selection = store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home)).selection
+
+    assertEquals(InstallationProfile.ORDINARY, selection?.installationProfile)
+    assertTrue(Files.readAllBytes(recovery).contentEquals(originalBytes))
+  }
+
+  @Test
+  fun `conflicting recovery copy preserves live legacy bytes`() {
+    val home = Files.createTempDirectory("skillbill-install-selection-conflict")
+    val path = home.resolve(".skill-bill/install-selection.json")
+    Files.createDirectories(path.parent)
+    val legacy = validPayload()
+    Files.writeString(path, legacy)
+    val originalBytes = Files.readAllBytes(path)
+    val recovery = path.resolveSibling("${path.fileName}.v1.0.recovery")
+    Files.writeString(recovery, validPayload(selectedAgents = listOf("claude")))
+    val store = FileSystemInstallSelectionPersistence()
+
+    assertFailsWith<SkillBillRuntimeException> {
+      store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home))
+    }.also { assertEquals(InstallFailureCode.INSTALL_SELECTION_MIGRATION_FAILED, it.code) }
+
+    assertTrue(Files.readAllBytes(path).contentEquals(originalBytes))
+    assertTrue(Files.exists(recovery))
+  }
+
+  @Test
+  fun `unknown current profile token fails without defaulting to ordinary`() {
+    val home = Files.createTempDirectory("skillbill-install-selection-unknown-profile")
+    val path = home.resolve(".skill-bill/install-selection.json")
+    Files.createDirectories(path.parent)
+    Files.writeString(
+      path,
+      """
+      {
+        "contract_version": "1.1",
+        "installation_profile": "gitlab",
+        "selected_agents": ["codex"],
+        "platform_pack_selection": {"mode": "none", "selected_slugs": []},
+        "telemetry_level": "anonymous",
+        "mcp_registration": {"register": false, "runtime_mcp_bin": null}
+      }
+      """.trimIndent(),
+    )
+    val store = FileSystemInstallSelectionPersistence()
+
+    assertFailsWith<SkillBillRuntimeException> {
+      store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home))
+    }.also { assertEquals(InstallFailureCode.MALFORMED_INSTALL_SELECTION_RECORD, it.code) }
+  }
+
+  @Test
+  fun `successful write replaces a corrupt existing record`() {
+    val home = Files.createTempDirectory("skillbill-install-selection-replace-corrupt")
+    val path = home.resolve(".skill-bill/install-selection.json")
+    Files.createDirectories(path.parent)
+    Files.writeString(path, "{\"recentRepoPath\":\"/repo\"}")
+    val store = FileSystemInstallSelectionPersistence()
+    val next = selection(selectedAgents = setOf(SupportedAgent.CLAUDE))
+
+    store.writeLatestSuccessfulSelection(
+      WriteLatestSuccessfulInstallSelectionRequest(installHome = home, selection = next),
+    )
+
+    assertEquals(
+      next,
+      store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home)).selection,
+    )
   }
 
   private fun selection(

@@ -4,16 +4,21 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.install.INSTALL_PLAN_CONTRACT_VERSION
+import skillbill.contracts.install.INSTALL_PLAN_PREVIOUS_CONTRACT_VERSION
 import skillbill.error.shellcontent.invalidInstallPlanSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.InstallPlanSchemaPaths
+import skillbill.infrastructure.contracts.locator.PreviousInstallPlanSchemaPaths
 import skillbill.infrastructure.contracts.locator.logSchemaLoadFailure
 import skillbill.infrastructure.contracts.review.formatValidationReason
 import skillbill.infrastructure.contracts.review.offendingValue
 import skillbill.infrastructure.contracts.review.violationOrdering
+import skillbill.install.model.InstallPlanPayloadKeys
 import skillbill.install.model.InstallPlanWireMap
+import skillbill.install.model.InstallationProfile
 import skillbill.ports.install.InstallPlanWireValidator
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -27,8 +32,31 @@ class InstallPlanSchemaValidator : InstallPlanWireValidator {
   }
 
   fun validate(plan: Map<String, Any?>) {
-    val instance: JsonNode = ClasspathContractSchemaLoader.valueToTree(plan)
-    val errors: Set<ValidationMessage> = ClasspathContractSchemaLoader.validate(installPlanSchema(), instance)
+    val version = plan[SharedPayloadKeys.CONTRACT_VERSION]
+    val candidate =
+      when (version) {
+        INSTALL_PLAN_PREVIOUS_CONTRACT_VERSION -> {
+          validatePayload(previousInstallPlanSchema(), plan)
+          plan.toMutableMap().apply {
+            put(SharedPayloadKeys.CONTRACT_VERSION, INSTALL_PLAN_CONTRACT_VERSION)
+            put(InstallPlanPayloadKeys.INSTALLATION_PROFILE, InstallationProfile.ORDINARY.wireValue)
+          }
+        }
+        INSTALL_PLAN_CONTRACT_VERSION -> plan
+        else -> throw invalidInstallPlanSchemaError(
+          fieldPath = SharedPayloadKeys.CONTRACT_VERSION,
+          reason = "Unsupported install-plan contract version: ${version ?: "<missing>"}.",
+        )
+      }
+    validatePayload(installPlanSchema(), candidate)
+  }
+
+  private fun validatePayload(
+    schema: JsonSchema,
+    payload: Map<String, Any?>,
+  ) {
+    val instance = ClasspathContractSchemaLoader.valueToTree(payload)
+    val errors: Set<ValidationMessage> = ClasspathContractSchemaLoader.validate(schema, instance)
     if (errors.isEmpty()) {
       return
     }
@@ -146,6 +174,42 @@ private fun installPlanSchema(): JsonSchema =
           fieldPath = "<schema>",
           reason = reason,
         )
+      },
+    ),
+  )
+
+private fun previousInstallPlanSchema(): JsonSchema =
+  ClasspathContractSchemaLoader.compiledSchema(
+    CompiledSchemaRequest(
+      cacheKey = PreviousInstallPlanSchemaPaths.CLASSPATH_RESOURCE,
+      classLoader = InstallPlanSchemaValidator::class.java.classLoader,
+      classpathResource = PreviousInstallPlanSchemaPaths.CLASSPATH_RESOURCE,
+      missingResource = {
+        invalidInstallPlanSchemaError(
+          fieldPath = "",
+          reason = "Previous install-plan schema is missing at '${PreviousInstallPlanSchemaPaths.CLASSPATH_RESOURCE}'.",
+        )
+      },
+      processingFailure = { cause ->
+        invalidInstallPlanSchemaError(
+          fieldPath = "<schema>",
+          reason = cause.message ?: cause::class.simpleName.orEmpty(),
+          cause = cause,
+        )
+      },
+      loadFailureLogger = { error ->
+        logSchemaLoadFailure(
+          log,
+          "install-plan",
+          PreviousInstallPlanSchemaPaths.CLASSPATH_RESOURCE,
+          PreviousInstallPlanSchemaPaths.REPO_RELATIVE_PATH,
+          error,
+        )
+      },
+      expectedSchemaId = PreviousInstallPlanSchemaPaths.EXPECTED_SCHEMA_ID,
+      expectedContractVersion = INSTALL_PLAN_PREVIOUS_CONTRACT_VERSION,
+      identityFailure = { reason ->
+        invalidInstallPlanSchemaError(fieldPath = "<schema>", reason = reason)
       },
     ),
   )

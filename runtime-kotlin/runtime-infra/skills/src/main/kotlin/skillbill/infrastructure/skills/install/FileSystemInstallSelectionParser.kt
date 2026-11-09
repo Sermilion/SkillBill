@@ -1,8 +1,10 @@
 package skillbill.infrastructure.skills.install
 
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.core.catchingNonCancellation
 import skillbill.install.model.InstallTelemetryLevel
+import skillbill.install.model.InstallationProfile
 import skillbill.install.model.McpRegistrationChoice
 import skillbill.install.model.PlatformPackSelection
 import skillbill.install.model.PlatformPackSelectionMode
@@ -25,14 +27,22 @@ internal fun parseInstallSelectionPayload(
 
 private fun Map<String, Any?>.toInstallSelection(path: Path): SharedInstallSelection {
   requireExactKeys(path, keys, INSTALL_SELECTION_KEYS, "root")
-  requireContractVersion(path, requireString(path, "contract_version"))
+  requireContractVersion(path, requireString(path, SharedPayloadKeys.CONTRACT_VERSION))
   return SharedInstallSelection(
+    installationProfile = requireInstallationProfile(path, requireString(path, INSTALL_SELECTION_PROFILE_KEY)),
     selectedAgents = requireStringList(path, "selected_agents").mapTo(mutableSetOf(), SupportedAgent::fromId),
     platformPackSelection = requireObject(path, "platform_pack_selection").toPlatformPackSelection(path),
     telemetryLevel = requireTelemetryLevel(path, requireString(path, "telemetry_level")),
     mcpRegistrationChoice = requireObject(path, "mcp_registration").toMcpRegistrationChoice(path),
   )
 }
+
+private fun requireInstallationProfile(
+  path: Path,
+  value: String,
+): InstallationProfile =
+  InstallationProfile.fromWire(value)
+    ?: throw malformedInstallSelection(path, "Unknown installation profile '$value'.")
 
 private fun requireContractVersion(
   path: Path,

@@ -7,6 +7,7 @@ import skillbill.cli.kernel.cli.CliOutput
 import skillbill.cli.model.CliFormat
 import skillbill.cli.model.CliRuntimeContext
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.install.INSTALL_PLAN_CONTRACT_VERSION
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.di.core.RuntimeComponent
 import skillbill.di.core.create
@@ -22,6 +23,7 @@ import skillbill.install.model.InstallAgentTargetSource
 import skillbill.install.model.InstallApplyResult
 import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.InstallPlan
+import skillbill.install.model.InstallPlanPayloadKeys
 import skillbill.install.model.InstallPlanRequest
 import skillbill.install.model.InstallPlanSkill
 import skillbill.install.model.InstallPlanSkillKind
@@ -30,6 +32,7 @@ import skillbill.install.model.InstallStagingPathIntent
 import skillbill.install.model.InstallTelemetryApplyOutcome
 import skillbill.install.model.InstallTelemetryApplyStatus
 import skillbill.install.model.InstallTelemetryLevel
+import skillbill.install.model.InstallationProfile
 import skillbill.install.model.InstallationTargetPaths
 import skillbill.install.model.McpRegistrationChoice
 import skillbill.install.model.McpRegistrationIntent
@@ -1079,7 +1082,7 @@ private fun singleCodexPlanGoldenPayload(
   val paths = SingleCodexGoldenPaths(fixture, contentHashes)
   return mapOf(
     "status" to "planned",
-    "contract_version" to "0.3",
+    "contract_version" to INSTALL_PLAN_CONTRACT_VERSION,
     "agents" to listOf(codexAgentGoldenPayload(paths)),
     "platform_packs" to emptyList<Map<String, Any?>>(),
     "selected_platforms" to emptyList<String>(),
@@ -1105,6 +1108,7 @@ private fun singleCodexPlanGoldenPayload(
         ),
       ),
     "telemetry_level" to "anonymous",
+    InstallPlanPayloadKeys.INSTALLATION_PROFILE to InstallationProfile.ORDINARY.wireValue,
     "mcp_registration" to
       mapOf(
         "register" to false,

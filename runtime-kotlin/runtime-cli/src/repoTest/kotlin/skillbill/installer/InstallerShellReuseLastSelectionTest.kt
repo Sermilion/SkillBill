@@ -18,11 +18,11 @@ class InstallerShellReuseLastSelectionTest {
     }.parent
 
   @Test
-  fun `installer shell reuses agent choices with all packs and a fresh mcp path`() {
+  fun `installer shell reuses agent choices with selected packs and a fresh mcp path`() {
     val run = runInstaller(extraArgs = listOf("--reuse-last-selection"))
 
     assertEquals(0, run.exitCode, run.output)
-    assertContains(run.output, "Reusing latest successful install selections")
+    assertContains(run.output, "Reusing saved platform mode 'selected' (kotlin)")
     assertContains(run.output, "Selections:     reused latest successful install selection")
     assertEquals(
       expectedApplyArgs(run) +
@@ -49,7 +49,7 @@ class InstallerShellReuseLastSelectionTest {
       )
 
     assertEquals(0, run.exitCode, run.output)
-    assertContains(run.output, "Preserving current telemetry config level 'full'")
+    assertContains(run.output, "Telemetry:      full")
     assertEquals("full", run.applyArgs[run.applyArgs.indexOf("--telemetry") + 1])
   }
 
@@ -66,7 +66,7 @@ class InstallerShellReuseLastSelectionTest {
       )
 
     assertFalse(run.exitCode == 0, "installer should fail. Output:\n${run.output}")
-    assertContains(run.output, "current telemetry configuration could not be read or validated")
+    assertContains(run.output, "Current telemetry configuration could not be read or validated")
     assertFalse(run.output.contains("Pre-install cleanup"), "cleanup must not run after telemetry read failure")
   }
 
@@ -186,11 +186,7 @@ class InstallerShellReuseLastSelectionTest {
     |  home="${'$'}2"
     |  shift 2
     |fi
-    |if [[ "${'$'}{1:-}" == "install" && "${'$'}{2:-}" == "--help" ]]; then
-    |  printf '%s\n' "Commands:"
-    |  printf '%s\n' "  replay-last-selection"
-    |  exit 0
-    |fi
+    |$fakeRuntimeCliSelectionBlocks
     |if [[ "${'$'}{1:-}" == "install" && "${'$'}{2:-}" == "agent-path" ]]; then
     |  printf '%s\n' "${'$'}home/agent-targets/${'$'}3"
     |  exit 0
@@ -255,8 +251,10 @@ class InstallerShellReuseLastSelectionTest {
       run.home.resolve(".skill-bill/platform-packs").toString(),
       "--agent-mode",
       "manual",
+      "--installation-profile",
+      "ordinary",
       "--platform-mode",
-      "all",
+      "selected",
       "--telemetry",
       "full",
       "--mcp",
@@ -276,6 +274,8 @@ class InstallerShellReuseLastSelectionTest {
       run.binDir.toString(),
       "--runtime-mcp-bin",
       run.home.resolve(".skill-bill/runtime/runtime-mcp/bin/runtime-mcp").toString(),
+      "--platform",
+      "kotlin",
     )
 
   private data class InstallerRun(

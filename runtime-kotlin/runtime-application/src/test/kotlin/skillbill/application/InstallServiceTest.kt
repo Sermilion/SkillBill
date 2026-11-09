@@ -739,7 +739,7 @@ class InstallServiceTest {
   private object NoopInstallSelectionPersistencePort : InstallSelectionPersistencePort {
     override fun readLatestSuccessfulSelection(
       request: ReadLatestSuccessfulInstallSelectionRequest,
-    ): ReadLatestSuccessfulInstallSelectionResult = error("readLatestSuccessfulSelection is not part of this test")
+    ): ReadLatestSuccessfulInstallSelectionResult = ReadLatestSuccessfulInstallSelectionResult(selection = null)
 
     override fun writeLatestSuccessfulSelection(
       request: WriteLatestSuccessfulInstallSelectionRequest,
@@ -752,7 +752,7 @@ class InstallServiceTest {
 
     override fun readLatestSuccessfulSelection(
       request: ReadLatestSuccessfulInstallSelectionRequest,
-    ): ReadLatestSuccessfulInstallSelectionResult = error("readLatestSuccessfulSelection is not part of this test")
+    ): ReadLatestSuccessfulInstallSelectionResult = ReadLatestSuccessfulInstallSelectionResult(selection = null)
 
     override fun writeLatestSuccessfulSelection(
       request: WriteLatestSuccessfulInstallSelectionRequest,

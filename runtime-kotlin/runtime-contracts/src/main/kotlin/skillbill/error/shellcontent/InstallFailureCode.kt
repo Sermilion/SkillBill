@@ -14,6 +14,7 @@ enum class InstallFailureCode : RuntimeFailureCode {
   MISSING_INSTALL_SELECTION_RECORD,
   UNREADABLE_INSTALL_SELECTION_RECORD,
   MALFORMED_INSTALL_SELECTION_RECORD,
+  INSTALL_SELECTION_MIGRATION_FAILED,
   UNREADABLE_BASELINE_MANIFEST,
   RECONCILIATION_CONFLICT,
   MALFORMED_REPO_LOCAL_CONFIG,
@@ -153,6 +154,23 @@ fun malformedInstallSelectionRecordError(
     "Install selection record at '${path.ifBlank { "<unknown>" }}' is malformed: $reason",
     cause,
   )
+
+fun installSelectionMigrationFailed(
+  livePath: String,
+  recoveryPath: String?,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException {
+  val live = livePath.ifBlank { "<unknown>" }
+  val recovery = recoveryPath?.ifBlank { "<unknown>" }
+  val recoveryClause = recovery?.let { " Recovery copy: '$it'." } ?: ""
+  return SkillBillRuntimeException(
+    InstallFailureCode.INSTALL_SELECTION_MIGRATION_FAILED,
+    "Install selection migration failed for '$live'.$recoveryClause $reason " +
+      "Live bytes were left unchanged. If a recovery copy is present, restore it and retry.",
+    cause,
+  )
+}
 
 fun unreadableBaselineManifestError(
   path: String,

@@ -9,6 +9,7 @@ import skillbill.install.model.InstallPlanRequest
 import skillbill.install.model.InstallPlatformPackDiscoverySnapshot
 import skillbill.install.model.InstallPlatformSkillMaterializationRequest
 import skillbill.install.model.InstallReconcileApplyOutcome
+import skillbill.install.model.InstallationProfile
 import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.model.PlatformPackSelection
 import skillbill.install.model.PlatformPackSelectionMode
@@ -37,6 +38,7 @@ import skillbill.ports.install.reconcile.InstallReconcilePort
 import skillbill.ports.install.reconcile.model.InstallReconcileApplyRequest
 import skillbill.ports.install.reconcile.model.InstallReconcileRequest
 import skillbill.ports.install.selection.InstallSelectionPersistencePort
+import skillbill.ports.install.selection.model.ReadLatestSuccessfulInstallSelectionRequest
 import skillbill.ports.install.selection.model.WriteLatestSuccessfulInstallSelectionRequest
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
 import skillbill.review.plan.ReviewFallbackResolver
@@ -57,7 +59,14 @@ class InstallService(
   private val databasePreparation: InstallDatabasePreparation,
 ) {
   fun planInstall(request: InstallPlanRequest): InstallPlan {
-    val facts = planningFactsPort.collectPlanningFacts(InstallPlanningFactsRequest(request)).facts
+    val resolvedRequest =
+      request.copy(
+        installationProfile =
+          request.installationProfile ?: installSelectionPersistencePort
+            .readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(request.home.toPath()))
+            .selection?.installationProfile ?: InstallationProfile.ORDINARY,
+      )
+    val facts = planningFactsPort.collectPlanningFacts(InstallPlanningFactsRequest(resolvedRequest)).facts
     val resolvedReviewFallback =
       facts.baseSkills
         .takeIf { skills -> skills.any { it.name == PACK_SIDECAR_PARENT_SKILL } }
@@ -65,7 +74,7 @@ class InstallService(
     val materializationPlan =
       InstallPlanPolicy.planPlatformSkillMaterialization(
         InstallPlatformSkillMaterializationRequest(
-          installRequest = request,
+          installRequest = resolvedRequest,
           platformPacks =
             facts.platformManifests.map { manifest ->
               InstallPlatformPackDiscoverySnapshot(
@@ -79,7 +88,7 @@ class InstallService(
     val platformPacks =
       platformSkillMaterializationPort.materializePlatformSkills(
         InstallPlatformSkillMaterializationPortRequest(
-          installRequest = request,
+          installRequest = resolvedRequest,
           platformManifests = facts.platformManifests,
           selectedPlatformSlugs =
             (
@@ -90,12 +99,12 @@ class InstallService(
       ).platformPacks
     val draft =
       InstallPlanPolicy.buildPlanDraft(
-        facts.toPolicyInput(request, platformPacks, resolvedReviewFallback?.slug),
+        facts.toPolicyInput(resolvedRequest, platformPacks, resolvedReviewFallback?.slug),
       )
     val staging =
       stagingIntentPort.buildStagingIntent(
         InstallStagingIntentRequest(
-          installRequest = request,
+          installRequest = resolvedRequest,
           draft = draft,
           platformManifests = facts.platformManifests,
         ),
@@ -200,6 +209,7 @@ class InstallService(
             platformPackSelection = persistedPlatformPackSelection(plan),
             telemetryLevel = plan.telemetryLevel,
             mcpRegistrationChoice = plan.request.mcpRegistrationChoice,
+            installationProfile = plan.request.installationProfile ?: InstallationProfile.ORDINARY,
           ),
       ),
     )

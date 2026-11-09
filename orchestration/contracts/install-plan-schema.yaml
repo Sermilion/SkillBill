@@ -5,7 +5,7 @@
 # map produced by `runtime-cli` and the `buildInstallPlanWireMap`
 # helper in `runtime-domain`). It is authored in YAML for human
 # readability and consumed as a JSON Schema (Draft 2020-12) by the
-# Kotlin runtime (`InstallPlanSchemaValidator` in `runtime-contracts`).
+# Kotlin runtime (`InstallPlanSchemaValidator` in `runtime-infra/contracts`).
 #
 # What lives here vs. in Kotlin:
 #
@@ -245,11 +245,15 @@ required:
   - staging_root
   - staging
   - telemetry_level
+  - installation_profile
   - mcp_registration
   - runtime_distribution
   - windows_symlink_preflight
   - replace_existing_skill_bill_links
 properties:
+  installation_profile:
+    type: string
+    enum: [ordinary, github]
   status:
     type: string
     minLength: 1
@@ -261,9 +265,9 @@ properties:
   contract_version:
     type: string
     minLength: 1
-    const: "0.3"
+    const: "0.4"
     description: >
-      Pinned to `INSTALL_PLAN_CONTRACT_VERSION` (currently "0.3"). The
+      Pinned to `INSTALL_PLAN_CONTRACT_VERSION` (currently "0.4"). The
       parity test `InstallPlanSchemaContractVersionTest` keeps the two
       in lockstep.
   agents:
