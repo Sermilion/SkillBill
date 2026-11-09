@@ -34,6 +34,22 @@ Use the resolved feature size for ceremony expectations; all runtime gates remai
 Scaling changes scope and verbosity only; it must not skip or weaken review, audit, validation,
 schema, branch, history, commit, or PR gates.
 
+## Subtask evidence boundary
+When executing a subtask, judge completion against that subtask's acceptance criteria and the
+prerequisites supplied by completed dependencies. Never require implementation, migration,
+integration, or evidence assigned to a later subtask. Parent outcome criteria describe the
+completed goal; they do not become additional acceptance gates for each child.
+Trace a suspected gap to its owning criterion and subtask before raising a finding, requesting
+repair, or blocking. Record work explicitly assigned to a later subtask as deferred context,
+not as a current failure, and do not fabricate its evidence or mark it completed.
+Current regressions remain repair work. Keep existing callers and persisted data usable while
+later integration is pending. If new strict behavior needs evidence a later subtask supplies,
+keep that behavior inactive at current entry points or preserve a safe compatible path. Do not
+demand the later producer's evidence or activate an incomplete consumer to satisfy this child.
+Required project checks still run in full. Never waive a failing check, weaken an evidence rule,
+skip a test, or claim the whole goal complete because a subtask boundary defers work.
+Final goal assessment must require every goal outcome after all subtasks finish.
+
 ## Validation ownership
 Only the validate phase may run the pack validation gate
 (`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check --continue`,

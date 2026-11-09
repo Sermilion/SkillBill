@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.phase.prompt.directives.nonValidatePhaseVali
 import skillbill.engine.featuretask.phase.prompt.directives.operatorBlockRetryDirective
 import skillbill.engine.featuretask.phase.prompt.directives.phasePromptHeader
 import skillbill.engine.featuretask.phase.prompt.directives.planBundleRepairDirective
+import skillbill.engine.featuretask.phase.prompt.directives.subtaskEvidenceBoundaryDirective
 import skillbill.engine.featuretask.phase.prompt.directives.terminalRetryDirective
 import skillbill.engine.featuretask.phase.prompt.directives.testValueDisciplineDirective
 
@@ -24,6 +25,7 @@ internal fun phasePromptLeadingSections(
     phasePromptHeader(inputs.issueKey, inputs.briefing.phaseId, sections.taskDirective, settlesThroughTools),
     installedRuntimeAuthorityDirective(settlesThroughTools),
     ceremonyDirective(inputs.briefing, sections.ceremonyLine),
+    subtaskEvidenceBoundaryDirective,
     mutatingPhaseIdempotencyDirective(inputs.mutating),
     nonValidatePhaseValidationOwnershipDirective(sections.runsValidationGate),
     nonBuildPhaseBuildOwnershipDirective(sections.runsBuildGate),

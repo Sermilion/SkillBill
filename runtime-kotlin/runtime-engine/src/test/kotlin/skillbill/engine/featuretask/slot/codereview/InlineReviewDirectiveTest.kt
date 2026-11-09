@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.runner.SlotBaselineTestResources
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -64,6 +65,8 @@ class InlineReviewDirectiveTest {
 
     assertTrue(prompt.contains("\n## Review mode argument\n"))
     assertTrue(prompt.contains("## Depth\n"))
+    assertContains(prompt, "integration, or evidence assigned to a later subtask.")
+    assertContains(prompt, "Current regressions remain repair work.")
     assertFalse(prompt.contains("read_evidence"), "the retired broker worker's evidence contract stays out")
   }
 
