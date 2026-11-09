@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import skillbill.approval.model.ApprovalActionClass
+import skillbill.approval.model.ApprovalMatchFacts
 import skillbill.approval.model.ApprovalProviderDisposition
 import skillbill.approval.model.DENY_OPTION_KIND
 import skillbill.approval.model.ONE_TIME_ALLOW_OPTION_KIND
@@ -183,9 +184,10 @@ class ClaudeApprovalRequests(
         state = ApprovalState.PENDING,
         providerPayload = frame.line,
       )
+    val canonicalInput = CanonicalJson.encode(frame.input)
     return ApprovalRegistrationCommand(
       request = request,
-      canonicalInput = CanonicalJson.encode(frame.input),
+      canonicalInput = canonicalInput,
       actionClass = tool.actionClass,
       writeCapable = tool.writeCapable,
       providerDisposition =
@@ -195,8 +197,28 @@ class ClaudeApprovalRequests(
           ApprovalProviderDisposition.NONE
         },
       enclosingDeadline = null,
+      matchFacts = matchFacts(toolName, frame.input),
     )
   }
+
+  private fun matchFacts(
+    toolName: String,
+    input: JsonObject,
+  ): ApprovalMatchFacts? =
+    when (toolName) {
+      BASH_TOOL -> ApprovalMatchFactsNormalizer.commandFacts(input.string(COMMAND_KEY))
+      in EDIT_TOOLS ->
+        input.string(FILE_PATH_KEY)?.let {
+          ApprovalMatchFactsNormalizer.pathFacts(checkout, checkout, listOf(it))
+        }
+      NOTEBOOK_TOOL ->
+        input.string(NOTEBOOK_PATH_KEY)?.let {
+          ApprovalMatchFactsNormalizer.pathFacts(checkout, checkout, listOf(it))
+        }
+      else -> null
+    }
+
+  private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 
   private fun ApprovalRegistrationResult.request(): ApprovalRequestRecord? =
     when (this) {
@@ -248,6 +270,11 @@ class ClaudeApprovalRequests(
     const val DENY_OPTION_ID = "deny"
     const val SCOPE_FINGERPRINT_PLACEHOLDER = "pending"
     const val BASH_TOOL = "Bash"
+    val EDIT_TOOLS = setOf("Edit", "Write", "MultiEdit")
+    const val NOTEBOOK_TOOL = "NotebookEdit"
+    const val FILE_PATH_KEY = "file_path"
+    const val NOTEBOOK_PATH_KEY = "notebook_path"
+    const val COMMAND_KEY = "command"
     const val UNAVAILABLE_MESSAGE =
       "Operator approval is unavailable for this request: no operator surface can answer it, so the action was not run."
     val NETWORK_TOOLS = setOf("WebFetch", "WebSearch")

@@ -69,6 +69,7 @@ internal class CursorAcpPermissions(
             waiting.writeCapable,
             if (ordinary) ApprovalProviderDisposition.NONE else ApprovalProviderDisposition.INTERACTION_REQUIRED,
             null,
+            matchFacts = waiting.matchFacts,
           ),
         )
       }.getOrElse { return stop("${provider.name} approval registration failed: ${it.message.orEmpty()}") }

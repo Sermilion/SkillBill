@@ -8,11 +8,13 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import skillbill.approval.model.ApprovalActionClass
+import skillbill.approval.model.ApprovalMatchFacts
 import skillbill.approval.model.DENY_OPTION_KIND
 import skillbill.approval.model.ONE_TIME_ALLOW_OPTION_KIND
 import skillbill.approval.model.PROVIDER_REMEMBER_OPTION_KIND
 import skillbill.contracts.CanonicalJson
 import skillbill.contracts.approval.ApprovalOption
+import skillbill.infrastructure.launcher.process.interaction.ApprovalMatchFactsNormalizer
 import skillbill.infrastructure.launcher.process.codex.CodexRpcKeys as K
 
 private enum class CodexCommandActionType(val wireValue: String) {
@@ -39,6 +41,7 @@ internal data class CodexApprovalAction(
   val subject: String,
   val display: String,
   val actionClass: ApprovalActionClass,
+  val joined: JsonObject,
 )
 
 internal object CodexApprovalActions {
@@ -79,7 +82,53 @@ internal object CodexApprovalActions {
         command -> ApprovalActionClass.ORDINARY_COMMAND
         else -> ApprovalActionClass.ORDINARY_TOOL
       },
+      joined,
     )
+  }
+
+  fun matchFacts(
+    action: CodexApprovalAction,
+    checkout: String,
+  ): ApprovalMatchFacts? {
+    if (action.canonical == null || action.actionClass !in ORDINARY_MATCH_FACT_CLASSES) return null
+    return if (action.kind == K.COMMAND_EXECUTION_TYPE) {
+      commandMatchFacts(action.joined, checkout)
+    } else {
+      fileMatchFacts(action.joined, checkout)
+    }
+  }
+
+  private fun commandMatchFacts(
+    joined: JsonObject,
+    checkout: String,
+  ): ApprovalMatchFacts? {
+    val cwd = joined.text(K.CWD) ?: return null
+    if (!ApprovalMatchFactsNormalizer.withinCheckout(checkout, cwd)) return null
+    return ApprovalMatchFactsNormalizer.commandFacts(unwrapShell(joined.text(K.COMMAND)))
+  }
+
+  private fun fileMatchFacts(
+    joined: JsonObject,
+    checkout: String,
+  ): ApprovalMatchFacts? {
+    if (joined[K.GRANT_ROOT].present() != null) return null
+    val paths = changePaths(joined[K.CHANGES]) ?: return null
+    return ApprovalMatchFactsNormalizer.pathFacts(checkout, joined.text(K.CWD) ?: checkout, paths)
+  }
+
+  private fun changePaths(value: JsonElement?): List<String>? {
+    val changes = value as? JsonArray ?: return null
+    return changes.map { entry ->
+      (entry as? JsonObject)?.text(K.PATH) ?: return null
+    }
+  }
+
+  private fun unwrapShell(command: String?): String? {
+    val trimmed = command?.trim() ?: return null
+    SHELL_WRAPPED_COMMAND.matchEntire(trimmed)?.let { return it.groupValues[1] }
+    val first = trimmed.takeWhile { !it.isWhitespace() }
+    if (first.isNotEmpty() && SHELL_BINARY.matches(first)) return null
+    return trimmed
   }
 
   private fun completeAction(
@@ -196,6 +245,11 @@ internal object CodexApprovalActions {
     return extensions || escalation || specialCommand
   }
 
+  private val ORDINARY_MATCH_FACT_CLASSES =
+    setOf(ApprovalActionClass.ORDINARY_COMMAND, ApprovalActionClass.ORDINARY_TOOL)
+  private val SHELL_WRAPPED_COMMAND =
+    Regex("""^(?:/bin/|/usr/bin/)?(?:bash|zsh|sh) -l?c '([^']*)'$""")
+  private val SHELL_BINARY = Regex("""^(?:/bin/|/usr/bin/)?(?:bash|zsh|sh)$""")
   private val REMEMBERED = setOf(K.ACCEPT_WITH_EXECPOLICY_AMENDMENT, K.APPLY_NETWORK_POLICY_AMENDMENT)
   private val ESCALATION_FIELDS =
     setOf(
