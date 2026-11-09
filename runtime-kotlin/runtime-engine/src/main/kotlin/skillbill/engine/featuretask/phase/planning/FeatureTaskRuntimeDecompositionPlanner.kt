@@ -20,6 +20,7 @@ import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.projectstore.model.SpecPathLocation
 import skillbill.ports.projectstore.model.classifySpecPath
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
+import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import java.nio.file.Path
@@ -84,6 +85,9 @@ public class FeatureTaskRuntimeDecompositionPlanner(
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, warning)
     }
   }
+
+  internal fun authoredManifest(parentSpecPath: Path): DecompositionManifest =
+    preparationWriter.authoredManifest(parentSpecPath)
 
   internal fun authoredSubtasks(parentSpecPath: Path): List<DecompositionSubtask> =
     preparationWriter.authoredSubtasks(parentSpecPath)

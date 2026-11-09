@@ -27,6 +27,7 @@ import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.projectstore.model.resolveSpecPath
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
+import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
 import java.io.IOException
@@ -146,8 +147,11 @@ public class FeatureSpecPreparationWriter(
     )
   }
 
+  internal fun authoredManifest(parentSpecPath: Path): DecompositionManifest =
+    loadPreparedManifest(parentSpecPath.resolveSibling(AUTHORED_MANIFEST_FILE)).manifest
+
   internal fun authoredSubtasks(parentSpecPath: Path): List<DecompositionSubtask> =
-    loadPreparedManifest(parentSpecPath.resolveSibling(AUTHORED_MANIFEST_FILE)).manifest.subtasks
+    authoredManifest(parentSpecPath).subtasks
 
   private fun authoredText(
     fieldPath: String,

@@ -16,6 +16,27 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimePhasePromptComposerContentTest {
   @Test
+  fun `subtask gates cannot demand future evidence or excuse current regressions`() {
+    listOf("plan", "implement", "audit", "review", "verify_findings", "implement_fix", "build", "validate")
+      .forEach { phaseId ->
+        val prompt = composePromptForPhase(phaseId)
+
+        assertContains(prompt, "## Subtask evidence boundary", message = phaseId)
+        assertContains(prompt, "Never require implementation, migration,", message = phaseId)
+        assertContains(prompt, "integration, or evidence assigned to a later subtask.", message = phaseId)
+        assertContains(prompt, "Trace a suspected gap to its owning criterion and subtask", message = phaseId)
+        assertContains(prompt, "Current regressions remain repair work.", message = phaseId)
+        assertContains(prompt, "Required project checks still run in full.", message = phaseId)
+        assertContains(prompt, "Final goal assessment must require every goal outcome", message = phaseId)
+      }
+
+    val plan = composePromptForPhase("plan")
+    assertContains(plan, "only its completed dependencies available.")
+    assertContains(plan, "prerequisites before consumer activation.")
+    assertContains(plan, "If that cannot be done safely, combine the coupled work or reorder the subtasks.")
+  }
+
+  @Test
   fun `implementation and audit may inspect new checkout contracts without replacing their settlement contract`() {
     val target = FeatureTaskRuntimePhaseSettlementTarget(workflowId = "wftr-20260904-210526-r3x0", attempt = 1)
     listOf("implement", "audit").forEach { phaseId ->
