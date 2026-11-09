@@ -754,6 +754,15 @@ existing recovery paths.
 
 ## Planning implementability
 
+Bundle planning divides broad criteria into smaller, independently verifiable pieces of the same
+production work. Prefer five focused criteria over fewer broad ones when that split is coherent.
+The split changes acceptance granularity while preserving requirements and the subtask boundary.
+Requirements and execution boundaries determine scope before criterion counts. Planning never expands
+scope or moves work between subtasks merely to reach five criteria. Fewer criteria are appropriate
+when further splitting would duplicate outcomes, separate tightly
+coupled work, or invent scope. Five is a preference within the existing one-to-five limit, not a
+minimum or a target number of subtasks. Test obligations remain separate from acceptance criteria.
+
 Preplan checks prerequisite capabilities against authoritative contracts and owning
 source. Bundle planning reconciles requirements across subtasks, and each subtask
 planner checks its final tasks against that evidence before declaring them ready.

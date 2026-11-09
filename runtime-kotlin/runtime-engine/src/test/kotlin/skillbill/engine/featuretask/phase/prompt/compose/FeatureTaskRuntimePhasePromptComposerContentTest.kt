@@ -284,8 +284,24 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(plan, "A subtask-sized criterion becomes its own full subtask.")
     assertContains(plan, "A one-sentence criterion is not allowed.")
     assertContains(plan, "Never use nested bullets inside a criterion")
+    assertContains(plan, "Divide broad criteria into smaller,")
+    assertContains(plan, "independently verifiable pieces of the same production work.")
+    assertContains(plan, "Prefer five focused criteria over three")
+    assertContains(plan, "preserve the same requirements and subtask boundary.")
+    assertContains(
+      plan,
+      "Never expand a subtask's scope or move work from another subtask merely to reach five criteria.",
+    )
+    assertContains(plan, "Use fewer when further splitting would duplicate outcomes")
+    assertContains(plan, "Never add test-only criteria or filler to reach five.")
+    assertContains(plan, "planning preference, not a minimum or a target number of subtasks.")
     assertFalse(plan.contains("Breadth is never a reason"), "size now decides whether a criterion splits")
-    assertContains(composePromptForPhase("preplan"), "When any criterion is subtask-sized, choose `decomposed`.")
+    val preplan = composePromptForPhase("preplan")
+    assertContains(preplan, "When any criterion is subtask-sized, choose `decomposed`.")
+    assertContains(preplan, "five focused criteria over fewer broad ones.")
+    assertContains(preplan, "Preserve the same requirements and subtask boundary.")
+    assertContains(preplan, "Never expand scope or move work between subtasks")
+    assertContains(preplan, "Five is a preference, not a minimum or a target number of subtasks.")
   }
 
   @Test
