@@ -162,22 +162,23 @@ class ChatChangeReadsTest {
     val sibling = home.resolve("linked").toFile()
     git("worktree", "add", "-q", "-b", "linked", sibling.path)
     File(sibling, "a.kt").writeText("pre-existing dirty edit\n")
-    // Linked roots come from git's worktree list, which uses forward slashes on Windows too.
-    val siblingRoot = sibling.path.replace('\\', '/')
+    // Changed paths of a linked checkout come from git, which uses forward slashes on Windows too;
+    // worktree roots keep the native form.
+    val siblingGitRoot = sibling.path.replace('\\', '/')
     val baseline = snapshot()
     write("b.kt", "chat in original\n")
     File(sibling, "b.kt").writeText("chat in linked\nextra line\n")
 
     val changed = assertIs<ChatChangedPaths.Listed>(reads.changedPaths(repo.path, baseline))
-    assertEquals(setOf("b.kt", "$siblingRoot/b.kt"), changed.paths)
+    assertEquals(setOf("b.kt", "$siblingGitRoot/b.kt"), changed.paths)
     val result = assertIs<ChatChangesRead.Listed>(reads.read(repo.path, baseline, changed.paths)).changes
     assertEquals(2, result.files.size)
     assertEquals(3, result.insertions)
     assertEquals(2, result.deletions)
-    assertEquals(setOf(repo.path, siblingRoot), result.worktrees.map { it.repositoryRoot }.toSet())
-    val linked = result.worktrees.single { it.repositoryRoot == siblingRoot }
+    assertEquals(setOf(repo.path, sibling.path), result.worktrees.map { it.repositoryRoot }.toSet())
+    val linked = result.worktrees.single { it.repositoryRoot == sibling.path }
     val target = chatScopeTarget("chat", linked.repositoryRoot, linked.baseline, linked.changes.timeline, linked.paths, linked.changes.comparisonBaseSha)
-    assertEquals(siblingRoot, target.worktreeRoot)
+    assertEquals(sibling.path, target.worktreeRoot)
     assertEquals(setOf("b.kt"), target.paths)
     val comparison = assertIs<ChangeBaseline.RunStart>(target.allBaseline)
     val files = assertIs<WorkChangeListResult.Listed>(runtime.workChangesPort.changes(comparison.toPort()))
