@@ -9,7 +9,6 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
 public data class PlanBundleFeasibilitySnapshot internal constructor(
@@ -108,11 +107,12 @@ public object PlanBundleFeasibility {
   public fun approved(
     snapshot: PlanBundleFeasibilitySnapshot,
     record: FeatureTaskRuntimePhaseRecord?,
+    phaseId: String,
   ): Boolean {
     if (record?.status != WorkflowStepStatus.COMPLETED) return false
     val artifact = record.outputArtifact ?: return false
     val output = NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(artifact, "plan_subtasks feasibility")
-    if (output.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS ||
+    if (output.phaseId != phaseId ||
       output.status != WorkflowStepStatus.COMPLETED.wireValue
     ) {
       return false
@@ -130,13 +130,13 @@ public object PlanBundleFeasibility {
     }
     val evidence = lines.drop(1).map { CRITERION.matchEntire(it) ?: return "Malformed criterion feasibility evidence." }
     val refs = evidence.map { it.groupValues[1] }
-    if (refs != snapshot.criterionRefs || refs.isEmpty()) {
-      return "Feasibility evidence must cover every criterion exactly once in manifest order."
+    return when {
+      refs != snapshot.criterionRefs || refs.isEmpty() ->
+        "Feasibility evidence must cover every criterion exactly once in manifest order."
+      evidence.any { it.groupValues[2].length < MIN_EVIDENCE_CHARS } ->
+        "Feasibility evidence must explain the available dependencies and the passing intermediate state."
+      else -> null
     }
-    if (evidence.any { it.groupValues[2].length < MIN_EVIDENCE_CHARS }) {
-      return "Feasibility evidence must explain the available dependencies and the passing intermediate state."
-    }
-    return null
   }
 
   internal fun repairRequested(reason: String?): Boolean = reason?.startsWith(REPAIR_REQUIRED) == true

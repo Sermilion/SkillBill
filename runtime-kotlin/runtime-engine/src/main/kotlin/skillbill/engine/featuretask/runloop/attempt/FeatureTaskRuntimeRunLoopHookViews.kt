@@ -13,7 +13,7 @@ import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
 import skillbill.engine.featuretask.runloop.observability.continuation
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runloop.planning.PlanBundleFeasibilitySettlement
+import skillbill.engine.featuretask.runloop.planning.FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement
 import skillbill.engine.featuretask.runloop.planning.PlanBundleStagingPromotion
 import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
 import skillbill.engine.featuretask.runloop.state.repositoryObservations
@@ -148,7 +148,14 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
       attested: NormalizedFeatureTaskRuntimePhaseOutput,
       before: PlanBundleFeasibilitySnapshot,
       repairing: Boolean,
-    ): AttemptResult? = PlanBundleFeasibilitySettlement.settle(context, capture, attested, before, repairing)
+    ): AttemptResult? =
+      FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement.settle(
+        context,
+        capture,
+        attested,
+        before,
+        repairing,
+      )
 
     override fun settleAuthoredBundle(capture: ValidatedOutputCapture): AttemptResult? {
       val rejection = PlanDecompositionStop.recordAuthoredBundleOrRejection(context, capture) ?: return null

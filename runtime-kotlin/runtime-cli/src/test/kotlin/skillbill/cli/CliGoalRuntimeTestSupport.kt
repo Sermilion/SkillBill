@@ -507,7 +507,7 @@ internal class GoalFixtureAgentRunLauncher(
         if ("# Goal assessment:" in skillRequest.promptOverride.orEmpty()) {
           "Finding: none"
         } else {
-          phasePlanningPayload(phaseId)
+          phasePlanningPayload(phaseId, skillRequest.promptOverride.orEmpty())
         },
       stderr = "",
     )
@@ -841,10 +841,31 @@ internal fun jsonString(value: Any?): String =
     JsonCodec.valueToJsonElement(value),
   )
 
-internal fun phasePlanningPayload(phaseId: String): String =
-  """{"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"$phaseId",""" +
-    """"status":"completed","summary":"$phaseId","produced_outputs":""" +
-    (planningProjectionOutputs(phaseId) ?: """{"result":"$phaseId"}""") + "}"
+internal fun phasePlanningPayload(
+  phaseId: String,
+  prompt: String,
+): String {
+  val snapshot = prompt.substringAfter("## Bundle feasibility snapshot", "")
+  val outputs =
+    if (snapshot.isNotEmpty()) {
+      val fingerprint = snapshot.lineSequence().first { it.startsWith("Fingerprint: ") }.removePrefix("Fingerprint: ")
+      val refs =
+        snapshot.lineSequence().first { it.startsWith("Required criterion refs: ") }
+          .removePrefix("Required criterion refs: ").split(", ")
+      val evidence =
+        buildString {
+          appendLine("bundle-feasibility-v1: approved $fingerprint")
+          refs.forEach {
+            appendLine("criterion $it: The fixture supplies this subtask's dependencies and its implementation path.")
+          }
+        }.trimEnd()
+      return evidence
+    } else {
+      planningProjectionOutputs(phaseId) ?: """{"result":"$phaseId"}"""
+    }
+  return """{"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"$phaseId",""" +
+    """"status":"completed","summary":"$phaseId","produced_outputs":$outputs}"""
+}
 
 internal fun planningProjectionOutputs(phaseId: String): String? =
   when (phaseId) {

@@ -11,10 +11,9 @@ import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
-internal object PlanBundleFeasibilitySettlement {
+internal object FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement {
   fun settle(
     context: PhaseOutputSettlementContext,
     capture: ValidatedOutputCapture,
@@ -46,20 +45,40 @@ internal object PlanBundleFeasibilitySettlement {
     if (unauthorized.isNotEmpty()) {
       return block(context, capture, "Bundle feasibility changed unauthorized files: ${unauthorized.joinToString()}.")
     }
-    if (!repairing) {
-      if (before != after) return block(context, capture, "The read-only feasibility review changed the bundle.")
-      val value = attested.output.value
-      val conflicts = value.lines().drop(1).filter { it.startsWith("conflict ") }
-      if (value.lineSequence().firstOrNull() ==
-        "${PlanBundleFeasibility.PREFIX} changes_requested ${before.fingerprint}" && conflicts.isNotEmpty()
-      ) {
-        return retry(capture, PlanBundleFeasibility.REPAIR_REQUIRED + "\n" + conflicts.joinToString("\n"))
-      }
-      return PlanBundleFeasibility.approvalRejection(before, value)?.let {
-        retry(capture, PlanBundleFeasibility.REVIEW_REQUIRED + "\n" + it)
-      }
-    }
+    if (!repairing) return review(context, capture, attested, before, after)
     before.repairViolation(after)?.let { return block(context, capture, it) }
+    return repair(context, capture, attested, before, target)
+  }
+
+  private fun review(
+    context: PhaseOutputSettlementContext,
+    capture: ValidatedOutputCapture,
+    attested: NormalizedFeatureTaskRuntimePhaseOutput,
+    before: PlanBundleFeasibilitySnapshot,
+    after: PlanBundleFeasibilitySnapshot,
+  ): AttemptResult? {
+    if (before != after) return block(context, capture, "The read-only feasibility review changed the bundle.")
+    val value = attested.output.value
+    val conflicts = value.lines().drop(1).filter { it.startsWith("conflict ") }
+    if (value.lineSequence().firstOrNull() ==
+      "${PlanBundleFeasibility.PREFIX} changes_requested ${before.fingerprint}" && conflicts.isNotEmpty()
+    ) {
+      return retry(capture, PlanBundleFeasibility.REPAIR_REQUIRED + "\n" + conflicts.joinToString("\n"))
+    }
+    return PlanBundleFeasibility.approvalRejection(before, value)?.let {
+      retry(capture, PlanBundleFeasibility.REVIEW_REQUIRED + "\n" + it)
+    }
+  }
+
+  private fun repair(
+    context: PhaseOutputSettlementContext,
+    capture: ValidatedOutputCapture,
+    attested: NormalizedFeatureTaskRuntimePhaseOutput,
+    before: PlanBundleFeasibilitySnapshot,
+    target: PlanBundleTarget?,
+  ): AttemptResult {
+    val planner = context.decompositionPlanner
+    val request = context.request
     if (attested.output.value.lineSequence().firstOrNull() != PlanBundleFeasibility.REPAIRED) {
       return retry(
         capture,
@@ -85,7 +104,7 @@ internal object PlanBundleFeasibilitySettlement {
     val rejection =
       PlanDecompositionStop.recordExistingBundleOrRejection(
         context,
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
+        capture.run.phaseId,
       )
     return retry(
       capture,

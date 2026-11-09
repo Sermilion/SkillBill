@@ -7,6 +7,7 @@ import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertFalse
@@ -71,11 +72,33 @@ class PlanBundleFeasibilityTest {
   fun `legacy completed plans require review and only current completed approval is reusable`() {
     val snapshot = snapshot()
     val record = record(approval(snapshot))
-    assertTrue(PlanBundleFeasibility.approved(snapshot, record))
-    assertFalse(PlanBundleFeasibility.approved(snapshot, null))
-    assertFalse(PlanBundleFeasibility.approved(snapshot, record("Planned subtasks 1")))
-    assertFalse(PlanBundleFeasibility.approved(snapshot, record.copy(status = WorkflowStepStatus.RUNNING)))
-    assertFalse(PlanBundleFeasibility.approved(snapshot.copy(parentText = "New parent scope"), record))
+    assertTrue(
+      PlanBundleFeasibility.approved(snapshot, record, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS),
+    )
+    assertFalse(
+      PlanBundleFeasibility.approved(snapshot, null, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS),
+    )
+    assertFalse(
+      PlanBundleFeasibility.approved(
+        snapshot,
+        record("Planned subtasks 1"),
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
+      ),
+    )
+    assertFalse(
+      PlanBundleFeasibility.approved(
+        snapshot,
+        record.copy(status = WorkflowStepStatus.RUNNING),
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
+      ),
+    )
+    assertFalse(
+      PlanBundleFeasibility.approved(
+        snapshot.copy(parentText = "New parent scope"),
+        record,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
+      ),
+    )
   }
 
   private fun snapshot(): PlanBundleFeasibilitySnapshot =

@@ -781,6 +781,16 @@ The shared runtime instruction is `slot/plan/planning-feasibility.md` in the eng
 resources; preplan, bundle planning and subtask planning all receive its body,
 including the model-specific strategy variants.
 
+Planning keeps a concise component inventory in its existing digest and implementation
+plan. It distinguishes existing behavior, authorized local components to build or extend,
+and unavailable external capabilities. Every missing local component has an implementation
+owner, consuming criteria and dependency order. Criterion sizing includes that work,
+caller wiring, contracts and required migrations, even when their files do not exist yet.
+Shared prerequisites have one implementation owner and precede dependent behavior;
+decomposition preserves usable intermediate states. Missing assigned code is implementation
+work and does not by itself justify a block. Planners reconcile this inventory against
+the final tasks before declaring them ready. This adds no output schema or runtime gate.
+
 The digest is the starting evidence, not a prohibition on resolving a critical gap.
 Planning may use targeted read-only lookups for a missing or contradictory fact that
 determines implementability. It does not repeat discovery or widen file-write

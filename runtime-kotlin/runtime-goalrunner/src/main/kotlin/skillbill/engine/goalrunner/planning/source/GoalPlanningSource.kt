@@ -118,7 +118,14 @@ public class PlanWorkflowGoalPlanningSource(
         scope.canonicalRepository,
         scope.state.manifest.issueKey,
       )
-    if (!PlanBundleFeasibility.approved(snapshot, plan.records[PLAN_SUBTASKS_STEP_ID])) return null
+    if (!PlanBundleFeasibility.approved(
+        snapshot,
+        plan.records[PLAN_SUBTASKS_STEP_ID],
+        PLAN_SUBTASKS_STEP_ID,
+      )
+    ) {
+      return null
+    }
     val descriptors = scope.descriptors(recordedHash = { null }) ?: return null
     val provenance =
       GoalPlanningContractProvenance(

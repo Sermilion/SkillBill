@@ -392,7 +392,7 @@ class CliPhasePlanRuntimeTest {
         JsonCodec.anyToStringAnyMap(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.value(after)),
       )
     listOf("preplan", "plan", "plan_subtasks:2").forEach { assertEquals(records[it], retained[it], it) }
-    assertEquals(listOf("plan_subtasks"), planner.phaseIds.drop(PLAN_LAUNCHES.size))
+    assertEquals(listOf("plan_subtasks", "plan_subtasks"), planner.phaseIds.drop(PLAN_LAUNCHES.size))
     assertTrue(planner.timeouts.all { it == null }, planner.timeouts.toString())
     assertEquals(1, goal.childLaunches.size)
   }
@@ -630,7 +630,15 @@ class CliPhasePlanRuntimeTest {
       if (failPlanSubtasks && phaseId == "plan_subtasks") {
         return agentRunLaunchFacts(SupportedAgent.CODEX, termination = AgentRunTermination.SpawnFailed)
       }
-      val stdout = if (phaseId == "plan") authorBundle() else phasePlanningPayload(phaseId)
+      val stdout =
+        if (phaseId == "plan") {
+          authorBundle()
+        } else {
+          phasePlanningPayload(
+            phaseId,
+            request.skillRunRequest.promptOverride.orEmpty(),
+          )
+        }
       if (dirtyOutsideBundle && phaseIds.count { it == "plan" } == 1 && phaseId == "plan") {
         Files.writeString(repoRoot.resolve("outside-plan.txt"), "Concurrent edit")
       }
@@ -687,10 +695,11 @@ class CliPhasePlanRuntimeTest {
     const val PLAN_INTAKE = "Split the work into two parts."
     val PHASE_LINE = Regex("""Phase: (\w+) \(""")
     val SUBTASK_FILES = mapOf(1 to "spec_subtask_1_first-part.md", 2 to "spec_subtask_2_second-part.md")
-    val PLAN_LAUNCHES = listOf("preplan", "plan", "plan_subtasks", "plan_subtasks")
+    val PLAN_LAUNCHES = listOf("preplan", "plan", "plan_subtasks", "plan_subtasks", "plan_subtasks")
     const val PLAN_ATTEMPTS_BEFORE_BLOCK = 3
-    val REPAIRED_PLAN_LAUNCHES = listOf("preplan", "plan", "plan", "plan_subtasks", "plan_subtasks")
-    val RESUMED_PLAN_LAUNCHES = listOf("preplan", "plan", "plan", "plan", "plan", "plan_subtasks", "plan_subtasks")
+    val REPAIRED_PLAN_LAUNCHES = listOf("preplan", "plan", "plan", "plan_subtasks", "plan_subtasks", "plan_subtasks")
+    val RESUMED_PLAN_LAUNCHES =
+      listOf("preplan", "plan", "plan", "plan", "plan", "plan_subtasks", "plan_subtasks", "plan_subtasks")
     val PLANNED_UNITS = listOf("plan_subtasks:1", "plan_subtasks:2")
 
     fun storeSpecsRoot(checkoutHome: Path): Path =

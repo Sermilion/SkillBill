@@ -298,7 +298,12 @@ public class StandalonePlanRun(
             decodePhaseRecords(it.artifacts)[FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS]
           }
         }
-      if (!PlanBundleFeasibility.approved(feasibility, record)) {
+      if (!PlanBundleFeasibility.approved(
+          feasibility,
+          record,
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
+        )
+      ) {
         val settledIds = feasibility.settledSubtaskIds
         return replanSubtasks(PlanSubtasksReplan(issueKey, id, repoRoot, settledIds), inputFor)
       }
