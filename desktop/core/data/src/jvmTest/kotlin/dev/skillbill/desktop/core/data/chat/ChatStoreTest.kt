@@ -202,6 +202,26 @@ class ChatStoreTest {
   }
 
   @Test
+  fun `project worktree snapshots survive repeated saves alongside a previous version chat`() {
+    val diagnostics = RecordingDiagnostics()
+    val store = ChatStore(host, diagnostics, Clock.System)
+    val baseline = ChatChangesBaseline("head", listOf("scratch.txt"), "stash", Instant.fromEpochMilliseconds(5))
+    val file = File(host.userHome, "$CHAT_STORE_PATH/previous.json")
+    file.parentFile.mkdirs()
+    file.writeText("""{"session_id":"previous","agent_id":"codex","updated_at_ms":10,"new_task_repository_root":"/work/app","new_task_session_established":true,"new_task_changes_capture_attempted":true,"new_task_changes_baseline":{"head_sha":"head","untracked_paths":["scratch.txt"],"stash_sha":"stash","taken_at":5},"new_task_changes_attributed_paths":["original.kt"],"lines":[{"role":"Operator","text":"keep this history"}]}""")
+    val previous = store.newTaskDrafts().single()
+    assertEquals(baseline, previous.newTask?.changesBaseline)
+    assertEquals(setOf("original.kt"), previous.newTask?.changesAttributedPaths)
+    val project = baseline.copy(projectId = "/work/app/.git", worktrees = mapOf("/work/app" to baseline, "/work/main" to baseline.copy(headSha = "main-head", stashSha = null)))
+    val updated = previous.copy(newTask = previous.newTask!!.copy(changesBaseline = project, changesAttributedPaths = setOf("original.kt", "/work/main/changed.kt")))
+    repeat(2) {
+      assertTrue(store.saveChat(updated))
+      assertEquals(updated, ChatStore(host, diagnostics, Clock.System).newTaskDrafts().single())
+    }
+    assertEquals(emptyList(), diagnostics.categories)
+  }
+
+  @Test
   fun `pending new-task turn index counts action-only replies`() {
     val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
     val draft = entry("pending", 10).copy(

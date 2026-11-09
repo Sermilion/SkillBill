@@ -68,6 +68,8 @@ private object ChatStoreKeys {
   const val NEW_TASK_BASE_BRANCH = "new_task_base_branch"
   const val NEW_TASK_SESSION_ESTABLISHED = "new_task_session_established"
   const val NEW_TASK_PENDING_TURN_LINE_INDEX = "new_task_pending_turn_line_index"
+  const val PROJECT_ID = "project_id"
+  const val WORKTREES = "worktrees"
   const val NEW_TASK_CHANGES_BASELINE = "new_task_changes_baseline"
   const val NEW_TASK_CHANGES_CAPTURE_ATTEMPTED = "new_task_changes_capture_attempted"
   const val NEW_TASK_CHANGES_ATTRIBUTED_PATHS = "new_task_changes_attributed_paths"
@@ -340,12 +342,7 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
     put(ChatStoreKeys.NEW_TASK_CHANGES_CAPTURE_ATTEMPTED, newTask.changesCaptureAttempted)
     newTask.pendingTurnLineIndex?.let { put(ChatStoreKeys.NEW_TASK_PENDING_TURN_LINE_INDEX, it) }
     newTask.changesBaseline?.let { baseline ->
-      put(ChatStoreKeys.NEW_TASK_CHANGES_BASELINE, buildJsonObject {
-        put(ChatStoreKeys.HEAD_SHA, baseline.headSha)
-        put(ChatStoreKeys.UNTRACKED_PATHS, buildJsonArray { baseline.untrackedPaths.forEach { add(it) } })
-        baseline.stashSha?.let { put(ChatStoreKeys.STASH_SHA, it) }
-        put(ChatStoreKeys.TAKEN_AT, baseline.takenAt.toEpochMilliseconds())
-      })
+      put(ChatStoreKeys.NEW_TASK_CHANGES_BASELINE, baseline.toJsonBaseline())
     }
     newTask.changesAttributedPaths?.let { paths ->
       put(ChatStoreKeys.NEW_TASK_CHANGES_ATTRIBUTED_PATHS, buildJsonArray { paths.sorted().forEach { add(it) } })
@@ -421,7 +418,18 @@ private fun decodeAttributedPaths(element: JsonElement?, diagnostics: Diagnostic
   return paths?.toSet()
 }
 
-private fun decodeChangesBaseline(element: JsonElement?, diagnostics: Diagnostics): ChatChangesBaseline? {
+private fun ChatChangesBaseline.toJsonBaseline(): JsonObject = buildJsonObject {
+  put(ChatStoreKeys.HEAD_SHA, headSha)
+  put(ChatStoreKeys.UNTRACKED_PATHS, buildJsonArray { untrackedPaths.forEach { add(it) } })
+  stashSha?.let { put(ChatStoreKeys.STASH_SHA, it) }
+  put(ChatStoreKeys.TAKEN_AT, takenAt.toEpochMilliseconds())
+  projectId?.let { put(ChatStoreKeys.PROJECT_ID, it) }
+  if (worktrees.isNotEmpty()) put(ChatStoreKeys.WORKTREES, buildJsonObject {
+    worktrees.forEach { (root, baseline) -> put(root, baseline.copy(projectId = null, worktrees = emptyMap()).toJsonBaseline()) }
+  })
+}
+
+private fun decodeChangesBaseline(element: JsonElement?, diagnostics: Diagnostics, nested: Boolean = false): ChatChangesBaseline? {
   if (element == null || element == JsonNull) return null
   val baseline = element as? JsonObject
   if (baseline == null) {
@@ -447,7 +455,25 @@ private fun decodeChangesBaseline(element: JsonElement?, diagnostics: Diagnostic
     diagnostics.record("chat.changes_baseline_unreadable")
     return null
   }
-  return ChatChangesBaseline(headSha, paths, stashSha, Instant.fromEpochMilliseconds(takenAt))
+  val projectElement = baseline[ChatStoreKeys.PROJECT_ID]
+  val projectId = (projectElement as? JsonPrimitive)?.takeIf { it.isString }?.content
+  val treeElement = baseline[ChatStoreKeys.WORKTREES]
+  val trees = linkedMapOf<String, ChatChangesBaseline>()
+  if (projectElement != null && projectId == null || treeElement != null && (nested || treeElement !is JsonObject)) {
+    diagnostics.record("chat.changes_baseline_unreadable")
+    return null
+  }
+  if (treeElement is JsonObject) {
+    if (projectId == null) {
+      diagnostics.record("chat.changes_baseline_unreadable")
+      return null
+    }
+    for ((root, value) in treeElement) {
+      val decoded = decodeChangesBaseline(value, diagnostics, nested = true) ?: return null
+      trees[root] = decoded
+    }
+  }
+  return ChatChangesBaseline(headSha, paths, stashSha, Instant.fromEpochMilliseconds(takenAt), projectId, trees)
 }
 
 private fun OperationCardReference.toJson(): JsonObject = buildJsonObject {

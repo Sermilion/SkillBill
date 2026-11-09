@@ -103,20 +103,27 @@ internal fun ChatChangesAnchor(chat: NewTaskChat?, state: ChatChangesState, comp
         since,
         onOpenDiff = { openChatChanges(chat, onOpenChanges, null) { open = false } },
         onOpenFile = { path -> openChatChanges(chat, onOpenChanges, path) { open = false } },
+        onOpenWorktree = { worktree, path -> openChatChanges(chat, onOpenChanges, path, worktree.repositoryRoot) { open = false } },
       )
     }
   }
 }
 
-private fun openChatChanges(chat: NewTaskChat?, dispatch: (ChangesSource.Chat, String?) -> Unit, path: String?, close: () -> Unit) {
+private fun openChatChanges(chat: NewTaskChat?, dispatch: (ChangesSource.Chat, String?) -> Unit, path: String?, worktreeRoot: String? = null, close: () -> Unit) {
   close()
   val currentChat = chat ?: return
   val current = currentChat.changes.value as? ChatChangesState.Shown ?: return
+  val worktree = current.changes.worktrees.firstOrNull { it.repositoryRoot == worktreeRoot }
+  if (worktreeRoot != null && worktree == null) return
+  val root = worktree?.repositoryRoot ?: currentChat.repositoryRoot
+  val baseline = worktree?.baseline ?: current.baseline
+  val changes = worktree?.changes ?: current.changes
+  val paths = worktree?.paths ?: current.paths
   val sessionId = currentChat.sessionId
   val source = ChangesSource.Chat(
     sessionId,
     chatChangesWindowTitle(currentChat.thread.transcript.value),
-    chatScopeTarget(sessionId, currentChat.repositoryRoot, current.baseline, current.changes.timeline, current.paths, current.changes.comparisonBaseSha),
+    chatScopeTarget(sessionId, root, baseline, changes.timeline, paths, changes.comparisonBaseSha),
   )
   dispatch(source, path)
 }

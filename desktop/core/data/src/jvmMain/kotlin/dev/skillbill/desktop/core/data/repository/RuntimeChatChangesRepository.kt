@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.domain.model.ChatBaselineCapture
 import dev.skillbill.desktop.core.domain.model.ChatChangedPaths
 import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatChangesRead
+import dev.skillbill.desktop.core.domain.model.ChatProjectWorktrees
 import dev.skillbill.desktop.core.domain.repository.ChatChangesRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -25,12 +26,23 @@ class RuntimeChatChangesRepository(
   private val gitReadLock: GitReadLock,
   private val clock: Clock,
 ) : ChatChangesRepository {
+  override suspend fun projectWorktrees(repositoryRoot: String): ChatProjectWorktrees = withContext(Dispatchers.IO) {
+    gitReadLock.mutex.withLock {
+      val runtime = sessions.sessions.value?.runtime
+      val result = if (runtime == null) ChatProjectWorktrees.Unavailable("No database session is open.")
+      else ChatChangeReads(runtime.workTreeSnapshotPort, runtime.workChangesPort, clock).projectWorktrees(repositoryRoot)
+      if (result is ChatProjectWorktrees.Unavailable) diagnostics.record("chat.project_worktrees_unavailable")
+      result
+    }
+  }
+
   override suspend fun captureBaseline(repositoryRoot: String): ChatBaselineCapture = withContext(Dispatchers.IO) {
     gitReadLock.mutex.withLock {
       val runtime = sessions.sessions.value?.runtime
       val result = if (runtime == null) ChatBaselineCapture.Unavailable("No database session is open.")
       else ChatChangeReads(runtime.workTreeSnapshotPort, runtime.workChangesPort, clock).capture(repositoryRoot)
       if (result is ChatBaselineCapture.Unavailable) diagnostics.record(BASELINE_UNAVAILABLE)
+      if (result is ChatBaselineCapture.Captured) result.unavailableWorktrees.forEach { _ -> diagnostics.record("chat.worktree_baseline_unavailable") }
       result
     }
   }

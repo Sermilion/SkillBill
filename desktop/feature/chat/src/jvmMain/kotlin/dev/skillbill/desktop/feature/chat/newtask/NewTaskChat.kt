@@ -345,6 +345,7 @@ internal class NewTaskChat(
         started = true
         pendingReplay = null
       }
+      if (event is ChatEvent.ToolUse) changesTracker.recordTool(event.call)
       thread.show(agent, event)
       if (opening && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
     }
@@ -365,6 +366,7 @@ internal class NewTaskChat(
       thread.stoppableState.value = true
       changesTracker.beginTurn(started)
     }
+    if (event is ChatEvent.ToolUse) changesTracker.recordTool(event.call)
     thread.show(thread.agentState.value, event)
     if (event !is ChatEvent.Completed && event !is ChatEvent.Failed) return
     if (ownTurn) {

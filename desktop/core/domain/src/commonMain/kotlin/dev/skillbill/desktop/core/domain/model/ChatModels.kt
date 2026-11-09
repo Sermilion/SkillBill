@@ -89,7 +89,7 @@ data class ChatSuggestedAction(
   val branch: String? = null,
 )
 
-data class ChatToolCall(val id: String, val name: String, val input: String, val summary: String?)
+data class ChatToolCall(val id: String, val name: String, val input: String, val summary: String?, val workingDirectory: String? = null)
 
 /** What one turn streams back; a turn ends with [Completed] or [Failed]. */
 sealed interface ChatEvent {
@@ -159,6 +159,8 @@ data class ChatChangesBaseline(
   val untrackedPaths: List<String>,
   val stashSha: String?,
   val takenAt: Instant,
+  val projectId: String? = null,
+  val worktrees: Map<String, ChatChangesBaseline> = emptyMap(),
 )
 
 /**

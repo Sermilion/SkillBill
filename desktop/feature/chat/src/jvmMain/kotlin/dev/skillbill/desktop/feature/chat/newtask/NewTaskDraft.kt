@@ -1,5 +1,7 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import dev.skillbill.desktop.core.domain.model.chatWorktreePath
+
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -432,12 +434,15 @@ class NewTaskDraft internal constructor(
       ?: NewTaskReplay(current.agent.agentId, current.repositoryRoot, current.baseBranch, lines))
       .takeIf { newTaskReplayPreamble(it, repo.root, branch) != null }
     current.end()
-    val sameRepository = current.repositoryRoot == repo.root
+    val sameRepository = current.repositoryRoot == repo.root || current.changesBaseline?.worktrees?.containsKey(repo.root) == true
     val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay,
       changesBaseline = current.changesBaseline.takeIf { sameRepository },
       resumedChanges = current.changesResumed && sameRepository,
       changesCaptureAttempted = (current.changesCaptureAttempted || current.started || current.changesBaseline != null) && sameRepository,
-      changesAttributedPaths = current.changesAttributedPaths.takeIf { sameRepository })
+      changesAttributedPaths = current.changesAttributedPaths.takeIf { sameRepository }?.map { path ->
+        if (current.repositoryRoot != repo.root && !path.startsWith("/") && !path.contains(":/"))
+          chatWorktreePath(current.repositoryRoot, path) else path
+      }?.toSet())
     val switched = "Switched to ${chipText(agent)} in ${repo.name}."
     val notice = if (replay != null) "$switched It gets the earlier conversation with your next message." else switched
     next.thread.showCapability(agent)

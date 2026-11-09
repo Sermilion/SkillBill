@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.skillbill.desktop.core.domain.model.ChatWorktreeChanges
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.*
@@ -32,7 +33,18 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 
 @Composable
-internal fun NewTaskChangesPanel(state: ChatChangesState.Shown, since: String, onOpenDiff: () -> Unit = {}, onOpenFile: (String) -> Unit = {}) {
+internal fun NewTaskChangesPanel(state: ChatChangesState.Shown, since: String, onOpenDiff: () -> Unit = {}, onOpenFile: (String) -> Unit = {}, onOpenWorktree: (ChatWorktreeChanges, String?) -> Unit = { _, _ -> }) {
+  if (state.changes.worktrees.isNotEmpty()) {
+    Column {
+      state.changes.worktrees.forEach { worktree ->
+        BasicText(worktree.repositoryRoot, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+          style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        NewTaskChangesPanel(state.copy(changes = worktree.changes, baseline = worktree.baseline, paths = worktree.paths), since,
+          onOpenDiff = { onOpenWorktree(worktree, null) }, onOpenFile = { onOpenWorktree(worktree, it) })
+      }
+    }
+    return
+  }
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val data = state.changes
