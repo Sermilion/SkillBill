@@ -12,6 +12,7 @@ public object QaPhaseOutputKeys {
   internal const val HEAD_REVISION = "qa_head_revision"
   public const val TREE_IDENTITY: String = "qa_tree_identity"
   public const val EVIDENCE_PREFIX: String = "qa_evidence_prefix"
+  public const val WORKSPACE_INVOCATION_ID: String = "qa_workspace_invocation_id"
   public const val OPEN_FINDINGS: String = "qa_open_findings"
   public const val WARNINGS: String = "qa_warnings"
   internal const val REPAIRS_EXHAUSTED = "qa_repairs_exhausted"

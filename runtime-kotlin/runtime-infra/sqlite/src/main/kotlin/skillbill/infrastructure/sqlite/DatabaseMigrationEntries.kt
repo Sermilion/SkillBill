@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.persistence.DesktopReadSchema
+import skillbill.contracts.qa.QA_PANEL_HISTORY_CONTRACT_VERSION
 import skillbill.idestatus.model.IdeStatusPolicy
 import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigration
@@ -30,6 +31,8 @@ import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalOw
 import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalRecordsAndRules
 import skillbill.infrastructure.sqlite.core.migration.area.addReviewFindingActions
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_DETAILS_COLUMN
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.SqliteQaDetailsKeys
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.buildrun.recordAgentBuildRuns
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.pruneWorktreeEditJournalToLatestTick
@@ -46,6 +49,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStand
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaReport
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneReviewRunId
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.recordValidationCheckEvents
+import skillbill.infrastructure.sqlite.core.migration.area.monitor.recordMonitorCiCycles
 import skillbill.infrastructure.sqlite.core.migration.area.operation.OperationProposalsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationConfirmationExecutions
 import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationLaunchRetention
@@ -1067,4 +1071,61 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 117,
       name = "defer-work-board-projection",
       operation = WorkBoardInvalidationsMigration::apply,
+    ) +
+    DatabaseMigration(
+      version = 118,
+      name = "record-monitor-ci-cycles",
+      operation = ::recordMonitorCiCycles,
+    ) +
+    DatabaseMigration(
+      version = 119,
+      name = "record-qa-panel-occurrences",
+      operation = { connection ->
+        connection.createStatement().use { statement ->
+          statement.execute(
+            """
+            CREATE TABLE IF NOT EXISTS feature_task_qa_panel_occurrences (
+              workflow_id TEXT NOT NULL,
+              occurrence_id TEXT NOT NULL,
+              contract_version TEXT NOT NULL CHECK (contract_version = '$QA_PANEL_HISTORY_CONTRACT_VERSION'),
+              occurrence_json TEXT NOT NULL CHECK (json_valid(occurrence_json)),
+              PRIMARY KEY (workflow_id, occurrence_id),
+              FOREIGN KEY (workflow_id) REFERENCES feature_task_qa_outcomes(workflow_id) ON DELETE CASCADE
+            )
+            """.trimIndent(),
+          )
+          statement.execute(
+            "CREATE INDEX IF NOT EXISTS idx_qa_panel_occurrence_workspace " +
+              "ON feature_task_qa_panel_occurrences(" +
+              "json_extract(occurrence_json, '$.${SqliteQaDetailsKeys.WORKSPACE_INVOCATION_ID}'))",
+          )
+          statement.execute(
+            """
+            INSERT OR IGNORE INTO feature_task_qa_panel_occurrences (
+              workflow_id, occurrence_id, contract_version, occurrence_json
+            )
+            SELECT outcomes.workflow_id,
+                   json_extract(occurrence.value, '$.${SqliteQaDetailsKeys.OCCURRENCE_ID}'),
+                   '$QA_PANEL_HISTORY_CONTRACT_VERSION',
+                   occurrence.value
+            FROM feature_task_qa_outcomes AS outcomes,
+                 json_each(
+                   CASE WHEN json_valid(outcomes.$QA_DETAILS_COLUMN)
+                     THEN outcomes.$QA_DETAILS_COLUMN ELSE '{}'
+                   END,
+                   '$.${SqliteQaDetailsKeys.OCCURRENCES}'
+                 ) AS occurrence
+            WHERE json_type(
+              CASE WHEN json_valid(outcomes.$QA_DETAILS_COLUMN)
+                THEN outcomes.$QA_DETAILS_COLUMN ELSE '{}'
+              END,
+              '$.${SqliteQaDetailsKeys.OCCURRENCES}'
+            ) = 'array'
+              AND json_type(occurrence.value) = 'object'
+              AND json_type(occurrence.value, '$.${SqliteQaDetailsKeys.OCCURRENCE_ID}') = 'text'
+              AND json_extract(occurrence.value, '$.${SqliteQaDetailsKeys.OCCURRENCE_ID}') <> ''
+            """.trimIndent(),
+          )
+        }
+      },
     )

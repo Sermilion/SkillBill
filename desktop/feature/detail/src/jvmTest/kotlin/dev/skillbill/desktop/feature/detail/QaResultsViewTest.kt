@@ -35,6 +35,17 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class QaResultsViewTest {
+  @Test
+  fun `goal QA reports fixing only while the repair card runs`() {
+    val qa = GoalQaResult("findings", null, 0, epoch, listOf(GoalQaFinding("QA-1", "Close button is covered", false)), null, null, null)
+    val fixing = qaResultsView(goalQaInput(qa, false, fixing = true))
+    assertEquals("Fixing", fixing.word)
+    assertEquals("Sent to qa_fix", fixing.openLabel)
+    assertEquals("Fixing", fixing.open.single().state)
+    assertEquals(QaResultsTone.Blocked, fixing.tone)
+    assertEquals("Not fixed", qaResultsView(goalQaInput(qa, false)).open.single().state)
+  }
+
   private val report = "Verdict: x\n\nNotes."
 
   private fun assertions(outcome: QaAssertionOutcome, count: Int) = (1..count).map { QaRunAssertion(outcome, "$outcome $it", "detail") }

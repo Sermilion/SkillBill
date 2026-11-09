@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.slot.PhaseFailureContinuationHooks
 import skillbill.engine.featuretask.slot.PhaseFailureContinuationOutput
 import skillbill.engine.featuretask.slot.PhaseLaunchPromptHooks
 import skillbill.engine.featuretask.slot.PhaseStepFailure
+import skillbill.engine.featuretask.slot.PhaseStepFailureSource
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
@@ -40,7 +41,24 @@ internal class QaRepairHooks(
     run: PhaseRun,
     failure: PhaseStepFailure,
     state: PhaseQaStepBinding,
-  ): PhaseFailureContinuationOutput? = stops.outputFor(run, failure, state)
+  ): PhaseFailureContinuationOutput? {
+    if (run.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX &&
+      (run.request.admittedExecution != null || run.request.qaSelection != null)
+    ) {
+      val disposition =
+        when (failure.source) {
+          PhaseStepFailureSource.BLOCK -> "blocked"
+          PhaseStepFailureSource.PAUSE -> "paused"
+          PhaseStepFailureSource.THROWN -> "failed"
+        }
+      outcomes.recordRepairSettled(
+        run.request.qaOutcomeWorkflowId,
+        state.currentAttempt(),
+        disposition,
+      )
+    }
+    return stops.outputFor(run, failure, state)
+  }
 
   override fun launchPromptSupplement(
     run: PhaseRun,
@@ -49,6 +67,12 @@ internal class QaRepairHooks(
   ): String {
     val findings = state.qaRepairState()?.openFindings.orEmpty()
     if (findings.isEmpty()) return ""
+    if (context.request.admittedExecution != null || context.request.qaSelection != null) {
+      outcomes.recordRepairStarted(
+        run.request.qaOutcomeWorkflowId,
+        state.currentAttempt(),
+      )
+    }
     return QaPromptSections.repairSupplement(
       findings,
       openFindingSections(run.request.qaOutcomeWorkflowId, run.request.repoRoot, findings, state),
@@ -86,6 +110,13 @@ internal class QaRepairHooks(
     output: NormalizedFeatureTaskRuntimePhaseOutput,
   ): NormalizedFeatureTaskRuntimePhaseOutput {
     if (output.status != COMPLETED) return output
+    if (context.request.admittedExecution != null || context.request.qaSelection != null) {
+      outcomes.recordRepairSettled(
+        run.request.qaOutcomeWorkflowId,
+        state.currentAttempt(),
+        "accepted_output",
+      )
+    }
     val previous =
       state.qaRepairState()
         ?: error("qa_fix completed without the QA findings state it repairs.")

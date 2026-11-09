@@ -1,3 +1,13 @@
+## [2026-11-08] Share phase choices across pane and inline inspectors
+Context: SKILL-527 requires each goal and subtask, including Goal finish, to retain its selected phase while paging and changing layouts.
+Decision: Store explicit choices in window-scoped SubtaskSelections keyed by work item and SubtaskKey. Share card rendering between pane and inline rows, clear choices on database-session changes and resolve stale choices against available cards.
+Reason: Paging replaces the detail ViewModel, so local state would lose the choice. Item ids repeat across databases. Shared selection and rendering preserve the selected card when the pane hides, Specs opens or the window narrows.
+
+## [2026-11-08] Render review passes only inside an existing review card
+Context: SKILL-527 moves review passes into the phase card while retaining review access for subtasks without a recorded review card.
+Decision: Suppress the separate Review block when a review card exists. Keep audit results below Phases and preserve the no-card review path.
+Reason: Drawing both review locations would duplicate the same evidence. The fallback preserves access for subtasks without recorded cards.
+
 ## [2026-11-08] Fall back to the Linux URL handler for branch links
 Context: Java Desktop can report BROWSE unsupported on Linux with a configured default browser.
 Decision: Try Java browsing first, then invoke xdg-open with the encoded URL as one argument on Linux. Approve only RepositoryBrowserLauncher in the process-launch guard. Bound its wait and destroy an unfinished launcher on cancellation or timeout.

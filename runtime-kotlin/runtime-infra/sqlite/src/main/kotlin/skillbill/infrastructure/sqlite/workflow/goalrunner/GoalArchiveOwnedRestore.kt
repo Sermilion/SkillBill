@@ -19,6 +19,7 @@ private val RESTORE_ALLOWED_TABLES =
   RESTORE_SKIP_TABLES +
     setOf(
       "worktree_edit_journal",
+      "monitor_ci_cycles",
       "producer_output_evidence",
       "rejected_output_diagnostics",
       "agent_activity_stamps",

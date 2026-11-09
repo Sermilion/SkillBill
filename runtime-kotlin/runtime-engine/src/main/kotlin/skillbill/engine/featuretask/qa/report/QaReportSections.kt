@@ -2,7 +2,12 @@ package skillbill.engine.featuretask.qa.report
 
 import skillbill.workflow.taskruntime.model.qa.QaAssertionOutcome
 import skillbill.workflow.taskruntime.model.qa.QaRunAssertion
+import skillbill.workflow.taskruntime.model.qa.QaRunScreenshot
 import skillbill.workflow.taskruntime.model.qa.QaRunTemporaryEdit
+import java.nio.file.InvalidPathException
+import java.nio.file.Path
+import java.time.Instant
+import java.time.format.DateTimeParseException
 
 internal data class QaParsedAssertions(
   val assertions: List<QaRunAssertion>,
@@ -15,7 +20,15 @@ internal data class QaFindingFields(
   val steps: String?,
 )
 
+internal data class QaParsedScreenshotInventory(
+  val screenshots: List<QaRunScreenshot>,
+  val rejected: Int,
+)
+
 internal object QaReportSections {
+  private const val SCREENSHOT_FIELD_COUNT = 4
+  private const val MAX_SCREENSHOT_LABEL_LENGTH = 160
+  private val IMAGE_FORMATS = setOf("png", "jpeg", "jpg")
   private const val LABEL_STEPS = "steps"
   private const val LABEL_EXPECTED = "expected"
   private const val LABEL_OBSERVED = "observed"
@@ -84,6 +97,58 @@ internal object QaReportSections {
       .distinct()
       .toList()
   }
+
+  fun screenshots(
+    lines: List<String>,
+    evidencePrefix: String,
+  ): QaParsedScreenshotInventory {
+    val evidenceRoot =
+      absolutePath(evidencePrefix)
+        ?: return QaParsedScreenshotInventory(emptyList(), lines.size)
+    val screenshots = lines.mapNotNull { raw -> screenshotOf(raw, evidenceRoot) }
+    return QaParsedScreenshotInventory(screenshots, lines.size - screenshots.size)
+  }
+
+  private fun screenshotOf(
+    raw: String,
+    evidenceRoot: Path,
+  ): QaRunScreenshot? {
+    val fields = raw.trim().removePrefix("-").trim().split(" | ", limit = SCREENSHOT_FIELD_COUNT)
+    if (fields.size != SCREENSHOT_FIELD_COUNT) return null
+    val recordedAt = fields[0]
+    val format = fields[1].lowercase()
+    val label = fields[2]
+    val path = fields.last()
+    val imagePath = absolutePath(path) ?: return null
+    if (label.isBlank() || label.length > MAX_SCREENSHOT_LABEL_LENGTH ||
+      !imagePath.startsWith(
+        evidenceRoot,
+      )
+    ) {
+      return null
+    }
+    val instant = parseInstant(recordedAt)
+    val extension = path.substringAfterLast('.', "").lowercase()
+    return if (instant != null && format in IMAGE_FORMATS && extension in IMAGE_FORMATS) {
+      QaRunScreenshot(label, path, instant.toString(), if (format == "jpg") "jpeg" else format)
+    } else {
+      null
+    }
+  }
+
+  private fun absolutePath(path: String): Path? =
+    try {
+      Path.of(path).normalize().takeIf(Path::isAbsolute)
+    } catch (_: InvalidPathException) {
+      null
+    }
+
+  private fun parseInstant(value: String): Instant? =
+    try {
+      Instant.parse(value)
+    } catch (_: DateTimeParseException) {
+      null
+    }
 
   private fun bulletsOf(lines: List<String>): List<String> {
     val bullets = mutableListOf<String>()

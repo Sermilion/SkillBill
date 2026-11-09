@@ -35,6 +35,7 @@ data class DetailUiState(
   val boardPosition: BoardPosition? = null,
   val controls: ControlsUiState = ControlsUiState(),
   val subtaskChoice: SubtaskChoice = SubtaskChoice(),
+  val phaseChoice: Map<PhaseChoiceKey, String> = emptyMap(),
   /** The previous detail was left by J or K while its Subtasks list had focus, so this one's list takes focus once it shows. */
   val focusSubtaskList: Boolean = false,
   val changes: ChangesUi = ChangesUi(),
@@ -78,6 +79,8 @@ sealed interface SubtaskKey {
  * inline inspector that the selected row shows while the details pane is hidden.
  */
 data class SubtaskChoice(val key: SubtaskKey? = null, val expanded: Boolean = true)
+
+data class PhaseChoiceKey(val itemId: String, val subtask: SubtaskKey)
 
 sealed interface SectionsUi {
   data object Pending : SectionsUi
@@ -146,6 +149,9 @@ sealed interface DetailAction {
 
   /** Selects [key]; with [inline] (the details pane hidden) selecting the selected row again folds or unfolds it. */
   data class SelectSubtask(val key: SubtaskKey, val inline: Boolean = false) : DetailAction
+
+  /** Selects a phase for one subtask of the named item. */
+  data class SelectPhase(val itemId: String, val key: SubtaskKey, val phaseId: String) : DetailAction
 
   /** ↑ or ↓ in the focused Subtasks index. */
   data class MoveSubtaskSelection(val delta: Int) : DetailAction

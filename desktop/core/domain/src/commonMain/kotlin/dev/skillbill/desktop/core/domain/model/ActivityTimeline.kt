@@ -26,6 +26,7 @@ data class ActivityGroup(
   val before: List<ActivityFact> = emptyList(),
   val after: List<ActivityFact> = emptyList(),
   val kind: ActivityGroupKind = ActivityGroupKind.SUBTASK,
+  val phaseEvents: List<ActivityPhaseEvent> = emptyList(),
 )
 
 data class ActivityPhase(
@@ -60,3 +61,5 @@ data class ActivityFact(
   val summary: String?,
   val running: Boolean,
 )
+
+data class ActivityPhaseEvent(val phaseId: String?, val at: Instant, val label: String, val blocked: Boolean)

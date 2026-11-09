@@ -15,6 +15,7 @@ data class PullRequestCheck(
   val bucket: CheckBucket,
   val link: String,
   val startedAt: Instant? = null,
+  val completedAt: Instant? = null,
 )
 
 enum class CheckBucket(val wireValue: String) {

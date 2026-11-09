@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.goal.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.RecordingOutcomeStore
+import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestDatabase
 import skillbill.engine.goalrunner.execution.core.goalRunnerDefaultPhaseRecorder
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
@@ -130,7 +131,7 @@ class GoalRunnerReviewPassProjectionTest {
           manifestStore = InMemoryGoalManifestStore(manifest),
           outcomeStore = RecordingOutcomeStore(),
           phaseRecorder = testPhaseRecorder(FakeDatabaseSessionFactory(states), testWorkflowSnapshotValidator),
-          database = ReviewStoreDatabase(FakeDatabaseSessionFactory(InMemoryWorkflowStates()), lanesOnlyReviews(lanes)),
+          database = ReviewStoreDatabase(GoalRunnerStatusTestDatabase(), lanesOnlyReviews(lanes)),
         ).status(GoalRunnerStatusRequest(issueKey = manifest.issueKey, invokedAgentId = "codex")),
       )
 
@@ -274,7 +275,7 @@ class GoalRunnerReviewPassProjectionTest {
         manifestStore = InMemoryGoalManifestStore(manifest),
         outcomeStore = RecordingOutcomeStore(),
         phaseRecorder = testPhaseRecorder(FakeDatabaseSessionFactory(states), testWorkflowSnapshotValidator),
-        database = ReviewStoreDatabase(FakeDatabaseSessionFactory(InMemoryWorkflowStates()), reviews),
+        database = ReviewStoreDatabase(GoalRunnerStatusTestDatabase(), reviews),
       ).status(GoalRunnerStatusRequest(issueKey = manifest.issueKey, invokedAgentId = "codex")),
     ).completedSubtaskPhaseResults.single()
   }
@@ -317,7 +318,7 @@ class GoalRunnerReviewPassProjectionTest {
         manifestStore = InMemoryGoalManifestStore(manifest),
         outcomeStore = RecordingOutcomeStore(),
         phaseRecorder = recorder,
-        database = ReviewStoreDatabase(FakeDatabaseSessionFactory(InMemoryWorkflowStates()), reviews),
+        database = ReviewStoreDatabase(GoalRunnerStatusTestDatabase(), reviews),
       ).status(GoalRunnerStatusRequest(issueKey = manifest.issueKey, invokedAgentId = "codex")),
     ).completedSubtaskPhaseResults.single()
   }

@@ -33,4 +33,23 @@ internal object SqliteQaDetailsKeys {
   const val OBSERVED: String = QaOutcomePayloadKeys.OBSERVED
   const val EXPECTED: String = QaOutcomePayloadKeys.EXPECTED
   const val STEPS: String = QaOutcomePayloadKeys.STEPS
+  const val HISTORY_AVAILABILITY: String = "history_availability"
+  const val HISTORY_CONTRACT_VERSION: String = "history_contract_version"
+  const val OCCURRENCES: String = "occurrences"
+  const val OCCURRENCE_ID: String = "occurrence_id"
+  const val PHASE_ATTEMPT: String = "phase_attempt"
+  const val WORKSPACE_INVOCATION_ID: String = "workspace_invocation_id"
+  const val STARTED_AT: String = "started_at"
+  const val FINISHED_AT: String = "finished_at"
+  const val DISPOSITION: String = "disposition"
+  const val TESTED_TREE_IDENTITY: String = "tested_tree_identity"
+  const val RESULT_REFERENCE: String = "result_reference"
+  const val FRAME_REFERENCE: String = "frame_reference"
+  const val FRAME_AVAILABILITY: String = "frame_availability"
+  const val SCREENSHOTS: String = "screenshots"
+  const val STAGES: String = "stages"
+  const val LABEL: String = "label"
+  const val FORMAT: String = "format"
+  const val NAME: String = "name"
+  const val STATE: String = "state"
 }

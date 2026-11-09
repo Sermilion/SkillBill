@@ -1,7 +1,9 @@
 package skillbill.engine.featuretask.slot.monitor
 
+import skillbill.engine.featuretask.slot.state.CiWatchListeners
 import skillbill.engine.featuretask.slot.state.ExpectedCiHead
 import skillbill.engine.featuretask.slot.state.PullRequestCiOutcome
+import skillbill.engine.featuretask.slot.state.PullRequestCiSnapshot
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.CheckBucket
@@ -27,14 +29,13 @@ internal class PullRequestCiWatcher(
   fun watch(
     repoRoot: Path,
     branch: String,
-    onCiRunning: (String, List<PullRequestCheck>) -> Unit = { _, _ -> },
     expectedHead: ExpectedCiHead = ExpectedCiHead(),
-    onInconclusive: (String) -> Unit = {},
+    listeners: CiWatchListeners = CiWatchListeners(),
   ): PullRequestCiOutcome {
+    val (onCiRunning, onInconclusive, onObserved) = listeners
     val startedAt = now()
     val refresh = expectedHead.refreshAfter?.let { CheckRefresh(it, startedAt + refreshGrace) }
     val request = WatchRequest(repoRoot, branch, refresh, expectedHead.sha)
-    val seenChecks = mutableSetOf<Pair<Int, String?>>()
     var inconclusiveReported = false
     var progress = CiProgress()
     val emptyGrace = CheckRegistrationGrace(noChecksGrace)
@@ -48,11 +49,30 @@ internal class PullRequestCiWatcher(
     val reportChecks = { url: String, checks: List<PullRequestCheck> ->
       progress = reportRunning(url, checks, checksSettled(checks), onCiRunning, progress)
     }
+    var snapshots = SnapshotProgress()
+    var unreported: PullRequestCiSnapshot? = null
+    val observeChecks = { snapshot: PullRequestCiSnapshot ->
+      val at = now()
+      val lastAt = snapshots.at
+      val due = lastAt == null || Duration.between(lastAt, at) >= progressInterval
+      if (due || snapshot.checks != snapshots.checks) {
+        onObserved(snapshot)
+        snapshots = SnapshotProgress(at, snapshot.checks)
+      } else {
+        unreported = snapshot
+      }
+    }
     while (true) {
-      val poll = observePoll(request, reportChecks, ::reportInconclusive, onInconclusive, seenChecks)
+      unreported = null
+      val poll = observePoll(request, reportChecks, observeChecks, ::reportInconclusive, onInconclusive)
       val settled = poll.outcome
-      if (settled != null) return settled
-      if (confirmEmpty(poll.emptyIdentity, request, seenChecks, emptyGrace, onInconclusive)) {
+      if (settled != null) {
+        if (settled is PullRequestCiOutcome.Failed || settled is PullRequestCiOutcome.Passed) {
+          unreported?.let(onObserved)
+        }
+        return settled
+      }
+      if (confirmEmpty(poll.emptyIdentity, request, emptyGrace, onInconclusive)) {
         return PullRequestCiOutcome.NoChecksReported
       }
       sleep(pollInterval)
@@ -62,7 +82,6 @@ internal class PullRequestCiWatcher(
   private fun confirmEmpty(
     identity: PullRequestIdentity.Found?,
     request: WatchRequest,
-    seenChecks: Set<Pair<Int, String?>>,
     grace: CheckRegistrationGrace,
     onInconclusive: (String) -> Unit,
   ): Boolean {
@@ -75,7 +94,7 @@ internal class PullRequestCiWatcher(
         else -> null
       }
     if (reason != null) onInconclusive(reason)
-    if (identity == null || reason != null || (identity.number to identity.headSha) in seenChecks) {
+    if (identity == null || reason != null || (identity.number to identity.headSha) in request.seenChecks) {
       grace.clear()
       return false
     }
@@ -91,6 +110,7 @@ internal class PullRequestCiWatcher(
     val branch: String,
     val refresh: CheckRefresh?,
     val expectedHead: String?,
+    val seenChecks: MutableSet<Pair<Int, String?>> = mutableSetOf(),
   )
 
   private data class CheckRefresh(val after: Instant, val graceEndsAt: Instant)
@@ -103,9 +123,9 @@ internal class PullRequestCiWatcher(
   private fun observePoll(
     request: WatchRequest,
     onChecks: (String, List<PullRequestCheck>) -> Unit,
+    onObserved: (PullRequestCiSnapshot) -> Unit,
     onInconclusive: (String) -> Unit,
     onReadFailure: (String) -> Unit,
-    seenChecks: MutableSet<Pair<Int, String?>>,
   ): CiPoll {
     val identity = currentIdentity(request.repoRoot, request.branch, onReadFailure)
     val found = identity as? PullRequestIdentity.Found ?: return identityPoll(request, identity, onReadFailure)
@@ -119,7 +139,8 @@ internal class PullRequestCiWatcher(
       }
       is PullRequestChecks.Reported -> {
         onChecks(found.url, checks.checks)
-        if (checks.checks.isNotEmpty()) seenChecks += (found.number to found.headSha)
+        onObserved(PullRequestCiSnapshot(found.url, found.number, found.headSha, checks.checks))
+        if (checks.checks.isNotEmpty()) request.seenChecks += (found.number to found.headSha)
         val failingChecks = checks.checks.filter { it.bucket == CheckBucket.FAIL }
         when {
           failingChecks.isNotEmpty() && !refreshed(request.refresh, checks.checks) -> CiPoll()
@@ -280,6 +301,8 @@ internal class PullRequestCiWatcher(
   }
 
   private data class CiProgress(val at: Instant? = null, val names: List<String>? = null)
+
+  private data class SnapshotProgress(val at: Instant? = null, val checks: List<PullRequestCheck>? = null)
 
   private fun reportRunning(
     pullRequestUrl: String,

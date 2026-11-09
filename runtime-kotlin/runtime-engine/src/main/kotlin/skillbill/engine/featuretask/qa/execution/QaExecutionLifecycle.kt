@@ -91,7 +91,7 @@ public class QaExecutionLifecycle(
           }
         }
       }
-    return QaExecutionResult(value, retained, expected, warnings)
+    return QaExecutionResult(value, retained, expected, workspace.invocationId, warnings)
   }
 
   internal fun outputWarnings(
@@ -333,5 +333,6 @@ internal data class QaExecutionResult<T>(
   public val value: T,
   public val retainedResources: List<QaRetainedResource>,
   public val expected: QaExpectedIdentity,
+  public val invocationId: String,
   public val warnings: List<String> = emptyList(),
 )

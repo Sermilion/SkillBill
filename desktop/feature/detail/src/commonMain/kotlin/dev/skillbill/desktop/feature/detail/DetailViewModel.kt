@@ -103,6 +103,7 @@ class DetailViewModel(
       stale = false,
       renderedAt = clock.now(),
       subtaskChoice = subtaskSelections.get(item.id),
+      phaseChoice = subtaskSelections.phases(item.id),
       focusSubtaskList = subtaskSelections.takeListFocus(),
     ),
   )
@@ -266,6 +267,7 @@ class DetailViewModel(
       is DetailAction.OpenSpecFile -> open(FILE_NOT_OPENED) { specs.openFile(action.path) }
       is DetailAction.Navigate -> effectChannel.trySend(DetailEffect.OpenRoute(action.route))
       is DetailAction.SelectSubtask -> selectSubtask(action.key, action.inline)
+      is DetailAction.SelectPhase -> selectPhase(action)
       is DetailAction.MoveSubtaskSelection -> moveSubtaskSelection(action.delta)
       DetailAction.OpenSelectedSubtaskSpec -> openSelectedSubtaskSpec()
       DetailAction.SubtaskListFocused -> if (state.value.focusSubtaskList) mutableState.update { it.copy(focusSubtaskList = false) }
@@ -368,6 +370,13 @@ class DetailViewModel(
     if (key !in subtaskKeys(state.value.header, detail)) return
     val choice = state.value.subtaskChoice
     if (inline && key == effectiveSubtask()) chooseSubtask(choice.copy(key = key, expanded = !choice.expanded)) else chooseSubtask(SubtaskChoice(key, expanded = true))
+  }
+
+  private fun selectPhase(action: DetailAction.SelectPhase) {
+    if (action.itemId != item.id) return
+    val key = PhaseChoiceKey(action.itemId, action.key)
+    subtaskSelections.setPhase(key, action.phaseId)
+    mutableState.update { it.copy(phaseChoice = it.phaseChoice + (key to action.phaseId)) }
   }
 
   private fun moveSubtaskSelection(delta: Int) {

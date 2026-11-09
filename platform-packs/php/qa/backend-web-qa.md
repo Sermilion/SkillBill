@@ -49,6 +49,7 @@ Exercise the backend and server-rendered web behavior the acceptance criteria de
 
 - Exercise the Blade or Twig journeys the criteria describe: navigate, fill forms, submit, and assert visible content, redirects, validation errors and the persisted result.
 - Save screenshots in the invocation directory. A page load alone is not a check.
+- At capture time, run `skill-bill qa screenshot --invocation <invocation id> --file <absolute path> --label <short label>` for every PNG or JPEG screenshot, including images not linked to findings. Keep each image under the invocation evidence directory and list it in the `## Screenshots` report section.
 
 ### Backend reach versus mocks
 

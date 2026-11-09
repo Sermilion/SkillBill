@@ -71,6 +71,7 @@ skill-bill qa lease acquire --invocation <invocation id> --device <udid>
 - Run every flow the criteria describe on the app built from the QA checkout. Do not inspect git history, diffs, or source to decide whether the change is present. Missing or wrong behavior is a finding. Skip only when the tools to perform QA are unavailable.
 - Prefer existing automation. Reuse the project's XCUITest schemes for the screens the criteria cover before writing new steps.
 - Otherwise drive the device through the Appium XCUITest driver with WebDriverAgent. Save screenshots and page source after each step that matters.
+- At capture time, run `skill-bill qa screenshot --invocation <invocation id> --file <absolute path> --label <short label>` for every PNG or JPEG screenshot, including images not linked to findings. Keep each image under the invocation evidence directory and list it in the `## Screenshots` report section.
 - Keep only the log excerpt that explains a failure, saved as a file under the invocation directory.
 
 ## Simulator fallback

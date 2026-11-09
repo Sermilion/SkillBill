@@ -35,6 +35,7 @@ import skillbill.ports.idestatus.AgentActivityStampRepository
 import skillbill.ports.idestatus.AgentBuildRunRepository
 import skillbill.ports.idestatus.EmptyAgentActivityStampRepository
 import skillbill.ports.idestatus.EmptyAgentBuildRunRepository
+import skillbill.ports.idestatus.EmptyMonitorCiCycleRepository
 import skillbill.ports.idestatus.EmptyWorktreeEditJournalRepository
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
@@ -60,6 +61,7 @@ import skillbill.ports.idestatus.model.WorkBoardReadModelPage
 import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardReadModelRow
 import skillbill.ports.idestatus.model.WorkValidationBranchRun
+import skillbill.ports.idestatus.monitor.MonitorCiCycleRepository
 import skillbill.ports.operation.OperationCardRepository
 import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.operation.UnavailableOperationCardRepository
@@ -76,6 +78,7 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
   open override val unaddressedFindings: UnaddressedFindingsRepository = UnavailableUnaddressedFindingsRepository
   open override val agentActivityStamps: AgentActivityStampRepository = EmptyAgentActivityStampRepository
   open override val worktreeEditJournal: WorktreeEditJournalRepository = EmptyWorktreeEditJournalRepository
+  open override val monitorCiCycles: MonitorCiCycleRepository = EmptyMonitorCiCycleRepository
   open override val agentBuildRuns: AgentBuildRunRepository = EmptyAgentBuildRunRepository
   open override val standalonePhaseStatuses: StandalonePhaseStatusRepository =
     object : StandalonePhaseStatusRepository {

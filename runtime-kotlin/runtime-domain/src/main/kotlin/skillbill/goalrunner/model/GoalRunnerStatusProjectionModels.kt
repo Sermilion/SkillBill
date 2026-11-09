@@ -5,6 +5,7 @@ import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadK
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState
 import skillbill.goalrunner.assessment.model.GoalAssessmentVerification
+import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.idestatus.model.WorktreeEditSummary
 import skillbill.review.model.ReviewFindingStatus
 import skillbill.workflow.decomposition.model.DecompositionManifest
@@ -135,6 +136,7 @@ data class GoalRunnerStatusProjection(
   val auditAcRetryCount: Int? = null,
   val noChangeStatus: GoalRunnerNoChangeStatus? = null,
   val goalCompletedAt: String? = null,
+  val goalFinishCards: List<GoalRunnerPhaseCard> = emptyList(),
   val goalWorktree: GoalRunnerWorktreeStatus? = null,
   val launchWarning: String? = null,
   val parentWorkflowId: String? = null,
@@ -190,6 +192,85 @@ data class GoalRunnerSubtaskPhaseResults(
   val runningReviewPass: GoalRunnerRunningReviewPass? = null,
   val auditResult: GoalRunnerSubtaskAuditResult? = null,
   val execution: GoalRunnerSubtaskExecution? = null,
+  val phaseCards: List<GoalRunnerPhaseCard> = emptyList(),
+)
+
+enum class GoalRunnerPhaseCardState(val wireValue: String) {
+  RUNNING("running"),
+  COMPLETED("completed"),
+  FAILED("failed"),
+  BLOCKED("blocked"),
+  SKIPPED("skipped"),
+  PAUSED("paused"),
+}
+
+data class GoalRunnerPhaseCard(
+  val phaseId: String,
+  val state: GoalRunnerPhaseCardState,
+  val round: Int? = null,
+  val startedAt: Instant? = null,
+  val finishedAt: Instant? = null,
+  val durationMillis: Long? = null,
+  val agentId: String? = null,
+  val model: String? = null,
+  val effort: String? = null,
+  val blockedReason: String? = null,
+  val files: List<String> = emptyList(),
+  val edit: GoalRunnerPhaseCardEdit? = null,
+  val activityAt: Instant? = null,
+  val activityLabel: AgentActivityLabel? = null,
+  val output: GoalRunnerPhaseCardOutput? = null,
+  val pullRequestUrl: String? = null,
+  val pullRequestNumber: Int? = null,
+  val ciCycles: List<GoalRunnerCiCycle> = emptyList(),
+  val repairedChecks: List<GoalRunnerCiCheck> = emptyList(),
+  val conflictBaseBranch: String? = null,
+  val fixCommitSha: String? = null,
+)
+
+data class GoalRunnerPhaseCardEdit(
+  val recordedAt: Instant,
+  val fileCount: Int,
+  val insertions: Int,
+  val deletions: Int,
+  val samplePaths: List<String>,
+)
+
+data class GoalRunnerHistoryReceipt(
+  val changedPaths: List<String>?,
+  val historyWritten: Boolean?,
+  val decisionsRecorded: Boolean?,
+)
+
+data class GoalRunnerPhaseCardOutput(
+  val verdict: String?,
+  val buildReceipt: FeatureTaskRuntimeValidationGateExecutionEvidence?,
+  val validationReceipt: FeatureTaskRuntimeValidationGateExecutionEvidence?,
+  val historyReceipt: GoalRunnerHistoryReceipt?,
+  val commitSha: String?,
+  val pushedBranch: String?,
+  val pushed: Boolean?,
+  val pullRequestUrl: String?,
+  val pullRequestNumber: Int?,
+)
+
+data class GoalRunnerCiCycle(
+  val cycle: Int,
+  val startedAt: Instant,
+  val observedAt: Instant,
+  val finishedAt: Instant?,
+  val outcome: String?,
+  val headSha: String?,
+  val checks: List<GoalRunnerCiCheck>,
+)
+
+data class GoalRunnerCiCheck(
+  val name: String,
+  val bucket: String,
+  val link: String?,
+  val startedAt: Instant?,
+  val completedAt: Instant?,
+  val durationMillis: Long?,
 )
 
 data class GoalRunnerSubtaskExecution(
@@ -301,6 +382,7 @@ data class GoalRunnerAssessmentResult(
   val openFindingRefs: List<String>,
   val findings: List<GoalRunnerAssessmentFinding>,
   val unavailableReason: String? = null,
+  val fixCommitSha: String? = null,
 )
 
 data class GoalRunnerAssessmentFinding(
@@ -356,6 +438,7 @@ data class GoalRunnerStatusProjectionRuntimeInputs(
   val auditAcRetryCount: Int? = null,
   val noChangeStatus: GoalRunnerNoChangeStatus? = null,
   val goalCompletedAt: String? = null,
+  val goalFinishCards: List<GoalRunnerPhaseCard> = emptyList(),
   val goalWorktree: GoalRunnerWorktreeStatus? = null,
   val launchWarning: String? = null,
 )

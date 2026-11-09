@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.core.migration.area.idestatus
 
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.qa.QA_PANEL_HISTORY_CONTRACT_VERSION
 import skillbill.error.core.MalformedJsonTextError
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
@@ -10,8 +11,11 @@ import skillbill.workflow.taskruntime.model.qa.QaRunAssertion
 import skillbill.workflow.taskruntime.model.qa.QaRunCoverage
 import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import skillbill.workflow.taskruntime.model.qa.QaRunFinding
+import skillbill.workflow.taskruntime.model.qa.QaRunOccurrence
 import skillbill.workflow.taskruntime.model.qa.QaRunPreview
 import skillbill.workflow.taskruntime.model.qa.QaRunRetainedResource
+import skillbill.workflow.taskruntime.model.qa.QaRunScreenshot
+import skillbill.workflow.taskruntime.model.qa.QaRunStage
 import skillbill.workflow.taskruntime.model.qa.QaRunTemporaryEdit
 import java.sql.ResultSet
 
@@ -38,6 +42,9 @@ internal fun encodeQaDetails(details: QaRunDetails): String =
         },
       SqliteQaDetailsKeys.TEMPORARY_EDITS to details.temporaryEdits.map(::temporaryEditEntry),
       SqliteQaDetailsKeys.FINDINGS to details.findings.map(::findingEntry),
+      SqliteQaDetailsKeys.HISTORY_AVAILABILITY to details.historyAvailability,
+      SqliteQaDetailsKeys.HISTORY_CONTRACT_VERSION to details.historyContractVersion,
+      SqliteQaDetailsKeys.OCCURRENCES to details.occurrences.map(::occurrenceEntry),
     ),
   )
 
@@ -49,6 +56,15 @@ internal fun decodeQaDetails(json: String): QaRunDetails {
       invalidQaDetails("Stored QA details are not valid JSON.")
     }
   val root = JsonCodec.anyToStringAnyMap(parsed) ?: invalidQaDetails("Stored QA details are not an object.")
+  val historyVersion = root[SqliteQaDetailsKeys.HISTORY_CONTRACT_VERSION]
+  if (historyVersion != null && historyVersion !is String) {
+    invalidQaDetails("Stored QA panel history contract version is not text.")
+  }
+  if (historyVersion != null && historyVersion != QA_PANEL_HISTORY_CONTRACT_VERSION) {
+    invalidQaDetails(
+      "Stored QA panel history contract '$historyVersion' is unsupported; preserve the database and migrate it.",
+    )
+  }
   return QaRunDetails(
     preview =
       root[SqliteQaDetailsKeys.PREVIEW]?.let { value ->
@@ -74,8 +90,88 @@ internal fun decodeQaDetails(json: String): QaRunDetails {
       },
     temporaryEdits = root.objectList(SqliteQaDetailsKeys.TEMPORARY_EDITS).map(::decodeTemporaryEdit),
     findings = root.objectList(SqliteQaDetailsKeys.FINDINGS).map(::decodeFinding),
+    historyAvailability = root.optionalText(SqliteQaDetailsKeys.HISTORY_AVAILABILITY) ?: "not_recorded",
+    occurrences = root.objectList(SqliteQaDetailsKeys.OCCURRENCES).map(::decodeOccurrence),
+    historyContractVersion = QA_PANEL_HISTORY_CONTRACT_VERSION,
   )
 }
+
+internal fun encodeQaOccurrence(occurrence: QaRunOccurrence): String =
+  JsonCodec.valueToJsonString(occurrenceEntry(occurrence))
+
+internal fun decodeQaOccurrence(json: String): QaRunOccurrence {
+  val value = JsonCodec.parseValue(json)
+  val entry = JsonCodec.anyToStringAnyMap(value) ?: invalidQaDetails("Stored QA occurrence is not an object.")
+  return decodeOccurrence(entry)
+}
+
+private fun occurrenceEntry(occurrence: QaRunOccurrence): Map<String, Any?> =
+  mapOf(
+    SqliteQaDetailsKeys.OCCURRENCE_ID to occurrence.occurrenceId,
+    SqliteQaDetailsKeys.KIND to occurrence.kind,
+    SqliteQaDetailsKeys.PHASE_ATTEMPT to occurrence.phaseAttempt,
+    SqliteQaDetailsKeys.WORKSPACE_INVOCATION_ID to occurrence.workspaceInvocationId,
+    SqliteQaDetailsKeys.STARTED_AT to occurrence.startedAt,
+    SqliteQaDetailsKeys.FINISHED_AT to occurrence.finishedAt,
+    SqliteQaDetailsKeys.DISPOSITION to occurrence.disposition,
+    SqliteQaDetailsKeys.TESTED_TREE_IDENTITY to occurrence.testedTreeIdentity,
+    SqliteQaDetailsKeys.RESULT_REFERENCE to occurrence.resultReference,
+    SqliteQaDetailsKeys.FRAME_REFERENCE to occurrence.frameReference,
+    SqliteQaDetailsKeys.FRAME_AVAILABILITY to occurrence.frameAvailability,
+    SqliteQaDetailsKeys.SCREENSHOTS to
+      occurrence.screenshots.map { screenshot ->
+        mapOf(
+          SqliteQaDetailsKeys.LABEL to screenshot.label,
+          SqliteQaDetailsKeys.PATH to screenshot.path,
+          SqliteQaDetailsKeys.STARTED_AT to screenshot.recordedAt,
+          SqliteQaDetailsKeys.FORMAT to screenshot.format,
+        )
+      },
+    SqliteQaDetailsKeys.STAGES to
+      occurrence.stages.map { stage ->
+        mapOf(
+          SqliteQaDetailsKeys.NAME to stage.name,
+          SqliteQaDetailsKeys.STATE to stage.state,
+          SqliteQaDetailsKeys.STARTED_AT to stage.startedAt,
+          SqliteQaDetailsKeys.FINISHED_AT to stage.finishedAt,
+          SqliteQaDetailsKeys.DETAIL to stage.detail,
+        )
+      },
+  )
+
+private fun decodeOccurrence(entry: Map<String, Any?>): QaRunOccurrence =
+  QaRunOccurrence(
+    occurrenceId = entry.requiredText(SqliteQaDetailsKeys.OCCURRENCE_ID),
+    kind = entry.requiredText(SqliteQaDetailsKeys.KIND),
+    phaseAttempt = (entry[SqliteQaDetailsKeys.PHASE_ATTEMPT] as? Number)?.toInt(),
+    workspaceInvocationId = entry.optionalText(SqliteQaDetailsKeys.WORKSPACE_INVOCATION_ID),
+    startedAt = entry.requiredText(SqliteQaDetailsKeys.STARTED_AT),
+    finishedAt = entry.optionalText(SqliteQaDetailsKeys.FINISHED_AT),
+    disposition = entry.optionalText(SqliteQaDetailsKeys.DISPOSITION) ?: "unknown",
+    testedTreeIdentity = entry.optionalText(SqliteQaDetailsKeys.TESTED_TREE_IDENTITY),
+    resultReference = entry.optionalText(SqliteQaDetailsKeys.RESULT_REFERENCE),
+    frameReference = entry.optionalText(SqliteQaDetailsKeys.FRAME_REFERENCE),
+    frameAvailability = entry.optionalText(SqliteQaDetailsKeys.FRAME_AVAILABILITY) ?: "unavailable",
+    screenshots =
+      entry.objectList(SqliteQaDetailsKeys.SCREENSHOTS).map { image ->
+        QaRunScreenshot(
+          image.requiredText(SqliteQaDetailsKeys.LABEL),
+          image.requiredText(SqliteQaDetailsKeys.PATH),
+          image.requiredText(SqliteQaDetailsKeys.STARTED_AT),
+          image.requiredText(SqliteQaDetailsKeys.FORMAT),
+        )
+      },
+    stages =
+      entry.objectList(SqliteQaDetailsKeys.STAGES).map { stage ->
+        QaRunStage(
+          stage.requiredText(SqliteQaDetailsKeys.NAME),
+          stage.requiredText(SqliteQaDetailsKeys.STATE),
+          stage.optionalText(SqliteQaDetailsKeys.STARTED_AT),
+          stage.optionalText(SqliteQaDetailsKeys.FINISHED_AT),
+          stage.optionalText(SqliteQaDetailsKeys.DETAIL),
+        )
+      },
+  )
 
 internal fun ResultSet.readQaDetailsOrWarn(
   invocationId: String,

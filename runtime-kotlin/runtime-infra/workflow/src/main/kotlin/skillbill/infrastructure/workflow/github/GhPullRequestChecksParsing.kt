@@ -46,11 +46,20 @@ private fun checkFrom(entry: JsonNode): PullRequestCheck? {
   val name = entry.path("name").takeIf(JsonNode::isTextual)?.asText()?.takeIf(String::isNotBlank) ?: return null
   val bucket = entry.path("bucket").takeIf(JsonNode::isTextual)?.asText()?.let(::bucketFrom) ?: return null
   val link = entry.path("link").takeIf(JsonNode::isTextual)?.asText().orEmpty()
-  return PullRequestCheck(name = name, bucket = bucket, link = link, startedAt = startedAtFrom(entry))
+  return PullRequestCheck(
+    name = name,
+    bucket = bucket,
+    link = link,
+    startedAt = instantFrom(entry, "startedAt"),
+    completedAt = instantFrom(entry, "completedAt"),
+  )
 }
 
-private fun startedAtFrom(entry: JsonNode): Instant? =
-  entry.path("startedAt").takeIf(JsonNode::isTextual)?.asText()
+private fun instantFrom(
+  entry: JsonNode,
+  field: String,
+): Instant? =
+  entry.path(field).takeIf(JsonNode::isTextual)?.asText()
     ?.let { text ->
       try {
         Instant.parse(text)

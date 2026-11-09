@@ -7,4 +7,6 @@ interface FeatureTaskQaOutcomeRepository {
   fun upsert(outcome: FeatureTaskQaOutcome)
 
   fun find(workflowId: String): FeatureTaskQaOutcome?
+
+  fun findByWorkspaceInvocation(invocationId: String): FeatureTaskQaOutcome?
 }

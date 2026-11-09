@@ -28,6 +28,9 @@ import skillbill.ports.goalrunner.runner.model.CheckBucket
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.goalrunner.runner.model.PullRequestChecks
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
+import skillbill.ports.idestatus.model.MonitorCiCheckBucket
+import skillbill.ports.idestatus.model.MonitorCiCycleCheck
+import skillbill.ports.idestatus.model.MonitorCiCycleOutcome
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import skillbill.workflow.taskruntime.model.skeleton.LaunchModelProvenance
@@ -37,12 +40,14 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfileClassifier
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
+import java.sql.DriverManager
 import java.time.Clock
 import java.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class PhaseMonitorRunTest {
@@ -423,6 +428,53 @@ class PhaseMonitorRunTest {
   }
 
   @Test
+  fun `a failed cycle is stored and the repair brief lists only its failing checks from the store`() {
+    initFeatureBranch()
+    val unit = PullRequestCheck("unit-tests", CheckBucket.FAIL, "https://ci.example/unit")
+    val lint = PullRequestCheck("lint", CheckBucket.PASS, "https://ci.example/lint")
+
+    entry(checks = { _, _ -> PullRequestChecks.Reported(listOf(unit, lint)) }).runMonitor("SKILL-904")
+
+    val latest = assertNotNull(database.read { it.monitorCiCycles.latest(GOAL_WORKFLOW_ID) })
+    assertEquals(MonitorCiCycleOutcome.FAILED, latest.outcome)
+    assertNotNull(latest.finishedAt)
+    assertEquals(
+      listOf(
+        MonitorCiCycleCheck("unit-tests", MonitorCiCheckBucket.FAIL, "https://ci.example/unit"),
+        MonitorCiCycleCheck("lint", MonitorCiCheckBucket.PASS, "https://ci.example/lint"),
+      ),
+      latest.checks,
+    )
+    val prompt = launcher.requests.first().skillRunRequest.promptOverride.orEmpty()
+    assertTrue("## Failing CI checks\n- unit-tests: https://ci.example/unit" in prompt, prompt)
+    assertTrue("- lint:" !in prompt, prompt)
+  }
+
+  @Test
+  fun `a merge conflict whose cycle record cannot be written blocks instead of starting repair`() {
+    initFeatureBranch()
+    DriverManager.getConnection("jdbc:sqlite:${database.resolveDbPath()}").use { connection ->
+      connection.createStatement().use { it.execute("DROP TABLE monitor_ci_cycles") }
+    }
+
+    val result =
+      entry(
+        identity = { _, _ ->
+          PullRequestIdentity.Found(
+            PULL_REQUEST_URL,
+            7,
+            conflicting = true,
+            headSha = git(repoRoot, "rev-parse", "HEAD"),
+          )
+        },
+      ).runMonitor("SKILL-904")
+
+    val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
+    assertTrue("monitor CI cycle record" in blocked.reason, blocked.reason)
+    assertEquals(emptyList(), launchedPhaseIds())
+  }
+
+  @Test
   fun `repair prompt requires CI investigation and blocks unresolved local passes`() {
     initFeatureBranch()
     val failing =
@@ -713,7 +765,7 @@ class PhaseMonitorRunTest {
   private fun PhaseRunEntry.runMonitor(
     intake: String,
     modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
-  ): PhaseRunResult = runForGoal(monitorRequest(intake, modelAssignment), "goal-parent", FEATURE_BRANCH)
+  ): PhaseRunResult = runForGoal(monitorRequest(intake, modelAssignment), GOAL_WORKFLOW_ID, FEATURE_BRANCH)
 
   private fun opusLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
     if (request.requestedModel == PhaseModelProfileClassifier.ANTHROPIC_OPUS_55) {
@@ -791,5 +843,6 @@ class PhaseMonitorRunTest {
     const val MONITOR_FIX = "monitor_fix"
     const val FEATURE_BRANCH = "feat/SKILL-904-phase-monitor"
     const val PULL_REQUEST_URL = "https://github.com/example/repo/pull/7"
+    const val GOAL_WORKFLOW_ID = "goal-parent"
   }
 }

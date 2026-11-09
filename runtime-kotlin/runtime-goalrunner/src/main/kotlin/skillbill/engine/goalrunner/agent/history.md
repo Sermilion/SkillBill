@@ -1,5 +1,17 @@
 # goalrunner boundary history
 
+## [2026-11-08] SKILL-527 runtime-owned phase card projection
+Areas: runtime-goalrunner status; runtime-domain goalrunner models; runtime-ports idestatus; desktop/core/domain and desktop/core/data
+- MEDIUM feature. Subtask cards follow workflow order, omit pending records and combine recorded headers with attempt-matched settlement output through owning keys and readers.
+- Live edit facts attach only to the current subtask's matching phase; its last running or blocked card receives the workflow activity stamp. Earlier cards retain introduced-file facts.
+- Goal finish cards project assessment and its latest fix commit, retained QA and validation, PR facts and the latest 10 monitor cycles with check durations and repair attribution.
+- Monitor repair commits belong to the cycle immediately after the failed or conflicted routing cycle. Conflict repair cards show the base branch rather than unrelated passing checks.
+- GoalRunnerPhaseCard and desktop PhaseCard are reusable transport models. Mapping preserves nulls and empty collections instead of inventing missing agent, timing or output facts.
+- Failed settlement reads retain headers with absent output. Failed live, quality or cycle reads omit affected facts and record degradation; cancellation propagates.
+- Limits: introduced-file lists stop at 50 paths and live edit samples at eight. The journal retains one current tick; an unfinished cycle stays running until durable evidence changes.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented across the parent feature
+
 ## [2026-11-07] SKILL-514 — reorder assessment quality gates
 Areas: runtime-goalrunner assessment, QA, finalization and persistence; runtime-engine phase execution; runtime-domain quality model; runtime-contracts; orchestration/contracts; runtime-core; docs
 - Assessment repairs commit locally and use independent next-round source verification; full validation is deferred to final quality.

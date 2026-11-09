@@ -9,6 +9,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.onRoot
@@ -53,6 +54,7 @@ class DetailPeekTest {
     val preview = GoalQaPreview("goal-qa", "/qa/goal", listOf("desktop"), true, null)
     val detail = emptyDetail.copy(
       currentPhase = "qa",
+      goalFinishCards = listOf(finishCard("qa", dev.skillbill.desktop.core.domain.model.PhaseCardState.Running)),
       subtasks = listOf(WorkSubtask(1, "Build", "completed", null, null, emptyList())),
       goalQaPreview = preview,
     )
@@ -67,8 +69,7 @@ class DetailPeekTest {
       }
     }
 
-    onNodeWithText("Desktop preview").assertDoesNotExist()
-    onNodeWithText("QA").performClick()
+    onNodeWithText("Desktop preview").assertIsDisplayed()
     onNodeWithContentDescription("Live desktop QA preview for run goal-qa").performScrollTo().assertIsDisplayed()
     runOnIdle { state.value = state.value.copy(qaPreview = QaPreviewState.Ended) }
     onNodeWithContentDescription("Live desktop QA preview for run goal-qa").assertDoesNotExist()
@@ -101,6 +102,7 @@ class DetailPeekTest {
       SectionsUi.Loaded(detail, null, emptyMap(), emptySet()),
       false,
       epoch,
+      subtaskChoice = SubtaskChoice(SubtaskKey.Subtask(3), expanded = false),
     )
     val open = mutableStateOf(false)
     val input = ShellInput()
@@ -122,17 +124,21 @@ class DetailPeekTest {
     val detail = emptyDetail.copy(
       subtasks = (1..12).map { WorkSubtask(it, "Build the view $it", "completed", null, null, emptyList()) },
       goalFinishPipeline = listOf("goal_assessment", "qa"),
+      goalFinishCards = listOf(finishCard("goal_assessment"), finishCard("qa")),
       goalAssessment = GoalAssessmentResult(
         GoalAssessmentState.Completed, 3, null, false,
         listOf(
           GoalAssessmentFinding("GA-1", "minor", "View.kt", 10, "An action has no label", GoalAssessmentVerification.Confirmed, GoalAssessmentFindingState.Open, ""),
-          GoalAssessmentFinding("GA-2", "major", "View.kt", 20, "A completed run loses its findings", GoalAssessmentVerification.Confirmed, GoalAssessmentFindingState.Open, ""),
+          GoalAssessmentFinding("GA-2", "major", "View.kt", 20, "A completed run loses its findings", GoalAssessmentVerification.Confirmed, GoalAssessmentFindingState.Refuted, ""),
+          GoalAssessmentFinding("GA-3", "blocker", "View.kt", 30, "Fixed blocker", GoalAssessmentVerification.Confirmed, GoalAssessmentFindingState.Fixed, ""),
+          GoalAssessmentFinding("GA-4", "blocker", "View.kt", 40, "Open blocker", GoalAssessmentVerification.Confirmed, GoalAssessmentFindingState.Open, ""),
         ),
       ),
       goalQa = GoalQaResult("findings", null, 0, epoch, listOf(GoalQaFinding("QA-1", "The drawer covers its close button", false)), "Verdict: skipped\n\n## Coverage\n\n- No supported target\n- No application exercised", "unsupported_target", null),
     )
     val state = mutableStateOf(DetailUiState(
       workItem("goal"), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch,
+      subtaskChoice = SubtaskChoice(SubtaskKey.Subtask(1), expanded = false),
     ))
     val open = mutableStateOf(false)
     val input = ShellInput()
@@ -140,6 +146,9 @@ class DetailPeekTest {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides input) {
           DetailScreen(state.value, DetailScreenHost(open.value, "Ctrl I", { open.value = !open.value })) { action ->
+            if (action is DetailAction.SelectPhase) {
+              state.value = state.value.copy(phaseChoice = state.value.phaseChoice + (PhaseChoiceKey(action.itemId, action.key) to action.phaseId))
+            }
             if (action is DetailAction.SelectSubtask) {
               state.value = state.value.copy(subtaskChoice = SubtaskChoice(action.key))
               open.value = true
@@ -149,7 +158,7 @@ class DetailPeekTest {
       }
     }
 
-    onNodeWithText("Goal assessment").assertDoesNotExist()
+    onNodeWithText("An action has no label").assertDoesNotExist()
     val subtask = onNode(hasText("Build the view 2") and hasClickAction()).performScrollTo()
     val bounds = subtask.fetchSemanticsNode().boundsInRoot
     onRoot().performMouseInput { moveTo(bounds.center); press() }
@@ -163,24 +172,35 @@ class DetailPeekTest {
     assertEquals(bounds.top, subtask.fetchSemanticsNode().boundsInRoot.top)
     onNodeWithContentDescription("Close details").performClick()
     onNodeWithText("Goal finish").performScrollTo().performClick()
-    onNodeWithText("Goal assessment").assertExists()
+    onNode(hasText("Goal assessment") and isSelectable()).performClick()
     onNodeWithText("Priority").performClick()
     onNodeWithText("Priority").assertIsSelected()
-    onNodeWithText("QA").performClick()
+    fun assertOrder(vararg titles: String) {
+      val tops = titles.map { onNodeWithText(it).fetchSemanticsNode().boundsInRoot.top }
+      assertEquals(tops.sorted(), tops)
+    }
+    assertOrder("Open blocker", "Fixed blocker", "A completed run loses its findings", "An action has no label")
+    onNodeWithText("Status").performClick()
+    assertOrder("Open blocker", "An action has no label", "A completed run loses its findings", "Fixed blocker")
+    onNodeWithText("Priority").performClick()
+    runOnIdle { state.value = state.value.copy(header = workItem("next-goal")) }
+    runOnIdle { state.value = state.value.copy(header = workItem("goal")) }
+    onNodeWithText("Priority").assertIsSelected()
+    onNode(hasText("QA") and isSelectable()).performClick()
     onNodeWithText("Coverage").assertDoesNotExist()
     onNodeWithText("Full report").performClick()
     onNodeWithText("Coverage").assertExists()
     onNodeWithText("## Coverage").assertDoesNotExist()
-    onNodeWithText("Assessment").performClick()
+    onNode(hasText("Goal assessment") and isSelectable()).performClick()
     onNodeWithText("Priority").assertIsSelected()
     onNodeWithContentDescription("Close details").performClick()
-    onNodeWithText("Goal assessment").assertDoesNotExist()
+    onNodeWithText("An action has no label").assertExists()
     onNodeWithText("Goal finish").performScrollTo().performClick()
     onNodeWithText("Priority").assertIsSelected()
     runOnIdle { assertTrue(input.dismissTopLayer()) }
-    onNodeWithText("Goal assessment").assertDoesNotExist()
+    onNodeWithText("An action has no label").assertExists()
     onNodeWithText("Build the view 1").performScrollTo().performClick()
-    onNodeWithText("Goal assessment").assertDoesNotExist()
+    onNodeWithText("An action has no label").assertDoesNotExist()
     onNodeWithContentDescription("Close details").assertExists()
   }
 
@@ -191,6 +211,7 @@ class DetailPeekTest {
     val dir = invocationDirectory
     val detail = emptyDetail.copy(
       goalFinishPipeline = listOf("qa"),
+      goalFinishCards = listOf(finishCard("qa")),
       goalQa = GoalQaResult(
         "attempted", null, 1, epoch,
         listOf(GoalQaFinding("QA-1", "Benchmark times out", false, listOf("$dir/benchmark.log"), "$dir/report.md", "it exited under $dir/tmp", "It finishes", "Run `gradle`")),
@@ -214,7 +235,7 @@ class DetailPeekTest {
         ) { actions += it }
       }
     }
-    onNodeWithText("QA").performClick()
+    onNode(hasText("QA") and isSelectable()).performClick()
     onNodeWithText("Needs your review").assertIsDisplayed()
     onNodeWithText("QA-1").assertIsDisplayed()
     onNodeWithText("Live app").assertIsDisplayed()
@@ -236,6 +257,7 @@ class DetailPeekTest {
     val qaB = "/home/me/.skill-bill/qa-B"
     val detail = emptyDetail.copy(
       goalFinishPipeline = listOf("qa"),
+      goalFinishCards = listOf(finishCard("qa")),
       goalQa = GoalQaResult(
         "findings", null, 1, epoch,
         listOf(
@@ -255,7 +277,7 @@ class DetailPeekTest {
         ) { actions += it }
       }
     }
-    onNodeWithText("QA").performClick()
+    onNode(hasText("QA") and isSelectable()).performClick()
     onNodeWithText("Carried problem").performClick()
     onNodeWithContentDescription("Open evidence carried.log").performClick()
     runOnIdle { assertTrue(DetailAction.OpenQaEvidence("$qaA/carried.log", qaA) in actions) }

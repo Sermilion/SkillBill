@@ -440,18 +440,6 @@ internal object PhaseLaunchPreparation {
     val run = args.run
     val resolvedBranchRecord = recorder.loadResolvedBranch(run.request.workflowId)
     val launchReviewTier = launchReviewTierFor(run, args.boundStep)
-    val checkpointArgs =
-      RepositoryCheckpointResolutionArgs(
-        recorder,
-        goalContinuationRecorder,
-        gitOperations,
-        qualityGateCycles,
-        coupledRunTransitions,
-        session,
-        run,
-        diagnostics,
-        this::extendsOwnedInventory,
-      )
     val hooks = stepHooks(run)
     val implementationTurn =
       args.iteration?.let { hooks.implementationTurn(run, launchHookContext(run, hooks), it) }
@@ -464,6 +452,7 @@ internal object PhaseLaunchPreparation {
     val acceptanceRepair = (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair
     return FeatureTaskRuntimePhasePromptComposeInputs(
       issueKey = run.request.issueKey,
+      workflowId = run.request.workflowId,
       briefing = briefing,
       specRewritable = run.request.protectedSpecSha256 == null,
       planBundleTarget = planBundleTargetFor(run),
@@ -497,7 +486,7 @@ internal object PhaseLaunchPreparation {
       validationGateTriage = run.validationGateTriage,
       validateProbeScopeSource = { ValidateProbeActivation.scopeFor(run.request, run.validationGateTriage) },
       agentRunValidateFallback = run.agentRunValidateFallback,
-      packBuildCommand = packCommand(run, checkpointArgs, carriesBuild = true),
+      packBuildCommand = packCommand(run, checkpointResolutionArgs(run), carriesBuild = true),
       mutating = run.policy.mutating,
       singleAgentSession = run.policy.singleAgentSession,
       repoRoot = run.request.repoRoot,
@@ -505,6 +494,21 @@ internal object PhaseLaunchPreparation {
       implementationChecklistAddress = implementationChecklistAddress(run),
     )
   }
+
+  private fun PhaseAttemptLaunchPreparationContext.checkpointResolutionArgs(
+    run: PhaseRun,
+  ): RepositoryCheckpointResolutionArgs =
+    RepositoryCheckpointResolutionArgs(
+      recorder,
+      goalContinuationRecorder,
+      gitOperations,
+      qualityGateCycles,
+      coupledRunTransitions,
+      session,
+      run,
+      diagnostics,
+      this::extendsOwnedInventory,
+    )
 
   private fun PhaseAttemptLaunchPreparationContext.priorAcceptanceAudit(): String? =
     auditProseValue(

@@ -4,6 +4,7 @@ import skillbill.ports.goalrunner.runner.model.CheckBucket
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.goalrunner.runner.model.PullRequestChecks
 import java.nio.file.Path
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -39,7 +40,7 @@ class GhPullRequestChecksLookupTest {
       ),
       checks,
     )
-    assertEquals(listOf("pr", "checks", "42", "--json", "name,state,bucket,link,startedAt"), calls.single())
+    assertEquals(listOf("pr", "checks", "42", "--json", "name,state,bucket,link,startedAt,completedAt"), calls.single())
   }
 
   @Test
@@ -106,6 +107,41 @@ class GhPullRequestChecksLookupTest {
 
     assertEquals(
       PullRequestChecks.Unavailable("GitHub CLI returned a check with an unrecognised bucket or name."),
+      lookup.lookup(repoRoot, 42),
+    )
+  }
+
+  @Test
+  fun `completion time is read and the unfinished zero time becomes null`() {
+    val lookup =
+      GhPullRequestChecksLookup { _, _ ->
+        GhCommandResult(
+          exitCode = 0,
+          stdout =
+            """
+            [
+              {"name":"lint","bucket":"pass","link":"l",
+               "startedAt":"2026-11-08T10:00:00Z","completedAt":"2026-11-08T10:02:00Z"},
+              {"name":"unit","bucket":"pending","link":"u",
+               "startedAt":"0001-01-01T00:00:00Z","completedAt":"0001-01-01T00:00:00Z"}
+            ]
+            """.trimIndent(),
+        )
+      }
+
+    assertEquals(
+      PullRequestChecks.Reported(
+        listOf(
+          PullRequestCheck(
+            "lint",
+            CheckBucket.PASS,
+            "l",
+            startedAt = Instant.parse("2026-11-08T10:00:00Z"),
+            completedAt = Instant.parse("2026-11-08T10:02:00Z"),
+          ),
+          PullRequestCheck("unit", CheckBucket.PENDING, "u"),
+        ),
+      ),
       lookup.lookup(repoRoot, 42),
     )
   }

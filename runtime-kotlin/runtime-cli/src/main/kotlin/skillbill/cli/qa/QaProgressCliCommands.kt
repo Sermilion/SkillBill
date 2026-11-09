@@ -1,5 +1,6 @@
 package skillbill.cli.qa
 
+import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
@@ -9,15 +10,19 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.formatOption
+import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
+import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.qa.QaChecklistPayloadKeys
 import skillbill.engine.featuretask.qa.checklist.QaChecklistOutcome
 import skillbill.engine.featuretask.qa.checklist.QaChecklistRecorder
+import skillbill.engine.featuretask.qa.checklist.QaStageReport
 import skillbill.engine.featuretask.qa.checklist.QaStepReport
 import skillbill.engine.featuretask.qa.checklist.QaTargetReport
 import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.idestatus.model.StandaloneQaStepStatus
 import skillbill.ports.idestatus.model.StandaloneQaTargetState
 import skillbill.ports.qa.QaChecklistPlanFile
+import skillbill.workflow.taskruntime.model.qa.QaRunStageState
 import java.nio.file.Path
 
 private const val EXIT_RULE =
@@ -99,6 +104,49 @@ class QaTargetCommand(
   }
 }
 
+@Inject
+class QaStageCommand(
+  private val recorder: QaChecklistRecorder,
+  private val state: CliRunState,
+) : DocumentedCliCommand("stage", "Report an actual stage of one QA invocation. $EXIT_RULE") {
+  private val invocation by option("--invocation", help = INVOCATION_HELP).required()
+  private val name by option("--name", help = "QA operation reported by the runtime or pack guidance.").required()
+  private val stageState by option("--state", help = "Stage state.")
+    .choice(QaRunStageState.reportable.associate { it.wireValue to it.wireValue })
+    .required()
+  private val detail by option("--detail", help = "Short status detail. Follow the report's redaction rules.")
+  private val format by formatOption()
+
+  override fun run() {
+    val outcome = recorder.recordStage(QaStageReport(invocation, name, stageState, detail))
+    state.complete(outcome.toPayload(), format, exitCode = 0)
+  }
+}
+
+@Inject
+class QaScreenshotCommand(
+  private val recorder: QaChecklistRecorder,
+  private val state: CliRunState,
+  private val inputs: CliRunInputs,
+) : DocumentedCliCommand("screenshot", "Retain one screenshot for an active QA invocation. $EXIT_RULE") {
+  private val invocation by option("--invocation", help = INVOCATION_HELP).required()
+  private val file by option("--file", help = "Screenshot path inside this invocation's evidence directory.").required()
+  private val label by option("--label", help = "Short label for the captured screenshot.").required()
+  private val asFrame by option("--frame", help = "Also retain this image as the occurrence's last frame.").flag()
+  private val repoRoot by option("--repo-root", help = "Repository root. Defaults to the invocation repository root.")
+  private val format by formatOption()
+
+  override fun run() {
+    val root = resolveCliRepositoryRoot(repoRoot, inputs)
+    val outcome =
+      catchingNonCancellation { Path.of(file) }.fold(
+        onSuccess = { source -> recorder.recordScreenshot(root, invocation, source, label, asFrame) },
+        onFailure = { QaChecklistOutcome.Rejected("screenshot path is invalid") },
+      )
+    state.complete(outcome.toPayload(), format, exitCode = 0)
+  }
+}
+
 private enum class QaProgressStatus(val wireValue: String) {
   RECORDED("recorded"),
   REJECTED("rejected"),
@@ -111,6 +159,7 @@ private fun QaChecklistOutcome.toPayload(): Map<String, Any?> =
       buildMap {
         put(QaChecklistPayloadKeys.STATUS, QaProgressStatus.RECORDED.wireValue)
         if (rejectedEvidence.isNotEmpty()) put(QaChecklistPayloadKeys.REJECTED_EVIDENCE, rejectedEvidence)
+        retainedPath?.let { path -> put(QaChecklistPayloadKeys.PATH, path) }
       }
     is QaChecklistOutcome.Rejected ->
       mapOf(

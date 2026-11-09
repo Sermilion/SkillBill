@@ -1,7 +1,9 @@
 package skillbill.engine.featuretask.slot.monitor
 
+import skillbill.engine.featuretask.slot.state.CiWatchListeners
 import skillbill.engine.featuretask.slot.state.ExpectedCiHead
 import skillbill.engine.featuretask.slot.state.PullRequestCiOutcome
+import skillbill.engine.featuretask.slot.state.PullRequestCiSnapshot
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.CheckBucket
@@ -198,7 +200,7 @@ class PullRequestCiWatcherTest {
         REPO_ROOT,
         BRANCH,
         expectedHead = ExpectedCiHead(HEAD_SHA),
-        onInconclusive = inconclusive::add,
+        listeners = CiWatchListeners(onInconclusive = inconclusive::add),
       )
 
     val failed = assertIs<PullRequestCiOutcome.Failed>(outcome)
@@ -251,12 +253,13 @@ class PullRequestCiWatcherTest {
     val reported = mutableListOf<Pair<String, List<PullRequestCheck>>>()
 
     val outcome =
-      watcher(checks).watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead(HEAD_SHA), onCiRunning = {
-          pullRequestUrl,
-          pendingChecks,
-        ->
-        reported += pullRequestUrl to pendingChecks
-      })
+      watcher(checks).watch(
+        REPO_ROOT,
+        BRANCH,
+        expectedHead = ExpectedCiHead(HEAD_SHA),
+        listeners =
+          CiWatchListeners(onCiRunning = { url, pendingChecks -> reported += url to pendingChecks }),
+      )
 
     assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
     assertEquals(List(5) { PR_URL to listOf(check("desktop-build", CheckBucket.PENDING)) }, reported)
@@ -279,9 +282,13 @@ class PullRequestCiWatcherTest {
     watcher(
       checks,
       progressInterval = Duration.ofMinutes(10),
-    ).watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead(HEAD_SHA), onCiRunning = { pullRequestUrl, pendingChecks ->
-      reported += pullRequestUrl to pendingChecks
-    })
+    ).watch(
+      REPO_ROOT,
+      BRANCH,
+      expectedHead = ExpectedCiHead(HEAD_SHA),
+      listeners =
+        CiWatchListeners(onCiRunning = { url, pendingChecks -> reported += url to pendingChecks }),
+    )
 
     assertEquals(
       listOf(
@@ -317,9 +324,13 @@ class PullRequestCiWatcherTest {
           PR_NUMBER,
           headSha = HEAD_SHA,
         ),
-    ).watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead(HEAD_SHA), onCiRunning = { pullRequestUrl, pendingChecks ->
-      reported += pullRequestUrl to pendingChecks
-    })
+    ).watch(
+      REPO_ROOT,
+      BRANCH,
+      expectedHead = ExpectedCiHead(HEAD_SHA),
+      listeners =
+        CiWatchListeners(onCiRunning = { url, pendingChecks -> reported += url to pendingChecks }),
+    )
 
     assertEquals(
       listOf(
@@ -451,7 +462,7 @@ class PullRequestCiWatcherTest {
       )
     val errors = mutableListOf<String>()
 
-    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH, onInconclusive = errors::add)
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH, listeners = CiWatchListeners(onInconclusive = errors::add))
 
     assertIs<PullRequestCiOutcome.Failed>(outcome)
     assertEquals(listOf("GitHub CI checks lookup failed: temporary failure"), errors)
@@ -618,7 +629,12 @@ class PullRequestCiWatcherTest {
       watcher(
         checks,
         identityLookup = identities,
-      ).watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead(HEAD_SHA), onInconclusive = inconclusive::add)
+      ).watch(
+        REPO_ROOT,
+        BRANCH,
+        expectedHead = ExpectedCiHead(HEAD_SHA),
+        listeners = CiWatchListeners(onInconclusive = inconclusive::add),
+      )
 
     assertEquals(PullRequestCiOutcome.Merged, outcome)
     assertEquals(listOf("GitHub pull request identity lookup failed: gh is not authenticated"), inconclusive)
@@ -638,7 +654,7 @@ class PullRequestCiWatcherTest {
         REPO_ROOT,
         BRANCH,
         expectedHead = ExpectedCiHead(HEAD_SHA),
-        onInconclusive = inconclusive::add,
+        listeners = CiWatchListeners(onInconclusive = inconclusive::add),
       )
 
     assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
@@ -666,10 +682,46 @@ class PullRequestCiWatcherTest {
         checks,
         noChecksGrace = Duration.ZERO,
         identityLookup = identities,
-      ).watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead(HEAD_SHA), onInconclusive = inconclusive::add)
+      ).watch(
+        REPO_ROOT,
+        BRANCH,
+        expectedHead = ExpectedCiHead(HEAD_SHA),
+        listeners = CiWatchListeners(onInconclusive = inconclusive::add),
+      )
 
     assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
     assertEquals(List(2) { "GitHub pull request identity lookup failed: gh: HTTP 502" }, inconclusive)
+  }
+
+  @Test
+  fun `full check lists are observed on change and once more before a terminal outcome`() {
+    val pending = listOf(check("lint", CheckBucket.PASS), check("unit", CheckBucket.PENDING))
+    val failed = listOf(check("lint", CheckBucket.PASS), check("unit", CheckBucket.FAIL))
+    val checks =
+      ScriptedChecks(
+        PullRequestChecks.Reported(pending),
+        PullRequestChecks.Reported(pending),
+        PullRequestChecks.Reported(failed),
+      )
+    val observed = mutableListOf<PullRequestCiSnapshot>()
+    val running = mutableListOf<List<PullRequestCheck>>()
+
+    val outcome =
+      watcher(checks, progressInterval = Duration.ofMinutes(10)).watch(
+        REPO_ROOT,
+        BRANCH,
+        expectedHead = ExpectedCiHead(HEAD_SHA),
+        listeners =
+          CiWatchListeners(onCiRunning = { _, pendingChecks -> running += pendingChecks }, onObserved = observed::add),
+      )
+
+    assertIs<PullRequestCiOutcome.Failed>(outcome)
+    assertEquals(2, observed.size)
+    assertEquals(
+      PullRequestCiSnapshot(PR_URL, PR_NUMBER, HEAD_SHA, failed),
+      observed.last(),
+    )
+    assertEquals(listOf(listOf(check("unit", CheckBucket.PENDING))), running)
   }
 
   private fun watcher(

@@ -30,6 +30,7 @@ Exercise the Node service and browser frontend behavior the acceptance criteria 
 
 - Run the existing Playwright specs for the journeys the criteria describe, or a temporary spec written in the invocation directory.
 - Save screenshots and traces in the invocation directory. A page load alone is not a check.
+- At capture time, run `skill-bill qa screenshot --invocation <invocation id> --file <absolute path> --label <short label>` for every PNG or JPEG screenshot, including images not linked to findings. Keep each image under the invocation evidence directory and list it in the `## Screenshots` report section.
 - When no browser driver is usable (`npx playwright --version` fails), name the missing capability rather than claiming browser coverage.
 
 ## Layout and keyboard

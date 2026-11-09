@@ -2,6 +2,7 @@ package dev.skillbill.desktop.core.designsystem.component
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -25,9 +26,41 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 private val FINDING_SEVERITY_WIDTH = 58.dp
 
 @Composable
-fun FindingRow(title: String, severity: String? = null, ref: String? = null, location: String? = null, meta: String? = null, state: String? = null, stateColor: Color? = null, showDivider: Boolean = true, refContent: (@Composable () -> Unit)? = null) {
+fun FindingRow(title: String, severity: String? = null, ref: String? = null, location: String? = null, meta: String? = null, state: String? = null, stateColor: Color? = null, showDivider: Boolean = true, refContent: (@Composable () -> Unit)? = null, stacked: Boolean = false, severityColor: Color? = null) {
   val dividerColor = SkillBillTheme.colors.borderSubtle
   val locationFontFamily = SkillBillTheme.type.monoSm.fontFamily
+  if (stacked) {
+    Column(
+      Modifier.drawBehind {
+        if (showDivider) {
+          val stroke = 1.dp.toPx()
+          drawLine(dividerColor, Offset(0f, stroke / 2), Offset(size.width, stroke / 2), stroke)
+        }
+      }.padding(start = 12.dp, end = 12.dp, top = if (showDivider) 10.dp else 9.dp, bottom = 9.dp),
+      verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        severity?.let { BasicText(it.uppercase(), style = SkillBillTheme.type.t2xs.copy(color = severityColor ?: stackedSeverityColor(it), fontWeight = FontWeight.SemiBold)) }
+        if (refContent != null) refContent() else ref?.let { IdTag(it, Modifier.padding(top = 2.dp)) }
+        androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+        state?.let { SbLabel(it, SbLabelStyle.Dot(stateColor ?: SkillBillTheme.colors.fgFaint)) }
+      }
+      SelectionContainer(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+          ExpandableText(title, SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.fg, lineHeight = 1.45.em))
+          if (location != null || meta != null) {
+            val text = buildAnnotatedString {
+              if (location != null) withStyle(SpanStyle(fontFamily = locationFontFamily)) { append(location) }
+              if (location != null && meta != null) append(" · ")
+              meta?.let(::append)
+            }
+            ExpandableText(text, SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal, lineHeight = 1.45.em))
+          }
+        }
+      }
+    }
+    return
+  }
   // `.sb-finding` border-top takes its own 1px above the 9px padding; the line sits inside the row, not half above it.
   Row(
     Modifier.drawBehind {
@@ -63,6 +96,15 @@ private fun SeverityText(severity: String, width: Dp) {
     style = SkillBillTheme.type.t2xs.copy(color = severityColor(severity), fontWeight = FontWeight.SemiBold, letterSpacing = .04f.em, lineHeight = 1.6.em),
     maxLines = 1,
   )
+}
+
+@Composable
+private fun stackedSeverityColor(severity: String): Color = when (severity.lowercase()) {
+  "blocker" -> SkillBillTheme.colors.stFailed
+  "major", "high" -> SkillBillTheme.colors.stBlocked
+  "medium" -> SkillBillTheme.colors.data1
+  "minor", "low" -> SkillBillTheme.colors.fgMuted
+  else -> SkillBillTheme.colors.fgFaint
 }
 
 @Composable private fun severityColor(severity: String): Color = when (severity.lowercase()) {

@@ -106,7 +106,8 @@ class DetailViewModelTest {
     toastQueue: ToastQueue = ToastQueue(),
     specs: SpecRepository = NoSpecs,
     preview: QaPreviewRepository = qaPreview,
-  ) = DetailViewModel(source, session, details, changes, scopes, activity, board, specs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, workControls, toastQueue, settings, preview)
+    selections: SubtaskSelections = SubtaskSelections(session),
+  ) = DetailViewModel(source, session, details, changes, scopes, activity, board, specs, NoWebPages, SelectionHolder(), selections, clock, workControls, toastQueue, settings, preview)
 
   @Test
   fun `goal preview follows selected subtask and pane visibility and clears frames when QA ends`() = runTest {
@@ -165,6 +166,40 @@ class DetailViewModelTest {
     runCurrent()
     assertEquals(QaPreviewState.Ended, viewModel.state.value.qaPreview)
     assertEquals(3, closed.size)
+  }
+
+  @Test
+  fun `phase choice stays with its goal and survives paging back`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val selections = SubtaskSelections(session)
+    val goalA = item.copy(id = "goal-a", kind = WorkKind.Goal)
+    val goalB = item.copy(id = "goal-b", kind = WorkKind.Goal)
+    val first = viewModel(source = goalA, selections = selections)
+    val second = viewModel(source = goalB, selections = selections)
+    runCurrent()
+    val detail = emptyDetail.copy(subtasks = listOf(WorkSubtask(1, "Build", "in_progress", null, null, emptyList())))
+    details.flow.emit(DetailState(goalA, DetailSections.Loaded(detail, null, emptyMap(), emptySet(), stale = false)))
+    runCurrent()
+
+    first.onAction(DetailAction.SelectPhase(goalA.id, SubtaskKey.Subtask(1), "review"))
+    assertEquals("review", first.state.value.phaseChoice[PhaseChoiceKey(goalA.id, SubtaskKey.Subtask(1))])
+    assertTrue(second.state.value.phaseChoice.isEmpty())
+    val returned = viewModel(source = goalA, selections = selections)
+    assertEquals("review", returned.state.value.phaseChoice[PhaseChoiceKey(goalA.id, SubtaskKey.Subtask(1))])
+  }
+
+  @Test
+  fun `a later subtask selection replaces the phase return row without losing its phase`() {
+    val selections = SubtaskSelections(session)
+    val phaseKey = PhaseChoiceKey(item.id, SubtaskKey.Subtask(1))
+    selections.setPhase(phaseKey, "review")
+    assertEquals(phaseKey.subtask, selections.get(item.id).key)
+
+    val laterChoice = SubtaskChoice(SubtaskKey.Subtask(2), expanded = false)
+    selections.set(item.id, laterChoice)
+
+    assertEquals(laterChoice, selections.get(item.id))
+    assertEquals("review", selections.phases(item.id)[phaseKey])
   }
 
   @Test
