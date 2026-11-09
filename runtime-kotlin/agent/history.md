@@ -1,3 +1,13 @@
+## [2026-11-10] SKILL-529 wildcard approval allow rules
+Areas: runtime-domain approval model, runtime-application approval, runtime-contracts and persistence, runtime-infra/sqlite and launcher approval, runtime-ports approval, desktop/core approval and chat
+- MEDIUM feature. Pattern rules extend durable repository approvals beside exact fingerprint rules. ApprovalMatchFacts in runtime-domain owns glob matching, unsafe-command blocking, validation refusals and suggestions; decide and stored-rule auto-allow use optional pattern and persisted match facts.
+- Migration 120 adds approval_rules.pattern and approval_requests.match_facts_json; DesktopReadSchema is 120. Pattern rules persist with an empty action fingerprint; exact rules are unchanged. Provider launchers populate normalized match facts for in-scope tools.
+- Desktop pending cards offer Always allow similar when the runtime supplies a suggested pattern without refusal; decide forwards operator-edited patterns and surfaces runtime refusal text inline.
+- reusable: ApprovalMatchFacts matcher; pattern auto-allow requires both a stored pattern rule and comparable request facts from adapters.
+- Limits: null match facts keep pattern rules inert; bare-star stored patterns refuse at match time; managed organization policy and native agent allowlists stay out of scope.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-11-08] SKILL-522 per-run build indicator
 Areas: runtime-domain; runtime-ports; runtime-engine featuretask, operation and work; runtime-goalrunner; runtime-infra skills, launcher, host and sqlite; runtime-contracts; runtime-cli; runtime-core; orchestration/contracts; platform pack manifests; desktop
 - MEDIUM feature. Manifest-driven build matching and per-launch observation feed migration 108's agent_build_runs store. Primary repository identity shares duration history across goal worktrees.

@@ -1,3 +1,18 @@
+## [2026-11-10] Store pattern rules with an empty action fingerprint
+Context: approval_rules.action_fingerprint is NOT NULL and exact rules still key on fingerprint equality.
+Decision: Pattern rules write pattern plus actionFingerprint ""; scopes() skips fingerprint compare when pattern is non-null.
+Reason: Avoids a table rebuild to relax NOT NULL while keeping exact-rule behavior unchanged.
+
+## [2026-11-10] Refuse bare-wildcard patterns at match time for stored rules
+Context: Operators might persist overly broad patterns; tampered rows could bypass decide-time validation.
+Decision: ApprovalMatchFacts.matches runs patternShapeRefusal before glob matching so all-wildcard stored patterns never auto-allow.
+Reason: Defense in depth after decide; bare patterns stay inert even if validation was bypassed.
+
+## [2026-11-10] Judge approval paths lexically in the domain matcher
+Context: Wildcard approval must match checkout-relative path strings before provider adapters normalize absolute paths.
+Decision: Keep ApprovalMatchFacts path rules lexical only; no java.nio or filesystem resolution in runtime-domain.
+Reason: Adapters own absolute path normalization; the matcher must stay pure and testable without I/O.
+
 ## [2026-11-08] Keep run launches outside chat approval cards
 Context: Desktop resume and rerun selected a direct agent harness that the detached launcher refused because it had no operator approval channel. The operator clarified that permission cards belong only to chats, and runs use native permission bypass.
 Decision: Launch recorded goal and phase commands through the runtime. Remove the unused direct-harness launch path and classify phase agent requests as OutsideApproval. Keep chat approval handling and parked-operation proposal confirmation unchanged.

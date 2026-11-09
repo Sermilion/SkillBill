@@ -1,5 +1,14 @@
 # Boundary History — runtime-kotlin/runtime-infra
 
+## [2026-11-10] SKILL-529 provider approval match facts
+Areas: runtime-infra/launcher interaction, codex and cursor permission requests; desktop chat JVM adapter tests
+- Claude, Codex and Cursor approval registration fills matchFacts with trimmed command text or checkout-relative paths; fingerprints, classification and options stay unchanged.
+- ApprovalMatchFactsNormalizer is the sole filesystem owner: commandFacts trims text; pathFacts walks deepest existing ancestors with NOFOLLOW_LINKS and returns null for blank paths, escapes, symlinks, checkout-root equality and I/O failures. reusable
+- Codex unwraps only bash, zsh or sh -c or -lc single-quoted wrappers; other shell-first-token commands, grantRoot file changes and cwd outside checkout yield null. Cursor execute, edit, delete and move pass facts; other kinds stay null.
+- Limits: unrecognized shell quoting stays null; grammar, decide validation and card UI remain in sibling boundaries.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-11-03] SKILL-475 Keep Cursor review payload through harvest
 Areas: runtime-infra/launcher Cursor stream harvest
 - Last-turn Cursor JSONL whose non-empty lines are all review-register lines is kept as a strict register, so a lanes / NO_FINDINGS / canonical-verdict payload no longer falls through to concatenated-result harvest.
