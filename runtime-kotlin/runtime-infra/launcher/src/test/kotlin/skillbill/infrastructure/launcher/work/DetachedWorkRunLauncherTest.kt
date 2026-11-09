@@ -20,14 +20,6 @@ import kotlin.test.assertTrue
 
 class DetachedWorkRunLauncherTest {
   @Test
-  fun `a missing harness refuses launch without falling back to runtime cli`() {
-    val home = Files.createTempDirectory("missing-harness")
-    val request = harnessRequest(home, "Resume")
-    val refused = assertIs<WorkRunLaunchResult.Refused>(launcher(home).start(request))
-    assertTrue(refused.reason.contains("claude harness"))
-  }
-
-  @Test
   fun `a missing runtime refuses a runtime command without falling back to the agent harness`() {
     val home = Files.createTempDirectory("missing-runtime")
     executable(home, "#!/bin/sh\ntouch harness-was-started\n")
@@ -206,11 +198,6 @@ class DetachedWorkRunLauncherTest {
     assertTrue(executable.toFile().setExecutable(true))
     return executable
   }
-
-  private fun harnessRequest(
-    home: Path,
-    prompt: String,
-  ) = WorkRunLaunchRequest(home, home.resolve("metrics.db"), "work", WorkRunLaunchKind.AgentHarness("claude", prompt))
 
   private fun launcher(
     home: Path,

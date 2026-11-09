@@ -92,6 +92,8 @@ import skillbill.engine.featuretask.slot.harnessReviewRunnerSyncingPendingVerify
 import skillbill.engine.featuretask.slot.implementationCheckOutput
 import skillbill.engine.featuretask.slot.isImplementationCheckPrompt
 import skillbill.engine.featuretask.slot.monitor.MonitorCiCycleRecorder
+import skillbill.engine.featuretask.slot.monitor.MonitorRepairPublicationGate
+import skillbill.engine.featuretask.slot.monitor.PassingMonitorRepairPublicationGate
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.state.PhaseRunState
@@ -745,6 +747,7 @@ data class RuntimeHarnessConfig(
     OpenPullRequestIdentityLookup(gitOperationsOverride ?: branchSetup.gitOperations),
   val pullRequestChecksLookup: PullRequestChecksLookup = PassingPullRequestChecksLookup,
   val standaloneMonitorService: StandaloneMonitorService = UnavailableStandaloneMonitorService.service,
+  val monitorPublicationGate: MonitorRepairPublicationGate = PassingMonitorRepairPublicationGate,
   val qaExecution: QaExecutionLifecycle = testQaExecutionLifecycle(),
   val qaReports: QaReportSettlement = unavailableQaReportSettlement(),
   val phaseInstructionSource: PhaseInstructionFileSource? = null,
@@ -1393,6 +1396,7 @@ private fun harnessPhaseStrategies(
     monitoredPullRequestLookup = runtimeConfig.monitoredPullRequestLookup,
     pullRequestChecksLookup = runtimeConfig.pullRequestChecksLookup,
     standaloneMonitorService = runtimeConfig.standaloneMonitorService,
+    monitorPublicationGate = runtimeConfig.monitorPublicationGate,
     qaExecution = runtimeConfig.qaExecution,
     qaReports = runtimeConfig.qaReports,
     phaseInstructionSource = runtimeConfig.phaseInstructionSource,

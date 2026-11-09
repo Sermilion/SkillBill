@@ -14,8 +14,6 @@ data class WorkRunLaunchRequest(
 )
 
 sealed interface WorkRunLaunchKind {
-  data class AgentHarness(val agentId: String, val prompt: String) : WorkRunLaunchKind
-
   data class RuntimeCommand(val arguments: List<String>) : WorkRunLaunchKind
 }
 

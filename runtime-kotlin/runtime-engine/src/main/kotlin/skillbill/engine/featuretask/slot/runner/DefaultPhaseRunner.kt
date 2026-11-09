@@ -166,7 +166,7 @@ public class DefaultPhaseRunner(
           progressIdleTimeout =
             if (readOnly) READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes else facts.progressIdleTimeout,
           spawnAuthorization = facts.spawnAuthorization,
-          approval = AgentRunApprovalRequirement.Owned(facts.approvalRunId),
+          approval = AgentRunApprovalRequirement.OutsideApproval,
           activityStampSink = observation.activityStampSink,
           worktreeEditObserver = observation.worktreeEditObserver,
           buildObserver = observation.buildObserver,

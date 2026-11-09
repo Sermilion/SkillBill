@@ -110,10 +110,10 @@ sealed interface AgentRunApprovalRequirement {
   /** The governed review pipeline, whose separate isolation and launch strategy is unchanged. */
   data object GovernedReview : AgentRunApprovalRequirement
 
-  /** A runtime command wrapper; the nested agent child it starts is itself launched as [Owned]. */
+  /** A runtime command wrapper; its nested phase agents launch outside chat approval cards. */
   data object RuntimeHosted : AgentRunApprovalRequirement
 
-  /** A non-phase launch the spec keeps outside approval cards; its existing launch strategy is unchanged. */
+  /** A launch outside chat approval cards, including runtime phases; native permission bypass applies. */
   data object OutsideApproval : AgentRunApprovalRequirement
 
   /** No classification was supplied; every agent spawn is refused, citing [reason]. */

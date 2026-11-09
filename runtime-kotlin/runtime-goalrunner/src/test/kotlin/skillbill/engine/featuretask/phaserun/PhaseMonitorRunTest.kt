@@ -9,6 +9,9 @@ import skillbill.engine.featuretask.runner.facts
 import skillbill.engine.featuretask.runner.phaseIdFromPrompt
 import skillbill.engine.featuretask.runner.telemetryRunnerHarness
 import skillbill.engine.featuretask.slot.PassingPullRequestChecksLookup
+import skillbill.engine.featuretask.slot.monitor.MonitorRepairPublicationGate
+import skillbill.engine.featuretask.slot.monitor.MonitorRepairPublicationVerdict
+import skillbill.engine.featuretask.slot.monitor.PassingMonitorRepairPublicationGate
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.RecordingOutcomeStore
@@ -166,6 +169,81 @@ class PhaseMonitorRunTest {
     assertEquals(List(2) { MONITOR_FIX }, launchedPhaseIds(repairLauncher))
     assertEquals("Fix CI", git(origin, "show", "$FEATURE_BRANCH:ci-fix.txt"))
   }
+
+  @Test
+  fun `a repair the publication gate rejects is sent back and published only after the gate passes`() {
+    initFeatureBranch()
+    var publishedBefore: String? = null
+    var repairs = 0
+    val repairLauncher =
+      repairLauncher {
+        repairs += 1
+        Files.writeString(repoRoot.resolve("ci-fix.txt"), "Fix CI $repairs\n")
+      }
+    var gateCalls = 0
+    val gate =
+      MonitorRepairPublicationGate { gateRoot, _ ->
+        gateCalls += 1
+        assertEquals(repoRoot, gateRoot)
+        assertEquals(publishedBefore, git(origin, "rev-parse", FEATURE_BRANCH), "published before the gate passed")
+        if (gateCalls == 1) {
+          MonitorRepairPublicationVerdict.RepairAgain("Full gate failed: DatabaseMigrationsTest expected 42 tables")
+        } else {
+          MonitorRepairPublicationVerdict.Publishable
+        }
+      }
+    val checks =
+      PullRequestChecksLookup { _, _ ->
+        val head = git(origin, "rev-parse", FEATURE_BRANCH)
+        val baseline = publishedBefore ?: head.also { publishedBefore = it }
+        val bucket = if (head != baseline) CheckBucket.PASS else CheckBucket.FAIL
+        PullRequestChecks.Reported(listOf(PullRequestCheck("validate", bucket, "https://ci.example/run")))
+      }
+
+    val result = entry(checks = checks, agentLauncher = repairLauncher, gate = gate).runMonitor("SKILL-904")
+
+    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertEquals(2, gateCalls)
+    assertEquals(List(2) { MONITOR_FIX }, launchedPhaseIds(repairLauncher))
+    val retryPrompt = requireNotNull(repairLauncher.requests.last().skillRunRequest.promptOverride)
+    assertTrue("DatabaseMigrationsTest expected 42 tables" in retryPrompt, retryPrompt)
+    assertEquals("Fix CI 2", git(origin, "show", "$FEATURE_BRANCH:ci-fix.txt"))
+  }
+
+  @Test
+  fun `a repair the publication gate keeps rejecting blocks without publishing`() {
+    initFeatureBranch()
+    val observed = mutableListOf<String>()
+    val gate = MonitorRepairPublicationGate { _, _ -> MonitorRepairPublicationVerdict.RepairAgain("markers remain") }
+
+    val result = entry(checks = failingChecks(observed), gate = gate).runMonitor("SKILL-904")
+
+    val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
+    assertTrue("exhausted its retryable-failure budget" in blocked.reason, blocked.reason)
+    assertTrue("markers remain" in blocked.reason, blocked.reason)
+    assertEquals(List(3) { MONITOR_FIX }, launchedPhaseIds())
+    assertEquals(listOf(git(origin, "rev-parse", FEATURE_BRANCH)), observed.distinct())
+  }
+
+  @Test
+  fun `a repair the publication gate cannot verify blocks without publishing`() {
+    initFeatureBranch()
+    val observed = mutableListOf<String>()
+    val gate = MonitorRepairPublicationGate { _, _ -> MonitorRepairPublicationVerdict.Refused("gate runner crashed") }
+
+    val result = entry(checks = failingChecks(observed), gate = gate).runMonitor("SKILL-904")
+
+    val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
+    assertTrue("gate runner crashed" in blocked.reason, blocked.reason)
+    assertEquals(listOf(MONITOR_FIX), launchedPhaseIds())
+    assertEquals(listOf(git(origin, "rev-parse", FEATURE_BRANCH)), observed.distinct())
+  }
+
+  private fun failingChecks(observed: MutableList<String>): PullRequestChecksLookup =
+    PullRequestChecksLookup { _, _ ->
+      observed += git(origin, "rev-parse", FEATURE_BRANCH)
+      PullRequestChecks.Reported(listOf(PullRequestCheck("validate", CheckBucket.FAIL, "https://ci.example/run")))
+    }
 
   @Test
   fun `a repair that only fixes the pull request title is published and monitoring follows the refreshed checks`() {
@@ -732,6 +810,7 @@ class PhaseMonitorRunTest {
     checks: PullRequestChecksLookup = PassingPullRequestChecksLookup,
     agentLauncher: RuntimeRecordingLauncher = launcher,
     launchModelResolver: (AgentRunLaunchModelRequest) -> EffectiveLaunchModel = ::passThroughResolvedLaunchModel,
+    gate: MonitorRepairPublicationGate = PassingMonitorRepairPublicationGate,
   ): PhaseRunEntry {
     val config =
       RuntimeHarnessConfig(
@@ -741,6 +820,7 @@ class PhaseMonitorRunTest {
         gitOperationsOverride = GitWorkflowGitOperations(),
         monitoredPullRequestLookup = identity,
         pullRequestChecksLookup = checks,
+        monitorPublicationGate = gate,
       )
     val harness =
       telemetryRunnerHarness(

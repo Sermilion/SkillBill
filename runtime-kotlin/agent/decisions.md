@@ -1,3 +1,8 @@
+## [2026-11-08] Keep run launches outside chat approval cards
+Context: Desktop resume and rerun selected a direct agent harness that the detached launcher refused because it had no operator approval channel. The operator clarified that permission cards belong only to chats, and runs use native permission bypass.
+Decision: Launch recorded goal and phase commands through the runtime. Remove the unused direct-harness launch path and classify phase agent requests as OutsideApproval. Keep chat approval handling and parked-operation proposal confirmation unchanged.
+Reason: Run ownership, continuation, profile selection and recorded arguments belong to the runtime. A chat approval channel is not a prerequisite for executing or resuming a run.
+
 ## [2026-11-08] Move board projection out of source write transactions
 Context: Concurrent goals shared one SQLite writer. Heartbeat and worktree-journal commits rebuilt board projections while holding that writer lock, including full history decoding. A 467-file tick could exceed the change-revision bound and trigger a full rebuild. Whole-phase selfManagedWrite revision comparisons also attributed other runs' changes to the returning phase.
 Decision: Migration 117 installs a durable invalidation queue keyed by work id. Board reads prepare projections in read snapshots and publish only after checking file identity and a monotonic source-change fence in a short write transaction. Pending work survives failure and restart. Until the queue drains, board reads use authoritative records. Remove the synchronous projector port and never replay selfManagedWrite blocks on busy failures. Retain bounded transaction-admission retry and record slow transaction wait and hold durations.

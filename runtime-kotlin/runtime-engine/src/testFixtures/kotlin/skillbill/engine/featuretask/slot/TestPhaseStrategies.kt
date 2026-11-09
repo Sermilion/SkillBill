@@ -15,7 +15,9 @@ import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorCiCycleRecorder
+import skillbill.engine.featuretask.slot.monitor.MonitorRepairPublicationGate
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
+import skillbill.engine.featuretask.slot.monitor.PassingMonitorRepairPublicationGate
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
@@ -97,9 +99,10 @@ fun testPhaseStrategies(
   monitorCycles: MonitorCiCycleRecorder = unusedMonitorCiCycleRecorder(),
   inlineRubricResolver: InlineReviewRubricResolver? = null,
   phaseInstructionSource: PhaseInstructionFileSource? = null,
+  monitorPublicationGate: MonitorRepairPublicationGate = PassingMonitorRepairPublicationGate,
 ): PhaseStrategyLookup {
   val runner = DefaultPhaseRunner(launcher, gitOperations)
-  val standaloneMonitor = StandaloneMonitorStrategy(standaloneMonitorService)
+  val standaloneMonitor = StandaloneMonitorStrategy(standaloneMonitorService, monitorPublicationGate)
   val planFanOut = PlanFanOutStrategy(planFanOutPort, planFanOutCap)
   val codeReviewRunner = reviewRunner?.let { reviewRoutingPhaseRunner(it, runner) } ?: runner
   val registry =
@@ -131,7 +134,7 @@ fun testPhaseStrategies(
           runner,
         ),
         PhaseStrategyRegistration(
-          MonitorStrategy(monitoredPullRequestLookup, pullRequestChecksLookup, monitorCycles),
+          MonitorStrategy(monitoredPullRequestLookup, pullRequestChecksLookup, monitorCycles, monitorPublicationGate),
           runner,
         ),
         PhaseStrategyRegistration(standaloneMonitor, runner),

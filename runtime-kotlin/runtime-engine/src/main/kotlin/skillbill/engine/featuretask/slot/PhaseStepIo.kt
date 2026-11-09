@@ -30,7 +30,6 @@ public data class PhaseStepFacts(
   val attempt: Int?,
   val observeLaunch: Boolean,
   val briefingText: String,
-  val approvalRunId: String,
   val subtaskId: Int? = null,
   val progressIdleTimeout: Duration? = null,
   val streamOutputForLiveness: Boolean = false,

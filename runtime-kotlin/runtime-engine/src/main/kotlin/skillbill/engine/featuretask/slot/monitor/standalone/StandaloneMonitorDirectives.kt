@@ -46,6 +46,11 @@ internal object StandaloneMonitorDirectives {
       "investigation cannot establish a repository or pull request fix, report the repair unresolved with the " +
       "failed check URL, the evidence inspected, and the unresolved cause or missing evidence. Unavailable logs, " +
       "missing secrets, or an infrastructure outage also leave the repair unresolved with the concrete obstacle. " +
+      "Before publishing a fixed repair, the runtime scans the branch's changed files for unresolved " +
+      "conflict-marker blocks and reruns the repository's full validation gate; a remaining marker or any gate " +
+      "failure sends the repair back to you with that evidence, and nothing is committed or pushed until both " +
+      "pass, so resolve every conflict and fix every failing check, including failures unrelated to the recorded " +
+      "one. " +
       "Do not commit, push, or change remote configuration. The runtime commits and publishes a completed repair " +
       "to the target head, records a pull-request-only repair without pushing when the target is a pull request, " +
       "and owns subsequent CI confirmation. In natural prose, explain the CI failure, its cause, the repository or " +
