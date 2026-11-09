@@ -24,6 +24,7 @@ import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.model.repair.FocusedRepairStrategy
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionAccountingPolicy
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -67,6 +68,12 @@ internal object ImplementationCriterionHooks :
     loaded: LaunchedTurn,
     step: PhaseAcceptedStepExecution,
   ): PhaseLaunchAdmission {
+    if (loaded.ledger.progress.accountingPolicy != AcceptanceCriterionAccountingPolicy.PRE_ADOPTION) {
+      return processFailure(
+        "Target evidence records require the deferred evidence migration and engine adoption. " +
+          "Resume with an evidence-capable runtime.",
+      )
+    }
     val ledger =
       when (val grant = grantReopen(loaded)) {
         is RequiredPhaseWrite.Rejected -> return PhaseLaunchAdmission.WriteRejected(grant)

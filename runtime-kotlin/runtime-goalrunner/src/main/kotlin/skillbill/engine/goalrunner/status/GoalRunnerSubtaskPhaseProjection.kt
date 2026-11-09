@@ -11,9 +11,9 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.artifact.historical.toEngineRepairState
 import skillbill.workflow.taskruntime.artifact.isPreContractAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionRepairState
-import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
@@ -97,7 +97,7 @@ private fun readAuditState(
       ) {
         null
       } else {
-        payload.toAcceptanceCriterionRepairState("workflow-artifact:${family.label()}")
+        payload.toEngineRepairState("workflow-artifact:${family.label()}")
       }
     }.getOrElse { error ->
       degradation.record(

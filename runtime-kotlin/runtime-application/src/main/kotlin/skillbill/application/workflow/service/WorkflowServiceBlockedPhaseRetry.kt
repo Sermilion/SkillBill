@@ -33,10 +33,10 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.model.workflowStepStatus
-import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
-import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.historical.asEngineRepairWireMap
+import skillbill.workflow.taskruntime.artifact.historical.toEngineRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
@@ -212,7 +212,7 @@ internal class WorkflowServiceBlockedPhaseRetry(
     val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
     if (!family.contains(existing.artifacts)) return null
     return FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(existing.artifacts))
-      .toAcceptanceCriterionRepairState(family.label()).reopenForOperatorAudit()
+      .toEngineRepairState(family.label()).reopenForOperatorAudit()
   }
 
   private fun retryRejection(
@@ -353,7 +353,7 @@ private fun blockedPhaseRetryInput(
         ) +
           state.repairState?.let {
             val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
-            mapOf(family.entry(it.asRepairWireMap()))
+            mapOf(family.entry(it.asEngineRepairWireMap()))
           }.orEmpty(),
       ),
     sessionId = "",

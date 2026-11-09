@@ -5,6 +5,9 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTAT
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeImplementationProgressSchema
+import skillbill.workflow.taskruntime.artifact.accounting.AcceptanceCriterionRepairAccountingWire
+import skillbill.workflow.taskruntime.artifact.accounting.evidenceRows
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionAccountingPolicy
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.validAcceptanceCriterionRepairBudgets
 import skillbill.workflow.taskruntime.model.audit.validateAcceptanceCriterionEvidence
@@ -14,7 +17,12 @@ import java.math.BigDecimal
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionProgressPayloadKeys as ProgressKeys
 import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimeImplementationProgressPayloadKeys as Keys
 
-fun FeatureTaskRuntimeImplementationProgress.asImplementationProgressWireMap(): FeatureTaskRuntimeWorkflowArtifactMap =
+fun FeatureTaskRuntimeImplementationProgress.asImplementationProgressWireMap(): FeatureTaskRuntimeWorkflowArtifactMap {
+  require(accountingPolicy == AcceptanceCriterionAccountingPolicy.VERIFIED_EVIDENCE)
+  return implementationFields()
+}
+
+internal fun FeatureTaskRuntimeImplementationProgress.implementationFields(): FeatureTaskRuntimeWorkflowArtifactMap =
   FeatureTaskRuntimeWorkflowArtifactMap.from(
     linkedMapOf(
       Keys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_CONTRACT_VERSION,

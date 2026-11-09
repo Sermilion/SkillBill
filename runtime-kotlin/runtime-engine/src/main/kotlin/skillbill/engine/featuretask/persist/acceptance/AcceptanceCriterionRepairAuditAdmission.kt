@@ -4,7 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairAuditEvidence
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairMutation
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.workflow.taskruntime.artifact.asRepairWireMap
+import skillbill.workflow.taskruntime.artifact.historical.asEngineRepairWireMap
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
@@ -38,7 +38,7 @@ public class AcceptanceCriterionRepairAuditAdmission(private val validator: Feat
     val identity =
       wire[Keys.CATALOG_ID] == next.catalogId && wire[Keys.SPEC_DIGEST] == next.specDigest &&
         wire[Keys.EXECUTION_ID] == next.executionId
-    if (!identity || wire[Keys.DEPENDENCIES] != next.asRepairWireMap()[Keys.DEPENDENCIES]) return false
+    if (!identity || wire[Keys.DEPENDENCIES] != next.asEngineRepairWireMap()[Keys.DEPENDENCIES]) return false
     return when (mutation) {
       is AcceptanceCriterionRepairMutation.Discover -> discoveryMatches(wire, next)
       is AcceptanceCriterionRepairMutation.Outcome -> targetedMatches(wire, next, mutation)

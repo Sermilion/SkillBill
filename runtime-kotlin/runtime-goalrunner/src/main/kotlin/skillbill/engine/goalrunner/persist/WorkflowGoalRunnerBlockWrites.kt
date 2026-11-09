@@ -48,11 +48,11 @@ import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.artifact.historical.asEngineRepairWireMap
+import skillbill.workflow.taskruntime.artifact.historical.toEngineRepairState
 import skillbill.workflow.taskruntime.artifact.phaseLedgerFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.artifact.phaseRecordsFromWorkflowArtifacts
-import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAlias
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAliasKind
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelatedField
@@ -563,9 +563,9 @@ public class WorkflowGoalRunnerBlockWrites(
     if (!family.contains(artifacts)) return emptyMap()
     val state =
       FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
-        .toAcceptanceCriterionRepairState(family.label())
+        .toEngineRepairState(family.label())
     val resumed = state.resetBudgetForOperatorResume()
-    return if (resumed == state) emptyMap() else mapOf(family.entry(resumed.asRepairWireMap()))
+    return if (resumed == state) emptyMap() else mapOf(family.entry(resumed.asEngineRepairWireMap()))
   }
 
   private fun operatorReopenablePhaseRecord(

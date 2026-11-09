@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.persist.acceptance
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
-import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_INTERACTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
@@ -25,7 +25,7 @@ import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
-import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.historical.toEngineRepairState
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.audit.QUARANTINE_REJECTION_CLASS_ACCEPTANCE_REPAIR_VERSION
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
@@ -188,7 +188,7 @@ public class AcceptanceCriterionRepairVersionRecovery(
         FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_AUDIT_RESULT
       }
     validator.validate(kind, wire, label)
-    if (repair) wire.toAcceptanceCriterionRepairState(label)
+    if (repair) wire.toEngineRepairState(label)
   }
 
   private fun warn(
@@ -201,7 +201,7 @@ public class AcceptanceCriterionRepairVersionRecovery(
       diagnostics,
       "seam=serial_repair_version_recovery workflow=${worker.workflowId.take(MAX_DIAGNOSTIC_ID)} " +
         "record_kind=$kind families=${families.joinToString(",")} " +
-        "value_expected=$ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION " +
+        "value_expected=$ACCEPTANCE_CRITERION_REPAIR_STATE_INTERACTION_CONTRACT_VERSION " +
         "value_used=$ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION diagnostic_degraded=$degraded",
     )
   }

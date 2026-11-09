@@ -7,8 +7,8 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.taskruntime.AcceptanceCriterionRepairProjection
 import skillbill.ports.taskruntime.model.AcceptanceCriterionRepairProjectionRequest
-import skillbill.workflow.taskruntime.artifact.asRepairWireMap
-import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.historical.asEngineRepairWireMap
+import skillbill.workflow.taskruntime.artifact.historical.toEngineRepairState
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import java.io.IOException
 import java.nio.channels.FileChannel
@@ -35,7 +35,7 @@ class FileSystemAcceptanceCriterionRepairProjection(
     val target = directory.resolve("$key.json")
     val temporary = Files.createTempFile(directory, "$key-", ".tmp")
     try {
-      val requestedJson = JsonCodec.valueToJsonString(request.state.asRepairWireMap())
+      val requestedJson = JsonCodec.valueToJsonString(request.state.asEngineRepairWireMap())
       Files.writeString(temporary, requestedJson)
       FileChannel.open(directory.resolve("$key.lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE).use {
           channel ->
@@ -71,7 +71,7 @@ class FileSystemAcceptanceCriterionRepairProjection(
     if (!Files.isRegularFile(target)) return null
     return try {
       FeatureTaskRuntimeWorkflowArtifactMap.from(JsonCodec.parseValue(Files.readString(target))).also {
-        it.toAcceptanceCriterionRepairState(target.toString())
+        it.toEngineRepairState(target.toString())
       }
     } catch (failure: SkillBillRuntimeException) {
       diagnostics.warning(

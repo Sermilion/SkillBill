@@ -42,7 +42,7 @@ import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
-import skillbill.workflow.taskruntime.artifact.asRepairWireMap
+import skillbill.workflow.taskruntime.artifact.historical.asEngineRepairWireMap
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdmission
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
@@ -125,7 +125,7 @@ class SerialRepairSqliteFixture(
       },
       emptyList(),
     )
-  val initial = assertNotNull(AcceptanceCriterionRepairState.admit(admission))
+  val initial = assertNotNull(AcceptanceCriterionRepairState.admitPreAdoption(admission))
   var sourceDigest = binding.specDigest
   val source =
     object : FeatureTaskRuntimeRunInvariantsSource {
@@ -413,7 +413,7 @@ class SerialRepairSqliteFixture(
                 Keys.EVIDENCE_REF to evidenceRef,
               )
             },
-          Keys.DEPENDENCIES to state.asRepairWireMap()[Keys.DEPENDENCIES],
+          Keys.DEPENDENCIES to state.asEngineRepairWireMap()[Keys.DEPENDENCIES],
           Keys.REGRESSED_REFS to emptyList<String>(),
           Keys.EDGE_CHANGES to emptyList<Any>(),
           Keys.INTERACTIONS to emptyList<Any>(),

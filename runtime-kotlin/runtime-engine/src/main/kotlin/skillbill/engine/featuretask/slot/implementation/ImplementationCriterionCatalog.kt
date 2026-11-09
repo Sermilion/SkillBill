@@ -110,7 +110,7 @@ internal data class ImplementationCriterionLedger(
   val records: List<FeatureTaskRuntimeImplementationTurnRecord>,
 ) {
   val progress: FeatureTaskRuntimeImplementationProgress
-    get() = stored ?: FeatureTaskRuntimeImplementationProgress.initial(catalog.ids)
+    get() = stored ?: FeatureTaskRuntimeImplementationProgress.preAdoption(catalog.ids)
 
   companion object {
     fun load(

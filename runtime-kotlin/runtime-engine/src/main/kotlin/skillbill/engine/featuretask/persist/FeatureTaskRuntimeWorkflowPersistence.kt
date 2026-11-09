@@ -35,13 +35,13 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
-import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.artifact.historical.asEngineRepairWireMap
+import skillbill.workflow.taskruntime.artifact.historical.toEngineImplementationProgress
+import skillbill.workflow.taskruntime.artifact.historical.toEngineRepairState
 import skillbill.workflow.taskruntime.artifact.isPreContractAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionAuditResult
 import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionRepairState
-import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
-import skillbill.workflow.taskruntime.artifact.toImplementationProgress
 import skillbill.workflow.taskruntime.artifact.toQaRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
@@ -206,7 +206,7 @@ public class FeatureTaskRuntimeWorkflowPersistence
           payload,
           "workflow-artifact:${family.label()}",
         )
-        val state = payload.toAcceptanceCriterionRepairState("workflow-artifact:${family.label()}")
+        val state = payload.toEngineRepairState("workflow-artifact:${family.label()}")
         if (state.catalogId != expectedCatalogId || state.executionId != expectedExecutionId) {
           throw invalidWorkflowStateSchemaError(
             "Workflow '$workflowId' serial repair identity does not match the admitted execution.",
@@ -239,7 +239,7 @@ public class FeatureTaskRuntimeWorkflowPersistence
         validateSerialArtifacts(record.artifacts)
         payload?.let {
           AcceptanceCriterionRepairStatusRead.Current(
-            it.toAcceptanceCriterionRepairState("workflow-artifact:${family.label()}"),
+            it.toEngineRepairState("workflow-artifact:${family.label()}"),
           )
         }
       }
@@ -294,7 +294,7 @@ public class FeatureTaskRuntimeWorkflowPersistence
         payload,
         "workflow-artifact:${family.label()}",
       )
-      return payload.toImplementationProgress("workflow-artifact:${family.label()}")
+      return payload.toEngineImplementationProgress("workflow-artifact:${family.label()}")
     }
 
     public fun persistArtifactsPatch(
@@ -404,7 +404,7 @@ public class FeatureTaskRuntimeWorkflowPersistence
         coupledPatch +
           mapOf(
             DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR.entry(
-              state.asRepairWireMap(),
+              state.asEngineRepairWireMap(),
             ),
           )
       val updated =

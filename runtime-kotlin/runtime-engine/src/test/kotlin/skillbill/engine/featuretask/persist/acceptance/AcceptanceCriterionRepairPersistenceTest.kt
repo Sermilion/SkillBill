@@ -17,7 +17,9 @@ import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
-import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.taskruntime.artifact.asRepairWireMap
+import skillbill.workflow.taskruntime.artifact.historical.toEngineRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -34,6 +36,41 @@ import kotlin.test.assertTrue
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 class AcceptanceCriterionRepairPersistenceTest {
+  @Test
+  fun `target format refuses pre-adoption engine writes and preserves the stored record and history`() {
+    SerialRepairSqliteFixture().use { f ->
+      f.owned { worker ->
+        val target = assertNotNull(AcceptanceCriterionRepairState.admit(f.admission))
+        val original = f.snapshot()
+        f.database.transaction {
+          it.workflowStates.save(
+            WorkflowFamily.TASK_RUNTIME,
+            original.copy(
+              artifacts =
+                DurableWorkflowArtifacts.fromMap(
+                  original.artifacts +
+                    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR.entry(
+                      target.asRepairWireMap(),
+                    ),
+                ),
+            ),
+          )
+        }
+        val before = f.snapshot().toRecord()
+        assertFailsWith<SkillBillRuntimeException> {
+          f.write(worker, target, AcceptanceCriterionRepairMutation.Reserve("premature-adoption"))
+        }
+        assertEquals(before, f.snapshot().toRecord())
+        assertEquals(
+          target,
+          assertIs<AcceptanceCriterionRepairHydration.Present>(
+            f.persistence.hydrate(f.workflowId, f.binding),
+          ).state,
+        )
+      }
+    }
+  }
+
   @Test
   fun `restart replays targeted failure once and the third unsuccessful cycle blocks the criterion`() {
     SerialRepairSqliteFixture().use { f ->
@@ -245,7 +282,7 @@ class AcceptanceCriterionRepairPersistenceTest {
                     DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR.value(
                       staged.artifacts,
                     ),
-                  ).toAcceptanceCriterionRepairState("staged")
+                  ).toEngineRepairState("staged")
                 assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, state.stage)
                 throw IOException("closure commit rejected")
               }

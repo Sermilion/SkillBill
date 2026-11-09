@@ -23,16 +23,26 @@ import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionCheckedMutation
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionCompletedMutation
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionIndependentProgress
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionMutationDisposition
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionPreservedObligation
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProgressClassification
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProgressContext
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProseAudit
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdmission
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairLaunch
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionResolvedObligation
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
 import skillbill.workflow.taskruntime.model.audit.recordProseAudit
+import skillbill.workflow.taskruntime.model.audit.repairAccounting
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -86,11 +96,14 @@ class WorkflowServiceBlockedPhaseRetryTest {
         val resumed =
           FeatureTaskRuntimeWorkflowArtifactMap.from(repairFamily.value(saved.artifacts))
             .toAcceptanceCriterionRepairState(repairFamily.label())
+        assertEquals(emptyMap(), resumed.unsuccessfulTotals)
+        assertEquals(repair.outcomes.size, resumed.budgetStartOutcomeIndex)
+        assertEquals(repair.completedMutations, resumed.completedMutations)
+        assertEquals(repair.independentChecks, resumed.independentChecks)
         assertEquals(
-          if (status == WorkflowStatus.BLOCKED) emptyMap() else mapOf("AC-001" to 1),
-          resumed.unsuccessfulTotals,
+          repair.repairAccounting("AC-001").escalationRequired,
+          resumed.repairAccounting("AC-001").escalationRequired,
         )
-        assertEquals(if (status == WorkflowStatus.BLOCKED) 3 else 0, resumed.budgetStartOutcomeIndex)
         assertEquals(AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED, resumed.stage)
         assertEquals(listOf("AC-001"), resumed.pendingAuditRefs)
         assertEquals(resumed, AcceptanceCriterionRepairState.restore(resumed))
@@ -209,9 +222,10 @@ private fun repairWithFailures(count: Int): AcceptanceCriterionRepairState {
   repeat(count) { index ->
     val id = "repair-$index"
     state = assertNotNull(state.reserve(id))
+    state = assertNotNull(state.captureForTest(id, id, "c".repeat(64), "checkpoint:$index"))
     state =
       assertNotNull(
-        state.record(
+        state.recordIndependently(
           AcceptanceCriterionRepairOutcome(
             id,
             id,
@@ -305,4 +319,99 @@ private fun retryFixture(includeInvariants: Boolean = true): RetryFixture {
     ),
     invariants,
   )
+}
+
+private fun AcceptanceCriterionRepairState.captureForTest(
+  reservationId: String,
+  evidenceRef: String,
+  treeDigest: String,
+  checkpointId: String,
+): AcceptanceCriterionRepairState? {
+  val ref = reservation?.criterionRef ?: return null
+  val inventory = independentChecks.lastOrNull { it.mutation.criterionRef == ref }?.establishedObligations().orEmpty()
+  val mutation =
+    AcceptanceCriterionCompletedMutation(
+      catalogId, specDigest, executionId, ref, reservationId, "worker", "worker-output:$reservationId", "e".repeat(64),
+      "a".repeat(64), "before", treeDigest, checkpointId, inventory, AcceptanceCriterionMutationDisposition.INCOMPLETE,
+      AcceptanceCriterionRepairLaunch(
+        reservationId,
+        "provider",
+        "model",
+        "high",
+        "plan",
+        "launch:$reservationId",
+        repairAccounting(ref).escalationRequired,
+      ),
+    )
+  return retainCompletedMutation(mutation)?.completeRepairAwaitingTargetedVerification(
+    reservationId,
+    evidenceRef,
+    treeDigest,
+    checkpointId,
+  )
+}
+
+private fun AcceptanceCriterionRepairState.recordIndependently(
+  outcome: AcceptanceCriterionRepairOutcome,
+): AcceptanceCriterionRepairState? {
+  if (outcomes.any { it.reservationId == outcome.reservationId }) return record(outcome)
+  val tree = assertNotNull(admittedTreeDigest)
+  val checkpoint = assertNotNull(admittedCheckpointId)
+  val binding = outcome.auditBindingDigest ?: "a".repeat(64)
+  val mutation = completedMutations.single { it.repairAttemptId == outcome.reservationId }
+  val resolved =
+    if (outcome.successful) {
+      listOf(
+        AcceptanceCriterionResolvedObligation(
+          "obligation:${outcome.reservationId}",
+          "Production caller closes ${outcome.criterionRef}",
+          listOf("before:src/Store.kt:5"),
+          listOf("after:src/Store.kt:6"),
+        ),
+      )
+    } else {
+      emptyList()
+    }
+  val preserved =
+    mutation.establishedObligations.map {
+      AcceptanceCriterionPreservedObligation(it.obligationId, it.obligation, listOf("after:src/Store.kt:4"))
+    }
+  val comparison =
+    AcceptanceCriterionIndependentProgress(
+      outcome.criterionRef, outcome.reservationId, mutation.baselineTreeDigest, tree, "before", checkpoint, revision,
+      binding, resolved, preserved, if (outcome.successful) emptyList() else listOf("Production gap"),
+      if (outcome.successful) {
+        AcceptanceCriterionProgressClassification.SATISFIED
+      } else {
+        AcceptanceCriterionProgressClassification.NO_PROGRESS
+      },
+    )
+  val baselineCitations =
+    resolved.flatMap { it.baselineCitations } +
+      mutation.establishedObligations.flatMap { it.currentCitations }
+  val context =
+    AcceptanceCriterionProgressContext(
+      catalogId,
+      specDigest,
+      executionId,
+      outcome.criterionRef,
+      outcome.reservationId,
+      "worker",
+      mutation.workerOutputDigest,
+      mutation.baselineTreeDigest,
+      "before",
+      tree,
+      checkpoint,
+      revision,
+      binding,
+      "checker",
+      outcome.outcomeId,
+      outcome.digest,
+      true,
+      baselineCitations.toSet(),
+      (resolved.flatMap { it.currentCitations } + preserved.flatMap { it.currentCitations }).toSet(),
+      mutation.establishedObligations, resolved, preserved, mutation,
+    )
+  return retainIndependentCheck(AcceptanceCriterionCheckedMutation(mutation, comparison, context))
+    ?.record(outcome.copy(auditBindingDigest = binding))
 }

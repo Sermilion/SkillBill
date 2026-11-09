@@ -32,7 +32,7 @@ class PhaseHistoricalInterpreterTest {
       }
     var state =
       assertNotNull(
-        AcceptanceCriterionRepairState.admit(
+        AcceptanceCriterionRepairState.admitPreAdoption(
           AcceptanceCriterionRepairAdmission(
             "catalog",
             "execution",

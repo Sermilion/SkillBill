@@ -185,18 +185,20 @@ private fun AcceptanceCriterionRepairState.applyFocusedAudit(
 }
 
 private fun AcceptanceCriterionRepairState.permitsFocusedClosure(audit: AcceptanceCriterionProseAudit): Boolean {
+  if (accountingPolicy == AcceptanceCriterionAccountingPolicy.PRE_ADOPTION) return true
   val mutation = completedMutations.lastOrNull { it.criterionRef == audit.criterionRef }
   val repaired = outcomes.any { it.criterionRef == audit.criterionRef }
   if (audit.satisfied && repaired && mutation == null) return false
-  if (audit.satisfied && mutation != null) {
+  return if (audit.satisfied && mutation != null) {
     val check = independentChecks.singleOrNull { it.mutation == mutation } ?: return false
     check.validate()
     val source =
       check.comparison.currentTreeDigest == audit.treeDigest &&
         check.comparison.currentCheckpointId == audit.checkpointId
-    if (!source || check.comparison.classification != AcceptanceCriterionProgressClassification.SATISFIED) return false
+    source && check.comparison.classification == AcceptanceCriterionProgressClassification.SATISFIED
+  } else {
+    true
   }
-  return true
 }
 
 internal fun AcceptanceCriterionRepairCriterion.afterProseAudit(
@@ -779,7 +781,17 @@ fun AcceptanceCriterionRepairState.repairAccounting(ref: String): AcceptanceCrit
   }
 
 internal fun AcceptanceCriterionRepairState.budgetBlocks(ref: String): Boolean {
+  if (accountingPolicy == AcceptanceCriterionAccountingPolicy.PRE_ADOPTION) {
+    return FocusedRepairStrategy.exhausted(unsuccessfulTotals.getOrDefault(ref, 0))
+  }
   val accounting = repairAccounting(ref)
   return FocusedRepairStrategy.exhausted(accounting.noProgressOutcomes) &&
     !accounting.escalatedOpportunityOwed && accounting.pendingCheckAttemptIds.isEmpty() && !accounting.evidenceMissing
 }
+
+fun AcceptanceCriterionRepairState.repairTarget(ref: String): RepairTargetProgress =
+  if (accountingPolicy == AcceptanceCriterionAccountingPolicy.PRE_ADOPTION) {
+    RepairTargetProgress(ref, unsuccessfulTotals.getOrDefault(ref, 0))
+  } else {
+    repairAccounting(ref).target()
+  }

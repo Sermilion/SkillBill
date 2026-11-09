@@ -9,7 +9,7 @@ import skillbill.infrastructure.contracts.workflow.featuretask.wire.FeatureTaskR
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
-import skillbill.workflow.taskruntime.artifact.asRepairWireMap
+import skillbill.workflow.taskruntime.artifact.historical.asEngineRepairWireMap
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -36,7 +36,7 @@ class AcceptanceCriterionRepairPreContractStatusTest {
         workflowPersistence.readAcceptanceCriterionRepairStatus(fixture.workflowId),
       )
 
-      storePreContractShape(fixture, discovered.asRepairWireMap())
+      storePreContractShape(fixture, discovered.asEngineRepairWireMap())
 
       assertEquals(
         AcceptanceCriterionRepairStatusRead.PreContract,

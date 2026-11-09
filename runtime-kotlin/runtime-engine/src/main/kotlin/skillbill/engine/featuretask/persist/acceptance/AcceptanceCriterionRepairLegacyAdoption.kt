@@ -6,7 +6,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_PREVIOUS_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_ADOPTION_CONTRACT_VERSION
-import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_INTERACTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PREVIOUS_CONTRACT_VERSION
@@ -499,7 +499,7 @@ public class AcceptanceCriterionRepairLegacyAdoption(
       regenerated,
       JsonCodec.valueToJsonString(originals).toByteArray(Charsets.UTF_8),
       "Stored ${families.joinToString()} at contract ${SUPERSEDED_CANDIDATES.first().version}; " +
-        "regenerated at $ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION.",
+        "regenerated at $ACCEPTANCE_CRITERION_REPAIR_STATE_INTERACTION_CONTRACT_VERSION.",
     )
   }
 

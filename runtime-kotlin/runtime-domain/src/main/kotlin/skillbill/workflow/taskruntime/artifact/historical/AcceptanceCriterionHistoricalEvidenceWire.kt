@@ -2,7 +2,7 @@ package skillbill.workflow.taskruntime.artifact.historical
 
 import skillbill.error.shellcontent.invalidAcceptanceCriterionAuditResultSchema
 import skillbill.workflow.taskruntime.artifact.AcceptanceCriterionEvidenceWire
-import skillbill.workflow.taskruntime.artifact.evidenceRows
+import skillbill.workflow.taskruntime.artifact.accounting.evidenceRows
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionCompletedMutation
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionEstablishedObligation
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionMutationDisposition

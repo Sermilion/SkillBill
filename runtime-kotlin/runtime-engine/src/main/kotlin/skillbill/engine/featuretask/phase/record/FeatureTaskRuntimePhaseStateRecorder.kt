@@ -33,11 +33,11 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.model.workflowStepStatus
-import skillbill.workflow.taskruntime.artifact.asImplementationProgressWireMap
 import skillbill.workflow.taskruntime.artifact.asQaRepairStateWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromArtifact
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
+import skillbill.workflow.taskruntime.artifact.historical.asEngineProgressWireMap
 import skillbill.workflow.taskruntime.artifact.implementationAttemptRecordWorkflowArtifact
 import skillbill.workflow.taskruntime.artifact.operatorBlockRetryFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
@@ -349,7 +349,7 @@ public class FeatureTaskRuntimePhaseStateRecorder(
       FeatureTaskRuntimeWorkflowArtifactMap.from(attemptWire),
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.label(),
     )
-    val progressWire = write.progress.asImplementationProgressWireMap()
+    val progressWire = write.progress.asEngineProgressWireMap()
     implementationAttemptValidator.validate(
       FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_PROGRESS,
       progressWire,

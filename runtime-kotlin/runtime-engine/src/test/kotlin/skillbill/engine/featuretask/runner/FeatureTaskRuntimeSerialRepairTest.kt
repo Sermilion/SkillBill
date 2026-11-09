@@ -39,8 +39,8 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.artifact.historical.asEngineRepairWireMap
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -755,7 +755,7 @@ class FeatureTaskRuntimeSerialRepairTest {
     records["audit_plan_fix"] = records.getValue("audit_plan_fix").asPendingForOperatorResume()
     val artifacts = harness.repository.taskRuntimeArtifacts(WORKFLOW_ID).toMutableMap()
     artifacts[DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR.label()] =
-      state.asRepairWireMap()
+      state.asEngineRepairWireMap()
     artifacts[DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.label()] =
       records.mapValues { it.value.asWorkflowArtifactEntry() }
     harness.repository.replaceTaskRuntimeArtifacts(WORKFLOW_ID, artifacts)
@@ -1146,7 +1146,7 @@ internal fun serialStructuredAuditOutput(
       Keys.CURRENT_CRITERION_REF to current.currentCriterionRef.takeIf { targeted },
       Keys.RESERVATION_ID to current.reservation?.reservationId.takeIf { targeted },
       Keys.CRITERIA to selected.map { criterionFact(it, targeted, prose) },
-      Keys.DEPENDENCIES to current.asRepairWireMap()[Keys.DEPENDENCIES],
+      Keys.DEPENDENCIES to current.asEngineRepairWireMap()[Keys.DEPENDENCIES],
       Keys.REGRESSED_REFS to emptyList<String>(),
       Keys.EDGE_CHANGES to emptyList<Any>(),
       Keys.INTERACTIONS to emptyList<Any>(),

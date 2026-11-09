@@ -37,8 +37,9 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.taskruntime.artifact.asRepairWireMap
-import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.historical.asEngineRepairWireMap
+import skillbill.workflow.taskruntime.artifact.historical.toEngineRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionAccountingPolicy
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.admitQaReaudit
@@ -101,7 +102,9 @@ public class AcceptanceCriterionRepairPersistence(
             admittedDigest,
             authoredCriteria,
           )
-        AcceptanceCriterionRepairHydration.Present(requireNotNull(decode(row.artifacts, binding)))
+        val state = requireNotNull(decode(row.artifacts, binding))
+        requirePreAdoption(state)
+        AcceptanceCriterionRepairHydration.Present(state)
       }
     }
 
@@ -357,6 +360,7 @@ public class AcceptanceCriterionRepairPersistence(
     val previous =
       decode(record.artifacts, binding)
         ?: return refuse(worker, null, AcceptanceCriterionRepairRefusal.UNSAFE_LEGACY_ADOPTION)
+    requirePreAdoption(previous)
     val next = AcceptanceCriterionInteractionTargets.prepare(previous, binding)
     return when {
       next == previous -> AcceptanceCriterionRepairWriteResult.Committed(detach(previous), true)
@@ -419,6 +423,7 @@ public class AcceptanceCriterionRepairPersistence(
         ?: throw invalidAcceptanceCriterionRepairStateSchema(worker.workflowId, "The workflow is missing.")
     workflowPersistence.validateSerialArtifacts(record.artifacts)
     val previous = decode(record.artifacts, binding)
+    previous?.let(::requirePreAdoption)
     return when {
       previous != null && AcceptanceCriterionRepairStartLedger.sameCommittedStart(record.artifacts, request) ->
         AcceptanceCriterionRepairWriteResult.Committed(detach(previous), true)
@@ -511,7 +516,7 @@ public class AcceptanceCriterionRepairPersistence(
     ) {
       return true
     }
-    val used = JsonCodec.valueToJsonString(state.asRepairWireMap()).toByteArray(Charsets.UTF_8).size
+    val used = JsonCodec.valueToJsonString(state.asEngineRepairWireMap()).toByteArray(Charsets.UTF_8).size
     val available =
       AcceptanceCriterionRepairState.MAX_DURABLE_UTF8_BYTES -
         AcceptanceCriterionRepairState.RESERVATION_UTF8_HEADROOM
@@ -676,7 +681,7 @@ public class AcceptanceCriterionRepairPersistence(
     if (!family.contains(artifacts)) return null
     val wire = FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
     validator.validate(FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_STATE, wire, family.label())
-    val state = wire.toAcceptanceCriterionRepairState(family.label())
+    val state = wire.toEngineRepairState(family.label())
     if (!identityMatches(state, binding)) {
       throw invalidAcceptanceCriterionRepairStateSchema(
         family
@@ -688,8 +693,8 @@ public class AcceptanceCriterionRepairPersistence(
   }
 
   private fun detach(state: AcceptanceCriterionRepairState): AcceptanceCriterionRepairState =
-    FeatureTaskRuntimeWorkflowArtifactMap.from(state.asRepairWireMap())
-      .toAcceptanceCriterionRepairState("committed-serial-state")
+    FeatureTaskRuntimeWorkflowArtifactMap.from(state.asEngineRepairWireMap())
+      .toEngineRepairState("committed-serial-state")
 
   private fun identityMatches(
     state: AcceptanceCriterionRepairState,
@@ -757,7 +762,7 @@ public class AcceptanceCriterionRepairPersistence(
   ): AcceptanceCriterionRepairState? =
     when (mutation) {
       is AcceptanceCriterionRepairMutation.Discover -> {
-        val admitted = AcceptanceCriterionRepairState.admit(mutation.admission)
+        val admitted = AcceptanceCriterionRepairState.admitPreAdoption(mutation.admission)
         val replayed = admitted?.let { AcceptanceCriterionInteractionTargets.prepare(it, binding) }
         if (state == null || state == admitted || state == replayed) admitted else null
       }
@@ -945,5 +950,15 @@ public class AcceptanceCriterionRepairPersistence(
   private companion object {
     const val MAX_DIAGNOSTIC_ID = 128
     const val MAX_CRITERION_ID = 32
+  }
+}
+
+private fun requirePreAdoption(state: AcceptanceCriterionRepairState) {
+  if (state.accountingPolicy != AcceptanceCriterionAccountingPolicy.PRE_ADOPTION) {
+    throw invalidAcceptanceCriterionRepairStateSchema(
+      state.executionId,
+      "Target evidence records require the deferred evidence migration and engine adoption. " +
+        "The original record and history are retained; resume with an evidence-capable runtime.",
+    )
   }
 }

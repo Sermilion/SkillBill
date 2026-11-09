@@ -5,7 +5,7 @@ import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairAuditEv
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairMutation
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.workflow.taskruntime.artifact.asRepairWireMap
+import skillbill.workflow.taskruntime.artifact.historical.asEngineRepairWireMap
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProseAudit
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdmission
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
@@ -134,7 +134,7 @@ class AcceptanceCriterionRepairAuditAdmissionTest {
         Keys.EXPECTED_REVISION to null,
         Keys.CURRENT_CRITERION_REF to null,
         Keys.RESERVATION_ID to null,
-        Keys.DEPENDENCIES to state.asRepairWireMap()[Keys.DEPENDENCIES],
+        Keys.DEPENDENCIES to state.asEngineRepairWireMap()[Keys.DEPENDENCIES],
         Keys.REGRESSED_REFS to emptyList<Any>(),
         Keys.EDGE_CHANGES to emptyList<Any>(),
         Keys.INTERACTIONS to emptyList<Any>(),

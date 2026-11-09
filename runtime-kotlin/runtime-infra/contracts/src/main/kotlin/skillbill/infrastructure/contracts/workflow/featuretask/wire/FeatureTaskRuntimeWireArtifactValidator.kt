@@ -1,6 +1,11 @@
 package skillbill.infrastructure.contracts.workflow.featuretask.wire
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_INTERACTION_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_PREVIOUS_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimeImplementationProgressPayloadKeys
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.infrastructure.contracts.requireFeatureTaskRuntimeArtifactMap
 import skillbill.infrastructure.contracts.workflow.featuretask.AcceptanceCriterionRepairAuxiliarySchemaValidator
@@ -96,7 +101,7 @@ class FeatureTaskRuntimeWireArtifactValidator(
       FeatureTaskRuntimeWireArtifactKind.GOAL_QUALITY_EXECUTION ->
         GoalQualityExecutionSchemaValidator.validate(wireMap, sourceLabel)
       FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_STATE ->
-        AcceptanceCriterionRepairStateSchemaValidator.validate(wireMap, sourceLabel)
+        validateRepairState(wireMap, sourceLabel)
       FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_AUDIT_RESULT ->
         AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(wireMap, sourceLabel)
       FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_HANDOFF ->
@@ -111,12 +116,41 @@ class FeatureTaskRuntimeWireArtifactValidator(
       FeatureTaskRuntimeWireArtifactKind.QA_REPAIR_STATE ->
         QaRepairStateSchemaValidator.validate(wireMap)
       FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_PROGRESS ->
-        FeatureTaskRuntimeImplementationProgressSchemaValidator.validate(wireMap, sourceLabel)
+        validateImplementationProgress(wireMap, sourceLabel)
       FeatureTaskRuntimeWireArtifactKind.VALIDATION_TEST_PROBES ->
         ValidationTestProbesSchemaValidator.validate(wireMap, sourceLabel)
       FeatureTaskRuntimeWireArtifactKind.GOAL_ASSESSMENT_RECORD ->
         GoalAssessmentRecordSchemaValidator.validate(wireMap, sourceLabel)
       else -> error("Unexpected non-serial wire artifact $kind")
+    }
+  }
+
+  private fun validateRepairState(
+    wireMap: Map<String, Any?>,
+    sourceLabel: String,
+  ) {
+    if (wireMap[AcceptanceCriterionRepairPayloadKeys.CONTRACT_VERSION] in
+      setOf(
+        ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION,
+        ACCEPTANCE_CRITERION_REPAIR_STATE_INTERACTION_CONTRACT_VERSION,
+      )
+    ) {
+      AcceptanceCriterionRepairStateSchemaValidator.validatePrevious(wireMap, sourceLabel)
+    } else {
+      AcceptanceCriterionRepairStateSchemaValidator.validate(wireMap, sourceLabel)
+    }
+  }
+
+  private fun validateImplementationProgress(
+    wireMap: Map<String, Any?>,
+    sourceLabel: String,
+  ) {
+    if (wireMap[FeatureTaskRuntimeImplementationProgressPayloadKeys.CONTRACT_VERSION] ==
+      FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS_PREVIOUS_CONTRACT_VERSION
+    ) {
+      FeatureTaskRuntimeImplementationProgressSchemaValidator.validatePrevious(wireMap, sourceLabel)
+    } else {
+      FeatureTaskRuntimeImplementationProgressSchemaValidator.validate(wireMap, sourceLabel)
     }
   }
 

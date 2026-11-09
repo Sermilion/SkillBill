@@ -16,9 +16,9 @@ import skillbill.workflow.model.repair.FocusedRepairStrategy
 import skillbill.workflow.taskruntime.artifact.decodeNoChangePauseFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateProgressFromArtifact
+import skillbill.workflow.taskruntime.artifact.historical.toEngineRepairState
 import skillbill.workflow.taskruntime.artifact.isPreContractAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionRepairState
-import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
@@ -151,7 +151,7 @@ internal object BlockIncidentRecoveryFactsReader {
           repairState =
             repairWire
               ?.takeUnless { preContract || superseded }
-              ?.toAcceptanceCriterionRepairState(repairFamily.label()),
+              ?.toEngineRepairState(repairFamily.label()),
           repairStatePreContract = preContract,
           repairStateSuperseded = superseded,
           reviewState = GoalSubtaskReviewArtifactDecoder.decodeReviewStateOnly(artifacts),

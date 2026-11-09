@@ -1,3 +1,9 @@
+## [2026-11-09] Keep criterion evidence adoption separate from its domain definitions
+Context: 0AC-103 introduced strict terminal mutation and independent-check contracts before the engine could capture their inputs. Active implementation and focused repair stalled on missing evidence.
+Decision: Active callers create pre-adoption states and retain their pinned progress 0.1 and repair 0.2 formats. Their policy comes from the persisted version, never from an empty evidence list. Strict target codecs and pure transitions keep their evidence requirements. Status readers preserve target records, while engine mutation boundaries refuse them with recovery guidance until migration and capture adoption are available. Historical evidence that cannot be represented by the supported engine also yields a typed refusal and retains its original data.
+Reason: A launch marker or legacy outcome cannot establish verified progress, and a domain contract must not activate consumers whose producers are deferred.
+Revisit when: Subtasks 2 through 4 provide migration, runtime-owned evidence acquisition and consumer adoption together.
+
 ## [2026-11-07] Default all provider launches to native permission bypass
 Context: The operator explicitly restored the previous global bypass behavior after testing SKILL-453, and requested it as the default for every agent and launch surface.
 Decision: Claude skips permission checks; Codex requests never approvals and full access on thread start, resume and turns; Cursor uses force, trust, MCP approval and a disabled sandbox; Junie ACP enables Brave mode before prompting. Existing headless Junie review execution remains autonomous.

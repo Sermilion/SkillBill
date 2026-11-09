@@ -11,8 +11,10 @@ import skillbill.engine.featuretask.slot.isImplementationCheckPrompt
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.taskruntime.artifact.asImplementationProgressWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationCheckDecision
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationTurnRole
 import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeImplementationTurnRecords
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -64,6 +66,8 @@ class FeatureTaskRuntimeImplementationCriteriaTest {
       assertPromptsCarryOnlyTheirTurn(script)
       assertEquals(THREE_CRITERIA.map { it.substringBefore('.') }, progressOf(harness).closedIds)
       assertEquals(script.labels.size, progressOf(harness).launchCount)
+      assertTrue(progressOf(harness).completedMutations.isEmpty())
+      assertTrue(progressOf(harness).independentChecks.isEmpty())
       assertEquals(1, implementCompletions(harness))
       val receipt = requireNotNull(harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("implement")?.outputArtifact)
       assertContains(receipt, "Implement closed 3 acceptance criteria one at a time.")
@@ -186,6 +190,24 @@ class FeatureTaskRuntimeImplementationCriteriaTest {
     val progress = progressOf(harness)
     assertEquals(listOf("AC-001"), progress.closedIds)
     assertEquals(0, progress.workerCount)
+  }
+
+  @Test
+  fun `target progress stays intact and launches no worker before evidence adoption`() {
+    val script = CriterionScript()
+    val harness = criterionHarness(script, TWO_CRITERIA)
+    val target =
+      FeatureTaskRuntimeImplementationProgress.initial(listOf("AC-001", "AC-002"))
+        .asImplementationProgressWireMap()
+    harness.repository.replaceTaskRuntimeArtifacts(
+      WORKFLOW_ID,
+      harness.repository.taskRuntimeArtifacts(WORKFLOW_ID) + (PROGRESS_KEY to target),
+    )
+    val report = harness.runner.run(harness.request())
+    assertIs<FeatureTaskRuntimeRunReport.Blocked>(report)
+    assertContains(requireNotNull(report.blockedReason), "deferred evidence migration and engine adoption")
+    assertTrue(script.labels.isEmpty())
+    assertEquals(target, criterionProgressMap(harness.repository.taskRuntimeArtifacts(WORKFLOW_ID)[PROGRESS_KEY]))
   }
 
   @Test

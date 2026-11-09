@@ -77,7 +77,6 @@ import skillbill.engine.featuretask.slot.blockedOutputRetryCorrection
 import skillbill.engine.featuretask.slot.checksImmediateConsumerProjection
 import skillbill.engine.featuretask.slot.earlyOutput
 import skillbill.engine.featuretask.slot.fingerprintsCompletedRepository
-import skillbill.engine.featuretask.slot.settleCompletedRound
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
@@ -608,7 +607,7 @@ internal object PhaseOutputGate {
       args.attested,
       args.reject,
     )
-      ?: args.stepHooks.settleCompletedRound(
+      ?: args.boundStep.boundHooks.settleCompletedRound(
         stepOutputContext(run, args.stepHooks),
         args.capture,
         args.attested,

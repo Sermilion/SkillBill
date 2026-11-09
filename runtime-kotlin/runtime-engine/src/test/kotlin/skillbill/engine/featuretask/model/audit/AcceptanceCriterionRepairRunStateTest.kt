@@ -79,7 +79,7 @@ class AcceptanceCriterionRepairRunStateTest {
     val criteria = listOf("Preserve original report text.", "Display the report.")
     val state =
       assertNotNull(
-        AcceptanceCriterionRepairState.admit(
+        AcceptanceCriterionRepairState.admitPreAdoption(
           AcceptanceCriterionRepairAdmission(
             "catalog",
             "execution",
