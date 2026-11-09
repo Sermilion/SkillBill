@@ -60,7 +60,7 @@ private const val VISIBLE_TEXT_LINES = 3
  */
 internal data class ChatApprovalActions(
   val live: Boolean,
-  val onDecide: (key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean) -> Unit,
+  val onDecide: (key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean, pattern: String?) -> Unit,
   val onDismiss: (key: ApprovalCardKey) -> Unit,
   /** Opens the repository's durable-rule list. It lists only and never decides; null hides the entry. */
   val onOpenRules: (() -> Unit)? = null,
@@ -80,7 +80,7 @@ internal fun ChatMessage.Approval.controlsOffReason(live: Boolean): String? = wh
 internal fun ApprovalCard.outcomeText(): String = when (state) {
   "pending" -> "Waiting for your answer"
   "allowed" -> when (decisionSource) {
-    "operator_rule", "stored_rule" -> "Always allowed"
+    "operator_rule", "stored_rule" -> if (rulePattern != null) "Always allowed by pattern" else "Always allowed"
     else -> "Allowed once"
   }
   "denied" -> "Denied"
@@ -120,6 +120,7 @@ internal fun ChatApprovalCard(message: ChatMessage.Approval, actions: ChatApprov
   }
   val decision = if (card.isPending) emptyList() else card.decisionLines()
   var expanded by rememberSaveable(card.key) { mutableStateOf(false) }
+  var similarEditing by rememberSaveable(card.key) { mutableStateOf(false) }
   Column(
     Modifier.fillMaxWidth()
       .border(1.dp, if (card.isPending) colors.borderStrong else colors.border, shape)
@@ -139,7 +140,7 @@ internal fun ChatApprovalCard(message: ChatMessage.Approval, actions: ChatApprov
     }
     BasicText(outcome, style = type.tSm.copy(color = outcomeColor))
     ApprovalScrollText(card.reason?.takeIf { it.isNotBlank() } ?: card.subject, type.tSm.copy(color = colors.fg2))
-    if (card.isPending) ApprovalControls(message, actions, offReason)
+    if (card.isPending) ApprovalControls(message, actions, offReason, similarEditing, { similarEditing = it })
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       SbButton(
         label = if (expanded) "Hide details" else "Show details",
@@ -156,7 +157,9 @@ internal fun ChatApprovalCard(message: ChatMessage.Approval, actions: ChatApprov
     if (expanded) {
       ApprovalScrollText(card.detailsText(decision), type.tSm.copy(color = colors.fgMuted, fontFamily = FontFamily.Monospace))
     }
-    message.refusal?.let { ApprovalScrollText(it, type.tSm.copy(color = colors.stFailed), Modifier.semantics { liveRegion = LiveRegionMode.Assertive }) }
+    if (!similarEditing) {
+      message.refusal?.let { ApprovalScrollText(it, type.tSm.copy(color = colors.stFailed), Modifier.semantics { liveRegion = LiveRegionMode.Assertive }) }
+    }
   }
 }
 
@@ -196,16 +199,24 @@ private fun ApprovalCard.detailsText(decision: List<String>): String = buildList
   }
   if (isPending && options.any { it.kind == ALLOW_KIND }) {
     add(grants?.alwaysAllowUnavailable ?: "Always allow saves this exact action for this repository; revoke it under Repository rules.")
+    add("Always allow similar saves an editable pattern rule for this repository; revoke it under Repository rules.")
   }
 }.joinToString("\n")
 
 @Composable
-private fun ApprovalControls(message: ChatMessage.Approval, actions: ChatApprovalActions?, offReason: String?) {
+private fun ApprovalControls(
+  message: ChatMessage.Approval,
+  actions: ChatApprovalActions?,
+  offReason: String?,
+  similarEditing: Boolean,
+  onSimilarEditing: (Boolean) -> Unit,
+) {
   val colors = SkillBillTheme.colors
   val card = message.card
   val enabled = offReason == null && actions != null
   val grants = card.grants
   val allowOption = card.options.firstOrNull { it.kind == ALLOW_KIND }
+  var patternText by rememberSaveable(card.key) { mutableStateOf("") }
   Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       card.options.filter { it.kind == ALLOW_KIND || it.kind == DENY_KIND }.forEach { option ->
@@ -214,7 +225,7 @@ private fun ApprovalControls(message: ChatMessage.Approval, actions: ChatApprova
           else if (option.kind == ALLOW_KIND) "Allow once" else "Deny"
         SbButton(
           label = label,
-          onClick = { actions?.onDecide(card.key, option.optionId, false) },
+          onClick = { actions?.onDecide(card.key, option.optionId, false, null) },
           tooltip = option.label,
           modifier = Modifier.semantics { contentDescription = option.label },
           variant = if (primary) SbButtonVariant.Primary else if (option.kind == DENY_KIND) SbButtonVariant.Danger else SbButtonVariant.Secondary,
@@ -226,18 +237,46 @@ private fun ApprovalControls(message: ChatMessage.Approval, actions: ChatApprova
         SbButton(
           label = "Always allow",
           tooltip = grants?.alwaysAllowUnavailable ?: (alwaysAllowLabel(card) + ": this exact action only"),
-          onClick = { actions?.onDecide(card.key, allowOption.optionId, true) },
+          onClick = { actions?.onDecide(card.key, allowOption.optionId, true, null) },
           size = SbControlSize.Small,
           enabled = enabled && grants?.alwaysAllowUnavailable == null,
+        )
+        SbButton(
+          label = "Always allow similar…",
+          tooltip = grants?.similarUnavailable ?: "Save an editable pattern rule for this repository",
+          onClick = {
+            if (!similarEditing) {
+              grants?.suggestedPattern?.let { patternText = it }
+              onSimilarEditing(true)
+            }
+          },
+          size = SbControlSize.Small,
+          enabled = enabled && grants?.similarUnavailable == null && grants?.suggestedPattern != null,
         )
       }
       SbButton(label = "Dismiss", onClick = { actions?.onDismiss(card.key) }, variant = SbButtonVariant.Ghost,
         size = SbControlSize.Small, enabled = enabled)
     }
+    if (similarEditing && allowOption != null) {
+      ApprovalSimilarEditor(
+        text = patternText,
+        onTextChange = { patternText = it },
+        enabled = enabled,
+        refusal = message.refusal,
+        onSave = { actions?.onDecide(card.key, allowOption.optionId, true, patternText.trim()) },
+        onCancel = {
+          onSimilarEditing(false)
+          grants?.suggestedPattern?.let { patternText = it }
+        },
+      )
+    }
     val notes = if (offReason != null) listOf(offReason) else listOfNotNull(
       grants?.oneTimeUnavailable?.let { "Allowing is unavailable: $it" },
       grants?.alwaysAllowUnavailable?.takeIf { allowOption != null && it != grants?.oneTimeUnavailable }
         ?.let { "Always allow is unavailable: $it" },
+      grants?.similarUnavailable
+        ?.takeIf { it != grants?.alwaysAllowUnavailable && it != grants?.oneTimeUnavailable }
+        ?.let { "Always allow similar is unavailable: $it" },
     )
     notes.forEach { ApprovalScrollText(it, SkillBillTheme.type.tSm.copy(color = colors.fgMuted)) }
   }
@@ -253,8 +292,12 @@ private const val REMEMBER_UNAVAILABLE =
 internal fun ApprovalCard.decisionLines(): List<String> = listOfNotNull(
   when (decisionSource) {
     "operator_once" -> "Decided by the operator, once"
-    "operator_rule" -> "Decided by the operator, with a new always-allow rule for this repository"
-    "stored_rule" -> "Decided by a saved always-allow rule"
+    "operator_rule" -> if (rulePattern != null) {
+      "Decided by the operator, with a new always-allow pattern rule `$rulePattern` for this repository"
+    } else "Decided by the operator, with a new always-allow rule for this repository"
+    "stored_rule" -> if (rulePattern != null) {
+      "Decided by the saved always-allow pattern rule `$rulePattern`"
+    } else "Decided by a saved always-allow rule"
     else -> null
   },
   ruleId?.let { "Rule $it" },

@@ -52,7 +52,10 @@ internal fun ApprovalOperatorView.toCard(): ApprovalCard = record.toCard().copy(
   grants = ApprovalCardGrants(
     oneTimeUnavailable = unavailableReason(oneTimeRefusal),
     alwaysAllowUnavailable = unavailableReason(alwaysAllowRefusal),
+    similarUnavailable = unavailableReason(patternRefusal),
+    suggestedPattern = suggestedPattern,
   ),
+  rulePattern = rulePattern,
 )
 
 private fun ApprovalOperatorView.unavailableReason(refusal: ApprovalGrantRefusal?): String? = when {
@@ -82,7 +85,7 @@ internal fun ApprovalGrantRefusal.readableReason(): String = when (this) {
 private const val NOT_RUNNING_REASON = "The requesting process is no longer running."
 
 internal fun ApprovalRuleRecord.toRule(): ApprovalRule = ApprovalRule(
-  ruleId, provider, profileIdentity, protocolRevision, actionKind, workingDirectory, actionFingerprint, createdAt,
+  ruleId, provider, profileIdentity, protocolRevision, actionKind, workingDirectory, actionFingerprint, createdAt, pattern,
 )
 
 internal fun ApprovalCardKey.toIdentity(): ApprovalRequestIdentity = ApprovalRequestIdentity(

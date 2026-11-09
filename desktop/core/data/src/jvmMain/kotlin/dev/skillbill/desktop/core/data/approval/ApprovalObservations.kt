@@ -100,9 +100,9 @@ class ApprovalObservations(
   }
 
   /** Decides one pending request with the session-held nonce; with no live registration nothing is written. */
-  suspend fun decide(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean): ApprovalDecisionOutcome =
+  suspend fun decide(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean, pattern: String? = null): ApprovalDecisionOutcome =
     leases.nonceFor(key.repositoryIdentity)?.let { nonce ->
-      write { service.decide(key.toIdentity(), nonce, optionId, alwaysAllow) }
+      write { service.decide(key.toIdentity(), nonce, optionId, alwaysAllow, pattern) }
     } ?: ApprovalDecisionOutcome.NotLive
 
   suspend fun dismiss(key: ApprovalCardKey): ApprovalDecisionOutcome =
