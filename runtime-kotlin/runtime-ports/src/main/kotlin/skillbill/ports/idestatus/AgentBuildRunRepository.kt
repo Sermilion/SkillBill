@@ -10,7 +10,7 @@ import java.time.Instant
  * Records the builds an agent run starts and answers the history questions the read surface asks.
  *
  * A row is open until [settle] sets its end, outcome and exit code. [abandonOpen] leaves the row open.
- * Rows without an end time are never pruned and never count toward [history]. Store failures surface as
+ * Build observations remain available for run totals. Open rows never count toward [history]. Store failures surface as
  * the typed persistence failures; the store does not swallow them, so callers decide whether a failure is
  * best-effort.
  */
@@ -19,8 +19,7 @@ interface AgentBuildRunRepository {
   fun start(start: AgentBuildRunStart)
 
   /**
-   * Sets the end, outcome and exit code of an open build once. In the same transaction it deletes settled
-   * rows for the same repository identity and command beyond the newest 20 by end time.
+   * Sets the end, outcome and exit code of an open build once, retaining observations for run totals.
    *
    * @return false when the build is unknown or already settled.
    */
@@ -44,6 +43,9 @@ interface AgentBuildRunRepository {
    * observations but do not retain active-row priority.
    */
   fun latestForRun(runIds: Set<String>): AgentBuildRun?
+
+  /** Returns all build observations matching a run or parent run, ordered by start time. */
+  fun buildsForRun(runIds: Set<String>): List<AgentBuildRun>
 
   /**
    * Returns the usual time and the previous build of [command] in [repositoryIdentity], from the last 20

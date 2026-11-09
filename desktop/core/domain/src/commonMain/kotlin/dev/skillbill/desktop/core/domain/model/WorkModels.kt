@@ -35,6 +35,8 @@ data class WorkBuild(
   val exitCode: Int?,
   val finishedAt: Instant?,
   val previous: WorkBuildPrevious?,
+  val totalElapsedMs: Long? = null,
+  val totalElapsedAsOf: Instant? = null,
 )
 
 /** What happened to the main checkout when the goal's worktree was removed. */

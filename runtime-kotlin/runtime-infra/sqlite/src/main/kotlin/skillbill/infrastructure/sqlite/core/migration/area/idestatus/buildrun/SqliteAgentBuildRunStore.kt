@@ -2,9 +2,7 @@ package skillbill.infrastructure.sqlite.core.migration.area.idestatus.buildrun
 
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
-import skillbill.infrastructure.sqlite.core.schema.AgentBuildRunsKeys.COMMAND
 import skillbill.infrastructure.sqlite.core.schema.AgentBuildRunsKeys.ENDED_AT
-import skillbill.infrastructure.sqlite.core.schema.AgentBuildRunsKeys.REPOSITORY_IDENTITY
 import skillbill.infrastructure.sqlite.core.schema.AgentBuildRunsKeys.STARTED_AT
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.AgentBuildRunRepository
@@ -53,23 +51,8 @@ internal class SqliteAgentBuildRunStore(
           statement.bindAll(endedAt.toBuildText(), outcome.wireValue, exitCode, buildId)
           statement.executeUpdate()
         } == 1
-      if (settled) pruneSettled(buildId)
       settled
     }
-
-  private fun Connection.pruneSettled(buildId: String) {
-    val key =
-      prepareStatement(SELECT_BUILD_KEY_SQL).use { statement ->
-        statement.setString(1, buildId)
-        statement.executeQuery().use { rows ->
-          if (rows.next()) rows.getString(REPOSITORY_IDENTITY) to rows.getString(COMMAND) else null
-        }
-      } ?: return
-    prepareStatement(PRUNE_SETTLED_SQL).use { statement ->
-      statement.bindAll(key.first, key.second, key.first, key.second)
-      statement.executeUpdate()
-    }
-  }
 
   override fun abandonOpen(runId: String): Int =
     connection.inNestedWriteTransaction(diagnostics, transactionActive) {
@@ -86,6 +69,17 @@ internal class SqliteAgentBuildRunStore(
     return connection.prepareStatement(latestForRunSql(ids.size)).use { statement ->
       (ids + ids).forEachIndexed { index, id -> statement.setString(index + 1, id) }
       statement.executeQuery().use { rows -> if (rows.next()) rows.readBuildRun() else null }
+    }
+  }
+
+  override fun buildsForRun(runIds: Set<String>): List<AgentBuildRun> {
+    if (runIds.isEmpty()) return emptyList()
+    val ids = runIds.toList()
+    return connection.prepareStatement(buildsForRunSql(ids.size)).use { statement ->
+      (ids + ids).forEachIndexed { index, id -> statement.setString(index + 1, id) }
+      statement.executeQuery().use { rows ->
+        buildList { while (rows.next()) add(rows.readBuildRun()) }
+      }
     }
   }
 

@@ -142,7 +142,12 @@ public class WorkBoardItemProjection(
     if (runId == null) return null
     val row = buildRunRepository.latestForRun(setOf(runId)) ?: return null
     val history = buildRunRepository.history(row.repositoryIdentity, row.command, row.startedAt)
-    return workBuildView(row, history, running, now)
+    val builds = buildRunRepository.buildsForRun(setOf(runId))
+    val total = totalBuildElapsedMs(builds, running, now)
+    return workBuildView(row, history, running, now).copy(
+      totalElapsedMs = total,
+      totalElapsedAsOf = now.takeIf { total != null && running && builds.any { it.endedAt == null } },
+    )
   }
 
   internal fun projectBoardCandidate(
@@ -1006,3 +1011,20 @@ private fun finishedBuildState(outcome: AgentBuildOutcome?): WorkBuildState =
     AgentBuildOutcome.FAILED -> WorkBuildState.FAILED
     AgentBuildOutcome.UNKNOWN, null -> WorkBuildState.FINISHED
   }
+
+private fun totalBuildElapsedMs(
+  builds: List<AgentBuildRun>,
+  running: Boolean,
+  now: Instant,
+): Long? {
+  if (builds.isEmpty()) return null
+  var end: Instant? = null
+  var total = 0L
+  for (build in builds.sortedBy { it.startedAt }) {
+    val until = build.endedAt ?: now.takeIf { running && build.outcome == null } ?: return null
+    val since = end?.takeIf { it > build.startedAt } ?: build.startedAt
+    if (until > since) total += Duration.between(since, until).toMillis()
+    if (end == null || until > end) end = until
+  }
+  return total
+}

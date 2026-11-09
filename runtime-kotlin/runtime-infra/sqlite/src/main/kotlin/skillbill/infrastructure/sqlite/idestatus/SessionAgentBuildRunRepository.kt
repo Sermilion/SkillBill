@@ -27,6 +27,9 @@ class SessionAgentBuildRunRepository(private val database: DatabaseSessionFactor
   override fun latestForRun(runIds: Set<String>): AgentBuildRun? =
     database.read { it.agentBuildRuns.latestForRun(runIds) }
 
+  override fun buildsForRun(runIds: Set<String>): List<AgentBuildRun> =
+    database.read { it.agentBuildRuns.buildsForRun(runIds) }
+
   override fun history(
     repositoryIdentity: String,
     command: String,

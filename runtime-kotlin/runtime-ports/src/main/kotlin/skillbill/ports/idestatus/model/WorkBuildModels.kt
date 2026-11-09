@@ -33,4 +33,6 @@ data class WorkBuildView(
   val exitCode: Int?,
   val finishedAt: Instant?,
   val previous: WorkBuildPrevious?,
+  val totalElapsedMs: Long? = null,
+  val totalElapsedAsOf: Instant? = null,
 )

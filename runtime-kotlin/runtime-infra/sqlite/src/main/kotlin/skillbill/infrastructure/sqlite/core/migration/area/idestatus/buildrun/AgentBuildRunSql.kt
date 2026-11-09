@@ -39,14 +39,6 @@ internal const val INSERT_BUILD_SQL: String =
 internal const val SETTLE_BUILD_SQL: String =
   "UPDATE $TABLE SET $ENDED_AT = ?, $OUTCOME = ?, $EXIT_CODE = ? WHERE $BUILD_ID = ? AND $ENDED_AT IS NULL"
 
-internal const val SELECT_BUILD_KEY_SQL: String =
-  "SELECT $REPOSITORY_IDENTITY, $COMMAND FROM $TABLE WHERE $BUILD_ID = ?"
-
-internal const val PRUNE_SETTLED_SQL: String =
-  "DELETE FROM $TABLE WHERE $REPOSITORY_IDENTITY = ? AND $COMMAND = ? AND $ENDED_AT IS NOT NULL " +
-    "AND $BUILD_ID NOT IN (SELECT $BUILD_ID FROM $TABLE WHERE $REPOSITORY_IDENTITY = ? AND $COMMAND = ? " +
-    "AND $ENDED_AT IS NOT NULL ORDER BY $ENDED_AT DESC, $BUILD_ID DESC LIMIT $RETAINED_SETTLED_BUILDS)"
-
 internal const val ABANDON_OPEN_SQL: String =
   "UPDATE $TABLE SET $OUTCOME = ? WHERE $RUN_ID = ? AND $ENDED_AT IS NULL AND $OUTCOME IS NULL"
 
@@ -59,6 +51,12 @@ internal fun latestForRunSql(count: Int): String {
   val placeholders = List(count) { "?" }.joinToString()
   return "SELECT * FROM $TABLE WHERE $RUN_ID IN ($placeholders) OR $PARENT_RUN_ID IN ($placeholders) " +
     "ORDER BY ($ENDED_AT IS NULL AND $OUTCOME IS NULL) DESC, $STARTED_AT DESC, $BUILD_ID DESC LIMIT 1"
+}
+
+internal fun buildsForRunSql(count: Int): String {
+  val placeholders = List(count) { "?" }.joinToString()
+  return "SELECT * FROM $TABLE WHERE $RUN_ID IN ($placeholders) OR $PARENT_RUN_ID IN ($placeholders) " +
+    "ORDER BY $STARTED_AT, $BUILD_ID"
 }
 
 internal fun ResultSet.readBuildRun(): AgentBuildRun =

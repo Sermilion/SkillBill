@@ -3723,3 +3723,17 @@ A1 and A2 keep process lifetime and settlement in the launcher adapter. A7 keeps
 cleanup degradation observable. A11 limits settlement helpers to that module.
 Deterministic process handles cover EOF shutdown, forced cleanup and a surviving
 child without waiting for real process deadlines.
+
+## 2026-11-09 Retain build observations for total duration
+
+Keep build rows after settlement so the desktop can total a run's build time across
+commands and count overlapping processes once. The usual-time history still reads
+only the latest twenty settled observations per repository and command. Run totals
+use existing timestamps, so installation needs no database rewrite. Previously
+pruned observations cannot be reconstructed. An observation without a known end
+makes the total unavailable once its run stops, rather than inventing a duration.
+
+The optional `total_elapsed_ms` and `total_elapsed_as_of` fields extend the board
+and detail build payloads without changing their required fields or versions.
+Older payloads remain valid and default to an absent total. Repeated reads derive
+the total without mutating stored runs, identities or timestamps.

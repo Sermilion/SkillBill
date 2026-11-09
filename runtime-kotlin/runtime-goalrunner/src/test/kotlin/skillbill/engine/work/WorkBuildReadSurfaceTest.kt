@@ -47,6 +47,7 @@ class WorkBuildReadSurfaceTest {
         buildStart("current", repositoryIdentity, startedAt, 14).copy(runId = "w-child", parentRunId = "goal-1"),
       )
     }
+    seedOverlappingBuilds(buildDatabase, repositoryIdentity, startedAt)
     val fixture = gitRepoFixture("work-build-repo")
     val identity = testGoalRepositoryIdentity(fixture)
     val service =
@@ -73,6 +74,8 @@ class WorkBuildReadSurfaceTest {
     val boardBuild = requireNotNull(boardItem.build)
 
     assertEquals(WorkBuildState.RUNNING, boardBuild.state)
+    assertEquals(60_000L, boardBuild.totalElapsedMs)
+    assertEquals(ideStatusObservedAt, boardBuild.totalElapsedAsOf)
     assertEquals(30_000L, boardBuild.elapsedMs)
     assertEquals(ideStatusObservedAt, boardBuild.elapsedAsOf)
     assertEquals(233_333L, boardBuild.usualMs)
@@ -81,6 +84,9 @@ class WorkBuildReadSurfaceTest {
     assertEquals(startedAt.minusSeconds(100), boardBuild.previous?.finishedAt)
     assertEquals(boardBuild, selectedBoardItem.build)
     assertEquals(boardBuild, detailItem.build)
+
+    buildStore.settle("current", ideStatusObservedAt.plusSeconds(5), AgentBuildOutcome.PASSED, 0)
+    assertFrozenTotal(service)
   }
 
   @Test
@@ -142,6 +148,8 @@ class WorkBuildReadSurfaceTest {
     assertFalse(board.running)
     assertFalse(detail.running)
     assertEquals(WorkBuildState.FINISHED, build.state)
+    assertNull(build.totalElapsedMs)
+    assertNull(build.totalElapsedAsOf)
     assertNull(build.elapsedMs)
     assertNull(build.elapsedAsOf)
     assertNull(build.exitCode)
@@ -161,6 +169,31 @@ class WorkBuildReadSurfaceTest {
 
     assertEquals("validation-run", board.items.single().snapshot.execution?.invocationId)
     assertNull(board.items.single().build)
+  }
+
+  private fun seedOverlappingBuilds(
+    database: DatabaseSessionFactory,
+    repositoryIdentity: String,
+    startedAt: Instant,
+  ) {
+    database.transaction { unit ->
+      listOf("compile" to 70L, "test" to 60L).forEach { (command, secondsBefore) ->
+        val start =
+          buildStart(command, repositoryIdentity, startedAt.minusSeconds(secondsBefore), 15)
+            .copy(runId = "w-child", parentRunId = "goal-1", command = command)
+        unit.agentBuildRuns.start(start)
+        unit.agentBuildRuns.settle(start.buildId, start.startedAt.plusSeconds(20), AgentBuildOutcome.PASSED, 0)
+      }
+    }
+  }
+
+  private fun assertFrozenTotal(service: IdeStatusService) {
+    repeat(2) { read ->
+      val request = WorkDetailRequest("goal-1", observedAt = ideStatusObservedAt.plusSeconds(60L + read))
+      val finished = assertNotNull(service.detail(request).item?.build)
+      assertEquals(65_000L, finished.totalElapsedMs)
+      assertNull(finished.totalElapsedAsOf)
+    }
   }
 
   private fun standaloneBuildDatabase(): DatabaseSessionFactory {
