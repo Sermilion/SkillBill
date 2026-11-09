@@ -64,6 +64,7 @@ class CodexPhaseSessionTest {
 
       assertEquals(AgentRunTermination.Exited(0), result.termination, result.stderr)
       assertEquals("Completed work", result.stdout)
+      assertContains(result.stderr, "Readian authentication or upstream request failed")
       assertEquals("6", Files.readString(directory.resolve("turn-count")).trim())
       val frames = Files.readString(directory.resolve("frames"))
       assertEquals(5, frames.lineSequence().count { it.contains("\"method\":\"thread/resume\"") })
@@ -79,6 +80,7 @@ class CodexPhaseSessionTest {
 
   private fun providerScript(): String =
     """
+    printf '%s\n' 'Readian authentication or upstream request failed' >&2
     count=0
     if [[ -f turn-count ]]; then count=${'$'}(cat turn-count); fi
     count=${'$'}((count + 1))

@@ -3703,3 +3703,23 @@ instead of being retained. Validate blocks only after `MAX_VALIDATE_ATTEMPTS`
 attempts fail; a pause stops at once. `spendFailedAttempt` counts a failed attempt
 as spent, so the next launch of the phase in the same process starts a new attempt.
 Moved here from source comments to satisfy the Kotlin comment architecture gate.
+
+## [2026-11-09] Settle provider turns before releasing their process trees
+
+A provider's terminal turn and its process shutdown are separate facts. The
+launcher captures the owned descendants before closing provider input. A settled
+session gets the existing bounded exit wait so the provider can reap its MCP
+children before forced termination. Forced cleanup remains the fallback. A final
+exit check determines whether the launcher releases ownership.
+
+A transient process-cleanup warning does not reject a completed response once
+exit is confirmed and capture is complete. The warning remains in run diagnostics.
+Unconfirmed exit keeps the process tree owned and blocks continuation. The saved
+provider outcome and captured response remain intact in either case. Cleanup
+failure diagnostics name that cause before incidental provider stderr, including
+optional MCP connection errors. Stream and capture failures still reject settlement.
+
+A1 and A2 keep process lifetime and settlement in the launcher adapter. A7 keeps
+cleanup degradation observable. A11 limits settlement helpers to that module.
+Deterministic process handles cover EOF shutdown, forced cleanup and a surviving
+child without waiting for real process deadlines.
