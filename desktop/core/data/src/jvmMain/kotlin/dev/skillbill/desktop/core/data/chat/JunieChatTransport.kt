@@ -33,7 +33,7 @@ class JunieChatTransport(
   private val host: HostEnvironment,
   private val store: ChatStore,
   private val diagnostics: Diagnostics,
-  private val liveLauncher: LiveChatProcessLauncher? = null,
+  private val liveLauncher: LiveChatProcessLauncher,
   private val approvalAuthority: ChatApprovalAuthority? = null,
 ) : ChatTransport {
   override val agentId = "junie"
@@ -43,9 +43,9 @@ class JunieChatTransport(
   override fun run(request: ChatTurnRequest): Flow<ChatEvent> = flow {
     val live = liveLauncher
     val authority = approvalAuthority
-    if (live == null || authority == null) {
+    if (authority == null) {
       emit(ChatEvent.Failed(ChatFailure.ApprovalUnsupported,
-        "Junie ACP requires a live process and operator approval channel; the chat was not started."))
+        "Junie ACP requires an operator approval channel; the chat was not started."))
       return@flow
     }
     val history = if (request.scope is ChatScope.NewTask) {
