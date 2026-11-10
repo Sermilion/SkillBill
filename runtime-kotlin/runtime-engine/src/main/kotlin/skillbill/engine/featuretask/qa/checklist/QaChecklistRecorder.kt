@@ -11,6 +11,7 @@ import skillbill.error.featuretask.qa.qaProgressReason
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
+import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandaloneQaChecklistWriteResult
 import skillbill.ports.idestatus.model.StandaloneQaStepStatus
@@ -147,14 +148,22 @@ public class QaChecklistRecorder(
     label: String,
     asFrame: Boolean,
   ): QaChecklistOutcome {
-    catchingNonCancellation {
-      if (label.isBlank() || label.length > MAX_SCREENSHOT_LABEL_LENGTH) {
-        throw qaProgressFailed("screenshot label is invalid")
-      }
-      database.read { unit ->
-        requireActiveOccurrence(unit.featureTaskQaOutcomes.findByWorkspaceInvocation(invocationId), invocationId)
-      }
-    }.getOrElse { failure -> return outcomeOf(invocationId, failure) }
+    val standalone =
+      catchingNonCancellation {
+        if (label.isBlank() || label.length > MAX_SCREENSHOT_LABEL_LENGTH) {
+          throw qaProgressFailed("screenshot label is invalid")
+        }
+        database.read { unit ->
+          val goalOutcome = unit.featureTaskQaOutcomes.findByWorkspaceInvocation(invocationId)
+          if (goalOutcome == null) {
+            requireActiveStandaloneQa(unit.standalonePhaseStatuses.readByInvocation(invocationId))
+            true
+          } else {
+            requireActiveOccurrence(goalOutcome, invocationId)
+            false
+          }
+        }
+      }.getOrElse { failure -> return outcomeOf(invocationId, failure) }
     val recordedAt = clock.instant().toString()
     val retained =
       catchingNonCancellation {
@@ -166,6 +175,7 @@ public class QaChecklistRecorder(
         )
         return QaChecklistOutcome.Failed("screenshot could not be retained")
       }
+    if (standalone) return QaChecklistOutcome.Recorded(retainedPath = retained.path)
     return persistScreenshot(invocationId, QaRunScreenshot(label, retained.path, recordedAt, retained.format), asFrame)
   }
 
@@ -228,6 +238,17 @@ public class QaChecklistRecorder(
       }
     if (rejection != null) throw qaProgressFailed(rejection)
     return checkNotNull(occurrence)
+  }
+
+  private fun requireActiveStandaloneQa(row: StandalonePhaseStatusRecord?) {
+    val rejection =
+      when {
+        row == null -> "no active QA run has this invocation id"
+        SkeletonDefinition.runHarnessOf(row.phaseId) != PhaseRunHarness.DEVICE_QA -> "this invocation is not a QA run"
+        row.finishedAt != null -> "the QA run already finished"
+        else -> null
+      }
+    if (rejection != null) throw qaProgressFailed(rejection)
   }
 
   private fun validateStage(report: QaStageReport) {
