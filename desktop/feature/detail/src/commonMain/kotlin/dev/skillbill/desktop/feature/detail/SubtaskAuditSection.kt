@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ExpandableText
+import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
+import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
@@ -65,6 +67,9 @@ internal fun SubtaskAuditSection(results: SubtaskPhaseResults?, kind: StatusKind
 @Composable
 private fun AuditResult(audit: SubtaskAuditResult, verdict: String?, summary: String?, subtaskId: Int) {
   Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    if (audit.attempts.any { it.unavailableReason != null }) {
+      Hint("Some historical audit results are unavailable because their discovery scope was not retained.", FeedbackTone.Warn)
+    }
     when (audit.outcome) {
       AuditOutcome.Passed -> VerdictLine("Passed", audit.countsText(), SkillBillTheme.colors.stDone)
       AuditOutcome.Failed -> VerdictLine("Failed", audit.countsText(), SkillBillTheme.colors.stFailed)
