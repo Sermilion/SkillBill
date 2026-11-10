@@ -76,6 +76,14 @@ data class ExecutionMatrix(
     val agent = SupportedAgent.entries.firstOrNull { it.id == agentId.trim().lowercase() } ?: return null
     return agentPhaseOverrides[agent]?.get(phaseId) ?: agents[agent]?.get(tierOf(phaseId))
   }
+
+  fun directiveForTier(
+    agentId: String,
+    tier: ExecutionTier,
+  ): PhaseModelDirective? {
+    val agent = SupportedAgent.entries.firstOrNull { it.id == agentId.trim().lowercase() } ?: return null
+    return agents[agent]?.get(tier)
+  }
 }
 
 sealed interface ExecutionMatrixParse {

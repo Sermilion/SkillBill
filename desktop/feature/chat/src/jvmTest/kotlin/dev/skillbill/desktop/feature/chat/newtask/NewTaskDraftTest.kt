@@ -1,6 +1,10 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatBaselineCapture
+import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
+import dev.skillbill.desktop.core.domain.repository.ChatChangesRepository
+import dev.skillbill.desktop.core.testing.FakeChatChangesRepository
 import dev.skillbill.desktop.core.domain.model.OperationCardDetailsView
 import dev.skillbill.desktop.core.domain.model.OperationCardState
 import dev.skillbill.desktop.core.domain.model.OperationCardView
@@ -78,7 +82,7 @@ class NewTaskDraftTest {
   private val chat = FakeExecutionChatRepository()
   private val root = createTempDirectory("new-task-repo").toString()
 
-  private fun TestScope.draft(chats: ExecutionChatRepository = chat, controls: FakeWorkControlRepository = FakeWorkControlRepository()) = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+  private fun TestScope.draft(chats: ExecutionChatRepository = chat, controls: FakeWorkControlRepository = FakeWorkControlRepository(), changes: ChatChangesRepository = UnavailableChatChanges) = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, changesRepository = changes).apply {
     chatDispatcher = StandardTestDispatcher(testScheduler)
     repository = NewTaskRepository(root, "repo")
     baseBranch = "main"
@@ -89,6 +93,32 @@ class NewTaskDraftTest {
   private fun NewTaskDraft.say(message: String) {
     text = message
     send()
+  }
+
+  @Test
+  fun `first send and reopening retain HEAD captured while the empty composer was open`() = runTest {
+    val opening = ChatChangesBaseline("opening-head", listOf("already-untracked.kt"), "dirty-snapshot", Instant.fromEpochMilliseconds(1))
+    val repository = FakeChatChangesRepository(captureResult = ChatBaselineCapture.Captured(opening))
+    val draft = draft(changes = repository)
+    val preview = draft.previewChanges(root)
+    runCurrent()
+    assertEquals(opening, preview.baseline)
+    repository.captureResult = ChatBaselineCapture.Captured(opening.copy(headSha = "later-commit"))
+
+    draft.say("continue working")
+    runCurrent()
+    val current = checkNotNull(draft.chat.value)
+    assertEquals(opening, current.changesBaseline)
+    val saved = chat.saved.getValue(current.sessionId)
+    assertEquals(opening, saved.newTask?.changesBaseline)
+    draft.close()
+
+    val resumed = draft(changes = repository)
+    assertTrue(resumed.resume(saved))
+    runCurrent()
+    assertEquals(opening, resumed.chat.value?.changesBaseline)
+    assertTrue(repository.openingReadCalls.all { (_, start) -> start.headSha == opening.headSha })
+    resumed.close()
   }
 
   @Test
@@ -610,7 +640,8 @@ class NewTaskDraftTest {
     runCurrent()
 
     assertEquals(sessionId, draft.chat.value?.sessionId)
-    assertTrue(chat.ended.isEmpty())
+    assertEquals(listOf(sessionId), chat.ended)
+    assertEquals("other", chat.requests.last().agent.model)
     assertTrue(checkNotNull(draft.chat.value).thread.transcript.value.none { it is ChatMessage.Notice })
     assertFalse(chat.requests.last().firstTurn)
     assertEquals("continue", chat.requests.last().prompt)

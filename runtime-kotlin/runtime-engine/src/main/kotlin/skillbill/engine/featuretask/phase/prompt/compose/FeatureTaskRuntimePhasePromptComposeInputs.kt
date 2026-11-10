@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phase.prompt.compose
 
 import skillbill.engine.featuretask.model.audit.AcceptanceAuditInteractionTraceScope
+import skillbill.engine.featuretask.model.audit.AcceptanceRepairPromptFocus
 import skillbill.engine.featuretask.model.audit.UnknownInteractionScenarioContext
 import skillbill.engine.featuretask.model.audit.ValidateProbeScope
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
@@ -14,6 +15,8 @@ import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimePriorReviewContext
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedger
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGap
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionLateFinding
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import java.nio.file.Path
@@ -35,7 +38,14 @@ public data class FeatureTaskRuntimePhasePromptComposeInputs(
   internal val priorPlanBundleRejection: String? = null,
   internal val priorAcceptanceAudit: String? = null,
   public val currentAcceptanceCriterion: String? = null,
-  public val priorAcceptanceRepairFailures: String? = null,
+  public val acceptanceDiscoveryCriteria: List<String> = emptyList(),
+  public val acceptanceDiscoveryAudit: Boolean = false,
+  public val acceptanceVerifyAudit: Boolean = false,
+  public val acceptanceOpenGaps: List<AcceptanceCriterionGap> = emptyList(),
+  public val acceptanceRepairChangedPaths: List<String> = emptyList(),
+  public val acceptanceLateFindings: List<AcceptanceCriterionLateFinding> = emptyList(),
+  internal val acceptanceRepairFocus: AcceptanceRepairPromptFocus? = null,
+  public val acceptanceRepairOperatorInstructions: String? = null,
   internal val interactionTraceScope: AcceptanceAuditInteractionTraceScope? = null,
   public val unknownInteractionScenarios: List<UnknownInteractionScenarioContext> = emptyList(),
   internal val noChangeClaim: String? = null,

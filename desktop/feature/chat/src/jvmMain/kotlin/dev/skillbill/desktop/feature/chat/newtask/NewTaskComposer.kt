@@ -40,12 +40,10 @@ import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
 import dev.skillbill.desktop.core.designsystem.component.SbPopoverPlacement
-import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.feature.chat.AgentPicker
-import dev.skillbill.desktop.feature.chat.CursorMcpPicker
 import dev.skillbill.desktop.feature.chat.ChatActivityPill
 import dev.skillbill.desktop.feature.chat.ClipboardImageReader
 import dev.skillbill.desktop.feature.chat.ImageChip
@@ -84,9 +82,12 @@ internal fun NewTaskComposer(
   val busy = chat?.let { key(it) { it.thread.busy.collectAsState().value } } ?: false
   val stoppable = chat?.let { key(it) { it.thread.stoppable.collectAsState().value } } ?: false
   val queued = chat?.let { key(it) { it.thread.queued.collectAsState().value } }.orEmpty()
-  val changes = chat?.let { key(it) { it.changes.collectAsState().value } } ?: ChatChangesState.None
+  val changesRoot = chat?.repositoryRoot ?: draft.repository?.root
+  val preview = remember(draft, chat, changesRoot) { changesRoot?.takeIf { chat == null }?.let(draft::previewChanges) }
+  LaunchedEffect(preview) { preview?.observe() }
+  val changes = chat?.let { key(it) { it.changes.collectAsState().value } }
+    ?: preview?.let { key(it) { it.state.collectAsState().value } } ?: ChatChangesState.None
   val gate = remember(chat) { SendNowGate() }
-  val cursorMcpDependency = draft.cursorMcpDependency
   val offer by draft.offer.collectAsState()
   val ready = !offer.starting && draft.canSend()
   val sendNow = stoppable && queued.isNotEmpty() && draft.text.isBlank() && draft.images.isEmpty() && !offer.starting
@@ -100,7 +101,6 @@ internal fun NewTaskComposer(
   val saved by draft.saved.collectAsState()
   val submit = {
     val startsTurn = ready && !busy && draft.text.trim() != RESUME_COMMAND
-    draft.cursorMcpDependency = cursorMcpDependency
     onAction(NewTaskAction.Send)
     if (startsTurn) focusManager.clearFocus()
   }
@@ -154,13 +154,13 @@ internal fun NewTaskComposer(
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         RepositoryPicker(state, draft, chat, busy, offer.starting, focus, now, Modifier.weight(1f, fill = false), onAction)
-        AgentPicker(state.agent, state.agents, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy) { onAction(NewTaskAction.ChooseAgent(it)) }
-        if (state.agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
-          CursorMcpPicker(cursorMcpDependency, enabled = pickersEnabled) { draft.cursorMcpDependency = it }
-        }
+        AgentPicker(
+          state.agent, state.agents, draft.repository?.root, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy,
+          loadModels = draft::models, onChooseModel = { onAction(NewTaskAction.ChooseModel(it)) },
+        ) { onAction(NewTaskAction.ChooseAgent(it)) }
       }
       Row(Modifier.wrapContentWidth(unbounded = true), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        ChatChangesAnchor(chat, changes, focus, now, onOpenChanges)
+        ChatChangesAnchor(chat, changes, focus, onOpenChanges, changesRoot)
         if (stoppable) {
           SbButton(
             "Stop", { onAction(NewTaskAction.Stop); focus.requestFocus() },

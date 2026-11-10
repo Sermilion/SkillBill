@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import dev.skillbill.desktop.core.domain.model.ChatModel
 import androidx.lifecycle.viewModelScope
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
@@ -81,6 +82,69 @@ class NewTaskViewModelTest {
 
   private fun viewModel(board: FakeWorkBoardRepository, chats: NewTaskChats, specs: SpecRepository = FakeSpecs(), branches: RepositoryBranchesRepository = FakeBranches(), folders: FolderChooser = FolderChooser { FolderChoice.Cancelled }, settings: AppSettingsRepository = FakeAppSettingsRepository(), diagnostics: RecordingDiagnostics = RecordingDiagnostics()) =
     NewTaskViewModel(chats, board, specs, branches, folders, FakeExecutionChatRepository(), detecting(), FIXED_CLOCK, settings, diagnostics)
+
+  @Test
+  fun `model selection keeps an existing draft session and applies to its next message`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val repository = FakeExecutionChatRepository()
+    val chats = testNewTaskChats(chat = repository)
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), chats)
+    runCurrent()
+    val draft = chats.selected.value
+    draft.repository = NewTaskRepository("/repo", "repo")
+    draft.text = "original question"
+    draft.send()
+    runCurrent()
+    val previous = repository.requests.single()
+
+    model.onAction(NewTaskAction.ChooseModel(ChatModel("new-model", "New model")))
+    runCurrent()
+    val selected = draft.selectedAgent!!
+    assertEquals("new-model", selected.model)
+    assertEquals("new-model", repository.saved.values.single().agent.model)
+    draft.text = "follow-up question"
+    draft.send()
+    runCurrent()
+
+    val next = repository.requests.last()
+    assertEquals(selected, next.agent)
+    assertEquals(previous.sessionId, next.sessionId)
+    assertEquals("follow-up question", next.prompt)
+    model.viewModelScope.cancel()
+    chats.closeAll()
+  }
+
+  @Test
+  fun `model selection during a pending agent switch does not cancel resolution or block sending`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val repository = FakeExecutionChatRepository(supported = setOf("claude", "codex"))
+    val resolved = CompletableDeferred<ChatAgent>()
+    val gated = object : ExecutionChatRepository by repository {
+      override suspend fun agentFor(agentId: String): ChatAgent =
+        if (agentId == "codex") resolved.await() else repository.agentFor(agentId)
+    }
+    val chats = testNewTaskChats(gated)
+    val model = NewTaskViewModel(chats, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, gated, detecting("claude"), FIXED_CLOCK, FakeAppSettingsRepository(), RecordingDiagnostics())
+    runCurrent()
+    val draft = chats.selected.value
+    draft.repository = NewTaskRepository("/repo", "repo")
+    val previous = draft.selectedAgent
+    model.onAction(NewTaskAction.ChooseAgent("codex"))
+    runCurrent()
+    model.onAction(NewTaskAction.ChooseModel(ChatModel("old-agent-model", "Old agent model")))
+    assertEquals(previous, draft.selectedAgent)
+
+    val codex = ChatAgent("codex", "codex-model", null)
+    resolved.complete(codex)
+    runCurrent()
+    assertEquals(codex, draft.selectedAgent)
+    draft.text = "continue"
+    model.onAction(NewTaskAction.Send)
+    runCurrent()
+    assertEquals(codex, repository.requests.single().agent)
+    model.viewModelScope.cancel()
+    chats.closeAll()
+  }
 
   @Test
   fun `chat layout follows settings without changing open or selected chats`() = runTest {

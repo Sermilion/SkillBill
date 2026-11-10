@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunBuildObserver
+import skillbill.ports.agentrun.model.AgentRunModelObserver
 import skillbill.ports.agentrun.model.AgentRunProgressEmission
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -51,6 +52,7 @@ public data class PhaseLaunchObservation(
   val worktreeEditObserver: AgentRunWorktreeEditObserver,
   val progressEmitter: ((AgentRunProgressEmission) -> Unit)? = null,
   val buildObserver: AgentRunBuildObserver = AgentRunBuildObserver.NONE,
+  val modelObserver: AgentRunModelObserver? = null,
 )
 
 public sealed interface PhaseSettledEnvelopeRead {

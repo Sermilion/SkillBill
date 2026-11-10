@@ -52,7 +52,7 @@ fun settledAuditSatisfiedRecord(): String =
   """.trimIndent()
 
 fun auditRemainingAcOutput(remainingText: String): String {
-  val escaped = remainingText.replace("\\", "\\\\").replace("\"", "\\\"")
+  val escaped = JsonCodec.valueToJsonString(remainingText)
   return """
     {
       "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
@@ -60,7 +60,7 @@ fun auditRemainingAcOutput(remainingText: String): String {
       "status": "completed",
       "summary": "Audit found remaining acceptance criteria.",
       "produced_outputs": {
-        "value": "$escaped"
+        "value": $escaped
       }
     }
     """.trimIndent()

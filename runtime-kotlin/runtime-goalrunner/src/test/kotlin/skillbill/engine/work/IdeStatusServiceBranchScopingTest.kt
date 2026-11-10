@@ -257,6 +257,7 @@ class IdeStatusServiceBranchScopingTest {
         leaseGeneration = 1L,
         leaseExpiresAt = ideStatusObservedAt.plusSeconds(3600),
         terminalResult = null,
+        reportedModel = "provider-model",
         monitorTarget =
           StandaloneMonitorTarget(
             pullRequestKey = "github.com/acme/repo#7",
@@ -284,6 +285,8 @@ class IdeStatusServiceBranchScopingTest {
         IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt),
       )
 
+    assertEquals("provider-model", result.snapshot.currentModel?.model)
+    assertNull(result.snapshot.currentModel?.effort)
     assertNull(result.snapshot.problem)
     assertEquals("monitor-execution", result.snapshot.execution?.executionId)
     val summary = requireNotNull(result.snapshot.summary)

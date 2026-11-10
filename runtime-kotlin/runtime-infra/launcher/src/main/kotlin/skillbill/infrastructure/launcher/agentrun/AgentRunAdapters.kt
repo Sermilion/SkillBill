@@ -108,6 +108,7 @@ internal class ProcessAgentRunAdapter(
   val canHostApprovalCards: Boolean get() = commandBuilder.approvalProtocol != null
 
   fun launch(request: SkillRunRequest): AgentRunLaunchOutcome {
+    request.modelObserver?.reported(null)
     approvalRefusal(request)?.let { return it }
     val built = commandBuilder.build(request)
     val cardRequiredCursor =
@@ -161,7 +162,11 @@ internal class ProcessAgentRunAdapter(
         is LauncherResolution.Missing -> return unavailableLauncherFacts(request, built, resolution.message)
       }
     val displaySink =
-      if (request.captureDisplayOutput) ReadableAgentOutputSink(agent.id, request.outputSink, diagnostics) else null
+      if (request.captureDisplayOutput) {
+        ReadableAgentOutputSink(agent.id, request.outputSink, diagnostics, request.modelObserver)
+      } else {
+        null
+      }
     val serializedObserver =
       request.buildObserver
         .takeIf { it !== AgentRunBuildObserver.NONE && command.kind == AgentRunCommandKind.AGENT }
@@ -206,6 +211,7 @@ internal class ProcessAgentRunAdapter(
             model = request.modelOverride,
             effort = request.effortOverride,
             savedThread = null,
+            modelObserver = request.modelObserver,
             outputSink = request.outputSink,
             workspaceRoots = request.additionalWritableDirectories.map { it.toAbsolutePath().normalize().toString() },
           )
@@ -225,7 +231,7 @@ internal class ProcessAgentRunAdapter(
     process: AgentRunProcessRequest,
   ): AgentRunProcessResult {
     if (!request.captureDisplayOutput) return processRunner.run(process)
-    val displaySink = ReadableAgentOutputSink(agent.id, request.outputSink, diagnostics)
+    val displaySink = ReadableAgentOutputSink(agent.id, request.outputSink, diagnostics, request.modelObserver)
     val displayProcess =
       process.copy(
         launch =
@@ -267,7 +273,7 @@ internal class ProcessAgentRunAdapter(
         normalizedStdout.encodeToByteArray()
       }
     val execFailure = result.sessionOutcome == null && decoded.failureDiagnostic != null
-    recordReportedLaunchIdentity(request, decoded.reportedIdentity)
+    recordReportedLaunchIdentity(request, command, decoded.reportedIdentity)
     return AgentRunLaunchFacts(
       agent = agent,
       termination = result.termination(),
@@ -514,7 +520,7 @@ internal class ProcessAgentRunAdapter(
     command: AgentRunCommand,
     deadline: Instant?,
   ): AgentRunApprovalOpenResult {
-    val channel = CursorSessionChannel(launch, clock, request.outputSink, diagnostics)
+    val channel = CursorSessionChannel(launch, clock, request.outputSink, diagnostics, request.modelObserver)
     val owned =
       request.approval as? AgentRunApprovalRequirement.Owned
         ?: return AgentRunApprovalOpenResult.Opened(channel)
@@ -584,6 +590,7 @@ internal class ProcessAgentRunAdapter(
 
   private fun recordReportedLaunchIdentity(
     request: SkillRunRequest,
+    command: AgentRunCommand,
     reportedIdentity: ReportedLaunchIdentity,
   ) {
     when (reportedIdentity) {
@@ -595,6 +602,11 @@ internal class ProcessAgentRunAdapter(
         }
       }
       is ReportedLaunchIdentity.Reported -> {
+        if (command.approvalProtocol != AgentRunApprovalProtocol.CURSOR_ACP &&
+          command.approvalProtocol != AgentRunApprovalProtocol.JUNIE_ACP
+        ) {
+          reportedIdentity.identities.singleOrNull()?.let { request.modelObserver?.reported(it) }
+        }
         val expected = request.modelOverride
         val identities = reportedIdentity.identities
         if (expected != null && identities.size == 1 && identities.single() == expected) return

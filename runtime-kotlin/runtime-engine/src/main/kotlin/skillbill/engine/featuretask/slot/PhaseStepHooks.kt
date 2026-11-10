@@ -29,7 +29,6 @@ import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseStandalonePublicationStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
-import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ReviewFindingVerdict
@@ -96,13 +95,10 @@ public interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStepLa
   }
 }
 
-/** A step that owns one serial acceptance-repair mutation attempt and rejects an unfinished agent completion. */
+/** A step that owns one serial acceptance-repair mutation attempt. */
 internal interface PhaseAcceptanceRepairHooks {
   /** Whether the accepted step owns one serial acceptance-repair mutation attempt. */
   val serialAcceptanceRepairStep: Boolean
-
-  /** The failure code an agent completion that left the step unfinished is rejected with. */
-  val unfinishedAgentCompletionRejection: FeatureTaskRuntimeFailureCode
 }
 
 /** A step whose agent launch can be refused after briefing persistence. */

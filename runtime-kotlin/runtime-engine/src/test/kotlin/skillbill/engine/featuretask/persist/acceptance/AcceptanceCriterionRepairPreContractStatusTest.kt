@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.persist.acceptance
 
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_FIRST_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStatusRead
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.error.core.SkillBillRuntimeException
@@ -17,6 +19,43 @@ import kotlin.test.assertIs
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 class AcceptanceCriterionRepairPreContractStatusTest {
+  @Test
+  fun `status reports the stored version for both superseded repair records`() {
+    SerialRepairSqliteFixture().use { fixture ->
+      var discovered = fixture.initial
+      fixture.owned { worker -> discovered = fixture.discover(worker) }
+      val workflowPersistence =
+        FeatureTaskRuntimeWorkflowPersistence(
+          fixture.database,
+          WorkflowStateSchemaValidator(),
+          FeatureTaskRuntimeWireArtifactValidator(
+            fixture.execution.validator,
+            ContractFeatureTaskRuntimePhaseOutputMigration(),
+          ),
+        )
+      val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
+      listOf(
+        ACCEPTANCE_CRITERION_REPAIR_STATE_FIRST_CONTRACT_VERSION,
+        ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION,
+      ).forEach { version ->
+        val oldRecord = discovered.asRepairWireMap() + (Keys.CONTRACT_VERSION to version)
+        val snapshot = fixture.snapshot()
+        fixture.database.transaction {
+          it.workflowStates.save(
+            WorkflowFamily.TASK_RUNTIME,
+            snapshot.copy(
+              artifacts = DurableWorkflowArtifacts.fromMap(snapshot.artifacts + family.entry(oldRecord)),
+            ),
+          )
+        }
+        assertEquals(
+          AcceptanceCriterionRepairStatusRead.SupersededVersion(version),
+          workflowPersistence.readAcceptanceCriterionRepairStatus(fixture.workflowId),
+        )
+      }
+    }
+  }
+
   @Test
   fun `status reads unversioned repair state as pre-contract while resume still refuses it`() {
     SerialRepairSqliteFixture().use { fixture ->

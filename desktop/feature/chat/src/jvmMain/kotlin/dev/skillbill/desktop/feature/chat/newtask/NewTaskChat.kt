@@ -64,7 +64,7 @@ internal class NewTaskChat(
   var databaseSessionId: Long?,
   val repositoryRoot: String,
   val baseBranch: String?,
-  val agent: ChatAgent,
+  agent: ChatAgent,
   initiallyStarted: Boolean = false,
   initiallyPendingTurnLineIndex: Int? = null,
   val repositoryMissing: Boolean = false,
@@ -80,7 +80,22 @@ internal class NewTaskChat(
   resumedChanges: Boolean = false,
   changesCaptureAttempted: Boolean = false,
   changesAttributedPaths: Set<String>? = null,
+  retainedChanges: NewTaskChatChanges? = null,
 ) {
+  @Volatile
+  var agent: ChatAgent = agent
+    private set
+
+  internal fun changeModel(next: ChatAgent) {
+    if (thread.busy.value || closing || next == agent) return
+    chat.end(sessionId)
+    agent = next
+    thread.agentState.value = next
+    scope.launch(job + dispatcher) {
+      if (!save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+    }
+  }
+
   private val sessionIdState = MutableStateFlow(initialSessionId)
   val sessionIdFlow: StateFlow<String> = sessionIdState.asStateFlow()
   val sessionId: String get() = sessionIdState.value
@@ -88,7 +103,7 @@ internal class NewTaskChat(
   val thread = retainedThread
   val job: Job = SupervisorJob(scope.coroutineContext[Job])
   private val approvalFlow = ChatApprovals(approvals)
-  private val changesTracker = NewTaskChatChanges(changesRepository, scope, dispatcher, repositoryRoot, initialChangesBaseline, resumedChanges, repositoryMissing, changesCaptureAttempted || initiallyStarted || initialChangesBaseline != null, changesAttributedPaths)
+  private val changesTracker = retainedChanges ?: NewTaskChatChanges(changesRepository, scope, dispatcher, repositoryRoot, initialChangesBaseline, resumedChanges, repositoryMissing, changesCaptureAttempted || initiallyStarted || initialChangesBaseline != null, changesAttributedPaths)
   val changes: StateFlow<ChatChangesState> = changesTracker.state
   suspend fun observeChanges() = changesTracker.observe()
   val changesBaseline: ChatChangesBaseline? get() = changesTracker.baseline

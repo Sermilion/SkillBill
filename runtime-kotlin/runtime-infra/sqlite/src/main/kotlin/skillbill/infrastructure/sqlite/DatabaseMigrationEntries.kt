@@ -48,6 +48,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStand
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaChecklist
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaReport
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneReportedModel
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneReviewRunId
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.recordValidationCheckEvents
 import skillbill.infrastructure.sqlite.core.migration.area.monitor.recordMonitorCiCycles
@@ -1132,6 +1133,11 @@ internal val databaseMigrations: List<DatabaseMigration> =
     ) +
     DatabaseMigration(
       version = 120,
+      name = "record-standalone-reported-model",
+      operation = ::recordStandaloneReportedModel,
+    ) +
+    DatabaseMigration(
+      version = 121,
       name = "add-approval-rule-patterns",
       operation = ::addApprovalRulePatterns,
     )

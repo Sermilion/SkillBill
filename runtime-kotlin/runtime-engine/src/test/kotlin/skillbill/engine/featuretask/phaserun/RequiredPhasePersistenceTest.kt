@@ -511,7 +511,7 @@ class RequiredPhasePersistenceTest {
     context: FeatureTaskRuntimeRunLoopContext,
     phase: String,
   ): PhaseRun =
-    FeatureTaskRuntimeRunLoopPlanningBranch.buildPhaseRun(
+    context.phaseRunFactory.build(
       context,
       phase,
       context.request,

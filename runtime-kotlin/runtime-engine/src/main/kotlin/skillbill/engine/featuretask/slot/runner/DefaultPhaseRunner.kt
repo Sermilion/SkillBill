@@ -141,6 +141,7 @@ public class DefaultPhaseRunner(
           AgentRunActivityStampSink.NONE,
           AgentRunWorktreeEditObserver.NONE,
           buildObserver = launchObservation.buildObserver,
+          modelObserver = launchObservation.modelObserver,
         )
       }
     val liveChecksInvocation = facts.liveChecks?.takeIf { it.agentCapable }?.invocationId
@@ -154,14 +155,15 @@ public class DefaultPhaseRunner(
           additionalWritableDirectories = facts.additionalWritableDirectories,
           subtaskId = facts.subtaskId,
           timeout = facts.timeout,
+          modelObserver = observation.modelObserver,
           modelOverride = facts.modelOverride,
           effortOverride = facts.effortOverride,
           compaction = facts.compaction,
           outputSink = outputSink,
           promptOverride = composePrompt(input),
-          streamProviderOutput = captureStreamOutput,
+          streamProviderOutput = captureStreamOutput || observation.modelObserver != null,
           streamOutputForLiveness = facts.streamOutputForLiveness || captureStreamOutput,
-          captureDisplayOutput = captureStreamOutput,
+          captureDisplayOutput = captureStreamOutput || observation.modelObserver != null,
           readOnlyPhase = readOnly,
           progressIdleTimeout =
             if (readOnly) READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes else facts.progressIdleTimeout,

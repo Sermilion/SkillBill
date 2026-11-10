@@ -23,6 +23,7 @@ import skillbill.goalrunner.model.history.GoalHistoryWriterInput
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.goalrunner.model.quality.GoalQualityQaSourceWitness
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunModelObserver
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -71,6 +72,7 @@ public data class PhaseRunRequest(
   internal val goalQualityInvocationId: String? = null,
   internal val acceptedGoalQualityPlanText: String? = null,
   public val acceptedGoalQualityAgentId: String? = null,
+  public val modelObserver: AgentRunModelObserver? = null,
 ) {
   init {
     require(definitionId.isNotBlank()) { "PhaseRunRequest.definitionId is required." }

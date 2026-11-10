@@ -66,7 +66,6 @@ internal class ChatReplyStream(private val diagnostics: Diagnostics) {
 }
 
 private const val MAX_LABEL = 60
-private const val MAX_INSTRUCTION = 2000
 
 private class DecodedActions(val actions: List<ChatSuggestedAction>, val dropped: List<String>)
 
@@ -77,7 +76,7 @@ private fun droppedActionsNotice(reasons: List<String>): String {
 
 private fun decodeActions(source: String, diagnostics: Diagnostics): DecodedActions? {
   val trimmed = source.trim()
-  if (!trimmed.endsWith("```") || trimmed.length > 16000) return null
+  if (!trimmed.endsWith("```")) return null
   val array = try {
     Json.parseToJsonElement(trimmed.removeSuffix("```").trim()) as? JsonArray
   } catch (_: SerializationException) {
@@ -111,15 +110,8 @@ private fun decodeAction(element: JsonElement, diagnostics: Diagnostics): Action
     ?: return ActionResult.Dropped(
       if (rawLabel != null && rawLabel.length > MAX_LABEL) "label over $MAX_LABEL characters" else "missing or invalid label",
     )
-  val rawInstruction = action.actionString("instruction")?.trim()
-  val instruction = rawInstruction?.takeIf { it.isNotBlank() && it.length <= MAX_INSTRUCTION }
-    ?: return ActionResult.Dropped(
-      if (rawInstruction != null && rawInstruction.length > MAX_INSTRUCTION) {
-        "\"$label\" has an instruction of ${rawInstruction.length} characters, over the $MAX_INSTRUCTION limit"
-      } else {
-        "\"$label\" has no instruction"
-      },
-    )
+  val instruction = action.actionString("instruction")?.trim()?.takeIf { it.isNotBlank() }
+    ?: return ActionResult.Dropped("\"$label\" has no instruction")
   val mode = when (action.actionString("mode")) {
     "read" -> ChatPermissionMode.ReadOnly
     "act" -> ChatPermissionMode.Act

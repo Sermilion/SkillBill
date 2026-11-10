@@ -2380,7 +2380,8 @@ private val expectedMigrationDefinitions =
     117 to "defer-work-board-projection",
     118 to "record-monitor-ci-cycles",
     119 to "record-qa-panel-occurrences",
-    120 to "add-approval-rule-patterns",
+    120 to "record-standalone-reported-model",
+    121 to "add-approval-rule-patterns",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

@@ -41,6 +41,7 @@ class GitMonitorRepairPublisher : MonitorRepairPublisher {
     original: String,
   ): MonitorPublicationResult {
     val worktree = request.worktree.path
+    val endpoint = monitorTransportUrl(worktree, request.head.pushUrl)
     val hookDirectory =
       catchingNonCancellation(::writeMonitorPrePushGuard).getOrElse { failure ->
         return MonitorPublicationResult.Rejected(
@@ -52,7 +53,7 @@ class GitMonitorRepairPublisher : MonitorRepairPublisher {
       val environment =
         NO_PROMPT_ENVIRONMENT +
           mapOf(
-            GUARD_EXPECT_URL to request.head.pushUrl,
+            GUARD_EXPECT_URL to endpoint,
             GUARD_EXPECT_REF to destination,
             GUARD_EXPECT_LOCAL_SHA to request.repairSha,
             GUARD_EXPECT_REMOTE_SHA to request.expectedRemoteSha,
@@ -66,7 +67,7 @@ class GitMonitorRepairPublisher : MonitorRepairPublisher {
             "core.hooksPath=$hookDirectory",
             "push",
             "--porcelain",
-            request.head.pushUrl,
+            endpoint,
             "$localRef:$destination",
           ),
           stdin = null,
@@ -75,11 +76,11 @@ class GitMonitorRepairPublisher : MonitorRepairPublisher {
         )
       val detail = result.readFailure?.message ?: if (result.timedOut) "git push timed out" else result.output
       return if (result.exitCode == 0 && result.readFailure == null && !result.timedOut) {
-        reconcile(request, destination, detail, pushed = true)
+        reconcile(request, endpoint, destination, detail, pushed = true)
       } else if (GUARD_REFUSAL_MARKER in detail) {
         MonitorPublicationResult.Rejected(MonitorPublicationRefusal.GUARD_REFUSED, detail)
       } else {
-        reconcile(request, destination, detail, pushed = false)
+        reconcile(request, endpoint, destination, detail, pushed = false)
       }
     } finally {
       removeMonitorPrePushGuard(hookDirectory)
@@ -88,11 +89,12 @@ class GitMonitorRepairPublisher : MonitorRepairPublisher {
 
   private fun reconcile(
     request: MonitorPublicationRequest,
+    endpoint: String,
     destination: String,
     detail: String,
     pushed: Boolean,
   ): MonitorPublicationResult {
-    val remote = monitorGit(request.worktree.path, "ls-remote", request.head.pushUrl, destination)
+    val remote = monitorGit(request.worktree.path, "ls-remote", endpoint, destination)
     val advertised =
       if (remote.ok) {
         remote.output.lineSequence().firstOrNull()?.substringBefore('\t')?.trim().orEmpty()

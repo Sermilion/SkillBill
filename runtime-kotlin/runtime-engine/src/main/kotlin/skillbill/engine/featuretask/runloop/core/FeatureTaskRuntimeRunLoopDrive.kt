@@ -16,7 +16,9 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.featureTaskRuntimePhaseOrderViolationMessage
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairBlockReason
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairDecision
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairStep
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionContext
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
@@ -120,12 +122,9 @@ internal object FeatureTaskRuntimeRunLoopDrive {
   ): String? =
     FeatureTaskRuntimeRunLoopAcceptanceRepair.reviewEntryBlockReason(context, phaseId)
       ?: (context.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.let { scope ->
-        if (scope.snapshot?.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
-          "The current acceptance criterion exhausted its three unsuccessful repair attempts. " +
-            "Other criteria have separate budgets. ${scope.currentCriterionContext}"
-        } else {
-          null
-        }
+        val state = scope.snapshot
+        val blocked = state?.let(AcceptanceRepairDecision::next) as? AcceptanceRepairStep.Blocked
+        if (state != null && blocked != null) AcceptanceRepairBlockReason.build(state, blocked.criterionRef) else null
       } ?: entryGateBlockReason(context.state, context.transitions, phaseId)
       ?: with(FeatureTaskRuntimeRunLoopBackwardEdge) {
         FeatureTaskRuntimeRunLoopBackwardEdge.capExhaustedOnResume(

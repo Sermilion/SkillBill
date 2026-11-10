@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.config.model.PhaseModelDirective
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
@@ -25,6 +26,20 @@ public class FeatureTaskRuntimeStepLaunchResolver(
   private val launcher: AgentRunLauncher,
   private val lookup: PhaseStrategyLookup,
 ) {
+  public fun resolveDirective(
+    stepId: String,
+    agentId: String,
+    directive: PhaseModelDirective,
+    environmentKind: LaunchEnvironmentKind,
+  ): StepLaunchAssignment =
+    StepLaunchAssignment(
+      stepId,
+      agentId,
+      launcher.resolveLaunchModel(
+        AgentRunLaunchModelRequest(agentId, directive.model, directive.effort, environmentKind),
+      ),
+    )
+
   public fun resolve(
     facts: PhaseStrategySelectionFacts,
     inputs: StepLaunchAssignmentInputs,

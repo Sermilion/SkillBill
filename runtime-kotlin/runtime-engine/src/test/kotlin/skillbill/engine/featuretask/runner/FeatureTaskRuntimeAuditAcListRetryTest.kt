@@ -112,7 +112,8 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
       harness.launcher.requests
         .map { requireNotNull(it.skillRunRequest.promptOverride) }
         .filter { phaseIdFromPrompt(it) == "audit_implement_fix" }
-    assertContains(repairPrompts.last(), "Runner removal remains unfinished")
+    assertFalse(repairPrompts.last().contains("Runner removal remains unfinished"))
+    assertContains(repairPrompts.last(), "Resume the saved audit repair")
   }
 
   @Test
@@ -216,7 +217,8 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
           }
           "audit_implement_fix" -> {
             repairLaunches += 1
-            assertContains(prompt, remainingHint)
+            assertFalse(prompt.contains(remainingHint))
+            assertContains(prompt, "Do not edit; report the missing runtime context.")
             assertFalse(request.skillRunRequest.readOnlyPhase)
             assertEquals("configured-implementer", request.skillRunRequest.modelOverride)
             assertEquals("medium", request.skillRunRequest.effortOverride)

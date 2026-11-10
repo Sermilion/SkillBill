@@ -38,6 +38,38 @@ class ChatChangeReadsTest {
   private val reads = ChatChangeReads(runtime.workTreeSnapshotPort, runtime.workChangesPort, Clock.System)
 
   @Test
+  fun `opening HEAD includes existing dirty files and later commits but excludes earlier commits`() {
+    committed("a.kt", "b.kt")
+    write("earlier.kt", "committed before opening\n")
+    git("add", ".")
+    git("commit", "-q", "-m", "earlier work")
+    write("b.kt", "staged before opening\n")
+    git("add", "b.kt")
+    write("a.kt", "unstaged before opening\n")
+    write("untracked.kt", "created before opening\n")
+    val opening = snapshot()
+    val initial = assertIs<ChatChangesRead.Listed>(reads.readSinceOpening(repo.path, opening)).changes
+    assertEquals(listOf("a.kt", "b.kt", "untracked.kt"), initial.files.map { it.path })
+    assertEquals(0, initial.commitCount)
+    assertTrue(initial.uncommitted)
+
+    git("add", ".")
+    git("commit", "-q", "-m", "commit after opening")
+    write("later.kt", "created afterward\n")
+    val result = assertIs<ChatChangesRead.Listed>(reads.readSinceOpening(repo.path, opening)).changes
+    assertEquals(listOf("a.kt", "b.kt", "later.kt", "untracked.kt"), result.files.map { it.path })
+    assertEquals(listOf("commit after opening"), result.timeline.commits.map { it.subject })
+    assertTrue(result.uncommitted)
+    assertEquals(opening.headSha, result.comparisonBaseSha)
+    val visibleBaseline = opening.copy(stashSha = null, untrackedPaths = emptyList(), worktrees = emptyMap())
+    val target = chatScopeTarget("chat", repo.path, visibleBaseline, result.timeline, null, result.comparisonBaseSha)
+    val listed = assertIs<WorkChangeListResult.Listed>(runtime.workChangesPort.changes(target.allBaseline.toPort()))
+    assertEquals(result.files.map { it.path }, listed.files.map { it.path }.sorted())
+    assertEquals(result.insertions, listed.insertions)
+    assertEquals(result.deletions, listed.deletions)
+  }
+
+  @Test
   fun `a turn's changed paths leave out edits made before its snapshot`() {
     committed("a.kt", "b.kt")
     write("a.kt", "edited before the turn\n")

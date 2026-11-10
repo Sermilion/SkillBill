@@ -73,6 +73,7 @@ class CursorAcpSession(
   private val onEvent: (CursorAcpEvent) -> Unit,
   private val onCard: (ApprovalRequestRecord) -> Unit,
   private val record: (String) -> Unit,
+  private val onModel: (String) -> Unit = {},
 ) : ApprovalOwnerEffects {
   private val lock = Any()
   private val providerName = launch.provider.name
@@ -187,6 +188,7 @@ class CursorAcpSession(
       prompt()
     } else {
       model = selectedModel
+      model?.let(onModel)
       selectMode()
     }
   }
@@ -254,6 +256,7 @@ class CursorAcpSession(
         .firstOrNull { it.text(K.CATEGORY) == "model" }
     if (requested == null) {
       model = config?.text(K.CURRENT_VALUE) ?: setup.obj(K.MODELS)?.text(K.CURRENT_MODEL_ID)
+      model?.let(onModel)
       return selectMode()
     }
     if (config == null) selectLegacyModel(requested) else configureModel(config, requested)
@@ -271,6 +274,7 @@ class CursorAcpSession(
         )
     if (config.text(K.CURRENT_VALUE) == selected) {
       model = selected
+      onModel(selected)
       return selectMode()
     }
     pendingConfigId = config.text(K.ID)
@@ -298,6 +302,7 @@ class CursorAcpSession(
         )
     if (models?.text(K.CURRENT_MODEL_ID) == selected) {
       model = selected
+      onModel(selected)
       return selectMode()
     }
     send(

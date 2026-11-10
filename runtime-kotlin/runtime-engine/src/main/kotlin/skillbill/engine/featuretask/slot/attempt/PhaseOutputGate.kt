@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheck
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMetadata
 import skillbill.engine.featuretask.lifecycle.subtask.FeatureTaskRuntimeSubtaskFinalisation
 import skillbill.engine.featuretask.lifecycle.subtask.FeatureTaskRuntimeSubtaskFinaliseRequest
+import skillbill.engine.featuretask.model.audit.AcceptanceGapAuditScope
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
@@ -657,6 +658,13 @@ internal object PhaseOutputGate {
     rule: String,
   ): PhaseStepOutputCheck {
     if (interactionTraceRepair(run.request) != null) {
+      return PhaseStepOutputCheck.Retry(reason, rule)
+    }
+    val repair = (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair
+    val reask = repair?.gapReask
+    val currentScope = repair?.let { AcceptanceGapAuditScope.key(it) }
+    val matchingReask = reask != null && reask.scopeKey == currentScope && reask.reason == reason
+    if (repair?.steps?.audit == run.phaseId && currentScope != null && matchingReask) {
       return PhaseStepOutputCheck.Retry(reason, rule)
     }
     return PhaseStepOutputCheck.Reject(reason, rule)

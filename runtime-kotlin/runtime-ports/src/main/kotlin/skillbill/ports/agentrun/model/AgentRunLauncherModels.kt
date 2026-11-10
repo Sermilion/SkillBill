@@ -53,6 +53,7 @@ data class SkillRunRequest(
   val validationCheckInvocationId: String? = null,
   val captureDisplayOutput: Boolean = false,
   val buildObserver: AgentRunBuildObserver = AgentRunBuildObserver.NONE,
+  val modelObserver: AgentRunModelObserver? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

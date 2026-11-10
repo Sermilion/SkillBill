@@ -138,6 +138,8 @@ data class StandalonePhaseStatusUpdate(
   val reviewRunId: String? = null,
   val qaDetails: QaRunDetails? = null,
   val validationOutcome: StandaloneValidationOutcome? = null,
+  val reportedModel: String? = null,
+  val replaceReportedModel: Boolean = false,
 )
 
 enum class StandalonePhaseStatusUpdateResult {
@@ -188,6 +190,7 @@ data class StandalonePhaseStatusRecord(
   val qaDetails: QaRunDetails? = null,
   val liveChecks: LiveChecksAvailability? = null,
   val validationOutcome: StandaloneValidationOutcome? = null,
+  val reportedModel: String? = null,
 )
 
 const val STANDALONE_ELIGIBLE_PAGE_LIMIT: Int = 500

@@ -87,10 +87,14 @@ internal fun codexAppServerTurn(
   val rpc = CodexAppServerRpc(input, output, diagnostics, eventSink, approval)
   try {
     val (activeThread, activeTurn) = withTimeout(30_000) {
-    val settings = codexChatSettings(command, request)
     rpc.call("initialize", CodexAppServerProtocol.initializeParams()) { }
     if (!input.writeAndAwait(CodexAppServerProtocol.initializedNotification().toString())) {
       throw CodexSessionFailure("Codex initialization delivery is uncertain; it will not be replayed.")
+    }
+    val settings = codexResumeSettings(codexChatSettings(command, request), savedThread) { method, params ->
+      var response: JsonObject? = null
+      rpc.call(method, params) { response = it }
+      requireNotNull(response)
     }
     var threadId: String? = null
     rpc.call(CodexAppServerProtocol.threadMethod(savedThread), CodexAppServerProtocol.threadParams(settings, savedThread)) { result ->

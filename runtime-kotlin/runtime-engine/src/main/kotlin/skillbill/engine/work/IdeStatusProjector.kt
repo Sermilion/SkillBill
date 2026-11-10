@@ -234,6 +234,7 @@ public class IdeStatusProjector(
       workflowId = record.workflowId,
       workflowFamily = record.workflowId?.let { IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME },
       execution = execution,
+      currentModel = record.reportedModel?.let { IdeStatusCurrentModel(model = it) },
       currentActivity = record.currentActivity,
       lifecycleState = lifecycle,
       currentStep = IdeStatusStep(record.currentStep, record.currentStep),

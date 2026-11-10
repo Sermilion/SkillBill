@@ -30,6 +30,26 @@ class NewTaskChatChangesTest {
   private val secondTurn = snapshot("second-turn")
 
   @Test
+  fun `opening and reopening show pre-existing edits without resetting the starting HEAD`() = runTest {
+    val original = baseline.copy(untrackedPaths = listOf("untracked.kt"), stashSha = "dirty-snapshot")
+    val repository = FakeChatChangesRepository(captureResult = ChatBaselineCapture.Captured(original), readResult = listedChanges(7))
+    val fresh = tracker(repository, this, null, null)
+    val resumed = tracker(repository, this, original, emptySet())
+    testScheduler.advanceUntilIdle()
+
+    for (changes in listOf(fresh, resumed)) {
+      val shown = assertIs<ChatChangesState.Shown>(changes.state.value)
+      assertEquals(7, shown.changes.insertions)
+      assertEquals(listOf("a.kt"), shown.changes.files.map { it.path })
+      assertEquals(null, shown.paths)
+      assertEquals(emptyList(), shown.baseline.untrackedPaths)
+      changes.end()
+    }
+    assertEquals(listOf("/work/app"), repository.captureCalls)
+    assertTrue(repository.openingReadCalls.all { (_, start) -> start.headSha == original.headSha && start.stashSha == null })
+  }
+
+  @Test
   fun `only paths changed during the chat's own turns are attributed`() = runTest {
     val repository = FakeChatChangesRepository(captureResult = ChatBaselineCapture.Captured(baseline))
     val changes = tracker(repository, this, initialBaseline = null, initialPaths = null)
@@ -47,7 +67,6 @@ class NewTaskChatChangesTest {
     assertEquals(listOf(baseline, secondTurn), repository.changedPathsCalls)
     assertEquals(baseline, changes.baseline)
     assertEquals(setOf("a.kt", "b.kt"), changes.attributedPaths)
-    assertEquals(listOf<Set<String>?>(setOf("a.kt", "b.kt")), repository.readPaths)
   }
 
   @Test
@@ -74,7 +93,6 @@ class NewTaskChatChangesTest {
 
     assertEquals(emptyList(), repository.captureCalls)
     assertEquals(null, changes.attributedPaths)
-    assertEquals(listOf<Set<String>?>(null), repository.readPaths)
   }
 
   @Test
@@ -170,7 +188,7 @@ class NewTaskChatChangesTest {
     val releaseRead = CompletableDeferred<Unit>()
     val fake = FakeChatChangesRepository(captureResult = ChatBaselineCapture.Captured(baseline))
     val repository = object : ChatChangesRepository by fake {
-      override suspend fun read(repositoryRoot: String, baseline: ChatChangesBaseline, paths: Set<String>?): ChatChangesRead {
+      override suspend fun readSinceOpening(repositoryRoot: String, baseline: ChatChangesBaseline): ChatChangesRead {
         val result = fake.readResult
         if (!readStarted.isCompleted) {
           readStarted.complete(Unit)

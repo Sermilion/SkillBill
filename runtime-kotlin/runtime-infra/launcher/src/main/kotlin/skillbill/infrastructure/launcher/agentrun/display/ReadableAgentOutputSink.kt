@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import skillbill.infrastructure.launcher.process.launch.AgentRunOutputEndObserver
 import skillbill.ports.agentrun.model.AgentRunActivityOutputSink
+import skillbill.ports.agentrun.model.AgentRunModelObserver
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -13,6 +14,7 @@ internal class ReadableAgentOutputSink(
   private val agent: String,
   private val delegate: AgentRunOutputSink,
   private val diagnostics: RuntimeDiagnostics,
+  private val modelObserver: AgentRunModelObserver? = null,
 ) : AgentRunOutputSink, AgentRunOutputEndObserver {
   private val pending = mutableMapOf<AgentRunOutputStream, StringBuilder>()
   private val dropping = mutableSetOf<AgentRunOutputStream>()
@@ -126,7 +128,7 @@ internal class ReadableAgentOutputSink(
         delegate.write(stream, "$trimmed\n")
         return
       }
-    publishActivity(event)
+    publishObservations(event)
     val type = event.path("type").asText("")
     if (agent == "cursor" && type != "partial" && type != "assistant") {
       flushCursorPartial(stream)
@@ -143,7 +145,8 @@ internal class ReadableAgentOutputSink(
     }
   }
 
-  private fun publishActivity(event: JsonNode) {
+  private fun publishObservations(event: JsonNode) {
+    providerReportedModel(agent, event, diagnostics)?.let { modelObserver?.reported(it) }
     activityDecoder?.decode(event)?.forEach { activitySink?.activity(it) }
   }
 

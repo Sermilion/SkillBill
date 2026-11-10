@@ -1,5 +1,7 @@
 package dev.skillbill.desktop.feature.chat
 
+import dev.skillbill.desktop.core.domain.model.ChatModel
+import dev.skillbill.desktop.core.domain.model.ChatAgent
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshotFlow
 import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
@@ -122,6 +124,7 @@ class ChatWorkspace(
   private val selection: SelectionHolder,
   private val newTask: NewTaskChats,
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
+  private val runs: RunOpener = UnavailableRunOpener,
 ) : ChatCommands {
   internal val cursorMcpDependencies = mutableStateMapOf<String, CursorMcpDependency>()
   private val scope = windowScope.scope
@@ -556,6 +559,19 @@ class ChatWorkspace(
     }
   }
 
+  internal suspend fun models(agent: ChatAgent, root: String) = chat.models(agent, root)
+
+  internal fun switchModel(id: String, model: ChatModel?) {
+    val session = sessions[id] ?: return
+    val agent = session.agentState.value ?: return
+    if (session.busyState.value || (agent.model == model?.id && agent.effort == null)) return
+    endAgent(session)
+    val selected = agent.copy(model = model?.id, effort = null)
+    session.agentState.value = selected
+    session.append(ChatMessage.Notice("Model changed to ${model?.label ?: "agent default"}."))
+    scope.launch(session.job) { turns.save(session, selected) }
+  }
+
   /**
    * Moves [id]'s chat to [agentId] with that agent's reasoning model, or its CLI default when the config sets none. The next
    * turn opens a new agent session with the full snapshot. Ignored while a turn runs or when [agentId] is already in use.
@@ -679,7 +695,7 @@ class ChatWorkspace(
             checkoutRoot = session.item.workingRoot(),
           )
         }
-      }, { turns.operationCardChanged(session) })
+      }, { turns.operationCardChanged(session) }, runs = runs)
     }
 
   private fun enqueue(id: String, message: QueuedChatMessage) {

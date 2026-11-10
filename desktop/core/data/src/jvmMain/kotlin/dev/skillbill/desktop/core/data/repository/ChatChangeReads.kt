@@ -29,6 +29,30 @@ internal class ChatChangeReads(
   private val changes: WorkChangesPort,
   private val clock: Clock,
 ) {
+  fun readSinceOpening(root: String, baseline: ChatChangesBaseline): ChatChangesRead {
+    val timeline = when (val result = changes.commitTimeline(root, baseline.headSha, emptyList())) {
+      is WorkCommitTimelineResult.Listed -> result
+      is WorkCommitTimelineResult.BaseUnavailable -> return ChatChangesRead.Unavailable(result.reason)
+      is WorkCommitTimelineResult.NotARepository -> return ChatChangesRead.Unavailable("Not a repository: ${result.worktreeRoot}")
+      is WorkCommitTimelineResult.Failed -> return ChatChangesRead.Unavailable(result.message)
+    }
+    val files = when (val result = changes.changes(WorkChangeBaseline.RunStart(root, baseline.headSha, emptyList()))) {
+      is WorkChangeListResult.Listed -> result
+      is WorkChangeListResult.BaseUnavailable -> return ChatChangesRead.Unavailable(result.reason)
+      is WorkChangeListResult.NotARepository -> return ChatChangesRead.Unavailable("Not a repository: ${result.worktreeRoot}")
+      is WorkChangeListResult.Failed -> return ChatChangesRead.Unavailable(result.message)
+    }
+    val uncommitted = when (val result = changes.uncommittedChanges(root)) {
+      is WorkChangeListResult.Listed -> result.files.isNotEmpty()
+      is WorkChangeListResult.BaseUnavailable -> return ChatChangesRead.Unavailable(result.reason)
+      is WorkChangeListResult.NotARepository -> return ChatChangesRead.Unavailable("Not a repository: ${result.worktreeRoot}")
+      is WorkChangeListResult.Failed -> return ChatChangesRead.Unavailable(result.message)
+    }
+    val mapped = files.files.map { it.toDomain() }.sortedBy(ChangedFile::path)
+    return ChatChangesRead.Listed(ChatChanges(mapped, mapped.sumOf { it.insertions ?: 0 }, mapped.sumOf { it.deletions ?: 0 },
+      timeline.commits.size, uncommitted, timeline.headSha, timeline.toChatTimeline(), baseline.headSha))
+  }
+
   fun projectWorktrees(root: String): ChatProjectWorktrees = when (val result = snapshot.projectWorktrees(root)) {
     is WorkTreeProjectResult.Listed -> ChatProjectWorktrees.Listed(result.projectId, result.worktreeRoots)
     is WorkTreeProjectResult.Unavailable -> ChatProjectWorktrees.Unavailable(result.reason)
