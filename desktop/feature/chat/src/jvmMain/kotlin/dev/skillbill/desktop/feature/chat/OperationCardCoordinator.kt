@@ -29,6 +29,7 @@ internal class OperationCardCoordinator(
   private val base: (NewTaskKind) -> NewTaskStart?,
   private val historyChanged: suspend (ChatThread) -> Boolean = { true },
   private val pollMillis: Long = RESTORED_CONFIRMING_POLL_MILLIS,
+  private val runs: RunOpener = UnavailableRunOpener,
 ) {
   private val requests = ConcurrentHashMap<String, NewTaskStart>()
   private val observations = ConcurrentHashMap<String, Job>()
@@ -116,7 +117,18 @@ internal class OperationCardCoordinator(
       onDismiss = { token -> dismiss(thread, token) },
       onAdjust = { token -> adjust(thread, token) },
       canAdjust = { token -> !thread.busy.value && thread.operationCard(token)?.card?.launchId?.let(requests::containsKey) == true },
+      onOpenRun = { token -> openRun(thread, token) },
     )
+
+  private fun openRun(thread: ChatThread, token: String) {
+    val message = thread.operationCard(token)?.takeIf { it.opensVerifyRun() } ?: return
+    scope.launch {
+      runs.open(message.card.token)?.let { problem ->
+        thread.append(ChatMessage.Notice(problem))
+        persistOrWarn(thread)
+      }
+    }
+  }
 
   private fun confirm(thread: ChatThread, token: String) {
     val message = thread.operationCard(token) ?: return

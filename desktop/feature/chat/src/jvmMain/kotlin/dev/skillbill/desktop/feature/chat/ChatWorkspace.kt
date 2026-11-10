@@ -124,6 +124,7 @@ class ChatWorkspace(
   private val selection: SelectionHolder,
   private val newTask: NewTaskChats,
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
+  private val runs: RunOpener = UnavailableRunOpener,
 ) : ChatCommands {
   internal val cursorMcpDependencies = mutableStateMapOf<String, CursorMcpDependency>()
   private val scope = windowScope.scope
@@ -694,7 +695,7 @@ class ChatWorkspace(
             checkoutRoot = session.item.workingRoot(),
           )
         }
-      }, { turns.operationCardChanged(session) })
+      }, { turns.operationCardChanged(session) }, runs = runs)
     }
 
   private fun enqueue(id: String, message: QueuedChatMessage) {

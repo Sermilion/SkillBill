@@ -31,8 +31,10 @@ import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatOperationCardActions
 import dev.skillbill.desktop.feature.chat.ChatThread
 import dev.skillbill.desktop.feature.chat.OperationCardCoordinator
+import dev.skillbill.desktop.feature.chat.RunOpener
 import dev.skillbill.desktop.feature.chat.START_AGAIN_SUFFIX
 import dev.skillbill.desktop.feature.chat.UnavailableApprovalFeed
+import dev.skillbill.desktop.feature.chat.UnavailableRunOpener
 import dev.skillbill.desktop.feature.chat.chipText
 import dev.skillbill.desktop.feature.chat.restored
 import dev.skillbill.desktop.feature.chat.restoredDraft
@@ -75,6 +77,7 @@ class NewTaskDraft internal constructor(
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
   private val savedChats: NewTaskSavedChats = NewTaskSavedChats(chats, windowScope.scope, toasts),
   private val changesRepository: ChatChangesRepository = UnavailableChatChanges,
+  private val runs: RunOpener = UnavailableRunOpener,
 ) {
   private val scope = windowScope.scope
   private val cardOwners = IdentityHashMap<ChatThread, NewTaskChat>()
@@ -101,7 +104,7 @@ class NewTaskDraft internal constructor(
     }
   }, { thread ->
     synchronized(cardOwners) { cardOwners[thread] }?.persist()?.also { if (it) refreshSaved() } ?: false
-  })
+  }, runs = runs)
   private val chatState = MutableStateFlow<NewTaskChat?>(null)
   private val offerState = MutableStateFlow(NewTaskOffer())
   private var closing = false

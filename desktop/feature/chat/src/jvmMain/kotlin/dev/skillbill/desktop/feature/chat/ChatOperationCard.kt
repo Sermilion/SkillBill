@@ -61,6 +61,18 @@ internal data class ChatOperationCardActions(
   val onDismiss: (token: String) -> Unit,
   val onAdjust: (token: String) -> Unit,
   val canAdjust: (token: String) -> Boolean,
+  val onOpenRun: (token: String) -> Unit = {},
+)
+
+/** True once the operator confirmed a verify proposal and its run went ahead; the card token is that run's id. */
+internal fun ChatMessage.OperationCard.opensVerifyRun(): Boolean =
+  card.details is OperationCardDetailsView.Verify && card.state in VERIFY_RUN_STATES
+
+private val VERIFY_RUN_STATES = setOf(
+  OperationCardState.Confirming,
+  OperationCardState.Completed,
+  OperationCardState.Failed,
+  OperationCardState.ConsumedUncertain,
 )
 
 /** The `select:` value a PR-review-fix confirm sends, or null when no offered option was explicitly chosen. Verify has none. */
@@ -180,6 +192,15 @@ internal fun ChatOperationCard(message: ChatMessage.OperationCard, actions: Chat
       }
     }
     if (awaiting) OperationCardControls(message, actions)
+    if (message.opensVerifyRun() && actions != null) {
+      SbButton(
+        label = "Go to Verify run",
+        onClick = { actions.onOpenRun(card.token) },
+        variant = SbButtonVariant.Secondary,
+        size = SbControlSize.Small,
+        icon = LucideIcons.external,
+      )
+    }
     message.refusal?.let {
       BasicText(it, style = type.tSm.copy(color = colors.stFailed), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive })
     }
