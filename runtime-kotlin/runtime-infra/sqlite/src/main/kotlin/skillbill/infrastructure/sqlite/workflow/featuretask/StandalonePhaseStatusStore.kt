@@ -35,9 +35,11 @@ import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.core.schema.AGENT_ENVIRONMENT_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.LAUNCH_SCOPE_COLUMN
+import skillbill.infrastructure.sqlite.core.schema.REPORTED_MODEL_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.agentEnvironmentJson
 import skillbill.infrastructure.sqlite.core.schema.readAgentEnvironment
 import skillbill.infrastructure.sqlite.core.schema.readLaunchScope
+import skillbill.infrastructure.sqlite.core.schema.readStandaloneReportedModel
 import skillbill.infrastructure.sqlite.idestatus.readPlanActivity
 import skillbill.infrastructure.sqlite.idestatus.writePlanActivity
 import skillbill.infrastructure.sqlite.workflow.featuretask.validation.StandaloneValidationBranchReads
@@ -491,7 +493,8 @@ internal class StandalonePhaseStatusStore(
           active_duration_as_of = CASE WHEN ? THEN NULL ELSE COALESCE(?, active_duration_as_of) END,
           terminal_result = ?, accepted_result = ?,
           $MONITOR_CLEANUP_ASSIGNMENTS, $QA_OUTCOME_ASSIGNMENT, $QA_REPORT_TEXT_ASSIGNMENT, $QA_DETAILS_ASSIGNMENT,
-          $PLAN_REPORT_ASSIGNMENT, $REVIEW_RUN_ID_ASSIGNMENT, $VALIDATION_OUTCOME_ASSIGNMENT
+          $PLAN_REPORT_ASSIGNMENT, $REVIEW_RUN_ID_ASSIGNMENT, $VALIDATION_OUTCOME_ASSIGNMENT,
+          $REPORTED_MODEL_COLUMN = CASE WHEN ? THEN ? ELSE $REPORTED_MODEL_COLUMN END
         WHERE execution_id = ? AND status_revision = ? AND lease_owner = ? AND lease_generation = ?
         """.trimIndent(),
       ).use { statement ->
@@ -516,6 +519,8 @@ internal class StandalonePhaseStatusStore(
               request.planReport.columnValue(),
               request.reviewRunId,
               request.validationOutcome?.wireValue,
+              request.replaceReportedModel,
+              request.reportedModel,
               request.executionId,
               request.expectedRevision,
               request.leaseOwner,
@@ -862,6 +867,7 @@ internal class StandalonePhaseStatusStore(
       qaDetails = readQaDetailsOrWarn(getString("invocation_id"), diagnostics),
       liveChecks = readLiveChecks("standalone-status"),
       validationOutcome = readValidationOutcome("standalone-status"),
+      reportedModel = readStandaloneReportedModel(),
     )
   }
 

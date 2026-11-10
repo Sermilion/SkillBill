@@ -1,6 +1,9 @@
 package skillbill.infrastructure.sqlite.core.migration.area.idestatus
 
+import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.core.schema.REPORTED_MODEL_COLUMN
+import skillbill.infrastructure.sqlite.core.schema.reinstallStandalonePhaseStatusChangeTriggers
 import java.sql.Connection
 import java.util.UUID
 
@@ -317,4 +320,14 @@ internal object StandalonePhaseStatusMigration {
     }
     return if (carry == 1) "1${digits.concatToString()}" else digits.concatToString()
   }
+}
+
+internal fun recordStandaloneReportedModel(connection: Connection) {
+  DatabaseColumnMigrations.ensureColumn(
+    connection,
+    "standalone_phase_status",
+    REPORTED_MODEL_COLUMN,
+    "TEXT NULL CHECK ($REPORTED_MODEL_COLUMN IS NULL OR length(trim($REPORTED_MODEL_COLUMN)) BETWEEN 1 AND 128)",
+  )
+  reinstallStandalonePhaseStatusChangeTriggers(connection)
 }

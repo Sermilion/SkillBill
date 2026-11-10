@@ -221,6 +221,7 @@ class CursorAcpSessionTest {
         """"modes":{"availableModes":[{"id":"agent"}]}}""",
     )
 
+    assertTrue(harness.reportedModels.isEmpty())
     val selection = harness.frames.last()
     assertEquals(JsonPrimitive("session/set_config_option"), selection[CursorAcpKeys.METHOD])
     assertContains(selection.toString(), "\"value\":\"composer-2.5[fast=true]\"")
@@ -230,6 +231,7 @@ class CursorAcpSessionTest {
     harness.respond("{}")
     assertEquals(JsonPrimitive("session/prompt"), harness.frames.last()[CursorAcpKeys.METHOD])
     harness.respond("""{"stopReason":"end_turn"}""")
+    assertEquals(listOf("composer-2.5[fast=true]"), harness.reportedModels)
     assertEquals("composer-2.5[fast=true]", harness.session.outcome()?.model)
     harness.session.close()
   }
@@ -350,6 +352,7 @@ class CursorAcpSessionTest {
     val frames = mutableListOf<JsonObject>()
     val events = mutableListOf<CursorAcpEvent>()
     val cards = mutableListOf<ApprovalRequestRecord>()
+    val reportedModels = mutableListOf<String>()
     val owner = Owner()
     val session =
       CursorAcpSession(
@@ -371,6 +374,7 @@ class CursorAcpSessionTest {
         events::add,
         cards::add,
         {},
+        onModel = { reportedModels += it },
       )
 
     init {

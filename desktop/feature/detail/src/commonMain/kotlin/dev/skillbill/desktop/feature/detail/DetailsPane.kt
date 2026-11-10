@@ -140,7 +140,11 @@ private fun ExecutionSection(item: WorkItem, detail: Detail?, subtaskId: Int?, o
           PropertyText(it)
         }
       }
-      facts.model?.let { model -> PropertyRow("Model") { PropertyText(model + facts.effort?.let { " · $it" }.orEmpty()) } }
+      if (item.control.phaseId == "monitor") {
+        PropertyRow("Model") { PropertyText(facts.model ?: "Not reported") }
+      } else {
+        facts.model?.let { model -> PropertyRow("Model") { PropertyText(model + facts.effort?.let { " · $it" }.orEmpty()) } }
+      }
       facts.liveness?.let { PropertyRow("Liveness") { PropertyText(it) } }
       facts.startedAt?.let { PropertyRow("Started") { PropertyText(formatInstant(it, "d MMM HH:mm")) } }
       facts.updatedAt?.let { PropertyRow("Updated") { PropertyText(formatInstant(it, "HH:mm:ss")) } }

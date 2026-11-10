@@ -170,6 +170,7 @@ public class InMemoryPhaseRunState(
           durableStamps,
           AgentRunWorktreeEditObserver.NONE,
           buildObserver = buildObserver,
+          modelObserver = facts.request.modelObserver,
         )
     var lastKind: String? = null
     var lastPublishedAt: Instant? = null
@@ -213,6 +214,7 @@ public class InMemoryPhaseRunState(
       worktreeEditObserver = AgentRunWorktreeEditObserver.NONE,
       progressEmitter = progressEmitter,
       buildObserver = buildObserver,
+      modelObserver = facts.request.modelObserver,
     )
   }
 

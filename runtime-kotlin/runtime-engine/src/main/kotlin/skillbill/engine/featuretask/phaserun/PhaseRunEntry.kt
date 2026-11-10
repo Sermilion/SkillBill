@@ -487,6 +487,7 @@ public class PhaseRunEntry(
       )
     val statusRequest =
       request.copy(
+        modelObserver = publisher.modelObserver(request.modelObserver),
         eventSink = statusPublisherFactory.compose(request.eventSink::emit, publisher),
         activityOutput = { stepName, activity ->
           publisher.publishActivity(stepName, activity)

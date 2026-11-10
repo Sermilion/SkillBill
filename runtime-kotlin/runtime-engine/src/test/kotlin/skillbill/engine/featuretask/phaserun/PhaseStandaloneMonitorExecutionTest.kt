@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.phaserun
 
+import skillbill.config.model.PhaseModelDirective
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phaserun.monitor.MonitorTargetResolver
@@ -86,6 +88,8 @@ class PhaseStandaloneMonitorExecutionTest {
   private val repairCwds = mutableListOf<Path>()
   private val repairPrompts = mutableListOf<String>()
   private var duringRepair: (Path) -> Unit = {}
+  private var reportedModel: String? = null
+  private var modelAssignment = FeatureTaskRuntimeModelAssignment()
   private var reportedBase: String? = null
   private var repairCount = 0
   private var repairOutcome = FIXED
@@ -96,6 +100,7 @@ class PhaseStandaloneMonitorExecutionTest {
     RuntimeRecordingLauncher { request ->
       val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
       if (phaseId == MONITOR_FIX) {
+        reportedModel?.let { request.skillRunRequest.modelObserver?.reported(it) }
         val cwd = request.skillRunRequest.repoRoot
         repairCwds.add(cwd)
         repairPrompts.add(requireNotNull(request.skillRunRequest.promptOverride))
@@ -141,11 +146,19 @@ class PhaseStandaloneMonitorExecutionTest {
   @Test
   fun `a failing head is repaired in the owned worktree and the repair lands on the fork head only`() {
     failingHeads += headSha
+    reportedModel = "provider-model"
+    modelAssignment =
+      FeatureTaskRuntimeModelAssignment(
+        perPhaseDirectives = mapOf(MONITOR_FIX to PhaseModelDirective("configured-model")),
+      )
     val callerHead = git(caller, "rev-parse", "HEAD")
 
     val result = run()
 
     val completed = assertIs<PhaseRunResult.Completed>(result, result.toString())
+    val status = assertNotNull(database.read { it.standalonePhaseStatuses.readByInvocation(result.invocationId) })
+    assertEquals("provider-model", status.reportedModel)
+    assertEquals("configured-model", launcher.requests.single().skillRunRequest.modelOverride)
     assertOwnedWorktreeRemoved(completed.targetReport)
     assertEquals(COMMIT_PUSH, completed.completedStepIds.first(), "the publication step runs first as a no-op")
     val repair = forkHead()
@@ -593,6 +606,7 @@ class PhaseStandaloneMonitorExecutionTest {
         repoRoot = caller,
         invokedAgentId = "claude",
         intake = intake,
+        modelAssignment = modelAssignment,
       ),
     )
   }

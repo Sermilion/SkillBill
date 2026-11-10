@@ -2380,6 +2380,7 @@ private val expectedMigrationDefinitions =
     117 to "defer-work-board-projection",
     118 to "record-monitor-ci-cycles",
     119 to "record-qa-panel-occurrences",
+    120 to "record-standalone-reported-model",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {
