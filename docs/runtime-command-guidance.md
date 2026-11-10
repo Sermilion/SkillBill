@@ -358,13 +358,30 @@ runtime commit strategy and launches no agent. Details:
 
 ## Desktop new-task start
 
-New-task and execution chats add no tool restrictions, approval steps or
-workflow gates. Their prompts supply context and optional action-button
-formatting. The agent can carry out operator requests directly with its
-available tools, including shell commands and the skill-bill CLI. Button-only
-launches, issue-key acceptance in chat and pause-and-act are not prerequisites
-for direct tool use. Optional start buttons still use the desktop intake path
-below; runtime commands retain their own contracts.
+New-task chats make preparation a high priority for implementation work. The
+agent inspects the repository and connected context, discusses the outcome,
+scope, acceptance criteria, constraints and edge cases, and checks required
+infrastructure, tooling and access. It infers answers from evidence and batches
+material questions without repeating answered questions. Discussion and context
+gathering do not start a standalone planning run. Plan runs require an explicit
+operator request.
+
+Readiness advice is advisory. When an operator requests a goal or plan with
+unresolved material questions or blockers, the agent names them, explains their
+consequences, recommends resolving them first, and asks once whether to proceed.
+An explicit choice to proceed gets the requested start card without another
+readiness confirmation. Its instruction preserves unresolved questions, blockers
+and accepted assumptions alongside the requirements and resolved decisions. The
+agent never claims unchecked prerequisites are ready or invents unknowns to delay
+a ready task. Ready tasks need no extra readiness confirmation. This advice adds
+no app readiness state or launch gate, and standalone phases and operations keep
+their existing routes.
+
+The operator still accepts a complete issue key before a goal or plan card is
+offered and launches through the app's start card. A readiness override does not
+waive either requirement or authorize a goal launch through chat tools. Explicit
+requests to implement directly in chat use the agent's available tools without
+starting a goal. Execution chats keep their execution context and action rules.
 
 All provider launches default to native permission bypass, including execution
 and new-task chats, workflow phases, review workers and background summaries.

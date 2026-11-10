@@ -85,13 +85,22 @@ class ChatSystemPromptTest {
   }
 
   @Test
-  fun `new task preparation resolves prerequisites before a user owned goal launch`() {
+  fun `new task preparation advises readiness without blocking an informed operator choice`() {
     val prompt = scopeSystemPrompt(ChatScope.NewTask("/work/app", null))
 
     assertTrue("Inspect the repository and connected context" in prompt)
-    assertTrue("check required infrastructure, tooling and access" in prompt)
+    assertTrue("Check required infrastructure, tooling and access" in prompt)
+    assertTrue("acceptance criteria, constraints, edge cases and unknowns" in prompt)
     assertTrue("batch related questions" in prompt)
-    assertTrue("Withhold the goal card while known blockers or material questions remain unresolved" in prompt)
+    assertTrue("Readiness advice is advisory, not a hard block" in prompt)
+    assertTrue("name the specific unknowns, explain their consequences" in prompt)
+    assertTrue("ask once whether they are sure they want to proceed" in prompt)
+    assertTrue("offer the requested start card without repeating the readiness confirmation" in prompt)
+    assertTrue("Carry unresolved questions, blockers and accepted assumptions into its instruction" in prompt)
+    assertTrue("Do not invent unknowns when the task is ready" in prompt)
+    assertTrue("Readiness does not need an extra confirmation when no material questions remain" in prompt)
+    assertTrue("keep standalone review, validation, QA, PR, monitor and operation requests on their existing routes" in prompt)
+    assertFalse("Withhold the goal card while known blockers or material questions remain unresolved" in prompt)
     assertTrue("It does not start a standalone planning run" in prompt)
     assertTrue("Only the operator clicking the inline UI start card may launch a goal" in prompt)
     assertTrue("Never launch a goal through shell commands, the skill-bill CLI, MCP tools or another agent" in prompt)
@@ -119,5 +128,6 @@ class ChatSystemPromptTest {
     assertTrue("Verify findings" in prompt)
     assertTrue("must not set \"start\":\"verify\"" in prompt)
     assertFalse("Route applicable work through Skill Bill" in prompt)
+    assertFalse("Readiness advice" in prompt)
   }
 }
