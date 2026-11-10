@@ -142,7 +142,11 @@ class AcceptanceCriterionRepairRunStateTest {
           assertNotNull(state.currentCriterionRef),
           "e".repeat(64),
           kind,
-          evidence,
+          if (kind == AcceptanceCriterionRepairOutcomeKind.TARGETED_SUCCESS) {
+            "$evidence\n${state.currentCriterionRef}.G1: closed @ src/Report.kt:1"
+          } else {
+            evidence
+          },
         ),
       ),
     )

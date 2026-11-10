@@ -2,6 +2,7 @@ package skillbill.workflow.taskruntime.model.audit.interaction
 
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
+import skillbill.workflow.taskruntime.model.audit.UNKNOWN_AUDIT_SUFFIX
 
 internal fun traceAuditId(
   outputId: String,
@@ -23,8 +24,6 @@ internal fun regressedLine(
   criterionRef: String,
   evidence: String,
 ): String = "Recheck $criterionRef: regressed evidence $evidence"
-
-internal const val UNKNOWN_AUDIT_SUFFIX: String = ":trace:unknown"
 
 internal fun unknownAuditId(outputId: String): String = "$outputId$UNKNOWN_AUDIT_SUFFIX"
 

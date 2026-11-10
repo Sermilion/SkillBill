@@ -56,7 +56,8 @@ class AcceptanceCriterionRepairStateSchemaValidatorTest {
         "c".repeat(64),
         "checkpoint:discovery",
       )
-    val focused = assertNotNull(initial.recordProseAudit(audit))
+    val discovered = assertNotNull(initial.recordProseAudit(audit))
+    val focused = assertNotNull(discovered.reopenForOperatorAudit())
     val closed =
       assertNotNull(
         focused.recordProseAudit(

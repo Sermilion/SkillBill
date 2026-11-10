@@ -25,7 +25,8 @@ import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairDecision
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairStep
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -323,7 +324,7 @@ internal object AcceptanceCriterionRepairAttemptSettlement {
     val output =
       FeatureTaskRuntimePhaseOutput(run.phaseId, context.loop.iteration, normalized.canonicalJson, normalized)
     context.loopTransitions.applyPersistedPhaseCompletion(output, phase.reviewPassNumber)
-    if (scope.snapshot?.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
+    if (scope.snapshot?.let(AcceptanceRepairDecision::next) is AcceptanceRepairStep.Blocked) {
       return PhaseOutcome.blocked(
         "The current acceptance criterion exhausted its three unsuccessful repair attempts. " +
           "Other criteria have separate budgets. " + scope.currentCriterionContext,

@@ -18,6 +18,7 @@ import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProseAudit
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -34,6 +35,37 @@ import kotlin.test.assertTrue
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 class AcceptanceCriterionRepairPersistenceTest {
+  @Test
+  fun `discovery replay accepts the producer report without its captured snapshot`() {
+    SerialRepairSqliteFixture().use { f ->
+      f.owned { worker ->
+        val initial = f.discover(worker)
+        val mutation =
+          AcceptanceCriterionRepairMutation.ProseAudit(
+            AcceptanceCriterionProseAudit(
+              "discovery-report",
+              initial.revision + 1,
+              null,
+              false,
+              "b".repeat(64),
+              "Open criteria: AC-001\nAC-001.G1: missing behavior @ src/Main.kt:1",
+              "c".repeat(64),
+              "checkpoint:discovery-report",
+            ),
+          )
+        val committed = assertIs<AcceptanceCriterionRepairWriteResult.Committed>(f.write(worker, initial, mutation))
+        assertNotNull(committed.state.proseAudits.single().discoverySnapshot)
+        val beforeReplay = f.snapshot().toRecord()
+
+        val replayed = assertIs<AcceptanceCriterionRepairWriteResult.Committed>(f.write(worker, initial, mutation))
+
+        assertTrue(replayed.replayed)
+        assertEquals(committed.state, replayed.state)
+        assertEquals(beforeReplay, f.snapshot().toRecord())
+      }
+    }
+  }
+
   @Test
   fun `restart replays targeted failure once and the third unsuccessful cycle blocks the criterion`() {
     SerialRepairSqliteFixture().use { f ->

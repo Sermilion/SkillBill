@@ -225,6 +225,7 @@ data class AcceptanceCriterionRepairState internal constructor(
     evidenceRef: String,
     treeDigest: String,
     checkpointId: String,
+    changedPaths: List<String> = emptyList(),
   ): AcceptanceCriterionRepairState? {
     val live = reservation ?: return null
     val validReservation = live.reservationId == reservationId && live.criterionRef == currentCriterionRef
@@ -236,6 +237,7 @@ data class AcceptanceCriterionRepairState internal constructor(
       completedRepairEvidenceRef = evidenceRef,
       admittedTreeDigest = treeDigest,
       admittedCheckpointId = checkpointId,
+      repairChangedPaths = changedPaths.distinct().sorted().take(AcceptanceCriterionGapLimits.MAX_CHANGED_PATHS),
       reservation = live.copy(stageRevision = revision + 1),
       revision = revision + 1,
     )
@@ -247,27 +249,51 @@ data class AcceptanceCriterionRepairState internal constructor(
     if (existing != null) return if (outcome.replays(existing)) this else null
     if (!canRecord(outcome)) return null
     val acceptedOutcome = outcome.boundTo(this)
-    return acceptedOutcome.takeIf { it.matchesVerification(this) }?.let(::applyOutcome)
+    val criterion = criteria.single { it.canonicalRef == acceptedOutcome.criterionRef }
+    val outcome = acceptedOutcome
+    val verification =
+      if (outcome.targeted) {
+        AcceptanceGapVerificationResolver.resolve(
+          this,
+          criterion,
+          outcome.evidenceRef,
+          admittedTreeDigest == outcome.treeDigest,
+          legacySatisfied = outcome.successful,
+        )
+      } else {
+        null
+      }
+    return acceptedOutcome.takeIf {
+      it.matchesVerification(this) && (verification == null || verification.outcomeKind == it.kind)
+    }?.let { applyOutcome(it, verification) }
   }
 
-  private fun applyOutcome(acceptedOutcome: AcceptanceCriterionRepairOutcome): AcceptanceCriterionRepairState? {
+  private fun applyOutcome(
+    acceptedOutcome: AcceptanceCriterionRepairOutcome,
+    verification: AcceptanceGapVerification?,
+  ): AcceptanceCriterionRepairState? {
     val outcome = acceptedOutcome
     val totals = chargedAttempts.toMutableMap()
     val criterion = criteria.singleOrNull { it.canonicalRef == outcome.criterionRef } ?: return null
-    val openGapsBefore = criterion.gaps.count { it.status == AcceptanceCriterionGapStatus.OPEN }
-    if (!outcome.successful) {
-      val next =
-        FocusedRepairStrategy.recordUnsuccessfulOutcome(totals.getOrDefault(outcome.criterionRef, 0))
-          ?: return null
-      totals[outcome.criterionRef] = next
-    }
+    val openGapsBefore =
+      verification?.openGapsBefore
+        ?: criterion.gaps.count { it.status == AcceptanceCriterionGapStatus.OPEN }
+    if (!chargeOutcome(outcome, totals)) return null
     val chargedOutcome =
       outcome.copy(
         charged = !outcome.successful,
         openGapsBefore = openGapsBefore,
-        openGapsAfter = if (outcome.successful) 0 else openGapsBefore,
+        openGapsAfter = verification?.openGapsAfter ?: openGapsBefore,
       )
-    val changedCriteria = criteriaAfter(chargedOutcome, totals[outcome.criterionRef] ?: 0)
+    val changedCriteria =
+      criteriaAfter(chargedOutcome, totals[outcome.criterionRef] ?: 0)
+        .map { changed ->
+          if (changed.canonicalRef == outcome.criterionRef) {
+            changed.copy(gaps = verification?.gaps ?: changed.gaps)
+          } else {
+            changed
+          }
+        }
     val byRef = changedCriteria.associateBy { it.canonicalRef }
     val queue = stableQueue(changedCriteria, dependencies, byRef) ?: return null
     val pending = if (outcome.successful) pendingAuditRefs - outcome.criterionRef else pendingAuditRefs
@@ -282,6 +308,7 @@ data class AcceptanceCriterionRepairState internal constructor(
       outcomes = outcomes + chargedOutcome,
       chargedAttempts = totals,
       repairChangedPaths = emptyList(),
+      lateFindings = lateFindings + verification?.lateFindings.orEmpty(),
       mode = modeAfterOutcome(pending, queue),
       stage = stageAfterOutcome(blocked, outcome.successful, pending, queue),
       completedRepairEvidenceRef = null,
@@ -290,6 +317,18 @@ data class AcceptanceCriterionRepairState internal constructor(
       sourceTransitions = sourceTransitionsAfter(outcome),
       revision = revision + 1,
     )
+  }
+
+  private fun chargeOutcome(
+    outcome: AcceptanceCriterionRepairOutcome,
+    totals: MutableMap<String, Int>,
+  ): Boolean {
+    if (outcome.successful) return true
+    val next =
+      FocusedRepairStrategy.recordUnsuccessfulOutcome(totals.getOrDefault(outcome.criterionRef, 0))
+        ?: return false
+    totals[outcome.criterionRef] = next
+    return true
   }
 
   private fun modeAfterOutcome(
@@ -358,7 +397,7 @@ data class AcceptanceCriterionRepairState internal constructor(
           closureTreeDigest = admittedTreeDigest,
           closureCheckpointId = admittedCheckpointId,
           escalated = criterion.escalated || chargedCount >= 2,
-        ).closeOpenGaps(revision + 1)
+        )
       } else if (criterion.canonicalRef == outcome.criterionRef) {
         criterion.copy(
           evidenceRef = outcome.evidenceRef,
@@ -495,14 +534,28 @@ private fun AcceptanceCriterionRepairOutcome.boundTo(
 private fun AcceptanceCriterionRepairOutcome.matchesVerification(state: AcceptanceCriterionRepairState): Boolean =
   verifiedRevision == state.revision && (
     !targeted || (
-      treeDigest == state.admittedTreeDigest &&
-        checkpointId == state.admittedCheckpointId
+      if (successful) {
+        treeDigest == state.admittedTreeDigest && !checkpointId.isNullOrBlank()
+      } else {
+        treeDigest?.isDigest() == true && !checkpointId.isNullOrBlank()
+      }
     )
   )
 
 data class AcceptanceCriterionAuditAttempt(
   val id: String,
   val number: Int,
-  val passed: Boolean,
-  val uncoveredCount: Int,
-)
+  val passed: Boolean?,
+  val uncoveredCount: Int?,
+  val unavailableReason: String? = null,
+) {
+  init {
+    require(
+      if (unavailableReason == null) {
+        passed != null && uncoveredCount != null && uncoveredCount >= 0 && passed == (uncoveredCount == 0)
+      } else {
+        unavailableReason.isNotBlank() && passed == null && uncoveredCount == null
+      },
+    )
+  }
+}

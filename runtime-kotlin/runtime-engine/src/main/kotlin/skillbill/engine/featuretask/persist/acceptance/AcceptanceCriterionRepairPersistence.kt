@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairMutatio
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRefusal
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairWriteResult
 import skillbill.engine.featuretask.model.audit.ExpectedAcceptanceCriterionRepairState
+import skillbill.engine.featuretask.model.audit.stepId
 import skillbill.engine.featuretask.model.audit.toRepairRefusal
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
@@ -39,13 +40,21 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapLimits
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapOrigin
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapReportParser
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapStatus
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceGapVerificationResolver
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairDecision
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairStep
 import skillbill.workflow.taskruntime.model.audit.admitQaReaudit
 import skillbill.workflow.taskruntime.model.audit.interaction.recordInteractionTrace
 import skillbill.workflow.taskruntime.model.audit.recordProseAudit
 import skillbill.workflow.taskruntime.model.audit.retainClarification
 import skillbill.workflow.taskruntime.model.audit.retainProseProgress
+import skillbill.workflow.taskruntime.model.audit.sameProducerAs
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -302,8 +311,90 @@ public class AcceptanceCriterionRepairPersistence(
     if (committed.interactionTraceSkipped && !committed.replayed) {
       AcceptanceCriterionInteractionTargets.recordSkip(diagnostics, worker.workflowId)
     }
+    recordDiscoveryDiagnostics(worker.workflowId, request, committed)
+    recordPostCommitDiagnostics(worker.workflowId, request, committed)
     AcceptanceCriterionTraceDiagnostics.record(diagnostics, worker.workflowId, request.mutation, committed)
     return project(repositoryRoot, worker.workflowId, committed)
+  }
+
+  private fun recordDiscoveryDiagnostics(
+    workflowId: String,
+    request: AcceptanceCriterionRepairCommit,
+    committed: AcceptanceCriterionRepairWriteResult.Committed,
+  ) {
+    if (committed.replayed) return
+    val prose =
+      when (val mutation = request.mutation) {
+        is AcceptanceCriterionRepairMutation.Discover -> mutation.initialAudit?.prose
+        is AcceptanceCriterionRepairMutation.ProseAudit -> mutation.audit.prose
+        else -> null
+      } ?: return
+    val fallbackRefs =
+      committed.state.criteria.filter { criterion ->
+        criterion.canonicalRef in request.discoveryFallbackCriteria &&
+          criterion.evidenceRef == prose &&
+          criterion.gaps.any { gap ->
+            gap.origin == AcceptanceCriterionGapOrigin.DISCOVERY &&
+              gap.text == AcceptanceCriterionGapReportParser.FALLBACK_GAP_TEXT &&
+              gap.citation == "spec:${criterion.canonicalRef}"
+          }
+      }.map { it.canonicalRef }
+    if (fallbackRefs.isNotEmpty()) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Workflow $workflowId used acceptance gap fallback for ${fallbackRefs.joinToString(", ")}.",
+      )
+    }
+    val stray = request.discoveryStrayCriteria
+    if (stray.isNotEmpty()) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Workflow $workflowId ignored malformed acceptance gap observations for ${stray.joinToString(", ")}.",
+      )
+    }
+  }
+
+  private fun recordPostCommitDiagnostics(
+    workflowId: String,
+    request: AcceptanceCriterionRepairCommit,
+    committed: AcceptanceCriterionRepairWriteResult.Committed,
+  ) {
+    val mutation = request.mutation
+    if (committed.replayed) return
+    if (mutation is AcceptanceCriterionRepairMutation.Outcome && mutation.outcome.kind in
+      setOf(
+        AcceptanceCriterionRepairOutcomeKind.TARGETED_SUCCESS,
+        AcceptanceCriterionRepairOutcomeKind.TARGETED_FAILURE,
+      )
+    ) {
+      val outcome = mutation.outcome
+      val stillOpen =
+        committed.state.criteria.singleOrNull { it.canonicalRef == outcome.criterionRef }
+          ?.gaps?.filter { it.status == AcceptanceCriterionGapStatus.OPEN }?.map { it.id }.orEmpty().toSet()
+      val missing =
+        AcceptanceGapVerificationResolver.missingGapIds(outcome.evidenceRef, request.verificationGapIds)
+          .filter { it in stillOpen }
+      if (missing.isNotEmpty()) {
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "Workflow $workflowId left acceptance gaps open without status reports: ${missing.joinToString(", ")}.",
+        )
+      }
+    }
+    if (committed.droppedLateFindingCount > 0) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Workflow $workflowId dropped ${committed.droppedLateFindingCount} acceptance late findings " +
+          "at the 256-record limit.",
+      )
+    }
+    if (request.repairManifestUnavailable && mutation is AcceptanceCriterionRepairMutation.RepairCompleted) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Workflow $workflowId completed repair admission without a retained repair manifest; " +
+          "no changed-file evidence was available.",
+      )
+    }
   }
 
   internal fun prepareBoundInteractionTrace(
@@ -425,7 +516,7 @@ public class AcceptanceCriterionRepairPersistence(
       previous != null && AcceptanceCriterionRepairStartLedger.supersededStart(record.artifacts, request) ->
         refuse(worker, previous, AcceptanceCriterionRepairRefusal.EXPECTED_STATE_CHANGED)
       else -> {
-        val digest = request.evidence?.let { sha256Hex(JsonCodec.valueToJsonString(it.payload)) }
+        val digest = auditEvidenceDigest(request)
         val raw = transition(previous, request.mutation, digest, binding)
         val update = AcceptanceCriterionInteractionTraceRound.recheckUpdate(previous, raw, request.repairChangedPaths)
         val next = AcceptanceCriterionInteractionTraceRound.scheduleRechecks(raw, update, binding)
@@ -436,23 +527,23 @@ public class AcceptanceCriterionRepairPersistence(
         if (refusal != null) {
           refuse(worker, previous, refusal)
         } else {
+          val droppedLateFindingCount = droppedLateFindings(previous, request.mutation)
           val committed = commitCandidate(work, worker, record, requireNotNull(next), request)
+          val flagged = AcceptanceCriterionInteractionTargets.flagSkipped(committed, previous, request.mutation)
+          val committedWithDropCount =
+            if (flagged is AcceptanceCriterionRepairWriteResult.Committed) {
+              flagged.copy(droppedLateFindingCount = droppedLateFindingCount)
+            } else {
+              flagged
+            }
           AcceptanceCriterionInteractionTraceRound.annotateRechecks(
-            AcceptanceCriterionInteractionTargets.flagSkipped(committed, previous, request.mutation),
+            committedWithDropCount,
             update,
           )
         }
       }
     }
   }
-
-  private fun phaseIdentityMatches(
-    worker: AcquiredFeatureTaskRuntimeWorker,
-    binding: AcceptanceCriterionRepairBinding,
-    phase: FeatureTaskRuntimePhaseStateRequest,
-  ): Boolean =
-    phase.workflowId == worker.workflowId && binding.executionId == worker.workflowId &&
-      worker.ownsAuditStep(phase.phaseId)
 
   private fun mayAdopt(
     record: WorkflowStateSnapshot,
@@ -551,8 +642,12 @@ public class AcceptanceCriterionRepairPersistence(
         next,
         patch,
         WorkflowRowAdvance(
-          if (request.phase.finished) request.nextSteps[next.stage] ?: request.phase.phaseId else request.phase.phaseId,
-          if (next.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
+          if (request.phase.finished) {
+            request.stepRoles?.let { AcceptanceRepairDecision.next(next).stepId(it) } ?: request.phase.phaseId
+          } else {
+            request.phase.phaseId
+          },
+          if (AcceptanceRepairDecision.next(next) is AcceptanceRepairStep.Blocked) {
             WorkflowStatus.BLOCKED.wireValue
           } else {
             workflowStatusFor(request.phase)
@@ -756,11 +851,7 @@ public class AcceptanceCriterionRepairPersistence(
     binding: AcceptanceCriterionRepairBinding,
   ): AcceptanceCriterionRepairState? =
     when (mutation) {
-      is AcceptanceCriterionRepairMutation.Discover -> {
-        val admitted = AcceptanceCriterionRepairState.admit(mutation.admission)
-        val replayed = admitted?.let { AcceptanceCriterionInteractionTargets.prepare(it, binding) }
-        if (state == null || state == admitted || state == replayed) admitted else null
-      }
+      is AcceptanceCriterionRepairMutation.Discover -> discoveryTransition(state, mutation, binding)
       is AcceptanceCriterionRepairMutation.Reserve -> {
         if (state?.reservation?.reservationId == mutation.reservationId) {
           state
@@ -779,6 +870,7 @@ public class AcceptanceCriterionRepairPersistence(
             mutation.evidenceRef,
             mutation.treeDigest,
             mutation.checkpointId,
+            mutation.fileManifestIntroduced,
           )?.clearPendingClarification()
         }
       }
@@ -796,17 +888,6 @@ public class AcceptanceCriterionRepairPersistence(
       AcceptanceCriterionRepairMutation.PrepareInteractionTrace,
       -> null
     }
-
-  private fun repairCompletedReplays(
-    state: AcceptanceCriterionRepairState?,
-    mutation: AcceptanceCriterionRepairMutation.RepairCompleted,
-  ): Boolean {
-    val identity =
-      state?.reservation?.reservationId == mutation.reservationId &&
-        state.completedRepairEvidenceRef == mutation.evidenceRef
-    return identity && state.admittedTreeDigest == mutation.treeDigest &&
-      state.admittedCheckpointId == mutation.checkpointId
-  }
 
   private fun replayExpected(
     state: AcceptanceCriterionRepairState?,
@@ -832,9 +913,16 @@ public class AcceptanceCriterionRepairPersistence(
     when (mutation) {
       is AcceptanceCriterionRepairMutation.ProseAudit ->
         expected.revision == mutation.audit.revision - 1 &&
-          expected.currentCriterionRef == mutation.audit.criterionRef &&
-          expected.reservationId == state?.reservation?.reservationId &&
-          state?.proseAudits?.any { it == mutation.audit } == true
+          expected.currentCriterionRef?.let { ref -> state?.criteria?.any { it.canonicalRef == ref } } == true &&
+          state?.proseAudits?.any { mutation.audit.sameProducerAs(it) } == true &&
+          (
+            if (mutation.audit.criterionRef == null) {
+              expected.reservationId == null
+            } else {
+              expected.currentCriterionRef == mutation.audit.criterionRef &&
+                expected.reservationId == state.reservation?.reservationId
+            }
+          )
       AcceptanceCriterionRepairMutation.KeepProgress,
       is AcceptanceCriterionRepairMutation.Clarification,
       AcceptanceCriterionRepairMutation.PrepareInteractionTrace,
@@ -947,3 +1035,80 @@ public class AcceptanceCriterionRepairPersistence(
     const val MAX_CRITERION_ID = 32
   }
 }
+
+private fun repairCompletedReplays(
+  state: AcceptanceCriterionRepairState?,
+  mutation: AcceptanceCriterionRepairMutation.RepairCompleted,
+): Boolean {
+  val identity =
+    state?.reservation?.reservationId == mutation.reservationId &&
+      state.completedRepairEvidenceRef == mutation.evidenceRef
+  return identity && state.admittedTreeDigest == mutation.treeDigest &&
+    state.admittedCheckpointId == mutation.checkpointId &&
+    state.repairChangedPaths ==
+    mutation.fileManifestIntroduced.distinct().sorted().take(
+      AcceptanceCriterionGapLimits.MAX_CHANGED_PATHS,
+    )
+}
+
+private fun discoveryTransition(
+  state: AcceptanceCriterionRepairState?,
+  mutation: AcceptanceCriterionRepairMutation.Discover,
+  binding: AcceptanceCriterionRepairBinding,
+): AcceptanceCriterionRepairState? {
+  val admitted = AcceptanceCriterionRepairState.admit(mutation.admission)
+  val replayed = admitted?.let { AcceptanceCriterionInteractionTargets.prepare(it, binding) }
+  val seeded =
+    admitted?.let { current ->
+      val audited = mutation.initialAudit?.let(current::recordProseAudit) ?: current
+      val clarified = mutation.initialClarification?.let(audited::retainClarification) ?: audited
+      AcceptanceCriterionInteractionTargets.prepare(clarified, binding)
+    }
+  val seededReplay =
+    replayed?.let { current ->
+      val audited = mutation.initialAudit?.let(current::recordProseAudit) ?: current
+      val clarified = mutation.initialClarification?.let(audited::retainClarification) ?: audited
+      AcceptanceCriterionInteractionTargets.prepare(clarified, binding)
+    }
+  return if (state == null) {
+    seeded
+  } else if (
+    state in listOf(admitted, replayed, seeded, seededReplay)
+  ) {
+    seededReplay
+  } else {
+    null
+  }
+}
+
+private fun droppedLateFindings(
+  state: AcceptanceCriterionRepairState?,
+  mutation: AcceptanceCriterionRepairMutation,
+): Int {
+  val outcome = (mutation as? AcceptanceCriterionRepairMutation.Outcome)?.outcome ?: return 0
+  val criterion = state?.criteria?.singleOrNull { it.canonicalRef == outcome.criterionRef } ?: return 0
+  return when (outcome.kind) {
+    AcceptanceCriterionRepairOutcomeKind.TARGETED_SUCCESS,
+    AcceptanceCriterionRepairOutcomeKind.TARGETED_FAILURE,
+    ->
+      AcceptanceGapVerificationResolver.resolve(
+        state,
+        criterion,
+        outcome.evidenceRef,
+        state.admittedTreeDigest == outcome.treeDigest,
+        legacySatisfied = outcome.successful,
+      ).droppedLateFindingCount
+    else -> 0
+  }
+}
+
+private fun phaseIdentityMatches(
+  worker: AcquiredFeatureTaskRuntimeWorker,
+  binding: AcceptanceCriterionRepairBinding,
+  phase: FeatureTaskRuntimePhaseStateRequest,
+): Boolean =
+  phase.workflowId == worker.workflowId && binding.executionId == worker.workflowId &&
+    worker.ownsAuditStep(phase.phaseId)
+
+private fun auditEvidenceDigest(request: AcceptanceCriterionRepairCommit): String? =
+  request.evidence?.let { sha256Hex(JsonCodec.valueToJsonString(it.payload)) }

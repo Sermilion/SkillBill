@@ -6,8 +6,10 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGap
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapOrigin
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapStatus
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionLateFinding
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProseAudit
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdmission
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -23,6 +25,45 @@ import kotlin.test.assertNotNull
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 class AcceptanceCriterionRepairAccountingDecodeTest {
+  @Test
+  fun `accepted records predating discovery snapshots retain their source closure on decode`() {
+    val initial = admittedState()
+    val audit =
+      AcceptanceCriterionProseAudit(
+        "legacy:accepted",
+        1,
+        null,
+        true,
+        "b".repeat(64),
+        "Every production criterion is met.",
+        "c".repeat(64),
+        "checkpoint:legacy",
+      )
+    val legacy =
+      initial.copy(
+        criteria =
+          initial.criteria.map {
+            it.copy(
+              sourceDisposition = AcceptanceCriterionSourceDisposition.SOURCE_CLOSED,
+              closureEvidenceRef = audit.prose,
+              closureTreeDigest = audit.treeDigest,
+              closureCheckpointId = audit.checkpointId,
+            )
+          },
+        unresolvedQueue = emptyList(),
+        currentCriterionRef = null,
+        revision = 1,
+        mode = AcceptanceCriterionRepairMode.ACCEPTED,
+        stage = AcceptanceCriterionRepairStage.ACCEPTED,
+        proseAudits = listOf(audit),
+      )
+    val wire = legacy.asRepairWireMap()
+    val storedAudit = assertIs<Map<*, *>>(assertIs<List<*>>(wire[Keys.PROSE_AUDITS]).single())
+    assertEquals(false, storedAudit.containsKey(Keys.DISCOVERY_SNAPSHOT))
+
+    assertEquals(legacy, wire.toAcceptanceCriterionRepairState("legacy-accepted"))
+  }
+
   @Test
   fun `wire round trip keeps gaps findings changed paths and charged outcomes`() {
     val awaiting = awaitingSecondCriterion()

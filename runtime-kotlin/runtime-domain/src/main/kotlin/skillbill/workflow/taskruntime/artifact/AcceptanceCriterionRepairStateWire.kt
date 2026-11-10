@@ -3,6 +3,7 @@ package skillbill.workflow.taskruntime.artifact
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
 import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairStateSchema
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionDiscoverySnapshot
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGap
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapOrigin
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapStatus
@@ -313,7 +314,16 @@ private fun proseAuditWire(value: AcceptanceCriterionProseAudit): Map<String, An
     Keys.PROSE to value.prose,
     Keys.TREE_DIGEST to value.treeDigest,
     Keys.CHECKPOINT_ID to value.checkpointId,
-  )
+  ) +
+    value.discoverySnapshot?.let { snapshot ->
+      mapOf(
+        Keys.DISCOVERY_SNAPSHOT to
+          mapOf(
+            Keys.DISCOVERY_LISTED_CRITERION_REFS to snapshot.listedCriterionRefs,
+            Keys.DISCOVERY_UNRESOLVED_CRITERION_REFS to snapshot.unresolvedCriterionRefs,
+          ),
+      )
+    }.orEmpty()
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.repairCriteria(): List<AcceptanceCriterionRepairCriterion> =
   objectList(Keys.CRITERIA).map { criterion ->
@@ -456,8 +466,18 @@ private fun FeatureTaskRuntimeWorkflowArtifactMap.repairProseAudits(): List<Acce
       prose = audit.requiredString(Keys.PROSE),
       treeDigest = audit.requiredString(Keys.TREE_DIGEST),
       checkpointId = audit.requiredString(Keys.CHECKPOINT_ID),
+      discoverySnapshot = audit.discoverySnapshot(),
     )
   } ?: emptyList()
+
+private fun Map<String, Any?>.discoverySnapshot(): AcceptanceCriterionDiscoverySnapshot? {
+  if (!containsKey(Keys.DISCOVERY_SNAPSHOT)) return null
+  val snapshot = repairObject(this[Keys.DISCOVERY_SNAPSHOT])
+  return AcceptanceCriterionDiscoverySnapshot(
+    listedCriterionRefs = snapshot.stringList(Keys.DISCOVERY_LISTED_CRITERION_REFS),
+    unresolvedCriterionRefs = snapshot.stringList(Keys.DISCOVERY_UNRESOLVED_CRITERION_REFS),
+  )
+}
 
 private fun interactionTraceWire(value: AcceptanceCriterionInteractionTrace): Map<String, Any?> =
   mapOf(

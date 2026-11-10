@@ -290,7 +290,23 @@ enum class AuditOutcome { Passed, Failed, Running, Unknown }
 
 data class AuditCriterion(val ref: String, val text: String, val met: Boolean, val fixedInAttempt: Int?)
 
-data class AuditAttempt(val number: Int, val passed: Boolean, val uncoveredCount: Int, val nextPhaseId: String?)
+data class AuditAttempt(
+  val number: Int,
+  val passed: Boolean?,
+  val uncoveredCount: Int?,
+  val nextPhaseId: String?,
+  val unavailableReason: String? = null,
+) {
+  init {
+    require(
+      if (unavailableReason == null) {
+        passed != null && uncoveredCount != null && uncoveredCount >= 0 && passed == (uncoveredCount == 0)
+      } else {
+        unavailableReason.isNotBlank() && passed == null && uncoveredCount == null && nextPhaseId == null
+      },
+    )
+  }
+}
 
 data class RunningReviewPass(val passNumber: Int, val lanes: List<RunningReviewLane>)
 

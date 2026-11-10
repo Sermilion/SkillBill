@@ -375,7 +375,9 @@ internal fun GoalRunnerSubtaskPhaseResults.toDomain(): SubtaskPhaseResults = Sub
       metCount = audit.metCount,
       totalCount = audit.totalCount,
       criteria = audit.criteria.map { AuditCriterion(it.ref, it.text, it.met, it.fixedInAttempt) },
-      attempts = audit.attempts.map { AuditAttempt(it.number, it.passed, it.uncoveredCount, it.nextPhaseId) },
+      attempts = audit.attempts.map {
+        AuditAttempt(it.number, it.passed, it.uncoveredCount, it.nextPhaseId, it.unavailableReason)
+      },
       attemptTotal = audit.attemptTotal,
     )
   },

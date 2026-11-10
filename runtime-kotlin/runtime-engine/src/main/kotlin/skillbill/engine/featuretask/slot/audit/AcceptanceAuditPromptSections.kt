@@ -98,12 +98,16 @@ internal object AcceptanceAuditPromptSections {
     }
 
   const val DIRECTIVE: String =
-    "On the initial full audit, verify the production behavior required by every acceptance criterion " +
-      "against the current implementation, and end your prose with exactly one line " +
+    "On a discovery audit, verify the production behavior required by every criterion in the runtime-supplied " +
+      "discovery scope; on a fresh full audit that scope contains every acceptance criterion. " +
+      "Check the current implementation. In discovery, include exactly one line " +
       "`Open criteria: AC-002, AC-005` that names every criterion with a production source gap, or " +
       "`Open criteria: none`. The runtime accepts every criterion that line does not name and repairs the " +
-      "named ones one at a time; a test-only criterion is never open. On a focused audit, inspect only the " +
-      "authored criterion selected by the runtime. " +
+      "named ones one at a time; a test-only criterion is never open. On a read-only focused audit, inspect only " +
+      "the authored criterion selected by the runtime. " +
+      "For every criterion named open, write one gap line per missing production behavior using " +
+      "`AC-002.G1: <missing production behavior> @ path:line` or a line range. Number gaps from G1 without holes " +
+      "in order of appearance. " +
       "Exclude all test requirements from audit, even when the plan or a criterion " +
       "explicitly requires tests. Missing tests, coverage, assertions, test quality, fixtures, and test results " +
       "never keep an acceptance criterion open. For a mixed criterion, evaluate only its production behavior. " +
@@ -121,7 +125,8 @@ internal object AcceptanceAuditPromptSections {
       "production gaps and let the runtime apply its durable repair policy. " +
       "A completed inspection with open criteria routes to audit_plan_fix. Downstream review requires " +
       "a report that no production criteria remain. " +
-      "When the runtime supplies a current criterion, inspect that authored criterion and report its source gaps " +
+      "When the runtime supplies a current criterion for a focused audit, inspect that authored criterion and report " +
+      "its source gaps " +
       "in prose. A focused audit checks every independent production requirement in that criterion; treat earlier " +
       "audit findings as context, not as a complete list of its gaps. $DEFECT_CLASS_FANOUT_SENTENCE " +
       "If the source conclusion is ambiguous, keep " +
@@ -143,7 +148,7 @@ internal object AcceptanceAuditPromptSections {
         when {
           trace != null -> traceDirective(trace) + traceScope(trace)
           inputs.noChangeClaim == null -> DIRECTIVE + auditScope(inputs)
-          else -> DIRECTIVE + noChangeScope(inputs)
+          else -> DIRECTIVE + auditScope(inputs) + noChangeScope(inputs)
         },
       ceremonyLine =
         "Apply ${ceremonyScalingOf(inputs.briefing).auditCeremony.promptLabel}. " +
@@ -159,7 +164,7 @@ internal object AcceptanceAuditPromptSections {
     "Report source gaps and conclusions in ordinary prose. Say when the current source meets the " +
       "production requirements. Exclude test-only criteria and test-related parts of mixed criteria, and " +
       "state those later test or build obligations separately when relevant. Refer to criteria using their " +
-      "briefing labels when useful; apart from the initial full audit's Open criteria line there is no " +
+      "briefing labels when useful; apart from a discovery audit's Open criteria line there is no " +
       "fixed format. " +
       "Source gaps route to audit_plan_fix. Do not repair gaps in audit. Every criterion must be accepted " +
       "before downstream review. Focused audits inspect the runtime-selected criterion. " +
@@ -212,16 +217,47 @@ internal object AcceptanceAuditPromptSections {
 
   private fun noChangeScope(inputs: FeatureTaskRuntimePhasePromptComposeInputs): String {
     val claim = inputs.noChangeClaim ?: return ""
-    return " The implementation step claims that no change is needed (produced_outputs.no_change). Judge every " +
-      "criterion in the claim against the current tree. Read each cited path:line and the boundary trace without " +
+    val discovery = inputs.acceptanceDiscoveryAudit && inputs.acceptanceDiscoveryCriteria.isNotEmpty()
+    val claimScope =
+      if (discovery) {
+        "Judge only claimed criteria in the runtime-supplied discovery scope. "
+      } else {
+        "Judge every criterion in the claim against the current tree. "
+      }
+    val coverage =
+      if (discovery) {
+        "Include the discovery audit's Open criteria line, naming only criteria listed in its runtime scope. "
+      } else {
+        "Include the initial audit's Open criteria line required above, including every criterion with " +
+          "a production source gap. "
+      }
+    return " The implementation step claims that no change is needed (produced_outputs.no_change). " + claimScope +
+      "Read each cited path:line and the boundary trace without " +
       "editing anything. Set verdict to no_change_confirmed when the evidence supports every criterion's verdict. " +
       "Otherwise set verdict to no_change_rejected and give the specific per-criterion reasons in the value. " +
-      "End the initial full audit with the Open criteria line required above, including every criterion with " +
-      "a production source gap. Later focused audits assess only the runtime-selected criterion, even when " +
+      coverage + "Later focused audits assess only the runtime-selected criterion, even when " +
       "this claim covers other criteria. Claim:\n" + claim
   }
 
   private fun auditScope(inputs: FeatureTaskRuntimePhasePromptComposeInputs): String {
+    if (inputs.acceptanceVerifyAudit && inputs.acceptanceOpenGaps.isNotEmpty()) {
+      val gaps = inputs.acceptanceOpenGaps.joinToString("\n") { "- ${it.id}: ${it.text} @ ${it.citation}" }
+      return " Runtime-selected verify scope: ${inputs.currentAcceptanceCriterion ?: "current criterion"}. " +
+        "This verify is read-only. Report exactly one status line for each listed open gap, using " +
+        "`AC-002.G1: closed @ path:line` or `AC-002.G1: open @ path:line` (a line range is allowed). " +
+        "Closed gaps are settled. You may report `New gap: <missing production behavior> @ path:line` " +
+        "for a gap in a changed file, or `Late finding: <text>` for any other observation. Changed files: " +
+        inputs.acceptanceRepairChangedPaths.joinToString(", ").ifEmpty { "none" } +
+        "\nOpen gaps:\n$gaps"
+    }
+    if (inputs.acceptanceDiscoveryAudit && inputs.acceptanceDiscoveryCriteria.isNotEmpty()) {
+      return " Runtime-selected discovery scope. Inspect exactly these unresolved criteria and no others:\n" +
+        inputs.acceptanceDiscoveryCriteria.joinToString("\n") { "- $it" } +
+        "\nAll other criteria are settled and must not be re-audited. The `Open criteria:` line may name only " +
+        "criteria listed above. For every named open criterion, write one gap line per missing production behavior " +
+        "in the form `AC-002.G1: <missing production behavior> @ path:line` (a line range is allowed). Number " +
+        "gaps from G1 without holes, in order of appearance."
+    }
     val current = inputs.currentAcceptanceCriterion ?: return ""
     return " Runtime-selected audit context: $current. Use this context for a focused audit."
   }

@@ -24,12 +24,19 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.artifact.asQaRepairStateWireMap
+import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromArtifact
+import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGap
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapOrigin
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapStatus
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
 import skillbill.workflow.taskruntime.model.audit.interaction.unknownScenarios
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
 import skillbill.workflow.taskruntime.model.qa.QaOpenFinding
@@ -41,6 +48,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 class AcceptanceCriterionRepairPhaseRecorderScenarios(
   private val verifyUnknownScenarios: (DatabaseSessionFactory, String) -> Unit,
@@ -190,6 +198,19 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
         assertEquals(AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED, reopened.mode)
         assertEquals("AC-002", reopened.currentCriterionRef)
         assertEquals(listOf("IS-001"), reopened.interactionTrace.brokenScenarioRefs)
+        assertEquals("audit", f.snapshot().currentStepId)
+        val discovery = phase(f, "audit", 4)
+        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(discovery))
+        assertEquals(
+          RequiredPhaseWrite.Acknowledged,
+          recorder.complete(
+            output(
+              discovery,
+              "advance",
+              "Open criteria: AC-002\nAC-002.G1: Restore the interaction caller @ src/Flow.kt:10",
+            ),
+          ),
+        )
         assertEquals("audit_plan_fix", f.snapshot().currentStepId)
       }
     }
@@ -231,7 +252,7 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
         val repair = phase(f, "audit_implement_fix", 2)
         assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(repair))
         val progress =
-          output(repair, "progress", "Only part of AC-002 is connected.")
+          output(repair, "satisfied", "The production caller for AC-002 is connected.")
             .copy(fileManifestIntroduced = listOf("src/Flow.kt"))
         assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(progress))
         val scheduled = assertNotNull(scope.snapshot)
@@ -292,8 +313,21 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
             assertEquals("src/Flow.kt:11", state.criteria.single { it.canonicalRef == "AC-001" }.closureEvidenceRef)
           } else {
             assertEquals("AC-001", state.currentCriterionRef)
-            assertEquals("audit_plan_fix", f.snapshot().currentStepId)
+            assertEquals("audit", f.snapshot().currentStepId)
             assertTrue(state.chargedAttempts.isEmpty())
+            val discovery = phase(f, "audit", 5)
+            assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(discovery))
+            assertEquals(
+              RequiredPhaseWrite.Acknowledged,
+              recorder.complete(
+                output(
+                  discovery,
+                  "advance",
+                  "Open criteria: AC-001\nAC-001.G1: Restore the caller @ src/Flow.kt:11",
+                ),
+              ),
+            )
+            assertEquals("audit_plan_fix", f.snapshot().currentStepId)
           }
         }
       }
@@ -375,10 +409,12 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
         AcceptanceCriterionRepairPhaseRecorder(f.persistence, git, f.workflows, f.diagnostics)
           .session(accepting, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
       )
-    audit(f, acceptor, 1, true, "The first requirement is implemented.")
-    val second = phase(f, "audit", 2)
-    assertEquals(RequiredPhaseWrite.Acknowledged, acceptor.start(second))
-    acceptor.complete(output(second, "satisfied", "The second requirement is implemented."))
+    val first = phase(f, "audit", 1)
+    assertEquals(RequiredPhaseWrite.Acknowledged, acceptor.start(first))
+    assertEquals(
+      RequiredPhaseWrite.Acknowledged,
+      acceptor.complete(output(first, "satisfied", "All production requirements are implemented.")),
+    )
     assertEquals(AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED, accepting.snapshot?.stage)
 
     assertIs<AcceptanceCriterionRepairWriteResult.Committed>(
@@ -792,30 +828,68 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
     prose: String,
   ) {
     if (recorder.accounting.snapshot == null) {
-      val discovery = phase(f, "audit", -1)
-      assertTrue(recorder.start(discovery) == RequiredPhaseWrite.Acknowledged)
-      assertTrue(
-        recorder.complete(
-          output(
-            discovery,
-            "advance",
-            "The full source audit found a missing caller.",
+      val criteria =
+        f.admission.criteria.map { criterion ->
+          criterion.copy(
+            sourceDisposition = AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED,
+            gaps =
+              listOf(
+                AcceptanceCriterionGap(
+                  "${criterion.canonicalRef}.G1",
+                  "Missing production caller",
+                  "src/Foo.kt:1",
+                  AcceptanceCriterionGapStatus.OPEN,
+                  AcceptanceCriterionGapOrigin.DISCOVERY,
+                  null,
+                ),
+              ),
+          )
+        }
+      val admitted = assertNotNull(AcceptanceCriterionRepairState.admit(f.admission.copy(criteria = criteria)))
+      val wire =
+        admitted.asRepairWireMap() +
+          mapOf(
+            Keys.MODE to AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED.wireValue,
+            Keys.STAGE to AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED.wireValue,
+            Keys.PENDING_AUDIT_REFS to criteria.map { it.canonicalRef },
+          )
+      val state =
+        FeatureTaskRuntimeWorkflowArtifactMap.from(wire)
+          .toAcceptanceCriterionRepairState("focused audit fixture")
+      val snapshot = f.snapshot()
+      val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
+      f.database.transaction {
+        it.workflowStates.save(
+          WorkflowFamily.TASK_RUNTIME,
+          snapshot.copy(
+            artifacts =
+              DurableWorkflowArtifacts.fromMap(
+                snapshot.artifacts +
+                  family.entry(state.asRepairWireMap()),
+              ),
           ),
-        ) == RequiredPhaseWrite.Acknowledged,
-      )
-      val initialAudit = phase(f, "audit", 0)
-      assertTrue(recorder.start(initialAudit) == RequiredPhaseWrite.Acknowledged)
-      assertTrue(
-        recorder.complete(
-          output(initialAudit, "advance", "The full source audit found a missing caller."),
-        ) == RequiredPhaseWrite.Acknowledged,
-      )
+        )
+      }
+      recorder.accounting.acknowledgeCommitted(state)
     }
+    val before = assertNotNull(recorder.accounting.snapshot)
+    val verifying = before.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION
+    val report =
+      if (verifying) {
+        (
+          listOf(prose) +
+            before.criteria.single { it.canonicalRef == before.currentCriterionRef }.gaps
+              .filter { it.status == AcceptanceCriterionGapStatus.OPEN }
+              .map { "${it.id}: ${if (satisfied) "closed" else "open"} @ src/Foo.kt:1" }
+        ).joinToString("\n")
+      } else {
+        prose
+      }
     val phase = phase(f, "audit", attempt)
-    assertTrue(recorder.start(phase) == RequiredPhaseWrite.Acknowledged)
+    assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(phase))
     assertTrue(
       recorder.complete(
-        output(phase, if (satisfied) "satisfied" else "advance", prose),
+        output(phase, if (satisfied) "satisfied" else "advance", report),
       ) == RequiredPhaseWrite.Acknowledged,
     )
   }
@@ -826,7 +900,7 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
     attempt: Int,
   ) {
     val phase = phase(f, "audit_implement_fix", attempt)
-    assertTrue(recorder.start(phase) == RequiredPhaseWrite.Acknowledged)
+    assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(phase))
     assertTrue(
       recorder.complete(
         output(phase, "satisfied", "Connected the missing production caller."),

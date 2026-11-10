@@ -41,6 +41,7 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapStatus
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -211,7 +212,10 @@ class FeatureTaskRuntimeSerialRepairTest {
               if (accounting.get()?.snapshot == null) {
                 serialDiscoveryOutput()
               } else {
-                "Every criterion is met. The settlement tools are unavailable, so this prose is the phase value."
+                serialGapDiscoveryProse(
+                  "AC-001",
+                  "The settlement tools are unavailable, so this prose is the phase value.",
+                )
               }
             }
             else -> defaultPhaseOutput(request)
@@ -247,20 +251,18 @@ class FeatureTaskRuntimeSerialRepairTest {
           when (phase) {
             "audit" ->
               when {
-                state == null -> serialDiscoveryOutput().replace("advance", "no_change_rejected")
-                state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY ->
-                  auditRemainingAcOutput("AC-002 has no production caller. AC-001 is satisfied.")
-                    .replace(
-                      "\"status\": \"completed\",",
-                      "\"status\": \"completed\", \"verdict\": \"no_change_rejected\",",
-                    )
+                state == null -> serialDiscoveryOutput("AC-002").replace("advance", "no_change_rejected")
+                state.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED ->
+                  serialInteractionOutput(
+                    state,
+                  )
                 else -> {
                   val criterion = assertNotNull(state.currentCriterionRef)
                   focused += criterion
                   assertFalse(prompt.contains("Judge every criterion in the claim"))
                   assertContains(prompt, "($criterion)")
                   if (criterion == "AC-001" || repaired) {
-                    settledAuditSatisfiedRecord()
+                    serialStructuredAuditOutput(focused.size, state, "The production caller is implemented.")
                   } else {
                     auditRemainingAcOutput("AC-002 has no production caller.")
                       .replace("\"status\": \"completed\",", "\"status\": \"completed\", \"verdict\": \"advance\",")
@@ -296,7 +298,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         )
 
       assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
-      assertEquals(listOf("AC-001", "AC-002", "AC-002"), focused)
+      assertEquals(listOf("AC-002"), focused)
       assertTrue(assertNotNull(scope.snapshot).chargedAttempts.isEmpty())
       assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
     }
@@ -454,7 +456,7 @@ class FeatureTaskRuntimeSerialRepairTest {
 
       assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
       assertEquals(listOf("audit_plan_fix", "audit_implement_fix"), repairPrompts)
-      assertEquals(4, repairs)
+      assertEquals(3, repairs)
       assertEquals(2, assertNotNull(scope.snapshot).chargedAttempts["AC-001"])
       assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
     }
@@ -468,6 +470,7 @@ class FeatureTaskRuntimeSerialRepairTest {
   ): String =
     when {
       state == null -> serialDiscoveryOutput()
+      state.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED -> serialInteractionOutput(state)
       state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION && repairs >= 3 ->
         serialStructuredAuditOutput(audits, state, "The production paths preserve the accepted identity.")
       else -> {
@@ -475,7 +478,7 @@ class FeatureTaskRuntimeSerialRepairTest {
           rejections.getOrNull(
             repairs - 1,
           ) ?: "The selected criterion still has incomplete production paths."
-        auditRemainingAcOutput("$finding Open criteria: ${state.currentCriterionRef}").replace(
+        auditRemainingAcOutput(serialGapDiscoveryProse(assertNotNull(state.currentCriterionRef), finding)).replace(
           "\"status\": \"completed\",",
           "\"status\": \"completed\", \"verdict\": \"advance\",",
         )
@@ -485,8 +488,8 @@ class FeatureTaskRuntimeSerialRepairTest {
   @Test
   fun `a failed repair returns to focused planning once and an accepted queue moves to review without another audit`() {
     val repairs = AtomicInteger()
-    val currentState = AtomicReference<AcceptanceCriterionRepairState?>()
-    val launcher = serialLauncher(repairs) { currentState.get() }
+    val currentState = AtomicReference<AcceptanceCriterionRepairRunState?>()
+    val launcher = serialLauncher(repairs) { currentState.get()?.snapshot }
     val harness =
       runnerHarness(
         RuntimeHarnessConfig(
@@ -496,7 +499,7 @@ class FeatureTaskRuntimeSerialRepairTest {
       )
     harness.gitOperations.repositoryFingerprintValue = "unchanged-source"
     runOwnedSerial(harness) { admitted, worker, scope ->
-      currentState.set(scope.snapshot)
+      currentState.set(scope)
       val report =
         harness.runner.run(
           harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope),
@@ -508,8 +511,6 @@ class FeatureTaskRuntimeSerialRepairTest {
       assertEquals(2, repairs.get())
       assertEquals(
         listOf(
-          "audit",
-          "audit",
           "audit",
           "audit_plan_fix",
           "audit_implement_fix",
@@ -529,19 +530,19 @@ class FeatureTaskRuntimeSerialRepairTest {
   @Test
   fun `audit slot steps run under a worker lease bound to their own phase`() {
     val repairs = AtomicInteger()
-    val currentState = AtomicReference<AcceptanceCriterionRepairState?>()
+    val currentState = AtomicReference<AcceptanceCriterionRepairRunState?>()
     val launchedPhaseAndLeasePhase = mutableListOf<Pair<String, String?>>()
     lateinit var harness: RunnerHarness
     val launcher =
       serialLauncher(repairs, onPhase = { phase ->
         val lease = harness.io.database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID) }
         launchedPhaseAndLeasePhase += phase to lease?.phaseId
-      }) { currentState.get() }
+      }) { currentState.get()?.snapshot }
     harness =
       runnerHarness(RuntimeHarnessConfig(launcher = launcher, codeReviewMode = CodeReviewExecutionMode.INLINE))
     harness.gitOperations.repositoryFingerprintValue = "unchanged-source"
     runOwnedSerial(harness) { admitted, worker, scope ->
-      currentState.set(scope.snapshot)
+      currentState.set(scope)
       val report =
         harness.runner.run(
           harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope),
@@ -606,7 +607,7 @@ class FeatureTaskRuntimeSerialRepairTest {
   @Test
   fun `later phase edits leave accepted phases complete on execution and resume`() {
     val git = RecordingWorkflowGitOperations().apply { repositoryFingerprintValue = "unchanged-source" }
-    val currentState = AtomicReference<AcceptanceCriterionRepairState?>()
+    val currentState = AtomicReference<AcceptanceCriterionRepairRunState?>()
     val changedPhases = mutableListOf<String>()
     val launcher =
       serialLauncher(AtomicInteger(), validationFailures = MAX_VALIDATE_ATTEMPTS, onPhase = { phase ->
@@ -614,7 +615,7 @@ class FeatureTaskRuntimeSerialRepairTest {
           changedPhases += phase
           git.repositoryFingerprintValue = "changed-by-$phase"
         }
-      }) { currentState.get() }
+      }) { currentState.get()?.snapshot }
     val harness =
       runnerHarness(
         RuntimeHarnessConfig(
@@ -624,7 +625,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         ),
       )
     runOwnedSerial(harness) { admitted, worker, scope ->
-      currentState.set(scope.snapshot)
+      currentState.set(scope)
       val request = harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope)
       val report = harness.runner.run(request, worker)
       assertEquals("validate", assertIs<FeatureTaskRuntimeRunReport.Blocked>(report, "$report").lastIncompletePhase)
@@ -812,19 +813,15 @@ class FeatureTaskRuntimeSerialRepairTest {
           audit++
           facts(
             when {
-              state == null -> serialDiscoveryOutput()
+              state == null -> serialDiscoveryOutput(initialOpenCriteria ?: "AC-001, AC-002")
+              state.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED -> serialInteractionOutput(state)
               prompt.contains("Read-only repair-report admission") ->
                 budgetAdmissionOutput(state.currentCriterionRef, repairsByCriterion, secondCriterionSucceeds)
               state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
                 budgetVerificationOutput(audit, state, repairsByCriterion, secondCriterionSucceeds)
               else -> {
                 val refs = state.pendingAuditRefs.ifEmpty { state.unresolvedQueue }.joinToString()
-                val prose =
-                  if (state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY && initialOpenCriteria != null) {
-                    "Open criteria: $initialOpenCriteria"
-                  } else {
-                    "$refs remain open because their production callers are missing."
-                  }
+                val prose = budgetDiscoveryProse(state, initialOpenCriteria, refs)
                 auditRemainingAcOutput(prose).replace(
                   "\"status\": \"completed\",",
                   "\"status\": \"completed\", \"verdict\": \"advance\",",
@@ -868,6 +865,19 @@ class FeatureTaskRuntimeSerialRepairTest {
       }
     }
   }
+
+  private fun budgetDiscoveryProse(
+    state: AcceptanceCriterionRepairState,
+    initialOpenCriteria: String?,
+    refs: String,
+  ): String =
+    serialGapDiscoveryProse(
+      if (state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY && initialOpenCriteria != null) {
+        initialOpenCriteria
+      } else {
+        refs
+      },
+    )
 
   private fun budgetVerificationOutput(
     audit: Int,
@@ -924,16 +934,20 @@ class FeatureTaskRuntimeSerialRepairTest {
         "audit" -> {
           audit++
           if (audit <= 4) assertContains(prompt, "AC-1")
-          if (audit == 6) assertContains(prompt, "AC-2")
+
           val state = currentState()
           if (audit == 1) {
             facts(serialDiscoveryOutput())
+          } else if (state?.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED) {
+            facts(serialInteractionOutput(state))
           } else if (state?.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION) {
             facts(serialStructuredAuditOutput(audit, state, "Current production behavior meets this requirement."))
           } else {
             facts(
               if (audit <= 4) {
-                auditRemainingAcOutput("There is no caller for the first requirement.").replace(
+                auditRemainingAcOutput(
+                  serialGapDiscoveryProse("AC-001, AC-002", "There is no caller for the first requirement."),
+                ).replace(
                   "\"status\": \"completed\",",
                   "\"status\": \"completed\", \"verdict\": \"advance\",",
                 )
@@ -1048,18 +1062,15 @@ internal fun continuingAuditOutput(
     state == null -> serialDiscoveryOutput()
     state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
       serialStructuredAuditOutput(audits, state, "The complete production repair is present.")
-    state.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED ->
-      auditRemainingAcOutput(
-        state.interactionTrace.pendingRechecks.joinToString("\n") { "Recheck $it: holds evidence src/Foo.kt:1" },
-      ).replace("\"status\": \"completed\",", "\"status\": \"completed\", \"verdict\": \"satisfied\",")
+    state.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED -> serialInteractionOutput(state)
     else ->
-      auditRemainingAcOutput("Open criteria: AC-001").replace(
+      auditRemainingAcOutput(serialGapDiscoveryProse("AC-001")).replace(
         "\"status\": \"completed\",",
         "\"status\": \"completed\", \"verdict\": \"advance\",",
       )
   }
 
-internal fun serialDiscoveryOutput(): String {
+internal fun serialDiscoveryOutput(openRefs: String = "AC-001"): String {
   val authored = listOf("AC-1", "AC-2")
   val specDigest = "a".repeat(64)
   val audit =
@@ -1101,7 +1112,7 @@ internal fun serialDiscoveryOutput(): String {
       SharedPayloadKeys.VERDICT to "advance",
       SharedPayloadKeys.PRODUCED_OUTPUTS to
         mapOf(
-          SharedPayloadKeys.VALUE to "Initial structured acceptance audit.",
+          SharedPayloadKeys.VALUE to serialGapDiscoveryProse(openRefs),
           Keys.ACCEPTANCE_CRITERION_AUDIT_RESULT to audit,
         ),
     ),
@@ -1114,10 +1125,17 @@ internal fun serialStructuredAuditOutput(
   prose: String,
 ): String {
   val current = assertNotNull(state)
+  val report =
+    (
+      listOf(prose) +
+        current.criteria.firstOrNull { it.canonicalRef == current.currentCriterionRef }
+          ?.gaps.orEmpty().filter { it.status == AcceptanceCriterionGapStatus.OPEN }
+          .map { "${it.id}: closed @ src/Foo.kt:1" }
+    ).joinToString("\n")
   val tree = current.admittedTreeDigest ?: sha256Hex("unchanged-source")
   val checkpoint = current.admittedCheckpointId ?: "unchanged-source"
   val ref = "$WORKFLOW_ID:audit:$attempt:${current.revision}"
-  val digest = sha256Hex("$WORKFLOW_ID:audit:$attempt:${current.revision}:$prose:$tree")
+  val digest = sha256Hex("$WORKFLOW_ID:audit:$attempt:${current.revision}:$report:$tree")
   val targeted = current.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION
   val selected =
     if (targeted) {
@@ -1145,7 +1163,7 @@ internal fun serialStructuredAuditOutput(
       Keys.EXPECTED_REVISION to current.revision.takeIf { targeted },
       Keys.CURRENT_CRITERION_REF to current.currentCriterionRef.takeIf { targeted },
       Keys.RESERVATION_ID to current.reservation?.reservationId.takeIf { targeted },
-      Keys.CRITERIA to selected.map { criterionFact(it, targeted, prose) },
+      Keys.CRITERIA to selected.map { criterionFact(it, targeted, report) },
       Keys.DEPENDENCIES to current.asRepairWireMap()[Keys.DEPENDENCIES],
       Keys.REGRESSED_REFS to emptyList<String>(),
       Keys.EDGE_CHANGES to emptyList<Any>(),
@@ -1161,7 +1179,7 @@ internal fun serialStructuredAuditOutput(
       SharedPayloadKeys.VERDICT to "satisfied",
       SharedPayloadKeys.PRODUCED_OUTPUTS to
         mapOf(
-          SharedPayloadKeys.VALUE to prose,
+          SharedPayloadKeys.VALUE to report,
           Keys.ACCEPTANCE_CRITERION_AUDIT_RESULT to auditResult,
         ),
     ),
@@ -1228,3 +1246,23 @@ private fun serialPersistence(harness: RunnerHarness): AcceptanceCriterionRepair
     AcceptanceCriterionRepairAuditAdmission(validator),
   )
 }
+
+internal fun serialGapDiscoveryProse(
+  refs: String,
+  text: String = "Production callers are missing.",
+): String =
+  (
+    listOf(text, "Open criteria: $refs") +
+      refs.split(",").map {
+        "${it.trim()}.G1: Missing production caller @ src/Foo.kt:1"
+      }
+  ).joinToString("\n")
+
+internal fun serialInteractionOutput(state: AcceptanceCriterionRepairState): String =
+  auditRemainingAcOutput(
+    (
+      state.interactionTrace.pendingScenarioRefs.map { "Interaction $it: holds evidence src/Foo.kt:1" } +
+        state.interactionTrace.pendingRechecks.map { "Recheck $it: holds evidence src/Foo.kt:1" }
+    ).joinToString("\n"),
+  )
+    .replace("\"status\": \"completed\",", "\"status\": \"completed\", \"verdict\": \"satisfied\",")

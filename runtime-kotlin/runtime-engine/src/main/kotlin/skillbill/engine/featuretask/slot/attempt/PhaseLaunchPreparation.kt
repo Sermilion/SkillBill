@@ -3,6 +3,8 @@ package skillbill.engine.featuretask.slot.attempt
 import skillbill.application.decomposition.baseBranch
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
+import skillbill.engine.featuretask.model.audit.AcceptanceGapAuditScope
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseProjectInstructionsRecord
@@ -57,6 +59,8 @@ import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapStatus
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffAssemblyRequest
@@ -492,8 +496,31 @@ internal object PhaseLaunchPreparation {
       repoRoot = run.request.repoRoot,
       stepProfile = run.launchAssignment?.profile ?: PhaseModelProfile.CANONICAL,
       implementationChecklistAddress = implementationChecklistAddress(run),
-    )
+    ).withAcceptanceGapInputs(acceptanceRepair)
   }
+
+  private fun FeatureTaskRuntimePhasePromptComposeInputs.withAcceptanceGapInputs(
+    acceptanceRepair: AcceptanceCriterionRepairRunState?,
+  ): FeatureTaskRuntimePhasePromptComposeInputs =
+    copy(
+      acceptanceDiscoveryCriteria =
+        acceptanceRepair?.let(AcceptanceGapAuditScope::discoveryCriteria)
+          .orEmpty().map { (ref, text) -> "$ref: $text" },
+      acceptanceDiscoveryAudit = acceptanceRepair?.let(AcceptanceGapAuditScope::discoveryCriteria) != null,
+      acceptanceVerifyAudit =
+        acceptanceRepair?.snapshot?.stage ==
+          AcceptanceCriterionRepairStage
+            .REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION,
+      acceptanceOpenGaps =
+        acceptanceRepair?.snapshot?.let { repair ->
+          repair.criteria.singleOrNull { it.canonicalRef == repair.currentCriterionRef }
+            ?.gaps?.filter {
+              it.status == AcceptanceCriterionGapStatus.OPEN
+            }
+        }.orEmpty(),
+      acceptanceRepairChangedPaths = acceptanceRepair?.snapshot?.repairChangedPaths.orEmpty(),
+      acceptanceLateFindings = acceptanceRepair?.snapshot?.lateFindings.orEmpty(),
+    )
 
   private fun PhaseAttemptLaunchPreparationContext.checkpointResolutionArgs(
     run: PhaseRun,
