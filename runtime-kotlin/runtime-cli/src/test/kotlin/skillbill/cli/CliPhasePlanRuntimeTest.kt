@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import skillbill.cli.core.CliRuntime
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.DECOMPOSITION_MANIFEST_CONTRACT_VERSION
+import skillbill.engine.featuretask.phase.core.scriptedPhaseValueRecord
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.agentRunLaunchFacts
@@ -601,7 +602,7 @@ class CliPhasePlanRuntimeTest {
     }
   }
 
-  private class PhasePlanLauncher(
+  private inner class PhasePlanLauncher(
     private val repoRoot: Path,
     private val dirtyOutsideBundle: Boolean = false,
     private val incompleteFirstBundle: Boolean = false,
@@ -632,7 +633,7 @@ class CliPhasePlanRuntimeTest {
       }
       val stdout =
         if (phaseId == "plan") {
-          authorBundle()
+          scriptedPhaseValueRecord(phaseId, authorBundle())
         } else {
           phasePlanningPayload(
             phaseId,
@@ -642,7 +643,12 @@ class CliPhasePlanRuntimeTest {
       if (dirtyOutsideBundle && phaseIds.count { it == "plan" } == 1 && phaseId == "plan") {
         Files.writeString(repoRoot.resolve("outside-plan.txt"), "Concurrent edit")
       }
-      return agentRunLaunchFacts(agent = SupportedAgent.CODEX, stdout = stdout, stderr = "")
+      return RuntimeWorkflowTestSupport.settlePhase(
+        agentRunLaunchFacts(agent = SupportedAgent.CODEX, stdout = stdout, stderr = ""),
+        request.skillRunRequest.promptOverride,
+        fixture.dbPath,
+        fixture.context(launcher = this),
+      )
     }
 
     fun authorBundle(): String {

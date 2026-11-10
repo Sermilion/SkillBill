@@ -53,8 +53,6 @@ fun unavailableAgentLauncherReason(
   val agent = SupportedAgent.entries.firstOrNull { candidate -> candidate.wireValue == normalized }
   val launcher = agent?.let(AGENT_LAUNCHER_CLIS::get) ?: return null
   return when {
-    agent == SupportedAgent.OPENCODE ->
-      "Agent 'opencode' is selected, but Skill Bill runtime execution support is not available yet."
     launcher.executables.any(onPath) -> null
     else -> agentLauncherUnavailableMessage(agent, launcher.executables.first(), launcher.installHint)
   }
@@ -74,6 +72,7 @@ val MODEL_DIRECTIVE_CAPABLE_AGENTS: Set<SupportedAgent> =
     SupportedAgent.CLAUDE,
     SupportedAgent.CODEX,
     SupportedAgent.CURSOR,
+    SupportedAgent.OPENCODE,
   )
 
 fun supportsModelDirective(agentId: String?): Boolean {

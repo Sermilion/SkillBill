@@ -96,7 +96,7 @@ public class DefaultPhaseRunner(
     }
     val settled =
       state.settlementTarget(attempt)?.let { target -> state.settledEnvelope(step, target) }
-        ?: PhaseSettledEnvelopeRead.None
+        ?: PhaseSettledEnvelopeRead.NotRequired
     val manifest =
       when (val captured = captureAfter(input, before)) {
         is AfterCapture.Ready -> captured.manifest
@@ -121,7 +121,7 @@ public class DefaultPhaseRunner(
     val input = state.prepareLaunch(unprepared) ?: return preparationRejected(unprepared.stepName)
     markLiveChecks(input)
     val outcome = session.execute(launchRequest(input, state, outputSink, captureStreamOutput))
-    return launched(outcome, null, PhaseSettledEnvelopeRead.None, classify(input, outcome))
+    return launched(outcome, null, PhaseSettledEnvelopeRead.NotRequired, classify(input, outcome))
   }
 
   private fun launchRequest(

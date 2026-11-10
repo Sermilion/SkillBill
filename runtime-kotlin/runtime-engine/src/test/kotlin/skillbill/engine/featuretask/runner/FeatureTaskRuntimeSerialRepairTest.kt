@@ -21,6 +21,7 @@ import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepair
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairLegacyAdoption
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPersistence
 import skillbill.engine.featuretask.persist.sha256Hex
+import skillbill.engine.featuretask.phase.core.scriptedPhaseValueRecord
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
 import skillbill.engine.featuretask.runloop.qualitygate.MAX_VALIDATE_ATTEMPTS
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
@@ -211,7 +212,7 @@ class FeatureTaskRuntimeSerialRepairTest {
               if (accounting.get()?.snapshot == null) {
                 serialDiscoveryOutput()
               } else {
-                "Every criterion is met. The settlement tools are unavailable, so this prose is the phase value."
+                scriptedPhaseValueRecord("audit", "Every criterion is met.")
               }
             }
             else -> defaultPhaseOutput(request)

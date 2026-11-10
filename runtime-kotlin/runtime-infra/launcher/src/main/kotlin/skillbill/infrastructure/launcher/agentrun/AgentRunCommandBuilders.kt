@@ -8,6 +8,7 @@ import skillbill.infrastructure.launcher.mcp.claudeRuntimeMcpArguments
 import skillbill.infrastructure.launcher.mcp.claudeRuntimeSettlementToolArguments
 import skillbill.infrastructure.launcher.mcp.codexRuntimeMcpArguments
 import skillbill.infrastructure.launcher.process.codex.CODEX_OUTPUT_EXHAUSTED
+import skillbill.infrastructure.launcher.process.cursor.CursorAcpMcpServer
 import skillbill.infrastructure.launcher.process.launch.AgentRunIdlePolicy
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
@@ -41,6 +42,9 @@ internal data class AgentRunCommand(
   val streamsProviderEvents: Boolean = false,
   val approvalProtocol: AgentRunApprovalProtocol? = null,
   val sessionModel: String? = null,
+  val sessionEffort: String? = null,
+  val preflightFailure: String? = null,
+  val sessionMcpServers: List<CursorAcpMcpServer> = emptyList(),
 )
 
 internal enum class AgentRunApprovalProtocol {
@@ -48,6 +52,7 @@ internal enum class AgentRunApprovalProtocol {
   CODEX_APP_SERVER,
   CURSOR_ACP,
   JUNIE_ACP,
+  OPENCODE_ACP,
 }
 
 internal enum class AgentRunCommandKind {

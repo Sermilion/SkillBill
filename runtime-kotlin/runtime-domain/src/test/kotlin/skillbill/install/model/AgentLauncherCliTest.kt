@@ -51,14 +51,7 @@ class AgentLauncherCliTest {
   @Test
   fun `an installed CLI produces no reason`() {
     SupportedAgent.entries.forEach { agent ->
-      if (agent == SupportedAgent.OPENCODE) {
-        assertContains(
-          assertNotNull(unavailableAgentLauncherReason(agent.id, everythingInstalled)),
-          "execution support is not available",
-        )
-      } else {
-        assertNull(unavailableAgentLauncherReason(agent.id, everythingInstalled))
-      }
+      assertNull(unavailableAgentLauncherReason(agent.id, everythingInstalled))
     }
   }
 }

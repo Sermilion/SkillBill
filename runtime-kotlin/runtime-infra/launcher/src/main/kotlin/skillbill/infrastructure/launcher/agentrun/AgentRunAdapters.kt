@@ -68,6 +68,7 @@ internal sealed interface LauncherResolution {
 }
 
 private const val CURSOR_MCP_DEPENDENCY_ENV = "SKILL_BILL_CURSOR_MCP_DEPENDENCY"
+private const val OPENCODE_CONFIG_DIR_ENV = "OPENCODE_CONFIG_DIR"
 
 private fun resolveCursorMcpDependency(
   request: CursorMcpDependencyRequirement,
@@ -134,7 +135,19 @@ internal class ProcessAgentRunAdapter(
         return UnsupportedAgentRunLaunch(agent, reason)
       }
     }
-    return launchResolved(request, built, cursorDependency)
+    return built.preflightFailure?.let { reason ->
+      diagnostics.warning("seam=agent_run outcome=provider_preflight_refused provider=${agent.id}")
+      AgentRunLaunchFacts(
+        agent = agent,
+        termination = AgentRunTermination.SpawnFailed,
+        stdout = "",
+        stderr = reason,
+        stdoutByteSize = 0,
+        stdoutSha256 = launcherSha256Hex(ByteArray(0)),
+        childSessionPath = built.workingDirectory.toString(),
+        childSessionId = childSessionId(agent, request, built.workingDirectory),
+      )
+    } ?: launchResolved(request, built, cursorDependency)
   }
 
   private fun approvalRefusal(request: SkillRunRequest): UnsupportedAgentRunLaunch? {
@@ -181,16 +194,17 @@ internal class ProcessAgentRunAdapter(
         buildObserver = serializedObserver ?: AgentRunBuildObserver.NONE,
         captureDisplayOutput = false,
       )
-    try {
+    return try {
       val process = processRequest(command, streamRequest)
       when (command.approvalProtocol) {
         AgentRunApprovalProtocol.CURSOR_ACP ->
-          return launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.Cursor)
+          launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.Cursor)
         AgentRunApprovalProtocol.JUNIE_ACP ->
-          return launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.Junie)
-        else -> Unit
+          launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.Junie)
+        AgentRunApprovalProtocol.OPENCODE_ACP ->
+          launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.OpenCode)
+        else -> launchOtherSession(streamRequest, command, process)
       }
-      return launchOtherSession(streamRequest, command, process)
     } finally {
       tap?.finish()
       displaySink?.finish()
@@ -469,6 +483,7 @@ internal class ProcessAgentRunAdapter(
       AgentRunApprovalProtocol.CODEX_APP_SERVER,
       AgentRunApprovalProtocol.CURSOR_ACP,
       AgentRunApprovalProtocol.JUNIE_ACP,
+      AgentRunApprovalProtocol.OPENCODE_ACP,
       -> null
       null -> refusedOpening("agent '${agent.id}' cannot host approval cards for this launch")
     }
@@ -493,6 +508,9 @@ internal class ProcessAgentRunAdapter(
         },
         mcpDependency = dependency,
         provider = provider,
+        effort = command.sessionEffort,
+        mcpServers = command.sessionMcpServers,
+        approval = request.approval,
       )
     val deadline = approvalEnclosingDeadline(clock, request.timeout)
     val result =
@@ -533,6 +551,8 @@ internal class ProcessAgentRunAdapter(
         if (launch.provider == AcpProvider.Cursor) {
           command.environment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR]
             ?: inheritedEnvironment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR]
+        } else if (launch.provider == AcpProvider.OpenCode) {
+          command.environment[OPENCODE_CONFIG_DIR_ENV] ?: inheritedEnvironment[OPENCODE_CONFIG_DIR_ENV]
         } else {
           null
         }
@@ -603,7 +623,8 @@ internal class ProcessAgentRunAdapter(
       }
       is ReportedLaunchIdentity.Reported -> {
         if (command.approvalProtocol != AgentRunApprovalProtocol.CURSOR_ACP &&
-          command.approvalProtocol != AgentRunApprovalProtocol.JUNIE_ACP
+          command.approvalProtocol != AgentRunApprovalProtocol.JUNIE_ACP &&
+          command.approvalProtocol != AgentRunApprovalProtocol.OPENCODE_ACP
         ) {
           reportedIdentity.identities.singleOrNull()?.let { request.modelObserver?.reported(it) }
         }
@@ -822,6 +843,11 @@ internal fun headlessAgentRunAdapters(
     ),
     JunieAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
     CursorAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
+    OpenCodeAgentRunCommandBuilder(
+      databasePath = workerBinding.databasePath,
+      runtimeMcpBin = workerBinding.runtimeMcpBin,
+      bindingEnvironment = workerBinding.providerEnvironment,
+    ),
   ).associate { builder ->
     builder.agent to
       ProcessAgentRunAdapter(

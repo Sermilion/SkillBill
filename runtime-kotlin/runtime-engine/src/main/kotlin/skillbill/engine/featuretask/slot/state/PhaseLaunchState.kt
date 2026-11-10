@@ -56,6 +56,8 @@ public data class PhaseLaunchObservation(
 )
 
 public sealed interface PhaseSettledEnvelopeRead {
+  public data object NotRequired : PhaseSettledEnvelopeRead
+
   public data object None : PhaseSettledEnvelopeRead
 
   public data class Found(val envelope: FeatureTaskRuntimeWorkflowArtifactMap) : PhaseSettledEnvelopeRead

@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.attempt
 
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.launchHookContext
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
@@ -197,6 +198,10 @@ internal object PhaseAttemptOnce {
     var rejected: LaunchResult? = null
     val preparingState =
       object : PhaseLaunchState by call.acceptedExecution.launchState {
+        private var preparedSettlementTarget: FeatureTaskRuntimePhaseSettlementTarget? = null
+
+        override fun settlementTarget(attempt: Int): FeatureTaskRuntimePhaseSettlementTarget? = preparedSettlementTarget
+
         override fun prepareLaunch(input: PhaseStepInput): PhaseStepInput? =
           when (
             val preparation =
@@ -209,6 +214,7 @@ internal object PhaseAttemptOnce {
               )
           ) {
             is PreparedLaunchReady -> {
+              preparedSettlementTarget = preparation.value.settlementTarget
               val launchBlock =
                 call.acceptedExecution.boundHooks.beforeAgentLaunch(
                   run,
@@ -332,7 +338,7 @@ internal object PhaseAttemptOnce {
           outputGateFailuresBefore = args.context.outputGateFailuresBefore,
           progress = context.progress,
           recorder = context.recorder,
-          phaseSettlementService = context.phaseSettlementService,
+          diagnostics = context.diagnostics,
           observability = context.observability,
           coupledRunTransitions = context.coupledRunTransitions,
           settleAcceptedOutput = { normalized, observability ->

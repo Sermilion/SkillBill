@@ -1,0 +1,52 @@
+package skillbill.infrastructure.launcher.agentrun
+
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class OpenCodeAgentRunCommandBuilderTest {
+  @Test
+  fun `OpenCode ACP command carries selected database and validation environment as typed MCP values`() {
+    val builder =
+      OpenCodeAgentRunCommandBuilder(
+        databasePath = Path.of("/tmp/runtime/../runtime/skill-bill.db"),
+        runtimeMcpBin = Path.of("/opt/skill-bill/runtime-mcp"),
+        bindingEnvironment = mapOf("OPENCODE_CONFIG_DIR" to "/operator/opencode"),
+      )
+
+    val command =
+      builder.build(
+        request(model = "anthropic/claude-sonnet-4-5", effort = "high").copy(
+          validationCheckInvocationId = "validation-17",
+        ),
+      )
+
+    assertEquals(listOf("opencode", "acp"), command.command)
+    assertEquals(Path.of("/tmp/skillbill-agent-run"), command.workingDirectory)
+    assertEquals("anthropic/claude-sonnet-4-5", command.sessionModel)
+    assertEquals("high", command.sessionEffort)
+    val server = command.sessionMcpServers.single()
+    assertEquals("skill-bill", server.name)
+    assertEquals("/opt/skill-bill/runtime-mcp", server.command)
+    assertTrue(server.args.isEmpty())
+    assertEquals(
+      mapOf(
+        "SKILL_BILL_REVIEW_DB" to "/tmp/runtime/skill-bill.db",
+        "SKILL_BILL_VALIDATION_INVOCATION_ID" to "validation-17",
+      ),
+      server.environment,
+    )
+    assertEquals("/operator/opencode", command.environment["OPENCODE_CONFIG_DIR"])
+    assertNull(command.preflightFailure)
+  }
+
+  @Test
+  fun `missing runtime MCP executable refuses before OpenCode can start`() {
+    val command = OpenCodeAgentRunCommandBuilder(runtimeMcpBin = null).build(request())
+
+    assertTrue(command.preflightFailure.orEmpty().contains("runtime MCP executable"))
+    assertTrue(command.sessionMcpServers.isEmpty())
+  }
+}

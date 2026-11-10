@@ -8,6 +8,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import skillbill.engine.featuretask.phase.core.scriptedPhaseValueRecord
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
@@ -30,7 +31,7 @@ class FeatureTaskRuntimeRepairReportAdmissionTest {
     val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
     val git = AtomicReference<RecordingWorkflowGitOperations>()
     val reservations = mutableListOf<String>()
-    val partialReport = "AC-001 remains unfinished. I did not submit a durable phase settlement."
+    val partialReport = "AC-001 remains unfinished. This report does not claim a repair verdict."
     var repairs = 0
     var plans = 0
     var admissions = 0
@@ -96,7 +97,7 @@ class FeatureTaskRuntimeRepairReportAdmissionTest {
     value: String,
   ): String =
     if (reportKind == "prose") {
-      value
+      scriptedPhaseValueRecord(phase, value)
     } else {
       JsonCodec.mapToJsonString(
         buildMap {
@@ -143,7 +144,8 @@ class FeatureTaskRuntimeRepairReportAdmissionTest {
         val state = accounting.get()?.snapshot
         facts(
           when {
-            phase == "audit_implement_fix" -> "Every production item in the saved repair plan is implemented."
+            phase == "audit_implement_fix" ->
+              scriptedPhaseValueRecord(phase, "Every production item in the saved repair plan is implemented.")
             phase != "audit" -> defaultPhaseOutput(request)
             else -> {
               audits++

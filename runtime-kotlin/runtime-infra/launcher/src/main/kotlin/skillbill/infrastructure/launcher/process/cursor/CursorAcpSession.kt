@@ -11,6 +11,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 import skillbill.contracts.approval.ApprovalRequestRecord
 import skillbill.error.core.catchingNonCancellation
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.approval.ApprovalOwnerEffects
 import skillbill.ports.approval.model.ApprovalDeliveryState
 import skillbill.ports.approval.model.ApprovalOwnerSession
@@ -28,6 +29,9 @@ data class CursorAcpLaunch(
   val images: List<CursorAcpImage> = emptyList(),
   val mcpDependency: CursorAcpMcpDependency = CursorAcpMcpDependency.ProjectUserOnly,
   val provider: AcpProvider = AcpProvider.Cursor,
+  val effort: String? = null,
+  val mcpServers: List<CursorAcpMcpServer> = emptyList(),
+  val approval: AgentRunApprovalRequirement = AgentRunApprovalRequirement.Unowned(),
 ) {
   constructor(
     cwd: String,
@@ -38,6 +42,13 @@ data class CursorAcpLaunch(
     images: List<CursorAcpImage>,
   ) : this(cwd, prompt, model, mode, savedSession, images, CursorAcpMcpDependency.ProjectUserOnly)
 }
+
+data class CursorAcpMcpServer(
+  val name: String,
+  val command: String,
+  val args: List<String>,
+  val environment: Map<String, String>,
+)
 
 enum class CursorAcpMcpDependency { ProjectUserOnly, TeamDashboardRequired }
 
@@ -85,6 +96,8 @@ class CursorAcpSession(
   private var capabilities = JsonObject(emptyMap())
   private var model: String? = null
   private var selectedModel: String? = null
+  private var selectingOpenCodeModel = false
+  private var selectingOpenCodeEffort = false
   private var pendingConfigId: String? = null
   private var pendingConfigValue: String? = null
   private var pendingConfigIsMode = false
@@ -97,6 +110,17 @@ class CursorAcpSession(
   private var textTruncated = false
   private var result: CursorAcpOutcome? = null
   private var permissions: CursorAcpPermissions? = null
+  private val outsidePermissions =
+    CursorAcpOutsidePermissions(
+      { message ->
+        synchronized(lock) {
+          if (closing || closed) false else write(message)
+        }
+      },
+      ::stop,
+      record,
+      launch.provider,
+    )
   private var providerFailure: String? = null
 
   @Volatile var ready: Boolean = false
@@ -157,7 +181,7 @@ class CursorAcpSession(
   private fun response(message: JsonObject) {
     val body =
       message.obj(K.RESULT)
-        ?: return stop("$providerName rejected $expectedMethod: ${message.obj(K.ERROR)?.text(K.MESSAGE).orEmpty()}")
+        ?: return stop(rejectedResponse(message))
     when (expectedMethod) {
       K.INITIALIZE -> initialize(body)
       K.AUTHENTICATE -> acquireSession()
@@ -176,6 +200,16 @@ class CursorAcpSession(
     }
   }
 
+  private fun rejectedResponse(message: JsonObject): String {
+    val error = message.obj(K.ERROR) ?: return "$providerName rejected $expectedMethod without an error payload."
+    return buildString {
+      append("$providerName rejected $expectedMethod")
+      error[K.CODE]?.let { append(" code=").append(it) }
+      error.text(K.MESSAGE)?.let { append(" message=").append(it) }
+      error[K.DATA]?.let { append(" data=").append(it.toString().take(MAX_CAPTURE)) }
+    }
+  }
+
   private fun acceptConfiguration(body: JsonObject) {
     if (selectingBypass) return acceptBypass(body)
     val acknowledged =
@@ -186,6 +220,16 @@ class CursorAcpSession(
       stop("$providerName did not acknowledge the selected session configuration.")
     } else if (pendingConfigIsMode) {
       prompt()
+    } else if (selectingOpenCodeModel) {
+      selectingOpenCodeModel = false
+      setup = replaceConfigOptions(setup, body)
+      model = selectedModel
+      model?.let(onModel)
+      selectOpenCodeEffort()
+    } else if (selectingOpenCodeEffort) {
+      selectingOpenCodeEffort = false
+      setup = replaceConfigOptions(setup, body)
+      selectMode()
     } else {
       model = selectedModel
       model?.let(onModel)
@@ -225,7 +269,7 @@ class CursorAcpSession(
       if (launch.savedSession == null) K.SESSION_NEW else K.SESSION_LOAD,
       buildJsonObject {
         put(K.CWD, launch.cwd)
-        put(K.MCP_SERVERS, JsonArray(emptyList()))
+        put(K.MCP_SERVERS, JsonArray(launch.mcpServers.map(::mcpServerJson)))
         launch.savedSession?.let { put(K.SESSION_ID, it) }
       },
     )
@@ -250,6 +294,7 @@ class CursorAcpSession(
   }
 
   private fun selectModel() {
+    if (launch.provider == AcpProvider.OpenCode) return selectOpenCodeModel()
     val requested = launch.model
     val config =
       (setup[K.CONFIG_OPTIONS] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
@@ -260,6 +305,54 @@ class CursorAcpSession(
       return selectMode()
     }
     if (config == null) selectLegacyModel(requested) else configureModel(config, requested)
+  }
+
+  private fun selectOpenCodeModel() {
+    val config = configOptions(setup).firstOrNull { it.text(K.ID) == K.MODEL_CONFIG }
+    val requested = launch.model
+    if (requested == null) {
+      model = config?.text(K.CURRENT_VALUE)
+      model?.let(onModel)
+      return selectOpenCodeEffort()
+    }
+    val selected =
+      config?.takeIf { it.text(K.CATEGORY) == K.MODEL_CONFIG }
+        ?.let { requested.takeIf(configValues(it[K.OPTIONS])::contains) }
+        ?: return stop("OpenCode does not advertise the selected model '$requested'; no prompt was sent.")
+    selectedModel = selected
+    selectingOpenCodeModel = true
+    pendingConfigId = K.MODEL_CONFIG
+    pendingConfigValue = selected
+    sendConfig(K.MODEL_CONFIG, selected)
+  }
+
+  private fun selectOpenCodeEffort() {
+    val requested = launch.effort ?: return selectMode()
+    val config =
+      configOptions(setup).firstOrNull { it.text(K.ID) == K.EFFORT_CONFIG }
+        ?.takeIf { it.text(K.CATEGORY) == K.THOUGHT_LEVEL }
+        ?: return stop("OpenCode does not advertise the requested effort '$requested'; no prompt was sent.")
+    if (requested !in configValues(config[K.OPTIONS])) {
+      return stop("OpenCode does not advertise the requested effort '$requested'; no prompt was sent.")
+    }
+    selectingOpenCodeEffort = true
+    pendingConfigId = K.EFFORT_CONFIG
+    pendingConfigValue = requested
+    sendConfig(K.EFFORT_CONFIG, requested)
+  }
+
+  private fun sendConfig(
+    id: String,
+    value: String,
+  ) {
+    send(
+      K.SESSION_SET_CONFIG,
+      buildJsonObject {
+        put(K.SESSION_ID, sessionId)
+        put(K.CONFIG_ID, id)
+        put(K.VALUE, value)
+      },
+    )
   }
 
   private fun configureModel(
@@ -327,8 +420,26 @@ class CursorAcpSession(
   }
 
   private fun selectMode() {
+    if (launch.provider == AcpProvider.OpenCode) return selectOpenCodeMode()
     val mode = launch.mode
     if (mode == null) prompt() else selectMode(mode)
+  }
+
+  private fun selectOpenCodeMode() {
+    val config =
+      configOptions(setup).firstOrNull { it.text(K.ID) == K.MODE_CONFIG }
+        ?.takeIf { it.text(K.CATEGORY) == K.MODE_CONFIG }
+        ?: return stop("OpenCode did not advertise a selectable mode; no prompt was sent.")
+    val requested =
+      launch.mode ?: config.text(K.CURRENT_VALUE)
+        ?: return stop("OpenCode did not advertise a current mode; no prompt was sent.")
+    if (requested !in configValues(config[K.OPTIONS])) {
+      return stop("OpenCode does not advertise the requested mode '$requested'; no prompt was sent.")
+    }
+    pendingConfigId = K.MODE_CONFIG
+    pendingConfigValue = requested
+    pendingConfigIsMode = true
+    sendConfig(K.MODE_CONFIG, requested)
   }
 
   private fun selectMode(mode: String) {
@@ -457,21 +568,45 @@ class CursorAcpSession(
     message: JsonObject,
     method: String,
   ) {
+    if (synchronized(lock) { closing || closed }) return
     val id = message[K.ID] ?: return stop("$providerName blocking request has no identity.")
     if (method == K.REQUEST_PERMISSION) {
       val owner = permissions
       if (owner != null) {
         owner.request(message)
+      } else if (launch.provider == AcpProvider.OpenCode) {
+        outsidePermissions.respond(
+          message,
+          sessionId,
+          launch.approval == AgentRunApprovalRequirement.OutsideApproval && ready && !closing,
+        )
       } else {
-        reply(id, permissionAllowResult(message))
+        reply(id, permissionResult(message))
       }
+      return
+    }
+    if (launch.provider == AcpProvider.OpenCode) {
+      write(
+        buildJsonObject {
+          put(K.JSONRPC, "2.0")
+          put(K.ID, id)
+          put(
+            K.ERROR,
+            buildJsonObject {
+              put(K.CODE, METHOD_NOT_FOUND_CODE)
+              put(K.MESSAGE, "$providerName does not support the blocking request '$method'.")
+            },
+          )
+        },
+      )
+      record("seam=$seam outcome=unsupported_blocking_request method=$method")
       return
     }
     reply(id, cursorExtensionAcceptance(method, message.obj(K.PARAMS)))
     record("seam=$seam outcome=extension_accepted method=$method")
   }
 
-  private fun permissionAllowResult(message: JsonObject): JsonObject {
+  private fun permissionResult(message: JsonObject): JsonObject {
     val optionId = CursorPermissionRequests.allowOnceOptionId(message)
     val outcome = if (optionId == null) "permission_unavailable_cancelled" else "permission_auto_allowed"
     record("seam=$seam outcome=$outcome")
@@ -524,6 +659,7 @@ class CursorAcpSession(
   fun close() {
     if (outcome() == null) stop("$providerName session was cancelled or disconnected before prompt completion.")
     permissions?.release()
+    outsidePermissions.release()
   }
 
   private fun finish(failure: String?) {
@@ -533,7 +669,7 @@ class CursorAcpSession(
     }
     try {
       if (failure == null) permissions?.clear() else permissions?.release()
-      if (failure != null && ready) {
+      if (failure != null && sessionId != null) {
         write(
           buildJsonObject {
             put(K.JSONRPC, "2.0")
@@ -544,6 +680,7 @@ class CursorAcpSession(
       }
     } finally {
       permissions?.release()
+      outsidePermissions.release()
       synchronized(lock) {
         closed = true
         result = CursorAcpOutcome(text.toString(), sessionId, model, failure)
@@ -582,6 +719,7 @@ class CursorAcpSession(
             "$providerName response delivery is uncertain; it will not be replayed.",
           )
       }
+      outsidePermissions.release()
       record("seam=$seam outcome=uncertain_write")
     }
     return written
@@ -589,6 +727,7 @@ class CursorAcpSession(
 
   private companion object {
     const val MAX_CAPTURE = 4_000_000
+    const val METHOD_NOT_FOUND_CODE = -32601
     val OPENING_TIMEOUT: Duration = Duration.ofSeconds(30)
   }
 }
@@ -660,3 +799,29 @@ private fun configValues(value: JsonElement?): Set<String> =
     val option = entry as? JsonObject ?: return@flatMap emptyList()
     option.text(K.VALUE)?.let(::listOf) ?: configValues(option[K.OPTIONS]).toList()
   }.toSet()
+
+private fun configOptions(body: JsonObject): List<JsonObject> =
+  (body[K.CONFIG_OPTIONS] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+
+private fun replaceConfigOptions(
+  source: JsonObject,
+  response: JsonObject,
+): JsonObject = JsonObject(source - K.CONFIG_OPTIONS + response.filterKeys { it == K.CONFIG_OPTIONS })
+
+private fun mcpServerJson(server: CursorAcpMcpServer) =
+  buildJsonObject {
+    put(K.NAME, server.name)
+    put(K.COMMAND, server.command)
+    put(K.ARGS, JsonArray(server.args.map(::JsonPrimitive)))
+    put(
+      K.SERVER_ENV,
+      JsonArray(
+        server.environment.map { (key, value) ->
+          buildJsonObject {
+            put(K.NAME, key)
+            put(K.VALUE, value)
+          }
+        },
+      ),
+    )
+  }

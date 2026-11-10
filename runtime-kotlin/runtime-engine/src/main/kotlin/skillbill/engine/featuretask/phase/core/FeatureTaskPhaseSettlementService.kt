@@ -15,7 +15,10 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementComple
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementEnvelope
 import skillbill.engine.featuretask.slot.PhaseAcceptanceRepairHooks
 import skillbill.engine.featuretask.slot.PhaseStrategyRegistry
+import skillbill.error.core.MalformedJsonTextError
+import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
@@ -192,10 +195,24 @@ public class FeatureTaskPhaseSettlementService(
     attempt: Int,
   ): FeatureTaskPhaseSettlementEnvelope? {
     val settlement = repository.find(workflowId, phaseId, attempt) ?: return null
+    val parsed =
+      try {
+        JsonCodec.parseValue(settlement.envelopeJson)
+      } catch (error: MalformedJsonTextError) {
+        throw invalidFeatureTaskRuntimePhaseOutputSchema(
+          "$workflowId/$phaseId/$attempt",
+          "durable settlement is malformed JSON.",
+          FeatureTaskRuntimePhaseOutputFailureCode.MALFORMED,
+          error,
+        )
+      }
     val envelope =
-      JsonCodec.parseObjectOrNull(settlement.envelopeJson)
-        ?.let { JsonCodec.anyToStringAnyMap(JsonCodec.jsonElementToValue(it)) }
-        ?: return null
+      JsonCodec.anyToStringAnyMap(parsed)
+        ?: throw invalidFeatureTaskRuntimePhaseOutputSchema(
+          "$workflowId/$phaseId/$attempt",
+          "durable settlement must be a JSON object.",
+          FeatureTaskRuntimePhaseOutputFailureCode.ROOT_NOT_OBJECT,
+        )
     val wire = envelope.toWorkflowArtifactMap()
     val evidence =
       wire[SharedPayloadKeys.PRODUCED_OUTPUTS]

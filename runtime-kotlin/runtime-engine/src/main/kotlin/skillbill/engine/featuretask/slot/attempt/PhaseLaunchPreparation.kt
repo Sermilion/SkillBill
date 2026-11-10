@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseProjectInstructions
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseProjectInstructionsResolution
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
+import skillbill.engine.featuretask.phase.prompt.compose.settlementTarget
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
 import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.launchHookContext
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
@@ -313,12 +314,7 @@ internal object PhaseLaunchPreparation {
             projectInstructions = projectInstructions,
             goalHistoryWriterInput = run.request.goalHistoryWriterInput,
           )
-      return PreparedLaunchReady(
-        PreparedLaunch(
-          briefing,
-          PhaseLaunchPreparation.composeLaunchPrompt(context, run, inputs, prompt, args.boundStep),
-        ),
-      )
+      return PreparedLaunchReady(composePreparedLaunch(context, run, inputs, prompt, args.boundStep))
     }
   }
 
@@ -397,15 +393,21 @@ internal object PhaseLaunchPreparation {
       )
   }
 
-  private fun composeLaunchPrompt(
+  private fun composePreparedLaunch(
     context: PhaseAttemptLaunchPreparationContext,
     run: PhaseRun,
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
     prompt: PhaseStepPromptSource,
     boundStep: PhaseAcceptedStepExecution,
-  ): String =
-    FeatureTaskRuntimePhasePromptComposer.compose(inputs, prompt) +
-      boundStep.boundHooks.launchPromptSupplement(run, context.launchHookContext(run, context.stepHooks(run)))
+  ): PreparedLaunch {
+    val sections = prompt.sections(inputs)
+    return PreparedLaunch(
+      inputs.briefing,
+      FeatureTaskRuntimePhasePromptComposer.compose(inputs) { sections } +
+        boundStep.boundHooks.launchPromptSupplement(run, context.launchHookContext(run, context.stepHooks(run))),
+      settlementTarget(inputs, sections),
+    )
+  }
 
   private fun PhaseAttemptLaunchPreparationContext.planBundleTargetFor(run: PhaseRun): PlanBundleTarget? {
     if (run.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN) return null
