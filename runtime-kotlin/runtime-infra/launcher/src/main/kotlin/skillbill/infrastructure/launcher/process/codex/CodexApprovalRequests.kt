@@ -141,6 +141,7 @@ class CodexApprovalRequests(
             true,
             ApprovalProviderDisposition.NONE,
             null,
+            matchFacts = CodexApprovalActions.matchFacts(action, checkout),
           ),
         )
       }.getOrElse { return stop("Codex approval registration failed: ${it.message.orEmpty()}") }

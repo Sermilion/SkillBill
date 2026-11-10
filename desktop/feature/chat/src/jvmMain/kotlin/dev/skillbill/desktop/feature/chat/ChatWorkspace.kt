@@ -917,9 +917,9 @@ class ChatWorkspace(
     }
   }
 
-  internal fun decideRepositoryApproval(id: String, key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean) {
+  internal fun decideRepositoryApproval(id: String, key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean, pattern: String? = null) {
     val tab = approvalTabs[id]?.takeIf { it.liveState.value } ?: return
-    scope.launch(tab.job) { approvalFlow.decide(tab.thread, key, optionId, alwaysAllow) }
+    scope.launch(tab.job) { approvalFlow.decide(tab.thread, key, optionId, alwaysAllow, pattern) }
   }
 
   internal fun dismissRepositoryApproval(id: String, key: ApprovalCardKey) {
@@ -927,10 +927,10 @@ class ChatWorkspace(
     scope.launch(tab.job) { approvalFlow.dismiss(tab.thread, key) }
   }
 
-  fun decideApproval(id: String, key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean) {
+  fun decideApproval(id: String, key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean, pattern: String? = null) {
     val session = sessions[id] ?: return
     if (!session.approvalLiveState.value) return
-    scope.launch(session.job) { approvalFlow.decide(session.thread, key, optionId, alwaysAllow) }
+    scope.launch(session.job) { approvalFlow.decide(session.thread, key, optionId, alwaysAllow, pattern) }
   }
 
   fun dismissApproval(id: String, key: ApprovalCardKey) {

@@ -52,7 +52,10 @@ internal fun ApprovalOperatorView.toCard(): ApprovalCard = record.toCard().copy(
   grants = ApprovalCardGrants(
     oneTimeUnavailable = unavailableReason(oneTimeRefusal),
     alwaysAllowUnavailable = unavailableReason(alwaysAllowRefusal),
+    similarUnavailable = unavailableReason(patternRefusal),
+    suggestedPattern = suggestedPattern,
   ),
+  rulePattern = rulePattern,
 )
 
 private fun ApprovalOperatorView.unavailableReason(refusal: ApprovalGrantRefusal?): String? = when {
@@ -70,12 +73,19 @@ internal fun ApprovalGrantRefusal.readableReason(): String = when (this) {
     "Sandbox or network escalations and other special requests cannot be saved as repository rules."
   ApprovalGrantRefusal.INCOMPLETE_INPUT -> "Not eligible for a repository rule: the action input is incomplete."
   ApprovalGrantRefusal.INCOMPLETE_SCOPE -> "Not eligible for a repository rule: the action scope is incomplete."
+  ApprovalGrantRefusal.INVALID_PATTERN ->
+    "Pattern refused: it must name something besides wildcards and contain no shell operators."
+  ApprovalGrantRefusal.NO_MATCH_FACTS ->
+    "Not eligible for a pattern rule: this request exposes no command or checkout paths."
+  ApprovalGrantRefusal.UNSAFE_COMMAND ->
+    "Not eligible for a pattern rule: the command uses shell operators, substitution or redirects."
+  ApprovalGrantRefusal.PATTERN_MISMATCH -> "Pattern refused: it does not match this request."
 }
 
 private const val NOT_RUNNING_REASON = "The requesting process is no longer running."
 
 internal fun ApprovalRuleRecord.toRule(): ApprovalRule = ApprovalRule(
-  ruleId, provider, profileIdentity, protocolRevision, actionKind, workingDirectory, actionFingerprint, createdAt,
+  ruleId, provider, profileIdentity, protocolRevision, actionKind, workingDirectory, actionFingerprint, createdAt, pattern,
 )
 
 internal fun ApprovalCardKey.toIdentity(): ApprovalRequestIdentity = ApprovalRequestIdentity(

@@ -154,9 +154,9 @@ internal class NewTaskChat(
   }
 
   /** The operator's click on one option of a pending card; it sends nothing unless the feed holds a live registration. */
-  fun decideApproval(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean) {
+  fun decideApproval(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean, pattern: String? = null) {
     if (!approvalLiveState.value || closing) return
-    scope.launch(job + dispatcher) { approvalFlow.decide(thread, key, optionId, alwaysAllow) }
+    scope.launch(job + dispatcher) { approvalFlow.decide(thread, key, optionId, alwaysAllow, pattern) }
   }
 
   fun dismissApproval(key: ApprovalCardKey) {

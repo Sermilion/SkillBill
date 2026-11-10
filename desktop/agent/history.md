@@ -1,3 +1,12 @@
+## [2026-11-10] SKILL-529 desktop always allow similar
+Areas: desktop/core/domain, core/data approval and chat, feature/chat production and JVM tests
+- Pending approval cards show Always allow similar when the runtime supplies a suggested pattern and no pattern refusal; an inline editor prefills the pattern, saves through decide with alwaysAllow and an optional pattern, and stays open with runtime refusal text.
+- Domain and data carry optional pattern through decide, card mapping and chat persistence; ChatApprovalStore writes rule_pattern only when set so older chat files still load.
+- Card details, decision lines, outcome text and Repository rules name pattern rules; exact rules keep prior wording. reusable: ChatApprovalSimilarEditor beside existing controls.
+- Limits: no desktop pattern grammar beyond blank trim; no editing saved patterns in the rules list; requires DesktopReadSchema 120 from runtime migration 120.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented across runtime and desktop
+
 ## [2026-11-08] SKILL-522 per-run build indicator placement
 Areas: desktop/core/domain, core/data, core/ui, core/designsystem, feature/work and feature/detail; runtime build capture and work read contracts
 - MEDIUM feature. Nullable WorkBuild carries current and previous build state, command metadata, timestamps, durations and exit code through board and detail mapping.

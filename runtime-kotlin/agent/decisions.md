@@ -1,3 +1,18 @@
+## [2026-11-10] Store pattern rules with an empty action fingerprint
+Context: approval_rules.action_fingerprint is NOT NULL and exact rules still key on fingerprint equality.
+Decision: Pattern rules write pattern plus actionFingerprint ""; scopes() skips fingerprint compare when pattern is non-null.
+Reason: Avoids a table rebuild to relax NOT NULL while keeping exact-rule behavior unchanged.
+
+## [2026-11-10] Refuse bare-wildcard patterns at match time for stored rules
+Context: Operators might persist overly broad patterns; tampered rows could bypass decide-time validation.
+Decision: ApprovalMatchFacts.matches runs patternShapeRefusal before glob matching so all-wildcard stored patterns never auto-allow.
+Reason: Defense in depth after decide; bare patterns stay inert even if validation was bypassed.
+
+## [2026-11-10] Judge approval paths lexically in the domain matcher
+Context: Wildcard approval must match checkout-relative path strings before provider adapters normalize absolute paths.
+Decision: Keep ApprovalMatchFacts path rules lexical only; no java.nio or filesystem resolution in runtime-domain.
+Reason: Adapters own absolute path normalization; the matcher must stay pure and testable without I/O.
+
 ## [2026-11-10] Charge acceptance repairs by verified gap progress
 Context: SKILL-533 replaces unfinished-report charging after partial repairs consumed the budget even when they closed production gaps.
 Decision: Charge an unsuccessful outcome only when open gaps do not decrease. Gate and reset the current criterion's count independently; retain gaps, outcomes, plan generation and sticky escalation on operator retry. Replays reuse stored charge facts.
