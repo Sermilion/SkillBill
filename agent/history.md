@@ -1,3 +1,12 @@
+## [2026-11-10] SKILL-535 — Carry captured roots into desktop work items
+Areas: runtime-infra/sqlite/idestatus; desktop/core/domain and desktop/core/data/runtime
+- MEDIUM feature. Optional `primaryRepositoryRoot` survives SQLite snapshot caching, validation, and decoding; absent and null legacy values remain readable, while malformed values retain the undecodable-row diagnostic path.
+- WorkItem carries the captured root and run-kind label. Shared board/detail mapping transports the root and derives verify from workflow family or the label from the authoritative execution phase, preserving exact checkout identity and control mapping.
+- Reusable: carry captured repository facts through the shared snapshot cache and mapper seams, separate from checkout identity and display-derived labels.
+- Limits: pre-existing records without a captured primary root keep their compatibility fallback.
+Feature flag: N/A
+Acceptance criteria: 1/1 implemented in this boundary
+
 ## [2026-11-07] SKILL-453 operator approval cards and provider refusal boundaries
 Areas: runtime-kotlin, desktop/core/{domain,data}, desktop/feature/chat, orchestration/contracts, docs
 - Added durable, typed operator approval requests and revocable repository-scoped rules, with provider request identity preserved and transactional broker decisions. Runtime and desktop share the persisted approval store and render complete approval cards; rules match the provider profile and exact action input. reusable

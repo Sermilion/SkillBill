@@ -487,7 +487,8 @@ class ChatWorkspaceTest {
       runCurrent()
 
       val resumed = backing.requests.last()
-      assertEquals(offered.sessionId, resumed.sessionId)
+      val expectedSessionId = if (agentId == "cursor") fallbackRequest.sessionId else offered.sessionId
+      assertEquals(expectedSessionId, resumed.sessionId)
       assertFalse(resumed.firstTurn)
       assertEquals(primaryRoot, (resumed.scope as ChatScope.Execution).repositoryRoot)
       assertEquals(listOf(exactRoot to primaryRoot), backing.moveCalls)

@@ -1,3 +1,13 @@
+## [2026-11-10] SKILL-535 — Continue chats after checkout removal
+Areas: desktop/feature/chat production and JVM tests
+- Select the existing checkout when present, then the captured primary root, then the legacy repository root for turns, saved-chat listing, and resume.
+- Under the session move lock, relocate eligible removed Goal, Phase, and Operation chats; retain settled outcomes and allow retry after cancellation.
+- Successful Claude/Codex moves may resume the saved session; failed moves and other providers start fresh at the selected root. Resume preserves one-time removal notices and goal-only notice order.
+- Reuse `ExecutionChatRepository.moveSessions`; keep relocation outcome and notices in chat-session state. Notices identify Verify/phase/operation runs and the destination.
+- Limits: deleted historical checkouts without a distinct captured root keep the legacy fallback; no root discovery, provider format, or branch-switch behavior was added.
+Feature flag: N/A
+Acceptance criteria: 2/2 implemented in this boundary
+
 ## [2026-11-08] SKILL-528 chat changes indicator
 Areas: desktop/feature/chat/newtask, desktop/core/domain, desktop/core/data, desktop/core/testing, desktop/core/designsystem, runtime-kotlin/runtime-ports, runtime-kotlin/runtime-infra/workflow, runtime-kotlin/runtime-core
 - New Task captures HEAD, pre-existing untracked paths, an optional unreferenced stash SHA and capture time before its first agent turn. Saved drafts retain the baseline and capture-attempt state; older started chats load without a baseline, and malformed baseline data records a diagnostic without losing the transcript.
