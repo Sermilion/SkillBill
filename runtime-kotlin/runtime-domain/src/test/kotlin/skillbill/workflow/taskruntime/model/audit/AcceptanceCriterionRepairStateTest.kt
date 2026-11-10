@@ -313,6 +313,103 @@ class AcceptanceCriterionRepairStateTest {
   }
 
   @Test
+  fun `bulleted discovery gaps and status records parse without fallback`() {
+    val initial = admitSingleCriterion()
+    val discovered =
+      assertNotNull(
+        initial.recordProseAudit(
+          AcceptanceCriterionProseAudit(
+            "audit",
+            1,
+            null,
+            false,
+            "b".repeat(64),
+            "Open criteria: AC-001\n- AC-001.G1: missing behavior @ src/Foo.kt:10",
+            "c".repeat(64),
+            "checkpoint",
+          ),
+        ),
+      )
+    val statuses = AcceptanceCriterionGapStatusReportParser.parse("- AC-001.G1: closed @ src/Foo.kt:10")
+
+    assertEquals("missing behavior", discovered.criteria.single().gaps.single().text)
+    assertEquals(AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED, discovered.criteria.single().sourceDisposition)
+    assertEquals(
+      listOf(AcceptanceCriterionGapStatusReportEntry("AC-001.G1", true, "src/Foo.kt:10")),
+      statuses,
+    )
+  }
+
+  @Test
+  fun `bulleted new gap keeps targeted verification open and source unresolved`() {
+    val verifying = verifyingSingleGap("src/Foo.kt")
+    val criterion = verifying.criteria.single()
+    val prose =
+      "- AC-001.G1: closed @ src/Foo.kt:10\n" +
+        "- New gap: broken caller @ src/Foo.kt:40"
+    val verification = AcceptanceGapVerificationResolver.resolve(verifying, criterion, prose, treeMatches = true)
+
+    assertEquals(AcceptanceCriterionRepairOutcomeKind.TARGETED_FAILURE, verification.outcomeKind)
+    assertEquals(1, verification.openGapsAfter)
+    assertEquals("broken caller", verification.gaps.last().text)
+    assertEquals("src/Foo.kt:40", verification.gaps.last().citation)
+    assertEquals(AcceptanceCriterionGapStatus.OPEN, verification.gaps.last().status)
+
+    val recorded =
+      assertNotNull(
+        verifying.record(
+          AcceptanceCriterionRepairOutcome(
+            "outcome",
+            "reservation",
+            "AC-001",
+            "c".repeat(64),
+            verification.outcomeKind,
+            prose,
+            treeDigest = "b".repeat(64),
+            checkpointId = "checkpoint",
+          ),
+        ),
+      )
+    assertEquals(AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED, recorded.criteria.single().sourceDisposition)
+    assertEquals("broken caller", recorded.criteria.single().gaps.last().text)
+  }
+
+  @Test
+  fun `bulleted late findings and gaps outside changed files remain review observations`() {
+    val verifying = verifyingSingleGap("src/Foo.kt")
+    val criterion = verifying.criteria.single()
+    val prose =
+      "- AC-001.G1: closed @ src/Foo.kt:10\n" +
+        "- Late finding: check the error path\n" +
+        "- New gap: unrelated caller @ src/Other.kt:40"
+    val verification = AcceptanceGapVerificationResolver.resolve(verifying, criterion, prose, treeMatches = true)
+
+    assertEquals(AcceptanceCriterionRepairOutcomeKind.TARGETED_SUCCESS, verification.outcomeKind)
+    assertEquals(0, verification.openGapsAfter)
+    assertEquals(
+      listOf("check the error path", "unrelated caller"),
+      verification.lateFindings.map { it.text },
+    )
+    val recorded =
+      assertNotNull(
+        verifying.record(
+          AcceptanceCriterionRepairOutcome(
+            "outcome",
+            "reservation",
+            "AC-001",
+            "c".repeat(64),
+            verification.outcomeKind,
+            prose,
+            treeDigest = "b".repeat(64),
+            checkpointId = "checkpoint",
+          ),
+        ),
+      )
+    assertEquals(AcceptanceCriterionSourceDisposition.SOURCE_CLOSED, recorded.criteria.single().sourceDisposition)
+    assertEquals(2, recorded.lateFindings.size)
+  }
+
+  @Test
   fun `decision honors trace clarification audit budget and terminal stages`() {
     val admission =
       AcceptanceCriterionRepairAdmission(
@@ -988,5 +1085,39 @@ class AcceptanceCriterionRepairStateTest {
           emptyList(),
         ),
       ),
+    )
+
+  private fun verifyingSingleGap(changedPath: String): AcceptanceCriterionRepairState {
+    val initial =
+      assertNotNull(
+        AcceptanceCriterionRepairState.admit(
+          AcceptanceCriterionRepairAdmission(
+            "catalog",
+            "execution",
+            "a".repeat(64),
+            listOf("first"),
+            listOf(criterion("AC-001", 1, "first").copy(gaps = listOf(openGap()))),
+            emptyList(),
+          ),
+        ),
+      )
+    return assertNotNull(initial.reserve("reservation"))
+      .completeRepairAwaitingTargetedVerification(
+        "reservation",
+        "repair",
+        "b".repeat(64),
+        "checkpoint",
+        listOf(changedPath),
+      )!!
+  }
+
+  private fun openGap() =
+    AcceptanceCriterionGap(
+      "AC-001.G1",
+      "missing behavior",
+      "src/Foo.kt:10",
+      AcceptanceCriterionGapStatus.OPEN,
+      AcceptanceCriterionGapOrigin.DISCOVERY,
+      null,
     )
 }

@@ -93,7 +93,7 @@ object AcceptanceGapVerificationResolver {
     val state = context.state
     val criterion = context.criterion
     val findings = context.findings
-    prose.lineSequence().map(String::trim).forEach { line ->
+    prose.lineSequence().map(::normalizeListLine).forEach { line ->
       val status = AcceptanceCriterionGapStatusReportParser.parse(line).firstOrNull()
       when {
         line.startsWith("New gap:") ->
@@ -251,7 +251,7 @@ object AcceptanceCriterionGapReportParser {
     val strayCriteria = linkedSetOf<String>()
     val malformedLines = mutableListOf<String>()
     val criterionPrefix = Regex("""^(AC-[0-9]{3})\.G""")
-    prose.lineSequence().map(String::trim).filter { it.startsWith("AC-") && ".G" in it }.forEach { line ->
+    prose.lineSequence().map(::normalizeListLine).filter { it.startsWith("AC-") && ".G" in it }.forEach { line ->
       val entry = parseEntry(line)
       if (entry == null) {
         val ref = criterionPrefix.find(line)?.groupValues?.get(1)
@@ -314,7 +314,7 @@ object AcceptanceCriterionGapStatusReportParser {
     )
 
   fun parse(prose: String): List<AcceptanceCriterionGapStatusReportEntry> =
-    prose.lineSequence().map(String::trim).mapNotNull { line ->
+    prose.lineSequence().map(::normalizeListLine).mapNotNull { line ->
       val match = STATUS_LINE.matchEntire(line) ?: return@mapNotNull null
       AcceptanceCriterionGapStatusReportEntry(
         match.capture("id"),
@@ -328,3 +328,12 @@ private fun MatchResult.capture(name: String): String = checkNotNull(groups[name
 
 private fun MatchResult.lineCitation(): String =
   "${capture("path")}:${capture("start")}${groups["end"]?.value.orEmpty()}"
+
+private fun normalizeListLine(line: String): String {
+  val trimmed = line.trim()
+  return if (trimmed.length > 1 && trimmed[0] in "-*+" && trimmed[1].isWhitespace()) {
+    trimmed.drop(1).trimStart()
+  } else {
+    trimmed
+  }
+}
