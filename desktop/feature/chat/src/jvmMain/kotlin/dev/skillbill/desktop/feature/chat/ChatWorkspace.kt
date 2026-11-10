@@ -58,6 +58,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import me.tatarka.inject.annotations.Inject
@@ -622,9 +623,11 @@ class ChatWorkspace(
   fun showResumable(id: String) {
     val session = sessions[id] ?: return
     scope.launch(session.job) {
-      // A removed worktree's sessions move first, so the listing at the repository root includes them.
-      if (session.turnJob == null) turns.followWorktree(session)
-      session.resumeChoicesState.value = chat.savedChats(session.item.id, session.item.workingRoot(), session.sessionId)
+      session.worktreeMoveLock.withLock {
+        // A removed checkout's sessions move first, so the listing at the selected root includes them.
+        if (session.turnJob == null) turns.followWorktreeWhileLocked(session)
+        session.resumeChoicesState.value = chat.savedChats(session.item.id, session.item.workingRoot(), session.sessionId)
+      }
     }
   }
 
@@ -633,9 +636,9 @@ class ChatWorkspace(
   }
 
   /**
-   * Swaps [id]'s chat for [entry], an agent session in its worktree or a chat the app saved for it: a running turn ends, the
-   * transcript shows the session's latest lines, and the next turn continues that agent session, on its agent and profile, with
-   * the full snapshot. Ignored once the execution left the database or for another execution's saved chat.
+   * Swaps [id]'s chat for [entry], an agent session in its checkout or a chat the app saved for it: a running turn ends and the
+   * transcript shows its latest lines. Relocation may require a fresh session; ordinary resume continues the selected agent and
+   * profile with the full snapshot. Ignored once the execution left the database or for another execution's saved chat.
    */
   fun resume(id: String, entry: ChatHistoryEntry) {
     val session = sessions[id] ?: return
@@ -649,25 +652,39 @@ class ChatWorkspace(
     session.stoppableState.value = false
     launchTurn(session) {
       running?.cancelAndJoin()
-      turns.followWorktree(session)
-      val lines = try {
-        chat.openSavedChat(entry)
-      } catch (failure: IOException) {
-        session.append(ChatMessage.Error(null, failure.message ?: "Couldn't open the saved provider session."))
-        return@launchTurn
+      session.worktreeMoveLock.withLock {
+        turns.followWorktreeWhileLocked(session)
+        val lines = try {
+          chat.openSavedChat(entry)
+        } catch (failure: IOException) {
+          session.append(ChatMessage.Error(null, failure.message ?: "Couldn't open the saved provider session."))
+          return@withLock
+        }
+        endAgent(session)
+        val moveOutcome = session.worktreeMoveOutcome
+        val root = session.item.workingRoot()
+        val continueSession = session.hasProviderSessionAt(entry, root) || moveOutcome == null || moveOutcome.canContinue(entry.agent.agentId)
+        if (continueSession) {
+          session.resumeFrom(entry.sessionId, root, entry.agent)
+        } else {
+          session.restart(UUID.randomUUID().toString())
+        }
+        session.agentState.value = entry.agent
+        session.agentSupportedState.value = chat.supports(entry.agent.agentId)
+        val shown = if (lines.isEmpty()) "The app can't read this session's messages; the agent still has them." else "Showing its last ${lines.size} messages."
+        val continuation = if (continueSession) {
+          "The next turn continues it with the current execution state."
+        } else {
+          "The next turn starts a fresh provider session with the current execution state."
+        }
+        val notice = ChatMessage.Notice(
+          "Resumed the ${chipText(entry.agent)} session from ${savedAgo(entry.updatedAt, clock.now())}. $shown " +
+            continuation,
+        )
+        session.replaceTranscript(session.resumeTranscript(stateCard(session.item), notice, lines))
+        session.thread.showCapability(entry.agent)
+        cards(session).revalidate(session.thread, lines.mapNotNull { it.operationCard?.token })
       }
-      endAgent(session)
-      session.resumeFrom(entry.sessionId, session.item.workingRoot())
-      session.agentState.value = entry.agent
-      session.agentSupportedState.value = chat.supports(entry.agent.agentId)
-      val shown = if (lines.isEmpty()) "The app can't read this session's messages; the agent still has them." else "Showing its last ${lines.size} messages."
-      val notice = ChatMessage.Notice(
-        "Resumed the ${chipText(entry.agent)} session from ${savedAgo(entry.updatedAt, clock.now())}. $shown " +
-          "The next turn continues it with the current execution state.",
-      )
-      session.replaceTranscript(listOf(stateCard(session.item), notice) + lines.map(::restored))
-      session.thread.showCapability(entry.agent)
-      cards(session).revalidate(session.thread, lines.mapNotNull { it.operationCard?.token })
     }
   }
 
