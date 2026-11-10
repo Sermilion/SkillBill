@@ -1,3 +1,17 @@
+## [2026-11-10] SKILL-533 simplify acceptance repair loop
+Areas: runtime-domain workflow/taskruntime and config; runtime-contracts workflow/featuretask; runtime-engine featuretask and recovery; runtime-application workflow retry; runtime-goalrunner persistence and status; runtime-infra/contracts; orchestration/contracts; desktop detail; runtime guidance
+- MEDIUM feature. Repair-state 0.3 stores stable numbered gaps, late findings, repair-changed paths, charged outcomes, plan generation and sticky escalation. Eligible 0.1 records upgrade through 0.2; existing recovery and retry writers persist upgrades without a store-wide migration.
+- Upgrades retain criterion dispositions, closure evidence, outcomes, source transitions, audits, traces and revision. Incompatible in-flight reservations restart through discovery or pending read-only audit with zero charges and working-tree edits retained. Existing 0.1 refusal conditions remain.
+- AcceptanceRepairDecision is reusable domain policy for resume, persistence and budget routing. Discovery establishes gaps; read-only verify closes open gaps on matching source and admits new gaps only with line citations in repair-changed files. Other observations go to code review as late findings.
+- Unsuccessful outcomes charge once only when open gaps do not decrease. Each criterion blocks after three charges, escalates after two, and retains escalation and evidence when operator retry resets its own count. AcceptanceRepairBlockReason is reusable and bounds incident text to 8000 characters.
+- Completed repairs proceed to verify with retained edits regardless of completion verdict. Retryable worker blocks follow that path; other worker blocks charge once. Unfinished-repair rejection and repair-report admission are removed; historical INCOMPLETE outcomes remain readable.
+- Plan and repair prompts use current-pass open gaps and latest failed verify evidence; repair receives the saved plan. AcceptanceRepairPromptFocus is reusable. Plan generations bind the shared plan to one criterion pass, reuse it on ordinary retry and require planning after escalation, reopening or new discovery gaps.
+- Escalated launches resolve provider reasoning-tier model and effort without rewriting recorded assignments. Missing configuration retains the current model with a diagnostic. ExecutionMatrix.directiveForTier and FeatureTaskRuntimePhaseRunFactory are reusable.
+- Malformed gap reports get one in-memory correction before diagnostic fallback. Optional discovery snapshots support audit-attempt projection; older missing counts stay unavailable in status and desktop detail rather than becoming invented evidence.
+- Limits: new-gap admission checks changed files, not diff hunks. Caps are 32 gaps per criterion, 512 changed paths and 256 late findings. Restart can permit another correction; rediscovery at the gap cap remains bounded by the existing loop cap. Audit-result, handoff and adoption formats stay unchanged.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-08] SKILL-522 per-run build indicator
 Areas: runtime-domain; runtime-ports; runtime-engine featuretask, operation and work; runtime-goalrunner; runtime-infra skills, launcher, host and sqlite; runtime-contracts; runtime-cli; runtime-core; orchestration/contracts; platform pack manifests; desktop
 - MEDIUM feature. Manifest-driven build matching and per-launch observation feed migration 108's agent_build_runs store. Primary repository identity shares duration history across goal worktrees.
