@@ -102,11 +102,12 @@ internal object QaReportSections {
     lines: List<String>,
     evidencePrefix: String,
   ): QaParsedScreenshotInventory {
+    val entries = lines.filter { line -> BULLET.matches(line.trim()) }
     val evidenceRoot =
       absolutePath(evidencePrefix)
-        ?: return QaParsedScreenshotInventory(emptyList(), lines.size)
-    val screenshots = lines.mapNotNull { raw -> screenshotOf(raw, evidenceRoot) }
-    return QaParsedScreenshotInventory(screenshots, lines.size - screenshots.size)
+        ?: return QaParsedScreenshotInventory(emptyList(), entries.size)
+    val screenshots = entries.mapNotNull { raw -> screenshotOf(raw, evidenceRoot) }
+    return QaParsedScreenshotInventory(screenshots, entries.size - screenshots.size)
   }
 
   private fun screenshotOf(

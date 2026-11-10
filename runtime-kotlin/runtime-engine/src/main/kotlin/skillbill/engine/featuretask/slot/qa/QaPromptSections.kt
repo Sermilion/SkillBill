@@ -257,7 +257,9 @@ internal object QaPromptSections {
     |  `backend:` field is required on a `web` line.
     |- Under a `## Assertions` heading, write one bullet per assertion, including those you did not exercise, in the
     |  form `- [passed|failed|not_exercised] <title>: <detail>. Evidence: <paths>`. A `failed` assertion must have a
-    |  finding. A `not_exercised` assertion names what you tried and why it failed.
+    |  finding. A `not_exercised` assertion names what you tried and why it failed. List only checks this run was
+    |  asked to make; leave out extra variants the plan did not ask for, because each `not_exercised` line marks the
+    |  run as not fully tested.
     |- Under a `## Isolation` heading, record the selected environment or app defaults. For backend and web
     |  targets also state the disposable database or its absence, outbound substitutes, and rejected configuration.
     |  Never include secret values.
