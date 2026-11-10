@@ -584,3 +584,8 @@ Context: Cursor Act chat added `--auto-review`, which let the provider decide to
 Decision: Both chat transports launch the provider's standard ACP arguments. Remove Cursor's automatic-review argument override. Verify that publishing requests from either provider produce full pending cards and send no permission response until an operator decision is delivered.
 Reason: Interactive permission decisions belong to the operator. Retain provider-issued options, session identity checks, read-only mode and unsupported-interaction handling.
 Superseded by: Default all provider launches to native permission bypass (2026-11-07)
+
+## [2026-11-10] Keep complete suggested-action instructions
+Context: The 2000-character instruction limit dropped goal start cards containing detailed requirements. A separate 16000-character action-block limit also rejected longer intake.
+Decision: Remove both size caps from suggested-action decoding and remove the instruction-length restriction from both chat prompts. Keep nonblank instructions, label limits, valid modes, supported starts and block structure checks.
+Reason: Start cards must retain the operator's requirements and resolved decisions. The regression test decodes an instruction longer than both former caps and checks its complete value and sibling action.
