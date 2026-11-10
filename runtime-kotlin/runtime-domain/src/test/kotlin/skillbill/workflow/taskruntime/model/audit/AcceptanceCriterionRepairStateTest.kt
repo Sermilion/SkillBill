@@ -235,19 +235,7 @@ class AcceptanceCriterionRepairStateTest {
 
   @Test
   fun `decision routes discovery plan repair verification and acceptance from state`() {
-    val initial =
-      assertNotNull(
-        AcceptanceCriterionRepairState.admit(
-          AcceptanceCriterionRepairAdmission(
-            "catalog",
-            "execution",
-            "a".repeat(64),
-            listOf("first"),
-            listOf(criterion("AC-001", 1, "first")),
-            emptyList(),
-          ),
-        ),
-      )
+    val initial = admitSingleCriterion()
     assertEquals(AcceptanceRepairStep.Discover, AcceptanceRepairDecision.next(initial))
     val discovered =
       assertNotNull(
@@ -265,7 +253,19 @@ class AcceptanceCriterionRepairStateTest {
         ),
       )
     assertEquals(AcceptanceRepairStep.Plan("AC-001"), AcceptanceRepairDecision.next(discovered))
-    val reserved = assertNotNull(discovered.reserve("reservation-1"))
+    val planned = assertNotNull(discovered.completePlan("AC-001", 1))
+    assertEquals(AcceptanceRepairStep.Repair("AC-001"), AcceptanceRepairDecision.next(planned))
+    assertNull(discovered.completePlan("AC-001", 2))
+    assertNull(discovered.completePlan("AC-002", 1))
+    val escalated =
+      planned.copy(
+        criteria = planned.criteria.map { it.copy(escalated = true) },
+        chargedAttempts = mapOf("AC-001" to 2),
+      )
+    assertEquals(AcceptanceRepairStep.Plan("AC-001"), AcceptanceRepairDecision.next(escalated))
+    val escalatedPlan = assertNotNull(escalated.completePlan("AC-001", 2))
+    assertEquals(AcceptanceRepairStep.Repair("AC-001"), AcceptanceRepairDecision.next(escalatedPlan))
+    val reserved = assertNotNull(planned.reserve("reservation-1"))
     assertEquals(AcceptanceRepairStep.Repair("AC-001"), AcceptanceRepairDecision.next(reserved))
     val verify =
       assertNotNull(
@@ -975,4 +975,18 @@ class AcceptanceCriterionRepairStateTest {
       },
     evidenceRef = if (successful) "$criterionRef.G1: closed @ source.kt:1" else "evidence:$id",
   )
+
+  private fun admitSingleCriterion(): AcceptanceCriterionRepairState =
+    assertNotNull(
+      AcceptanceCriterionRepairState.admit(
+        AcceptanceCriterionRepairAdmission(
+          "catalog",
+          "execution",
+          "a".repeat(64),
+          listOf("first"),
+          listOf(criterion("AC-001", 1, "first")),
+          emptyList(),
+        ),
+      ),
+    )
 }

@@ -33,6 +33,7 @@ import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFi
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskExecutionIdentityResolver
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionEntry
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
@@ -65,6 +66,7 @@ import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
 import skillbill.engine.featuretask.qa.report.QaReportSettlement
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeReviewFixBudget
 import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationBoundaryMemory
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimePhaseRunFactory
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
@@ -97,6 +99,7 @@ import skillbill.engine.featuretask.slot.monitor.PassingMonitorRepairPublication
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.state.PhaseRunState
+import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.featuretask.slot.unavailableQaReportSettlement
 import skillbill.engine.featuretask.slot.validJsonOutput
@@ -123,9 +126,13 @@ import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathRes
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningBoundaryBodyResolver
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningContextDiscovery
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
+import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.model.AgentRunTermination
+import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
@@ -1618,6 +1625,7 @@ open class TestFeatureTaskRuntimeRunLoopEntry(
     ),
   commitPushManifestCompletion: CommitPushManifestCompletion = NoopCommitPushManifestCompletion,
   projectStore: ProjectStorePort = RUNNER_TEST_PROJECT_STORE,
+  stepLaunchResolver: FeatureTaskRuntimeStepLaunchResolver = testStepLaunchResolver(),
 ) : FeatureTaskRuntimeRunLoopEntry(
     gitOperations,
     decompositionPlanner,
@@ -1629,7 +1637,7 @@ open class TestFeatureTaskRuntimeRunLoopEntry(
     diffResolver,
     implementationChecklistStore,
     commitPushManifestCompletion,
-    projectStore,
+    FeatureTaskRuntimePhaseRunFactory(stepLaunchResolver, projectStore),
   ) {
   private var delegate: FeatureTaskRuntimeRunLoopEntry? = null
 
@@ -1641,6 +1649,17 @@ open class TestFeatureTaskRuntimeRunLoopEntry(
     beforeDrive: (FeatureTaskRuntimeRunLoop) -> Unit,
   ): FeatureTaskRuntimeRunReport = delegate?.run(context, beforeDrive) ?: super.run(context, beforeDrive)
 }
+
+private fun testStepLaunchResolver(): FeatureTaskRuntimeStepLaunchResolver =
+  FeatureTaskRuntimeStepLaunchResolver(
+    object : AgentRunLauncher {
+      override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = passThroughResolvedLaunchModel(request)
+
+      override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome =
+        error("A run-loop fixture must not launch through its model resolver.")
+    },
+    statusProjectionPhaseStrategies(),
+  )
 
 fun testDecompositionPlanner(): FeatureTaskRuntimeDecompositionPlanner =
   FeatureTaskRuntimeDecompositionPlanner(
@@ -2818,5 +2837,5 @@ fun FeatureTaskRuntimeRunLoopContext.withRunState(state: PhaseRunState): Feature
     qualityGateCycles,
     sharedEvidenceResolver,
     diffResolver,
-    projectStoreRoot,
+    phaseRunFactory,
   )

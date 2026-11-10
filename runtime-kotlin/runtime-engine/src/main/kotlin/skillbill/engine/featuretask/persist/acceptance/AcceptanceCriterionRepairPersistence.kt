@@ -768,6 +768,7 @@ public class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.QaReaudit,
       is AcceptanceCriterionRepairMutation.InteractionTrace,
       AcceptanceCriterionRepairMutation.PrepareInteractionTrace,
+      is AcceptanceCriterionRepairMutation.PlanCompleted,
       -> proseTransition(state, mutation)
       else -> repairTransition(state, mutation, auditDigest, binding)
     }
@@ -785,6 +786,8 @@ public class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.InteractionTrace ->
         state?.recordInteractionTrace(mutation.settlement)?.clearPendingClarification()
       AcceptanceCriterionRepairMutation.PrepareInteractionTrace -> state
+      is AcceptanceCriterionRepairMutation.PlanCompleted ->
+        state?.completePlan(mutation.criterionRef, mutation.planGeneration)
       else -> null
     }
 
@@ -830,6 +833,7 @@ public class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.QaReaudit,
       is AcceptanceCriterionRepairMutation.InteractionTrace,
       AcceptanceCriterionRepairMutation.PrepareInteractionTrace,
+      is AcceptanceCriterionRepairMutation.PlanCompleted,
       -> null
     }
 
@@ -845,6 +849,7 @@ public class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.QaReaudit,
       is AcceptanceCriterionRepairMutation.InteractionTrace,
       AcceptanceCriterionRepairMutation.PrepareInteractionTrace,
+      is AcceptanceCriterionRepairMutation.PlanCompleted,
       -> proseReplayExpected(state, expected, mutation)
       else -> repairReplayExpected(state, expected, mutation)
     }
@@ -871,11 +876,23 @@ public class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.Clarification,
       AcceptanceCriterionRepairMutation.PrepareInteractionTrace,
       -> expected.revision == state?.revision?.minus(1)
+      is AcceptanceCriterionRepairMutation.PlanCompleted ->
+        planReplayExpected(state, expected, mutation)
       is AcceptanceCriterionRepairMutation.QaReaudit ->
         expected.revision == state?.revision?.minus(1) && state?.pendingAuditRefs == mutation.criterionRefs
       is AcceptanceCriterionRepairMutation.InteractionTrace -> expected.revision == state?.revision?.minus(1)
       else -> false
     }
+
+  private fun planReplayExpected(
+    state: AcceptanceCriterionRepairState?,
+    expected: ExpectedAcceptanceCriterionRepairState,
+    mutation: AcceptanceCriterionRepairMutation.PlanCompleted,
+  ): Boolean =
+    expected.revision == state?.revision?.minus(1) && expected.currentCriterionRef == mutation.criterionRef &&
+      expected.reservationId == state?.reservation?.reservationId &&
+      state?.criteria?.singleOrNull { it.canonicalRef == mutation.criterionRef }?.planGeneration ==
+      mutation.planGeneration
 
   private fun repairReplayExpected(
     state: AcceptanceCriterionRepairState?,
@@ -901,6 +918,7 @@ public class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.QaReaudit,
       is AcceptanceCriterionRepairMutation.InteractionTrace,
       AcceptanceCriterionRepairMutation.PrepareInteractionTrace,
+      is AcceptanceCriterionRepairMutation.PlanCompleted,
       -> false
     }
 

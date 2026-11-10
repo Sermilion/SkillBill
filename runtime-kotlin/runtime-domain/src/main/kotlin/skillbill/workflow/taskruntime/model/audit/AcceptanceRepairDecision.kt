@@ -44,13 +44,19 @@ object AcceptanceRepairDecision {
       state.reservation == null && discoveryCriteria(state).isNotEmpty() -> AcceptanceRepairStep.Discover
       state.stage == AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED -> AcceptanceRepairStep.ReadOnlyAudit
       state.stage == AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED && state.currentCriterionRef != null ->
-        if (state.chargedAttempts.getOrDefault(state.currentCriterionRef, 0) >=
-          FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES
-        ) {
-          AcceptanceRepairStep.Blocked(state.currentCriterionRef)
-        } else {
-          AcceptanceRepairStep.Plan(state.currentCriterionRef)
-        }
+        plannedStep(state)
       else -> AcceptanceRepairStep.Accepted
     }
+
+  private fun plannedStep(state: AcceptanceCriterionRepairState): AcceptanceRepairStep =
+    state.criteria.singleOrNull { it.canonicalRef == state.currentCriterionRef }?.let { criterion ->
+      val charged = state.chargedAttempts.getOrDefault(criterion.canonicalRef, 0)
+      when {
+        charged >= FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES ->
+          AcceptanceRepairStep.Blocked(criterion.canonicalRef)
+        criterion.planGeneration == 0 || criterion.escalated && criterion.planGeneration < 2 ->
+          AcceptanceRepairStep.Plan(criterion.canonicalRef)
+        else -> AcceptanceRepairStep.Repair(criterion.canonicalRef)
+      }
+    } ?: AcceptanceRepairStep.Accepted
 }

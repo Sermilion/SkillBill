@@ -153,9 +153,18 @@ public class AcceptanceCriterionRepairPhaseRecorder(
     session: AcceptanceCriterionRepairSession,
     phase: FeatureTaskRuntimePhaseStateRequest,
   ): RequiredPhaseWrite? {
+    return when {
+      !session.worker.ownsAuditStep(phase.phaseId) -> null
+      phase.phaseId == session.steps.planning -> completePlan(session, phase)
+      else -> completeAudit(session, phase)
+    }
+  }
+
+  private fun completeAudit(
+    session: AcceptanceCriterionRepairSession,
+    phase: FeatureTaskRuntimePhaseStateRequest,
+  ): RequiredPhaseWrite? {
     val scope = session.accounting
-    val inactive = !session.worker.ownsAuditStep(phase.phaseId)
-    if (inactive || phase.phaseId == session.steps.planning) return null
     val envelope =
       phase.normalizedOutput?.envelopeWireMap()
         ?: return rejected(phase, "The normalized phase output is unavailable.")
@@ -171,6 +180,28 @@ public class AcceptanceCriterionRepairPhaseRecorder(
           rejected(phase, "Interaction tracing requires the audit phase.")
         }
       else -> completeExisting(session, phase, envelope, state)
+    }
+  }
+
+  private fun completePlan(
+    session: AcceptanceCriterionRepairSession,
+    phase: FeatureTaskRuntimePhaseStateRequest,
+  ): RequiredPhaseWrite? {
+    val scope = session.accounting
+    val state = scope.snapshot ?: return null
+    val criterion =
+      state.criteria.singleOrNull { it.canonicalRef == state.currentCriterionRef } ?: return null
+    val generation = if (criterion.escalated) 2 else 1
+    return when {
+      state.stage != AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED || phase.normalizedOutput == null -> null
+      criterion.planGeneration == generation -> RequiredPhaseWrite.Acknowledged
+      else ->
+        commit(
+          session,
+          phase,
+          AcceptanceCriterionRepairMutation.PlanCompleted(criterion.canonicalRef, generation),
+          CommitContext(expectedState = state),
+        )
     }
   }
 

@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phase.prompt.compose
 
 import skillbill.engine.featuretask.model.audit.AcceptanceAuditInteractionTraceScope
+import skillbill.engine.featuretask.model.audit.AcceptanceRepairPromptFocus
 import skillbill.engine.featuretask.model.audit.UnknownInteractionScenarioContext
 import skillbill.engine.featuretask.model.audit.ValidateProbeScope
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
@@ -43,7 +44,8 @@ public data class FeatureTaskRuntimePhasePromptComposeInputs(
   public val acceptanceOpenGaps: List<AcceptanceCriterionGap> = emptyList(),
   public val acceptanceRepairChangedPaths: List<String> = emptyList(),
   public val acceptanceLateFindings: List<AcceptanceCriterionLateFinding> = emptyList(),
-  public val priorAcceptanceRepairFailures: String? = null,
+  internal val acceptanceRepairFocus: AcceptanceRepairPromptFocus? = null,
+  public val acceptanceRepairOperatorInstructions: String? = null,
   internal val interactionTraceScope: AcceptanceAuditInteractionTraceScope? = null,
   public val unknownInteractionScenarios: List<UnknownInteractionScenarioContext> = emptyList(),
   internal val noChangeClaim: String? = null,

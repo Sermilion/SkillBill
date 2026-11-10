@@ -44,6 +44,8 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
     val reopened =
       if (target == steps.planning) {
         listOf(target, steps.repair, steps.audit)
+      } else if (target == steps.repair && state.stage == AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED) {
+        listOf(target, steps.audit)
       } else {
         listOf(target)
       }
@@ -85,7 +87,9 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
     steps: AcceptanceCriterionRepairStepRoles,
   ): Routing {
     val target = decision.stepId(steps) ?: return Routing.Continue
-    if (target == steps.planning) {
+    val planningReentry = target == steps.planning
+    val repairReentryAfterAudit = target == steps.repair && phaseId == steps.audit
+    if (planningReentry || repairReentryAfterAudit) {
       if (!FeatureTaskRuntimeRunLoopCheckpointRemediation.establishRemediationCheckpoint(
           context,
           phaseId,
@@ -94,13 +98,9 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
       ) {
         return Routing.Stop
       }
-      context.runState.coupledRunTransitions.reenterAcceptanceSteps(
-        listOf(
-          target,
-          steps.repair,
-          steps.audit,
-        ),
-      )
+      val reopened =
+        if (planningReentry) listOf(target, steps.repair, steps.audit) else listOf(target, steps.audit)
+      context.runState.coupledRunTransitions.reenterAcceptanceSteps(reopened)
     } else {
       context.runState.coupledRunTransitions.reenterAcceptanceSteps(listOf(target))
     }

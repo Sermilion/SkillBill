@@ -162,6 +162,12 @@ private fun AcceptanceCriterionRepairCriterion.appendDiscoveryGaps(
   val additions = entries.filter { it.criterionRef == canonicalRef }
   return copy(
     evidenceRef = prose,
+    planGeneration =
+      if (additions.isNotEmpty() && gaps.none { it.status == AcceptanceCriterionGapStatus.OPEN }) {
+        0
+      } else {
+        planGeneration
+      },
     gaps =
       gaps +
         additions.mapIndexed { index, gap ->
@@ -268,6 +274,14 @@ internal fun AcceptanceCriterionRepairCriterion.afterProseAudit(
     } else {
       copy(
         sourceDisposition = disposition,
+        planGeneration =
+          if (sourceDisposition == AcceptanceCriterionSourceDisposition.SOURCE_CLOSED &&
+            disposition == AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED
+          ) {
+            0
+          } else {
+            planGeneration
+          },
         evidenceRef = audit.prose,
         closureEvidenceRef = if (audit.satisfied) audit.prose else null,
         closureTreeDigest = if (audit.satisfied) audit.treeDigest else null,

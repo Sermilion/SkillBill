@@ -56,6 +56,7 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
     producingPhaseId: String = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
     checkpointPolicy: FeatureTaskRuntimeRepositoryCheckpointPolicy =
       FeatureTaskRuntimeRepositoryCheckpointPolicy.NOT_REQUIRED,
+    includeDirective: Boolean = true,
   ): PhaseHandoffProjectionDeclaration =
     upstreamPlanningProjection(
       UpstreamPlanningProjectionSpec(
@@ -63,7 +64,8 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
         sourceRef = FeatureTaskRuntimeHandoffSourceRef.UpstreamPhaseOutput(producingPhaseId),
         projectionName = "${producingPhaseId}_prose",
         projectionContractId = FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.PHASE_PROSE,
-        declaredFieldNames = listOf(SharedPayloadKeys.VALUE, "directive"),
+        declaredFieldNames =
+          if (includeDirective) listOf(SharedPayloadKeys.VALUE, "directive") else listOf(SharedPayloadKeys.VALUE),
         delivery =
           PhaseHandoffProjectionDelivery(
             checkpointPolicy = checkpointPolicy,
@@ -154,29 +156,13 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
           ),
         ),
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX to
-        listOf(
-          phaseProseDeclaration(
-            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
-            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
-          ),
-          phaseProseDeclaration(
-            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
-            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
-          ),
-        ),
+        emptyList(),
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to
         listOf(
           phaseProseDeclaration(
             FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
             FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
-          ),
-          phaseProseDeclaration(
-            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
-            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
-          ),
-          phaseProseDeclaration(
-            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
-            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+            includeDirective = false,
           ),
         ),
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to

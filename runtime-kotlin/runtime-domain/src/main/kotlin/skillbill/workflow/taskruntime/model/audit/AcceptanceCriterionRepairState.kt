@@ -202,6 +202,26 @@ data class AcceptanceCriterionRepairState internal constructor(
     )
   }
 
+  fun completePlan(
+    criterionRef: String,
+    planGeneration: Int,
+  ): AcceptanceCriterionRepairState? {
+    if (stage != AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED ||
+      currentCriterionRef != criterionRef || planGeneration !in 1..2
+    ) {
+      return null
+    }
+    val criterion = criteria.singleOrNull { it.canonicalRef == criterionRef } ?: return null
+    if (planGeneration != if (criterion.escalated) 2 else 1) return null
+    return copy(
+      criteria =
+        criteria.map {
+          it.copy(planGeneration = if (it.canonicalRef == criterionRef) planGeneration else 0)
+        },
+      revision = revision + 1,
+    )
+  }
+
   fun reserve(
     reservationId: String,
     mode: AcceptanceCriterionRepairMode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
