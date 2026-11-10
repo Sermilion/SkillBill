@@ -38,7 +38,7 @@ class ChatChangeReadsTest {
   private val reads = ChatChangeReads(runtime.workTreeSnapshotPort, runtime.workChangesPort, Clock.System)
 
   @Test
-  fun `opening HEAD includes existing dirty files and later commits but excludes earlier commits`() {
+  fun `latest HEAD includes dirty files and drops committed work even after switching branches`() {
     committed("a.kt", "b.kt")
     write("earlier.kt", "committed before opening\n")
     git("add", ".")
@@ -47,8 +47,7 @@ class ChatChangeReadsTest {
     git("add", "b.kt")
     write("a.kt", "unstaged before opening\n")
     write("untracked.kt", "created before opening\n")
-    val opening = snapshot()
-    val initial = assertIs<ChatChangesRead.Listed>(reads.readSinceOpening(repo.path, opening)).changes
+    val initial = assertIs<ChatChangesRead.Listed>(reads.readCurrentChanges(repo.path)).changes
     assertEquals(listOf("a.kt", "b.kt", "untracked.kt"), initial.files.map { it.path })
     assertEquals(0, initial.commitCount)
     assertTrue(initial.uncommitted)
@@ -56,17 +55,37 @@ class ChatChangeReadsTest {
     git("add", ".")
     git("commit", "-q", "-m", "commit after opening")
     write("later.kt", "created afterward\n")
-    val result = assertIs<ChatChangesRead.Listed>(reads.readSinceOpening(repo.path, opening)).changes
-    assertEquals(listOf("a.kt", "b.kt", "later.kt", "untracked.kt"), result.files.map { it.path })
-    assertEquals(listOf("commit after opening"), result.timeline.commits.map { it.subject })
+    val result = assertIs<ChatChangesRead.Listed>(reads.readCurrentChanges(repo.path)).changes
+    assertEquals(listOf("later.kt"), result.files.map { it.path })
+    assertTrue(result.timeline.commits.isEmpty())
+    assertEquals(0, result.commitCount)
     assertTrue(result.uncommitted)
-    assertEquals(opening.headSha, result.comparisonBaseSha)
-    val visibleBaseline = opening.copy(stashSha = null, untrackedPaths = emptyList(), worktrees = emptyMap())
+    assertEquals(gitOutput("rev-parse", "HEAD"), result.headSha)
+    assertEquals("HEAD", result.comparisonBaseSha)
+    val visibleBaseline = ChatChangesBaseline("obsolete-head", emptyList(), "obsolete-stash", kotlin.time.Instant.fromEpochMilliseconds(1))
     val target = chatScopeTarget("chat", repo.path, visibleBaseline, result.timeline, null, result.comparisonBaseSha)
     val listed = assertIs<WorkChangeListResult.Listed>(runtime.workChangesPort.changes(target.allBaseline.toPort()))
     assertEquals(result.files.map { it.path }, listed.files.map { it.path }.sorted())
     assertEquals(result.insertions, listed.insertions)
     assertEquals(result.deletions, listed.deletions)
+
+    git("add", ".")
+    git("commit", "-q", "-m", "finish dirty work")
+    val clean = assertIs<ChatChangesRead.Listed>(reads.readCurrentChanges(repo.path)).changes
+    assertTrue(clean.files.isEmpty())
+    assertFalse(clean.uncommitted)
+    assertTrue(assertIs<WorkChangeListResult.Listed>(runtime.workChangesPort.changes(target.allBaseline.toPort())).files.isEmpty())
+
+    git("checkout", "-q", "-b", "other", "HEAD~1")
+    write("a.kt", "dirty on another branch\n")
+    val switched = assertIs<ChatChangesRead.Listed>(reads.readCurrentChanges(repo.path)).changes
+    assertEquals(listOf("a.kt"), switched.files.map { it.path })
+    assertEquals(gitOutput("rev-parse", "HEAD"), switched.headSha)
+    val window = assertIs<WorkChangeListResult.Listed>(runtime.workChangesPort.changes(target.allBaseline.toPort()))
+    assertEquals(switched.files.map { it.path }, window.files.map { it.path })
+    val patch = assertIs<WorkFileDiffResult.Patch>(runtime.workChangesPort.fileDiff(repo.path, window.baseSha, window.files.single())).text
+    assertTrue("+dirty on another branch" in patch)
+    assertFalse("+staged before opening" in patch)
   }
 
   @Test

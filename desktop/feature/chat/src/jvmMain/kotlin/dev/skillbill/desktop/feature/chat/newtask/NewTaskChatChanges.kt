@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.currentCoroutineContext
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Clock
 
 internal sealed interface ChatChangesState {
   data object None : ChatChangesState
@@ -29,7 +30,7 @@ internal sealed interface ChatChangesState {
 }
 
 internal object UnavailableChatChanges : ChatChangesRepository {
-  override suspend fun readSinceOpening(repositoryRoot: String, baseline: ChatChangesBaseline) = ChatChangesRead.Unavailable("Changes are unavailable.")
+  override suspend fun readCurrentChanges(repositoryRoot: String) = ChatChangesRead.Unavailable("Changes are unavailable.")
   override suspend fun projectWorktrees(repositoryRoot: String) = ChatProjectWorktrees.Unavailable("Changes are unavailable.")
   override suspend fun captureBaseline(repositoryRoot: String) = ChatBaselineCapture.Unavailable("Changes are unavailable.")
   override suspend fun read(repositoryRoot: String, baseline: ChatChangesBaseline, paths: Set<String>?) = ChatChangesRead.Unavailable("Changes are unavailable.")
@@ -213,19 +214,27 @@ internal class NewTaskChatChanges(
         is ChatChangedPaths.Unavailable -> Unit
       }
     }
-    val (saved, paths) = synchronized(lock) { (currentBaseline ?: return) to attributed }
-    val baseline = (saved.worktrees[repositoryRoot] ?: saved).copy(untrackedPaths = emptyList(), stashSha = null, projectId = null, worktrees = emptyMap())
-    val changes = (repository.readSinceOpening(repositoryRoot, baseline) as? ChatChangesRead.Listed)?.changes ?: return
+    val (saved, paths) = synchronized(lock) { currentBaseline to attributed }
+    val changes = (repository.readCurrentChanges(repositoryRoot) as? ChatChangesRead.Listed)?.changes ?: return
+    val baseline = ChatChangesBaseline(changes.headSha, emptyList(), null, saved?.takenAt ?: Clock.System.now())
     val primary = ChatWorktreeChanges(repositoryRoot, baseline, null, changes)
     val siblingPaths = paths?.filter { it.startsWith("/") || it.contains(":/") }?.toSet().orEmpty()
-    val siblings = if (siblingPaths.isNotEmpty()) {
-      (repository.read(repositoryRoot, saved, siblingPaths) as? ChatChangesRead.Listed)?.changes?.worktrees
-        .orEmpty().filter { it.repositoryRoot != repositoryRoot }
-    } else emptyList()
+    val siblings = saved?.worktrees.orEmpty().keys.filter { root ->
+      root != repositoryRoot && siblingPaths.any { it.startsWith(root.replace('\\', '/').trimEnd('/') + "/") }
+    }.mapNotNull { root ->
+      val current = (repository.readCurrentChanges(root) as? ChatChangesRead.Listed)?.changes ?: return@mapNotNull null
+      val prefix = root.replace('\\', '/').trimEnd('/') + "/"
+      val selected = siblingPaths.filter { it.startsWith(prefix) }.map { it.removePrefix(prefix) }.toSet()
+      val files = current.files.filter { it.path in selected || it.oldPath in selected }
+      val filtered = current.copy(files = files, insertions = files.sumOf { it.insertions ?: 0 },
+        deletions = files.sumOf { it.deletions ?: 0 }, uncommitted = files.isNotEmpty())
+      ChatWorktreeChanges(root, baseline.copy(headSha = current.headSha), selected, filtered)
+    }
     val groups = (listOf(primary) + siblings).filter { it.changes.files.isNotEmpty() }
     val files = groups.flatMap { it.changes.files }
     val listed = changes.copy(files = files, insertions = groups.sumOf { it.changes.insertions },
-      deletions = groups.sumOf { it.changes.deletions }, worktrees = if (siblings.isEmpty()) emptyList() else groups)
+      deletions = groups.sumOf { it.changes.deletions }, uncommitted = groups.any { it.changes.uncommitted },
+      worktrees = if (siblings.isEmpty()) emptyList() else groups)
     val state = if (files.isEmpty()) ChatChangesState.None else ChatChangesState.Shown(listed, baseline, resumed, null)
     synchronized(lock) {
       if (!ended && readJob === owner && owner?.isActive != false) mutableState.value = state

@@ -117,7 +117,7 @@ class NewTaskDraftTest {
     assertTrue(resumed.resume(saved))
     runCurrent()
     assertEquals(opening, resumed.chat.value?.changesBaseline)
-    assertTrue(repository.openingReadCalls.all { (_, start) -> start.headSha == opening.headSha })
+    assertTrue(repository.currentReadCalls.isNotEmpty())
     resumed.close()
   }
 

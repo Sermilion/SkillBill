@@ -99,7 +99,7 @@ internal fun NewTaskChangesPanel(state: ChatChangesState.Shown, onOpenDiff: () -
       }
     }
     Row(Modifier.fillMaxWidth().heightIn(min = 30.dp).drawBehind { drawLine(colors.borderSubtle, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-      BasicText("Changes since chat opened" + chatChangesMade(data.commitCount, data.uncommitted).let { if (it.isEmpty()) "" else " · $it" }, style = type.tXs.copy(color = colors.fgFaint))
+      BasicText("Uncommitted changes against HEAD", style = type.tXs.copy(color = colors.fgFaint))
     }
   }
 }

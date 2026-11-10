@@ -30,7 +30,7 @@ class NewTaskChatChangesTest {
   private val secondTurn = snapshot("second-turn")
 
   @Test
-  fun `opening and reopening show pre-existing edits without resetting the starting HEAD`() = runTest {
+  fun `opening and reopening show current edits instead of the saved starting HEAD`() = runTest {
     val original = baseline.copy(untrackedPaths = listOf("untracked.kt"), stashSha = "dirty-snapshot")
     val repository = FakeChatChangesRepository(captureResult = ChatBaselineCapture.Captured(original), readResult = listedChanges(7))
     val fresh = tracker(repository, this, null, null)
@@ -43,10 +43,12 @@ class NewTaskChatChangesTest {
       assertEquals(listOf("a.kt"), shown.changes.files.map { it.path })
       assertEquals(null, shown.paths)
       assertEquals(emptyList(), shown.baseline.untrackedPaths)
+      assertEquals("current-head", shown.baseline.headSha)
+      assertEquals(null, shown.baseline.stashSha)
       changes.end()
     }
     assertEquals(listOf("/work/app"), repository.captureCalls)
-    assertTrue(repository.openingReadCalls.all { (_, start) -> start.headSha == original.headSha && start.stashSha == null })
+    assertEquals(listOf("/work/app", "/work/app"), repository.currentReadCalls)
   }
 
   @Test
@@ -188,7 +190,7 @@ class NewTaskChatChangesTest {
     val releaseRead = CompletableDeferred<Unit>()
     val fake = FakeChatChangesRepository(captureResult = ChatBaselineCapture.Captured(baseline))
     val repository = object : ChatChangesRepository by fake {
-      override suspend fun readSinceOpening(repositoryRoot: String, baseline: ChatChangesBaseline): ChatChangesRead {
+      override suspend fun readCurrentChanges(repositoryRoot: String): ChatChangesRead {
         val result = fake.readResult
         if (!readStarted.isCompleted) {
           readStarted.complete(Unit)
@@ -217,9 +219,56 @@ class NewTaskChatChangesTest {
     assertEquals(5, assertIs<ChatChangesState.Shown>(changes.state.value).changes.insertions)
   }
 
+  @Test
+  fun `missing opening snapshots do not hide current edits and committing hides the pill`() = runTest {
+    val repository = FakeChatChangesRepository(readResult = listedChanges(3))
+    val changes = tracker(repository, this, null, null)
+    testScheduler.advanceUntilIdle()
+    assertEquals(3, assertIs<ChatChangesState.Shown>(changes.state.value).changes.insertions)
+
+    val clean = assertIs<ChatChangesRead.Listed>(repository.readResult).changes.copy(
+      files = emptyList(), insertions = 0, uncommitted = false, headSha = "new-commit",
+      timeline = ChangeScopeTimeline("new-commit", "new-commit", emptyList()),
+    )
+    repository.readResult = ChatChangesRead.Listed(clean)
+    changes.refresh()
+    testScheduler.advanceUntilIdle()
+    assertIs<ChatChangesState.None>(changes.state.value)
+    changes.end()
+  }
+
+  @Test
+  fun `associated sibling changes use its latest HEAD and disappear after committing`() = runTest {
+    val saved = baseline.copy(projectId = "project", worktrees = mapOf("/work/app" to baseline, "/work/linked" to baseline))
+    val fake = FakeChatChangesRepository()
+    val dirty = assertIs<ChatChangesRead.Listed>(listedChanges(2)).changes
+    val clean = dirty.copy(files = emptyList(), insertions = 0, uncommitted = false)
+    var sibling = dirty
+    val repository = object : ChatChangesRepository by fake {
+      override suspend fun readCurrentChanges(repositoryRoot: String) = ChatChangesRead.Listed(
+        if (repositoryRoot == "/work/linked") sibling else clean,
+      )
+    }
+    val changes = tracker(repository, this, saved, setOf("/work/linked/a.kt"))
+    testScheduler.advanceUntilIdle()
+    val shown = assertIs<ChatChangesState.Shown>(changes.state.value)
+    assertTrue(shown.changes.uncommitted)
+    assertEquals(2, shown.changes.insertions)
+    val linked = shown.changes.worktrees.single()
+    assertEquals("/work/linked", linked.repositoryRoot)
+    assertEquals("current-head", linked.baseline.headSha)
+    assertEquals("HEAD", linked.changes.comparisonBaseSha)
+
+    sibling = clean.copy(headSha = "committed-sibling")
+    changes.refresh()
+    testScheduler.advanceUntilIdle()
+    assertIs<ChatChangesState.None>(changes.state.value)
+    changes.end()
+  }
+
   private fun listedChanges(insertions: Int) = ChatChangesRead.Listed(
     ChatChanges(listOf(ChangedFile("a.kt", null, ChangeStatus.Modified, insertions, 0)), insertions, 0, 0, true,
-      "baseline", ChangeScopeTimeline("baseline", "baseline", emptyList())),
+      "current-head", ChangeScopeTimeline("current-head", "current-head", emptyList()), "HEAD"),
   )
 
   private fun tracker(repository: ChatChangesRepository, scope: TestScope, initialBaseline: ChatChangesBaseline?, initialPaths: Set<String>?) =

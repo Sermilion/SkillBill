@@ -35,7 +35,7 @@ import dev.skillbill.desktop.core.ui.input.ShellLayer
 internal fun NewTaskChangesPill(changes: ChatChanges, expanded: Boolean, focusRequester: FocusRequester, onClick: () -> Unit) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
-  SbTooltip("Existing uncommitted changes and changes since this chat opened") {
+  SbTooltip("Uncommitted changes against the latest HEAD") {
     SbPickerButton(
       onClick = onClick,
       modifier = Modifier.focusRequester(focusRequester).semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
