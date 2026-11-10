@@ -357,6 +357,11 @@ internal class ChatTurns(
   internal suspend fun save(session: ChatSession, agent: ChatAgent) {
     val lines = session.historyLines()
     val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
-    chat.saveChat(ChatHistoryEntry(session.sessionId, session.item.id, agent, clock.now(), title, lines))
+    chat.saveChat(
+      ChatHistoryEntry(
+        session.sessionId, session.item.id, agent, clock.now(), title, lines,
+        executionCheckoutRoot = session.startedRoot,
+      ),
+    )
   }
 }

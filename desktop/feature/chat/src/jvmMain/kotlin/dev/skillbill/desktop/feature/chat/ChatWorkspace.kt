@@ -661,11 +661,11 @@ class ChatWorkspace(
           return@withLock
         }
         endAgent(session)
-        val moveOutcome = session.worktreeMoveOutcome
         val root = session.item.workingRoot()
-        val continueSession = session.hasProviderSessionAt(entry, root) || moveOutcome == null || moveOutcome.canContinue(entry.agent.agentId)
+        val continueSession = session.canContinue(entry, root)
         if (continueSession) {
-          session.resumeFrom(entry.sessionId, root, entry.agent)
+          val providerSessionId = if (entry.agent.agentId == "cursor") entry.appSessionId ?: entry.sessionId else entry.sessionId
+          session.resumeFrom(providerSessionId, root, entry.agent)
         } else {
           session.restart(UUID.randomUUID().toString())
         }
@@ -674,6 +674,8 @@ class ChatWorkspace(
         val shown = if (lines.isEmpty()) "The app can't read this session's messages; the agent still has them." else "Showing its last ${lines.size} messages."
         val continuation = if (continueSession) {
           "The next turn continues it with the current execution state."
+        } else if (entry.agent.agentId == "junie" && entry.executionCheckoutRoot == null) {
+          "The saved checkout is unknown, so the next turn starts a fresh provider session. The saved conversation remains available."
         } else {
           "The next turn starts a fresh provider session with the current execution state."
         }

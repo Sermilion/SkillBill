@@ -104,6 +104,14 @@ class ChatSession internal constructor(
   internal fun hasProviderSessionAt(entry: ChatHistoryEntry, root: String): Boolean =
     providerSessionRoots[ProviderSessionIdentity(entry.appSessionId ?: entry.sessionId, entry.agent.agentId)] == root
 
+  internal fun canContinue(entry: ChatHistoryEntry, root: String): Boolean {
+    if (hasProviderSessionAt(entry, root) || entry.executionCheckoutRoot == root) return true
+    val moveOutcome = worktreeMoveOutcome
+    if (moveOutcome != null) return moveOutcome.canContinue(entry.agent.agentId)
+    if (entry.executionCheckoutRoot != null) return false
+    return entry.agent.agentId != "cursor" && entry.agent.agentId != "junie"
+  }
+
   internal val thread = ChatThread(clock)
 
   val transcript: StateFlow<List<ChatMessage>> get() = thread.transcript
