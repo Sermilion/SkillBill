@@ -64,7 +64,7 @@ import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayload
 
 class FeatureTaskRuntimeSerialRepairTest {
   @Test
-  fun `two unfinished repairs consume attempts before a third repair passes independent verification`() {
+  fun `two repairs without closed gaps consume attempts before a third repair passes verification`() {
     val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
     val git = AtomicReference<RecordingWorkflowGitOperations>()
     val reservations = mutableListOf<String>()
@@ -79,7 +79,7 @@ class FeatureTaskRuntimeSerialRepairTest {
           when (phase) {
             "audit" -> {
               audits++
-              continuingAuditOutput(state, audits)
+              continuingAuditOutput(state, audits, satisfied = repairs >= 3)
             }
             "audit_plan_fix" -> {
               plans++
@@ -154,7 +154,7 @@ class FeatureTaskRuntimeSerialRepairTest {
           when (phase) {
             "audit" -> {
               audits++
-              continuingAuditOutput(state, audits)
+              continuingAuditOutput(state, audits, satisfied = false)
             }
             "audit_plan_fix" -> {
               plans++
@@ -187,7 +187,7 @@ class FeatureTaskRuntimeSerialRepairTest {
           worker,
         )
       assertIs<FeatureTaskRuntimeRunReport.Blocked>(report, "$report")
-      assertContains(report.blockedReason, "three unsuccessful repair attempts")
+      assertContains(report.blockedReason, "three charged repair attempts")
       assertEquals(3, repairs)
       assertEquals(3, plans)
       assertEquals(3, reservations.distinct().size)
@@ -210,7 +210,7 @@ class FeatureTaskRuntimeSerialRepairTest {
               audits++
               check(audits <= 3) { "Verdict-less audits relaunched without blocking." }
               if (accounting.get()?.snapshot == null) {
-                serialDiscoveryOutput()
+                verdictlessDiscoveryOutput()
               } else {
                 serialGapDiscoveryProse(
                   "AC-001",
@@ -709,7 +709,7 @@ class FeatureTaskRuntimeSerialRepairTest {
       if (settlementAvailable) {
         assertResumedRepairEvidence(launcher, launchesBeforeResume, exhausted)
         assertEquals("audit_plan_fix", harness.launchedPromptPhaseOrder().drop(beforeResume).firstOrNull(), "$report")
-        assertContains(report.blockedReason, "three unsuccessful repair attempts")
+        assertContains(report.blockedReason, "three charged repair attempts")
         assertEquals(mapOf("AC-002" to 6), repairs)
         assertEquals(
           List(3) { listOf("audit_plan_fix", "audit_implement_fix") }.flatten(),
@@ -739,7 +739,7 @@ class FeatureTaskRuntimeSerialRepairTest {
       }.take(2)
     assertEquals(2, prompts.size)
     prompts.forEach { prompt ->
-      assertContains(prompt, "retained failures: 0 of 3")
+      assertContains(prompt, "charged attempts: 0 of 3")
       exhausted.outcomes.filter { it.criterionRef == "AC-002" && !it.successful }.forEach { outcome ->
         assertContains(prompt, outcome.outcomeId)
         assertContains(prompt, outcome.evidenceRef)
@@ -815,8 +815,6 @@ class FeatureTaskRuntimeSerialRepairTest {
             when {
               state == null -> serialDiscoveryOutput(initialOpenCriteria ?: "AC-001, AC-002")
               state.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED -> serialInteractionOutput(state)
-              prompt.contains("Read-only repair-report admission") ->
-                budgetAdmissionOutput(state.currentCriterionRef, repairsByCriterion, secondCriterionSucceeds)
               state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
                 budgetVerificationOutput(audit, state, repairsByCriterion, secondCriterionSucceeds)
               else -> {
@@ -834,7 +832,7 @@ class FeatureTaskRuntimeSerialRepairTest {
           val current = assertNotNull(state?.currentCriterionRef)
           val used = state.chargedAttempts.getOrDefault(current, 0)
           assertContains(prompt, current)
-          assertContains(prompt, "retained failures: $used of 3")
+          assertContains(prompt, "charged attempts: $used of 3")
           facts(defaultPhaseOutput(request))
         }
         "audit_implement_fix" -> {
@@ -893,10 +891,10 @@ class FeatureTaskRuntimeSerialRepairTest {
     ) {
       serialStructuredAuditOutput(audit, state, "The selected production requirement is satisfied.")
     } else {
-      budgetAdmissionOutput(state.currentCriterionRef, repairsByCriterion, secondCriterionSucceeds)
+      budgetFailedVerificationOutput(state.currentCriterionRef, repairsByCriterion, secondCriterionSucceeds)
     }
 
-  private fun budgetAdmissionOutput(
+  private fun budgetFailedVerificationOutput(
     criterionRef: String?,
     repairsByCriterion: Map<String, Int>,
     secondCriterionSucceeds: Boolean,
@@ -917,6 +915,24 @@ class FeatureTaskRuntimeSerialRepairTest {
     attempt: Int,
     secondCriterionSucceeds: Boolean,
   ): Boolean = attempt == 3 && (criterionRef == "AC-001" || secondCriterionSucceeds)
+
+  private fun verdictlessDiscoveryOutput(): String {
+    val json = assertNotNull(JsonCodec.parseObjectOrNull(serialDiscoveryOutput()))
+    val values = assertNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.jsonElementToValue(json)))
+    return JsonCodec.mapToJsonString(values - SharedPayloadKeys.VERDICT)
+  }
+
+  private fun serialVerificationOutput(
+    audit: Int,
+    state: AcceptanceCriterionRepairState,
+    repairs: Int,
+  ): String =
+    serialStructuredAuditOutput(
+      audit,
+      state,
+      "Current production behavior was inspected.",
+      satisfied = repairs > 1,
+    )
 
   private fun serialLauncher(
     repairs: AtomicInteger,
@@ -941,7 +957,7 @@ class FeatureTaskRuntimeSerialRepairTest {
           } else if (state?.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED) {
             facts(serialInteractionOutput(state))
           } else if (state?.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION) {
-            facts(serialStructuredAuditOutput(audit, state, "Current production behavior meets this requirement."))
+            facts(serialVerificationOutput(audit, state, repairs.get()))
           } else {
             facts(
               if (audit <= 4) {
@@ -1057,11 +1073,12 @@ internal fun runOwnedSerial(
 internal fun continuingAuditOutput(
   state: AcceptanceCriterionRepairState?,
   audits: Int,
+  satisfied: Boolean = true,
 ): String =
   when {
     state == null -> serialDiscoveryOutput()
     state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
-      serialStructuredAuditOutput(audits, state, "The complete production repair is present.")
+      serialStructuredAuditOutput(audits, state, "The production repair was inspected.", satisfied = satisfied)
     state.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED -> serialInteractionOutput(state)
     else ->
       auditRemainingAcOutput(serialGapDiscoveryProse("AC-001")).replace(
@@ -1123,6 +1140,7 @@ internal fun serialStructuredAuditOutput(
   attempt: Int,
   state: AcceptanceCriterionRepairState?,
   prose: String,
+  satisfied: Boolean = true,
 ): String {
   val current = assertNotNull(state)
   val report =
@@ -1130,7 +1148,7 @@ internal fun serialStructuredAuditOutput(
       listOf(prose) +
         current.criteria.firstOrNull { it.canonicalRef == current.currentCriterionRef }
           ?.gaps.orEmpty().filter { it.status == AcceptanceCriterionGapStatus.OPEN }
-          .map { "${it.id}: closed @ src/Foo.kt:1" }
+          .map { "${it.id}: ${if (satisfied) "closed" else "open"} @ src/Foo.kt:1" }
     ).joinToString("\n")
   val tree = current.admittedTreeDigest ?: sha256Hex("unchanged-source")
   val checkpoint = current.admittedCheckpointId ?: "unchanged-source"
@@ -1163,7 +1181,7 @@ internal fun serialStructuredAuditOutput(
       Keys.EXPECTED_REVISION to current.revision.takeIf { targeted },
       Keys.CURRENT_CRITERION_REF to current.currentCriterionRef.takeIf { targeted },
       Keys.RESERVATION_ID to current.reservation?.reservationId.takeIf { targeted },
-      Keys.CRITERIA to selected.map { criterionFact(it, targeted, report) },
+      Keys.CRITERIA to selected.map { criterionFact(it, targeted && satisfied, report) },
       Keys.DEPENDENCIES to current.asRepairWireMap()[Keys.DEPENDENCIES],
       Keys.REGRESSED_REFS to emptyList<String>(),
       Keys.EDGE_CHANGES to emptyList<Any>(),
@@ -1176,7 +1194,7 @@ internal fun serialStructuredAuditOutput(
       SharedPayloadKeys.PHASE_ID to "audit",
       SharedPayloadKeys.STATUS to "completed",
       SharedPayloadKeys.SUMMARY to "Structured acceptance audit.",
-      SharedPayloadKeys.VERDICT to "satisfied",
+      SharedPayloadKeys.VERDICT to if (satisfied) "satisfied" else "advance",
       SharedPayloadKeys.PRODUCED_OUTPUTS to
         mapOf(
           SharedPayloadKeys.VALUE to report,

@@ -133,10 +133,7 @@ internal object AcceptanceAuditPromptSections {
       "the criterion open and request read-only clarification. $ACCEPTED_RECHECK_SENTENCE " +
       "Settle with an explicit verdict: when you complete through $PHASE_COMPLETE_SETTLEMENT_TOOL, pass " +
       "verdict \"satisfied\" when the inspected production scope is met and verdict \"advance\" when it has " +
-      "source gaps. For a runtime-supplied read-only repair-report admission, follow its narrower verdict " +
-      "instructions: progress records one unsuccessful attempt for unfinished implementation, satisfied " +
-      "admits a finished repair for independent source verification, and advance records a concrete external " +
-      "obstacle. A completion without a verdict is read as a clarification request and repeats this audit. " +
+      "source gaps. A completion without a verdict is read as a clarification request and repeats this audit. " +
       "When all required production behavior is implemented, say so in ordinary prose, including when only " +
       "test requirements remain. Block with a concrete failure_disposition only when an " +
       "external dependency prevents inspection. " + AUDIT_READONLY_EVIDENCE_SENTENCE

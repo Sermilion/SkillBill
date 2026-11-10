@@ -37,7 +37,6 @@ import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.WorkflowStatus
-import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapLimits
@@ -57,7 +56,6 @@ import skillbill.workflow.taskruntime.model.audit.retainProseProgress
 import skillbill.workflow.taskruntime.model.audit.sameProducerAs
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import java.io.IOException
 import java.nio.file.Path
 import java.time.Clock
@@ -388,13 +386,6 @@ public class AcceptanceCriterionRepairPersistence(
           "at the 256-record limit.",
       )
     }
-    if (request.repairManifestUnavailable && mutation is AcceptanceCriterionRepairMutation.RepairCompleted) {
-      RuntimeDiagnosticsBestEffortWarning.record(
-        diagnostics,
-        "Workflow $workflowId completed repair admission without a retained repair manifest; " +
-          "no changed-file evidence was available.",
-      )
-    }
   }
 
   internal fun prepareBoundInteractionTrace(
@@ -633,9 +624,7 @@ public class AcceptanceCriterionRepairPersistence(
         ),
       ) == next
     if (!replay) {
-      val patch =
-        settlementPatch(worker.workflowId, record.artifacts, request)
-          ?: return refuse(worker, next, AcceptanceCriterionRepairRefusal.EXPECTED_STATE_CHANGED)
+      val patch = settlementPatch(record.artifacts, request)
       workflowPersistence.persistAcquiredRepairState(
         work.workflowStates,
         record,
@@ -661,54 +650,9 @@ public class AcceptanceCriterionRepairPersistence(
   }
 
   private fun settlementPatch(
-    workflowId: String,
     artifacts: Map<String, Any?>,
     request: AcceptanceCriterionRepairCommit,
-  ): Map<String, Any?>? {
-    val patch = phases.serialPhasePatch(artifacts, request.phase, request.attemptStatus)
-    val additionalPhaseId = request.additionalPhaseId ?: return patch
-    val additional = restoreCompletedPhase(workflowId, additionalPhaseId, artifacts + patch) ?: return null
-    return patch + phases.serialPhasePatch(artifacts + patch, additional, request.additionalAttemptStatus)
-  }
-
-  private fun restoreCompletedPhase(
-    workflowId: String,
-    phaseId: String,
-    artifacts: Map<String, Any?>,
-  ): FeatureTaskRuntimePhaseStateRequest? {
-    val prior = decodePhaseRecords(artifacts)[phaseId] ?: return null
-    val priorEnvelope =
-      prior.outputArtifact?.let { JsonCodec.parseObjectOrNull(it) }
-        ?.let { JsonCodec.jsonElementToValue(it) }
-        ?.let { JsonCodec.anyToStringAnyMap(it) }
-    val normalizedPrior =
-      priorEnvelope?.let {
-        NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(it))
-      } ?: return null
-    return FeatureTaskRuntimePhaseStateRequest(
-      workflowId,
-      phaseId,
-      WorkflowStepStatus.COMPLETED.wireValue,
-      prior.attemptCount,
-      prior.resolvedAgentId,
-      true,
-      outputArtifact = prior.outputArtifact,
-      normalizedOutput = normalizedPrior,
-      blockedReason = prior.blockedReason,
-      failureDisposition = prior.failureDisposition,
-      fileManifestBefore = prior.fileManifestBefore,
-      fileManifestAfter = prior.fileManifestAfter,
-      fileManifestIntroduced = prior.fileManifestIntroduced,
-      loopId = prior.loopId,
-      edgeIteration = prior.edgeIteration,
-      reviewPassNumber = prior.reviewPassNumber,
-      repairEvidence = prior.repairEvidence,
-      launchedModel = prior.launchedModel,
-      launchedEffort = prior.launchedEffort,
-      reviewRunId = prior.reviewRunId,
-      mutating = true,
-    )
-  }
+  ): Map<String, Any?> = phases.serialPhasePatch(artifacts, request.phase, request.attemptStatus)
 
   internal fun recoverProjection(
     repositoryRoot: Path,

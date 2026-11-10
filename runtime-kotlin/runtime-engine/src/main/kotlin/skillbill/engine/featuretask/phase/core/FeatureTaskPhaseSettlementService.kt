@@ -13,8 +13,6 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAcknow
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementBlockRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementCompleteRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementEnvelope
-import skillbill.engine.featuretask.slot.PhaseAcceptanceRepairHooks
-import skillbill.engine.featuretask.slot.PhaseStrategyRegistry
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
@@ -22,7 +20,6 @@ import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementWriteResult
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.decodeValidationEvidenceFromArtifact
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
@@ -38,40 +35,10 @@ public class FeatureTaskPhaseSettlementService(
   private val clock: Clock,
   private val database: DatabaseSessionFactory,
   private val blockIncidentCapture: BlockIncidentCapture,
-  private val strategies: PhaseStrategyRegistry,
 ) {
   public fun completeFromAgent(
     request: FeatureTaskPhaseSettlementCompleteRequest,
-  ): FeatureTaskPhaseSettlementAcknowledgment {
-    val refusal =
-      strategies.strategies.asSequence()
-        .filter { request.phaseId in it.steps }
-        .mapNotNull {
-          (
-            it.stepHooks(
-              request.phaseId,
-            ) as? PhaseAcceptanceRepairHooks
-          )?.unfinishedAgentCompletionRejection
-        }
-        .firstOrNull()
-    if (refusal != null &&
-      (
-        request.verdict == FeatureTaskRuntimeVerdict.PROGRESS.wireValue ||
-          request.verdict == FeatureTaskRuntimeVerdict.NO_PROGRESS.wireValue
-      )
-    ) {
-      return FeatureTaskPhaseSettlementAcknowledgment(
-        status = FeatureTaskPhaseSettlementAckStatus.ERROR,
-        workflowId = request.workflowId,
-        phaseId = request.phaseId,
-        attempt = request.attempt,
-        kind = KIND_COMPLETE,
-        envelope = null,
-        diagnosticCode = refusal.name,
-      )
-    }
-    return complete(request)
-  }
+  ): FeatureTaskPhaseSettlementAcknowledgment = complete(request)
 
   public fun complete(request: FeatureTaskPhaseSettlementCompleteRequest): FeatureTaskPhaseSettlementAcknowledgment =
     complete(request, repository)

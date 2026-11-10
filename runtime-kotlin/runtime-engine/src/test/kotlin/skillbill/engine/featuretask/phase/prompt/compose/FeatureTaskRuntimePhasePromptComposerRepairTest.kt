@@ -152,7 +152,7 @@ class FeatureTaskRuntimePhasePromptComposerRepairTest {
     assertContains(prompt, "If a formatter cannot be scoped safely, record its deferral and continue editing.")
     assertContains(
       prompt.replace(Regex("\\s+"), " "),
-      "Every unfinished repair accepted for settlement consumes one unsuccessful attempt",
+      "If work remains when you stop, say what remains. Your edits are kept and verify runs next.",
     )
     assertFalse(prompt.contains("does not spend a criterion failure"))
     assertFalse(prompt.contains("This retains the\nreservation"))

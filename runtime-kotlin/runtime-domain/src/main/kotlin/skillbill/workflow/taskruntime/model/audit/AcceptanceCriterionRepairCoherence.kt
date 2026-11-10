@@ -175,7 +175,9 @@ internal object AcceptanceCriterionRepairCoherence {
       state.currentCriterionRef == state.pendingAuditRefs.firstOrNull()
 
   private fun hasExhaustedBudget(state: AcceptanceCriterionRepairState): Boolean =
-    AcceptanceCriterionRepairState.hasExhaustedUnresolvedCriterion(state.unresolvedQueue, state.chargedAttempts)
+    state.currentCriterionRef?.let { current ->
+      FocusedRepairStrategy.exhausted(state.chargedAttempts.getOrDefault(current, 0))
+    } ?: false
 
   private fun discoveryIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
     val mode =

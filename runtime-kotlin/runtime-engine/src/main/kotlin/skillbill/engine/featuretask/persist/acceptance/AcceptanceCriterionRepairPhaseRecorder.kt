@@ -43,7 +43,6 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationO
 import skillbill.workflow.taskruntime.model.audit.AcceptanceGapVerificationResolver
 import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairDecision
 import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairStep
-import skillbill.workflow.taskruntime.model.audit.REPAIR_ADMISSION_CLARIFICATION_PREFIX
 import skillbill.workflow.taskruntime.model.audit.acceptanceCriterionIdentity
 import skillbill.workflow.taskruntime.model.audit.auditNeedsClarification
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionEntry
@@ -257,6 +256,18 @@ public class AcceptanceCriterionRepairPhaseRecorder(
     state: AcceptanceCriterionRepairState,
   ): RequiredPhaseWrite {
     val prose = auditProseValue(envelope) ?: phase.outputArtifact.orEmpty()
+    val retainedRepair =
+      state.stage == AcceptanceCriterionRepairStage.REPAIR_RESERVED && phase.phaseId == session.steps.audit &&
+        state.pendingClarificationQuestion != null
+    val changedPaths =
+      if (retainedRepair) {
+        val savedRepair =
+          workflows.readArtifacts(phase.workflowId)?.let(::decodePhaseRecords)?.get(session.steps.repair)
+            ?: return rejected(phase, "Restore the unavailable retained repair phase record before resuming.")
+        savedRepair.fileManifestIntroduced
+      } else {
+        phase.fileManifestIntroduced
+      }
     val checkpoint =
       sourceFingerprint(session.root).takeIf { it.ok && it.value.isNotBlank() }?.value
         ?: return rejected(phase, "The repository fingerprint is unavailable.")
@@ -269,23 +280,18 @@ public class AcceptanceCriterionRepairPhaseRecorder(
         setOf(
           FeatureTaskRuntimeVerdict.SATISFIED.wireValue,
           FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED.wireValue,
-        ) || phase.phaseId == session.steps.repair &&
-        conclusion == FeatureTaskRuntimeVerdict.COMPLETED.wireValue
+        )
     val clarification = auditNeedsClarification(conclusion)
-    val manifest = repairManifest(session, phase, state)
     val evidence =
       CompletionEvidence(
         ref,
         digest,
-        prose,
+        if (retainedRepair) checkNotNull(state.pendingClarificationQuestion) else prose,
         tree,
         checkpoint,
         satisfied,
         clarification,
-        conclusion == FeatureTaskRuntimeVerdict.PROGRESS.wireValue ||
-          conclusion == FeatureTaskRuntimeVerdict.NO_PROGRESS.wireValue,
-        manifest.first,
-        manifest.second,
+        changedPaths,
       )
     val mutation =
       completionMutation(state, phase.phaseId, evidence, session.steps)
@@ -297,11 +303,6 @@ public class AcceptanceCriterionRepairPhaseRecorder(
       CommitContext(
         auditEvidence(mutation, envelope),
         expectedState = state,
-        attemptStatus =
-          FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE.takeIf {
-            phase.phaseId == session.steps.repair && mutation is AcceptanceCriterionRepairMutation.Outcome &&
-              mutation.outcome.kind == AcceptanceCriterionRepairOutcomeKind.INCOMPLETE
-          },
         discoveryDiagnosticFacts = discoveryDiagnosticFacts(state, mutation),
         verificationGapIds =
           if (
@@ -313,28 +314,8 @@ public class AcceptanceCriterionRepairPhaseRecorder(
           } else {
             emptyList()
           },
-        repairManifestUnavailable = evidence.repairManifestUnavailable,
       ),
     )
-  }
-
-  private fun repairManifest(
-    session: AcceptanceCriterionRepairSession,
-    phase: FeatureTaskRuntimePhaseStateRequest,
-    state: AcceptanceCriterionRepairState,
-  ): Pair<List<String>, Boolean> {
-    val repairAdmission =
-      state.stage == AcceptanceCriterionRepairStage.REPAIR_RESERVED &&
-        phase.phaseId == session.steps.audit && state.pendingClarificationQuestion != null
-    val repairPhaseRecord =
-      if (repairAdmission) {
-        workflows.readArtifacts(phase.workflowId)?.let(::decodePhaseRecords)?.get(session.steps.repair)
-      } else {
-        null
-      }
-    val changedPaths =
-      if (repairAdmission) repairPhaseRecord?.fileManifestIntroduced.orEmpty() else phase.fileManifestIntroduced
-    return changedPaths to (repairAdmission && repairPhaseRecord == null)
   }
 
   private fun completeInteractionTrace(
@@ -450,9 +431,7 @@ public class AcceptanceCriterionRepairPhaseRecorder(
     val checkpoint: String,
     val satisfied: Boolean,
     val clarification: Boolean,
-    val unfinished: Boolean,
     val changedPaths: List<String>,
-    val repairManifestUnavailable: Boolean,
   )
 
   private fun sourceFingerprint(root: Path): WorkflowGitOperationResult {
@@ -478,7 +457,6 @@ public class AcceptanceCriterionRepairPhaseRecorder(
     val attemptStatus: FeatureTaskRuntimeImplementationAttemptStatus? = null,
     val discoveryDiagnosticFacts: DiscoveryDiagnosticFacts = DiscoveryDiagnosticFacts(),
     val verificationGapIds: List<String> = emptyList(),
-    val repairManifestUnavailable: Boolean = false,
   )
 
   private data class DiscoveryDiagnosticFacts(
@@ -524,12 +502,11 @@ public class AcceptanceCriterionRepairPhaseRecorder(
     steps: AcceptanceCriterionRepairStepRoles,
   ): AcceptanceCriterionRepairMutation? =
     with(evidence) {
-      val pendingClarificationQuestion = state.pendingClarificationQuestion
       val auditedCriterion = auditedCriterion(state)
       when {
-        phaseId == steps.repair -> repairCompletionMutation(state, evidence)
-        state.stage == AcceptanceCriterionRepairStage.REPAIR_RESERVED && phaseId == steps.audit &&
-          pendingClarificationQuestion != null -> repairAdmissionMutation(state, evidence, pendingClarificationQuestion)
+        phaseId == steps.repair ||
+          state.stage == AcceptanceCriterionRepairStage.REPAIR_RESERVED && phaseId == steps.audit &&
+          state.pendingClarificationQuestion != null -> repairCompletionMutation(state, evidence)
         state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION -> {
           val live = state.reservation ?: return@with null
           val criterion = state.criteria.singleOrNull { it.canonicalRef == live.criterionRef } ?: return@with null
@@ -582,68 +559,14 @@ public class AcceptanceCriterionRepairPhaseRecorder(
   ): AcceptanceCriterionRepairMutation? =
     with(evidence) {
       val live = state.reservation ?: return@with null
-      if (unfinished) {
-        incompleteRepairOutcome(state, evidence)
-      } else if (satisfied) {
-        AcceptanceCriterionRepairMutation.RepairCompleted(
-          live.reservationId,
-          prose,
-          tree,
-          checkpoint,
-          changedPaths,
-        )
-      } else {
-        AcceptanceCriterionRepairMutation.Clarification(
-          "$REPAIR_ADMISSION_CLARIFICATION_PREFIX Inspect the report and current source for this criterion. " +
-            "Report progress when production work remains, including after a partial edit. " +
-            "An unfinished implementation consumes one unsuccessful repair attempt. " +
-            "Report satisfied only when the repair is complete. Report advance only for a concrete external " +
-            "obstacle that prevents further repair, naming the missing input or external action. " +
-            "Task size and unfinished implementation are not external obstacles. " + prose,
-        )
-      }
-    }
-
-  private fun repairAdmissionMutation(
-    state: AcceptanceCriterionRepairState,
-    evidence: CompletionEvidence,
-    pendingClarificationQuestion: String,
-  ): AcceptanceCriterionRepairMutation? =
-    with(evidence) {
-      val live = state.reservation ?: return@with null
-      if (unfinished) {
-        incompleteRepairOutcome(state, evidence)
-      } else if (clarification) {
-        AcceptanceCriterionRepairMutation.Clarification(prose)
-      } else if (satisfied) {
-        AcceptanceCriterionRepairMutation.RepairCompleted(
-          live.reservationId,
-          pendingClarificationQuestion,
-          tree,
-          checkpoint,
-          changedPaths,
-        )
-      } else {
-        incompleteRepairOutcome(state, evidence)
-      }
-    }
-
-  private fun incompleteRepairOutcome(
-    state: AcceptanceCriterionRepairState,
-    evidence: CompletionEvidence,
-  ): AcceptanceCriterionRepairMutation.Outcome? {
-    val live = state.reservation ?: return null
-    return AcceptanceCriterionRepairMutation.Outcome(
-      AcceptanceCriterionRepairOutcome(
-        evidence.ref,
+      AcceptanceCriterionRepairMutation.RepairCompleted(
         live.reservationId,
-        live.criterionRef,
-        evidence.digest,
-        AcceptanceCriterionRepairOutcomeKind.INCOMPLETE,
-        evidence.prose,
-      ),
-    )
-  }
+        prose,
+        tree,
+        checkpoint,
+        changedPaths,
+      )
+    }
 
   internal fun unsuccessful(
     session: AcceptanceCriterionRepairSession,
@@ -668,17 +591,11 @@ public class AcceptanceCriterionRepairPhaseRecorder(
         kind,
         prose,
       )
-    val attemptStatus =
-      if (kind == AcceptanceCriterionRepairOutcomeKind.INCOMPLETE) {
-        FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE
-      } else {
-        FeatureTaskRuntimeImplementationAttemptStatus.BLOCKED
-      }
     return commit(
       session,
       phase,
       AcceptanceCriterionRepairMutation.Outcome(outcome),
-      CommitContext(expectedState = state, attemptStatus = attemptStatus),
+      CommitContext(expectedState = state, attemptStatus = FeatureTaskRuntimeImplementationAttemptStatus.BLOCKED),
     ) == RequiredPhaseWrite.Acknowledged
   }
 
@@ -724,13 +641,6 @@ public class AcceptanceCriterionRepairPhaseRecorder(
     mutation: AcceptanceCriterionRepairMutation,
     context: CommitContext = CommitContext(expectedState = session.accounting.snapshot),
   ): RequiredPhaseWrite {
-    val additionalPhaseId =
-      session.steps.repair.takeIf {
-        phase.phaseId == session.steps.audit && (
-          mutation is AcceptanceCriterionRepairMutation.Outcome &&
-            mutation.outcome.kind == AcceptanceCriterionRepairOutcomeKind.INCOMPLETE
-        )
-      }
     val scope = session.accounting
     val state = context.expectedState
     val result =
@@ -748,19 +658,17 @@ public class AcceptanceCriterionRepairPhaseRecorder(
           context.auditEvidence,
           context.attemptStatus,
           stepRoles = session.steps,
-          additionalPhaseId = additionalPhaseId,
-          additionalAttemptStatus =
-            FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE.takeIf {
-              additionalPhaseId != null
-            },
           repairChangedPaths =
-            phase.fileManifestIntroduced.takeIf {
-              phase.phaseId == session.steps.repair && phase.finished
-            }.orEmpty(),
+            if (mutation is AcceptanceCriterionRepairMutation.RepairCompleted) {
+              mutation.fileManifestIntroduced
+            } else {
+              phase.fileManifestIntroduced.takeIf {
+                phase.phaseId == session.steps.repair && phase.finished
+              }.orEmpty()
+            },
           discoveryFallbackCriteria = context.discoveryDiagnosticFacts.fallbackCriteria,
           discoveryStrayCriteria = context.discoveryDiagnosticFacts.strayCriteria,
           verificationGapIds = context.verificationGapIds,
-          repairManifestUnavailable = context.repairManifestUnavailable,
         ),
         session.root,
       )

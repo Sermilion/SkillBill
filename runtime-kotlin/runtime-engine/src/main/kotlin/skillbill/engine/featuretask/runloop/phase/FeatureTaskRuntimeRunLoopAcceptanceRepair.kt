@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContex
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairBlockReason
 import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairDecision
 import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairStep
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -70,8 +71,7 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
         context.state,
         context.runState.coupledSession(),
         phaseId,
-        "The current acceptance criterion exhausted its three unsuccessful repair attempts. " +
-          "Other criteria have separate budgets. ${scope.currentCriterionContext}",
+        AcceptanceRepairBlockReason.build(state, decision.criterionRef),
       )
       return Routing.Stop
     }

@@ -3,9 +3,6 @@ package skillbill.engine.featuretask.phase.core
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.engine.diagnostics.block.testBlockIncidentCapture
-import skillbill.engine.featuretask.slot.PhaseStrategy
-import skillbill.engine.featuretask.slot.PhaseStrategyRegistry
-import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.persistence.UnitOfWork
@@ -33,6 +30,5 @@ fun testPhaseSettlementService(
     clock,
     selected,
     testBlockIncidentCapture(selected, clock),
-    PhaseStrategyRegistry(listOf<PhaseStrategy>(AcceptanceAuditStrategy())),
   )
 }

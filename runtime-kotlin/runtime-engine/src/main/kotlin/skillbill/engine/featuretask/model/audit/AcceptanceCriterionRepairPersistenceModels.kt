@@ -45,13 +45,10 @@ public data class AcceptanceCriterionRepairCommit(
   public val evidence: AcceptanceCriterionRepairAuditEvidence?,
   internal val attemptStatus: FeatureTaskRuntimeImplementationAttemptStatus? = null,
   internal val stepRoles: AcceptanceCriterionRepairStepRoles? = null,
-  internal val additionalPhaseId: String? = null,
-  internal val additionalAttemptStatus: FeatureTaskRuntimeImplementationAttemptStatus? = null,
   internal val repairChangedPaths: List<String> = emptyList(),
   internal val discoveryFallbackCriteria: List<String> = emptyList(),
   internal val discoveryStrayCriteria: List<String> = emptyList(),
   internal val verificationGapIds: List<String> = emptyList(),
-  internal val repairManifestUnavailable: Boolean = false,
 )
 
 public sealed interface AcceptanceCriterionRepairMutation {
@@ -259,9 +256,9 @@ public class AcceptanceCriterionRepairRunState internal constructor(
       }
       val criterion = state.criteria.firstOrNull { it.canonicalRef == current } ?: return null
       val identity = criterion.originalAlias?.let { "$it ($current)" } ?: current
-      val failures = state.chargedAttempts.getOrDefault(current, 0)
+      val used = state.chargedAttempts.getOrDefault(current, 0)
       val reserved = state.reservation?.takeIf { it.criterionRef == current }?.reservationId
-      val remaining = (FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES - failures).coerceAtLeast(0)
+      val remaining = (FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES - used).coerceAtLeast(0)
       val authoredQueue =
         state.criteria
           .filter { it.canonicalRef in state.pendingAuditRefs || it.canonicalRef in state.unresolvedQueue }
@@ -269,8 +266,9 @@ public class AcceptanceCriterionRepairRunState internal constructor(
       val queuePosition = authoredQueue.indexOf(criterion).takeIf { it >= 0 }?.plus(1)
       val gap = criterion.evidenceRef.takeUnless { it == state.specDigest } ?: "Not assessed."
       return "mode=${state.mode.wireValue}; stage=${state.stage.wireValue}; criterion $identity; " +
-        "retained failures: $failures of ${FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES}; " +
-        "remaining failures: $remaining; queue position: ${queuePosition ?: "unavailable"} of ${authoredQueue.size}; " +
+        "charged attempts: $used of ${FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES}; " +
+        "remaining charged attempts: $remaining; " +
+        "queue position: ${queuePosition ?: "unavailable"} of ${authoredQueue.size}; " +
         "live cycle: ${reserved ?: "none"}; " +
         "authored criterion: ${criterion.originalText}; latest gap: $gap" +
         state.pendingClarificationQuestion?.let { "; read-only clarification: $it" }.orEmpty()

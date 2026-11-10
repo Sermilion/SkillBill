@@ -1,5 +1,6 @@
 package skillbill.workflow.taskruntime.model.audit.interaction
 
+import skillbill.workflow.model.repair.FocusedRepairStrategy
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionInteractionTrace
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProseAudit
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
@@ -205,7 +206,10 @@ private fun AcceptanceCriterionRepairState.applyInteractionTrace(
   val queue =
     AcceptanceCriterionRepairState.stableQueue(nextCriteria, dependencies, nextCriteria.associateBy { it.canonicalRef })
       ?: return null
-  val blocked = AcceptanceCriterionRepairState.hasExhaustedUnresolvedCriterion(queue, chargedAttempts)
+  val blocked =
+    queue.firstOrNull()?.let { current ->
+      FocusedRepairStrategy.exhausted(chargedAttempts.getOrDefault(current, 0))
+    } ?: false
   return copy(
     criteria = nextCriteria,
     unresolvedQueue = queue,

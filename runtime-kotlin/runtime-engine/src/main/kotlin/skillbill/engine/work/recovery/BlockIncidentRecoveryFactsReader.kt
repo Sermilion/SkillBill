@@ -181,9 +181,9 @@ internal object BlockIncidentRecoveryFactsReader {
       outcomes.lastOrNull()?.kind in UNSATISFIED_OUTCOME_KINDS
 
   private fun AcceptanceCriterionRepairState.exhaustedUnresolvedCriterion(): Boolean =
-    unresolvedQueue.any {
+    currentCriterionRef?.let {
       chargedAttempts.getOrDefault(it, 0) >= FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES
-    }
+    } ?: false
 
   private val PENDING_VERDICT_STAGES =
     setOf(

@@ -1,6 +1,19 @@
 package skillbill.workflow.taskruntime.model.audit
 
 import skillbill.workflow.model.repair.FocusedRepairStrategy
+import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+
+val AUDIT_CONCLUSION_VERDICTS: Set<String> =
+  setOf(
+    FeatureTaskRuntimeVerdict.SATISFIED.wireValue,
+    FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED.wireValue,
+    FeatureTaskRuntimeVerdict.NO_CHANGE_REJECTED.wireValue,
+    FeatureTaskRuntimeVerdict.ADVANCE.wireValue,
+  )
+
+fun auditNeedsClarification(conclusion: String?): Boolean = conclusion !in AUDIT_CONCLUSION_VERDICTS
+
+fun AcceptanceCriterionRepairState.awaitsAuditClarification(): Boolean = pendingClarificationQuestion != null
 
 internal const val UNKNOWN_AUDIT_SUFFIX: String = ":trace:unknown"
 

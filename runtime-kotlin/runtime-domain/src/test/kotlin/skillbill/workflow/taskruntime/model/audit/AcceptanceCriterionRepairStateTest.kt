@@ -7,6 +7,197 @@ import kotlin.test.assertNull
 
 class AcceptanceCriterionRepairStateTest {
   @Test
+  fun `gap progress controls charging and replay leaves the budget unchanged`() {
+    val initial = admittedWithTwoGaps()
+    val firstReservation = assertNotNull(initial.reserve("reservation-1"))
+    val firstVerification =
+      assertNotNull(
+        firstReservation.completeRepairAwaitingTargetedVerification(
+          "reservation-1",
+          "repair-1",
+          "b".repeat(64),
+          "checkpoint-1",
+          listOf("src/Foo.kt"),
+        ),
+      )
+    val progress =
+      assertNotNull(
+        firstVerification.record(
+          AcceptanceCriterionRepairOutcome(
+            "outcome-1",
+            "reservation-1",
+            "AC-001",
+            "c".repeat(64),
+            AcceptanceCriterionRepairOutcomeKind.TARGETED_FAILURE,
+            "AC-001.G1: closed @ src/Foo.kt:1\nAC-001.G2: open @ src/Foo.kt:2",
+          ),
+        ),
+      )
+
+    assertEquals(false, progress.outcomes.single().charged)
+    assertEquals(2, progress.outcomes.single().openGapsBefore)
+    assertEquals(1, progress.outcomes.single().openGapsAfter)
+    assertEquals(0, progress.chargedAttempts.getOrDefault("AC-001", 0))
+    assertEquals(AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED, progress.stage)
+    assertNotNull(AcceptanceCriterionRepairState.restore(progress))
+
+    val secondReservation = assertNotNull(progress.reserve("reservation-2"))
+    val secondVerification =
+      assertNotNull(
+        secondReservation.completeRepairAwaitingTargetedVerification(
+          "reservation-2",
+          "repair-2",
+          "d".repeat(64),
+          "checkpoint-2",
+          listOf("src/Foo.kt"),
+        ),
+      )
+    val noProgressOutcome =
+      AcceptanceCriterionRepairOutcome(
+        "outcome-2",
+        "reservation-2",
+        "AC-001",
+        "e".repeat(64),
+        AcceptanceCriterionRepairOutcomeKind.TARGETED_FAILURE,
+        "AC-001.G2: open @ src/Foo.kt:2",
+      )
+    val noProgress = assertNotNull(secondVerification.record(noProgressOutcome))
+
+    assertEquals(true, noProgress.outcomes.last().charged)
+    assertEquals(1, noProgress.chargedAttempts["AC-001"])
+    assertEquals(noProgress, noProgress.record(noProgressOutcome))
+    assertEquals(1, noProgress.chargedAttempts["AC-001"])
+  }
+
+  private fun admittedWithTwoGaps(): AcceptanceCriterionRepairState {
+    val gaps =
+      listOf(
+        AcceptanceCriterionGap(
+          "AC-001.G1",
+          "first gap",
+          "src/Foo.kt:1",
+          AcceptanceCriterionGapStatus.OPEN,
+          AcceptanceCriterionGapOrigin.DISCOVERY,
+          null,
+        ),
+        AcceptanceCriterionGap(
+          "AC-001.G2",
+          "second gap",
+          "src/Foo.kt:2",
+          AcceptanceCriterionGapStatus.OPEN,
+          AcceptanceCriterionGapOrigin.DISCOVERY,
+          null,
+        ),
+      )
+    return assertNotNull(
+      AcceptanceCriterionRepairState.admit(
+        AcceptanceCriterionRepairAdmission(
+          "catalog",
+          "execution",
+          "a".repeat(64),
+          listOf("first"),
+          listOf(criterion("AC-001", 1, "first").copy(gaps = gaps)),
+          emptyList(),
+        ),
+      ),
+    )
+  }
+
+  @Test
+  fun `operator retry resets only the blocked criterion and retains its evidence`() {
+    val criteria = listOf(criterion("AC-001", 1, "first"), criterion("AC-002", 2, "second"))
+    var state =
+      assertNotNull(
+        AcceptanceCriterionRepairState.admit(
+          AcceptanceCriterionRepairAdmission(
+            "catalog",
+            "execution",
+            "a".repeat(64),
+            listOf("first", "second"),
+            criteria,
+            emptyList(),
+          ),
+        ),
+      ).recordProseAudit(
+        AcceptanceCriterionProseAudit(
+          "discovery",
+          1,
+          null,
+          false,
+          "b".repeat(64),
+          "Open criteria: AC-001, AC-002",
+          "c".repeat(64),
+          "checkpoint",
+        ),
+      )!!
+    repeat(3) { index ->
+      val reservation = "reservation-${index + 1}"
+      val verifying =
+        assertNotNull(state.reserve(reservation))
+          .completeRepairAwaitingTargetedVerification(
+            reservation,
+            "repair-$index",
+            "d".repeat(64),
+            "checkpoint-$index",
+          )!!
+      state = assertNotNull(verifying.record(outcome("outcome-$index", reservation, "AC-001", successful = false)))
+    }
+    val otherCriterionOutcome =
+      AcceptanceCriterionRepairOutcome(
+        "other-criterion-outcome",
+        "other-criterion-reservation",
+        "AC-002",
+        "e".repeat(64),
+        AcceptanceCriterionRepairOutcomeKind.BLOCKED,
+        "external dependency",
+        charged = true,
+      )
+    val preservedGaps = openAndClosedGaps(state.criteria)
+    val blocked =
+      state.copy(
+        outcomes = state.outcomes + otherCriterionOutcome,
+        chargedAttempts = state.chargedAttempts + ("AC-002" to 1),
+        criteria = preservedGaps,
+      )
+    val reset = blocked.resetBudgetForOperatorResume()
+
+    assertEquals(AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED, reset.stage)
+    assertEquals(0, reset.chargedAttempts.getOrDefault("AC-001", 0))
+    assertEquals(1, reset.chargedAttempts["AC-002"])
+    assertEquals(blocked.outcomes, reset.outcomes)
+    assertEquals(blocked.criteria, reset.criteria)
+    assertEquals(blocked.revision + 1, reset.revision)
+  }
+
+  private fun openAndClosedGaps(
+    criteria: List<AcceptanceCriterionRepairCriterion>,
+  ): List<AcceptanceCriterionRepairCriterion> {
+    return criteria.map { criterion ->
+      criterion.copy(
+        gaps =
+          listOf(
+            AcceptanceCriterionGap(
+              "${criterion.canonicalRef}.G1",
+              "open gap",
+              "src/Foo.kt:1",
+              AcceptanceCriterionGapStatus.OPEN,
+              AcceptanceCriterionGapOrigin.DISCOVERY,
+              null,
+            ),
+            AcceptanceCriterionGap(
+              "${criterion.canonicalRef}.G2",
+              "closed gap",
+              "src/Foo.kt:2",
+              AcceptanceCriterionGapStatus.CLOSED,
+              AcceptanceCriterionGapOrigin.REPAIR,
+              1,
+            ),
+          ),
+      )
+    }
+  }
+
+  @Test
   fun `an in-flight repair without retained gaps preserves the verifier conclusion`() {
     val initial =
       assertNotNull(

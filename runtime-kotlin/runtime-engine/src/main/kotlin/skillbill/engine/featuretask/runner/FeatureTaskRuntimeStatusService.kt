@@ -247,8 +247,8 @@ public class FeatureTaskRuntimeStatusService(
     criterionRef: String,
     originalAlias: String?,
   ): String {
-    val failures = state.chargedAttempts.getOrDefault(criterionRef, 0)
-    val remaining = (FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES - failures).coerceAtLeast(0)
+    val used = state.chargedAttempts.getOrDefault(criterionRef, 0)
+    val remaining = (FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES - used).coerceAtLeast(0)
     val authoredQueue =
       state.criteria
         .filter { it.canonicalRef in state.pendingAuditRefs || it.canonicalRef in state.unresolvedQueue }
@@ -257,8 +257,8 @@ public class FeatureTaskRuntimeStatusService(
     val alias = originalAlias?.takeIf { it.length <= MAX_INLINE_CRITERION_ALIAS }
     return listOfNotNull(
       "Criterion $criterionRef${alias?.let { " ($it)" }.orEmpty()}",
-      "$failures failures used",
-      "$remaining failures remaining",
+      "$used of 3 charged attempts used",
+      "$remaining charged attempts remaining",
       queuePosition?.let { "queue position $it of ${authoredQueue.size}" },
     ).joinToString("; ")
   }

@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.lifecycle.checkpoint.goalScopedBaselinePaths
 import skillbill.engine.featuretask.lifecycle.checkpoint.isRuntimePrivatePath
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssemblyResult
@@ -43,6 +44,7 @@ import skillbill.engine.featuretask.runner.boundedSchemaGateDetail
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptPlanAuthorization
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
+import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
@@ -219,7 +221,10 @@ internal object FeatureTaskRuntimeRunLoopOutputVerification {
         outputMap,
         blockedDisposition,
       )
-    if (disposition.retryOnResume && !run.policy.singleAgentSession) {
+    val acceptanceRepair =
+      (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair != null &&
+        (recorder as? AcceptanceCriterionRepairCycleRecords)?.isRepairStep(run.phaseId) == true
+    if (!run.policy.singleAgentSession && (disposition.retryOnResume || acceptanceRepair)) {
       val value = (outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS] as? Map<*, *>)?.get(SharedPayloadKeys.VALUE)
       val continuationOutput =
         normalizedOutput.takeIf { run.policy.mutating && !(value as? String).isNullOrBlank() }

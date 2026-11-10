@@ -59,7 +59,7 @@ internal object AuditImplementFixPromptSections {
       "Completed repairs return to a fresh source audit. " +
       "When every in-scope production finding is addressed, report that in ordinary prose and pass verdict " +
       "completed or satisfied to the completion tool. A missing or unrecognized verdict, including final " +
-      "prose without a settlement, requires read-only report admission before source verification. " +
+      "prose without a settlement, proceeds to verify the repair output. " +
       "Finish every in-scope production item in the saved plan before reporting the repair satisfied. " +
       "One guard or one safe edit is not completion when the saved plan still has missing behavior. " +
       "Continue implementing while any in-scope production item remains and authorized source work can proceed. " +
@@ -67,13 +67,7 @@ internal object AuditImplementFixPromptSections {
       "Task size, implementation complexity, and an unproven file-scoped formatter invocation are not reasons " +
       "to stop source repair. If a formatter cannot be scoped safely, record its deferral and continue editing. " +
       "Use compaction to retain the plan and unfinished items when context runs low. " +
-      "Do not call feature_task_phase_complete with progress or no_progress for unfinished source work. " +
-      "The completion tool rejects those handoffs without saving a settlement; continue implementing " +
-      "in this session and attempt. Do not omit or change the verdict to conceal unfinished work. " +
-      "A real process interruption is handled by the runtime, not by declaring partial work complete. " +
-      "Every unfinished repair implementation accepted for settlement consumes one of the " +
-      "selected criterion's three unsuccessful repair attempts, whether or not it changed source files. " +
-      "The runtime preserves edits and reports, then blocks after the third unsuccessful attempt. " +
+      "If work remains when you stop, say what remains. Your edits are kept and verify runs next. " +
       "Never use feature_task_phase_block or a " +
       "retryable failure to hand off unfinished implementation. " +
       "The runtime preserves applied edits and saved repair reports across continuation sessions. " +
@@ -124,13 +118,8 @@ internal object AuditImplementFixPromptSections {
       with the latest audit and current source. Preserve completed edits and continue the saved plan for
       the runtime-selected criterion. Prior completion claims and test-only classifications remain claims
       to verify. Continue every remaining production item in the saved plan under the current reservation.
-      Do not stop after another partial edit while authorized source work can proceed. The completion
-      tool rejects progress and no_progress handoffs without saving a settlement. Continue implementing
-      in the same attempt; do not conceal unfinished work by omitting or changing the verdict.
-      Every unfinished repair accepted for settlement consumes one unsuccessful attempt, even when it
-      changed source files. The runtime preserves
-      edits and reports; the next attempt receives a new reservation and repair plan. Do not replace the
-      plan with another partial guard.
+      If work remains when you stop, say what remains. Your edits are kept and verify runs next.
+      The runtime preserves edits and reports. Do not replace the plan with another partial guard.
 
       $reports
 

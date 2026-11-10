@@ -189,8 +189,9 @@ data class AcceptanceCriterionRepairState internal constructor(
 
   fun resetBudgetForOperatorResume(): AcceptanceCriterionRepairState {
     if (stage != AcceptanceCriterionRepairStage.BUDGET_BLOCKED) return this
+    val current = currentCriterionRef ?: return this
     return copy(
-      chargedAttempts = emptyMap(),
+      chargedAttempts = chargedAttempts + (current to 0),
       stage =
         if (pendingAuditRefs.isEmpty()) {
           AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
@@ -206,7 +207,9 @@ data class AcceptanceCriterionRepairState internal constructor(
     mode: AcceptanceCriterionRepairMode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
   ): AcceptanceCriterionRepairState? {
     val current = currentCriterionRef ?: return null
-    val available = reservation == null && !hasExhaustedUnresolvedCriterion(unresolvedQueue, chargedAttempts)
+    val available =
+      reservation == null &&
+        !FocusedRepairStrategy.exhausted(chargedAttempts.getOrDefault(current, 0))
     val validId = reservationId.isNotBlank() && outcomes.none { it.reservationId == reservationId }
     val capacity = outcomes.size < MAX_REPAIR_OUTCOMES && sourceTransitions.size < MAX_REPAIR_SOURCE_TRANSITIONS
     val allowedStage = stage == AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
@@ -278,12 +281,14 @@ data class AcceptanceCriterionRepairState internal constructor(
     val openGapsBefore =
       verification?.openGapsBefore
         ?: criterion.gaps.count { it.status == AcceptanceCriterionGapStatus.OPEN }
-    if (!chargeOutcome(outcome, totals)) return null
+    val openGapsAfter = verification?.openGapsAfter ?: openGapsBefore
+    val charged = !outcome.successful && openGapsAfter >= openGapsBefore
+    if (charged && !chargeOutcome(outcome, totals)) return null
     val chargedOutcome =
       outcome.copy(
-        charged = !outcome.successful,
+        charged = charged,
         openGapsBefore = openGapsBefore,
-        openGapsAfter = verification?.openGapsAfter ?: openGapsBefore,
+        openGapsAfter = openGapsAfter,
       )
     val changedCriteria =
       criteriaAfter(chargedOutcome, totals[outcome.criterionRef] ?: 0)
@@ -298,7 +303,7 @@ data class AcceptanceCriterionRepairState internal constructor(
     val queue = stableQueue(changedCriteria, dependencies, byRef) ?: return null
     val pending = if (outcome.successful) pendingAuditRefs - outcome.criterionRef else pendingAuditRefs
     val current = pending.firstOrNull() ?: queue.firstOrNull()
-    val blocked = !outcome.successful && FocusedRepairStrategy.exhausted(totals.getOrDefault(outcome.criterionRef, 0))
+    val blocked = charged && FocusedRepairStrategy.exhausted(totals.getOrDefault(outcome.criterionRef, 0))
     return copy(
       criteria = changedCriteria,
       unresolvedQueue = queue,
@@ -412,14 +417,6 @@ data class AcceptanceCriterionRepairState internal constructor(
   companion object {
     const val MAX_DURABLE_UTF8_BYTES: Int = 12_582_912
     const val RESERVATION_UTF8_HEADROOM: Int = 65_536
-
-    internal fun hasExhaustedUnresolvedCriterion(
-      unresolvedQueue: List<String>,
-      chargedAttempts: Map<String, Int>,
-    ): Boolean =
-      unresolvedQueue.any {
-        FocusedRepairStrategy.exhausted(chargedAttempts.getOrDefault(it, 0))
-      }
 
     fun restore(state: AcceptanceCriterionRepairState): AcceptanceCriterionRepairState? =
       state.takeIf { AcceptanceCriterionRepairCoherence.isCoherent(it) }
