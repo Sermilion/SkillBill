@@ -105,7 +105,7 @@ public class WorkBoardItemProjection(
     catchingNonCancellation {
       items.map { item ->
         item.copy(
-          build = buildView(item.snapshot.execution?.invocationId ?: item.snapshot.workflowId, item.running, now),
+          build = buildView(item.snapshot, item.running, now),
         )
       }
     }.getOrElse { error ->
@@ -123,7 +123,7 @@ public class WorkBoardItemProjection(
   ): WorkDetailItem =
     catchingNonCancellation {
       item.copy(
-        build = buildView(item.snapshot.execution?.invocationId ?: item.snapshot.workflowId, item.running, now),
+        build = buildView(item.snapshot, item.running, now),
       )
     }.getOrElse { error ->
       RuntimeDiagnosticsBestEffortWarning.record(
@@ -135,14 +135,18 @@ public class WorkBoardItemProjection(
     }
 
   private fun buildView(
-    runId: String?,
+    snapshot: IdeStatusSnapshot,
     running: Boolean,
     now: Instant,
   ): WorkBuildView? {
-    if (runId == null) return null
+    val runId = snapshot.execution?.invocationId ?: snapshot.workflowId ?: return null
     val row = buildRunRepository.latestForRun(setOf(runId)) ?: return null
     val history = buildRunRepository.history(row.repositoryIdentity, row.command, row.startedAt)
-    val builds = buildRunRepository.buildsForRun(setOf(runId))
+    val builds =
+      buildRunRepository.buildsForRun(setOf(runId)).filter { build ->
+        val subtask = snapshot.currentSubtask
+        subtask == null || subtask.startedAt?.let { build.startedAt >= it } == true
+      }
     val total = totalBuildElapsedMs(builds, running, now)
     return workBuildView(row, history, running, now).copy(
       totalElapsedMs = total,
