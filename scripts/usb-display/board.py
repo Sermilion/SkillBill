@@ -8,6 +8,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 
+STATE_PRIORITY = {"blocked": 0, "active": 1, "failed": 2, "idle": 2, "paused": 3}
+
+
 class BoardReadError(RuntimeError):
     pass
 
@@ -155,6 +158,7 @@ def parse_pages(pages):
     rows = sorted(
         (r for r in rows if r.group == "Goals"), key=lambda r: r.started_at
     ) + [r for r in rows if r.group != "Goals"]
+    rows.sort(key=lambda r: STATE_PRIORITY[r.state])
     return Board(tuple(rows), running, needs_you, finished, observed, tuple(warnings))
 
 
