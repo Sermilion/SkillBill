@@ -107,6 +107,7 @@ class NewTaskDraft internal constructor(
   }, runs = runs)
   private val chatState = MutableStateFlow<NewTaskChat?>(null)
   private val offerState = MutableStateFlow(NewTaskOffer())
+  private var previewTracker: Pair<String, NewTaskChatChanges>? = null
   private var closing = false
   private var offerKeyEdit: NewTaskOfferKeyEdit? = null
   private var lastOfferFieldValue: String? = null
@@ -123,6 +124,8 @@ class NewTaskDraft internal constructor(
     get() = repositoryState
     set(value) {
       if (repositoryState?.root != value?.root) {
+        previewTracker?.second?.end()
+        previewTracker = null
         acceptedKeyState = null
         issueKeyProposals = emptyList()
         offerState.value = NewTaskOffer()
@@ -409,6 +412,8 @@ class NewTaskDraft internal constructor(
   /** Writes any running reply, then ends the chat's agent process and keeps its saved draft, for "New chat" and a window close. */
   internal suspend fun close(): Boolean {
     if (closing) return false
+    previewTracker?.second?.end()
+    previewTracker = null
     val current = chatState.value ?: return true
     closing = true
     return try {
@@ -419,6 +424,15 @@ class NewTaskDraft internal constructor(
     } finally {
       closing = false
     }
+  }
+
+  internal fun previewChanges(root: String): NewTaskChatChanges {
+    previewTracker?.takeIf { it.first == root }?.let { return it.second }
+    previewTracker?.second?.end()
+    return NewTaskChatChanges(
+      changesRepository, scope, chatDispatcher, root, null, resumed = false, repositoryMissing = false,
+      captureAttempted = false, initialAttributedPaths = null,
+    ).also { previewTracker = root to it }
   }
 
   internal suspend fun models(agent: ChatAgent, root: String) = chats.models(agent, root)
@@ -513,6 +527,8 @@ class NewTaskDraft internal constructor(
   }
 
   internal fun dispose() {
+    previewTracker?.second?.end()
+    previewTracker = null
     chatState.value?.end()
     chatState.value = null
     images = emptyList()
@@ -559,6 +575,7 @@ class NewTaskDraft internal constructor(
       resumedChanges,
       changesCaptureAttempted,
       changesAttributedPaths,
+      previewTracker?.takeIf { it.first == root && changesBaseline == null && !started }?.second?.also { previewTracker = null },
     ).also {
       clearChatFeedback()
       chatState.value = it

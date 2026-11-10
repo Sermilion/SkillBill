@@ -80,6 +80,7 @@ internal class NewTaskChat(
   resumedChanges: Boolean = false,
   changesCaptureAttempted: Boolean = false,
   changesAttributedPaths: Set<String>? = null,
+  retainedChanges: NewTaskChatChanges? = null,
 ) {
   @Volatile
   var agent: ChatAgent = agent
@@ -102,7 +103,7 @@ internal class NewTaskChat(
   val thread = retainedThread
   val job: Job = SupervisorJob(scope.coroutineContext[Job])
   private val approvalFlow = ChatApprovals(approvals)
-  private val changesTracker = NewTaskChatChanges(changesRepository, scope, dispatcher, repositoryRoot, initialChangesBaseline, resumedChanges, repositoryMissing, changesCaptureAttempted || initiallyStarted || initialChangesBaseline != null, changesAttributedPaths)
+  private val changesTracker = retainedChanges ?: NewTaskChatChanges(changesRepository, scope, dispatcher, repositoryRoot, initialChangesBaseline, resumedChanges, repositoryMissing, changesCaptureAttempted || initiallyStarted || initialChangesBaseline != null, changesAttributedPaths)
   val changes: StateFlow<ChatChangesState> = changesTracker.state
   suspend fun observeChanges() = changesTracker.observe()
   val changesBaseline: ChatChangesBaseline? get() = changesTracker.baseline

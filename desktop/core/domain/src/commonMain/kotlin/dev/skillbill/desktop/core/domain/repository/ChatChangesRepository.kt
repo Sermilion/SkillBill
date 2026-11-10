@@ -7,6 +7,8 @@ import dev.skillbill.desktop.core.domain.model.ChatChangesRead
 import dev.skillbill.desktop.core.domain.model.ChatProjectWorktrees
 
 interface ChatChangesRepository {
+  suspend fun readSinceOpening(repositoryRoot: String, baseline: ChatChangesBaseline): ChatChangesRead
+
   suspend fun projectWorktrees(repositoryRoot: String): ChatProjectWorktrees
 
   suspend fun captureBaseline(repositoryRoot: String): ChatBaselineCapture
