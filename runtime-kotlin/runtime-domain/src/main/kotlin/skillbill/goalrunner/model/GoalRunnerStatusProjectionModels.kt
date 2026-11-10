@@ -304,10 +304,21 @@ data class GoalRunnerSubtaskAuditCriterion(
 data class GoalRunnerSubtaskAuditAttempt(
   val id: String,
   val number: Int,
-  val passed: Boolean,
-  val uncoveredCount: Int,
+  val passed: Boolean?,
+  val uncoveredCount: Int?,
   val nextPhaseId: String?,
-)
+  val unavailableReason: String? = null,
+) {
+  init {
+    require(
+      if (unavailableReason == null) {
+        passed != null && uncoveredCount != null && uncoveredCount >= 0 && passed == (uncoveredCount == 0)
+      } else {
+        unavailableReason.isNotBlank() && passed == null && uncoveredCount == null && nextPhaseId == null
+      },
+    )
+  }
+}
 
 data class GoalRunnerRunningReviewPass(
   val passNumber: Int,

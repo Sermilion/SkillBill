@@ -120,7 +120,7 @@ fun engineWorkflowGoalRunnerManifestStore(
     )
   val qualityExecution = testWorkflowGoalRunnerQualityExecutionStore(database, workflowSnapshotValidator)
   val parentProjection = GoalParentProjectionWriter(decompositionManifestValidator)
-  val blockWrites = WorkflowGoalRunnerBlockWrites(clock)
+  val blockWrites = WorkflowGoalRunnerBlockWrites(clock, NoopRuntimeDiagnostics)
   return WorkflowGoalRunnerManifestStore(
     database = database,
     projectionPersistence =
@@ -225,7 +225,7 @@ fun engineWorkflowGoalRunnerOutcomeStore(
     blockIncidentCapture = testBlockIncidentCapture(database, clock),
     phaseRecorder = testPhaseRecorder(database, workflowSnapshotValidator),
     clock = clock,
-    blockWrites = WorkflowGoalRunnerBlockWrites(clock),
+    blockWrites = WorkflowGoalRunnerBlockWrites(clock, NoopRuntimeDiagnostics),
     progressRecording =
       WorkflowGoalRunnerProgressRecording(
         database,

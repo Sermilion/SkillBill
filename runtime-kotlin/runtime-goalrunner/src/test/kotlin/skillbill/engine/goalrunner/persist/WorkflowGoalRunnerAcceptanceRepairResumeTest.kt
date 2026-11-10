@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.persist
 
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairHydration
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairMutation
@@ -8,12 +9,14 @@ import skillbill.engine.featuretask.persist.acceptance.SerialRepairSqliteFixture
 import skillbill.engine.featuretask.persist.acceptance.hydrateForTest
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.goal.OperatorBlockedPhaseReopenRequest
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
@@ -24,6 +27,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 class WorkflowGoalRunnerAcceptanceRepairResumeTest {
   @Test
@@ -46,6 +50,9 @@ class WorkflowGoalRunnerAcceptanceRepairResumeTest {
               artifacts =
                 DurableWorkflowArtifacts.fromMap(
                   row.artifacts +
+                    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR.entry(
+                      oldVersion02(blocked),
+                    ) +
                     DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
                       records.mapValues { it.value.asWorkflowArtifactEntry() },
                     ),
@@ -53,7 +60,7 @@ class WorkflowGoalRunnerAcceptanceRepairResumeTest {
             ),
           )
         }
-        val writes = WorkflowGoalRunnerBlockWrites(f.clock)
+        val writes = WorkflowGoalRunnerBlockWrites(f.clock, NoopRuntimeDiagnostics)
 
         fun resume() =
           f.database.transaction { unit ->
@@ -69,12 +76,12 @@ class WorkflowGoalRunnerAcceptanceRepairResumeTest {
           assertIs<AcceptanceCriterionRepairHydration.Present>(
             f.service().hydrateForTest(f.workflowId, f.binding),
           ).state
-        assertEquals(0, resumed.unsuccessfulTotals.getOrDefault("AC-001", 0))
+        assertEquals(0, resumed.chargedAttempts.getOrDefault("AC-001", 0))
         assertEquals(AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED, resumed.stage)
-        assertEquals(blocked.outcomes, resumed.outcomes)
-        assertEquals(blocked.criteria, resumed.criteria)
+        assertEquals(blocked.outcomes.map { it.outcomeId }, resumed.outcomes.map { it.outcomeId })
+        assertTrue(resumed.outcomes.none { it.charged })
+        assertEquals(blocked.criteria.map { it.copy(escalated = false) }, resumed.criteria)
         assertEquals(blocked.unresolvedQueue, resumed.unresolvedQueue)
-        assertEquals(blocked.outcomes.size, resumed.budgetStartOutcomeIndex)
         assertEquals(WorkflowStepStatus.PENDING, decodePhaseRecords(f.snapshot().artifacts).getValue("audit").status)
         assertTrue(resume())
         assertEquals(
@@ -86,13 +93,32 @@ class WorkflowGoalRunnerAcceptanceRepairResumeTest {
         f.owned { worker ->
           val exhaustedAgain = failThreeRepairs(f, worker, resumed, "after")
           assertEquals(6, exhaustedAgain.outcomes.size)
-          assertEquals(3, exhaustedAgain.unsuccessfulTotals["AC-001"])
+          assertEquals(3, exhaustedAgain.chargedAttempts["AC-001"])
           assertIs<AcceptanceCriterionRepairWriteResult.Refused>(
             f.write(worker, exhaustedAgain, AcceptanceCriterionRepairMutation.Reserve("fourth")),
           )
         }
       }
     }
+  }
+
+  private fun oldVersion02(state: AcceptanceCriterionRepairState): Map<String, Any?> {
+    val wire = state.asRepairWireMap().toMutableMap()
+    wire[Keys.CONTRACT_VERSION] = ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
+    wire[Keys.CRITERIA] =
+      assertIs<List<*>>(wire[Keys.CRITERIA]).map { raw ->
+        assertIs<Map<*, *>>(raw).filterKeys { it !in setOf(Keys.GAPS, Keys.PLAN_GENERATION, Keys.ESCALATED) }
+      }
+    wire[Keys.OUTCOMES] =
+      assertIs<List<*>>(wire[Keys.OUTCOMES]).map { raw ->
+        assertIs<Map<*, *>>(raw).filterKeys { it !in setOf(Keys.CHARGED, Keys.OPEN_GAPS_BEFORE, Keys.OPEN_GAPS_AFTER) }
+      }
+    wire[Keys.UNSUCCESSFUL_TOTALS] = state.chargedAttempts
+    wire[Keys.BUDGET_START_OUTCOME_INDEX] = 0
+    wire.remove(Keys.CHARGED_ATTEMPTS)
+    wire.remove(Keys.LATE_FINDINGS)
+    wire.remove(Keys.REPAIR_CHANGED_PATHS)
+    return wire
   }
 
   private fun failThreeRepairs(

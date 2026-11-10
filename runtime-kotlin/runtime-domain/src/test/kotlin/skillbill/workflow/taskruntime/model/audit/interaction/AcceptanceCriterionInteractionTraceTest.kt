@@ -3,6 +3,7 @@ package skillbill.workflow.taskruntime.model.audit.interaction
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProseAudit
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdmission
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -479,7 +480,14 @@ class AcceptanceCriterionInteractionTraceTest {
         "c".repeat(64),
         "source:1",
       )
-    var state = assertNotNull(initial.recordProseAudit(discovery))
+    var state =
+      initial.copy(
+        mode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
+        stage = AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED,
+        pendingAuditRefs = initial.unresolvedQueue,
+        proseAudits = listOf(discovery),
+        revision = discovery.revision,
+      )
     listOf("AC-001", "AC-002").forEach { ref ->
       state =
         assertNotNull(

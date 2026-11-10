@@ -8,7 +8,7 @@ class AcceptanceCriterionAuditAttemptsTest {
   @Test
   fun `a satisfied initial audit closes the attempt and named gaps stay open`() {
     val state = state()
-    val satisfied = state.copy(proseAudits = listOf(proseAudit("audit:pass", 1, true, "")))
+    val satisfied = state.copy(proseAudits = listOf(proseAudit("audit:pass", 1, true, "", emptyList())))
     assertEquals(listOf(AcceptanceCriterionAuditAttempt("audit:pass", 1, true, 0)), satisfied.auditAttempts())
 
     val gapState =
@@ -18,7 +18,7 @@ class AcceptanceCriterionAuditAttemptsTest {
             criterion("AC-001", AcceptanceCriterionSourceDisposition.SOURCE_CLOSED),
             criterion("AC-002"),
           ),
-        proseAudits = listOf(proseAudit("audit:gaps", 1, false, "Open criteria: AC-002")),
+        proseAudits = listOf(proseAudit("audit:gaps", 1, false, "Open criteria: AC-002", listOf("AC-002"))),
       )
     assertEquals(listOf(AcceptanceCriterionAuditAttempt("audit:gaps", 1, false, 1)), gapState.auditAttempts())
   }
@@ -27,7 +27,7 @@ class AcceptanceCriterionAuditAttemptsTest {
   fun `targeted outcomes update gaps while repair outcomes do not become attempts`() {
     val state =
       state().copy(
-        proseAudits = listOf(proseAudit("audit:initial", 1, false, "Open criteria: AC-001")),
+        proseAudits = listOf(proseAudit("audit:initial", 1, false, "Open criteria: AC-001", listOf("AC-001"))),
         outcomes =
           listOf(
             outcome("repair:incomplete", 2, AcceptanceCriterionRepairOutcomeKind.INCOMPLETE),
@@ -45,6 +45,16 @@ class AcceptanceCriterionAuditAttemptsTest {
       ),
       state.auditAttempts(),
     )
+  }
+
+  @Test
+  fun `historical audits without a retained discovery scope do not invent counts`() {
+    val historical = state().copy(proseAudits = listOf(proseAudit("audit:legacy", 1, true, "All criteria met.")))
+
+    val attempt = historical.auditAttempts().single()
+    assertEquals(null, attempt.passed)
+    assertEquals(null, attempt.uncoveredCount)
+    assertNotNull(attempt.unavailableReason)
   }
 
   private fun state(): AcceptanceCriterionRepairState =
@@ -80,6 +90,7 @@ class AcceptanceCriterionAuditAttemptsTest {
     revision: Long,
     satisfied: Boolean,
     prose: String,
+    unresolvedRefs: List<String>? = null,
   ) = AcceptanceCriterionProseAudit(
     id,
     revision,
@@ -89,6 +100,7 @@ class AcceptanceCriterionAuditAttemptsTest {
     prose,
     "c".repeat(64),
     "checkpoint:$id",
+    unresolvedRefs?.let { AcceptanceCriterionDiscoverySnapshot(listOf("AC-001", "AC-002"), it) },
   )
 
   private fun outcome(

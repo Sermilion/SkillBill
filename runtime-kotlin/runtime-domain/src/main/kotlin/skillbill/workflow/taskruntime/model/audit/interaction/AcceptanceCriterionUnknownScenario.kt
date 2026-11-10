@@ -1,6 +1,7 @@
 package skillbill.workflow.taskruntime.model.audit.interaction
 
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.UNKNOWN_AUDIT_SUFFIX
 
 data class AcceptanceCriterionUnknownScenario(
   val scenarioRef: String,

@@ -82,38 +82,25 @@ class FeatureTaskPhaseSettlementServiceTest {
   }
 
   @Test
-  fun `unfinished audit repair cannot settle and can finish in the same attempt`() {
-    listOf("progress", "no_progress").forEach { verdict ->
-      val service = testPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
-      val request =
-        FeatureTaskPhaseSettlementCompleteRequest(
-          workflowId = "wftr-test",
-          phaseId = "audit_implement_fix",
-          attempt = 1,
-          value = "One guard repaired. The remaining production paths still need edits.",
-          verdict = verdict,
-        )
-
-      val refused = service.completeFromAgent(request)
-
-      assertEquals(FeatureTaskPhaseSettlementAckStatus.ERROR, refused.status)
-      assertEquals(
-        FeatureTaskRuntimeFailureCode.AUDIT_REPAIR_UNFINISHED_CONTINUE_IMPLEMENTING.name,
-        refused.diagnosticCode,
+  fun `progress audit repair settlement is stored for verification`() {
+    val service = testPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
+    val request =
+      FeatureTaskPhaseSettlementCompleteRequest(
+        workflowId = "wftr-test",
+        phaseId = "audit_implement_fix",
+        attempt = 1,
+        value = "One guard repaired. The remaining production paths still need edits.",
+        verdict = "progress",
       )
-      assertNull(refused.envelope)
-      assertNull(service.findEnvelope(request.workflowId, request.phaseId, request.attempt))
-      assertEquals(
-        FeatureTaskPhaseSettlementAckStatus.OK,
-        service.completeFromAgent(request.copy(phaseId = "validate")).status,
-      )
-      val finished =
-        service.completeFromAgent(
-          request.copy(value = "Every planned production path repaired.", verdict = "satisfied"),
-        )
-      assertEquals(FeatureTaskPhaseSettlementAckStatus.OK, finished.status)
-      assertNotNull(service.findEnvelope(request.workflowId, request.phaseId, request.attempt))
-    }
+
+    val acknowledgment = service.completeFromAgent(request)
+    val envelope = assertNotNull(service.findEnvelope(request.workflowId, request.phaseId, request.attempt)).envelope
+
+    assertEquals(FeatureTaskPhaseSettlementAckStatus.OK, acknowledgment.status)
+    assertEquals("completed", envelope[SharedPayloadKeys.STATUS])
+    assertEquals("progress", envelope[SharedPayloadKeys.VERDICT])
+    val produced = assertNotNull(JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]))
+    assertTrue((produced[SharedPayloadKeys.VALUE] as String).contains("remaining production paths"))
   }
 
   @Test

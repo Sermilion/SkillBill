@@ -58,38 +58,18 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
   }
 
   @Test
-  fun `three rejected completed repair claims block even when verification reports progress`() {
-    scenarios.`three rejected completed repair claims block even when verification reports progress`()
+  fun `progress repair settlement reaches targeted verification with changed paths`() {
+    scenarios.`progress repair settlement reaches targeted verification with changed paths`()
   }
 
   @Test
-  fun `three rejected repair claims without a verdict block even when verification reports progress`() {
-    scenarios.`three rejected repair claims without a verdict block even when verification reports progress`()
-  }
-
-  @Test
-  fun `three rejected satisfied repair claims block even when verification reports progress`() {
-    scenarios.`three rejected satisfied repair claims block even when verification reports progress`()
+  fun `a retained repair clarification resumes through verification without losing its evidence`() {
+    scenarios.`a retained repair clarification resumes through verification without losing its evidence`()
   }
 
   @Test
   fun `each criterion keeps its own failure count and its third unsuccessful cycle blocks`() {
     scenarios.`each criterion keeps its own failure count and its third unsuccessful cycle blocks`()
-  }
-
-  @Test
-  fun `clarified incomplete repair clears its report and persists the failed attempt before another cycle`() {
-    scenarios.`clarified incomplete repair clears its report and persists the failed attempt before another cycle`()
-  }
-
-  @Test
-  fun `admitted unfinished work consumes an attempt that survives recovery and replay`() {
-    scenarios.`admitted unfinished work consumes an attempt that survives recovery and replay`()
-  }
-
-  @Test
-  fun `direct unfinished work consumes an attempt that survives recovery and replay`() {
-    scenarios.`direct unfinished work consumes an attempt that survives recovery and replay`()
   }
 
   @Test

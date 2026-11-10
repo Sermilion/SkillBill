@@ -3,12 +3,16 @@ package skillbill.engine.featuretask.runner
 import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -47,48 +51,59 @@ class FeatureTaskRuntimeAuditFixPlanningTest {
   }
 
   @Test
-  fun `malformed no-change repair claim preserves the auditors production finding for the next repair plan`() {
-    val finding = "AC-002: Goal monitor resume discards confirmed failed repair commits."
+  fun `malformed no-change repair claim stays out of the focused repair plan`() {
+    val finding = "AC-002.G1: Goal monitor resume discards confirmed failed repair commits. @ src/Monitor.kt:1"
+    val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
     var audits = 0
     var plans = 0
     val launcher =
       RuntimeRecordingLauncher { request ->
         val prompt = requireNotNull(request.skillRunRequest.promptOverride)
         when (phaseIdFromPrompt(prompt)) {
-          "audit" -> facts(if (++audits == 1) auditRemainingAcOutput(finding) else auditSatisfiedOutput())
+          "audit" -> {
+            audits++
+            val state = accounting.get()?.snapshot
+            facts(
+              when {
+                state == null ->
+                  auditRemainingAcOutput("Open criteria: AC-002\n$finding").replace(
+                    "\"status\": \"completed\",",
+                    "\"status\": \"completed\", " + "\"verdict\": \"advance\",",
+                  )
+                state.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED ->
+                  serialInteractionOutput(
+                    state,
+                  )
+                else -> serialStructuredAuditOutput(audits, state, "The production caller preserves repair commits.")
+              },
+            )
+          }
           "audit_plan_fix" -> {
             plans++
             assertContains(prompt, finding)
-            assertContains(prompt, "No-change claim rejected:")
+            assertFalse(prompt.contains("No-change claim rejected:"))
+            assertFalse(prompt.contains("The scoped finding was already satisfied."))
             facts(defaultPhaseOutput(request))
           }
           else -> facts(defaultPhaseOutput(request))
         }
       }
     val harness = runnerHarness(RuntimeHarnessConfig(launcher = launcher))
+    harness.gitOperations.repositoryFingerprintValue = "unchanged-source"
     harness.seedPhase("preplan", "completed", 1, "claude", PREPLAN_OUTPUT)
     harness.seedPhase("plan", "completed", 1, "claude", PLAN_OUTPUT)
     harness.seedPhase("implement", "completed", 1, "claude", IMPLEMENT_OUTPUT)
-    harness.seedPhase(
-      "audit_implement_fix",
-      "completed",
-      1,
-      "claude",
-      JsonCodec.mapToJsonString(
-        mapOf(
-          SharedPayloadKeys.CONTRACT_VERSION to "0.7",
-          SharedPayloadKeys.PHASE_ID to "audit_implement_fix",
-          SharedPayloadKeys.STATUS to "completed",
-          SharedPayloadKeys.PRODUCED_OUTPUTS to
-            mapOf(
-              SharedPayloadKeys.VALUE to "The scoped finding was already satisfied.",
-              "no_change" to mapOf("criterion" to "AC-002"),
-            ),
-        ),
-      ),
-    )
+    seedMalformedNoChange(harness)
 
-    assertIs<FeatureTaskRuntimeRunReport.Completed>(harness.runner.run(harness.request()))
+    runOwnedSerial(harness) { admitted, worker, scope ->
+      accounting.set(scope)
+      val report =
+        harness.runner.run(
+          harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope),
+          worker,
+        )
+      assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
+    }
     assertEquals(1, plans)
   }
 
@@ -164,4 +179,25 @@ class FeatureTaskRuntimeAuditFixPlanningTest {
     |  "produced_outputs": {"value": "$prose"}
     |}
     """.trimMargin()
+
+  private fun seedMalformedNoChange(harness: RunnerHarness) {
+    harness.seedPhase(
+      "audit_implement_fix",
+      "completed",
+      1,
+      "claude",
+      JsonCodec.mapToJsonString(
+        mapOf(
+          SharedPayloadKeys.CONTRACT_VERSION to "0.7",
+          SharedPayloadKeys.PHASE_ID to "audit_implement_fix",
+          SharedPayloadKeys.STATUS to "completed",
+          SharedPayloadKeys.PRODUCED_OUTPUTS to
+            mapOf(
+              SharedPayloadKeys.VALUE to "The scoped finding was already satisfied.",
+              "no_change" to mapOf("criterion" to "AC-002"),
+            ),
+        ),
+      ),
+    )
+  }
 }
