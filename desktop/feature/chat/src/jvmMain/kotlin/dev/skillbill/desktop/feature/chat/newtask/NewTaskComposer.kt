@@ -3,7 +3,6 @@ package dev.skillbill.desktop.feature.chat.newtask
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
@@ -45,7 +44,6 @@ import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
-import dev.skillbill.desktop.feature.chat.ChatModelPicker
 import dev.skillbill.desktop.feature.chat.AgentPicker
 import dev.skillbill.desktop.feature.chat.CursorMcpPicker
 import dev.skillbill.desktop.feature.chat.ChatActivityPill
@@ -154,12 +152,12 @@ internal fun NewTaskComposer(
     }
     if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-      FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+      Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         RepositoryPicker(state, draft, chat, busy, offer.starting, focus, now, Modifier.weight(1f, fill = false), onAction)
-        AgentPicker(state.agent, state.agents, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy) { onAction(NewTaskAction.ChooseAgent(it)) }
-        ChatModelPicker(state.agent, draft.repository?.root, pickersEnabled, load = draft::models) {
-          onAction(NewTaskAction.ChooseModel(it))
-        }
+        AgentPicker(
+          state.agent, state.agents, draft.repository?.root, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy,
+          loadModels = draft::models, onChooseModel = { onAction(NewTaskAction.ChooseModel(it)) },
+        ) { onAction(NewTaskAction.ChooseAgent(it)) }
         if (state.agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
           CursorMcpPicker(cursorMcpDependency, enabled = pickersEnabled) { draft.cursorMcpDependency = it }
         }

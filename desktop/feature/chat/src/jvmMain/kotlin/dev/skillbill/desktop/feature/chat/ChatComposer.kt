@@ -1,9 +1,7 @@
 package dev.skillbill.desktop.feature.chat
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,10 +22,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
@@ -35,14 +29,10 @@ import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
-import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.component.SbMenu
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
 import dev.skillbill.desktop.core.designsystem.component.SbPopoverPlacement
-import dev.skillbill.desktop.core.designsystem.component.SbTooltip
-import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
-import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
@@ -161,19 +151,17 @@ internal fun ChatComposer(
     }
     if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-      FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        ModeBadge(ChatPermissionMode.Act)
-        AgentPicker(agent, workspace.agents, enabled = !busy && !gone) { workspace.switchAgent(id, it) }
-        ChatModelPicker(agent, session.item.repositoryRoot, enabled = !busy && !gone, load = workspace::models) {
-          workspace.switchModel(id, it)
-        }
-        if (agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
-          CursorMcpPicker(cursorMcpDependency, enabled = !gone) {
-            workspace.cursorMcpDependencies[id] = it
-          }
+      ModeBadge(ChatPermissionMode.Act)
+      AgentPicker(
+        agent, workspace.agents, session.item.repositoryRoot, enabled = !busy && !gone,
+        loadModels = workspace::models, onChooseModel = { workspace.switchModel(id, it) },
+      ) { workspace.switchAgent(id, it) }
+      if (agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
+        CursorMcpPicker(cursorMcpDependency, enabled = !gone) {
+          workspace.cursorMcpDependencies[id] = it
         }
       }
-      Row(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+      Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
         if (stoppable) {
           SbButton(
             "Stop", { workspace.stop(id); focus.requestFocus() },
@@ -249,45 +237,4 @@ internal fun CursorMcpPicker(
       }
     }
   }
-}
-
-/** The agent chip; clicking it lists the agents the chat can switch to. */
-@Composable
-internal fun AgentPicker(agent: ChatAgent?, agents: List<String>, enabled: Boolean, disabledWhy: String? = null, onChoose: (String) -> Unit) {
-  var open by remember { mutableStateOf(false) }
-  val close = { open = false }
-  val canOpen = enabled && agents.isNotEmpty()
-  val why = disabledWhy.takeIf { !canOpen }
-  Box {
-    val chipModifier = Modifier.then(if (canOpen) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
-      .clickable(enabled = canOpen, onClickLabel = "Change agent") { open = true }
-      .then(if (why != null) Modifier.semantics { stateDescription = why } else Modifier)
-    val chip = @Composable {
-      SbLabel(
-        chipText(agent),
-        style = SbLabelStyle.Mono,
-        icon = LucideIcons.cpu,
-        maxWidth = 220.dp,
-        modifier = chipModifier,
-      )
-    }
-    if (why != null) SbTooltip(why) { chip() } else chip()
-    if (open && canOpen) {
-      ShellLayer(close)
-      SbPopover(expanded = true, onDismissRequest = close) {
-        SbMenu(
-          agents.map { choice ->
-            SbMenuEntry.Item(choice, { close(); onChoose(choice) }, checked = choice == agent?.agentId, mono = true)
-          },
-        )
-      }
-    }
-  }
-}
-
-internal fun chipText(agent: ChatAgent?): String = when {
-  agent == null -> "No agent"
-  agent.model == null -> "${agentName(agent)} · default"
-  agent.effort == null -> "${agentName(agent)} · ${agent.model}"
-  else -> "${agentName(agent)} · ${agent.model} · ${agent.effort}"
 }
