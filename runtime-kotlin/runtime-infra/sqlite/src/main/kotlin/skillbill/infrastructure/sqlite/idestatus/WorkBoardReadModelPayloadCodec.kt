@@ -192,6 +192,10 @@ internal object WorkBoardReadModelPayloadCodec {
             WorkBoardReadModelPayloadKeys.PROGRESS_TOTAL to it.total,
           )
         },
+    ) + (
+      snapshot.primaryRepositoryRoot?.let {
+        mapOf(WorkBoardReadModelPayloadKeys.PRIMARY_REPOSITORY_ROOT to it)
+      } ?: emptyMap()
     )
 
   private fun snapshotProgressMap(snapshot: IdeStatusSnapshot): Map<String, Any?> =
@@ -326,6 +330,7 @@ internal object WorkBoardReadModelPayloadCodec {
       title = fields.text(WorkBoardReadModelPayloadKeys.TITLE),
       issueKey = fields.nullableText(WorkBoardReadModelPayloadKeys.ISSUE_KEY),
       workflowId = fields.nullableText(WorkBoardReadModelPayloadKeys.WORKFLOW_ID),
+      primaryRepositoryRoot = fields.nullableText(WorkBoardReadModelPayloadKeys.PRIMARY_REPOSITORY_ROOT),
       workflowFamily =
         fields.wireEnumOrNull(
           WorkBoardReadModelPayloadKeys.WORKFLOW_FAMILY,
