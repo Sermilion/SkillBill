@@ -69,6 +69,8 @@ class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
           "WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY",
         FeatureTaskRuntimeWireArtifactKind.GOAL_QUALITY_EXECUTION to
           "WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION",
+        FeatureTaskRuntimeWireArtifactKind.PLAN_BUNDLE_FEASIBILITY to
+          "PlanBundleFeasibilityFailureCode.UNSUPPORTED_VERSION",
       )
 
     FeatureTaskRuntimeWireArtifactKind.entries.forEach { kind ->

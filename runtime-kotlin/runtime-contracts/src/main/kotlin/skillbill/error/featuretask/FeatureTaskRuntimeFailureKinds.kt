@@ -23,3 +23,8 @@ enum class FeatureTaskRuntimeHandoffProjectionFailureKind(
   CHECKPOINT_POLICY_VIOLATION("checkpoint_policy_violation"),
   SCHEMA_INVALID("schema_invalid"),
 }
+
+enum class PlanBundleFeasibilityFailureCode : RuntimeFailureCode {
+  INVALID_STATE,
+  UNSUPPORTED_VERSION,
+}

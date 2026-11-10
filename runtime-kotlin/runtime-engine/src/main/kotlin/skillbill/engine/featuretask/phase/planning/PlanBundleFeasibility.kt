@@ -9,6 +9,9 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityDependency
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityIdentity
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilitySubtaskIdentity
 import java.nio.file.Path
 
 public data class PlanBundleFeasibilitySnapshot internal constructor(
@@ -25,13 +28,33 @@ public data class PlanBundleFeasibilitySnapshot internal constructor(
         .joinToString("\n"),
     )
 
+  public val identity: PlanBundleFeasibilityIdentity =
+    PlanBundleFeasibilityIdentity(
+      parentSha256 = sha256HexUtf8(parentText),
+      manifestSha256 = sha256HexUtf8(manifestText),
+      immutableManifestSha256 = planBundleImmutableManifestHash(manifest),
+      subtasks =
+        manifest.subtasks.map { subtask ->
+          PlanBundleFeasibilitySubtaskIdentity(
+            id = subtask.id,
+            specPath = subtask.specPath,
+            specSha256 = sha256HexUtf8(specTexts.getValue(subtask.id)),
+            criterionRefs =
+              PlanBundleSpecText.acceptanceCriteriaOf(specTexts.getValue(subtask.id)).indices.map {
+                "${subtask.id}.${it + 1}"
+              },
+            dependencies =
+              subtask.dependencies.map {
+                PlanBundleFeasibilityDependency(it.subtaskId, it.optional, it.skipped)
+              },
+          )
+        },
+    )
+
   public val settledSubtaskIds: Set<Int> =
     manifest.subtasks.filter { it.status.decompositionStatus() in SETTLED }.mapTo(mutableSetOf()) { it.id }
 
-  internal val criterionRefs: List<String> =
-    manifest.subtasks.flatMap { subtask ->
-      PlanBundleSpecText.acceptanceCriteriaOf(specTexts.getValue(subtask.id)).indices.map { "${subtask.id}.${it + 1}" }
-    }
+  internal val criterionRefs: List<String> = identity.subtasks.flatMap { it.criterionRefs }
 
   internal fun prompt(): String =
     buildString {

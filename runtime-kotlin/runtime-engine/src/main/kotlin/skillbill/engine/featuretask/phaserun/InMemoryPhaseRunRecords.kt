@@ -7,8 +7,11 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerReq
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProducerOutputRead
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
+import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWrite
+import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWriteResult
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
+import skillbill.engine.featuretask.phase.planning.planBundleFeasibilityWriteResult
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeNoChangePausePort
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecordFor
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
@@ -49,6 +52,8 @@ import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeAppend
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityIdentity
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
@@ -615,6 +620,58 @@ private class InMemoryPhasePlanRecords(
 ) : PhasePlanRecords {
   private val planBundles = mutableMapOf<String, FeatureTaskRuntimePlanBundle>()
   private val waveHistory = mutableMapOf<String, FeatureTaskRuntimePlanFanOutHistory>()
+  private val feasibilityStates = mutableMapOf<String, FeatureTaskRuntimePlanBundleFeasibilityState>()
+
+  override fun loadPlanBundleFeasibility(workflowId: String): FeatureTaskRuntimePlanBundleFeasibilityState? =
+    feasibilityStates[workflowId]?.detached()
+
+  override fun writePlanBundleFeasibility(
+    request: PlanBundleFeasibilityStateWrite,
+  ): PlanBundleFeasibilityStateWriteResult {
+    val phase = phaseRecords[request.phaseId]
+    val attempt =
+      if (phase?.status == WorkflowStepStatus.RUNNING) phase.attemptCount else (phase?.attemptCount ?: 0) + 1
+    if (attempt != request.attempt) return PlanBundleFeasibilityStateWriteResult.Refused("phase attempt changed")
+    val result = planBundleFeasibilityWriteResult(feasibilityStates[request.workflowId]?.detached(), request)
+    if (result is PlanBundleFeasibilityStateWriteResult.Applied) {
+      feasibilityStates[request.workflowId] = result.state.detached()
+      return PlanBundleFeasibilityStateWriteResult.Applied(result.state.detached())
+    }
+    return result
+  }
+
+  private fun FeatureTaskRuntimePlanBundleFeasibilityState.detached() =
+    copy(
+      identity = identity.detached(),
+      acceptedLines = acceptedLines.map { it.copy(dependencyHashes = it.dependencyHashes.toList()) },
+      conflicts = conflicts.toList(),
+      changedSubtaskIds = changedSubtaskIds.toList(),
+      requiredRefs = requiredRefs.toList(),
+      carriedRefs = carriedRefs.toList(),
+      activeLaunch =
+        activeLaunch?.let { launch ->
+          launch.copy(
+            baselineIdentity = launch.baselineIdentity.detached(),
+            intendedAfterIdentity = launch.intendedAfterIdentity?.detached(),
+          )
+        },
+      settledLaunches =
+        settledLaunches.map {
+          it.copy(
+            baselineIdentity = it.baselineIdentity.detached(),
+            intendedAfterIdentity = it.intendedAfterIdentity?.detached(),
+          )
+        },
+      approval = approval?.let { it.copy(criterionLines = it.criterionLines.toList()) },
+    )
+
+  private fun PlanBundleFeasibilityIdentity.detached() =
+    copy(
+      subtasks =
+        subtasks.map { subtask ->
+          subtask.copy(criterionRefs = subtask.criterionRefs.toList(), dependencies = subtask.dependencies.toList())
+        },
+    )
 
   override fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle? = planBundles[workflowId]
 

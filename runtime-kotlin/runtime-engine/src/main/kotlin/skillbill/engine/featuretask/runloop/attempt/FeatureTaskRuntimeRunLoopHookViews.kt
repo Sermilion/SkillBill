@@ -1,6 +1,9 @@
 package skillbill.engine.featuretask.runloop.attempt
 
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWrite
+import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWriteResult
 import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibility
 import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilitySnapshot
 import skillbill.engine.featuretask.phase.planning.PlanBundleTarget
@@ -36,10 +39,15 @@ import skillbill.engine.featuretask.slot.attempt.PhasePlanningOutputContext
 import skillbill.engine.featuretask.slot.attempt.PhasePlanningTraversalContext
 import skillbill.engine.featuretask.slot.attempt.PhasePullRequestLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PlanBundleFeasibilityFailureCode
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
 import java.nio.file.Path
 
 internal object FeatureTaskRuntimeRunLoopHookViews {
@@ -134,6 +142,52 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
         PlanBundleStagingPromotion.seed(planner, target, diagnostics, run.resolvedAgent.resolvedAgentId)
       }
       val snapshot = PlanBundleFeasibility.capture(planner, request.repoRoot, request.issueKey)
+      val workflowId = run.request.workflowId
+      if (context.recorder.loadPlanBundleFeasibility(workflowId) == null) {
+        val phases = context.recorder.loadPhaseRecords(workflowId).orEmpty()
+        val legacyOrigin = phases.values.any { it.outputArtifact?.contains(PlanBundleFeasibility.PREFIX) == true }
+        val phaseRecord = phases[run.phaseId]
+        val attempt =
+          if (phaseRecord?.status == WorkflowStepStatus.RUNNING) {
+            phaseRecord.attemptCount
+          } else {
+            (phaseRecord?.attemptCount ?: 0) + 1
+          }
+        val state =
+          FeatureTaskRuntimePlanBundleFeasibilityState(
+            revision = 0,
+            mode = PlanBundleFeasibilityMode.REVIEW,
+            identity = snapshot.identity,
+            acceptedLines = emptyList(),
+            conflicts = emptyList(),
+            changedSubtaskIds = emptyList(),
+            requiredRefs = snapshot.criterionRefs,
+            carriedRefs = emptyList(),
+            reviewRoundsStarted = 0,
+            repairLaunchesStarted = 0,
+            activeLaunch = null,
+            settledLaunches = emptyList(),
+            lastReviewValue = null,
+            approval = null,
+            legacyOrigin = legacyOrigin,
+          )
+        val result =
+          context.recorder.writePlanBundleFeasibility(
+            PlanBundleFeasibilityStateWrite(workflowId, run.phaseId, attempt, null, null, state),
+          )
+        if (result is PlanBundleFeasibilityStateWriteResult.Refused) {
+          throw SkillBillRuntimeException(
+            PlanBundleFeasibilityFailureCode.INVALID_STATE,
+            "Could not initialize feasibility state for workflow '$workflowId', phase '${run.phaseId}' " +
+              "attempt $attempt: ${result.reason}. Preserve the workflow and retry with current ownership.",
+          )
+        }
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "Initialized feasibility state for workflow '$workflowId' (legacy v1 history: $legacyOrigin); " +
+            "result=${result::class.simpleName}.",
+        )
+      }
       val directory = if (target is PlanBundleTarget.Staged) target.directory else target?.directory
       return snapshot.copy(repairDirectory = directory.takeIf { repairing })
     }

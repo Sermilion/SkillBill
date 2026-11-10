@@ -1,0 +1,153 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://skill-bill.dev/contracts/feature-task-runtime-plan-bundle-feasibility.yaml
+title: Feature task runtime plan bundle feasibility state
+type: object
+additionalProperties: false
+required:
+  - contract_version
+  - revision
+  - mode
+  - identity
+  - accepted_lines
+  - conflicts
+  - changed_subtask_ids
+  - required_refs
+  - carried_refs
+  - review_rounds_started
+  - repair_launches_started
+  - active_launch
+  - settled_launches
+  - last_review_value
+  - approval
+  - legacy_origin
+properties:
+  contract_version: {const: '0.1'}
+  revision: {type: integer, minimum: 0}
+  mode: {enum: [review, repair, approved, blocked]}
+  identity: {$ref: '#/$defs/identity'}
+  accepted_lines:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [ref, line, judged_parent_sha256, judged_manifest_sha256, judged_spec_sha256, dependency_hashes]
+      properties:
+        ref: {type: string, minLength: 1}
+        line: {type: string}
+        judged_parent_sha256: {$ref: '#/$defs/hash'}
+        judged_manifest_sha256: {$ref: '#/$defs/hash'}
+        judged_spec_sha256: {$ref: '#/$defs/hash'}
+        dependency_hashes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [subtask_id, spec_sha256]
+            properties:
+              subtask_id: {type: integer, minimum: 1}
+              spec_sha256: {$ref: '#/$defs/hash'}
+  conflicts:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [ref, line]
+      properties:
+        ref: {type: string, minLength: 1}
+        line: {type: string}
+  changed_subtask_ids: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
+  required_refs: {type: array, uniqueItems: true, items: {type: string, minLength: 1}}
+  carried_refs: {type: array, uniqueItems: true, items: {type: string, minLength: 1}}
+  review_rounds_started: {type: integer, minimum: 0, maximum: 3}
+  repair_launches_started: {type: integer, minimum: 0, maximum: 2}
+  active_launch:
+    oneOf:
+      - {$ref: '#/$defs/launch'}
+      - {type: 'null'}
+  settled_launches: {type: array, items: {$ref: '#/$defs/settledLaunch'}}
+  last_review_value: {type: [string, 'null']}
+  approval:
+    oneOf:
+      - {$ref: '#/$defs/approval'}
+      - {type: 'null'}
+  legacy_origin: {type: boolean}
+$defs:
+  hash: {type: string, pattern: '^[0-9a-f]{64}$'}
+  identity:
+    type: object
+    additionalProperties: false
+    required: [parent_sha256, manifest_sha256, immutable_manifest_sha256, subtasks]
+    properties:
+      parent_sha256: {$ref: '#/$defs/hash'}
+      manifest_sha256: {$ref: '#/$defs/hash'}
+      immutable_manifest_sha256: {$ref: '#/$defs/hash'}
+      subtasks:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [id, spec_path, spec_sha256, criterion_refs, dependencies]
+          properties:
+            id: {type: integer, minimum: 1}
+            spec_path: {type: string, minLength: 1}
+            spec_sha256: {$ref: '#/$defs/hash'}
+            criterion_refs: {type: array, uniqueItems: true, items: {type: string, minLength: 1}}
+            dependencies:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [subtask_id, optional, skipped]
+                properties:
+                  subtask_id: {type: integer, minimum: 1}
+                  optional: {type: boolean}
+                  skipped: {type: boolean}
+  launch:
+    type: object
+    additionalProperties: false
+    required: [transition_id, phase_id, attempt, kind, baseline_identity, repair_directory, intended_after_identity]
+    properties:
+      transition_id: {type: string, minLength: 1}
+      phase_id: {type: string, minLength: 1}
+      attempt: {type: integer, minimum: 1}
+      kind: {enum: [review, repair]}
+      baseline_identity: {$ref: '#/$defs/identity'}
+      repair_directory: {type: [string, 'null']}
+      intended_after_identity:
+        oneOf:
+          - {$ref: '#/$defs/identity'}
+          - {type: 'null'}
+  settledLaunch:
+    type: object
+    additionalProperties: false
+    required:
+      - transition_id
+      - phase_id
+      - attempt
+      - kind
+      - baseline_identity
+      - repair_directory
+      - intended_after_identity
+      - outcome
+      - value
+    properties:
+      transition_id: {type: string, minLength: 1}
+      phase_id: {type: string, minLength: 1}
+      attempt: {type: integer, minimum: 1}
+      kind: {enum: [review, repair]}
+      baseline_identity: {$ref: '#/$defs/identity'}
+      repair_directory: {type: [string, 'null']}
+      intended_after_identity:
+        oneOf:
+          - {$ref: '#/$defs/identity'}
+          - {type: 'null'}
+      outcome: {enum: [completed, blocked, refused]}
+      value: {type: string}
+  approval:
+    type: object
+    additionalProperties: false
+    required: [immutable_fingerprint, criterion_lines, transition_id]
+    properties:
+      immutable_fingerprint: {$ref: '#/$defs/hash'}
+      criterion_lines: {type: array, items: {type: string}}
+      transition_id: {type: string, minLength: 1}

@@ -13,12 +13,14 @@ import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFi
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
 import skillbill.engine.featuretask.phase.planning.authoredBundleReasonForTest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.runner.RUNNER_TEST_PROJECT_STORE
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.planning.outcome.proseRecordPayload
 import skillbill.engine.goalrunner.planning.source.findImportedSubtaskPlanWorkflowIds
 import skillbill.engine.goalrunner.planning.source.findLinkedSubtaskPlanWorkflowId
@@ -134,7 +136,13 @@ class PlanSubtasksReopeningTest {
       val execution = ExecutionPlanAdmissionFixture(SkeletonDefinition.PLAN, database = database)
       val selectedId = "wftr-drifted-plan"
       seedPlans(database, execution, selectedId, "wftr-older-plan", acceptedRecords())
-      val recorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock)
+      val recorder =
+        FeatureTaskRuntimeDecomposeTerminalRecorder(
+          database,
+          testHarnessClock,
+          PlanBundleFeasibilityStateCodec(featureTaskRuntimeWireArtifactValidatorForTest()),
+          NoopRuntimeDiagnostics,
+        )
       val rebased =
         FeatureTaskRuntimePlanBundle(
           FeatureTaskRuntimePlanBundleOrigin.EXISTING,
@@ -169,7 +177,13 @@ class PlanSubtasksReopeningTest {
       val execution = ExecutionPlanAdmissionFixture(SkeletonDefinition.PLAN, database = database)
       val selectedId = "wftr-terminal-plan"
       seedPlans(database, execution, selectedId, "wftr-older-plan", acceptedRecords())
-      val recorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock)
+      val recorder =
+        FeatureTaskRuntimeDecomposeTerminalRecorder(
+          database,
+          testHarnessClock,
+          PlanBundleFeasibilityStateCodec(featureTaskRuntimeWireArtifactValidatorForTest()),
+          NoopRuntimeDiagnostics,
+        )
       val terminal =
         FeatureTaskRuntimeDecomposeTerminal(
           reason = authoredBundleReasonForTest(),
@@ -483,7 +497,12 @@ class PlanSubtasksReopeningTest {
         RUNNER_TEST_PROJECT_STORE,
         TestDecompositionManifestStore,
       ),
-      FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
+      FeatureTaskRuntimeDecomposeTerminalRecorder(
+        database,
+        testHarnessClock,
+        PlanBundleFeasibilityStateCodec(featureTaskRuntimeWireArtifactValidatorForTest()),
+        NoopRuntimeDiagnostics,
+      ),
       testHarnessClock,
     )
 }

@@ -303,6 +303,11 @@ governedResources {
     "SKILL-140: canonical quarantine schema",
   )
   copy(
+    "copyFeatureTaskRuntimePlanBundleFeasibilitySchema",
+    "feature-task-runtime-plan-bundle-feasibility-schema.yaml",
+    "SKILL-534: canonical durable feasibility schema",
+  )
+  copy(
     "copyIssueKeySchema",
     "issue-key-schema.yaml",
     "canonical issue-key schema",
