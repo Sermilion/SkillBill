@@ -7,16 +7,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.padding
 import com.mikepenz.markdown.compose.Markdown
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.MarkdownCodeBlock
 import com.mikepenz.markdown.compose.elements.MarkdownCodeFence
-import com.mikepenz.markdown.compose.elements.MarkdownTable
-import com.mikepenz.markdown.compose.elements.MarkdownTableHeader
-import com.mikepenz.markdown.compose.elements.MarkdownTableRow
 import com.mikepenz.markdown.model.markdownDimens
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import com.mikepenz.markdown.model.DefaultMarkdownColors
@@ -24,7 +19,6 @@ import com.mikepenz.markdown.model.DefaultMarkdownTypography
 import com.mikepenz.markdown.model.markdownPadding
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.runtimeTextStyles
-import dev.skillbill.desktop.core.designsystem.detail.SbBox
 
 @Composable
 internal fun ChatMarkdown(text: String, modifier: Modifier = Modifier) {
@@ -70,21 +64,7 @@ internal fun ChatMarkdown(text: String, modifier: Modifier = Modifier) {
       components = markdownComponents(
         codeFence = { MarkdownCodeFence(it.content, it.node, it.typography.code) { code, language, _ -> ChatCodeBlock(code, language) } },
         codeBlock = { MarkdownCodeBlock(it.content, it.node, it.typography.code) { code, language, _ -> ChatCodeBlock(code, language) } },
-        table = {
-          SbBox(Modifier.padding(vertical = 4.dp)) {
-            MarkdownTable(
-              it.content,
-              it.node,
-              it.typography.table,
-              headerBlock = { content, header, width, style ->
-                MarkdownTableHeader(content, header, width, style, maxLines = Int.MAX_VALUE, overflow = TextOverflow.Clip)
-              },
-              rowBlock = { content, row, width, style ->
-                MarkdownTableRow(content, row, width, style, maxLines = Int.MAX_VALUE, overflow = TextOverflow.Clip)
-              },
-            )
-          }
-        },
+        table = { ChatMarkdownTable(it.content, it.node, it.typography.table) },
       ),
     )
   }

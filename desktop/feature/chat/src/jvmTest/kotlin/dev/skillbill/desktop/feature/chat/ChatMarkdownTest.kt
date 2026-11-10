@@ -4,19 +4,27 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import java.io.File
+import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -73,9 +81,20 @@ class ChatMarkdownTest {
     val table = onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange))
     val range = table.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange]
     assertTrue(range.maxValue() > 0f)
-    table.performSemanticsAction(SemanticsActions.ScrollBy) { it(range.maxValue(), 0f) }
+    val screenshots = File("build/reports/chat-tables").apply { mkdirs() }
+    ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(screenshots, "before-scroll.png"))
+    onNodeWithContentDescription("Scroll table horizontally").assertIsDisplayed().performMouseInput {
+      moveTo(Offset(12f, center.y))
+      press()
+      moveTo(Offset(width - 2f, center.y))
+      release()
+    }
     runOnIdle { assertTrue(range.value() > 0f) }
-    onNodeWithText(lastCell, substring = true).assertIsDisplayed()
+    ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(screenshots, "after-scroll.png"))
+    val last = onNodeWithText(lastCell, substring = true).assertIsDisplayed()
+    val layouts = mutableListOf<TextLayoutResult>()
+    last.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+    assertTrue(last.fetchSemanticsNode().boundsInRoot.width >= layouts.single().size.width - 1f, "The entire last column must be visible after dragging")
   }
 
 }
