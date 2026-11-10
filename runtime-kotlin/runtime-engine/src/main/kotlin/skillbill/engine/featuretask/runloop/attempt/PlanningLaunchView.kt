@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.phase.planning.PlanBundleTarget
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.planning.PlanBundleStagingPromotion
+import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchRuntimeContext
 import skillbill.engine.featuretask.slot.attempt.PhasePlanningLaunchContext
 import skillbill.engine.featuretask.slot.attempt.PlanBundleFeasibilityLaunchContext
@@ -19,13 +20,18 @@ import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeP
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
+import skillbill.workflow.taskruntime.model.planning.PLAN_BUNDLE_FEASIBILITY_RUNTIME_COMPLETION_VALUE
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityApprovalCandidate
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityIdentity
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunch
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunchKind
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunchOutcome
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityReviewProjection
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityReviewScope
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityReviewScopeResult
 import skillbill.workflow.taskruntime.model.planning.blockPlanBundleFeasibilityLaunch
+import skillbill.workflow.taskruntime.model.planning.finalizeCurrentPlanBundleFeasibility
 import java.nio.file.Path
 
 internal class PlanningLaunchView(
@@ -50,16 +56,109 @@ internal class PlanningLaunchView(
       context.recorder.loadPlanBundleFeasibility(run.request.workflowId)
         ?.let { recoverApprovalCandidate(it, currentSnapshot) } ?: return null
     val candidate = state.approvalCandidate ?: return null
-    val record = context.recorder.loadPhaseRecords(request.workflowId)?.get(run.phaseId) ?: return null
-    return if (!candidateMatchesCurrentRecord(candidate, currentSnapshot, record)) {
-      null
-    } else {
-      if (record.status == WorkflowStepStatus.COMPLETED) {
-        completedApprovalOutcome(state, currentSnapshot, record)
-      } else {
-        publishApprovalCandidate(state, candidate)
-      }
+    val record = context.recorder.loadPhaseRecords(request.workflowId)?.get(run.phaseId)
+    return when {
+      canPublishRuntimeCandidate(candidate, currentSnapshot, record) -> publishApprovalCandidate(state, candidate)
+      record == null -> null
+      !candidateMatchesCurrentRecord(candidate, currentSnapshot, record) -> null
+      record.status == WorkflowStepStatus.COMPLETED -> completedApprovalOutcome(state, currentSnapshot, record)
+      else -> publishApprovalCandidate(state, candidate)
     }
+  }
+
+  private fun canPublishRuntimeCandidate(
+    candidate: PlanBundleFeasibilityApprovalCandidate,
+    snapshot: PlanBundleFeasibilitySnapshot,
+    record: FeatureTaskRuntimePhaseRecord?,
+  ): Boolean {
+    val currentAttempt = candidate.attempt == progress.phase(run.phaseId).nextIteration
+    val currentEvidence =
+      candidate.reviewerAgentId == "runtime" && candidate.immutableFingerprint == snapshot.fingerprint
+    return currentAttempt && currentEvidence && record?.status != WorkflowStepStatus.COMPLETED
+  }
+
+  override fun completeCurrentBundleFeasibility(run: PhaseRun): PhaseOutcome? {
+    check(run === this.run) { "Feasibility completion must settle the accepted planning step." }
+    val workflowId = request.workflowId
+    var snapshot = PlanBundleFeasibility.capture(context.decompositionPlanner, request.repoRoot, request.issueKey)
+    var state = context.recorder.loadPlanBundleFeasibility(workflowId) ?: return null
+    state.invalidReason()?.let {
+      refuseFeasibility(workflowId, run.phaseId, progress.phase(run.phaseId).nextIteration, it)
+    }
+    val active = state.activeLaunch
+    if (active != null) {
+      when (
+        val recovered =
+          recoverActiveFeasibilityLaunch(context, run, progress.phase(run.phaseId).nextIteration, state, snapshot)
+      ) {
+        is FeasibilityLaunchRecovery.Ready -> state = recovered.state
+        is FeasibilityLaunchRecovery.Blocked -> return PhaseOutcome.blocked(recovered.reason)
+      }
+      snapshot = PlanBundleFeasibility.capture(context.decompositionPlanner, request.repoRoot, request.issueKey)
+    }
+    if (state.activeLaunch != null || state.mode != PlanBundleFeasibilityMode.REVIEW || state.conflicts.isNotEmpty()) {
+      return null
+    }
+    val projection =
+      when (val result = PlanBundleFeasibilityReviewScope.derive(snapshot.identity, state)) {
+        is PlanBundleFeasibilityReviewScopeResult.Valid -> result.projection
+        is PlanBundleFeasibilityReviewScopeResult.Invalid ->
+          refuseFeasibility(workflowId, run.phaseId, progress.phase(run.phaseId).nextIteration, result.reason)
+      }
+    return if (projection.requiredRefs.isEmpty()) {
+      finalizeCurrentFeasibility(state, snapshot, projection)
+    } else {
+      null
+    }
+  }
+
+  private fun finalizeCurrentFeasibility(
+    state: FeatureTaskRuntimePlanBundleFeasibilityState,
+    snapshot: PlanBundleFeasibilitySnapshot,
+    projection: PlanBundleFeasibilityReviewProjection,
+  ): PhaseOutcome? {
+    val workflowId = request.workflowId
+    val attempt = progress.phase(run.phaseId).nextIteration
+    val output =
+      PlanDecompositionStop.settledOutput(
+        run.phaseId,
+        "Completed bundle feasibility from retained current evidence.",
+        PLAN_BUNDLE_FEASIBILITY_RUNTIME_COMPLETION_VALUE,
+      )
+    val cycle = state.currentCycleId ?: return null
+    val transitionId = "$workflowId:$cycle:runtime:$attempt:${state.revision}"
+    val proposed =
+      finalizeCurrentPlanBundleFeasibility(
+        state,
+        projection,
+        PlanBundleFeasibilityApprovalCandidate(
+          sourceRevision = state.revision + 1,
+          immutableFingerprint = snapshot.fingerprint,
+          transitionId = transitionId,
+          phaseId = run.phaseId,
+          attempt = attempt,
+          reviewerAgentId = "runtime",
+          normalizedEnvelope = output.canonicalJson,
+          fileManifestBefore = emptyList(),
+          fileManifestAfter = emptyList(),
+          fileManifestIntroduced = emptyList(),
+        ),
+      ) ?: return null
+    val persisted =
+      context.recorder.writePlanBundleFeasibility(
+        PlanBundleFeasibilityStateWrite(
+          workflowId,
+          run.phaseId,
+          attempt,
+          state.revision,
+          transitionId,
+          proposed,
+        ),
+      ).stateOrRefuse(workflowId, run.phaseId, attempt, "finalize current feasibility evidence")
+    val unchanged = PlanBundleFeasibility.capture(context.decompositionPlanner, request.repoRoot, request.issueKey)
+    if (unchanged.identity != projection.identity) return null
+    val candidate = checkNotNull(persisted.approvalCandidate)
+    return publishApprovalCandidate(persisted, candidate)
   }
 
   private fun completedApprovalOutcome(
@@ -108,6 +207,16 @@ internal class PlanningLaunchView(
     state: FeatureTaskRuntimePlanBundleFeasibilityState,
     candidate: PlanBundleFeasibilityApprovalCandidate,
   ): PhaseOutcome? {
+    val currentSnapshot =
+      PlanBundleFeasibility.capture(context.decompositionPlanner, request.repoRoot, request.issueKey)
+    val approvingTransition = state.settledLaunches.singleOrNull { it.transitionId == candidate.transitionId }
+    if (approvingTransition?.baselineIdentity != currentSnapshot.identity) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        context.diagnostics,
+        "Feasibility approval candidate '${candidate.transitionId}' no longer matches the captured bundle identity.",
+      )
+      return null
+    }
     val normalized =
       NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(
         candidate.normalizedEnvelope,
@@ -131,6 +240,7 @@ internal class PlanningLaunchView(
         fileManifestAfter = candidate.fileManifestAfter,
         fileManifestIntroduced = candidate.fileManifestIntroduced,
       )
+    if (candidate.reviewerAgentId == "runtime" && !startRuntimeCandidateAttempt(phaseState)) return null
     val output =
       FeatureTaskRuntimePhaseOutput(
         candidate.phaseId,
@@ -148,6 +258,31 @@ internal class PlanningLaunchView(
     } else {
       null
     }
+  }
+
+  private fun startRuntimeCandidateAttempt(phaseState: FeatureTaskRuntimePhaseStateRequest): Boolean {
+    val existing = context.recorder.loadPhaseRecords(request.workflowId)?.get(phaseState.phaseId)
+    if (existing?.status == WorkflowStepStatus.RUNNING && existing.attemptCount == phaseState.attemptCount) return true
+    val started =
+      context.recorder.recordRequiredPhaseStart(
+        phaseState.copy(
+          status = WorkflowStepStatus.RUNNING.wireValue,
+          finished = false,
+          outputArtifact = null,
+          normalizedOutput = null,
+          feasibilityApprovalRequired = false,
+          feasibilityApprovalRevision = null,
+          feasibilityApprovalExpectedRevision = null,
+          feasibilityApprovalTransitionId = null,
+        ),
+      )
+    if (started is RequiredPhaseWrite.Acknowledged) return true
+    RuntimeDiagnosticsBestEffortWarning.record(
+      context.diagnostics,
+      "Could not acquire planning attempt ${phaseState.attemptCount} to publish feasibility approval " +
+        "candidate '${phaseState.feasibilityApprovalTransitionId}'.",
+    )
+    return false
   }
 
   private fun recoverApprovalCandidate(
@@ -363,7 +498,6 @@ internal class PlanningLaunchView(
     snapshot: PlanBundleFeasibilitySnapshot,
     target: PlanBundleTarget?,
   ): PlanBundleFeasibilityLaunchContext {
-    val planner = context.decompositionPlanner
     val workflowId = request.workflowId
     val transitionId = feasibilityTransitionId(workflowId, run.phaseId, attempt)
     val kind =
@@ -376,6 +510,12 @@ internal class PlanningLaunchView(
       refuseFeasibility(workflowId, run.phaseId, attempt, current.blockedReason())
     }
     val directory = if (target is PlanBundleTarget.Staged) target.directory else target?.directory
+    val projection =
+      when (val result = PlanBundleFeasibilityReviewScope.derive(snapshot.identity, current)) {
+        is PlanBundleFeasibilityReviewScopeResult.Valid -> result.projection
+        is PlanBundleFeasibilityReviewScopeResult.Invalid ->
+          refuseFeasibility(workflowId, run.phaseId, attempt, result.reason)
+      }
     val repositoryCapture = captureRepositoryBaseline(context.gitOperations, request.repoRoot)
     val repositoryBaseline =
       (repositoryCapture as? RepositoryBaselineCapture.Captured)?.baseline
@@ -406,18 +546,7 @@ internal class PlanningLaunchView(
         sequence = sequence,
         repositoryBaseline = repositoryBaseline,
       )
-    val next =
-      current.copy(
-        revision = current.revision + 1,
-        reviewRoundsStarted =
-          current.reviewRoundsStarted +
-            if (kind == PlanBundleFeasibilityLaunchKind.REVIEW) 1 else 0,
-        repairLaunchesStarted =
-          current.repairLaunchesStarted +
-            if (kind == PlanBundleFeasibilityLaunchKind.REPAIR) 1 else 0,
-        activeLaunch = admitted,
-        currentCycleId = cycleId,
-      )
+    val next = admittedFeasibilityState(current, admitted, projection)
     val state =
       context.recorder.writePlanBundleFeasibility(
         PlanBundleFeasibilityStateWrite(
@@ -429,7 +558,41 @@ internal class PlanningLaunchView(
           next,
         ),
       ).stateOrRefuse(workflowId, run.phaseId, attempt, "admit review")
-    return prepareAdmittedFeasibility(attempt, current, state, snapshot, target)
+    return prepareAdmittedFeasibility(attempt, state, snapshot, target, projection)
+  }
+
+  private fun admittedFeasibilityState(
+    current: FeatureTaskRuntimePlanBundleFeasibilityState,
+    admitted: PlanBundleFeasibilityLaunch,
+    projection: PlanBundleFeasibilityReviewProjection,
+  ): FeatureTaskRuntimePlanBundleFeasibilityState {
+    val reviewing = admitted.kind == PlanBundleFeasibilityLaunchKind.REVIEW
+    return current.copy(
+      revision = current.revision + 1,
+      reviewRoundsStarted =
+        current.reviewRoundsStarted +
+          if (reviewing) 1 else 0,
+      repairLaunchesStarted =
+        current.repairLaunchesStarted +
+          if (admitted.kind == PlanBundleFeasibilityLaunchKind.REPAIR) 1 else 0,
+      activeLaunch = admitted,
+      currentCycleId = admitted.cycleId,
+      acceptedLines =
+        if (reviewing) projection.carriedLines else current.acceptedLines,
+      conflicts =
+        if (reviewing) projection.previousConflictLines else current.conflicts,
+      requiredRefs =
+        if (reviewing) projection.requiredRefs else current.requiredRefs,
+      carriedRefs =
+        if (reviewing) projection.carriedRefs else current.carriedRefs,
+      changedSubtaskIds =
+        if (reviewing) {
+          projection.changedSubtaskIds
+        } else {
+          current.changedSubtaskIds
+        },
+      identity = if (reviewing) projection.identity else current.identity,
+    )
   }
 
   private fun hasAdmissionSlot(
@@ -498,10 +661,10 @@ internal class PlanningLaunchView(
 
   private fun prepareAdmittedFeasibility(
     attempt: Int,
-    current: FeatureTaskRuntimePlanBundleFeasibilityState,
     admittedState: FeatureTaskRuntimePlanBundleFeasibilityState,
     snapshot: PlanBundleFeasibilitySnapshot,
     target: PlanBundleTarget?,
+    projection: PlanBundleFeasibilityReviewProjection?,
   ): PlanBundleFeasibilityLaunchContext {
     val workflowId = request.workflowId
     val planner = context.decompositionPlanner
@@ -517,7 +680,7 @@ internal class PlanningLaunchView(
         state = blocked.first
         blockedReason = blocked.second
       }
-      val priorRepairRefusal = hasPriorRepairRefusal(current)
+      val priorRepairRefusal = hasPriorRepairRefusal(admittedState)
       val stagedFiles = planner.bundleTree(target.directory).filter(planner::isBundleFile)
       if (snapshot.identity != launch.baselineIdentity) {
         blockAdmission("Canonical bundle files no longer match the staged-repair admission baseline.")
@@ -565,11 +728,12 @@ internal class PlanningLaunchView(
     return PlanBundleFeasibilityLaunchContext(
       launchSnapshot,
       repairing,
-      current.conflicts.map { it.line },
+      state.conflicts.map { it.line },
       state.revision,
       launch.transitionId,
       attempt,
       blockedReason,
+      projection,
     )
   }
 }

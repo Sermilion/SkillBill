@@ -451,7 +451,14 @@ private fun recoverRetainedReviewReceipt(
         "Original phase envelope: ${retained.normalized.canonicalJson}",
     )
   }
-  return when (val parsed = PlanBundleFeasibility.parseReviewReceipt(recovery.snapshot, retained.value)) {
+  return when (
+    val parsed =
+      PlanBundleFeasibility.parseReviewReceipt(
+        recovery.snapshot,
+        retained.value,
+        recovery.state.requiredRefs,
+      )
+  ) {
     is PlanBundleFeasibility.ReviewParseResult.Rejected -> refuseRetainedLaunch(context, run, recovery, parsed.reason)
     is PlanBundleFeasibility.ReviewParseResult.Accepted ->
       settleRecoveredReview(context, run, recovery, retained, parsed.receipt)
@@ -496,14 +503,28 @@ private fun settleRecoveredReview(
       "The retained approval receipt belongs to an earlier phase attempt; preserve it and require a full review.",
     )
   }
+  val successful =
+    (recovery.state.acceptedLines + feasibilityAcceptedLines(launch.baselineIdentity, receipt))
+      .sortedBy { recovery.snapshot.criterionRefs.indexOf(it.ref) }
+  val complete = receipt.conflictLines.isEmpty() && successful.map { it.ref } == recovery.snapshot.criterionRefs
   val proposed =
     settlePlanBundleFeasibilityReview(
       recovery.state,
       launch.transitionId,
-      feasibilityAcceptedLines(launch.baselineIdentity, receipt),
+      successful,
       receipt.lines.filter { it.conflict }.map { PlanBundleFeasibilityConflict(it.ref, it.originalLine) },
       receipt.originalValue,
-    )?.copy(approvalCandidate = candidate)
+    )?.copy(
+      approvalCandidate = candidate,
+      requiredRefs =
+        if (complete) {
+          recovery.snapshot.criterionRefs
+        } else {
+          recovery.state.requiredRefs
+        },
+      carriedRefs = recovery.state.carriedRefs,
+      changedSubtaskIds = recovery.state.changedSubtaskIds,
+    )
       ?: return FeasibilityLaunchRecovery.Blocked("The retained review receipt did not match its admission.")
   return writeRecoveredFeasibilityState(context, run, recovery, proposed)
 }

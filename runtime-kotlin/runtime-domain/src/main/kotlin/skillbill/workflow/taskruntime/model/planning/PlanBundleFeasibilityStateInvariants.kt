@@ -83,10 +83,46 @@ private fun FeatureTaskRuntimePlanBundleFeasibilityState.candidateTransitionMatc
   candidate: PlanBundleFeasibilityApprovalCandidate,
 ): Boolean {
   val transition = settledLaunches.singleOrNull { it.transitionId == candidate.transitionId } ?: return false
+  val runtimeCompletion = candidate.reviewerAgentId == "runtime"
+  val matchingValue =
+    if (runtimeCompletion) {
+      transition.value == PLAN_BUNDLE_FEASIBILITY_RUNTIME_COMPLETION_VALUE &&
+        lastReviewValue != null && lastReviewValue != PLAN_BUNDLE_FEASIBILITY_RUNTIME_COMPLETION_VALUE &&
+        runtimeCompletionEvidenceMatches(transition)
+    } else {
+      transition.value == lastReviewValue
+    }
   return transition.kind == PlanBundleFeasibilityLaunchKind.REVIEW &&
     transition.outcome == PlanBundleFeasibilityLaunchOutcome.COMPLETED && transition.phaseId == candidate.phaseId &&
-    transition.attempt == candidate.attempt && transition.value == lastReviewValue &&
+    transition.attempt == candidate.attempt && matchingValue &&
     currentCycleId != null && transition.cycleId == currentCycleId
+}
+
+private fun FeatureTaskRuntimePlanBundleFeasibilityState.runtimeCompletionEvidenceMatches(
+  transition: PlanBundleFeasibilitySettledLaunch,
+): Boolean {
+  if (identity != transition.baselineIdentity) return false
+  val refs = identity.subtasks.flatMap { it.criterionRefs }
+  val fullCoverage = requiredRefs == refs && carriedRefs == refs && acceptedLines.map { it.ref } == refs
+  if (!fullCoverage || conflicts.isNotEmpty()) {
+    return false
+  }
+  val judged = transition.baselineIdentity.subtasks.associateBy { it.id }
+  return acceptedLines.all { line ->
+    val subtask = judged.values.firstOrNull { line.ref in it.criterionRefs } ?: return@all false
+    val dependencies =
+      transition.baselineIdentity.transitiveDependencyIds(subtask.id).map { dependencyId ->
+        PlanBundleFeasibilityDependencyHash(dependencyId, judged[dependencyId]?.specSha256.orEmpty())
+      }
+    val directDependencies =
+      subtask.dependencies.map { dependency ->
+        PlanBundleFeasibilityDependencyHash(dependency.subtaskId, judged[dependency.subtaskId]?.specSha256.orEmpty())
+      }
+    line.judgedParentSha256 == transition.baselineIdentity.parentSha256 &&
+      line.judgedManifestSha256 == transition.baselineIdentity.manifestSha256 &&
+      line.judgedSpecSha256 == subtask.specSha256 &&
+      (line.dependencyHashes == dependencies || line.dependencyHashes == directDependencies)
+  }
 }
 
 private fun PlanBundleFeasibilityAcceptedLine.valid(): Boolean =

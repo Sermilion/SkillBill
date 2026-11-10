@@ -23,7 +23,7 @@ import kotlin.test.assertNull
 
 class WorkBuildReadSurfaceTest {
   @Test
-  fun `board and detail overlay the parent goal build with history from SQLite`() {
+  fun `board and detail total only current subtask builds while retaining command history`() {
     val startedAt = ideStatusObservedAt.minusSeconds(30)
     val repositoryIdentity = "repo-root-realpath-v1:/repo"
     val buildDatabase =
@@ -52,7 +52,7 @@ class WorkBuildReadSurfaceTest {
     val identity = testGoalRepositoryIdentity(fixture)
     val service =
       ideStatusService(
-        goalWithLaunchedChildDatabase(identity, startedAt),
+        goalWithLaunchedChildDatabase(identity, startedAt.minusSeconds(70)),
         manifestStore =
           StubGoalManifestStore(
             goalManifestState(fixture, identity, childWorkflowId = "w-child"),
@@ -87,6 +87,44 @@ class WorkBuildReadSurfaceTest {
 
     buildStore.settle("current", ideStatusObservedAt.plusSeconds(5), AgentBuildOutcome.PASSED, 0)
     assertFrozenTotal(service)
+  }
+
+  @Test
+  fun `a new subtask shows no total until it starts a build`() {
+    val startedAt = ideStatusObservedAt.minusSeconds(30)
+    val buildDatabase =
+      sqliteDatabaseSessionFactory(
+        userHome = Files.createTempDirectory("work-build-new-subtask"),
+        environment = emptyMap(),
+      )
+    val buildStore = SessionAgentBuildRunRepository(buildDatabase)
+    buildStore.start(
+      buildStart("previous-subtask", "repo-root-realpath-v1:/repo", startedAt.minusSeconds(120), 10)
+        .copy(runId = "w-done", parentRunId = "goal-1"),
+    )
+    buildStore.settle("previous-subtask", startedAt.minusSeconds(1), AgentBuildOutcome.PASSED, 0)
+    val fixture = gitRepoFixture("work-build-new-subtask-repo")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val service =
+      ideStatusService(
+        goalWithLaunchedChildDatabase(identity, startedAt),
+        manifestStore =
+          StubGoalManifestStore(
+            goalManifestState(fixture, identity, childWorkflowId = "w-child"),
+            lease = lease(ideStatusObservedAt.minusSeconds(5)),
+          ),
+        ports = IdeStatusServiceTestPorts(buildRunRepository = buildStore),
+      )
+
+    val board =
+      service.board(WorkBoardRequest(observedAt = ideStatusObservedAt)).items.single {
+        it.snapshot.workflowId == "goal-1"
+      }
+    val detail = assertNotNull(service.detail(WorkDetailRequest("goal-1", observedAt = ideStatusObservedAt)).item)
+
+    assertNull(assertNotNull(board.build).totalElapsedMs)
+    assertNull(assertNotNull(board.build).totalElapsedAsOf)
+    assertEquals(board.build, detail.build)
   }
 
   @Test
@@ -177,6 +215,16 @@ class WorkBuildReadSurfaceTest {
     startedAt: Instant,
   ) {
     database.transaction { unit ->
+      val previousSubtask =
+        buildStart("previous-subtask", repositoryIdentity, startedAt.minusSeconds(300), 10)
+          .copy(runId = "w-done", parentRunId = "goal-1", command = "compile")
+      unit.agentBuildRuns.start(previousSubtask)
+      unit.agentBuildRuns.settle(
+        previousSubtask.buildId,
+        startedAt.minusSeconds(71),
+        AgentBuildOutcome.PASSED,
+        0,
+      )
       listOf("compile" to 70L, "test" to 60L).forEach { (command, secondsBefore) ->
         val start =
           buildStart(command, repositoryIdentity, startedAt.minusSeconds(secondsBefore), 15)

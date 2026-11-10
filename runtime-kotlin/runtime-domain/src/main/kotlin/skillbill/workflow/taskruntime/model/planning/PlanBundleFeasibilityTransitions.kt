@@ -1,5 +1,6 @@
 package skillbill.workflow.taskruntime.model.planning
 
+import skillbill.text.sha256HexUtf8
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 
 public fun settlePlanBundleFeasibilityReview(
@@ -51,6 +52,98 @@ public fun settlePlanBundleFeasibilityReview(
     approvalCandidate = null,
   )
 }
+
+public fun finalizeCurrentPlanBundleFeasibility(
+  state: FeatureTaskRuntimePlanBundleFeasibilityState,
+  projection: PlanBundleFeasibilityReviewProjection,
+  candidate: PlanBundleFeasibilityApprovalCandidate,
+): FeatureTaskRuntimePlanBundleFeasibilityState? {
+  val refs = projection.identity.subtasks.flatMap { it.criterionRefs }
+  if (!state.canFinalize(projection) || !candidate.matchesRuntimeCompletion(state, projection)) return null
+  val sequence =
+    (
+      state.settledLaunches.filter {
+        it.cycleId == state.currentCycleId
+      }.maxOfOrNull { it.sequence } ?: 0
+    ) + 1
+  val transition =
+    PlanBundleFeasibilitySettledLaunch(
+      transitionId = candidate.transitionId,
+      phaseId = candidate.phaseId,
+      attempt = candidate.attempt,
+      kind = PlanBundleFeasibilityLaunchKind.REVIEW,
+      baselineIdentity = projection.identity,
+      repairDirectory = null,
+      intendedAfterIdentity = null,
+      outcome = PlanBundleFeasibilityLaunchOutcome.COMPLETED,
+      value = PLAN_BUNDLE_FEASIBILITY_RUNTIME_COMPLETION_VALUE,
+      cycleId = state.currentCycleId,
+      sequence = sequence,
+    )
+  return state.copy(
+    revision = state.revision + 1,
+    mode = PlanBundleFeasibilityMode.REVIEW,
+    identity = projection.identity,
+    acceptedLines = projection.carriedLines,
+    conflicts = emptyList(),
+    changedSubtaskIds = projection.changedSubtaskIds,
+    requiredRefs = refs,
+    carriedRefs = projection.carriedRefs,
+    activeLaunch = null,
+    settledLaunches = state.settledLaunches + transition,
+    approval = null,
+    approvalCandidate = candidate,
+  )
+}
+
+private fun FeatureTaskRuntimePlanBundleFeasibilityState.canFinalize(
+  projection: PlanBundleFeasibilityReviewProjection,
+): Boolean {
+  val idle = mode == PlanBundleFeasibilityMode.REVIEW && activeLaunch == null && conflicts.isEmpty()
+  val retained = identity == projection.identity && acceptedLines == projection.carriedLines
+  val reviewed = !currentCycleId.isNullOrBlank() && !lastReviewValue.isNullOrBlank()
+  return idle && retained && reviewed && projection.hasCompleteCarriedEvidence()
+}
+
+private fun PlanBundleFeasibilityReviewProjection.hasCompleteCarriedEvidence(): Boolean {
+  val refs = identity.subtasks.flatMap { it.criterionRefs }
+  val fullCoverage = requiredRefs.isEmpty() && carriedRefs == refs && carriedLines.map { it.ref } == refs
+  return fullCoverage && carriedLines.all { it.matchesCurrent(identity) }
+}
+
+private fun PlanBundleFeasibilityApprovalCandidate.matchesRuntimeCompletion(
+  state: FeatureTaskRuntimePlanBundleFeasibilityState,
+  projection: PlanBundleFeasibilityReviewProjection,
+): Boolean {
+  val validContext = transitionId.isNotBlank() && phaseId.isNotBlank() && attempt > 0 && normalizedEnvelope.isNotBlank()
+  val currentEvidence =
+    sourceRevision == state.revision + 1 &&
+      immutableFingerprint == projection.identity.immutableFingerprint() && reviewerAgentId == "runtime"
+  return validContext && currentEvidence && state.settledLaunches.none { it.transitionId == transitionId }
+}
+
+private fun PlanBundleFeasibilityAcceptedLine.matchesCurrent(identity: PlanBundleFeasibilityIdentity): Boolean {
+  val subtask = identity.subtasks.firstOrNull { ref in it.criterionRefs } ?: return false
+  val byId = identity.subtasks.associateBy { it.id }
+  val dependencies =
+    identity.transitiveDependencyIds(subtask.id).map { id ->
+      PlanBundleFeasibilityDependencyHash(id, byId[id]?.specSha256.orEmpty())
+    }
+  val directDependencies =
+    subtask.dependencies.map { dependency ->
+      PlanBundleFeasibilityDependencyHash(dependency.subtaskId, byId[dependency.subtaskId]?.specSha256.orEmpty())
+    }
+  return judgedParentSha256 == identity.parentSha256 && judgedManifestSha256 == identity.manifestSha256 &&
+    judgedSpecSha256 == subtask.specSha256 &&
+    (dependencyHashes == dependencies || dependencyHashes == directDependencies)
+}
+
+private fun PlanBundleFeasibilityIdentity.immutableFingerprint(): String =
+  sha256HexUtf8(
+    listOf(parentSha256, immutableManifestSha256)
+      .plus(subtasks.map { "${it.id}:${it.specPath}:${it.specSha256}" })
+      .joinToString("\n"),
+  )
 
 public fun publishPlanBundleFeasibilityApproval(
   state: FeatureTaskRuntimePlanBundleFeasibilityState,
@@ -131,16 +224,23 @@ private fun approvalCandidateMatchesFence(
   if (!matchesRevision || !matchesAttempt) return false
   val transition = state.settledLaunches.singleOrNull { it.transitionId == candidate.transitionId } ?: return false
   return state.matchesApprovingTransition(transition, candidate) &&
-    state.hasCompleteApprovalCoverage(transition) && state.hasCompatibleReopenings(candidate, expectedRevision)
+    state.hasCompleteApprovalCoverage(transition) &&
+    state.hasCompatibleReopenings(candidate, expectedRevision)
 }
 
 private fun FeatureTaskRuntimePlanBundleFeasibilityState.matchesApprovingTransition(
   transition: PlanBundleFeasibilitySettledLaunch,
   candidate: PlanBundleFeasibilityApprovalCandidate,
 ): Boolean {
+  val runtimeCompletion = candidate.reviewerAgentId == "runtime"
   val matchesReview =
     transition.kind == PlanBundleFeasibilityLaunchKind.REVIEW &&
-      transition.outcome == PlanBundleFeasibilityLaunchOutcome.COMPLETED && transition.value == lastReviewValue
+      transition.outcome == PlanBundleFeasibilityLaunchOutcome.COMPLETED &&
+      if (runtimeCompletion) {
+        transition.value == PLAN_BUNDLE_FEASIBILITY_RUNTIME_COMPLETION_VALUE && lastReviewValue != null
+      } else {
+        transition.value == lastReviewValue
+      }
   val matchesAttempt =
     transition.phaseId == candidate.phaseId && transition.attempt == candidate.attempt &&
       transition.cycleId == currentCycleId
@@ -152,7 +252,9 @@ private fun FeatureTaskRuntimePlanBundleFeasibilityState.hasCompleteApprovalCove
   transition: PlanBundleFeasibilitySettledLaunch,
 ): Boolean {
   val refs = identity.subtasks.flatMap { it.criterionRefs }
-  val matchingRefs = requiredRefs == refs && acceptedLines.map { it.ref } == refs && refs.isNotEmpty()
+  val matchingRefs =
+    requiredRefs == refs && acceptedLines.map { it.ref } == refs &&
+      carriedRefs == refs.filter { it in carriedRefs } && refs.isNotEmpty()
   if (!matchingRefs || acceptedLines.any { it.line.startsWith("conflict ") }) return false
   val judgedById = transition.baselineIdentity.subtasks.associateBy { it.id }
   return acceptedLines.all { line ->
@@ -161,13 +263,21 @@ private fun FeatureTaskRuntimePlanBundleFeasibilityState.hasCompleteApprovalCove
       line.judgedParentSha256 == transition.baselineIdentity.parentSha256 &&
         line.judgedManifestSha256 == transition.baselineIdentity.manifestSha256 &&
         line.judgedSpecSha256 == subtask.specSha256
-    matchingIdentity && line.dependencyHashes ==
+    val transitive =
+      transition.baselineIdentity.transitiveDependencyIds(subtask.id).map { dependencyId ->
+        PlanBundleFeasibilityDependencyHash(
+          dependencyId,
+          judgedById[dependencyId]?.specSha256.orEmpty(),
+        )
+      }
+    val direct =
       subtask.dependencies.map { dependency ->
         PlanBundleFeasibilityDependencyHash(
           dependency.subtaskId,
           judgedById[dependency.subtaskId]?.specSha256.orEmpty(),
         )
       }
+    matchingIdentity && (line.dependencyHashes == transitive || line.dependencyHashes == direct)
   }
 }
 
@@ -230,7 +340,7 @@ public fun reopenApprovedPlanBundleFeasibilityCycle(
     revision = state.revision + 1,
     mode = PlanBundleFeasibilityMode.REVIEW,
     identity = identity,
-    acceptedLines = emptyList(),
+    acceptedLines = state.acceptedLines.filter { line -> identity.subtasks.any { line.ref in it.criterionRefs } },
     conflicts = emptyList(),
     changedSubtaskIds = emptyList(),
     requiredRefs = identity.subtasks.flatMap { it.criterionRefs },
@@ -238,7 +348,7 @@ public fun reopenApprovedPlanBundleFeasibilityCycle(
     reviewRoundsStarted = 0,
     repairLaunchesStarted = 0,
     activeLaunch = null,
-    lastReviewValue = null,
+    lastReviewValue = state.lastReviewValue,
     approval = null,
     approvalCandidate = null,
     currentCycleId = cycleId,
@@ -320,7 +430,11 @@ public fun settlePlanBundleFeasibilityRepair(
     revision = state.revision + 1,
     mode = PlanBundleFeasibilityMode.REVIEW,
     identity = postRepairIdentity,
-    acceptedLines = emptyList(),
+    acceptedLines =
+      state.acceptedLines.filter {
+          line ->
+        postRepairIdentity.subtasks.any { line.ref in it.criterionRefs }
+      },
     requiredRefs = postRepairIdentity.subtasks.flatMap { it.criterionRefs },
     carriedRefs = emptyList(),
     changedSubtaskIds = emptyList(),

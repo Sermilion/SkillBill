@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.phase.planning
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityAcceptedLine
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityDependencyHash
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityIdentity
+import skillbill.workflow.taskruntime.model.planning.transitiveDependencyIds
 
 internal fun feasibilityAcceptedLines(
   baseline: PlanBundleFeasibilityIdentity,
@@ -18,10 +19,10 @@ internal fun feasibilityAcceptedLines(
       judgedManifestSha256 = baseline.manifestSha256,
       judgedSpecSha256 = subtask.specSha256,
       dependencyHashes =
-        subtask.dependencies.map { dependency ->
+        baseline.transitiveDependencyIds(subtask.id).map { dependencyId ->
           PlanBundleFeasibilityDependencyHash(
-            dependency.subtaskId,
-            identityById.getValue(dependency.subtaskId).specSha256,
+            dependencyId,
+            identityById.getValue(dependencyId).specSha256,
           )
         },
     )

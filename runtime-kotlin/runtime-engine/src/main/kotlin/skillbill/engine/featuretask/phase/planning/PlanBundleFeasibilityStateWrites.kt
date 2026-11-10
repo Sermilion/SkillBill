@@ -4,8 +4,12 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWrite
 import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWriteResult
 import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
+import skillbill.workflow.taskruntime.model.planning.PLAN_BUNDLE_FEASIBILITY_RUNTIME_COMPLETION_VALUE
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityApprovalCandidate
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunchKind
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunchOutcome
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilitySettledLaunch
 import skillbill.workflow.taskruntime.model.planning.isPlanBundleFeasibilityLifecycleTransitionValid
 
 internal fun planBundleFeasibilityWriteResult(
@@ -17,7 +21,14 @@ internal fun planBundleFeasibilityWriteResult(
   }
   val priorSettlement = current?.settledLaunches?.firstOrNull { it.transitionId == request.transitionId }
   if (priorSettlement != null) {
-    return if (request.state.matchesRetainedContext(priorSettlement)) {
+    val existing = checkNotNull(current)
+    val runtimeReplayMatches =
+      request.state.approvalCandidate?.takeIf { it.reviewerAgentId == "runtime" }?.let { candidate ->
+        existing.approvalCandidate == candidate && existing.acceptedLines == request.state.acceptedLines &&
+          existing.identity == request.state.identity &&
+          existing.settledLaunches.singleOrNull { it.transitionId == candidate.transitionId } == priorSettlement
+      } ?: true
+    return if (request.state.matchesRetainedContext(priorSettlement) && runtimeReplayMatches) {
       PlanBundleFeasibilityStateWriteResult.Replayed(current, priorSettlement.outcome.wireValue)
     } else {
       PlanBundleFeasibilityStateWriteResult.Refused(
@@ -26,7 +37,82 @@ internal fun planBundleFeasibilityWriteResult(
       )
     }
   }
+  runtimeCompletionWrite(current, request)?.let { return it }
   return advanceResult(current, request)
+}
+
+private fun runtimeCompletionWrite(
+  current: FeatureTaskRuntimePlanBundleFeasibilityState?,
+  request: PlanBundleFeasibilityStateWrite,
+): PlanBundleFeasibilityStateWriteResult? {
+  val state = request.state
+  val candidate = state.approvalCandidate?.takeIf { it.reviewerAgentId == "runtime" } ?: return null
+  val previous = current ?: return PlanBundleFeasibilityStateWriteResult.Refused("feasibility artifact is missing")
+  val transition =
+    state.settledLaunches.lastOrNull() ?: return PlanBundleFeasibilityStateWriteResult.Refused(
+      "runtime completion transition is missing",
+    )
+  val valid =
+    runtimeCompletionFenceMatches(previous, request, transition) &&
+      runtimeCompletionPreservesState(previous, state, transition) &&
+      runtimeCompletionCandidateMatches(candidate, request, transition)
+  return if (valid && state.invalidReason() == null) {
+    PlanBundleFeasibilityStateWriteResult.Applied(state)
+  } else {
+    PlanBundleFeasibilityStateWriteResult.Refused(
+      "runtime completion transition does not match current evidence",
+      previous.revision,
+    )
+  }
+}
+
+private fun runtimeCompletionFenceMatches(
+  previous: FeatureTaskRuntimePlanBundleFeasibilityState,
+  request: PlanBundleFeasibilityStateWrite,
+  transition: PlanBundleFeasibilitySettledLaunch,
+): Boolean {
+  val nextSequence =
+    (previous.settledLaunches.filter { it.cycleId == previous.currentCycleId }.maxOfOrNull { it.sequence } ?: 0) + 1
+  val sameCycle = transition.cycleId == previous.currentCycleId && transition.sequence == nextSequence
+  val matchingRevision =
+    request.expectedRevision == previous.revision && request.state.revision == previous.revision + 1
+  val matchingRequest =
+    request.transitionId == transition.transitionId && transition.phaseId == request.phaseId &&
+      transition.attempt == request.attempt
+  return sameCycle && matchingRevision && matchingRequest
+}
+
+private fun runtimeCompletionPreservesState(
+  previous: FeatureTaskRuntimePlanBundleFeasibilityState,
+  state: FeatureTaskRuntimePlanBundleFeasibilityState,
+  transition: PlanBundleFeasibilitySettledLaunch,
+): Boolean {
+  val idleReview =
+    previous.activeLaunch == null && previous.mode == PlanBundleFeasibilityMode.REVIEW &&
+      previous.conflicts.isEmpty() && state.activeLaunch == null
+  val unchangedCounters =
+    previous.reviewRoundsStarted == state.reviewRoundsStarted &&
+      previous.repairLaunchesStarted == state.repairLaunchesStarted
+  val retainedHistory =
+    state.settledLaunches == previous.settledLaunches + transition &&
+      state.currentCycleId == previous.currentCycleId && state.identity == previous.identity
+  return idleReview && unchangedCounters && retainedHistory
+}
+
+private fun runtimeCompletionCandidateMatches(
+  candidate: PlanBundleFeasibilityApprovalCandidate,
+  request: PlanBundleFeasibilityStateWrite,
+  transition: PlanBundleFeasibilitySettledLaunch,
+): Boolean {
+  val completedReview =
+    transition.kind == PlanBundleFeasibilityLaunchKind.REVIEW &&
+      transition.outcome == PlanBundleFeasibilityLaunchOutcome.COMPLETED &&
+      transition.value == PLAN_BUNDLE_FEASIBILITY_RUNTIME_COMPLETION_VALUE
+  val matchingCandidate =
+    candidate.transitionId == transition.transitionId &&
+      candidate.sourceRevision == request.state.revision && candidate.phaseId == request.phaseId &&
+      candidate.attempt == request.attempt
+  return completedReview && matchingCandidate
 }
 
 private fun initializationResult(

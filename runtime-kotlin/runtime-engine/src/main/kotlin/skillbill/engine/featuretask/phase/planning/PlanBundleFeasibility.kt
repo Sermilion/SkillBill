@@ -10,14 +10,17 @@ import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
+import skillbill.workflow.taskruntime.model.planning.PLAN_BUNDLE_FEASIBILITY_RUNTIME_COMPLETION_VALUE
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityDependency
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityDependencyHash
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityIdentity
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunchKind
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunchOutcome
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityReviewProjection
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilitySettledLaunch
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilitySubtaskIdentity
+import skillbill.workflow.taskruntime.model.planning.transitiveDependencyIds
 import java.nio.file.Path
 
 public data class PlanBundleFeasibilitySnapshot internal constructor(
@@ -65,12 +68,20 @@ public data class PlanBundleFeasibilitySnapshot internal constructor(
 
   public val criterionRefs: List<String> = identity.subtasks.flatMap { it.criterionRefs }
 
-  internal fun prompt(): String =
+  internal fun prompt(projection: PlanBundleFeasibilityReviewProjection? = null): String =
     buildString {
       appendLine("## Bundle feasibility snapshot")
       appendLine("Fingerprint: $fingerprint")
       repairDirectory?.let { appendLine("Repair directory: $it") }
-      appendLine("Required criterion refs: ${criterionRefs.joinToString(", ")}")
+      appendLine("required_refs: ${(projection?.requiredRefs ?: criterionRefs).joinToString(", ")}")
+      projection?.let {
+        appendLine("carried_refs: ${it.carriedRefs.joinToString(", ")}")
+        appendLine("changed_subtask_ids: ${it.changedSubtaskIds.joinToString(", ")}")
+        appendLine("Settled carried criterion lines:")
+        it.carriedLines.forEach { line -> appendLine(line.line) }
+        appendLine("Original previous conflict lines:")
+        it.previousConflictLines.forEach { conflict -> appendLine(conflict.line) }
+      }
       appendLine("Parent spec, ${manifest.parentSpecPath}:")
       appendLine(parentText)
       appendLine("Manifest, $DECOMPOSITION_MANIFEST_FILENAME:")
@@ -194,13 +205,51 @@ public object PlanBundleFeasibility {
       state.requiredRefs == snapshot.criterionRefs &&
         evidence.map { it.ref } == snapshot.criterionRefs && approval.criterionLines == evidence.map { it.line }
     val matchingCandidate = candidate.transitionId == approval.transitionId && candidate.matchesRecord(record)
-    return matchingCoverage && matchingCandidate && evidenceMatchesBaseline(state, transition.baselineIdentity) &&
-      approvingTransitionMatches(state, transition, record, value) && approvalRejection(snapshot, value) == null
+    return matchingCoverage && matchingCandidate &&
+      evidenceMatchesBaseline(state, transition.baselineIdentity, allowDirectDependencies = true) &&
+      approvingTransitionMatches(state, transition, record, value) &&
+      if (candidate.reviewerAgentId == "runtime") {
+        completedRuntimeFinalizationMatches(state, transition, value)
+      } else {
+        completedReviewerReceiptMatches(state, snapshot, transition, value)
+      }
+  }
+
+  private fun completedRuntimeFinalizationMatches(
+    state: FeatureTaskRuntimePlanBundleFeasibilityState,
+    transition: PlanBundleFeasibilitySettledLaunch,
+    value: String,
+  ): Boolean =
+    transition.value == PLAN_BUNDLE_FEASIBILITY_RUNTIME_COMPLETION_VALUE &&
+      value == PLAN_BUNDLE_FEASIBILITY_RUNTIME_COMPLETION_VALUE &&
+      state.lastReviewValue?.let { priorValue ->
+        state.settledLaunches.any {
+          it.transitionId != transition.transitionId && it.kind == PlanBundleFeasibilityLaunchKind.REVIEW &&
+            it.outcome == PlanBundleFeasibilityLaunchOutcome.COMPLETED && it.value == priorValue
+        }
+      } == true
+
+  private fun completedReviewerReceiptMatches(
+    state: FeatureTaskRuntimePlanBundleFeasibilityState,
+    snapshot: PlanBundleFeasibilitySnapshot,
+    transition: PlanBundleFeasibilitySettledLaunch,
+    value: String,
+  ): Boolean {
+    val carried = state.carriedRefs
+    val currentRefs = snapshot.criterionRefs
+    if (carried != currentRefs.filter { it in carried } || carried.size == currentRefs.size) return false
+    val reviewerRefs = currentRefs.filterNot { it in carried }
+    val parsed = parseReviewReceipt(snapshot, value, reviewerRefs) as? ReviewParseResult.Accepted ?: return false
+    if (!parsed.receipt.approved || parsed.receipt.lines.any { it.conflict }) return false
+    val durableLines = state.acceptedLines.associateBy { it.ref }
+    return parsed.receipt.lines.all { line -> durableLines[line.ref]?.line == line.originalLine } &&
+      evidenceMatchesBaseline(state, transition.baselineIdentity, allowDirectDependencies = true)
   }
 
   private fun evidenceMatchesBaseline(
     state: FeatureTaskRuntimePlanBundleFeasibilityState,
     judgedIdentity: PlanBundleFeasibilityIdentity,
+    allowDirectDependencies: Boolean = false,
   ): Boolean {
     val judgedById = judgedIdentity.subtasks.associateBy { it.id }
     return state.acceptedLines.all { line ->
@@ -208,13 +257,24 @@ public object PlanBundleFeasibility {
       val matchingIdentity =
         line.judgedParentSha256 == judgedIdentity.parentSha256 &&
           line.judgedManifestSha256 == judgedIdentity.manifestSha256 && line.judgedSpecSha256 == subtask.specSha256
-      matchingIdentity && line.dependencyHashes ==
+      val transitive =
+        judgedIdentity.transitiveDependencyIds(subtask.id).map { dependencyId ->
+          PlanBundleFeasibilityDependencyHash(
+            dependencyId,
+            judgedById[dependencyId]?.specSha256.orEmpty(),
+          )
+        }
+      val direct =
         subtask.dependencies.map { dependency ->
           PlanBundleFeasibilityDependencyHash(
             dependency.subtaskId,
             judgedById[dependency.subtaskId]?.specSha256.orEmpty(),
           )
         }
+      matchingIdentity && (
+        line.dependencyHashes == transitive ||
+          (allowDirectDependencies && line.dependencyHashes == direct)
+      )
     }
   }
 
@@ -224,16 +284,25 @@ public object PlanBundleFeasibility {
     record: FeatureTaskRuntimePhaseRecord,
     value: String,
   ): Boolean {
+    val runtimeCompletion = state.approvalCandidate?.reviewerAgentId == "runtime"
     val matchingReview =
       transition.kind == PlanBundleFeasibilityLaunchKind.REVIEW &&
         transition.outcome == PlanBundleFeasibilityLaunchOutcome.COMPLETED
     val matchingRecord = transition.phaseId == record.phaseId && transition.attempt == record.attemptCount
-    return matchingReview && matchingRecord && transition.value == value && state.lastReviewValue == transition.value
+    val matchingValue =
+      if (runtimeCompletion) {
+        transition.value == PLAN_BUNDLE_FEASIBILITY_RUNTIME_COMPLETION_VALUE &&
+          value == PLAN_BUNDLE_FEASIBILITY_RUNTIME_COMPLETION_VALUE && state.lastReviewValue != null
+      } else {
+        transition.value == value && state.lastReviewValue == transition.value
+      }
+    return matchingReview && matchingRecord && matchingValue
   }
 
   public fun parseReviewReceipt(
     snapshot: PlanBundleFeasibilitySnapshot,
     value: String,
+    requiredRefs: List<String> = snapshot.criterionRefs,
   ): ReviewParseResult {
     val lines = value.lines()
     val header = lines.firstOrNull()?.let(REVIEW_HEADER::matchEntire)
@@ -241,15 +310,23 @@ public object PlanBundleFeasibility {
       header == null -> ReviewParseResult.Rejected("Feasibility receipt header is malformed.")
       header.groupValues[FINGERPRINT_GROUP] != snapshot.fingerprint ->
         ReviewParseResult.Rejected("Feasibility receipt identifies a stale bundle fingerprint.")
-      else -> parseReviewLines(snapshot, value, header.groupValues[1] == "approved", lines.drop(1))
+      else ->
+        parseReviewLines(
+          value,
+          header.groupValues[1] == "approved",
+          header.groupValues[FINGERPRINT_GROUP],
+          lines.drop(1),
+          requiredRefs,
+        )
     }
   }
 
   private fun parseReviewLines(
-    snapshot: PlanBundleFeasibilitySnapshot,
     value: String,
     approved: Boolean,
+    fingerprint: String,
     lines: List<String>,
+    requiredRefs: List<String>,
   ): ReviewParseResult {
     val resultLines = mutableListOf<ReviewLine>()
     for (line in lines.filter(String::isNotBlank)) {
@@ -262,13 +339,13 @@ public object PlanBundleFeasibility {
     val refs = resultLines.map { it.ref }
     val hasConflicts = resultLines.any { it.conflict }
     return when {
-      refs != snapshot.criterionRefs || refs.isEmpty() ->
+      refs != requiredRefs || refs.isEmpty() ->
         ReviewParseResult.Rejected(
-          "Feasibility receipt must cover every criterion exactly once in manifest order.",
+          "Feasibility receipt must cover every required criterion exactly once in manifest order.",
         )
       approved == hasConflicts ->
         ReviewParseResult.Rejected("Feasibility receipt verdict does not match its conflict lines.")
-      else -> ReviewParseResult.Accepted(ReviewReceipt(approved, snapshot.fingerprint, resultLines, value))
+      else -> ReviewParseResult.Accepted(ReviewReceipt(approved, fingerprint, resultLines, value))
     }
   }
 

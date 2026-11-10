@@ -327,6 +327,7 @@ internal object FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement {
         PlanBundleFeasibility.parseReviewReceipt(
           before,
           originalValue ?: attested.output.value,
+          launchContext.projection?.requiredRefs ?: current.requiredRefs,
         )
     ) {
       is PlanBundleFeasibility.ReviewParseResult.Rejected ->
@@ -439,8 +440,18 @@ internal object FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement {
     launch: PlanBundleFeasibilityLaunchContext,
     reviewed: ReviewedReceipt,
   ): FeatureTaskRuntimePlanBundleFeasibilityState? {
+    val projection = launch.projection
+    val currentRefs = launch.snapshot.criterionRefs
+    val successful =
+      (projection?.carriedLines ?: emptyList()) +
+        feasibilityAcceptedLines(launch.snapshot.identity, reviewed.receipt)
+    val conflicts =
+      reviewed.receipt.lines.filter { it.conflict }
+        .map { PlanBundleFeasibilityConflict(it.ref, it.originalLine) }
+    val orderedSuccessful = successful.sortedBy { currentRefs.indexOf(it.ref) }
+    val complete = conflicts.isEmpty() && orderedSuccessful.map { it.ref } == currentRefs
     val candidate =
-      if (reviewed.receipt.approved) {
+      if (reviewed.receipt.approved && complete) {
         PlanBundleFeasibilityApprovalCandidate(
           sourceRevision = reviewed.current.revision + 1,
           immutableFingerprint = launch.snapshot.fingerprint,
@@ -459,10 +470,15 @@ internal object FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement {
     return settlePlanBundleFeasibilityReview(
       reviewed.current,
       launch.transitionId,
-      feasibilityAcceptedLines(launch.snapshot.identity, reviewed.receipt),
-      reviewed.receipt.lines.filter { it.conflict }.map { PlanBundleFeasibilityConflict(it.ref, it.originalLine) },
+      orderedSuccessful,
+      conflicts,
       reviewed.receipt.originalValue,
-    )?.copy(approvalCandidate = candidate)
+    )?.copy(
+      approvalCandidate = candidate,
+      requiredRefs = if (complete) currentRefs else projection?.requiredRefs ?: currentRefs,
+      carriedRefs = projection?.carriedRefs ?: emptyList(),
+      changedSubtaskIds = projection?.changedSubtaskIds ?: emptyList(),
+    )
   }
 
   private fun authoritativeReviewReceipt(
@@ -478,7 +494,7 @@ internal object FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement {
         if (archived == null) {
           PlanBundleFeasibility.ReviewParseResult.Rejected("Feasibility replay has no retained receipt.")
         } else {
-          PlanBundleFeasibility.parseReviewReceipt(snapshot, archived.value)
+          PlanBundleFeasibility.parseReviewReceipt(snapshot, archived.value, receipt.lines.map { it.ref })
         }
       }
       is PlanBundleFeasibilityStateWriteResult.Existing ->

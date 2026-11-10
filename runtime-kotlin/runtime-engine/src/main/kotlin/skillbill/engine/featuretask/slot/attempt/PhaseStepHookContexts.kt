@@ -16,6 +16,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranc
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityReviewProjection
 import java.nio.file.Path
 
 public interface PhaseAttemptLaunchHookContext : PhaseAttemptEnvironment {
@@ -103,6 +104,8 @@ internal interface PhasePlanningLaunchContext : PhaseAttemptLaunchHookContext {
   fun admitBundleFeasibility(attempt: Int): PlanBundleFeasibilityLaunchContext
 
   fun completeFeasibilityApprovalCandidate(run: PhaseRun): PhaseOutcome?
+
+  fun completeCurrentBundleFeasibility(run: PhaseRun): PhaseOutcome?
 }
 
 internal data class PlanBundleFeasibilityLaunchContext(
@@ -113,6 +116,7 @@ internal data class PlanBundleFeasibilityLaunchContext(
   val transitionId: String,
   val attempt: Int,
   val blockedReason: String? = null,
+  val projection: PlanBundleFeasibilityReviewProjection? = null,
 )
 
 internal interface PhasePlanningOutputContext : PhaseStepOutputContext {

@@ -158,6 +158,7 @@ public data class PlanBundleFeasibilityReopening(
 )
 
 public const val PLAN_BUNDLE_FEASIBILITY_FULL_V2_REVIEW_ADOPTION_REASON: String = "full-v2-review-adoption"
+public const val PLAN_BUNDLE_FEASIBILITY_RUNTIME_COMPLETION_VALUE: String = "bundle-feasibility-runtime-finalized"
 
 public sealed interface PlanBundleFeasibilityStateValidation {
   public object Valid : PlanBundleFeasibilityStateValidation
