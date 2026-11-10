@@ -33,6 +33,7 @@ internal data class IdeStatusCandidate(
   val execution: IdeStatusExecutionIdentity? = null,
   val branchCorrelation: String? = null,
   val standaloneStatus: StandalonePhaseStatusRecord? = null,
+  val primaryRepositoryRoot: String? = null,
 )
 
 internal sealed class IdeStatusRepositoryResolution {

@@ -47,6 +47,7 @@ object WorkBoardReadModelPayloadKeys {
   const val DONE_WITHIN_DAY = "done_within_day"
   const val MEMBERSHIP_DEADLINE = "membership_deadline"
   const val REPOSITORY_IDENTITY = "repository_identity"
+  const val PRIMARY_REPOSITORY_ROOT = "primary_repository_root"
   const val LIFECYCLE_STATE = "lifecycle_state"
   const val CURRENT_STEP = "current_step"
   const val UPDATED_AT = "updated_at"

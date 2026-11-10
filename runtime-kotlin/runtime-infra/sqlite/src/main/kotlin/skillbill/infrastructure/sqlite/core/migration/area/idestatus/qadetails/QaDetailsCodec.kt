@@ -1,4 +1,4 @@
-package skillbill.infrastructure.sqlite.core.migration.area.idestatus
+package skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.qa.QA_PANEL_HISTORY_CONTRACT_VERSION

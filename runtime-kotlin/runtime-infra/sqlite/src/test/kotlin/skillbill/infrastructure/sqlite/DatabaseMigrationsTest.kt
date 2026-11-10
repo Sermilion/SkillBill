@@ -306,6 +306,59 @@ class DatabaseMigrationsTest {
   }
 
   @Test
+  fun `schema 120 status rows survive primary root readiness without backfill or repeated changes`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-primary-root-upgrade").resolve("runtime.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          """
+          INSERT INTO standalone_phase_status (
+            execution_id, repository_identity, branch_correlation, invocation_id, phase_id,
+            status_store_id, run_sequence, status_revision, lifecycle_state, current_step,
+            started_at, updated_at, lease_owner, lease_generation, lease_expires_at
+          ) VALUES (
+            'phase-execution', 'repo-root-realpath-v1:/checkout', 'main', 'phase-invocation',
+            'implement', 'phase-store', '1', '2', 'terminal', 'complete',
+            '2026-11-09T10:00:00Z', '2026-11-09T11:00:00Z', 'owner', 1, '2026-11-10T11:00:00Z'
+          )
+          """.trimIndent(),
+        )
+        statement.executeUpdate(
+          """
+          INSERT INTO ide_status_workflow_execution (
+            execution_id, repository_identity, branch_correlation, workflow_id, invocation_id,
+            status_store_id, run_sequence, status_revision, lifecycle_state, started_at, updated_at
+          ) VALUES (
+            'workflow-execution', 'repo-root-realpath-v1:/checkout', 'main', 'workflow-1',
+            'workflow-invocation', 'workflow-store', '2', '3', 'completed',
+            '2026-11-09T09:00:00Z', '2026-11-09T12:00:00Z'
+          )
+          """.trimIndent(),
+        )
+        statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN primary_repository_root")
+        statement.execute("ALTER TABLE ide_status_workflow_execution DROP COLUMN primary_repository_root")
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE version = 121")
+        statement.execute("PRAGMA user_version = 120")
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals("phase-invocation", scalarString(connection, "SELECT invocation_id FROM standalone_phase_status"))
+      assertEquals("complete", scalarString(connection, "SELECT current_step FROM standalone_phase_status"))
+      assertEquals("workflow-1", scalarString(connection, "SELECT workflow_id FROM ide_status_workflow_execution"))
+      assertEquals("completed", scalarString(connection, "SELECT lifecycle_state FROM ide_status_workflow_execution"))
+      assertEquals(null, scalarString(connection, "SELECT primary_repository_root FROM standalone_phase_status"))
+      assertEquals(null, scalarString(connection, "SELECT primary_repository_root FROM ide_status_workflow_execution"))
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(DesktopReadSchema.VERSION, scalarInt(connection, "PRAGMA user_version"))
+      assertEquals("complete", scalarString(connection, "SELECT current_step FROM standalone_phase_status"))
+      assertEquals("completed", scalarString(connection, "SELECT lifecycle_state FROM ide_status_workflow_execution"))
+    }
+  }
+
+  @Test
   fun `opening legacy audit storage preserves its rows without requiring or updating them`() {
     val root = Files.createTempDirectory("runtime-kotlin-stateless-audit-storage")
     val dbPath = root.resolve("legacy.db")
@@ -2381,6 +2434,7 @@ private val expectedMigrationDefinitions =
     118 to "record-monitor-ci-cycles",
     119 to "record-qa-panel-occurrences",
     120 to "record-standalone-reported-model",
+    121 to "record-primary-repository-root",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {
