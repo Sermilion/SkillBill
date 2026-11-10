@@ -41,6 +41,7 @@ import skillbill.engine.featuretask.runloop.planning.PlanBundleStagingPromotion
 import skillbill.engine.featuretask.runloop.settlement.FeatureTaskRuntimeRunLoopValidationScope
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runner.LaunchResult
+import skillbill.engine.featuretask.slot.PhaseLaunchHandoffSelection
 import skillbill.engine.featuretask.slot.PhaseLaunchReviewTier
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
 import skillbill.engine.featuretask.slot.carriesPackBuildCommand
@@ -61,6 +62,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryChe
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffAssemblyRequest
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseHandoff
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionFailureClassification
 import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
@@ -195,12 +197,13 @@ internal object PhaseLaunchPreparation {
     context: PhaseAttemptLaunchPreparationContext,
     args: DeclaredLaunchArgs,
   ): LaunchPreparation {
+    val selectedArgs = args.copy(run = args.run.forLaunchHandoff(args.boundStep))
     with(context) {
-      val run = args.run
-      val state = args.state
-      val measurementContext = args.context
+      val run = selectedArgs.run
+      val state = selectedArgs.state
+      val measurementContext = selectedArgs.context
       return try {
-        PhaseLaunchPreparation.prepareLaunch(context, args)
+        PhaseLaunchPreparation.prepareLaunch(context, selectedArgs)
       } catch (error: SkillBillRuntimeException) {
         error.rethrowUnless(error.isInvalidWorkflowStateFailure())
         rejectedDurableBriefingLaunch(recorder, run, state, error, measurementContext)
@@ -322,6 +325,16 @@ internal object PhaseLaunchPreparation {
     }
   }
 
+  private fun PhaseRun.forLaunchHandoff(boundStep: PhaseAcceptedStepExecution): PhaseRun {
+    if (boundStep.boundHooks.launchHandoffSelection != PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY) return this
+    val declarations =
+      declaration.projectionDeclarations.filterNot { projection ->
+        (projection.sourceRef as? FeatureTaskRuntimeHandoffSourceRef.UpstreamPhaseOutput)?.producingPhaseId ==
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN
+      }
+    return copy(declaration = declaration.copy(projectionDeclarations = declarations))
+  }
+
   private fun resolveProjectInstructions(
     context: PhaseAttemptLaunchPreparationContext,
     run: PhaseRun,
@@ -403,9 +416,16 @@ internal object PhaseLaunchPreparation {
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
     prompt: PhaseStepPromptSource,
     boundStep: PhaseAcceptedStepExecution,
-  ): String =
-    FeatureTaskRuntimePhasePromptComposer.compose(inputs, prompt) +
-      boundStep.boundHooks.launchPromptSupplement(run, context.launchHookContext(run, context.stepHooks(run)))
+  ): String {
+    val launchContext = context.launchHookContext(run, context.stepHooks(run))
+    return if (boundStep.boundHooks.launchHandoffSelection == PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY) {
+      val supplement = boundStep.boundHooks.launchPromptSupplement(run, launchContext)
+      FeatureTaskRuntimePhasePromptComposer.compose(inputs, prompt) + supplement
+    } else {
+      FeatureTaskRuntimePhasePromptComposer.compose(inputs, prompt) +
+        boundStep.boundHooks.launchPromptSupplement(run, launchContext)
+    }
+  }
 
   private fun PhaseAttemptLaunchPreparationContext.planBundleTargetFor(run: PhaseRun): PlanBundleTarget? {
     if (run.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN) return null
@@ -467,7 +487,10 @@ internal object PhaseLaunchPreparation {
       priorReviewContext = null,
       priorTerminalFailure = args.priorCorrection?.retryableTerminalReason,
       priorFindingCoverage = args.priorCorrection?.findingCoverageReason,
-      priorPlanBundleRejection = args.priorCorrection?.planBundleRejectionReason,
+      priorPlanBundleRejection =
+        args.priorCorrection?.planBundleRejectionReason.takeUnless {
+          args.boundStep.boundHooks.launchHandoffSelection == PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY
+        },
       priorAcceptanceAudit = priorAcceptanceAudit(),
       currentAcceptanceCriterion = acceptanceCriterionContext(run),
       priorAcceptanceRepairFailures = acceptanceRepair?.priorRepairFailures,

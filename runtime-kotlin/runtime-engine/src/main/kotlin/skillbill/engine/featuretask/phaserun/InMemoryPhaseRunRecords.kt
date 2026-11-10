@@ -7,15 +7,21 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerReq
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProducerOutputRead
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
+import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityRepairAppliedWrite
 import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWrite
 import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWriteResult
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
+import skillbill.engine.featuretask.phase.planning.feasibilityRepairWriteResult
 import skillbill.engine.featuretask.phase.planning.planBundleFeasibilityWriteResult
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeNoChangePausePort
+import skillbill.engine.featuretask.phase.record.completedPhaseRequestMatches
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecordFor
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorRunRecords
+import skillbill.engine.featuretask.phaserun.planning.InMemoryFeasibilityCompletion
+import skillbill.engine.featuretask.phaserun.planning.InMemoryPlanningRecordsState
+import skillbill.engine.featuretask.runloop.planning.PlanUnit
 import skillbill.engine.featuretask.runloop.state.REVIEW_INVALIDATION_AGENT_ID
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
 import skillbill.engine.featuretask.slot.state.FeatureTaskRuntimeImplementationTurnWrite
@@ -54,6 +60,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityIdentity
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityRepositoryBaseline
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
@@ -66,7 +73,7 @@ import java.time.Clock
 public class InMemoryPhaseRunRecords private constructor(
   public val clock: Clock,
   public val resolvedBranch: FeatureTaskRuntimeResolvedBranch?,
-  public val phaseRecords: LinkedHashMap<String, FeatureTaskRuntimePhaseRecord>,
+  private val recordState: InMemoryPlanningRecordsState,
   public override val standaloneMonitorLedger: StandaloneMonitorLedger?,
   private val acceptedGoalRepairOutput: ((String, Int, String) -> Unit)?,
   private val goalQualityProgressSink: ((GoalQualityPhaseProgress, String?) -> Boolean)?,
@@ -78,9 +85,10 @@ public class InMemoryPhaseRunRecords private constructor(
 ) : PhaseRunRecords,
   StandaloneMonitorRunRecords,
   PhaseLaunchRecords by InMemoryPhaseLaunchRecords(),
-  PhasePlanRecords by InMemoryPhasePlanRecords(phaseRecords),
+  PhasePlanRecords by InMemoryPhasePlanRecords(recordState),
   FeatureTaskRuntimeNoChangePausePort by InMemoryNoChangePauses(),
-  PhaseImplementationProgressRecords by InMemoryImplementationProgressRecords(clock, phaseRecords) {
+  PhaseImplementationProgressRecords by InMemoryImplementationProgressRecords(clock, recordState.phaseRecords) {
+  public val phaseRecords: LinkedHashMap<String, FeatureTaskRuntimePhaseRecord> = recordState.phaseRecords
   internal constructor(
     clock: Clock,
     resolvedBranch: FeatureTaskRuntimeResolvedBranch?,
@@ -96,7 +104,7 @@ public class InMemoryPhaseRunRecords private constructor(
   ) : this(
     clock,
     resolvedBranch,
-    LinkedHashMap(goalQualityPhaseProgress?.phaseRecords.orEmpty()),
+    InMemoryPlanningRecordsState(LinkedHashMap(goalQualityPhaseProgress?.phaseRecords.orEmpty()), null),
     standaloneMonitorLedger,
     acceptedGoalRepairOutput,
     persistGoalQualityPhaseProgress,
@@ -122,6 +130,22 @@ public class InMemoryPhaseRunRecords private constructor(
       verificationBoundary = progress.verificationBoundary?.detachedBoundary()
     }
   }
+
+  internal constructor(
+    unit: PlanUnit,
+    clock: Clock,
+    phaseRecordSink: (FeatureTaskRuntimePhaseRecord) -> Boolean,
+  ) : this(
+    clock, null,
+    InMemoryPlanningRecordsState(
+      LinkedHashMap(),
+      (unit.workflowId to unit.stepId).takeIf {
+        unit.subtaskId > 0
+      },
+    ),
+    null, null, null, null, "",
+    phaseRecordSink, null, null,
+  )
 
   internal val acceptedOutputs: MutableMap<String, String> = mutableMapOf()
   private val producerOutputs = mutableListOf<ProducerOutputEvidence>()
@@ -261,7 +285,18 @@ public class InMemoryPhaseRunRecords private constructor(
   }
 
   override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite {
-    val output = (request.normalizedOutput?.output?.value ?: request.outputArtifact)?.takeIf(String::isNotBlank)
+    val completion = recordState.prepareCompletion(request, completionPreviouslyMatched(request, phaseRecords))
+    when (completion) {
+      InMemoryFeasibilityCompletion.Refused -> return RequiredPhaseWrite.Rejected(
+        RequiredPhaseWriteKind.COMPLETION,
+        request.workflowId,
+        request.phaseId,
+        request.attemptCount,
+      )
+      InMemoryFeasibilityCompletion.Replayed -> return RequiredPhaseWrite.Acknowledged
+      is InMemoryFeasibilityCompletion.Pending -> Unit
+    }
+    val output = completionOutput(request)
     val proposedRecords = LinkedHashMap(phaseRecords)
     applyPhaseRecord(proposedRecords, request, clock)
     val proposedRecord = proposedRecords.getValue(request.phaseId).detached()
@@ -281,10 +316,7 @@ public class InMemoryPhaseRunRecords private constructor(
           FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
           request,
         )
-    val proposedOutputs =
-      output?.let {
-        acceptedOccurrences + GoalQualityAcceptedOutput(request.phaseId, request.attemptCount, it)
-      } ?: acceptedOccurrences.toList()
+    val proposedOutputs = completionAcceptedOutputs(request, output, acceptedOccurrences)
     val sourceObservation =
       if (goalQualityProgressSink != null) {
         qualitySourceObservation?.invoke(request.phaseId, request.attemptCount)?.copy(
@@ -295,10 +327,7 @@ public class InMemoryPhaseRunRecords private constructor(
       } else {
         null
       }
-    val proposedObservations =
-      sourceObservation?.let {
-        acceptedSourceObservations + it
-      } ?: acceptedSourceObservations.toList()
+    val proposedObservations = completionSourceObservations(acceptedSourceObservations, sourceObservation)
     val proposed =
       goalQualityProgress().copy(
         phaseRecords = proposedRecords.toMap(),
@@ -309,6 +338,7 @@ public class InMemoryPhaseRunRecords private constructor(
       )
     if (goalQualityProgressSink != null) persistGoalQualityProgress(proposed)
     phaseRecords[request.phaseId] = proposedRecord
+    completion.publishedState?.let { recordState.feasibilityStates[request.workflowId] = it }
     phaseLedger += proposedLedger.last()
     if (output != null) {
       acceptedOccurrences += GoalQualityAcceptedOutput(request.phaseId, request.attemptCount, output)
@@ -616,26 +646,47 @@ public class InMemoryPhaseRunRecords private constructor(
 }
 
 private class InMemoryPhasePlanRecords(
-  private val phaseRecords: MutableMap<String, FeatureTaskRuntimePhaseRecord>,
+  private val recordState: InMemoryPlanningRecordsState,
 ) : PhasePlanRecords {
   private val planBundles = mutableMapOf<String, FeatureTaskRuntimePlanBundle>()
   private val waveHistory = mutableMapOf<String, FeatureTaskRuntimePlanFanOutHistory>()
-  private val feasibilityStates = mutableMapOf<String, FeatureTaskRuntimePlanBundleFeasibilityState>()
 
   override fun loadPlanBundleFeasibility(workflowId: String): FeatureTaskRuntimePlanBundleFeasibilityState? =
-    feasibilityStates[workflowId]?.detached()
+    recordState.feasibilityStates[workflowId]?.detached()
 
   override fun writePlanBundleFeasibility(
     request: PlanBundleFeasibilityStateWrite,
   ): PlanBundleFeasibilityStateWriteResult {
-    val phase = phaseRecords[request.phaseId]
+    val phase = recordState.phaseRecords[request.phaseId]
     val attempt =
       if (phase?.status == WorkflowStepStatus.RUNNING) phase.attemptCount else (phase?.attemptCount ?: 0) + 1
     if (attempt != request.attempt) return PlanBundleFeasibilityStateWriteResult.Refused("phase attempt changed")
-    val result = planBundleFeasibilityWriteResult(feasibilityStates[request.workflowId]?.detached(), request)
+    val result =
+      planBundleFeasibilityWriteResult(
+        recordState.feasibilityStates[request.workflowId]?.detached(),
+        request,
+      )
     if (result is PlanBundleFeasibilityStateWriteResult.Applied) {
-      feasibilityStates[request.workflowId] = result.state.detached()
+      recordState.feasibilityStates[request.workflowId] = result.state.detached()
       return PlanBundleFeasibilityStateWriteResult.Applied(result.state.detached())
+    }
+    return result
+  }
+
+  override fun recordFeasibilityRepairApplied(
+    request: PlanBundleFeasibilityRepairAppliedWrite,
+  ): PlanBundleFeasibilityStateWriteResult {
+    val phase = recordState.phaseRecords[request.phaseId]
+    val attempt =
+      if (phase?.status == WorkflowStepStatus.RUNNING) phase.attemptCount else (phase?.attemptCount ?: 0) + 1
+    if (attempt != request.attempt) return PlanBundleFeasibilityStateWriteResult.Refused("phase attempt changed")
+    val current =
+      recordState.feasibilityStates[request.workflowId]?.detached()
+        ?: return PlanBundleFeasibilityStateWriteResult.Refused("feasibility artifact is missing")
+    val result = feasibilityRepairWriteResult(current, request, planBundles[request.workflowId])
+    if (result is PlanBundleFeasibilityStateWriteResult.Applied) {
+      recordState.feasibilityStates[request.workflowId] = result.state.detached()
+      planBundles[request.workflowId] = request.bundle
     }
     return result
   }
@@ -653,6 +704,8 @@ private class InMemoryPhasePlanRecords(
           launch.copy(
             baselineIdentity = launch.baselineIdentity.detached(),
             intendedAfterIdentity = launch.intendedAfterIdentity?.detached(),
+            repositoryBaseline = launch.repositoryBaseline?.detached(),
+            repairBeforeIdentity = launch.repairBeforeIdentity?.detached(),
           )
         },
       settledLaunches =
@@ -660,9 +713,38 @@ private class InMemoryPhasePlanRecords(
           it.copy(
             baselineIdentity = it.baselineIdentity.detached(),
             intendedAfterIdentity = it.intendedAfterIdentity?.detached(),
+            repositoryBaseline = it.repositoryBaseline?.detached(),
+            repairBeforeIdentity = it.repairBeforeIdentity?.detached(),
           )
         },
       approval = approval?.let { it.copy(criterionLines = it.criterionLines.toList()) },
+      approvalCandidate =
+        approvalCandidate?.let {
+          it.copy(
+            fileManifestBefore = it.fileManifestBefore.toList(),
+            fileManifestAfter = it.fileManifestAfter.toList(),
+            fileManifestIntroduced = it.fileManifestIntroduced.toList(),
+          )
+        },
+      cycleHistory =
+        cycleHistory.map { cycle ->
+          cycle.copy(
+            identity = cycle.identity.detached(),
+            acceptedLines = cycle.acceptedLines.map { it.copy(dependencyHashes = it.dependencyHashes.toList()) },
+            conflicts = cycle.conflicts.toList(),
+            settledLaunches =
+              cycle.settledLaunches.map {
+                it.copy(
+                  baselineIdentity = it.baselineIdentity.detached(),
+                  intendedAfterIdentity = it.intendedAfterIdentity?.detached(),
+                  repositoryBaseline = it.repositoryBaseline?.detached(),
+                  repairBeforeIdentity = it.repairBeforeIdentity?.detached(),
+                )
+              },
+            approval = cycle.approval?.let { it.copy(criterionLines = it.criterionLines.toList()) },
+          )
+        },
+      reopenings = reopenings.map { it.copy(originalPhaseRecord = it.originalPhaseRecord.detached()) },
     )
 
   private fun PlanBundleFeasibilityIdentity.detached() =
@@ -672,6 +754,9 @@ private class InMemoryPhasePlanRecords(
           subtask.copy(criterionRefs = subtask.criterionRefs.toList(), dependencies = subtask.dependencies.toList())
         },
     )
+
+  private fun PlanBundleFeasibilityRepositoryBaseline.detached() =
+    copy(dirtyPaths = dirtyPaths.toList(), contentIdentities = contentIdentities.toMap())
 
   override fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle? = planBundles[workflowId]
 
@@ -704,7 +789,8 @@ private class InMemoryPhasePlanRecords(
     unitRecords: Map<Int, FeatureTaskRuntimePhaseRecord>,
   ): Boolean {
     unitRecords.forEach { (subtaskId, record) ->
-      phaseRecords[FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitRecordId(subtaskId)] = record.detached()
+      recordState.phaseRecords[FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitRecordId(subtaskId)] =
+        record.detached()
     }
     return recordPlanBundle(workflowId, bundle)
   }
@@ -963,3 +1049,25 @@ private fun nextLedgerSequence(
     phaseLedger.maxOfOrNull { it.sequenceNumber } ?: 0,
     initialGoalQualityProgress?.ledgerSequenceHighWaterMark ?: 0,
   ) + 1
+
+private fun completionAcceptedOutputs(
+  request: FeatureTaskRuntimePhaseStateRequest,
+  output: String?,
+  accepted: List<GoalQualityAcceptedOutput>,
+): List<GoalQualityAcceptedOutput> =
+  output?.let {
+    accepted + GoalQualityAcceptedOutput(request.phaseId, request.attemptCount, it)
+  } ?: accepted.toList()
+
+private fun completionOutput(request: FeatureTaskRuntimePhaseStateRequest): String? =
+  (request.normalizedOutput?.output?.value ?: request.outputArtifact)?.takeIf(String::isNotBlank)
+
+private fun completionSourceObservations(
+  retained: List<GoalQualityAcceptedSourceObservation>,
+  observation: GoalQualityAcceptedSourceObservation?,
+): List<GoalQualityAcceptedSourceObservation> = observation?.let { retained + it } ?: retained.toList()
+
+private fun completionPreviouslyMatched(
+  request: FeatureTaskRuntimePhaseStateRequest,
+  records: Map<String, FeatureTaskRuntimePhaseRecord>,
+): Boolean = records[request.phaseId]?.let { completedPhaseRequestMatches(request, it) } == true

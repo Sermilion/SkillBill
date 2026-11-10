@@ -1,5 +1,7 @@
 package skillbill.workflow.taskruntime.model.planning
 
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+
 public enum class PlanBundleFeasibilityMode(public val wireValue: String) {
   REVIEW("review"),
   REPAIR("repair"),
@@ -26,6 +28,7 @@ public data class PlanBundleFeasibilitySubtaskIdentity(
   val specSha256: String,
   val criterionRefs: List<String>,
   val dependencies: List<PlanBundleFeasibilityDependency>,
+  val rawSpecText: String? = null,
 )
 
 public data class PlanBundleFeasibilityIdentity(
@@ -33,9 +36,17 @@ public data class PlanBundleFeasibilityIdentity(
   val manifestSha256: String,
   val immutableManifestSha256: String,
   val subtasks: List<PlanBundleFeasibilitySubtaskIdentity>,
+  val rawParentText: String? = null,
+  val rawManifestText: String? = null,
 )
 
 public data class PlanBundleFeasibilityDependencyHash(val subtaskId: Int, val specSha256: String)
+
+public data class PlanBundleFeasibilityRepositoryBaseline(
+  val headCommit: String,
+  val dirtyPaths: List<String>,
+  val contentIdentities: Map<String, String>,
+)
 
 public data class PlanBundleFeasibilityAcceptedLine(
   val ref: String,
@@ -56,11 +67,16 @@ public data class PlanBundleFeasibilityLaunch(
   val baselineIdentity: PlanBundleFeasibilityIdentity,
   val repairDirectory: String?,
   val intendedAfterIdentity: PlanBundleFeasibilityIdentity?,
+  val cycleId: String? = null,
+  val sequence: Int = 0,
+  val intendedRepairValue: String? = null,
+  val repositoryBaseline: PlanBundleFeasibilityRepositoryBaseline? = null,
+  val repairBeforeIdentity: PlanBundleFeasibilityIdentity? = null,
 ) {
   public fun matchesContext(other: PlanBundleFeasibilityLaunch): Boolean =
     transitionId == other.transitionId && phaseId == other.phaseId && attempt == other.attempt &&
-      kind == other.kind && baselineIdentity == other.baselineIdentity &&
-      repairDirectory == other.repairDirectory && intendedAfterIdentity == other.intendedAfterIdentity
+      kind == other.kind && baselineIdentity == other.baselineIdentity && repairDirectory == other.repairDirectory &&
+      cycleId == other.cycleId && sequence == other.sequence && repositoryBaseline == other.repositoryBaseline
 }
 
 public data class PlanBundleFeasibilitySettledLaunch(
@@ -73,16 +89,22 @@ public data class PlanBundleFeasibilitySettledLaunch(
   val intendedAfterIdentity: PlanBundleFeasibilityIdentity?,
   val outcome: PlanBundleFeasibilityLaunchOutcome,
   val value: String,
+  val cycleId: String? = null,
+  val sequence: Int = 0,
+  val repositoryBaseline: PlanBundleFeasibilityRepositoryBaseline? = null,
+  val repairBeforeIdentity: PlanBundleFeasibilityIdentity? = null,
 ) {
   public fun matchesContext(launch: PlanBundleFeasibilityLaunch): Boolean =
     transitionId == launch.transitionId && phaseId == launch.phaseId && attempt == launch.attempt &&
       kind == launch.kind && baselineIdentity == launch.baselineIdentity &&
-      repairDirectory == launch.repairDirectory && intendedAfterIdentity == launch.intendedAfterIdentity
+      repairDirectory == launch.repairDirectory && cycleId == launch.cycleId && sequence == launch.sequence &&
+      repositoryBaseline == launch.repositoryBaseline && repairBeforeIdentity == launch.repairBeforeIdentity
 
   public fun matchesContext(other: PlanBundleFeasibilitySettledLaunch): Boolean =
     transitionId == other.transitionId && phaseId == other.phaseId && attempt == other.attempt &&
       kind == other.kind && baselineIdentity == other.baselineIdentity &&
-      repairDirectory == other.repairDirectory && intendedAfterIdentity == other.intendedAfterIdentity
+      repairDirectory == other.repairDirectory && cycleId == other.cycleId && sequence == other.sequence &&
+      repositoryBaseline == other.repositoryBaseline && repairBeforeIdentity == other.repairBeforeIdentity
 }
 
 public data class PlanBundleFeasibilityApproval(
@@ -90,6 +112,52 @@ public data class PlanBundleFeasibilityApproval(
   val criterionLines: List<String>,
   val transitionId: String,
 )
+
+public data class PlanBundleFeasibilityApprovalCandidate(
+  val sourceRevision: Int,
+  val immutableFingerprint: String,
+  val transitionId: String,
+  val phaseId: String,
+  val attempt: Int,
+  val reviewerAgentId: String,
+  val normalizedEnvelope: String,
+  val fileManifestBefore: List<String>,
+  val fileManifestAfter: List<String>,
+  val fileManifestIntroduced: List<String>,
+) {
+  public fun matchesRecord(record: FeatureTaskRuntimePhaseRecord): Boolean {
+    val matchesAttempt =
+      phaseId == record.phaseId && attempt == record.attemptCount &&
+        reviewerAgentId == record.resolvedAgentId
+    val matchesEvidence =
+      normalizedEnvelope == record.outputArtifact &&
+        fileManifestBefore == record.fileManifestBefore && fileManifestAfter == record.fileManifestAfter &&
+        fileManifestIntroduced == record.fileManifestIntroduced
+    return matchesAttempt && matchesEvidence
+  }
+}
+
+public data class PlanBundleFeasibilityCycleHistory(
+  val cycleId: String,
+  val identity: PlanBundleFeasibilityIdentity,
+  val acceptedLines: List<PlanBundleFeasibilityAcceptedLine>,
+  val conflicts: List<PlanBundleFeasibilityConflict>,
+  val reviewRoundsStarted: Int,
+  val repairLaunchesStarted: Int,
+  val settledLaunches: List<PlanBundleFeasibilitySettledLaunch>,
+  val lastReviewValue: String?,
+  val approval: PlanBundleFeasibilityApproval?,
+)
+
+public data class PlanBundleFeasibilityReopening(
+  val sourceAttempt: Int,
+  val sourceRevision: Int?,
+  val retryLedgerSequence: Int,
+  val reason: String,
+  val originalPhaseRecord: FeatureTaskRuntimePhaseRecord,
+)
+
+public const val PLAN_BUNDLE_FEASIBILITY_FULL_V2_REVIEW_ADOPTION_REASON: String = "full-v2-review-adoption"
 
 public sealed interface PlanBundleFeasibilityStateValidation {
   public object Valid : PlanBundleFeasibilityStateValidation
@@ -113,6 +181,10 @@ public data class FeatureTaskRuntimePlanBundleFeasibilityState(
   val lastReviewValue: String?,
   val approval: PlanBundleFeasibilityApproval?,
   val legacyOrigin: Boolean,
+  val approvalCandidate: PlanBundleFeasibilityApprovalCandidate? = null,
+  val currentCycleId: String? = null,
+  val cycleHistory: List<PlanBundleFeasibilityCycleHistory> = emptyList(),
+  val reopenings: List<PlanBundleFeasibilityReopening> = emptyList(),
 ) {
   public fun validation(): PlanBundleFeasibilityStateValidation =
     invalidReason()?.let(PlanBundleFeasibilityStateValidation::Invalid) ?: PlanBundleFeasibilityStateValidation.Valid
@@ -131,18 +203,53 @@ public data class FeatureTaskRuntimePlanBundleFeasibilityState(
       return false
     }
     val additions = settledLaunches.drop(previous.settledLaunches.size)
-    if (additions.isNotEmpty()) {
-      val active = previous.activeLaunch ?: return false
-      return additions.size == 1 && activeLaunch == null && active.transitionId == transitionId &&
-        additions.single().matchesContext(active)
-    }
+    if (additions.isNotEmpty()) return preservesSettledAddition(previous, transitionId, additions)
+
     val previousActive = previous.activeLaunch
     return if (previousActive == null) {
       activeLaunch?.transitionId == transitionId
     } else {
-      activeLaunch?.matchesContext(previousActive) == true
+      activeLaunch?.let { preservesActiveIntent(it, previousActive) } == true
     }
   }
+
+  private fun preservesSettledAddition(
+    previous: FeatureTaskRuntimePlanBundleFeasibilityState,
+    transitionId: String,
+    additions: List<PlanBundleFeasibilitySettledLaunch>,
+  ): Boolean {
+    val active = previous.activeLaunch ?: return false
+    if (additions.size != 1 || activeLaunch != null || active.transitionId != transitionId) return false
+    val settled = additions.single()
+    val intendedAfterValid =
+      if (settled.kind == PlanBundleFeasibilityLaunchKind.REPAIR &&
+        settled.outcome == PlanBundleFeasibilityLaunchOutcome.COMPLETED && active.intendedAfterIdentity == null
+      ) {
+        settled.intendedAfterIdentity != null
+      } else {
+        settled.intendedAfterIdentity == active.intendedAfterIdentity
+      }
+    val repairValueValid =
+      settled.outcome != PlanBundleFeasibilityLaunchOutcome.COMPLETED ||
+        settled.kind != PlanBundleFeasibilityLaunchKind.REPAIR ||
+        active.intendedRepairValue == null || settled.value == active.intendedRepairValue
+    return settled.matchesContext(active) && intendedAfterValid && repairValueValid
+  }
+
+  private fun preservesActiveIntent(
+    active: PlanBundleFeasibilityLaunch,
+    previous: PlanBundleFeasibilityLaunch,
+  ): Boolean =
+    active.matchesContext(previous) &&
+      when {
+        active.intendedAfterIdentity == previous.intendedAfterIdentity ->
+          active.intendedRepairValue == previous.intendedRepairValue &&
+            active.repairBeforeIdentity == previous.repairBeforeIdentity
+        previous.kind == PlanBundleFeasibilityLaunchKind.REPAIR &&
+          previous.intendedAfterIdentity == null && active.intendedAfterIdentity != null ->
+          active.intendedRepairValue != null && active.repairBeforeIdentity != null
+        else -> false
+      }
 
   public fun matchesRetainedContext(settlement: PlanBundleFeasibilitySettledLaunch): Boolean {
     val activeMatches = activeLaunch?.takeIf { it.transitionId == settlement.transitionId }

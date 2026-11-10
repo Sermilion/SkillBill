@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilitySnapshot
 import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationBoundaryMemory
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
+import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
@@ -99,15 +100,26 @@ internal interface PhaseFindingEvidenceContext {
 }
 
 internal interface PhasePlanningLaunchContext : PhaseAttemptLaunchHookContext {
-  fun captureBundleFeasibility(repairing: Boolean): PlanBundleFeasibilitySnapshot
+  fun admitBundleFeasibility(attempt: Int): PlanBundleFeasibilityLaunchContext
+
+  fun completeFeasibilityApprovalCandidate(run: PhaseRun): PhaseOutcome?
 }
+
+internal data class PlanBundleFeasibilityLaunchContext(
+  val snapshot: PlanBundleFeasibilitySnapshot,
+  val repairing: Boolean,
+  val openConflictLines: List<String>,
+  val expectedRevision: Int,
+  val transitionId: String,
+  val attempt: Int,
+  val blockedReason: String? = null,
+)
 
 internal interface PhasePlanningOutputContext : PhaseStepOutputContext {
   fun settleBundleFeasibility(
     capture: ValidatedOutputCapture,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
-    before: PlanBundleFeasibilitySnapshot,
-    repairing: Boolean,
+    launch: PlanBundleFeasibilityLaunchContext,
   ): AttemptResult?
 
   fun settleAuthoredBundle(capture: ValidatedOutputCapture): AttemptResult?

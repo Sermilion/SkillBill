@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProducerOutputRead
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
+import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityRepairAppliedWrite
 import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWrite
 import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWriteResult
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
@@ -391,6 +392,13 @@ private class DurablePhasePlanRecords(
   ): PlanBundleFeasibilityStateWriteResult =
     admitted.ownedWrite({ decomposeTerminalRecorder.writePlanBundleFeasibility(request, it) }) {
       decomposeTerminalRecorder.writePlanBundleFeasibility(request)
+    }
+
+  override fun recordFeasibilityRepairApplied(
+    request: PlanBundleFeasibilityRepairAppliedWrite,
+  ): PlanBundleFeasibilityStateWriteResult =
+    admitted.ownedWrite({ decomposeTerminalRecorder.recordFeasibilityRepairApplied(request, it) }) {
+      decomposeTerminalRecorder.recordFeasibilityRepairApplied(request)
     }
 
   override fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle? =

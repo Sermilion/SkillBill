@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepair
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairLegacyAdoption
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPersistence
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPhaseRecorder
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
@@ -60,6 +61,7 @@ fun harnessAcceptanceRecorder(
         validator,
         harnessPhaseSettlement(),
         testHarnessClock,
+        PlanBundleFeasibilityStateCodec(validator),
       ),
       validator,
       object : AcceptanceCriterionRepairProjection {

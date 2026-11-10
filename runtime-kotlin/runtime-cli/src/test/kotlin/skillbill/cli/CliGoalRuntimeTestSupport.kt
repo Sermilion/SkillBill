@@ -854,7 +854,7 @@ internal fun phasePlanningPayload(
           .removePrefix("Required criterion refs: ").split(", ")
       val evidence =
         buildString {
-          appendLine("bundle-feasibility-v1: approved $fingerprint")
+          appendLine("bundle-feasibility-v2: approved $fingerprint")
           refs.forEach {
             appendLine("criterion $it: The fixture supplies this subtask's dependencies and its implementation path.")
           }

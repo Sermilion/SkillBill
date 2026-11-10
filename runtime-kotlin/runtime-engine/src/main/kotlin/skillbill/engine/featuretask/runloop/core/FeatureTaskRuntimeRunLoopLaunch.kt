@@ -78,6 +78,11 @@ internal sealed interface AttemptResult {
     override val fileManifest: FeatureTaskRuntimePhaseFileManifest,
   ) : AttemptResult
 
+  data class BundleFeasibilityContinuation(
+    val reason: String,
+    override val fileManifest: FeatureTaskRuntimePhaseFileManifest,
+  ) : AttemptResult
+
   val settledOutcome: PhaseOutcome? get() = (this as? Settled)?.outcome
   val schemaInvalidOperatorReason: String? get() = (this as? SchemaInvalid)?.operatorReason
   val schemaInvalidRetryReason: String? get() = (this as? SchemaInvalid)?.retryReason
@@ -92,6 +97,7 @@ internal sealed interface AttemptResult {
         is FindingsOwed -> fileManifest
         is CriterionTurn -> fileManifest
         is PlanBundleRejected -> fileManifest
+        is BundleFeasibilityContinuation -> fileManifest
       }
   val rejectedOutput: String? get() = (this as? SchemaInvalid)?.rejectedOutput
 
@@ -106,6 +112,7 @@ internal sealed interface AttemptResult {
         is FindingsOwed -> null
         is CriterionTurn -> null
         is PlanBundleRejected -> null
+        is BundleFeasibilityContinuation -> null
       }
 
   val semanticRetryReason: String?
@@ -119,6 +126,7 @@ internal sealed interface AttemptResult {
         is FindingsOwed -> null
         is CriterionTurn -> null
         is PlanBundleRejected -> null
+        is BundleFeasibilityContinuation -> null
       }
 
   val retryableTerminal: RetryableTerminal? get() = this as? RetryableTerminal
@@ -126,6 +134,7 @@ internal sealed interface AttemptResult {
   val findingsOwed: FindingsOwed? get() = this as? FindingsOwed
 
   val planBundleRejected: PlanBundleRejected? get() = this as? PlanBundleRejected
+  val bundleFeasibilityContinuation: BundleFeasibilityContinuation? get() = this as? BundleFeasibilityContinuation
 
   val incompleteWorkContinuationReason: String? get() = (this as? IncompleteWork)?.continuationReason
   val incompleteWorkOutput: NormalizedFeatureTaskRuntimePhaseOutput?

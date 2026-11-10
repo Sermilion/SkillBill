@@ -2,8 +2,11 @@ package skillbill.infrastructure.workflow.decomposition
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
+import skillbill.ports.workflow.decomposition.model.DecompositionManifestBundleProjection
+import skillbill.ports.workflow.decomposition.model.DecompositionManifestFileIdentity
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.security.MessageDigest
@@ -16,6 +19,37 @@ import kotlin.test.assertTrue
 class FileSystemDecompositionManifestFileStoreTest {
   private val storeRoot = Files.createTempDirectory("decomposition-manifest-project-store")
   private val projectStore = FixedProjectStorePort(storeRoot)
+
+  @Test
+  fun `guarded writes across journal parents refuse before changing either target`() {
+    val root = Files.createTempDirectory("guarded-bundle-multiple-parents")
+    try {
+      val first = Files.createDirectories(root.resolve("first")).resolve("spec.md")
+      val second = Files.createDirectories(root.resolve("second")).resolve("spec.md")
+      Files.writeString(first, "original first")
+      Files.writeString(second, "original second")
+      val projection =
+        DecompositionManifestBundleProjection(
+          listOf(
+            DecompositionManifestFileIdentity(first, sha256("original first")),
+            DecompositionManifestFileIdentity(second, sha256("original second")),
+          ),
+          emptyList(),
+        )
+      val store = FileSystemDecompositionManifestFileStore(projectStore)
+
+      val failure =
+        assertFailsWith<SkillBillRuntimeException> {
+          store.writeBundleAtomically(listOf(first to "replacement", second to "replacement"), projection) { Unit }
+        }
+
+      assertEquals(WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_TARGET_OUTSIDE_PARENT, failure.code)
+      assertEquals("original first", Files.readString(first))
+      assertEquals("original second", Files.readString(second))
+    } finally {
+      root.toFile().deleteRecursively()
+    }
+  }
 
   @Test
   fun `manifest discovery lists every store bundle, nested ones too, before legacy bundles`() {

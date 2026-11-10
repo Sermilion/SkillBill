@@ -20,6 +20,7 @@ import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunch
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunchKind
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunchOutcome
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityRepositoryBaseline
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilitySettledLaunch
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilitySubtaskIdentity
 import java.nio.file.Files
@@ -179,6 +180,9 @@ class PlanBundleFeasibilityDurableRecordsTest {
         firstLaunch.intendedAfterIdentity,
         PlanBundleFeasibilityLaunchOutcome.COMPLETED,
         "original review result",
+        cycleId = firstLaunch.cycleId,
+        sequence = firstLaunch.sequence,
+        repositoryBaseline = firstLaunch.repositoryBaseline,
       )
     val settled =
       launched.copy(
@@ -234,6 +238,9 @@ class PlanBundleFeasibilityDurableRecordsTest {
     state.identity,
     null,
     null,
+    cycleId = state.currentCycleId,
+    sequence = state.reviewRoundsStarted + state.repairLaunchesStarted + 1,
+    repositoryBaseline = PlanBundleFeasibilityRepositoryBaseline("head", emptyList(), emptyMap()),
   )
 
   private fun initialState(parentHashSeed: String) =
@@ -262,6 +269,7 @@ class PlanBundleFeasibilityDurableRecordsTest {
       lastReviewValue = null,
       approval = null,
       legacyOrigin = false,
+      currentCycleId = "cycle-1",
     )
 
   private companion object {

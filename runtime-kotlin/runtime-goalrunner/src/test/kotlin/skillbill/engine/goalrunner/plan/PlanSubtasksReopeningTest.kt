@@ -424,6 +424,8 @@ class PlanSubtasksReopeningTest {
         execution.compatibility,
         execution.recoveryResolver(),
       ),
+      database,
+      PlanBundleFeasibilityStateCodec(featureTaskRuntimeWireArtifactValidatorForTest()),
     )
 
   private fun acceptedRecords(): Map<String, FeatureTaskRuntimePhaseRecord> =
@@ -504,5 +506,7 @@ class PlanSubtasksReopeningTest {
         NoopRuntimeDiagnostics,
       ),
       testHarnessClock,
+      PlanBundleFeasibilityStateCodec(featureTaskRuntimeWireArtifactValidatorForTest()),
+      NoopRuntimeDiagnostics,
     )
 }

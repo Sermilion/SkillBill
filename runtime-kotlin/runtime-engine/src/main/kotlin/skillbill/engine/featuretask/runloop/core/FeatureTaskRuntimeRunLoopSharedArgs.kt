@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
+import skillbill.engine.featuretask.slot.PhaseLaunchHandoffSelection
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptContinuations
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
@@ -137,6 +138,7 @@ internal data class PersistAcceptedOutputArgs(
   val observability: FeatureTaskRuntimeRunObservability,
   val fileManifest: FeatureTaskRuntimePhaseFileManifest,
   val repositoryFingerprint: String?,
+  val launchHandoffSelection: PhaseLaunchHandoffSelection,
 )
 
 internal data class PersistStandardAcceptedOutputArgs(
@@ -383,6 +385,7 @@ internal data class FinalizeValidatedOutputAcceptanceArgs(
   val repositoryFingerprint: String?,
   val boundStep: PhaseAcceptedStepExecution,
   val stepHooks: PhaseStepHooks<*>,
+  val launchHandoffSelection: PhaseLaunchHandoffSelection,
 )
 
 internal data class ShouldRetryPersistedBlockArgs(

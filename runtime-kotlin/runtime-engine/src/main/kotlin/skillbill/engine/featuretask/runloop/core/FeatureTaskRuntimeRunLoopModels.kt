@@ -219,6 +219,10 @@ internal data class PhaseStateRequestAttachments(
   val repositoryFingerprint: String? = null,
   val launched: LaunchedModelDirective? = null,
   val reviewRunId: String? = null,
+  val feasibilityApprovalRequired: Boolean = false,
+  val feasibilityApprovalRevision: Int? = null,
+  val feasibilityApprovalExpectedRevision: Int? = null,
+  val feasibilityApprovalTransitionId: String? = null,
 )
 
 internal data class PhaseStateRequestArgs(
