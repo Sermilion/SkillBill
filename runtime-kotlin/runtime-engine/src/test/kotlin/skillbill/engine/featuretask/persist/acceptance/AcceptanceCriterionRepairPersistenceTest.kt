@@ -56,7 +56,7 @@ class AcceptanceCriterionRepairPersistenceTest {
           ).state
         f.assertReplayAfterRestart(worker, verifying, failed, outcome, evidence)
         var state = failed
-        assertEquals(1, state.unsuccessfulTotals["AC-001"])
+        assertEquals(1, state.chargedAttempts["AC-001"])
         assertEquals("AC-001", state.currentCriterionRef)
         for (index in 2..3) {
           state =
@@ -80,7 +80,7 @@ class AcceptanceCriterionRepairPersistenceTest {
             ).state
         }
         assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, state.stage)
-        assertEquals(3, state.unsuccessfulTotals["AC-001"])
+        assertEquals(3, state.chargedAttempts["AC-001"])
         assertIs<AcceptanceCriterionRepairWriteResult.Refused>(
           f.write(
             worker,

@@ -14,7 +14,9 @@ required:
   - current_criterion_ref
   - reservation
   - outcomes
-  - unsuccessful_totals
+  - charged_attempts
+  - late_findings
+  - repair_changed_paths
   - revision
   - mode
   - stage
@@ -24,7 +26,7 @@ required:
   - source_transitions
   - interaction_trace
 properties:
-  contract_version: { const: '0.2' }
+  contract_version: { const: '0.3' }
   catalog_id: { type: string, minLength: 1, maxLength: 256 }
   execution_id: { type: string, minLength: 1, maxLength: 256 }
   spec_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
@@ -35,7 +37,7 @@ properties:
     items:
       type: object
       additionalProperties: false
-      required: [canonical_ref, original_alias, original_text, ordinal, source_disposition, validation_obligation, validation_owner_available, evidence_ref, closure_evidence_ref, closure_tree_digest, closure_checkpoint_id]
+      required: [canonical_ref, original_alias, original_text, ordinal, source_disposition, validation_obligation, validation_owner_available, evidence_ref, closure_evidence_ref, closure_tree_digest, closure_checkpoint_id, gaps, plan_generation, escalated]
       properties:
         canonical_ref: { type: string, pattern: '^AC-[0-9]{3}$' }
         original_alias: { type: [string, 'null'], maxLength: 128 }
@@ -48,6 +50,22 @@ properties:
         closure_evidence_ref: { type: [string, 'null'], minLength: 1 }
         closure_tree_digest: { type: [string, 'null'], pattern: '^[a-fA-F0-9]{64}$' }
         closure_checkpoint_id: { type: [string, 'null'], minLength: 1, maxLength: 256 }
+        gaps:
+          type: array
+          maxItems: 32
+          items:
+            type: object
+            additionalProperties: false
+            required: [gap_id, gap_text, gap_citation, gap_status, gap_origin, gap_closed_revision]
+            properties:
+              gap_id: { type: string, pattern: '^AC-[0-9]{3}\.G[1-9][0-9]?$' }
+              gap_text: { type: string, minLength: 1, maxLength: 2048 }
+              gap_citation: { type: string, minLength: 1, maxLength: 512 }
+              gap_status: { enum: [open, closed] }
+              gap_origin: { enum: [discovery, repair] }
+              gap_closed_revision: { type: [integer, 'null'], minimum: 1 }
+        plan_generation: { type: integer, minimum: 0, maximum: 2 }
+        escalated: { type: boolean }
   dependencies:
     type: array
     maxItems: 4096
@@ -84,7 +102,7 @@ properties:
     items:
       type: object
       additionalProperties: false
-      required: [outcome_id, reservation_id, criterion_ref, digest, outcome_kind, evidence_ref, expected_revision, tree_digest, checkpoint_id]
+      required: [outcome_id, reservation_id, criterion_ref, digest, outcome_kind, evidence_ref, expected_revision, tree_digest, checkpoint_id, charged, open_gaps_before, open_gaps_after]
       properties:
         outcome_id: { type: string, minLength: 1, maxLength: 256 }
         reservation_id: { type: string, minLength: 1, maxLength: 256 }
@@ -96,8 +114,10 @@ properties:
         tree_digest: { type: [string, 'null'], pattern: '^[a-fA-F0-9]{64}$' }
         checkpoint_id: { type: [string, 'null'], minLength: 1, maxLength: 256 }
         evidence_ref: { type: string, minLength: 1 }
-  budget_start_outcome_index: { type: integer, minimum: 0, maximum: 4096 }
-  unsuccessful_totals:
+        charged: { type: boolean }
+        open_gaps_before: { type: integer, minimum: 0, maximum: 32 }
+        open_gaps_after: { type: integer, minimum: 0, maximum: 32 }
+  charged_attempts:
     type: object
     maxProperties: 256
     additionalProperties: false
@@ -144,6 +164,23 @@ properties:
         tree_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
         checkpoint_id: { type: string, minLength: 1, maxLength: 256 }
   pending_clarification_question: { type: [string, 'null'], maxLength: 1024 }
+  late_findings:
+    type: array
+    maxItems: 256
+    items:
+      type: object
+      additionalProperties: false
+      required: [criterion_ref, finding_text, finding_citation, revision]
+      properties:
+        criterion_ref: { type: string, pattern: '^AC-[0-9]{3}$' }
+        finding_text: { type: string, minLength: 1, maxLength: 2048 }
+        finding_citation: { type: [string, 'null'], minLength: 1, maxLength: 512 }
+        revision: { type: integer, minimum: 1 }
+  repair_changed_paths:
+    type: array
+    maxItems: 512
+    uniqueItems: true
+    items: { type: string, minLength: 1, maxLength: 1024 }
   interaction_trace:
     type: object
     additionalProperties: false
@@ -179,7 +216,9 @@ x-coherence-checks:
   - id: active-position
     description: Current criterion is the first unresolved queue entry; a reservation names that current criterion and at most one reservation is live.
   - id: monotonic-budget
-    description: Unsuccessful totals equal accepted unsuccessful outcomes at or after budget_start_outcome_index, which defaults to zero and cannot exceed the retained outcome count. Each criterion admits at most three failures per budget. Explicit operator resume of a budget-blocked child advances the index to the retained outcome count and clears the active totals without deleting history. Budget-blocked state has an exhausted criterion anywhere in the unresolved queue; discovery, reserved, and awaiting-verification stages have no exhausted unresolved criterion.
+    description: Charged attempts name catalog criteria, stay between zero and three, and do not exceed retained outcomes marked charged. Successful outcomes are uncharged, counts of two or three imply escalation, and budget-blocked state has a current criterion at three attempts.
+  - id: criterion-gaps
+    description: Gap identifiers match their criterion and one-based list position, bounds match the runtime limits, open gaps have no closure revision, closed gaps have a closure revision no later than state revision, and source-closed criteria have no open gaps. Late findings name catalog criteria and repair changed paths appear only while awaiting targeted verification.
   - id: accepted-queue
     description: An empty focused queue with no pending audit is accepted; settled criteria are trusted, and accepted criteria are re-checked only when the runtime lists them in interaction-trace or re-check scope.
   - id: immutable-transition-history

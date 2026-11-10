@@ -17,7 +17,7 @@ import skillbill.workflow.taskruntime.artifact.decodeNoChangePauseFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateProgressFromArtifact
 import skillbill.workflow.taskruntime.artifact.isPreContractAcceptanceCriterionRepairState
-import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.supersededAcceptanceCriterionRepairStateVersion
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -138,7 +138,7 @@ internal object BlockIncidentRecoveryFactsReader {
         val repairFamily = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
         val repairWire = repairFamily.value(artifacts)?.let(FeatureTaskRuntimeWorkflowArtifactMap::from)
         val preContract = repairWire?.isPreContractAcceptanceCriterionRepairState() == true
-        val superseded = repairWire?.isPreviousVersionAcceptanceCriterionRepairState() == true
+        val superseded = repairWire?.supersededAcceptanceCriterionRepairStateVersion() != null
         return TypedOwners(
           mandates =
             decodeRunInvariantsFromArtifact(
@@ -182,7 +182,7 @@ internal object BlockIncidentRecoveryFactsReader {
 
   private fun AcceptanceCriterionRepairState.exhaustedUnresolvedCriterion(): Boolean =
     unresolvedQueue.any {
-      unsuccessfulTotals.getOrDefault(it, 0) >= FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES
+      chargedAttempts.getOrDefault(it, 0) >= FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES
     }
 
   private val PENDING_VERDICT_STAGES =

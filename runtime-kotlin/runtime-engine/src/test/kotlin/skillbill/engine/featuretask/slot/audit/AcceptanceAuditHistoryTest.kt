@@ -94,7 +94,7 @@ class AcceptanceAuditHistoryTest {
     }
 
     assertEquals("AC-002", state.currentCriterionRef)
-    assertEquals(2, state.unsuccessfulTotals["AC-001"])
+    assertEquals(2, state.chargedAttempts["AC-001"])
     assertDisplayedAttempt(1)
   }
 }

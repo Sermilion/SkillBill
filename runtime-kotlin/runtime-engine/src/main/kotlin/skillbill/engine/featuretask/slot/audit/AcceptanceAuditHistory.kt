@@ -19,7 +19,7 @@ internal fun auditCurrentExecution(
       kind = IdeStatusCurrentPhaseExecutionKind.ATTEMPT,
       criterionRef = criterion,
       count =
-        (repair.unsuccessfulTotals.getOrDefault(criterion, 0) + 1)
+        (repair.chargedAttempts.getOrDefault(criterion, 0) + 1)
           .coerceAtMost(FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES),
     )
   }

@@ -89,7 +89,7 @@ class FeatureTaskRuntimeSerialRepairTest {
               reservations += assertNotNull(state?.reservation?.reservationId)
               check(repairs <= 3) { "The completed repair did not reach independent verification." }
               git.get().contentIdentities["src/Foo.kt"] = "repair-$repairs"
-              assertEquals(repairs - 1, assertNotNull(state).unsuccessfulTotals.getOrDefault("AC-001", 0))
+              assertEquals(repairs - 1, assertNotNull(state).chargedAttempts.getOrDefault("AC-001", 0))
               assertEquals(repairs - 1, state.outcomes.size)
               assertEquals(
                 AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED,
@@ -119,7 +119,7 @@ class FeatureTaskRuntimeSerialRepairTest {
       assertEquals(3, repairs)
       assertEquals(3, plans)
       assertEquals(3, reservations.distinct().size)
-      assertEquals(2, assertNotNull(scope.snapshot).unsuccessfulTotals["AC-001"])
+      assertEquals(2, assertNotNull(scope.snapshot).chargedAttempts["AC-001"])
       assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
       assertEquals(3, scope.snapshot?.outcomes?.size)
       assertTrue(assertNotNull(scope.snapshot).interactionTrace.pendingRechecks.isEmpty())
@@ -164,7 +164,7 @@ class FeatureTaskRuntimeSerialRepairTest {
               reservations += assertNotNull(state?.reservation?.reservationId)
               check(repairs <= 3) { "Unfinished repair reports bypassed the criterion budget." }
               if (changesSource) git.get().contentIdentities["src/Foo.kt"] = "repair-$repairs"
-              assertEquals(repairs - 1, assertNotNull(state).unsuccessfulTotals.getOrDefault("AC-001", 0))
+              assertEquals(repairs - 1, assertNotNull(state).chargedAttempts.getOrDefault("AC-001", 0))
               defaultPhaseOutput(request).replace(
                 "\"status\": \"completed\",",
                 "\"status\": \"completed\", \"verdict\": \"progress\",",
@@ -190,7 +190,7 @@ class FeatureTaskRuntimeSerialRepairTest {
       assertEquals(3, repairs)
       assertEquals(3, plans)
       assertEquals(3, reservations.distinct().size)
-      assertEquals(3, assertNotNull(scope.snapshot).unsuccessfulTotals["AC-001"])
+      assertEquals(3, assertNotNull(scope.snapshot).chargedAttempts["AC-001"])
       assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, scope.snapshot?.stage)
       assertFalse("review" in harness.launchOrder())
     }
@@ -297,7 +297,7 @@ class FeatureTaskRuntimeSerialRepairTest {
 
       assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
       assertEquals(listOf("AC-001", "AC-002", "AC-002"), focused)
-      assertTrue(assertNotNull(scope.snapshot).unsuccessfulTotals.isEmpty())
+      assertTrue(assertNotNull(scope.snapshot).chargedAttempts.isEmpty())
       assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
     }
   }
@@ -455,7 +455,7 @@ class FeatureTaskRuntimeSerialRepairTest {
       assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
       assertEquals(listOf("audit_plan_fix", "audit_implement_fix"), repairPrompts)
       assertEquals(4, repairs)
-      assertEquals(2, assertNotNull(scope.snapshot).unsuccessfulTotals["AC-001"])
+      assertEquals(2, assertNotNull(scope.snapshot).chargedAttempts["AC-001"])
       assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
     }
   }
@@ -504,7 +504,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         )
       assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
       assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
-      assertEquals(1, scope.snapshot?.unsuccessfulTotals?.get("AC-001"))
+      assertEquals(1, scope.snapshot?.chargedAttempts?.get("AC-001"))
       assertEquals(2, repairs.get())
       assertEquals(
         listOf(
@@ -716,7 +716,7 @@ class FeatureTaskRuntimeSerialRepairTest {
             it in setOf("audit_plan_fix", "audit_implement_fix")
           },
         )
-        assertEquals(3, resumed.unsuccessfulTotals["AC-002"])
+        assertEquals(3, resumed.chargedAttempts["AC-002"])
       } else {
         assertContains(report.blockedReason, "requires upstream output(s) audit")
         assertEquals(beforeResume, harness.launchedPromptPhaseOrder().size)
@@ -781,17 +781,17 @@ class FeatureTaskRuntimeSerialRepairTest {
           worker,
         )
       assertEquals(mapOf("AC-001" to 3, "AC-002" to 3), repairsByCriterion, "$report; ${scope.snapshot}")
-      assertEquals(2, scope.snapshot?.unsuccessfulTotals?.get("AC-001"))
+      assertEquals(2, scope.snapshot?.chargedAttempts?.get("AC-001"))
       if (secondCriterionSucceeds) {
         assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
         assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
-        assertEquals(2, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
+        assertEquals(2, scope.snapshot?.chargedAttempts?.get("AC-002"))
         assertContains(harness.launchOrder(), "review")
       } else {
         assertIs<FeatureTaskRuntimeRunReport.Blocked>(report, "$report")
         assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, scope.snapshot?.stage)
         assertEquals("AC-002", scope.snapshot?.currentCriterionRef)
-        assertEquals(3, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
+        assertEquals(3, scope.snapshot?.chargedAttempts?.get("AC-002"))
       }
     }
   }
@@ -835,7 +835,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         }
         "audit_plan_fix" -> {
           val current = assertNotNull(state?.currentCriterionRef)
-          val used = state.unsuccessfulTotals.getOrDefault(current, 0)
+          val used = state.chargedAttempts.getOrDefault(current, 0)
           assertContains(prompt, current)
           assertContains(prompt, "retained failures: $used of 3")
           facts(defaultPhaseOutput(request))

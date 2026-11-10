@@ -67,7 +67,61 @@ internal object AcceptanceCriterionRepairCoherence {
   }
 
   fun isCoherent(state: AcceptanceCriterionRepairState): Boolean =
-    catalogIsCoherent(state) && progressIsCoherent(state) && outcomesAreCoherent(state) && historyIsCoherent(state)
+    catalogIsCoherent(state) && gapsAreCoherent(state) && progressIsCoherent(state) &&
+      outcomesAreCoherent(state) && historyIsCoherent(state)
+
+  private fun gapsAreCoherent(state: AcceptanceCriterionRepairState): Boolean =
+    state.criteria.all { criterionGapsAreCoherent(it, state.revision) } &&
+      lateFindingsAreCoherent(state) && changedPathsAreCoherent(state)
+
+  private fun criterionGapsAreCoherent(
+    criterion: AcceptanceCriterionRepairCriterion,
+    revision: Long,
+  ): Boolean {
+    val minimumGeneration = AcceptanceCriterionGapLimits.MIN_PLAN_GENERATION
+    val maximumGeneration = AcceptanceCriterionGapLimits.MAX_PLAN_GENERATION
+    return criterion.gaps.size <= AcceptanceCriterionGapLimits.MAX_GAPS_PER_CRITERION &&
+      criterion.planGeneration in minimumGeneration..maximumGeneration &&
+      criterion.gaps.withIndex().all { (index, gap) ->
+        gap.id == "${criterion.canonicalRef}.G${index + 1}" && gapIsCoherent(gap, revision)
+      } && (
+        criterion.sourceDisposition != AcceptanceCriterionSourceDisposition.SOURCE_CLOSED ||
+          criterion.gaps.none { it.status == AcceptanceCriterionGapStatus.OPEN }
+      )
+  }
+
+  private fun gapIsCoherent(
+    gap: AcceptanceCriterionGap,
+    revision: Long,
+  ): Boolean =
+    gap.text.length in 1..AcceptanceCriterionGapLimits.MAX_TEXT_LENGTH &&
+      gap.citation.length in 1..AcceptanceCriterionGapLimits.MAX_CITATION_LENGTH &&
+      when (gap.status) {
+        AcceptanceCriterionGapStatus.OPEN -> gap.closedRevision == null
+        AcceptanceCriterionGapStatus.CLOSED -> gap.closedRevision?.let { it in 1..revision } == true
+      }
+
+  private fun lateFindingsAreCoherent(state: AcceptanceCriterionRepairState): Boolean {
+    val criteria = state.criteria.associateBy { it.canonicalRef }
+    val findings = state.lateFindings
+    return findings.size <= AcceptanceCriterionGapLimits.MAX_LATE_FINDINGS &&
+      findings.all { finding ->
+        finding.criterionRef in criteria &&
+          finding.text.length in 1..AcceptanceCriterionGapLimits.MAX_TEXT_LENGTH &&
+          finding.citation?.length?.let { it in 1..AcceptanceCriterionGapLimits.MAX_CITATION_LENGTH } != false &&
+          finding.revision in 1..state.revision
+      }
+  }
+
+  private fun changedPathsAreCoherent(state: AcceptanceCriterionRepairState): Boolean {
+    val paths = state.repairChangedPaths
+    return paths.size <= AcceptanceCriterionGapLimits.MAX_CHANGED_PATHS &&
+      paths.distinct().size == paths.size &&
+      paths.all {
+        it.length in 1..AcceptanceCriterionGapLimits.MAX_CHANGED_PATH_LENGTH && it.isNotBlank()
+      } &&
+      (state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION || paths.isEmpty())
+  }
 
   private fun catalogIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
     val admission =
@@ -164,14 +218,15 @@ internal object AcceptanceCriterionRepairCoherence {
 
   private fun budgetIsBlocked(state: AcceptanceCriterionRepairState): Boolean =
     state.mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED && state.currentCriterionRef != null &&
-      hasExhaustedBudget(state)
+      state.chargedAttempts.getOrDefault(state.currentCriterionRef, 0) ==
+      FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES && hasExhaustedBudget(state)
 
   private fun readOnlyAuditIsRequired(state: AcceptanceCriterionRepairState): Boolean =
     state.mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED &&
       state.currentCriterionRef == state.pendingAuditRefs.firstOrNull()
 
   private fun hasExhaustedBudget(state: AcceptanceCriterionRepairState): Boolean =
-    AcceptanceCriterionRepairState.hasExhaustedUnresolvedCriterion(state.unresolvedQueue, state.unsuccessfulTotals)
+    AcceptanceCriterionRepairState.hasExhaustedUnresolvedCriterion(state.unresolvedQueue, state.chargedAttempts)
 
   private fun discoveryIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
     val mode =
@@ -197,7 +252,7 @@ internal object AcceptanceCriterionRepairCoherence {
     val revision = live.revision in 1..state.revision && live.stageRevision in live.revision..state.revision
     val unspent =
       state.outcomes.none { it.reservationId == live.reservationId } &&
-        state.unsuccessfulTotals.getOrDefault(
+        state.chargedAttempts.getOrDefault(
           live.criterionRef,
           0,
         ) < FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES
@@ -215,16 +270,19 @@ internal object AcceptanceCriterionRepairCoherence {
     val bounded = outcomes.size <= AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES
     if (!unique || !bounded || !outcomes.all { outcomeIsCoherent(it, state) }) return false
     val refs = state.criteria.map { it.canonicalRef }.toSet()
-    val totals = state.unsuccessfulTotals
+    val totals = state.chargedAttempts
     val validTotals =
       totals.all {
           (ref, total) ->
         ref in refs && total in 0..FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES
       }
-    if (state.budgetStartOutcomeIndex !in 0..outcomes.size) return false
-    return validTotals && outcomes.drop(state.budgetStartOutcomeIndex).filterNot {
-      it.successful
-    }.groupingBy { it.criterionRef }.eachCount() == totals.filterValues { it > 0 }
+    val chargedOutcomes = outcomes.filter { it.charged }.groupingBy { it.criterionRef }.eachCount()
+    val attemptsAreBacked = totals.all { (ref, count) -> count <= chargedOutcomes.getOrDefault(ref, 0) }
+    val escalationIsConsistent =
+      state.criteria.all { criterion ->
+        totals.getOrDefault(criterion.canonicalRef, 0) < 2 || criterion.escalated
+      }
+    return validTotals && attemptsAreBacked && escalationIsConsistent
   }
 
   private fun outcomeIsCoherent(
@@ -241,8 +299,14 @@ internal object AcceptanceCriterionRepairCoherence {
     val verified =
       outcome.verifiedRevision?.let { it in 1 until state.revision } == true &&
         outcome.treeDigest?.isDigest() == true && !outcome.checkpointId.isNullOrBlank()
-    return identity && evidence && (!targeted || verified)
+    return identity && evidence && outcomeAccountingIsCoherent(outcome) && (!targeted || verified)
   }
+
+  private fun outcomeAccountingIsCoherent(outcome: AcceptanceCriterionRepairOutcome): Boolean =
+    (!outcome.successful || !outcome.charged) &&
+      outcome.openGapsBefore in 0..AcceptanceCriterionGapLimits.MAX_GAPS_PER_CRITERION &&
+      outcome.openGapsAfter in 0..AcceptanceCriterionGapLimits.MAX_GAPS_PER_CRITERION &&
+      (!outcome.successful || outcome.openGapsAfter == 0)
 
   private fun historyIsCoherent(state: AcceptanceCriterionRepairState): Boolean =
     transitionsAreCoherent(state) && currentSourcesAreCoherent(state)

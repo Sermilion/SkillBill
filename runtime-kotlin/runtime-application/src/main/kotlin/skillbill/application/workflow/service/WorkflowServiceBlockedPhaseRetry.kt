@@ -13,6 +13,7 @@ import skillbill.application.workflow.persist.WorkflowPersistenceContext
 import skillbill.application.workflow.persist.buildUpdateOk
 import skillbill.application.workflow.persist.decodeFeatureTaskRuntimePhaseRecords
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
@@ -36,7 +37,8 @@ import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
-import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.supersededAcceptanceCriterionRepairStateVersion
+import skillbill.workflow.taskruntime.artifact.toUpgradedAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
@@ -211,8 +213,16 @@ internal class WorkflowServiceBlockedPhaseRetry(
     }
     val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
     if (!family.contains(existing.artifacts)) return null
-    return FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(existing.artifacts))
-      .toAcceptanceCriterionRepairState(family.label()).reopenForOperatorAudit()
+    val payload = FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(existing.artifacts))
+    val storedVersion = payload.supersededAcceptanceCriterionRepairStateVersion()
+    if (storedVersion != null) {
+      runtimeDiagnostics.warning(
+        "seam=operator_retry_acceptance_repair_version " +
+          "value_expected=$ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION " +
+          "value_used=$storedVersion workflow_id=${existing.workflowId}",
+      )
+    }
+    return payload.toUpgradedAcceptanceCriterionRepairState(family.label()).reopenForOperatorAudit()
   }
 
   private fun retryRejection(

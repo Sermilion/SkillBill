@@ -210,6 +210,7 @@ class AcceptanceCriterionRepairStateTest {
         "checkpoint:1",
       )!!
     val failed = verified.record(outcome("outcome-1", "reservation-1", "AC-001", successful = false))!!
+    assertEquals(failed, failed.record(outcome("outcome-1", "reservation-1", "AC-001", successful = false)))
     val reservedAgain = failed.reserve("reservation-2")!!
     val success = outcome("outcome-2", "reservation-2", "AC-001", successful = true)
     val repaired =
@@ -221,10 +222,103 @@ class AcceptanceCriterionRepairStateTest {
       )!!
     val closed = repaired.record(success)!!
 
-    assertEquals(1, closed.unsuccessfulTotals["AC-001"])
+    assertEquals(1, closed.chargedAttempts["AC-001"])
     assertEquals("AC-002", closed.currentCriterionRef)
     assertEquals(closed, closed.record(success))
     assertNull(closed.record(success.copy(digest = "a".repeat(64))))
+  }
+
+  @Test
+  fun `successful verification closes open gaps at the new state revision and records charge facts`() {
+    val initial =
+      assertNotNull(
+        AcceptanceCriterionRepairState.admit(
+          AcceptanceCriterionRepairAdmission(
+            "catalog",
+            "execution",
+            "a".repeat(64),
+            listOf("first"),
+            listOf(criterion("AC-001", 1, "first")),
+            emptyList(),
+          ),
+        ),
+      ).copy(
+        criteria =
+          listOf(
+            criterion("AC-001", 1, "first").copy(
+              gaps =
+                listOf(
+                  AcceptanceCriterionGap(
+                    "AC-001.G1",
+                    "The required source check is missing.",
+                    "spec.md:12",
+                    AcceptanceCriterionGapStatus.OPEN,
+                    AcceptanceCriterionGapOrigin.DISCOVERY,
+                    null,
+                  ),
+                ),
+            ),
+          ),
+      )
+    val verified =
+      initial.reserve("reservation")!!
+        .completeRepairAwaitingTargetedVerification(
+          "reservation",
+          "repair:evidence",
+          "b".repeat(64),
+          "checkpoint",
+        )!!
+    val closed = assertNotNull(verified.record(outcome("outcome", "reservation", "AC-001", successful = true)))
+    val gap = closed.criteria.single().gaps.single()
+
+    assertEquals(AcceptanceCriterionGapStatus.CLOSED, gap.status)
+    assertEquals(closed.revision, gap.closedRevision)
+    assertEquals(false, closed.outcomes.single().charged)
+    assertEquals(1, closed.outcomes.single().openGapsBefore)
+    assertEquals(0, closed.outcomes.single().openGapsAfter)
+  }
+
+  @Test
+  fun `coherence rejects open gaps on closed criteria and unbacked charged attempts`() {
+    val initial =
+      AcceptanceCriterionRepairState.admit(
+        AcceptanceCriterionRepairAdmission(
+          "catalog",
+          "execution",
+          "a".repeat(64),
+          listOf("first"),
+          listOf(criterion("AC-001", 1, "first")),
+          emptyList(),
+        ),
+      )!!
+    val openGap =
+      AcceptanceCriterionGap(
+        "AC-001.G1",
+        "The required source check is missing.",
+        "spec.md:12",
+        AcceptanceCriterionGapStatus.OPEN,
+        AcceptanceCriterionGapOrigin.REPAIR,
+        null,
+      )
+    val withGap = initial.copy(criteria = listOf(initial.criteria.single().copy(gaps = listOf(openGap))))
+    assertNotNull(AcceptanceCriterionRepairState.restore(withGap))
+    assertNull(
+      AcceptanceCriterionRepairState.restore(
+        withGap.copy(
+          criteria =
+            listOf(
+              withGap.criteria.single().copy(
+                sourceDisposition = AcceptanceCriterionSourceDisposition.SOURCE_CLOSED,
+              ),
+            ),
+          unresolvedQueue = emptyList(),
+          currentCriterionRef = null,
+          mode = AcceptanceCriterionRepairMode.ACCEPTED,
+          stage = AcceptanceCriterionRepairStage.ACCEPTED,
+        ),
+      ),
+    )
+    assertNull(AcceptanceCriterionRepairState.restore(withGap.copy(chargedAttempts = mapOf("AC-001" to 1))))
   }
 
   @Test
@@ -261,7 +355,7 @@ class AcceptanceCriterionRepairStateTest {
           ),
         ),
       )
-    assertEquals(emptyMap(), state.unsuccessfulTotals)
+    assertEquals(emptyMap(), state.chargedAttempts)
 
     fun repair(
       ref: String,
@@ -286,27 +380,33 @@ class AcceptanceCriterionRepairStateTest {
     listOf(0, 1, 2, 1).forEachIndexed { index, failures ->
       val ref = criteria[index].canonicalRef
       assertEquals(ref, state.currentCriterionRef)
-      assertEquals(0, state.unsuccessfulTotals.getOrDefault(ref, 0))
+      assertEquals(0, state.chargedAttempts.getOrDefault(ref, 0))
       repeat(failures) { attempt ->
         repair(ref, attempt + 1, successful = false)
-        assertEquals(attempt + 1, state.unsuccessfulTotals[ref])
+        assertEquals(attempt + 1, state.chargedAttempts[ref])
         assertEquals(AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED, state.stage)
       }
       repair(ref, failures + 1, successful = true)
-      assertEquals(failures, state.unsuccessfulTotals.getOrDefault(ref, 0))
+      assertEquals(failures, state.chargedAttempts.getOrDefault(ref, 0))
       assertEquals(criteria[index + 1].canonicalRef, state.currentCriterionRef)
-      assertEquals(0, state.unsuccessfulTotals.getOrDefault(assertNotNull(state.currentCriterionRef), 0))
+      assertEquals(0, state.chargedAttempts.getOrDefault(assertNotNull(state.currentCriterionRef), 0))
       assertEquals(AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED, state.stage)
     }
 
-    assertEquals(4, state.unsuccessfulTotals.values.sum())
+    assertEquals(4, state.chargedAttempts.values.sum())
     repeat(3) { attempt ->
       repair("AC-005", attempt + 1, successful = false)
     }
-    assertEquals(3, state.unsuccessfulTotals["AC-005"])
+    assertEquals(3, state.chargedAttempts["AC-005"])
+    assertEquals(true, state.criteria.last().escalated)
     assertEquals("AC-005", state.currentCriterionRef)
     assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, state.stage)
     assertNull(state.reserve("AC-005:4"))
+    assertNull(
+      AcceptanceCriterionRepairState.restore(
+        state.copy(criteria = state.criteria.dropLast(1) + state.criteria.last().copy(escalated = false)),
+      ),
+    )
   }
 
   @Test

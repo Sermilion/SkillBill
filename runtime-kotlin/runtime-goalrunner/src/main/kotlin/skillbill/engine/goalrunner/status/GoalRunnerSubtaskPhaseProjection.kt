@@ -31,7 +31,7 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateExecutionEvidenceFromArtifact
 import skillbill.workflow.taskruntime.artifact.isPreContractAcceptanceCriterionRepairState
-import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.supersededAcceptanceCriterionRepairStateVersion
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionAuditAttempt
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -116,7 +116,7 @@ private fun readAuditState(
     catchingNonCancellation {
       val payload = FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
       if (payload.isPreContractAcceptanceCriterionRepairState() ||
-        payload.isPreviousVersionAcceptanceCriterionRepairState()
+        payload.supersededAcceptanceCriterionRepairStateVersion() != null
       ) {
         null
       } else {

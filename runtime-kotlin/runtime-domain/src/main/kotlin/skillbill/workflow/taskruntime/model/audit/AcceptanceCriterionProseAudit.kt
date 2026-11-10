@@ -90,7 +90,7 @@ private fun AcceptanceCriterionRepairState.applyDiscoveredGaps(
             closureEvidenceRef = audit.prose,
             closureTreeDigest = audit.treeDigest,
             closureCheckpointId = audit.checkpointId,
-          )
+          ).closeOpenGaps(audit.revision)
       }
     }
   val queue = AcceptanceCriterionRepairState.stableQueue(settled, dependencies, settled.associateBy { it.canonicalRef })
@@ -142,7 +142,7 @@ private fun AcceptanceCriterionRepairState.applyFocusedAudit(
       nextCriteria.associateBy { it.canonicalRef },
     ) ?: return null
   val blocked =
-    !audit.satisfied && unsuccessfulTotals.getOrDefault(previous.canonicalRef, 0) >=
+    !audit.satisfied && chargedAttempts.getOrDefault(previous.canonicalRef, 0) >=
       FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES
   val transition =
     if (previous.sourceDisposition != disposition) {
@@ -176,18 +176,25 @@ private fun AcceptanceCriterionRepairState.applyFocusedAudit(
 internal fun AcceptanceCriterionRepairCriterion.afterProseAudit(
   audit: AcceptanceCriterionProseAudit,
   disposition: AcceptanceCriterionSourceDisposition,
-): AcceptanceCriterionRepairCriterion =
-  if (sourceDisposition == disposition && audit.satisfied) {
-    this
+): AcceptanceCriterionRepairCriterion {
+  val updated =
+    if (sourceDisposition == disposition && audit.satisfied) {
+      this
+    } else {
+      copy(
+        sourceDisposition = disposition,
+        evidenceRef = audit.prose,
+        closureEvidenceRef = if (audit.satisfied) audit.prose else null,
+        closureTreeDigest = if (audit.satisfied) audit.treeDigest else null,
+        closureCheckpointId = if (audit.satisfied) audit.checkpointId else null,
+      )
+    }
+  return if (disposition == AcceptanceCriterionSourceDisposition.SOURCE_CLOSED) {
+    updated.closeOpenGaps(audit.revision)
   } else {
-    copy(
-      sourceDisposition = disposition,
-      evidenceRef = audit.prose,
-      closureEvidenceRef = if (audit.satisfied) audit.prose else null,
-      closureTreeDigest = if (audit.satisfied) audit.treeDigest else null,
-      closureCheckpointId = if (audit.satisfied) audit.checkpointId else null,
-    )
+    updated
   }
+}
 
 private fun proseAuditStage(
   satisfied: Boolean,

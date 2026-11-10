@@ -293,7 +293,7 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
           } else {
             assertEquals("AC-001", state.currentCriterionRef)
             assertEquals("audit_plan_fix", f.snapshot().currentStepId)
-            assertTrue(state.unsuccessfulTotals.isEmpty())
+            assertTrue(state.chargedAttempts.isEmpty())
           }
         }
       }
@@ -460,7 +460,7 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
           assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(verification))
           val rejected = output(verification, "progress", "The claimed repair still loses the causal incident.")
           assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(rejected))
-          assertEquals(index + 1, scope.snapshot?.unsuccessfulTotals?.get("AC-001"))
+          assertEquals(index + 1, scope.snapshot?.chargedAttempts?.get("AC-001"))
           val saved = scope.snapshot
           if (index < 2) assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(rejected))
           assertEquals(saved, scope.snapshot)
@@ -508,8 +508,8 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
         assertIncompleteCycleSettlesOnce(f, recorder)
         repair(f, recorder, 2)
         audit(f, recorder, 3, false, "The caller still permits a second semantic repair in one cycle.")
-        assertEquals(2, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
-        assertEquals(null, scope.snapshot?.unsuccessfulTotals?.get("AC-001"))
+        assertEquals(2, scope.snapshot?.chargedAttempts?.get("AC-002"))
+        assertEquals(null, scope.snapshot?.chargedAttempts?.get("AC-001"))
         assertEquals("AC-002", scope.snapshot?.currentCriterionRef)
         val last = phase(f, "audit_implement_fix", 3)
         assertTrue(recorder.start(last) == RequiredPhaseWrite.Acknowledged)
@@ -520,10 +520,10 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
           ) == true,
         )
         assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, scope.snapshot?.stage)
-        assertEquals(3, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
+        assertEquals(3, scope.snapshot?.chargedAttempts?.get("AC-002"))
         assertEquals(WorkflowStatus.BLOCKED, f.snapshot().workflowStatus)
         assertFalse(recorder.start(phase(f, "audit_implement_fix", 4)) == RequiredPhaseWrite.Acknowledged)
-        assertEquals(3, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
+        assertEquals(3, scope.snapshot?.chargedAttempts?.get("AC-002"))
       }
     }
   }
@@ -556,7 +556,7 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
         assertEquals("The caller still needs production work.", scope.snapshot?.outcomes?.last()?.evidenceRef)
         assertTrue(requireNotNull(scope.currentCriterionContext).contains("The caller still needs production work."))
         assertFalse(requireNotNull(scope.currentCriterionContext).contains("Only part of the caller is connected."))
-        assertEquals(1, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
+        assertEquals(1, scope.snapshot?.chargedAttempts?.get("AC-002"))
         assertEquals(
           FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE,
           decodeImplementationAttemptsFromArtifact(
@@ -619,7 +619,7 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
         assertNull(state.reservation)
         assertEquals(AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED, state.stage)
         assertNull(state.pendingClarificationQuestion)
-        assertEquals(1, state.unsuccessfulTotals["AC-001"])
+        assertEquals(1, state.chargedAttempts["AC-001"])
         assertEquals(1, state.outcomes.size)
         val recorder = recorderFor(f, worker, scope)
         for (attempt in 2..3) {
@@ -635,7 +635,7 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
             assertIs<RequiredPhaseWrite.Rejected>(recorder.complete(unfinished))
           }
           assertEquals(committed, scope.snapshot)
-          assertEquals(attempt, openScope(f, worker).snapshot?.unsuccessfulTotals?.get("AC-001"))
+          assertEquals(attempt, openScope(f, worker).snapshot?.chargedAttempts?.get("AC-001"))
         }
         assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, openScope(f, worker).snapshot?.stage)
         assertIs<RequiredPhaseWrite.Rejected>(recorder.start(phase(f, "audit_implement_fix", 4)))
@@ -743,7 +743,7 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
         AcceptanceCriterionRepairOutcomeKind.INCOMPLETE,
       ) == true,
     )
-    assertEquals(1, recorder.accounting.snapshot?.unsuccessfulTotals?.get("AC-002"))
+    assertEquals(1, recorder.accounting.snapshot?.chargedAttempts?.get("AC-002"))
     val incomplete = recorder.accounting.snapshot
     assertTrue(
       recorder.settleUnsuccessfulRepair(

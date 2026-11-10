@@ -107,6 +107,7 @@ internal sealed interface AcceptanceCriterionRepairVersionPlan {
 
   class Recovery(
     val families: List<String>,
+    val storedVersions: List<String>,
     val regenerated: Map<String, Any?>,
     val rejectedRecord: ByteArray,
     val detail: String,
@@ -233,7 +234,7 @@ public class AcceptanceCriterionRepairRunState internal constructor(
       }
       val criterion = state.criteria.firstOrNull { it.canonicalRef == current } ?: return null
       val identity = criterion.originalAlias?.let { "$it ($current)" } ?: current
-      val failures = state.unsuccessfulTotals.getOrDefault(current, 0)
+      val failures = state.chargedAttempts.getOrDefault(current, 0)
       val reserved = state.reservation?.takeIf { it.criterionRef == current }?.reservationId
       val remaining = (FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES - failures).coerceAtLeast(0)
       val authoredQueue =

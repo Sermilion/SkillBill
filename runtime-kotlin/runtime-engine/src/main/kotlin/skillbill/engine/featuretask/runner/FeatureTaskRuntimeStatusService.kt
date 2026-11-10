@@ -247,7 +247,7 @@ public class FeatureTaskRuntimeStatusService(
     criterionRef: String,
     originalAlias: String?,
   ): String {
-    val failures = state.unsuccessfulTotals.getOrDefault(criterionRef, 0)
+    val failures = state.chargedAttempts.getOrDefault(criterionRef, 0)
     val remaining = (FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES - failures).coerceAtLeast(0)
     val authoredQueue =
       state.criteria

@@ -205,7 +205,7 @@ private fun AcceptanceCriterionRepairState.applyInteractionTrace(
   val queue =
     AcceptanceCriterionRepairState.stableQueue(nextCriteria, dependencies, nextCriteria.associateBy { it.canonicalRef })
       ?: return null
-  val blocked = AcceptanceCriterionRepairState.hasExhaustedUnresolvedCriterion(queue, unsuccessfulTotals)
+  val blocked = AcceptanceCriterionRepairState.hasExhaustedUnresolvedCriterion(queue, chargedAttempts)
   return copy(
     criteria = nextCriteria,
     unresolvedQueue = queue,

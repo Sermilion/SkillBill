@@ -127,7 +127,7 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
         else -> FocusedRepairStage.VERIFICATION
       }
     val refs = (state.pendingAuditRefs + state.unresolvedQueue).distinct()
-    val targets = refs.map { RepairTargetProgress(it, state.unsuccessfulTotals.getOrDefault(it, 0)) }
+    val targets = refs.map { RepairTargetProgress(it, state.chargedAttempts.getOrDefault(it, 0)) }
     return when (FocusedRepairStrategy.next(targets, stage)) {
       FocusedRepairAction.Discover, is FocusedRepairAction.Verify -> steps.audit
       is FocusedRepairAction.Plan -> steps.planning

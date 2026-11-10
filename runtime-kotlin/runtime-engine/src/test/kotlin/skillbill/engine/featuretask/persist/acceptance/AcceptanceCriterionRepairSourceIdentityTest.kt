@@ -82,7 +82,7 @@ class AcceptanceCriterionRepairSourceIdentityTest {
           },
           state.outcomes.single().kind,
         )
-        assertEquals(if (changedPath != null) 1 else 0, state.unsuccessfulTotals.getOrDefault("AC-001", 0))
+        assertEquals(if (changedPath != null) 1 else 0, state.chargedAttempts.getOrDefault("AC-001", 0))
         assertEquals(
           if (changedPath != null) {
             AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED

@@ -3,7 +3,11 @@ package skillbill.workflow.taskruntime.artifact
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
 import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairStateSchema
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGap
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapOrigin
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapStatus
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionInteractionTrace
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionLateFinding
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProseAudit
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairDependency
@@ -33,8 +37,7 @@ fun AcceptanceCriterionRepairState.asRepairWireMap(): FeatureTaskRuntimeWorkflow
       Keys.CURRENT_CRITERION_REF to currentCriterionRef,
       Keys.RESERVATION to reservation?.let(::reservationWire),
       Keys.OUTCOMES to outcomes.map(::outcomeWire),
-      Keys.UNSUCCESSFUL_TOTALS to unsuccessfulTotals,
-      Keys.BUDGET_START_OUTCOME_INDEX to budgetStartOutcomeIndex,
+      Keys.CHARGED_ATTEMPTS to chargedAttempts,
       Keys.REVISION to revision,
       Keys.MODE to mode.wireValue,
       Keys.STAGE to stage.wireValue,
@@ -56,6 +59,8 @@ fun AcceptanceCriterionRepairState.asRepairWireMap(): FeatureTaskRuntimeWorkflow
           )
         },
       Keys.PENDING_AUDIT_REFS to pendingAuditRefs,
+      Keys.LATE_FINDINGS to lateFindings.map(::lateFindingWire),
+      Keys.REPAIR_CHANGED_PATHS to repairChangedPaths,
       Keys.PROSE_AUDITS to proseAudits.map(::proseAuditWire),
       Keys.PENDING_CLARIFICATION_QUESTION to pendingClarificationQuestion,
       Keys.INTERACTION_TRACE to interactionTraceWire(interactionTrace),
@@ -86,8 +91,7 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
       currentCriterionRef = optionalString(Keys.CURRENT_CRITERION_REF),
       reservation = repairReservation(),
       outcomes = repairOutcomes(),
-      unsuccessfulTotals = repairTotals(),
-      budgetStartOutcomeIndex = repairBudgetStartOutcomeIndex(),
+      chargedAttempts = repairTotals(),
       revision = requiredLong(Keys.REVISION),
       mode = requiredEnum(Keys.MODE, AcceptanceCriterionRepairMode.entries) { it.wireValue },
       stage = requiredEnum(Keys.STAGE, AcceptanceCriterionRepairStage.entries) { it.wireValue },
@@ -96,6 +100,8 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
       admittedCheckpointId = optionalString(Keys.ADMITTED_CHECKPOINT_ID),
       sourceTransitions = repairTransitions(),
       pendingAuditRefs = optionalStringList(Keys.PENDING_AUDIT_REFS),
+      lateFindings = repairLateFindings(),
+      repairChangedPaths = stringList(Keys.REPAIR_CHANGED_PATHS),
       proseAudits = repairProseAudits(),
       pendingClarificationQuestion = optionalString(Keys.PENDING_CLARIFICATION_QUESTION),
       interactionTrace = repairInteractionTrace(),
@@ -105,14 +111,6 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
     "repair state is incoherent.",
   )
 }
-
-private fun FeatureTaskRuntimeWorkflowArtifactMap.repairBudgetStartOutcomeIndex(): Int =
-  if (containsKey(Keys.BUDGET_START_OUTCOME_INDEX)) {
-    requiredLong(Keys.BUDGET_START_OUTCOME_INDEX).takeIf { it in 0..Int.MAX_VALUE }?.toInt()
-      ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "Budget start outcome index is invalid.")
-  } else {
-    0
-  }
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.validateDurableSize(sourceLabel: String) {
   if (
@@ -182,8 +180,24 @@ private fun Map<String, Any?>.requiredInt(key: String): Int =
   (this[key] as? Number)?.toLongIfExact()?.takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.toInt()
     ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key is invalid.")
 
+private fun Map<String, Any?>.requiredNullableLong(key: String): Long? {
+  if (!containsKey(key)) throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key is missing.")
+  val value = this[key] ?: return null
+  return (value as? Number)?.toLongIfExact()
+    ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key is invalid.")
+}
+
+private fun Map<String, Any?>.requiredNullableString(key: String): String? {
+  if (!containsKey(key)) throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key is missing.")
+  return this[key] as? String ?: if (this[key] == null) {
+    null
+  } else {
+    throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key is invalid.")
+  }
+}
+
 private fun Map<String, Any?>.requiredLong(key: String): Long =
-  (this[key] as? Number)?.toLong() ?: throw invalidAcceptanceCriterionRepairStateSchema(
+  (this[key] as? Number)?.toLongIfExact() ?: throw invalidAcceptanceCriterionRepairStateSchema(
     "serial-repair",
     "$key is invalid.",
   )
@@ -218,6 +232,9 @@ private fun criterionWire(value: AcceptanceCriterionRepairCriterion): Map<String
     Keys.CLOSURE_EVIDENCE_REF to value.closureEvidenceRef,
     Keys.CLOSURE_TREE_DIGEST to value.closureTreeDigest,
     Keys.CLOSURE_CHECKPOINT_ID to value.closureCheckpointId,
+    Keys.GAPS to value.gaps.map(::gapWire),
+    Keys.PLAN_GENERATION to value.planGeneration,
+    Keys.ESCALATED to value.escalated,
   )
 
 private fun dependencyWire(value: AcceptanceCriterionRepairDependency): Map<String, Any?> =
@@ -249,6 +266,27 @@ private fun outcomeWire(value: AcceptanceCriterionRepairOutcome): Map<String, An
     Keys.AUDIT_BINDING_DIGEST to value.auditBindingDigest,
     Keys.TREE_DIGEST to value.treeDigest,
     Keys.CHECKPOINT_ID to value.checkpointId,
+    Keys.CHARGED to value.charged,
+    Keys.OPEN_GAPS_BEFORE to value.openGapsBefore,
+    Keys.OPEN_GAPS_AFTER to value.openGapsAfter,
+  )
+
+private fun gapWire(value: AcceptanceCriterionGap): Map<String, Any?> =
+  mapOf(
+    Keys.GAP_ID to value.id,
+    Keys.GAP_TEXT to value.text,
+    Keys.GAP_CITATION to value.citation,
+    Keys.GAP_STATUS to value.status.wireValue,
+    Keys.GAP_ORIGIN to value.origin.wireValue,
+    Keys.GAP_CLOSED_REVISION to value.closedRevision,
+  )
+
+private fun lateFindingWire(value: AcceptanceCriterionLateFinding): Map<String, Any?> =
+  mapOf(
+    Keys.CRITERION_REF to value.criterionRef,
+    Keys.FINDING_TEXT to value.text,
+    Keys.FINDING_CITATION to value.citation,
+    Keys.REVISION to value.revision,
   )
 
 private fun repairObject(raw: Any?): Map<String, Any?> {
@@ -299,6 +337,32 @@ private fun FeatureTaskRuntimeWorkflowArtifactMap.repairCriteria(): List<Accepta
       closureEvidenceRef = criterion.optionalString(Keys.CLOSURE_EVIDENCE_REF),
       closureTreeDigest = criterion.optionalString(Keys.CLOSURE_TREE_DIGEST),
       closureCheckpointId = criterion.optionalString(Keys.CLOSURE_CHECKPOINT_ID),
+      gaps = criterion.repairGaps(),
+      planGeneration = criterion.requiredInt(Keys.PLAN_GENERATION),
+      escalated = criterion.requiredBoolean(Keys.ESCALATED),
+    )
+  }
+
+private fun Map<String, Any?>.repairGaps(): List<AcceptanceCriterionGap> =
+  (this[Keys.GAPS] as? List<*>)?.map { raw ->
+    val gap = repairObject(raw)
+    AcceptanceCriterionGap(
+      id = gap.requiredString(Keys.GAP_ID),
+      text = gap.requiredString(Keys.GAP_TEXT),
+      citation = gap.requiredString(Keys.GAP_CITATION),
+      status = gap.requiredEnum(Keys.GAP_STATUS, AcceptanceCriterionGapStatus.entries) { it.wireValue },
+      origin = gap.requiredEnum(Keys.GAP_ORIGIN, AcceptanceCriterionGapOrigin.entries) { it.wireValue },
+      closedRevision = gap.requiredNullableLong(Keys.GAP_CLOSED_REVISION),
+    )
+  } ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "gaps is invalid.")
+
+private fun FeatureTaskRuntimeWorkflowArtifactMap.repairLateFindings(): List<AcceptanceCriterionLateFinding> =
+  objectList(Keys.LATE_FINDINGS).map { finding ->
+    AcceptanceCriterionLateFinding(
+      criterionRef = finding.requiredString(Keys.CRITERION_REF),
+      text = finding.requiredString(Keys.FINDING_TEXT),
+      citation = finding.requiredNullableString(Keys.FINDING_CITATION),
+      revision = finding.requiredLong(Keys.REVISION),
     )
   }
 
@@ -341,11 +405,14 @@ private fun FeatureTaskRuntimeWorkflowArtifactMap.repairOutcomes(): List<Accepta
       treeDigest = outcome.optionalString(Keys.TREE_DIGEST),
       checkpointId = outcome.optionalString(Keys.CHECKPOINT_ID),
       auditBindingDigest = outcome.optionalString(Keys.AUDIT_BINDING_DIGEST),
+      charged = outcome.requiredBoolean(Keys.CHARGED),
+      openGapsBefore = outcome.requiredInt(Keys.OPEN_GAPS_BEFORE),
+      openGapsAfter = outcome.requiredInt(Keys.OPEN_GAPS_AFTER),
     )
   }
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.repairTotals(): Map<String, Int> =
-  repairObject(this[Keys.UNSUCCESSFUL_TOTALS]).entries.associate { (key, value) ->
+  repairObject(this[Keys.CHARGED_ATTEMPTS]).entries.associate { (key, value) ->
     val ref =
       key
     val total =

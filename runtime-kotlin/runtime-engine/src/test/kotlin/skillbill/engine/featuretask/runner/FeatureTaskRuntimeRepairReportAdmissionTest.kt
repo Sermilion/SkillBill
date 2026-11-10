@@ -62,7 +62,7 @@ class FeatureTaskRuntimeRepairReportAdmissionTest {
               repairs++
               check(repairs <= 3) { "Unclassified repair reports bypassed the criterion budget." }
               reservations += assertNotNull(state?.reservation?.reservationId)
-              assertEquals(repairs - 1, state.unsuccessfulTotals.getOrDefault("AC-001", 0))
+              assertEquals(repairs - 1, state.chargedAttempts.getOrDefault("AC-001", 0))
               git.get().contentIdentities["src/Foo.kt"] = "repair-$repairs"
               repairReport(reportKind, phase, partialReport)
             }
@@ -115,7 +115,7 @@ class FeatureTaskRuntimeRepairReportAdmissionTest {
     partialReport: String,
   ) {
     val state = assertNotNull(scope.snapshot)
-    assertEquals(3, state.unsuccessfulTotals["AC-001"])
+    assertEquals(3, state.chargedAttempts["AC-001"])
     assertEquals(List(3) { AcceptanceCriterionRepairOutcomeKind.INCOMPLETE }, state.outcomes.map { it.kind })
     assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, state.stage)
     assertEquals(AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED, state.criteria.first().sourceDisposition)
@@ -185,7 +185,7 @@ class FeatureTaskRuntimeRepairReportAdmissionTest {
       assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
       assertEquals(1, admissions)
       assertEquals(1, verifications)
-      assertTrue(assertNotNull(scope.snapshot).unsuccessfulTotals.isEmpty())
+      assertTrue(assertNotNull(scope.snapshot).chargedAttempts.isEmpty())
       assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
       assertContains(harness.launchOrder(), "review")
     }
