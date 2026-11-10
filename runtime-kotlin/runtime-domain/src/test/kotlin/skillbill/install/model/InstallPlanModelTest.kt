@@ -32,7 +32,7 @@ class InstallPlanModelTest {
   @Test
   fun `native agent provider ids mirror the install agent order`() {
     assertEquals(
-      listOf("claude", "codex", "junie", "cursor"),
+      SupportedAgent.supportedIds,
       NativeAgentProviderId.entries.map(NativeAgentProviderId::id),
     )
   }

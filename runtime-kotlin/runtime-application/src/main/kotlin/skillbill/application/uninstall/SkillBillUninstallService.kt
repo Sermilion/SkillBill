@@ -87,21 +87,26 @@ class SkillBillUninstallService(
     val recorder = UninstallMutationRecorder(diagnostics)
 
     cleanupAgentInstallTargets(plan, installAgentService, removed, skipped, recorder)
-    cleanupNativeAgentInstallLinks(plan, installNativeAgentLinkPort, uninstallFileSystem, removed, recorder)
+    val nativeCleanup =
+      cleanupNativeAgentInstallLinks(plan, installNativeAgentLinkPort, removed, recorder)
     cleanupMcpRegistrations(plan, installMcpRegistrationPort, removed, recorder)
 
     plan.launchers.forEach { launcher ->
       removeLauncher(uninstallFileSystem, launcher, removed, skipped, recorder)
     }
     removeDesktop(uninstallFileSystem, plan.desktop, removed, skipped, recorder)
-    uninstallFileSystem.withConfigTransaction(plan.home, plan.environment) {
-      removeInstallState(
-        uninstallFileSystem,
-        plan.stateRoot,
-        removed,
-        recorder,
-        InstallStateRemovalOptions(uninstallFileSystem.configLockFilePaths(plan.home, plan.environment)),
-      )
+    if (nativeCleanup.complete) {
+      uninstallFileSystem.withConfigTransaction(plan.home, plan.environment) {
+        removeInstallState(
+          uninstallFileSystem,
+          plan.stateRoot,
+          removed,
+          recorder,
+          InstallStateRemovalOptions(
+            uninstallFileSystem.configLockFilePaths(plan.home, plan.environment) + nativeCleanup.retainedPaths,
+          ),
+        )
+      }
     }
 
     return UninstallResult(

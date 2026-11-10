@@ -31,17 +31,27 @@ import kotlin.test.assertTrue
 
 class InstallApplyTest : InstallApplyTestSupport() {
   @Test
-  fun `selected OpenCode installs useful capabilities with a deferred native warning`() {
+  fun `selected OpenCode installs native specialists through its configured directory`() {
     val fixture = setupApplyFixture()
-    val plan = planInstallForTest(fixture.request(agents = setOf(SupportedAgent.OPENCODE)))
+    val plan =
+      planInstallForTest(
+        fixture.request(selectedPlatforms = setOf("kotlin"), agents = setOf(SupportedAgent.OPENCODE)),
+      )
 
     val result = applyInstallForTest(plan)
 
-    assertEquals(InstallApplyStatus.WARNING, result.status)
-    assertTrue(result.nativeAgents.isEmpty())
-    val issue = result.warnings.single { it.kind == InstallApplyIssueKind.NATIVE_AGENT_SUPPORT_DEFERRED }
-    assertEquals(SupportedAgent.OPENCODE, issue.agent)
-    assertContains(issue.message, "unavailable")
+    assertEquals(InstallApplyStatus.SUCCESS, result.status)
+    assertTrue(
+      result.nativeAgents.any { native ->
+        native.provider == NativeAgentProviderId.OPENCODE && native.status == NativeAgentApplyStatus.LINKED
+      },
+    )
+    assertTrue(
+      result.nativeAgents.none { native ->
+        native.agent == SupportedAgent.OPENCODE && native.status == NativeAgentApplyStatus.FAILED
+      },
+    )
+    assertTrue(Files.isSymbolicLink(fixture.home.resolve(".config/opencode/agents/bill-code-review-worker.md")))
     assertEquals(listOf(SupportedAgent.OPENCODE), result.mcpRegistrationOutcomes.map { it.agent })
   }
 

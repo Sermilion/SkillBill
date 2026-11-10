@@ -226,7 +226,10 @@ internal object NativeAgentLinkInventoryBootstrap {
     if (!agentPathIsSymbolicLink(link, "inspect managed ${provider.name} agent link")) return
     val rawTarget = readManagedLinkTarget(link)
     val resolved = (link.parent ?: link.toAbsolutePath().parent).resolve(rawTarget).toAbsolutePath().normalize()
-    if (isCanonicalNativeAgentArtifactTarget(home, provider, entry.logicalName, resolved, managedRoots)) {
+    if (
+      resolved == entry.cacheTargetPath.toAbsolutePath().normalize() &&
+      isCanonicalNativeAgentArtifactTarget(home, provider, entry.logicalName, resolved, managedRoots)
+    ) {
       beforeMutation(link)
       Files.deleteIfExists(link)
     }

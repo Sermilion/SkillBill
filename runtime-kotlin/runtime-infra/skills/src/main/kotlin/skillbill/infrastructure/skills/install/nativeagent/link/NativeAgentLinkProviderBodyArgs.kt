@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.nativeagent.link
 
+import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventoryEntry
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentCompositionContext
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.install.model.AgentTarget
@@ -15,4 +16,6 @@ internal data class NativeAgentLinkProviderBodyArgs(
   val compositionContext: NativeAgentCompositionContext,
   val effectivePackRoots: List<Path>,
   val journal: ProviderMutationJournal,
+  val priorInventory: List<NativeAgentLinkInventoryEntry>,
+  val hasInventory: Boolean,
 )

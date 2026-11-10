@@ -6,12 +6,14 @@ import skillbill.error.shellcontent.missingInstalledNativeAgent
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.install.nativeagent.installNativeAgentCompositionContext
+import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventory
+import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventoryBootstrap
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventoryEntry
+import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventoryPaths
 import skillbill.infrastructure.skills.install.nativeagent.parseEmbeddedLogicalName
-import skillbill.infrastructure.skills.install.nativeagent.uninstallNativeAgentFiles
 import skillbill.infrastructure.skills.nativeagent.NativeAgentOperations
-import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentInstallRenderOverrides
-import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentInstallRenderRequest
+import skillbill.infrastructure.skills.nativeagent.discovery.discoverNativeAgentSourceEntries
+import skillbill.infrastructure.skills.nativeagent.discovery.discoverNativeAgentSourceEntriesInRoots
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.infrastructure.skills.nativeagent.rendering.nativeAgentCompositionRepoRoot
 import skillbill.infrastructure.skills.nativeagent.validation.validateNativeAgentArtifactsForInstall
@@ -20,7 +22,9 @@ import skillbill.install.model.SupportedAgent
 import java.nio.file.FileSystemException
 import java.nio.file.Files
 import java.nio.file.LinkOption
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
+import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.DosFileAttributeView
 import java.nio.file.attribute.PosixFileAttributeView
 import java.nio.file.attribute.PosixFilePermission
@@ -40,6 +44,9 @@ internal fun linkProviderAgents(
       selectedPlatforms = request.selectedPlatforms,
       catalogLoader = request.catalogLoader,
     )
+  val inventoryPath = NativeAgentLinkInventoryPaths.inventoryPath(resolvedHome)
+  val hasInventory = NativeAgentLinkInventory.inventoryPathExists(inventoryPath)
+  val priorInventory = readNativeAgentOwnership(resolvedHome, request, validationRoot)
   val compositionContext = installNativeAgentCompositionContext(effectivePackRoots)
   request.overrides.sourceRoots
     ?.let { roots ->
@@ -57,7 +64,7 @@ internal fun linkProviderAgents(
     request.overrides.installCacheRoot?.toAbsolutePath()?.normalize()
       ?: NativeAgentOperations.installCacheRoot(resolvedHome, request.platformPacksRoot, request.skillsRoot)
   val journal = ProviderMutationJournal()
-  return linkProviderAgentsWithJournal(journal) {
+  return withNativeAgentMutationJournal(journal) {
     linkProviderAgentsBody(
       NativeAgentLinkProviderBodyArgs(
         provider = provider,
@@ -69,6 +76,8 @@ internal fun linkProviderAgents(
         compositionContext = compositionContext,
         effectivePackRoots = effectivePackRoots,
         journal = journal,
+        priorInventory = priorInventory,
+        hasInventory = hasInventory,
       ),
     )
   }
@@ -285,49 +294,94 @@ internal fun isEmptyDirectory(path: Path): Boolean = Files.list(path).use { !it.
 internal fun unlinkProviderAgents(
   provider: NativeAgentProvider,
   request: NativeAgentLinkRequest,
-  agentDirs: List<Path>? = null,
-): List<Path> {
+  sharedJournal: ProviderMutationJournal? = null,
+): NativeAgentRemovalOutcome {
   val resolvedHome = request.home ?: resolveUserHome(null)
-  val resolvedAgentDirs = agentDirs ?: provider.homeAgentDirs(resolvedHome, request.environment)
-  val compositionContext = installNativeAgentCompositionContext()
-  val generated =
-    NativeAgentOperations.renderInstallArtifacts(
-      NativeAgentInstallRenderRequest(
-        platformPacksRoot = request.platformPacksRoot,
-        skillsRoot = request.skillsRoot,
-        selectedPlatforms = request.selectedPlatforms,
-        provider = provider,
-        home = resolvedHome,
-        compositionContext = compositionContext,
-        overrides =
-          NativeAgentInstallRenderOverrides(
-            cacheRoot = request.overrides.installCacheRoot,
-            sourceRoots = request.overrides.sourceRoots,
-          ),
-      ),
-    )
-  val legacyGenerated =
-    request.overrides.legacyManagedRoot
-      ?.takeIf { legacyRoot -> legacyRoot != generated.cacheRoot }
-      ?.let { legacyRoot ->
-        NativeAgentOperations.renderInstallArtifacts(
-          NativeAgentInstallRenderRequest(
-            platformPacksRoot = request.platformPacksRoot,
-            skillsRoot = request.skillsRoot,
-            selectedPlatforms = request.selectedPlatforms,
-            provider = provider,
-            home = resolvedHome,
-            compositionContext = compositionContext,
-            overrides =
-              NativeAgentInstallRenderOverrides(
-                cacheRoot = legacyRoot,
-                sourceRoots = request.overrides.sourceRoots,
-              ),
-          ),
-        )
+  val candidates = nativeAgentRemovalCandidates(provider, request, resolvedHome)
+  val journal = sharedJournal ?: ProviderMutationJournal()
+  val removed = mutableListOf<Path>()
+  val released = mutableListOf<NativeAgentLinkInventoryEntry>()
+  val retainedPaths = mutableSetOf<Path>()
+  val mutation = {
+    candidates.forEach { entry ->
+      val link = entry.installedPath.toAbsolutePath().normalize()
+      val attributes = nativeAgentRemovalAttributes(link)
+      if (attributes == null) {
+        released += entry
+        return@forEach
       }
-  return uninstallNativeAgentFiles(
-    (generated.generatedFiles + legacyGenerated?.generatedFiles.orEmpty()).distinct(),
-    resolvedAgentDirs,
-  )
+      if (!attributes.isSymbolicLink) return@forEach
+      val raw = Files.readSymbolicLink(link)
+      val target = link.parent.resolve(raw).toAbsolutePath().normalize()
+      if (target != entry.cacheTargetPath.toAbsolutePath().normalize()) {
+        if (target.startsWith(resolvedHome.resolve(".skill-bill").toAbsolutePath().normalize())) {
+          retainedPaths.add(target)
+        }
+        return@forEach
+      }
+      journal.beforeMutation(link)
+      Files.deleteIfExists(link)
+      removed.add(link)
+      released += entry
+    }
+    NativeAgentLinkInventory.removeEntries(
+      home = resolvedHome,
+      removed = released,
+      environment = request.environment,
+      managedRoots = listOfNotNull(request.overrides.installCacheRoot, request.overrides.legacyManagedRoot),
+      beforeMutation = journal::beforeMutation,
+    )
+    NativeAgentRemovalOutcome(removed, retainedPaths.toList())
+  }
+  return if (sharedJournal == null) withNativeAgentMutationJournal(journal, mutation) else mutation()
+}
+
+private fun nativeAgentRemovalCandidates(
+  provider: NativeAgentProvider,
+  request: NativeAgentLinkRequest,
+  home: Path,
+): List<NativeAgentLinkInventoryEntry> {
+  val sourceRoot =
+    nativeAgentCompositionRepoRoot(request.platformPacksRoot, request.skillsRoot)
+      .toAbsolutePath()
+      .normalize()
+  val entries = readNativeAgentOwnership(home, request, sourceRoot)
+  val logicalNames =
+    request.nativeAgentLogicalNames
+      ?: request.overrides.sourceRoots?.let(::discoverNativeAgentSourceEntriesInRoots)?.map { it.name }?.toSet()
+      ?: request.selectedPlatforms?.let {
+        discoverNativeAgentSourceEntries(request.platformPacksRoot, request.skillsRoot, it).map { source ->
+          source.name
+        }.toSet()
+      }
+  val dirs = provider.homeAgentDirs(home, request.environment).map { it.toAbsolutePath().normalize() }.toSet()
+  return entries.filter { entry ->
+    entry.provider == provider.name.lowercase() &&
+      (request.includeAllSourceRoots || entry.sourceRoot.toAbsolutePath().normalize() == sourceRoot) &&
+      entry.installedPath.toAbsolutePath().normalize().parent in dirs &&
+      (logicalNames == null || entry.logicalName in logicalNames)
+  }
+}
+
+private fun nativeAgentRemovalAttributes(link: Path): BasicFileAttributes? =
+  try {
+    Files.readAttributes(link, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+  } catch (_: NoSuchFileException) {
+    null
+  }
+
+internal data class NativeAgentRemovalOutcome(val removed: List<Path>, val retainedPaths: List<Path>)
+
+private fun readNativeAgentOwnership(
+  home: Path,
+  request: NativeAgentLinkRequest,
+  sourceRoot: Path,
+): List<NativeAgentLinkInventoryEntry> {
+  val managedRoots = listOfNotNull(request.overrides.installCacheRoot, request.overrides.legacyManagedRoot)
+  val inventoryPath = NativeAgentLinkInventoryPaths.inventoryPath(home)
+  if (NativeAgentLinkInventory.inventoryPathExists(inventoryPath)) {
+    return NativeAgentLinkInventory.read(home, managedRoots, sourceRoot, request.environment)
+  }
+  val bootstrap = NativeAgentLinkInventoryBootstrap.bootstrap(home, managedRoots, sourceRoot, request.environment)
+  return bootstrap.retain + bootstrap.remove
 }

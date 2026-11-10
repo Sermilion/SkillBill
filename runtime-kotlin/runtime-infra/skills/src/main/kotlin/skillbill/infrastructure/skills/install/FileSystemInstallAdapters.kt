@@ -317,6 +317,7 @@ class FileSystemInstallNativeAgentLinks(
         NativeAgentLinkProvider.CODEX -> InstallNativeAgentOperations.linkCodexAgents(fsRequest)
         NativeAgentLinkProvider.JUNIE -> InstallNativeAgentOperations.linkJunieAgents(fsRequest)
         NativeAgentLinkProvider.CURSOR -> InstallNativeAgentOperations.linkCursorAgents(fsRequest)
+        NativeAgentLinkProvider.OPENCODE -> InstallNativeAgentOperations.linkOpenCodeAgents(fsRequest)
       }
     return InstallNativeAgentLinkOperationResult(
       outcome =
@@ -330,16 +331,20 @@ class FileSystemInstallNativeAgentLinks(
   override fun unlinkNativeAgents(
     request: InstallNativeAgentLinkOperationRequest,
   ): InstallNativeAgentUnlinkOperationResult {
-    val fsRequest = request.linkRequest.toFsRequest(catalogLoader)
-    return InstallNativeAgentUnlinkOperationResult(
-      unlinked =
-        when (request.provider) {
-          NativeAgentLinkProvider.CLAUDE -> InstallNativeAgentOperations.unlinkClaudeAgents(fsRequest)
-          NativeAgentLinkProvider.CODEX -> InstallNativeAgentOperations.unlinkCodexAgents(fsRequest)
-          NativeAgentLinkProvider.JUNIE -> InstallNativeAgentOperations.unlinkJunieAgents(fsRequest)
-          NativeAgentLinkProvider.CURSOR -> InstallNativeAgentOperations.unlinkCursorAgents(fsRequest)
-        },
-    )
+    val fsRequest =
+      request.linkRequest.toFsRequest(catalogLoader).copy(
+        includeAllSourceRoots = request.includeAllSourceRoots,
+      )
+    val provider =
+      when (request.provider) {
+        NativeAgentLinkProvider.CLAUDE -> SupportedAgent.CLAUDE
+        NativeAgentLinkProvider.CODEX -> SupportedAgent.CODEX
+        NativeAgentLinkProvider.JUNIE -> SupportedAgent.JUNIE
+        NativeAgentLinkProvider.CURSOR -> SupportedAgent.CURSOR
+        NativeAgentLinkProvider.OPENCODE -> SupportedAgent.OPENCODE
+      }
+    val outcome = InstallNativeAgentOperations.unlinkAgentsResult(provider, fsRequest)
+    return InstallNativeAgentUnlinkOperationResult(outcome.removed, outcome.retainedPaths)
   }
 }
 
@@ -380,6 +385,7 @@ private fun NativeAgentLinkRequest.toFsRequest(catalogLoader: PlatformPackCatalo
     home = home,
     selectedPlatforms = selectedPlatforms,
     environment = environment,
+    nativeAgentLogicalNames = nativeAgentLogicalNames,
     catalogLoader = catalogLoader,
     overrides =
       FsNativeAgentLinkOverrides(

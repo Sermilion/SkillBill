@@ -9,27 +9,22 @@ import java.nio.file.Path
 
 internal fun reconcileNativeAgentLinkInventoryLocked(request: NativeAgentLinkInventoryLockedReconcileRequest) {
   val trustedRoots = NativeAgentLinkInventoryPaths.canonicalManagedCacheRoots(request.home, request.managedRoots)
+  val currentExists = NativeAgentLinkInventory.inventoryPathExists(request.path)
+  val current =
+    if (currentExists) {
+      NativeAgentLinkInventory.read(request.home, trustedRoots, request.sourceRoot, request.environment)
+    } else {
+      emptyList()
+    }
+  verifyExpectedInventory(request, currentExists, current)
   val previous =
-    loadPreviousNativeAgentLinkInventory(request, trustedRoots)
+    if (currentExists) current else bootstrapPreviousNativeAgentLinkInventory(request, trustedRoots)
   val desiredPaths = request.desired.map { it.installedPath.normalize() }.toSet()
   previous.filter { it.provider == request.provider && it.installedPath.normalize() !in desiredPaths }
     .forEach { stale ->
       NativeAgentLinkInventoryBootstrap.removeIfStillManaged(stale, request.home, trustedRoots, request.beforeMutation)
     }
-  val retained =
-    previous.filter { it.provider != request.provider }.filter { entry ->
-      if (NativeAgentLinkInventoryDecode.isSemanticallyValid(entry, request.home, trustedRoots, request.environment)) {
-        true
-      } else {
-        NativeAgentLinkInventoryBootstrap.removeIfStillManaged(
-          entry,
-          request.home,
-          trustedRoots,
-          request.beforeMutation,
-        )
-        false
-      }
-    }
+  val retained = previous.filter { it.provider != request.provider }
   try {
     NativeAgentLinkInventoryWrite.write(
       NativeAgentLinkInventoryWriteRequest(
@@ -52,29 +47,34 @@ internal fun reconcileNativeAgentLinkInventoryLocked(request: NativeAgentLinkInv
   }
 }
 
+private fun verifyExpectedInventory(
+  request: NativeAgentLinkInventoryLockedReconcileRequest,
+  currentExists: Boolean,
+  current: List<NativeAgentLinkInventoryEntry>,
+) {
+  if (currentExists != request.expectedInventoryPresent || current != request.expectedPrevious) {
+    throw reconcileError(
+      request.path,
+      "native-agent inventory changed after link ownership was read; retry installation",
+    )
+  }
+}
+
+private fun bootstrapPreviousNativeAgentLinkInventory(
+  request: NativeAgentLinkInventoryLockedReconcileRequest,
+  trustedRoots: List<Path>,
+): List<NativeAgentLinkInventoryEntry> {
+  val bootstrap =
+    NativeAgentLinkInventoryBootstrap.bootstrap(request.home, trustedRoots, request.sourceRoot, request.environment)
+  bootstrap.remove.filter { it.provider == request.provider }.forEach { entry ->
+    NativeAgentLinkInventoryBootstrap.removeIfStillManaged(entry, request.home, trustedRoots, request.beforeMutation)
+  }
+  return bootstrap.retain
+}
+
 private fun reconcileError(
   path: Path,
   reason: String,
   cause: Throwable? = null,
 ): InvalidNativeAgentLinkInventoryReconcileError =
   InvalidNativeAgentLinkInventoryReconcileError(path = path.toString(), reason = reason, cause = cause)
-
-private fun loadPreviousNativeAgentLinkInventory(
-  request: NativeAgentLinkInventoryLockedReconcileRequest,
-  trustedRoots: List<Path>,
-): List<NativeAgentLinkInventoryEntry> =
-  if (NativeAgentLinkInventory.inventoryPathExists(request.path)) {
-    NativeAgentLinkInventory.read(request.home, trustedRoots, request.sourceRoot, request.environment)
-  } else {
-    val bootstrap =
-      NativeAgentLinkInventoryBootstrap.bootstrap(
-        request.home,
-        trustedRoots,
-        request.sourceRoot,
-        request.environment,
-      )
-    bootstrap.remove.forEach { remove ->
-      NativeAgentLinkInventoryBootstrap.removeIfStillManaged(remove, request.home, trustedRoots, request.beforeMutation)
-    }
-    bootstrap.retain
-  }

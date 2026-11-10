@@ -3,6 +3,7 @@ import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.networknt.schema.JsonSchema
 import skillbill.contracts.nativeagent.NATIVE_AGENT_LINK_INVENTORY_CONTRACT_VERSION
+import skillbill.error.core.InvalidNativeAgentLinkInventoryReconcileError
 import skillbill.error.shellcontent.invalidNativeAgentLinkInventorySchema
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
@@ -73,6 +74,8 @@ object NativeAgentLinkInventory {
             managedRoots = request.managedRoots,
             sourceRoot = request.sourceRoot,
             environment = environment,
+            expectedPrevious = request.expectedPrevious,
+            expectedInventoryPresent = request.expectedInventoryPresent,
             mapper = mapper,
             schema = schema,
             beforeMutation = request.beforeMutation,
@@ -132,6 +135,54 @@ object NativeAgentLinkInventory {
         error,
       )
     }
+
+  internal fun removeEntries(
+    home: Path,
+    removed: List<NativeAgentLinkInventoryEntry>,
+    environment: Map<String, String>,
+    managedRoots: List<Path>,
+    beforeMutation: (Path) -> Unit,
+  ) {
+    if (removed.isEmpty()) return
+    val path = NativeAgentLinkInventoryPaths.inventoryPath(home)
+    beforeMutation(requireNotNull(path.parent))
+    Files.createDirectories(path.parent)
+    FileChannel.open(lockPath(path), StandardOpenOption.CREATE, StandardOpenOption.WRITE).use { channel ->
+      channel.lock().use {
+        if (!inventoryPathExists(path)) return
+        val current = read(home, managedRoots, environment = environment)
+        val removedByPath = removed.associateBy { it.provider to it.installedPath.toAbsolutePath().normalize() }
+        val currentByPath = current.associateBy { it.provider to it.installedPath.toAbsolutePath().normalize() }
+        removedByPath.forEach { (key, expected) ->
+          if (currentByPath[key] != expected) {
+            throw InvalidNativeAgentLinkInventoryReconcileError(
+              path = path.toString(),
+              reason = "native-agent inventory changed during unlink; retry cleanup",
+            )
+          }
+        }
+        val entries =
+          current.filterNot { entry ->
+            val key = entry.provider to entry.installedPath.toAbsolutePath().normalize()
+            val expected = removedByPath[key]
+            expected != null && entry == expected
+          }
+        NativeAgentLinkInventoryWrite.write(
+          NativeAgentLinkInventoryWriteRequest(
+            path = path,
+            entries = entries,
+            home = home,
+            managedRoots = managedRoots,
+            environment = environment,
+            mapper = mapper,
+            schema = schema,
+            beforeMutation = beforeMutation,
+            afterTemporaryCreation = {},
+          ),
+        )
+      }
+    }
+  }
 
   private fun lockPath(inventoryPath: Path): Path = inventoryPath.resolveSibling("${inventoryPath.fileName}.lock")
 }

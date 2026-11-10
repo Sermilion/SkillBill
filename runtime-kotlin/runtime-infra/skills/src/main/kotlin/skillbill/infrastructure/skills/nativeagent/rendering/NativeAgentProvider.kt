@@ -1,5 +1,9 @@
 package skillbill.infrastructure.skills.nativeagent.rendering
+
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
+import skillbill.infrastructure.skills.install.opencode.opencodeConfigRoots
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.composition.YAML_DOUBLE_QUOTE_ESCAPES
 import skillbill.infrastructure.skills.nativeagent.composition.declaresReadOnlyToolset
@@ -60,6 +64,17 @@ enum class NativeAgentProvider {
       environment: Map<String, String>,
     ): List<Path> = listOf(home.resolve(requireNotNull(supportedAgent.simpleHomeDirectory)).resolve("agents"))
   },
+  OpenCode {
+    override val supportedAgent = SupportedAgent.OPENCODE
+
+    override fun render(source: NativeAgentSource): String =
+      renderFrontmatterAgent(source, listOf("mode: primary") + openCodePermissionFields(source))
+
+    override fun homeAgentDirs(
+      home: Path,
+      environment: Map<String, String>,
+    ): List<Path> = listOf(opencodeConfigRoots(home, environment).configDirectory.resolve("agents"))
+  },
   ;
 
   abstract val supportedAgent: SupportedAgent
@@ -97,6 +112,7 @@ enum class NativeAgentProvider {
       }
       Junie,
       Cursor,
+      OpenCode,
       -> homeAgentDirs(home, environment).map { path -> NativeAgentInventoryAgentDirectory(path, null) }
     }
 
@@ -119,6 +135,14 @@ enum class NativeAgentProvider {
             agentPathExists(path, "inspect ${supportedAgent.wireValue} native-agent directory")
           }.any { exists -> exists }
         if (present) targets else emptyList()
+      }
+      OpenCode -> {
+        val targets = homeAgentDirs(home, environment)
+        if (targets.any { path -> agentPathExists(path, "inspect opencode native-agent directory") }) {
+          targets
+        } else {
+          emptyList()
+        }
       }
     }.map { it.toAbsolutePath().normalize() }
 
@@ -158,6 +182,39 @@ private fun renderFrontmatterAgent(
     append('\n')
     append(agent.body.trimEnd()).append('\n')
   }
+
+private fun openCodePermissionFields(agent: NativeAgentSource): List<String> {
+  if (agent.tools.isEmpty()) return emptyList()
+  val permissions = agent.tools.map(::openCodePermission).distinct()
+  return listOf("permission:", "  \"*\": deny") +
+    permissions.map { permission -> "  ${yamlScalar(permission)}: allow" }
+}
+
+private fun openCodePermission(tool: String): String =
+  when (tool) {
+    "Read" -> "read"
+    "Grep" -> "grep"
+    "Glob" -> "glob"
+    "Bash" -> "bash"
+    "Edit", "Write", "NotebookEdit" -> "edit"
+    "Agent" -> "task"
+    else -> openCodeMcpPermission(tool) ?: invalidOpenCodeCapability(tool)
+  }
+
+private fun openCodeMcpPermission(tool: String): String? {
+  if (!tool.startsWith("mcp__")) return null
+  val parts = tool.removePrefix("mcp__").split("__", limit = 2)
+  if (parts.size != 2 || parts.any(String::isBlank)) return null
+  return parts.joinToString("_") { part -> part.replace(OPEN_CODE_TOOL_PART_INVALID, "_") }
+}
+
+private fun invalidOpenCodeCapability(tool: String): Nothing =
+  throw SkillBillRuntimeException(
+    InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA,
+    "OpenCode cannot map declared native-agent capability '$tool' to a permission.",
+  )
+
+private val OPEN_CODE_TOOL_PART_INVALID = Regex("[^A-Za-z0-9_-]")
 
 private fun toolsetFields(agent: NativeAgentSource): List<String> =
   if (agent.tools.isEmpty()) {

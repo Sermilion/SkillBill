@@ -3,6 +3,7 @@ package skillbill.cli
 import skillbill.cli.core.CliRuntime
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.composition.renderNativeAgentSource
+import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
 import java.nio.file.Files
 import kotlin.test.Test
@@ -85,7 +86,17 @@ class CliInstallMcpRuntimeTest {
         .resolve(fixture.junieMd.fileName)
     listOf(legacyCodex, legacyJunie).forEach { legacy ->
       Files.createDirectories(legacy.parent)
-      Files.writeString(legacy, "legacy generated artifact\n")
+      val provider = NativeAgentProvider.entries.single { it.directoryName == legacy.parent.fileName.toString() }
+      Files.writeString(
+        legacy,
+        provider.render(
+          NativeAgentSource(
+            "bill-kotlin-code-review-testing",
+            "Legacy worker.",
+            "# Worker\n\nlegacy generated artifact",
+          ),
+        ),
+      )
     }
     Files.createDirectories(codexTarget.parent)
     Files.createDirectories(junieTarget.parent)
@@ -111,7 +122,13 @@ class CliInstallMcpRuntimeTest {
     val oldJunie = oldCache.resolve("junie-agents/${fixture.junieMd.fileName}")
     listOf(oldCodex, oldJunie).forEach { stale ->
       Files.createDirectories(stale.parent)
-      Files.writeString(stale, "stale cache artifact\n")
+      val provider = NativeAgentProvider.entries.single { it.directoryName == stale.parent.fileName.toString() }
+      Files.writeString(
+        stale,
+        provider.render(
+          NativeAgentSource("bill-kotlin-code-review-testing", "Earlier worker.", "# Worker\n\nstale cache artifact"),
+        ),
+      )
     }
     Files.createDirectories(codexTarget.parent)
     Files.createDirectories(junieTarget.parent)

@@ -47,33 +47,40 @@ internal fun cleanupAgentInstallTargets(
 internal fun cleanupNativeAgentInstallLinks(
   plan: UninstallPlan,
   installNativeAgentLinkPort: InstallNativeAgentLinkPort,
-  uninstallFileSystem: UninstallPathsPort,
   removed: MutableList<String>,
   recorder: UninstallMutationRecorder,
-) {
-  if (!plan.nativeSourceRoots.any(uninstallFileSystem::exists)) {
-    return
-  }
+): NativeAgentCleanupResult {
   val request =
     NativeAgentLinkRequest(
       platformPacksRoot = plan.stateRoot.resolve("platform-packs"),
       skillsRoot = plan.stateRoot.resolve("skills"),
       home = plan.home,
+      environment = plan.environment,
     )
+  val retainedPaths = mutableSetOf<Path>()
+  var complete = true
   NativeAgentLinkProvider.entries.forEach { provider ->
     catchingNonCancellation {
       installNativeAgentLinkPort.unlinkNativeAgents(
         InstallNativeAgentLinkOperationRequest(
           provider = provider,
           linkRequest = request,
+          includeAllSourceRoots = true,
         ),
       )
-    }.onSuccess { result -> removed += result.unlinked.map(Path::toString) }
+    }.onSuccess { result ->
+      removed += result.unlinked.map(Path::toString)
+      retainedPaths += result.retainedPaths
+    }
       .onFailure { error ->
+        complete = false
         recorder.recordFailure("native agent cleanup failed for ${provider.name.lowercase()}", error)
       }
   }
+  return NativeAgentCleanupResult(complete, retainedPaths.toList())
 }
+
+internal data class NativeAgentCleanupResult(val complete: Boolean, val retainedPaths: List<Path>)
 
 internal fun cleanupMcpRegistrations(
   plan: UninstallPlan,
