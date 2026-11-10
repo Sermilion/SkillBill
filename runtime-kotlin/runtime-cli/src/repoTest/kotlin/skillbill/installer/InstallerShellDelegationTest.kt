@@ -49,6 +49,10 @@ class InstallerShellDelegationTest {
           "cursor",
           "--agent-target",
           "cursor=${run.home.resolve("agent-targets/cursor")}",
+          "--agent",
+          "opencode",
+          "--agent-target",
+          "opencode=${run.home.resolve("agent-targets/opencode")}",
         ),
       run.applyArgs,
     )

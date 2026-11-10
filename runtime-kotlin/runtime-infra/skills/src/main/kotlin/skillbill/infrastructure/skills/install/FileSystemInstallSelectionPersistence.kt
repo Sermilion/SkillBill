@@ -1,6 +1,8 @@
 package skillbill.infrastructure.skills.install
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.core.RuntimeFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.missingInstallSelectionRecordError
 import skillbill.error.shellcontent.unreadableInstallSelectionRecordError
 import skillbill.infrastructure.host.jvm.atomicWriteString
@@ -26,14 +28,20 @@ class FileSystemInstallSelectionPersistence : InstallSelectionPersistencePort {
     request: WriteLatestSuccessfulInstallSelectionRequest,
   ): WriteLatestSuccessfulInstallSelectionResult {
     val selectionPath = selectionPath(request.installHome)
-    selectionPath.parent?.let(Files::createDirectories)
     val payload = request.selection.toInstallSelectionJson()
     val durablePayload = payload + "\n"
     if (durablePayload.toByteArray(StandardCharsets.UTF_8).size > MAX_INSTALL_SELECTION_RECORD_BYTES) {
       throw unreadableInstallSelectionRecordError(selectionPath.toString())
     }
     parseInstallSelectionPayload(selectionPath, payload)
-    writeInstallSelectionRecord(selectionPath, durablePayload)
+    try {
+      selectionPath.parent?.let(Files::createDirectories)
+      writeInstallSelectionRecord(selectionPath, durablePayload)
+    } catch (error: IOException) {
+      throw installSelectionWriteError(selectionPath, error)
+    } catch (error: SecurityException) {
+      throw installSelectionWriteError(selectionPath, error)
+    }
     return WriteLatestSuccessfulInstallSelectionResult(path = selectionPath)
   }
 }
@@ -53,8 +61,24 @@ private fun writeInstallSelectionRecord(
   path: Path,
   payload: String,
 ) {
-  atomicWriteString(path, payload)
+  atomicWriteString(path, payload, strictAtomic = true)
 }
+
+private enum class InstallSelectionFailureCode : RuntimeFailureCode {
+  WRITE_FAILED,
+}
+
+private fun installSelectionWriteError(
+  path: Path,
+  cause: Exception,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    InstallSelectionFailureCode.WRITE_FAILED,
+    "Install selection publication at '$path' did not complete cleanly. Inspect and preserve the current selection " +
+      "record before retrying. Check directory access and atomic replacement support, then retry the same install. " +
+      "Provider changes completed before this failure may remain applied.",
+    cause,
+  )
 
 private fun installSelectionRecordSize(path: Path): Long =
   try {

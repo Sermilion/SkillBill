@@ -6,7 +6,9 @@ import skillbill.application.uninstall.model.LauncherRemoval
 import skillbill.application.uninstall.model.UninstallPlan
 import skillbill.error.core.catchingNonCancellation
 import skillbill.install.model.McpRegistrationOutcome
+import skillbill.install.model.SupportedAgent
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
+import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
 import skillbill.ports.install.mcp.model.InstallMcpUnregistrationRequest
 import skillbill.ports.install.model.NativeAgentLinkProvider
 import skillbill.ports.install.model.NativeAgentLinkRequest
@@ -85,6 +87,8 @@ internal fun cleanupMcpRegistrations(
         InstallMcpUnregistrationRequest(
           agent = agent,
           home = plan.home,
+          profileEnvironment = InstallMcpProfileEnvironment.from(plan.environment),
+          expectedRuntimeMcpBin = if (agent == SupportedAgent.OPENCODE.id) plan.runtimeMcpBinIdentity else null,
         ),
       ).outcome
     }.onSuccess { outcome ->

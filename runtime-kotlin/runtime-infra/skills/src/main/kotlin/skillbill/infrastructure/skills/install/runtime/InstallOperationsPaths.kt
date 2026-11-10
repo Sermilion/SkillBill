@@ -6,6 +6,7 @@ import skillbill.infrastructure.skills.install.plan.claudeConfigRoot
 import skillbill.infrastructure.skills.install.plan.claudeConfigRoots
 import skillbill.infrastructure.skills.install.plan.codexConfigRoots
 import skillbill.infrastructure.skills.install.plan.installConfigRoots
+import skillbill.infrastructure.skills.install.plan.resolveInstallEnvironment
 import skillbill.infrastructure.skills.install.plan.resolveInstallHome
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.system.HostPlatformPort
@@ -23,7 +24,9 @@ internal object InstallOperationsPaths {
       "Unknown agent '$agent'. Supported agents: ${SUPPORTED_AGENTS.joinToString { it.wireValue }}."
     }
     val resolvedHome = resolveInstallHome(home, hostPlatform)
-    return agentPaths(resolvedHome, installConfigRoots(resolvedHome, environment)).getValue(supported)
+    val resolvedEnvironment =
+      if (supported == SupportedAgent.OPENCODE) resolveInstallEnvironment(environment, hostPlatform) else environment
+    return agentPaths(resolvedHome, installConfigRoots(resolvedHome, resolvedEnvironment)).getValue(supported)
   }
 
   fun claudeRoots(

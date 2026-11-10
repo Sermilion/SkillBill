@@ -146,6 +146,8 @@ private object NoopRuntimeDiagnostics : RuntimeDiagnostics {
 }
 
 private object StubHostPlatformPort : HostPlatformPort {
+  override fun resolveUserName(): String? = "test-user"
+
   override fun resolveUserHome(): Path = Path.of(System.getProperty("user.home"))
 
   override fun resolveEnvironment(): Map<String, String> = System.getenv()

@@ -8,6 +8,7 @@ data class EnvironmentContext(
   val environment: Map<String, String> = UnspecifiedEnvironment,
   val userHome: Path = UnspecifiedUserHome,
   val repositoryRoot: Path = UnspecifiedRepositoryRoot,
+  val workingDirectory: Path = UnspecifiedWorkingDirectory,
 ) {
   companion object {
     val UnspecifiedEnvironment: Map<String, String> =
@@ -16,5 +17,6 @@ data class EnvironmentContext(
       }
     val UnspecifiedUserHome: Path = Path.of(".skillbill-unspecified-user-home")
     val UnspecifiedRepositoryRoot: Path = Path.of(".skillbill-unspecified-repository-root")
+    val UnspecifiedWorkingDirectory: Path = Path.of(".skillbill-unspecified-working-directory")
   }
 }

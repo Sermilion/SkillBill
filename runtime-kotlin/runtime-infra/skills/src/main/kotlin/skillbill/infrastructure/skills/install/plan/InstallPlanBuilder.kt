@@ -17,6 +17,7 @@ import skillbill.install.model.buildInstallPlanWireMap
 import skillbill.install.policy.InstallPlanPolicy
 import skillbill.model.toPath
 import skillbill.ports.install.InstallPlanWireValidator
+import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
 import skillbill.ports.install.plan.model.InstallPlanningFacts
 import skillbill.ports.repository.toFileLocation
 import skillbill.review.plan.ReviewFallbackResolver
@@ -27,12 +28,13 @@ internal fun buildInstallPlan(
   request: InstallPlanRequest,
   wireValidator: InstallPlanWireValidator,
 ): InstallPlan {
+  val scopedRequest = request.withCallingDirectory()
   requireSupportedAgentContract()
-  val platformManifests = discoverPlatformManifests(request)
-  val policyInput = buildInstallPolicyInput(request, platformManifests, enforceContractVersion = true)
+  val platformManifests = discoverPlatformManifests(scopedRequest)
+  val policyInput = buildInstallPolicyInput(scopedRequest, platformManifests, enforceContractVersion = true)
   val draft = InstallPlanPolicy.buildPlanDraft(policyInput)
   validateInstallPlanInternalSkills(draft.skills)
-  val staging = buildInstallStagingIntent(request, draft.skills, platformManifests)
+  val staging = buildInstallStagingIntent(scopedRequest, draft.skills, platformManifests)
   val plan = draft.toInstallPlan(staging)
 
   wireValidator.validate(buildInstallPlanWireMap(plan))
@@ -110,10 +112,11 @@ internal fun enumerateInstallPlanSkills(
   catalogLoader: PlatformPackCatalogLoader? = null,
   enforceGovernedReviewStructure: Boolean = true,
 ): List<InstallPlanSkill> {
+  val scopedRequest = request.withCallingDirectory()
   requireSupportedAgentContract()
   val platformManifests =
     discoverPlatformManifests(
-      request,
+      scopedRequest,
       enforceContractVersion,
       catalogLoader,
       enforceGovernedReviewStructure,
@@ -121,7 +124,7 @@ internal fun enumerateInstallPlanSkills(
   val skills =
     InstallPlanPolicy.buildPlanDraft(
       buildInstallPolicyInput(
-        request,
+        scopedRequest,
         platformManifests,
         enforceContractVersion,
         enforceGovernedReviewStructure,
@@ -135,20 +138,21 @@ internal fun collectInstallPlanningFacts(
   request: InstallPlanRequest,
   catalogLoader: PlatformPackCatalogLoader? = null,
 ): InstallPlanningFacts {
+  val scopedRequest = request.withCallingDirectory()
   requireSupportedAgentContract()
-  val platformManifests = discoverPlatformManifests(request, catalogLoader = catalogLoader)
+  val platformManifests = discoverPlatformManifests(scopedRequest, catalogLoader = catalogLoader)
   return InstallPlanningFacts(
-    baseSkills = discoverBaseSkills(request.targetPaths.skillsRoot.toPath()),
+    baseSkills = discoverBaseSkills(scopedRequest.targetPaths.skillsRoot.toPath()),
     platformManifests = platformManifests,
     detectedAgentTargets =
-      detectAgents(request.home.toPath(), installPlanEnvironment(request)).map { target ->
+      detectAgents(scopedRequest.home.toPath(), installPlanEnvironment(scopedRequest)).map { target ->
         InstallAgentTarget(
           agent = SupportedAgent.fromId(target.name),
           path = target.path,
           source = InstallAgentTargetSource.DETECTED,
         )
       },
-    defaultAgentTargets = multiRootDefaultTargets(request.home.toPath(), installPlanEnvironment(request)),
+    defaultAgentTargets = multiRootDefaultTargets(scopedRequest.home.toPath(), installPlanEnvironment(scopedRequest)),
   )
 }
 
@@ -170,6 +174,12 @@ internal fun materializeSelectedPlatformSkills(
       baselineLayers = manifest.codeReviewComposition?.baselineLayers.orEmpty(),
     )
   }
+}
+
+private fun InstallPlanRequest.withCallingDirectory(): InstallPlanRequest {
+  if (environment[InstallMcpProfileEnvironment.PWD_ENV] != null) return this
+  val callingDirectory = repoRoot.toPath().toAbsolutePath().normalize().toString()
+  return copy(environment = environment + (InstallMcpProfileEnvironment.PWD_ENV to callingDirectory))
 }
 
 private fun installPlanEnvironment(request: InstallPlanRequest): Map<String, String> = request.environment

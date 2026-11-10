@@ -3,6 +3,7 @@ package skillbill.cli
 import skillbill.cli.core.CliRuntime
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.composition.renderNativeAgentSource
+import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -11,6 +12,46 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class CliInstallMcpRuntimeTest {
+  @Test
+  fun `OpenCode MCP uses captured cwd and absent selection does not block no-op removal`() {
+    val home = Files.createTempDirectory("skillbill-cli-opencode-cwd")
+    val working = Files.createDirectories(home.resolve("actual"))
+    val stale = home.resolve("stale")
+    val configPath = working.resolve("config/opencode.json")
+    val baseContext = installCliContext(home)
+    val context =
+      baseContext.copy(
+        workingDirectory = working,
+        environment =
+          baseContext.environment +
+            mapOf(
+              InstallMcpProfileEnvironment.PWD_ENV to stale.toString(),
+              InstallMcpProfileEnvironment.OPENCODE_CONFIG_ENV to "config/opencode.json",
+              InstallMcpProfileEnvironment.OPENCODE_DISABLE_PROJECT_CONFIG_ENV to "1",
+            ),
+      )
+    val removeArguments = listOf("install", "unregister-mcp", "opencode")
+
+    val absentRemoval = CliRuntime.run(removeArguments, context)
+
+    assertEquals(0, absentRemoval.exitCode, absentRemoval.stdout)
+    assertFalse(Files.exists(configPath))
+    val command = home.resolve("runtime bin/runtime-mcp").toString()
+    val register =
+      CliRuntime.run(
+        listOf("install", "register-mcp", "opencode", "--runtime-mcp-bin", command),
+        context,
+      )
+    assertEquals(0, register.exitCode, register.stdout)
+    assertContains(Files.readString(configPath), "skill-bill")
+    assertFalse(Files.exists(stale))
+
+    val removal = CliRuntime.run(removeArguments + listOf("--runtime-mcp-bin", command), context)
+
+    assertEquals(0, removal.exitCode, removal.stdout)
+    assertFalse(Files.readString(configPath).contains("skill-bill"))
+  }
+
   @Test
   fun `native subagent commands preserve existing regular target files`() {
     val fixture = installFixture()

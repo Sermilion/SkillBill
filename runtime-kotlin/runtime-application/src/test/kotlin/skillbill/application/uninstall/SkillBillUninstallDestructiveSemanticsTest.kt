@@ -298,6 +298,8 @@ private object DestructiveSemanticsHostPlatformPort : HostPlatformPort {
   override val javaCommand: String? = null
   override val pathSeparator: String = ":"
 
+  override fun resolveUserName(): String? = "test-user"
+
   override fun resolveUserHome(): Path = Path.of(System.getProperty("user.home"))
 
   override fun resolveEnvironment(): Map<String, String> = System.getenv()

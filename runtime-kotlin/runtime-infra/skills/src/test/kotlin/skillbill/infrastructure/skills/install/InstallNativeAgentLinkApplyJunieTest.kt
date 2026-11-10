@@ -9,6 +9,7 @@ import skillbill.infrastructure.skills.install.symlink.createNewSymlinkWithGuida
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.install.model.AgentTarget
 import skillbill.install.model.InstallAgentLinkStatus
+import skillbill.install.model.InstallApplyIssueKind
 import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.McpRegistrationApplyStatus
 import skillbill.install.model.NativeAgentApplyStatus
@@ -193,7 +194,10 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
 
     val result = applyInstallForTest(plan)
 
-    assertEquals(InstallApplyStatus.SUCCESS, result.status)
+    assertEquals(InstallApplyStatus.WARNING, result.status)
+    val deferred = result.warnings.single { it.kind == InstallApplyIssueKind.NATIVE_AGENT_SUPPORT_DEFERRED }
+    assertEquals(SupportedAgent.OPENCODE, deferred.agent)
+    assertTrue(result.failures.isEmpty())
     assertEquals(SupportedAgent.entries.sortedBy(SupportedAgent::id), result.mcpRegistrationIntent.agents)
     assertEquals(
       SupportedAgent.entries.toSet(),

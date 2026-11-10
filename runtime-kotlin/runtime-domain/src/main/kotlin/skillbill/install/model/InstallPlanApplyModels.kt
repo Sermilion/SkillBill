@@ -68,6 +68,7 @@ data class McpMutationResult(
   val configPath: FileLocation,
   val changed: Boolean,
   val profiles: List<McpProfileOutcome> = emptyList(),
+  val coverage: String? = null,
 )
 
 sealed interface McpRegistrationOutcome {
@@ -81,6 +82,8 @@ sealed interface McpRegistrationOutcome {
 
 enum class McpRegistrationFailureCode : RuntimeFailureCode {
   PROFILE_UPDATE_FAILED,
+  OPENCODE_CONFIG_INVALID,
+  OPENCODE_CONFIG_WRITE_FAILED,
 }
 
 data class RenderedSkill(
@@ -104,6 +107,7 @@ enum class InstallApplyIssueKind {
   STAGING_FAILED,
   SKILL_LINK_FAILED,
   NATIVE_AGENT_LINK_FAILED,
+  NATIVE_AGENT_SUPPORT_DEFERRED,
   TELEMETRY_APPLY_FAILED,
   MCP_REGISTRATION_FAILED,
   WINDOWS_SYMLINK_PRECHECK_FAILED,
@@ -279,6 +283,11 @@ data class InstallApplyResult(
   val telemetryLevel: InstallTelemetryLevel,
   val mcpRegistrationIntent: McpRegistrationIntent,
 ) {
+  val canPersistSuccessfulSelection: Boolean
+    get() =
+      status != InstallApplyStatus.FAILURE &&
+        mcpRegistrationOutcomes.none { outcome -> outcome.status == McpRegistrationApplyStatus.FAILED }
+
   val resolvedInstalledAgents: ResolvedInstalledAgents
     get() = ResolvedInstalledAgents.fromApplyResult(status, skills)
 }

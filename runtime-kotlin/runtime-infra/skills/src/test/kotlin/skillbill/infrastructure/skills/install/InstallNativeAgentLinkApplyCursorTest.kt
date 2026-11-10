@@ -9,6 +9,7 @@ import skillbill.infrastructure.skills.nativeagent.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.install.model.AgentTarget
+import skillbill.install.model.InstallApplyIssueKind
 import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.repository.toFileLocation
@@ -73,7 +74,10 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
           ),
         ),
       )
-    assertEquals(InstallApplyStatus.SUCCESS, result.status, "apply failures: ${result.failures}")
+    assertEquals(InstallApplyStatus.WARNING, result.status)
+    val deferred = result.warnings.single { it.kind == InstallApplyIssueKind.NATIVE_AGENT_SUPPORT_DEFERRED }
+    assertEquals(SupportedAgent.OPENCODE, deferred.agent)
+    assertTrue(result.failures.isEmpty())
     val cacheRoot =
       currentNativeAgentApplyCacheRoot(
         fixture.home,

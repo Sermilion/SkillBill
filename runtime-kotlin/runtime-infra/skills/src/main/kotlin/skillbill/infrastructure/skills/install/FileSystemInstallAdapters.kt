@@ -5,11 +5,13 @@ import skillbill.infrastructure.skills.install.apply.InstallApplyPorts
 import skillbill.infrastructure.skills.install.apply.InstallCleanupOperations
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
 import skillbill.infrastructure.skills.install.nativeagent.link.InstallNativeAgentOperations
+import skillbill.infrastructure.skills.install.opencode.opencodeConfigRoots
 import skillbill.infrastructure.skills.install.plan.buildInstallStagingIntent
 import skillbill.infrastructure.skills.install.plan.codexAgentsPath
 import skillbill.infrastructure.skills.install.plan.collectInstallPlanningFacts
 import skillbill.infrastructure.skills.install.plan.materializeSelectedPlatformSkills
 import skillbill.infrastructure.skills.install.plan.resolveInstallEnvironment
+import skillbill.infrastructure.skills.install.plan.resolveInstallHome
 import skillbill.infrastructure.skills.install.reconcile.ReconcileSourceRoots
 import skillbill.infrastructure.skills.install.reconcile.applyReconciliation
 import skillbill.infrastructure.skills.install.reconcile.computeReconciliationPlan
@@ -18,6 +20,7 @@ import skillbill.infrastructure.skills.install.runtime.linkInstalledSkill
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.install.agent.InstallAgentTargetPort
 import skillbill.ports.install.agent.model.ClaudeConfigRootsRequest
 import skillbill.ports.install.agent.model.ClaudeConfigRootsResult
@@ -276,6 +279,10 @@ class FileSystemInstallAgentTargets(
         SupportedAgent.CLAUDE.wireValue -> InstallOperations.claudeAgentsPath(request.home, environment, hostPlatform)
         SupportedAgent.JUNIE.wireValue -> InstallOperations.junieAgentsPath(request.home, hostPlatform)
         SupportedAgent.CURSOR.wireValue -> InstallOperations.cursorAgentsPath(request.home, hostPlatform)
+        SupportedAgent.OPENCODE.wireValue ->
+          opencodeConfigRoots(resolveInstallHome(request.home, hostPlatform), environment).let { roots ->
+            (roots.additionalDirectory ?: roots.globalDirectory).resolve("agents")
+          }
         else -> InstallOperations.agentPath(request.agent, request.home, environment, hostPlatform)
       },
     )
@@ -339,17 +346,15 @@ class FileSystemInstallNativeAgentLinks(
 @Inject
 class FileSystemInstallMcpRegistration(
   private val hostPlatform: HostPlatformPort,
+  private val diagnostics: RuntimeDiagnostics,
 ) : InstallMcpRegistrationPort {
   override fun registerMcp(request: InstallMcpRegistrationRequest): InstallMcpRegistrationResult =
     InstallMcpRegistrationResult(
       outcome =
         McpRegistrationOperations.registerWithProfileEnvironment(
-          request.agent,
-          request.runtimeMcpBin,
-          request.home,
-          request.profileEnvironment
-            ?: InstallMcpProfileEnvironment.from(resolveInstallEnvironment(emptyMap(), hostPlatform))
-            ?: InstallMcpProfileEnvironment(),
+          request.copy(profileEnvironment = request.profileEnvironment ?: hostProfileEnvironment()),
+          hostPlatform,
+          diagnostics,
         ),
     )
 
@@ -357,13 +362,15 @@ class FileSystemInstallMcpRegistration(
     InstallMcpRegistrationResult(
       outcome =
         McpRegistrationOperations.unregisterWithProfileEnvironment(
-          request.agent,
-          request.home,
-          request.profileEnvironment
-            ?: InstallMcpProfileEnvironment.from(resolveInstallEnvironment(emptyMap(), hostPlatform))
-            ?: InstallMcpProfileEnvironment(),
+          request.copy(profileEnvironment = request.profileEnvironment ?: hostProfileEnvironment()),
+          hostPlatform,
+          diagnostics,
         ),
     )
+
+  private fun hostProfileEnvironment(): InstallMcpProfileEnvironment =
+    InstallMcpProfileEnvironment.from(resolveInstallEnvironment(emptyMap(), hostPlatform))
+      ?: InstallMcpProfileEnvironment(workingDirectory = hostPlatform.resolveWorkingDirectory().toString())
 }
 
 private fun NativeAgentLinkRequest.toFsRequest(catalogLoader: PlatformPackCatalogLoader): FsNativeAgentLinkRequest =

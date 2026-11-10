@@ -1,7 +1,9 @@
 package skillbill.infrastructure.skills.install.plan
 
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.invalidInternalSkillClassification
 import skillbill.infrastructure.host.jvm.rollbackDeleteIfExists
+import skillbill.infrastructure.skills.install.opencode.opencodeConfigRoots
 import skillbill.infrastructure.skills.install.staging.StagedSymlinkTargetInput
 import skillbill.infrastructure.skills.install.staging.resolveStagedSymlinkTarget
 import skillbill.infrastructure.skills.nativeagent.support.agentPathExists
@@ -12,6 +14,7 @@ import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPac
 import skillbill.install.model.AgentTarget
 import skillbill.install.model.InstallPlanSkill
 import skillbill.install.model.InstallTransaction
+import skillbill.install.model.McpRegistrationFailureCode
 import skillbill.install.model.SupportedAgent
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
@@ -36,6 +39,7 @@ internal val CURSOR_AGENTS_KIND: String = SupportedAgent.CURSOR.nativeAgentsKind
 internal data class InstallConfigRoots(
   val claude: Path,
   val codex: Path,
+  val opencodeSkills: Path,
 )
 
 internal fun installConfigRoots(
@@ -45,6 +49,7 @@ internal fun installConfigRoots(
   InstallConfigRoots(
     claude = claudeConfigRoot(home, environment),
     codex = codexConfigRoot(home, environment),
+    opencodeSkills = opencodeConfigRoots(home, environment).skillDirectory,
   )
 
 internal fun agentPaths(
@@ -56,6 +61,7 @@ internal fun agentPaths(
     SupportedAgent.JUNIE to home.resolve(SupportedAgent.JUNIE.simpleHomeDirectory!!).resolve("skills"),
     SupportedAgent.CURSOR to home.resolve(SupportedAgent.CURSOR.simpleHomeDirectory!!).resolve("skills"),
     SupportedAgent.CODEX to configRoots.codex.resolve("skills"),
+    SupportedAgent.OPENCODE to configRoots.opencodeSkills,
   )
 
 internal fun codexAgentsPath(
@@ -85,6 +91,32 @@ internal fun detectAgents(
           emptyList()
         } else {
           targets.map { path -> AgentTarget(agent.wireValue, path.toFileLocation()) }
+        }
+      }
+      SupportedAgent.OPENCODE -> {
+        val roots = opencodeConfigRoots(home, environment)
+        val skillRoot = roots.skillDirectory
+        val evidence =
+          listOf(
+            roots.globalDirectory,
+            roots.globalDirectory.resolve("skills"),
+            roots.configDirectory,
+            skillRoot,
+            home.resolve(".opencode"),
+          ) + roots.knownConfigDirectories + listOfNotNull(roots.additionalDirectory?.resolve("skills")) +
+            listOfNotNull(roots.additionalDirectory, roots.explicitConfigFile) + roots.knownConfigSources
+        val pathPresent = anyAgentPathExists(evidence.distinct(), "inspect OpenCode installation")
+        val inlinePresent = roots.inlineContent?.isNotBlank() == true
+        if (!pathPresent && !inlinePresent) {
+          emptyList()
+        } else {
+          if (roots.projectConfigEnabled && roots.workingDirectory == null) {
+            throw SkillBillRuntimeException(
+              McpRegistrationFailureCode.OPENCODE_CONFIG_INVALID,
+              "OpenCode detection requires the caller working directory while project configuration is enabled.",
+            )
+          }
+          listOf(AgentTarget(agent.wireValue, skillRoot.toFileLocation()))
         }
       }
       SupportedAgent.JUNIE,

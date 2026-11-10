@@ -31,6 +31,21 @@ import kotlin.test.assertTrue
 
 class InstallApplyTest : InstallApplyTestSupport() {
   @Test
+  fun `selected OpenCode installs useful capabilities with a deferred native warning`() {
+    val fixture = setupApplyFixture()
+    val plan = planInstallForTest(fixture.request(agents = setOf(SupportedAgent.OPENCODE)))
+
+    val result = applyInstallForTest(plan)
+
+    assertEquals(InstallApplyStatus.WARNING, result.status)
+    assertTrue(result.nativeAgents.isEmpty())
+    val issue = result.warnings.single { it.kind == InstallApplyIssueKind.NATIVE_AGENT_SUPPORT_DEFERRED }
+    assertEquals(SupportedAgent.OPENCODE, issue.agent)
+    assertContains(issue.message, "unavailable")
+    assertEquals(listOf(SupportedAgent.OPENCODE), result.mcpRegistrationOutcomes.map { it.agent })
+  }
+
+  @Test
   fun `apply returns structured success for selected skills platforms agents and native agents`() {
     val fixture = setupApplyFixture()
     Files.createDirectories(fixture.home.resolve(".codex"))

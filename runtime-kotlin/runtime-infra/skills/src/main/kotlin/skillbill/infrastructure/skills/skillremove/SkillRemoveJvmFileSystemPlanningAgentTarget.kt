@@ -56,4 +56,5 @@ internal fun SkillRemoveJvmFileSystemPlanning.agentHomeDirs(
     SupportedAgent.JUNIE,
     SupportedAgent.CURSOR,
     -> listOf(home.resolve(requireNotNull(provider.simpleHomeDirectory)).resolve("agents"))
+    SupportedAgent.OPENCODE -> emptyList()
   }

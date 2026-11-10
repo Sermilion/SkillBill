@@ -1,7 +1,7 @@
 package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.contracts.JsonCodec
-import skillbill.infrastructure.launcher.mcp.RUNTIME_MCP_BIN_ENV
+import skillbill.contracts.persistence.RuntimeMcpEnvironmentKeys
 import skillbill.infrastructure.launcher.mcp.resolveRuntimeMcpBin
 import java.nio.file.Files
 import java.nio.file.Path
@@ -105,7 +105,10 @@ class RuntimeMcpServerTest {
     val configured = home.resolve("custom-mcp")
     Files.writeString(configured, "#!/bin/sh\n")
     Files.setPosixFilePermissions(configured, PosixFilePermissions.fromString("rwx------"))
-    assertEquals(configured, resolveRuntimeMcpBin(mapOf(RUNTIME_MCP_BIN_ENV to configured.toString()), home))
+    assertEquals(
+      configured,
+      resolveRuntimeMcpBin(mapOf(RuntimeMcpEnvironmentKeys.RUNTIME_MCP_BIN to configured.toString()), home),
+    )
   }
 
   private companion object {

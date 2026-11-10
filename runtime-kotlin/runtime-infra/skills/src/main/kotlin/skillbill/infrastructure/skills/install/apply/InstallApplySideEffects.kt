@@ -246,11 +246,12 @@ private fun profilesFailedMessage(failure: McpRegistrationOutcome.ProfilesFailed
 
 private fun mcpRegistrationMessage(result: McpMutationResult): String {
   val base = if (result.changed) "MCP registration updated." else "MCP registration already up to date."
+  val coverage = result.coverage?.let { " $it" }.orEmpty()
   if (result.profiles.size <= 1) {
-    return base
+    return base + coverage
   }
   val paths = result.profiles.joinToString(", ") { it.configPath.toString() }
-  return "$base Profiles (${result.profiles.size}): $paths"
+  return "$base Profiles (${result.profiles.size}): $paths$coverage"
 }
 
 private fun failedMcpRegistrationOutcome(
@@ -265,6 +266,10 @@ private fun failedMcpRegistrationOutcome(
       kind = InstallApplyIssueKind.MCP_REGISTRATION_FAILED,
       message = message,
       agent = agent,
+      guidance =
+        "This failed requested registration does not qualify the attempt to replace saved successful install " +
+          "choices. Resolve the reported source or I/O problem and retry installation. Provider or profile " +
+          "changes already completed may remain applied.",
       causeClass = causeClass,
     )
   warnings.add(issue)

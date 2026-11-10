@@ -10,13 +10,12 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 internal const val RUNTIME_MCP_SERVER_NAME: String = "skill-bill"
-internal const val RUNTIME_MCP_BIN_ENV: String = "SKILL_BILL_RUNTIME_MCP_BIN"
 
 internal fun runtimeMcpBinCandidate(
   environment: Map<String, String>,
   userHome: Path,
 ): Path {
-  val configured = environment[RUNTIME_MCP_BIN_ENV]?.takeIf(String::isNotBlank)
+  val configured = environment[RuntimeMcpEnvironmentKeys.RUNTIME_MCP_BIN]?.takeIf(String::isNotBlank)
   val home =
     userHome.takeUnless { it.toString().isBlank() || it == EnvironmentContext.UnspecifiedUserHome }
       ?: environment["HOME"]?.takeIf(String::isNotBlank)?.let(Path::of)

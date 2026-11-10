@@ -47,6 +47,7 @@ class NativeBypassLaunchTest {
           assertTrue(
             "--output-format" in process.launch.command && "text" in process.launch.command,
           )
+        SupportedAgent.OPENCODE -> error("OpenCode runtime launches are not available yet")
       }
     }
   }

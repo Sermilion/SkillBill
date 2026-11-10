@@ -4,6 +4,7 @@ import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.http.JdkHttpRemoteTransport
 import skillbill.model.EnvironmentContext
+import skillbill.ports.system.HostPlatformPort
 import java.nio.file.Path
 
 internal object RuntimeBootstrapBindings {
@@ -23,6 +24,15 @@ internal object RuntimeBootstrapBindings {
       } else {
         resolvedEnvironment
       }
+    val hostPlatform = inputRuntimeContext.callbacks.hostPlatformPort ?: processHostPlatform()
+    val environmentWithWorkingDirectory =
+      if (environmentWithEnv.workingDirectory == EnvironmentContext.UnspecifiedWorkingDirectory) {
+        environmentWithEnv.copy(
+          workingDirectory = hostPlatform.resolveWorkingDirectory().toAbsolutePath().normalize(),
+        )
+      } else {
+        environmentWithEnv
+      }
     val inputTransport = inputRuntimeContext.transport
     val resolvedTransport =
       inputTransport.copy(
@@ -31,16 +41,28 @@ internal object RuntimeBootstrapBindings {
             ?: JdkHttpRemoteTransport.create(inputTransport.connectTimeout, inputTransport.requestTimeout),
       )
     val resolvedRepositoryRoot =
-      if (environmentWithEnv.repositoryRoot == EnvironmentContext.UnspecifiedRepositoryRoot) {
-        environmentWithEnv.copy(repositoryRoot = CanonicalRepositoryRoot.enclosingRepositoryRoot(Path.of("")))
+      if (environmentWithWorkingDirectory.repositoryRoot == EnvironmentContext.UnspecifiedRepositoryRoot) {
+        environmentWithWorkingDirectory.copy(
+          repositoryRoot =
+            CanonicalRepositoryRoot.enclosingRepositoryRoot(environmentWithWorkingDirectory.workingDirectory),
+        )
       } else {
-        environmentWithEnv.copy(
-          repositoryRoot = CanonicalRepositoryRoot.enclosingRepositoryRoot(environmentWithEnv.repositoryRoot),
+        environmentWithWorkingDirectory.copy(
+          repositoryRoot =
+            CanonicalRepositoryRoot.enclosingRepositoryRoot(environmentWithWorkingDirectory.repositoryRoot),
         )
       }
     return inputRuntimeContext.copy(
       environment = resolvedRepositoryRoot,
       transport = resolvedTransport,
+      callbacks = inputRuntimeContext.callbacks.copy(hostPlatformPort = hostPlatform),
     )
+  }
+
+  private fun processHostPlatform(): HostPlatformPort {
+    val userName = System.getProperty("user.name")?.takeIf(String::isNotBlank)
+    return object : HostPlatformPort by JdkHostPlatformPort {
+      override fun resolveUserName(): String? = userName
+    }
   }
 }

@@ -103,6 +103,8 @@ private class FixedTempRootHostPlatform(private val tempRoot: Path) : HostPlatfo
   override val javaCommand: String? get() = error("unused")
   override val pathSeparator: String get() = error("unused")
 
+  override fun resolveUserName(): String? = "test-user"
+
   override fun resolveUserHome(): Path = error("unused")
 
   override fun resolveEnvironment(): Map<String, String> = error("unused")

@@ -7,8 +7,10 @@ import skillbill.application.uninstall.model.LauncherRemoval
 import skillbill.application.uninstall.model.UninstallPlan
 import skillbill.application.uninstall.model.UninstallRequest
 import skillbill.application.uninstall.model.UninstallResult
+import skillbill.install.model.SupportedAgent
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
+import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.system.HostPlatformPort
 import skillbill.ports.system.UninstallPathsPort
@@ -26,6 +28,13 @@ class SkillBillUninstallService(
   fun plan(request: UninstallRequest): UninstallPlan {
     val home = request.home
     val stateRoot = request.stateRoot
+    val environment =
+      if (InstallMcpProfileEnvironment.PWD_ENV in request.environment) {
+        request.environment
+      } else {
+        request.environment +
+          (InstallMcpProfileEnvironment.PWD_ENV to hostPlatform.resolveWorkingDirectory().toString())
+      }
     val skillNames = installedSkillNames(uninstallFileSystem, stateRoot.resolve("installed-skills"))
     val legacyNames = legacySkillNames(skillNames)
     val claudeTargets =
@@ -41,8 +50,10 @@ class SkillBillUninstallService(
         home.resolve(".agents/skills"),
         home.resolve(".junie/skills"),
         home.resolve(".cursor/skills"),
-      ) + claudeTargets + codexTargets
+      ) + claudeTargets + codexTargets +
+        listOf(installAgentService.agentPath(SupportedAgent.OPENCODE.id, home, environment))
     val stateRuntimeRoot = stateRoot.resolve("runtime")
+    val runtimeMcpBin = stateRuntimeRoot.resolve("runtime-mcp/bin/runtime-mcp")
     val binDir = request.environment["SKILL_BILL_BIN_DIR"]?.let(Path::of) ?: home.resolve(".local/bin")
     return UninstallPlan(
       home = home,
@@ -51,11 +62,11 @@ class SkillBillUninstallService(
       legacyNames = legacyNames,
       agentTargets = agentTargets.distinct(),
       nativeSourceRoots = listOf(stateRoot.resolve("platform-packs"), stateRoot.resolve("skills")),
-      mcpAgents = listOf("claude", "codex", "junie", "cursor"),
+      mcpAgents = SupportedAgent.entries.map(SupportedAgent::id),
       launchers =
         listOf(
           LauncherRemoval(binDir.resolve("skill-bill"), stateRuntimeRoot.resolve("runtime-cli/bin/runtime-cli")),
-          LauncherRemoval(binDir.resolve("skill-bill-mcp"), stateRuntimeRoot.resolve("runtime-mcp/bin/runtime-mcp")),
+          LauncherRemoval(binDir.resolve("skill-bill-mcp"), runtimeMcpBin),
         ),
       desktop =
         desktopPlan(
@@ -65,7 +76,8 @@ class SkillBillUninstallService(
           environment = request.environment,
           os = currentOs(hostPlatform.osName),
         ),
-      environment = request.environment,
+      environment = environment,
+      runtimeMcpBinIdentity = runtimeMcpBin,
     )
   }
 

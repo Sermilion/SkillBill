@@ -177,6 +177,8 @@ private object StubInstallNativeAgentLinkPort : InstallNativeAgentLinkPort {
 }
 
 private object StubUninstallHostPlatformPort : HostPlatformPort {
+  override fun resolveUserName(): String? = "test-user"
+
   override fun resolveUserHome(): Path = Path.of(System.getProperty("user.home"))
 
   override fun resolveEnvironment(): Map<String, String> = System.getenv()
