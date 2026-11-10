@@ -1,3 +1,33 @@
+## [2026-11-10] SKILL-534 separate review freshness from completed approval compatibility
+Context: Incremental review judges exact bundle bytes, while the existing immutable manifest fingerprint excludes execution progress.
+Decision: Hash unnormalized UTF-8 parent, raw manifest and complete child text beside the immutable fingerprint. Require raw identity matches for carry-forward and repair protection; retain immutable-fingerprint compatibility for completed approval.
+Reason: Normalized or scope-only hashes could reuse judgments after whitespace or Implementation Details edits. Ordinary execution metadata updates must leave an already completed approval usable.
+
+## [2026-11-10] SKILL-534 make persisted scope the incremental review authority
+Context: Repair, reopening or restart can leave valid successes beside changed specs and unresolved conflicts.
+Decision: Persist ordered required and carried refs, original evidence and changed child IDs at admission. Settlement enforces that scope and publishes only the complete ordered success union linked to its completed phase record. Empty required scope uses a linked runtime transition retaining prior reviewer evidence.
+Reason: A subset receipt cannot prove whole-bundle approval, and prompt prose cannot restore scope after restart. Complete current evidence needs no invented reviewer receipt or additional review slot.
+
+## [2026-11-10] SKILL-534 charge feasibility launches at durable admission
+Context: Unusable output still consumes a launch, and restart or replay must preserve the fixed cycle budget.
+Decision: Persist launch identity, baseline and counters before dispatch, with three review and two repair slots per cycle and a dedicated feasibility continuation. After ownership and attempt admission, match settled transition context before rejecting an old expected revision; return the retained outcome and current state.
+Reason: Transient counters would reset on restart, and the unrelated authored-bundle correction cap could stop this lifecycle early. Revision checks alone reject legitimate replay, while applying replay again could overwrite newer evidence or charge twice.
+
+## [2026-11-10] SKILL-534 recover repair projection from retained intent
+Context: The workflow transaction and filesystem journal cannot commit together, so repair projection can finish before durable settlement.
+Decision: Retain original baselines, intended identities and replacement text before projection. Reconcile stored bundle and journal against that intent before completing settlement or replaying projection, preserving protected parent, manifest and non-pending spec bytes.
+Reason: Recapturing edited bytes would erase the safety baseline. Before and intended after identities distinguish interrupted progress from unrelated drift and preserve original evidence on refusal.
+
+## [2026-11-10] SKILL-534 adopt missing v2 evidence without inventing judgments
+Context: Populated v1 workflows have historical output and completed work but no artifact proving v2 per-criterion coverage.
+Decision: Initialize only genuine absence with empty evidence and legacy-origin classification, then request full v2 review under the same workflow identity. Preserve existing artifacts and historical work; present corrupt or unsupported evidence fails with owned errors and recovery guidance.
+Reason: Translating v1 successes would invent v2 judgments. Replacing existing evidence or resetting workflow records would discard the data required for safe resume and recovery.
+
+## [2026-11-10] SKILL-534 keep stale judgments readable for revalidation
+Context: Accepted lines retain the hashes they judged, while a later capture or reopened cycle can identify different bundle text.
+Decision: Validate historical evidence structure without requiring its judged hashes to equal the current identity. Retain original lines and prior-cycle evidence while current scope removes obsolete refs and invalidates changed dependency closures.
+Reason: Historical hash differences describe judgments that incremental policy must inspect. Treating them as corruption would prevent safe invalidation and carry-forward.
+
 ## [2026-11-08] Serialize build observation with completion-time membership
 Context: Output-drain threads decode command events while the process wait loop owns polling and launch settlement.
 Decision: Queue command events and failures for wait-loop delivery. Capture descendant membership at command completion and flush final output before recorder settlement.
