@@ -610,7 +610,8 @@ class NewTaskDraftTest {
     runCurrent()
 
     assertEquals(sessionId, draft.chat.value?.sessionId)
-    assertTrue(chat.ended.isEmpty())
+    assertEquals(listOf(sessionId), chat.ended)
+    assertEquals("other", chat.requests.last().agent.model)
     assertTrue(checkNotNull(draft.chat.value).thread.transcript.value.none { it is ChatMessage.Notice })
     assertFalse(chat.requests.last().firstTurn)
     assertEquals("continue", chat.requests.last().prompt)

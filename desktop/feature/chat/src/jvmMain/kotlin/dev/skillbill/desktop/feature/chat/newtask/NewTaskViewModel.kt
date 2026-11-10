@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import dev.skillbill.desktop.core.domain.model.ChatModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.skillbill.desktop.core.common.Diagnostics
@@ -72,6 +73,7 @@ sealed interface NewTaskAction {
   data object RetryBranches : NewTaskAction
   data class ChooseRepository(val repository: NewTaskRepository) : NewTaskAction
   data class SubmitRepositoryPath(val path: String) : NewTaskAction
+  data class ChooseModel(val model: ChatModel?) : NewTaskAction
   data class ChooseAgent(val agentId: String) : NewTaskAction
   data object AddRepository : NewTaskAction
   data object OpenRepositoryPicker : NewTaskAction
@@ -156,6 +158,17 @@ class NewTaskViewModel(
       }
       is NewTaskAction.SubmitRepositoryPath -> submitPath(target, action.path)
       NewTaskAction.AddRepository -> addRepository(target)
+      is NewTaskAction.ChooseModel -> {
+        if (!canChangeContext(target)) return
+        val agent = target.selectedAgent ?: return
+        if (agent.agentId != target.agentId) return
+        agentReads.remove(target)?.cancel()
+        target.agentChosen = true
+        val selected = agent.copy(model = action.model?.id, effort = null)
+        target.selectedAgent = selected
+        mutableState.update { it.copy(agent = selected) }
+        target.rebindChat()
+      }
       is NewTaskAction.ChooseAgent -> {
         target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
         target.agentChosen = true

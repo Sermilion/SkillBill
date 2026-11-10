@@ -1,5 +1,7 @@
 package dev.skillbill.desktop.feature.chat
 
+import dev.skillbill.desktop.core.domain.model.ChatModel
+import dev.skillbill.desktop.core.domain.model.ChatAgent
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshotFlow
 import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
@@ -554,6 +556,19 @@ class ChatWorkspace(
         cursorMcpDependency = cursorMcpDependency,
       )) restoreDraft(session.id, text, images, cursorMcpDependency)
     }
+  }
+
+  internal suspend fun models(agent: ChatAgent, root: String) = chat.models(agent, root)
+
+  internal fun switchModel(id: String, model: ChatModel?) {
+    val session = sessions[id] ?: return
+    val agent = session.agentState.value ?: return
+    if (session.busyState.value || (agent.model == model?.id && agent.effort == null)) return
+    endAgent(session)
+    val selected = agent.copy(model = model?.id, effort = null)
+    session.agentState.value = selected
+    session.append(ChatMessage.Notice("Model changed to ${model?.label ?: "agent default"}."))
+    scope.launch(session.job) { turns.save(session, selected) }
   }
 
   /**

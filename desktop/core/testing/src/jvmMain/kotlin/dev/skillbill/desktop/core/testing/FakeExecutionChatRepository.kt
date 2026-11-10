@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.core.testing
 
+import dev.skillbill.desktop.core.domain.model.ChatModelsRead
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
@@ -35,6 +36,9 @@ class FakeExecutionChatRepository(
   /** What [agentFor] answers; by default the agent with the CLI's model. */
   var agentFor: (String) -> ChatAgent = { ChatAgent(it, null, null) }
   val agentForCalls: MutableList<String> = Collections.synchronizedList(mutableListOf())
+
+  override suspend fun models(agent: ChatAgent, repositoryRoot: String) =
+    ChatModelsRead.Loaded(emptyList())
 
   override suspend fun agentFor(agentId: String): ChatAgent {
     agentForCalls += agentId

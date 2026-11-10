@@ -42,7 +42,9 @@ class AgentExecutionChatRepositoryTest {
       val settings = FakeAppSettingsRepository()
       val summarizer = ChatSummarizer(host, settings, { error("unused") }, store, diagnostics, ApplicationCoroutineScope(backgroundScope))
       val catalog = AgentSessionCatalog(host, settings, store, diagnostics)
-      AgentExecutionChatRepository(setOf(claude), unusedConfig, store, catalog, diagnostics, summarizer)
+      AgentExecutionChatRepository(setOf(claude), unusedConfig, store, catalog, diagnostics, summarizer,
+        ChatModelCatalog(host, { error("unused") }, { error("unused") },
+          dev.skillbill.desktop.core.data.usage.UsageProfileResolver(host), settings, diagnostics))
     }
 
     val events = repository.send(chatRequest(agent = ChatAgent("codex", null, null))).toList()

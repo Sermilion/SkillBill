@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat
 
+import dev.skillbill.desktop.core.domain.model.ChatModel
 import androidx.compose.runtime.snapshots.Snapshot
 import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
@@ -1228,6 +1229,31 @@ class ChatWorkspaceTest {
     assertEquals(ChatMessage.Notice(GONE_NOTICE), transcript.last())
     assertTrue(transcript.none { it == ChatMessage.Operator("hello?") })
     assertEquals(1, chat.requests.size)
+  }
+
+  @Test
+  fun `changing model keeps the provider session and profile and saves the next turn choice`() = runTest {
+    val item = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(running = false)
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    chat.agent = ChatAgent("claude", "old-model", "high", "/profiles/custom")
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    val opening = chat.requests.single()
+
+    workspace.switchModel(item.id, ChatModel("new-model", "New model"))
+    runCurrent()
+    assertEquals("new-model", chat.saved[session.sessionId]?.agent?.model)
+    workspace.send(item.id, "continue with this model")
+    runCurrent()
+
+    val next = chat.requests.last()
+    assertEquals(ChatAgent("claude", "new-model", null, "/profiles/custom"), next.agent)
+    assertEquals(opening.sessionId, next.sessionId)
+    assertFalse(next.firstTurn)
+    assertTrue(opening.sessionId in chat.ended)
+    workspace.closeAll()
   }
 
   // A switch that kept the old session id would resume a Claude session in Codex, or send Codex only a diff it never saw the base of.

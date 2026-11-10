@@ -64,7 +64,7 @@ internal class NewTaskChat(
   var databaseSessionId: Long?,
   val repositoryRoot: String,
   val baseBranch: String?,
-  val agent: ChatAgent,
+  agent: ChatAgent,
   initiallyStarted: Boolean = false,
   initiallyPendingTurnLineIndex: Int? = null,
   val repositoryMissing: Boolean = false,
@@ -81,6 +81,20 @@ internal class NewTaskChat(
   changesCaptureAttempted: Boolean = false,
   changesAttributedPaths: Set<String>? = null,
 ) {
+  @Volatile
+  var agent: ChatAgent = agent
+    private set
+
+  internal fun changeModel(next: ChatAgent) {
+    if (thread.busy.value || closing || next == agent) return
+    chat.end(sessionId)
+    agent = next
+    thread.agentState.value = next
+    scope.launch(job + dispatcher) {
+      if (!save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+    }
+  }
+
   private val sessionIdState = MutableStateFlow(initialSessionId)
   val sessionIdFlow: StateFlow<String> = sessionIdState.asStateFlow()
   val sessionId: String get() = sessionIdState.value

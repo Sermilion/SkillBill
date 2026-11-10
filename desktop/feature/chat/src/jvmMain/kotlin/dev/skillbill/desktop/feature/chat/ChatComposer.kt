@@ -3,6 +3,7 @@ package dev.skillbill.desktop.feature.chat
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -160,14 +161,19 @@ internal fun ChatComposer(
     }
     if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-      ModeBadge(ChatPermissionMode.Act)
-      AgentPicker(agent, workspace.agents, enabled = !busy && !gone) { workspace.switchAgent(id, it) }
-      if (agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
-        CursorMcpPicker(cursorMcpDependency, enabled = !gone) {
-          workspace.cursorMcpDependencies[id] = it
+      FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        ModeBadge(ChatPermissionMode.Act)
+        AgentPicker(agent, workspace.agents, enabled = !busy && !gone) { workspace.switchAgent(id, it) }
+        ChatModelPicker(agent, session.item.repositoryRoot, enabled = !busy && !gone, load = workspace::models) {
+          workspace.switchModel(id, it)
+        }
+        if (agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
+          CursorMcpPicker(cursorMcpDependency, enabled = !gone) {
+            workspace.cursorMcpDependencies[id] = it
+          }
         }
       }
-      Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+      Row(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
         if (stoppable) {
           SbButton(
             "Stop", { workspace.stop(id); focus.requestFocus() },

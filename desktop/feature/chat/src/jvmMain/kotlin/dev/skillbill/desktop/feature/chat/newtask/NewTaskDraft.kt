@@ -418,16 +418,22 @@ class NewTaskDraft internal constructor(
     }
   }
 
+  internal suspend fun models(agent: ChatAgent, root: String) = chats.models(agent, root)
+
   internal fun launch(block: suspend () -> Unit) = scope.launch { block() }
 
-  /** Opens a new agent session on the current repository, branch and agent, keeping the transcript. */
+  /** Applies model changes to this session, or opens a new session after repository, branch, agent or profile changes. */
   internal fun rebindChat() {
     val current = chatState.value ?: return
     val agent = selectedAgent ?: return
     val repo = repository ?: return
     if (closing || current.repositoryMissing || current.thread.busy.value || offerState.value.starting) return
     val branch = baseBranch.ifBlank { null }
-    if (current.repositoryRoot == repo.root && current.baseBranch == branch && current.agent.agentId == agent.agentId) return
+    if (current.repositoryRoot == repo.root && current.baseBranch == branch &&
+      current.agent.agentId == agent.agentId && current.agent.profile == agent.profile) {
+      current.changeModel(agent)
+      return
+    }
     val lines = current.thread.transcript.value
     val previousId = current.sessionId
     val replay = (current.pendingReplay?.takeIf { !current.started }
