@@ -82,6 +82,7 @@ data class SbBuild(
   val exitCode: Int?,
   val finishedAt: Instant?,
   val previous: SbBuildPrevious?,
+  val sampleCount: Int? = null,
 ) {
   internal fun elapsedAt(now: Instant): Long? {
     val elapsed = if (state == SbBuildState.Running) {
@@ -110,11 +111,15 @@ data class SbBuild(
   }
 
   internal fun subLine(now: Instant): String? = when {
-    state == SbBuildState.Running && usualMs == null -> "first run, no usual time yet"
-    isSlow(now) -> "${formatActiveDuration((elapsedAt(now) ?: 0) - (usualMs ?: 0), true)} over usual"
-    state == SbBuildState.Running -> "usually ${formatActiveDuration(usualMs, true)}"
+    state == SbBuildState.Running && usualMs == null -> "no command history for this project yet"
+    state == SbBuildState.Running -> averageLabel()
     finishedAt != null -> "finished ${relativeAge(now - finishedAt)}"
     else -> null
+  }
+
+  private fun averageLabel(): String {
+    val samples = sampleCount?.takeIf { it > 0 }?.let { " over $it ${if (it == 1) "run" else "runs"}" }.orEmpty()
+    return "average ${formatActiveDuration(usualMs, true)}$samples"
   }
 
   internal fun barRatio(now: Instant): Float? {
@@ -126,7 +131,7 @@ data class SbBuild(
   internal fun chipTooltip(now: Instant): String = when {
     state == SbBuildState.Failed && exitCode != null -> "$command exited $exitCode after ${formatActiveDuration(elapsedAt(now), true)}"
     state == SbBuildState.Failed -> "$command failed after ${formatActiveDuration(elapsedAt(now), true)}"
-    else -> "$command · $projectKind" + (usualMs?.let { " · usually ${formatActiveDuration(it, true)}" } ?: "")
+    else -> "$command · $projectKind" + (usualMs?.let { " · ${averageLabel()}" } ?: "")
   }
 
   internal fun metaSegments(now: Instant, startedText: String): List<SbBuildMeta> = buildList {

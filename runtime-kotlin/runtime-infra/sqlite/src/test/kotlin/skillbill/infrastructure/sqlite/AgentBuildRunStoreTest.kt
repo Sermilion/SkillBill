@@ -55,19 +55,36 @@ class AgentBuildRunStoreTest {
     factory.read { unitOfWork -> block(unitOfWork.agentBuildRuns) }
 
   @Test
-  fun `usual is the median of the five newest settled builds and floors an even pair`() {
+  fun `average uses twenty latest equivalent commands across goals without mixing workloads`() {
     write { store ->
-      (0..5).forEach { store.settled(startRow("old-$it", hour(it)), 10_000) }
-      listOf(100L, 500L, 300L, 900L, 700L).forEachIndexed { index, ms ->
-        store.settled(startRow("new-$index", hour(10 + index)), ms)
+      (0..24).forEach { index ->
+        val command =
+          if (index % 2 == 0) "./gradlew check -q --console=plain" else "gradlew --console plain check --info"
+        store.settled(startRow("b$index", hour(index), command = command), index * 1_000L)
       }
-      listOf(100L, 201L, 300L, 999L).forEachIndexed { index, ms ->
-        store.settled(startRow("even-$index", hour(index), command = "./gradlew check"), ms)
-      }
+      store.settled(startRow("other-task", hour(30), command = "./gradlew assemble"), 999_999)
+      store.settled(startRow("extra-task", hour(31), command = "./gradlew check assemble"), 999_999)
+      store.settled(startRow("uncached", hour(32), command = "./gradlew check --no-build-cache"), 999_999)
+      store.settled(startRow("other-project", hour(33), command = "./gradlew check -p other"), 999_999)
+      store.settled(startRow("outlier", hour(34), command = "./gradlew check"), 100_000)
     }
 
-    assertEquals(500L, read { it.history("repo", "./gradlew build", hour(100)).usualMs })
-    assertEquals(250L, read { it.history("repo", "./gradlew check", hour(100)).usualMs })
+    val history = read { it.history("repo", "./gradlew check --warning-mode none", hour(100)) }
+    assertEquals(19_250L, history.usualMs)
+    assertEquals(20, history.sampleCount)
+    assertEquals(100_000L, history.previous?.durationMs)
+  }
+
+  @Test
+  fun `partial history averages all durations and floors fractional milliseconds`() {
+    write { store ->
+      listOf(100L, 201L, 300L, 999L).forEachIndexed { index, ms ->
+        store.settled(startRow("b$index", hour(index)), ms)
+      }
+    }
+    val history = read { it.history("repo", "./gradlew build", hour(100)) }
+    assertEquals(400L, history.usualMs)
+    assertEquals(4, history.sampleCount)
   }
 
   @Test
@@ -81,11 +98,13 @@ class AgentBuildRunStoreTest {
       store.start(startRow("abandoned", hour(4), runId = "restarted"))
       store.abandonOpen("restarted")
       store.settled(startRow("later", hour(5)), 99_999)
+      store.settled(startRow("overlapping", hour(3)), Duration.ofHours(3).toMillis())
     }
 
     assertEquals(
       AgentBuildHistory(
         usualMs = 1_500L,
+        sampleCount = 2,
         previous = AgentBuildPrevious(AgentBuildOutcome.FAILED, 2_000L, hour(2).plusMillis(2_000)),
       ),
       read { it.history("repo", "./gradlew build", hour(5)) },

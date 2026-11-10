@@ -46,10 +46,11 @@ interface AgentBuildRunRepository {
   fun latestForRun(runIds: Set<String>): AgentBuildRun?
 
   /**
-   * Returns the usual time and the previous build of [command] in [repositoryIdentity], from the last five
-   * settled rows that started before [startedBefore]. Usual is their median duration in milliseconds: the
-   * middle value for an odd count, the mean of the two middle values rounded down for an even count, null
-   * with no settled row. Previous is the most recently ended of those rows.
+   * Returns the average time and previous build of commands equivalent to [command] in [repositoryIdentity],
+   * across run identities. Uses at most the newest 20 settled rows that started before and ended no later
+   * than [startedBefore]. The average is their arithmetic mean in milliseconds rounded down, null with
+   * no matching history. Previous is the most recently ended matching row. Gradle wrapper commands with
+   * the same tasks and workload options share history despite different logging options.
    */
   fun history(
     repositoryIdentity: String,

@@ -65,6 +65,24 @@ class WorkPayloadSchemaValidatorTest {
 
     validator.validateBoard(JsonCodec.mapToJsonString(board), "build-board")
     validator.validateDetail(JsonCodec.mapToJsonString(detail), "build-detail")
+    listOf(null, 0, 1, 20, -1, 21).forEach { count ->
+      val build = buildPayload("passed") + (WorkBuildPayloadKeys.SAMPLE_COUNT to count)
+      val countedItem = item + (WorkBoardPayloadKeys.BUILD to build)
+      val countedBoard = board + (WorkBoardPayloadKeys.ITEMS to listOf(countedItem))
+      val detailItem = countedItem + (WorkDetailPayloadKeys.STEP_PIPELINE to emptyList<String>())
+      val countedDetail = detail + (WorkDetailPayloadKeys.ITEM to detailItem)
+      if (count == null || count in 0..20) {
+        validator.validateBoard(JsonCodec.mapToJsonString(countedBoard), "count-board")
+        validator.validateDetail(JsonCodec.mapToJsonString(countedDetail), "count-detail")
+      } else {
+        assertFailsWith<SkillBillRuntimeException> {
+          validator.validateBoard(JsonCodec.mapToJsonString(countedBoard), "invalid-count-board")
+        }
+        assertFailsWith<SkillBillRuntimeException> {
+          validator.validateDetail(JsonCodec.mapToJsonString(countedDetail), "invalid-count-detail")
+        }
+      }
+    }
     assertFailsWith<SkillBillRuntimeException> {
       validator.validateBoard(
         JsonCodec.mapToJsonString(

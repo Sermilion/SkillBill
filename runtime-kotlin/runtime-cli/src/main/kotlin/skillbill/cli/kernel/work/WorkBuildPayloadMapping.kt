@@ -15,6 +15,7 @@ internal fun workBuildWireMap(build: WorkBuildView): Map<String, Any?> =
     WorkBuildPayloadKeys.ELAPSED_MS to build.elapsedMs,
     WorkBuildPayloadKeys.ELAPSED_AS_OF to build.elapsedAsOf?.toString(),
     WorkBuildPayloadKeys.USUAL_MS to build.usualMs,
+    WorkBuildPayloadKeys.SAMPLE_COUNT to build.sampleCount,
     WorkBuildPayloadKeys.EXIT_CODE to build.exitCode,
     WorkBuildPayloadKeys.FINISHED_AT to build.finishedAt?.toString(),
     WorkBuildPayloadKeys.PREVIOUS to

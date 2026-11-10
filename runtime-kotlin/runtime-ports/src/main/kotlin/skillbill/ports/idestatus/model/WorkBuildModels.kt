@@ -33,4 +33,5 @@ data class WorkBuildView(
   val exitCode: Int?,
   val finishedAt: Instant?,
   val previous: WorkBuildPrevious?,
+  val sampleCount: Int? = null,
 )

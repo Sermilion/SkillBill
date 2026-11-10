@@ -51,4 +51,5 @@ data class AgentBuildPrevious(
 data class AgentBuildHistory(
   val usualMs: Long?,
   val previous: AgentBuildPrevious?,
+  val sampleCount: Int = 0,
 )

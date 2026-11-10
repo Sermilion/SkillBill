@@ -173,6 +173,7 @@ internal fun WorkBuildView.toDomain(): WorkBuild = WorkBuild(
   elapsedMs = elapsedMs,
   elapsedAsOf = elapsedAsOf?.toKotlinInstant(),
   usualMs = usualMs,
+  sampleCount = sampleCount,
   exitCode = exitCode,
   finishedAt = finishedAt?.toKotlinInstant(),
   previous = previous?.let { WorkBuildPrevious(it.state.toDomain(), it.durationMs, it.finishedAt.toKotlinInstant()) },

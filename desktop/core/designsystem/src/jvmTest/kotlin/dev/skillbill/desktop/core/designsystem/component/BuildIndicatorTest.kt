@@ -18,6 +18,7 @@ class BuildIndicatorTest {
     elapsedMs: Long? = 117_800,
     elapsedAsOf: Instant? = start,
     usualMs: Long? = 190_000,
+    sampleCount: Int? = 20,
     exitCode: Int? = null,
     finishedAt: Instant? = null,
   ) = SbBuild(
@@ -31,6 +32,7 @@ class BuildIndicatorTest {
     elapsedMs = elapsedMs,
     elapsedAsOf = elapsedAsOf,
     usualMs = usualMs,
+    sampleCount = sampleCount,
     exitCode = exitCode,
     finishedAt = finishedAt,
     previous = null,
@@ -44,17 +46,19 @@ class BuildIndicatorTest {
 
     assertFalse(build.isSlow(atBoundary))
     assertEquals(SbBuildTone.None, build.tone(atBoundary))
-    assertEquals("usually 3m 10s", build.subLine(atBoundary))
+    assertEquals("average 3m 10s over 20 runs", build.subLine(atBoundary))
     assertTrue(build.isSlow(pastBoundary))
     assertEquals(SbBuildTone.Slow, build.tone(pastBoundary))
-    assertEquals("0s over usual", build.subLine(pastBoundary))
+    assertEquals("average 3m 10s over 20 runs", build.subLine(pastBoundary))
   }
 
   @Test
   fun `sub line covers first run finished age and missing finish time`() {
     val now = start + kotlin.time.Duration.parse("60s")
-    assertEquals("first run, no usual time yet", build(usualMs = null).subLine(now))
+    assertEquals("no command history for this project yet", build(usualMs = null).subLine(now))
     assertNull(build(usualMs = null).barRatio(now))
+    assertEquals("average 3m 10s over 1 run", build(sampleCount = 1).subLine(now))
+    assertEquals("average 3m 10s", build(sampleCount = null).subLine(now))
     assertEquals("finished 1m ago", build(SbBuildState.Failed, elapsedMs = null, finishedAt = start).subLine(now))
     assertNull(build(SbBuildState.Passed, elapsedMs = null).subLine(now))
   }
@@ -81,7 +85,7 @@ class BuildIndicatorTest {
       "./gradlew check failed after 1m 05s",
       build(SbBuildState.Failed, elapsedMs = 65_000).chipTooltip(now),
     )
-    assertEquals("./gradlew check · Android · usually 3m 10s", build().chipTooltip(now))
+    assertEquals("./gradlew check · Android · average 3m 10s over 20 runs", build().chipTooltip(now))
   }
 
   @Test

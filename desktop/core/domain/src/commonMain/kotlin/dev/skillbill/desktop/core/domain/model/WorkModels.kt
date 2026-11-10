@@ -35,6 +35,7 @@ data class WorkBuild(
   val exitCode: Int?,
   val finishedAt: Instant?,
   val previous: WorkBuildPrevious?,
+  val sampleCount: Int? = null,
 )
 
 /** What happened to the main checkout when the goal's worktree was removed. */

@@ -87,6 +87,7 @@ $defs:
       elapsed_ms: {type: [integer, "null"], minimum: 0}
       elapsed_as_of: {type: [string, "null"], format: date-time}
       usual_ms: {type: [integer, "null"], minimum: 0}
+      sample_count: {type: [integer, "null"], minimum: 0, maximum: 20}
       exit_code: {type: [integer, "null"]}
       finished_at: {type: [string, "null"], format: date-time}
       previous:

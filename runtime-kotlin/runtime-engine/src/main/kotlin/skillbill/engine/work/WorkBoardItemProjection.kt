@@ -894,6 +894,7 @@ private fun workBuildView(
     elapsedMs = elapsedMs,
     elapsedAsOf = elapsedAsOf,
     usualMs = history.usualMs,
+    sampleCount = history.sampleCount,
     exitCode = row.exitCode,
     finishedAt = endedAt,
     previous =

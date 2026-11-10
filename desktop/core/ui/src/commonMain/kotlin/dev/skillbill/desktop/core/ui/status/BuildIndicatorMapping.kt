@@ -17,6 +17,7 @@ fun WorkBuild.toSbBuild(): SbBuild = SbBuild(
   elapsedMs = elapsedMs,
   elapsedAsOf = elapsedAsOf,
   usualMs = usualMs,
+  sampleCount = sampleCount,
   exitCode = exitCode,
   finishedAt = finishedAt,
   previous = previous?.let { SbBuildPrevious(it.state.toSb(), it.durationMs, it.finishedAt) },

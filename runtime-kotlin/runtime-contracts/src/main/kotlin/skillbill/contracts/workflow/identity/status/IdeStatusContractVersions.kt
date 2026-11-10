@@ -26,6 +26,7 @@ object WorkBuildPayloadKeys {
   const val ELAPSED_MS = "elapsed_ms"
   const val ELAPSED_AS_OF = "elapsed_as_of"
   const val USUAL_MS = "usual_ms"
+  const val SAMPLE_COUNT = "sample_count"
   const val EXIT_CODE = WorkDetailPayloadKeys.ACTIVITY_EXIT_CODE
   const val FINISHED_AT = WorkflowWirePayloadKeys.FINISHED_AT
   const val PREVIOUS = "previous"

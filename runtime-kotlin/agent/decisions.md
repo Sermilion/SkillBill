@@ -3692,3 +3692,9 @@ instead of being retained. Validate blocks only after `MAX_VALIDATE_ATTEMPTS`
 attempts fail; a pause stops at once. `spendFailedAttempt` counts a failed attempt
 as spent, so the next launch of the phase in the same process starts a new attempt.
 Moved here from source comments to satisfy the Kotlin comment architecture gate.
+
+## [2026-11-10] Build duration averages use project command history
+
+The build indicator uses the arithmetic mean of the latest 20 completed equivalent commands across the primary repository's runs. Gradle wrapper logging options do not split history. Task order, task paths, project selection and workload options remain part of the match. Commands still running at the observation's start do not count.
+
+Existing build rows remain unchanged. History normalizes their commands when reading, so upgrades immediately use retained records. The optional nullable `sample_count` addition to board and detail build projections keeps their current contract versions. Previous payloads without the field remain valid, as the contract validator tests prove. These projections add no persisted source field and require no data rewrite. The UI omits the count when an older projection has none.

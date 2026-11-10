@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite.core.migration.area.idestatus.buildrun
 
+import skillbill.agent.buildrun.buildCommandHistoryKey
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.core.schema.AgentBuildRunsKeys.COMMAND
@@ -94,12 +95,14 @@ internal class SqliteAgentBuildRunStore(
     command: String,
     startedBefore: Instant,
   ): AgentBuildHistory {
+    val commandKey = buildCommandHistoryKey(command)
     val settled =
       connection.prepareStatement(HISTORY_SQL).use { statement ->
-        statement.bindAll(repositoryIdentity, command, startedBefore.toBuildText())
+        statement.bindAll(repositoryIdentity, startedBefore.toBuildText(), startedBefore.toBuildText())
         statement.executeQuery().use { rows ->
           buildList {
-            while (rows.next()) {
+            while (size < BUILD_HISTORY_WINDOW && rows.next()) {
+              if (buildCommandHistoryKey(rows.getString(COMMAND)) != commandKey) continue
               val ended = Instant.parse(rows.getString(ENDED_AT))
               val durationMs = Duration.between(Instant.parse(rows.getString(STARTED_AT)), ended).toMillis()
               add(AgentBuildPrevious(rows.readSettledOutcome(), durationMs.coerceAtLeast(0), ended))
@@ -107,13 +110,12 @@ internal class SqliteAgentBuildRunStore(
           }
         }
       }
-    return AgentBuildHistory(usualMs = medianMs(settled.map { it.durationMs }), previous = settled.firstOrNull())
-  }
-
-  private fun medianMs(durations: List<Long>): Long? {
-    if (durations.isEmpty()) return null
-    val sorted = durations.sorted()
-    val middle = sorted.size / 2
-    return if (sorted.size % 2 == 1) sorted[middle] else (sorted[middle - 1] + sorted[middle]) / 2
+    val durations = settled.map { it.durationMs }
+    val averageMs =
+      durations.takeIf { it.isNotEmpty() }?.let { values ->
+        val count = values.size.toLong()
+        values.sumOf { it / count } + values.sumOf { it % count } / count
+      }
+    return AgentBuildHistory(usualMs = averageMs, previous = settled.firstOrNull(), sampleCount = settled.size)
   }
 }
