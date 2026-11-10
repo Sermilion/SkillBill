@@ -89,11 +89,11 @@ internal fun NewTaskComposer(
     ?: preview?.let { key(it) { it.state.collectAsState().value } } ?: ChatChangesState.None
   val gate = remember(chat) { SendNowGate() }
   val offer by draft.offer.collectAsState()
-  val ready = !offer.starting && draft.canSend()
+  val ready = !offer.starting && !draft.branchSwitching && draft.canSend()
   val sendNow = stoppable && queued.isNotEmpty() && draft.text.isBlank() && draft.images.isEmpty() && !offer.starting
   val pickersDisabledWhy = when {
     busy -> PICKERS_DISABLED_BUSY
-    offer.starting -> PICKERS_DISABLED_STARTING
+    offer.starting || draft.branchSwitching -> PICKERS_DISABLED_STARTING
     chat?.repositoryMissing == true -> PICKERS_DISABLED_MISSING_REPO
     else -> null
   }
@@ -118,6 +118,7 @@ internal fun NewTaskComposer(
   Column(Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     // A draft whose repository is gone refuses every turn, so it has no activity to report and is not "Ready".
     chat?.takeUnless { it.repositoryMissing }?.let { key(it) { ChatActivityPill(it.thread) } }
+    NewTaskBranchWarning(state, draft, pickersEnabled, onAction)
     Box(Modifier.fillMaxWidth()) {
       SbInput(
         draft.text, { onAction(NewTaskAction.TextChanged(it)) },
@@ -153,7 +154,7 @@ internal fun NewTaskComposer(
     if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        RepositoryPicker(state, draft, chat, busy, offer.starting, focus, now, Modifier.weight(1f, fill = false), onAction)
+        RepositoryPicker(state, draft, chat, busy, offer.starting || draft.branchSwitching, focus, now, Modifier.weight(1f, fill = false), onAction)
         AgentPicker(
           state.agent, state.agents, draft.repository?.root, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy,
           loadModels = draft::models, onChooseModel = { onAction(NewTaskAction.ChooseModel(it)) },
@@ -207,7 +208,7 @@ private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, chat: N
     NewTaskRepositoryPill(
       mode,
       repository?.name,
-      repositoryPillBranch(draft.baseBranch, repository?.root, state.branchRead),
+      repositoryPillBranch(repository?.root, state.branchRead),
       pillFocus,
     ) { closeFocus = pillFocus; onAction(NewTaskAction.OpenRepositoryPicker) }
     val open = (mode == RepositoryPillMode.Interactive || mode == RepositoryPillMode.Choose) && state.repositoryPickerOpen

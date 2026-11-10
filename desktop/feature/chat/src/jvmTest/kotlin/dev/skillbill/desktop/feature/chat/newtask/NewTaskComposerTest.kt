@@ -508,17 +508,18 @@ class NewTaskComposerTest {
       repository = NewTaskRepository("/work/repository", "repository")
       baseBranch = "short"
     }
+    var read by mutableStateOf(RepositoryBranches("/work/repository", "main", emptyList(), emptyList(), currentBranch = "short"))
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-          NewTaskComposer(NewTaskUiState(), draft) {}
+          NewTaskComposer(NewTaskUiState(branchRead = BranchReadState.Loaded(read.repositoryRoot, read)), draft) {}
         }
       }
     }
     fun repositoryWidth() = onNodeWithText("repository", useUnmergedTree = true).fetchSemanticsNode().size.width
     val shortBranchWidth = repositoryWidth()
 
-    runOnIdle { draft.baseBranch = "b".repeat(200) }
+    runOnIdle { read = read.copy(currentBranch = "b".repeat(200)) }
     waitForIdle()
 
     assertEquals(shortBranchWidth, repositoryWidth())

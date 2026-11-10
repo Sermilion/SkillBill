@@ -133,6 +133,7 @@ class NewTaskDraft internal constructor(
       repositoryState = value
     }
   var addedRepositories: List<NewTaskRepository> by mutableStateOf(emptyList())
+  internal var branchSwitching: Boolean by mutableStateOf(false)
   var baseBranch: String by mutableStateOf("")
   var agentId: String? by mutableStateOf(null)
 
@@ -168,7 +169,7 @@ class NewTaskDraft internal constructor(
 
   private fun canAdmitTurn(message: String, attachments: List<ChatImage> = emptyList()): Boolean {
     val current = chatState.value
-    return !closing && (message.isNotBlank() || attachments.isNotEmpty()) && repository != null && selectedAgent != null && selectedAgent?.agentId == agentId &&
+    return !closing && !branchSwitching && (message.isNotBlank() || attachments.isNotEmpty()) && repository != null && selectedAgent != null && selectedAgent?.agentId == agentId &&
       current?.repositoryMissing != true && !offerState.value.starting
   }
 
@@ -271,7 +272,7 @@ class NewTaskDraft internal constructor(
     offerFieldValue: String? = null,
   ) {
     val current = chatState.value
-    if (closing || offerState.value.starting || current?.thread?.busy?.value == true) return
+    if (closing || branchSwitching || offerState.value.starting || current?.thread?.busy?.value == true) return
     if (current == null && kind in RUN_KINDS) return
     if (kind in RUN_KINDS && offerState.value.started != null) return
     if (selectedAgent == null || repository == null) return

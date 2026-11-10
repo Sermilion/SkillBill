@@ -39,6 +39,9 @@ import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
+import dev.skillbill.desktop.core.domain.repository.RepositoryBranchesRepository
+import dev.skillbill.desktop.core.domain.model.RepositoryBranchesRead
+import dev.skillbill.desktop.core.domain.model.newWorkBranchProblem
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
@@ -123,6 +126,7 @@ class RuntimeWorkControlRepository(
   private val launches: LaunchReservations,
   private val diagnostics: Diagnostics,
   private val appScope: ApplicationCoroutineScope,
+  private val branches: RepositoryBranchesRepository,
 ) : WorkControlRepository {
   init {
     appScope.scope.launch {
@@ -265,6 +269,14 @@ class RuntimeWorkControlRepository(
       NewTaskKind.Verify, NewTaskKind.PrReviewFix ->
         return startOperationTask(request, session)
       NewTaskKind.GoalRun, NewTaskKind.PlanOnly -> Unit
+    }
+    when (val read = branches.branches(request.repoRoot)) {
+      is RepositoryBranchesRead.Listed -> read.branches.newWorkBranchProblem(request.baseBranch)?.let {
+        diagnostics.record("desktop_new_work_branch_choice_required")
+        return NewTaskStartOutcome.Refused(it)
+      }
+      is RepositoryBranchesRead.NotARepository -> return NewTaskStartOutcome.Refused("${read.path} is not a git repository.")
+      is RepositoryBranchesRead.Unavailable -> return NewTaskStartOutcome.Failed(read.problem)
     }
     val identity = callInSession(
       session,
