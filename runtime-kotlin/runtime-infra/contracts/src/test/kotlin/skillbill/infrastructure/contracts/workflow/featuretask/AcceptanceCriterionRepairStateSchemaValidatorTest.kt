@@ -56,7 +56,8 @@ class AcceptanceCriterionRepairStateSchemaValidatorTest {
         "c".repeat(64),
         "checkpoint:discovery",
       )
-    val focused = assertNotNull(initial.recordProseAudit(audit))
+    val discovered = assertNotNull(initial.recordProseAudit(audit))
+    val focused = assertNotNull(discovered.reopenForOperatorAudit())
     val closed =
       assertNotNull(
         focused.recordProseAudit(
@@ -112,21 +113,20 @@ class AcceptanceCriterionRepairStateSchemaValidatorTest {
       )
     val valid = state.asRepairWireMap()
     AcceptanceCriterionRepairStateSchemaValidator.validate(valid, "valid")
-    val legacy = valid - Keys.BUDGET_START_OUTCOME_INDEX
-    AcceptanceCriterionRepairStateSchemaValidator.validate(legacy, "before-budget-reset-support")
+    val missingNewField = valid - Keys.CHARGED_ATTEMPTS
+    assertFailsWith<SkillBillRuntimeException> {
+      AcceptanceCriterionRepairStateSchemaValidator.validate(missingNewField, "missing-charged-attempts")
+    }
     assertEquals(
       state,
-      FeatureTaskRuntimeWorkflowArtifactMap.from(legacy)
-        .toAcceptanceCriterionRepairState("before-budget-reset-support"),
+      FeatureTaskRuntimeWorkflowArtifactMap.from(valid)
+        .toAcceptanceCriterionRepairState("valid"),
     )
     listOf(
-      valid + (Keys.BUDGET_START_OUTCOME_INDEX to -1),
-      valid + (Keys.BUDGET_START_OUTCOME_INDEX to 1),
-      valid + (Keys.BUDGET_START_OUTCOME_INDEX to 0.5),
-      valid + (Keys.BUDGET_START_OUTCOME_INDEX to null),
+      valid + (Keys.UNSUCCESSFUL_TOTALS to mapOf("AC-001" to 1)),
+      valid + (Keys.BUDGET_START_OUTCOME_INDEX to 0),
       valid + (Keys.CONTRACT_VERSION to "0.1"),
       valid - Keys.INTERACTION_TRACE,
-      valid + (Keys.UNSUCCESSFUL_TOTALS to mapOf("AC-001" to 1)),
       valid + (Keys.CURRENT_CRITERION_REF to "AC-002"),
       valid + (Keys.CRITERIA to emptyList<Any>()),
       valid - Keys.STAGE,

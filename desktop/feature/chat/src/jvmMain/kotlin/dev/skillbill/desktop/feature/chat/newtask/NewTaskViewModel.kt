@@ -71,6 +71,8 @@ sealed interface NewTaskAction {
   data class TextChanged(val text: String) : NewTaskAction
   data class ChooseBaseBranch(val branch: String) : NewTaskAction
   data object RetryBranches : NewTaskAction
+  data object SwitchToDefaultBranch : NewTaskAction
+  data object UseCurrentBranchAsBase : NewTaskAction
   data class ChooseRepository(val repository: NewTaskRepository) : NewTaskAction
   data class SubmitRepositoryPath(val path: String) : NewTaskAction
   data class ChooseModel(val model: ChatModel?) : NewTaskAction
@@ -152,7 +154,15 @@ class NewTaskViewModel(
         target.rebindChat()
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
       }
-      NewTaskAction.RetryBranches -> target.repository?.root?.let { readBranches(target, it) }
+      NewTaskAction.SwitchToDefaultBranch -> switchToDefaultBranch(target)
+      NewTaskAction.UseCurrentBranchAsBase -> {
+        if (!canChangeContext(target)) return
+        val loaded = mutableState.value.branchRead as? BranchReadState.Loaded ?: return
+        if (loaded.root != target.repository?.root) return
+        val current = loaded.branches.currentBranch ?: return
+        onAction(NewTaskAction.ChooseBaseBranch(current))
+      }
+      NewTaskAction.RetryBranches -> if (!target.branchSwitching && branchReadJob?.isActive != true) target.repository?.root?.let { readBranches(target, it) }
       is NewTaskAction.ChooseRepository -> {
         selectRepository(target, action.repository)
       }
@@ -399,8 +409,31 @@ class NewTaskViewModel(
     if (isSelected(target)) mutableState.update { it.copy(repositoryError = message) }
   }
 
+  private fun switchToDefaultBranch(target: NewTaskDraft) {
+    if (!canChangeContext(target)) return
+    val loaded = mutableState.value.branchRead as? BranchReadState.Loaded ?: return
+    val root = target.repository?.root ?: return
+    if (loaded.root != root || loaded.branches.defaultBranch == null) return
+    target.branchSwitching = true
+    viewModelScope.launch {
+      try {
+        when (val result = branches.switchToDefaultBranch(root, loaded.branches.currentBranch)) {
+          is Outcome.Failure -> showRepositoryError(target, readProblemText(result.error))
+          is Outcome.Success -> {
+            target.baseBranch = ""
+            target.rebindChat()
+            if (isSelected(target)) mutableState.update { it.copy(repositoryError = null) }
+          }
+        }
+      } finally {
+        target.branchSwitching = false
+        readBranches(target)
+      }
+    }
+  }
+
   private fun canChangeContext(target: NewTaskDraft): Boolean {
     val current = target.chat.value
-    return current?.repositoryMissing != true && current?.thread?.busy?.value != true && !target.offer.value.starting
+    return !target.branchSwitching && current?.repositoryMissing != true && current?.thread?.busy?.value != true && !target.offer.value.starting
   }
 }

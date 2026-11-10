@@ -5,6 +5,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalWindowInfo
+import kotlinx.coroutines.delay
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.toNewTaskKind
 import dev.skillbill.desktop.core.domain.model.ChangeScope
@@ -43,6 +45,15 @@ class NewTaskFeatureEntry(
     val state by viewModel.state.collectAsState()
     val selectedChat by viewModel.chats.selected.collectAsState()
     val repositoryRoot = selectedChat.repository?.root
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(repositoryRoot, windowFocused) {
+      if (repositoryRoot != null && windowFocused) {
+        while (true) {
+          viewModel.onAction(NewTaskAction.RetryBranches)
+          delay(3_000)
+        }
+      }
+    }
     LaunchedEffect(repositoryRoot) { paneCommands.chatRepositorySelected(repositoryRoot?.let(Path::of)) }
     DisposableEffect(paneCommands) { onDispose { paneCommands.chatRepositorySelected(null) } }
     val host = NewTaskScreenHost(

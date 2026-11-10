@@ -184,28 +184,13 @@ class AcceptanceCriterionRepairAuditAdmissionTest {
         "full:1",
         initial.revision + 1,
         null,
-        false,
+        true,
         "b".repeat(64),
-        "AC-001 and AC-002 need a focused audit.",
+        "Open criteria: none",
         "c".repeat(64),
         "source:1",
       )
-    var state = assertNotNull(initial.recordProseAudit(discovery))
-    listOf("AC-001", "AC-002").forEach { ref ->
-      state =
-        assertNotNull(
-          state.recordProseAudit(
-            discovery.copy(
-              id = "focused:$ref",
-              revision = state.revision + 1,
-              criterionRef = ref,
-              satisfied = true,
-              prose = "$ref met at src/Flow.kt:10",
-            ),
-          ),
-        )
-    }
-    return state
+    return assertNotNull(initial.recordProseAudit(discovery))
   }
 
   private fun criterion(

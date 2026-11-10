@@ -1,3 +1,23 @@
+## [2026-11-10] Store pattern rules with an empty action fingerprint
+Context: approval_rules.action_fingerprint is NOT NULL and exact rules still key on fingerprint equality.
+Decision: Pattern rules write pattern plus actionFingerprint ""; scopes() skips fingerprint compare when pattern is non-null.
+Reason: Avoids a table rebuild to relax NOT NULL while keeping exact-rule behavior unchanged.
+
+## [2026-11-10] Refuse bare-wildcard patterns at match time for stored rules
+Context: Operators might persist overly broad patterns; tampered rows could bypass decide-time validation.
+Decision: ApprovalMatchFacts.matches runs patternShapeRefusal before glob matching so all-wildcard stored patterns never auto-allow.
+Reason: Defense in depth after decide; bare patterns stay inert even if validation was bypassed.
+
+## [2026-11-10] Judge approval paths lexically in the domain matcher
+Context: Wildcard approval must match checkout-relative path strings before provider adapters normalize absolute paths.
+Decision: Keep ApprovalMatchFacts path rules lexical only; no java.nio or filesystem resolution in runtime-domain.
+Reason: Adapters own absolute path normalization; the matcher must stay pure and testable without I/O.
+
+## [2026-11-10] Charge acceptance repairs by verified gap progress
+Context: SKILL-533 replaces unfinished-report charging after partial repairs consumed the budget even when they closed production gaps.
+Decision: Charge an unsuccessful outcome only when open gaps do not decrease. Gate and reset the current criterion's count independently; retain gaps, outcomes, plan generation and sticky escalation on operator retry. Replays reuse stored charge facts.
+Reason: Independent verification measures partial progress without requiring the whole criterion to pass. A worker block has no verification result and leaves the gap count unchanged, so it charges once. Retained evidence prevents retry from erasing earlier work. Existing work-detail projection rules remain unchanged.
+
 ## [2026-11-09] Map Cursor CLI model slugs to the advertised ACP variant
 Context: Cursor `--list-models` and `execution_matrix` use slugs such as `composer-2.5` and `cursor-grok-4.6-high`. ACP `session/new` advertises one parameterized value per base (`composer-2.5[fast=true]`) and accepts only those exact strings. Exact-match selection stopped the session before the prompt.
 Decision: `resolveAcpModel` uses an exact advertised value when present. Otherwise it strips the `cursor-` prefix, treats `auto` as `default`, and peels trailing effort or speed tokens until a base has exactly one advertised variant. Ambiguous and unknown bases stay unresolved and still stop. `session/set_config_option` and `session/set_model` send that selected variant, not the original slug. Tests pin the 2026-11-09 `session/new` advertised set.
@@ -3562,6 +3582,7 @@ Context: SKILL-429 reached audit repair attempt 27 while its selected criterion 
 Decision: Both `progress` and `no_progress` repair reports settle as incomplete outcomes through the existing serial repair owner. The third unsuccessful outcome blocks the selected criterion. Operator resume retains its explicit budget reset. Goal detail projects retained audit and review results for the current subtask as well as paged completed subtasks, so unresolved criteria remain visible during repair and after a block. Validation results remain restricted to completed subtasks.
 
 Evidence: `FeatureTaskRuntimeSerialRepairTest` proves unfinished progress consumes three distinct repair reservations and blocks before review. `GoalRunnerValidationEvidenceProjectionTest` checks running and blocked subtask audit gaps through both goal status projection paths without fabricating completed validation.
+Superseded by: Charge acceptance repairs by verified gap progress (2026-11-10)
 
 ## [2026-10-21] Reopen canceled workflows through accepted operator mutation
 

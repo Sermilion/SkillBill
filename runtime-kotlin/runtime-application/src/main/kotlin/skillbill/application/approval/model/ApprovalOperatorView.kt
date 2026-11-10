@@ -11,4 +11,7 @@ data class ApprovalOperatorView(
   val oneTimeRefusal: ApprovalGrantRefusal?,
   val alwaysAllowRefusal: ApprovalGrantRefusal?,
   val ownerLive: Boolean,
+  val patternRefusal: ApprovalGrantRefusal? = null,
+  val suggestedPattern: String? = null,
+  val rulePattern: String? = null,
 )

@@ -84,6 +84,45 @@ class NewTaskViewModelTest {
     NewTaskViewModel(chats, board, specs, branches, folders, FakeExecutionChatRepository(), detecting(), FIXED_CLOCK, settings, diagnostics)
 
   @Test
+  fun `branch choice is explicit and a failed default switch preserves it and reports the error`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val chats = testNewTaskChats()
+    val draft = chats.selected.value
+    draft.repository = NewTaskRepository("/repo", "repo")
+    var current = "feature/current"
+    var refuseSwitch = true
+    val branches = object : RepositoryBranchesRepository {
+      override suspend fun branches(path: String) = RepositoryBranchesRead.Listed(
+        RepositoryBranches(path, "main", emptyList(), emptyList(), current),
+      )
+      override suspend fun switchToDefaultBranch(path: String, expectedCurrentBranch: String?): Outcome<Unit, ReadProblem> {
+        assertEquals("feature/current", expectedCurrentBranch)
+        if (refuseSwitch) return Outcome.Failure(ReadProblem.Runtime("Local edits would be overwritten"))
+        current = "main"
+        return Outcome.Success(Unit)
+      }
+    }
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), chats, branches = branches)
+    runCurrent()
+    assertEquals("", draft.baseBranch)
+    model.onAction(NewTaskAction.UseCurrentBranchAsBase)
+    assertEquals("feature/current", draft.baseBranch)
+    model.onAction(NewTaskAction.SwitchToDefaultBranch)
+    runCurrent()
+    assertEquals("feature/current", draft.baseBranch)
+    assertEquals("feature/current", (model.state.value.branchRead as BranchReadState.Loaded).branches.currentBranch)
+    assertTrue(model.state.value.repositoryError.orEmpty().contains("Local edits would be overwritten"))
+
+    refuseSwitch = false
+    model.onAction(NewTaskAction.SwitchToDefaultBranch)
+    runCurrent()
+    assertEquals("", draft.baseBranch)
+    assertEquals("main", (model.state.value.branchRead as BranchReadState.Loaded).branches.currentBranch)
+    assertEquals(null, model.state.value.repositoryError)
+    model.viewModelScope.cancel()
+  }
+
+  @Test
   fun `model selection keeps an existing draft session and applies to its next message`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val repository = FakeExecutionChatRepository()
@@ -798,6 +837,8 @@ class NewTaskViewModelTest {
 
   private class FakeBranches(private val read: suspend (String) -> RepositoryBranchesRead = { listed(it) }) : RepositoryBranchesRepository {
     val calls = mutableListOf<String>()
+
+    override suspend fun switchToDefaultBranch(path: String, expectedCurrentBranch: String?): Outcome<Unit, ReadProblem> = Outcome.Success(Unit)
 
     override suspend fun branches(path: String): RepositoryBranchesRead {
       calls += path

@@ -80,6 +80,7 @@ internal class NewTaskChat(
   resumedChanges: Boolean = false,
   changesCaptureAttempted: Boolean = false,
   changesAttributedPaths: Set<String>? = null,
+  retainedChanges: NewTaskChatChanges? = null,
 ) {
   @Volatile
   var agent: ChatAgent = agent
@@ -102,7 +103,7 @@ internal class NewTaskChat(
   val thread = retainedThread
   val job: Job = SupervisorJob(scope.coroutineContext[Job])
   private val approvalFlow = ChatApprovals(approvals)
-  private val changesTracker = NewTaskChatChanges(changesRepository, scope, dispatcher, repositoryRoot, initialChangesBaseline, resumedChanges, repositoryMissing, changesCaptureAttempted || initiallyStarted || initialChangesBaseline != null, changesAttributedPaths)
+  private val changesTracker = retainedChanges ?: NewTaskChatChanges(changesRepository, scope, dispatcher, repositoryRoot, initialChangesBaseline, resumedChanges, repositoryMissing, changesCaptureAttempted || initiallyStarted || initialChangesBaseline != null, changesAttributedPaths)
   val changes: StateFlow<ChatChangesState> = changesTracker.state
   suspend fun observeChanges() = changesTracker.observe()
   val changesBaseline: ChatChangesBaseline? get() = changesTracker.baseline
@@ -153,9 +154,9 @@ internal class NewTaskChat(
   }
 
   /** The operator's click on one option of a pending card; it sends nothing unless the feed holds a live registration. */
-  fun decideApproval(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean) {
+  fun decideApproval(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean, pattern: String? = null) {
     if (!approvalLiveState.value || closing) return
-    scope.launch(job + dispatcher) { approvalFlow.decide(thread, key, optionId, alwaysAllow) }
+    scope.launch(job + dispatcher) { approvalFlow.decide(thread, key, optionId, alwaysAllow, pattern) }
   }
 
   fun dismissApproval(key: ApprovalCardKey) {

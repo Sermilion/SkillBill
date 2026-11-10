@@ -38,6 +38,10 @@ enum class ApprovalGrantRefusal {
   NOT_ORDINARY_ACTION,
   INCOMPLETE_INPUT,
   INCOMPLETE_SCOPE,
+  INVALID_PATTERN,
+  NO_MATCH_FACTS,
+  UNSAFE_COMMAND,
+  PATTERN_MISMATCH,
 }
 
 data class ApprovalGrantFacts(
@@ -45,6 +49,7 @@ data class ApprovalGrantFacts(
   val writeCapable: Boolean,
   val inputComplete: Boolean,
   val providerDisposition: ApprovalProviderDisposition,
+  val matchFacts: ApprovalMatchFacts? = null,
 )
 
 fun ApprovalGrantFacts.onceRefusal(
@@ -80,8 +85,12 @@ fun ApprovalAuthorityScope.isComplete(): Boolean =
   profileIdentity.isNotBlank() && protocolRevision.isNotBlank() && actionKind.isNotBlank() &&
     workingDirectory.isNotBlank() && actionFingerprint.isNotBlank()
 
-fun ApprovalRuleRecord.matches(request: ApprovalRequestRecord): Boolean {
+fun ApprovalRuleRecord.matches(
+  request: ApprovalRequestRecord,
+  matchFacts: ApprovalMatchFacts?,
+): Boolean {
   val scope = request.authorityScope ?: return false
+  val rulePattern = pattern
   return revokedAt == null &&
     repositoryIdentity == request.repositoryIdentity &&
     provider == request.provider &&
@@ -89,8 +98,19 @@ fun ApprovalRuleRecord.matches(request: ApprovalRequestRecord): Boolean {
     protocolRevision == scope.protocolRevision &&
     actionKind == scope.actionKind &&
     workingDirectory == scope.workingDirectory &&
-    actionFingerprint == scope.actionFingerprint
+    if (rulePattern == null) {
+      actionFingerprint == scope.actionFingerprint
+    } else {
+      matchFacts?.matches(rulePattern) == true
+    }
 }
+
+fun ApprovalAuthorityScope.toPatternRule(
+  request: ApprovalRequestRecord,
+  ruleId: String,
+  createdAt: String,
+  pattern: String,
+): ApprovalRuleRecord = toRule(request, ruleId, createdAt).copy(actionFingerprint = "", pattern = pattern)
 
 fun ApprovalAuthorityScope.toRule(
   request: ApprovalRequestRecord,

@@ -86,7 +86,7 @@ Use this exact fenced block format, with a JSON array containing up to 3 actions
 [{"label":"Inspect CI failure","instruction":"Inspect the failed CI job for this execution and explain its cause without changing files or runtime state.","mode":"act"}]
 ```
 Each label must be specific, at most 60 characters, and match an action offered in your reply.
-Each instruction must be self-contained and be at most 2000 characters.
+Each instruction must be self-contained and include the requirements needed to carry out the action.
 Use mode "read" for actions that only inspect, discuss or file issues.
 Use mode "act" for file edits, pushes or runtime changes.
 The app pauses a running execution before an act action, then resumes it when the turn ends.
@@ -110,7 +110,7 @@ Use this exact fenced block format, with a JSON array containing up to 3 actions
 ```skillbill-actions
 [{"label":"Run phase:goal","instruction":"Implement the requested change in this repository.","mode":"act","start":"goal","title":"Add dark mode setting"}]
 ```
-Each action needs a nonblank instruction and a mode of "read" or "act". Labels must be at most 60 characters, and instructions at most 2000 characters. The app does not show an action that breaks these limits, so keep a goal instruction to a short summary and put long detail in a file in the repository the run can read.
+Each action needs a nonblank, self-contained instruction and a mode of "read" or "act". Labels must be at most 60 characters. Instructions have no character limit; retain the requirements and resolved decisions needed for the run.
 Every "goal" and "plan" start action needs a "title": 2 to 6 words naming the change, with no issue key, file path or trailing punctuation.
 Keep issue keys out of the title and action JSON; the app's start card handles the run's issue key.
 When "start" is "monitor", set optional JSON "target" to exactly one token: branch:<name>, a pull request URL, or an issue key.

@@ -17,6 +17,7 @@ internal object GoalRunnerSubtaskReadSource {
   const val REVIEW_FINDINGS = "subtask_review_findings"
   const val REVIEW_LANES = "subtask_review_lanes"
   const val SUBTASK_AUDIT_CRITERIA = "subtask_audit_criteria"
+  const val SUBTASK_AUDIT_HISTORY = "subtask_audit_history"
   const val PHASE_CARD_OUTPUT = "subtask_phase_card_output"
 }
 

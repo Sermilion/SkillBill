@@ -1,3 +1,43 @@
+## [2026-11-10] Upgrade acceptance repair records through existing write owners
+Context: SKILL-533 adds required repair-state 0.3 fields while existing runs retain 0.1 or 0.2 records, including interrupted repairs.
+Decision: Chain eligible 0.1 records through 0.2 to 0.3. Read-only consumers upgrade in memory; existing recovery and operator retry writers persist upgrades with coupled workflow updates. Restart incompatible in-flight reservations through discovery or pending read-only audit with empty charge accounting and retained working-tree edits.
+Reason: Older records cannot supply gap or charge evidence they never stored. Preserve completed criteria, closure evidence, outcomes, source transitions, audits, traces and revision without inventing that evidence or adding durable mutations to status reads. Existing 0.1 refusal conditions remain; audit-result stays at 0.2.
+
+## [2026-11-10] Choose acceptance repair steps from domain state
+Context: Resume, phase recording and budget checks derived repair steps separately, allowing the same persisted state to select different work.
+Decision: AcceptanceRepairDecision owns ordered step selection from state. One engine mapping translates its result to workflow roles; completed repair routes directly to verification.
+Reason: Routing and persistence must agree without duplicating stage policy. FocusedRepairStrategy remains for its existing goal-assessment consumer.
+
+## [2026-11-10] Bound verify to discovered gaps and repair-changed files
+Context: Repeated full criterion audits could close one gap and introduce a sibling, leaving repair without a stable completion scope.
+Decision: Discovery establishes numbered gaps within the authored subtask. Verify reports on open gaps, keeps closed gaps terminal and admits new gaps only with line citations in repair-changed files. Other observations remain late findings for code review.
+Reason: Git evidence identifies repair-changed paths but cannot attribute worktree diff hunks to one repair when checkpoints are skipped. A per-repair source snapshot store is outside scope. Late findings retain observations without extending the criterion's repair scope.
+
+## [2026-11-10] Degrade malformed gap reports after one correction
+Context: Discovery and verification consume agent prose that can omit numbered gaps or required statuses.
+Decision: Allow one correction per in-memory state scope. Then store a fallback gap for each affected discovery criterion or leave unreported verification gaps open, with diagnostics.
+Reason: Malformed prose must not add a block path or silently accept missing production behavior. The existing interaction-trace correction pattern provides the bound, at the cost of another correction after restart.
+
+## [2026-11-10] Verify every completed acceptance repair settlement
+Context: SKILL-533 replaces unfinished-repair rejection and read-only repair-report admission.
+Decision: Retain a completed repair's reservation, report, source evidence and changed paths, then run targeted verification regardless of its verdict. Retryable worker blocks follow that path; other worker blocks record a charged BLOCKED outcome. Keep general read-only audit clarification and historical INCOMPLETE decoding.
+Reason: A completion verdict does not establish whether production gaps closed. Verification must inspect retained edits before acceptance or progress-based charging. Historical records remain readable without reinstating admission or adding another schema version.
+
+## [2026-11-10] Replace retained repair reports with current gap state
+Context: SKILL-533 requires criterion-local plan and repair prompts describing the current pass.
+Decision: Render open gaps and the latest failed verify evidence from that pass. Keep earlier outcomes in durable accounting without injecting their reports. Admit operator retry prose only through the runtime-authored rejected-no-change envelope. Current source remains authoritative; unavailable historical evidence must not be invented.
+Reason: Closed gaps and failures from an earlier pass must not become repair work again. The current gap list and verify evidence define the remaining work.
+
+## [2026-11-10] Bind the shared repair plan to one criterion pass
+Context: Repair receives the latest audit_plan_fix output through an existing shared phase handoff.
+Decision: Only the criterion whose plan completed last retains a positive planGeneration. Clear it on reopening or new discovery gaps. Plan at generation zero and once after escalation; reuse the plan on ordinary retry. Checkpoint earlier edits on planning and repair re-entry; resume reopens the saved step without another checkpoint.
+Reason: These transitions prevent repair from receiving another criterion's plan or a plan from an earlier pass without adding a plan store. If the plan's state update did not commit, planning repeats.
+
+## [2026-11-10] Resolve escalated repair models at launch
+Context: Escalation can begin after a run starts while recorded step assignments still carry the implementation model.
+Decision: Resolve the reasoning-tier directive for each escalated repair launch and carry the resolved assignment on that PhaseRun without phase overrides or changes to recorded assignments. If the tier is absent, keep the current model and emit a warning.
+Reason: Persisted criterion state must govern escalation after resume and operator retry without changing models for other criteria, planning or audit.
+
 ## [2026-11-08] Serialize build observation with completion-time membership
 Context: Output-drain threads decode command events while the process wait loop owns polling and launch settlement.
 Decision: Queue command events and failures for wait-loop delivery. Capture descendant membership at command completion and flush final output before recorder settlement.
@@ -122,6 +162,7 @@ Context: Interaction-trace mode added required fields, so the schemas moved from
 Decision: Add no 0.1 recovery path; decoding a 0.1 record fails on the version mismatch.
 Reason: A silent upgrade would invent an empty interaction trace and hide that the run was never traced. Failing loudly keeps the mode's coherence guarantees honest.
 Alternatives considered: a version-upgrade shim that defaults the trace to empty, rejected because it would pass untraced runs as traced.
+Superseded by: Upgrade acceptance repair records through existing write owners (2026-11-10)
 
 ## [2026-10-25] Operator-authored parent specs are exempt from the Transitional Regressions requirement
 Context: Authored-bundle verification now requires `## Transitional Regressions` on a bundle parent with two or more subtasks, but an operator can supply the parent spec themselves.
@@ -214,6 +255,7 @@ authority, and independent audit still decides acceptance.
 
 Reason: Retaining failure history helps only when the proposed repair addresses
 why the previous approach was rejected.
+Superseded by: Replace retained repair reports with current gap state (2026-11-10)
 
 ## [2026-10-22] Retain rejected repair evidence in later repair prompts
 
@@ -222,6 +264,7 @@ Context: Durable accounting retained failed repairs, but planning and repair pro
 Decision: Derive the selected criterion's latest three unsuccessful outcomes from existing accounting and pass them to planning and repair. State the included and total counts, retain outcomes across operator resume, and treat the reports as counterexamples to inspect against current source. Require planning to identify the invariant and its owner and trace applicable execution sequences. Require repair to perform a separate read-only source closure pass before reporting completion.
 
 Reason: This repairs the context handoff without new persisted state or output fields. Independent audit remains the acceptance authority. Budgets, progress admission, phase routing, and execution semantics are unchanged, so the wording and prompt delivery change does not require a semantic revision bump.
+Superseded by: Replace retained repair reports with current gap state (2026-11-10)
 
 ## [2026-10-22] Block repeated verdict-less audits
 
@@ -281,6 +324,7 @@ Reason: Expected settlement outcomes are values. Throwing inside the sqlite repo
 Context: Per-criterion audit still looped when a focused pass named one production path, repair fixed that path, and the next audit found a sibling of the same forbidden pattern (SQL LIMIT before parse isolation on a cousin store method).
 Decision: Keep one-criterion serial repair and the existing strategy revision. Instruct audit, `audit_plan_fix`, and `audit_implement_fix` that a named gap is an example of a remaining defect class. Audit reports every remaining sibling in that criterion's family. Plan and repair cover that set in one round. Do not open another criterion.
 Reason: The runtime already allowed several independent gaps under one criterion. Agents treated the latest-gap briefing as the work item. Prompt text is enough; a semantic revision bump would remap in-flight runs for a wording change.
+Superseded by: Bound verify to discovered gaps and repair-changed files (2026-11-10)
 
 ## [2026-10-17] Goal children stamp validate, not last-child-only build
 Context: `GoalRunnerQualityGateSelectionResolver` stamped BUILD for every non-final child and VALIDATE only for the last non-skipped subtask. BUILD is compile-only, so completed earlier subtasks had no boolean validation result and the last child inherited accumulated check/detekt debt.
@@ -719,6 +763,7 @@ retain the plan that justified the repair. This changes the repair loop, not its
 retry budget, test exclusion, or full-list re-audit requirement. It follows A1,
 A2, A6, and A7 by keeping audit behavior in its slot and reusing owned contracts
 and expected rejection results.
+Superseded by: Bound verify to discovered gaps and repair-changed files (2026-11-10)
 
 ## [2026-10-10] Owed repair findings continue the round
 
@@ -780,6 +825,7 @@ Context: SKILL-446 launched 115 repair implementation attempts while AC-001 rema
 Decision: Supersede the partial-progress continuation exception. Every unfinished repair implementation, including `progress` and `no_progress`, records one unsuccessful outcome through the existing serial repair owner. Source edits do not exempt an attempt. Remove the continuation mutation and domain transition. Read-only admission of unfinished work consumes that same attempt once. Preserve the existing independent verification, per-criterion budgets and explicit operator reset.
 
 Evidence: Runner tests cover three source-changing unfinished repairs blocking before review, and a successful third repair after two failures. SQLite recorder tests cover direct settlement, read-only admission, replay and state reload without resetting or double-charging the budget.
+Superseded by: Verify every completed acceptance repair settlement (2026-11-10)
 
 ## [2026-10-27] Repair continuation instructions match the attempt budget
 
@@ -788,6 +834,7 @@ Context: SKILL-446 exhausted three repair attempts after reports that reconciled
 Decision: Keep the three-attempt limit. Resumed repair prompts describe the charged attempt and new reservation. Require continued source work while authorized items remain, and reserve a partial progress settlement for an actual execution limit. A formatter that cannot be scoped safely is deferred without stopping production edits.
 
 Evidence: The rendered resume-prompt test checks the stopping rule, formatter deferral, charged attempt and absence of the obsolete budget exemption. Existing serial repair tests retain the accounting proof.
+Superseded by: Verify every completed acceptance repair settlement (2026-11-10)
 
 ## [2026-10-27] Refuse voluntary unfinished audit repair settlement
 
@@ -796,6 +843,7 @@ Context: SKILL-446 spent all three renewed attempts on MCP completion calls with
 Decision: The MCP completion path calls the service's agent admission method, which returns `AUDIT_REPAIR_UNFINISHED_CONTINUE_IMPLEMENTING` for new `audit_implement_fix` completion requests with `progress` or `no_progress`, without writing a settlement. The worker continues the same attempt and can complete it after finishing the plan. This supersedes the earlier instruction to voluntarily settle partial work at an execution limit. Process interruption remains runtime-owned. Trusted runtime settlement and historical reads, independent audit verification and the existing failure accounting remain unchanged. Other phases retain their completion verdicts.
 
 Evidence: The settlement service test refuses both partial verdicts, verifies no envelope was saved, then completes the same attempt. The existing serial repair tests retain the three-failure accounting proof.
+Superseded by: Verify every completed acceptance repair settlement (2026-11-10)
 
 ## [2026-10-29] The runtime owns and deletes each agent run's temporary files
 

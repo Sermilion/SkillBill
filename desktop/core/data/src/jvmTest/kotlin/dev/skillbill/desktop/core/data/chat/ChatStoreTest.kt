@@ -1,6 +1,9 @@
 package dev.skillbill.desktop.core.data.chat
 
 import dev.skillbill.desktop.core.common.HostEnvironment
+import dev.skillbill.desktop.core.domain.model.ApprovalCard
+import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
+import dev.skillbill.desktop.core.domain.model.ApprovalCardOption
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
@@ -294,5 +297,35 @@ class ChatStoreTest {
 
     assertEquals("old", store.staleForSummary("old")?.sessionId)
     assertEquals(listOf("old"), store.staleSummaries(1).map { it.sessionId })
+  }
+
+  @Test
+  fun `approval card json omits rule_pattern when null and round-trips when set`() {
+    val diagnostics = RecordingDiagnostics()
+    val card = ApprovalCard(
+      key = ApprovalCardKey("a", "repo", "run", "gen", "claude", "req", false),
+      checkoutRoot = "/repo",
+      providerSessionId = null,
+      title = "Bash",
+      reason = null,
+      subject = "git status",
+      inputText = "git status",
+      options = listOf(ApprovalCardOption("allow", "Allow", "allow")),
+      actionFingerprint = null,
+      authorityScope = null,
+      createdAt = "2026-11-07T00:00:00Z",
+      deadlineAt = "2026-11-07T00:10:00Z",
+      state = "allowed",
+      decisionSource = "stored_rule",
+      selectedOptionId = "allow",
+      ruleId = "rule-1",
+      providerPayload = "{}",
+      rulePattern = "git status *",
+    )
+    val omitted = card.copy(rulePattern = null).toJson()
+    assertEquals(false, "rule_pattern" in omitted)
+    assertEquals(null, omitted.toApprovalCard(diagnostics)?.rulePattern)
+    assertEquals("git status *", card.toJson().toApprovalCard(diagnostics)?.rulePattern)
+    assertEquals("git status *", card.toJson().toApprovalCard(diagnostics)?.toJson()?.toApprovalCard(diagnostics)?.rulePattern)
   }
 }

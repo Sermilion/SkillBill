@@ -155,10 +155,10 @@ class ChatReplyStreamTest {
   }
 
   @Test
-  fun `an instruction over the limit drops only that action and tells the operator why`() {
+  fun `long instructions survive streamed action decoding without truncation`() {
     val diagnostics = RecordingDiagnostics()
     val stream = ChatReplyStream(diagnostics)
-    val long = "x".repeat(2031)
+    val long = "x".repeat(20_031)
     stream.accept(
       ChatEvent.TextDelta(
         "Ready.\n```skillbill-actions\n" +
@@ -168,14 +168,16 @@ class ChatReplyStreamTest {
       ),
     )
     val events = stream.accept(ChatEvent.Completed)
-    val notice = events.filterIsInstance<ChatEvent.TextDelta>().single().text
-    assertTrue("\"Run phase:goal\" has an instruction of 2031 characters, over the 2000 limit" in notice)
+    assertTrue(events.none { it is ChatEvent.TextDelta })
     assertEquals(
-      listOf(ChatSuggestedAction("Use SKILL-12", "SKILL-12", ChatPermissionMode.ReadOnly)),
+      listOf(
+        ChatSuggestedAction("Run phase:goal", long, ChatPermissionMode.Act, NewTaskActionKind.Goal, "Redesign validation page"),
+        ChatSuggestedAction("Use SKILL-12", "SKILL-12", ChatPermissionMode.ReadOnly),
+      ),
       events.filterIsInstance<ChatEvent.SuggestedActions>().single().actions,
     )
     assertEquals(ChatEvent.Completed, events.last())
-    assertEquals(listOf("chat.action_invalid"), diagnostics.categories)
+    assertTrue(diagnostics.categories.isEmpty())
   }
 
   @Test

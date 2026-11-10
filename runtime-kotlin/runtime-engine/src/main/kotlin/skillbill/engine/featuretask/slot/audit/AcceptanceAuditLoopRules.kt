@@ -4,6 +4,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
 import skillbill.engine.featuretask.lifecycle.checkpoint.auditReviewCheckpointWarning
+import skillbill.engine.featuretask.model.audit.AcceptanceRepairPromptFocus
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.slot.PhaseEntrySettlement
 import skillbill.engine.featuretask.slot.PhaseEntrySettlementRules
@@ -63,7 +64,7 @@ internal object AcceptanceAuditLoopRules :
   private fun retryEnvelope(retry: NoChangeOperatorRetry): NormalizedFeatureTaskRuntimePhaseOutput {
     val criterionIds = retry.pause.criteria.joinToString { it.criterionId }
     val prose =
-      "Operator instructions: ${retry.instructions}\n" +
+      "${AcceptanceRepairPromptFocus.OPERATOR_INSTRUCTIONS_PREFIX} ${retry.instructions}\n" +
         "The operator rejected the audit-confirmed no-change claim (${retry.pause.reason.wireValue}). " +
         "Every criterion the claim covered stays open: $criterionIds. " +
         "Suggested handoff: ${retry.pause.suggestedHandoff}"

@@ -25,6 +25,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMig
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelRebuildMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkflowStateVersionMigration
 import skillbill.infrastructure.sqlite.core.migration.area.addApprovalNotRequiredDelivery
+import skillbill.infrastructure.sqlite.core.migration.area.addApprovalRulePatterns
 import skillbill.infrastructure.sqlite.core.migration.area.addGoalContinuationColumns
 import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalLeasesAndGrantFacts
 import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalOwnerLeaseExpiry
@@ -1138,6 +1139,11 @@ internal val databaseMigrations: List<DatabaseMigration> =
     ) +
     DatabaseMigration(
       version = 121,
+      name = "add-approval-rule-patterns",
+      operation = ::addApprovalRulePatterns,
+    ) +
+    DatabaseMigration(
+      version = 122,
       name = "record-primary-repository-root",
       operation = PrimaryRepositoryRootMigration::apply,
     )

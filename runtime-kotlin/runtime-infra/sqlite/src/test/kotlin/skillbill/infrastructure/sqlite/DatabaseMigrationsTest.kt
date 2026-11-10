@@ -337,8 +337,8 @@ class DatabaseMigrationsTest {
         )
         statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN primary_repository_root")
         statement.execute("ALTER TABLE ide_status_workflow_execution DROP COLUMN primary_repository_root")
-        statement.executeUpdate("DELETE FROM schema_migrations WHERE version = 121")
-        statement.execute("PRAGMA user_version = 120")
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE version = 122")
+        statement.execute("PRAGMA user_version = 121")
       }
     }
 
@@ -2434,7 +2434,8 @@ private val expectedMigrationDefinitions =
     118 to "record-monitor-ci-cycles",
     119 to "record-qa-panel-occurrences",
     120 to "record-standalone-reported-model",
-    121 to "record-primary-repository-root",
+    121 to "add-approval-rule-patterns",
+    122 to "record-primary-repository-root",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

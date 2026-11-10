@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
 import skillbill.contracts.workflow.goal.GoalBlockArtifactKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
@@ -30,6 +31,7 @@ import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
 import skillbill.goalrunner.toPersistenceWire
 import skillbill.ports.blockincident.BlockIncidentRepository
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.WorkflowStateRepository
@@ -52,7 +54,9 @@ import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.phaseLedgerFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.artifact.phaseRecordsFromWorkflowArtifacts
-import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.supersededAcceptanceCriterionRepairStateVersion
+import skillbill.workflow.taskruntime.artifact.toUpgradedAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAlias
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAliasKind
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelatedField
@@ -68,10 +72,12 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import skillbill.workflow.taskruntime.phaseartifacts.asPendingForOperatorResume
 import java.time.Clock
 import java.time.ZoneOffset
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as RepairKeys
 
 @Inject
 public class WorkflowGoalRunnerBlockWrites(
   private val clock: Clock,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   private val engine = WorkflowEngine()
 
@@ -561,11 +567,23 @@ public class WorkflowGoalRunnerBlockWrites(
   private fun repairBudgetResetPatch(artifacts: Map<String, Any?>): Map<String, Any?> {
     val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
     if (!family.contains(artifacts)) return emptyMap()
-    val state =
-      FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
-        .toAcceptanceCriterionRepairState(family.label())
+    val payload = FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
+    val storedVersion = payload.supersededAcceptanceCriterionRepairStateVersion()
+    if (storedVersion != null) {
+      diagnostics.warning(
+        "seam=goal_runner_operator_retry_acceptance_repair_version " +
+          "value_expected=$ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION " +
+          "value_used=$storedVersion",
+      )
+    }
+    val storedStage = payload[RepairKeys.STAGE]
+    val state = payload.toUpgradedAcceptanceCriterionRepairState(family.label())
     val resumed = state.resetBudgetForOperatorResume()
-    return if (resumed == state) emptyMap() else mapOf(family.entry(resumed.asRepairWireMap()))
+    return if (resumed == state && storedStage != AcceptanceCriterionRepairStage.BUDGET_BLOCKED.wireValue) {
+      emptyMap()
+    } else {
+      mapOf(family.entry(resumed.asRepairWireMap()))
+    }
   }
 
   private fun operatorReopenablePhaseRecord(
