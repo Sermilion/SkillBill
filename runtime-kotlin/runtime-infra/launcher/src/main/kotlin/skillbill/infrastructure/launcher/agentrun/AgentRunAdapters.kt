@@ -236,7 +236,7 @@ internal class ProcessAgentRunAdapter(
     return try {
       captureLaunchResourceOutcome {
         displaySink =
-          if (request.captureDisplayOutput) {
+          if (request.captureDisplayOutput && command.usesProviderEventOutput()) {
             ReadableAgentOutputSink(agent.id, request.outputSink, diagnostics, request.modelObserver)
           } else {
             null
@@ -247,7 +247,7 @@ internal class ProcessAgentRunAdapter(
             ?.let(::SerializedBuildObserver)
         tap =
           serializedObserver
-            ?.takeIf { command.streamsProviderEvents }
+            ?.takeIf { command.streamsProviderEvents && !command.usesDecodedSessionOutput() }
             ?.let { observer ->
               BuildCommandTap(agent.id, displaySink ?: request.outputSink, observer, clock, diagnostics)
             }
@@ -302,7 +302,7 @@ internal class ProcessAgentRunAdapter(
           openCodexSession(settings, request, approvalDeadline)
         }.run(launch)
       } else {
-        runWithDisplaySink(request, process)
+        runWithDisplaySink(request, command, process)
       }
     result.spawnDenied?.let { denied -> return AgentRunLaunchDenied(agent, denied.pauseReason) }
     return launchFacts(request, command, result)
@@ -310,9 +310,10 @@ internal class ProcessAgentRunAdapter(
 
   private fun runWithDisplaySink(
     request: SkillRunRequest,
+    command: AgentRunCommand,
     process: AgentRunProcessRequest,
   ): AgentRunProcessResult {
-    if (!request.captureDisplayOutput) return processRunner.run(process)
+    if (!request.captureDisplayOutput || !command.usesProviderEventOutput()) return processRunner.run(process)
     val displaySink = ReadableAgentOutputSink(agent.id, request.outputSink, diagnostics, request.modelObserver)
     val displayProcess =
       process.copy(
@@ -331,6 +332,25 @@ internal class ProcessAgentRunAdapter(
     } finally {
       displaySink.finish()
     }
+  }
+
+  private fun AgentRunCommand.usesDecodedSessionOutput(): Boolean =
+    when (approvalProtocol) {
+      AgentRunApprovalProtocol.CURSOR_ACP,
+      AgentRunApprovalProtocol.JUNIE_ACP,
+      AgentRunApprovalProtocol.OPENCODE_ACP,
+      AgentRunApprovalProtocol.CODEX_APP_SERVER,
+      -> true
+      AgentRunApprovalProtocol.CLAUDE_HOST, null -> false
+    }
+
+  private fun AgentRunCommand.usesProviderEventOutput(): Boolean {
+    if (usesDecodedSessionOutput()) return false
+    val decoder = outputDecoder ?: commandBuilder.outputDecoder
+    return decoder === AgentRunOutputDecoder.CLAUDE_JSON ||
+      decoder === AgentRunOutputDecoder.CLAUDE_STREAM_JSON ||
+      decoder === AgentRunOutputDecoder.CODEX_JSONL ||
+      decoder === AgentRunOutputDecoder.CURSOR_STREAM_JSON
   }
 
   private fun launchFacts(
