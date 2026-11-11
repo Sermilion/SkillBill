@@ -3,8 +3,10 @@ package dev.skillbill.desktop.core.data.chat
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
-import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -112,6 +114,74 @@ class CodexAppServerRpcTest {
     drain.join()
     approval.release()
     output.close()
+  }
+
+  @Test
+  fun `late rejection replaces terminal uncertainty before tracking is released`() = runTest {
+    val terminalFrames = listOf(
+      """{"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed"}}}""",
+      """{"method":"turn/failed","params":{"threadId":"thread","turn":{"id":"turn","status":"failed"}}}""",
+      """{"method":"turn/interrupted","params":{"threadId":"thread","turn":{"id":"turn","status":"interrupted"}}}""",
+    )
+
+    terminalFrames.forEachIndexed { index, terminalFrame ->
+      val input = Channel<ChatProcessInput>(Channel.UNLIMITED)
+      val output = Channel<ChatProcessOutput>(Channel.UNLIMITED)
+      val updates = Channel<ChatSteeringResult>(Channel.UNLIMITED)
+      val terminalEmitted = CompletableDeferred<Unit>()
+      val approval = CodexChatApproval({ true }, {}, RecordingDiagnostics(), {}, "/checkout")
+      val rpc = CodexAppServerRpc(input, output, RecordingDiagnostics(), { event ->
+        if (event is ChatEvent.Completed || event is ChatEvent.Failed) {
+          output.trySend(line("""{"id":1,"error":{"code":-32602,"message":"turn busy"}}"""))
+          terminalEmitted.complete(Unit)
+        }
+      }, approval)
+      val drain = launch { rpc.drainTurn("thread", "turn") }
+      val steer = async {
+        rpc.steer("delivery-terminal-$index", "thread", "turn", emptyList(), { acquire -> acquire() },
+          { register -> register() }) { updates.trySend(it) }
+      }
+      acknowledgeWrite(input.receive())
+      assertIs<ChatSteeringResult.DeliveryUncertain>(steer.await())
+      assertIs<ChatSteeringResult.DeliveryUncertain>(updates.receive())
+
+      output.send(line(terminalFrame))
+      drain.join()
+      terminalEmitted.await()
+
+      val rejection = assertIs<ChatSteeringResult.Rejected>(updates.receive())
+      assertEquals("turn busy", rejection.reason)
+      approval.release()
+      output.close()
+    }
+  }
+
+  @Test
+  fun `cleanup drains a late rejection before releasing steering tracking`() = runTest {
+    val input = Channel<ChatProcessInput>(Channel.UNLIMITED)
+    val output = Channel<ChatProcessOutput>(Channel.UNLIMITED)
+    val updates = Channel<ChatSteeringResult>(Channel.UNLIMITED)
+    val approval = CodexChatApproval({ true }, {}, RecordingDiagnostics(), {}, "/checkout")
+    val rpc = CodexAppServerRpc(input, output, RecordingDiagnostics(), {}, approval)
+    val drain = launch { rpc.drainTurn("thread", "turn") }
+    val steer = async {
+      rpc.steer("delivery-cleanup-rejection", "thread", "turn", emptyList(), { acquire -> acquire() },
+        { register -> register() }) { updates.trySend(it) }
+    }
+    acknowledgeWrite(input.receive())
+    assertIs<ChatSteeringResult.DeliveryUncertain>(steer.await())
+    assertIs<ChatSteeringResult.DeliveryUncertain>(updates.receive())
+
+    drain.cancelAndJoin()
+    rpc.closeAndSettleSteering()
+    output.send(line("""{"id":1,"error":{"code":-32602,"message":"turn busy"}}"""))
+    rpc.drainReadySteeringResponses()
+
+    val rejection = assertIs<ChatSteeringResult.Rejected>(updates.receive())
+    assertEquals("turn busy", rejection.reason)
+    rpc.releaseSteering()
+    output.close()
+    approval.release()
   }
 
   @Test
