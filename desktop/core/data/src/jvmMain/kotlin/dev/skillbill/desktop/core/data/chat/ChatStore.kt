@@ -97,6 +97,7 @@ private object ChatStoreKeys {
   const val REFUSAL = "refusal"
   const val SUMMARY = "summary"
   const val SUMMARY_SOURCE_UPDATED_AT = "summary_source_updated_at_ms"
+  const val EXECUTION_CHECKOUT_ROOT = "execution_checkout_root"
 }
 
 /** What one session file holds; the workspace writes the conversation fields and the transports write the resume fields. */
@@ -113,6 +114,7 @@ private data class StoredChat(
   val newTask: ChatNewTaskContext? = null,
   val summary: String? = null,
   val summarySourceUpdatedAt: Instant? = null,
+  val executionCheckoutRoot: String? = null,
 )
 
 /**
@@ -165,6 +167,7 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
         updatedAt = if (exists && stored.lines == entry.lines) stored.updatedAt else entry.updatedAt,
         lines = entry.lines,
         newTask = entry.newTask,
+        executionCheckoutRoot = entry.executionCheckoutRoot ?: stored.executionCheckoutRoot,
       )
     }
     val executionId = entry.executionId ?: return saved
@@ -274,7 +277,10 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
 
 private fun StoredChat.toEntry(): ChatHistoryEntry? {
   val operator = lines.firstOrNull { it.role == ChatHistoryRole.Operator } ?: return null
-  return ChatHistoryEntry(sessionId, executionId, agent ?: return null, updatedAt ?: Instant.DISTANT_PAST, operator.text, lines, newTask, summary)
+  return ChatHistoryEntry(
+    sessionId, executionId, agent ?: return null, updatedAt ?: Instant.DISTANT_PAST, operator.text, lines, newTask, summary,
+    executionCheckoutRoot = executionCheckoutRoot ?: cursorWorkingDirectory,
+  )
 }
 
 /** Staleness rule: a listable chat whose summary source differs from its `updated_at`. */
@@ -350,6 +356,7 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
   }
   chat.summary?.let { put(ChatStoreKeys.SUMMARY, it) }
   chat.summarySourceUpdatedAt?.let { put(ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT, it.toEpochMilliseconds()) }
+  chat.executionCheckoutRoot?.let { put(ChatStoreKeys.EXECUTION_CHECKOUT_ROOT, it) }
   put(
     ChatStoreKeys.EXCHANGES,
     buildJsonArray {
@@ -406,6 +413,7 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
     },
     summary = root.string(ChatStoreKeys.SUMMARY)?.takeIf { it.isNotBlank() },
     summarySourceUpdatedAt = (root[ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT] as? JsonPrimitive)?.longOrNull?.let(Instant::fromEpochMilliseconds),
+    executionCheckoutRoot = root.string(ChatStoreKeys.EXECUTION_CHECKOUT_ROOT),
   )
 }
 

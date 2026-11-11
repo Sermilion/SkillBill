@@ -211,6 +211,7 @@ public class WorkBoardItemProjection(
             observedAt,
             resolved.item,
             error.message.orEmpty(),
+            resolved.workflowExecution?.primaryRepositoryRoot,
           )
         ideStatusValidator.validate(snapshot, "work-board:$id")
         WorkBoardItem(
@@ -570,6 +571,7 @@ public class WorkBoardItemProjection(
             ),
           branchCorrelation = record.branchCorrelation,
           standaloneStatus = record,
+          primaryRepositoryRoot = record.primaryRepositoryRoot,
         )
       }.orEmpty()
     val standaloneWorkflowIds = standaloneRecords.mapNotNull { it.workflowId }.toSet()
@@ -660,14 +662,15 @@ public class WorkBoardItemProjection(
       }
     val branchCorrelation =
       projector.goalBranchCorrelation(item, family, workflowExecution?.branchCorrelation, branch, repository.repoRoot)
+    val selectedWorkflowExecution =
+      workflowExecution?.takeIf {
+        family != IdeStatusWorkflowFamily.FEATURE_VERIFY ||
+          branch == null ||
+          branchCorrelation == branch ||
+          branchCorrelation == "HEAD"
+      }
     val execution =
-      workflowExecution
-        ?.takeIf {
-          family != IdeStatusWorkflowFamily.FEATURE_VERIFY ||
-            branch == null ||
-            branchCorrelation == branch ||
-            branchCorrelation == "HEAD"
-        }
+      selectedWorkflowExecution
         ?.let { record ->
           IdeStatusExecutionIdentity(
             scope = IdeStatusExecutionScope.WORKFLOW,
@@ -689,6 +692,7 @@ public class WorkBoardItemProjection(
       isGoalAuthoritative = family == IdeStatusWorkflowFamily.FEATURE_GOAL,
       execution = execution,
       branchCorrelation = branchCorrelation,
+      primaryRepositoryRoot = selectedWorkflowExecution?.primaryRepositoryRoot,
     )
   }
 

@@ -1,3 +1,8 @@
+## [2026-11-10] Keep primary checkout as optional registration provenance
+Context: Linked-checkout metadata may disappear before a finished run's chat resumes.
+Decision: Capture the primary root at registration and carry it as nullable metadata separate from execution identity; do not reconstruct or backfill historical values.
+Reason: Registration has the metadata needed for accurate capture, while nullable additive storage preserves exact identities and keeps old rows readable.
+
 ## [2026-11-08] Block monitor conflict repair when its cycle record fails
 Context: Conflict repair publication needs the base branch stored in the monitor cycle record to check the base-branch merge.
 Decision: Block on a failed conflicted-outcome write or latest-cycle read during repair publication. Keep other cycle writes best effort with diagnostics.

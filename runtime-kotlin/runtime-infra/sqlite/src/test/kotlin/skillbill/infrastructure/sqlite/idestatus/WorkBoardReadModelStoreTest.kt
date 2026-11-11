@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.idestatus
 
 import skillbill.contracts.persistence.WorkBoardReadModelKeys
+import skillbill.contracts.persistence.WorkBoardReadModelPayloadKeys
 import skillbill.idestatus.model.IdeStatusFreshness
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.infrastructure.sqlite.SqliteTestDiagnostics
@@ -11,6 +12,7 @@ import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
 import skillbill.ports.idestatus.model.WorkBoardItem
+import skillbill.ports.idestatus.model.WorkBoardReadModelPage
 import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardReadModelRow
 import java.nio.file.Files
@@ -18,7 +20,10 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class WorkBoardReadModelStoreTest {
   @Test
@@ -87,6 +92,98 @@ class WorkBoardReadModelStoreTest {
       WorkBoardReadModelPayloadCodec.decode(payload, metadata)?.item?.goalWorktree,
     )
     assertNull(WorkBoardReadModelPayloadCodec.decode(payload.replace("\"title\":\"plan SKILL-452\",", ""), metadata))
+  }
+
+  @Test
+  fun `snapshot primary root round trips while old and null payloads remain readable`() {
+    val row = primaryRootRow()
+    val at = row.updatedAt
+    val metadata = WorkBoardRowMetadata(row.workId, at, row.searchText, null, at, null)
+    val payload = WorkBoardReadModelPayloadCodec.encode(row)
+    val field = "\"${WorkBoardReadModelPayloadKeys.PRIMARY_REPOSITORY_ROOT}\":\"/main\""
+    val legacy = payload.replace(",$field", "")
+    val explicitNull = payload.replace(field, "\"${WorkBoardReadModelPayloadKeys.PRIMARY_REPOSITORY_ROOT}\":null")
+    val absentRootRow = row.copy(item = row.item.copy(snapshot = row.item.snapshot.copy(primaryRepositoryRoot = null)))
+    val nullSnapshotPayload = WorkBoardReadModelPayloadCodec.encode(absentRootRow)
+    assertFalse(
+      nullSnapshotPayload.contains(WorkBoardReadModelPayloadKeys.PRIMARY_REPOSITORY_ROOT),
+      nullSnapshotPayload,
+    )
+    assertFalse(legacy.contains(WorkBoardReadModelPayloadKeys.PRIMARY_REPOSITORY_ROOT), legacy)
+    listOf(legacy, explicitNull).forEach { compatiblePayload ->
+      assertEquals(absentRootRow, assertNotNull(WorkBoardReadModelPayloadCodec.decode(compatiblePayload, metadata)))
+    }
+
+    val dbPath = Files.createTempDirectory("work-board-read-model-primary-root").resolve("runtime.db")
+    ensureTestDatabase(dbPath).use { connection ->
+      val store = SqliteWorkBoardReadModelStore(connection, SqliteTestDiagnostics)
+      store.upsert(row)
+      val entry = store.page(WorkBoardReadModelPageQuery(at.minusSeconds(1), null, null, 10)).entries.single()
+      assertEquals(row, assertIs<WorkBoardReadModelPage.Entry.Decoded>(entry).row)
+    }
+  }
+
+  @Test
+  fun `corrupt primary roots are rejected and a persisted corrupt row emits a diagnostic`() {
+    val row = primaryRootRow()
+    val at = row.updatedAt
+    val metadata = WorkBoardRowMetadata(row.workId, at, row.searchText, null, at, null)
+    val payload = WorkBoardReadModelPayloadCodec.encode(row)
+    val field = "\"${WorkBoardReadModelPayloadKeys.PRIMARY_REPOSITORY_ROOT}\":\"/main\""
+
+    listOf("", "  ", "42").forEach { malformed ->
+      val value = if (malformed == "42") malformed else "\"$malformed\""
+      val invalid = payload.replace(field, "\"${WorkBoardReadModelPayloadKeys.PRIMARY_REPOSITORY_ROOT}\":$value")
+      assertNull(WorkBoardReadModelPayloadCodec.decode(invalid, metadata), "Expected rejection for $malformed")
+    }
+
+    SqliteTestDiagnostics.reset()
+    val dbPath = Files.createTempDirectory("work-board-read-model-corrupt-root").resolve("runtime.db")
+    ensureTestDatabase(dbPath).use { connection ->
+      val store = SqliteWorkBoardReadModelStore(connection, SqliteTestDiagnostics)
+      store.upsert(row)
+      connection.prepareStatement(
+        "UPDATE ${WorkBoardReadModelKeys.ITEMS_TABLE} SET ${WorkBoardReadModelKeys.PAYLOAD} = ? " +
+          "WHERE ${WorkBoardReadModelKeys.WORK_ID} = ?",
+      ).use { statement ->
+        statement.setString(
+          1,
+          payload.replace(field, "\"${WorkBoardReadModelPayloadKeys.PRIMARY_REPOSITORY_ROOT}\":\" \""),
+        )
+        statement.setString(2, row.workId)
+        statement.executeUpdate()
+      }
+      val entry = store.page(WorkBoardReadModelPageQuery(at.minusSeconds(1), null, null, 10)).entries.single()
+      assertTrue(entry is WorkBoardReadModelPage.Entry.Undecodable)
+      assertTrue(
+        SqliteTestDiagnostics.recordedWarnings().single().contains("seam=work_board_read_model_decode work_id=plan-1"),
+      )
+    }
+  }
+
+  private fun primaryRootRow(): WorkBoardReadModelRow {
+    val at = Instant.parse("2026-10-28T10:00:00Z")
+    return WorkBoardReadModelRow(
+      "plan-1",
+      WorkBoardItem(
+        IdeStatusSnapshot(
+          repositoryIdentity = "repo",
+          lifecycleState = IdeStatusLifecycleState.BLOCKED,
+          currentStep = IdeStatusStep("plan", "plan"),
+          updatedAt = at,
+          freshness = IdeStatusFreshness.FRESH,
+          summary = "The plan is blocked.",
+          title = "plan SKILL-535",
+          primaryRepositoryRoot = "/main",
+        ),
+        repositoryRoot = "/checkout",
+      ),
+      at,
+      "plan",
+      null,
+      at,
+      null,
+    )
   }
 
   @Test

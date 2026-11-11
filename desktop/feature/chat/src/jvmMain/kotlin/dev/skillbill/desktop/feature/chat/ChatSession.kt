@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
+import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
@@ -26,6 +27,8 @@ internal data class QueuedChatMessage(
   val cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly,
   val onRejected: (() -> Unit)? = null,
 )
+
+private data class ProviderSessionIdentity(val sessionId: String, val agentId: String)
 
 /**
  * One chat about an execution; an execution can have several. [id] names the chat tab. [sessionId] names the agent CLI session and changes when the operator switches agents; [job] parents
@@ -61,9 +64,13 @@ class ChatSession internal constructor(
   internal var started: Boolean = false
   internal var startedRoot: String? = null
   internal var worktreeRemovedNoticed: Boolean = false
+  internal var worktreeMoveOutcome: WorktreeMoveOutcome? = null
+  internal var worktreeRemovalNotice: ChatMessage.Notice? = null
+  internal var mainCheckoutNotice: ChatMessage.Notice? = null
+  private val providerSessionRoots = mutableMapOf<ProviderSessionIdentity, String>()
 
   /**
-   * Held while the removed worktree's sessions move, so this session's refresh, resume listing and turn move them and post the
+   * Held while the removed checkout's sessions move, so this session's refresh, resume listing and turn move them and post the
    * notice once. Other windows hold their own sessions; the catalog serializes their moves.
    */
   internal val worktreeMoveLock = Mutex()
@@ -82,11 +89,27 @@ class ChatSession internal constructor(
   }
 
   /** The next turn continues the saved agent session [savedSessionId] and sends the full snapshot, since what it last saw is unknown. */
-  internal fun resumeFrom(savedSessionId: String, root: String) {
+  internal fun resumeFrom(savedSessionId: String, root: String, agent: ChatAgent) {
     sessionIdState.value = savedSessionId
     delivered = null
+    recordStarted(agent, root)
+  }
+
+  internal fun recordStarted(agent: ChatAgent, root: String) {
     started = true
     startedRoot = root
+    providerSessionRoots[ProviderSessionIdentity(sessionId, agent.agentId)] = root
+  }
+
+  internal fun hasProviderSessionAt(entry: ChatHistoryEntry, root: String): Boolean =
+    providerSessionRoots[ProviderSessionIdentity(entry.appSessionId ?: entry.sessionId, entry.agent.agentId)] == root
+
+  internal fun canContinue(entry: ChatHistoryEntry, root: String): Boolean {
+    if (hasProviderSessionAt(entry, root) || entry.executionCheckoutRoot == root) return true
+    val moveOutcome = worktreeMoveOutcome
+    if (moveOutcome != null) return moveOutcome.canContinue(entry.agent.agentId)
+    if (entry.executionCheckoutRoot != null) return false
+    return entry.agent.agentId != "cursor" && entry.agent.agentId != "junie"
   }
 
   internal val thread = ChatThread(clock)
@@ -132,6 +155,17 @@ class ChatSession internal constructor(
   internal fun append(message: ChatMessage) = thread.append(message)
 
   internal fun replaceTranscript(transcript: List<ChatMessage>) = thread.replaceTranscript(transcript)
+
+  internal fun resumeTranscript(stateCard: ChatMessage, resumeNotice: ChatMessage, lines: List<ChatHistoryLine>): List<ChatMessage> {
+    val retainedRemoval = worktreeRemovalNotice
+    val retainedMainCheckout = mainCheckoutNotice
+    val history = lines.filterNot { line ->
+      line.role == ChatHistoryRole.Notice && line.approval == null && line.operationCard == null &&
+        ((retainedRemoval != null && isSerializedRemovalNotice(line.text)) ||
+          (retainedMainCheckout != null && isSerializedMainCheckoutNotice(line.text)))
+    }.map(::restored)
+    return listOf(stateCard, resumeNotice) + listOfNotNull(retainedRemoval, retainedMainCheckout) + history
+  }
 
   internal fun historyLines(): List<ChatHistoryLine> = thread.historyLines()
 

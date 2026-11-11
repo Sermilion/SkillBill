@@ -1,4 +1,4 @@
-package skillbill.infrastructure.sqlite.core.migration.area.idestatus
+package skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails
 
 import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
 import skillbill.infrastructure.sqlite.core.schema.reinstallStandalonePhaseStatusChangeTriggers

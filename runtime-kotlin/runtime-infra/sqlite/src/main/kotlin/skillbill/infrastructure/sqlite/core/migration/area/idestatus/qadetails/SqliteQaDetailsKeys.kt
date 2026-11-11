@@ -1,4 +1,4 @@
-package skillbill.infrastructure.sqlite.core.migration.area.idestatus
+package skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails
 
 import skillbill.contracts.qa.QaChecklistPayloadKeys
 import skillbill.contracts.qa.QaDeviceLeasePayloadKeys

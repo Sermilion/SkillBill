@@ -177,4 +177,8 @@ data class ChatHistoryEntry(
   val lines: List<ChatHistoryLine>,
   val newTask: ChatNewTaskContext? = null,
   val summary: String? = null,
+  /** The app session linked by a native listing; transient metadata, absent on stored app history and older callers. */
+  val appSessionId: String? = null,
+  /** The checkout where this provider conversation was established, when known. */
+  val executionCheckoutRoot: String? = null,
 )

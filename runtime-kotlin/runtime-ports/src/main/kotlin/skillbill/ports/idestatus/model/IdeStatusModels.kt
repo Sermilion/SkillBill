@@ -209,6 +209,7 @@ data class IdeStatusSnapshot(
   val execution: IdeStatusExecutionIdentity? = null,
   val currentActivity: String? = null,
   val branchCorrelation: String? = null,
+  val primaryRepositoryRoot: String? = null,
   val workflowQaOutcome: IdeStatusWorkflowQaOutcome? = null,
   val contractVersion: String = IDE_STATUS_CONTRACT_VERSION,
 ) {

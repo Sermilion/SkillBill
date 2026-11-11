@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.domain.model.WorkBuildState as DesktopBuildSta
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.idestatus.model.IdeStatusFreshness
 import skillbill.idestatus.model.IdeStatusLifecycleState
+import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.idestatus.model.GoalMainCheckoutOutcome
 import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
@@ -52,6 +53,56 @@ class RuntimeWorkMapperTest {
     val keyless = board("wf-2", execution, title = "linear-progress-sync").toWorkItem(1L)
 
     assertEquals("[SKILL-452] Linear progress sync" to "Linear progress sync", keyed.title to keyless.title)
+  }
+
+  @Test
+  fun `board and direct detail retain captured root and authoritative run label`() {
+    val execution = IdeStatusExecutionIdentity(
+      IdeStatusExecutionScope.STANDALONE_PHASE, "exec", "store", "1", "1", invocationId = "inv", phaseId = "implement",
+    )
+    val base = board("wf", execution, title = "verify misleading display text").copy(repositoryRoot = "/checkout")
+    val phaseSnapshot = base.snapshot.copy(primaryRepositoryRoot = "/main")
+    val phaseBoard = base.copy(snapshot = phaseSnapshot).toWorkItem(1L)
+    val phaseDetail = WorkDetailItem(
+      snapshot = phaseSnapshot,
+      recoveryWorkId = "inv",
+      repositoryRoot = "/checkout",
+      stepPipeline = emptyList(),
+    ).toWorkItem(1L)
+
+    assertEquals("/main" to "implement", phaseBoard.primaryRepositoryRoot to phaseBoard.runKindLabel)
+    assertEquals("/main" to "implement", phaseDetail.primaryRepositoryRoot to phaseDetail.runKindLabel)
+    assertEquals("/checkout" to "checkout", phaseBoard.repositoryRoot to phaseBoard.repositoryName)
+    assertEquals("/checkout" to "checkout", phaseDetail.repositoryRoot to phaseDetail.repositoryName)
+    assertEquals("inv" to phaseBoard.control, phaseDetail.id to phaseDetail.control)
+
+    val verify = phaseSnapshot.copy(
+      workflowFamily = IdeStatusWorkflowFamily.FEATURE_VERIFY,
+      execution = execution.copy(phaseId = "audit"),
+    )
+    val verifyBoard = base.copy(snapshot = verify).toWorkItem(1L)
+    val verifyDetail = WorkDetailItem(
+      snapshot = verify,
+      recoveryWorkId = "inv",
+      repositoryRoot = "/checkout",
+      stepPipeline = emptyList(),
+    ).toWorkItem(1L)
+    assertEquals("verify" to "/main", verifyBoard.runKindLabel to verifyBoard.primaryRepositoryRoot)
+    assertEquals("verify" to "/main", verifyDetail.runKindLabel to verifyDetail.primaryRepositoryRoot)
+    assertEquals(verifyBoard.control, verifyDetail.control)
+
+    listOf(null, " ").forEach { root ->
+      val absent = phaseSnapshot.copy(primaryRepositoryRoot = root, execution = null)
+      val absentBoard = base.copy(snapshot = absent).toWorkItem(1L)
+      val absentDetail = WorkDetailItem(
+        snapshot = absent,
+        recoveryWorkId = "wf",
+        repositoryRoot = "/checkout",
+        stepPipeline = emptyList(),
+      ).toWorkItem(1L)
+      assertEquals(null to null, absentBoard.primaryRepositoryRoot to absentBoard.runKindLabel)
+      assertEquals(null to null, absentDetail.primaryRepositoryRoot to absentDetail.runKindLabel)
+    }
   }
 
   @Test

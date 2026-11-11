@@ -1,3 +1,12 @@
+## [2026-11-10] SKILL-535 — Capture the primary checkout at registration
+Areas: runtime-engine featuretask/work projection; runtime-ports IDE status; runtime-infra SQLite and contracts; runtime-contracts; orchestration IDE status schema
+- MEDIUM feature. Capture the primary repository root while linked-checkout metadata exists, persist it separately from execution identity, and project it through normal, incompatible, and blocked IDE status snapshots.
+- Migration 121 adds nullable root columns without backfilling historical rows; optional schema serialization emits the field when present and preserves legacy omission compatibility.
+- Pattern: failure snapshots reuse the eligible registration already resolved for the work item; absent source registration stays null.
+- Limits: desktop read-model transport and chat use are handled at their owning boundaries.
+Feature flag: N/A
+Acceptance criteria: 1/1 implemented in this boundary
+
 ## [2026-11-08] SKILL-527 durable monitor cycles and goal QA evidence
 Areas: runtime-engine featuretask monitor and QA; runtime-ports; runtime-infra/sqlite and workflow; runtime-domain; runtime-contracts; runtime-core; runtime-cli; platform-pack QA guidance
 - MEDIUM feature. Migration 118 adds monitor_ci_cycles keyed by workflow and cycle. Monitor writes start, throttled full-check observations and terminal outcomes, including check completion times and repair attribution.
