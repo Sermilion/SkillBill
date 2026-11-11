@@ -15,6 +15,7 @@ import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.OperationCardReference
 import dev.skillbill.desktop.core.domain.model.OperationCardState
+import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -36,6 +37,8 @@ import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
+import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
+import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
 
 /** Relative to the user's home, beside the settings file. */
 internal const val CHAT_STORE_PATH = ".skill-bill/desktop/chats"
@@ -87,6 +90,8 @@ private object ChatStoreKeys {
   const val TITLE = "title"
   const val TARGET = "target"
   const val BRANCH = "branch"
+  const val QA = "qa"
+  const val REVIEW_MODE = "review_mode"
   const val APPROVAL = "approval"
   const val OPERATION_CARD = "operation_card"
   const val TOKEN = "token"
@@ -513,6 +518,8 @@ private fun ChatSuggestedAction.toJson(): JsonObject = buildJsonObject {
   title?.let { put(ChatStoreKeys.TITLE, it) }
   target?.takeIf { it.isNotBlank() }?.let { put(ChatStoreKeys.TARGET, it) }
   branch?.takeIf { it.isNotBlank() }?.let { put(ChatStoreKeys.BRANCH, it) }
+  verify.qa?.let { put(ChatStoreKeys.QA, it.wire) }
+  verify.reviewMode?.let { put(ChatStoreKeys.REVIEW_MODE, it.wire) }
 }
 
 private fun JsonObject.actions(key: String, diagnostics: Diagnostics): List<ChatSuggestedAction> {
@@ -553,7 +560,12 @@ private fun JsonObject.toAction(diagnostics: Diagnostics): ChatSuggestedAction? 
   if (ChatStoreKeys.TITLE in this && title == null) diagnostics.record("chat.store_malformed_action")
   val target = string(ChatStoreKeys.TARGET)?.trim()?.takeIf { it.isNotBlank() }
   val branch = string(ChatStoreKeys.BRANCH)?.trim()?.takeIf { it.isNotBlank() }
-  return ChatSuggestedAction(label, instruction, mode, start, title, target, branch)
+  val qa = VerifyQaChoice.entries.firstOrNull { it.wire == string(ChatStoreKeys.QA) }
+  val reviewMode = VerifyReviewModeChoice.entries.firstOrNull { it.wire == string(ChatStoreKeys.REVIEW_MODE) }
+  if ((ChatStoreKeys.QA in this && qa == null) || (ChatStoreKeys.REVIEW_MODE in this && reviewMode == null)) {
+    diagnostics.record("chat.store_malformed_action")
+  }
+  return ChatSuggestedAction(label, instruction, mode, start, title, target, branch, VerifyStartChoices(qa, reviewMode))
 }
 
 private fun JsonObject.objects(key: String): List<JsonObject> = (get(key) as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }

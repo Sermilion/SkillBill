@@ -77,7 +77,8 @@ enum class NewTaskActionKind(val wire: String) {
 
 /**
  * A null [start] sends [instruction] as the next turn; otherwise clicking the action starts that run. [title] names a started
- * goal or plan. [branch] is the git branch a started run works on; null runs it on the chat's checkout as it is.
+ * goal or plan. [branch] is the git branch a started run works on; null runs it on the chat's checkout as it is. [verify]
+ * carries a verify start's QA and review mode.
  */
 data class ChatSuggestedAction(
   val label: String,
@@ -87,6 +88,7 @@ data class ChatSuggestedAction(
   val title: String? = null,
   val target: String? = null,
   val branch: String? = null,
+  val verify: VerifyStartChoices = VerifyStartChoices(),
 )
 
 data class ChatToolCall(val id: String, val name: String, val input: String, val summary: String?, val workingDirectory: String? = null)

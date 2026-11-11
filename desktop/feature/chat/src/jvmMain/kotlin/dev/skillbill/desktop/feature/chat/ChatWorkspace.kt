@@ -412,6 +412,7 @@ class ChatWorkspace(
         target = action.target,
         branch = action.branch,
         checkoutRoot = session.item.workingRoot(),
+        verify = action.verify,
       )
       val outcome = controls.startNewTask(request)
       when (outcome) {

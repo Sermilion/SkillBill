@@ -41,6 +41,7 @@ import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.repository.RepositoryBranchesRepository
 import dev.skillbill.desktop.core.domain.model.RepositoryBranchesRead
+import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
 import dev.skillbill.desktop.core.domain.model.newWorkBranchProblem
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
@@ -103,6 +104,11 @@ import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.nio.file.Path
 import kotlin.time.toJavaInstant
+import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
+import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
+import skillbill.engine.work.control.model.VerifyStartOptions
+import skillbill.workflow.verify.model.VerifyQaSelection
+import skillbill.workflow.verify.model.VerifyReviewMode
 
 /** The unfiltered default board the reservation end rule watches. */
 private val RESERVATION_BOARD = BoardQuery(HistoryWindow.DEFAULT, filter = "", pageSize = WorkPaginationLimits.DEFAULT_PAGE_SIZE)
@@ -250,7 +256,7 @@ class RuntimeWorkControlRepository(
   }
 
   override suspend fun startNewTask(request: NewTaskStart): NewTaskStartOutcome {
-    val qaDevice = if (request.kind == NewTaskKind.Qa || request.kind == NewTaskKind.GoalRun) when (val result = readQaDevice()) {
+    val qaDevice = if (request.usesQaDevice()) when (val result = readQaDevice()) {
       is Outcome.Failure -> return NewTaskStartOutcome.Failed(ReadProblem.Runtime("Could not read the saved QA device selection."))
       is Outcome.Success -> result.value
     } else null
@@ -267,7 +273,7 @@ class RuntimeWorkControlRepository(
       NewTaskKind.Review, NewTaskKind.Validation, NewTaskKind.Qa, NewTaskKind.Pr, NewTaskKind.Monitor ->
         return startStandaloneTask(request, session, qaDevice)
       NewTaskKind.Verify, NewTaskKind.PrReviewFix ->
-        return startOperationTask(request, session)
+        return startOperationTask(request, session, qaDevice)
       NewTaskKind.GoalRun, NewTaskKind.PlanOnly -> Unit
     }
     when (val read = branches.branches(request.repoRoot)) {
@@ -424,12 +430,33 @@ class RuntimeWorkControlRepository(
       is Outcome.Success -> Outcome.Success(result.value?.toRuntimeDevice())
     }
 
+  private fun VerifyStartChoices.toRuntimeOptions(qaDevice: QaNamedDevice?): VerifyStartOptions = VerifyStartOptions(
+    qa = when (qa) {
+      VerifyQaChoice.On -> VerifyQaSelection.ON
+      VerifyQaChoice.Off -> VerifyQaSelection.OFF
+      null -> null
+    },
+    mode = when (reviewMode) {
+      VerifyReviewModeChoice.Inline -> VerifyReviewMode.INLINE
+      VerifyReviewModeChoice.Delegated -> VerifyReviewMode.DELEGATED
+      null -> null
+    },
+    qaDevice = qaDevice.takeIf { qa == VerifyQaChoice.On },
+  )
+
   private fun QaDevicePick.toRuntimeDevice(): QaNamedDevice = QaNamedDevice(
     if (kind == QaDevicePickKind.Serial) QaNamedDeviceKind.SERIAL else QaNamedDeviceKind.AVD,
     value,
   )
 
-  private suspend fun startOperationTask(request: NewTaskStart, session: DatabaseSessionComponent): NewTaskStartOutcome {
+  private fun NewTaskStart.usesQaDevice(): Boolean =
+    kind == NewTaskKind.Qa || kind == NewTaskKind.GoalRun || (kind == NewTaskKind.Verify && verify.qa == VerifyQaChoice.On)
+
+  private suspend fun startOperationTask(
+    request: NewTaskStart,
+    session: DatabaseSessionComponent,
+    qaDevice: QaNamedDevice?,
+  ): NewTaskStartOutcome {
     val operationId = when (request.kind) {
       NewTaskKind.Verify -> NewTaskActionKind.Verify.wire
       NewTaskKind.PrReviewFix -> NewTaskActionKind.PrReviewFix.wire
@@ -446,6 +473,7 @@ class RuntimeWorkControlRepository(
           request.standaloneCheckout(),
           request.confirmation?.let { OperatorConfirmation(it.token, it.selection) },
           proposalChanges = request.proposalChanges,
+          verifyOptions = request.verify.toRuntimeOptions(qaDevice),
         ),
       )
     }

@@ -5,12 +5,15 @@ import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
+import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
+import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
 
 private const val ACTION_MARKER = "```skillbill-actions"
 
@@ -124,10 +127,38 @@ private fun decodeAction(element: JsonElement, diagnostics: Diagnostics): Action
   }
   val target = optionalActionString(action, "target") ?: return ActionResult.Dropped("\"$label\" has a non-string target")
   val branch = optionalActionString(action, "branch") ?: return ActionResult.Dropped("\"$label\" has a non-string branch")
+  val verify = when (val choices = verifyChoices(action, label, start)) {
+    is VerifyChoicesResult.Dropped -> return choices.dropped
+    is VerifyChoicesResult.Ok -> choices.choices
+  }
   return ActionResult.Ok(
-    ChatSuggestedAction(label, instruction, mode, start, actionTitle(action, diagnostics), target.value, branch.value),
+    ChatSuggestedAction(label, instruction, mode, start, actionTitle(action, diagnostics), target.value, branch.value, verify),
   )
 }
+
+private sealed interface VerifyChoicesResult {
+  class Ok(val choices: VerifyStartChoices) : VerifyChoicesResult
+  class Dropped(val dropped: ActionResult.Dropped) : VerifyChoicesResult
+}
+
+private fun verifyChoices(action: JsonObject, label: String, start: NewTaskActionKind?): VerifyChoicesResult {
+  if (QA_KEY !in action && REVIEW_MODE_KEY !in action) return VerifyChoicesResult.Ok(VerifyStartChoices())
+  if (start != NewTaskActionKind.Verify) {
+    return VerifyChoicesResult.Dropped(ActionResult.Dropped("\"$label\" sets qa or review_mode, which only a verify start takes"))
+  }
+  val qa = action[QA_KEY]?.let {
+    VerifyQaChoice.entries.firstOrNull { choice -> choice.wire == action.actionString(QA_KEY) }
+      ?: return VerifyChoicesResult.Dropped(ActionResult.Dropped("\"$label\" has a qa other than on or off"))
+  }
+  val reviewMode = action[REVIEW_MODE_KEY]?.let {
+    VerifyReviewModeChoice.entries.firstOrNull { choice -> choice.wire == action.actionString(REVIEW_MODE_KEY) }
+      ?: return VerifyChoicesResult.Dropped(ActionResult.Dropped("\"$label\" has a review_mode other than inline or delegated"))
+  }
+  return VerifyChoicesResult.Ok(VerifyStartChoices(qa, reviewMode))
+}
+
+private const val QA_KEY = "qa"
+private const val REVIEW_MODE_KEY = "review_mode"
 
 private fun actionTitle(action: JsonObject, diagnostics: Diagnostics): String? {
   if ("title" !in action) return null
