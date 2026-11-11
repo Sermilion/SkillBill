@@ -261,4 +261,17 @@ class GitMonitorRepairPublisherTest {
     assertEquals(MonitorPublicationResult.Acknowledged(repair), result)
     assertEquals(repair, remoteHead(fixture.remote, FEATURE_BRANCH))
   }
+
+  @Test
+  fun `a pinned https head is published through the caller's ssh remote for the same repository`() {
+    val fixture = fixture()
+    fixture.routeOriginOverSsh()
+    val worktree = ownedWorktree(fixture)
+    val repair = worktree.repair(fixture)
+
+    val result = publish(worktree, fixture, repair, headFetchUrl = "https://github.com/acme/repo.git")
+
+    assertEquals(MonitorPublicationResult.Acknowledged(repair), result)
+    assertEquals(repair, remoteHead(fixture.remote, FEATURE_BRANCH))
+  }
 }

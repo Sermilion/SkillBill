@@ -64,7 +64,8 @@ class ApprovalOperatorService(
     consumerNonce: String,
     selectedOptionId: String,
     alwaysAllow: Boolean,
-  ): ApprovalDecisionResult = broker.decide(identity, consumerNonce, selectedOptionId, alwaysAllow)
+    pattern: String? = null,
+  ): ApprovalDecisionResult = broker.decide(identity, consumerNonce, selectedOptionId, alwaysAllow, pattern)
 
   fun dismiss(identity: ApprovalRequestIdentity): ApprovalDecisionResult = broker.dismiss(identity)
 

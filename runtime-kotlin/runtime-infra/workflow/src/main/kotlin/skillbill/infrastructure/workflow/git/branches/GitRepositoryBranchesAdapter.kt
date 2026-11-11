@@ -33,12 +33,43 @@ class GitRepositoryBranchesAdapter : RepositoryBranchesPort {
         is WorkflowGitOperationResult.Ok -> read.value.trim()
         is WorkflowGitOperationResult.Failed -> return RepositoryBranchesResult.Failed(read.error)
       }
+    val currentBranch =
+      when (val read = runGitCommand(path, "branch", "--show-current")) {
+        is WorkflowGitOperationResult.Ok -> read.value.trim().takeIf(String::isNotBlank)
+        is WorkflowGitOperationResult.Failed -> return RepositoryBranchesResult.Failed(read.error)
+      }
     return captureList<RepositoryBranchesResult>(path, REF_ARGS, RepositoryBranchesResult::Failed) { text ->
       val defaultBranch = (gitDefaultBranch(path) as? WorkflowGitOperationResult.Ok)?.value
       val groups = groupRepositoryBranches(text.lineSequence().mapNotNull(::parseRef).toList(), defaultBranch)
-      RepositoryBranchesResult.Listed(root, defaultBranch, groups.local, groups.remote)
+      RepositoryBranchesResult.Listed(root, defaultBranch, groups.local, groups.remote, currentBranch)
     }
   }
+
+  override fun switchToDefaultBranch(
+    path: Path,
+    expectedCurrentBranch: String?,
+  ): WorkflowGitOperationResult =
+    when (val read = branches(path)) {
+      is RepositoryBranchesResult.Listed -> {
+        val defaultBranch = read.defaultBranch
+        when {
+          read.currentBranch != expectedCurrentBranch ->
+            WorkflowGitOperationResult.Failed(
+              error = "The checkout branch changed. Review the current branch and try again.",
+            )
+          defaultBranch == null ->
+            WorkflowGitOperationResult.Failed(
+              error = "Could not determine the default branch. Set origin/HEAD and try again.",
+            )
+          else -> runGitCommand(path, "switch", defaultBranch)
+        }
+      }
+      is RepositoryBranchesResult.NotARepository ->
+        WorkflowGitOperationResult.Failed(
+          error = "${read.path} is not a git repository.",
+        )
+      is RepositoryBranchesResult.Failed -> WorkflowGitOperationResult.Failed(error = read.message)
+    }
 
   private fun parseRef(line: String): RawBranchRef? {
     val fields = line.split('\t')

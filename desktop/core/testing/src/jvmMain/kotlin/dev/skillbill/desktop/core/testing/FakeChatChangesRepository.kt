@@ -12,6 +12,12 @@ class FakeChatChangesRepository(
   var readResult: ChatChangesRead = ChatChangesRead.Unavailable("Not configured."),
   var changedPathsResult: ChatChangedPaths = ChatChangedPaths.Listed(emptySet()),
 ) : ChatChangesRepository {
+  val currentReadCalls = mutableListOf<String>()
+  override suspend fun readCurrentChanges(repositoryRoot: String): ChatChangesRead {
+    currentReadCalls += repositoryRoot
+    return readResult
+  }
+
   var projectResult: ChatProjectWorktrees = ChatProjectWorktrees.Listed("project", emptyList())
   override suspend fun projectWorktrees(repositoryRoot: String): ChatProjectWorktrees = projectResult
 

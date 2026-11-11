@@ -8,12 +8,10 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.padding
 import com.mikepenz.markdown.compose.Markdown
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.MarkdownCodeBlock
 import com.mikepenz.markdown.compose.elements.MarkdownCodeFence
-import com.mikepenz.markdown.compose.elements.MarkdownTable
 import com.mikepenz.markdown.model.markdownDimens
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import com.mikepenz.markdown.model.DefaultMarkdownColors
@@ -21,7 +19,6 @@ import com.mikepenz.markdown.model.DefaultMarkdownTypography
 import com.mikepenz.markdown.model.markdownPadding
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.runtimeTextStyles
-import dev.skillbill.desktop.core.designsystem.detail.SbBox
 
 @Composable
 internal fun ChatMarkdown(text: String, modifier: Modifier = Modifier) {
@@ -63,15 +60,11 @@ internal fun ChatMarkdown(text: String, modifier: Modifier = Modifier) {
       ),
       annotator = annotator,
       padding = markdownPadding(block = 8.dp, listIndent = 16.dp),
-      dimens = markdownDimens(tableCellPadding = 10.dp, tableCellWidth = 150.dp, tableCornerSize = SkillBillRadius.md),
+      dimens = markdownDimens(tableCellPadding = 10.dp, tableCellWidth = 280.dp, tableCornerSize = SkillBillRadius.md),
       components = markdownComponents(
         codeFence = { MarkdownCodeFence(it.content, it.node, it.typography.code) { code, language, _ -> ChatCodeBlock(code, language) } },
         codeBlock = { MarkdownCodeBlock(it.content, it.node, it.typography.code) { code, language, _ -> ChatCodeBlock(code, language) } },
-        table = {
-          SbBox(Modifier.padding(vertical = 4.dp)) {
-            MarkdownTable(it.content, it.node, it.typography.table)
-          }
-        },
+        table = { ChatMarkdownTable(it.content, it.node, it.typography.table) },
       ),
     )
   }

@@ -3,6 +3,9 @@ package skillbill.engine.featuretask.slot.attempt
 import skillbill.application.decomposition.baseBranch
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
+import skillbill.engine.featuretask.model.audit.AcceptanceGapAuditScope
+import skillbill.engine.featuretask.model.audit.AcceptanceRepairPromptFocus
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseProjectInstructionsRecord
@@ -58,6 +61,8 @@ import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapStatus
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffAssemblyRequest
@@ -470,6 +475,8 @@ internal object PhaseLaunchPreparation {
       ImplementationChecklistLaunchPreparation.prepare(this, run, implementationContinuation)
     }
     val acceptanceRepair = (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair
+    val acceptanceAuditProse = priorAcceptanceAudit()
+    val repairPrompt = run.phaseId in ACCEPTANCE_REPAIR_PROMPT_PHASES
     return FeatureTaskRuntimePhasePromptComposeInputs(
       issueKey = run.request.issueKey,
       workflowId = run.request.workflowId,
@@ -485,22 +492,26 @@ internal object PhaseLaunchPreparation {
       reviewDecidingRule = launchReviewTier.resolution?.decidingRule,
       repairLedger = handoff.repairLedger,
       priorReviewContext = null,
-      priorTerminalFailure = args.priorCorrection?.retryableTerminalReason,
-      priorFindingCoverage = args.priorCorrection?.findingCoverageReason,
+      priorTerminalFailure = args.priorCorrection?.retryableTerminalReason.takeUnless { repairPrompt },
+      priorFindingCoverage = args.priorCorrection?.findingCoverageReason.takeUnless { repairPrompt },
       priorPlanBundleRejection =
         args.priorCorrection?.planBundleRejectionReason.takeUnless {
-          args.boundStep.boundHooks.launchHandoffSelection == PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY
+          repairPrompt ||
+            args.boundStep.boundHooks.launchHandoffSelection == PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY
         },
-      priorAcceptanceAudit = priorAcceptanceAudit(),
-      currentAcceptanceCriterion = acceptanceCriterionContext(run),
-      priorAcceptanceRepairFailures = acceptanceRepair?.priorRepairFailures,
+      priorAcceptanceAudit = acceptanceAuditProse.takeUnless { repairPrompt },
+      currentAcceptanceCriterion =
+        if (repairPrompt) null else acceptanceCriterionContext(run),
       interactionTraceScope = acceptanceRepair?.let(AcceptanceCriterionInteractionTraceRound::promptScope),
       unknownInteractionScenarios =
         acceptanceRepair?.let(AcceptanceCriterionInteractionTraceRound::unknownContext).orEmpty(),
       noChangeClaim = auditNoChangeClaim(run),
       operatorBlockRetry =
         session.operatorBlockRetry
-          ?.takeIf { it.phaseId == run.phaseId && !session.operatorBlockRetryCompleted },
+          ?.takeIf {
+            it.phaseId == run.phaseId && !session.operatorBlockRetryCompleted &&
+              !repairPrompt
+          },
       implementationContinuation = implementationContinuation,
       implementationTurn = implementationTurn,
       validationGateFindings = run.validationGateFindings,
@@ -515,8 +526,39 @@ internal object PhaseLaunchPreparation {
       repoRoot = run.request.repoRoot,
       stepProfile = run.launchAssignment?.profile ?: PhaseModelProfile.CANONICAL,
       implementationChecklistAddress = implementationChecklistAddress(run),
-    )
+    ).withAcceptanceGapInputs(acceptanceRepair, acceptanceAuditProse)
   }
+
+  private fun FeatureTaskRuntimePhasePromptComposeInputs.withAcceptanceGapInputs(
+    acceptanceRepair: AcceptanceCriterionRepairRunState?,
+    acceptanceAuditProse: String?,
+  ): FeatureTaskRuntimePhasePromptComposeInputs =
+    copy(
+      acceptanceDiscoveryCriteria =
+        acceptanceRepair?.let(AcceptanceGapAuditScope::discoveryCriteria)
+          .orEmpty().map { (ref, text) -> "$ref: $text" },
+      acceptanceDiscoveryAudit = acceptanceRepair?.let(AcceptanceGapAuditScope::discoveryCriteria) != null,
+      acceptanceVerifyAudit =
+        acceptanceRepair?.snapshot?.stage ==
+          AcceptanceCriterionRepairStage
+            .REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION,
+      acceptanceOpenGaps =
+        acceptanceRepair?.snapshot?.let { repair ->
+          repair.criteria.singleOrNull { it.canonicalRef == repair.currentCriterionRef }
+            ?.gaps?.filter {
+              it.status == AcceptanceCriterionGapStatus.OPEN
+            }
+        }.orEmpty(),
+      acceptanceRepairChangedPaths = acceptanceRepair?.snapshot?.repairChangedPaths.orEmpty(),
+      acceptanceLateFindings = acceptanceRepair?.snapshot?.lateFindings.orEmpty(),
+      acceptanceRepairFocus =
+        acceptanceRepair?.promptFocus.takeIf { briefing.phaseId in ACCEPTANCE_REPAIR_PROMPT_PHASES },
+      acceptanceRepairOperatorInstructions =
+        acceptanceAuditProse?.takeIf {
+          briefing.phaseId in ACCEPTANCE_REPAIR_PROMPT_PHASES &&
+            it.startsWith(AcceptanceRepairPromptFocus.OPERATOR_INSTRUCTIONS_PREFIX)
+        },
+    )
 
   private fun PhaseAttemptLaunchPreparationContext.checkpointResolutionArgs(
     run: PhaseRun,
@@ -571,4 +613,10 @@ internal object PhaseLaunchPreparation {
 
   private fun acceptanceCriterionContext(run: PhaseRun): String? =
     (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.currentCriterionContext
+
+  private val ACCEPTANCE_REPAIR_PROMPT_PHASES =
+    setOf(
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
+    )
 }

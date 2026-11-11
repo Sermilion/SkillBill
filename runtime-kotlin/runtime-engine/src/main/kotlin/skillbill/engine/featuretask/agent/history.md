@@ -9,6 +9,7 @@ Areas: runtime-engine featuretask planning, launch, settlement and recovery; run
 - Reusable: PlanBundleFeasibilityReviewScope, typed receipt results, conditional phase-record writes and guarded bundle projection. New evidence records transitive dependency hashes; supported v2 direct-dependency evidence remains readable.
 - Missing v2 evidence triggers full review under the existing workflow identity without translating v1 judgments. Corrupt present evidence fails with owned errors and retains its source. Journal 0.2 keeps the 0.1 schema readable.
 - Limits: completed approval keeps immutable-manifest compatibility for execution progress; new-review reuse requires exact raw identities. Feasibility remains mandatory for every feature size, and execution dependency and retry policies retain their existing behavior.
+- QA limitation: validation changed code after QA settled, so the final tree differs from the tree QA exercised. QA did not re-run.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented
 

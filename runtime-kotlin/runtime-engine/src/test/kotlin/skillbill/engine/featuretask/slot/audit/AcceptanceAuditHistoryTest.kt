@@ -3,6 +3,9 @@ package skillbill.engine.featuretask.slot.audit
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStatus
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGap
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapOrigin
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapStatus
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdmission
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
@@ -28,6 +31,17 @@ class AcceptanceAuditHistoryTest {
           AcceptanceCriterionValidationObligation.DEFERRED,
           true,
           "gap:$ordinal",
+          gaps =
+            listOf(
+              AcceptanceCriterionGap(
+                "AC-00$ordinal.G1",
+                "Missing caller",
+                "src/Foo.kt:1",
+                AcceptanceCriterionGapStatus.OPEN,
+                AcceptanceCriterionGapOrigin.DISCOVERY,
+                null,
+              ),
+            ),
         )
       }
     var state =
@@ -87,14 +101,14 @@ class AcceptanceAuditHistoryTest {
               } else {
                 AcceptanceCriterionRepairOutcomeKind.TARGETED_FAILURE
               },
-              "verification:$index",
+              if (index == 2) "AC-001.G1: closed @ src/Foo.kt:1" else "AC-001.G1: open @ src/Foo.kt:1",
             ),
           ),
         )
     }
 
     assertEquals("AC-002", state.currentCriterionRef)
-    assertEquals(2, state.unsuccessfulTotals["AC-001"])
+    assertEquals(2, state.chargedAttempts["AC-001"])
     assertDisplayedAttempt(1)
   }
 }

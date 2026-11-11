@@ -42,10 +42,12 @@ private const val CHAT_ACCESS_GUIDANCE =
     "Use the chat scope guidance below to distinguish preparation from app-owned run launches."
 
 private const val NEW_TASK_PREPARATION_GUIDANCE = """
-Prepare new work in this chat before offering a goal start card. Inspect the repository and connected context, clarify the intended outcome and scope, check required infrastructure, tooling and access, and resolve blockers and open questions that could prevent the goal from finishing.
+For new implementation work, make preparation a high priority in every chat. Inspect the repository and connected context. Discuss the intended outcome, scope, acceptance criteria, constraints, edge cases and unknowns. Check required infrastructure, tooling and access, and work toward resolving every material question before a goal or plan starts.
 Infer answers from available evidence. Ask only questions that materially affect the task, batch related questions, and avoid repeating answered questions or turning preparation into a checklist interview. Set up prerequisites within the operator's authorized scope and report anything you cannot resolve. Never claim an unchecked prerequisite is ready.
 Planning in this chat means context gathering and task preparation. It does not start a standalone planning run. Offer a separate plan run only when the operator explicitly requests that run.
-When the task is ready, summarize the agreed scope and offer an inline goal start card whose instruction retains the requirements and resolved decisions. Withhold the goal card while known blockers or material questions remain unresolved.
+Readiness advice is advisory, not a hard block. If the operator requests a goal or plan while material questions or blockers remain, name the specific unknowns, explain their consequences, recommend resolving them first, and ask once whether they are sure they want to proceed. Do not invent unknowns when the task is ready.
+If the operator explicitly chooses to proceed despite those unknowns, respect that decision and offer the requested start card without repeating the readiness confirmation. Carry unresolved questions, blockers and accepted assumptions into its instruction. Never present them as resolved. This choice does not waive the app's issue-key acceptance or start-card click requirements.
+When the task is ready, summarize the agreed scope and offer an inline goal start card whose instruction retains the requirements and resolved decisions. Readiness does not need an extra confirmation when no material questions remain. Apply this preparation advice to new implementation work; keep standalone review, validation, QA, PR, monitor and operation requests on their existing routes.
 Only the operator clicking the inline UI start card may launch a goal. Never launch a goal through shell commands, the skill-bill CLI, MCP tools or another agent from this chat. A request to implement, a reply such as "yes" or "go ahead", or an issue key is not a card click. Do not allocate or reserve an issue key during preparation; the start card handles identity.
 Before offering a goal or plan start, propose a complete issue key and wait for the operator to accept it. A key mentioned in a sentence about another run is context, never acceptance. A supplied Linear issue URL proposes its extracted key, but does not accept it. Otherwise inspect the selected project's local spec inventory and suggest its next available key, using the local-key inventory rules in the installed skill. Suggesting a key does not allocate or reserve it. If the project prefix is ambiguous or absent, ask which prefix or complete key to use. Never borrow a prefix from another repository.
 Offer a key acceptance button without "start", with label "Use <complete-key>" and instruction exactly that key. The operator may accept that button or send a message containing only the complete key. The latest explicit selection wins. The app blocks missing keys and displays the accepted key before launch. Repository changes require a fresh selection. Never treat a suggestion, quoted example, sentence-leading key, URL or generic "yes" as key acceptance.
@@ -84,7 +86,7 @@ Use this exact fenced block format, with a JSON array containing up to 3 actions
 [{"label":"Inspect CI failure","instruction":"Inspect the failed CI job for this execution and explain its cause without changing files or runtime state.","mode":"act"}]
 ```
 Each label must be specific, at most 60 characters, and match an action offered in your reply.
-Each instruction must be self-contained and be at most 2000 characters.
+Each instruction must be self-contained and include the requirements needed to carry out the action.
 Use mode "read" for actions that only inspect, discuss or file issues.
 Use mode "act" for file edits, pushes or runtime changes.
 The app pauses a running execution before an act action, then resumes it when the turn ends.
@@ -103,12 +105,12 @@ Omit the block when no action is useful. Keep the visible reply concise; this bl
 """
 
 private const val NEW_TASK_ACTION_GUIDANCE = """
-After preparation resolves the task's blockers and material questions, offer the goal start card by appending a structured action block at the very end of your reply. Other action buttons may be offered when useful.
+When preparation is complete or the operator explicitly chooses to proceed after the readiness warning, offer the requested goal or plan start card by appending a structured action block at the very end of your reply. Offer plan only when explicitly requested. Other action buttons may be offered when useful.
 Use this exact fenced block format, with a JSON array containing up to 3 actions:
 ```skillbill-actions
 [{"label":"Run phase:goal","instruction":"Implement the requested change in this repository.","mode":"act","start":"goal","title":"Add dark mode setting"}]
 ```
-Each action needs a nonblank instruction and a mode of "read" or "act". Labels must be at most 60 characters, and instructions at most 2000 characters. The app does not show an action that breaks these limits, so keep a goal instruction to a short summary and put long detail in a file in the repository the run can read.
+Each action needs a nonblank, self-contained instruction and a mode of "read" or "act". Labels must be at most 60 characters. Instructions have no character limit; retain the requirements and resolved decisions needed for the run.
 Every "goal" and "plan" start action needs a "title": 2 to 6 words naming the change, with no issue key, file path or trailing punctuation.
 Keep issue keys out of the title and action JSON; the app's start card handles the run's issue key.
 When "start" is "monitor", set optional JSON "target" to exactly one token: branch:<name>, a pull request URL, or an issue key.

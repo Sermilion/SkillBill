@@ -38,13 +38,13 @@ fun testWorkIncidentProjectionBuilder(
       BlockIncidentRecoveryActions(
         GoalRunnerBlockRecoveryAdapter(
           GoalParentProjectionWriter(testDecompositionManifestValidator),
-          WorkflowGoalRunnerBlockWrites(clock),
+          WorkflowGoalRunnerBlockWrites(clock, NoopRuntimeDiagnostics),
         ),
         FeatureTaskRuntimeStandaloneIncidentRecovery(clock),
       ),
       GoalRunnerBlockRecoveryAdapter(
         GoalParentProjectionWriter(testDecompositionManifestValidator),
-        WorkflowGoalRunnerBlockWrites(clock),
+        WorkflowGoalRunnerBlockWrites(clock, NoopRuntimeDiagnostics),
       ),
       telemetry = null,
       reportDelivery = null,

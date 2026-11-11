@@ -26,6 +26,16 @@ class RuntimeChatChangesRepository(
   private val gitReadLock: GitReadLock,
   private val clock: Clock,
 ) : ChatChangesRepository {
+  override suspend fun readCurrentChanges(repositoryRoot: String): ChatChangesRead = withContext(Dispatchers.IO) {
+    gitReadLock.mutex.withLock {
+      val runtime = sessions.sessions.value?.runtime
+      val result = if (runtime == null) ChatChangesRead.Unavailable("No database session is open.")
+      else ChatChangeReads(runtime.workTreeSnapshotPort, runtime.workChangesPort, clock).readCurrentChanges(repositoryRoot)
+      if (result is ChatChangesRead.Unavailable) diagnostics.record(CHANGES_UNAVAILABLE)
+      result
+    }
+  }
+
   override suspend fun projectWorktrees(repositoryRoot: String): ChatProjectWorktrees = withContext(Dispatchers.IO) {
     gitReadLock.mutex.withLock {
       val runtime = sessions.sessions.value?.runtime

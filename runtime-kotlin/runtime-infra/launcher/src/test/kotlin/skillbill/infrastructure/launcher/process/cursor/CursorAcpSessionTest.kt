@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import skillbill.approval.model.ApprovalMatchFacts
 import skillbill.approval.model.ApprovalProviderDisposition
 import skillbill.contracts.approval.ApprovalProviderRequestId
 import skillbill.contracts.approval.ApprovalRequestRecord
@@ -16,6 +17,7 @@ import skillbill.ports.approval.model.ApprovalPendingWait
 import skillbill.ports.approval.model.ApprovalProviderClearance
 import skillbill.ports.approval.model.ApprovalRegistrationCommand
 import skillbill.ports.approval.model.ApprovalRegistrationResult
+import java.nio.file.Files
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -306,6 +308,43 @@ class CursorAcpSessionTest {
   }
 
   @Test
+  fun `execute and move permissions carry match facts`() {
+    val checkout = Files.createTempDirectory("cursor-facts").toRealPath()
+    try {
+      Files.createDirectories(checkout.resolve("src"))
+      Files.writeString(checkout.resolve("src/a.kt"), "x")
+      val harness = Harness(checkout = checkout.toString())
+      harness.open()
+      harness.permission("90", "run", "git status")
+      assertEquals(ApprovalMatchFacts.Command("git status"), harness.owner.requests.last().matchFacts)
+      harness.session.observe(
+        """{"jsonrpc":"2.0","id":91,"method":"session/request_permission",""" +
+          """"params":{"sessionId":"s","toolCall":{"toolCallId":"mv","title":"Move","kind":"move",""" +
+          """"rawInput":{"path":"src/b.kt"},"locations":[{"path":"src/a.kt"}]},""" +
+          """"options":[{"optionId":"once-mv","name":"Allow once","kind":"allow_once"},""" +
+          """{"optionId":"deny-mv","name":"Reject once","kind":"reject_once"}]}}""",
+      )
+      assertEquals(
+        ApprovalMatchFacts.Paths(listOf("src/a.kt", "src/b.kt")),
+        harness.owner.requests.last().matchFacts,
+      )
+      harness.session.observe(
+        """{"jsonrpc":"2.0","id":92,"method":"session/request_permission",""" +
+          """"params":{"sessionId":"s","toolCall":{"toolCallId":"mv-dest","title":"Move","kind":"move",""" +
+          """"rawInput":{"path":"src/b.kt"}},""" +
+          """"options":[{"optionId":"once-dest","name":"Allow once","kind":"allow_once"},""" +
+          """{"optionId":"deny-dest","name":"Reject once","kind":"reject_once"}]}}""",
+      )
+      assertEquals(null, harness.owner.requests.last().matchFacts)
+      harness.session.close()
+    } finally {
+      Files.walk(checkout).use { paths ->
+        paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
+      }
+    }
+  }
+
+  @Test
   fun `an owned permission for a different session is cancelled without approval or termination`() {
     val harness = Harness()
     harness.open()
@@ -347,6 +386,7 @@ class CursorAcpSessionTest {
     model: String? = null,
     dependency: CursorAcpMcpDependency = CursorAcpMcpDependency.ProjectUserOnly,
     provider: AcpProvider = AcpProvider.Cursor,
+    checkout: String = "/checkout",
     bindOwner: Boolean = true,
   ) {
     val frames = mutableListOf<JsonObject>()
@@ -357,7 +397,7 @@ class CursorAcpSessionTest {
     val session =
       CursorAcpSession(
         CursorAcpLaunch(
-          "/checkout",
+          checkout,
           "scoped prompt",
           model,
           "agent".takeIf { provider == AcpProvider.Cursor },

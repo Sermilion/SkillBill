@@ -12,6 +12,7 @@ import skillbill.approval.model.durableRefusal
 import skillbill.approval.model.matches
 import skillbill.approval.model.onceRefusal
 import skillbill.approval.model.settleFor
+import skillbill.approval.model.toPatternRule
 import skillbill.approval.model.toRule
 import skillbill.contracts.approval.ApprovalDecisionSource
 import skillbill.contracts.approval.ApprovalOption
@@ -180,7 +181,9 @@ class ApprovalBroker(
     consumerNonce: String,
     selectedOptionId: String,
     alwaysAllow: Boolean,
+    pattern: String? = null,
   ): ApprovalDecisionResult {
+    require(pattern == null || alwaysAllow)
     val now = clock.instant()
     val result: ApprovalDecisionResult =
       database.transaction { unit ->
@@ -191,7 +194,7 @@ class ApprovalBroker(
           stored == null -> ApprovalDecisionResult.Missing
           stored.record.state != ApprovalState.PENDING -> ApprovalDecisionResult.AlreadySettled(stored.record)
           owner == null || consumer?.isLive(now, consumerNonce) != true -> ApprovalDecisionResult.NotLive(stored.record)
-          else -> decideLocked(unit, stored, owner, DecisionInput(selectedOptionId, alwaysAllow), now)
+          else -> decideLocked(unit, stored, owner, DecisionInput(selectedOptionId, alwaysAllow, pattern), now)
         }
       }
     if (result is ApprovalDecisionResult.Settled) lifecycle.afterSettled(result.request, deliver = true)
@@ -249,6 +252,7 @@ class ApprovalBroker(
         command.writeCapable,
         inputComplete = command.canonicalInput != null,
         providerDisposition = command.providerDisposition,
+        matchFacts = command.matchFacts.takeIf { command.canonicalInput != null },
       )
     val live = owner != null && consumerLive
     return when (val registration = unit.approvals.register(pending, facts)) {
@@ -292,7 +296,7 @@ class ApprovalBroker(
     val option = pending.options.firstOrNull { it.kind == ONE_TIME_ALLOW_OPTION_KIND } ?: return null
     if (created.facts.durableRefusal(owner.executionMode, option, pending) != null) return null
     val rules = unit.approvals.activeRules(pending.repositoryIdentity)
-    val rule = rules.firstOrNull { it.matches(pending) } ?: return null
+    val rule = rules.firstOrNull { it.matches(pending, created.facts.matchFacts) } ?: return null
     val settled =
       pending.copy(
         state = ApprovalState.ALLOWED,
@@ -343,9 +347,20 @@ class ApprovalBroker(
     if (option == null || target == null) return ApprovalDecisionResult.OptionUnavailable(request)
     val refusal = grantRefusal(stored, owner, option, target, input.alwaysAllow)
     if (refusal != null) return ApprovalDecisionResult.GrantRefused(request, refusal)
+    if (input.pattern != null) {
+      val patternRefusal = stored.patternRefusal(input.pattern)
+      if (patternRefusal != null) return ApprovalDecisionResult.GrantRefused(request, patternRefusal)
+    }
     val rule =
       if (input.alwaysAllow) {
-        request.authorityScope?.toRule(request, UUID.randomUUID().toString(), now.toString())
+        val ruleId = UUID.randomUUID().toString()
+        val createdAt = now.toString()
+        val trimmedPattern = input.pattern?.trim()
+        when {
+          trimmedPattern != null ->
+            request.authorityScope?.toPatternRule(request, ruleId, createdAt, trimmedPattern)
+          else -> request.authorityScope?.toRule(request, ruleId, createdAt)
+        }
       } else {
         null
       }
@@ -440,7 +455,7 @@ class ApprovalBroker(
     return endedAt == null && unexpired && (nonce == null || this.nonce == nonce)
   }
 
-  private class DecisionInput(val optionId: String, val alwaysAllow: Boolean)
+  private class DecisionInput(val optionId: String, val alwaysAllow: Boolean, val pattern: String? = null)
 
   private class CreatedRequest(
     val pending: ApprovalRequestRecord,

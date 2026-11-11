@@ -10,7 +10,6 @@ import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopPlanningBranch
 import skillbill.engine.featuretask.runner.RuntimeHarnessConfig
 import skillbill.engine.featuretask.runner.RuntimeRecordingLauncher
 import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
@@ -492,7 +491,7 @@ class PhaseStandaloneMonitorExecutionTest {
           beforeDrive: (FeatureTaskRuntimeRunLoop) -> Unit,
         ): FeatureTaskRuntimeRunReport {
           val run =
-            FeatureTaskRuntimeRunLoopPlanningBranch.buildPhaseRun(
+            context.phaseRunFactory.build(
               context,
               COMMIT_PUSH,
               context.request,

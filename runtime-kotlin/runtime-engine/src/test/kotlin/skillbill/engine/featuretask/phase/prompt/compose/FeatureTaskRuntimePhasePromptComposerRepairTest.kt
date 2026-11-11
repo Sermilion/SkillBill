@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.phase.prompt.compose
 
+import skillbill.engine.featuretask.model.audit.AcceptanceRepairPromptFocus
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
 import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys
 import kotlin.test.Test
@@ -87,9 +88,18 @@ class FeatureTaskRuntimePhasePromptComposerRepairTest {
     }
     val repair =
       composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor("audit_plan_fix")) {
-        copy(currentAcceptanceCriterion = "AC-002: Preserve the wrapper API and return to the exact opening target.")
+        copy(
+          acceptanceRepairFocus =
+            AcceptanceRepairPromptFocus(
+              "AC-002",
+              null,
+              "Preserve the wrapper API and return to the exact opening target.",
+              emptyList(),
+              null,
+            ),
+        )
       }
-    assertContains(repair, "AC-002: Preserve the wrapper API and return to the exact opening target.")
+    assertContains(repair, "AC-002\nPreserve the wrapper API and return to the exact opening target.")
     assertContains(repair, "Keep this plan on this criterion.")
     assertContains(repair, "Do not edit files, spawn subagents, compile")
     assertFalse(composePromptForPhase("audit_implement_fix").contains(guidance))
@@ -129,7 +139,7 @@ class FeatureTaskRuntimePhasePromptComposerRepairTest {
   }
 
   @Test
-  fun `resumed audit repair receives its saved reports without an implementation receipt contract`() {
+  fun `resumed audit repair keeps failure context without replaying saved reports`() {
     val prompt =
       composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor("audit_implement_fix")) {
         copy(
@@ -145,14 +155,13 @@ class FeatureTaskRuntimePhasePromptComposerRepairTest {
       }
 
     assertContains(prompt, "Resume the saved audit repair")
-    assertContains(prompt, "Guard scanner repaired. Capability leaks remain.")
-    assertContains(prompt, "Close the remaining authority paths.")
+    assertFalse(prompt.contains("Guard scanner repaired. Capability leaks remain."))
+    assertFalse(prompt.contains("Close the remaining authority paths."))
     assertContains(prompt, "needs_user_action")
-    assertContains(prompt, "Do not end the session after a small edit")
-    assertContains(prompt, "If a formatter cannot be scoped safely, record its deferral and continue editing.")
+    assertContains(prompt, "Its edits are in the working tree or checkpoint commits.")
     assertContains(
       prompt.replace(Regex("\\s+"), " "),
-      "Every unfinished repair accepted for settlement consumes one unsuccessful attempt",
+      "If work remains when you stop, say what remains. Your edits are kept and verify runs next.",
     )
     assertFalse(prompt.contains("does not spend a criterion failure"))
     assertFalse(prompt.contains("This retains the\nreservation"))

@@ -25,7 +25,9 @@ import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairBlockReason
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairDecision
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairStep
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -271,7 +273,7 @@ internal object AcceptanceCriterionRepairAttemptSettlement {
     val cycles = recorder as? AcceptanceCriterionRepairCycleRecords
     if (scope == null || !context.serialAcceptanceRepairStep || cycles?.isRepairStep(run.phaseId) != true) return null
     val attempt = context.attempt
-    val normalized = serialRepairOutput(attempt) ?: return null
+    val normalized = (attempt as? AttemptResult.RetryableTerminal)?.normalizedOutput ?: return null
     val phase =
       FeatureTaskRuntimePhaseStateRequest(
         run.request.workflowId, run.phaseId, "completed", context.loop.iteration,
@@ -282,21 +284,15 @@ internal object AcceptanceCriterionRepairAttemptSettlement {
         loopId = run.reentry?.loopId,
         edgeIteration = run.reentry?.edgeIteration,
         mutating = run.policy.mutating,
-        fileManifestBefore = attempt.fileManifest?.before.orEmpty(),
-        fileManifestAfter = attempt.fileManifest?.after.orEmpty(),
-        fileManifestIntroduced = attempt.fileManifest?.introduced.orEmpty(),
+        fileManifestBefore = attempt.fileManifest.before,
+        fileManifestAfter = attempt.fileManifest.after,
+        fileManifestIntroduced = attempt.fileManifest.introduced,
       )
     val committed =
       if (attempt.retryableTerminal?.failureDisposition == FeatureTaskRuntimeFailureDisposition.RETRYABLE) {
         recorder.recordCompletedPhase(phase) == RequiredPhaseWrite.Acknowledged
       } else {
-        val kind =
-          if (attempt is AttemptResult.IncompleteWork) {
-            AcceptanceCriterionRepairOutcomeKind.INCOMPLETE
-          } else {
-            AcceptanceCriterionRepairOutcomeKind.BLOCKED
-          }
-        cycles.settleUnsuccessfulRepair(phase, kind) ?: return null
+        cycles.settleUnsuccessfulRepair(phase, AcceptanceCriterionRepairOutcomeKind.BLOCKED) ?: return null
       }
     return if (!committed) {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
@@ -317,13 +313,6 @@ internal object AcceptanceCriterionRepairAttemptSettlement {
     }
   }
 
-  private fun serialRepairOutput(attempt: AttemptResult): NormalizedFeatureTaskRuntimePhaseOutput? =
-    when (attempt) {
-      is AttemptResult.IncompleteWork -> attempt.normalizedOutput
-      is AttemptResult.RetryableTerminal -> attempt.normalizedOutput
-      else -> null
-    }
-
   private fun acknowledgeCommitted(
     context: FixLoopBranchContext,
     phase: FeatureTaskRuntimePhaseStateRequest,
@@ -334,10 +323,11 @@ internal object AcceptanceCriterionRepairAttemptSettlement {
     val output =
       FeatureTaskRuntimePhaseOutput(run.phaseId, context.loop.iteration, normalized.canonicalJson, normalized)
     context.loopTransitions.applyPersistedPhaseCompletion(output, phase.reviewPassNumber)
-    if (scope.snapshot?.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
+    val state = scope.snapshot
+    val blocked = state?.let(AcceptanceRepairDecision::next) as? AcceptanceRepairStep.Blocked
+    if (state != null && blocked != null) {
       return PhaseOutcome.blocked(
-        "The current acceptance criterion exhausted its three unsuccessful repair attempts. " +
-          "Other criteria have separate budgets. " + scope.currentCriterionContext,
+        AcceptanceRepairBlockReason.build(state, blocked.criterionRef),
       )
     }
     return PhaseOutcome.completed(output)

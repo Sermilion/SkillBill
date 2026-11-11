@@ -342,6 +342,33 @@ class QaReportParserTest {
     )
   }
 
+  @Test
+  fun `a covered target counts as passed and prose in the screenshot section is not a rejected entry`() {
+    val report =
+      QaReportParser.parse(
+        """
+        |Verdict: passed
+        |## Coverage
+        |- android: covered
+        |## Assertions
+        |- [passed] Edit kept: sent by the next write. Evidence: ${prefix}log.txt
+        |## Isolation
+        |- Staging account.
+        |## Screenshots
+        |Registration was rejected, so these files are on disk only.
+        |
+        |- 2026-11-10T11:24:49Z | png | Worker added | ${prefix}evidence/s42.png
+        |- 2026-11-10T11:25:00Z | png | Outside the run | /tmp/elsewhere.png
+        """.trimMargin(),
+        prefix,
+        declaredKinds = setOf(QaTargetKind("android")),
+      )
+
+    assertEquals(QaVerdict.PASSED, report.coverage.single().verdict)
+    assertTrue(report.coverageWarnings.isEmpty())
+    assertEquals(listOf("QA screenshot inventory rejected 1 entries"), report.warnings)
+  }
+
   private companion object {
     const val OVERSIZED_REPORT_LENGTH = 300_001
   }

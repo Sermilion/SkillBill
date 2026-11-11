@@ -33,13 +33,13 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 
 @Composable
-internal fun NewTaskChangesPanel(state: ChatChangesState.Shown, since: String, onOpenDiff: () -> Unit = {}, onOpenFile: (String) -> Unit = {}, onOpenWorktree: (ChatWorktreeChanges, String?) -> Unit = { _, _ -> }) {
+internal fun NewTaskChangesPanel(state: ChatChangesState.Shown, onOpenDiff: () -> Unit = {}, onOpenFile: (String) -> Unit = {}, onOpenWorktree: (ChatWorktreeChanges, String?) -> Unit = { _, _ -> }) {
   if (state.changes.worktrees.isNotEmpty()) {
     Column {
       state.changes.worktrees.forEach { worktree ->
         BasicText(worktree.repositoryRoot, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
           style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 2, overflow = TextOverflow.Ellipsis)
-        NewTaskChangesPanel(state.copy(changes = worktree.changes, baseline = worktree.baseline, paths = worktree.paths), since,
+        NewTaskChangesPanel(state.copy(changes = worktree.changes, baseline = worktree.baseline, paths = worktree.paths),
           onOpenDiff = { onOpenWorktree(worktree, null) }, onOpenFile = { onOpenWorktree(worktree, it) })
       }
     }
@@ -60,10 +60,6 @@ internal fun NewTaskChangesPanel(state: ChatChangesState.Shown, since: String, o
       SbButton("Open diff", onOpenDiff, variant = SbButtonVariant.Ghost, size = SbControlSize.Small, icon = LucideIcons.external)
     }
     Spacer(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
-    if (state.resumed) Row(Modifier.fillMaxWidth().background(colors.bgHover).drawBehind { drawLine(colors.borderSubtle, Offset(0f, size.height - 1.dp.toPx()), Offset(size.width, size.height - 1.dp.toPx()), 1.dp.toPx()) }.padding(horizontal = 12.dp, vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
-      SbIcon(LucideIcons.history, SbIconSize.Xs, modifier = Modifier.padding(top = 2.dp))
-      BasicText("Counted from when this chat started on ${chatChangesResumedDate(state.baseline.takenAt)}. Edits made while it was closed are included.", style = type.tXs.copy(color = colors.fgMuted))
-    }
     Column(Modifier.padding(4.dp)) {
       data.files.take(6).forEach { file ->
         val parts = changePathParts(file.path)
@@ -103,7 +99,7 @@ internal fun NewTaskChangesPanel(state: ChatChangesState.Shown, since: String, o
       }
     }
     Row(Modifier.fillMaxWidth().heightIn(min = 30.dp).drawBehind { drawLine(colors.borderSubtle, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-      BasicText(chatChangesFooter(since, chatChangesMade(data.commitCount, data.uncommitted)), style = type.tXs.copy(color = colors.fgFaint))
+      BasicText("Uncommitted changes against HEAD", style = type.tXs.copy(color = colors.fgFaint))
     }
   }
 }

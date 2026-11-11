@@ -288,4 +288,61 @@ class ChatOperationCardTest {
     assertEquals(3, shown.size)
     assertEquals(OperationCardState.AwaitingConfirmation, (shown[1] as ChatMessage.OperationCard).card.state)
   }
+
+  @Test
+  fun `a confirmed verify card opens the run its token names`() = runTest {
+    val runs = RecordingRunOpener()
+    val coordinator = OperationCardCoordinator(FakeWorkControlRepository(), backgroundScope, { null }, runs = runs)
+    val thread = ChatThread(Clock.System)
+    thread.showOperationCard(verify().copy(state = OperationCardState.Confirming))
+
+    coordinator.actions(thread).onOpenRun("verify-token")
+    runCurrent()
+
+    assertEquals(listOf("verify-token"), runs.opened)
+  }
+
+  @Test
+  fun `only a verify card past confirmation offers its run`() {
+    val offered = OperationCardState.entries.filter { state ->
+      val thread = ChatThread(Clock.System)
+      thread.showOperationCard(verify().copy(state = state))
+      thread.operationCard("verify-token")!!.opensVerifyRun()
+    }
+    val thread = ChatThread(Clock.System)
+    thread.showOperationCard(prReviewFix(OperationCardState.Completed))
+
+    assertEquals(
+      listOf(
+        OperationCardState.Confirming,
+        OperationCardState.Completed,
+        OperationCardState.Failed,
+        OperationCardState.ConsumedUncertain,
+      ),
+      offered,
+    )
+    assertEquals(false, thread.operationCard("opt-1")!!.opensVerifyRun())
+  }
+
+  @Test
+  fun `a run that cannot be opened is reported in chat`() = runTest {
+    val runs = RecordingRunOpener(problem = "gone")
+    val coordinator = OperationCardCoordinator(FakeWorkControlRepository(), backgroundScope, { null }, runs = runs)
+    val thread = ChatThread(Clock.System)
+    thread.showOperationCard(verify().copy(state = OperationCardState.Completed))
+
+    coordinator.actions(thread).onOpenRun("verify-token")
+    runCurrent()
+
+    assertEquals(1, thread.transcript.value.filterIsInstance<ChatMessage.Notice>().size)
+  }
+
+  private class RecordingRunOpener(private val problem: String? = null) : RunOpener {
+    val opened = mutableListOf<String>()
+
+    override suspend fun open(id: String): String? {
+      opened += id
+      return problem
+    }
+  }
 }

@@ -112,6 +112,21 @@ class GitMonitorResourcesLifecycleTest {
   }
 
   @Test
+  fun `pinned https endpoints are fetched through the caller's ssh remote for the same repository`() {
+    val fixture = fixture()
+    fixture.routeOriginOverSsh()
+    val pinnedUrl = "https://github.com/acme/repo.git"
+    val target = fixture.target(headFetchUrl = pinnedUrl, baseFetchUrl = pinnedUrl)
+
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val fetched = assertIs<MonitorFetchResult.Fetched>(resources.fetchPinned(fence, target))
+
+    assertEquals(fixture.headSha, runGit(fixture.caller, "rev-parse", fetched.refs.headRef))
+    assertEquals(fixture.baseSha, runGit(fixture.caller, "rev-parse", fetched.refs.baseRef))
+    assertEquals(MonitorSettlement.Released, resources.settle(fence))
+  }
+
+  @Test
   fun `a prepared worktree gets the caller's ignored local configuration but no ignored directories`() {
     val fixture = fixture()
     fixture.commitFile(".gitignore", "local.properties\nbuild/\n")

@@ -1,46 +1,11 @@
 package skillbill.engine.featuretask.slot.audit
 
-import skillbill.contracts.SharedPayloadKeys
-import skillbill.engine.featuretask.runloop.core.AttemptResult
-import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.slot.PhaseAcceptanceRepairHooks
-import skillbill.engine.featuretask.slot.PhaseCompletedRoundHooks
 import skillbill.engine.featuretask.slot.PhaseStepHooks
-import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
-import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
-import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal object AuditImplementFixStep :
   PhaseStepHooks<PhaseAcceptedStepExecution>,
-  PhaseAcceptanceRepairHooks,
-  PhaseCompletedRoundHooks {
+  PhaseAcceptanceRepairHooks {
   override val serialAcceptanceRepairStep: Boolean = true
-
-  override val unfinishedAgentCompletionRejection: FeatureTaskRuntimeFailureCode =
-    FeatureTaskRuntimeFailureCode.AUDIT_REPAIR_UNFINISHED_CONTINUE_IMPLEMENTING
-
-  override fun settleCompletedRound(
-    context: PhaseStepOutputContext,
-    capture: ValidatedOutputCapture,
-    attested: NormalizedFeatureTaskRuntimePhaseOutput,
-    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ): AttemptResult? {
-    if (capture.run.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX) return null
-    val verdict = outputMap[SharedPayloadKeys.VERDICT]
-    if (verdict != FeatureTaskRuntimeVerdict.NO_PROGRESS.wireValue &&
-      verdict != FeatureTaskRuntimeVerdict.PROGRESS.wireValue
-    ) {
-      return null
-    }
-    return AttemptResult.incompleteWork(
-      "The repair report says production work remains.",
-      "Settle the unfinished repair against the selected criterion's failure budget before continuing.",
-      capture.fileManifest,
-      attested,
-    )
-  }
 }

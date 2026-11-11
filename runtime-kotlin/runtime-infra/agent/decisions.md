@@ -1,3 +1,13 @@
+## [2026-11-10] Codex shell unwrap recognizes only single-quoted -c and -lc wrappers
+Context: Codex command approvals sometimes wrap the operator command in bash, zsh or sh.
+Decision: Unwrap when the outer form matches optional /bin or /usr/bin, shell name, -c or -lc, and a single-quoted inner segment with no embedded quote; otherwise return null when the first token is a shell.
+Reason: Exposes the intended inner command for pattern rules while failing closed on double quotes, extra flags and script-path forms the spec does not attest.
+
+## [2026-11-10] Centralize match-fact filesystem access in one launcher normalizer
+Context: Wildcard allow rules need comparable command and path facts from three provider adapters without inconsistent containment.
+Decision: Only ApprovalMatchFactsNormalizer uses Path, Files and relativize; Claude, Codex and Cursor adapters call commandFacts, pathFacts or withinCheckout.
+Reason: A single real-path and ancestor-walk policy prevents adapters from diverging on symlink or not-yet-existing Write targets.
+
 ## [2026-11-05] Pass temp-root inputs through the host port
 Context: Runtime temp resolution needs the configured JVM directory, environment and user home, while ambient property reads are governed at the host boundary.
 Decision: JdkHostPlatformPort passes those inputs to resolveRuntimeTempRoot. If creating state scratch fails, the resolver logs a warning and returns the configured path, or /tmp when it is blank.

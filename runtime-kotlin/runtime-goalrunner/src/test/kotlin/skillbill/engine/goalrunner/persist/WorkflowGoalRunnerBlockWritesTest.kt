@@ -51,7 +51,7 @@ class WorkflowGoalRunnerBlockWritesTest {
   private val engine = WorkflowEngine()
   private val workflows = InMemoryWorkflowStates()
   private val incidents = InMemoryBlockIncidentRepository(clock)
-  private val writes = WorkflowGoalRunnerBlockWrites(clock)
+  private val writes = WorkflowGoalRunnerBlockWrites(clock, NoopRuntimeDiagnostics)
 
   @Test
   fun `historical replay preserves known and unknown failure phase independently of the resume phase`() {

@@ -28,7 +28,7 @@ class NewTaskProjectChangesTest {
     var opened: Pair<String, String?>? = null
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        NewTaskChangesPanel(ChatChangesState.Shown(aggregate, baseline, false, emptySet()), "10:00",
+        NewTaskChangesPanel(ChatChangesState.Shown(aggregate, baseline, false, emptySet()),
           onOpenWorktree = { worktree, path -> opened = worktree.repositoryRoot to path })
       }
     }

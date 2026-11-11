@@ -276,7 +276,7 @@ class NewTaskComposerTest {
     waitForIdle()
     onNode(hasClickLabel("Change repository or base branch")).assertDoesNotExist()
     onNodeWithContentDescription(REPOSITORY_PILL_CHEVRON, useUnmergedTree = true).assertDoesNotExist()
-    onNode(hasClickLabel("Change agent")).assertIsNotEnabled()
+    onNode(hasClickLabel("Change agent or model")).assertIsNotEnabled()
 
     events.trySend(ChatEvent.Completed)
     waitUntil { draft.chat.value?.thread?.busy?.value == false }
@@ -286,7 +286,7 @@ class NewTaskComposerTest {
     onNodeWithContentDescription(REPOSITORY_PILL_CHEVRON, useUnmergedTree = true).assertExists()
     onNode(hasClickLabel("Change repository or base branch")).performClick()
     assertTrue(actions.contains(NewTaskAction.OpenRepositoryPicker))
-    onNode(hasClickLabel("Change agent")).assertIsEnabled().performClick()
+    onNode(hasClickLabel("Change agent or model")).assertIsEnabled().performClick()
     onNodeWithText("codex").assertExists()
   }
 
@@ -405,7 +405,7 @@ class NewTaskComposerTest {
       runOnIdle { busyDraft.send() }
       waitForIdle()
       onNode(hasClickLabel("Change repository or base branch")).assertDoesNotExist()
-      onNode(hasClickLabel("Change agent")).assertIsNotEnabled()
+      onNode(hasClickLabel("Change agent or model")).assertIsNotEnabled()
         .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Wait for the current reply to finish"))
       busyEvents.trySend(ChatEvent.Completed)
       waitForIdle()
@@ -435,7 +435,7 @@ class NewTaskComposerTest {
       try {
         val startingWhy = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Wait for the start to finish")
         onNode(hasClickLabel("Change repository or base branch")).assertIsNotEnabled().assert(startingWhy)
-        onNode(hasClickLabel("Change agent")).assertIsNotEnabled().assert(startingWhy)
+        onNode(hasClickLabel("Change agent or model")).assertIsNotEnabled().assert(startingWhy)
       } finally {
         startGate.complete(NewTaskStartOutcome.Refused("done"))
         waitForIdle()
@@ -508,17 +508,18 @@ class NewTaskComposerTest {
       repository = NewTaskRepository("/work/repository", "repository")
       baseBranch = "short"
     }
+    var read by mutableStateOf(RepositoryBranches("/work/repository", "main", emptyList(), emptyList(), currentBranch = "short"))
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-          NewTaskComposer(NewTaskUiState(), draft) {}
+          NewTaskComposer(NewTaskUiState(branchRead = BranchReadState.Loaded(read.repositoryRoot, read)), draft) {}
         }
       }
     }
     fun repositoryWidth() = onNodeWithText("repository", useUnmergedTree = true).fetchSemanticsNode().size.width
     val shortBranchWidth = repositoryWidth()
 
-    runOnIdle { draft.baseBranch = "b".repeat(200) }
+    runOnIdle { read = read.copy(currentBranch = "b".repeat(200)) }
     waitForIdle()
 
     assertEquals(shortBranchWidth, repositoryWidth())

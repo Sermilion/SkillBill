@@ -16,7 +16,7 @@ public object QaReportParser {
   private val SECTION_BREAK = Regex("^#{1,3}\\s")
   private val DIGIT = Regex("\\d")
   private val COVERAGE_LINE =
-    Regex("^[-*]\\s*([a-z][a-z0-9-]{0,31})\\s*:\\s*(passed|findings_open|findings|skipped|incomplete)\\b")
+    Regex("^[-*]\\s*([a-z][a-z0-9-]{0,31})\\s*:\\s*(passed|covered|findings_open|findings|skipped|incomplete)\\b")
   private val REASON_TOKEN = Regex("(?<![A-Za-z0-9_])reason:\\s*([a-z_]+)", RegexOption.IGNORE_CASE)
   private val BACKEND_TOKEN = Regex("backend:\\s*(real|mocked|none)")
 
@@ -166,7 +166,7 @@ public object QaReportParser {
 
   private fun verdictOfWord(word: String): QaVerdict =
     when (word) {
-      "passed" -> QaVerdict.PASSED
+      "passed", "covered" -> QaVerdict.PASSED
       "skipped" -> QaVerdict.SKIPPED
       "incomplete" -> QaVerdict.INCOMPLETE
       else -> QaVerdict.FINDINGS_OPEN

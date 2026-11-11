@@ -98,7 +98,7 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
                 persistence,
               ),
             ).state
-          assertEquals(emptyMap(), discovered.unsuccessfulTotals)
+          assertEquals(emptyMap(), discovered.chargedAttempts)
           assertEquals(emptyList(), discovered.outcomes)
           assertEquals(
             SqliteWorkflowArtifactWireEncoder().encode(original.artifacts),

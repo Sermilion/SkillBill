@@ -44,6 +44,38 @@ def page(*items, cursor=None):
 
 
 class DisplayTest(unittest.TestCase):
+    def test_blocked_runs_precede_running_and_paused_across_display_pages(self):
+        for family in ("feature-goal", "feature-task-runtime", "feature-verify"):
+            with self.subTest(family=family):
+                states = (
+                    "paused", "active", "failed", "blocked",
+                    "idle", "active", "blocked", "paused",
+                )
+                items = [
+                    item(str(index), state, family=family)
+                    for index, state in enumerate(states)
+                ]
+                board = parse_pages([page(*items[:4]), page(*items[4:])])
+                expected = ["3", "6", "1", "5", "2"]
+                if family == "feature-goal":
+                    expected.append("4")
+                expected.extend(["0", "7"])
+                self.assertEqual(
+                    expected,
+                    [row.key for _, rows in pages(board) for row in rows],
+                )
+
+    def test_goals_keep_start_time_order_within_each_status(self):
+        newer = item("newer")
+        newer["snapshot"]["started_at"] = "2026-11-09T13:00:00Z"
+        board = parse_pages([
+            page(newer, item("paused", "paused"), item("older"), item("blocked", "blocked"))
+        ])
+        self.assertEqual(
+            ["blocked", "older", "newer", "paused"],
+            [row.key for row in board.rows],
+        )
+
     def test_paused_and_blocked_runs_count_as_needs_you_rather_than_running(self):
         board = parse_pages(
             [

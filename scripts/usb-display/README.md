@@ -7,7 +7,9 @@ board. The desktop app can be closed while the display service runs.
 The portrait layout adapts the tray popover. It shows Running, Needs you and
 Finished today, followed by issue keys, repository names, phases, active durations
 and subtask progress. Each page holds three runs, with project and status together
-on the second line. Goals, phases and operations cycle every eight seconds, with empty groups omitted. The board refreshes every
+on the second line. Within each group, blocked runs come first, running runs next,
+then failed or idle runs, and paused runs last. Runs with the same priority keep
+their existing order. Goals, phases and operations cycle every eight seconds, with empty groups omitted. The board refreshes every
 ten seconds, with one bounded CLI request sequence in flight.
 
 The companion calls `skill-bill work board --finished-within 24h` and follows all

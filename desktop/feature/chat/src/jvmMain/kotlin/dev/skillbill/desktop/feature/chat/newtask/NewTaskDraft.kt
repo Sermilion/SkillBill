@@ -31,8 +31,10 @@ import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatOperationCardActions
 import dev.skillbill.desktop.feature.chat.ChatThread
 import dev.skillbill.desktop.feature.chat.OperationCardCoordinator
+import dev.skillbill.desktop.feature.chat.RunOpener
 import dev.skillbill.desktop.feature.chat.START_AGAIN_SUFFIX
 import dev.skillbill.desktop.feature.chat.UnavailableApprovalFeed
+import dev.skillbill.desktop.feature.chat.UnavailableRunOpener
 import dev.skillbill.desktop.feature.chat.chipText
 import dev.skillbill.desktop.feature.chat.restored
 import dev.skillbill.desktop.feature.chat.restoredDraft
@@ -75,6 +77,7 @@ class NewTaskDraft internal constructor(
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
   private val savedChats: NewTaskSavedChats = NewTaskSavedChats(chats, windowScope.scope, toasts),
   private val changesRepository: ChatChangesRepository = UnavailableChatChanges,
+  private val runs: RunOpener = UnavailableRunOpener,
 ) {
   private val scope = windowScope.scope
   private val cardOwners = IdentityHashMap<ChatThread, NewTaskChat>()
@@ -101,9 +104,10 @@ class NewTaskDraft internal constructor(
     }
   }, { thread ->
     synchronized(cardOwners) { cardOwners[thread] }?.persist()?.also { if (it) refreshSaved() } ?: false
-  })
+  }, runs = runs)
   private val chatState = MutableStateFlow<NewTaskChat?>(null)
   private val offerState = MutableStateFlow(NewTaskOffer())
+  private var previewTracker: Pair<String, NewTaskChatChanges>? = null
   private var closing = false
   private var offerKeyEdit: NewTaskOfferKeyEdit? = null
   private var lastOfferFieldValue: String? = null
@@ -120,6 +124,8 @@ class NewTaskDraft internal constructor(
     get() = repositoryState
     set(value) {
       if (repositoryState?.root != value?.root) {
+        previewTracker?.second?.end()
+        previewTracker = null
         acceptedKeyState = null
         issueKeyProposals = emptyList()
         offerState.value = NewTaskOffer()
@@ -127,6 +133,7 @@ class NewTaskDraft internal constructor(
       repositoryState = value
     }
   var addedRepositories: List<NewTaskRepository> by mutableStateOf(emptyList())
+  internal var branchSwitching: Boolean by mutableStateOf(false)
   var baseBranch: String by mutableStateOf("")
   var agentId: String? by mutableStateOf(null)
 
@@ -162,7 +169,7 @@ class NewTaskDraft internal constructor(
 
   private fun canAdmitTurn(message: String, attachments: List<ChatImage> = emptyList()): Boolean {
     val current = chatState.value
-    return !closing && (message.isNotBlank() || attachments.isNotEmpty()) && repository != null && selectedAgent != null && selectedAgent?.agentId == agentId &&
+    return !closing && !branchSwitching && (message.isNotBlank() || attachments.isNotEmpty()) && repository != null && selectedAgent != null && selectedAgent?.agentId == agentId &&
       current?.repositoryMissing != true && !offerState.value.starting
   }
 
@@ -265,7 +272,7 @@ class NewTaskDraft internal constructor(
     offerFieldValue: String? = null,
   ) {
     val current = chatState.value
-    if (closing || offerState.value.starting || current?.thread?.busy?.value == true) return
+    if (closing || branchSwitching || offerState.value.starting || current?.thread?.busy?.value == true) return
     if (current == null && kind in RUN_KINDS) return
     if (kind in RUN_KINDS && offerState.value.started != null) return
     if (selectedAgent == null || repository == null) return
@@ -406,6 +413,8 @@ class NewTaskDraft internal constructor(
   /** Writes any running reply, then ends the chat's agent process and keeps its saved draft, for "New chat" and a window close. */
   internal suspend fun close(): Boolean {
     if (closing) return false
+    previewTracker?.second?.end()
+    previewTracker = null
     val current = chatState.value ?: return true
     closing = true
     return try {
@@ -416,6 +425,15 @@ class NewTaskDraft internal constructor(
     } finally {
       closing = false
     }
+  }
+
+  internal fun previewChanges(root: String): NewTaskChatChanges {
+    previewTracker?.takeIf { it.first == root }?.let { return it.second }
+    previewTracker?.second?.end()
+    return NewTaskChatChanges(
+      changesRepository, scope, chatDispatcher, root, null, resumed = false, repositoryMissing = false,
+      captureAttempted = false, initialAttributedPaths = null,
+    ).also { previewTracker = root to it }
   }
 
   internal suspend fun models(agent: ChatAgent, root: String) = chats.models(agent, root)
@@ -510,6 +528,8 @@ class NewTaskDraft internal constructor(
   }
 
   internal fun dispose() {
+    previewTracker?.second?.end()
+    previewTracker = null
     chatState.value?.end()
     chatState.value = null
     images = emptyList()
@@ -556,6 +576,7 @@ class NewTaskDraft internal constructor(
       resumedChanges,
       changesCaptureAttempted,
       changesAttributedPaths,
+      previewTracker?.takeIf { it.first == root && changesBaseline == null && !started }?.second?.also { previewTracker = null },
     ).also {
       clearChatFeedback()
       chatState.value = it
