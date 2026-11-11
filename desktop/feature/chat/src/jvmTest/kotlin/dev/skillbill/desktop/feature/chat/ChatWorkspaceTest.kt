@@ -9,6 +9,7 @@ import dev.skillbill.desktop.core.domain.model.OperationCardState
 import dev.skillbill.desktop.core.domain.model.OperationCardView
 import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
 import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
+import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
@@ -371,6 +372,43 @@ class ChatWorkspaceTest {
       assertFalse(session.thread.hasDeliveryClaim())
       assertTrue(workspace.closeAll())
     }
+  }
+
+  @Test
+  fun `late authoritative rejection restores the batch and workspace drains it after turn completion`() = runTest {
+    chat.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
+    chat.steeringResult = { ChatSteeringResult.DeliveryUncertain(it.deliveryId, "Awaiting acknowledgement") }
+    val complete = CompletableDeferred<Unit>()
+    chat.events = { flow { emit(ChatEvent.TextDelta("reply")); complete.await(); emit(ChatEvent.Completed) } }
+    val active = workItem("SKILL-530").copy(repositoryRoot = "/repo")
+    details.details = mapOf(active.id to MutableStateFlow(loaded(active)))
+    val workspace = workspace()
+    workspace.open(active)
+    runCurrent()
+    val session = workspace.session(active.id)!!
+    workspace.send(active.id, "question")
+    runCurrent()
+    val image = ChatImage(byteArrayOf(8), "image/png")
+    workspace.send(active.id, "rejected batch", listOf(image))
+    workspace.sendNow(active.id)
+    workspace.send(active.id, "later")
+    runCurrent()
+    val steering = chat.steeringRequests.single()
+    assertTrue(session.thread.hasDeliveryClaim())
+
+    complete.complete(Unit)
+    runCurrent()
+    chat.retainedSteering.value = mapOf((steering.sessionId to steering.deliveryId) to
+      ChatSteeringUpdate(steering.sessionId, ChatSteeringResult.Rejected(steering.deliveryId, "turn already ended")))
+    runCurrent()
+
+    assertEquals(2, chat.requests.size)
+    assertEquals("rejected batch\n\nlater", chat.requests.last().prompt)
+    assertTrue(chat.requests.last().images.single() === image)
+    assertFalse(session.thread.hasDeliveryClaim())
+    assertEquals(null, session.thread.delivery.value)
+    assertEquals(1, chat.retiredSteering.count { it.third == steering.deliveryId })
+    assertTrue(workspace.closeAll())
   }
 
   @Test

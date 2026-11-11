@@ -220,6 +220,42 @@ class NewTaskDraftTest {
   }
 
   @Test
+  fun `live draft delivery resumes queued work after an authoritative late rejection`() = runTest {
+    chat.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
+    chat.steeringResult = { ChatSteeringResult.DeliveryUncertain(it.deliveryId, "Awaiting acknowledgement") }
+    var turns = 0
+    chat.events = {
+      turns++
+      if (turns == 1) flow { emit(ChatEvent.TextDelta("reply")); awaitCancellation() } else flowOf(ChatEvent.Completed)
+    }
+    val draft = draft()
+    draft.say("question")
+    runCurrent()
+    val current = draft.chat.value!!
+    val image = ChatImage(byteArrayOf(4), "image/png")
+    draft.text = "rejected batch"
+    draft.addPastedImage(image)
+    draft.send()
+    draft.sendNow()
+    draft.say("later")
+    runCurrent()
+    val request = chat.steeringRequests.single()
+    assertTrue(current.thread.hasDeliveryClaim())
+
+    chat.retainedSteering.value = mapOf((request.sessionId to request.deliveryId) to
+      ChatSteeringUpdate(request.sessionId, ChatSteeringResult.Rejected(request.deliveryId, "turn already ended")))
+    runCurrent()
+
+    assertEquals(2, chat.requests.size)
+    assertEquals("rejected batch\n\nlater", chat.requests.last().prompt)
+    assertTrue(chat.requests.last().images.single() === image)
+    assertFalse(current.thread.hasDeliveryClaim())
+    assertEquals(null, current.thread.delivery.value)
+    assertEquals(1, chat.retiredSteering.count { it.third == request.deliveryId })
+    assertEquals(1, current.thread.transcript.value.filterIsInstance<ChatMessage.Operator>().count { it.text == "rejected batch" })
+  }
+
+  @Test
   fun `live draft fallback during unprompted output waits for normal completion without interruption`() = runTest {
     chat.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
     chat.steeringResult = { ChatSteeringResult.NoActiveTurn(it.deliveryId, "No active reply") }

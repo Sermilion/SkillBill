@@ -102,7 +102,13 @@ internal class ChatThread(private val clock: Clock) {
           DeliveryTransition.RetainedUncertain(result.reason)
         }
       }
-      is ChatSteeringResult.Unsupported, is ChatSteeringResult.NoActiveTurn, is ChatSteeringResult.Rejected -> {
+      is ChatSteeringResult.Rejected -> {
+        queuedState.value = claim.entries + queuedState.value
+        deliveryClaim = null
+        deliveryState.value = null
+        DeliveryTransition.Restored(result.reason)
+      }
+      is ChatSteeringResult.Unsupported, is ChatSteeringResult.NoActiveTurn -> {
         if (claim.uncertain) return@synchronized DeliveryTransition.Ignored
         queuedState.value = claim.entries + queuedState.value
         deliveryClaim = null
@@ -110,7 +116,6 @@ internal class ChatThread(private val clock: Clock) {
         val reason = when (result) {
           is ChatSteeringResult.Unsupported -> result.reason
           is ChatSteeringResult.NoActiveTurn -> result.reason
-          is ChatSteeringResult.Rejected -> result.reason
           else -> error("Expected a known-unsent result")
         }
         DeliveryTransition.Restored(reason)

@@ -38,6 +38,60 @@ class ChatSteeringDeliveryTest {
   }
 
   @Test
+  fun `authoritative rejection restores an uncertain batch and drains once`() = runTest {
+    val repository = FakeExecutionChatRepository()
+    repository.steeringResult = { ChatSteeringResult.DeliveryUncertain(it.deliveryId, "unknown") }
+    val thread = ChatThread(Clock.System)
+    var rejected = 0
+    val image = dev.skillbill.desktop.core.domain.model.ChatImage(byteArrayOf(9), "image/png")
+    val original = QueuedChatMessage("first", null, true, images = listOf(image), onRejected = { rejected++ })
+    val later = QueuedChatMessage("later", null, false)
+    thread.enqueue(original)
+    var drains = 0
+    val delivery = ChatSteeringDelivery(repository, RecordingDiagnostics(), thread, backgroundScope, Any(), { true }, { drains++ })
+    delivery.send("session", "codex")
+    runCurrent()
+    val id = thread.delivery.value!!.deliveryId
+    thread.enqueue(later)
+
+    repository.retainedSteering.value = mapOf(("session" to id) to
+      ChatSteeringUpdate("session", ChatSteeringResult.Rejected(id, "turn already ended")))
+    runCurrent()
+
+    assertEquals(listOf(original, later), thread.queued.value)
+    assertTrue(thread.queued.value.first().images.single() === image)
+    assertEquals("turn already ended", thread.transcript.value.filterIsInstance<ChatMessage.Notice>().single().text)
+    assertFalse(thread.hasDeliveryClaim())
+    assertEquals(null, thread.delivery.value)
+    assertEquals(1, drains)
+    assertEquals(1, repository.retiredSteering.count { it.third == id })
+    assertEquals(0, rejected)
+  }
+
+  @Test
+  fun `settlement restores an authoritative rejection without draining during teardown`() = runTest {
+    val repository = FakeExecutionChatRepository()
+    repository.steeringResult = { ChatSteeringResult.DeliveryUncertain(it.deliveryId, "unknown") }
+    repository.settledSteering = { _, id -> ChatSteeringResult.Rejected(id, "turn already ended") }
+    val thread = ChatThread(Clock.System)
+    thread.enqueue(QueuedChatMessage("first", null, false))
+    var drains = 0
+    val delivery = ChatSteeringDelivery(repository, RecordingDiagnostics(), thread, backgroundScope, Any(), { true }, { drains++ })
+    delivery.send("session", "codex")
+    runCurrent()
+    val id = thread.delivery.value!!.deliveryId
+    thread.enqueue(QueuedChatMessage("later", null, false))
+
+    delivery.detach {}
+
+    assertEquals(listOf("first", "later"), thread.queued.value.map { it.text })
+    assertFalse(thread.hasDeliveryClaim())
+    assertEquals(null, thread.delivery.value)
+    assertEquals(0, drains)
+    assertEquals(1, repository.retiredSteering.count { it.third == id })
+  }
+
+  @Test
   fun `acknowledgement racing explicit retry releases later entries without replaying the accepted batch`() = runTest {
     val repository = FakeExecutionChatRepository()
     repository.steeringResult = { ChatSteeringResult.DeliveryUncertain(it.deliveryId, "unknown") }

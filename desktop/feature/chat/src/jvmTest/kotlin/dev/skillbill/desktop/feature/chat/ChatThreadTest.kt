@@ -46,12 +46,28 @@ class ChatThreadTest {
     thread.claimDelivery("uncertain")
     thread.enqueue(later)
     thread.reduceDelivery(ChatSteeringResult.DeliveryUncertain("uncertain", "unknown"))
-    thread.reduceDelivery(ChatSteeringResult.Rejected("uncertain", "late failure"))
-    assertNull(thread.takeQueuedMessage())
-    thread.reduceDelivery(ChatSteeringResult.Accepted("uncertain"))
+    val rejection = thread.reduceDelivery(ChatSteeringResult.Rejected("uncertain", "late failure"))
+    assertEquals(ChatThread.DeliveryTransition.Restored("late failure"), rejection)
     assertFalse(thread.hasDeliveryClaim())
-    assertEquals(listOf(later), thread.takeQueuedEntries())
-    assertEquals(ChatThread.DeliveryTransition.Ignored, thread.reduceDelivery(ChatSteeringResult.Accepted("uncertain")))
+    assertNull(thread.delivery.value)
+    assertEquals(listOf(first, later), thread.takeQueuedEntries())
+    assertEquals(ChatThread.DeliveryTransition.Ignored, thread.reduceDelivery(ChatSteeringResult.Rejected("uncertain", "duplicate")))
+  }
+
+  @Test
+  fun `unavailable transport result does not restore an uncertain batch`() {
+    val thread = ChatThread(Clock.System)
+    val original = QueuedChatMessage("first", null, false)
+    val later = QueuedChatMessage("later", null, false)
+    thread.enqueue(original)
+    thread.claimDelivery("uncertain")
+    thread.enqueue(later)
+    thread.reduceDelivery(ChatSteeringResult.DeliveryUncertain("uncertain", "unknown"))
+
+    assertEquals(ChatThread.DeliveryTransition.Ignored,
+      thread.reduceDelivery(ChatSteeringResult.NoActiveTurn("uncertain", "transport unavailable")))
+    assertTrue(thread.hasDeliveryClaim())
+    assertEquals(listOf(later), thread.queued.value)
   }
 
   @Test
