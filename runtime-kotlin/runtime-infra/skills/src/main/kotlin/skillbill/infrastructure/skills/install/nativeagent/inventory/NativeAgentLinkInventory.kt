@@ -8,6 +8,7 @@ import skillbill.error.shellcontent.invalidNativeAgentLinkInventorySchema
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.NativeAgentLinkInventorySchemaPaths
+import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import java.io.IOException
@@ -116,6 +117,26 @@ object NativeAgentLinkInventory {
       environment,
       InventoryValidation(mapper, schema),
     )
+  }
+
+  fun readSelectedArtifact(entry: NativeAgentLinkInventoryEntry): ByteArray {
+    val target = verifiedSelectedTarget(entry)
+    val bytes = Files.readAllBytes(target)
+    if (sha256Hex(bytes) != entry.contentDigest) {
+      throw invalidNativeAgentLinkInventorySchema("The selected native worker artifact digest is stale. Reinstall it.")
+    }
+    return bytes
+  }
+
+  private fun verifiedSelectedTarget(entry: NativeAgentLinkInventoryEntry): Path {
+    if (!Files.isSymbolicLink(entry.installedPath)) {
+      throw invalidNativeAgentLinkInventorySchema("The selected native worker managed link is missing. Reinstall it.")
+    }
+    val target = entry.installedPath.toRealPath()
+    if (target != entry.cacheTargetPath.toRealPath() || !Files.isReadable(target)) {
+      throw invalidNativeAgentLinkInventorySchema("The selected native worker managed link is stale. Reinstall it.")
+    }
+    return target
   }
 
   internal fun inventoryPathExists(path: Path): Boolean =

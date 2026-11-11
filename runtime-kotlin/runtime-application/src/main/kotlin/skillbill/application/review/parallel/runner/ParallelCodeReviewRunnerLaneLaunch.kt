@@ -24,8 +24,12 @@ import skillbill.application.review.parallel.verification.ParallelCodeReviewRunn
 import skillbill.application.review.parallel.verification.parallelCodeReviewCaptureLane
 import skillbill.application.review.parallel.verification.parallelCodeReviewInlineTerminalStatus
 import skillbill.application.review.parallel.verification.parallelCodeReviewNoOpResumeOutcome
+import skillbill.contracts.system.OpenCodeLaunchIdentity
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.terminalStatus
+import skillbill.install.model.SupportedAgent
+import skillbill.model.EnvironmentContext
 import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
@@ -54,7 +58,9 @@ import skillbill.review.context.model.packet.ReviewContextPacket
 import skillbill.review.context.model.packet.ReviewLaneCompletionState
 import skillbill.review.context.model.packet.asFailedLaneRun
 import skillbill.review.model.ReviewEvidenceBoundaryAccounting
+import java.io.IOException
 import java.nio.file.Path
+import kotlin.coroutines.cancellation.CancellationException
 
 @Inject
 class ParallelCodeReviewRunnerLaneLaunch(
@@ -65,24 +71,152 @@ class ParallelCodeReviewRunnerLaneLaunch(
   private val sharedEvidenceLocatorReader: FeatureTaskRuntimeSharedEvidenceLocatorReadPort?,
   private val failureAdmission: ParallelCodeReviewRunnerFailureAdmission,
   private val activityStampWriter: AgentActivityStampWriter,
+  private val environment: EnvironmentContext,
 ) {
   internal fun runLanes(initial: ParallelCodeReviewInitialRun): ParallelReviewLaneRunResult {
     val request = initial.request
     val byAgent = initial.preparedLaunchRequests.groupBy { it.agentId }
+    val openCodeArgs =
+      LaunchParentLaneArgs(
+        agentId = initial.agent1Id,
+        launchRequests = byAgent[initial.agent1Id].orEmpty(),
+        routedManifests = initial.detection.routed,
+        budget = initial.budget,
+        request = request,
+        modelOverride = request.modelOverride,
+      )
     val lane1 =
       parallelCodeReviewCaptureLane {
-        launchParentLane(
-          LaunchParentLaneArgs(
-            agentId = initial.agent1Id,
-            launchRequests = byAgent[initial.agent1Id].orEmpty(),
-            routedManifests = initial.detection.routed,
-            budget = initial.budget,
-            request = request,
-            modelOverride = request.modelOverride,
-          ),
-        )
+        if (initial.agent1Id == SupportedAgent.OPENCODE.id) {
+          launchOpenCodeSpecialists(openCodeArgs)
+        } else {
+          launchParentLane(openCodeArgs)
+        }
       }
     return ParallelReviewLaneRunResult(lane1 = lane1)
+  }
+
+  private fun launchOpenCodeSpecialists(args: LaunchParentLaneArgs): ParallelReviewLaneOutcome {
+    if (args.launchRequests.isEmpty()) return parallelCodeReviewNoOpResumeOutcome(args.agentId)
+    val selected = args.launchRequests.sortedBy { it.assignment.laneDecision.orderIndex }
+    val outcomes = selected.map { specialist -> launchOpenCodeSpecialist(args, specialist) }
+    val completionStates =
+      selected.zip(outcomes).map { (specialist, outcome) ->
+        val accounting =
+          outcome.specialistAccounting.firstOrNull {
+            it.assignmentDigest == specialist.assignment.digest
+          }
+        if (accounting?.terminalStatus == ReviewAccountingTerminalOutcome.COMPLETED.wireValue) {
+          parallelCodeReviewGovernedLaunchFor(specialist).completionState
+        } else {
+          val governed = parallelCodeReviewGovernedLaunchFor(specialist)
+          governed.completionState.asFailedLaneRun(
+            governed.assembledBundle.entries.map { "${it.commitSha}@${it.hunk.path}" },
+          )
+        }
+      }
+    val completion = parallelCodeReviewAggregateBundleCompletion(completionStates)
+    val accounting = outcomes.flatMap { it.specialistAccounting.ifEmpty { listOfNotNull(it.accounting) } }
+    return ParallelReviewLaneOutcome(
+      success = outcomes.all { it.success },
+      rawOutput = outcomes.joinToString("\n\n") { it.rawOutput },
+      failureReason = outcomes.mapNotNull { it.failureReason }.joinToString("; ").ifBlank { null },
+      droppedCandidateDiagnostic =
+        outcomes.mapNotNull { it.droppedCandidateDiagnostic }.joinToString("; ").ifBlank { null },
+      budgetOutcome = outcomes.firstNotNullOfOrNull { it.budgetOutcome },
+      specialistAccounting = accounting,
+      findings = outcomes.flatMap { it.findings },
+      interrupted = outcomes.any { it.interrupted },
+      reviewDisposition = completion.disposition,
+      bundleCompositionDigest = completion.bundleCompositionDigest,
+      segmentAccounting = completion.segments,
+      unreviewedSegmentIds = completion.unreviewedSegmentIds,
+      budgetDimension = completion.budgetDimension,
+      unreviewedUnits = completion.unreviewedUnits,
+      rejectedCandidateCount = outcomes.sumOf { it.rejectedCandidateCount },
+      unboundSeam = outcomes.firstNotNullOfOrNull { it.unboundSeam },
+      citationDiagnostics = outcomes.flatMap { it.citationDiagnostics },
+      outputTruncated = outcomes.any { it.outputTruncated },
+    )
+  }
+
+  private fun launchOpenCodeSpecialist(
+    args: LaunchParentLaneArgs,
+    specialist: ReviewSpecialistLaunchRequest,
+  ): ParallelReviewLaneOutcome {
+    val launch =
+      ParallelCodeReviewInlineParentLaunch(
+        agentId = args.agentId,
+        selected = listOf(specialist),
+        prompt =
+          ParallelCodeReviewRunnerParentPrompt.build(
+            listOf(specialist),
+            args.routedManifests,
+            args.agentId,
+            args.request.reportContract,
+            args.request.directiveSuffix,
+          ),
+        bundleState = parallelCodeReviewGovernedLaunchFor(specialist).completionState,
+      )
+    return try {
+      val workerName = specialist.logicalWorkerName?.takeIf(String::isNotBlank)
+      if (specialist.workerKind != ReviewWorkerKind.PROVIDER_NATIVE || workerName == null) {
+        unsupportedParentOutcome(
+          launch,
+          UnsupportedAgentRunLaunch(
+            SupportedAgent.OPENCODE,
+            "OpenCode governed review requires the selected native specialist worker name.",
+          ),
+        )
+      } else {
+        when (val bound = bindGovernedEvidence(listOf(specialist), args.request)) {
+          is ParallelCodeReviewGovernedEvidenceBind.Unbound -> unboundParentOutcome(launch, bound)
+          is ParallelCodeReviewGovernedEvidenceBind.Bound ->
+            launchedBoundParent(
+              LaunchedBoundParentArgs(
+                launch = launch,
+                bound = bound,
+                budget = specialist.budget,
+                request = args.request,
+                modelOverride = args.modelOverride,
+              ),
+            )
+        }
+      }
+    } catch (failure: CancellationException) {
+      throw failure
+    } catch (failure: IOException) {
+      failedOpenCodeSpecialist(launch, failure.message ?: "The OpenCode specialist launch failed.")
+    } catch (failure: SkillBillRuntimeException) {
+      failedOpenCodeSpecialist(launch, failure.message ?: "The OpenCode specialist launch failed.")
+    }
+  }
+
+  private fun failedOpenCodeSpecialist(
+    launch: ParallelCodeReviewInlineParentLaunch,
+    reason: String,
+  ): ParallelReviewLaneOutcome {
+    val completion =
+      launch.bundleState.asFailedLaneRun(
+        launch.selected.flatMap { selected ->
+          parallelCodeReviewGovernedLaunchFor(selected).assembledBundle.entries.map {
+            "${it.commitSha}@${it.hunk.path}"
+          }
+        },
+      )
+    return ParallelReviewLaneOutcome(
+      success = false,
+      rawOutput = "",
+      failureReason = reason,
+      accounting =
+        inlineParentAccounting(launch, ReviewAccountingTerminalOutcome.FAILED, null, null, completion),
+      reviewDisposition = completion.disposition,
+      bundleCompositionDigest = completion.bundleCompositionDigest,
+      segmentAccounting = completion.segments,
+      unreviewedSegmentIds = completion.unreviewedSegmentIds,
+      budgetDimension = completion.budgetDimension,
+      unreviewedUnits = completion.unreviewedUnits,
+    )
   }
 
   private fun launchParentLane(args: LaunchParentLaneArgs): ParallelReviewLaneOutcome {
@@ -120,6 +254,16 @@ class ParallelCodeReviewRunnerLaneLaunch(
 
   private fun launchedBoundParent(args: LaunchedBoundParentArgs): ParallelReviewLaneOutcome =
     args.bound.endpoint.use {
+      val openCodeIdentity = openCodeLaunchIdentity(args.launch.agentId, args.request.repoRoot)
+      if (args.launch.agentId == SupportedAgent.OPENCODE.id && openCodeIdentity == null) {
+        return@use unsupportedParentOutcome(
+          args.launch,
+          UnsupportedAgentRunLaunch(
+            agent = SupportedAgent.OPENCODE,
+            reason = "OpenCode launch source environment is unresolved.",
+          ),
+        )
+      }
       if (args.launch.agentId == "cursor") {
         reviewLaunchAgentStaging.stage(
           ReviewLaunchAgentStagingRequest(
@@ -148,7 +292,12 @@ class ParallelCodeReviewRunnerLaneLaunch(
                 modelOverride = args.modelOverride,
                 reviewEvidenceBroker = args.bound.broker,
                 reviewEvidenceEndpoint = args.bound.endpoint,
-                reviewFanOut = true,
+                openCodeIdentity = openCodeIdentity,
+                nativeReviewWorkerName =
+                  args.launch.selected.singleOrNull()
+                    ?.takeIf { args.launch.agentId == SupportedAgent.OPENCODE.id }
+                    ?.logicalWorkerName,
+                reviewFanOut = args.launch.agentId != SupportedAgent.OPENCODE.id,
                 approval = AgentRunApprovalRequirement.GovernedReview,
                 additionalWritableDirectories = listOf(args.request.projectStoreRoot),
               ).boundedReviewLane(args.request.laneProgressIdleTimeout, args.bound.evidenceReads),
@@ -161,6 +310,20 @@ class ParallelCodeReviewRunnerLaneLaunch(
           launchedParentOutcome(args.launch, outcome, args.budget, args.bound.broker, args.request)
       }
     }
+
+  private fun openCodeLaunchIdentity(
+    agentId: String,
+    workingDirectory: Path,
+  ): OpenCodeLaunchIdentity? {
+    if (agentId != SupportedAgent.OPENCODE.id) return null
+    if (
+      environment.environment === EnvironmentContext.UnspecifiedEnvironment ||
+      environment.userHome == EnvironmentContext.UnspecifiedUserHome
+    ) {
+      return null
+    }
+    return OpenCodeLaunchIdentity.capture(environment.environment, environment.userHome, workingDirectory)
+  }
 
   private fun bindGovernedEvidence(
     selected: List<ReviewSpecialistLaunchRequest>,
@@ -219,12 +382,19 @@ class ParallelCodeReviewRunnerLaneLaunch(
     launch: ParallelCodeReviewInlineParentLaunch,
     unbound: ParallelCodeReviewGovernedEvidenceBind.Unbound,
   ): ParallelReviewLaneOutcome {
-    val bundleState = launch.bundleState
+    val bundleState =
+      launch.bundleState.asFailedLaneRun(
+        launch.selected.flatMap { selected ->
+          parallelCodeReviewGovernedLaunchFor(selected).assembledBundle.entries.map {
+            "${it.commitSha}@${it.hunk.path}"
+          }
+        },
+      )
     return ParallelReviewLaneOutcome(
       success = false,
       rawOutput = "",
       failureReason = "governed evidence broker ${unbound.fault.wireValue} failed",
-      accounting = inlineParentAccounting(launch, ReviewAccountingTerminalOutcome.FAILED, null, null),
+      accounting = inlineParentAccounting(launch, ReviewAccountingTerminalOutcome.FAILED, null, null, bundleState),
       reviewDisposition = bundleState.disposition,
       bundleCompositionDigest = bundleState.bundleCompositionDigest,
       segmentAccounting = bundleState.segments,
@@ -314,12 +484,17 @@ internal fun unsupportedParentOutcome(
   launch: ParallelCodeReviewInlineParentLaunch,
   outcome: UnsupportedAgentRunLaunch,
 ): ParallelReviewLaneOutcome {
-  val bundleState = launch.bundleState
+  val bundleState =
+    launch.bundleState.asFailedLaneRun(
+      launch.selected.flatMap { selected ->
+        parallelCodeReviewGovernedLaunchFor(selected).assembledBundle.entries.map { "${it.commitSha}@${it.hunk.path}" }
+      },
+    )
   return ParallelReviewLaneOutcome(
     success = false,
     rawOutput = "",
     failureReason = "unsupported agent: ${outcome.reason}",
-    accounting = inlineParentAccounting(launch, UNSUPPORTED_PROVIDER_TERMINAL_STATUS, null, null),
+    accounting = inlineParentAccounting(launch, UNSUPPORTED_PROVIDER_TERMINAL_STATUS, null, null, bundleState),
     reviewDisposition = bundleState.disposition,
     bundleCompositionDigest = bundleState.bundleCompositionDigest,
     segmentAccounting = bundleState.segments,

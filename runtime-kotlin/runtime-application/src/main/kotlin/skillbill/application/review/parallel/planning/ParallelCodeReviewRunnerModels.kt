@@ -178,8 +178,19 @@ internal fun parallelCodeReviewEffectiveCompletionState(
   outcomes: ParallelReviewLaneRunResult,
 ): ReviewLaneCompletionState {
   val governed = parallelCodeReviewGovernedLaunchFor(launch)
+  val directOpenCodeAccounting =
+    launch.takeIf { it.agentId == "opencode" }
+      ?.let { selected ->
+        outcomes.lane1.specialistAccounting.firstOrNull { it.assignmentDigest == selected.assignment.digest }
+      }
+  val runSucceeded =
+    if (launch.agentId == "opencode") {
+      directOpenCodeAccounting?.terminalStatus == ReviewAccountingTerminalOutcome.COMPLETED.wireValue
+    } else {
+      outcomes.lane1.success
+    }
   val runCompletion =
-    if (outcomes.lane1.success) {
+    if (runSucceeded) {
       governed.completionState
     } else {
       governed.completionState.asFailedLaneRun(

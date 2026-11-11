@@ -1,8 +1,11 @@
 package skillbill.infrastructure.launcher.agentrun
 
+import skillbill.contracts.system.OpenCodeLaunchIdentity
+import skillbill.ports.review.model.ReviewLaunchIsolationStrategy
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -48,5 +51,25 @@ class OpenCodeAgentRunCommandBuilderTest {
 
     assertTrue(command.preflightFailure.orEmpty().contains("runtime MCP executable"))
     assertTrue(command.sessionMcpServers.isEmpty())
+  }
+
+  @Test
+  fun `unverified governed review scope exposes no isolation capability`() {
+    val builder = OpenCodeAgentRunCommandBuilder()
+    val command =
+      builder.build(
+        governedReviewRequest(nativeReviewWorkerName = "bill-kotlin-code-review-architecture")
+          .copy(
+            modelOverride = "anthropic/claude-sonnet",
+            promptOverride = "Immutable parent packet",
+            openCodeIdentity = OpenCodeLaunchIdentity.capture(emptyMap(), Path.of("/operator"), Path.of("/repo")),
+          ),
+      )
+
+    assertTrue(command.preflightFailure.orEmpty().contains("user home cannot be verified"))
+    assertEquals(ReviewLaunchIsolationStrategy.UNSUPPORTED, builder.reviewIsolation)
+    assertTrue(command.sessionMcpServers.isEmpty())
+    assertFalse(builder.governedReviewLaunchCapability.governedOnlyTooling)
+    assertFalse(builder.governedReviewLaunchCapability.mcpIsolation)
   }
 }

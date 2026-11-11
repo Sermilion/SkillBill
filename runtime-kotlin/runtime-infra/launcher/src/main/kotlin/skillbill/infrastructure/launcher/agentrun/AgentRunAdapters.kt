@@ -9,6 +9,7 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.launcher.agentrun.display.BuildCommandTap
 import skillbill.infrastructure.launcher.agentrun.display.ReadableAgentOutputSink
 import skillbill.infrastructure.launcher.agentrun.display.SerializedBuildObserver
+import skillbill.infrastructure.launcher.mcp.OpenCodeReviewLaunchScope
 import skillbill.infrastructure.launcher.process.codex.CodexPhaseSession
 import skillbill.infrastructure.launcher.process.codex.CodexSessionChannel
 import skillbill.infrastructure.launcher.process.codex.CodexSessionLaunch
@@ -31,6 +32,7 @@ import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessReviewFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRunner
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessTimingFields
+import skillbill.infrastructure.launcher.process.launch.captureLaunchResourceOutcome
 import skillbill.infrastructure.launcher.process.support.launcherSha256Hex
 import skillbill.infrastructure.launcher.review.CursorReviewStreamMalformedError
 import skillbill.install.model.AgentLauncherCli
@@ -42,6 +44,7 @@ import skillbill.ports.agentrun.model.AgentRunBuildObserver
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.CursorMcpDependencyRequirement
 import skillbill.ports.agentrun.model.MAX_REPORTED_LAUNCH_IDENTITIES
@@ -54,6 +57,7 @@ import skillbill.ports.approval.claudeProfileIdentity
 import skillbill.ports.approval.model.ApprovalOwnerOpenRequest
 import skillbill.ports.approval.model.ApprovalOwnerOpenResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.system.HostPlatformPort
 import skillbill.workflow.taskruntime.model.skeleton.LAUNCH_MODEL_TOKEN_PATTERN
 import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
 import java.nio.file.Path
@@ -135,6 +139,7 @@ internal class ProcessAgentRunAdapter(
       }
     }
     return built.preflightFailure?.let { reason ->
+      settleLaunchScope(built.launchScope, request.outputSink)
       diagnostics.warning("seam=agent_run outcome=provider_preflight_refused provider=${agent.id}")
       AgentRunLaunchFacts(
         agent = agent,
@@ -168,45 +173,109 @@ internal class ProcessAgentRunAdapter(
     built: AgentRunCommand,
     cursorDependency: CursorAcpMcpDependency,
   ): AgentRunLaunchOutcome {
-    val command =
-      when (val resolution = resolveLauncherExecutable(built.command, commandBuilder.launcherCli)) {
-        is LauncherResolution.Resolved -> built.copy(command = resolution.command)
-        is LauncherResolution.Missing -> return unavailableLauncherFacts(request, built, resolution.message)
-      }
-    val displaySink =
-      if (request.captureDisplayOutput) {
-        ReadableAgentOutputSink(agent.id, request.outputSink, diagnostics, request.modelObserver)
-      } else {
-        null
-      }
-    val serializedObserver =
-      request.buildObserver
-        .takeIf { it !== AgentRunBuildObserver.NONE && command.kind == AgentRunCommandKind.AGENT }
-        ?.let(::SerializedBuildObserver)
-    val tap =
-      serializedObserver
-        ?.takeIf { command.streamsProviderEvents }
-        ?.let { observer -> BuildCommandTap(agent.id, displaySink ?: request.outputSink, observer, clock, diagnostics) }
-    val streamRequest =
-      request.copy(
-        outputSink = tap ?: displaySink ?: request.outputSink,
-        buildObserver = serializedObserver ?: AgentRunBuildObserver.NONE,
-        captureDisplayOutput = false,
+    if (
+      agent.id == SupportedAgent.OPENCODE.id && request.reviewEvidenceBroker != null &&
+      (built.launchScope as? OpenCodeReviewLaunchScope)?.logicalWorkerName.isNullOrBlank()
+    ) {
+      settleLaunchScope(built.launchScope, request.outputSink)
+      return unavailableLauncherFacts(
+        request,
+        built,
+        "OpenCode governed review has no admitted native worker mode; the review was not started.",
       )
+    }
+    val resolution =
+      captureLaunchResourceOutcome {
+        resolveLauncherExecutable(built.command, commandBuilder.launcherCli)
+      }.getOrElse { failure ->
+        settleLaunchScopeAfterFailure(built.launchScope, request.outputSink, failure)
+        throw failure
+      }
+    val resolvedCommand =
+      when (resolution) {
+        is LauncherResolution.Resolved -> built.copy(command = resolution.command)
+        is LauncherResolution.Missing -> {
+          settleLaunchScope(built.launchScope, request.outputSink)
+          return unavailableLauncherFacts(request, built, resolution.message)
+        }
+      }
+    val command =
+      if (built.launchScope is OpenCodeReviewLaunchScope) {
+        val supported =
+          captureLaunchResourceOutcome {
+            built.launchScope.supportsPinnedExecutable(resolvedCommand.command.first())
+          }.getOrElse { failure ->
+            settleLaunchScopeAfterFailure(built.launchScope, request.outputSink, failure)
+            throw failure
+          }
+        if (supported) {
+          resolvedCommand
+        } else {
+          settleLaunchScope(built.launchScope, request.outputSink)
+          return unavailableLauncherFacts(
+            request,
+            built,
+            "OpenCode version 1.15.3 could not be verified; governed review was not started.",
+          )
+        }
+      } else {
+        resolvedCommand
+      }
+    return launchCommand(request, command, cursorDependency)
+  }
+
+  private fun launchCommand(
+    request: SkillRunRequest,
+    command: AgentRunCommand,
+    cursorDependency: CursorAcpMcpDependency,
+  ): AgentRunLaunchOutcome {
+    var displaySink: ReadableAgentOutputSink? = null
+    var tap: BuildCommandTap? = null
+    var streamOutputSink = request.outputSink
+    var primaryFailure: Throwable? = null
     return try {
-      val process = processRequest(command, streamRequest)
-      when (command.approvalProtocol) {
-        AgentRunApprovalProtocol.CURSOR_ACP ->
-          launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.Cursor)
-        AgentRunApprovalProtocol.JUNIE_ACP ->
-          launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.Junie)
-        AgentRunApprovalProtocol.OPENCODE_ACP ->
-          launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.OpenCode)
-        else -> launchOtherSession(streamRequest, command, process)
+      captureLaunchResourceOutcome {
+        displaySink =
+          if (request.captureDisplayOutput) {
+            ReadableAgentOutputSink(agent.id, request.outputSink, diagnostics, request.modelObserver)
+          } else {
+            null
+          }
+        val serializedObserver =
+          request.buildObserver
+            .takeIf { observesBuild(it, command) }
+            ?.let(::SerializedBuildObserver)
+        tap =
+          serializedObserver
+            ?.takeIf { command.streamsProviderEvents }
+            ?.let { observer ->
+              BuildCommandTap(agent.id, displaySink ?: request.outputSink, observer, clock, diagnostics)
+            }
+        streamOutputSink = tap ?: displaySink ?: request.outputSink
+        val streamRequest =
+          request.copy(
+            outputSink = streamOutputSink,
+            buildObserver = serializedObserver ?: AgentRunBuildObserver.NONE,
+            captureDisplayOutput = false,
+          )
+        val process = processRequest(command, streamRequest)
+        when (command.approvalProtocol) {
+          AgentRunApprovalProtocol.CURSOR_ACP ->
+            launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.Cursor)
+          AgentRunApprovalProtocol.JUNIE_ACP ->
+            launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.Junie)
+          AgentRunApprovalProtocol.OPENCODE_ACP ->
+            launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.OpenCode)
+          else -> launchOtherSession(streamRequest, command, process)
+        }
+      }.getOrElse { failure ->
+        primaryFailure = failure
+        throw failure
       }
     } finally {
-      tap?.finish()
-      displaySink?.finish()
+      if (tap != null || displaySink != null || command.launchScope != null) {
+        finishLaunchResources(primaryFailure, tap, displaySink, command.launchScope, streamOutputSink)
+      }
     }
   }
 
@@ -405,6 +474,10 @@ internal class ProcessAgentRunAdapter(
         stdinText = command.stdinText,
         outputSink = request.outputSink,
         continuation = commandBuilder.continuation(command, diagnostics),
+        beforeStart =
+          (command.launchScope as? OpenCodeReviewLaunchScope)?.let { scope ->
+            { scope.verifyManagedSources() }
+          },
       ),
     timing =
       AgentRunProcessTimingFields(
@@ -435,6 +508,7 @@ internal class ProcessAgentRunAdapter(
         inheritEnvironment = command.inheritEnvironment,
         environmentPassthroughKeys = command.environmentPassthroughKeys,
         removedEnvironmentKeys = command.removedEnvironmentKeys,
+        explicitEnvironment = command.explicitEnvironment,
       ),
     review =
       AgentRunProcessReviewFields(
@@ -444,7 +518,64 @@ internal class ProcessAgentRunAdapter(
         spawnAuthorization = request.spawnAuthorization,
       ),
     approval = AgentRunProcessApprovalFields(channel = approvalOpening(command, request)),
+    processLifecycle = (command.launchScope as? OpenCodeReviewLaunchScope)?.processLifecycle,
   )
+
+  private fun finishLaunchResources(
+    primaryFailure: Throwable?,
+    tap: BuildCommandTap?,
+    displaySink: ReadableAgentOutputSink?,
+    launchScope: AutoCloseable?,
+    outputSink: AgentRunOutputSink,
+  ) {
+    val failures = mutableListOf<Throwable>()
+    listOf<() -> Unit>(
+      { tap?.finish() },
+      { displaySink?.finish() },
+      {
+        when (launchScope) {
+          is OpenCodeReviewLaunchScope -> launchScope.release(diagnostics, outputSink)
+          null -> Unit
+          else -> launchScope.close()
+        }
+      },
+    ).forEach { cleanup ->
+      captureLaunchResourceOutcome {
+        cleanup()
+      }.getOrElse { failure ->
+        failures += failure
+      }
+    }
+    if (primaryFailure != null) {
+      failures.filter { it !== primaryFailure }.forEach(primaryFailure::addSuppressed)
+    } else if (failures.isNotEmpty()) {
+      failures.drop(1).filter { it !== failures.first() }.forEach(failures.first()::addSuppressed)
+      throw failures.first()
+    }
+  }
+
+  private fun settleLaunchScope(
+    launchScope: AutoCloseable?,
+    outputSink: AgentRunOutputSink,
+  ) {
+    when (launchScope) {
+      is OpenCodeReviewLaunchScope -> launchScope.release(diagnostics, outputSink)
+      null -> Unit
+      else -> launchScope.close()
+    }
+  }
+
+  private fun settleLaunchScopeAfterFailure(
+    launchScope: AutoCloseable?,
+    outputSink: AgentRunOutputSink,
+    primaryFailure: Throwable,
+  ) {
+    captureLaunchResourceOutcome {
+      settleLaunchScope(launchScope, outputSink)
+    }.getOrElse { cleanupFailure ->
+      if (cleanupFailure !== primaryFailure) primaryFailure.addSuppressed(cleanupFailure)
+    }
+  }
 
   private fun approvalOpening(
     command: AgentRunCommand,
@@ -502,7 +633,11 @@ internal class ProcessAgentRunAdapter(
         requireNotNull(command.stdinText),
         command.sessionModel,
         if (provider != AcpProvider.Cursor) {
-          null
+          if (provider == AcpProvider.OpenCode && request.reviewEvidenceBroker != null) {
+            requireNotNull((command.launchScope as? OpenCodeReviewLaunchScope)?.logicalWorkerName)
+          } else {
+            null
+          }
         } else {
           "agent"
         },
@@ -825,45 +960,49 @@ internal data class AgentRunWorkerBinding(
   val providerEnvironment: Map<String, String> = emptyMap(),
 )
 
-internal fun headlessAgentRunAdapters(
-  processRunner: AgentRunProcessRunner,
-  executableLookup: ExecutableLookup = PathExecutableLookup(),
-  workerBinding: AgentRunWorkerBinding = AgentRunWorkerBinding(),
-  diagnostics: RuntimeDiagnostics,
-  clock: Clock,
-): Map<SupportedAgent, ProcessAgentRunAdapter> =
-  listOf(
-    ClaudeAgentRunCommandBuilder(
-      providerEnvironment = workerBinding.providerEnvironment,
-      databasePath = workerBinding.databasePath,
-      runtimeMcpBin = workerBinding.runtimeMcpBin,
-    ),
-    CodexAgentRunCommandBuilder(
-      databasePath = workerBinding.databasePath,
-      runtimeMcpBin = workerBinding.runtimeMcpBin,
-    ),
-    JunieAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
-    CursorAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
-    OpenCodeAgentRunCommandBuilder(
-      databasePath = workerBinding.databasePath,
-      runtimeMcpBin = workerBinding.runtimeMcpBin,
-      bindingEnvironment = workerBinding.providerEnvironment,
-      userHome = workerBinding.userHome,
-    ),
-  ).associate { builder ->
-    builder.agent to
-      ProcessAgentRunAdapter(
-        agent = builder.agent,
-        commandBuilder = builder,
-        processRunner = processRunner,
-        clock = clock,
-        executableLookup = executableLookup,
-        diagnostics = diagnostics,
-        approvals = workerBinding.approvals,
-        inheritedEnvironment = workerBinding.providerEnvironment,
+internal class HeadlessAgentRunAdapterFactory(
+  private val processRunner: AgentRunProcessRunner,
+  private val executableLookup: ExecutableLookup = PathExecutableLookup(),
+  private val workerBinding: AgentRunWorkerBinding = AgentRunWorkerBinding(),
+  private val diagnostics: RuntimeDiagnostics,
+  private val clock: Clock,
+  private val hostPlatform: HostPlatformPort? = null,
+) {
+  fun createAll(): Map<SupportedAgent, ProcessAgentRunAdapter> =
+    listOf(
+      ClaudeAgentRunCommandBuilder(
+        providerEnvironment = workerBinding.providerEnvironment,
+        databasePath = workerBinding.databasePath,
+        runtimeMcpBin = workerBinding.runtimeMcpBin,
+      ),
+      CodexAgentRunCommandBuilder(
+        databasePath = workerBinding.databasePath,
+        runtimeMcpBin = workerBinding.runtimeMcpBin,
+      ),
+      JunieAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
+      CursorAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
+      OpenCodeAgentRunCommandBuilder(
+        databasePath = workerBinding.databasePath,
+        runtimeMcpBin = workerBinding.runtimeMcpBin,
+        bindingEnvironment = workerBinding.providerEnvironment,
+        hostPlatform = hostPlatform,
         userHome = workerBinding.userHome,
-      )
-  }
+      ),
+    ).associate { builder ->
+      builder.agent to
+        ProcessAgentRunAdapter(
+          agent = builder.agent,
+          commandBuilder = builder,
+          processRunner = processRunner,
+          clock = clock,
+          executableLookup = executableLookup,
+          diagnostics = diagnostics,
+          approvals = workerBinding.approvals,
+          inheritedEnvironment = workerBinding.providerEnvironment,
+          userHome = workerBinding.userHome,
+        )
+    }
+}
 
 internal data class AgentRunApprovalOwners(
   val authority: ApprovalOwnerAuthority,
@@ -877,3 +1016,8 @@ private fun approvalEnclosingDeadline(
   clock: Clock,
   timeout: Duration?,
 ): Instant? = timeout?.let { clock.instant().plusMillis(it.inWholeMilliseconds) }
+
+private fun observesBuild(
+  observer: AgentRunBuildObserver,
+  command: AgentRunCommand,
+): Boolean = observer !== AgentRunBuildObserver.NONE && command.kind == AgentRunCommandKind.AGENT

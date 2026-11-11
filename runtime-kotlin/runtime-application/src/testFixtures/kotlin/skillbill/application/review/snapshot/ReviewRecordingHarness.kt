@@ -29,6 +29,7 @@ import skillbill.infrastructure.workflow.review.broker.FileSystemReviewEvidenceB
 import skillbill.infrastructure.workflow.review.specialists.ClasspathReviewSpecialistContractProvider
 import skillbill.install.model.SupportedAgent
 import skillbill.learnings.model.LearningRecord
+import skillbill.model.EnvironmentContext
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
@@ -298,6 +299,7 @@ fun parallelCodeReviewRunnerOf(
   val laneLaunch =
     ParallelCodeReviewRunnerLaneLaunch(
       parentReviewLauncher = parentReviewLauncher,
+      environment = EnvironmentContext(),
       reviewEvidenceBrokerFactory = reviewEvidenceBrokerFactory,
       governedEvidenceEndpointBinder = governedEvidenceEndpointBinder,
       reviewLaunchAgentStaging = reviewLaunchAgentStaging,

@@ -20,13 +20,13 @@ class NativeBypassLaunchTest {
   fun `unowned OpenCode work is refused before ACP starts`() {
     val runner = RecordingAgentRunProcessRunner()
     val adapter =
-      headlessAgentRunAdapters(
+      HeadlessAgentRunAdapterFactory(
         runner,
         ALL_EXECUTABLES_AVAILABLE,
         AgentRunWorkerBinding(),
         diagnostics = NoopRuntimeDiagnostics,
         clock = LAUNCH_TEST_CLOCK,
-      ).getValue(SupportedAgent.OPENCODE)
+      ).createAll().getValue(SupportedAgent.OPENCODE)
 
     val outcome = adapter.launch(request().copy(approval = AgentRunApprovalRequirement.Unowned()))
 
@@ -52,7 +52,7 @@ class NativeBypassLaunchTest {
     )) {
       val runner = RecordingAgentRunProcessRunner()
       val adapters =
-        headlessAgentRunAdapters(
+        HeadlessAgentRunAdapterFactory(
           runner,
           ALL_EXECUTABLES_AVAILABLE,
           workerBinding =
@@ -62,7 +62,7 @@ class NativeBypassLaunchTest {
             ),
           diagnostics = NoopRuntimeDiagnostics,
           clock = LAUNCH_TEST_CLOCK,
-        )
+        ).createAll()
       adapters.getValue(agent).launch(request().copy(approval = AgentRunApprovalRequirement.OutsideApproval))
       val process = runner.requests.single()
       assertNull(process.approval.channel, agent.id)

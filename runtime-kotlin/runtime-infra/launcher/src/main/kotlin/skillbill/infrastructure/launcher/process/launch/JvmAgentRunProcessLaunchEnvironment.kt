@@ -12,18 +12,22 @@ internal fun configureLaunchEnvironment(
 ) {
   if (!request.environmentFields.inheritEnvironment) {
     val isolated =
-      isolatedLaunchEnvironment(
-        builder.environment(),
-        request.environmentFields.environment,
-        request.environmentFields.environmentPassthroughKeys,
-      )
+      if (request.environmentFields.explicitEnvironment) {
+        request.environmentFields.environment
+      } else {
+        isolatedLaunchEnvironment(
+          builder.environment(),
+          request.environmentFields.environment,
+          request.environmentFields.environmentPassthroughKeys,
+        )
+      }
     builder.environment().clear()
     builder.environment().putAll(isolated)
   } else {
     builder.environment().putAll(request.environmentFields.environment)
   }
   val environment = builder.environment()
-  gateJvmResolver.resolve(environment).applyTo(environment)
+  if (!request.environmentFields.explicitEnvironment) gateJvmResolver.resolve(environment).applyTo(environment)
   request.environmentFields.removedEnvironmentKeys.forEach(environment::remove)
 }
 

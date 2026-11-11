@@ -40,12 +40,12 @@ class AgentRunLauncherProcessTest {
       )
     val facts =
       requireNotNull(
-        headlessAgentRunAdapters(
+        HeadlessAgentRunAdapterFactory(
           runner,
           ALL_EXECUTABLES_AVAILABLE,
           diagnostics = NoopRuntimeDiagnostics,
           clock = LAUNCH_TEST_CLOCK,
-        )[SupportedAgent.CLAUDE],
+        ).createAll()[SupportedAgent.CLAUDE],
       ).launchFacts(skillRunRequest())
 
     assertTrue(facts.stdoutTruncated)
@@ -59,12 +59,12 @@ class AgentRunLauncherProcessTest {
     val request = skillRunRequest(goalContinuation = null).copy(promptOverride = AGENT_RUN_LAUNCHER_PHASE_PROMPT)
 
     requireNotNull(
-      headlessAgentRunAdapters(
+      HeadlessAgentRunAdapterFactory(
         runner,
         ALL_EXECUTABLES_AVAILABLE,
         diagnostics = NoopRuntimeDiagnostics,
         clock = LAUNCH_TEST_CLOCK,
-      )[SupportedAgent.CLAUDE],
+      ).createAll()[SupportedAgent.CLAUDE],
     ).launch(request)
 
     val captured = runner.requests.single()
@@ -81,12 +81,12 @@ class AgentRunLauncherProcessTest {
     val request = skillRunRequest(goalContinuation = null).copy(promptOverride = AGENT_RUN_LAUNCHER_PHASE_PROMPT)
 
     requireNotNull(
-      headlessAgentRunAdapters(
+      HeadlessAgentRunAdapterFactory(
         runner,
         ALL_EXECUTABLES_AVAILABLE,
         diagnostics = NoopRuntimeDiagnostics,
         clock = LAUNCH_TEST_CLOCK,
-      )[SupportedAgent.JUNIE],
+      ).createAll()[SupportedAgent.JUNIE],
     ).launch(request)
 
     val session = runner.requests.single()
@@ -132,12 +132,12 @@ class AgentRunLauncherProcessTest {
       )
     val timeout =
       requireNotNull(
-        headlessAgentRunAdapters(
+        HeadlessAgentRunAdapterFactory(
           timeoutRunner,
           ALL_EXECUTABLES_AVAILABLE,
           diagnostics = NoopRuntimeDiagnostics,
           clock = LAUNCH_TEST_CLOCK,
-        )[SupportedAgent.CODEX],
+        ).createAll()[SupportedAgent.CODEX],
       ).launchFacts(skillRunRequest())
     assertEquals(AgentRunTermination.TimedOut, timeout.termination)
 
@@ -155,12 +155,12 @@ class AgentRunLauncherProcessTest {
       )
     val spawnFailure =
       requireNotNull(
-        headlessAgentRunAdapters(
+        HeadlessAgentRunAdapterFactory(
           spawnRunner,
           ALL_EXECUTABLES_AVAILABLE,
           diagnostics = NoopRuntimeDiagnostics,
           clock = LAUNCH_TEST_CLOCK,
-        )[SupportedAgent.CODEX],
+        ).createAll()[SupportedAgent.CODEX],
       ).launchFacts(skillRunRequest())
     assertEquals(AgentRunTermination.SpawnFailed, spawnFailure.termination)
     assertEquals("missing executable", spawnFailure.stderr)
@@ -185,12 +185,12 @@ class AgentRunLauncherProcessTest {
 
     val facts =
       requireNotNull(
-        headlessAgentRunAdapters(
+        HeadlessAgentRunAdapterFactory(
           runner,
           ALL_EXECUTABLES_AVAILABLE,
           diagnostics = NoopRuntimeDiagnostics,
           clock = LAUNCH_TEST_CLOCK,
-        )[SupportedAgent.CODEX],
+        ).createAll()[SupportedAgent.CODEX],
       )
         .launchFacts(skillRunRequest())
 
@@ -216,12 +216,12 @@ class AgentRunLauncherProcessTest {
 
     val facts =
       requireNotNull(
-        headlessAgentRunAdapters(
+        HeadlessAgentRunAdapterFactory(
           runner,
           ALL_EXECUTABLES_AVAILABLE,
           diagnostics = NoopRuntimeDiagnostics,
           clock = LAUNCH_TEST_CLOCK,
-        )[SupportedAgent.CLAUDE],
+        ).createAll()[SupportedAgent.CLAUDE],
       )
         .launchFacts(skillRunRequest())
 
@@ -235,12 +235,12 @@ class AgentRunLauncherProcessTest {
     val runner = RecordingAgentRunProcessRunner()
     val adapter =
       requireNotNull(
-        headlessAgentRunAdapters(
+        HeadlessAgentRunAdapterFactory(
           runner,
           ALL_EXECUTABLES_AVAILABLE,
           diagnostics = NoopRuntimeDiagnostics,
           clock = LAUNCH_TEST_CLOCK,
-        )[SupportedAgent.CLAUDE],
+        ).createAll()[SupportedAgent.CLAUDE],
       )
 
     adapter.launch(

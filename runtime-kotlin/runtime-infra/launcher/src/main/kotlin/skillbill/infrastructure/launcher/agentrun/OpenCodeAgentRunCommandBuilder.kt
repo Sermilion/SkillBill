@@ -4,24 +4,35 @@ import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.contracts.system.OpenCodeEnvironmentKeys
 import skillbill.contracts.system.OpenCodeEnvironmentSelection
 import skillbill.contracts.system.OpenCodeLaunchIdentity
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.shellcontent.GovernedReviewFailureCode
+import skillbill.infrastructure.launcher.mcp.OpenCodeReviewLaunchScope
+import skillbill.infrastructure.launcher.mcp.OpenCodeReviewPreparation
 import skillbill.infrastructure.launcher.mcp.RUNTIME_MCP_SERVER_NAME
 import skillbill.infrastructure.launcher.mcp.runtimeMcpServerEnvironment
 import skillbill.infrastructure.launcher.process.cursor.AcpProvider
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpMcpServer
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
+import skillbill.infrastructure.launcher.process.launch.captureLaunchResourceOutcome
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.model.ReviewLaunchIsolationStrategy
+import skillbill.ports.system.HostPlatformPort
+import java.io.IOException
 import java.nio.file.Path
+import java.util.concurrent.CancellationException
 
 internal class OpenCodeAgentRunCommandBuilder(
   private val databasePath: Path? = null,
   private val runtimeMcpBin: Path? = null,
   private val bindingEnvironment: Map<String, String> = emptyMap(),
   private val userHome: Path? = null,
+  private val hostPlatform: HostPlatformPort? = null,
 ) : AgentRunCommandBuilder {
   override val agent: SupportedAgent = SupportedAgent.OPENCODE
   override val outputDecoder: AgentRunOutputDecoder =
@@ -38,7 +49,7 @@ internal class OpenCodeAgentRunCommandBuilder(
       configFormat = McpRegistrationOperations.configFormatFor(SupportedAgent.OPENCODE),
     )
   override val approvalProtocol: AgentRunApprovalProtocol = AgentRunApprovalProtocol.OPENCODE_ACP
-  override val reviewIsolation: ReviewLaunchIsolationStrategy = ReviewLaunchIsolationStrategy.FRESH_PROCESS
+  override val reviewIsolation: ReviewLaunchIsolationStrategy = ReviewLaunchIsolationStrategy.UNSUPPORTED
 
   override fun continuation(
     command: AgentRunCommand,
@@ -46,6 +57,7 @@ internal class OpenCodeAgentRunCommandBuilder(
   ): ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)? = null
 
   override fun build(request: SkillRunRequest): AgentRunCommand {
+    if (isGovernedReviewIntent(request)) return governedReviewCommand(request)
     requireProcessLaunch(request, reviewIsolation)
     requireGovernedReviewLaunch(request, agent, governedReviewLaunchCapability)
     val continuation = goalContinuationCommand(request, agent, databasePath)
@@ -97,6 +109,98 @@ internal class OpenCodeAgentRunCommandBuilder(
       idlePolicy = unstreamedLivenessPolicy(request),
     )
   }
+
+  private fun governedReviewCommand(request: SkillRunRequest): AgentRunCommand {
+    governedReviewRefusal(request)?.let { return failedGovernedReviewCommand(request, it) }
+    val prompt = launchPrompt(request)
+    val admitted =
+      when (val prepared = prepareGovernedReview(request)) {
+        is OpenCodeReviewPreparation.Ready -> prepared.scope
+        is OpenCodeReviewPreparation.Refused -> return failedGovernedReviewCommand(request, prepared.reason)
+      }
+    return AgentRunCommand(
+      command = listOf(SupportedAgent.OPENCODE.wireValue) + AcpProvider.OpenCode.acpArguments,
+      workingDirectory = admitted.cwd,
+      timeout = request.timeout,
+      stdinText = prompt,
+      environment = admitted.environment,
+      inheritEnvironment = false,
+      approvalProtocol = approvalProtocol,
+      sessionModel = request.modelOverride,
+      sessionEffort = request.effortOverride,
+      idlePolicy = unstreamedLivenessPolicy(request),
+      conversationIsolation = governedReviewConversationIsolation(request),
+      launchScope = admitted,
+      explicitEnvironment = true,
+    )
+  }
+
+  private fun prepareGovernedReview(request: SkillRunRequest): OpenCodeReviewPreparation {
+    val home = userHome ?: return OpenCodeReviewPreparation.Refused("The OpenCode user home cannot be verified.")
+    return captureLaunchResourceOutcome {
+      OpenCodeReviewLaunchScope.prepare(request, bindingEnvironment, home, hostPlatform)
+    }.getOrElse { failure ->
+      if (failure is CancellationException) throw failure
+      governedPreparationFailure(failure)
+    }
+  }
+
+  private fun governedPreparationFailure(failure: Throwable): OpenCodeReviewPreparation.Refused {
+    if (failure.suppressed.isNotEmpty()) throw failure
+    val reason =
+      when (failure) {
+        is SkillBillRuntimeException ->
+          (
+            failure.failureCodeLabel()?.let { "$it: " }.orEmpty() +
+              (failure.message ?: "OpenCode review isolation could not be established.")
+          ).take(MAX_PREPARATION_DIAGNOSTIC_CHARS)
+        is IOException -> "OpenCode review isolation files could not be read or prepared."
+        is SecurityException -> "OpenCode review isolation files could not be inspected."
+        is UnsupportedOperationException -> "The host cannot enforce private OpenCode review permissions."
+        else -> throw failure
+      }
+    return OpenCodeReviewPreparation.Refused(reason)
+  }
+
+  private fun failedGovernedReviewCommand(
+    request: SkillRunRequest,
+    reason: String,
+  ): AgentRunCommand =
+    AgentRunCommand(
+      command = listOf(SupportedAgent.OPENCODE.wireValue) + AcpProvider.OpenCode.acpArguments,
+      workingDirectory = request.repoRoot,
+      timeout = request.timeout,
+      inheritEnvironment = false,
+      approvalProtocol = approvalProtocol,
+      sessionModel = request.modelOverride,
+      sessionEffort = request.effortOverride,
+      preflightFailure = "${GovernedReviewFailureCode.LAUNCH_CAPABILITY.name}: $reason",
+      idlePolicy = unstreamedLivenessPolicy(request),
+      conversationIsolation = governedReviewConversationIsolation(request),
+      explicitEnvironment = true,
+    )
+
+  private fun governedReviewRefusal(request: SkillRunRequest): String? =
+    when {
+      request.approval != AgentRunApprovalRequirement.GovernedReview ->
+        "governed review authority is missing"
+      request.reviewEvidenceBroker == null || request.reviewEvidenceEndpoint == null ->
+        "lane-bound review evidence broker and endpoint are required"
+      request.nativeReviewWorkerName.isNullOrBlank() -> "the selected native worker is missing"
+      request.openCodeIdentity == null -> "the resolved OpenCode source identity is missing"
+      request.modelOverride?.let {
+        it.substringBefore('/').isNotBlank() && '/' in it && it.substringAfter('/').isNotBlank()
+      } != true ->
+        "the selected provider and model are missing"
+      request.promptOverride.isNullOrBlank() -> "the immutable parent review packet is missing"
+      request.reviewFanOut -> "OpenCode governed review requires a single-lane assignment"
+      request.goalContinuation != null -> "a governed review cannot use goal continuation"
+      else -> null
+    }
+
+  private fun isGovernedReviewIntent(request: SkillRunRequest): Boolean =
+    request.approval == AgentRunApprovalRequirement.GovernedReview ||
+      request.reviewEvidenceBroker != null || request.reviewEvidenceEndpoint != null
 }
 
 private data class OpenCodeChildEnvironment(
@@ -195,3 +299,5 @@ private fun childRemovals(
       identityRoots(accepted).forEach { (key, selection) -> if (!selection.supplied) add(key) }
     }
   }
+
+private const val MAX_PREPARATION_DIAGNOSTIC_CHARS = 240
