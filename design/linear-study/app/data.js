@@ -191,7 +191,7 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
       att('failed', '07:15', 140000, 1, '`RuntimeRawMapArchitectureTest` rejected a public `Map<String, Any?>` parameter.'),
       att('passed', '07:18', 190000, 0)]),
     chk('agnix', 'agnix', '.', 'npx --yes agnix@0.44.0 --strict .', [att('passed', '07:21', 18000, 0)]),
-    chk('skill-bill-validate', 'Skill Bill validate', '.', 'skill-bill validate --repo-root .', [att('passed', '07:21', 6000, 0)]),
+    chk('skill-bill-validate', 'Sona validate', '.', 'skill-bill validate --repo-root .', [att('passed', '07:21', 6000, 0)]),
     chk('agent-configs', 'Agent configs', '.', 'scripts/validate_agent_configs', [att('passed', '07:22', 12000, 0, '106 skills, 16 add-on files, 9 packs, 96 native agents.')]),
     chk('tray-check', 'Tray check and distributable', 'desktop-tray', './gradlew clean check createDistributable --no-build-cache', [att('passed', '07:22', 160000, 0)]),
     chk('tray-smoke', 'Tray packaged smoke', 'desktop-tray', './gradlew :composeApp:packagedDataSmoke --no-build-cache', [

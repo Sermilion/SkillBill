@@ -1,6 +1,8 @@
-# Skill Bill: Linear study
+# Sona: Linear study
 
-An interactive HTML prototype of the Skill Bill desktop app redesigned in Linear's design language. It keeps the app's near-black and amber palette. The desktop app in `desktop/` defines shared styling and behavior. Added mock functionality stays in the prototype for later implementation.
+An interactive HTML prototype of the Sona desktop app redesigned in Linear's design language. It keeps the app's near-black and amber palette. The desktop app in `desktop/` defines shared styling and behavior. Added mock functionality stays in the prototype for later implementation.
+
+Sona uses the Ping logo from [the logo study](../sona-logo-linear.html). The shared `BrandMark` draws its three clipped bands in one color at every size. Amber remains the interface accent for actions and status. Runtime commands, paths, repository names and recorded patches keep their existing identities.
 
 [HANDOFF.md](HANDOFF.md) is the implementation handoff. Read it before planning work.
 

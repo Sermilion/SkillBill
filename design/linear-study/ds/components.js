@@ -1,4 +1,4 @@
-/* Skill Bill — Linear study · component library
+/* Sona — Linear study · component library
  * Every component is a function that returns an HTML string and records where it was used.
  * Screens (app/screens.js) may only call these functions plus the layout primitives in components.css. */
 (function () {
@@ -126,16 +126,18 @@
   }
 
   /* ---------- Brand mark ---------- */
+  let brandMarkId = 0;
   function BrandMark(size) {
     track('BrandMark');
     const s = size || 20;
-    return `<svg class="sb-mark" style="width:${s}px;height:${s}px" viewBox="0 0 64 64" aria-hidden="true">
-      <defs><linearGradient id="sbt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e1e24"/><stop offset="1" stop-color="#0b0b0d"/></linearGradient>
-      <linearGradient id="sba" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3c462"/><stop offset=".55" stop-color="#e9a81c"/><stop offset="1" stop-color="#c98a0e"/></linearGradient></defs>
-      <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#sbt)"/>
-      <rect x="2.25" y="2.25" width="59.5" height="59.5" rx="13.75" fill="none" stroke="#fff" stroke-opacity=".1" stroke-width=".5"/>
-      <circle cx="32" cy="32" r="15.6" fill="none" stroke="url(#sba)" stroke-width="4.25"/>
-      <path d="M32 32L32 22.6A9.4 9.4 0 1 1 23.5 36Z" fill="url(#sba)"/></svg>`;
+    const clip = `sona-ping-${++brandMarkId}`;
+    return `<svg class="sb-mark" style="width:${s}px;height:${s}px" viewBox="0 0 100 100" aria-hidden="true">
+      <defs><clipPath id="${clip}"><circle cx="50" cy="50" r="44"/></clipPath></defs>
+      <g clip-path="url(#${clip})" fill="none" stroke="currentColor">
+        <circle cx="18.9" cy="81.1" r="13" stroke-width="26"/>
+        <circle cx="18.9" cy="81.1" r="47" stroke-width="22"/>
+        <circle cx="18.9" cy="81.1" r="80" stroke-width="22"/>
+      </g></svg>`;
   }
 
   /* ---------- Status icon: shape carries the state, color reinforces it ---------- */
@@ -155,7 +157,7 @@
   function StatusIcon(state, frac, opts) {
     track('StatusIcon');
     const o = opts || {};
-    const c = `var(--st-${(STATES[state] || STATES.pending).tone})`;
+    const c = o.monochrome ? 'var(--fg)' : `var(--st-${(STATES[state] || STATES.pending).tone})`;
     const ink = 'var(--bg-panel)';
     let inner;
     switch (state) {
@@ -759,7 +761,7 @@
   /* ---------- Tray popover ---------- */
   function TrayPopover(o) {
     track('TrayPopover');
-    return `<div class="sb-tray"><div class="sb-tray-hd">${BrandMark(18)}<span>Skill Bill</span></div><div class="sb-tray-stats">${o.stats.map((x) => `<div><b style="color:${x.color || 'var(--fg)'}">${esc(x.value)}</b><span>${esc(x.label)}</span></div>`).join('')}</div><div class="sb-tray-tabs">${o.tabs}</div><div class="sb-tray-body">${join(o.rows)}</div><div class="sb-tray-ft">${join(o.footer)}</div></div>`;
+    return `<div class="sb-tray"><div class="sb-tray-hd">${BrandMark(18)}<span>Sona</span></div><div class="sb-tray-stats">${o.stats.map((x) => `<div><b style="color:${x.color || 'var(--fg)'}">${esc(x.value)}</b><span>${esc(x.label)}</span></div>`).join('')}</div><div class="sb-tray-tabs">${o.tabs}</div><div class="sb-tray-body">${join(o.rows)}</div><div class="sb-tray-ft">${join(o.footer)}</div></div>`;
   }
 
   /* ---------- New task: open chats, transcript, composer, home, pickers ---------- */

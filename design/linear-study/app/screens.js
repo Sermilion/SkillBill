@@ -82,13 +82,13 @@
     const live = D.items.filter((x) => x.section !== 'finished').length;
     const navOn = (v, sec) => (st.view === v && (sec === undefined || st.section === sec)) || (v === 'work' && sec === undefined && st.view === 'detail');
     return S.Sidebar({
-      top: S.WorkspaceSwitcher({ name: 'Skill Bill', actions: [S.IconButton({ icon: 'search', label: 'Command menu', kbd: '⌘ K', act: 'cmdk', size: 'sm' })] }),
+      top: S.WorkspaceSwitcher({ name: 'Sona', actions: [S.IconButton({ icon: 'search', label: 'Command menu', kbd: '⌘ K', act: 'cmdk', size: 'sm' })] }),
       items: [
         S.SidebarItem({ icon: 'pencil', label: 'New task', count: st.nt.chats.length > 1 ? st.nt.chats.length : null, on: st.view === 'newtask', act: 'nav', arg: 'newtask', tip: 'New task', kbd: 'G N' }),
         S.SidebarItem({ icon: 'target', label: 'Work', count: live, on: navOn('work', null) || st.view === 'detail', act: 'nav', arg: 'work', tip: 'Work', kbd: 'G W' }),
         S.SidebarItem({ icon: 'history', label: 'History', on: st.view === 'history', act: 'nav', arg: 'history', tip: 'History', kbd: 'G H' }),
         S.SidebarSection({ label: 'Board', act: 'sec-toggle', arg: 'board', closed: st.closed.has('board'), items: SECTIONS.map(([id, label, state]) => S.SidebarItem({
-          lead: S.StatusIcon(state, 0.5), label, child: false, act: 'section', arg: id, on: st.view === 'work' && st.section === id,
+          lead: S.StatusIcon(state, 0.5, { monochrome: true }), label, child: false, act: 'section', arg: id, on: st.view === 'work' && st.section === id,
           attention: id === 'needs' && count(id) ? count(id) : null, count: id === 'needs' ? null : count(id),
         })) }),
       ],
@@ -2010,7 +2010,7 @@
     return S.ViewHeader({ crumbs: [{ label: 'Settings', act: 'settings-page', arg: 'general' }, { label }], actions: [] }) + `<div class="sb-scroll" data-scroll="settings"><div class="sb-set">${content}</div></div>`;
   }
   function setGeneral(st) {
-    return S.SettingsHeader({ title: 'General', body: 'Where the app reads Skill Bill’s work, which Claude account runs use, and how long finished work stays listed.' }) +
+    return S.SettingsHeader({ title: 'General', body: 'Where the app reads Sona’s work, which Claude account runs use, and how long finished work stays listed.' }) +
       S.SettingsGroup({ title: 'Database', rows: [S.SettingRow({ stack: true, control: `<div class="l-col g-2" style="width:100%">${S.Field({ for: 'db-path', label: 'Database path, blank uses runtime default', control: `<div class="l-row g-2">${S.Input({ id: 'db-path', value: st.prefs.dbDraft, mono: true, placeholder: 'Runtime default', input: 'db-path' })}${S.Button({ label: 'Save settings', variant: 'primary', act: 'db-save', disabled: st.prefs.dbDraft === st.prefs.dbPath })}</div>` })}${st.prefs.dbDraft && !st.prefs.dbDraft.trim() ? S.Hint({ tone: 'error', text: 'The path is only spaces. Clear it to use the default.' }) : ''}${S.Hint({ text: `Current database: ${st.prefs.dbPath || '~/.skill-bill/review-metrics.db'}` })}</div>` })] }) +
       S.SettingsGroup({ title: 'Claude account', rows: [S.SettingRow({ label: 'Claude config directory', desc: 'Runs started here use it as CLAUDE_CONFIG_DIR.', control: `<button type="button" class="sb-pick" data-act="claude-menu">${S.Icon('folder')}<span class="mono">${esc(st.prefs.claudeDir)}</span>${S.Icon('chevronDown')}</button>` })] }) +
       S.SettingsGroup({ title: 'History retention', rows: [S.SettingRow({ label: 'Keep finished work for', desc: 'How long History and the tray list finished work.', control: S.Segmented({ act: 'pref-retention', value: st.prefs.retention, items: ['6h', '24h', '7d'].map((x) => ({ id: x, label: x })) }) })] }) +
@@ -2019,7 +2019,7 @@
   function setNotifications(st) {
     return S.SettingsHeader({ title: 'Notifications', body: 'A notification fires when work changes lifecycle state. Clicking one opens that item.' }) +
       S.SettingsGroup({ title: 'Notify me when', rows: D.NOTIFICATIONS.map(([id, label]) => S.SettingRow({ label, control: S.Toggle({ on: st.prefs.notify[id], act: 'pref-notify', arg: id, label }) })) }) +
-      S.SettingsGroup({ title: 'Preview', rows: [S.SettingRow({ stack: true, control: S.Toast({ system: true, app: 'Skill Bill', when: 'now', title: 'INF-7 is blocked', body: 'Review left 2 Blocker findings on subtask 3 · infra-terraform' }) })] });
+      S.SettingsGroup({ title: 'Preview', rows: [S.SettingRow({ stack: true, control: S.Toast({ system: true, app: 'Sona', when: 'now', title: 'INF-7 is blocked', body: 'Review left 2 Blocker findings on subtask 3 · infra-terraform' }) })] });
   }
 
   /* Models: execution_matrix in ~/.config/skill-bill/config.json */
@@ -2168,7 +2168,7 @@
       ['APP-123', 'From an issue', 'APP-123'],
     ].map(([title, kind, text]) => S.InboxRow({ icon: 'message', title, sub: kind, act: 'chat-quick', arg: text })) }) + (st.nt.readiness ? S.Label({ text: st.nt.readiness, color: st.nt.readiness.startsWith('Ready:') ? 'var(--st-done)' : 'var(--accent)', dot: true }) : '') }) : '';
     return S.NewTaskHome({ scroll: 'nt-home-' + c.id, children: [
-      S.DocHeader({ title: 'What should we ship?', sub: 'Describe the work or paste an issue. Skill Bill plans it, builds it, audits it and opens the PR.' }),
+      S.DocHeader({ title: 'What should we ship?', sub: 'Describe the work or paste an issue. Sona plans it, builds it, audits it and opens the PR.' }),
       S.StepLine(D.NEW_TASK_STEPS),
       recent.length ? S.Section({ title: 'Recent chats', count: recent.length, end: [S.Button({ label: 'Search chats', variant: 'ghost', size: 'sm', kbd: '/resume', act: 'resume-palette' })], body: S.InboxList({ id: 'nt-recent', label: 'Recent chats', rows: recentRows }) }) : '',
       st.nt.homeState ? examples : S.Section({ title: needs.length ? 'Needs you' : 'All clear', count: needs.length || null, end: [S.Button({ label: `${running} running · ${finished} finished today`, icon: 'arrowRight', variant: 'ghost', size: 'sm', act: 'nav', arg: 'work' })], body: needs.length ? S.InboxList({ id: 'nt-needs', label: 'Needs you', rows: needRows }) : '' }),

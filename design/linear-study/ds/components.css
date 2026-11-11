@@ -1,4 +1,4 @@
-/* Skill Bill — Linear study · component layer
+/* Sona — Linear study · component layer
  * Every class here belongs to one component in ds/components.js.
  * Screens never add their own visual rules; they compose these. */
 
@@ -38,7 +38,7 @@ input { font: inherit; color: inherit; }
 .sb-icon--lg { width: 20px; height: 20px; stroke-width: 1.5; }
 
 /* Brand mark */
-.sb-mark { width: 20px; height: 20px; flex: none; border-radius: 5px; display: block; }
+.sb-mark { width: 20px; height: 20px; flex: none; color: var(--fg); display: block; }
 
 /* Status icon */
 .sb-status { width: 14px; height: 14px; flex: none; display: block; }
