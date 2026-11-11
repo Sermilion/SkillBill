@@ -71,6 +71,11 @@ governedResources {
     "SKILL-248: canonical decomposition manifest bundle journal schema",
   )
   copy(
+    "copyLegacyDecompositionManifestBundleJournalSchema",
+    "decomposition-manifest-bundle-journal-v0.1-schema.yaml",
+    "SKILL-534: retained 0.1 bundle journal schema for pending marker recovery",
+  )
+  copy(
     "copyGoalObservabilityEventSchema",
     "goal-observability-event-schema.yaml",
     "SKILL-61: canonical goal-observability event schema",
@@ -301,6 +306,11 @@ governedResources {
     "copyFeatureTaskRuntimeQuarantineSchema",
     "feature-task-runtime-quarantine-schema.yaml",
     "SKILL-140: canonical quarantine schema",
+  )
+  copy(
+    "copyFeatureTaskRuntimePlanBundleFeasibilitySchema",
+    "feature-task-runtime-plan-bundle-feasibility-schema.yaml",
+    "SKILL-534: canonical durable feasibility schema",
   )
   copy(
     "copyIssueKeySchema",

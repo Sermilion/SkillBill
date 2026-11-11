@@ -42,6 +42,7 @@ import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.boundedSchemaGateDetail
 import skillbill.engine.featuretask.runner.phaseDeclaration
+import skillbill.engine.featuretask.slot.PhaseLaunchHandoffSelection
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptPlanAuthorization
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRecords
@@ -290,6 +291,7 @@ internal object FeatureTaskRuntimeRunLoopOutputVerification {
                 observability = observability,
                 fileManifest = fileManifest,
                 repositoryFingerprint = repositoryFingerprint,
+                launchHandoffSelection = args.launchHandoffSelection,
               ),
             outputText = outputText,
           ),
@@ -565,6 +567,8 @@ internal object FeatureTaskRuntimeRunLoopOutputVerification {
       val observability = accepted.observability
       val fileManifest = accepted.fileManifest
       val repositoryFingerprint = accepted.repositoryFingerprint
+      val feasibilityState = acceptedFeasibilityState(context, accepted)
+      val feasibilityCandidate = feasibilityState?.approvalCandidate
       val phaseState =
         FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
           request,
@@ -585,6 +589,11 @@ internal object FeatureTaskRuntimeRunLoopOutputVerification {
                 normalizedOutput = normalizedOutput,
                 repairEvidence = repairEvidence,
                 repositoryFingerprint = repositoryFingerprint,
+                feasibilityApprovalRequired =
+                  accepted.launchHandoffSelection == PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY,
+                feasibilityApprovalRevision = feasibilityCandidate?.sourceRevision,
+                feasibilityApprovalExpectedRevision = feasibilityState?.revision,
+                feasibilityApprovalTransitionId = feasibilityCandidate?.transitionId,
               ),
           ),
         )
@@ -603,25 +612,43 @@ internal object FeatureTaskRuntimeRunLoopOutputVerification {
           inMemoryOutput = inMemoryOutput,
         )
       if (persisted is RequiredPhaseWrite.Rejected) {
-        val blockCoupling = context.settlementCoupling()
-        return AttemptResult.settled(
-          FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-            blockCoupling.progress,
-            blockCoupling.transitions,
-            recorder,
-            PhaseBlockRequest(
-              run = run,
-              attemptCount = iteration,
-              reason = persisted.message,
-              observability = observability,
-              payload = BlockAndPersistPayload(fileManifest = fileManifest),
-              failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
-            ),
-          ),
-        )
+        return blockCompletionRejection(context, accepted, persisted)
       }
       return null
     }
+  }
+
+  private fun blockCompletionRejection(
+    context: PhaseOutputSettlementContext,
+    accepted: PersistAcceptedOutputArgs,
+    persisted: RequiredPhaseWrite.Rejected,
+  ): AttemptResult {
+    val coupling = context.settlementCoupling()
+    return AttemptResult.settled(
+      FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
+        coupling.progress,
+        coupling.transitions,
+        context.recorder,
+        PhaseBlockRequest(
+          run = accepted.run,
+          attemptCount = accepted.iteration,
+          reason = persisted.message,
+          observability = accepted.observability,
+          payload = BlockAndPersistPayload(fileManifest = accepted.fileManifest),
+          failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
+        ),
+      ),
+    )
+  }
+
+  private fun acceptedFeasibilityState(
+    context: PhaseOutputSettlementContext,
+    accepted: PersistAcceptedOutputArgs,
+  ) = if (accepted.launchHandoffSelection == PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY
+  ) {
+    context.recorder.loadPlanBundleFeasibility(accepted.run.request.workflowId)
+  } else {
+    null
   }
 
   internal fun blockRequiredOutput(

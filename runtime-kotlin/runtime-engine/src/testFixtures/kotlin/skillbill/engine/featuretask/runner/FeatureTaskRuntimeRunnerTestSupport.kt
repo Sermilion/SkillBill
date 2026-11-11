@@ -52,6 +52,7 @@ import skillbill.engine.featuretask.phase.core.InMemoryFeatureTaskPhaseSettlemen
 import skillbill.engine.featuretask.phase.core.settleScriptedEnvelope
 import skillbill.engine.featuretask.phase.core.testPhaseSettlementService
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
@@ -940,6 +941,8 @@ private fun harnessWorkflowParts(database: DatabaseSessionFactory): RunnerHarnes
       FeatureTaskRuntimeDecomposeTerminalRecorder(
         database,
         testHarnessClock,
+        PlanBundleFeasibilityStateCodec(AcceptingFeatureTaskRuntimeWireArtifactValidator),
+        NoopRuntimeDiagnostics,
       ),
     runInvariantsStore =
       FeatureTaskRuntimeRunInvariantsStore(

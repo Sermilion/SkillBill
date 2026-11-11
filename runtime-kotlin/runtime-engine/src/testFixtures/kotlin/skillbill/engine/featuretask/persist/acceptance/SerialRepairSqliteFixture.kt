@@ -23,6 +23,7 @@ import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.phase.core.InMemoryFeatureTaskPhaseSettlementRepository
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.testPhaseSettlementService
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
@@ -222,6 +223,7 @@ class SerialRepairSqliteFixture(
         validator,
         testPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), clock),
         clock,
+        PlanBundleFeasibilityStateCodec(validator),
       ),
       validator,
       projection,

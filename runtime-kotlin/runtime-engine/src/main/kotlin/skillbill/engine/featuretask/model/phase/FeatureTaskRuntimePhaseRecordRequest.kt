@@ -33,6 +33,10 @@ public data class FeatureTaskRuntimePhaseStateRequest(
   public val reviewRunId: String? = null,
   internal val findingVerificationCheckpoint: List<FeatureTaskRuntimeFindingVerificationDisposition>? = null,
   public val mutating: Boolean = false,
+  public val feasibilityApprovalRequired: Boolean = false,
+  public val feasibilityApprovalRevision: Int? = null,
+  public val feasibilityApprovalExpectedRevision: Int? = null,
+  public val feasibilityApprovalTransitionId: String? = null,
 )
 
 public data class FeatureTaskRuntimePhaseLedgerRequest(

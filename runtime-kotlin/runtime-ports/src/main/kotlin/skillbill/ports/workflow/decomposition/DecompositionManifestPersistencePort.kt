@@ -1,5 +1,6 @@
 package skillbill.ports.workflow.decomposition
 
+import skillbill.ports.workflow.decomposition.model.DecompositionManifestBundleProjection
 import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import java.nio.file.Path
 
@@ -23,6 +24,12 @@ interface DecompositionManifestPersistencePort {
 
   fun <T> writeBundleAtomically(
     writes: List<Pair<Path, String>>,
+    verify: () -> T,
+  ): T
+
+  fun <T> writeBundleAtomically(
+    writes: List<Pair<Path, String>>,
+    projection: DecompositionManifestBundleProjection,
     verify: () -> T,
   ): T
 }

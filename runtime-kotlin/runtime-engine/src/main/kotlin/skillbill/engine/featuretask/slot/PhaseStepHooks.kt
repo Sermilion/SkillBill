@@ -46,6 +46,7 @@ import skillbill.workflow.taskruntime.model.review.ReviewPassResolution
  */
 public interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStepLaunchHooks<B> {
   public val contextKind: PhaseStepHookContextKind get() = PhaseStepHookContextKind.COMMON
+  public val launchHandoffSelection: PhaseLaunchHandoffSelection get() = PhaseLaunchHandoffSelection.DEFAULT
 
   /** The rule a [completionRejection] of this step is recorded under in the durable block reason. */
   public val completionRejectionRule: String
@@ -93,6 +94,11 @@ public interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStepLa
     internal val None: PhaseStepHooks<PhaseAcceptedStepExecution> =
       object : PhaseStepHooks<PhaseAcceptedStepExecution> {}
   }
+}
+
+public enum class PhaseLaunchHandoffSelection {
+  DEFAULT,
+  BUNDLE_FEASIBILITY,
 }
 
 /** A step that owns one serial acceptance-repair mutation attempt. */
@@ -267,6 +273,13 @@ internal interface PhaseLaunchReconciliationHooks {
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
   )
+}
+
+internal interface PhaseLaunchCompletionReconciliationHooks {
+  fun completeBeforeLaunch(
+    run: PhaseRun,
+    context: PhaseAttemptLaunchHookContext,
+  ): PhaseOutcome?
 }
 
 /** A step that launches an implementation turn. */
@@ -676,6 +689,9 @@ public class PhaseBoundStepHooks<B : PhaseAcceptedStepExecution> internal constr
   private val hooks: PhaseStepHooks<B>,
   private val binding: B,
 ) {
+  internal val launchHandoffSelection: PhaseLaunchHandoffSelection
+    get() = hooks.launchHandoffSelection
+
   internal fun settleCompletedRound(
     context: PhaseStepOutputContext,
     capture: ValidatedOutputCapture,

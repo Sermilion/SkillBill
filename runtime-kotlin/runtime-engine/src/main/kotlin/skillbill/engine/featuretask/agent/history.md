@@ -1,3 +1,18 @@
+## [2026-11-10] SKILL-534 incremental bundle feasibility reviews
+Areas: runtime-engine featuretask planning, launch, settlement and recovery; runtime-domain planning; runtime-goalrunner planning; runtime-contracts; runtime-ports decomposition; runtime-infra workflow and contracts; orchestration/contracts
+- MEDIUM feature. A versioned 0.1 feasibility artifact retains exact bundle identities, original mixed review receipts, cited conflicts, launch history, counters and assembled approval.
+- Full child text hashes and all declared dependency edges determine incremental scope. Changed children invalidate transitive dependents, including optional and skipped edges; parent or raw-manifest drift requires full review. Unrelated current successes carry forward.
+- V2 receipts cover exactly the persisted required refs in manifest order, with evidence and positive-line citations for conflicts. Malformed receipts add no accepted lines. Review and repair briefings omit preplan; ordinary unit planning retains it.
+- Durable admission charges at most three review and two repair launches per cycle. Matching replay retains its outcome without charging again; feasibility continuation leaves the generic authored-bundle correction budget unchanged.
+- Repair protects parent and raw-manifest bytes and non-pending specs. Retained intent, replacement text and guarded journal projection recover interrupted writes against original before and intended after identities.
+- Goal and standalone planning require complete artifact coverage linked to the matching completed phase record. Approval combines carried and new lines; complete current evidence can finalize through a linked runtime transition without another reviewer launch.
+- Reusable: PlanBundleFeasibilityReviewScope, typed receipt results, conditional phase-record writes and guarded bundle projection. New evidence records transitive dependency hashes; supported v2 direct-dependency evidence remains readable.
+- Missing v2 evidence triggers full review under the existing workflow identity without translating v1 judgments. Corrupt present evidence fails with owned errors and retains its source. Journal 0.2 keeps the 0.1 schema readable.
+- Limits: completed approval keeps immutable-manifest compatibility for execution progress; new-review reuse requires exact raw identities. Feasibility remains mandatory for every feature size, and execution dependency and retry policies retain their existing behavior.
+- QA limitation: validation changed code after QA settled, so the final tree differs from the tree QA exercised. QA did not re-run.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-08] SKILL-522 build capture across agent launches
 Areas: runtime-engine featuretask and operation; runtime-goalrunner launch; runtime-ports agentrun; runtime-infra launcher, host and sqlite; runtime-core wiring; runtime-cli subprocess fixtures
 - MEDIUM feature. Durable phases, standalone phases, operations and direct goal-agent launches observe descendant processes and provider command events through per-launch recorders, independently of display observation.

@@ -229,7 +229,12 @@ internal object PhaseAttemptSteps {
         state,
         coupling.transitions,
       )
+    return settleFixLoopBranch(context)
+  }
+
+  private fun PhaseRunLoopAttemptScope.settleFixLoopBranch(context: FixLoopBranchContext): PhaseOutcome? {
     val phaseAttempts = PhaseAttemptContinuations
+    val attempt = context.attempt
     return attempt.settledOutcome ?: AcceptanceCriterionRepairAttemptSettlement.settle(recorder, context) ?: when {
       attempt.incompleteWorkContinuationReason != null ->
         phaseAttempts.settleIncompleteWork(
@@ -237,12 +242,18 @@ internal object PhaseAttemptSteps {
           context,
         )
       attempt.boundaryBodyDeliveryContinuationReason != null ->
-        phaseAttempts.settleBoundaryBodyDelivery(observability, context)
+        phaseAttempts.settleBoundaryBodyDelivery(context.observability, context)
       attempt.criterionTurnContinuationReason != null -> phaseAttempts.settleCriterionTurn(context)
       attempt.findingsOwed != null ->
         phaseAttempts.settleFindingsOwed(recorder, context, requireNotNull(attempt.findingsOwed))
       attempt.planBundleRejected != null ->
         phaseAttempts.settlePlanBundleRejected(recorder, context, requireNotNull(attempt.planBundleRejected))
+      attempt.bundleFeasibilityContinuation != null ->
+        phaseAttempts.settleBundleFeasibilityContinuation(
+          recorder,
+          context,
+          requireNotNull(attempt.bundleFeasibilityContinuation),
+        )
       attempt.retryableTerminal != null ->
         phaseAttempts.settleRetryableTerminal(recorder, context, requireNotNull(attempt.retryableTerminal))
       phaseAttempts.continueInteractionTraceReask(context) -> null

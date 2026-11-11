@@ -29,6 +29,7 @@ import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutp
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersistInPhase
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking.pauseAndPersistInPhase
+import skillbill.engine.featuretask.runloop.planning.FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement
 import skillbill.engine.featuretask.runloop.state.featureTaskRuntimeChildOutput
 import skillbill.engine.featuretask.runner.LaunchResult
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
@@ -38,6 +39,7 @@ import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.attempt.PhaseLaunchPreparation.prepareLaunchForCapture
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
+import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.stepFacts
 import skillbill.error.core.catchingNonCancellation
@@ -111,6 +113,12 @@ internal object PhaseAttemptOnce {
     return if (rejection == null) {
       settleRecordRejectionLaunchOutcome(context, args, launch)
     } else {
+      FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement.refuseUnusableReview(
+        context,
+        run,
+        args.context.iteration,
+        "The admitted feasibility launch could not persist its required launch record: ${rejection.message}",
+      )
       AttemptResult.settled(blockRequiredWriteRejection(context, run, rejection))
     }
   }
@@ -305,6 +313,31 @@ internal object PhaseAttemptOnce {
     }
   }
 
+  private fun settleMissingFeasibilityReceipt(
+    context: PhaseAttemptLaunchCollaborationScope,
+    args: RecordRejectionAttemptArgs,
+    launch: LaunchResult,
+  ): AttemptResult? {
+    val captured = requireNotNull(launch.capturedPhaseOutput)
+    if ((captured.text.isBlank() || captured.truncated) &&
+      launch.capturedSettledEnvelope !is PhaseSettledEnvelopeRead.Found
+    ) {
+      if (FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement.refuseUnusableReview(
+          context,
+          args.context.run,
+          args.context.iteration,
+          "The admitted feasibility launch returned no complete phase receipt.",
+        )
+      ) {
+        return AttemptResult.BundleFeasibilityContinuation(
+          "The admitted feasibility launch returned no complete phase receipt.",
+          requireNotNull(launch.fileManifest),
+        )
+      }
+    }
+    return null
+  }
+
   internal fun settleRecordRejectionLaunchOutcome(
     context: PhaseAttemptLaunchCollaborationScope,
     args: RecordRejectionAttemptArgs,
@@ -324,7 +357,8 @@ internal object PhaseAttemptOnce {
       }
       val fileManifest = requireNotNull(launch.fileManifest)
       val captured = requireNotNull(launch.capturedPhaseOutput)
-      return PhaseOutputGate.gateOutput(
+      val missingReceipt = settleMissingFeasibilityReceipt(context, args, launch)
+      return missingReceipt ?: PhaseOutputGate.gateOutput(
         GateOutput(
           run = run,
           iteration = iteration,
@@ -368,6 +402,12 @@ internal object PhaseAttemptOnce {
   ): AttemptResult =
     AttemptResult.settled(
       with(context) {
+        FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement.refuseUnusableReview(
+          context,
+          args.context.run,
+          args.context.iteration,
+          "The provider paused before the admitted review returned a receipt: $reason",
+        )
         with(FeatureTaskRuntimeRunLoopPhaseBlocking) {
           pauseAndPersistInPhase(
             PauseAndPersistInPhaseArgs(
@@ -390,6 +430,12 @@ internal object PhaseAttemptOnce {
   ): AttemptResult {
     with(context) {
       val run = args.context.run
+      FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement.refuseUnusableReview(
+        context,
+        run,
+        args.context.iteration,
+        "The admitted review ended before a receipt was accepted: $reason",
+      )
       PhaseOutputGate.persistChildProcessFailureOutput(
         context,
         run,
@@ -430,8 +476,14 @@ internal object PhaseAttemptOnce {
     context: PhaseAttemptLaunchCollaborationScope,
     args: RecordRejectionAttemptArgs,
     rejection: RecordRejection,
-  ): AttemptResult =
-    AttemptResult.settled(
+  ): AttemptResult {
+    FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement.refuseUnusableReview(
+      context,
+      args.context.run,
+      args.context.iteration,
+      "The admitted feasibility launch could not settle its phase record: ${rejection.rejectionDetail}",
+    )
+    return AttemptResult.settled(
       with(PhaseAttemptContinuations) {
         context.settleRecordRejection(
           SettleRecordRejectionArgs(
@@ -444,4 +496,5 @@ internal object PhaseAttemptOnce {
         )
       },
     )
+  }
 }

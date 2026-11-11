@@ -11,6 +11,7 @@ import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntim
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeImplementationProgressSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimePersistenceSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimePhaseHandoffSchemaValidator
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimePlanBundleFeasibilitySchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeProjectionMeasurementSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeQuarantineSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidator
@@ -77,6 +78,8 @@ class FeatureTaskRuntimeWireArtifactValidator(
         GoalObservabilityEventSchemaValidator.validate(wireMap, sourceLabel)
       FeatureTaskRuntimeWireArtifactKind.GOAL_PLANNING_PREPARATION_ENVELOPE ->
         GoalPlanningPreparationSchemaValidator.validate(wireMap, sourceLabel)
+      FeatureTaskRuntimeWireArtifactKind.PLAN_BUNDLE_FEASIBILITY ->
+        FeatureTaskRuntimePlanBundleFeasibilitySchemaValidator.validate(wireMap, sourceLabel)
       else -> validateSerial(kind, wireMap, sourceLabel)
     }
   }

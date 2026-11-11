@@ -20,9 +20,15 @@ import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.projectstore.model.SpecPathLocation
 import skillbill.ports.projectstore.model.classifySpecPath
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
+import skillbill.ports.workflow.decomposition.model.DecompositionManifestBundleProjection
+import skillbill.ports.workflow.decomposition.model.DecompositionManifestFileIdentity
+import skillbill.text.sha256HexUtf8
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
+import java.io.IOException
 import java.nio.file.Path
 import java.time.Instant
 
@@ -86,8 +92,15 @@ public class FeatureTaskRuntimeDecompositionPlanner(
     }
   }
 
-  internal fun authoredManifest(parentSpecPath: Path): DecompositionManifest =
-    preparationWriter.authoredManifest(parentSpecPath)
+  internal fun authoredManifest(
+    parentSpecPath: Path,
+    persistRepairs: Boolean = true,
+  ): DecompositionManifest =
+    if (persistRepairs) {
+      preparationWriter.authoredManifest(parentSpecPath)
+    } else {
+      preparationWriter.authoredManifestWithoutRepair(parentSpecPath)
+    }
 
   internal fun authoredSubtasks(parentSpecPath: Path): List<DecompositionSubtask> =
     preparationWriter.authoredSubtasks(parentSpecPath)
@@ -130,6 +143,65 @@ public class FeatureTaskRuntimeDecompositionPlanner(
     target: Path,
     content: String,
   ) = fileStore.writeTextAtomically(target, content)
+
+  internal fun applyFeasibilityRepair(
+    repoRoot: Path,
+    issueKey: String,
+    before: PlanBundleFeasibilitySnapshot,
+    intended: PlanBundleFeasibilitySnapshot,
+    replacementTexts: Map<Path, String>,
+  ): Boolean {
+    before.repairViolation(intended)?.let { return false }
+    val pending = before.manifest.subtasks.filter { it.status.decompositionStatus() == DecompositionStatus.PENDING }
+    val allowed = pending.associate { bundlePath(repoRoot, it.specPath).toAbsolutePath().normalize() to it.id }
+    val writes = mutableListOf<Pair<Path, String>>()
+    replacementTexts.forEach { (path, text) ->
+      val target = path.toAbsolutePath().normalize()
+      val id = allowed[target]
+      if (id == null || intended.specTexts[id] != text) return false
+      if (before.specTexts[id] != text) writes += target to text
+    }
+    if (writes.isEmpty()) {
+      val current = PlanBundleFeasibility.capture(this, repoRoot, issueKey)
+      return before.identity == intended.identity && current.identity == intended.identity &&
+        before.repairViolation(current) == null
+    }
+    val changedPaths = writes.mapTo(mutableSetOf()) { it.first }
+    val expectedBefore =
+      writes.map { (path, _) ->
+        val id = allowed.getValue(path)
+        DecompositionManifestFileIdentity(path, sha256HexUtf8(before.specTexts.getValue(id)))
+      }
+    val parentPath = bundlePath(repoRoot, before.manifest.parentSpecPath)
+    val protectedFiles =
+      buildList {
+        add(DecompositionManifestFileIdentity(parentPath, sha256HexUtf8(before.parentText)))
+        add(
+          DecompositionManifestFileIdentity(
+            parentPath.resolveSibling(DECOMPOSITION_MANIFEST_FILENAME),
+            sha256HexUtf8(before.manifestText),
+          ),
+        )
+        before.manifest.subtasks.filter { subtask ->
+          bundlePath(repoRoot, subtask.specPath).toAbsolutePath().normalize() !in changedPaths
+        }.forEach { subtask ->
+          val path = bundlePath(repoRoot, subtask.specPath)
+          add(DecompositionManifestFileIdentity(path, sha256HexUtf8(before.specTexts.getValue(subtask.id))))
+        }
+      }
+    val projection = DecompositionManifestBundleProjection(expectedBefore, protectedFiles)
+    return try {
+      fileStore.writeBundleAtomically(writes, projection) {
+        val projected = PlanBundleFeasibility.capture(this, repoRoot, issueKey)
+        if (projected.identity != intended.identity || before.repairViolation(projected) != null) {
+          throw IOException("The journaled feasibility projection did not match its retained intent.")
+        }
+        true
+      }
+    } catch (_: IOException) {
+      false
+    }
+  }
 
   internal fun deleteBundlePath(target: Path) = fileStore.deleteIfExists(target)
 

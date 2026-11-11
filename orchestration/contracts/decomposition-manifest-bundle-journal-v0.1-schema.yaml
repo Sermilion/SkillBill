@@ -1,0 +1,20 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://skill-bill.dev/contracts/decomposition-manifest-bundle-journal-v0.1-schema.yaml"
+title: "Decomposition manifest bundle journal 0.1"
+type: object
+additionalProperties: false
+required: [contract_version, staging_directory, entries]
+properties:
+  contract_version: {const: "0.1"}
+  staging_directory: {type: string, minLength: 1}
+  entries:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      required: [target, staged, sha256]
+      properties:
+        target: {type: string, minLength: 1}
+        staged: {type: string, minLength: 1}
+        sha256: {type: string, minLength: 64, maxLength: 64}

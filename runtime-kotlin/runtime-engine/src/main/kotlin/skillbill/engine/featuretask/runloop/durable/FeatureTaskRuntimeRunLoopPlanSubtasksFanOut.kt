@@ -74,6 +74,14 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
 
   override fun pendingUnits(): PhaseFanOutUnits {
     val wave = parent.stepBinding.requireAuthorizedFanOutWave()
+    val feasibility = parent.records.loadPlanBundleFeasibility(facts.workflowId)
+    if (feasibility?.activeLaunch != null || feasibility?.settledLaunches?.any {
+        it.cycleId == feasibility.currentCycleId
+      } == true
+    ) {
+      staging = null
+      return PhaseFanOutUnits.Pending(emptyList())
+    }
     staging =
       (PlanBundleStagingPromotion.targetFor(planner, wave) as? PlanBundleTarget.Staged)?.let { target ->
         PromotionRequest(target, facts.repoRoot, wave.resolvedAgent.resolvedAgentId, parentSpecProtected = false)
@@ -279,7 +287,12 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
   override fun completed(): PhaseOutcome {
     val bundle =
       parent.records.loadPlanBundle(facts.workflowId) ?: return PhaseOutcome.blocked(MISSING_BUNDLE_REASON)
-    staging?.let { PlanBundleStagingPromotion.finishStaging(planner, parent.diagnostics, it) }
+    val feasibility = parent.records.loadPlanBundleFeasibility(facts.workflowId)
+    if (feasibility?.settledLaunches?.none { it.cycleId == feasibility.currentCycleId } != false &&
+      feasibility?.activeLaunch == null
+    ) {
+      staging?.let { PlanBundleStagingPromotion.finishStaging(planner, parent.diagnostics, it) }
+    }
     val ids = bundle.subtasks.map { it.id }
     val summary =
       "Planned subtasks ${ids.joinToString(", ")}; unit records " +
@@ -379,7 +392,7 @@ private class FeatureTaskRuntimeRunLoopPlanUnitState(
   override val clock: Clock get() = parent.clock
   override val diagnostics: RuntimeDiagnostics get() = parent.diagnostics
   override val records: PhaseRunRecords =
-    InMemoryPhaseRunRecords(parent.clock, null, phaseRecordSink = { record ->
+    InMemoryPhaseRunRecords(unit, parent.clock, phaseRecordSink = { record ->
       synchronized(parent.records) {
         persistPlanSubtaskProgress(parent.records, facts.workflowId, unit.subtaskId, record)
       }

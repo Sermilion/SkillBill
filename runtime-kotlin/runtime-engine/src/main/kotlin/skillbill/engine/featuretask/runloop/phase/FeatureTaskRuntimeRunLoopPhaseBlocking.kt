@@ -561,6 +561,10 @@ internal object FeatureTaskRuntimeRunLoopPhaseBlocking {
       launchedEffort = extras.launched?.persistedEffort,
       launchOutcomeKnown = extras.launched != null,
       reviewRunId = extras.reviewRunId,
+      feasibilityApprovalRequired = extras.feasibilityApprovalRequired,
+      feasibilityApprovalRevision = extras.feasibilityApprovalRevision,
+      feasibilityApprovalExpectedRevision = extras.feasibilityApprovalExpectedRevision,
+      feasibilityApprovalTransitionId = extras.feasibilityApprovalTransitionId,
       mutating = run.policy.mutating,
     )
   }

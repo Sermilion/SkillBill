@@ -21,6 +21,7 @@ import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepair
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairLegacyAdoption
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPersistence
 import skillbill.engine.featuretask.persist.sha256Hex
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
 import skillbill.engine.featuretask.runloop.qualitygate.MAX_VALIDATE_ATTEMPTS
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
@@ -1272,6 +1273,7 @@ private fun serialPersistence(harness: RunnerHarness): AcceptanceCriterionRepair
       validator,
       harnessPhaseSettlement(),
       testHarnessClock,
+      PlanBundleFeasibilityStateCodec(validator),
     ),
     validator,
     object : AcceptanceCriterionRepairProjection {

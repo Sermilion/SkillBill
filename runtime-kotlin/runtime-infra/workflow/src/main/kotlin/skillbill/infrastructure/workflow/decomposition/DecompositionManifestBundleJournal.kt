@@ -2,6 +2,7 @@ package skillbill.infrastructure.workflow.decomposition
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.contracts.decomposition.BUNDLE_JOURNAL_CONTRACT_VERSION
+import skillbill.contracts.decomposition.BUNDLE_JOURNAL_LEGACY_CONTRACT_VERSION
 import skillbill.contracts.projectstore.ProjectStoreLayout
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
@@ -9,6 +10,7 @@ import skillbill.infrastructure.host.jvm.RuntimeTempEnvironmentKeys
 import skillbill.infrastructure.host.jvm.atomicWriteString
 import skillbill.infrastructure.host.jvm.resolveTelemetryStateDir
 import skillbill.ports.system.HostPlatformPort
+import skillbill.ports.workflow.decomposition.model.DecompositionManifestBundleProjection
 import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.Path
@@ -24,8 +26,9 @@ internal class DecompositionManifestBundleJournal(
   fun create(
     parent: Path,
     writes: List<Pair<Path, String>>,
+    projection: DecompositionManifestBundleProjection? = null,
   ): DecompositionManifestBundleTransaction =
-    DecompositionManifestBundleJournalCreate.create(parent, writes, yamlMapper, this)
+    DecompositionManifestBundleJournalCreate.create(parent, writes, projection, yamlMapper, this)
 
   fun apply(transaction: DecompositionManifestBundleTransaction) =
     DecompositionManifestBundleJournalIo.apply(transaction)
@@ -52,6 +55,7 @@ internal class DecompositionManifestBundleJournal(
 
   internal companion object {
     const val BUNDLE_CONTRACT_VERSION = BUNDLE_JOURNAL_CONTRACT_VERSION
+    const val LEGACY_BUNDLE_CONTRACT_VERSION = BUNDLE_JOURNAL_LEGACY_CONTRACT_VERSION
     const val BUNDLE_PREFIX = ".decomposition-manifest-bundle-"
     const val MARKER_SUFFIX = ".commit"
     const val STAGING_SUFFIX = ".staging"

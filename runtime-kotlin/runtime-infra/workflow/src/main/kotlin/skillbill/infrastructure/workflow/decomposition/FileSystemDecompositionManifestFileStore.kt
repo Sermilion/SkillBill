@@ -3,9 +3,12 @@ package skillbill.infrastructure.workflow.decomposition
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.catchingNonCancellation
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidDecompositionManifestBundleJournal
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.workflow.decomposition.DecompositionManifestDiscoveryPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
+import skillbill.ports.workflow.decomposition.model.DecompositionManifestBundleProjection
 import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import java.nio.file.Files
 import java.nio.file.Path
@@ -49,9 +52,28 @@ class FileSystemDecompositionManifestFileStore(
   override fun <T> writeBundleAtomically(
     writes: List<Pair<Path, String>>,
     verify: () -> T,
+  ): T = writeBundleAtomicallyWithProjection(writes, null, verify)
+
+  override fun <T> writeBundleAtomically(
+    writes: List<Pair<Path, String>>,
+    projection: DecompositionManifestBundleProjection,
+    verify: () -> T,
+  ): T = writeBundleAtomicallyWithProjection(writes, projection, verify)
+
+  private fun <T> writeBundleAtomicallyWithProjection(
+    writes: List<Pair<Path, String>>,
+    projection: DecompositionManifestBundleProjection?,
+    verify: () -> T,
   ): T {
     val distinctWrites = writes.distinctBy { (path, _) -> path.toAbsolutePath().normalize() }
     val parents = distinctWrites.map { (path, _) -> path.toAbsolutePath().normalize().parent }.distinct()
+    if (projection != null && (parents.size != 1 || distinctWrites.isEmpty())) {
+      throw invalidDecompositionManifestBundleJournal(
+        sourceLabel = "guarded bundle projection",
+        reason = "Guarded bundle writes require nonempty targets under one journal parent.",
+        code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_TARGET_OUTSIDE_PARENT,
+      )
+    }
     if (parents.size != 1 || distinctWrites.isEmpty()) {
       val snapshots =
         writes.distinctBy { (path, _) -> path }.map { (path, _) ->
@@ -85,9 +107,10 @@ class FileSystemDecompositionManifestFileStore(
           val existed = Files.isRegularFile(normalized)
           DecompositionManifestBundleSnapshot(normalized, existed, if (existed) Files.readString(normalized) else null)
         }
-      val transaction = bundleJournal.create(parent, distinctWrites)
+      val transaction = bundleJournal.create(parent, distinctWrites, projection)
       restoringOnFailure(
         restore = { failure ->
+          if (projection != null) return@restoringOnFailure
           snapshots.asReversed().forEach { snapshot ->
             catchingNonCancellation {
               if (snapshot.existed) {

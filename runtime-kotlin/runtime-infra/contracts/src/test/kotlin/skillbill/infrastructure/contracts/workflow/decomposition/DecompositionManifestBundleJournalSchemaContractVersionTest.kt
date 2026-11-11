@@ -72,6 +72,6 @@ class DecompositionManifestBundleJournalSchemaContractVersionTest {
 
   private companion object {
     const val KNOWN_SCHEMA_CONTENT_HASH: String =
-      "bd98e4f6af9e6463323e1366cdb1fb86edfe13ff7e4107b973067c821905f1a5"
+      "01912421481b57bef86163e1ff8951aa41f6add378119afd82b5e5f17c0c6f43"
   }
 }

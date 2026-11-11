@@ -850,11 +850,11 @@ internal fun phasePlanningPayload(
     if (snapshot.isNotEmpty()) {
       val fingerprint = snapshot.lineSequence().first { it.startsWith("Fingerprint: ") }.removePrefix("Fingerprint: ")
       val refs =
-        snapshot.lineSequence().first { it.startsWith("Required criterion refs: ") }
-          .removePrefix("Required criterion refs: ").split(", ")
+        snapshot.lineSequence().first { it.startsWith("required_refs: ") }
+          .removePrefix("required_refs: ").split(", ")
       val evidence =
         buildString {
-          appendLine("bundle-feasibility-v1: approved $fingerprint")
+          appendLine("bundle-feasibility-v2: approved $fingerprint")
           refs.forEach {
             appendLine("criterion $it: The fixture supplies this subtask's dependencies and its implementation path.")
           }

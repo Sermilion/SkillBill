@@ -134,6 +134,8 @@ internal interface PhaseAttemptStrategyLookup {
 
 /** Launch and pre-launch hook inputs; narrower than the full collaborator aggregate. */
 internal interface PhaseAttemptLaunchRuntimeContext : PhaseAttemptEnvironment {
+  val phaseSettlementService: PhaseRunSettlements
+
   val progress: FeatureTaskRuntimeProgressSnapshotAccess
 
   val session: FeatureTaskRuntimeRunSessionObservations

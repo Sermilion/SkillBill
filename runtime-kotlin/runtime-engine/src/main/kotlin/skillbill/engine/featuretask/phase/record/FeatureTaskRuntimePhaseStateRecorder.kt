@@ -18,6 +18,8 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.operatorBlockRetryFromWorkflowArtifacts
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
+import skillbill.engine.featuretask.phase.planning.feasibilityApprovalCandidateMatchesRequest
 import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecords
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
 import skillbill.engine.featuretask.slot.state.FeatureTaskRuntimeImplementationTurnWrite
@@ -29,6 +31,7 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.model.workflowStatus
@@ -52,6 +55,9 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction.COMPLETE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
+import skillbill.workflow.taskruntime.model.planning.isPublishedPlanBundleFeasibilityApprovalReplay
+import skillbill.workflow.taskruntime.model.planning.publishPlanBundleFeasibilityApproval
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import java.time.Clock
 import java.time.Instant
@@ -64,6 +70,7 @@ public class FeatureTaskRuntimePhaseStateRecorder(
   private val implementationAttemptValidator: FeatureTaskRuntimeWireArtifactValidator,
   private val phaseSettlementService: FeatureTaskPhaseSettlementService,
   private val clock: Clock,
+  private val feasibilityCodec: PlanBundleFeasibilityStateCodec,
 ) : FeatureTaskRuntimePhaseStatePort,
   FeatureTaskRuntimePhaseStateQueries,
   FeatureTaskRuntimeImplementationProgressPort {
@@ -521,6 +528,51 @@ public class FeatureTaskRuntimePhaseStateRecorder(
       ?.let(outcomes::upsert)
   }
 
+  private fun feasibilityApprovalReplayMatches(
+    request: FeatureTaskRuntimePhaseStateRequest,
+    artifacts: DurableWorkflowArtifacts,
+    previous: FeatureTaskRuntimePhaseRecord,
+  ): Boolean {
+    if (!request.feasibilityApprovalRequired) return true
+    val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
+    if (!family.contains(artifacts)) return false
+    val feasibility = feasibilityCodec.decode(family.value(artifacts), "${request.workflowId}/${family.label()}")
+    val transition = feasibility.settledLaunches.singleOrNull { it.transitionId == feasibility.approval?.transitionId }
+    val candidate = feasibility.approvalCandidate
+    val expectedRevision = request.feasibilityApprovalExpectedRevision
+    val matchesAttempt = transition?.attempt == previous.attemptCount && transition.phaseId == request.phaseId
+    val matchesSource =
+      candidate != null && candidate.matchesRecord(previous) &&
+        candidate.sourceRevision == request.feasibilityApprovalRevision &&
+        candidate.transitionId == request.feasibilityApprovalTransitionId
+    return feasibility.mode == PlanBundleFeasibilityMode.APPROVED && matchesAttempt && matchesSource &&
+      expectedRevision != null &&
+      isPublishedPlanBundleFeasibilityApprovalReplay(
+        feasibility,
+        request.phaseId,
+        request.attemptCount,
+        expectedRevision,
+        requireNotNull(candidate).transitionId,
+      )
+  }
+
+  private fun feasibilityApprovalPatch(
+    request: FeatureTaskRuntimePhaseStateRequest,
+    artifacts: DurableWorkflowArtifacts,
+  ): Map<String, Any?>? {
+    if (!request.feasibilityApprovalRequired) return emptyMap()
+    val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
+    if (!family.contains(artifacts)) return null
+    val feasibility = feasibilityCodec.decode(family.value(artifacts), "${request.workflowId}/${family.label()}")
+    val expectedRevision = request.feasibilityApprovalExpectedRevision ?: return null
+    val approved =
+      feasibility.approvalCandidate
+        ?.takeIf { feasibilityApprovalCandidateMatchesRequest(it, request) }?.let {
+          publishPlanBundleFeasibilityApproval(feasibility, request.phaseId, request.attemptCount, expectedRevision)
+        }
+    return approved?.let { mapOf(family.entry(feasibilityCodec.encode(it))) }
+  }
+
   private fun recordCompletedPhaseWrite(
     request: FeatureTaskRuntimePhaseStateRequest,
     admitted: AdmittedFeatureTaskRuntimeExecution?,
@@ -539,9 +591,11 @@ public class FeatureTaskRuntimePhaseStateRecorder(
       val existingRecords = decodePhaseRecords(artifacts)
       val previous = existingRecords[request.phaseId]
       if (previous?.status == WorkflowStepStatus.COMPLETED) {
-        return@requiredWrite completedPhaseRequestMatches(request, previous)
+        return@requiredWrite completedPhaseRequestMatches(request, previous) &&
+          feasibilityApprovalReplayMatches(request, artifacts, previous)
       }
       if (!phaseEventAdmissible(request, previous, phaseStart = false)) return@requiredWrite false
+      val feasibilityApprovalPatch = feasibilityApprovalPatch(request, artifacts) ?: return@requiredWrite false
       val updatedRecords =
         LinkedHashMap(existingRecords).apply {
           put(request.phaseId, featureTaskRuntimePhaseRecordFor(request, previous, clock.instant()))
@@ -573,7 +627,8 @@ public class FeatureTaskRuntimePhaseStateRecorder(
             updatedRecords.mapValues { (_, value) -> value.asWorkflowArtifactEntry() },
           ),
           DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_LEDGER.entry(updatedLedger),
-        ) + implementationAttemptPatch(artifacts, request, FeatureTaskRuntimeImplementationAttemptStatus.COMPLETED) +
+        ) + feasibilityApprovalPatch +
+          implementationAttemptPatch(artifacts, request, FeatureTaskRuntimeImplementationAttemptStatus.COMPLETED) +
           findingVerificationCheckpointPatch(request) + qaRepairStatePatch(request),
         WorkflowRowAdvance(
           request.phaseId,

@@ -4,6 +4,7 @@ import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.testHarnessClock
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
@@ -97,7 +98,12 @@ class IdeStatusProjectorTest {
           goalRunnerDefaultPhaseRecorder(),
           persistence,
           FeatureTaskRuntimeRunInvariantsStore(database, persistence),
-          FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
+          FeatureTaskRuntimeDecomposeTerminalRecorder(
+            database,
+            testHarnessClock,
+            PlanBundleFeasibilityStateCodec(featureTaskRuntimeWireArtifactValidatorForTest()),
+            NoopRuntimeDiagnostics,
+          ),
         ),
       manifestStore = GoalRunnerManifestProjectionReader(EmptyManifestStore),
       diagnostics =

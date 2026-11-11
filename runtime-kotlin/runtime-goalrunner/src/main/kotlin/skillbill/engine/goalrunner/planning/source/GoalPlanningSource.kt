@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
 import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibility
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
 import skillbill.engine.featuretask.phase.planning.PlanBundleSnapshots
 import skillbill.engine.featuretask.phase.planning.planBundleImmutableManifestHash
 import skillbill.engine.goal.GoalRunnerManifestState
@@ -51,6 +52,8 @@ import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.artifact.decodePlanBundleFromArtifact
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
@@ -72,6 +75,7 @@ public class PlanWorkflowGoalPlanningSource(
   private val replannedChildren: GoalReplannedChildCleanup,
   private val progressRecorder: GoalPlanningProgressRecorder,
   private val projectStore: ProjectStorePort,
+  private val feasibilityCodec: PlanBundleFeasibilityStateCodec,
 ) : GoalPlanningSource {
   private val snapshots = PlanBundleSnapshots(planner)
 
@@ -111,14 +115,16 @@ public class PlanWorkflowGoalPlanningSource(
     scope: PlanningScope,
     plan: LinkedPlan,
   ): GoalPlanningSweepOutcome.PreparedAll? {
-    if (scope.pending.any { !plan.unitComplete(scope, it) }) return null
+    if (scope.pending.any { !plan.unitComplete(scope, it) } || plan.feasibilityState == null) return null
     val snapshot =
       PlanBundleFeasibility.capture(
         planner,
         scope.canonicalRepository,
         scope.state.manifest.issueKey,
       )
+    val feasibilityState = requireNotNull(plan.feasibilityState)
     if (!PlanBundleFeasibility.approved(
+        feasibilityState,
         snapshot,
         plan.records[PLAN_SUBTASKS_STEP_ID],
         PLAN_SUBTASKS_STEP_ID,
@@ -157,6 +163,17 @@ public class PlanWorkflowGoalPlanningSource(
       )
     }
     val linked = linkedPlan(scope)
+    val feasibilityNeedsReview =
+      linked?.let { plan ->
+        val state = plan.feasibilityState ?: return@let true
+        val snapshot = PlanBundleFeasibility.capture(planner, scope.canonicalRepository, scope.state.manifest.issueKey)
+        !PlanBundleFeasibility.approved(
+          state,
+          snapshot,
+          plan.records[PLAN_SUBTASKS_STEP_ID],
+          PLAN_SUBTASKS_STEP_ID,
+        )
+      } ?: false
     val replanned =
       if (linked == null) {
         legacyDriftedIds(scope)
@@ -181,6 +198,8 @@ public class PlanWorkflowGoalPlanningSource(
             repoRoot = request.repoRoot,
             settledSubtaskIds = scope.settledIds,
             agentId = agentId,
+            feasibilityAdoption =
+              feasibilityNeedsReview || linked.feasibilityState?.mode == PlanBundleFeasibilityMode.APPROVED,
           ),
           inputFor,
         )
@@ -236,6 +255,7 @@ public class PlanWorkflowGoalPlanningSource(
           settledSubtaskIds = scope.settledIds,
           agentId = agentId,
           forcedSubtaskIds = forcedSubtaskIds,
+          feasibilityAdoption = true,
         ),
         inputFor,
       )
@@ -302,12 +322,20 @@ public class PlanWorkflowGoalPlanningSource(
     workflowId: String,
     snapshot: WorkflowStateSnapshot?,
   ): LinkedPlan? {
-    if (snapshot == null || snapshot.steps.none { it.stepId == PLAN_SUBTASKS_STEP_ID }) return null
+    if (snapshot == null) return null
+    val feasibilityFamily = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
+    val feasibilityState =
+      if (feasibilityFamily.contains(snapshot.artifacts)) {
+        feasibilityCodec.decode(feasibilityFamily.value(snapshot.artifacts), "$workflowId/${feasibilityFamily.label()}")
+      } else {
+        null
+      }
+    if (snapshot.steps.none { it.stepId == PLAN_SUBTASKS_STEP_ID }) return null
     val bundle =
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.value(snapshot.artifacts)
         ?.let(::decodePlanBundleFromArtifact)
         ?: return null
-    return LinkedPlan(workflowId, bundle, decodePhaseRecords(snapshot.artifacts))
+    return LinkedPlan(workflowId, bundle, decodePhaseRecords(snapshot.artifacts), feasibilityState)
   }
 
   private fun PlanningScope.descriptors(recordedHash: (Int) -> String?): List<GovernedGoalSubtaskDescriptor>? =
@@ -347,6 +375,7 @@ public class PlanWorkflowGoalPlanningSource(
     val workflowId: String,
     val bundle: FeatureTaskRuntimePlanBundle,
     val records: Map<String, FeatureTaskRuntimePhaseRecord>,
+    val feasibilityState: FeatureTaskRuntimePlanBundleFeasibilityState?,
   )
 
   private class PlanningScope(

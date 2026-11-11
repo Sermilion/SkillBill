@@ -134,6 +134,15 @@ object FeatureTaskRuntimeQuarantineSchemaPaths {
     "https://skill-bill.dev/contracts/feature-task-runtime-quarantine-schema.yaml"
 }
 
+object FeatureTaskRuntimePlanBundleFeasibilitySchemaPaths {
+  const val REPO_RELATIVE_PATH: String =
+    "orchestration/contracts/feature-task-runtime-plan-bundle-feasibility-schema.yaml"
+  const val CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/feature-task-runtime-plan-bundle-feasibility-schema.yaml"
+  const val EXPECTED_SCHEMA_ID: String =
+    "https://skill-bill.dev/contracts/feature-task-runtime-plan-bundle-feasibility.yaml"
+}
+
 object FeatureTaskRuntimeImplementationAttemptSchemaPaths {
   const val REPO_RELATIVE_PATH: String =
     "orchestration/contracts/feature-task-runtime-implementation-attempt-schema.yaml"
