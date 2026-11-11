@@ -53,12 +53,18 @@ jobs:
           # `runs-on: ${{ fromJSON(matrix.runner) }}` expression.
           - runner: '["self-hosted", "macmini"]'
             host_token: macos-arm64
+            package_task: packageDmg
+            extension: dmg
           # Windows x64.
           - runner: '["windows-latest"]'
             host_token: windows-x64
+            package_task: packageMsi
+            extension: msi
           # Linux x64.
           - runner: '["ubuntu-latest"]'
             host_token: linux-x64
+            package_task: packageDeb
+            extension: deb
 
     steps:
       - name: Check out repository
@@ -111,11 +117,21 @@ jobs:
           cd runtime-kotlin
           ./gradlew --no-configuration-cache :runtime-cli:runtimeZip :runtime-mcp:runtimeZip
 
+      - name: Install Windows packaging dependencies
+        if: matrix.host_token == 'windows-x64'
+        shell: pwsh
+        run: |
+          $wixBin = "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin"
+          if (-not (Test-Path "$wixBin\light.exe")) {
+            choco install wixtoolset --version=3.14.0 -y --no-progress
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $wixBin
+
       - name: Build desktop distribution
         shell: bash
         env:
           SKILL_BILL_INSTALL_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-        run: (cd desktop && ./gradlew clean check createDistributable --no-build-cache --no-configuration-cache)
+        run: (cd desktop && ./gradlew clean check createDistributable :app:${{ matrix.package_task }} --no-build-cache --no-configuration-cache)
 
       # The installer refuses a runtime and desktop pair whose build identity
       # records differ, so a release must never publish one.
@@ -187,6 +203,25 @@ jobs:
                           raise SystemExit(f"Desktop release archive contains Skill Bill runtime classes: {member.name}")
           PYTHON
 
+      - name: Stage native installer
+        shell: bash
+        env:
+          HOST_TOKEN: ${{ matrix.host_token }}
+          EXTENSION: ${{ matrix.extension }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          packages=(desktop/app/build/compose/binaries/main/"$EXTENSION"/*."$EXTENSION")
+          [[ "${#packages[@]}" -eq 1 ]] || { echo "Expected exactly one $EXTENSION installer." >&2; exit 1; }
+          installer="sona-${RELEASE_VERSION}-${HOST_TOKEN}.${EXTENSION}"
+          cp "${packages[0]}" "$installer"
+          if command -v sha256sum >/dev/null 2>&1; then
+            digest="$(sha256sum "$installer" | awk '{print $1}')"
+          else
+            digest="$(shasum -a 256 "$installer" | awk '{print $1}')"
+          fi
+          printf '%s  %s\n' "$digest" "$installer" > "${installer}.sha256"
+
       - name: Verify packaged licenses and checksums
         shell: bash
         run: |
@@ -196,6 +231,7 @@ jobs:
             "runtime-kotlin/runtime-cli/build/runtime-image/runtime-cli-${RELEASE_VERSION}-${host_token}.zip"
             "runtime-kotlin/runtime-mcp/build/runtime-image/runtime-mcp-${RELEASE_VERSION}-${host_token}.zip"
             "skill-bill-desktop-${RELEASE_VERSION}-${host_token}.tar.gz"
+            "sona-${RELEASE_VERSION}-${host_token}.${{ matrix.extension }}"
           )
           case "${host_token}" in
             macos-arm64|windows-x64)
@@ -218,7 +254,7 @@ jobs:
           # copy must sit under scripts/ for the drifted LICENSE to be the one
           # it compares against.
           mkdir -p "${verifier_probe}/scripts"
-          cp scripts/verify_release_artifact_licenses "${verifier_probe}/scripts/verify_release_artifact_licenses"
+          cp scripts/verify_release_artifact_licenses scripts/verify_native_artifact_license.py "${verifier_probe}/scripts/"
           printf '%s\n' 'intentional license drift probe' > "${verifier_probe}/LICENSE"
           for artifact in "${artifacts[@]}"; do
             probe_log="${verifier_probe}/$(basename "${artifact}").log"
@@ -364,6 +400,9 @@ jobs:
             "runtime-mcp-${release_version}-linux-x64.zip"
             "skill-bill-desktop-${release_version}-linux-x64.tar.gz"
             "skill-bill-skills-${release_version}.tar.gz"
+            "sona-${release_version}-macos-arm64.dmg"
+            "sona-${release_version}-windows-x64.msi"
+            "sona-${release_version}-linux-x64.deb"
           )
           asset_names=()
           for artifact_name in "${artifact_names[@]}"; do
@@ -519,3 +558,62 @@ jobs:
               await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: artifact.id });
               core.info(`Deleted ${artifact.name} from completed release build ${artifact.workflow_run.id}.`);
             }
+
+  publish-downloads:
+    needs: publish
+    if: github.event_name == 'push' && !contains(github.ref_name, '-')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: sona-desktop-downloads-promotion
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v5
+
+      - name: Verify stable release and download installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          release="$(gh release view "$RELEASE_TAG" --json tagName,isDraft,isPrerelease)"
+          jq -e --arg tag "$RELEASE_TAG" '.tagName == $tag and .isDraft == false and .isPrerelease == false' <<< "$release"
+          mkdir release-assets
+          gh release download "$RELEASE_TAG" --pattern "sona-${RELEASE_TAG#v}-*" --dir release-assets
+
+      - name: Install pinned AWS CLI v2
+        run: |
+          expected="2.27.49"
+          if ! aws --version 2>&1 | grep -Fq "aws-cli/$expected "; then
+            sudo apt-get update
+            sudo apt-get install -y gnupg unzip
+            curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xFB5DB77FD5C118B80511ADA8A6310ACC4672475C' -o "$RUNNER_TEMP/aws-cli-signing-key.asc"
+            gpg --import "$RUNNER_TEMP/aws-cli-signing-key.asc"
+            fingerprint="$(gpg --with-colons --fingerprint A6310ACC4672475C | awk -F: '$1 == "fpr" {print $10; exit}')"
+            if [ "$fingerprint" != "FB5DB77FD5C118B80511ADA8A6310ACC4672475C" ]; then
+              echo "Unexpected AWS CLI signing key fingerprint: $fingerprint"
+              exit 1
+            fi
+            package="$RUNNER_TEMP/awscli-exe-linux-x86_64-$expected.zip"
+            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-$expected.zip" -o "$package"
+            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-$expected.zip.sig" -o "$package.sig"
+            gpg --verify "$package.sig" "$package"
+            unzip -q "$package" -d "$RUNNER_TEMP/aws-cli"
+            sudo "$RUNNER_TEMP/aws-cli/aws/install" --update
+          fi
+          aws --version | grep -F "aws-cli/$expected "
+
+      - name: Promote verified latest desktop downloads
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.HETZNER_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.HETZNER_SECRET_ACCESS_KEY }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 .github/scripts/publish_desktop_downloads.py \
+            --release-version "${RELEASE_TAG#v}" \
+            --assets-dir release-assets \
+            --endpoint-url https://hel1.your-objectstorage.com \
+            --bucket sonadesktop \
+            --public-base-url https://sonadesktop.hel1.your-objectstorage.com

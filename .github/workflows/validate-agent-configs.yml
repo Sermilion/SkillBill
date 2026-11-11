@@ -67,6 +67,9 @@ jobs:
         shell: bash
         run: echo "GRADLE_USER_HOME=$RUNNER_TEMP/gradle-user-home" >> "$GITHUB_ENV"
 
+      - name: Check desktop download promotion
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+
       - name: Check Gradle bootstrap retry policy
         shell: bash
         run: bash scripts/ci_gradle_bootstrap_test.sh
