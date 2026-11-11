@@ -97,6 +97,7 @@ internal object IdeStatusProblemSnapshots {
     observedAt: Instant,
     message: String,
     workflowId: String? = null,
+    primaryRepositoryRoot: String? = null,
   ): IdeStatusSnapshot =
     problemSnapshot(
       ProblemParts(
@@ -110,6 +111,7 @@ internal object IdeStatusProblemSnapshots {
             stepLabel = "Incompatible record",
           ),
         workflowId = workflowId,
+        primaryRepositoryRoot = primaryRepositoryRoot,
         exitLifecycle = IdeStatusLifecycleState.IDLE,
         freshness = IdeStatusFreshness.UNKNOWN,
       ),
@@ -120,8 +122,9 @@ internal object IdeStatusProblemSnapshots {
     observedAt: Instant,
     work: WorkItem,
     message: String,
+    primaryRepositoryRoot: String? = null,
   ): IdeStatusSnapshot =
-    incompatibleRecord(repositoryIdentity, observedAt, message, work.workflowId).copy(
+    incompatibleRecord(repositoryIdentity, observedAt, message, work.workflowId, primaryRepositoryRoot).copy(
       lifecycleState = IdeStatusLifecycleState.BLOCKED,
       issueKey = work.issueKey,
       workflowFamily = work.workflowKind.toIdeFamily(),
@@ -142,6 +145,7 @@ internal object IdeStatusProblemSnapshots {
       summary = parts.content.summary,
       title = parts.workflowId ?: parts.content.stepLabel,
       problem = IdeStatusProblem(code = parts.content.code, message = parts.content.message),
+      primaryRepositoryRoot = parts.primaryRepositoryRoot,
     )
 
   private data class ProblemContent(
@@ -156,6 +160,7 @@ internal object IdeStatusProblemSnapshots {
     val observedAt: Instant,
     val content: ProblemContent,
     val workflowId: String? = null,
+    val primaryRepositoryRoot: String? = null,
     val exitLifecycle: IdeStatusLifecycleState = IdeStatusLifecycleState.IDLE,
     val freshness: IdeStatusFreshness = IdeStatusFreshness.FRESH,
   )

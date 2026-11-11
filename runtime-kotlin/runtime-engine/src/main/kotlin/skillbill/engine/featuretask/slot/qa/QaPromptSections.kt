@@ -95,7 +95,7 @@ internal object QaPromptSections {
     |
     |$BACKEND_AND_WEB_FLOW_RULES
     |
-    |$REPORT_RULES
+    |${reportRules(qa)}
     |
     |$UNBLOCK_RULES
     |Rules:
@@ -240,7 +240,7 @@ internal object QaPromptSections {
     |- `## Unblock` adds to the `Reason:` token and the `## Coverage` line; it does not replace either one.
     """.trimMargin()
 
-  private val REPORT_RULES: String =
+  private fun reportRules(qa: QaExecutionContext): String =
     """
     |Report:
     |
@@ -257,18 +257,31 @@ internal object QaPromptSections {
     |  `backend:` field is required on a `web` line.
     |- Under a `## Assertions` heading, write one bullet per assertion, including those you did not exercise, in the
     |  form `- [passed|failed|not_exercised] <title>: <detail>. Evidence: <paths>`. A `failed` assertion must have a
-    |  finding. A `not_exercised` assertion names what you tried and why it failed.
+    |  finding. A `not_exercised` assertion names what you tried and why it failed. List only checks this run was
+    |  asked to make; leave out extra variants the plan did not ask for, because each `not_exercised` line marks the
+    |  run as not fully tested.
     |- Under a `## Isolation` heading, record the selected environment or app defaults. For backend and web
     |  targets also state the disposable database or its absence, outbound substitutes, and rejected configuration.
     |  Never include secret values.
+    |- When you capture a screenshot, save it under `${qa.workspace.directory}/evidence/` and immediately retain it with
+    |  `skill-bill qa screenshot --invocation ${qa.workspace.invocationId} --file <absolute path> --label <label>`.
+    |  Put the returned `path` in the inventory so the report points to the retained file.
+    |  Include every captured image, even when no finding uses it. Capture the final useful rendered state with `--frame`. Add a `## Screenshots`
+    |  section with one line per image in capture order:
+    |  `- <UTC ISO-8601 time> | <png|jpeg> | <label> | <absolute path>`.
+    |  The path must start with `${qa.expected.evidencePrefix}`.
+    |  Do not list framebuffer files or files in the QA checkout.
     |- Under a `## Temporary edits` heading, write one bullet per file you changed in the QA checkout, in the form
     |  `` - `<path>`: <what changed> ``, and name the flows the change made possible. Prefix a bullet with
     |  `[not restored]` only when the edit outlives the QA checkout. Write `None.` when you changed nothing.
     """.trimMargin()
 
   private fun progressRules(qa: QaExecutionContext): String {
-    if (qa.policy != QaPolicy.STANDALONE) return ""
+    if (qa.policy == QaPolicy.OFF) return ""
     val invocationId = qa.workspace.invocationId
+    if (qa.policy != QaPolicy.STANDALONE) {
+      return "\n\nLive progress:\n\n" + goalStageRules(invocationId)
+    }
     return "\n\n" +
       """
     |Live progress:
@@ -294,6 +307,14 @@ internal object QaPromptSections {
     |- The redaction rules for the report also apply to notes and target details.
       """.trimMargin()
   }
+
+  private fun goalStageRules(invocationId: String): String =
+    "Report real execution stages when they start and settle with `skill-bill qa stage --invocation " +
+      "$invocationId --name <stage> --state running|done|warn|skipped [--detail <short reason>]`. Use " +
+      "pack-declared operation names, report only work that happened, and explain skipped display work on " +
+      "headless runs. The runtime records timestamps and leaves unreported stages unknown. " +
+      "Progress commands never decide the verdict; the report does. A non-zero exit or a printed `rejected` or " +
+      "`failed` means nothing changed: continue QA without retrying the same command."
 
   private fun deviceLeaseLines(
     invocationId: String,

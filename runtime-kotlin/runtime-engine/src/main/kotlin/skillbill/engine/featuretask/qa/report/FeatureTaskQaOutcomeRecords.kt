@@ -59,12 +59,30 @@ public object FeatureTaskQaOutcomeRecords {
       report?.text,
       FeatureTaskQaFailureKind.fromWire(produced[QaPhaseOutputKeys.FAILURE_KIND] as? String),
       QaRunDetailsMapping.goal(
-        report,
-        reference,
-        produced[QaPhaseOutputKeys.EVIDENCE_PREFIX] as? String,
-        produced[QaPhaseOutputKeys.REASON] as? String,
+        QaSettledRun(
+          treeIdentity = produced[QaPhaseOutputKeys.TREE_IDENTITY] as? String,
+          report = report,
+          reportPath = reference,
+          evidencePrefix = produced[QaPhaseOutputKeys.EVIDENCE_PREFIX] as? String,
+          producedReason = produced[QaPhaseOutputKeys.REASON] as? String,
+          invocationId = produced[QaPhaseOutputKeys.WORKSPACE_INVOCATION_ID] as? String,
+        ),
         previous?.details,
-      ),
+      )?.let { details ->
+        val invocationId = produced[QaPhaseOutputKeys.WORKSPACE_INVOCATION_ID] as? String
+        val occurrences =
+          details.occurrences.map { occurrence ->
+            if (occurrence.workspaceInvocationId == invocationId && !occurrence.isTerminal()) {
+              occurrence.finished(verdict.wireValue, recordedAt.toString()).copy(
+                resultReference = reference,
+                testedTreeIdentity = produced[QaPhaseOutputKeys.TREE_IDENTITY] as? String,
+              )
+            } else {
+              occurrence
+            }
+          }
+        details.copy(occurrences = occurrences)
+      },
     )
   }
 

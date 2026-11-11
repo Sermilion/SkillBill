@@ -317,13 +317,13 @@ private class GoalControlsFixture(
       BlockIncidentRecoveryActions(
         GoalRunnerBlockRecoveryAdapter(
           GoalParentProjectionWriter(testDecompositionManifestValidator),
-          WorkflowGoalRunnerBlockWrites(ideStatusClock),
+          WorkflowGoalRunnerBlockWrites(ideStatusClock, NoopRuntimeDiagnostics),
         ),
         FeatureTaskRuntimeStandaloneIncidentRecovery(ideStatusClock),
       ),
       GoalRunnerBlockRecoveryAdapter(
         GoalParentProjectionWriter(testDecompositionManifestValidator),
-        WorkflowGoalRunnerBlockWrites(ideStatusClock),
+        WorkflowGoalRunnerBlockWrites(ideStatusClock, NoopRuntimeDiagnostics),
       ),
       reportDelivery = null,
       telemetry = null,

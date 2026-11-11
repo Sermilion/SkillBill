@@ -5,6 +5,7 @@ import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFie
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.model.ReviewLaunchIsolationStrategy
@@ -36,7 +37,7 @@ internal class JunieAgentRunCommandBuilder(
     val continuation = goalContinuationCommand(request, agent, databasePath)
     return when {
       continuation != null -> continuation
-      request.reviewEvidenceBroker == null -> acpCommand(request)
+      request.approval is AgentRunApprovalRequirement.Owned -> acpCommand(request)
       else -> textCommand(request)
     }
   }

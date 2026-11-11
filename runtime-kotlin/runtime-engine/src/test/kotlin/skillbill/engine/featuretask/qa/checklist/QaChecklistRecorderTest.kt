@@ -1,12 +1,16 @@
 package skillbill.engine.featuretask.qa.checklist
 
+import skillbill.engine.featuretask.phaserun.qa.InMemoryQaWorkspaces
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandaloneQaStepStatus
+import skillbill.ports.qa.QaWorkspacePort
+import skillbill.ports.qa.model.QaRetainedScreenshot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
+import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -41,7 +45,8 @@ class QaChecklistRecorderTest {
       environment = mapOf("TEST" to "1"),
       diagnostics = diagnostics,
     )
-  private val recorder = QaChecklistRecorder(database, Clock.fixed(NOW, ZoneOffset.UTC), diagnostics)
+  private val recorder =
+    QaChecklistRecorder(database, Clock.fixed(NOW, ZoneOffset.UTC), diagnostics, InMemoryQaWorkspaces())
 
   @Test
   fun `re-registering a plan keeps a result only on a matching case, number and text`() {
@@ -131,6 +136,30 @@ class QaChecklistRecorderTest {
       """{"contract_version":"0.1","cases":[
         {"id":"a","title":"A","steps":[{"text":"x"}]},{"id":"a","title":"B","steps":[{"text":"y"}]}]}"""
     assertIs<QaChecklistOutcome.Rejected>(recorder.registerPlan(RUN, duplicate))
+  }
+
+  @Test
+  fun `a screenshot of an active standalone QA run is retained and one of another phase is rejected`() {
+    val workspaces =
+      object : QaWorkspacePort by InMemoryQaWorkspaces() {
+        override fun retainScreenshot(
+          repoRoot: Path,
+          invocationId: String,
+          sourcePath: Path,
+          label: String,
+          asFrame: Boolean,
+        ): QaRetainedScreenshot = QaRetainedScreenshot("$DIRECTORY/retained/s1.png", "png", 100, 10, 10)
+      }
+    val screenshots = QaChecklistRecorder(database, Clock.fixed(NOW, ZoneOffset.UTC), diagnostics, workspaces)
+    val source = Path.of("$DIRECTORY/evidence/s1.png")
+    register()
+
+    val recorded = screenshots.recordScreenshot(Path.of("/repo"), RUN, source, "Edit kept", false)
+
+    assertEquals(QaChecklistOutcome.Recorded(retainedPath = "$DIRECTORY/retained/s1.png"), recorded)
+    assertIs<QaChecklistOutcome.Rejected>(
+      screenshots.recordScreenshot(Path.of("/repo"), "absent", source, "Edit kept", false),
+    )
   }
 
   private fun checklist(): StandaloneQaChecklist =

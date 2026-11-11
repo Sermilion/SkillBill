@@ -44,7 +44,7 @@ class DetailSectionsTest {
         val page = ValidationPageState(null, mutableStateListOf(), {})
         LazyColumn(state = validationList) {
           val sections = DetailSections(this, collapse, validationList)
-          sections.document(state, runActionsView(state), {}, null, {}, page)
+          sections.document(state, runActionsView(state), false, {}, null, {}, page)
         }
       }
     }
@@ -60,7 +60,7 @@ class DetailSectionsTest {
         val state = DetailUiState(review, SectionsUi.Loaded(emptyDetail, null, emptyMap(), emptySet()), false, epoch)
         LazyColumn(state = list) {
           val sections = DetailSections(this, collapse, list)
-          sections.document(state, runActionsView(state), {}, null, {})
+          sections.document(state, runActionsView(state), false, {}, null, {})
         }
       }
     }

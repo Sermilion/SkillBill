@@ -1,7 +1,11 @@
 package dev.skillbill.desktop.core.data.chat
 
 import dev.skillbill.desktop.core.common.HostEnvironment
+import dev.skillbill.desktop.core.domain.model.ApprovalCard
+import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
+import dev.skillbill.desktop.core.domain.model.ApprovalCardOption
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
@@ -187,6 +191,40 @@ class ChatStoreTest {
   }
 
   @Test
+  fun `attributed paths survive a restart and a chat saved without them reads as unattributed`() {
+    val diagnostics = RecordingDiagnostics()
+    val store = ChatStore(host, diagnostics, Clock.System)
+    val baseline = ChatChangesBaseline("head", emptyList(), "stash", Instant.fromEpochMilliseconds(5))
+    store.saveChat(entry("attributed", 10).copy(executionId = null, newTask = ChatNewTaskContext("/work/app", "main", changesBaseline = baseline, changesAttributedPaths = setOf("b.kt", "a.kt"))))
+    store.saveChat(entry("legacy", 11).copy(executionId = null, newTask = ChatNewTaskContext("/work/app", "main", changesBaseline = baseline)))
+
+    val restored = ChatStore(host, diagnostics, Clock.System).newTaskDrafts().associate { it.sessionId to it.newTask?.changesAttributedPaths }
+
+    assertEquals(mapOf("legacy" to null, "attributed" to setOf("a.kt", "b.kt")), restored)
+    assertEquals(emptyList(), diagnostics.categories)
+  }
+
+  @Test
+  fun `project worktree snapshots survive repeated saves alongside a previous version chat`() {
+    val diagnostics = RecordingDiagnostics()
+    val store = ChatStore(host, diagnostics, Clock.System)
+    val baseline = ChatChangesBaseline("head", listOf("scratch.txt"), "stash", Instant.fromEpochMilliseconds(5))
+    val file = File(host.userHome, "$CHAT_STORE_PATH/previous.json")
+    file.parentFile.mkdirs()
+    file.writeText("""{"session_id":"previous","agent_id":"codex","updated_at_ms":10,"new_task_repository_root":"/work/app","new_task_session_established":true,"new_task_changes_capture_attempted":true,"new_task_changes_baseline":{"head_sha":"head","untracked_paths":["scratch.txt"],"stash_sha":"stash","taken_at":5},"new_task_changes_attributed_paths":["original.kt"],"lines":[{"role":"Operator","text":"keep this history"}]}""")
+    val previous = store.newTaskDrafts().single()
+    assertEquals(baseline, previous.newTask?.changesBaseline)
+    assertEquals(setOf("original.kt"), previous.newTask?.changesAttributedPaths)
+    val project = baseline.copy(projectId = "/work/app/.git", worktrees = mapOf("/work/app" to baseline, "/work/main" to baseline.copy(headSha = "main-head", stashSha = null)))
+    val updated = previous.copy(newTask = previous.newTask!!.copy(changesBaseline = project, changesAttributedPaths = setOf("original.kt", "/work/main/changed.kt")))
+    repeat(2) {
+      assertTrue(store.saveChat(updated))
+      assertEquals(updated, ChatStore(host, diagnostics, Clock.System).newTaskDrafts().single())
+    }
+    assertEquals(emptyList(), diagnostics.categories)
+  }
+
+  @Test
   fun `pending new-task turn index counts action-only replies`() {
     val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
     val draft = entry("pending", 10).copy(
@@ -259,5 +297,35 @@ class ChatStoreTest {
 
     assertEquals("old", store.staleForSummary("old")?.sessionId)
     assertEquals(listOf("old"), store.staleSummaries(1).map { it.sessionId })
+  }
+
+  @Test
+  fun `approval card json omits rule_pattern when null and round-trips when set`() {
+    val diagnostics = RecordingDiagnostics()
+    val card = ApprovalCard(
+      key = ApprovalCardKey("a", "repo", "run", "gen", "claude", "req", false),
+      checkoutRoot = "/repo",
+      providerSessionId = null,
+      title = "Bash",
+      reason = null,
+      subject = "git status",
+      inputText = "git status",
+      options = listOf(ApprovalCardOption("allow", "Allow", "allow")),
+      actionFingerprint = null,
+      authorityScope = null,
+      createdAt = "2026-11-07T00:00:00Z",
+      deadlineAt = "2026-11-07T00:10:00Z",
+      state = "allowed",
+      decisionSource = "stored_rule",
+      selectedOptionId = "allow",
+      ruleId = "rule-1",
+      providerPayload = "{}",
+      rulePattern = "git status *",
+    )
+    val omitted = card.copy(rulePattern = null).toJson()
+    assertEquals(false, "rule_pattern" in omitted)
+    assertEquals(null, omitted.toApprovalCard(diagnostics)?.rulePattern)
+    assertEquals("git status *", card.toJson().toApprovalCard(diagnostics)?.rulePattern)
+    assertEquals("git status *", card.toJson().toApprovalCard(diagnostics)?.toJson()?.toApprovalCard(diagnostics)?.rulePattern)
   }
 }

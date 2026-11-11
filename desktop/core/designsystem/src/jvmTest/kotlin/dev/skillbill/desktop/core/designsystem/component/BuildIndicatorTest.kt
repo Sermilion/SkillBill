@@ -9,6 +9,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -54,13 +55,14 @@ class BuildIndicatorTest {
     val ticker = UiTicker(object : Clock { override fun now(): Instant = start }, backgroundScope)
     runComposeUiTest {
       mainClock.autoAdvance = false
-      val current = mutableStateOf(build(usualMs = null, elapsedMs = 95_000))
+      val current = mutableStateOf(build(usualMs = null, elapsedMs = 95_000).copy(totalElapsedMs = 180_000))
       setContent {
         SkillBillTheme(reducedMotion = true) {
           CompositionLocalProvider(LocalUiTicker provides ticker) { BuildStrip(current.value) }
         }
       }
 
+      onNodeWithText("Total build 3m 00s").assertExists()
       onNodeWithContentDescription("Build in progress").assert(SemanticsMatcher.expectValue(
         SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate,
       ))
@@ -123,6 +125,15 @@ class BuildIndicatorTest {
       build(SbBuildState.Failed, elapsedMs = 65_000).chipTooltip(now),
     )
     assertEquals("./gradlew check · Android · usually 3m 10s", build().chipTooltip(now))
+  }
+
+  @Test
+  fun `total build time advances only while a command is active and survives command changes`() {
+    val now = start + kotlin.time.Duration.parse("10s")
+    val current = build().copy(totalElapsedMs = 120_000, totalElapsedAsOf = start)
+    assertEquals(Plain("Total build 2m 10s"), current.metaSegments(now, "10:00").first())
+    val finished = current.copy(state = SbBuildState.Passed, totalElapsedMs = 130_000, totalElapsedAsOf = null)
+    assertEquals(Plain("Total build 2m 10s"), finished.metaSegments(now + kotlin.time.Duration.parse("60s"), "10:00").first())
   }
 
   @Test

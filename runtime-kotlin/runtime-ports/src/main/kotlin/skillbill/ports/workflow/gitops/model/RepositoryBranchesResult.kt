@@ -11,6 +11,7 @@ sealed interface RepositoryBranchesResult {
     val defaultBranch: String?,
     val local: List<RepositoryBranchRef>,
     val remote: List<RepositoryBranchRef>,
+    val currentBranch: String? = null,
   ) : RepositoryBranchesResult
 
   data class NotARepository(val path: String) : RepositoryBranchesResult

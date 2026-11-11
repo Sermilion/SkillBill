@@ -1,6 +1,8 @@
-# Skill Bill: Linear study
+# Sona: Linear study
 
-An interactive HTML prototype of the Skill Bill desktop app redesigned in Linear's design language. It keeps the app's near-black and amber palette. The desktop app in `desktop/` defines shared styling and behavior. Added mock functionality stays in the prototype for later implementation.
+An interactive HTML prototype of the Sona desktop app redesigned in Linear's design language. It keeps the app's near-black and amber palette. The desktop app in `desktop/` defines shared styling and behavior. Added mock functionality stays in the prototype for later implementation.
+
+Sona uses the Ping logo from [the logo study](../sona-logo-linear.html). The shared `BrandMark` draws its three clipped bands in one color at every size. Amber remains the interface accent for actions and status. Runtime commands, paths, repository names and recorded patches keep their existing identities.
 
 [HANDOFF.md](HANDOFF.md) is the implementation handoff. Read it before planning work.
 
@@ -88,3 +90,11 @@ Review the card in the app layout with these links. Each opens the details popup
 - [Loading](index.html#usage/loading)
 
 The Components view also has UsageCard and UsagePanel examples.
+
+## Verify detail
+
+Verify keeps its outcome card brief. Full findings and the complete work summary live in the expandable Verdict step. The work overview shows at most three lines and links to that step.
+
+Non-goals, Technical constraints and Rollout use purpose-specific context panels. Each collapsed panel shows a one-line preview with an exclusion count, requirement count or release label. Expanded panels separate entries with rules and preserve report formatting. Non-goals use a muted cross, constraints a shield, and rollout an arrow. The same hierarchy applies at narrow widths.
+
+Criteria totals and row badges use the same per-criterion audit results. Missing grades display as ungraded, with the original report in Completeness audit. An empty audit never claims that all criteria are met.

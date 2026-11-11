@@ -26,7 +26,7 @@ internal object UnavailableApprovalFeed : ApprovalFeedRepository {
   override fun observe(repositoryRoot: String, retainedKeys: Flow<Set<ApprovalCardKey>>): Flow<ApprovalFeed> =
     flowOf(ApprovalFeed.Unavailable(REASON))
 
-  override suspend fun decide(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean): ApprovalDecisionOutcome =
+  override suspend fun decide(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean, pattern: String?): ApprovalDecisionOutcome =
     ApprovalDecisionOutcome.NotLive
 
   override suspend fun dismiss(key: ApprovalCardKey): ApprovalDecisionOutcome = ApprovalDecisionOutcome.NotLive
@@ -80,10 +80,10 @@ internal class ChatApprovals(private val repository: ApprovalFeedRepository) {
   }
 
   /** Sends the operator's click on [optionId]; the card shows as submitting until the feed reports its new outcome. */
-  suspend fun decide(thread: ChatThread, key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean) {
+  suspend fun decide(thread: ChatThread, key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean, pattern: String? = null) {
     val card = thread.beginApprovalDecision(key) ?: return
     val outcome = try {
-      repository.decide(card.key, optionId, alwaysAllow)
+      repository.decide(card.key, optionId, alwaysAllow, pattern)
     } catch (cancelled: CancellationException) {
       thread.approvalSubmitting(key, submitting = false)
       throw cancelled

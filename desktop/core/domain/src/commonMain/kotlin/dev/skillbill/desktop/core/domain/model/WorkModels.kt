@@ -35,6 +35,8 @@ data class WorkBuild(
   val exitCode: Int?,
   val finishedAt: Instant?,
   val previous: WorkBuildPrevious?,
+  val totalElapsedMs: Long? = null,
+  val totalElapsedAsOf: Instant? = null,
 )
 
 /** What happened to the main checkout when the goal's worktree was removed. */
@@ -133,6 +135,8 @@ data class WorkItem(
   val goalWorktree: GoalWorktree? = null,
   val launchWarning: String? = null,
   val build: WorkBuild? = null,
+  val primaryRepositoryRoot: String? = null,
+  val runKindLabel: String? = null,
 ) {
   val checkoutRoot: String get() = goalWorktree?.takeIf { it.state != GoalWorktreeState.Removed }?.path ?: repositoryRoot
 }

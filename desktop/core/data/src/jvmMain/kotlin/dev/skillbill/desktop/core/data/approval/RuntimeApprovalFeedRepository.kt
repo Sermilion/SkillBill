@@ -36,8 +36,8 @@ class RuntimeApprovalFeedRepository(
     },
   ) { it.approvals.observe(repositoryRoot, retainedKeys) }
 
-  override suspend fun decide(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean): ApprovalDecisionOutcome =
-    current()?.approvals?.decide(key, optionId, alwaysAllow) ?: ApprovalDecisionOutcome.NotLive
+  override suspend fun decide(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean, pattern: String?): ApprovalDecisionOutcome =
+    current()?.approvals?.decide(key, optionId, alwaysAllow, pattern) ?: ApprovalDecisionOutcome.NotLive
 
   override suspend fun dismiss(key: ApprovalCardKey): ApprovalDecisionOutcome =
     current()?.approvals?.dismiss(key) ?: ApprovalDecisionOutcome.NotLive

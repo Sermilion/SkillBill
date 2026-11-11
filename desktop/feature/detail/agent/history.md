@@ -1,3 +1,17 @@
+## [2026-11-08] SKILL-527 phase cards in details pane
+Areas: desktop/feature/detail, desktop/core/designsystem, desktop/core/domain, desktop/core/data; runtime phase-card and QA projections
+- MEDIUM feature. Subtask and Goal finish inspectors share phase tabs and selected cards in the 380px pane and expanded inline rows. Goal finish replaces the Assessment / QA switch with seven phase tabs.
+- PhaseTabs and PhasePeek parts are reusable. Recorded skipped tabs remain selectable; missing cards stay inert. Arrow keys wrap, and Home and End select the first and last available tabs.
+- Window-owned phase choices survive paging per goal and subtask, including Goal finish, and clear on database-session changes. Stale choices resolve against available cards.
+- Review passes appear inside the review card once, with the separate Review block retained only when no review card exists. Audit results remain below Phases.
+- Goal cards show assessment, retained QA, validation, PR and monitor facts. QA includes actual QA and qa_fix rounds, Live, retained frames, screenshot inventory and folded stages.
+- Runtime and data projections supply facts and ordering. Phase activity shows the latest five supplied events; monitor activity includes the current cycle and earlier outcomes.
+- Footer links use existing spec, branch and GitHub targets. Unsupported review, validation-run and Changes destinations remain omitted.
+- Limits: unrecoverable earlier QA evidence stays unavailable; headless runs may have no frame. Paired desktop and runtime must agree on read schema 119.
+- QA limitation: validate changed code after QA settled, so the final tree differs from the tree QA tested. This entry claims implementation coverage only.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented across the parent feature
+
 ## [2026-11-07] SKILL-518 match plan detail design
 Areas: desktop/feature/detail, desktop/core/designsystem
 - MEDIUM feature. Standalone plans follow the mock's stage strip, merged Now block or blocked callout, Activity, Spec bundle, Transcript and Briefing order. Plan-local headers and the Blocked badge leave other run types unchanged.

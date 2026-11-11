@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,7 +31,7 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -40,6 +42,8 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
+
+internal val LocalSubtaskRowOpen = staticCompositionLocalOf<(() -> Unit)?> { null }
 
 /**
  * `.sb-sublist`: the Subtasks index, a box that takes keyboard focus. While it has focus ↑ and ↓ call [onMove] with -1 or 1 and
@@ -100,9 +104,9 @@ fun SubtaskList(
         if (!it.hasFocus) pointerFocus = false
         onFocusChange(it.hasFocus)
       }
-      .onPreviewKeyEvent { event ->
+      .onKeyEvent { event ->
         if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isMetaPressed || event.isAltPressed || event.isShiftPressed) {
-          return@onPreviewKeyEvent false
+          return@onKeyEvent false
         }
         when (event.key) {
           Key.DirectionDown -> { move(1); true }
@@ -116,6 +120,6 @@ fun SubtaskList(
       .semantics { contentDescription = label }
       .selectableGroup()
       .sbBoxSegment(0, 1),
-    content = content,
+    content = { CompositionLocalProvider(LocalSubtaskRowOpen provides { open() }) { content() } },
   )
 }

@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -20,6 +18,8 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -33,8 +33,8 @@ import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.designsystem.detail.SbBox
-import dev.skillbill.desktop.core.designsystem.detail.rememberSectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.Section
+import dev.skillbill.desktop.core.designsystem.detail.rememberSectionCollapse
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.navigation.Crumb
 import dev.skillbill.desktop.core.designsystem.navigation.Pager
@@ -107,6 +107,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   }
   val item = state.header
   val view = runActionsView(state)
+  val paneShown = host.detailsPaneVisible && (item.kind != WorkKind.Goal || LocalShellLayout.current.showDetailsPane)
   val recoverFocus = remember { FocusRequester() }
   val listState = rememberLazyListState()
   val planScreenState = rememberPlanScreenState(item.id)
@@ -168,18 +169,21 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         val narrow = LocalShellLayout.current.drawerMode
         val inset = if (narrow) 16.dp else 40.dp
         val side = maxOf(inset, (maxWidth - (DOC_MAX_WIDTH - inset * 2)) / 2)
+        val verifyRun = loaded?.detail?.verifyRun
+        val fixBarVisible = verifyRun != null && verifySelectionAllowed(verifyRun) && state.fixSelection.isNotEmpty()
+        val fixBarHeight = remember(verifyRun?.workflowId) { mutableStateOf(0.dp) }
+        val density = LocalDensity.current
         LazyColumn(
           Modifier.fillMaxSize(),
           state = listState,
-          contentPadding = PaddingValues(start = side, end = side, top = if (narrow) 20.dp else 32.dp, bottom = if (narrow) 48.dp else 64.dp),
+          contentPadding = PaddingValues(start = side, end = side, top = if (narrow) 20.dp else 32.dp, bottom = maxOf(if (narrow) 48.dp else 64.dp, if (fixBarVisible) fixBarHeight.value + 16.dp else 0.dp)),
         ) {
           val sections = DetailSections(this, collapse, listState, assessmentOrder, keys, planScreenState)
           sections.item(key = "header") {
             val verifyRun = loaded?.detail?.verifyRun
             if (verifyRun != null) VerifyHeader(verifyRun, onAction) {
               if (state.sections != SectionsUi.Gone) {
-                val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
-                RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction)
+                VerifyHeaderActions(state, verifyRun, view, recoverFocus, onAction) { if (!host.chatOpen) host.onToggleChat() }
               }
             } else DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }, qa = if (qaRow) QaHeaderFacts(qaView?.testedCommit, qaView?.criteriaSource) else null, validation = validationRow, planReady = item.isStandalonePlan() && planFinished(item, loaded?.detail), planBlocked = item.isStandalonePlan() && hasBlockedSubtasks(loaded?.detail?.standalonePlan)) {
               if (state.sections != SectionsUi.Gone) {
@@ -204,14 +208,15 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
           if (!validationRow && item.reason != null && item.lifecycle != Lifecycle.Terminal) sections.item(key = "reason") {
             Column(Modifier.padding(top = DocBlockGap)) { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
           }
-          sections.document(state, view, onAction, qaView, scrollToFinding, validationPage, scrollToVerifySection)
+          sections.document(state, view, paneShown, onAction, qaView, scrollToFinding, validationPage, scrollToVerifySection)
+        }
+        if (fixBarVisible) Box(Modifier.align(Alignment.BottomCenter).padding(horizontal = side, vertical = 16.dp).onSizeChanged { fixBarHeight.value = with(density) { it.height.toDp() } }) {
+          VerifyFixBar(verifyFixItems(verifyRun, state.criterionMarks), state, true, onAction)
         }
       }
       DetailPeek(
-        open = host.detailsPaneVisible,
-        wide = (state.sections as? SectionsUi.Loaded)?.detail?.let {
-          selectedSubtask(item, it, state.subtaskChoice.key) == SubtaskKey.GoalFinish
-        } == true,
+        open = paneShown,
+        wide = detailsPaneWide(item),
         onDismiss = { if (host.detailsPaneOpen) host.onToggleDetails() },
       ) {
         peekState.SaveableStateProvider("${item.id}:${state.subtaskChoice.key}") {
@@ -250,7 +255,7 @@ internal fun DetailSections.incident(state: DetailUiState, view: RunActionsView,
 }
 
 /** Detail sections with Activity last; placeholders hold their place until the first read lands. */
-internal fun DetailSections.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit, qaView: QaChecklistView?, onOpenFinding: (String) -> Unit, validationPage: ValidationPageState? = null, onScrollToVerifySection: (String) -> Unit = {}) {
+internal fun DetailSections.document(state: DetailUiState, view: RunActionsView, paneShown: Boolean, onAction: (DetailAction) -> Unit, qaView: QaChecklistView?, onOpenFinding: (String) -> Unit, validationPage: ValidationPageState? = null, onScrollToVerifySection: (String) -> Unit = {}) {
   val item = state.header
   when (val sections = state.sections) {
     SectionsUi.Pending -> {
@@ -281,16 +286,12 @@ internal fun DetailSections.document(state: DetailUiState, view: RunActionsView,
       item(key = "metrics") {
         Column(Modifier.padding(top = DocBlockGap)) { DetailMetrics(item, detail) }
       }
-      subtaskSection(item, detail, state, onAction)
+      subtaskSection(item, detail, state, paneShown, onAction)
       pipelineSection(item, detail)
       if (item.showsChanges) changesSection(state.changes, onAction)
       briefingSection(item, detail, onAction)
       reviewActionsSection(item, detail, onAction)
       standaloneResultSection(item, detail)
-      if (item.kind != WorkKind.Goal) {
-        goalQaSection(detail, item.running, onAction)
-        goalAssessmentSection(detail)
-      }
       // Standalone phases and operations keep their dependencies, validation, phase results and spec bundle in the document.
       dependencySection(item, detail, state, onAction)
       validationSection(item, detail)

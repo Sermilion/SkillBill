@@ -8,10 +8,20 @@ A subtask pays the whole ceremony: preplan, plan, implement, review, validate, o
 cost barely moves between a two-file change and a twenty-file one, so decomposition exists to cut
 work too large for a single pass, not to give each layer, file, or logical unit its own ticket.
 
-Every spec you author must have one to five acceptance criteria. When a candidate subtask needs
-more than five, use the fewest subtask specs needed to stay within the limit and distribute the
-criteria as evenly as possible. For a split caused by criterion count, the largest and smallest
-specs differ by at most one criterion. Six criteria become two specs with three each; eleven become
+Every spec you author must have one to five acceptance criteria. Divide broad criteria into smaller,
+independently verifiable pieces of the same production work. Prefer five focused criteria over three
+broad criteria when that split is coherent. The split changes acceptance granularity, not the amount
+of implementation work: preserve the same requirements and subtask boundary.
+Set the subtask's scope from requirements and execution boundaries before choosing its criterion count.
+Never expand a subtask's scope or move work from another subtask merely to reach five criteria.
+Split along observable behavior or contract boundaries, with a distinct completion condition for each
+piece. Use fewer when further splitting would duplicate outcomes, separate
+tightly coupled work, or invent scope. Never add test-only criteria or filler to reach five. This is a
+planning preference, not a minimum or a target number of subtasks.
+
+When a candidate subtask needs more than five, use the fewest subtask specs needed to stay within the
+limit and distribute the criteria as evenly as possible. For a split caused by criterion count, the
+largest and smallest specs differ by at most one criterion. Six criteria become two specs with three each; eleven become
 three specs with four, four, and three. Keep related outcomes together and record their dependency
 order when assigning criteria to the balanced specs.
 
@@ -185,6 +195,22 @@ work, report the conflict during preparation or planning before authoring an
 executable spec. Do not silently relax it or defer an impossible requirement to a
 later worker. Apply this check to the whole spec, including Scope, Non-Goals,
 Dependency Notes, Validation Strategy, and Implementation Details.
+
+## Subtask dependency feasibility
+
+Check every subtask at the repository state that will exist when it finishes, with
+only its completed dependencies available. Never assign acceptance criteria,
+interaction scenarios, validation evidence, or production activation that needs
+work owned by a later subtask. Parent outcome criteria apply to the completed goal,
+not to every child. State each deferred outcome's owning subtask in Dependency Notes.
+
+When a new contract requires migration or evidence acquisition, order those
+prerequisites before consumer activation. A contract-only subtask must leave active
+callers and persisted data usable through the existing path until adoption is ready.
+If that cannot be done safely, combine the coupled work or reorder the subtasks.
+Do not plan a child that needs a later child's evidence to pass its own gates.
+Required project checks still run in full for each child. A deferred integration is
+not permission to waive failures, weaken evidence rules, or disable regression tests.
 
 ## Spec Format Contract
 

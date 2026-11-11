@@ -5,12 +5,15 @@ import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
+import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
+import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
 
 private const val ACTION_MARKER = "```skillbill-actions"
 
@@ -66,18 +69,17 @@ internal class ChatReplyStream(private val diagnostics: Diagnostics) {
 }
 
 private const val MAX_LABEL = 60
-private const val MAX_INSTRUCTION = 2000
 
 private class DecodedActions(val actions: List<ChatSuggestedAction>, val dropped: List<String>)
 
 private fun droppedActionsNotice(reasons: List<String>): String {
   val count = if (reasons.size == 1) "a suggested action" else "${reasons.size} suggested actions"
-  return "\n\n_Skill Bill could not show $count: ${reasons.distinct().joinToString("; ")}. Ask the agent to send it again._"
+  return "\n\n_Sona could not show $count: ${reasons.distinct().joinToString("; ")}. Ask the agent to send it again._"
 }
 
 private fun decodeActions(source: String, diagnostics: Diagnostics): DecodedActions? {
   val trimmed = source.trim()
-  if (!trimmed.endsWith("```") || trimmed.length > 16000) return null
+  if (!trimmed.endsWith("```")) return null
   val array = try {
     Json.parseToJsonElement(trimmed.removeSuffix("```").trim()) as? JsonArray
   } catch (_: SerializationException) {
@@ -111,15 +113,8 @@ private fun decodeAction(element: JsonElement, diagnostics: Diagnostics): Action
     ?: return ActionResult.Dropped(
       if (rawLabel != null && rawLabel.length > MAX_LABEL) "label over $MAX_LABEL characters" else "missing or invalid label",
     )
-  val rawInstruction = action.actionString("instruction")?.trim()
-  val instruction = rawInstruction?.takeIf { it.isNotBlank() && it.length <= MAX_INSTRUCTION }
-    ?: return ActionResult.Dropped(
-      if (rawInstruction != null && rawInstruction.length > MAX_INSTRUCTION) {
-        "\"$label\" has an instruction of ${rawInstruction.length} characters, over the $MAX_INSTRUCTION limit"
-      } else {
-        "\"$label\" has no instruction"
-      },
-    )
+  val instruction = action.actionString("instruction")?.trim()?.takeIf { it.isNotBlank() }
+    ?: return ActionResult.Dropped("\"$label\" has no instruction")
   val mode = when (action.actionString("mode")) {
     "read" -> ChatPermissionMode.ReadOnly
     "act" -> ChatPermissionMode.Act
@@ -132,10 +127,38 @@ private fun decodeAction(element: JsonElement, diagnostics: Diagnostics): Action
   }
   val target = optionalActionString(action, "target") ?: return ActionResult.Dropped("\"$label\" has a non-string target")
   val branch = optionalActionString(action, "branch") ?: return ActionResult.Dropped("\"$label\" has a non-string branch")
+  val verify = when (val choices = verifyChoices(action, label, start)) {
+    is VerifyChoicesResult.Dropped -> return choices.dropped
+    is VerifyChoicesResult.Ok -> choices.choices
+  }
   return ActionResult.Ok(
-    ChatSuggestedAction(label, instruction, mode, start, actionTitle(action, diagnostics), target.value, branch.value),
+    ChatSuggestedAction(label, instruction, mode, start, actionTitle(action, diagnostics), target.value, branch.value, verify),
   )
 }
+
+private sealed interface VerifyChoicesResult {
+  class Ok(val choices: VerifyStartChoices) : VerifyChoicesResult
+  class Dropped(val dropped: ActionResult.Dropped) : VerifyChoicesResult
+}
+
+private fun verifyChoices(action: JsonObject, label: String, start: NewTaskActionKind?): VerifyChoicesResult {
+  if (QA_KEY !in action && REVIEW_MODE_KEY !in action) return VerifyChoicesResult.Ok(VerifyStartChoices())
+  if (start != NewTaskActionKind.Verify) {
+    return VerifyChoicesResult.Dropped(ActionResult.Dropped("\"$label\" sets qa or review_mode, which only a verify start takes"))
+  }
+  val qa = action[QA_KEY]?.let {
+    VerifyQaChoice.entries.firstOrNull { choice -> choice.wire == action.actionString(QA_KEY) }
+      ?: return VerifyChoicesResult.Dropped(ActionResult.Dropped("\"$label\" has a qa other than on or off"))
+  }
+  val reviewMode = action[REVIEW_MODE_KEY]?.let {
+    VerifyReviewModeChoice.entries.firstOrNull { choice -> choice.wire == action.actionString(REVIEW_MODE_KEY) }
+      ?: return VerifyChoicesResult.Dropped(ActionResult.Dropped("\"$label\" has a review_mode other than inline or delegated"))
+  }
+  return VerifyChoicesResult.Ok(VerifyStartChoices(qa, reviewMode))
+}
+
+private const val QA_KEY = "qa"
+private const val REVIEW_MODE_KEY = "review_mode"
 
 private fun actionTitle(action: JsonObject, diagnostics: Diagnostics): String? {
   if ("title" !in action) return null

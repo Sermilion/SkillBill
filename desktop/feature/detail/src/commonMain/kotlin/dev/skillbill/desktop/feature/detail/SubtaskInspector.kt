@@ -39,15 +39,12 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.designsystem.list.SubtaskChip
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
+import dev.skillbill.desktop.core.domain.model.ActivityResult
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.WorkDependency
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
 import dev.skillbill.desktop.core.ui.status.subtaskStatusKind
-
-/** Result section keys shared by the document and the side peek. */
-internal const val GOAL_QA_KEY = "goal-qa"
-internal const val GOAL_ASSESSMENT_KEY = "goal-assessment"
 
 /** components.js `VERB`: a subtask state's word in the pane title. */
 internal fun statusWord(kind: StatusKind): String = when (kind) {
@@ -63,11 +60,20 @@ internal fun statusWord(kind: StatusKind): String = when (kind) {
 }
 
 /** The Goal finish row's state: done once the goal finished, else pending. */
-internal fun goalFinishStatus(item: WorkItem): StatusKind = if (finishedAt(item) != null) StatusKind.Completed else StatusKind.Pending
+internal fun goalFinishStatus(item: WorkItem, detail: Detail): StatusKind {
+  val states = detail.goalFinishCards.map { it.state }
+  return when {
+    dev.skillbill.desktop.core.domain.model.PhaseCardState.Running in states -> StatusKind.Active
+    states.any { it == dev.skillbill.desktop.core.domain.model.PhaseCardState.Blocked || it == dev.skillbill.desktop.core.domain.model.PhaseCardState.Paused } -> StatusKind.Blocked
+    dev.skillbill.desktop.core.domain.model.PhaseCardState.Failed in states -> StatusKind.Failed
+    finishedAt(item) != null -> StatusKind.Completed
+    else -> StatusKind.Pending
+  }
+}
 
 /** The pane title's status for the selected row. */
 internal fun inspectorStatus(item: WorkItem, detail: Detail, key: SubtaskKey): PaneStatus = when (key) {
-  SubtaskKey.GoalFinish -> goalFinishStatus(item).let { PaneStatus(it, statusWord(it)) }
+  SubtaskKey.GoalFinish -> goalFinishStatus(item, detail).let { PaneStatus(it, statusWord(it)) }
   is SubtaskKey.Subtask -> {
     val kind = subtaskStatusKind(detail.subtasks.firstOrNull { it.id == key.id }?.status.orEmpty())
     PaneStatus(kind, statusWord(kind), 0.5f)
@@ -75,12 +81,13 @@ internal fun inspectorStatus(item: WorkItem, detail: Detail, key: SubtaskKey): P
 }
 
 @Composable
-internal fun SubtaskInspector(detail: Detail, subtask: WorkSubtask, onAction: (DetailAction) -> Unit) {
+internal fun SubtaskInspector(item: WorkItem, detail: Detail, subtask: WorkSubtask, phaseChoice: Map<PhaseChoiceKey, String>, activity: ActivityResult, inline: Boolean, renderedAt: kotlin.time.Instant, onAction: (DetailAction) -> Unit) {
   val colors = SkillBillTheme.colors
   Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    BasicText(subtask.name, style = SkillBillTheme.type.tBaseMedium.copy(color = colors.fg, lineHeight = 1.4.em))
+    if (!inline) BasicText(subtask.name, style = SkillBillTheme.type.tBaseMedium.copy(color = colors.fg, lineHeight = 1.4.em))
     subtask.blockedReason?.takeIf { it.isNotBlank() }?.let { Hint(it, FeedbackTone.Warn, fold = true) }
     SubtaskProperties(detail, subtask, onAction)
+    SubtaskPhasesSection(item, detail, subtask, phaseChoice, activity, renderedAt, onAction)
     SubtaskResults(detail, subtask)
   }
 }
@@ -156,6 +163,7 @@ private fun ChipItems(detail: Detail, edges: List<WorkDependency>, onAction: (De
 @Composable
 private fun SubtaskResults(detail: Detail, subtask: WorkSubtask) {
   val results = detail.phaseResults.firstOrNull { it.subtaskId == subtask.id }
+  val reviewInCard = results?.phaseCards?.any { it.phaseId == "review" } == true
   val state = subtaskResultsState(subtaskStatusKind(subtask.status), results, detail.degradedGoalStatusSource)
   Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
     when (state) {
@@ -165,7 +173,7 @@ private fun SubtaskResults(detail: Detail, subtask: WorkSubtask) {
         PaneSection(title = "Audit") {}
       }
       is SubtaskResultsState.Shown -> {
-        when (val review = state.review) {
+        if (!reviewInCard) when (val review = state.review) {
           is SubtaskReviewState.Passes -> SubtaskReviewSection(review.passes, review.runningReviewPass)
           SubtaskReviewState.RunsAfterAudit -> ResultsPlaceholder("Review", "Runs after audit")
           SubtaskReviewState.Omitted -> Unit

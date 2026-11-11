@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.phase.prompt.directives
 
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibility
+
 internal class PriorAttemptCorrection private constructor(
   public val reason: String,
   public val kind: Kind,
@@ -37,6 +39,10 @@ internal fun findingCoverageDirective(priorFindingCoverage: String?): String {
 
 internal fun planBundleRepairDirective(priorPlanBundleRejection: String?): String {
   if (priorPlanBundleRejection.isNullOrBlank()) return ""
+  if (priorPlanBundleRejection.startsWith(PlanBundleFeasibility.REVIEW_REQUIRED)) {
+    return "## Fresh bundle feasibility review required\n$priorPlanBundleRejection\n" +
+      "Review the current bundle without editing files. The preceding planner cannot approve its own repair."
+  }
   return """
     ## Spec bundle rejected: repair it in place
     The runtime rejected the spec bundle your previous attempt authored. That bundle is still on disk.

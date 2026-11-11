@@ -2,11 +2,8 @@ package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -15,15 +12,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ExpandableText
-import dev.skillbill.desktop.core.designsystem.component.FindingRow
 import dev.skillbill.desktop.core.domain.model.Detail
-import dev.skillbill.desktop.core.domain.model.GoalAssessmentFindingState
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentState
 import dev.skillbill.desktop.core.domain.model.ReviewPass
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
-import dev.skillbill.desktop.core.designsystem.component.Segmented
-import dev.skillbill.desktop.core.designsystem.component.SegmentedOption
 
 @Composable
 private fun SectionText(text: String, color: Color = SkillBillTheme.colors.fg2, modifier: Modifier = Modifier) {
@@ -101,56 +94,10 @@ internal fun DetailSections.phaseResultsSection(item: WorkItem, detail: Detail) 
   }
 }
 
-/** HANDOFF 9.2 item 15: the goal's QA results. */
-internal fun DetailSections.goalQaSection(detail: Detail, running: Boolean, onAction: (DetailAction) -> Unit) {
-  val qa = detail.goalQa ?: return
-  qaResultsSection(GOAL_QA_KEY, "Goal QA", qaResultsView(goalQaInput(qa, running)), onAction)
-}
-
 internal fun GoalAssessmentState.word(): String = when (this) {
   GoalAssessmentState.Completed -> "Completed"
   GoalAssessmentState.Blocked -> "Blocked"
   GoalAssessmentState.Running -> "Running"
   GoalAssessmentState.Pending -> "Pending"
   GoalAssessmentState.Skipped -> "Skipped"
-}
-
-/** HANDOFF 9.2 item 16: the state and round in the header count, the findings in one box. */
-@OptIn(ExperimentalLayoutApi::class)
-internal fun DetailSections.goalAssessmentSection(detail: Detail) {
-  val assessment = detail.goalAssessment ?: return
-  val count = assessment.findings.size
-  val order = assessmentOrder
-  val findings = orderedFindings(assessment.findings, order.value)
-  section(GOAL_ASSESSMENT_KEY, "Goal assessment") {
-    item(key = "assessment-order") {
-      FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.padding(bottom = 12.dp),
-      ) {
-        SectionText("${assessment.state.word()} · round ${assessment.round}", SkillBillTheme.colors.fgFaint)
-        if (count > 1) {
-          Segmented(AssessmentOrder.entries.map { SegmentedOption(it, it.label) }, order.value) { order.value = it }
-        }
-      }
-    }
-    itemsIndexed(findings, key = { _, finding -> "assessment-${finding.ref}" }) { index, finding ->
-      val colors = SkillBillTheme.colors
-      BoxedFindingRow(
-        index, count,
-        title = finding.failureScenario,
-        severity = finding.severity,
-        ref = finding.ref,
-        location = "${finding.path}:${finding.line}",
-        meta = goalAssessmentVerificationLabel(finding.verification),
-        state = when (finding.state) {
-          GoalAssessmentFindingState.Fixed -> "Fixed"
-          GoalAssessmentFindingState.Refuted -> "Refuted"
-          GoalAssessmentFindingState.Open -> "Open"
-        },
-        stateColor = if (finding.state == GoalAssessmentFindingState.Fixed) colors.stDone else colors.fgFaint,
-      )
-    }
-  }
 }

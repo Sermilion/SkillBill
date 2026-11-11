@@ -120,7 +120,10 @@ private fun RuleRow(rule: ApprovalRule, revoking: Boolean, onRevoke: () -> Unit)
           style = type.tSm.copy(color = colors.fg2),
         )
         // The whole fingerprint is shown: a rule is exactly one action, and the operator must be able to see which.
-        BasicText("Action ${rule.actionFingerprint}", style = type.tSm.copy(color = colors.fg2))
+        BasicText(
+          rule.pattern?.let { "Pattern $it" } ?: "Action ${rule.actionFingerprint}",
+          style = type.tSm.copy(color = colors.fg2),
+        )
         BasicText(
           "Profile ${rule.profileIdentity} · protocol ${rule.protocolRevision} · created ${rule.createdAt}",
           style = type.tSm.copy(color = colors.fgMuted),

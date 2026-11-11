@@ -60,6 +60,8 @@ class ShellKeyboardEscapeTest {
 
     override fun specProjectSelected(checkout: Path?) = Unit
 
+    override fun chatRepositorySelected(root: Path?) = Unit
+
     override fun closeTerminals() = Unit
   }
 

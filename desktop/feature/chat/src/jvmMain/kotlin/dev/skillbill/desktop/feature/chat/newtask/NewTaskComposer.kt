@@ -86,16 +86,20 @@ internal fun NewTaskComposer(
   val stoppable = chat?.let { key(it) { it.thread.stoppable.collectAsState().value } } ?: false
   val delivery = chat?.let { key(it) { it.thread.delivery.collectAsState().value } }
   val queued = chat?.let { key(it) { it.thread.queued.collectAsState().value } }.orEmpty()
-  val changes = chat?.let { key(it) { it.changes.collectAsState().value } } ?: ChatChangesState.None
+  val changesRoot = chat?.repositoryRoot ?: draft.repository?.root
+  val preview = remember(draft, chat, changesRoot) { changesRoot?.takeIf { chat == null }?.let(draft::previewChanges) }
+  LaunchedEffect(preview) { preview?.observe() }
+  val changes = chat?.let { key(it) { it.changes.collectAsState().value } }
+    ?: preview?.let { key(it) { it.state.collectAsState().value } } ?: ChatChangesState.None
   val gate = remember(chat) { SendNowGate() }
   val cursorMcpDependency = draft.cursorMcpDependency
   val offer by draft.offer.collectAsState()
-  val ready = !offer.starting && draft.canSend()
+  val ready = !offer.starting && !draft.branchSwitching && draft.canSend()
   val sendNow = delivery == null && stoppable && queued.isNotEmpty() && draft.text.isBlank() && draft.images.isEmpty() && !offer.starting
   val pickersDisabledWhy = when {
     delivery != null -> "Resolve the pending follow-up first"
     busy -> PICKERS_DISABLED_BUSY
-    offer.starting -> PICKERS_DISABLED_STARTING
+    offer.starting || draft.branchSwitching -> PICKERS_DISABLED_STARTING
     chat?.repositoryMissing == true -> PICKERS_DISABLED_MISSING_REPO
     else -> null
   }
@@ -124,6 +128,7 @@ internal fun NewTaskComposer(
     delivery?.let { pending ->
       chat?.let { current -> ChatDeliveryRecovery(pending, current::retryDelivery, current::discardDelivery, current.thread::keepOpen) }
     }
+    NewTaskBranchWarning(state, draft, pickersEnabled, onAction)
     Box(Modifier.fillMaxWidth()) {
       SbInput(
         draft.text, { onAction(NewTaskAction.TextChanged(it)) },
@@ -159,14 +164,17 @@ internal fun NewTaskComposer(
     if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        RepositoryPicker(state, draft, chat, busy || delivery != null, offer.starting, focus, now, Modifier.weight(1f, fill = false), onAction)
-        AgentPicker(state.agent, state.agents, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy) { onAction(NewTaskAction.ChooseAgent(it)) }
+        RepositoryPicker(state, draft, chat, busy || delivery != null, offer.starting || draft.branchSwitching, focus, now, Modifier.weight(1f, fill = false), onAction)
+        AgentPicker(
+          state.agent, state.agents, draft.repository?.root, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy,
+          loadModels = draft::models, onChooseModel = { onAction(NewTaskAction.ChooseModel(it)) },
+        ) { onAction(NewTaskAction.ChooseAgent(it)) }
         if (state.agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
           CursorMcpPicker(cursorMcpDependency, enabled = pickersEnabled) { draft.cursorMcpDependency = it }
         }
       }
       Row(Modifier.wrapContentWidth(unbounded = true), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        ChatChangesAnchor(chat, changes, focus, now, onOpenChanges)
+        ChatChangesAnchor(chat, changes, focus, onOpenChanges, changesRoot)
         if (stoppable) {
           SbButton(
             "Stop", { onAction(NewTaskAction.Stop); focus.requestFocus() },
@@ -213,7 +221,7 @@ private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, chat: N
     NewTaskRepositoryPill(
       mode,
       repository?.name,
-      repositoryPillBranch(draft.baseBranch, repository?.root, state.branchRead),
+      repositoryPillBranch(repository?.root, state.branchRead),
       pillFocus,
     ) { closeFocus = pillFocus; onAction(NewTaskAction.OpenRepositoryPicker) }
     val open = (mode == RepositoryPillMode.Interactive || mode == RepositoryPillMode.Choose) && state.repositoryPickerOpen

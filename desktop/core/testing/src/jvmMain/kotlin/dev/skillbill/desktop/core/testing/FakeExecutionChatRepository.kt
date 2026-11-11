@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.flow.update
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ChatModelsRead
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
@@ -42,6 +43,8 @@ class FakeExecutionChatRepository(
   /** What [agentFor] answers; by default the agent with the CLI's model. */
   var agentFor: (String) -> ChatAgent = { ChatAgent(it, null, null) }
   val agentForCalls: MutableList<String> = Collections.synchronizedList(mutableListOf())
+
+  override suspend fun models(agent: ChatAgent, repositoryRoot: String) = ChatModelsRead.Loaded(emptyList())
 
   override suspend fun agentFor(agentId: String): ChatAgent {
     agentForCalls += agentId

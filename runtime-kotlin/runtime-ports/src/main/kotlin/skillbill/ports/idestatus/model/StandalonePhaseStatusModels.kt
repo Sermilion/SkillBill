@@ -16,6 +16,7 @@ data class IdeStatusWorkflowRegistration(
   val lifecycleState: String,
   val startedAt: Instant,
   val agentEnvironment: Map<String, String> = emptyMap(),
+  val primaryRepositoryRoot: String? = null,
 )
 
 data class IdeStatusWorkflowExecution(
@@ -32,6 +33,7 @@ data class IdeStatusWorkflowExecution(
   val startedAt: Instant,
   val updatedAt: Instant,
   val agentEnvironment: Map<String, String> = emptyMap(),
+  val primaryRepositoryRoot: String? = null,
 )
 
 data class StandaloneMonitorTarget(
@@ -115,6 +117,7 @@ data class StandalonePhaseStatusRegistration(
   val agentEnvironment: Map<String, String> = emptyMap(),
   val launchScope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
   val monitorTarget: StandaloneMonitorTarget? = null,
+  val primaryRepositoryRoot: String? = null,
 )
 
 data class StandalonePhaseStatusUpdate(
@@ -138,6 +141,8 @@ data class StandalonePhaseStatusUpdate(
   val reviewRunId: String? = null,
   val qaDetails: QaRunDetails? = null,
   val validationOutcome: StandaloneValidationOutcome? = null,
+  val reportedModel: String? = null,
+  val replaceReportedModel: Boolean = false,
 )
 
 enum class StandalonePhaseStatusUpdateResult {
@@ -188,6 +193,8 @@ data class StandalonePhaseStatusRecord(
   val qaDetails: QaRunDetails? = null,
   val liveChecks: LiveChecksAvailability? = null,
   val validationOutcome: StandaloneValidationOutcome? = null,
+  val reportedModel: String? = null,
+  val primaryRepositoryRoot: String? = null,
 )
 
 const val STANDALONE_ELIGIBLE_PAGE_LIMIT: Int = 500

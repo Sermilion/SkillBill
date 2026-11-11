@@ -15,6 +15,7 @@ import skillbill.ports.qa.model.QaDeviceLeaseSnapshot
 import skillbill.ports.qa.model.QaLeaseReleaseOutcome
 import skillbill.ports.qa.model.QaLeaseResult
 import skillbill.ports.qa.model.QaReportSource
+import skillbill.ports.qa.model.QaRetainedScreenshot
 import skillbill.ports.qa.model.QaWorkspace
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.scaffold.model.PlatformManifest
@@ -50,6 +51,14 @@ class InMemoryQaWorkspaces(
     reports[Path.of(reference)]?.let { content ->
       QaReportSource(content, "${Path.of(reference).parent}/")
     }
+
+  override fun retainScreenshot(
+    repoRoot: Path,
+    invocationId: String,
+    sourcePath: Path,
+    label: String,
+    asFrame: Boolean,
+  ): QaRetainedScreenshot = error("This fixture does not retain screenshots.")
 
   override fun close(workspace: QaWorkspace) {
     report?.let { reports[workspace.reportPath] = it }
@@ -102,5 +111,11 @@ fun qaStandalonePhaseRun(
         },
       ),
     settlement = QaReportSettlement(workspaces, NoopRuntimeDiagnostics),
-    checklist = QaChecklistRecorder(checklistDatabase, Clock.systemUTC(), NoopRuntimeDiagnostics),
+    checklist =
+      QaChecklistRecorder(
+        checklistDatabase,
+        Clock.systemUTC(),
+        NoopRuntimeDiagnostics,
+        InMemoryQaWorkspaces(),
+      ),
   )

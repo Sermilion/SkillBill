@@ -4,11 +4,16 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.infrastructure.workflow.process.gitTimedOutError
 import skillbill.infrastructure.workflow.process.runGitProcess
 import skillbill.ports.workchanges.WorkTreeSnapshotPort
+import skillbill.ports.workchanges.model.WorkTreeComparisonResult
+import skillbill.ports.workchanges.model.WorkTreeProjectResult
 import skillbill.ports.workchanges.model.WorkTreeSnapshotResult
 import java.nio.file.Path
 
 @Inject
 class GitWorkTreeSnapshotAdapter : WorkTreeSnapshotPort {
+  override fun projectWorktrees(worktreeRoot: String): WorkTreeProjectResult =
+    readProjectWorktrees(Path.of(worktreeRoot))
+
   override fun capture(worktreeRoot: String): WorkTreeSnapshotResult {
     val root = Path.of(worktreeRoot)
     repositoryProblem(root, WorkTreeSnapshotResult::NotARepository, WorkTreeSnapshotResult::Failed)?.let { return it }
@@ -19,6 +24,12 @@ class GitWorkTreeSnapshotAdapter : WorkTreeSnapshotPort {
       is BaseRead.Failed -> WorkTreeSnapshotResult.Failed(head.message)
     }
   }
+
+  override fun comparisonBaseline(
+    worktreeRoot: String,
+    headSha: String,
+    snapshotSha: String?,
+  ): WorkTreeComparisonResult = integrateSnapshotUpstream(Path.of(worktreeRoot), headSha, snapshotSha)
 
   private fun captureAtHead(
     root: Path,

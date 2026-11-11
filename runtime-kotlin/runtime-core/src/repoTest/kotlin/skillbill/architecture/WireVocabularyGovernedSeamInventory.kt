@@ -15,6 +15,7 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinua
 import skillbill.infrastructure.contracts.locator.DecompositionManifestBundleJournalSchemaPaths
 import skillbill.infrastructure.contracts.locator.DecompositionManifestSchemaPaths
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeExecutionPlanSchemaPaths
+import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimePlanBundleFeasibilitySchemaPaths
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeReadinessEvidenceSchemaPaths
 import skillbill.infrastructure.contracts.locator.GoalArchiveSchemaPaths
 import skillbill.infrastructure.contracts.locator.GoalQualityExecutionSchemaPaths
@@ -77,6 +78,15 @@ internal object WireVocabularyGovernedSeamInventory {
             "workflow/taskruntime/artifact/FeatureTaskRuntimeWorkflowArtifactWire",
             "workflow/taskruntime/model/validation/ReadinessEvidencePayloadKeys",
             "engine/featuretask/phase/record/FeatureTaskRuntimeGateProgressRecorder",
+          ),
+      ),
+      GovernedPayloadSeam(
+        seamId = "feature-task-runtime-plan-bundle-feasibility",
+        schemaRepoRelativePath = FeatureTaskRuntimePlanBundleFeasibilitySchemaPaths.REPO_RELATIVE_PATH,
+        governedRelativePathMarkers =
+          listOf(
+            "engine/featuretask/phase/planning/PlanBundleFeasibilityStateCodec",
+            "infrastructure/contracts/workflow/featuretask/FeatureTaskRuntimePlanBundleFeasibilitySchemaValidator",
           ),
       ),
       GovernedPayloadSeam(
@@ -185,7 +195,9 @@ internal object WireVocabularyGovernedSeamInventory {
           loadRepoSchema(schemaRepoRelativePath),
         )
       FeatureTaskRuntimeExecutionPlanSchemaPaths.REPO_RELATIVE_PATH ->
-        executionPlanGovernedKeys(loadRepoSchema(schemaRepoRelativePath))
+        recursiveSchemaPropertyKeys(loadRepoSchema(schemaRepoRelativePath))
+      FeatureTaskRuntimePlanBundleFeasibilitySchemaPaths.REPO_RELATIVE_PATH ->
+        recursiveSchemaPropertyKeys(loadRepoSchema(schemaRepoRelativePath))
       GoalArchiveSchemaPaths.REPO_RELATIVE_PATH ->
         propertyNames(loadRepoSchema(schemaRepoRelativePath).path("properties")).toSet()
       GoalQualityExecutionSchemaPaths.REPO_RELATIVE_PATH ->
@@ -198,10 +210,10 @@ internal object WireVocabularyGovernedSeamInventory {
       else -> emptySet()
     }
 
-  private fun executionPlanGovernedKeys(node: JsonNode): Set<String> =
+  private fun recursiveSchemaPropertyKeys(node: JsonNode): Set<String> =
     buildSet {
       if (node.isObject) addAll(propertyNames(node.path("properties")))
-      if (node.isContainerNode) node.elements().forEachRemaining { addAll(executionPlanGovernedKeys(it)) }
+      if (node.isContainerNode) node.elements().forEachRemaining { addAll(recursiveSchemaPropertyKeys(it)) }
     }
 
   private fun telemetryProxyGovernedKeys(): Set<String> =

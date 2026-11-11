@@ -15,6 +15,28 @@ the task's file ownership.
   does not authorize. A new local interface is valid when its implementation and
   consumers are planned together. It cannot supply information an external system
   never exposes.
+- Keep a concise component inventory in the existing digest and implementation
+  plan. For each required component, name its owner and whether it exists, needs
+  an authorized local implementation or extension, or depends on an unavailable
+  external capability. Cite source for existing behavior. For local work, assign
+  a concrete implementation task and its consuming criteria. A missing converter,
+  contract, persistence path or integration is work to plan when the task
+  authorizes building it. Its absence alone is not a blocker or evidence that an
+  earlier subtask failed.
+- Count that local work in criterion sizing before fixing subtask boundaries,
+  including implementation, caller wiring, contracts and required migrations.
+  Assign each shared prerequisite one implementation owner and order it before
+  its dependent behavior. If prerequisites make a criterion exceed the sizing
+  limits, split the work under the existing decomposition rules while preserving
+  usable intermediate states. Never omit prerequisite work from estimates because
+  its files or symbols do not exist yet. Keep test obligations separate.
+- Reconcile the inventory against the final tasks before declaring the plan ready.
+  Every authorized missing component must have an implementation owner and
+  dependency order. The implementation plan must identify which components the
+  worker creates, so it does not require those components to exist before starting.
+  Only an unresolved external prerequisite or scope or requirement conflict needs
+  an operator decision. This inventory uses existing planning prose, not a new
+  output schema or runtime rejection gate.
 - Verify external contracts through configured authoritative tools or owning source
   and documentation. Record the source and revision where available, the actual
   operation or response, identity and authorization scope, relevant success and

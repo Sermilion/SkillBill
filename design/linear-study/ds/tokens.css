@@ -1,4 +1,4 @@
-/* Skill Bill — Linear study · design tokens
+/* Sona — Linear study · design tokens
  * Layout concept: darker app frame, one inset content panel with a 12px radius,
  * dense 13px UI type, hairline borders, a single amber accent used sparingly.
  * Dark only, like the desktop app.
@@ -29,7 +29,7 @@
   --fg-muted: #9C9CA6;
   --fg-faint: #6A6A74;
 
-  /* Accent: Skill Bill amber */
+  /* Accent: Sona amber */
   --accent: #E9A81C;
   --accent-hover: #F3C462;
   --accent-fg: #14100A;

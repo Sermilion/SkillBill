@@ -11,18 +11,18 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_PR_
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_TARGET_COLUMN_LIST
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_TARGET_PLACEHOLDERS
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.PLAN_REPORT_ASSIGNMENT
-import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_DETAILS_ASSIGNMENT
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_OUTCOME_ASSIGNMENT
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_REPORT_TEXT_ASSIGNMENT
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.REVIEW_RUN_ID_ASSIGNMENT
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.columnValue
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.columnValues
-import skillbill.infrastructure.sqlite.core.migration.area.idestatus.encodeQaDetails
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails.QA_DETAILS_ASSIGNMENT
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails.encodeQaDetails
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails.readQaDetailsOrWarn
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readMonitorCleanup
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readMonitorTarget
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readPlanReport
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaChecklist
-import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaDetailsOrWarn
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaReportText
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readReviewRunId
@@ -35,9 +35,11 @@ import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.core.schema.AGENT_ENVIRONMENT_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.LAUNCH_SCOPE_COLUMN
+import skillbill.infrastructure.sqlite.core.schema.REPORTED_MODEL_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.agentEnvironmentJson
 import skillbill.infrastructure.sqlite.core.schema.readAgentEnvironment
 import skillbill.infrastructure.sqlite.core.schema.readLaunchScope
+import skillbill.infrastructure.sqlite.core.schema.readStandaloneReportedModel
 import skillbill.infrastructure.sqlite.idestatus.readPlanActivity
 import skillbill.infrastructure.sqlite.idestatus.writePlanActivity
 import skillbill.infrastructure.sqlite.workflow.featuretask.validation.StandaloneValidationBranchReads
@@ -116,9 +118,10 @@ internal class StandalonePhaseStatusStore(
         lifecycle_state, current_step, started_at, updated_at, lease_owner,
         lease_generation, lease_expires_at, owner_host_identity, owner_boot_identity, owner_pid, owner_birth_token,
         launch_agent_id, launch_arguments_json, $AGENT_ENVIRONMENT_COLUMN, $LAUNCH_SCOPE_COLUMN,
+        primary_repository_root,
         $MONITOR_TARGET_COLUMN_LIST
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         $MONITOR_TARGET_PLACEHOLDERS
       )
       """.trimIndent(),
@@ -149,6 +152,7 @@ internal class StandalonePhaseStatusStore(
           request.launchArguments?.let(JsonCodec::valueToJsonString),
           agentEnvironmentJson(request.agentEnvironment),
           request.launchScope.wireValue,
+          request.primaryRepositoryRoot,
         ) + request.monitorTarget.columnValues(),
       )
       statement.executeUpdate()
@@ -491,7 +495,8 @@ internal class StandalonePhaseStatusStore(
           active_duration_as_of = CASE WHEN ? THEN NULL ELSE COALESCE(?, active_duration_as_of) END,
           terminal_result = ?, accepted_result = ?,
           $MONITOR_CLEANUP_ASSIGNMENTS, $QA_OUTCOME_ASSIGNMENT, $QA_REPORT_TEXT_ASSIGNMENT, $QA_DETAILS_ASSIGNMENT,
-          $PLAN_REPORT_ASSIGNMENT, $REVIEW_RUN_ID_ASSIGNMENT, $VALIDATION_OUTCOME_ASSIGNMENT
+          $PLAN_REPORT_ASSIGNMENT, $REVIEW_RUN_ID_ASSIGNMENT, $VALIDATION_OUTCOME_ASSIGNMENT,
+          $REPORTED_MODEL_COLUMN = CASE WHEN ? THEN ? ELSE $REPORTED_MODEL_COLUMN END
         WHERE execution_id = ? AND status_revision = ? AND lease_owner = ? AND lease_generation = ?
         """.trimIndent(),
       ).use { statement ->
@@ -516,6 +521,8 @@ internal class StandalonePhaseStatusStore(
               request.planReport.columnValue(),
               request.reviewRunId,
               request.validationOutcome?.wireValue,
+              request.replaceReportedModel,
+              request.reportedModel,
               request.executionId,
               request.expectedRevision,
               request.leaseOwner,
@@ -613,8 +620,8 @@ internal class StandalonePhaseStatusStore(
       INSERT INTO ide_status_workflow_execution(
         execution_id, repository_identity, branch_correlation, issue_key, workflow_id,
         invocation_id, status_store_id, run_sequence, status_revision, lifecycle_state,
-        started_at, updated_at, $AGENT_ENVIRONMENT_COLUMN
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?)
+        started_at, updated_at, $AGENT_ENVIRONMENT_COLUMN, primary_repository_root
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?)
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -630,6 +637,7 @@ internal class StandalonePhaseStatusStore(
         updatedAt,
         updatedAt,
         agentEnvironmentJson(request.agentEnvironment),
+        request.primaryRepositoryRoot,
       )
       statement.executeUpdate()
     }
@@ -661,6 +669,7 @@ internal class StandalonePhaseStatusStore(
       startedAt = workflowExecutionInstant("started_at"),
       updatedAt = workflowExecutionInstant("updated_at"),
       agentEnvironment = readAgentEnvironment("workflow-status"),
+      primaryRepositoryRoot = getString("primary_repository_root"),
     )
 
   private fun ResultSet.workflowExecutionInstant(column: String): Instant {
@@ -862,6 +871,8 @@ internal class StandalonePhaseStatusStore(
       qaDetails = readQaDetailsOrWarn(getString("invocation_id"), diagnostics),
       liveChecks = readLiveChecks("standalone-status"),
       validationOutcome = readValidationOutcome("standalone-status"),
+      reportedModel = readStandaloneReportedModel(),
+      primaryRepositoryRoot = getString("primary_repository_root"),
     )
   }
 

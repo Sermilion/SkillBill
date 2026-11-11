@@ -30,8 +30,10 @@ import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatOperationCardActions
 import dev.skillbill.desktop.feature.chat.ChatThread
 import dev.skillbill.desktop.feature.chat.OperationCardCoordinator
+import dev.skillbill.desktop.feature.chat.RunOpener
 import dev.skillbill.desktop.feature.chat.START_AGAIN_SUFFIX
 import dev.skillbill.desktop.feature.chat.UnavailableApprovalFeed
+import dev.skillbill.desktop.feature.chat.UnavailableRunOpener
 import dev.skillbill.desktop.feature.chat.chipText
 import dev.skillbill.desktop.feature.chat.restored
 import dev.skillbill.desktop.feature.chat.restoredDraft
@@ -75,6 +77,7 @@ class NewTaskDraft internal constructor(
   private val savedChats: NewTaskSavedChats = NewTaskSavedChats(chats, windowScope.scope, toasts),
   private val changesRepository: ChatChangesRepository = UnavailableChatChanges,
   private val diagnostics: Diagnostics,
+  private val runs: RunOpener = UnavailableRunOpener,
 ) {
   private val scope = windowScope.scope
   private val cardOwners = IdentityHashMap<ChatThread, NewTaskChat>()
@@ -101,9 +104,10 @@ class NewTaskDraft internal constructor(
     }
   }, { thread ->
     synchronized(cardOwners) { cardOwners[thread] }?.persist()?.also { if (it) refreshSaved() } ?: false
-  })
+  }, runs = runs)
   private val chatState = MutableStateFlow<NewTaskChat?>(null)
   private val offerState = MutableStateFlow(NewTaskOffer())
+  private var previewTracker: Pair<String, NewTaskChatChanges>? = null
   private var closing = false
   private var offerKeyEdit: NewTaskOfferKeyEdit? = null
   private var lastOfferFieldValue: String? = null
@@ -128,6 +132,7 @@ class NewTaskDraft internal constructor(
     }
   var addedRepositories: List<NewTaskRepository> by mutableStateOf(emptyList())
   var baseBranch: String by mutableStateOf("")
+  internal var branchSwitching by mutableStateOf(false)
   var agentId: String? by mutableStateOf(null)
 
   /** True once the operator picks an agent for this draft; until then it follows the default agent setting. */
@@ -143,14 +148,14 @@ class NewTaskDraft internal constructor(
 
   internal val acceptedIssueKey: String?
     get() = acceptedKeyState.takeIf { chatState.value?.repositoryRoot == repository?.root }
-  internal var cursorMcpDependency by mutableStateOf(CursorMcpDependency.Unspecified)
+  internal var cursorMcpDependency by mutableStateOf(CursorMcpDependency.ProjectUserOnly)
 
   /** Every repository's saved drafts, newest first, as of the latest [refreshSaved]. */
   internal val saved: StateFlow<List<ChatHistoryEntry>> = savedChats.saved
 
   internal fun addPastedImage(image: ChatImage) {
     if (closing) return
-    cursorMcpDependency = CursorMcpDependency.Unspecified
+    cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
     images = images + image
   }
 
@@ -158,7 +163,7 @@ class NewTaskDraft internal constructor(
     images = images.filterIndexed { position, _ -> position != index }
   }
 
-  internal fun canSend(): Boolean = canAdmitTurn(text, images)
+  internal fun canSend(): Boolean = !branchSwitching && canAdmitTurn(text, images)
 
   private fun canAdmitTurn(message: String, attachments: List<ChatImage> = emptyList()): Boolean {
     val current = chatState.value
@@ -182,8 +187,8 @@ class NewTaskDraft internal constructor(
     val returned = chatState.value?.stop().orEmpty()
     if (returned.isNotEmpty()) {
       cursorMcpDependency = if (text.isBlank() && images.isEmpty()) {
-        returned.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.Unspecified
-      } else CursorMcpDependency.Unspecified
+        returned.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.ProjectUserOnly
+      } else CursorMcpDependency.ProjectUserOnly
       text = restoredDraft(returned, text)
       images = returned.flatMap { it.images } + images
     }
@@ -197,7 +202,7 @@ class NewTaskDraft internal constructor(
     submitted: String,
     action: ChatSuggestedAction?,
     attachments: List<ChatImage> = emptyList(),
-    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
+    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly,
   ) {
     val current = chatState.value ?: open(UUID.randomUUID().toString(), checkNotNull(repository).root, baseBranch.ifBlank { null }, checkNotNull(selectedAgent))
     offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, started = null, selectedKey = null)
@@ -418,6 +423,17 @@ class NewTaskDraft internal constructor(
 
   internal fun launch(block: suspend () -> Unit) = scope.launch { block() }
 
+  internal fun previewChanges(root: String): NewTaskChatChanges {
+    previewTracker?.takeIf { it.first == root }?.let { return it.second }
+    previewTracker?.second?.end()
+    return NewTaskChatChanges(
+      changesRepository, scope, chatDispatcher, root, null, resumed = false, repositoryMissing = false,
+      captureAttempted = false, initialAttributedPaths = null,
+    ).also { previewTracker = root to it }
+  }
+
+  internal suspend fun models(agent: ChatAgent, root: String) = chats.models(agent, root)
+
   /** Opens a new agent session on the current repository, branch and agent, keeping the transcript. */
   internal fun rebindChat() {
     val current = chatState.value ?: return
@@ -433,7 +449,10 @@ class NewTaskDraft internal constructor(
       val repo = repository ?: return
       if (closing || current.repositoryMissing || current.thread.busy.value || offerState.value.starting) return
       val branch = baseBranch.ifBlank { null }
-      if (current.repositoryRoot == repo.root && current.baseBranch == branch && current.agent.agentId == agent.agentId) return
+      if (current.repositoryRoot == repo.root && current.baseBranch == branch && current.agent.agentId == agent.agentId && current.agent.profile == agent.profile) {
+        current.changeModel(agent)
+        return
+      }
       val lines = current.thread.transcript.value
       val previousId = current.sessionId
       val replay = (current.pendingReplay?.takeIf { !current.started }
@@ -447,7 +466,8 @@ class NewTaskDraft internal constructor(
     val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay,
       changesBaseline = current.changesBaseline.takeIf { sameRepository },
       resumedChanges = current.changesResumed && sameRepository,
-      changesCaptureAttempted = (current.changesCaptureAttempted || current.started || current.changesBaseline != null) && sameRepository)
+      changesCaptureAttempted = (current.changesCaptureAttempted || current.started || current.changesBaseline != null) && sameRepository,
+      changesAttributedPaths = current.changesAttributedPaths.takeIf { sameRepository })
     val switched = "Switched to ${chipText(agent)} in ${repo.name}."
     val notice = if (replay != null) "$switched It gets the earlier conversation with your next message." else switched
     next.thread.showCapability(agent)
@@ -522,6 +542,8 @@ class NewTaskDraft internal constructor(
   }
 
   internal suspend fun disposeAndAwait() {
+    previewTracker?.second?.end()
+    previewTracker = null
     val current = chatState.value
     if (current?.end() == false) return
     chatState.value = null
@@ -541,6 +563,7 @@ class NewTaskDraft internal constructor(
     changesBaseline: ChatChangesBaseline? = null,
     resumedChanges: Boolean = false,
     changesCaptureAttempted: Boolean = false,
+    changesAttributedPaths: Set<String>? = null,
   ): NewTaskChat {
     val openedDatabaseSessionId = (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
     val thread = retainedThreads.getOrPut(sessionId) { ChatThread(clock) }
@@ -568,6 +591,8 @@ class NewTaskDraft internal constructor(
       changesBaseline,
       resumedChanges,
       changesCaptureAttempted,
+      changesAttributedPaths,
+      previewTracker?.takeIf { it.first == root && changesBaseline == null && !started }?.second?.also { previewTracker = null },
       diagnostics,
       { openedDatabaseSessionId != null && (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId == openedDatabaseSessionId },
     ).also {

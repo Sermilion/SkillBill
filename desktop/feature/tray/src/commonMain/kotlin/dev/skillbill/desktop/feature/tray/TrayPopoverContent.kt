@@ -65,7 +65,7 @@ fun TrayPopoverContent(
       )
     },
     footer = {
-      SbButton("Open Skill Bill", onClick = onOpen, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
+      SbButton("Open Sona", onClick = onOpen, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
       Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         SbIconButton(LucideIcons.refresh, "Refresh", onClick = { onAction(TrayAction.Refresh) }, size = SbControlSize.Small)
         SbIconButton(LucideIcons.sliders, "Settings", onClick = onSettings, size = SbControlSize.Small)

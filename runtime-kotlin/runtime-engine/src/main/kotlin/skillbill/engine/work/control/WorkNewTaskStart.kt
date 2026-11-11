@@ -31,6 +31,7 @@ import skillbill.engine.work.control.model.OperationStartRequest
 import skillbill.engine.work.control.model.OperatorConfirmation
 import skillbill.engine.work.control.model.StandaloneCheckout
 import skillbill.engine.work.control.model.StandalonePhaseRequest
+import skillbill.engine.work.control.model.VerifyStartOptions
 import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
@@ -50,6 +51,7 @@ import skillbill.ports.workflow.branchworktree.model.BranchWorktreeRelease
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.workflowStatus
+import skillbill.workflow.verify.model.VerifyQaSelection
 import java.nio.file.Path
 import java.util.concurrent.CompletionStage
 
@@ -253,8 +255,12 @@ public class WorkNewTaskStart(
     return when {
       operationId !in STANDALONE_OPERATIONS ->
         NewTaskStartResult.Refused("Unsupported standalone operation '$operationId'.")
-      confirmation != null && request.proposalChanges != null ->
+      confirmation != null && (request.proposalChanges != null || request.verifyOptions.requested) ->
         NewTaskStartResult.Refused("An operation confirmation cannot change its proposal.")
+      request.verifyOptions.requested && operationId != OperationCardOperationIds.VERIFY ->
+        NewTaskStartResult.Refused("QA, review mode and QA device choices apply only to operation verify.")
+      request.verifyOptions.qaDevice != null && request.verifyOptions.qa != VerifyQaSelection.ON ->
+        NewTaskStartResult.Refused("A QA device applies only to a verify with QA on.")
       request.proposalChanges.orEmpty().toByteArray(Charsets.UTF_8).size > MAX_INTAKE_BYTES ->
         NewTaskStartResult.Refused("Proposal changes are too long. Shorten them to under $MAX_INTAKE_BYTES bytes.")
       confirmation != null -> confirmOperation(repoRoot, operationId, confirmation)
@@ -301,7 +307,9 @@ public class WorkNewTaskStart(
         BranchWorktreeHolder(BranchWorktreeHolderKind.OPERATION, holderId),
         launchId,
         profile,
+        qaDevice = request.verifyOptions.qaDevice,
         proposalChanges = request.proposalChanges,
+        options = verifyArguments(request.verifyOptions),
       )
     return launchStandaloneCommand(repoRoot, run, request.target, request.agentId, request.checkout)
   }
@@ -458,11 +466,12 @@ public class WorkNewTaskStart(
   ): StandaloneArguments {
     val launchTarget = target?.trim()?.takeIf(String::isNotBlank)
     val changes =
-      listOfNotNull(
-        run.proposalChanges?.trim()?.takeIf(String::isNotBlank)?.let {
-          "Operator requested proposal changes (later instructions take precedence):\n$it"
-        },
-      )
+      run.options +
+        listOfNotNull(
+          run.proposalChanges?.trim()?.takeIf(String::isNotBlank)?.let {
+            "Operator requested proposal changes (later instructions take precedence):\n$it"
+          },
+        )
     val splitPrReviewMode =
       PR_REVIEW_FIX_MODE_TARGET.matchEntire(launchTarget.orEmpty())
         ?.takeIf { run.verb == "operation" && run.name == OperationCardOperationIds.PR_REVIEW_FIX }
@@ -751,6 +760,7 @@ public class WorkNewTaskStart(
     val profile: String? = null,
     val qaDevice: QaNamedDevice? = null,
     val proposalChanges: String? = null,
+    val options: List<String> = emptyList(),
   )
 
   private data class OperationBinding(
@@ -834,3 +844,12 @@ public class WorkNewTaskStart(
 
 private val PR_REVIEW_FIX_MODE_TARGET =
   Regex("""mode:(local|remote)(?:\s+(.+))?""", RegexOption.DOT_MATCHES_ALL)
+
+private fun verifyArguments(options: VerifyStartOptions): List<String> =
+  listOfNotNull(
+    options.qa?.let { "$VERIFY_QA_PREFIX${it.wireValue}" },
+    options.mode?.let { "$VERIFY_MODE_PREFIX${it.wireValue}" },
+  )
+
+private const val VERIFY_QA_PREFIX = "qa:"
+private const val VERIFY_MODE_PREFIX = "mode:"

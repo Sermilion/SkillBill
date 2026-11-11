@@ -151,6 +151,15 @@ sealed interface ImportOutcome {
 
 enum class NewTaskKind { GoalRun, PlanOnly, Review, Validation, Qa, Pr, Monitor, Verify, PrReviewFix }
 
+enum class VerifyQaChoice(val wire: String) { On("on"), Off("off") }
+
+enum class VerifyReviewModeChoice(val wire: String) { Inline("inline"), Delegated("delegated") }
+
+/** A verify start's QA and review mode; null keeps the runtime default (QA off, inline review). */
+data class VerifyStartChoices(val qa: VerifyQaChoice? = null, val reviewMode: VerifyReviewModeChoice? = null) {
+  val chosen: Boolean get() = qa != null || reviewMode != null
+}
+
 /**
  * [repoRoot] names the repository the start belongs to. A standalone phase or operation runs in a checkout of [branch] when
  * set, else in [checkoutRoot] when set, else in [repoRoot]. [profile] is the chosen agent's config directory; null runs
@@ -172,6 +181,7 @@ data class NewTaskStart(
   val confirmation: OperationCardConfirmation? = null,
   val profile: String? = null,
   val proposalChanges: String? = null,
+  val verify: VerifyStartChoices = VerifyStartChoices(),
 )
 
 fun NewTaskActionKind.toNewTaskKind(): NewTaskKind = when (this) {

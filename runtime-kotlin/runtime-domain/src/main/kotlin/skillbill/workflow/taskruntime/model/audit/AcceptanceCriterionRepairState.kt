@@ -72,6 +72,9 @@ data class AcceptanceCriterionRepairCriterion(
   val closureEvidenceRef: String? = null,
   val closureTreeDigest: String? = null,
   val closureCheckpointId: String? = null,
+  val gaps: List<AcceptanceCriterionGap> = emptyList(),
+  val planGeneration: Int = 0,
+  val escalated: Boolean = false,
 )
 
 data class AcceptanceCriterionRepairDependency(
@@ -100,6 +103,9 @@ data class AcceptanceCriterionRepairOutcome(
   val treeDigest: String? = null,
   val checkpointId: String? = null,
   val auditBindingDigest: String? = null,
+  val charged: Boolean = false,
+  val openGapsBefore: Int = 0,
+  val openGapsAfter: Int = 0,
 ) {
   val successful: Boolean get() = kind == AcceptanceCriterionRepairOutcomeKind.TARGETED_SUCCESS
 }
@@ -144,7 +150,7 @@ data class AcceptanceCriterionRepairState internal constructor(
   val currentCriterionRef: String?,
   val reservation: AcceptanceCriterionRepairReservation?,
   val outcomes: List<AcceptanceCriterionRepairOutcome>,
-  val unsuccessfulTotals: Map<String, Int>,
+  val chargedAttempts: Map<String, Int>,
   val revision: Long,
   val mode: AcceptanceCriterionRepairMode,
   val stage: AcceptanceCriterionRepairStage,
@@ -153,9 +159,10 @@ data class AcceptanceCriterionRepairState internal constructor(
   val admittedCheckpointId: String?,
   val sourceTransitions: List<AcceptanceCriterionRepairSourceTransition>,
   val pendingAuditRefs: List<String> = emptyList(),
+  val lateFindings: List<AcceptanceCriterionLateFinding> = emptyList(),
+  val repairChangedPaths: List<String> = emptyList(),
   val proseAudits: List<AcceptanceCriterionProseAudit> = emptyList(),
   val pendingClarificationQuestion: String? = null,
-  val budgetStartOutcomeIndex: Int = 0,
   val interactionTrace: AcceptanceCriterionInteractionTrace = AcceptanceCriterionInteractionTrace.EMPTY,
 ) {
   fun clearPendingClarification(): AcceptanceCriterionRepairState = copy(pendingClarificationQuestion = null)
@@ -182,9 +189,9 @@ data class AcceptanceCriterionRepairState internal constructor(
 
   fun resetBudgetForOperatorResume(): AcceptanceCriterionRepairState {
     if (stage != AcceptanceCriterionRepairStage.BUDGET_BLOCKED) return this
+    val current = currentCriterionRef ?: return this
     return copy(
-      unsuccessfulTotals = emptyMap(),
-      budgetStartOutcomeIndex = outcomes.size,
+      chargedAttempts = chargedAttempts + (current to 0),
       stage =
         if (pendingAuditRefs.isEmpty()) {
           AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
@@ -195,12 +202,34 @@ data class AcceptanceCriterionRepairState internal constructor(
     )
   }
 
+  fun completePlan(
+    criterionRef: String,
+    planGeneration: Int,
+  ): AcceptanceCriterionRepairState? {
+    if (stage != AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED ||
+      currentCriterionRef != criterionRef || planGeneration !in 1..2
+    ) {
+      return null
+    }
+    val criterion = criteria.singleOrNull { it.canonicalRef == criterionRef } ?: return null
+    if (planGeneration != if (criterion.escalated) 2 else 1) return null
+    return copy(
+      criteria =
+        criteria.map {
+          it.copy(planGeneration = if (it.canonicalRef == criterionRef) planGeneration else 0)
+        },
+      revision = revision + 1,
+    )
+  }
+
   fun reserve(
     reservationId: String,
     mode: AcceptanceCriterionRepairMode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
   ): AcceptanceCriterionRepairState? {
     val current = currentCriterionRef ?: return null
-    val available = reservation == null && !hasExhaustedUnresolvedCriterion(unresolvedQueue, unsuccessfulTotals)
+    val available =
+      reservation == null &&
+        !FocusedRepairStrategy.exhausted(chargedAttempts.getOrDefault(current, 0))
     val validId = reservationId.isNotBlank() && outcomes.none { it.reservationId == reservationId }
     val capacity = outcomes.size < MAX_REPAIR_OUTCOMES && sourceTransitions.size < MAX_REPAIR_SOURCE_TRANSITIONS
     val allowedStage = stage == AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
@@ -219,6 +248,7 @@ data class AcceptanceCriterionRepairState internal constructor(
     evidenceRef: String,
     treeDigest: String,
     checkpointId: String,
+    changedPaths: List<String> = emptyList(),
   ): AcceptanceCriterionRepairState? {
     val live = reservation ?: return null
     val validReservation = live.reservationId == reservationId && live.criterionRef == currentCriterionRef
@@ -230,6 +260,7 @@ data class AcceptanceCriterionRepairState internal constructor(
       completedRepairEvidenceRef = evidenceRef,
       admittedTreeDigest = treeDigest,
       admittedCheckpointId = checkpointId,
+      repairChangedPaths = changedPaths.distinct().sorted().take(AcceptanceCriterionGapLimits.MAX_CHANGED_PATHS),
       reservation = live.copy(stageRevision = revision + 1),
       revision = revision + 1,
     )
@@ -241,32 +272,68 @@ data class AcceptanceCriterionRepairState internal constructor(
     if (existing != null) return if (outcome.replays(existing)) this else null
     if (!canRecord(outcome)) return null
     val acceptedOutcome = outcome.boundTo(this)
-    return acceptedOutcome.takeIf { it.matchesVerification(this) }?.let(::applyOutcome)
+    val criterion = criteria.single { it.canonicalRef == acceptedOutcome.criterionRef }
+    val outcome = acceptedOutcome
+    val verification =
+      if (outcome.targeted) {
+        AcceptanceGapVerificationResolver.resolve(
+          this,
+          criterion,
+          outcome.evidenceRef,
+          admittedTreeDigest == outcome.treeDigest,
+          legacySatisfied = outcome.successful,
+        )
+      } else {
+        null
+      }
+    return acceptedOutcome.takeIf {
+      it.matchesVerification(this) && (verification == null || verification.outcomeKind == it.kind)
+    }?.let { applyOutcome(it, verification) }
   }
 
-  private fun applyOutcome(acceptedOutcome: AcceptanceCriterionRepairOutcome): AcceptanceCriterionRepairState? {
+  private fun applyOutcome(
+    acceptedOutcome: AcceptanceCriterionRepairOutcome,
+    verification: AcceptanceGapVerification?,
+  ): AcceptanceCriterionRepairState? {
     val outcome = acceptedOutcome
-    val totals = unsuccessfulTotals.toMutableMap()
-    if (!outcome.successful) {
-      val next =
-        FocusedRepairStrategy.recordUnsuccessfulOutcome(totals.getOrDefault(outcome.criterionRef, 0))
-          ?: return null
-      totals[outcome.criterionRef] = next
-    }
-    val changedCriteria = criteriaAfter(outcome)
+    val totals = chargedAttempts.toMutableMap()
+    val criterion = criteria.singleOrNull { it.canonicalRef == outcome.criterionRef } ?: return null
+    val openGapsBefore =
+      verification?.openGapsBefore
+        ?: criterion.gaps.count { it.status == AcceptanceCriterionGapStatus.OPEN }
+    val openGapsAfter = verification?.openGapsAfter ?: openGapsBefore
+    val charged = !outcome.successful && openGapsAfter >= openGapsBefore
+    if (charged && !chargeOutcome(outcome, totals)) return null
+    val chargedOutcome =
+      outcome.copy(
+        charged = charged,
+        openGapsBefore = openGapsBefore,
+        openGapsAfter = openGapsAfter,
+      )
+    val changedCriteria =
+      criteriaAfter(chargedOutcome, totals[outcome.criterionRef] ?: 0)
+        .map { changed ->
+          if (changed.canonicalRef == outcome.criterionRef) {
+            changed.copy(gaps = verification?.gaps ?: changed.gaps)
+          } else {
+            changed
+          }
+        }
     val byRef = changedCriteria.associateBy { it.canonicalRef }
     val queue = stableQueue(changedCriteria, dependencies, byRef) ?: return null
     val pending = if (outcome.successful) pendingAuditRefs - outcome.criterionRef else pendingAuditRefs
     val current = pending.firstOrNull() ?: queue.firstOrNull()
-    val blocked = !outcome.successful && FocusedRepairStrategy.exhausted(totals.getOrDefault(outcome.criterionRef, 0))
+    val blocked = charged && FocusedRepairStrategy.exhausted(totals.getOrDefault(outcome.criterionRef, 0))
     return copy(
       criteria = changedCriteria,
       unresolvedQueue = queue,
       currentCriterionRef = current,
       pendingAuditRefs = pending,
       reservation = null,
-      outcomes = outcomes + acceptedOutcome,
-      unsuccessfulTotals = totals,
+      outcomes = outcomes + chargedOutcome,
+      chargedAttempts = totals,
+      repairChangedPaths = emptyList(),
+      lateFindings = lateFindings + verification?.lateFindings.orEmpty(),
       mode = modeAfterOutcome(pending, queue),
       stage = stageAfterOutcome(blocked, outcome.successful, pending, queue),
       completedRepairEvidenceRef = null,
@@ -275,6 +342,18 @@ data class AcceptanceCriterionRepairState internal constructor(
       sourceTransitions = sourceTransitionsAfter(outcome),
       revision = revision + 1,
     )
+  }
+
+  private fun chargeOutcome(
+    outcome: AcceptanceCriterionRepairOutcome,
+    totals: MutableMap<String, Int>,
+  ): Boolean {
+    if (outcome.successful) return true
+    val next =
+      FocusedRepairStrategy.recordUnsuccessfulOutcome(totals.getOrDefault(outcome.criterionRef, 0))
+        ?: return false
+    totals[outcome.criterionRef] = next
+    return true
   }
 
   private fun modeAfterOutcome(
@@ -331,7 +410,10 @@ data class AcceptanceCriterionRepairState internal constructor(
     return identityMatches && capacity && historyCapacity && allowedStage
   }
 
-  private fun criteriaAfter(outcome: AcceptanceCriterionRepairOutcome): List<AcceptanceCriterionRepairCriterion> {
+  private fun criteriaAfter(
+    outcome: AcceptanceCriterionRepairOutcome,
+    chargedCount: Int,
+  ): List<AcceptanceCriterionRepairCriterion> {
     return criteria.map { criterion ->
       if (criterion.canonicalRef == outcome.criterionRef && outcome.successful) {
         criterion.copy(
@@ -339,9 +421,13 @@ data class AcceptanceCriterionRepairState internal constructor(
           closureEvidenceRef = outcome.evidenceRef,
           closureTreeDigest = admittedTreeDigest,
           closureCheckpointId = admittedCheckpointId,
+          escalated = criterion.escalated || chargedCount >= 2,
         )
       } else if (criterion.canonicalRef == outcome.criterionRef) {
-        criterion.copy(evidenceRef = outcome.evidenceRef)
+        criterion.copy(
+          evidenceRef = outcome.evidenceRef,
+          escalated = criterion.escalated || chargedCount >= 2,
+        )
       } else {
         criterion
       }
@@ -351,14 +437,6 @@ data class AcceptanceCriterionRepairState internal constructor(
   companion object {
     const val MAX_DURABLE_UTF8_BYTES: Int = 12_582_912
     const val RESERVATION_UTF8_HEADROOM: Int = 65_536
-
-    internal fun hasExhaustedUnresolvedCriterion(
-      unresolvedQueue: List<String>,
-      unsuccessfulTotals: Map<String, Int>,
-    ): Boolean =
-      unresolvedQueue.any {
-        FocusedRepairStrategy.exhausted(unsuccessfulTotals.getOrDefault(it, 0))
-      }
 
     fun restore(state: AcceptanceCriterionRepairState): AcceptanceCriterionRepairState? =
       state.takeIf { AcceptanceCriterionRepairCoherence.isCoherent(it) }
@@ -381,7 +459,7 @@ data class AcceptanceCriterionRepairState internal constructor(
         currentCriterionRef = queue.firstOrNull(),
         reservation = null,
         outcomes = emptyList(),
-        unsuccessfulTotals = emptyMap(),
+        chargedAttempts = emptyMap(),
         revision = 0,
         mode =
           if (queue.isEmpty()) {
@@ -452,6 +530,9 @@ private fun AcceptanceCriterionRepairOutcome.replays(existing: AcceptanceCriteri
       treeDigest = treeDigest ?: existing.treeDigest,
       checkpointId = checkpointId ?: existing.checkpointId,
       auditBindingDigest = auditBindingDigest ?: existing.auditBindingDigest,
+      charged = existing.charged,
+      openGapsBefore = existing.openGapsBefore,
+      openGapsAfter = existing.openGapsAfter,
     )
 
 private fun AcceptanceCriterionRepairOutcome.boundTo(
@@ -470,14 +551,28 @@ private fun AcceptanceCriterionRepairOutcome.boundTo(
 private fun AcceptanceCriterionRepairOutcome.matchesVerification(state: AcceptanceCriterionRepairState): Boolean =
   verifiedRevision == state.revision && (
     !targeted || (
-      treeDigest == state.admittedTreeDigest &&
-        checkpointId == state.admittedCheckpointId
+      if (successful) {
+        treeDigest == state.admittedTreeDigest && !checkpointId.isNullOrBlank()
+      } else {
+        treeDigest?.isDigest() == true && !checkpointId.isNullOrBlank()
+      }
     )
   )
 
 data class AcceptanceCriterionAuditAttempt(
   val id: String,
   val number: Int,
-  val passed: Boolean,
-  val uncoveredCount: Int,
-)
+  val passed: Boolean?,
+  val uncoveredCount: Int?,
+  val unavailableReason: String? = null,
+) {
+  init {
+    require(
+      if (unavailableReason == null) {
+        passed != null && uncoveredCount != null && uncoveredCount >= 0 && passed == (uncoveredCount == 0)
+      } else {
+        unavailableReason.isNotBlank() && passed == null && uncoveredCount == null
+      },
+    )
+  }
+}

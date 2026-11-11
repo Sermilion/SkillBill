@@ -1,13 +1,17 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.qa.QA_PANEL_HISTORY_CONTRACT_VERSION
 import skillbill.contracts.qa.QaOutcomePayloadKeys
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
-import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_DETAILS_COLUMN
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_FAILURE_KIND_COLUMN
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_REPORT_TEXT_COLUMN
-import skillbill.infrastructure.sqlite.core.migration.area.idestatus.decodeQaDetails
-import skillbill.infrastructure.sqlite.core.migration.area.idestatus.encodeQaDetails
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails.QA_DETAILS_COLUMN
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails.SqliteQaDetailsKeys
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails.decodeQaDetails
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails.decodeQaOccurrence
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails.encodeQaDetails
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails.encodeQaOccurrence
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
@@ -15,6 +19,9 @@ import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.workflow.taskruntime.model.qa.QaRunOccurrence
+import skillbill.workflow.taskruntime.model.qa.QaRunScreenshot
+import skillbill.workflow.taskruntime.model.qa.QaRunStage
 import java.sql.Connection
 
 internal class SqliteFeatureTaskQaOutcomeStore(
@@ -49,9 +56,12 @@ internal class SqliteFeatureTaskQaOutcomeStore(
         outcome.findings.takeIf(List<FeatureTaskQaFinding>::isNotEmpty)?.let(::encodeFindings),
         outcome.reportText,
         outcome.failureKind?.wireValue,
-        outcome.details?.let(::encodeQaDetails),
+        outcome.details?.copy(occurrences = emptyList())?.let(::encodeQaDetails),
       )
       statement.executeUpdate()
+    }
+    outcome.details?.occurrences.orEmpty().forEach { occurrence ->
+      upsertOccurrence(outcome.workflowId, occurrence)
     }
   }
 
@@ -83,10 +93,116 @@ internal class SqliteFeatureTaskQaOutcomeStore(
           findings = decodedFindings,
           reportText = storedReportText,
           failureKind = FeatureTaskQaFailureKind.fromWire(rows.getString(QA_FAILURE_KIND_COLUMN)),
-          details = rows.getString(QA_DETAILS_COLUMN)?.let(::decodeQaDetails),
+          details =
+            rows.getString(QA_DETAILS_COLUMN)?.let(::decodeQaDetails)?.let { details ->
+              val occurrences = readOccurrences(workflowId)
+              details.copy(
+                occurrences = occurrences.ifEmpty { details.occurrences },
+                historyAvailability = details.historyAvailability,
+              )
+            },
         )
       }
     }
+
+  override fun findByWorkspaceInvocation(invocationId: String): FeatureTaskQaOutcome? {
+    val workflowId =
+      connection.prepareStatement(
+        "SELECT workflow_id FROM feature_task_qa_panel_occurrences " +
+          "WHERE json_extract(occurrence_json, '$.${SqliteQaDetailsKeys.WORKSPACE_INVOCATION_ID}') = ? LIMIT 1",
+      ).use { statement ->
+        statement.bindAll(invocationId)
+        statement.executeQuery().use { rows -> if (rows.next()) rows.getString("workflow_id") else null }
+      } ?: return null
+    return find(workflowId)
+  }
+
+  private fun readOccurrences(workflowId: String): List<QaRunOccurrence> =
+    connection.prepareStatement(
+      "SELECT contract_version, occurrence_json FROM feature_task_qa_panel_occurrences " +
+        "WHERE workflow_id = ? ORDER BY rowid",
+    ).use { statement ->
+      statement.bindAll(workflowId)
+      statement.executeQuery().use { rows ->
+        buildList {
+          while (rows.next()) {
+            add(decodeStoredOccurrence(rows.getString("contract_version"), rows.getString("occurrence_json")))
+          }
+        }
+      }
+    }
+
+  private fun upsertOccurrence(
+    workflowId: String,
+    incoming: QaRunOccurrence,
+  ) {
+    val existing =
+      connection.prepareStatement(
+        "SELECT contract_version, occurrence_json FROM feature_task_qa_panel_occurrences " +
+          "WHERE workflow_id = ? AND occurrence_id = ?",
+      ).use { statement ->
+        statement.bindAll(workflowId, incoming.occurrenceId)
+        statement.executeQuery().use { rows ->
+          if (rows.next()) {
+            decodeStoredOccurrence(rows.getString("contract_version"), rows.getString("occurrence_json"))
+          } else {
+            null
+          }
+        }
+      }
+    val occurrence = existing?.let { prior -> mergeOccurrence(prior, incoming) } ?: incoming
+    connection.prepareStatement(
+      "INSERT INTO feature_task_qa_panel_occurrences (workflow_id, occurrence_id, contract_version, occurrence_json) " +
+        "VALUES (?, ?, ?, ?) ON CONFLICT(workflow_id, occurrence_id) " +
+        "DO UPDATE SET occurrence_json = excluded.occurrence_json",
+    ).use { statement ->
+      statement.bindAll(
+        workflowId,
+        occurrence.occurrenceId,
+        QA_PANEL_HISTORY_CONTRACT_VERSION,
+        encodeQaOccurrence(occurrence),
+      )
+      statement.executeUpdate()
+    }
+  }
+
+  private fun mergeOccurrence(
+    prior: QaRunOccurrence,
+    incoming: QaRunOccurrence,
+  ): QaRunOccurrence {
+    val phaseChanged = prior.kind != incoming.kind || prior.phaseAttempt != incoming.phaseAttempt
+    val invocationChanged =
+      prior.workspaceInvocationId != incoming.workspaceInvocationId || prior.startedAt != incoming.startedAt
+    if (phaseChanged || invocationChanged) {
+      throw invalidWorkflowStateSchemaError("QA occurrence '${prior.occurrenceId}' changed its immutable identity.")
+    }
+    if (prior.isTerminal()) return prior
+    val stages = (prior.stages + incoming.stages).associateBy(QaRunStage::name).values.toList()
+    val screenshots = (prior.screenshots + incoming.screenshots).distinctBy(QaRunScreenshot::path)
+    return incoming.copy(
+      finishedAt = incoming.finishedAt ?: prior.finishedAt,
+      resultReference = incoming.resultReference ?: prior.resultReference,
+      frameReference = incoming.frameReference ?: prior.frameReference,
+      frameAvailability =
+        if (incoming.frameReference == null && incoming.frameAvailability == "not_captured") {
+          prior.frameAvailability
+        } else {
+          incoming.frameAvailability
+        },
+      screenshots = screenshots,
+      stages = stages,
+    )
+  }
+
+  private fun decodeStoredOccurrence(
+    version: String,
+    json: String,
+  ): QaRunOccurrence {
+    if (version != QA_PANEL_HISTORY_CONTRACT_VERSION) {
+      throw invalidWorkflowStateSchemaError("Stored QA panel history contract '$version' is unsupported.")
+    }
+    return decodeQaOccurrence(json)
+  }
 
   private fun encodeFindings(findings: List<FeatureTaskQaFinding>): String =
     JsonCodec.valueToJsonString(

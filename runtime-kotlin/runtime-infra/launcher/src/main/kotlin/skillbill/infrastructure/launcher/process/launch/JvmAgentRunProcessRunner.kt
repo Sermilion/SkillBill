@@ -17,7 +17,6 @@ import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionOutc
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
-import skillbill.ports.agentrun.model.AgentRunSessionFailureEvidence
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointHandle
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
@@ -31,14 +30,6 @@ import java.util.concurrent.TimeUnit
 import java.util.logging.Logger
 import kotlin.time.Duration
 import kotlin.time.toKotlinDuration
-
-private fun AgentRunSessionCapture.failureMessage(processCaptureIncomplete: Boolean): String? =
-  listOfNotNull(
-    "Provider session output was truncated at the capture limit.".takeIf { truncated },
-    "Provider session output could not be delivered to the phase output sink.".takeIf { deliveryFailed },
-    "Provider process output capture did not finish completely.".takeIf { processCaptureIncomplete },
-    "Provider session output capture is incomplete.".takeIf { !complete && !truncated && !deliveryFailed },
-  ).distinct().joinToString("\n").ifBlank { null }
 
 @Inject
 class JvmAgentRunProcessRunner(
@@ -144,16 +135,6 @@ class JvmAgentRunProcessRunner(
     )
   }
 
-  private fun sessionFailureMessage(outcome: AgentRunSessionOutcome?): String? =
-    outcome?.failure ?: when {
-      outcome == null ->
-        "Provider session closed before a matching terminal turn; delivery will " +
-          "not be replayed."
-      outcome.completed && outcome.text.isBlank() ->
-        "Provider completed the turn without a completed assistant response."
-      else -> null
-    }
-
   private fun sessionSuccessful(
     result: AgentRunProcessResult,
     outcome: AgentRunSessionOutcome?,
@@ -166,21 +147,6 @@ class JvmAgentRunProcessRunner(
       !result.outputCaptureIncomplete,
       !result.stdoutTruncated,
     ).all { it }
-
-  private fun buildSessionFailureEvidence(
-    nativeStderr: String,
-    capture: AgentRunSessionCapture?,
-    failure: String?,
-    captureFailure: String?,
-  ): AgentRunSessionFailureEvidence =
-    AgentRunSessionFailureEvidence(
-      listOfNotNull(
-        nativeStderr.takeIf(String::isNotBlank),
-        capture?.failureDiagnostics,
-        failure,
-        captureFailure,
-      ).joinToString("\n").ifBlank { null },
-    )
 
   private fun approvalRefused(
     reason: String,
@@ -582,14 +548,13 @@ class JvmAgentRunProcessRunner(
     val release = input.lifetime.cachedRelease()
     val wait = input.waitResult.getOrNull()
     val processOutcome = input.lifetime.terminalOutcome(release, wait)
-    val sessionCleanupFailed = sessionCleanupFailed(input.degradation.snapshot())
     val session =
       sessionSettlement(
         input.sessionOutcome,
         input.sessionCapture,
         input.sessionExpected,
         release,
-        sessionCleanupFailed,
+        input.degradation.snapshot(),
       )
     val sessionCapture = session.capture
     val sessionOutcome = session.outcome
@@ -639,7 +604,7 @@ class JvmAgentRunProcessRunner(
       stdoutByteSize = stdout.totalByteSize,
       stdoutSha256 = stdout.sha256,
       outputCaptureIncomplete =
-        release.outputCaptureIncomplete || sessionCapture?.complete == false || sessionCleanupFailed,
+        release.outputCaptureIncomplete || sessionCapture?.complete == false || session.cleanupFailure != null,
       sessionOutcome = sessionOutcome,
       sessionCapture = sessionCapture,
       sessionFailureEvidence = session.failureEvidence,
@@ -658,55 +623,6 @@ class JvmAgentRunProcessRunner(
       wait.finished -> input.process.exitValue()
       else -> null
     }
-
-  private fun sessionCleanupFailed(records: List<ProcessRunDegradationRecord>): Boolean =
-    records.any { record ->
-      val processSeam =
-        record.seam.startsWith("process_") || record.seam.endsWith("_drain_join") ||
-          record.seam.endsWith("_stream_close")
-      record.kind == ProcessRunDegradationKind.CLEANUP_FAILURE && processSeam
-    }
-
-  private fun sessionSettlement(
-    outcome: AgentRunSessionOutcome?,
-    capture: AgentRunSessionCapture?,
-    expected: Boolean,
-    release: ProcessRunReleaseSnapshot,
-    cleanupFailed: Boolean,
-  ): ProcessSessionSettlement {
-    val failure = if (expected) sessionFailureMessage(outcome) else null
-    val effective = outcome ?: if (expected) AgentRunSessionOutcome("", null, null, false, failure) else null
-    val complete =
-      listOf(
-        effective?.completed == true,
-        effective?.text?.isNotBlank() == true,
-        capture?.complete == true,
-        !release.outputCaptureIncomplete,
-        !cleanupFailed,
-      ).all { it }
-    val captureFailure = capture?.failureMessage(release.outputCaptureIncomplete)
-    return ProcessSessionSettlement(
-      effective,
-      capture,
-      expected && !complete,
-      failure,
-      captureFailure,
-      if (expected) {
-        buildSessionFailureEvidence(release.stderrCapture.text, capture, failure, captureFailure)
-      } else {
-        null
-      },
-    )
-  }
-
-  private data class ProcessSessionSettlement(
-    val outcome: AgentRunSessionOutcome?,
-    val capture: AgentRunSessionCapture?,
-    val failed: Boolean,
-    val failure: String?,
-    val captureFailure: String?,
-    val failureEvidence: AgentRunSessionFailureEvidence?,
-  )
 
   private fun interruptedResult(
     release: ProcessRunReleaseSnapshot,

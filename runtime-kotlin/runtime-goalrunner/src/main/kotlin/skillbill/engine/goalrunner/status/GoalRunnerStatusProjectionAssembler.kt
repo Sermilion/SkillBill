@@ -35,7 +35,9 @@ import skillbill.goalrunner.model.GoalNoChangeState
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalRunnerAssessmentResult
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
+import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerNoChangeStatus
+import skillbill.goalrunner.model.GoalRunnerPhaseCard
 import skillbill.goalrunner.model.GoalRunnerPhaseConclusion
 import skillbill.goalrunner.model.GoalRunnerQaFinding
 import skillbill.goalrunner.model.GoalRunnerQaResult
@@ -48,7 +50,7 @@ import skillbill.goalrunner.model.GoalRunnerSubtaskPhaseResults
 import skillbill.goalrunner.model.GoalRunnerSubtaskValidationEvidence
 import skillbill.goalrunner.model.GoalRunnerWorktreeStatus
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
-import skillbill.idestatus.model.WorktreeEditSummary
+import skillbill.idestatus.model.WorktreeEditTick
 import skillbill.idestatus.model.summary
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -186,7 +188,7 @@ public class GoalRunnerStatusProjectionAssembler(
                   listOfNotNull(subject.current?.id).toSet(),
                 ),
               childWorkflowId = childWorkflowId,
-              latestWorktreeEdit = latestWorktreeEditSummary(childWorkflowId, durableRead),
+              latestWorktreeEditTick = latestWorktreeEditTick(childWorkflowId, durableRead),
               auditAcRetryCount = measuredAuditAcRetryCount(childWorkflowId, durableRead),
               noChangeStatus = noChange,
             ),
@@ -351,7 +353,7 @@ public class GoalRunnerStatusProjectionAssembler(
         progress = progress,
         ledgerSummary = ledgerSummary,
         childWorkflowId = childWorkflowId,
-        latestWorktreeEdit = latestWorktreeEditSummary(childWorkflowId, durableRead),
+        latestWorktreeEditTick = latestWorktreeEditTick(childWorkflowId, durableRead),
         auditAcRetryCount = measuredAuditAcRetryCount(childWorkflowId, durableRead),
         noChangeStatus = completedNoChangeStatus(manifest, durableRead),
       ),
@@ -372,7 +374,7 @@ public class GoalRunnerStatusProjectionAssembler(
     val progress: GoalRunnerWorkflowProgress?,
     val ledgerSummary: GoalRunnerAttemptLedgerSummary?,
     val childWorkflowId: String?,
-    val latestWorktreeEdit: WorktreeEditSummary?,
+    val latestWorktreeEditTick: WorktreeEditTick?,
     val auditAcRetryCount: Int?,
     val noChangeStatus: GoalRunnerNoChangeStatus?,
   )
@@ -408,9 +410,16 @@ public class GoalRunnerStatusProjectionAssembler(
       findingsInScope = assembly.ledgerSummary?.findingsInScope,
       outOfBandAcceptances = assembly.acceptances.toAcceptedSubtasks(),
       completedSubtaskValidation = assembly.validation,
-      completedSubtaskPhaseResults = assembly.phaseResults,
+      completedSubtaskPhaseResults =
+        readLivePhaseCardFacts(
+          assembly.phaseResults,
+          LivePhaseCardSource(assembly.currentSubtask?.id, assembly.childWorkflowId, assembly.latestWorktreeEditTick),
+          database,
+          assembly.durableRead,
+        ),
       goalQaResult = assembly.goalQaResult,
       goalAssessmentResult = assembly.goalAssessmentResult?.reconciledWith(executionLiveness),
+      goalFinishCards = goalFinishCards(assembly, currentStepOverride, executionLiveness),
       paused = assembly.loadedState.controlState.paused,
       pauseRequested = assembly.loadedState.controlState.pauseRequested,
       pauseReason = assembly.loadedState.controlState.pauseReason,
@@ -421,29 +430,37 @@ public class GoalRunnerStatusProjectionAssembler(
       subtaskActiveDurationMs = assembly.loadedState.controlState.subtaskActiveDurationMs,
       subtaskActiveDurationAsOf = assembly.loadedState.controlState.subtaskActiveDurationAsOf,
       degradedDurableRead = assembly.durableRead.degraded,
-      latestWorktreeEdit = assembly.latestWorktreeEdit,
+      latestWorktreeEdit = assembly.latestWorktreeEditTick?.summary(WorktreeEditJournalPayloadKeys.PATH_SAMPLE_LIMIT),
       auditAcRetryCount = assembly.auditAcRetryCount,
       noChangeStatus = assembly.noChangeStatus,
       goalCompletedAt = goalCompletedAt,
-      goalWorktree =
-        assembly.loadedState.controlState.executionWorktreePath?.let { path ->
-          val control = assembly.loadedState.controlState
-          if (control.executionWorktreeRemovedAt != null || control.executionWorktreeRetentionReason != null) {
-            GoalRunnerWorktreeStatus(
-              path,
-              control.executionWorktreeRemovedAt,
-              control.executionWorktreeRetentionReason,
-              control.executionWorktreeRetentionDetail,
-              mainCheckoutOutcome = control.executionMainCheckoutOutcome,
-              mainCheckoutDetail = control.executionMainCheckoutDetail,
-            )
-          } else {
-            null
-          }
-        },
+      goalWorktree = assembly.loadedState.controlState.goalWorktreeStatus(),
       launchWarning = assembly.loadedState.controlState.launchWarning,
     )
   }
+
+  private fun goalFinishCards(
+    assembly: GoalStatusProjectionRuntimeAssembly,
+    currentStep: String?,
+    executionLiveness: ExecutionLiveness,
+  ): List<GoalRunnerPhaseCard> =
+    if (assembly.request.includeCompletedSubtaskValidation) {
+      readGoalFinishCards(
+        GoalFinishCardReadRequest(
+          assembly.loadedState.parentWorkflowId,
+          assembly.goalAssessmentResult?.reconciledWith(executionLiveness),
+          assembly.loadedState.controlState.goalPullRequestUrl,
+          currentStep,
+          assembly.progress?.workflowStatus,
+          assembly.childWorkflowId,
+        ),
+        outcomeStore,
+        database,
+        assembly.durableRead,
+      )
+    } else {
+      emptyList()
+    }
 
   private fun progressStall(
     liveness: ExecutionLiveness,
@@ -458,7 +475,7 @@ public class GoalRunnerStatusProjectionAssembler(
             listOfNotNull(assembly.loadedState.parentWorkflowId, assembly.childWorkflowId),
             assembly.durableRead,
           ),
-        latestWorktreeEdit = assembly.latestWorktreeEdit,
+        latestWorktreeEdit = assembly.latestWorktreeEditTick?.summary(WorktreeEditJournalPayloadKeys.PATH_SAMPLE_LIMIT),
       )
     return ExecutionProgressStall.detect(liveness, signals.latestProgressAt(), clock.instant())
   }
@@ -553,24 +570,25 @@ public class GoalRunnerStatusProjectionAssembler(
     return pause?.reason?.wireValue
   }
 
-  private fun latestWorktreeEditSummary(
+  private fun latestWorktreeEditTick(
     childWorkflowId: String?,
     durableRead: GoalRunnerStatusDurableReadTracker,
-  ) = childWorkflowId?.let { workflowId ->
-    catchingNonCancellation {
-      database.readIfPresent { unitOfWork ->
-        unitOfWork.worktreeEditJournal.latestTick(workflowId)
+  ): WorktreeEditTick? =
+    childWorkflowId?.let { workflowId ->
+      catchingNonCancellation {
+        database.readIfPresent { unitOfWork ->
+          unitOfWork.worktreeEditJournal.latestTick(workflowId)
+        }
+      }.getOrElse { error ->
+        durableRead.recordDegradedRead(
+          seam = "goal-status.worktree_edit_journal",
+          expected = "latest_tick",
+          used = "omitted",
+          error = error,
+        )
+        null
       }
-    }.getOrElse { error ->
-      durableRead.recordDegradedRead(
-        seam = "goal-status.worktree_edit_journal",
-        expected = "latest_tick",
-        used = "omitted",
-        error = error,
-      )
-      null
-    }?.summary(WorktreeEditJournalPayloadKeys.PATH_SAMPLE_LIMIT)
-  }
+    }
 
   private fun measuredAuditAcRetryCount(
     childWorkflowId: String?,
@@ -724,20 +742,8 @@ public class GoalRunnerStatusProjectionAssembler(
       auditResult = projectSubtaskAudit(artifacts, auditRecord, auditConclusion, degradation),
       runningReviewPass = runningReviewPass(reviewRecord, reviewState, database, degradation),
       execution = subtaskExecution(workflowId, records.values),
+      phaseCards = subtaskPhaseCards(workflowId, records, database, degradation),
     )
-  }
-
-  private fun readExecutionPhaseRecords(
-    artifacts: DurableWorkflowArtifacts,
-    degradation: SubtaskReadDegradation,
-  ) = catchingNonCancellation { artifacts.phaseRecords() }.getOrElse { error ->
-    degradation.record(
-      source = GoalRunnerSubtaskReadSource.PHASE_RESULTS,
-      expected = "execution_phase_records",
-      used = "omitted",
-      error = error,
-    )
-    emptyMap()
   }
 
   private fun readPhaseRecord(
@@ -1074,3 +1080,32 @@ internal fun storedReviewPassFindings(
         status = if (status == ReviewFindingStatus.OPEN && !actionable) ReviewFindingStatus.REJECTED else status,
       )
     }
+
+private fun GoalRunnerControlState.goalWorktreeStatus(): GoalRunnerWorktreeStatus? =
+  executionWorktreePath?.let { path ->
+    if (executionWorktreeRemovedAt != null || executionWorktreeRetentionReason != null) {
+      GoalRunnerWorktreeStatus(
+        path,
+        executionWorktreeRemovedAt,
+        executionWorktreeRetentionReason,
+        executionWorktreeRetentionDetail,
+        mainCheckoutOutcome = executionMainCheckoutOutcome,
+        mainCheckoutDetail = executionMainCheckoutDetail,
+      )
+    } else {
+      null
+    }
+  }
+
+private fun readExecutionPhaseRecords(
+  artifacts: DurableWorkflowArtifacts,
+  degradation: SubtaskReadDegradation,
+) = catchingNonCancellation { artifacts.phaseRecords() }.getOrElse { error ->
+  degradation.record(
+    source = GoalRunnerSubtaskReadSource.PHASE_RESULTS,
+    expected = "execution_phase_records",
+    used = "omitted",
+    error = error,
+  )
+  emptyMap()
+}

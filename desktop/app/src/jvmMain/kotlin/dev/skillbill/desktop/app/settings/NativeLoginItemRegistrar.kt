@@ -33,7 +33,7 @@ class NativeLoginItemRegistrar(private val host: HostEnvironment, private val di
   private fun update(enabled: Boolean): LoginItemResult = when {
     os().contains("mac") || os().contains("win") -> when (if (enabled) AutoLaunch.enable() else AutoLaunch.disable()) {
       AutoLaunchResult.OK, AutoLaunchResult.UNCHANGED -> LoginItemResult.Applied
-      AutoLaunchResult.BLOCKED_BY_USER -> failed("The system blocked start at login. Allow Skill Bill in your login items settings.")
+      AutoLaunchResult.BLOCKED_BY_USER -> failed("The system blocked start at login. Allow Sona in your login items settings.")
       AutoLaunchResult.BLOCKED_BY_POLICY -> failed("A system policy blocks start at login on this machine.")
       AutoLaunchResult.UNSUPPORTED -> failed("Start at login is not supported on this system.")
       AutoLaunchResult.ERROR -> failed("Start at login could not be changed.")
@@ -64,7 +64,7 @@ class NativeLoginItemRegistrar(private val host: HostEnvironment, private val di
       val escaped = app.toString().replace("\\", "\\\\").replace("\"", "\\\"")
       Files.writeString(
         path,
-        "[Desktop Entry]\nType=Application\nName=Skill Bill\nExec=\"$escaped\"\nTerminal=false\nX-GNOME-Autostart-enabled=true\n",
+        "[Desktop Entry]\nType=Application\nName=Sona\nExec=\"$escaped\"\nTerminal=false\nX-GNOME-Autostart-enabled=true\n",
         StandardOpenOption.CREATE,
         StandardOpenOption.TRUNCATE_EXISTING,
       )

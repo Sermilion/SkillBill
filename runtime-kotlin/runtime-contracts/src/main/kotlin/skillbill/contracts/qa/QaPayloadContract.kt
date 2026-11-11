@@ -7,6 +7,7 @@ const val QA_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION: String = "0.1"
 const val QA_DEVICE_LEASE_CONTRACT_VERSION: String = "0.1"
 const val QA_OWNED_RESOURCE_CONTRACT_VERSION: String = "0.1"
 const val QA_CHECKLIST_CONTRACT_VERSION: String = "0.1"
+const val QA_PANEL_HISTORY_CONTRACT_VERSION: String = "0.1"
 const val QA_CHECKLIST_MAX_ENCODED_BYTES: Int = 512 * 1024
 
 object QaDeviceLeasePayloadKeys {
@@ -66,6 +67,7 @@ object QaChecklistPayloadKeys {
   const val RECORDED_AT = "recorded_at"
   const val LAST_STEP_UPDATE_AT = "last_step_update_at"
   const val REASON = "reason"
+  const val PATH = "path"
   const val REJECTED_EVIDENCE = "rejected_evidence"
 
   val CHECKLIST_FIELDS: Set<String> =

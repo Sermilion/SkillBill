@@ -4,17 +4,22 @@ import com.github.ajalt.clikt.core.UsageError
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.multiple
 import com.github.ajalt.clikt.parameters.options.flag
+import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.choice
 import me.tatarka.inject.annotations.Inject
 import skillbill.cli.kernel.agent.detectInvokingAgentId
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.requireInvokingAgentId
+import skillbill.cli.kernel.agent.resolveRequestedQaDevice
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.operationcard.OperationCardEnvironmentKeys
+import skillbill.contracts.operationcard.OperationCardOperationIds
+import skillbill.contracts.qa.QaDeviceLaunchTokens.QA_DEVICE_FLAG
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationExecutor
 import skillbill.engine.operation.core.OperationOutcome
@@ -23,6 +28,7 @@ import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.operation.core.OperationRequest
 import skillbill.engine.operation.core.OperationResult
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
+import skillbill.workflow.verify.model.VerifyQaSelection
 
 @Inject
 class OperationCommand(
@@ -50,6 +56,12 @@ class OperationCommand(
         "HEAD against origin/HEAD), mode:inline|delegated, and qa:on|off (default off; a confirm may repeat " +
         "but not change it); its confirm:<token> is the verify workflow id.",
   ).multiple()
+  private val qaDevices by option(
+    QA_DEVICE_FLAG,
+    help =
+      "verify with qa:on only: the device its QA step uses, serial:<serial> or avd:<name>. The proposal stores it " +
+        "and a confirm may repeat but not change it.",
+  ).multiple()
   private val agent by option(
     "--agent",
     help = "Agent an operation's agent step launches. " + invokingAgentResolutionHelp("--agent"),
@@ -64,7 +76,12 @@ class OperationCommand(
   ).choice(OperationOutputFormat.entries.associateBy(OperationOutputFormat::wireValue))
 
   override fun run() {
-    val invocation = OperationInvocationParser.parse(name, rest, OperationFlags(includePrereleases, format))
+    val invocation =
+      OperationInvocationParser.parse(
+        name,
+        rest,
+        OperationFlags(includePrereleases, format, resolveRequestedQaDevice(qaDevices)),
+      )
     val request =
       OperationRequest(
         operationId = invocation.operationId,
@@ -90,6 +107,7 @@ data class OperationInvocation(
 data class OperationFlags(
   val includePrereleases: Boolean = false,
   val format: OperationOutputFormat? = null,
+  val qaDevice: QaNamedDevice? = null,
 )
 
 object OperationInvocationParser {
@@ -135,6 +153,7 @@ object OperationInvocationParser {
       }
     }
     requireSingleQa(pairs)
+    requireQaDeviceOwner(name, values[QA], flags.qaDevice)
     requireUpdateCheckFlagsOwner(name, flags)
     return OperationInvocation(
       operationId = name,
@@ -150,6 +169,7 @@ object OperationInvocationParser {
           spec = values[SPEC],
           target = values[TARGET],
           qa = values[QA],
+          qaDevice = flags.qaDevice,
           includePrereleases = flags.includePrereleases,
           format = flags.format ?: OperationOutputFormat.TEXT,
         ),
@@ -169,6 +189,20 @@ object OperationInvocationParser {
           "supply exactly one of $QA:on or $QA:off."
       },
     )
+  }
+
+  private fun requireQaDeviceOwner(
+    name: String,
+    qa: String?,
+    device: QaNamedDevice?,
+  ) {
+    if (device == null) return
+    if (name != OperationCardOperationIds.VERIFY || qa != VerifyQaSelection.ON.wireValue) {
+      throw UsageError(
+        "$QA_DEVICE_FLAG is accepted only by operation ${OperationCardOperationIds.VERIFY} with " +
+          "$QA:${VerifyQaSelection.ON.wireValue}.",
+      )
+    }
   }
 
   private fun requireUpdateCheckFlagsOwner(

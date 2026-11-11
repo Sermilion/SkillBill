@@ -1,3 +1,20 @@
+## [2026-11-10] Keep primary checkout as optional registration provenance
+Context: Linked-checkout metadata may disappear before a finished run's chat resumes.
+Decision: Capture the primary root at registration and carry it as nullable metadata separate from execution identity; do not reconstruct or backfill historical values.
+Reason: Registration has the metadata needed for accurate capture, while nullable additive storage preserves exact identities and keeps old rows readable.
+
+## [2026-11-08] Block monitor conflict repair when its cycle record fails
+Context: Conflict repair publication needs the base branch stored in the monitor cycle record to check the base-branch merge.
+Decision: Block on a failed conflicted-outcome write or latest-cycle read during repair publication. Keep other cycle writes best effort with diagnostics.
+Reason: Continuing without the base branch would publish a conflict repair without its merge check. A blocked cycle can retry with a fresh record; a lost observation only costs display detail.
+Alternatives considered: Passing a null base branch after a read failure would silently bypass the required check.
+
+## [2026-11-08] Retain complete goal QA evidence against real invocations
+Context: The complete goal QA panel requires rounds, frames, screenshots and stages that the original desktop-only plan could not supply.
+Decision: Acquire and persist invocation-bound QA and qa_fix evidence through the existing outcome repository before cleanup. Carry it through runtime contracts and desktop transport without adding a goal runForGoal phase-record sink.
+Reason: The supplied scope mandate requires the complete panel while preserving runs and runtime authority over identities, ordering and verdicts. Reopening needs recorded evidence; unavailable historical evidence and absent headless frames must stay explicit.
+Alternatives considered: Deferring the missing QA sections would leave the required panel incomplete.
+
 ## [2026-11-06] Replay an interrupted read-only goal-quality step
 Context: SKILL-507's final QA process died about a minute into `qa#1` and left a `running` record with no accepted envelope. Every resume then refused with "The outcome of goal-quality step 'qa#1' is unknown" until the operator ran `goal fresh-quality`.
 Decision: `validateRetainedRunningPhases` lets a retained running agent step through when the accepted plan's step policy is neither `mutating` nor `fileMutating`, its start history is consistent, and the ledger has no terminal action for that attempt. The run loop then starts the next attempt. `qa_fix`, pack gates and any step with a terminal ledger action keep the unknown-outcome block.

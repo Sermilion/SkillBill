@@ -16,6 +16,7 @@ import skillbill.ports.qa.model.QaOwnedResource
 import skillbill.ports.qa.model.QaReportSource
 import skillbill.ports.qa.model.QaResourceRegistration
 import skillbill.ports.qa.model.QaResourceReleaseOutcome
+import skillbill.ports.qa.model.QaRetainedScreenshot
 import skillbill.ports.qa.model.QaWorkspace
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import java.nio.file.Path
@@ -59,6 +60,14 @@ private class TestQaWorkspaces : QaWorkspacePort {
     repoRoot: Path,
     reference: String,
   ): QaReportSource? = null
+
+  override fun retainScreenshot(
+    repoRoot: Path,
+    invocationId: String,
+    sourcePath: Path,
+    label: String,
+    asFrame: Boolean,
+  ): QaRetainedScreenshot = error("This fixture does not retain screenshots.")
 
   override fun close(workspace: QaWorkspace) = Unit
 }

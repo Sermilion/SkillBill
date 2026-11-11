@@ -148,12 +148,12 @@ class NewTaskDraftTest {
     assertTrue(current.thread.delivery.value!!.images.single() === image)
     assertEquals(1, chat.requests.size)
     assertTrue(chat.ended.contains(current.sessionId))
-    val readsBeforeRetry = changes.readCalls.size
+    val readsBeforeRetry = changes.currentReadCalls.size
     draft.say("later")
     current.retryDelivery(deliveryId)
     runCurrent()
     assertEquals(2, chat.requests.size)
-    assertTrue(changes.readCalls.size > readsBeforeRetry)
+    assertTrue(changes.currentReadCalls.size > readsBeforeRetry)
     assertEquals("retained\n\nlater", chat.requests.last().prompt)
     assertEquals("main", (chat.requests.last().scope as ChatScope.NewTask).baseBranch)
     assertTrue(chat.requests.last().images.single() === image)
@@ -850,7 +850,7 @@ class NewTaskDraftTest {
     runCurrent()
 
     assertEquals(sessionId, draft.chat.value?.sessionId)
-    assertTrue(chat.ended.isEmpty())
+    assertEquals(listOf(sessionId), chat.ended)
     assertTrue(checkNotNull(draft.chat.value).thread.transcript.value.none { it is ChatMessage.Notice })
     assertFalse(chat.requests.last().firstTurn)
     assertEquals("continue", chat.requests.last().prompt)
@@ -1078,7 +1078,7 @@ class NewTaskDraftTest {
     runCurrent()
     assertEquals(1, chat.requests.size)
     assertEquals("q1\n\nq2\n\nexisting", draft.text)
-    assertEquals(CursorMcpDependency.Unspecified, draft.cursorMcpDependency)
+    assertEquals(CursorMcpDependency.ProjectUserOnly, draft.cursorMcpDependency)
     replies[0].close()
     runCurrent()
     draft.close()

@@ -1,7 +1,7 @@
 package dev.skillbill.desktop.feature.detail
 
-import kotlinx.coroutines.launch
 import dev.skillbill.desktop.core.domain.model.VerifyRunDetails
+import kotlinx.coroutines.launch
 
 internal enum class VerifyRunState { Pending, Running, Parked, Superseded, Stopped, Finished }
 
@@ -77,7 +77,13 @@ internal fun rememberVerifySectionScroller(
     { key ->
       scope.launch {
         if (key == VERIFY_CRITERIA_KEY && collapse.isCollapsed(VERIFY_CRITERIA_KEY)) collapse.toggle(VERIFY_CRITERIA_KEY)
-        if (key.startsWith("verify-step-") && collapse.isCollapsed(VERIFY_STEPS_KEY)) collapse.toggle(VERIFY_STEPS_KEY)
+        if (key.startsWith("verify-step-")) {
+          if (collapse.isCollapsed(VERIFY_STEPS_KEY)) collapse.toggle(VERIFY_STEPS_KEY)
+          workflowId?.let { id ->
+            val row = verifyStepCollapseKey(id, key.removePrefix("verify-step-"))
+            if (collapse.isCollapsed(row, default = true)) collapse.toggle(row, default = true)
+          }
+        }
         if (key == VERIFY_QA_KEY) {
           if (collapse.isCollapsed(VERIFY_STEPS_KEY)) collapse.toggle(VERIFY_STEPS_KEY)
           workflowId?.let { id ->
@@ -96,4 +102,19 @@ internal fun rememberVerifySectionScroller(
       }
     }
   }
+}
+
+internal fun verifyRunActionsView(view: RunActionsView, run: VerifyRunDetails): RunActionsView {
+  val state = verifyRunState(run)
+  val showLaunch = state in setOf(VerifyRunState.Pending, VerifyRunState.Stopped)
+  return view.copy(
+    launch = view.launch?.takeIf { showLaunch }?.let { button ->
+      if (state == VerifyRunState.Stopped && button.label != WORKING) button.copy(label = "Resume from ${auditedSteps(run).getOrNull(stoppedStepIndex(run))?.let { verifyStepName(it.stepId) } ?: "last step"}") else button
+    },
+    agent = view.agent?.takeIf { showLaunch },
+    cancel = view.cancel?.takeUnless { state in setOf(VerifyRunState.Finished, VerifyRunState.Superseded, VerifyRunState.Stopped) }?.let { button ->
+      button.copy(label = if (button.label == WORKING) WORKING else when (state) { VerifyRunState.Running -> "Stop"; VerifyRunState.Parked -> "Discard"; else -> button.label })
+    },
+    launchNote = false,
+  )
 }

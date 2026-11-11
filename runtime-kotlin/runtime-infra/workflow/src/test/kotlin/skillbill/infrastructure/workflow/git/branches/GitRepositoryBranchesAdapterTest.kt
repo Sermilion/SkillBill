@@ -4,6 +4,7 @@ import skillbill.infrastructure.workflow.git.git
 import skillbill.infrastructure.workflow.process.runGitCommand
 import skillbill.ports.workflow.gitops.model.RepositoryBranchRef
 import skillbill.ports.workflow.gitops.model.RepositoryBranchesResult
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -44,6 +45,7 @@ class GitRepositoryBranchesAdapterTest {
       RepositoryBranchesResult.Listed(
         repositoryRoot = repo.toRealPath().toString(),
         defaultBranch = "main",
+        currentBranch = "main",
         local =
           listOf(
             RepositoryBranchRef("feature-b", BASE_DATE + 200),
@@ -80,6 +82,43 @@ class GitRepositoryBranchesAdapterTest {
 
     assertEquals(RepositoryBranchesResult.NotARepository(folder.toString()), adapter.branches(folder))
     assertEquals(RepositoryBranchesResult.NotARepository(missing.toString()), adapter.branches(missing))
+  }
+
+  @Test
+  fun `current branch follows checkout and detached HEAD instead of default branch`() {
+    val repo = repository("main")
+    git(repo, "commit", "--allow-empty", "-m", "base")
+    git(repo, "switch", "-c", "feature/current")
+    val feature = assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo))
+    assertEquals("main", feature.defaultBranch)
+    assertEquals("feature/current", feature.currentBranch)
+
+    assertIs<WorkflowGitOperationResult.Failed>(adapter.switchToDefaultBranch(repo, "stale"))
+    assertEquals("feature/current", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo)).currentBranch)
+    assertIs<WorkflowGitOperationResult.Ok>(adapter.switchToDefaultBranch(repo, "feature/current"))
+    assertEquals("main", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo)).currentBranch)
+
+    git(repo, "checkout", "--detach")
+    assertEquals(null, assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo)).currentBranch)
+  }
+
+  @Test
+  fun `switch refusal preserves conflicting local edits and untracked files`() {
+    val repo = repository("main")
+    val file = repo.resolve("shared.txt")
+    Files.writeString(file, "base")
+    git(repo, "add", "shared.txt")
+    git(repo, "commit", "-m", "base")
+    git(repo, "switch", "-c", "feature/current")
+    Files.writeString(file, "feature")
+    git(repo, "commit", "-am", "feature")
+    Files.writeString(file, "operator edits")
+    Files.writeString(repo.resolve("notes.txt"), "untracked notes")
+
+    assertIs<WorkflowGitOperationResult.Failed>(adapter.switchToDefaultBranch(repo, "feature/current"))
+    assertEquals("operator edits", Files.readString(file))
+    assertEquals("untracked notes", Files.readString(repo.resolve("notes.txt")))
+    assertEquals("feature/current", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo)).currentBranch)
   }
 
   private fun repository(initialBranch: String): Path =

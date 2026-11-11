@@ -66,7 +66,7 @@ internal class NewTaskChat(
   var databaseSessionId: Long?,
   val repositoryRoot: String,
   val baseBranch: String?,
-  val agent: ChatAgent,
+  agent: ChatAgent,
   initiallyStarted: Boolean = false,
   initiallyPendingTurnLineIndex: Int? = null,
   val repositoryMissing: Boolean = false,
@@ -81,9 +81,25 @@ internal class NewTaskChat(
   initialChangesBaseline: ChatChangesBaseline? = null,
   resumedChanges: Boolean = false,
   changesCaptureAttempted: Boolean = false,
+  changesAttributedPaths: Set<String>? = null,
+  retainedChanges: NewTaskChatChanges? = null,
   private val diagnostics: Diagnostics,
   private val canRecover: () -> Boolean = { true },
 ) {
+  @Volatile
+  var agent: ChatAgent = agent
+    private set
+
+  internal fun changeModel(next: ChatAgent) {
+    if (thread.busy.value || closing || next == agent) return
+    chat.end(sessionId)
+    agent = next
+    thread.agentState.value = next
+    scope.launch(job + dispatcher) {
+      if (!save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+    }
+  }
+
   internal val transitionLock = Any()
   private val transitionDispatcher = if (dispatcher == Dispatchers.Unconfined) {
     diagnostics.record("chat.unconfined_transitions")
@@ -98,11 +114,16 @@ internal class NewTaskChat(
   val thread = retainedThread
   val job: Job = SupervisorJob(scope.coroutineContext[Job])
   private val approvalFlow = ChatApprovals(approvals)
-  private val changesTracker = NewTaskChatChanges(changesRepository, scope, dispatcher, repositoryRoot, initialChangesBaseline, resumedChanges, repositoryMissing, changesCaptureAttempted || initiallyStarted || initialChangesBaseline != null)
+  private val changesTracker = retainedChanges ?: NewTaskChatChanges(
+    changesRepository, scope, dispatcher, repositoryRoot, initialChangesBaseline, resumedChanges, repositoryMissing,
+    changesCaptureAttempted || initiallyStarted || initialChangesBaseline != null, changesAttributedPaths,
+  )
   val changes: StateFlow<ChatChangesState> = changesTracker.state
+  suspend fun observeChanges() = changesTracker.observe()
   val changesBaseline: ChatChangesBaseline? get() = changesTracker.baseline
   internal val changesResumed: Boolean get() = changesTracker.resumed
   internal val changesCaptureAttempted: Boolean get() = changesTracker.captureAttempted
+  internal val changesAttributedPaths: Set<String>? get() = changesTracker.attributedPaths
 
   /** True only while the approval feed holds this window's operator registration for the draft's repository. */
   val approvalLiveState = MutableStateFlow(false)
@@ -155,9 +176,9 @@ internal class NewTaskChat(
   }
 
   /** The operator's click on one option of a pending card; it sends nothing unless the feed holds a live registration. */
-  fun decideApproval(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean) {
+  fun decideApproval(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean, pattern: String? = null) {
     if (!approvalLiveState.value || closing) return
-    scope.launch(job + transitionDispatcher) { approvalFlow.decide(thread, key, optionId, alwaysAllow) }
+    scope.launch(job + transitionDispatcher) { approvalFlow.decide(thread, key, optionId, alwaysAllow, pattern) }
   }
 
   fun dismissApproval(key: ApprovalCardKey) {
@@ -170,7 +191,7 @@ internal class NewTaskChat(
     action: ChatSuggestedAction? = null,
     images: List<ChatImage> = emptyList(),
     onAccepted: () -> Unit = {},
-    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
+    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly,
     onRejected: (() -> Unit)? = null,
   ) = synchronized(transitionLock) {
     if ((text.isBlank() && images.isEmpty()) || repositoryMissing || closing) return@synchronized
@@ -441,8 +462,9 @@ internal class NewTaskChat(
   }
 
   private suspend fun runTurn(text: String, images: List<ChatImage>, cursorMcpDependency: CursorMcpDependency, onRejected: (() -> Unit)?) {
-    changesTracker.captureBeforeFirstTurn(started)
+    changesTracker.beginTurn(started)
     if (!save()) {
+      changesTracker.endTurn()
       thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
       onRejected?.invoke()
       return
@@ -452,22 +474,27 @@ internal class NewTaskChat(
     var seenEvent = false
     val preamble = pendingReplay?.takeIf { !started }?.let { newTaskReplayPreamble(it, repositoryRoot, baseBranch) }
     val prompt = if (preamble == null) text else "$preamble\n\n$text"
-    chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, prompt, images, cursorMcpDependency)).collect { event ->
-
-      coroutineContext.ensureActive()
-      if (!seenEvent) {
-        seenEvent = true
-        thread.dropUnprompted = false
+    try {
+      chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, prompt, images, cursorMcpDependency)).collect { event ->
+        coroutineContext.ensureActive()
+        if (!seenEvent) {
+          seenEvent = true
+          thread.dropUnprompted = false
+        }
+        val opening = !opened && event !is ChatEvent.Failed && event !is ChatEvent.Notice
+        if (opening) {
+          opened = true
+          started = true
+          pendingReplay = null
+        }
+        if (event is ChatEvent.ToolUse) changesTracker.recordTool(event.call)
+        thread.show(agent, event)
+        if (opening && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
       }
-      val opening = !opened && event !is ChatEvent.Failed && event !is ChatEvent.Notice
-      if (opening) {
-        opened = true
-        started = true
-        pendingReplay = null
-      }
-      thread.show(agent, event)
-      if (opening && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+    } finally {
+      withContext(NonCancellable) { changesTracker.endTurn() }
     }
+    changesTracker.refresh()
     if (!opened) onRejected?.invoke()
   }
 
@@ -480,11 +507,15 @@ internal class NewTaskChat(
       return
     }
     val beginsReply = event !is ChatEvent.Completed && event !is ChatEvent.Failed
-    if (beginsReply) unpromptedReplyActive = true
+    if (beginsReply) {
+      unpromptedReplyActive = true
+      changesTracker.beginTurn(started)
+    }
     if (!normalReplyActive && unpromptedReplyActive) {
       thread.busyState.value = true
       thread.stoppableState.value = true
     }
+    if (event is ChatEvent.ToolUse) changesTracker.recordTool(event.call)
     thread.show(thread.agentState.value, event)
     if (event !is ChatEvent.Completed && event !is ChatEvent.Failed) return
     if (event is ChatEvent.Completed || event is ChatEvent.Failed) {
@@ -492,6 +523,7 @@ internal class NewTaskChat(
       val stillActive = normalReplyActive
       thread.busyState.value = stillActive
       thread.stoppableState.value = stillActive
+      withContext(NonCancellable) { changesTracker.endTurn() }
     }
     if (!save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
     changesTracker.refresh()

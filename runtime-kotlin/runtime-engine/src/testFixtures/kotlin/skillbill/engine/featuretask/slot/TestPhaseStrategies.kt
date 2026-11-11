@@ -14,12 +14,14 @@ import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentFixStrateg
 import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
+import skillbill.engine.featuretask.slot.monitor.MonitorCiCycleRecorder
 import skillbill.engine.featuretask.slot.monitor.MonitorRepairPublicationGate
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.monitor.PassingMonitorRepairPublicationGate
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
+import skillbill.engine.featuretask.slot.monitor.unusedMonitorCiCycleRecorder
 import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
@@ -59,6 +61,7 @@ import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import skillbill.ports.qa.QaWorkspacePort
 import skillbill.ports.qa.model.QaReportSource
+import skillbill.ports.qa.model.QaRetainedScreenshot
 import skillbill.ports.qa.model.QaWorkspace
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -93,6 +96,7 @@ fun testPhaseStrategies(
   qaReports: QaReportSettlement = unavailableQaReportSettlement(),
   qaExecution: QaExecutionLifecycle = testQaExecutionLifecycle(),
   qaOutcomes: FeatureTaskQaOutcomeRecorder = unusedQaOutcomeRecorder(),
+  monitorCycles: MonitorCiCycleRecorder = unusedMonitorCiCycleRecorder(),
   inlineRubricResolver: InlineReviewRubricResolver? = null,
   phaseInstructionSource: PhaseInstructionFileSource? = null,
   monitorPublicationGate: MonitorRepairPublicationGate = PassingMonitorRepairPublicationGate,
@@ -130,7 +134,7 @@ fun testPhaseStrategies(
           runner,
         ),
         PhaseStrategyRegistration(
-          MonitorStrategy(monitoredPullRequestLookup, pullRequestChecksLookup, monitorPublicationGate),
+          MonitorStrategy(monitoredPullRequestLookup, pullRequestChecksLookup, monitorCycles, monitorPublicationGate),
           runner,
         ),
         PhaseStrategyRegistration(standaloneMonitor, runner),
@@ -167,6 +171,14 @@ fun unavailableQaReportSettlement(): QaReportSettlement =
         repoRoot: Path,
         reference: String,
       ): QaReportSource? = null
+
+      override fun retainScreenshot(
+        repoRoot: Path,
+        invocationId: String,
+        sourcePath: Path,
+        label: String,
+        asFrame: Boolean,
+      ): QaRetainedScreenshot = error("This fixture does not retain screenshots.")
 
       override fun close(workspace: QaWorkspace) = Unit
     },

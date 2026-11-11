@@ -16,6 +16,27 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimePhasePromptComposerContentTest {
   @Test
+  fun `subtask gates cannot demand future evidence or excuse current regressions`() {
+    listOf("plan", "implement", "audit", "review", "verify_findings", "implement_fix", "build", "validate")
+      .forEach { phaseId ->
+        val prompt = composePromptForPhase(phaseId)
+
+        assertContains(prompt, "## Subtask evidence boundary", message = phaseId)
+        assertContains(prompt, "Never require implementation, migration,", message = phaseId)
+        assertContains(prompt, "integration, or evidence assigned to a later subtask.", message = phaseId)
+        assertContains(prompt, "Trace a suspected gap to its owning criterion and subtask", message = phaseId)
+        assertContains(prompt, "Current regressions remain repair work.", message = phaseId)
+        assertContains(prompt, "Required project checks still run in full.", message = phaseId)
+        assertContains(prompt, "Final goal assessment must require every goal outcome", message = phaseId)
+      }
+
+    val plan = composePromptForPhase("plan")
+    assertContains(plan, "only its completed dependencies available.")
+    assertContains(plan, "prerequisites before consumer activation.")
+    assertContains(plan, "If that cannot be done safely, combine the coupled work or reorder the subtasks.")
+  }
+
+  @Test
   fun `implementation and audit may inspect new checkout contracts without replacing their settlement contract`() {
     val target = FeatureTaskRuntimePhaseSettlementTarget(workflowId = "wftr-20260904-210526-r3x0", attempt = 1)
     listOf("implement", "audit").forEach { phaseId ->
@@ -284,8 +305,24 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(plan, "A subtask-sized criterion becomes its own full subtask.")
     assertContains(plan, "A one-sentence criterion is not allowed.")
     assertContains(plan, "Never use nested bullets inside a criterion")
+    assertContains(plan, "Divide broad criteria into smaller,")
+    assertContains(plan, "independently verifiable pieces of the same production work.")
+    assertContains(plan, "Prefer five focused criteria over three")
+    assertContains(plan, "preserve the same requirements and subtask boundary.")
+    assertContains(
+      plan,
+      "Never expand a subtask's scope or move work from another subtask merely to reach five criteria.",
+    )
+    assertContains(plan, "Use fewer when further splitting would duplicate outcomes")
+    assertContains(plan, "Never add test-only criteria or filler to reach five.")
+    assertContains(plan, "planning preference, not a minimum or a target number of subtasks.")
     assertFalse(plan.contains("Breadth is never a reason"), "size now decides whether a criterion splits")
-    assertContains(composePromptForPhase("preplan"), "When any criterion is subtask-sized, choose `decomposed`.")
+    val preplan = composePromptForPhase("preplan")
+    assertContains(preplan, "When any criterion is subtask-sized, choose `decomposed`.")
+    assertContains(preplan, "five focused criteria over fewer broad ones.")
+    assertContains(preplan, "Preserve the same requirements and subtask boundary.")
+    assertContains(preplan, "Never expand scope or move work between subtasks")
+    assertContains(preplan, "Five is a preference, not a minimum or a target number of subtasks.")
   }
 
   @Test

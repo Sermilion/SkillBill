@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
+import dev.skillbill.desktop.core.designsystem.SkillBillColors
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
@@ -37,7 +38,7 @@ private val goalGap = 10.dp
 private val checkSize = 10.dp
 private const val checkStrokeWidth = 2.5f
 
-enum class PipelineStepState { Pending, Done, Current, Waiting, Failed }
+enum class PipelineStepState { Pending, Done, Current, Waiting, Failed, Skipped }
 
 /** [goal] draws the goal-wide outline; [goalStart] marks the first goal-wide step, which gets a gap instead of a connector. */
 @Immutable
@@ -68,13 +69,8 @@ fun PhasePipeline(steps: List<PipelineStep>, modifier: Modifier = Modifier) {
 private fun PipelineStepChip(step: PipelineStep) {
   val colors = SkillBillTheme.colors
   val shape = RoundedCornerShape(SkillBillRadius.xs)
-  val (fg, bg) = when (step.state) {
-    PipelineStepState.Pending -> colors.fgFaint to colors.bgHover
-    PipelineStepState.Done -> colors.fgMuted to colors.bgHover
-    PipelineStepState.Current -> colors.stActive to colors.stActive.copy(alpha = 0.12f)
-    PipelineStepState.Waiting -> colors.stBlocked to colors.stBlocked.copy(alpha = 0.10f)
-    PipelineStepState.Failed -> colors.stFailed to colors.stFailed.copy(alpha = 0.10f)
-  }
+  val (fg, bg) = pipelineStepColors(colors, step.state)
+  val decoration = if (step.state == PipelineStepState.Skipped) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
   // `.sb-step.goal` is a transparent chip with an inset 1px `--border` ring; `.now` fills with `--st-active` and rings it at 35%, goal or not.
   val current = step.state == PipelineStepState.Current
   val outline = when {
@@ -93,6 +89,17 @@ private fun PipelineStepChip(step: PipelineStep) {
     if (step.state == PipelineStepState.Done) {
       CompositionLocalProvider(LocalContentColor provides colors.stDone) { SbIcon(LucideIcons.check, checkSize, checkStrokeWidth) }
     }
-    BasicText(text, style = SkillBillTheme.type.t2xs.copy(fontFamily = SkillBillTheme.type.mono.fontFamily, fontWeight = FontWeight.Medium, color = fg), maxLines = 1)
+    BasicText(text, style = SkillBillTheme.type.t2xs.copy(fontFamily = SkillBillTheme.type.mono.fontFamily, fontWeight = FontWeight.Medium, color = fg, textDecoration = decoration), maxLines = 1)
+  }
+}
+
+internal fun pipelineStepColors(colors: SkillBillColors, state: PipelineStepState): Pair<Color, Color> {
+  return when (state) {
+    PipelineStepState.Pending -> colors.fgFaint to colors.bgHover
+    PipelineStepState.Done -> colors.fgMuted to colors.bgHover
+    PipelineStepState.Current -> colors.stActive to colors.stActive.copy(alpha = 0.12f)
+    PipelineStepState.Waiting -> colors.stBlocked to colors.stBlocked.copy(alpha = 0.10f)
+    PipelineStepState.Failed -> colors.stFailed to colors.stFailed.copy(alpha = 0.10f)
+    PipelineStepState.Skipped -> colors.fgFaint to colors.bgHover
   }
 }

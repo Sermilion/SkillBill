@@ -118,14 +118,14 @@ class HeadlessAgentRunAdapterTest {
 
     val captured = runner.requests.last()
     assertEquals("agent", captured.launch.command.first())
-    assertEquals(
-      listOf("agent", "--force", "--trust", "--approve-mcps", "--sandbox", "disabled", "acp"),
-      captured.launch.command,
-    )
+    assertTrue("--print" in captured.launch.command)
+    assertTrue("--force" in captured.launch.command)
+    assertEquals(null, captured.launch.session)
+    assertEquals(null, captured.approval.channel)
   }
 
   @Test
-  fun `cursor admitted launch selects ACP without requiring a live provider account`() {
+  fun `cursor bypass launch selects the native CLI without requiring an approval owner`() {
     val launcher =
       FileSystemAgentRunLauncher(
         RecordingAgentRunProcessRunner(),
@@ -172,8 +172,9 @@ class HeadlessAgentRunAdapterTest {
         )
 
       assertFalse(outcome is UnsupportedAgentRunLaunch)
-      assertEquals("app-server", runner.requests.single().launch.command[1])
-      assertNotNull(runner.requests.single().launch.session)
+      assertEquals("exec", runner.requests.single().launch.command[1])
+      assertEquals(null, runner.requests.single().launch.session)
+      assertEquals(null, runner.requests.single().approval.channel)
     } finally {
       directory.toFile().deleteRecursively()
     }
@@ -235,7 +236,8 @@ class HeadlessAgentRunAdapterTest {
 
     val captured = runner.requests.last()
     assertEquals(100.milliseconds, captured.timing.timeout)
-    assertTrue(captured.launch.command.contains("acp"))
+    assertTrue(captured.launch.command.contains("--print"))
+    assertEquals(null, captured.launch.session)
   }
 
   @Test

@@ -86,7 +86,10 @@ class AgentLauncherPreflightTest {
     assertNotEquals<AgentRunTermination>(AgentRunTermination.SpawnFailed, facts.termination)
     assertEquals("cursor-agent", runner.requests.last().launch.command.first())
     assertEquals(
-      listOf("cursor-agent", "--force", "--trust", "--approve-mcps", "--sandbox", "disabled", "acp"),
+      listOf(
+        "cursor-agent", "--print", "--sandbox", "disabled", "--force", "--trust", "--approve-mcps",
+        "--workspace", "/tmp/skillbill-launcher-preflight", "--output-format", "json",
+      ),
       runner.requests.last().launch.command,
     )
   }

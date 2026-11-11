@@ -4,7 +4,6 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
-import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRefusal
@@ -57,9 +56,21 @@ public class AcceptanceCriterionRepairVersionRecovery(
           AcceptanceCriterionRepairVersionRecoveryResult.Refused(result.reason.toRepairRefusal())
       }
     if (committed is AcceptanceCriterionRepairVersionRecoveryResult.Recovered) {
-      warn(worker, "regenerated", committed.families, retained.diagnosticIdentity == null)
+      warn(
+        worker,
+        "regenerated",
+        committed.families,
+        plan.storedVersions,
+        retained.diagnosticIdentity == null,
+      )
     } else if (committed is AcceptanceCriterionRepairVersionRecoveryResult.Refused) {
-      warn(worker, "refusal:${committed.reason.wireValue}", plan.families, retained.diagnosticIdentity == null)
+      warn(
+        worker,
+        "refusal:${committed.reason.wireValue}",
+        plan.families,
+        plan.storedVersions,
+        retained.diagnosticIdentity == null,
+      )
     }
     return committed
   }
@@ -195,6 +206,7 @@ public class AcceptanceCriterionRepairVersionRecovery(
     worker: AcquiredFeatureTaskRuntimeWorker,
     kind: String,
     families: List<String>,
+    storedVersions: List<String>,
     degraded: Boolean,
   ) {
     RuntimeDiagnosticsBestEffortWarning.record(
@@ -202,7 +214,7 @@ public class AcceptanceCriterionRepairVersionRecovery(
       "seam=serial_repair_version_recovery workflow=${worker.workflowId.take(MAX_DIAGNOSTIC_ID)} " +
         "record_kind=$kind families=${families.joinToString(",")} " +
         "value_expected=$ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION " +
-        "value_used=$ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION diagnostic_degraded=$degraded",
+        "value_used=${storedVersions.joinToString(",")} diagnostic_degraded=$degraded",
     )
   }
 

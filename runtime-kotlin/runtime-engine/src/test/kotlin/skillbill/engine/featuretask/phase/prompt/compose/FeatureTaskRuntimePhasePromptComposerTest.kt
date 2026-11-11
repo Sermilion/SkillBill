@@ -193,25 +193,27 @@ class FeatureTaskRuntimePhasePromptComposerTest {
   }
 
   @Test
-  fun `audit plan and repair cover remaining siblings of the selected defect class`() {
+  fun `repair planning and implementation keep the selected criterion open gaps as their scope`() {
     val planPrompt = composePromptForPhase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX)
     val repairPrompt =
       composePromptForPhase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX)
 
-    assertContains(planPrompt, "remaining defect class")
-    assertContains(planPrompt, "plan every remaining sibling")
-    assertContains(repairPrompt, "sibling of a planned defect class")
+    assertContains(planPrompt, "Plan a repair for the runtime-selected criterion's listed open gaps.")
+    assertContains(planPrompt, "Keep this plan on this criterion.")
+    assertContains(repairPrompt, "Repair only the runtime-selected acceptance criterion and its listed open gaps.")
+    assertFalse(planPrompt.contains("plan every remaining sibling"))
+    assertFalse(repairPrompt.contains("sibling of a planned defect class"))
   }
 
   @Test
-  fun `audit and repair planning count only material gaps`() {
+  fun `audit classifies material gaps and repair planning uses the selected gaps`() {
     val auditPrompt = composePromptForPhase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
     val planPrompt = composePromptForPhase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX)
 
     assertContains(auditPrompt, AcceptanceAuditPromptSections.MATERIAL_GAP_SENTENCE)
     assertContains(auditPrompt, "Report only siblings that are material gaps")
-    assertContains(planPrompt, "Plan repairs only for material gaps")
-    assertContains(planPrompt, "add no code for it")
+    assertContains(planPrompt, "Plan a repair for the runtime-selected criterion's listed open gaps.")
+    assertContains(planPrompt, "For each gap, cite the current subtask obligation it violates.")
   }
 
   @Test

@@ -12,6 +12,8 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -55,6 +57,30 @@ class UsagePresentationTest {
     state = UsageUiState("Cursor", "cursor", nameOnly = true)
     onNodeWithText("Cursor").assertIsDisplayed()
     onNodeWithTag("card").assertHeightIsEqualTo(usageCardHeight(0))
+  }
+
+  @Test
+  fun `the card refresh button requests usage without opening details and disables while checking`() = runComposeUiTest {
+    var refreshEnabled by mutableStateOf(true)
+    var refreshes = 0
+    var opens = 0
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        UsageCard(
+          UsageUiState("Claude", "claude", meters = meters),
+          onOpen = { opens++ }, modifier = Modifier.width(240.dp).testTag("card"),
+          onRefresh = { refreshes++ }, refreshEnabled = refreshEnabled,
+        )
+      }
+    }
+    onNodeWithText("Refresh").assertIsDisplayed().performClick()
+    assertEquals(1, refreshes)
+    assertEquals(0, opens)
+    refreshEnabled = false
+    onNodeWithText("Refresh").assertIsNotEnabled().performClick()
+    assertEquals(1, refreshes)
+    onNodeWithTag("card").performClick()
+    assertEquals(1, opens)
   }
 
   @Test

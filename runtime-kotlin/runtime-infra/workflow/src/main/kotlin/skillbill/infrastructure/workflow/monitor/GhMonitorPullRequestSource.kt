@@ -28,8 +28,6 @@ private const val LISTING_OUTPUT_BYTES: Long = 256L * 1024 * 1024
 private const val LISTING_DEADLINE_SECONDS: Long = 300
 private const val PAGE_SIZE = "100"
 private const val NOT_FOUND_MARKER = "HTTP 404"
-private val REMOTE_URL =
-  Regex("^(?:https://(?:[^/@]+@)?|ssh://git@|git@)([^/:@]+)(?::\\d+)?[/:]([^/]+)/([^/]+?)(?:\\.git)?/?$")
 
 private sealed interface BranchRead {
   data class Tip(val facts: MonitorBranchCommitFacts) : BranchRead
@@ -56,11 +54,7 @@ class GhMonitorPullRequestSource internal constructor(
       is WorkflowGitOperationResult.Failed ->
         MonitorCallerRepository.Unavailable("The caller checkout has no origin remote: ${remote.error}")
       is WorkflowGitOperationResult.Ok ->
-        REMOTE_URL.matchEntire(remote.value.trim())
-          ?.destructured
-          ?.let { (host, owner, name) ->
-            MonitorCallerRepository.Resolved(MonitorRepositoryIdentity.canonical(host, owner, name))
-          }
+        monitorRepositoryOf(remote.value)?.let(MonitorCallerRepository::Resolved)
           ?: MonitorCallerRepository.Unavailable("The origin remote is not a recognizable repository URL.")
     }
 

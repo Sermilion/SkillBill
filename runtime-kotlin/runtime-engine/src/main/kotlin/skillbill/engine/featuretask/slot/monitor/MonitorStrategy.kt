@@ -15,13 +15,15 @@ import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedValidateAgentPhaseTask
+import skillbill.engine.featuretask.slot.state.CiWatchListeners
 import skillbill.engine.featuretask.slot.state.ExpectedCiHead
 import skillbill.engine.featuretask.slot.state.PhaseCiObservation
 import skillbill.engine.featuretask.slot.state.PhaseMonitorStepBinding
 import skillbill.engine.featuretask.slot.state.PullRequestCiOutcome
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
-import skillbill.ports.goalrunner.runner.model.PullRequestCheck
+import skillbill.ports.idestatus.model.MonitorCiCycleRecord
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -32,30 +34,24 @@ import java.nio.file.Path
 public class MonitorStrategy(
   private val identityLookup: PullRequestIdentityLookup,
   checksLookup: PullRequestChecksLookup,
+  private val cycles: MonitorCiCycleRecorder,
   private val publicationGate: MonitorRepairPublicationGate,
 ) : PhaseStrategy(),
   MonitorRepairCapability by MonitorRepairRoles {
   private val watcher = PullRequestCiWatcher(identityLookup, checksLookup)
-  private val fixBrief = MonitorFixBrief()
   private val observation =
     object : PhaseCiObservation {
       override fun watch(
         repoRoot: Path,
         branch: String,
-        onCiRunning: (String, List<PullRequestCheck>) -> Unit,
         expectedHead: ExpectedCiHead,
-        onInconclusive: (String) -> Unit,
-      ): PullRequestCiOutcome = watcher.watch(repoRoot, branch, onCiRunning, expectedHead, onInconclusive)
+        listeners: CiWatchListeners,
+      ): PullRequestCiOutcome = watcher.watch(repoRoot, branch, expectedHead, listeners)
 
-      override fun recordFailingChecks(
-        issueKey: String,
-        checks: List<PullRequestCheck>,
-      ) = fixBrief.record(issueKey, checks)
-
-      override fun recordMergeConflict(
-        issueKey: String,
-        baseBranch: String,
-      ) = fixBrief.recordConflict(issueKey, baseBranch)
+      override fun recordCycle(
+        workflowId: String,
+        record: MonitorCiCycleRecord,
+      ) = cycles.record(workflowId, record)
     }
 
   private val policies =
@@ -104,14 +100,23 @@ public class MonitorStrategy(
         context: PhaseStepOutputContext,
         state: PhaseMonitorStepBinding,
         outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-      ): PhaseStepOutputCheck =
-        publicationGate
-          .verify(run.request.repoRoot, state.resolvedBranch()?.baseBranch)
-          .publicationBlockingCheck()
-          ?: state
-            .publishRepair(run, identityLookup, fixBrief.conflictBaseBranch(run.request.issueKey))
-            ?.let { PhaseStepOutputCheck.Block(it) }
+      ): PhaseStepOutputCheck {
+        val latest =
+          catchingNonCancellation { cycles.latest(run.request.workflowId) }.getOrElse { error ->
+            return PhaseStepOutputCheck.Block(
+              "Monitor could not read the monitor CI cycle record to check the merge-conflict base branch: " +
+                error.message.orEmpty(),
+            )
+          }
+        val publicationBlock =
+          publicationGate.verify(run.request.repoRoot, state.resolvedBranch()?.baseBranch)
+            .publicationBlockingCheck()
+        if (publicationBlock != null) return publicationBlock
+        return state
+          .publishRepair(run, identityLookup, MonitorFixBrief.conflictBaseBranch(latest))
+          ?.let { PhaseStepOutputCheck.Block(it) }
           ?: PhaseStepOutputCheck.Accept
+      }
     }
 
   override fun directiveFor(stepId: String): String {
@@ -133,7 +138,10 @@ public class MonitorStrategy(
     } else {
       PhaseStepPromptSections(
         taskDirective = directiveFor(stepId),
-        stepContext = fixBrief.stepContextFor(inputs.issueKey),
+        stepContext =
+          MonitorFixBrief.stepContextFor(
+            inputs.workflowId?.let { id -> catchingNonCancellation { cycles.latest(id) }.getOrNull() },
+          ),
         runsValidationGate = true,
         runsBuildGate = true,
       )

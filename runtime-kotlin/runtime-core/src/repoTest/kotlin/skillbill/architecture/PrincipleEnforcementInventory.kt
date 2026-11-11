@@ -356,7 +356,7 @@ object PrincipleEnforcementInventory {
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
-            "workflow/featuretask/FeatureTaskRuntimeExecutionPlanCoherence.kt",
+            "workflow/featuretask/FeatureTaskRuntimeExecutionPlanSchemaValidator.kt",
         functionNames = setOf("validateExecutionPlanCoherence", "validateExecutionPlanTraversal", "incoherentPlan"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(

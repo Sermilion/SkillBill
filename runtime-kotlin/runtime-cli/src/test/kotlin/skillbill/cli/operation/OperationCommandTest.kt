@@ -8,6 +8,8 @@ import skillbill.cli.core.CliRuntime
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.model.CliRuntimeContext
 import skillbill.cli.updateCheckRequester
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.engine.featuretask.model.execution.QaNamedDeviceKind
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.core.OperationOutputFormat
@@ -247,6 +249,22 @@ class OperationCommandTest {
     )
     listOf(OperationFlags(includePrereleases = true), OperationFlags(format = OperationOutputFormat.TEXT)).forEach {
       assertFailsWith<UsageError> { OperationInvocationParser.parse("release", listOf("bump:minor"), it) }
+    }
+  }
+
+  @Test
+  fun `a QA device reaches verify with qa on and is a usage error without it or on another operation`() {
+    val device = OperationFlags(qaDevice = QaNamedDevice(QaNamedDeviceKind.SERIAL, "emulator-5554"))
+
+    val parsed = OperationInvocationParser.parse("verify", listOf("WE-1", "qa:on"), device)
+
+    assertEquals(device.qaDevice, parsed.arguments.qaDevice)
+    listOf(
+      "verify" to listOf("WE-1"),
+      "verify" to listOf("WE-1", "qa:off"),
+      "pr-review-fix" to emptyList(),
+    ).forEach { (name, tokens) ->
+      assertFailsWith<UsageError>("$name $tokens") { OperationInvocationParser.parse(name, tokens, device) }
     }
   }
 

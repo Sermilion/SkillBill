@@ -30,7 +30,7 @@ private const val COMPLETED_UPSTREAM_MISSING_OUTPUT_BLOCK_REASON = "completed_up
 internal fun qualityGateOmittedStepIds(selection: FeatureTaskRuntimeQualityGateSelection): Set<String> =
   selection.omittedStepIds
 
-internal fun phasesToReopenForCompletedUpstreamRepair(
+public fun phasesToReopenForCompletedUpstreamRepair(
   request: CompletedUpstreamRepairRequest,
   recordedOutputs: List<FeatureTaskRuntimePhaseOutput>,
 ): List<String> {
@@ -104,7 +104,7 @@ public fun completedUpstreamRepairWorkflowUpdate(
     acceptedSnapshotMutation = true,
   )
 
-internal fun completedUpstreamRepairRetryEntry(
+public fun completedUpstreamRepairRetryEntry(
   request: CompletedUpstreamRepairRequest,
 ): FeatureTaskRuntimePhaseLedgerEntry =
   FeatureTaskRuntimePhaseLedgerEntry(
@@ -116,7 +116,7 @@ internal fun completedUpstreamRepairRetryEntry(
     resolvedAgentId = requireNotNull(request.phaseRecords[request.resumePhaseId]).resolvedAgentId,
   )
 
-internal fun settledPhaseOutputs(
+public fun settledPhaseOutputs(
   phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
 ): List<FeatureTaskRuntimePhaseOutput> =
   phaseRecords.withoutPlanSubtaskUnitRecords().values.mapNotNull { record ->

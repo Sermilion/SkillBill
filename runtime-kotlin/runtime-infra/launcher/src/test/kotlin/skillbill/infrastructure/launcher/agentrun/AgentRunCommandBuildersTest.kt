@@ -394,12 +394,15 @@ class AgentRunCommandBuildersTest {
   }
 
   @Test
-  fun `codex selects app server while model and effort stay available to the session adapter`() {
+  fun `codex bypass selects exec and forwards model effort and native bypass flags`() {
     val builder = CodexAgentRunCommandBuilder()
     val built = builder.build(request(model = "gpt-sol", effort = "xhigh"))
 
-    assertEquals(listOf("codex", "app-server", "--listen", "stdio://"), built.command)
-    assertEquals(AgentRunApprovalProtocol.CODEX_APP_SERVER, built.approvalProtocol)
+    assertEquals(listOf("codex", "exec", "--json"), built.command.take(3))
+    assertContains(built.command, "--dangerously-bypass-approvals-and-sandbox")
+    assertContains(built.command, "gpt-sol")
+    assertContains(built.command, "model_reasoning_effort=xhigh")
+    assertEquals(null, built.approvalProtocol)
     assertEquals("Phase: implement", built.stdinText)
     assertTrue(built.inheritEnvironment)
   }
@@ -412,8 +415,8 @@ class AgentRunCommandBuildersTest {
           request().copy(promptOverride = "Phase: $phase"),
         ).command
 
-      assertFalse(command.contains("--dangerously-bypass-approvals-and-sandbox"))
-      assertFalse(command.contains("shell_environment_policy.inherit=all"))
+      assertTrue(command.contains("--dangerously-bypass-approvals-and-sandbox"))
+      assertTrue(command.contains("shell_environment_policy.inherit=all"))
       assertFalse(command.contains("read-only"))
     }
   }

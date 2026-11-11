@@ -77,9 +77,15 @@ internal class MonitorRepoFixture(root: Path) {
     runGit(inside, "commit", "-m", "add $name")
   }
 
+  fun routeOriginOverSsh(sshUrl: String = "git@github.com:acme/repo.git") {
+    runGit(caller, "remote", "set-url", "origin", sshUrl)
+    runGit(caller, "config", "url.$remote.insteadOf", sshUrl)
+  }
+
   fun target(
     headFetchUrl: String = remote.toString(),
     expectedHeadSha: String = headSha,
+    baseFetchUrl: String = remote.toString(),
   ): MonitorResolvedTarget {
     val head =
       MonitorPullRequestHead(
@@ -92,7 +98,7 @@ internal class MonitorRepoFixture(root: Path) {
       MonitorPullRequestIdentity(repository, 427),
       head,
       MonitorBranchTip(repository, "main", baseSha),
-      remote.toString(),
+      baseFetchUrl,
       MonitorWritability.REPOSITORY_PUSH,
     )
   }

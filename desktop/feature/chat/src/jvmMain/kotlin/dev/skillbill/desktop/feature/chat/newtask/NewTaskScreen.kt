@@ -228,7 +228,7 @@ private fun NewTaskHomeBody(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
           BasicText("What should we ship?", Modifier.semantics { heading() }, style = type.t2xl.copy(color = colors.fg))
           BasicText(
-            "Describe the work or paste an issue. Skill Bill plans it, builds it, audits it and opens the PR.",
+            "Describe the work or paste an issue. Sona plans it, builds it, audits it and opens the PR.",
             style = type.tBase.copy(color = colors.fgMuted),
           )
         }

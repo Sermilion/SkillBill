@@ -24,6 +24,7 @@ import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
 import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
 import dev.skillbill.desktop.core.domain.model.TimelineProblem
+import dev.skillbill.desktop.core.domain.model.attributedTo
 import dev.skillbill.desktop.core.domain.model.goalScopeTarget
 import dev.skillbill.desktop.core.domain.model.resolveScope
 import dev.skillbill.desktop.core.domain.model.selectedEndSubtask
@@ -86,7 +87,7 @@ class ChangeScopeObservations internal constructor(
     emit(ScopeChangesState.Loading)
     val resolved = resolveScope(target, scope)
     while (true) {
-      emit(readScope(target, scope, resolved, lock, cache))
+      emit(readScope(target, scope, resolved, lock, cache).attributedTo(target.paths))
       val followsHead = (resolved is ScopeRead.Baseline && resolved.baseline !is ChangeBaseline.CommittedBranchRange &&
         resolved.baseline !is ChangeBaseline.CommittedRevisionRange) ||
         resolved == ScopeRead.Uncommitted ||
@@ -107,7 +108,7 @@ class ChangeScopeObservations internal constructor(
       val result = readCommitStats(target, commit, lock, cache)
       if (result == null) {
         if (reportedCommitFailures.add("${target.worktreeRoot}:${commit.sha}")) diagnostics.record(SCOPES_READ_FAILED)
-      } else stats[commit.sha] = result
+      } else stats[commit.sha] = result.attributedTo(target.paths)
       emit(stats.toMap())
     }
   }.distinctUntilChanged()
@@ -399,6 +400,16 @@ class ChangeScopeObservations internal constructor(
   }
 
   private fun ChangeSet.toStats() = SubtaskStats(files, insertions, deletions)
+
+  private fun ChangeSet.attributedTo(paths: Set<String>?): ChangeSet =
+    if (paths == null) this else files.attributedTo(paths).let { kept -> ChangeSet(baseSha, kept, kept.sumOf { it.insertions ?: 0 }, kept.sumOf { it.deletions ?: 0 }) }
+
+  private fun SubtaskStats.attributedTo(paths: Set<String>?): SubtaskStats =
+    if (paths == null) this else files.attributedTo(paths).let { kept -> SubtaskStats(kept, kept.sumOf { it.insertions ?: 0 }, kept.sumOf { it.deletions ?: 0 }) }
+
+  private fun ScopeChangesState.attributedTo(paths: Set<String>?): ScopeChangesState =
+    if (paths == null || this !is ScopeChangesState.Listed) this
+    else ScopeChangesState.Listed(changes.attributedTo(paths), perCommit.map { CommitChanges(it.commit, it.files.attributedTo(paths)) })
   private fun ScopeRead.Committed.key(worktreeRoot: String) = CommittedListKey(worktreeRoot, fromSha, toSha)
   private fun ChangeScopeTarget.targetBranch(): String? = when (val baseline = allBaseline) {
     is ChangeBaseline.TargetMergeBase -> baseline.targetBranch

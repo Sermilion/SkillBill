@@ -3,21 +3,35 @@ package skillbill.infrastructure.workflow.qa
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.featuretask.qa.qaDeviceLeaseFailed
 import skillbill.error.featuretask.qa.qaRepositoryUnreadable
+import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.model.EnvironmentContext
 import skillbill.ports.monitor.MonitorProcessInspector
 import skillbill.ports.qa.QaWorkspacePort
 import skillbill.ports.qa.model.QaReportSource
+import skillbill.ports.qa.model.QaRetainedScreenshot
 import skillbill.ports.qa.model.QaWorkspace
+import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
 import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
+import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.InvalidPathException
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 import java.time.Clock
 import java.util.UUID
+import javax.imageio.ImageIO
 
 private const val REPORT_FILE = "report.md"
 private const val LEGACY_REPORT_FILE = "receipt.json"
+private const val MAX_SCREENSHOT_LABEL_LENGTH = 160
+private const val MAX_SCREENSHOT_BYTES = 12 * 1024 * 1024
+private const val MAX_SCREENSHOT_DIMENSION = 4096
+private const val MAX_SCREENSHOT_PIXELS = 16_777_216L
 
 @Inject
 class FileSystemQaWorkspace(
@@ -94,6 +108,159 @@ class FileSystemQaWorkspace(
     } catch (failure: IOException) {
       throw qaRepositoryUnreadable("the retained report could not be read: ${failure.message}", failure)
     }
+  }
+
+  override fun retainScreenshot(
+    repoRoot: Path,
+    invocationId: String,
+    sourcePath: Path,
+    label: String,
+    asFrame: Boolean,
+  ): QaRetainedScreenshot {
+    if (label.isBlank() || label.length > MAX_SCREENSHOT_LABEL_LENGTH) unreadable("the screenshot label is invalid")
+    val directory =
+      QaPaths.invocationDirectory(QaPaths.qaRoot(environment, repoRoot), invocationId)
+        .toAbsolutePath().normalize()
+    validateOwnedDirectory(directory, invocationId)
+    val source = sourcePath.toAbsolutePath().normalize()
+    if (!source.startsWith(directory.resolve("evidence")) || source == directory.resolve("evidence")) {
+      unreadable("the screenshot source is outside invocation evidence")
+    }
+    validateNoLinks(directory, source)
+    if (!Files.isRegularFile(
+        source,
+        LinkOption.NOFOLLOW_LINKS,
+      )
+    ) {
+      unreadable("the screenshot source is not a regular file")
+    }
+    val bytes =
+      Files.newInputStream(source, LinkOption.NOFOLLOW_LINKS).use {
+          input ->
+        input.readNBytes(MAX_SCREENSHOT_BYTES + 1)
+      }
+    if (bytes.isEmpty() || bytes.size > MAX_SCREENSHOT_BYTES) unreadable("the screenshot size is invalid")
+    val (format, width, height) = inspectScreenshot(bytes, asFrame)
+    val target = retainScreenshotBytes(directory, bytes, format)
+    return QaRetainedScreenshot(target.toString(), format, bytes.size.toLong(), width, height)
+  }
+
+  private fun retainScreenshotBytes(
+    directory: Path,
+    bytes: ByteArray,
+    format: String,
+  ): Path {
+    val retainedDirectory = directory.resolve("evidence").resolve("retained")
+    Files.createDirectories(retainedDirectory)
+    validateNoLinks(directory, retainedDirectory)
+    val digest = sha256Hex(bytes)
+    val target = retainedDirectory.resolve("$digest.$format")
+    if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+      if (Files.isSymbolicLink(
+          target,
+        ) ||
+        !Files.isRegularFile(
+          target,
+          LinkOption.NOFOLLOW_LINKS,
+        ) || sha256Hex(Files.readAllBytes(target)) != digest
+      ) {
+        unreadable("the retained screenshot target is not an immutable regular file")
+      }
+    } else {
+      val temporary = retainedDirectory.resolve(".$digest.${UUID.randomUUID()}.tmp")
+      try {
+        FileChannel.open(temporary, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use { channel ->
+          val buffer = ByteBuffer.wrap(bytes)
+          while (buffer.hasRemaining()) channel.write(buffer)
+          channel.force(true)
+        }
+        try {
+          Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE)
+        } catch (failure: FileAlreadyExistsException) {
+          if (sha256Hex(Files.readAllBytes(target)) != digest) throw failure
+          Files.deleteIfExists(temporary)
+        }
+      } catch (failure: IOException) {
+        Files.deleteIfExists(temporary)
+        unreadable("the screenshot could not be retained: ${failure.message}", failure)
+      }
+    }
+    return target
+  }
+
+  private fun validateOwnedDirectory(
+    directory: Path,
+    invocationId: String,
+  ) {
+    if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+      unreadable("the QA invocation directory is unavailable")
+    }
+    val ownerFile = QaPaths.ownerFile(directory)
+    if (Files.isSymbolicLink(ownerFile) || !Files.isRegularFile(ownerFile, LinkOption.NOFOLLOW_LINKS)) {
+      unreadable("the QA invocation owner record is unavailable")
+    }
+    val owner =
+      QaLeaseRecordCodec.decodeOwner(
+        readQaRecord(ownerFile) ?: unreadable("the QA invocation owner record is empty"),
+        ownerFile.toString(),
+      )
+    if (owner.invocationId != invocationId) unreadable("the QA invocation owner does not match")
+  }
+
+  private fun validateNoLinks(
+    root: Path,
+    path: Path,
+  ) {
+    var current = root
+    if (Files.isSymbolicLink(current)) unreadable("the QA invocation path contains a symbolic link")
+    for (part in root.relativize(path)) {
+      current = current.resolve(part)
+      if (Files.isSymbolicLink(current)) unreadable("the QA evidence path contains a symbolic link")
+    }
+  }
+
+  private fun inspectScreenshot(
+    bytes: ByteArray,
+    asFrame: Boolean,
+  ): Triple<String, Int, Int> {
+    val stream =
+      ImageIO.createImageInputStream(
+        ByteArrayInputStream(bytes),
+      ) ?: unreadable("the screenshot format is invalid")
+    stream.use {
+      val readers = ImageIO.getImageReaders(it)
+      if (!readers.hasNext()) unreadable("the screenshot format is unsupported")
+      val reader = readers.next()
+      try {
+        reader.input = it
+        val format = reader.formatName.lowercase()
+        if (format !in setOf("png", "jpeg")) unreadable("the screenshot format is unsupported")
+        val width = reader.getWidth(0)
+        val height = reader.getHeight(0)
+        if (width !in 1..MAX_SCREENSHOT_DIMENSION || height !in 1..MAX_SCREENSHOT_DIMENSION ||
+          width.toLong() * height.toLong() > MAX_SCREENSHOT_PIXELS
+        ) {
+          unreadable("the screenshot dimensions exceed the limits")
+        }
+        val image = reader.read(0) ?: unreadable("the screenshot is incomplete")
+        if (asFrame && isUniform(image)) unreadable("the captured frame is blank")
+        return Triple(format, width, height)
+      } catch (failure: IOException) {
+        unreadable("the screenshot could not be decoded: ${failure.message}", failure)
+      } finally {
+        reader.dispose()
+      }
+    }
+  }
+
+  private fun isUniform(image: BufferedImage): Boolean {
+    val first = image.getRGB(0, 0)
+    for (y in 0 until image.height) {
+      for (x in 0 until image.width) {
+        if (image.getRGB(x, y) != first) return false
+      }
+    }
+    return true
   }
 
   private fun retainedReportPath(

@@ -1,0 +1,4 @@
+Pillow==13.0.0
+pyserial==3.5
+smartscreen-driver==0.2.3
+numpy==2.5.4

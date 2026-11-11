@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.domain.model.OperationCardConfirmation
 import dev.skillbill.desktop.core.domain.model.OperationCardDismissOutcome
 import dev.skillbill.desktop.core.domain.model.OperationCardLookup
 import dev.skillbill.desktop.core.domain.model.OperationCardState
+import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +30,7 @@ internal class OperationCardCoordinator(
   private val base: (NewTaskKind) -> NewTaskStart?,
   private val historyChanged: suspend (ChatThread) -> Boolean = { true },
   private val pollMillis: Long = RESTORED_CONFIRMING_POLL_MILLIS,
+  private val runs: RunOpener = UnavailableRunOpener,
 ) {
   private val requests = ConcurrentHashMap<String, NewTaskStart>()
   private val observations = ConcurrentHashMap<String, Job>()
@@ -115,8 +117,20 @@ internal class OperationCardCoordinator(
       onConfirm = { token -> confirm(thread, token) },
       onDismiss = { token -> dismiss(thread, token) },
       onAdjust = { token -> adjust(thread, token) },
+      onChangeVerify = { token, choices -> changeVerify(thread, token, choices) },
       canAdjust = { token -> !thread.busy.value && thread.operationCard(token)?.card?.launchId?.let(requests::containsKey) == true },
+      onOpenRun = { token -> openRun(thread, token) },
     )
+
+  private fun openRun(thread: ChatThread, token: String) {
+    val message = thread.operationCard(token)?.takeIf { it.opensVerifyRun() } ?: return
+    scope.launch {
+      runs.open(message.card.token)?.let { problem ->
+        thread.append(ChatMessage.Notice(problem))
+        persistOrWarn(thread)
+      }
+    }
+  }
 
   private fun confirm(thread: ChatThread, token: String) {
     val message = thread.operationCard(token) ?: return
@@ -239,6 +253,48 @@ internal class OperationCardCoordinator(
       }
     }
     return true
+  }
+
+  /**
+   * Replaces the verify proposal [token] with one using [choices], keeping its intake, branch, checkout and agent. Confirm
+   * cannot change QA or review mode, so the old proposal is dismissed once the replacement parks.
+   */
+  private fun changeVerify(thread: ChatThread, token: String, choices: VerifyStartChoices) {
+    val message = thread.operationCard(token) ?: return
+    val request = requests[message.card.launchId]
+    if (request == null || request.kind != NewTaskKind.Verify) {
+      thread.operationCardSubmitting(token, false, ADJUST_UNAVAILABLE_TEXT)
+      scope.launch { persistOrWarn(thread) }
+      return
+    }
+    thread.beginOperationDecision(token, OperationCardDecision.Adjust) ?: return
+    pendingAdjustments.remove(thread, token)
+    val replacement = request.copy(confirmation = null, verify = choices)
+    thread.append(ChatMessage.Notice("Updating the verify proposal…"))
+    val finish = track(thread)
+    scope.launch {
+      var failure: String? = null
+      try {
+        if (!historyChanged(thread)) {
+          failure = HISTORY_SAVE_FAILED_TEXT
+          return@launch
+        }
+        failure = follow(thread, controls.startNewTask(replacement), null, replacement)
+        if (failure == null) {
+          failure = (controls.dismissOperationCard(token) as? OperationCardDismissOutcome.Stale)?.reason
+        }
+      } finally {
+        withContext(NonCancellable) {
+          try {
+            refresh(thread, token)
+          } finally {
+            thread.operationCardSubmitting(token, false, failure)
+            persistOrWarn(thread)
+            finish()
+          }
+        }
+      }
+    }
   }
 
   /**

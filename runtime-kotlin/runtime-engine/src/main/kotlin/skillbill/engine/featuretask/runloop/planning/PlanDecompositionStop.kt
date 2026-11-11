@@ -30,6 +30,7 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleOrigin
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -106,28 +107,60 @@ internal object PlanDecompositionStop {
     if (target is PlanBundleTarget.Staged) {
       PlanBundleAuthorization.violation(request.issueKey, target, introduced, listing)
         ?.let { violation -> return PlanBundleRejection(notReadyReason(violation)) }
-      PlanBundleStagingPromotion.promote(
-        planner,
-        context.diagnostics,
-        PromotionRequest(
-          target,
-          request.repoRoot,
-          capture.run.resolvedAgent.resolvedAgentId,
-          parentSpecProtected = request.protectedSpecSha256 != null,
-        ),
-      )
+      if (!PlanBundleStagingPromotion.promote(
+          planner,
+          context.diagnostics,
+          PromotionRequest(
+            target,
+            request.repoRoot,
+            capture.run.resolvedAgent.resolvedAgentId,
+            parentSpecProtected = request.protectedSpecSha256 != null,
+          ),
+        )
+      ) {
+        return PlanBundleRejection(notReadyReason("The staged plan bundle could not be promoted."))
+      }
     }
-    protectedSpecRejection(context)?.let { return PlanBundleRejection(it) }
     val authorized = if (target is PlanBundleTarget.Staged) PlanBundleTarget.Store(target.storeDirectory) else target
-    PlanBundleAuthorization.violation(request.issueKey, authorized, introduced, listing)
-      ?.let { violation -> return PlanBundleRejection(notReadyReason(violation)) }
-    return recordBundle(context, FeatureTaskRuntimePlanBundleOrigin.AUTHORED, keptUnitStepId = null)
+    val violation =
+      protectedSpecRejection(context)
+        ?: PlanBundleAuthorization.violation(request.issueKey, authorized, introduced, listing)?.let(::notReadyReason)
+    return if (violation != null) {
+      PlanBundleRejection(violation)
+    } else {
+      recordBundle(context, FeatureTaskRuntimePlanBundleOrigin.AUTHORED, keptUnitStepId = null)
+    }
   }
 
   fun recordExistingBundleOrRejection(
     context: PhaseOutputSettlementContext,
     unitStepId: String,
   ): String? = recordBundle(context, FeatureTaskRuntimePlanBundleOrigin.EXISTING, unitStepId)?.reason
+
+  fun prepareFeasibilityRepairBundle(context: PhaseOutputSettlementContext): Result<FeatureTaskRuntimePlanBundle> {
+    val request = context.request
+    return try {
+      val written =
+        context.decompositionPlanner.verifyAuthoredBundle(
+          request.repoRoot,
+          request.issueKey,
+          request.runInvariants,
+          request.protectedSpecSha256 == null,
+          context.diagnostics,
+        )
+      val bundle =
+        PlanBundleSnapshots(context.decompositionPlanner)
+          .capture(request.repoRoot, written, FeatureTaskRuntimePlanBundleOrigin.EXISTING)
+      Result.success(bundle)
+    } catch (error: InvalidFeatureSpecPreparationRequestError) {
+      Result.failure(error)
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowIfDatabaseFailure()
+      Result.failure(error)
+    } catch (error: IOException) {
+      Result.failure(error)
+    }
+  }
 
   private fun recordBundle(
     context: PhaseOutputSettlementContext,

@@ -71,6 +71,8 @@ internal object CodexRpcKeys {
   const val ACCEPT_WITH_EXECPOLICY_AMENDMENT = "acceptWithExecpolicyAmendment"
   const val APPLY_NETWORK_POLICY_AMENDMENT = "applyNetworkPolicyAmendment"
   const val PERMISSIONS_APPROVAL = "item/permissions/requestApproval"
+  const val TOOL_REQUEST_USER_INPUT = "item/tool/requestUserInput"
+  const val ANSWERS = "answers"
   const val MCP_ELICITATION = "mcpServer/elicitation/request"
   const val PERMISSIONS = "permissions"
   const val SCOPE = "scope"

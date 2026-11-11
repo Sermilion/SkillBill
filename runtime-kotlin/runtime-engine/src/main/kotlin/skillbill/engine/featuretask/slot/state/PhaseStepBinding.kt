@@ -16,6 +16,7 @@ import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
+import skillbill.ports.idestatus.model.MonitorCiCycleRecord
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -90,6 +91,8 @@ public interface PhaseAgentStepBinding :
   PhaseAgentExecution
 
 public interface PhaseQaStepBinding : PhaseAgentStepBinding {
+  public fun currentAttempt(): Int?
+
   public fun qaRepairState(): QaRepairState?
 }
 
@@ -144,26 +147,19 @@ public interface PhaseCiObservation {
    * Watches the pull request open for [branch] until its checks settle or a usable no-check observation exceeds the
    * CI start timeout. Failed identity and checks reads are reported through [onInconclusive] and retried as unknown
    * for that round; they do not establish that CI has not started.
-   * [onCiRunning] is invoked while checks are still pending so status can stay fresh for the whole run.
+   * [listeners] receive pending-check progress, inconclusive reads and full check-list observations.
    */
   public fun watch(
     repoRoot: Path,
     branch: String,
-    onCiRunning: (String, List<PullRequestCheck>) -> Unit = { _, _ -> },
     expectedHead: ExpectedCiHead = ExpectedCiHead(),
-    onInconclusive: (String) -> Unit = {},
+    listeners: CiWatchListeners = CiWatchListeners(),
   ): PullRequestCiOutcome
 
-  /** Keeps the failing [checks] so the fix step for [issueKey] can name them. */
-  public fun recordFailingChecks(
-    issueKey: String,
-    checks: List<PullRequestCheck>,
-  )
-
-  /** Keeps [baseBranch] so the fix step for [issueKey] can merge it and resolve conflicts. */
-  public fun recordMergeConflict(
-    issueKey: String,
-    baseBranch: String,
+  /** Upserts the durable monitor CI cycle [record] for [workflowId]; throws when the store rejects the write. */
+  public fun recordCycle(
+    workflowId: String,
+    record: MonitorCiCycleRecord,
   )
 }
 
@@ -259,6 +255,19 @@ public sealed interface StandalonePublication {
 
   public data class Blocked(val reason: String) : StandalonePublication
 }
+
+public data class CiWatchListeners(
+  val onCiRunning: (String, List<PullRequestCheck>) -> Unit = { _, _ -> },
+  val onInconclusive: (String) -> Unit = {},
+  val onObserved: (PullRequestCiSnapshot) -> Unit = {},
+)
+
+public data class PullRequestCiSnapshot(
+  val pullRequestUrl: String,
+  val pullRequestNumber: Int,
+  val headSha: String?,
+  val checks: List<PullRequestCheck>,
+)
 
 public data class ExpectedCiHead(
   val sha: String? = null,

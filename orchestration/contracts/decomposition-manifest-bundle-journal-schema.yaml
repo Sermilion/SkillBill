@@ -1,55 +1,42 @@
-# Decomposition manifest bundle journal schema (canonical source of truth).
-#
-# Describes the on-disk commit marker for atomic multi-file decomposition manifest
-# writes under a single parent directory. Consumed as JSON Schema (Draft 2020-12)
-# by `DecompositionManifestBundleJournalSchemaValidator` in `runtime-infra-fs`.
-#
-# Versioning rule:
-#
-# - `contract_version` is pinned by `BUNDLE_JOURNAL_CONTRACT_VERSION` in
-#   `runtime-kotlin/runtime-contracts/.../DecompositionManifestBundleJournalSchemaPaths.kt`.
-# - `DecompositionManifestBundleJournalSchemaContractVersionTest` fails the build
-#   if they diverge. Historical 0.1 records use the same envelope shape.
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://skill-bill.dev/contracts/decomposition-manifest-bundle-journal-schema.yaml"
 title: "Decomposition manifest bundle journal"
 description: >
-  Commit marker for staged, digest-checked moves that project decomposition manifest
-  bundle writes to their target paths. Recovery validates this record before applying
-  pending moves or deleting staging evidence.
+  Commit marker for staged, digest-checked bundle writes. Version 0.2 records target
+  before identities and protected file identities for guarded feasibility projections.
 type: object
 additionalProperties: false
-required:
-  - contract_version
-  - staging_directory
-  - entries
-$defs:
-  entry:
-    type: object
-    additionalProperties: false
-    required:
-      - target
-      - staged
-      - sha256
-    properties:
-      target:
-        type: string
-        minLength: 1
-      staged:
-        type: string
-        minLength: 1
-      sha256:
-        type: string
-        minLength: 64
-        maxLength: 64
+required: [contract_version, staging_directory, entries, protected_files]
 properties:
-  contract_version:
-    const: "0.1"
-  staging_directory:
-    type: string
-    minLength: 1
+  contract_version: {const: "0.2"}
+  staging_directory: {type: string, minLength: 1}
   entries:
     type: array
     minItems: 1
-    items:
-      $ref: "#/$defs/entry"
+    items: {$ref: "#/$defs/entry"}
+  protected_files:
+    type: array
+    items: {$ref: "#/$defs/protectedFile"}
+$defs:
+  hash: {type: string, pattern: "^[0-9a-f]{64}$"}
+  nullableHash:
+    oneOf:
+      - {$ref: "#/$defs/hash"}
+      - {type: "null"}
+  entry:
+    type: object
+    additionalProperties: false
+    required: [target, staged, sha256, before_exists, before_sha256]
+    properties:
+      target: {type: string, minLength: 1}
+      staged: {type: string, minLength: 1}
+      sha256: {$ref: "#/$defs/hash"}
+      before_exists: {type: boolean}
+      before_sha256: {$ref: "#/$defs/nullableHash"}
+  protectedFile:
+    type: object
+    additionalProperties: false
+    required: [path, sha256]
+    properties:
+      path: {type: string, minLength: 1}
+      sha256: {$ref: "#/$defs/nullableHash"}

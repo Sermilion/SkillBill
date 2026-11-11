@@ -5,6 +5,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_HANDOFF_ENV
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
+import skillbill.error.featuretask.PlanBundleFeasibilityFailureCode
 import skillbill.error.featuretask.qa.invalidQaRepairStateSchema
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidAcceptanceCriterionAuditResultSchema
@@ -101,6 +102,8 @@ internal fun featureTaskRuntimeWireArtifactNonObjectError(
         fieldPath = "<root>",
         reason = reason,
       )
+    FeatureTaskRuntimeWireArtifactKind.PLAN_BUNDLE_FEASIBILITY ->
+      SkillBillRuntimeException(PlanBundleFeasibilityFailureCode.INVALID_STATE, "$sourceLabel: $reason")
     else -> serialWireArtifactNonObjectError(kind, sourceLabel, reason)
   }
 
@@ -134,5 +137,6 @@ private fun serialWireArtifactNonObjectError(
       invalidValidationTestProbes(sourceLabel, reason)
     FeatureTaskRuntimeWireArtifactKind.GOAL_ASSESSMENT_RECORD ->
       invalidGoalAssessmentRecord(sourceLabel, reason)
+
     else -> error("Unexpected non-serial wire artifact $kind")
   }

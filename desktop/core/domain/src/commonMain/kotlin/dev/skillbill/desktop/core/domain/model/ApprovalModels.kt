@@ -30,7 +30,14 @@ const val PROVIDER_REMEMBER_OPTION_KIND = "provider_remember"
  * Why a grant is unavailable, as the runtime's own policy decided it; null means available. This is the runtime's answer
  * for a live card and is never saved: a restored card has no grants, so history can never enable a control.
  */
-data class ApprovalCardGrants(val oneTimeUnavailable: String?, val alwaysAllowUnavailable: String?)
+data class ApprovalCardGrants(
+  val oneTimeUnavailable: String?,
+  val alwaysAllowUnavailable: String?,
+  /** Why a pattern-rule grant is unavailable; null when eligible. */
+  val similarUnavailable: String? = null,
+  /** Runtime-suggested pattern prefill for the similar editor; null when unavailable. */
+  val suggestedPattern: String? = null,
+)
 
 /** The complete stored approval record, never clipped; display and controls belong to the card surface. */
 data class ApprovalCard(
@@ -58,6 +65,8 @@ data class ApprovalCard(
   /** The runtime's grant eligibility for a live card; null when not yet known, which keeps every grant disabled. */
   val grants: ApprovalCardGrants? = null,
   val repositoryName: String = "",
+  /** Pattern of the durable rule that decided this card, when applicable. */
+  val rulePattern: String? = null,
 ) {
   val isPending: Boolean get() = state == "pending"
 }
@@ -72,6 +81,8 @@ data class ApprovalRule(
   val workingDirectory: String,
   val actionFingerprint: String,
   val createdAt: String,
+  /** Wildcard pattern when this is a pattern rule; null for exact rules. */
+  val pattern: String? = null,
 )
 
 sealed interface ApprovalRulesResult {

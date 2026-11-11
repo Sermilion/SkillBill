@@ -75,7 +75,7 @@ operator's current request selects a standalone phase or operation.
 | `/skill-bill <intake> operation:feature-guard` | `skill-bill operation feature-guard <intake> --agent <currently-executing-agent>` | required |
 | `/skill-bill <intake> operation:feature-guard-cleanup` | `skill-bill operation feature-guard-cleanup <intake> --agent <currently-executing-agent>` | required |
 | `/skill-bill [<pr>] operation:pr-review-fix [mode:local\|remote] [scope:analyze-only] [push:on] [replies:draft]` | `skill-bill operation pr-review-fix [<pr>] [<tokens>] --agent <currently-executing-agent>` | optional |
-| `/skill-bill operation:verify <intake> [target:<pr\|branch\|base..head>] [mode:inline\|delegated] [qa:on\|off]` | `skill-bill operation verify <intake> [spec:<value>] [target:<value>] [mode:inline\|delegated] [qa:on\|off] --agent <currently-executing-agent>` | required |
+| `/skill-bill operation:verify <intake> [target:<pr\|branch\|base..head>] [mode:inline\|delegated] [qa:on\|off]` | `skill-bill operation verify <intake> [spec:<value>] [target:<value>] [mode:inline\|delegated] [qa:on\|off] [--qa-device <serial:...\|avd:...>] --agent <currently-executing-agent>` | required |
 
 For `operation:pr-review-fix`, local mode is the default; `push:` and `replies:` require `mode:remote`.
 
@@ -116,7 +116,8 @@ verbatim: a Linear issue key or URL, the requirements as raw text, or a
 `target:`, `mode:`, and `qa:` verbatim; without `target:`, the runtime verifies
 HEAD against `origin/HEAD`, without `mode:`, it reviews inline, and without
 `qa:`, QA is `off`. `qa:on` adds QA in a temporary QA checkout at the target
-head after the completeness audit.
+head after the completeness audit. With `qa:on`, forward an operator-named
+device as `--qa-device serial:<serial>` or `--qa-device avd:<name>`.
 
 ## Token Forwarding
 

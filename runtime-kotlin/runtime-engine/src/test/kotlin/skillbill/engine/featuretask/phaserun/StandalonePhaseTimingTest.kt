@@ -20,6 +20,33 @@ import kotlin.test.assertNull
 
 class StandalonePhaseTimingTest {
   @Test
+  fun `monitor persists reported model and clears it when the next repair has not reported`() {
+    val home = Files.createTempDirectory("monitor-model")
+    val clock = Clock.fixed(Instant.EPOCH, ZoneOffset.UTC)
+    val database = phaseRunDatabase(home, clock)
+    try {
+      val publisher =
+        testStandalonePhasePublisher(database, clock, NoopRuntimeDiagnostics)
+          .forPhase(home, "monitor", "monitor-model", "codex")
+      publisher.publishActivity("monitor", "Waiting for CI")
+
+      fun model() = database.read { it.standalonePhaseStatuses.readByInvocation("monitor-model") }?.reportedModel
+      assertNull(model())
+      publisher.reportModel("provider-model")
+      assertEquals("provider-model", model())
+      publisher.publishActivity("monitor_fix", "Fixing CI")
+      assertEquals("provider-model", model())
+      publisher.reportModel(null)
+      assertNull(model())
+      publisher.reportModel("second-model")
+      publisher.settle(PhaseRunResult.Completed("monitor-model", emptyList(), null, null))
+      assertEquals("second-model", model())
+    } finally {
+      home.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
   fun `goal planning records active time before subtasks and excludes a paused interval`() {
     val home = Files.createTempDirectory("goal-plan-clock")
     val start = Instant.parse("2026-10-25T10:00:00Z")

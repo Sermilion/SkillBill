@@ -25,6 +25,8 @@ object WorkBuildPayloadKeys {
   const val STARTED_AT = WorkflowWirePayloadKeys.STARTED_AT
   const val ELAPSED_MS = "elapsed_ms"
   const val ELAPSED_AS_OF = "elapsed_as_of"
+  const val TOTAL_ELAPSED_MS = "total_elapsed_ms"
+  const val TOTAL_ELAPSED_AS_OF = "total_elapsed_as_of"
   const val USUAL_MS = "usual_ms"
   const val EXIT_CODE = WorkDetailPayloadKeys.ACTIVITY_EXIT_CODE
   const val FINISHED_AT = WorkflowWirePayloadKeys.FINISHED_AT
@@ -35,6 +37,7 @@ object WorkBuildPayloadKeys {
 object IdeStatusPayloadKeys {
   const val LIFECYCLE_STATE = "lifecycle_state"
   const val BRANCH_CORRELATION = "branch_correlation"
+  const val PRIMARY_REPOSITORY_ROOT = WorkBoardReadModelPayloadKeys.PRIMARY_REPOSITORY_ROOT
   const val EXECUTION_SCOPE = "execution_scope"
   const val EXECUTION_ID = "execution_id"
   const val STATUS_STORE_ID = "status_store_id"

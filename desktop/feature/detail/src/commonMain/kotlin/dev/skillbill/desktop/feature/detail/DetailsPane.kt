@@ -11,24 +11,15 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Composable
 import dev.skillbill.desktop.core.designsystem.detail.rememberSectionCollapse
 import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.Avatar
-import dev.skillbill.desktop.core.designsystem.component.Segmented
-import dev.skillbill.desktop.core.designsystem.component.SegmentedOption
-import dev.skillbill.desktop.core.designsystem.detail.SbBox
-import androidx.compose.foundation.text.BasicText
 import dev.skillbill.desktop.core.designsystem.component.ShortId
 import dev.skillbill.desktop.core.designsystem.detail.Breakdown
 import dev.skillbill.desktop.core.designsystem.detail.PaneSection
-import dev.skillbill.desktop.core.designsystem.detail.PhasePipeline
 import dev.skillbill.desktop.core.designsystem.detail.PropertyList
 import dev.skillbill.desktop.core.designsystem.detail.PropertyRow
 import dev.skillbill.desktop.core.designsystem.detail.PropertyText
@@ -50,40 +41,22 @@ internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<Ass
   val item = state.header
   val detail = (state.sections as? SectionsUi.Loaded)?.detail
   val previewRun = detail?.let { selectedQaPreview(item, it, state.selectedQaRun, state.subtaskChoice.key) }
-  var resultTab by rememberSaveable(item.id) { mutableStateOf("assessment") }
   val selected = detail?.let { selectedSubtask(item, it, state.subtaskChoice.key) }
     ?: SubtaskKey.GoalFinish.takeIf { item.kind == WorkKind.Goal }
   val selectedSubtaskId = (selected as? SubtaskKey.Subtask)?.id
   val scrollStates = rememberSaveableStateHolder()
   Column(Modifier.fillMaxSize()) {
-    if (selected == SubtaskKey.GoalFinish) {
-      Segmented(
-        listOf(SegmentedOption("assessment", "Assessment"), SegmentedOption("qa", "QA")),
-        resultTab,
-        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-      ) { resultTab = it }
-    }
-    scrollStates.SaveableStateProvider(if (selected == SubtaskKey.GoalFinish) resultTab else "subtask") {
+    scrollStates.SaveableStateProvider(if (selected == SubtaskKey.GoalFinish) "finish" else "subtask") {
       val listState = rememberLazyListState()
       LazyColumn(Modifier.weight(1f), state = listState, contentPadding = PaddingValues(24.dp)) {
         val sections = DetailSections(this, collapse, listState, assessmentOrder)
         if (detail != null) {
-          sections.item(key = "inspector") { InspectorSection(item, detail, selected, onAction) }
-          if (state.qaPreviewVisible && (selected != SubtaskKey.GoalFinish || resultTab == "qa")) {
+          sections.item(key = "inspector") { InspectorSection(state, item, detail, selected, assessmentOrder, onAction) }
+          if (state.qaPreviewVisible && selected != SubtaskKey.GoalFinish) {
             previewRun?.let { run -> sections.item(key = "qa-preview") { QaPreview(run.invocationId, state.qaPreview) } }
           }
-          if (selected == SubtaskKey.GoalFinish) {
-            if (resultTab == "assessment") {
-              if (detail.goalAssessment != null) sections.goalAssessmentSection(detail) else sections.item(key = "assessment-unavailable") {
-                MissingResult("Goal assessment", "No assessment result is available for this run.")
-              }
-            } else {
-              if (detail.goalQa != null) sections.goalQaSection(detail, item.running, onAction) else sections.item(key = "qa-unavailable") {
-                MissingResult("Goal QA", "No QA result is available for this run.")
-              }
-            }
-          }
         }
+
         sections.item(key = "execution") {
           Column(Modifier.padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             ExecutionSection(item, detail, selectedSubtaskId) { onAction(DetailAction.Copy(it)) }
@@ -100,15 +73,6 @@ internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<Ass
           }
         }
       }
-    }
-  }
-}
-
-@Composable
-private fun MissingResult(title: String, message: String) {
-  PaneSection(title = title) {
-    SbBox {
-      BasicText(message, Modifier.padding(16.dp), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
     }
   }
 }
@@ -176,7 +140,11 @@ private fun ExecutionSection(item: WorkItem, detail: Detail?, subtaskId: Int?, o
           PropertyText(it)
         }
       }
-      facts.model?.let { model -> PropertyRow("Model") { PropertyText(model + facts.effort?.let { " · $it" }.orEmpty()) } }
+      if (item.control.phaseId == "monitor") {
+        PropertyRow("Model") { PropertyText(facts.model ?: "Not reported") }
+      } else {
+        facts.model?.let { model -> PropertyRow("Model") { PropertyText(model + facts.effort?.let { " · $it" }.orEmpty()) } }
+      }
       facts.liveness?.let { PropertyRow("Liveness") { PropertyText(it) } }
       facts.startedAt?.let { PropertyRow("Started") { PropertyText(formatInstant(it, "d MMM HH:mm")) } }
       facts.updatedAt?.let { PropertyRow("Updated") { PropertyText(formatInstant(it, "HH:mm:ss")) } }
@@ -216,14 +184,25 @@ private fun RunsSection(itemId: String, attempts: DetailAttempts) {
 
 /** The selected subtask, or the Goal finish steps; goals with a subtask index only. */
 @Composable
-private fun InspectorSection(item: WorkItem, detail: Detail, chosen: SubtaskKey?, onAction: (DetailAction) -> Unit) {
+private fun InspectorSection(state: DetailUiState, item: WorkItem, detail: Detail, chosen: SubtaskKey?, assessmentOrder: MutableState<AssessmentOrder>, onAction: (DetailAction) -> Unit) {
   val key = chosen ?: return
   val status = inspectorStatus(item, detail, key)
   when (key) {
-    SubtaskKey.GoalFinish -> PaneSection(title = "Goal finish", status = status) { PhasePipeline(goalFinishSteps(item, detail)) }
+    SubtaskKey.GoalFinish -> PaneSection(title = "Goal finish", status = status) { GoalFinishPhases(item, detail, state, assessmentOrder, onAction) }
     is SubtaskKey.Subtask -> {
       val subtask = detail.subtasks.firstOrNull { it.id == key.id } ?: return
-      PaneSection(title = "Subtask ${subtaskNumber(subtask.id)}", status = status) { SubtaskInspector(detail, subtask, onAction) }
+      PaneSection(title = "Subtask ${subtaskNumber(subtask.id)}", status = status) {
+        SubtaskInspector(
+          item = item,
+          detail = detail,
+          subtask = subtask,
+          phaseChoice = state.phaseChoice,
+          activity = state.activity,
+          inline = false,
+          renderedAt = state.renderedAt,
+          onAction = onAction,
+        )
+      }
     }
   }
 }

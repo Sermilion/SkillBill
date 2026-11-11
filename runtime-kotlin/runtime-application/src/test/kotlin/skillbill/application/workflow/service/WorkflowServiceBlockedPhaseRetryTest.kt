@@ -6,6 +6,7 @@ import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testRepositoryRoot
 import skillbill.application.workflow.model.WorkflowUpdateResult
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
@@ -43,6 +44,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 class WorkflowServiceBlockedPhaseRetryTest {
   @Test
@@ -70,7 +72,9 @@ class WorkflowServiceBlockedPhaseRetryTest {
             artifacts =
               DurableWorkflowArtifacts.fromMap(
                 before.artifacts +
-                  repairFamily.entry(repair.asRepairWireMap()) +
+                  repairFamily.entry(
+                    if (status == WorkflowStatus.BLOCKED) oldVersion02(repair) else repair.asRepairWireMap(),
+                  ) +
                   DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
                     mapOf("audit" to audit.asWorkflowArtifactEntry()),
                   ),
@@ -88,13 +92,17 @@ class WorkflowServiceBlockedPhaseRetryTest {
             .toAcceptanceCriterionRepairState(repairFamily.label())
         assertEquals(
           if (status == WorkflowStatus.BLOCKED) emptyMap() else mapOf("AC-001" to 1),
-          resumed.unsuccessfulTotals,
+          resumed.chargedAttempts,
         )
-        assertEquals(if (status == WorkflowStatus.BLOCKED) 3 else 0, resumed.budgetStartOutcomeIndex)
         assertEquals(AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED, resumed.stage)
         assertEquals(listOf("AC-001"), resumed.pendingAuditRefs)
         assertEquals(resumed, AcceptanceCriterionRepairState.restore(resumed))
-        assertEquals(repair.outcomes, resumed.outcomes)
+        if (status == WorkflowStatus.BLOCKED) {
+          assertEquals(repair.outcomes.map { it.outcomeId }, resumed.outcomes.map { it.outcomeId })
+          assertEquals(listOf(false, false, false), resumed.outcomes.map { it.charged })
+        } else {
+          assertEquals(repair.outcomes, resumed.outcomes)
+        }
         assertEquals(WorkflowStatus.PENDING, saved.workflowStatus)
         assertEquals("audit", saved.currentStepId)
         assertEquals(WorkflowStepStatus.PENDING, saved.steps.single { it.stepId == "audit" }.status)
@@ -104,6 +112,25 @@ class WorkflowServiceBlockedPhaseRetryTest {
         )
         assertEquals(beforeRepeat, fixture.states.runtimeRecord(WORKFLOW_ID))
       }
+  }
+
+  private fun oldVersion02(state: AcceptanceCriterionRepairState): Map<String, Any?> {
+    val wire = state.asRepairWireMap().toMutableMap()
+    wire[Keys.CONTRACT_VERSION] = ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
+    wire[Keys.CRITERIA] =
+      assertIs<List<*>>(wire[Keys.CRITERIA]).map { raw ->
+        assertIs<Map<*, *>>(raw).filterKeys { it !in setOf(Keys.GAPS, Keys.PLAN_GENERATION, Keys.ESCALATED) }
+      }
+    wire[Keys.OUTCOMES] =
+      assertIs<List<*>>(wire[Keys.OUTCOMES]).map { raw ->
+        assertIs<Map<*, *>>(raw).filterKeys { it !in setOf(Keys.CHARGED, Keys.OPEN_GAPS_BEFORE, Keys.OPEN_GAPS_AFTER) }
+      }
+    wire[Keys.UNSUCCESSFUL_TOTALS] = state.chargedAttempts
+    wire[Keys.BUDGET_START_OUTCOME_INDEX] = 0
+    wire.remove(Keys.CHARGED_ATTEMPTS)
+    wire.remove(Keys.LATE_FINDINGS)
+    wire.remove(Keys.REPAIR_CHANGED_PATHS)
+    return wire
   }
 
   @Test

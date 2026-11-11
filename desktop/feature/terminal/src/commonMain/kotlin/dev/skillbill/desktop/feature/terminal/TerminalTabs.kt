@@ -21,6 +21,17 @@ internal fun TerminalTabsState.renamed(id: Long, name: String): TerminalTabsStat
 
 internal fun TerminalTabsState.activated(id: Long): TerminalTabsState = if (tabs.any { it.id == id }) copy(activeId = id) else this
 
+/**
+ * The pane shown for the selection's [directory]: on the tab that started there, preferring the active one, or on the tabs as
+ * they were when nothing is selected. Null when a new tab has to open instead.
+ */
+internal fun TerminalTabsState.shownIn(directory: String?): TerminalTabsState? {
+  if (tabs.isEmpty()) return null
+  if (directory == null) return copy(paneOpen = true)
+  val id = tabs.firstOrNull { it.id == activeId && it.directory == directory }?.id ?: tabs.lastOrNull { it.directory == directory }?.id
+  return id?.let { copy(activeId = it, paneOpen = true) }
+}
+
 /** Closing the active tab activates the tab before it, else the new first one; closing the last tab closes the pane. */
 internal fun TerminalTabsState.without(ids: Set<Long>): TerminalTabsState {
   if (tabs.none { it.id in ids }) return this

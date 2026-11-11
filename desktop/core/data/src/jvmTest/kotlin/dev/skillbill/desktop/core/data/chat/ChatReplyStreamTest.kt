@@ -5,6 +5,9 @@ import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
+import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
+import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
+import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -112,6 +115,34 @@ class ChatReplyStreamTest {
   }
 
   @Test
+  fun `qa and review_mode reach a verify start and drop any other action that sets them`() {
+    val stream = ChatReplyStream(RecordingDiagnostics())
+    stream.accept(
+      ChatEvent.TextDelta(
+        "```skillbill-actions\n" +
+          """[{"label":"Run operation:verify","instruction":"Verify it.","mode":"act","start":"verify","target":"WE-1","qa":"on","review_mode":"delegated"},""" +
+          """{"label":"Run phase:review","instruction":"Review it.","mode":"read","start":"review","qa":"on"},""" +
+          """{"label":"Verify again","instruction":"Verify it.","mode":"act","start":"verify","target":"WE-1","qa":"yes"}]""" +
+          "\n```",
+      ),
+    )
+    val actions = stream.accept(ChatEvent.Completed).filterIsInstance<ChatEvent.SuggestedActions>().single().actions
+    assertEquals(
+      listOf(
+        ChatSuggestedAction(
+          "Run operation:verify",
+          "Verify it.",
+          ChatPermissionMode.Act,
+          NewTaskActionKind.Verify,
+          target = "WE-1",
+          verify = VerifyStartChoices(VerifyQaChoice.On, VerifyReviewModeChoice.Delegated),
+        ),
+      ),
+      actions,
+    )
+  }
+
+  @Test
   fun `non-string target drops that action`() {
     val diagnostics = RecordingDiagnostics()
     val stream = ChatReplyStream(diagnostics)
@@ -155,10 +186,10 @@ class ChatReplyStreamTest {
   }
 
   @Test
-  fun `an instruction over the limit drops only that action and tells the operator why`() {
+  fun `long instructions survive streamed action decoding without truncation`() {
     val diagnostics = RecordingDiagnostics()
     val stream = ChatReplyStream(diagnostics)
-    val long = "x".repeat(2031)
+    val long = "x".repeat(20_031)
     stream.accept(
       ChatEvent.TextDelta(
         "Ready.\n```skillbill-actions\n" +
@@ -168,14 +199,16 @@ class ChatReplyStreamTest {
       ),
     )
     val events = stream.accept(ChatEvent.Completed)
-    val notice = events.filterIsInstance<ChatEvent.TextDelta>().single().text
-    assertTrue("\"Run phase:goal\" has an instruction of 2031 characters, over the 2000 limit" in notice)
+    assertTrue(events.none { it is ChatEvent.TextDelta })
     assertEquals(
-      listOf(ChatSuggestedAction("Use SKILL-12", "SKILL-12", ChatPermissionMode.ReadOnly)),
+      listOf(
+        ChatSuggestedAction("Run phase:goal", long, ChatPermissionMode.Act, NewTaskActionKind.Goal, "Redesign validation page"),
+        ChatSuggestedAction("Use SKILL-12", "SKILL-12", ChatPermissionMode.ReadOnly),
+      ),
       events.filterIsInstance<ChatEvent.SuggestedActions>().single().actions,
     )
     assertEquals(ChatEvent.Completed, events.last())
-    assertEquals(listOf("chat.action_invalid"), diagnostics.categories)
+    assertTrue(diagnostics.categories.isEmpty())
   }
 
   @Test

@@ -11,6 +11,7 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -43,7 +44,8 @@ class FeatureTaskRuntimeAuditSessionResumeTest {
                 """.trimMargin(),
               )
             } else {
-              assertContains(prompt, partial)
+              assertFalse(prompt.contains(partial))
+              assertContains(prompt, "Its edits are in the working tree or checkpoint commits.")
               assertContains(prompt, "Resume the saved audit repair")
               facts(defaultPhaseOutput(request))
             }

@@ -105,7 +105,7 @@ public class WorkBoardItemProjection(
     catchingNonCancellation {
       items.map { item ->
         item.copy(
-          build = buildView(item.snapshot.execution?.invocationId ?: item.snapshot.workflowId, item.running, now),
+          build = buildView(item.snapshot, item.running, now),
         )
       }
     }.getOrElse { error ->
@@ -123,7 +123,7 @@ public class WorkBoardItemProjection(
   ): WorkDetailItem =
     catchingNonCancellation {
       item.copy(
-        build = buildView(item.snapshot.execution?.invocationId ?: item.snapshot.workflowId, item.running, now),
+        build = buildView(item.snapshot, item.running, now),
       )
     }.getOrElse { error ->
       RuntimeDiagnosticsBestEffortWarning.record(
@@ -135,14 +135,23 @@ public class WorkBoardItemProjection(
     }
 
   private fun buildView(
-    runId: String?,
+    snapshot: IdeStatusSnapshot,
     running: Boolean,
     now: Instant,
   ): WorkBuildView? {
-    if (runId == null) return null
+    val runId = snapshot.execution?.invocationId ?: snapshot.workflowId ?: return null
     val row = buildRunRepository.latestForRun(setOf(runId)) ?: return null
     val history = buildRunRepository.history(row.repositoryIdentity, row.command, row.startedAt)
-    return workBuildView(row, history, running, now)
+    val builds =
+      buildRunRepository.buildsForRun(setOf(runId)).filter { build ->
+        val subtask = snapshot.currentSubtask
+        subtask == null || subtask.startedAt?.let { build.startedAt >= it } == true
+      }
+    val total = totalBuildElapsedMs(builds, running, now)
+    return workBuildView(row, history, running, now).copy(
+      totalElapsedMs = total,
+      totalElapsedAsOf = now.takeIf { total != null && running && builds.any { it.endedAt == null } },
+    )
   }
 
   internal fun projectBoardCandidate(
@@ -202,6 +211,7 @@ public class WorkBoardItemProjection(
             observedAt,
             resolved.item,
             error.message.orEmpty(),
+            resolved.workflowExecution?.primaryRepositoryRoot,
           )
         ideStatusValidator.validate(snapshot, "work-board:$id")
         WorkBoardItem(
@@ -561,6 +571,7 @@ public class WorkBoardItemProjection(
             ),
           branchCorrelation = record.branchCorrelation,
           standaloneStatus = record,
+          primaryRepositoryRoot = record.primaryRepositoryRoot,
         )
       }.orEmpty()
     val standaloneWorkflowIds = standaloneRecords.mapNotNull { it.workflowId }.toSet()
@@ -651,14 +662,15 @@ public class WorkBoardItemProjection(
       }
     val branchCorrelation =
       projector.goalBranchCorrelation(item, family, workflowExecution?.branchCorrelation, branch, repository.repoRoot)
+    val selectedWorkflowExecution =
+      workflowExecution?.takeIf {
+        family != IdeStatusWorkflowFamily.FEATURE_VERIFY ||
+          branch == null ||
+          branchCorrelation == branch ||
+          branchCorrelation == "HEAD"
+      }
     val execution =
-      workflowExecution
-        ?.takeIf {
-          family != IdeStatusWorkflowFamily.FEATURE_VERIFY ||
-            branch == null ||
-            branchCorrelation == branch ||
-            branchCorrelation == "HEAD"
-        }
+      selectedWorkflowExecution
         ?.let { record ->
           IdeStatusExecutionIdentity(
             scope = IdeStatusExecutionScope.WORKFLOW,
@@ -680,6 +692,7 @@ public class WorkBoardItemProjection(
       isGoalAuthoritative = family == IdeStatusWorkflowFamily.FEATURE_GOAL,
       execution = execution,
       branchCorrelation = branchCorrelation,
+      primaryRepositoryRoot = selectedWorkflowExecution?.primaryRepositoryRoot,
     )
   }
 
@@ -1006,3 +1019,20 @@ private fun finishedBuildState(outcome: AgentBuildOutcome?): WorkBuildState =
     AgentBuildOutcome.FAILED -> WorkBuildState.FAILED
     AgentBuildOutcome.UNKNOWN, null -> WorkBuildState.FINISHED
   }
+
+private fun totalBuildElapsedMs(
+  builds: List<AgentBuildRun>,
+  running: Boolean,
+  now: Instant,
+): Long? {
+  if (builds.isEmpty()) return null
+  var end: Instant? = null
+  var total = 0L
+  for (build in builds.sortedBy { it.startedAt }) {
+    val until = build.endedAt ?: now.takeIf { running && build.outcome == null } ?: return null
+    val since = end?.takeIf { it > build.startedAt } ?: build.startedAt
+    if (until > since) total += Duration.between(since, until).toMillis()
+    if (end == null || until > end) end = until
+  }
+  return total
+}

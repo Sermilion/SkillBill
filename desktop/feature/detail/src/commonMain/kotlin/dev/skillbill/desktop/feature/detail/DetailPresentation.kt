@@ -7,7 +7,6 @@ import dev.skillbill.desktop.core.designsystem.detail.PipelineStep
 import dev.skillbill.desktop.core.designsystem.detail.PipelineStepState
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.domain.model.Detail
-import dev.skillbill.desktop.core.domain.model.GoalAssessmentState
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentVerification
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.PlanRunReport
@@ -112,22 +111,6 @@ internal fun subtaskSteps(item: WorkItem, detail: Detail, status: StatusKind, cu
   status == StatusKind.Completed || status == StatusKind.CompletedNoChange -> detail.stepPipeline.map { PipelineStep(it, PipelineStepState.Done) }
   current -> pipelineSteps(item, detail, detail.stepPipeline)
   else -> detail.stepPipeline.map { PipelineStep(it, PipelineStepState.Pending) }
-}
-
-private val ASSESSMENT_STEPS = setOf("goal_assessment", "goal_assessment_fix")
-
-/** The goal finish steps; a settled assessment completes its steps, and a skipped one shows them pending with a "skipped" tooltip. */
-internal fun goalFinishSteps(item: WorkItem, detail: Detail): List<PipelineStep> {
-  val state = detail.goalAssessment?.state
-  return pipelineSteps(item, detail, detail.goalFinishPipeline, goal = true).map { step ->
-    when {
-      step.label !in ASSESSMENT_STEPS -> step
-      state == GoalAssessmentState.Blocked -> PipelineStep(step.label, PipelineStepState.Failed, goal = true)
-      state == GoalAssessmentState.Completed -> PipelineStep(step.label, PipelineStepState.Done, goal = true)
-      state == GoalAssessmentState.Skipped -> PipelineStep(step.label, PipelineStepState.Pending, goal = true, tooltip = "skipped")
-      else -> step
-    }
-  }
 }
 
 internal fun goalAssessmentVerificationLabel(verification: GoalAssessmentVerification): String = when (verification) {

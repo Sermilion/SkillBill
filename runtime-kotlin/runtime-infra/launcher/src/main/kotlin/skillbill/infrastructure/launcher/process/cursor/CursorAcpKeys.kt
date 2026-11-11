@@ -75,6 +75,19 @@ internal object CursorAcpKeys {
   const val CURSOR_LOGIN = "cursor_login"
   const val ASK_QUESTION = "cursor/ask_question"
   const val CREATE_PLAN = "cursor/create_plan"
+  const val UPDATE_TODOS = "cursor/update_todos"
+  const val TASK = "cursor/task"
+  const val GENERATE_IMAGE = "cursor/generate_image"
+  const val TODOS = "todos"
+  const val ACCEPTED = "accepted"
+  const val COMPLETED = "completed"
+  const val GENERATED = "generated"
+  const val CANCELLED = "cancelled"
+  const val SKIPPED = "skipped"
+  const val SELECTED = "selected"
+  const val FILE_PATH = "filePath"
+  const val AGENT_ID = "agentId"
+  const val DURATION_MS = "durationMs"
 }
 
 internal enum class CursorPermissionKind(val wireValue: String) {

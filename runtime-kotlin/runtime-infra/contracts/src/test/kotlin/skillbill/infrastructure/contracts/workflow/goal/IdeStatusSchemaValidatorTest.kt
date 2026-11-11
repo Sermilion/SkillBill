@@ -1,6 +1,7 @@
 package skillbill.infrastructure.contracts.workflow.goal
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
+import skillbill.contracts.persistence.WorkBoardReadModelPayloadKeys
 import skillbill.contracts.workflow.identity.status.GOAL_PLANNING_WAVE_CAP
 import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
@@ -87,6 +88,40 @@ class IdeStatusSchemaValidatorTest {
     assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(malformed, "test-additional-property")
     }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
+  }
+
+  @Test
+  fun `primary repository root is optional but rejects malformed present values`() {
+    val compatible = validIdleSnapshot().toMutableMap()
+    compatible[WorkBoardReadModelPayloadKeys.PRIMARY_REPOSITORY_ROOT] = "/primary/repo"
+    IdeStatusSchemaValidator.validate(compatible, "test-primary-root")
+
+    listOf("", "   ", 42).forEach { invalidRoot ->
+      val malformed = validIdleSnapshot().toMutableMap()
+      malformed[WorkBoardReadModelPayloadKeys.PRIMARY_REPOSITORY_ROOT] = invalidRoot
+      assertFailsWith<SkillBillRuntimeException> {
+        IdeStatusSchemaValidator.validate(malformed, "test-primary-root-invalid")
+      }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
+    }
+    IdeStatusSchemaValidator.validate(validIdleSnapshot(), "test-primary-root-absent")
+
+    val snapshot =
+      IdeStatusSnapshot(
+        repositoryIdentity = "repo-root-realpath-v1:/repo",
+        lifecycleState = IdeStatusLifecycleState.IDLE,
+        currentStep = IdeStatusStep("none", "No work"),
+        updatedAt = Instant.EPOCH,
+        freshness = IdeStatusFreshness.UNKNOWN,
+        summary = "No matching work.",
+        title = "No matching work",
+        primaryRepositoryRoot = "/primary/repo",
+      )
+    val wire = IdeStatusSchemaValidator.wireMap(snapshot)
+    assertEquals("/primary/repo", wire[WorkBoardReadModelPayloadKeys.PRIMARY_REPOSITORY_ROOT])
+    assertFalse(
+      IdeStatusSchemaValidator.wireMap(snapshot.copy(primaryRepositoryRoot = null))
+        .containsKey(WorkBoardReadModelPayloadKeys.PRIMARY_REPOSITORY_ROOT),
+    )
   }
 
   @Test

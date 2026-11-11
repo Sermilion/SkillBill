@@ -72,7 +72,7 @@ internal fun ChatComposer(
   val gone by session.gone.collectAsState()
   val coordinationMode by session.coordinationMode.collectAsState()
   val id = session.id
-  val cursorMcpDependency = workspace.cursorMcpDependencies[id] ?: CursorMcpDependency.Unspecified
+  val cursorMcpDependency = workspace.cursorMcpDependencies[id] ?: CursorMcpDependency.ProjectUserOnly
   val choices by session.resumeChoices.collectAsState()
   val queued by session.queued.collectAsState()
   val delivery by session.thread.delivery.collectAsState()
@@ -127,7 +127,7 @@ internal fun ChatComposer(
       SbInput(
         text, {
           if (workspace.drafts[id] != it) {
-            workspace.cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
+            workspace.cursorMcpDependencies[id] = CursorMcpDependency.ProjectUserOnly
           }
           workspace.drafts[id] = it
         },
@@ -166,7 +166,10 @@ internal fun ChatComposer(
     if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       ModeBadge(ChatPermissionMode.Act)
-      AgentPicker(agent, workspace.agents, enabled = delivery == null && !busy && !gone) { workspace.switchAgent(id, it) }
+      AgentPicker(
+        agent, workspace.agents, session.item.repositoryRoot, enabled = delivery == null && !busy && !gone,
+        loadModels = workspace::models, onChooseModel = { workspace.switchModel(id, it) },
+      ) { workspace.switchAgent(id, it) }
       if (agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
         CursorMcpPicker(cursorMcpDependency, enabled = !gone) {
           workspace.cursorMcpDependencies[id] = it
@@ -217,7 +220,6 @@ internal fun CursorMcpPicker(
 ) {
   var open by remember { mutableStateOf(false) }
   val label = when (value) {
-    CursorMcpDependency.Unspecified -> "MCP scope: choose"
     CursorMcpDependency.ProjectUserOnly -> "MCP scope: project/user only"
     CursorMcpDependency.TeamDashboardRequired -> "MCP scope: team dashboard"
   }
@@ -228,14 +230,6 @@ internal fun CursorMcpPicker(
       SbPopover(expanded = true, onDismissRequest = { open = false }, placement = SbPopoverPlacement.Above) {
         SbMenu(
           listOf(
-            SbMenuEntry.Item(
-              "Choose later",
-              {
-                open = false
-                onChoose(CursorMcpDependency.Unspecified)
-              },
-              checked = value == CursorMcpDependency.Unspecified,
-            ),
             SbMenuEntry.Item(
               "Project/user configuration only",
               {
@@ -257,45 +251,4 @@ internal fun CursorMcpPicker(
       }
     }
   }
-}
-
-/** The agent chip; clicking it lists the agents the chat can switch to. */
-@Composable
-internal fun AgentPicker(agent: ChatAgent?, agents: List<String>, enabled: Boolean, disabledWhy: String? = null, onChoose: (String) -> Unit) {
-  var open by remember { mutableStateOf(false) }
-  val close = { open = false }
-  val canOpen = enabled && agents.isNotEmpty()
-  val why = disabledWhy.takeIf { !canOpen }
-  Box {
-    val chipModifier = Modifier.then(if (canOpen) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
-      .clickable(enabled = canOpen, onClickLabel = "Change agent") { open = true }
-      .then(if (why != null) Modifier.semantics { stateDescription = why } else Modifier)
-    val chip = @Composable {
-      SbLabel(
-        chipText(agent),
-        style = SbLabelStyle.Mono,
-        icon = LucideIcons.cpu,
-        maxWidth = 220.dp,
-        modifier = chipModifier,
-      )
-    }
-    if (why != null) SbTooltip(why) { chip() } else chip()
-    if (open && canOpen) {
-      ShellLayer(close)
-      SbPopover(expanded = true, onDismissRequest = close) {
-        SbMenu(
-          agents.map { choice ->
-            SbMenuEntry.Item(choice, { close(); onChoose(choice) }, checked = choice == agent?.agentId, mono = true)
-          },
-        )
-      }
-    }
-  }
-}
-
-internal fun chipText(agent: ChatAgent?): String = when {
-  agent == null -> "No agent"
-  agent.model == null -> "${agentName(agent)} · default"
-  agent.effort == null -> "${agentName(agent)} · ${agent.model}"
-  else -> "${agentName(agent)} · ${agent.model} · ${agent.effort}"
 }

@@ -358,13 +358,30 @@ runtime commit strategy and launches no agent. Details:
 
 ## Desktop new-task start
 
-New-task and execution chats add no tool restrictions, approval steps or
-workflow gates. Their prompts supply context and optional action-button
-formatting. The agent can carry out operator requests directly with its
-available tools, including shell commands and the skill-bill CLI. Button-only
-launches, issue-key acceptance in chat and pause-and-act are not prerequisites
-for direct tool use. Optional start buttons still use the desktop intake path
-below; runtime commands retain their own contracts.
+New-task chats make preparation a high priority for implementation work. The
+agent inspects the repository and connected context, discusses the outcome,
+scope, acceptance criteria, constraints and edge cases, and checks required
+infrastructure, tooling and access. It infers answers from evidence and batches
+material questions without repeating answered questions. Discussion and context
+gathering do not start a standalone planning run. Plan runs require an explicit
+operator request.
+
+Readiness advice is advisory. When an operator requests a goal or plan with
+unresolved material questions or blockers, the agent names them, explains their
+consequences, recommends resolving them first, and asks once whether to proceed.
+An explicit choice to proceed gets the requested start card without another
+readiness confirmation. Its instruction preserves unresolved questions, blockers
+and accepted assumptions alongside the requirements and resolved decisions. The
+agent never claims unchecked prerequisites are ready or invents unknowns to delay
+a ready task. Ready tasks need no extra readiness confirmation. This advice adds
+no app readiness state or launch gate, and standalone phases and operations keep
+their existing routes.
+
+The operator still accepts a complete issue key before a goal or plan card is
+offered and launches through the app's start card. A readiness override does not
+waive either requirement or authorize a goal launch through chat tools. Explicit
+requests to implement directly in chat use the agent's available tools without
+starting a goal. Execution chats keep their execution context and action rules.
 
 All provider launches default to native permission bypass, including execution
 and new-task chats, workflow phases, review workers and background summaries.
@@ -378,6 +395,13 @@ its existing headless review path remains autonomous. This policy supersedes
 the earlier default of routing every eligible permission prompt to the operator.
 Read-only phase instructions still constrain the requested work; they do not
 select a restrictive provider sandbox by default.
+
+Runtime launches outside chat approvals use the native headless CLIs. Skill-bill
+does not host their tool requests and must not add a deny, cancel, skip or
+unsupported-method response. The native harness owns tool execution and any
+provider refusal. Codex uses `exec` with native bypass, Cursor uses its print
+transport with force and trust flags, and Junie uses its headless text transport.
+Claude already uses its native print transport outside chat approvals.
 
 Approval cards apply only to chats. The chat broker remains connected for genuine
 permission requests a harness still emits. Runs launch through the runtime with
@@ -454,6 +478,9 @@ supplied briefing without starting standalone phase or operation commands.
 or `--qa-device avd:<name>`. The option is refused on other phases and never
 becomes intake text or an acceptance criterion. A goal uses the device only from
 its current launch. Resuming it without the option lets QA choose a device.
+`skill-bill operation verify` accepts the same option only with `qa:on`; the
+proposal stores it as `input_context.qa_device`, its QA step uses it after
+confirm, and a confirm naming another device is refused.
 
 Validation runs the project's required checks and fixes every failure in the same
 session, including build failures. It may run repository build and packaging commands,
@@ -528,7 +555,7 @@ must have completed successfully. Missing, pending, cancelled, skipped, failed, 
 unreadable results block before tagging, and the confirmation token stays available
 while admission is blocked. Release builds for another commit do not satisfy this gate.
 
-`skill-bill operation <update-check|release|unit-test-value-check|feature-guard|feature-guard-cleanup|pr-review-fix|verify>` runs one runtime operation with no feature-task workflow. `release` confirms in two invocations. The first stores the proposed version and changelog and exits `awaiting_confirmation` with a token. `confirm:<token>` then tags and pushes exactly the stored proposal, once. `unit-test-value-check` is a read-only report over the current changes or `scope:` and needs no confirmation. `feature-guard` and `feature-guard-cleanup` confirm the same way as `release`. Their first invocation changes no file and stores a plan anchored on HEAD and the current branch. Only `confirm:<token>` edits. After confirm, cleanup runs the `validation` definition. `pr-review-fix [mode:local|remote] [<pr>]` defaults to local mode, which proposes a per-thread matrix over the current branch's open local diff comment threads. Confirmation fixes selected threads, runs `validation`, replies with outcome-driven state, and commits without pushing. It refuses protected branches and dirty worktrees. Remote mode retains today's GitHub flow over PR review threads and pushes only with `push:on`; `push:` and `replies:` apply only to remote mode, and a PR reference requires `mode:remote`. `verify <intake> [target:<pr|branch|base..head>] [mode:inline|delegated] [qa:on|off]` is report-only. Its intake is free text (a Linear issue key or URL, or the requirements themselves) or `spec:<path>`, and an omitted target verifies HEAD against `origin/HEAD`. It parks a verify workflow (stored `workflow_name` `bill-feature-verify`) at the extracted criteria and exits `awaiting_confirmation`, with the workflow id as the token. `confirm:<token>` runs the audits, the review, and the verdict on that workflow. `qa:` defaults to `off` and only `operation:verify` accepts it; a duplicate, conflicting, or unknown value is a usage error. The proposal names the selection, the workflow stores it as `input_context.qa_selection`, and a confirm that asks for a different value is refused. `off` writes a `disabled_policy` QA skip report without probing a device or launching an agent. `on` runs report-only QA after the completeness audit in the temporary QA checkout at the target head, removes the QA checkout on every exit (a failed removal is recorded with manual cleanup guidance), and never changes the operator's checkout, HEAD, or target. QA problems never fail verify: a QA checkout that cannot be created settles `skipped` with `isolation_unavailable`, and an unreadable report or a stopped QA agent settles `incomplete`. An unqualified `APPROVE` against open QA findings is recorded as `APPROVE WITH FIXES` with a warning, and a skipped or incomplete QA run, and every QA warning, is reported as untested coverage. The report and `feature_verify_finished` telemetry carry `qa_outcome` (`not_selected`, `attempted`, `passed`, `findings`, `skipped`, or `incomplete`) and `qa_reason`. The MCP `feature_verify_workflow_*` tools read and update the same `input_context.qa_selection`.
+`skill-bill operation <update-check|release|unit-test-value-check|feature-guard|feature-guard-cleanup|pr-review-fix|verify>` runs one runtime operation with no feature-task workflow. `release` confirms in two invocations. The first stores the proposed version and changelog and exits `awaiting_confirmation` with a token. `confirm:<token>` then tags and pushes exactly the stored proposal, once. `unit-test-value-check` is a read-only report over the current changes or `scope:` and needs no confirmation. `feature-guard` and `feature-guard-cleanup` confirm the same way as `release`. Their first invocation changes no file and stores a plan anchored on HEAD and the current branch. Only `confirm:<token>` edits. After confirm, cleanup runs the `validation` definition. `pr-review-fix [mode:local|remote] [<pr>]` defaults to local mode, which proposes a per-thread matrix over the current branch's open local diff comment threads. Confirmation fixes selected threads, runs `validation`, replies with outcome-driven state, and commits without pushing. It refuses protected branches and dirty worktrees. Remote mode retains today's GitHub flow over PR review threads and pushes only with `push:on`; `push:` and `replies:` apply only to remote mode, and a PR reference requires `mode:remote`. `verify <intake> [target:<pr|branch|base..head>] [mode:inline|delegated] [qa:on|off]` is report-only. Its intake is free text (a Linear issue key or URL, or the requirements themselves) or `spec:<path>`, and an omitted target verifies HEAD against `origin/HEAD`. It parks a verify workflow (stored `workflow_name` `bill-feature-verify`) at the extracted criteria and exits `awaiting_confirmation`, with the workflow id as the token. `confirm:<token>` runs the audits, the review, and the verdict on that workflow. `qa:` defaults to `off` and only `operation:verify` accepts it; a duplicate, conflicting, or unknown value is a usage error. The proposal names the selection, the workflow stores it as `input_context.qa_selection`, and a confirm that asks for a different value is refused. `off` writes a `disabled_policy` QA skip report without probing a device or launching an agent. `on` runs report-only QA after the completeness audit in the temporary QA checkout at the target head, removes the QA checkout on every exit (a failed removal is recorded with manual cleanup guidance), and never changes the operator's checkout, HEAD, or target. QA problems never fail verify: a QA checkout that cannot be created settles `skipped` with `isolation_unavailable`, and an unreadable report or a stopped QA agent settles `incomplete`. An unqualified `APPROVE` against open QA findings is recorded as `APPROVE WITH FIXES` with a warning, and a skipped or incomplete QA run, and every QA warning, is reported as untested coverage. The report and `feature_verify_finished` telemetry carry `qa_outcome` (`not_selected`, `attempted`, `passed`, `findings`, `skipped`, or `incomplete`) and `qa_reason`. The MCP `feature_verify_workflow_*` tools read and update the same `input_context.qa_selection`. A desktop verify start passes its QA and review-mode choices as separate `qa:` and `mode:` arguments, never inside the intake, and adds the settings QA device when QA is on. Changing either choice on the proposal card starts a replacement proposal, because confirm cannot change them.
 
 The retired skills (`bill-feature`, `bill-feature-spec`, `bill-code-review`, `bill-code-check`, `bill-feature-verify`, `bill-monitor`, and the rest) are not installed; an install over an old home removes their links and copies. Telemetry `skill` values, the verify `workflow_name`, the workflow skill label, and the quality-check `routed_skill` (`bill-code-check`) keep their retired names because remote telemetry and stored rows key on them. Never tell an agent or operator to invoke a retired skill.
 
@@ -589,6 +616,17 @@ and keeps the goal branch. It retains worktrees with `dirty_worktree`,
 or `cleanup_failed`. `goal status` shows the path, reason, detail, and the exact
 `git worktree remove --force <path>` command. `goal purge` refuses when a retained
 worktree has work. A goal branch checked out in another checkout blocks the goal.
+
+A goal child requires evidence only for its own acceptance criteria and completed
+dependencies. Planning must order migration and evidence acquisition before strict
+consumer activation, or keep existing entry points compatible until adoption.
+Audit, review, finding verification, and validation must not demand work or evidence
+explicitly assigned to a later subtask. They trace each alleged gap to its owning
+criterion and subtask, and retain deferred work as context without claiming it is
+complete. Current regressions still require repair and every required project check
+still runs. A child must keep existing callers and persisted data usable; deferral
+never waives failures or weakens evidence rules. Final goal assessment requires all
+parent outcomes after the subtasks finish.
 
 Every non-skipped goal child runs `audit -> review -> validate -> write_history`, so each subtask runs the full project validation gate and records its own validation result. Goal children no longer run `qa` or `qa_fix`. After every child completes, goal finalization runs `goal_assessment -> build -> qa when enabled and build usable -> validate -> write_history -> commit_push -> pr -> monitor`. The goal-level build is the initial compile-only cycle after assessment; it does not make build mandatory for every standalone phase or child launch. The build-selection rules below still govern standalone and child execution.
 
@@ -754,12 +792,31 @@ existing recovery paths.
 
 ## Planning implementability
 
+Bundle planning divides broad criteria into smaller, independently verifiable pieces of the same
+production work. Prefer five focused criteria over fewer broad ones when that split is coherent.
+The split changes acceptance granularity while preserving requirements and the subtask boundary.
+Requirements and execution boundaries determine scope before criterion counts. Planning never expands
+scope or moves work between subtasks merely to reach five criteria. Fewer criteria are appropriate
+when further splitting would duplicate outcomes, separate tightly
+coupled work, or invent scope. Five is a preference within the existing one-to-five limit, not a
+minimum or a target number of subtasks. Test obligations remain separate from acceptance criteria.
+
 Preplan checks prerequisite capabilities against authoritative contracts and owning
 source. Bundle planning reconciles requirements across subtasks, and each subtask
 planner checks its final tasks against that evidence before declaring them ready.
 The shared runtime instruction is `slot/plan/planning-feasibility.md` in the engine
 resources; preplan, bundle planning and subtask planning all receive its body,
 including the model-specific strategy variants.
+
+Planning keeps a concise component inventory in its existing digest and implementation
+plan. It distinguishes existing behavior, authorized local components to build or extend,
+and unavailable external capabilities. Every missing local component has an implementation
+owner, consuming criteria and dependency order. Criterion sizing includes that work,
+caller wiring, contracts and required migrations, even when their files do not exist yet.
+Shared prerequisites have one implementation owner and precede dependent behavior;
+decomposition preserves usable intermediate states. Missing assigned code is implementation
+work and does not by itself justify a block. Planners reconcile this inventory against
+the final tasks before declaring them ready. This adds no output schema or runtime gate.
 
 The digest is the starting evidence, not a prohibition on resolving a critical gap.
 Planning may use targeted read-only lookups for a missing or contradictory fact that
@@ -805,57 +862,39 @@ precisely timed concurrent writers, and failures that end in a clear error witho
 data loss are not gaps. They never keep a criterion open and are mentioned at most
 as non-blocking notes.
 
-`audit_plan_fix` is a read-only reasoning step. Its prose plan covers the selected
-criterion's remaining defect class: the latest gap plus sibling production paths of
-the same forbidden pattern. Every planned item must be a material gap. The plan names
-reported cases it leaves out as immaterial and adds no code for them. A repair may include shared
-prerequisite edits, but those edits do not accept another criterion. Each reserved
-repair cycle records at most one unsuccessful outcome. Every repair implementation
-that leaves the selected criterion unfinished consumes one unsuccessful attempt,
-including a report with verdict `progress` or `no_progress`, whether or not that
-round changed source files. Saved edits and reports remain available to the next
-attempt, which receives a new reservation and repair plan.
-A retryable block first goes to read-only report admission. That admission returns
-`progress` for unfinished implementation, `satisfied` for a completed repair awaiting
-independent source verification, or `advance` for a concrete external obstacle.
-Both `progress` and `advance` consume the attempt. An agent stopping after one
-partial edit is not an external obstacle.
-A completed repair claim with an explicit verdict `completed` or `satisfied`
-goes directly to independent source verification. A repair report with an omitted
-or unrecognized verdict first goes through the same read-only report admission,
-whether submitted through the completion tool or captured from final prose.
-An unfinished report is recorded as incomplete against its original reservation
-and returns to repair planning; missing metadata never establishes completion.
-A verifier's `progress` verdict
-rejects that completion claim and consumes one unsuccessful outcome.
-The third unsuccessful outcome blocks that criterion. Explicit operator resume of
-the blocked goal resets the active failure counts to zero and grants three new
-outcomes per criterion, while retaining prior outcome identities and source evidence.
-An ordinary state reload does not reset the budget. A successful outcome closes source work for it
-without erasing earlier failures.
+`audit_plan_fix` plans the current criterion's open gaps. The runtime runs criteria
+one at a time in catalog order through plan, repair and verify. It plans once for a
+criterion, then plans again only after escalation. Reopening a closed criterion or
+adding discovery gaps starts a new pass and requires a fresh plan. Operator retry
+keeps the current plan. If a plan finishes but its state update does not commit, the
+runtime runs that plan again.
 
-Finding gaps and routing to repair are normal transitions and consume no repair
-budget. Closing one criterion and selecting the next also consumes no budget.
-Each criterion has its own allowance of three unsuccessful repair outcomes. If
-AC-002 fails verification once and passes after its second repair, AC-003 starts
-with zero failures used and three available. AC-002's failure remains in history
-and does not reduce AC-003's allowance. Phase execution counts identify launches;
-they are not the per-criterion repair budget. The desktop audit header shows the
-current criterion's repair attempt, which advances after an unsuccessful repair
-outcome and starts at one for the next criterion. Phase chips always show only
-their phase names, including active and skipped phases.
+Each open gap has an id such as `AC-002.G1`. Repair receives the current criterion,
+its open gaps, its plan and the latest verify result. Verify is read-only. It reports
+each open gap as closed or open, and may add a gap only for a file the repair changed.
+Other observations become late findings for code review and do not keep the
+criterion open. A repair that reports remaining work goes to verify.
+
+An attempt is charged only when the number of open gaps did not decrease. Each
+criterion has three charged attempts. After two charged attempts, repairs use the
+provider's reasoning tier. If no reasoning tier is configured, the runtime keeps the
+current model and records a diagnostic. The third charge blocks with a reason that
+names the criterion, its open gaps and the attempts. An operator retry resets only
+that criterion. Legitimate worker blocks remain valid outcomes. Nothing builds or
+tests between repair and verify. Older workflows resume through one discovery audit.
+
+Finding gaps, planning and routing do not consume repair budget. Closing one
+criterion and selecting the next also consumes no budget. Phase execution counts
+identify launches; they are not the per-criterion repair budget. Source acceptance
+does not say that tests, build or other project-quality work ran. Those obligations
+stay in their existing review, build and validation phases.
 
 Only the initial discovery audits the whole authored set. After it, the runtime
-settles one criterion at a time and trusts each settled result: an accepted
-criterion is never re-checked, and no full audit runs again. When the focused
-queue is empty, every criterion is accepted and the run moves on to review. Source
-acceptance does not say that tests, build, or other project-quality work ran.
-Those obligations stay in their existing review, build, and validation phases.
+settles one criterion at a time. Older workflows resume through one discovery audit.
 Status and detail readers report committed facts only. Older aggregate attempts
 without criterion attribution remain unavailable, not zero. Starting prospective
-per-criterion accounting for such a workflow requires a separate explicit
-operator decision. Audit, repair planning, and source repair do not run builds or
-tests.
+per-criterion accounting for such a workflow requires a separate explicit operator
+decision. Audit, repair planning, source repair and verify do not run builds or tests.
 
 When a completed phase cannot be admitted, the block report retains the rejected
 completion's reason and attempt. A changed or unreadable bound spec names its
@@ -881,3 +920,29 @@ Both packaged runtime entry points accept `--check-packaged-contracts`. This
 database-free check compares producer pins with resources inside that candidate
 image. Installation stages CLI and MCP candidates and checks both before
 promoting either image. A parity failure leaves both installed runtimes intact.
+
+## Bundle feasibility before implementation
+
+After `plan_subtasks` writes the implementation details, a fresh review checks the whole bundle against
+its dependency order. Every criterion must describe a passing state achievable with that subtask and
+its declared earlier dependencies. Scope and non-goals cannot forbid required wiring, migration,
+evidence capture, or validation repairs. Strict consumers stay compatible or inactive until their
+migration and evidence producers are available.
+
+The runtime requires approval of every criterion and binds it to the parent, immutable manifest fields,
+and full subtask text. Missing, partial, malformed, or stale approval cannot release implementation.
+A contradiction returns the pending specs to a planning repair session, then a fresh read-only review.
+This uses the existing bounded planning correction budget. Repair preserves parent bytes, manifest,
+completed and skipped specs, execution identities, commits, and history. An unrepairable conflict blocks
+with its clauses and missing prerequisite. Old completed plans remain readable and reopen planning for
+review before implementation; their unit plans and completed work remain intact. Execution status
+updates alone do not invalidate approval.
+
+## Interrupted legacy planning adoption
+
+Goal continuation reopens an ownerless planning workflow when compatibility adoption
+left `plan_subtasks` pending but the workflow marked running. It preserves phase
+records, accepted unit plans and feasibility history, and rebases the bundle snapshot
+before the required fresh feasibility review. Repeating continuation does not add
+another adoption or discard completed work. A worker ownership record, an active
+feasibility launch, or a running phase still refuses this recovery.

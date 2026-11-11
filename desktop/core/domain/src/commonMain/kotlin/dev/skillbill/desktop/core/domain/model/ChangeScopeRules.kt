@@ -28,14 +28,17 @@ fun chatScopeTarget(
   repositoryRoot: String,
   baseline: ChatChangesBaseline,
   timeline: ChangeScopeTimeline,
+  paths: Set<String>?,
+  comparisonBaseSha: String? = null,
 ): ChangeScopeTarget = ChangeScopeTarget(
   workId = "chat:" + sessionId,
   worktreeRoot = repositoryRoot,
-  allBaseline = ChangeBaseline.RunStart(repositoryRoot, baseline.stashSha ?: baseline.headSha, baseline.untrackedPaths),
+  allBaseline = ChangeBaseline.RunStart(repositoryRoot, comparisonBaseSha ?: baseline.stashSha ?: baseline.headSha, baseline.untrackedPaths),
   subtasks = emptyList(),
   rangesSupported = false,
   timeline = timeline,
   chat = true,
+  paths = paths,
 )
 
 fun availableScopes(target: ChangeScopeTarget): Set<ScopeKind> {

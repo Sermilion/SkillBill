@@ -11,6 +11,7 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutco
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
+import skillbill.workflow.taskruntime.model.audit.admitQaReaudit
 import skillbill.workflow.taskruntime.model.audit.recordProseAudit
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -19,61 +20,59 @@ import kotlin.test.assertNotNull
 
 class AcceptanceCriterionRepairRunStateTest {
   @Test
-  fun `later repair prompts retain earlier rejection reasons across budget reset without leaking other criteria`() {
+  fun `repair prompts omit earlier rejection reports and expose only focused inputs`() {
     var state = initialState()
-    val reasons =
-      listOf(
-        "A display title is not the original finding section.",
-        "Synthetic markdown changes the original report text.",
-        "Legacy metadata cannot reconstruct unavailable prose.",
-        "Readable retained report text must precede metadata fallback.",
-        "Receipt JSON is not an original prose report.",
-      )
-    reasons.forEachIndexed { index, reason ->
-      if (index == 3) {
-        val beforeResume = context(state)
-        state = state.resetBudgetForOperatorResume()
-        val afterResume = context(assertNotNull(AcceptanceCriterionRepairState.restore(state)))
-        reasons.take(3).forEach {
-          assertContains(beforeResume, it)
-          assertContains(afterResume, it)
-        }
-      }
-      state = outcome(state, index + 1, reason, AcceptanceCriterionRepairOutcomeKind.TARGETED_FAILURE)
-    }
-    val current = context(state)
-    reasons.take(
-      2,
-    ).forEach { assertFalse(current.contains(it), "older history stays outside the three recent outcomes") }
-    reasons.drop(2).forEach { assertContains(current, it) }
+    val older = "A display title is not the original finding section."
+    val latest = "The original report still loses its body."
+    state = outcome(state, 1, older, AcceptanceCriterionRepairOutcomeKind.TARGETED_FAILURE)
+    state = outcome(state, 2, latest, AcceptanceCriterionRepairOutcomeKind.TARGETED_FAILURE)
+    val focus = assertNotNull(scope(state.resetBudgetForOperatorResume()).promptFocus)
     listOf("audit_plan_fix", "audit_implement_fix").forEach { phase ->
       val prompt =
         composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor(phase)) {
-          copy(
-            currentAcceptanceCriterion = scope(state).currentCriterionContext,
-            priorAcceptanceRepairFailures = scope(state).priorRepairFailures,
-          )
+          copy(acceptanceRepairFocus = focus)
         }
-      reasons.drop(2).forEach { assertContains(prompt, it) }
+      assertContains(prompt, "AC-001")
+      assertContains(prompt, "AC-001.G1: Preserve the report body. @ src/Report.kt:1")
+      assertContains(prompt, latest)
+      assertContains(prompt, AcceptanceRepairPromptFocus.CHECKPOINT_GUIDANCE)
+      assertContains(prompt, AcceptanceRepairPromptFocus.VERIFY_GUIDANCE)
+      assertFalse(prompt.contains(older))
+      assertFalse(prompt.contains("AC-001.G2: Render the title."))
+      assertFalse(prompt.contains("AC-002.G1:"))
+      assertFalse(prompt.contains("charged attempts:"))
     }
+  }
 
-    state =
-      outcome(
-        state,
-        6,
-        "The original report reaches the consumer unchanged.",
-        AcceptanceCriterionRepairOutcomeKind.TARGETED_SUCCESS,
+  @Test
+  fun `a reopened criterion excludes verify evidence from its earlier pass`() {
+    var state =
+      outcome(initialState(), 1, "Earlier failed verify.", AcceptanceCriterionRepairOutcomeKind.TARGETED_FAILURE)
+    state = outcome(state, 2, "First criterion closed.", AcceptanceCriterionRepairOutcomeKind.TARGETED_SUCCESS)
+    state = outcome(state, 3, "Second criterion closed.", AcceptanceCriterionRepairOutcomeKind.TARGETED_SUCCESS)
+    val rechecking = assertNotNull(state.admitQaReaudit(listOf("AC-001")))
+    val reopened =
+      assertNotNull(
+        rechecking.recordProseAudit(
+          AcceptanceCriterionProseAudit(
+            "reopen",
+            rechecking.revision + 1,
+            "AC-001",
+            false,
+            "f".repeat(64),
+            "The report body regressed.",
+            "c".repeat(64),
+            "reopen-checkpoint",
+          ),
+        ),
       )
-    val next = context(state)
-    assertContains(next, "criterion AC-002")
-    reasons.forEach { assertFalse(next.contains(it), "AC-001 history must not become AC-002 repair scope") }
+    val prompt = assertNotNull(scope(reopened).promptFocus).render()
+    assertContains(prompt, "No verify has run for this criterion yet.")
+    assertFalse(prompt.contains("Earlier failed verify."))
   }
 
   private fun scope(state: AcceptanceCriterionRepairState): AcceptanceCriterionRepairRunState =
     AcceptanceCriterionRepairRunState(AcceptanceCriterionRepairHydration.Present(state))
-
-  private fun context(state: AcceptanceCriterionRepairState): String =
-    scope(state).let { assertNotNull(it.priorRepairFailures ?: it.currentCriterionContext) }
 
   private fun initialState(): AcceptanceCriterionRepairState {
     val criteria = listOf("Preserve original report text.", "Display the report.")
@@ -109,7 +108,10 @@ class AcceptanceCriterionRepairRunStateTest {
           null,
           false,
           "b".repeat(64),
-          "Open criteria: AC-001, AC-002",
+          "Open criteria: AC-001, AC-002\n" +
+            "AC-001.G1: Preserve the report body. @ src/Report.kt:1\n" +
+            "AC-001.G2: Render the title. @ src/Report.kt:2\n" +
+            "AC-002.G1: Display the report. @ src/Display.kt:1",
           "c".repeat(64),
           "checkpoint",
         ),
@@ -142,7 +144,12 @@ class AcceptanceCriterionRepairRunStateTest {
           assertNotNull(state.currentCriterionRef),
           "e".repeat(64),
           kind,
-          evidence,
+          if (kind == AcceptanceCriterionRepairOutcomeKind.TARGETED_SUCCESS) {
+            "$evidence\n${state.currentCriterionRef}.G1: closed @ src/Report.kt:1\n" +
+              if (state.currentCriterionRef == "AC-001") "AC-001.G2: closed @ src/Report.kt:2" else ""
+          } else {
+            "$evidence\nAC-001.G2: closed @ src/Report.kt:2"
+          },
         ),
       ),
     )

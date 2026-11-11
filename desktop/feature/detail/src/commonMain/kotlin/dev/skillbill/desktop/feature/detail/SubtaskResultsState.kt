@@ -30,7 +30,11 @@ internal sealed interface SubtaskReviewState {
  * never selects a skipped subtask, so its entry would never arrive.
  */
 internal fun subtaskResultsState(kind: StatusKind, results: SubtaskPhaseResults?, goalStatusSource: String?): SubtaskResultsState {
-  results?.degradedReadSource?.let { return SubtaskResultsState.Unreadable(it) }
+  results?.degradedReadSource?.let { source ->
+    val unavailableHistory = source == "subtask_audit_history" &&
+      results.auditResult?.attempts?.any { it.unavailableReason != null } == true
+    if (!unavailableHistory) return SubtaskResultsState.Unreadable(source)
+  }
   if (results == null && kind != StatusKind.Pending && goalStatusSource != null) return SubtaskResultsState.Unreadable(goalStatusSource)
   if (results == null && kind != StatusKind.Pending && kind != StatusKind.Skipped) return SubtaskResultsState.Loading
   val upcoming = kind == StatusKind.Pending || kind == StatusKind.Active || kind == StatusKind.Blocked

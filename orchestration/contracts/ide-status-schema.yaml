@@ -32,6 +32,11 @@ properties:
     minLength: 1
     maxLength: 256
     description: "The checked-out branch correlated with an execution-bearing snapshot."
+  primary_repository_root:
+    type: string
+    minLength: 1
+    pattern: "\\S"
+    description: "Captured canonical root of the primary checkout, when known."
   issue_key:
     type: string
     minLength: 1

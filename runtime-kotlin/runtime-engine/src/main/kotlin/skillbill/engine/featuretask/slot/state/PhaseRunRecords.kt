@@ -8,6 +8,9 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProducerOutputRead
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
+import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityRepairAppliedWrite
+import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWrite
+import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWriteResult
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeNoChangePausePort
@@ -31,6 +34,7 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplem
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
@@ -108,7 +112,17 @@ public data class FeatureTaskRuntimeImplementationTurnWrite(
 )
 
 /** The plan bundle snapshot and decompose terminal records planning makes for one run. */
-public interface PhasePlanRecords {
+public interface PhaseFeasibilityRecords {
+  public fun loadPlanBundleFeasibility(workflowId: String): FeatureTaskRuntimePlanBundleFeasibilityState?
+
+  public fun writePlanBundleFeasibility(request: PlanBundleFeasibilityStateWrite): PlanBundleFeasibilityStateWriteResult
+
+  public fun recordFeasibilityRepairApplied(
+    request: PlanBundleFeasibilityRepairAppliedWrite,
+  ): PlanBundleFeasibilityStateWriteResult
+}
+
+public interface PhasePlanRecords : PhaseFeasibilityRecords {
   /** The decompose terminal planning recorded for [workflowId], if the run decomposed. */
   public fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal?
 

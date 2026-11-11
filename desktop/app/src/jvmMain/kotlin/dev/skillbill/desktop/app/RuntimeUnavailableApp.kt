@@ -36,7 +36,7 @@ fun runRuntimeUnavailable(runtimeRoot: String, appRecordPath: String): Array<Str
         runtimeJars = installation.runtimeJars.map(Path::toString).toTypedArray()
         exitApplication()
       }
-      is RuntimeAvailability.Unavailable -> Window(onCloseRequest = ::exitApplication, title = "Skill Bill", icon = skillBillIcon()) {
+      is RuntimeAvailability.Unavailable -> Window(onCloseRequest = ::exitApplication, title = "Sona", icon = skillBillIcon()) {
         SkillBillTheme(reducedMotion = false) {
           ShellFrame(sidebar = null, drawerMode = false, drawerOpen = false, onDismissDrawer = {}) {
             // No sidebar here, so the state sits in the content panel inset 8 dp on every side, as the main window's panel.

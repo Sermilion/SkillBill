@@ -24,6 +24,7 @@ import skillbill.engine.work.control.model.NewTaskStartResult
 import skillbill.engine.work.control.model.OperationStartRequest
 import skillbill.engine.work.control.model.StandaloneCheckout
 import skillbill.engine.work.control.model.StandalonePhaseRequest
+import skillbill.engine.work.control.model.VerifyStartOptions
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.operation.EmptyOperationCardRepository
@@ -45,6 +46,8 @@ import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.verify.model.VerifyQaSelection
+import skillbill.workflow.verify.model.VerifyReviewMode
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
@@ -465,6 +468,70 @@ class WorkNewTaskStartTest {
       ),
       launcher.lastArgs(),
     )
+  }
+
+  @Test
+  fun `verify options launch as their own arguments and a qa token inside the intake stays free text`() {
+    val result =
+      subject.startOperation(
+        repoRoot,
+        OperationStartRequest(
+          "verify",
+          "WE-5046 qa:on",
+          "claude",
+          verifyOptions =
+            VerifyStartOptions(
+              VerifyQaSelection.ON,
+              VerifyReviewMode.DELEGATED,
+              QaNamedDevice(QaNamedDeviceKind.AVD, "Pixel_10_Pro"),
+            ),
+        ),
+      )
+
+    assertEquals(NewTaskStartResult.Started, result)
+    assertEquals(
+      listOf(
+        "operation",
+        "verify",
+        "WE-5046 qa:on",
+        "qa:on",
+        "mode:delegated",
+        "--agent",
+        "claude",
+        "--qa-device",
+        "avd:Pixel_10_Pro",
+      ),
+      launcher.lastArgs(),
+    )
+  }
+
+  @Test
+  fun `verify options are refused for other operations and a QA device needs QA on`() {
+    val device = QaNamedDevice(QaNamedDeviceKind.SERIAL, "emulator-5554")
+    val otherOperation =
+      subject.startOperation(
+        repoRoot,
+        OperationStartRequest(
+          "pr-review-fix",
+          null,
+          "claude",
+          verifyOptions = VerifyStartOptions(qa = VerifyQaSelection.ON),
+        ),
+      )
+    val deviceWithoutQa =
+      subject.startOperation(
+        repoRoot,
+        OperationStartRequest(
+          "verify",
+          "WE-5046",
+          "claude",
+          verifyOptions = VerifyStartOptions(VerifyQaSelection.OFF, qaDevice = device),
+        ),
+      )
+
+    assertIs<NewTaskStartResult.Refused>(otherOperation)
+    assertIs<NewTaskStartResult.Refused>(deviceWithoutQa)
+    assertEquals(0, launcher.calls)
   }
 
   @Test

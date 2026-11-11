@@ -72,6 +72,9 @@ class FeatureTaskRuntimeQaExecutionTest {
           assertEquals(Path.of(QA_TEST_QA_ROOT, preview.invocationId).toString(), preview.invocationDirectory)
           assertEquals(listOf("android"), preview.targets)
           assertTrue(preview.active)
+          val occurrence = assertNotNull(fixture.storedQaOutcome()?.details?.occurrences?.single())
+          assertEquals(1, occurrence.phaseAttempt)
+          assertEquals(preview.invocationId, occurrence.workspaceInvocationId)
           throw CancellationException("stop during QA")
         }
       })
@@ -80,6 +83,36 @@ class FeatureTaskRuntimeQaExecutionTest {
 
     assertFalse(assertNotNull(fixture.storedQaOutcome()?.details?.preview).active)
     assertEquals(listOf("qa-test-invocation"), fixture.workspaces.closedInvocations)
+  }
+
+  @Test
+  fun `resumed QA attributes replacement workspaces to the newly acknowledged phase attempt`() {
+    lateinit var fixture: Fixture
+    var invocation = 0
+    val attempts = mutableListOf<Int>()
+    fixture =
+      fixture(
+        QaVerdict.PASSED,
+        onPhase = { phase ->
+          if (phase == "qa") {
+            val details = assertNotNull(fixture.storedQaOutcome()?.details)
+            val current = details.occurrences.last()
+            val record = assertNotNull(fixture.harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("qa"))
+            assertEquals(record.attemptCount, current.phaseAttempt)
+            assertEquals(details.preview?.invocationId, current.workspaceInvocationId)
+            attempts += assertNotNull(current.phaseAttempt)
+            throw CancellationException("restart QA")
+          }
+        },
+        ports = QaFixturePorts(identifiers = IdentifierGeneratorPort { "restart-${++invocation}" }),
+      )
+
+    repeat(2) {
+      assertFailsWith<CancellationException> { fixture.harness.runner.run(fixture.harness.request) }
+    }
+
+    assertEquals(listOf(1, 2), attempts)
+    assertEquals(2, fixture.storedQaOutcome()?.details?.occurrences?.size)
   }
 
   @Test
@@ -197,6 +230,11 @@ class FeatureTaskRuntimeQaExecutionTest {
     val stored = assertNotNull(fixture.storedQaOutcome())
     assertEquals(StandaloneQaOutcome.PASSED, stored.outcome)
     assertEquals(3, stored.qaFixAttempts)
+    val history = assertNotNull(stored.details)
+    assertEquals("recorded", history.historyAvailability)
+    assertEquals(listOf(1, 2, 3), history.occurrences.filter { it.kind == "qa_fix" }.map { it.phaseAttempt })
+    assertTrue(history.occurrences.filter { it.kind == "qa_fix" }.all { it.disposition == "accepted_output" })
+    assertEquals(listOf(1, 1, 1, 1), history.occurrences.filter { it.kind == "qa" }.map { it.phaseAttempt })
     val settled = assertNotNull(fixture.harness.recorder.loadQaRepairState(WORKFLOW_ID))
     assertTrue(settled.openFindings.isEmpty())
     assertEquals(3, settled.consumedAttempts)

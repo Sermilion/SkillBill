@@ -278,6 +278,8 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
         }
       val expected =
         when (phaseId) {
+          def.PHASE_AUDIT_PLAN_FIX -> emptyList()
+          def.PHASE_AUDIT_IMPLEMENT_FIX -> listOf(def.PHASE_AUDIT_PLAN_FIX)
           def.PHASE_QA -> listOf(def.PHASE_IMPLEMENT, def.PHASE_AUDIT)
           def.PHASE_QA_FIX -> listOf(def.PHASE_QA)
           else -> projectedDependencies

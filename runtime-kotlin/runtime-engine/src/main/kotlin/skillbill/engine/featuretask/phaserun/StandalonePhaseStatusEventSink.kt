@@ -12,6 +12,7 @@ import skillbill.ports.agentrun.activity.model.AgentRunActivity
 import skillbill.ports.agentrun.activity.model.AgentRunActivityKind
 import skillbill.ports.agentrun.activity.model.AgentRunActivityState
 import skillbill.ports.agentrun.model.AgentRunActivityOutputSink
+import skillbill.ports.agentrun.model.AgentRunModelObserver
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.db.DatabaseSessionFactory
@@ -56,6 +57,7 @@ public class StandalonePhaseStatusEventSink(
   private val monitorSelector: String? = null,
   private val capturePlanOutput: Boolean = false,
 ) : FeatureTaskRuntimeRunEventSink {
+  private var reportedModel: String? = null
   private var registered: StandalonePhaseStatusRecord? = null
   private var revision: String? = null
   private var activeDurationMs: Long = 0
@@ -185,6 +187,24 @@ public class StandalonePhaseStatusEventSink(
 
   public val planOutputSink: AgentRunOutputSink
     get() = if (capturePlanOutput) outputSink else AgentRunOutputSink.NONE
+
+  internal fun modelObserver(delegate: AgentRunModelObserver?): AgentRunModelObserver =
+    AgentRunModelObserver { model ->
+      reportModel(model)
+      delegate?.reported(model)
+    }
+
+  @Synchronized
+  internal fun reportModel(model: String?) {
+    if (registered != null && reportedModel == model) return
+    catchingNonCancellation {
+      ensureRegistered(null)
+      reportedModel = model
+      persist(state = "active", finishedAt = null, terminalResult = null)
+    }.onFailure { error ->
+      RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status model publication failed", error)
+    }
+  }
 
   internal fun recordMonitorCleanup(cleanup: StandaloneMonitorCleanup) {
     monitorCleanup = cleanup
@@ -398,6 +418,7 @@ public class StandalonePhaseStatusEventSink(
       }
   }
 
+  @Synchronized
   private fun persist(
     state: String,
     finishedAt: Instant?,
@@ -433,6 +454,8 @@ public class StandalonePhaseStatusEventSink(
             planReport = planReport,
             reviewRunId = reviewRunId,
             validationOutcome = validationOutcome,
+            reportedModel = reportedModel,
+            replaceReportedModel = true,
           ),
         )
       }

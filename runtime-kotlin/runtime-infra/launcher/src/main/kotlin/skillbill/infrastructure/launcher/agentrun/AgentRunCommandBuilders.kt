@@ -351,24 +351,38 @@ internal class CodexAgentRunCommandBuilder(
   override fun build(request: SkillRunRequest): AgentRunCommand {
     requireProcessLaunch(request, reviewIsolation)
     requireGovernedReviewLaunch(request, agent, governedReviewLaunchCapability)
-    return goalContinuationCommand(request, agent, databasePath) ?: if (request.reviewEvidenceBroker == null) {
-      appServerCommand(request)
-    } else {
-      AgentRunCommand(
-        command =
-          buildList {
-            add(SupportedAgent.CODEX.wireValue)
-            add("exec")
-            add("--json")
-            add("--cd")
-            add(request.repoRoot.toString())
-            request.additionalWritableDirectories.forEach { directory ->
-              add("--add-dir")
-              add(directory.toString())
-            }
+    val continuation = goalContinuationCommand(request, agent, databasePath)
+    return when {
+      continuation != null -> continuation
+      request.approval is AgentRunApprovalRequirement.Owned && request.reviewEvidenceBroker == null ->
+        appServerCommand(
+          request,
+        )
+      else -> execCommand(request)
+    }
+  }
+
+  private fun execCommand(request: SkillRunRequest): AgentRunCommand =
+    AgentRunCommand(
+      command =
+        buildList {
+          add(SupportedAgent.CODEX.wireValue)
+          add("exec")
+          add("--json")
+          add("--cd")
+          add(request.repoRoot.toString())
+          request.additionalWritableDirectories.forEach { directory ->
+            add("--add-dir")
+            add(directory.toString())
+          }
+          add("--dangerously-bypass-approvals-and-sandbox")
+          if (request.reviewEvidenceBroker == null) {
+            add("--config")
+            add("shell_environment_policy.inherit=all")
+            addAll(codexRuntimeMcpArguments(request, runtimeMcpBin, databasePath))
+          } else {
             add("--skip-git-repo-check")
             add("--ignore-user-config")
-            add("--dangerously-bypass-approvals-and-sandbox")
             add("--config")
             add("shell_environment_policy.inherit=none")
             add("--config")
@@ -388,28 +402,29 @@ internal class CodexAgentRunCommandBuilder(
                 add(override)
               }
             }
-            request.modelOverride?.let {
-              add("--model")
-              add(it)
-            }
-            request.effortOverride?.let {
-              add("--config")
-              add("model_reasoning_effort=$it")
-            }
-          },
-        workingDirectory = request.repoRoot,
-        timeout = request.timeout,
-        stdinText = launchPrompt(request),
-        environment =
-          goalContinuationEnvironment(request) +
-            runtimeDatabaseEnvironment(false, databasePath),
-        inheritEnvironment = false,
-        conversationIsolation = governedReviewConversationIsolation(request),
-        idlePolicy = codexLivenessPolicy(request),
-        environmentPassthroughKeys = CODEX_PROVIDER_PASSTHROUGH_KEYS,
-      )
-    }
-  }
+          }
+          request.modelOverride?.let {
+            add("--model")
+            add(it)
+          }
+          request.effortOverride?.let {
+            add("--config")
+            add("model_reasoning_effort=$it")
+          }
+        },
+      workingDirectory = request.repoRoot,
+      timeout = request.timeout,
+      stdinText = launchPrompt(request),
+      environment =
+        goalContinuationEnvironment(request) +
+          runtimeDatabaseEnvironment(request.reviewEvidenceBroker == null, databasePath),
+      inheritEnvironment = request.reviewEvidenceBroker == null,
+      conversationIsolation = governedReviewConversationIsolation(request),
+      idlePolicy = codexLivenessPolicy(request),
+      streamsProviderEvents = true,
+      environmentPassthroughKeys =
+        if (request.reviewEvidenceBroker != null) CODEX_PROVIDER_PASSTHROUGH_KEYS else emptySet(),
+    )
 
   private fun appServerCommand(request: SkillRunRequest): AgentRunCommand =
     AgentRunCommand(

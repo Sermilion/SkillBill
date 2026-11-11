@@ -3,9 +3,11 @@ package skillbill.engine.featuretask.phaserun
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import java.nio.file.Files
+import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -35,13 +37,34 @@ class StandalonePhaseRegistrationFactoryTest {
     assertEquals(emptyMap(), launchd.workflowRegistration(root, "SKILL-1", "goal-parent").agentEnvironment)
   }
 
-  private fun factory(environment: Map<String, String>) =
-    StandalonePhaseRegistrationFactory(
-      TestRepositoryEnclosingRoot,
-      CheckedOutBranchSource { "main" },
-      Clock.fixed(Instant.parse("2026-10-14T08:00:00Z"), ZoneOffset.UTC),
-      NoopFeatureTaskRuntimeWorkerSupervisor,
-      NoopRuntimeDiagnostics,
-      EnvironmentContext(environment = environment),
-    )
+  @Test
+  fun `registrations capture the primary checkout without changing checkout identity`() {
+    val checkout = Files.createTempDirectory("registration-primary-root")
+    val primaryRoot = Path.of("/primary-checkout")
+    val repositories =
+      object : RepositoryEnclosingRootPort by TestRepositoryEnclosingRoot {
+        override fun primaryRepositoryRoot(repoRoot: Path): Path = primaryRoot
+      }
+    val operator = factory(emptyMap(), repositories)
+
+    val phase = operator.phaseRegistration(checkout, "implement", "run-1", "SKILL-535")
+    val workflow = operator.workflowRegistration(checkout, "SKILL-535", "goal-parent", goalScoped = true)
+
+    assertEquals(TestRepositoryEnclosingRoot.repositoryIdentity(checkout), phase.repositoryIdentity)
+    assertEquals(TestRepositoryEnclosingRoot.primaryRepositoryIdentity(checkout), workflow.repositoryIdentity)
+    assertEquals(primaryRoot.toString(), phase.primaryRepositoryRoot)
+    assertEquals(primaryRoot.toString(), workflow.primaryRepositoryRoot)
+  }
+
+  private fun factory(
+    environment: Map<String, String>,
+    repositories: RepositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+  ) = StandalonePhaseRegistrationFactory(
+    repositories,
+    CheckedOutBranchSource { "main" },
+    Clock.fixed(Instant.parse("2026-10-14T08:00:00Z"), ZoneOffset.UTC),
+    NoopFeatureTaskRuntimeWorkerSupervisor,
+    NoopRuntimeDiagnostics,
+    EnvironmentContext(environment = environment),
+  )
 }

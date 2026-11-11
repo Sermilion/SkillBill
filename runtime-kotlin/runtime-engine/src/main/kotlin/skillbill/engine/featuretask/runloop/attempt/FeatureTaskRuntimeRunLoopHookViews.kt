@@ -1,6 +1,8 @@
 package skillbill.engine.featuretask.runloop.attempt
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWriteResult
+import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.runloop.checkpoint.RuntimeCommitUpstreamHeadRecovery
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
@@ -10,6 +12,7 @@ import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
 import skillbill.engine.featuretask.runloop.observability.continuation
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
+import skillbill.engine.featuretask.runloop.planning.FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement
 import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
 import skillbill.engine.featuretask.runloop.state.repositoryObservations
 import skillbill.engine.featuretask.slot.PhaseLoopContext
@@ -30,10 +33,20 @@ import skillbill.engine.featuretask.slot.attempt.PhasePlanningOutputContext
 import skillbill.engine.featuretask.slot.attempt.PhasePlanningTraversalContext
 import skillbill.engine.featuretask.slot.attempt.PhasePullRequestLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
+import skillbill.engine.featuretask.slot.attempt.PlanBundleFeasibilityLaunchContext
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PlanBundleFeasibilityFailureCode
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityIdentity
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunchOutcome
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityRepositoryBaseline
 import java.nio.file.Path
 
 internal object FeatureTaskRuntimeRunLoopHookViews {
@@ -47,6 +60,7 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
       PhaseStepHookContextKind.FINDING_VERIFICATION -> FindingLaunchView(this)
       PhaseStepHookContextKind.PULL_REQUEST -> PullRequestLaunchView(this)
       PhaseStepHookContextKind.IMPLEMENTATION -> ImplementationLaunchView(this)
+      PhaseStepHookContextKind.PLANNING -> PlanningLaunchView(this, run)
       else -> LaunchView(this)
     }
   }
@@ -119,6 +133,18 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
     private val context: PhaseOutputSettlementContext,
   ) : OutputView(context),
     PhasePlanningOutputContext {
+    override fun settleBundleFeasibility(
+      capture: ValidatedOutputCapture,
+      attested: NormalizedFeatureTaskRuntimePhaseOutput,
+      launch: PlanBundleFeasibilityLaunchContext,
+    ): AttemptResult? =
+      FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement.settle(
+        context,
+        capture,
+        attested,
+        launch,
+      )
+
     override fun settleAuthoredBundle(capture: ValidatedOutputCapture): AttemptResult? {
       val rejection = PlanDecompositionStop.recordAuthoredBundleOrRejection(context, capture) ?: return null
       if (rejection.repairable) return AttemptResult.PlanBundleRejected(rejection.reason, capture.fileManifest)
@@ -297,3 +323,96 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
       phaseRecord = { stepId -> progress.phase(stepId).record },
     )
 }
+
+internal fun captureRepositoryBaseline(
+  git: WorkflowGitOperations,
+  repoRoot: Path,
+): RepositoryBaselineCapture {
+  val status =
+    when (val result = git.worktreeStatus(repoRoot)) {
+      is WorkflowGitOperationResult.Ok -> result
+      is WorkflowGitOperationResult.Failed ->
+        return RepositoryBaselineCapture.Failed(
+          "Could not capture the original feasibility worktree status before launch: ${result.error}",
+        )
+    }
+  val head =
+    when (val result = git.runtimePhaseHeadCommit(repoRoot)) {
+      is WorkflowGitOperationResult.Ok -> result
+      is WorkflowGitOperationResult.Failed ->
+        return RepositoryBaselineCapture.Failed(
+          "Could not capture the original feasibility HEAD before launch: ${result.error}",
+        )
+    }
+  val statusText = status.value.orEmpty()
+  val paths =
+    (
+      FeatureTaskRuntimePhaseSafetyPolicy.changedPaths(statusText) +
+        FeatureTaskRuntimePhaseSafetyPolicy.deletedPaths(statusText)
+    ).distinct().sorted()
+  val identities =
+    when (val result = git.pathContentIdentities(repoRoot, paths)) {
+      is WorkflowPathContentIdentitiesResult.Resolved -> result.identities
+      is WorkflowPathContentIdentitiesResult.Failed ->
+        return RepositoryBaselineCapture.Failed(
+          "Could not capture the original feasibility dirty-path identities before launch: ${result.error}",
+        )
+    }
+  return RepositoryBaselineCapture.Captured(
+    PlanBundleFeasibilityRepositoryBaseline(head.value.orEmpty(), paths, identities),
+  )
+}
+
+internal sealed interface RepositoryBaselineCapture {
+  data class Captured(val baseline: PlanBundleFeasibilityRepositoryBaseline) : RepositoryBaselineCapture
+
+  data class Failed(val reason: String) : RepositoryBaselineCapture
+}
+
+internal fun PlanBundleFeasibilityStateWriteResult.stateOrRefuse(
+  workflowId: String,
+  phaseId: String,
+  attempt: Int,
+  operation: String,
+): FeatureTaskRuntimePlanBundleFeasibilityState =
+  when (this) {
+    is PlanBundleFeasibilityStateWriteResult.Applied -> state
+    is PlanBundleFeasibilityStateWriteResult.Existing -> state
+    is PlanBundleFeasibilityStateWriteResult.Replayed -> state
+    is PlanBundleFeasibilityStateWriteResult.Refused ->
+      refuseFeasibility(workflowId, phaseId, attempt, "$operation refused: $reason")
+  }
+
+internal fun refuseFeasibility(
+  workflowId: String,
+  phaseId: String,
+  attempt: Int,
+  reason: String,
+): Nothing =
+  throw SkillBillRuntimeException(
+    PlanBundleFeasibilityFailureCode.INVALID_STATE,
+    "Could not admit feasibility review for workflow '$workflowId', phase '$phaseId' attempt $attempt: $reason. " +
+      "Preserve the workflow and retry with current ownership.",
+  )
+
+internal fun FeatureTaskRuntimePlanBundleFeasibilityState.blockedReason(): String =
+  buildString {
+    append("Bundle feasibility is blocked. ")
+    if (conflicts.isEmpty()) {
+      append("No open cited conflicts were recorded.")
+    } else {
+      append("Open cited conflicts:\n")
+      append(conflicts.joinToString("\n") { "${it.ref}: ${it.line}" })
+    }
+    settledLaunches.lastOrNull { it.outcome == PlanBundleFeasibilityLaunchOutcome.REFUSED }
+      ?.let { append("\nLatest invalid-output reason: ${it.value}") }
+  }
+
+internal fun PlanBundleFeasibilityIdentity.hasRawBaseline(): Boolean =
+  rawParentText != null && rawManifestText != null && subtasks.all { it.rawSpecText != null }
+
+internal fun feasibilityTransitionId(
+  workflowId: String,
+  phaseId: String,
+  attempt: Int,
+): String = listOf(workflowId, phaseId, attempt.toString()).joinToString(separator = "") { "${it.length}:$it" }

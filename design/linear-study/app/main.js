@@ -173,7 +173,7 @@
 
   /* ---------- rendering ---------- */
   function docBar() {
-    return `<div class="doc-bar">${S.BrandMark(18)}<span class="doc-bar-ti">Skill Bill</span><span class="doc-bar-sub">Linear study</span>
+    return `<div class="doc-bar">${S.BrandMark(18)}<span class="doc-bar-ti">Sona</span><span class="doc-bar-sub">Linear study</span>
       <span class="l-grow"></span>${S.Segmented({ act: 'mode', value: st.mode, items: [{ id: 'prototype', label: 'Prototype' }, { id: 'states', label: 'States' }, { id: 'components', label: 'Components' }, { id: 'foundations', label: 'Foundations' }] })}</div>`;
   }
   function body() {
@@ -453,7 +453,7 @@
       const pv = it.incident.preview;
       return S.Dialog({ title: pv.label, icon: S.Icon('refresh'), body: S.PropertyList([{ label: 'Effects', value: esc(pv.effects) }, { label: 'Workflow', value: S.ShortId({ value: pv.workflow, label: 'workflow id' }) }, { label: 'Phase', value: `<span class="mono">${esc(pv.phase)}</span>` }]), actions: [S.Button({ label: 'Cancel', variant: 'ghost', act: 'dialog-close' }), S.Button({ label: 'Apply and resume', variant: 'primary', act: 'recover-confirm', arg: d.arg, id: 'dialog-primary' })] });
     }
-    if (d.type === 'purge') return S.Dialog({ title: `Purge ${d.arg} run history?`, icon: S.Icon('rerun'), body: `<span>Purge deletes everything Skill Bill recorded while running this spec, so it can start again from scratch.</span>${S.Ledger({ leftTitle: 'Deleted', left: ['Goal and subtask run history', 'Run evidence and task tracking', 'Checkpoint refs', 'Subtask progress, back to not started'], rightTitle: 'Kept', right: ['Every spec file in the folder', 'Your branch and its commits', 'Open pull requests'] })}<span>This can’t be undone. Afterwards the spec shows as not started and Start runs it from the first subtask.</span>`, actions: [S.Button({ label: 'Keep run history', variant: 'ghost', act: 'dialog-close', id: 'dialog-primary' }), S.Button({ label: `Purge ${d.arg}`, variant: 'danger-solid', act: 'purge-confirm', arg: d.arg })] });
+    if (d.type === 'purge') return S.Dialog({ title: `Purge ${d.arg} run history?`, icon: S.Icon('rerun'), body: `<span>Purge deletes everything Sona recorded while running this spec, so it can start again from scratch.</span>${S.Ledger({ leftTitle: 'Deleted', left: ['Goal and subtask run history', 'Run evidence and task tracking', 'Checkpoint refs', 'Subtask progress, back to not started'], rightTitle: 'Kept', right: ['Every spec file in the folder', 'Your branch and its commits', 'Open pull requests'] })}<span>This can’t be undone. Afterwards the spec shows as not started and Start runs it from the first subtask.</span>`, actions: [S.Button({ label: 'Keep run history', variant: 'ghost', act: 'dialog-close', id: 'dialog-primary' }), S.Button({ label: `Purge ${d.arg}`, variant: 'danger-solid', act: 'purge-confirm', arg: d.arg })] });
     /* Specs: cancel, delete and the export guard share the Purge dialog's shape; the safe action has focus and Enter. */
     if (d.type === 'spec-cancel') return S.Dialog({ title: `Cancel ${d.arg}?`, icon: S.Icon('x'), body: '<span>The run stops and the goal is marked canceled. Its branch and commits stay.</span>', actions: [S.Button({ label: 'Keep running', variant: 'ghost', act: 'dialog-close', id: 'dialog-primary' }), S.Button({ label: 'Cancel goal', variant: 'danger-solid', act: 'spec-cancel-confirm', arg: d.arg })] });
     if (d.type === 'spec-delete') {

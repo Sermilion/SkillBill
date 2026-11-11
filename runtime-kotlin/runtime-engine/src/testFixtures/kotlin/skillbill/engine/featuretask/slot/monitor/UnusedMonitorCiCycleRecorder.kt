@@ -1,0 +1,29 @@
+package skillbill.engine.featuretask.slot.monitor
+
+import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
+import skillbill.ports.db.model.OwningTransactionResult
+import skillbill.ports.persistence.UnitOfWork
+import java.nio.file.Path
+
+private object UnusedMonitorCiCycleDatabase : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable("Database path protection is not available.")
+
+  override fun resolveDbPath(): Path = unused()
+
+  override fun databaseExists(): Boolean = unused()
+
+  override fun <T> read(block: (UnitOfWork) -> T): T = unused()
+
+  override fun <T> transaction(block: (UnitOfWork) -> T): T = unused()
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> = unused()
+
+  override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T = unused()
+
+  private fun unused(): Nothing =
+    throw UnsupportedOperationException("This test did not supply a database for monitor CI cycle records.")
+}
+
+fun unusedMonitorCiCycleRecorder(): MonitorCiCycleRecorder = MonitorCiCycleRecorder(UnusedMonitorCiCycleDatabase)

@@ -1,3 +1,38 @@
+## [2026-11-10] Store pattern rules with an empty action fingerprint
+Context: approval_rules.action_fingerprint is NOT NULL and exact rules still key on fingerprint equality.
+Decision: Pattern rules write pattern plus actionFingerprint ""; scopes() skips fingerprint compare when pattern is non-null.
+Reason: Avoids a table rebuild to relax NOT NULL while keeping exact-rule behavior unchanged.
+
+## [2026-11-10] Refuse bare-wildcard patterns at match time for stored rules
+Context: Operators might persist overly broad patterns; tampered rows could bypass decide-time validation.
+Decision: ApprovalMatchFacts.matches runs patternShapeRefusal before glob matching so all-wildcard stored patterns never auto-allow.
+Reason: Defense in depth after decide; bare patterns stay inert even if validation was bypassed.
+
+## [2026-11-10] Judge approval paths lexically in the domain matcher
+Context: Wildcard approval must match checkout-relative path strings before provider adapters normalize absolute paths.
+Decision: Keep ApprovalMatchFacts path rules lexical only; no java.nio or filesystem resolution in runtime-domain.
+Reason: Adapters own absolute path normalization; the matcher must stay pure and testable without I/O.
+
+## [2026-11-10] Charge acceptance repairs by verified gap progress
+Context: SKILL-533 replaces unfinished-report charging after partial repairs consumed the budget even when they closed production gaps.
+Decision: Charge an unsuccessful outcome only when open gaps do not decrease. Gate and reset the current criterion's count independently; retain gaps, outcomes, plan generation and sticky escalation on operator retry. Replays reuse stored charge facts.
+Reason: Independent verification measures partial progress without requiring the whole criterion to pass. A worker block has no verification result and leaves the gap count unchanged, so it charges once. Retained evidence prevents retry from erasing earlier work. Existing work-detail projection rules remain unchanged.
+
+## [2026-11-09] Map Cursor CLI model slugs to the advertised ACP variant
+Context: Cursor `--list-models` and `execution_matrix` use slugs such as `composer-2.5` and `cursor-grok-4.6-high`. ACP `session/new` advertises one parameterized value per base (`composer-2.5[fast=true]`) and accepts only those exact strings. Exact-match selection stopped the session before the prompt.
+Decision: `resolveAcpModel` uses an exact advertised value when present. Otherwise it strips the `cursor-` prefix, treats `auto` as `default`, and peels trailing effort or speed tokens until a base has exactly one advertised variant. Ambiguous and unknown bases stay unresolved and still stop. `session/set_config_option` and `session/set_model` send that selected variant, not the original slug. Tests pin the 2026-11-09 `session/new` advertised set.
+Reason: When ACP offers only one variant for a base, there is no other value that can honor a slug's effort or speed. Guessing among multiple variants would pick the wrong model.
+Revisit when: ACP advertises multiple variants per base, or `--list-models` IDs match advertised values.
+
+## [2026-11-09] Hosts never stop a worker for a tool or extension request
+Context: SKILL-453 required Cursor ACP unknown blocking extensions to cancel and stop the process so a plan was never auto-approved. Cursor still sends `cursor/update_todos` as a JSON-RPC request with an id, so SKILL-529 `audit_plan_fix` exited. Codex unsupported families declined or stopped, and Claude denied `AskUserQuestion` / `ExitPlanMode` and denied when no operator channel existed.
+Decision: Runtime bypass launches use native headless CLIs, not the app-server or ACP approval hosts. Codex uses `exec` with `--dangerously-bypass-approvals-and-sandbox`, Cursor uses print mode with force, trust, MCP approval and disabled sandbox flags, Junie uses its headless text CLI, and Claude keeps its native print transport. Skill-bill does not answer, skip, cancel or reject tool requests on these paths. The native harness controls tool execution and may apply its own restrictions.
+
+With an operator owner, supported permission cards wait for the operator. Unsupported Codex interactions settle as unsupported and send their method-specific non-authorizing response once. Failed response delivery remains uncertain and is never replayed. Claude approval registration failures deny the action, and malformed or stale owned ACP permission requests are cancelled. These paths never fall back to granting an owned action. Native bypass runs open no host session or operator owner, so neither card persistence nor these host response adapters can gate their calls. Parked verify and pr-review-fix confirmation stay separate.
+
+Reason: Skill-bill must not add a tool refusal policy on top of native bypass. Using native CLIs removes the interception point instead of guessing successful responses for unknown methods. Hosted chats still need valid response shapes. A host cannot fabricate answers or claim that an operator approved an unsupported interaction. A1 keeps provider response formats in launcher adapters, A7 requires observable bypass and cancellation responses, and response delivery stays owned and unreplayed.
+Revisit when: A new provider method needs a response adapter or operators request additional interactive question handling.
+
 ## [2026-11-08] Keep run launches outside chat approval cards
 Context: Desktop resume and rerun selected a direct agent harness that the detached launcher refused because it had no operator approval channel. The operator clarified that permission cards belong only to chats, and runs use native permission bypass.
 Decision: Launch recorded goal and phase commands through the runtime. Remove the unused direct-harness launch path and classify phase agent requests as OutsideApproval. Keep chat approval handling and parked-operation proposal confirmation unchanged.
@@ -3547,6 +3582,7 @@ Context: SKILL-429 reached audit repair attempt 27 while its selected criterion 
 Decision: Both `progress` and `no_progress` repair reports settle as incomplete outcomes through the existing serial repair owner. The third unsuccessful outcome blocks the selected criterion. Operator resume retains its explicit budget reset. Goal detail projects retained audit and review results for the current subtask as well as paged completed subtasks, so unresolved criteria remain visible during repair and after a block. Validation results remain restricted to completed subtasks.
 
 Evidence: `FeatureTaskRuntimeSerialRepairTest` proves unfinished progress consumes three distinct repair reservations and blocks before review. `GoalRunnerValidationEvidenceProjectionTest` checks running and blocked subtask audit gaps through both goal status projection paths without fabricating completed validation.
+Superseded by: Charge acceptance repairs by verified gap progress (2026-11-10)
 
 ## [2026-10-21] Reopen canceled workflows through accepted operator mutation
 
@@ -3703,3 +3739,37 @@ instead of being retained. Validate blocks only after `MAX_VALIDATE_ATTEMPTS`
 attempts fail; a pause stops at once. `spendFailedAttempt` counts a failed attempt
 as spent, so the next launch of the phase in the same process starts a new attempt.
 Moved here from source comments to satisfy the Kotlin comment architecture gate.
+
+## [2026-11-09] Settle provider turns before releasing their process trees
+
+A provider's terminal turn and its process shutdown are separate facts. The
+launcher captures the owned descendants before closing provider input. A settled
+session gets the existing bounded exit wait so the provider can reap its MCP
+children before forced termination. Forced cleanup remains the fallback. A final
+exit check determines whether the launcher releases ownership.
+
+A transient process-cleanup warning does not reject a completed response once
+exit is confirmed and capture is complete. The warning remains in run diagnostics.
+Unconfirmed exit keeps the process tree owned and blocks continuation. The saved
+provider outcome and captured response remain intact in either case. Cleanup
+failure diagnostics name that cause before incidental provider stderr, including
+optional MCP connection errors. Stream and capture failures still reject settlement.
+
+A1 and A2 keep process lifetime and settlement in the launcher adapter. A7 keeps
+cleanup degradation observable. A11 limits settlement helpers to that module.
+Deterministic process handles cover EOF shutdown, forced cleanup and a surviving
+child without waiting for real process deadlines.
+
+## 2026-11-09 Retain build observations for total duration
+
+Keep build rows after settlement so the desktop can total a run's build time across
+commands and count overlapping processes once. The usual-time history still reads
+only the latest twenty settled observations per repository and command. Run totals
+use existing timestamps, so installation needs no database rewrite. Previously
+pruned observations cannot be reconstructed. An observation without a known end
+makes the total unavailable once its run stops, rather than inventing a duration.
+
+The optional `total_elapsed_ms` and `total_elapsed_as_of` fields extend the board
+and detail build payloads without changing their required fields or versions.
+Older payloads remain valid and default to an absent total. Repeated reads derive
+the total without mutating stored runs, identities or timestamps.

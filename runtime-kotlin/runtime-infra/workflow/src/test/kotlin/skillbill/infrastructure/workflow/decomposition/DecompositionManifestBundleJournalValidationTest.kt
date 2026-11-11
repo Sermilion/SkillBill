@@ -318,11 +318,7 @@ class DecompositionManifestBundleJournalValidationTest {
           listOf(firstTarget to "new-first", secondTarget to "new-second"),
         )
       journal.apply(
-        DecompositionManifestBundleTransaction(
-          transaction.marker,
-          transaction.stagingDirectory,
-          listOf(transaction.entries.first()),
-        ),
+        transaction.copy(entries = listOf(transaction.entries.first())),
       )
       assertEquals("new-first", Files.readString(firstTarget))
       assertEquals("old-second", Files.readString(secondTarget))

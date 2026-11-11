@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.Flow
 interface ApprovalFeedRepository {
   fun observe(repositoryRoot: String, retainedKeys: Flow<Set<ApprovalCardKey>>): Flow<ApprovalFeed>
 
-  suspend fun decide(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean): ApprovalDecisionOutcome
+  suspend fun decide(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean, pattern: String? = null): ApprovalDecisionOutcome
 
   suspend fun dismiss(key: ApprovalCardKey): ApprovalDecisionOutcome
 

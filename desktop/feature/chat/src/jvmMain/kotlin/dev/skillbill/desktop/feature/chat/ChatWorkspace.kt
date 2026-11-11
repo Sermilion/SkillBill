@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshotFlow
 import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ChatModel
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
@@ -150,7 +152,7 @@ class ChatWorkspace(
   // A paste still normalizing when its chat closes must not leave an orphan entry behind.
   internal fun addPastedImage(id: String, image: ChatImage) {
     if (id !in sessions) return
-    cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
+    cursorMcpDependencies[id] = CursorMcpDependency.ProjectUserOnly
     pastedImages[id] =pastedImages[id].orEmpty() + image
   }
 
@@ -525,7 +527,7 @@ class ChatWorkspace(
   }
 
   /** Asks the agent about the execution, in the mode its state allows now; it never changes the execution. */
-  fun send(id: String, text: String, images: List<ChatImage> = emptyList(), cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified) {
+  fun send(id: String, text: String, images: List<ChatImage> = emptyList(), cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly) {
     enqueue(id, QueuedChatMessage(text, null, pauseAndAct = false, images = images, cursorMcpDependency = cursorMcpDependency))
   }
 
@@ -548,7 +550,7 @@ class ChatWorkspace(
    * or its tab closes. The relaunch is skipped when, after the turn, the execution is already running, finished or gone.
    * On an execution that is not running it is a plain [send].
    */
-  fun pauseAndAct(id: String, text: String, images: List<ChatImage> = emptyList(), cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified) {
+  fun pauseAndAct(id: String, text: String, images: List<ChatImage> = emptyList(), cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly) {
     enqueue(id, QueuedChatMessage(text, null, pauseAndAct = true, images = images, cursorMcpDependency = cursorMcpDependency))
   }
 
@@ -564,8 +566,8 @@ class ChatWorkspace(
     val queued = session.thread.takeOrdinaryQueuedEntries()
     if (queued.isNotEmpty()) {
       cursorMcpDependencies[id] = if (drafts[id].isNullOrBlank() && pastedImages[id].isNullOrEmpty()) {
-        queued.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.Unspecified
-      } else CursorMcpDependency.Unspecified
+        queued.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.ProjectUserOnly
+      } else CursorMcpDependency.ProjectUserOnly
       drafts[id] = restoredDraft(queued, drafts[id].orEmpty())
       val restoredImages = queued.flatMap { it.images }
       if (restoredImages.isNotEmpty()) pastedImages[id] = restoredImages + pastedImages[id].orEmpty()
@@ -657,6 +659,22 @@ class ChatWorkspace(
     }
   }
 
+  internal suspend fun models(agent: ChatAgent, root: String) = chat.models(agent, root)
+
+  internal fun switchModel(id: String, model: ChatModel?) {
+    val session = sessions[id] ?: return
+    if (deferAcceptedPersistence(session) { switchModel(id, model) }) return
+    if (session.thread.deferDestructiveAction("change the model")) return
+    val agent = session.agentState.value ?: return
+    if (session.busyState.value || (agent.model == model?.id && agent.effort == null)) return
+    endAgent(session)
+    val selected = agent.copy(model = model?.id, effort = null)
+    session.agentState.value = selected
+    session.thread.showCapability(selected)
+    session.append(ChatMessage.Notice("Model changed to ${model?.label ?: "agent default"}."))
+    scope.launch(session.job) { turns.save(session, selected) }
+  }
+
   /**
    * Moves [id]'s chat to [agentId] with that agent's reasoning model, or its CLI default when the config sets none. The next
    * turn opens a new agent session with the full snapshot. Ignored while a turn runs or when [agentId] is already in use.
@@ -666,7 +684,7 @@ class ChatWorkspace(
     if (deferAcceptedPersistence(session) { switchAgent(id, agentId) }) return
     if (session.thread.deferDestructiveAction("switch agents")) return
     if (session.busyState.value || session.agentState.value?.agentId == agentId) return
-    cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
+    cursorMcpDependencies[id] = CursorMcpDependency.ProjectUserOnly
     session.busyState.value = true
     session.stoppableState.value = false
     launchTurn(session) {
@@ -690,7 +708,7 @@ class ChatWorkspace(
     val session = sessions[id] ?: return
     if (deferAcceptedPersistence(session) { clear(id) }) return
     if (session.thread.deferDestructiveAction("clear this chat")) return
-    cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
+    cursorMcpDependencies[id] = CursorMcpDependency.ProjectUserOnly
     pastedImages.remove(id)
     session.resumeChoicesState.value = null
     session.prefixChoiceState.value = null
@@ -732,7 +750,7 @@ class ChatWorkspace(
     val session = sessions[id] ?: return
     if (deferAcceptedPersistence(session) { resume(id, entry) }) return
     if (session.thread.deferDestructiveAction("resume another chat")) return
-    cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
+    cursorMcpDependencies[id] = CursorMcpDependency.ProjectUserOnly
     session.resumeChoicesState.value = null
     session.prefixChoiceState.value = null
     if (session.goneState.value || (entry.executionId != null && entry.executionId != session.item.id)) return
@@ -750,7 +768,7 @@ class ChatWorkspace(
         return@launchTurn
       }
       endAgent(session)
-      session.resumeFrom(entry.sessionId, session.item.workingRoot())
+      session.resumeFrom(entry.sessionId, session.item.workingRoot(), entry.agent)
       session.agentState.value = entry.agent
       session.agentSupportedState.value = chat.supports(entry.agent.agentId)
       val shown = if (lines.isEmpty()) "The app can't read this session's messages; the agent still has them." else "Showing its last ${lines.size} messages."
@@ -1026,9 +1044,9 @@ class ChatWorkspace(
     }
   }
 
-  internal fun decideRepositoryApproval(id: String, key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean) {
+  internal fun decideRepositoryApproval(id: String, key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean, pattern: String? = null) {
     val tab = approvalTabs[id]?.takeIf { it.liveState.value } ?: return
-    scope.launch(tab.job) { approvalFlow.decide(tab.thread, key, optionId, alwaysAllow) }
+    scope.launch(tab.job) { approvalFlow.decide(tab.thread, key, optionId, alwaysAllow, pattern) }
   }
 
   internal fun dismissRepositoryApproval(id: String, key: ApprovalCardKey) {
@@ -1036,10 +1054,10 @@ class ChatWorkspace(
     scope.launch(tab.job) { approvalFlow.dismiss(tab.thread, key) }
   }
 
-  fun decideApproval(id: String, key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean) {
+  fun decideApproval(id: String, key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean, pattern: String? = null) {
     val session = sessions[id] ?: return
     if (!session.approvalLiveState.value) return
-    scope.launch(session.job) { approvalFlow.decide(session.thread, key, optionId, alwaysAllow) }
+    scope.launch(session.job) { approvalFlow.decide(session.thread, key, optionId, alwaysAllow, pattern) }
   }
 
   fun dismissApproval(id: String, key: ApprovalCardKey) {

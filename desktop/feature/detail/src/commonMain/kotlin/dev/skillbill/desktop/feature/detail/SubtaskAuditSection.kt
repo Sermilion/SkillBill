@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ExpandableText
+import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
+import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
@@ -65,6 +67,9 @@ internal fun SubtaskAuditSection(results: SubtaskPhaseResults?, kind: StatusKind
 @Composable
 private fun AuditResult(audit: SubtaskAuditResult, verdict: String?, summary: String?, subtaskId: Int) {
   Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    if (audit.attempts.any { it.unavailableReason != null }) {
+      Hint("Some historical audit results are unavailable because their discovery scope was not retained.", FeedbackTone.Warn)
+    }
     when (audit.outcome) {
       AuditOutcome.Passed -> VerdictLine("Passed", audit.countsText(), SkillBillTheme.colors.stDone)
       AuditOutcome.Failed -> VerdictLine("Failed", audit.countsText(), SkillBillTheme.colors.stFailed)
@@ -227,8 +232,13 @@ private fun VerdictLine(label: String, detail: String?, color: androidx.compose.
 
 @Composable
 private fun AuditAttemptLine(attempt: AuditAttempt) {
-  val status = if (attempt.passed) "Passed" else {
-    "Gaps found · ${attempt.uncoveredCount} ${if (attempt.uncoveredCount == 1) "criterion" else "criteria"} uncovered"
+  val status = if (attempt.unavailableReason != null) {
+    "Historical result unavailable"
+  } else if (attempt.passed == true) {
+    "Passed"
+  } else {
+    val count = requireNotNull(attempt.uncoveredCount)
+    "Gaps found · $count ${if (count == 1) "criterion" else "criteria"} uncovered"
   }
   val next = attempt.nextPhaseId?.let { " → $it" }.orEmpty()
   Row(
@@ -236,7 +246,13 @@ private fun AuditAttemptLine(attempt: AuditAttempt) {
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(8.dp),
   ) {
-    StatusDot(if (attempt.passed) SkillBillTheme.colors.stDone else SkillBillTheme.colors.stFailed)
+    StatusDot(
+      when {
+        attempt.passed == true -> SkillBillTheme.colors.stDone
+        attempt.passed == false -> SkillBillTheme.colors.stFailed
+        else -> SkillBillTheme.colors.fgMuted
+      },
+    )
     BasicText(
       "Attempt ${attempt.number} · $status$next",
       style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted),

@@ -7,6 +7,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_PREVIOUS_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_ADOPTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_FIRST_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PREVIOUS_CONTRACT_VERSION
@@ -39,7 +40,7 @@ import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromA
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
 import skillbill.workflow.taskruntime.artifact.goalPlanningImport
 import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionAuditResult
-import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.supersededAcceptanceCriterionRepairStateVersion
 import skillbill.workflow.taskruntime.artifact.upgradeAuditResultFromPrevious
 import skillbill.workflow.taskruntime.artifact.upgradeRepairStateFromPrevious
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdoptionComposition
@@ -480,6 +481,7 @@ public class AcceptanceCriterionRepairLegacyAdoption(
   internal fun versionRecovery(artifacts: Map<String, Any?>): AcceptanceCriterionRepairVersionPlan {
     val originals = linkedMapOf<String, Any?>()
     val regenerated = linkedMapOf<String, Any?>()
+    val storedVersions = mutableListOf<String>()
     for (candidate in SUPERSEDED_CANDIDATES) {
       val original =
         candidate.family.takeIf { it.contains(artifacts) }
@@ -491,14 +493,16 @@ public class AcceptanceCriterionRepairLegacyAdoption(
           ?: return AcceptanceCriterionRepairVersionPlan.Unrecoverable(candidate.family.label(), candidate.version)
       originals[candidate.family.label()] = original
       regenerated += candidate.family.entry(upgraded)
+      storedVersions += candidate.version
     }
     if (originals.isEmpty()) return AcceptanceCriterionRepairVersionPlan.NotSuperseded
     val families = originals.keys.toList()
     return AcceptanceCriterionRepairVersionPlan.Recovery(
       families,
+      storedVersions,
       regenerated,
       JsonCodec.valueToJsonString(originals).toByteArray(Charsets.UTF_8),
-      "Stored ${families.joinToString()} at contract ${SUPERSEDED_CANDIDATES.first().version}; " +
+      "Stored ${families.joinToString()} at contract ${storedVersions.joinToString()}; " +
         "regenerated at $ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION.",
     )
   }
@@ -548,7 +552,19 @@ public class AcceptanceCriterionRepairLegacyAdoption(
         SupersededCandidate(
           DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR,
           ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION,
-          { it.isPreviousVersionAcceptanceCriterionRepairState() },
+          {
+            it.supersededAcceptanceCriterionRepairStateVersion() ==
+              ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
+          },
+          { it.upgradeRepairStateFromPrevious() },
+        ),
+        SupersededCandidate(
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR,
+          ACCEPTANCE_CRITERION_REPAIR_STATE_FIRST_CONTRACT_VERSION,
+          {
+            it.supersededAcceptanceCriterionRepairStateVersion() ==
+              ACCEPTANCE_CRITERION_REPAIR_STATE_FIRST_CONTRACT_VERSION
+          },
           { it.upgradeRepairStateFromPrevious() },
         ),
         SupersededCandidate(

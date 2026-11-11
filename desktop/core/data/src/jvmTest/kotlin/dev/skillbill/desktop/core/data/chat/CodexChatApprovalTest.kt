@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import skillbill.approval.model.ApprovalMatchFacts
 import skillbill.approval.model.ApprovalProviderDisposition
 import skillbill.contracts.approval.ApprovalProviderRequestId
 import skillbill.contracts.approval.ApprovalRequestRecord
@@ -18,6 +19,7 @@ import skillbill.ports.approval.model.ApprovalPendingWait
 import skillbill.ports.approval.model.ApprovalProviderClearance
 import skillbill.ports.approval.model.ApprovalRegistrationCommand
 import skillbill.ports.approval.model.ApprovalRegistrationResult
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -66,6 +68,74 @@ class CodexChatApprovalTest {
   }
 
   @Test
+  fun `match facts honor shell unwrap grant root and checkout cwd`() {
+    val checkout = Files.createTempDirectory("codex-facts").toRealPath()
+    try {
+      val harness = Harness(checkout = checkout.toString())
+      val checkoutJson = jsonPathLiteral(checkout.toString())
+      val wrapped =
+        obj(
+          """{"id":10,"method":"item/commandExecution/requestApproval",""" +
+            """"params":{"threadId":"thread","turnId":"turn","itemId":"wrap",""" +
+            """"command":"bash -lc 'git status --short'","cwd":"$checkoutJson",""" +
+            """"commandActions":[{"type":"unknown","command":"bash -lc 'git status --short'"}]}}""",
+        )
+      harness.approval.handleServerRequest(wrapped, emptyMap())
+      assertEquals(ApprovalMatchFacts.Command("git status --short"), harness.owner.commands.last().matchFacts)
+      val quoted =
+        obj(
+          """{"id":11,"method":"item/commandExecution/requestApproval",""" +
+            """"params":{"threadId":"thread","turnId":"turn","itemId":"quote",""" +
+            """"command":"bash -lc \"git status\"","cwd":"$checkoutJson",""" +
+            """"commandActions":[{"type":"unknown","command":"bash -lc \"git status\""}]}}""",
+        )
+      harness.approval.handleServerRequest(quoted, emptyMap())
+      assertEquals(null, harness.owner.commands.last().matchFacts)
+      val tabulated =
+        obj(
+          """{"id":14,"method":"item/commandExecution/requestApproval",""" +
+            """"params":{"threadId":"thread","turnId":"turn","itemId":"tab",""" +
+            """"command":"bash\t-lc 'git status'","cwd":"$checkoutJson",""" +
+            """"commandActions":[{"type":"unknown","command":"bash\t-lc 'git status'"}]}}""",
+        )
+      harness.approval.handleServerRequest(tabulated, emptyMap())
+      assertEquals(null, harness.owner.commands.last().matchFacts)
+      val diff = "+patch"
+      val file =
+        obj("""{"type":"fileChange","id":"grant","changes":[{"path":"$checkoutJson/a","kind":{"type":"update"},"diff":${JsonPrimitive(diff)}}]}""")
+      harness.approval.handleServerRequest(
+        obj(
+          """{"id":12,"method":"item/fileChange/requestApproval","params":{"threadId":"thread","turnId":"turn","itemId":"grant","grantRoot":"$checkoutJson"}}""",
+        ),
+        mapOf(codexItemKey("thread", "turn", "grant") to file),
+      )
+      assertEquals(null, harness.owner.commands.last().matchFacts)
+      val outside = Files.createTempDirectory("codex-outside").toRealPath()
+      try {
+        val outsideJson = jsonPathLiteral(outside.toString())
+        harness.approval.handleServerRequest(
+          obj(
+            """{"id":13,"method":"item/commandExecution/requestApproval",""" +
+              """"params":{"threadId":"thread","turnId":"turn","itemId":"away",""" +
+              """"command":"git status","cwd":"$outsideJson",""" +
+              """"commandActions":[{"type":"unknown","command":"git status"}]}}""",
+          ),
+          emptyMap(),
+        )
+        assertEquals(null, harness.owner.commands.last().matchFacts)
+      } finally {
+        Files.walk(outside).use { paths ->
+          paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
+        }
+      }
+    } finally {
+      Files.walk(checkout).use { paths ->
+        paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
+      }
+    }
+  }
+
+  @Test
   fun `network permissions and elicitation refuse with distinct documented responses and full cards`() {
     val harness = Harness()
     val requests = listOf(
@@ -75,34 +145,36 @@ class CodexChatApprovalTest {
     )
     requests.forEach { harness.approval.handleServerRequest(it, emptyMap()) }
     assertEquals(3, harness.cards.size)
-    assertEquals("decline", harness.frames[0].obj("result")?.string("decision"))
+    assertEquals("cancel", harness.frames[0].obj("result")?.string("decision"))
     assertEquals(obj("""{"permissions":{},"scope":"turn"}"""), harness.frames[1].obj("result"))
-    assertEquals(obj("""{"action":"decline","content":null}"""), harness.frames[2].obj("result"))
+    assertEquals(obj("""{"action":"cancel"}"""), harness.frames[2].obj("result"))
     assertTrue(harness.cards.all { it.options.none { option -> option.kind == "allow" } })
     assertContains(harness.cards[2].inputText, "complete reason")
     assertFalse(harness.stopped)
     harness.approval.release()
   }
 
-  private class Harness {
+  private class Harness(checkout: String = "/checkout") {
     val frames = mutableListOf<JsonObject>()
     val cards = mutableListOf<ApprovalCard>()
     var stopped = false
     val owner = Owner()
     val approval = CodexChatApproval({ frames += obj(it); true }, { stopped = true },
-      RecordingDiagnostics(), cards::add, "/checkout")
+      RecordingDiagnostics(), cards::add, checkout)
     init { approval.bind(owner); approval.bindTurn("thread", "turn"); owner.deliver = approval::deliver }
   }
 
   private class Owner : ApprovalOwnerSession {
     override val key = ApprovalOwnerKey("repo", "run", "generation")
     val requests = mutableListOf<ApprovalRequestRecord>()
+    val commands = mutableListOf<ApprovalRegistrationCommand>()
     val cleared = mutableListOf<String>()
     lateinit var deliver: (ApprovalRequestRecord) -> ApprovalDeliveryState
     override fun register(command: ApprovalRegistrationCommand): ApprovalRegistrationResult {
       val request = command.request.copy(actionFingerprint = command.canonicalInput,
         authorityScope = command.canonicalInput?.let { value -> command.request.authorityScope?.copy(actionFingerprint = value) })
       requests += request
+      commands += command
       return ApprovalRegistrationResult.Registered(request)
     }
     override fun resolveByProvider(approvalId: String, providerRequestId: ApprovalProviderRequestId,
@@ -118,6 +190,8 @@ class CodexChatApprovalTest {
   }
 
   private companion object {
+    fun jsonPathLiteral(path: String): String = path.replace('\\', '/')
+
     fun obj(raw: String): JsonObject = Json.parseToJsonElement(raw).jsonObject
     fun command(network: Boolean = false): JsonObject = obj("""{"id":7,"method":"item/commandExecution/requestApproval","params":{"threadId":"thread","turnId":"turn","itemId":"cmd","command":"git status","cwd":"/checkout","commandActions":[{"type":"unknown","command":"git status"}],"availableDecisions":null${if (network) ",\"networkApprovalContext\":{\"host\":\"example.test\"}" else ""}}}""")
   }

@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import skillbill.approval.model.ApprovalActionClass
+import skillbill.approval.model.ApprovalMatchFacts
 import skillbill.approval.model.DENY_OPTION_KIND
 import skillbill.approval.model.ONE_TIME_ALLOW_OPTION_KIND
 import skillbill.approval.model.PROVIDER_REMEMBER_OPTION_KIND
@@ -20,6 +21,7 @@ import skillbill.contracts.approval.ApprovalProviderRequestId
 import skillbill.contracts.approval.ApprovalRequestRecord
 import skillbill.contracts.approval.ApprovalState
 import skillbill.contracts.approval.OPERATOR_APPROVAL_CONTRACT_VERSION
+import skillbill.infrastructure.launcher.process.interaction.ApprovalMatchFactsNormalizer
 import skillbill.ports.approval.model.ApprovalOwnerKey
 import java.util.Base64
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpKeys as K
@@ -44,6 +46,7 @@ internal class CursorPendingPermission(
   val options: List<CursorPermissionOption>,
   val actionClass: ApprovalActionClass,
   val writeCapable: Boolean,
+  val matchFacts: ApprovalMatchFacts?,
 ) {
   var written = false
 
@@ -82,6 +85,13 @@ internal object CursorPermissionRequests {
     return options.takeIf { it.map(CursorPermissionOption::id).distinct().size == it.size }
   }
 
+  fun allowOnceOptionId(message: JsonObject): String? {
+    val entries = message.obj(K.PARAMS)?.get(K.OPTIONS) as? JsonArray ?: return null
+    val parsed = entries.mapNotNull(::option)
+    return parsed.firstOrNull { it.kind == CursorPermissionKind.ALLOW_ONCE.wireValue }?.id
+      ?: parsed.firstOrNull { it.kind == CursorPermissionKind.ALLOW_ALWAYS.wireValue }?.id
+  }
+
   private fun option(value: JsonElement): CursorPermissionOption? {
     val objectValue = value as? JsonObject ?: return null
     val id = objectValue.text(K.OPTION_ID)?.takeIf(String::isNotBlank)
@@ -103,19 +113,7 @@ internal object CursorPermissionRequests {
     val ordinary = toolKind in ORDINARY_KINDS
     val input = rawInput as? JsonObject
     val complete = ordinary && actionKind.isNotBlank() && input?.isNotEmpty() == true
-    val canonical =
-      if (complete) {
-        CanonicalJson.encode(
-          buildJsonObject {
-            put(K.KIND, toolKind)
-            put(K.NAME, actionKind)
-            put(K.RAW_INPUT, requireNotNull(rawInput))
-            merged[K.LOCATIONS]?.let { put(K.LOCATIONS, it) }
-          },
-        )
-      } else {
-        null
-      }
+    val canonical = canonicalInput(complete, toolKind, actionKind, rawInput, merged)
     val payload =
       buildJsonObject {
         put(K.REQUEST, decoded.message)
@@ -149,6 +147,7 @@ internal object CursorPermissionRequests {
         ordinary -> ApprovalActionClass.ORDINARY_TOOL
         else -> ApprovalActionClass.PROVIDER_INTERACTION
       }
+    val matchFacts = permissionMatchFacts(canonical, toolKind, cwd, merged, input)
     return CursorPendingPermission(
       request,
       canonical,
@@ -156,7 +155,69 @@ internal object CursorPermissionRequests {
       decoded.options,
       actionClass,
       toolKind !in READ_ONLY_KINDS,
+      matchFacts,
     )
+  }
+
+  private fun canonicalInput(
+    complete: Boolean,
+    toolKind: String?,
+    actionKind: String,
+    rawInput: JsonElement?,
+    merged: JsonObject,
+  ): String? {
+    if (!complete) return null
+    return CanonicalJson.encode(
+      buildJsonObject {
+        put(K.KIND, toolKind)
+        put(K.NAME, actionKind)
+        put(K.RAW_INPUT, requireNotNull(rawInput))
+        merged[K.LOCATIONS]?.let { put(K.LOCATIONS, it) }
+      },
+    )
+  }
+
+  private fun permissionMatchFacts(
+    canonical: String?,
+    toolKind: String?,
+    cwd: String,
+    merged: JsonObject,
+    input: JsonObject?,
+  ): ApprovalMatchFacts? {
+    if (canonical == null) return null
+    return when (toolKind) {
+      "execute" -> ApprovalMatchFactsNormalizer.commandFacts(input?.text(K.COMMAND))
+      "edit", "delete", "move" -> pathMatchFacts(cwd, toolKind, merged, input)
+      else -> null
+    }
+  }
+
+  private fun pathMatchFacts(
+    cwd: String,
+    toolKind: String?,
+    merged: JsonObject,
+    input: JsonObject?,
+  ): ApprovalMatchFacts? {
+    val paths = toolPaths(merged, input) ?: return null
+    if (toolKind == "move" && paths.size < 2) return null
+    return ApprovalMatchFactsNormalizer.pathFacts(cwd, cwd, paths)
+  }
+
+  private fun toolPaths(
+    merged: JsonObject,
+    input: JsonObject?,
+  ): List<String>? {
+    val paths = mutableListOf<String>()
+    merged[K.LOCATIONS]?.let { value ->
+      val entries = value as? JsonArray ?: return null
+      for (entry in entries) {
+        val location = entry as? JsonObject ?: return null
+        val path = location.text(K.PATH) ?: return null
+        paths += path
+      }
+    }
+    input?.text(K.PATH)?.let(paths::add)
+    return paths
   }
 
   private fun cardKind(kind: String): String =

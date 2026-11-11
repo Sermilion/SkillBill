@@ -1,7 +1,6 @@
 package skillbill.engine.goalrunner.plan
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowId
 import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.application.workflow.decomposition.findOccupyingDecomposedParentWorkflow
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationCandidate
@@ -11,6 +10,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibility
 import skillbill.engine.featuretask.phaserun.StandalonePhaseLaunch
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusEventSink
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
@@ -26,8 +26,9 @@ import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.text.sha256HexUtf8
-import skillbill.workflow.taskruntime.artifact.decomposeTerminal
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
@@ -265,19 +266,10 @@ public class StandalonePlanRun(
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
   ): StandalonePlanResult {
     val completed =
-      database.read { unitOfWork ->
-        goalRepositoryIdentityCandidates(repoRoot, repositories)
-          .firstNotNullOfOrNull { identity ->
-            unitOfWork.workflowStates.findCompletedPlanWorkflowId(issueKey, identity)
-          }
-          ?.let { id ->
-            unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, id)
-              ?.takeIf { it.hasPlanSubtasksStep() }
-              ?.let { id to it.artifacts.decomposeTerminal() }
-          }
-      }?.takeIf { (_, terminal) ->
-        terminal == null || isLaunchedSpec(terminal.parentSpecPath, issueKey, intake, repoRoot)
-      }
+      planLookup.completedSelection(issueKey, goalRepositoryIdentityCandidates(repoRoot, repositories))
+        ?.takeIf { selected ->
+          selected.terminal == null || isLaunchedSpec(selected.terminal.parentSpecPath, issueKey, intake, repoRoot)
+        }
     if (completed == null) {
       return open(
         issueKey,
@@ -287,8 +279,24 @@ public class StandalonePlanRun(
         statusPublisher,
       )
     }
-    val (id, terminal) = completed
+    val id = completed.workflowId
+    val terminal = completed.terminal
     if (terminal != null && intake == null) {
+      val feasibility = PlanBundleFeasibility.capture(decompositionPlanner, repoRoot, issueKey)
+      if (completed.feasibilityState == null ||
+        !PlanBundleFeasibility.approved(
+          completed.feasibilityState,
+          feasibility,
+          completed.phaseRecord,
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
+        )
+      ) {
+        val settledIds = feasibility.settledSubtaskIds
+        return replanSubtasks(
+          PlanSubtasksReplan(issueKey, id, repoRoot, settledIds, feasibilityAdoption = true),
+          inputFor,
+        )
+      }
       val result =
         StandalonePlanResult.Completed(
           id,
@@ -340,6 +348,48 @@ public class StandalonePlanRun(
     return runEntry(input, repoRoot, statusPublisher)
   }
 
+  private fun adoptFeasibilityForResume(
+    candidate: FeatureTaskContinuationCandidate,
+    repoRoot: Path,
+  ): Boolean {
+    val selected = planLookup.selection(candidate.workflowId)
+    val selectedPhase = selected?.phaseRecord
+    val selectedFeasibility = selected?.feasibilityState
+    if (selectedPhase != null) {
+      val current =
+        PlanBundleFeasibility.capture(
+          decompositionPlanner,
+          repoRoot,
+          candidate.executionIdentity.normalizedIssueKey,
+        )
+      val completedApproval =
+        selectedFeasibility?.takeIf { it.mode == PlanBundleFeasibilityMode.APPROVED }?.let {
+          PlanBundleFeasibility.approved(
+            it,
+            current,
+            selectedPhase,
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
+          )
+        } == true
+      val needsFullReview =
+        selectedFeasibility == null ||
+          selectedFeasibility.mode == PlanBundleFeasibilityMode.APPROVED && !completedApproval ||
+          selectedPhase.status == WorkflowStepStatus.COMPLETED &&
+          selectedFeasibility.mode != PlanBundleFeasibilityMode.BLOCKED && !completedApproval
+      return !needsFullReview ||
+        reopening.reopenWithRebasedBundle(
+          PlanSubtasksReplan(
+            candidate.executionIdentity.normalizedIssueKey,
+            candidate.workflowId,
+            repoRoot,
+            current.settledSubtaskIds,
+            feasibilityAdoption = true,
+          ),
+        )
+    }
+    return true
+  }
+
   private fun resume(
     candidate: FeatureTaskContinuationCandidate,
     intake: String?,
@@ -359,6 +409,14 @@ public class StandalonePlanRun(
       )
     }
     val specPath = decompositionPlanner.bundlePath(repositories.canonicalPath(repoRoot), candidate.governedSpecPath)
+    if (!adoptFeasibilityForResume(candidate, repoRoot)) {
+      return refused(
+        statusPublisher,
+        "Plan workflow '${candidate.workflowId}' could not adopt its retained plan_subtasks output " +
+          "for a full v2 review.",
+        candidate.workflowId,
+      )
+    }
     val seed = seedRecorder.read(candidate.workflowId)
     if (seed != null && intake != null && sha256HexUtf8(intake) != seed.intakeSha256) {
       return refused(

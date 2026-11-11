@@ -1,9 +1,9 @@
 package skillbill.engine.featuretask.runloop.core
 
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.phaseLoopContext
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
@@ -29,13 +29,11 @@ import skillbill.engine.featuretask.slot.PhaseStepCapture
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepFailure
 import skillbill.engine.featuretask.slot.PhaseStepFailureSource
-import skillbill.engine.featuretask.slot.PhaseUpstreamFailureContinuationHooks
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.agentrun.model.AgentRunOutputSink
-import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -89,7 +87,7 @@ internal object FeatureTaskRuntimeRunLoopPlanningBranch {
   private fun capExhaustionPhaseRun(
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,
-  ): PhaseRun = buildPhaseRun(context, phaseId, context.request, context.specSource, null)
+  ): PhaseRun = context.phaseRunFactory.build(context, phaseId, context.request, context.specSource, null)
 
   internal fun runPhase(
     context: FeatureTaskRuntimeRunLoopContext,
@@ -99,7 +97,7 @@ internal object FeatureTaskRuntimeRunLoopPlanningBranch {
   ): PhaseOutcome {
     val phaseId = args.phaseId
     val run =
-      buildPhaseRun(
+      context.phaseRunFactory.build(
         context = context,
         phaseId = phaseId,
         request = args.request,
@@ -113,7 +111,29 @@ internal object FeatureTaskRuntimeRunLoopPlanningBranch {
         state = args.state,
         observability = args.observability,
       )?.let { return it }
+    warnIfReasoningTierUnavailable(context, run)
     return runPreparedPhase(context, run, outputSink, captureStreamOutput)
+  }
+
+  private fun warnIfReasoningTierUnavailable(
+    context: FeatureTaskRuntimeRunLoopContext,
+    run: PhaseRun,
+  ) {
+    val scope = (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair ?: return
+    if (run.phaseId != scope.steps?.repair) return
+    val state = scope.snapshot ?: return
+    val criterion = state.criteria.singleOrNull { it.canonicalRef == state.currentCriterionRef } ?: return
+    val agent = run.resolvedAgent.resolvedAgentId
+    if (criterion.escalated &&
+      FeatureTaskRuntimeModelResolver.reasoningTierDirective(agent, run.request.modelAssignment) == null
+    ) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        context.runState.diagnostics,
+        "seam=acceptance_repair_escalation value_expected=reasoning_tier value_used=current_model " +
+          "workflow=${run.request.workflowId} phase=${run.phaseId} criterion=${criterion.canonicalRef} agent=$agent " +
+          "No reasoning-tier model is configured; the repair runs on its current model.",
+      )
+    }
   }
 
   internal fun phaseDeclarationForRun(
@@ -126,45 +146,6 @@ internal object FeatureTaskRuntimeRunLoopPlanningBranch {
       request.runInvariants.featureSize,
       context.runState.unselectedStepIds(),
     )
-
-  internal fun buildPhaseRun(
-    context: FeatureTaskRuntimeRunLoopContext,
-    phaseId: String,
-    request: FeatureTaskRuntimeRunFacts,
-    specSource: SpecSource,
-    reentry: PendingReentry?,
-  ): PhaseRun {
-    val resolvedAgent =
-      FeatureTaskRuntimeAgentResolver.resolve(
-        phaseId = phaseId,
-        assignment = request.agentAssignment,
-        invokedAgentId = request.invokedAgentId,
-      )
-    val recorded = context.runState.stepLaunchAssignment(phaseId)
-    val resolvedAgentId = resolvedAgent.resolvedAgentId
-    return PhaseRun(
-      phaseId = phaseId,
-      declaration = phaseDeclarationForRun(context, request, phaseId),
-      resolvedAgent = resolvedAgent,
-      modelDirective =
-        FeatureTaskRuntimeResumeLaunchAssignment.modelDirective(
-          recorded,
-          resolvedAgentId,
-          phaseId,
-          request.modelAssignment,
-        ),
-      compaction = request.compactionSettings.directiveFor(phaseId),
-      request = request,
-      specSource = specSource,
-      policy = context.acceptedStepPolicy(phaseId),
-      projectStoreRoot = context.projectStoreRoot,
-      launchAssignment = FeatureTaskRuntimeResumeLaunchAssignment.recordedForAgent(recorded, resolvedAgentId),
-      reentry = reentry,
-      failureContinuationOutput =
-        (context.runState.strategyFor(phaseId).stepHooks(phaseId) as? PhaseUpstreamFailureContinuationHooks)
-          ?.failureContinuationOutput(context.state.outputs()),
-    )
-  }
 
   internal fun runPreparedPhase(
     context: FeatureTaskRuntimeRunLoopContext,
@@ -302,7 +283,7 @@ internal object FeatureTaskRuntimeRunLoopPlanningBranch {
     ): T? {
       val rules = descriptor.loopRules ?: return null
       val run =
-        buildPhaseRun(
+        context.phaseRunFactory.build(
           context = context,
           phaseId = stepId,
           request = context.request,

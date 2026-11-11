@@ -1,3 +1,13 @@
+## [2026-11-10] Codex shell unwrap recognizes only single-quoted -c and -lc wrappers
+Context: Codex command approvals sometimes wrap the operator command in bash, zsh or sh.
+Decision: Unwrap when the outer form matches optional /bin or /usr/bin, shell name, -c or -lc, and a single-quoted inner segment with no embedded quote; otherwise return null when the first token is a shell.
+Reason: Exposes the intended inner command for pattern rules while failing closed on double quotes, extra flags and script-path forms the spec does not attest.
+
+## [2026-11-10] Centralize match-fact filesystem access in one launcher normalizer
+Context: Wildcard allow rules need comparable command and path facts from three provider adapters without inconsistent containment.
+Decision: Only ApprovalMatchFactsNormalizer uses Path, Files and relativize; Claude, Codex and Cursor adapters call commandFacts, pathFacts or withinCheckout.
+Reason: A single real-path and ancestor-walk policy prevents adapters from diverging on symlink or not-yet-existing Write targets.
+
 ## [2026-11-05] Pass temp-root inputs through the host port
 Context: Runtime temp resolution needs the configured JVM directory, environment and user home, while ambient property reads are governed at the host boundary.
 Decision: JdkHostPlatformPort passes those inputs to resolveRuntimeTempRoot. If creating state scratch fails, the resolver logs a warning and returns the configured path, or /tmp when it is blank.
@@ -102,3 +112,8 @@ Revisit when: A supported pack needs agents to run Gradle with a different user 
 Context: A workflow contract mismatch removed a saved goal from the board while the cache stayed marked complete. Installation also treated a failed or deferred database migration as a warning.
 Decision: The staged runtime runs the existing database preparation before activation. Migration failure or a live worker blocks installation and retains the installed runtime. Migration 108 promotes readable workflow envelopes from 0.1 through 0.3 to 0.4 without changing their saved payloads. Unsupported versions and malformed JSON remain unchanged. Migration invalidates the board cache, and board projection retains incompatible workflows as blocked records with a typed problem.
 Reason: Workflow payloads, completed steps and history are durable evidence. The board is derived data and must rebuild after an upgrade. The strict workflow reader still validates each migrated snapshot before use.
+
+## [2026-11-08] Order monitor CI cycles in Kotlin and store their own check type
+Context: `monitor_ci_cycles` rows store `started_at` as `Instant.toString()` text, whose fraction digits vary, so SQL text ordering is wrong. The cycle record's checks first reused `PullRequestCheck`, which made `idestatus.model` depend on `goalrunner.runner.model` and closed a package cycle in runtime-ports.
+Decision: `MonitorCiCycleStore` reads one workflow's rows and orders the parsed instants in Kotlin. `MonitorCiCycleRecord` holds `MonitorCiCycleCheck` with its own `MonitorCiCheckBucket`, and the engine maps `PullRequestCheck` into it when it records an observation.
+Reason: One goal has a handful of monitor cycles, so loading them all is cheap. Move ordering into SQL if a workflow ever holds hundreds of cycles. The separate check type keeps runtime-ports acyclic without moving `PullRequestCheck`.

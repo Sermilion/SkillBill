@@ -20,6 +20,11 @@ Classify into one of two modes:
 Retain every intake requirement, even when there are more than five. Planning splits the scope into
 the fewest subtask specs needed to keep each at five criteria or fewer, with counts differing by at
 most one. Six criteria become two specs with three each. Each criterion stays focused on one outcome.
+Identify smaller, independently verifiable pieces of the same production work so planning can prefer
+five focused criteria over fewer broad ones. Preserve the same requirements and subtask boundary.
+Never expand scope or move work between subtasks
+merely to reach five criteria. Use fewer when reaching five would duplicate outcomes, separate tightly
+coupled work, or invent scope. Five is a preference, not a minimum or a target number of subtasks.
 Use `single_spec`
 only when the scope fits that limit and one implementation pass. Mode is sizing and planning metadata
 only; it never changes the artifact shape or executor.

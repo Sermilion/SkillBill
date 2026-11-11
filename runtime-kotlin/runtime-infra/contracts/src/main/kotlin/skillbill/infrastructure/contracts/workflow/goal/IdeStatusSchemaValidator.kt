@@ -132,10 +132,7 @@ internal const val IDE_STATUS_SCHEMA_REPO_RELATIVE_PATH: String =
 private fun ideStatusSchemaWireMap(snapshot: IdeStatusSnapshot): Map<String, Any?> =
   buildMap {
     put(SharedPayloadKeys.CONTRACT_VERSION, snapshot.contractVersion)
-    put("repository_identity", snapshot.repositoryIdentity)
-    snapshot.branchCorrelation?.takeIf(String::isNotBlank)?.let {
-      put(IdeStatusPayloadKeys.BRANCH_CORRELATION, it)
-    }
+    putRepositoryFields(snapshot)
     snapshot.issueKey?.takeIf(String::isNotBlank)?.let { put(SharedPayloadKeys.ISSUE_KEY, it) }
     snapshot.workflowId?.takeIf(String::isNotBlank)?.let { put(SharedPayloadKeys.WORKFLOW_ID, it) }
     snapshot.workflowFamily?.let { put("workflow_family", it.wireValue) }
@@ -156,6 +153,14 @@ private fun ideStatusSchemaWireMap(snapshot: IdeStatusSnapshot): Map<String, Any
     snapshot.problem?.let { put("problem", problemWireMap(it)) }
     snapshot.workflowQaOutcome?.let { put(IdeStatusPayloadKeys.WORKFLOW_QA_OUTCOME, workflowQaOutcomeWireMap(it)) }
   }
+
+private fun MutableMap<String, Any?>.putRepositoryFields(snapshot: IdeStatusSnapshot) {
+  put("repository_identity", snapshot.repositoryIdentity)
+  snapshot.branchCorrelation?.takeIf(String::isNotBlank)?.let {
+    put(IdeStatusPayloadKeys.BRANCH_CORRELATION, it)
+  }
+  snapshot.primaryRepositoryRoot?.let { put(IdeStatusPayloadKeys.PRIMARY_REPOSITORY_ROOT, it) }
+}
 
 private fun workflowQaOutcomeWireMap(qa: IdeStatusWorkflowQaOutcome): Map<String, Any?> =
   buildMap {

@@ -6,6 +6,7 @@ import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidDecompositionManifestSchema
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
+import skillbill.ports.workflow.decomposition.model.DecompositionManifestBundleProjection
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.UUID
@@ -58,6 +59,7 @@ internal object DecompositionManifestBundleJournalCreate {
   fun create(
     parent: Path,
     writes: List<Pair<Path, String>>,
+    projection: DecompositionManifestBundleProjection?,
     yamlMapper: YAMLMapper,
     journal: DecompositionManifestBundleJournal,
   ): DecompositionManifestBundleTransaction {
@@ -73,44 +75,89 @@ internal object DecompositionManifestBundleJournalCreate {
         val target = path.toAbsolutePath().normalize()
         val staged = stagingDirectory.resolve("entry-$index")
         journal.writeAtomically(staged, content)
-        DecompositionManifestBundleEntry(target, staged, sha256Hex(content.toByteArray(Charsets.UTF_8)))
+        val before = projection?.expectedBefore?.firstOrNull { it.path.toAbsolutePath().normalize() == target }
+        require(projection == null || before != null) {
+          "Guarded bundle writes must declare each target's before identity."
+        }
+        DecompositionManifestBundleEntry(
+          target,
+          staged,
+          sha256Hex(content.toByteArray(Charsets.UTF_8)),
+          beforeExisted = before?.sha256 != null,
+          beforeSha256 = before?.sha256,
+        )
+      }
+    val contractVersion =
+      if (projection == null) {
+        DecompositionManifestBundleJournal.LEGACY_BUNDLE_CONTRACT_VERSION
+      } else {
+        DecompositionManifestBundleJournal.BUNDLE_CONTRACT_VERSION
+      }
+    val protectedFiles =
+      projection?.protectedFiles.orEmpty().map { identity ->
+        DecompositionManifestBundleProtectedFile(identity.path.toAbsolutePath().normalize(), identity.sha256)
       }
     val marker =
       parent.resolve(
         "${DecompositionManifestBundleJournal.BUNDLE_PREFIX}$transactionId" +
           DecompositionManifestBundleJournal.MARKER_SUFFIX,
       )
-    journal.writeAtomically(
-      marker,
-      yamlMapper.writeValueAsString(
-        mapOf(
-          SharedPayloadKeys.CONTRACT_VERSION to DecompositionManifestBundleJournal.BUNDLE_CONTRACT_VERSION,
-          DecompositionManifestBundleJournalPayloadKeys.STAGING_DIRECTORY to stagingDirectory.toString(),
-          DecompositionManifestBundleJournalPayloadKeys.ENTRIES to
-            entries.map { entry ->
-              mapOf(
-                DecompositionManifestBundleJournalPayloadKeys.TARGET to entry.target.toString(),
-                DecompositionManifestBundleJournalPayloadKeys.STAGED to entry.staged.toString(),
-                DecompositionManifestBundleJournalPayloadKeys.SHA256 to entry.sha256,
-              )
-            },
-        ),
-      ),
-    )
-    return DecompositionManifestBundleTransaction(marker, stagingDirectory, entries)
+    val markerPayload = markerPayload(contractVersion, stagingDirectory, entries, projection != null, protectedFiles)
+    journal.writeAtomically(marker, yamlMapper.writeValueAsString(markerPayload))
+    return DecompositionManifestBundleTransaction(marker, stagingDirectory, entries, contractVersion, protectedFiles)
+  }
+
+  private fun markerPayload(
+    contractVersion: String,
+    stagingDirectory: Path,
+    entries: List<DecompositionManifestBundleEntry>,
+    guarded: Boolean,
+    protectedFiles: List<DecompositionManifestBundleProtectedFile>,
+  ): Map<String, Any?> {
+    return linkedMapOf<String, Any?>(
+      SharedPayloadKeys.CONTRACT_VERSION to contractVersion,
+      DecompositionManifestBundleJournalPayloadKeys.STAGING_DIRECTORY to stagingDirectory.toString(),
+      DecompositionManifestBundleJournalPayloadKeys.ENTRIES to
+        entries.map { entry ->
+          linkedMapOf<String, Any?>(
+            DecompositionManifestBundleJournalPayloadKeys.TARGET to entry.target.toString(),
+            DecompositionManifestBundleJournalPayloadKeys.STAGED to entry.staged.toString(),
+            DecompositionManifestBundleJournalPayloadKeys.SHA256 to entry.sha256,
+          ).apply {
+            if (guarded) {
+              put(DecompositionManifestBundleJournalPayloadKeys.BEFORE_EXISTS, entry.beforeExisted)
+              put(DecompositionManifestBundleJournalPayloadKeys.BEFORE_SHA256, entry.beforeSha256)
+            }
+          }
+        },
+    ).apply {
+      if (guarded) {
+        put(
+          DecompositionManifestBundleJournalPayloadKeys.PROTECTED_FILES,
+          protectedFiles.map { file ->
+            mapOf(
+              DecompositionManifestBundleJournalPayloadKeys.PATH to file.path.toString(),
+              DecompositionManifestBundleJournalPayloadKeys.SHA256 to file.sha256,
+            )
+          },
+        )
+      }
+    }
   }
 }
 
 internal object DecompositionManifestBundleJournalIo {
   fun apply(transaction: DecompositionManifestBundleTransaction) {
     DecompositionManifestBundleJournalValidation.validateTransaction(transaction)
+    DecompositionManifestBundleJournalValidation.validateProjectionPreconditions(transaction)
     transaction.entries.forEach { entry ->
       when {
+        Files.isRegularFile(entry.target) &&
+          sha256Hex(Files.readString(entry.target).toByteArray(Charsets.UTF_8)) == entry.sha256 -> Unit
         Files.isRegularFile(entry.staged) -> {
           Files.createDirectories(requireNotNull(entry.target.parent))
           atomicMoveReplacing(entry.staged, entry.target)
         }
-        Files.isRegularFile(entry.target) -> Unit
         else -> error("Decomposition manifest bundle journal is incomplete for '${entry.target}'.")
       }
     }

@@ -1,5 +1,6 @@
 package skillbill.infrastructure.workflow.decomposition
 
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidDecompositionManifestBundleJournal
 import skillbill.infrastructure.contracts.sha256Hex
@@ -18,10 +19,14 @@ internal object DecompositionManifestBundleJournalValidation {
       val parsed = DecompositionManifestBundleJournalSchemaValidator.validateYamlText(yamlText, sourceLabel)
       val markerParent = requireNotNull(marker.parent).toAbsolutePath().normalize()
       val transactionId = requireTransactionId(marker, sourceLabel)
+      val contractVersion = parsed[SharedPayloadKeys.CONTRACT_VERSION] as String
+      validateLegacyProjection(parsed, contractVersion, sourceLabel)
       val stagingDirectory = stagingDirectory(parsed)
       validateStagingDirectory(stagingDirectory, markerParent, transactionId, sourceLabel)
-      val entries = parseEntries(parsed, sourceLabel, stagingDirectory, markerParent)
-      val transaction = DecompositionManifestBundleTransaction(marker, stagingDirectory, entries)
+      val entries = parseEntries(parsed, contractVersion, sourceLabel, stagingDirectory, markerParent)
+      val protectedFiles = parseProtectedFiles(parsed, contractVersion, sourceLabel, markerParent)
+      val transaction =
+        DecompositionManifestBundleTransaction(marker, stagingDirectory, entries, contractVersion, protectedFiles)
       validateTransaction(transaction)
       transaction
     } catch (error: IOException) {
@@ -41,6 +46,22 @@ internal object DecompositionManifestBundleJournalValidation {
     }
   }
 
+  private fun validateLegacyProjection(
+    parsed: Map<String, Any?>,
+    contractVersion: String,
+    sourceLabel: String,
+  ) {
+    if (contractVersion == DecompositionManifestBundleJournal.LEGACY_BUNDLE_CONTRACT_VERSION &&
+      DecompositionManifestBundleJournalPayloadKeys.PROTECTED_FILES in parsed
+    ) {
+      throw journalError(
+        sourceLabel,
+        "Legacy journal markers cannot claim guarded projection identities.",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_SCHEMA_INVALID,
+      )
+    }
+  }
+
   fun validateTransaction(transaction: DecompositionManifestBundleTransaction) {
     val sourceLabel = transaction.marker.toString()
     val markerParent = requireNotNull(transaction.marker.parent).toAbsolutePath().normalize()
@@ -48,13 +69,58 @@ internal object DecompositionManifestBundleJournalValidation {
     val stagingDirectory = transaction.stagingDirectory.toAbsolutePath().normalize()
     validateStagingDirectory(stagingDirectory, markerParent, transactionId, sourceLabel)
     transaction.entries.forEach { entry -> validateEntryPaths(entry, markerParent, stagingDirectory, sourceLabel) }
+    transaction.protectedFiles.forEach { file ->
+      if (file.path.parent != markerParent || !pathContainedIn(file.path, markerParent)) {
+        throw journalError(
+          sourceLabel,
+          "Protected file '${file.path}' is outside the bundle parent.",
+          WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_TARGET_OUTSIDE_PARENT,
+        )
+      }
+    }
+    if (transaction.protectedFiles.map { it.path }.distinct().size != transaction.protectedFiles.size) {
+      throw journalError(
+        sourceLabel,
+        "Protected file identities repeat a normalized path.",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_DUPLICATE_TARGET,
+      )
+    }
     validateUniqueTargets(transaction.entries, sourceLabel)
     validateUniqueStagedPaths(transaction.entries, sourceLabel)
     validateEntryDigests(transaction)
   }
 
+  fun validateProjectionPreconditions(transaction: DecompositionManifestBundleTransaction) {
+    if (transaction.contractVersion != DecompositionManifestBundleJournal.BUNDLE_CONTRACT_VERSION) return
+    val sourceLabel = transaction.marker.toString()
+    transaction.protectedFiles.forEach { file ->
+      if (currentDigest(file.path) != file.sha256) {
+        throw journalError(
+          sourceLabel,
+          "Protected file '${file.path}' changed while a bundle projection was pending.",
+          WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_TARGET_DIGEST_MISMATCH,
+        )
+      }
+    }
+    transaction.entries.forEach { entry ->
+      val current = currentDigest(entry.target)
+      val before = if (entry.beforeExisted == true) entry.beforeSha256 else null
+      if (current != before && current != entry.sha256) {
+        throw journalError(
+          sourceLabel,
+          "Target '${entry.target}' matches neither its recorded before nor intended after identity.",
+          WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_TARGET_DIGEST_MISMATCH,
+        )
+      }
+    }
+  }
+
+  private fun currentDigest(path: Path): String? =
+    if (Files.isRegularFile(path)) sha256Hex(Files.readString(path).toByteArray(Charsets.UTF_8)) else null
+
   private fun parseEntries(
     parsed: Map<String, Any?>,
+    contractVersion: String,
     sourceLabel: String,
     stagingDirectory: Path,
     markerParent: Path,
@@ -67,12 +133,13 @@ internal object DecompositionManifestBundleJournalValidation {
           WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_ENTRIES_MISSING,
         )
     return rawEntries.map { rawEntry ->
-      parseEntry(rawEntry, sourceLabel, stagingDirectory, markerParent)
+      parseEntry(rawEntry, contractVersion, sourceLabel, stagingDirectory, markerParent)
     }
   }
 
   private fun parseEntry(
     rawEntry: Any?,
+    contractVersion: String,
     sourceLabel: String,
     stagingDirectory: Path,
     markerParent: Path,
@@ -103,13 +170,89 @@ internal object DecompositionManifestBundleJournalValidation {
           "Journal entry field '${DecompositionManifestBundleJournalPayloadKeys.SHA256}' is missing or not a string.",
           WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_ENTRY_FIELD_INVALID,
         )
+    val beforeExists = entry[DecompositionManifestBundleJournalPayloadKeys.BEFORE_EXISTS] as? Boolean
+    val beforeSha = entry[DecompositionManifestBundleJournalPayloadKeys.BEFORE_SHA256] as? String
+    validateBeforeIdentity(contractVersion, beforeExists, beforeSha, sourceLabel)
     validateEntryPaths(
-      DecompositionManifestBundleEntry(target, staged, sha256),
+      DecompositionManifestBundleEntry(target, staged, sha256, beforeExists, beforeSha),
       markerParent,
       stagingDirectory,
       sourceLabel,
     )
-    return DecompositionManifestBundleEntry(target, staged, sha256)
+    return DecompositionManifestBundleEntry(target, staged, sha256, beforeExists, beforeSha)
+  }
+
+  private fun validateBeforeIdentity(
+    contractVersion: String,
+    beforeExists: Boolean?,
+    beforeSha: String?,
+    sourceLabel: String,
+  ) {
+    if (contractVersion == DecompositionManifestBundleJournal.BUNDLE_CONTRACT_VERSION &&
+      (beforeExists == null || (beforeExists != (beforeSha != null)))
+    ) {
+      throw journalError(
+        sourceLabel,
+        "Guarded journal entry is missing a consistent before identity.",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_ENTRY_FIELD_INVALID,
+      )
+    }
+    if (contractVersion == DecompositionManifestBundleJournal.BUNDLE_CONTRACT_VERSION &&
+      beforeSha?.matches(Regex("[0-9a-f]{64}")) == false
+    ) {
+      throw journalError(
+        sourceLabel,
+        "Guarded journal entry has an invalid before digest.",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_ENTRY_FIELD_INVALID,
+      )
+    }
+  }
+
+  private fun parseProtectedFiles(
+    parsed: Map<String, Any?>,
+    contractVersion: String,
+    sourceLabel: String,
+    markerParent: Path,
+  ): List<DecompositionManifestBundleProtectedFile> {
+    val raw = parsed[DecompositionManifestBundleJournalPayloadKeys.PROTECTED_FILES] as? List<*>
+    if (contractVersion == DecompositionManifestBundleJournal.BUNDLE_CONTRACT_VERSION && raw == null) {
+      throw journalError(
+        sourceLabel,
+        "Guarded journal marker is missing protected file identities.",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_ENTRY_FIELD_INVALID,
+      )
+    }
+    return raw.orEmpty().map { value ->
+      parseProtectedFile(value, sourceLabel, markerParent)
+    }
+  }
+
+  private fun parseProtectedFile(
+    value: Any?,
+    sourceLabel: String,
+    markerParent: Path,
+  ): DecompositionManifestBundleProtectedFile {
+    val file =
+      value as? Map<*, *> ?: throw journalError(
+        sourceLabel,
+        "Malformed protected file identity.",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_ENTRY_NOT_OBJECT,
+      )
+    val path =
+      pathValue(
+        file[DecompositionManifestBundleJournalPayloadKeys.PATH],
+        sourceLabel,
+        DecompositionManifestBundleJournalPayloadKeys.PATH,
+      ).toAbsolutePath().normalize()
+    val digest = file[DecompositionManifestBundleJournalPayloadKeys.SHA256] as? String
+    if (path.parent != markerParent || digest?.matches(Regex("[0-9a-f]{64}")) == false) {
+      throw journalError(
+        sourceLabel,
+        "Protected file identity is outside the bundle or has an invalid digest.",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_TARGET_OUTSIDE_PARENT,
+      )
+    }
+    return DecompositionManifestBundleProtectedFile(path, digest)
   }
 
   private fun validateEntryPaths(

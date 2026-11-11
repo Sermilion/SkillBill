@@ -230,10 +230,12 @@ public class IdeStatusProjector(
     return IdeStatusSnapshot(
       repositoryIdentity = context.repositoryIdentity,
       branchCorrelation = record.branchCorrelation,
+      primaryRepositoryRoot = record.primaryRepositoryRoot,
       issueKey = record.issueKey,
       workflowId = record.workflowId,
       workflowFamily = record.workflowId?.let { IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME },
       execution = execution,
+      currentModel = record.reportedModel?.let { IdeStatusCurrentModel(model = it) },
       currentActivity = record.currentActivity,
       lifecycleState = lifecycle,
       currentStep = IdeStatusStep(record.currentStep, record.currentStep),
@@ -319,8 +321,7 @@ public class IdeStatusProjector(
     projection: GoalRunnerStatusProjection?,
     featureName: String?,
   ): IdeStatusProjection {
-    val completionRecorded = projection?.admittedParentComplete() == true
-    val preliminaryLifecycle = goalLifecycle(candidate, projection, completionRecorded)
+    val preliminaryLifecycle = goalLifecycle(candidate, projection, projection?.admittedParentComplete() == true)
     val planning = projection?.planning?.toIdeStatusPlanning()
     val childContext = childOptionalContext(projection?.currentChildWorkflowId, preliminaryLifecycle)
     val lifecycle = goalLifecycleForOperatorBlock(preliminaryLifecycle, childContext)
@@ -351,6 +352,7 @@ public class IdeStatusProjector(
       IdeStatusSnapshot(
         repositoryIdentity = context.repositoryIdentity,
         branchCorrelation = context.branchCorrelation,
+        primaryRepositoryRoot = candidate.primaryRepositoryRoot,
         issueKey = issueKey,
         workflowId = candidate.workflowId,
         workflowFamily = IdeStatusWorkflowFamily.FEATURE_GOAL,
@@ -557,6 +559,7 @@ public class IdeStatusProjector(
       IdeStatusSnapshot(
         repositoryIdentity = context.repositoryIdentity,
         branchCorrelation = context.branchCorrelation,
+        primaryRepositoryRoot = candidate.primaryRepositoryRoot,
         issueKey = candidate.issueKey,
         workflowId = candidate.workflowId,
         workflowFamily = IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
@@ -652,6 +655,7 @@ public class IdeStatusProjector(
     return IdeStatusSnapshot(
       repositoryIdentity = context.repositoryIdentity,
       branchCorrelation = context.branchCorrelation,
+      primaryRepositoryRoot = candidate.primaryRepositoryRoot,
       issueKey = candidate.issueKey,
       workflowId = candidate.workflowId,
       workflowFamily = wireFamily,
@@ -694,6 +698,7 @@ public class IdeStatusProjector(
       observedAt = context.observedAt,
       message = message,
       workflowId = candidate.workflowId,
+      primaryRepositoryRoot = candidate.primaryRepositoryRoot,
     )
 }
 

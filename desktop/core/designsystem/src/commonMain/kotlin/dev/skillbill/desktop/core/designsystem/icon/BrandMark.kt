@@ -8,11 +8,11 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.generated.resources.Res
-import dev.skillbill.desktop.core.designsystem.generated.resources.skill_bill
+import dev.skillbill.desktop.core.designsystem.generated.resources.sona
 import org.jetbrains.compose.resources.painterResource
 
 @Composable
-fun skillBillIcon(): Painter = painterResource(Res.drawable.skill_bill)
+fun skillBillIcon(): Painter = painterResource(Res.drawable.sona)
 
 @Composable
 fun BrandMark(size: Dp = 20.dp) {

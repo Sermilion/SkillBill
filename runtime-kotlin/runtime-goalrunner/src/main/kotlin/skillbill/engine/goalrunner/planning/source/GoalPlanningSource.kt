@@ -10,7 +10,10 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibility
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
 import skillbill.engine.featuretask.phase.planning.PlanBundleSnapshots
+import skillbill.engine.featuretask.phase.planning.planBundleImmutableManifestHash
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.goal.goalRepositoryIdentityCandidates
@@ -20,7 +23,6 @@ import skillbill.engine.goalrunner.plan.PlanSubtasksReplan
 import skillbill.engine.goalrunner.plan.StandalonePlanLaunch
 import skillbill.engine.goalrunner.plan.StandalonePlanResult
 import skillbill.engine.goalrunner.plan.StandalonePlanRun
-import skillbill.engine.goalrunner.planning.context.goalPlanningImmutableDecompositionHash
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
 import skillbill.engine.goalrunner.planning.outcome.canonicalStore
@@ -50,6 +52,8 @@ import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.artifact.decodePlanBundleFromArtifact
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
@@ -66,11 +70,12 @@ public class PlanWorkflowGoalPlanningSource(
   private val database: DatabaseSessionFactory,
   private val repositories: RepositoryEnclosingRootPort,
   private val fileStore: DecompositionManifestStore,
-  planner: FeatureTaskRuntimeDecompositionPlanner,
+  private val planner: FeatureTaskRuntimeDecompositionPlanner,
   private val legacyPreparations: GoalPlanningPreparationCheckpoint,
   private val replannedChildren: GoalReplannedChildCleanup,
   private val progressRecorder: GoalPlanningProgressRecorder,
   private val projectStore: ProjectStorePort,
+  private val feasibilityCodec: PlanBundleFeasibilityStateCodec,
 ) : GoalPlanningSource {
   private val snapshots = PlanBundleSnapshots(planner)
 
@@ -82,7 +87,7 @@ public class PlanWorkflowGoalPlanningSource(
     return if (scope.planned.isEmpty()) {
       GoalPlanningSweepOutcome.PreparedAll()
     } else {
-      fromPlanWorkflow(scope) ?: fromLegacyTables(scope) ?: runPlanSkeleton(scope)
+      fromPlanWorkflow(scope) ?: runPlanSkeleton(scope)
     }
   }
 
@@ -110,12 +115,28 @@ public class PlanWorkflowGoalPlanningSource(
     scope: PlanningScope,
     plan: LinkedPlan,
   ): GoalPlanningSweepOutcome.PreparedAll? {
-    if (scope.pending.any { !plan.unitComplete(scope, it) }) return null
+    if (scope.pending.any { !plan.unitComplete(scope, it) } || plan.feasibilityState == null) return null
+    val snapshot =
+      PlanBundleFeasibility.capture(
+        planner,
+        scope.canonicalRepository,
+        scope.state.manifest.issueKey,
+      )
+    val feasibilityState = requireNotNull(plan.feasibilityState)
+    if (!PlanBundleFeasibility.approved(
+        feasibilityState,
+        snapshot,
+        plan.records[PLAN_SUBTASKS_STEP_ID],
+        PLAN_SUBTASKS_STEP_ID,
+      )
+    ) {
+      return null
+    }
     val descriptors = scope.descriptors(recordedHash = { null }) ?: return null
     val provenance =
       GoalPlanningContractProvenance(
         parentSpecHash = plan.bundle.parentSpecSha256,
-        decompositionManifestHash = goalPlanningImmutableDecompositionHash(scope.state.manifest),
+        decompositionManifestHash = planBundleImmutableManifestHash(scope.state.manifest),
         planningContractId = GOAL_PLANNING_PREPARATION_SCHEMA_ID,
       )
     return GoalPlanningSweepOutcome.PreparedAll(scope.identity, provenance, descriptors, plan.workflowId)
@@ -130,35 +151,6 @@ public class PlanWorkflowGoalPlanningSource(
     return snapshots.unitComplete(scope.canonicalRepository, unit, unitRecord)
   }
 
-  private fun fromLegacyTables(scope: PlanningScope): GoalPlanningSweepOutcome.PreparedAll? =
-    try {
-      legacyPrepared(scope)
-    } catch (_: SkillBillRuntimeException) {
-      null
-    }
-
-  private fun legacyPrepared(scope: PlanningScope): GoalPlanningSweepOutcome.PreparedAll? {
-    val shared =
-      (legacyPreparations.findSharedPreplanResult(scope.identity) as? SharedGoalPreplanLookupResult.Found)
-        ?.checkpoint
-        ?: return null
-    val storedHashes = legacyStoredHashes(scope) ?: return null
-    val descriptors = scope.descriptors(recordedHash = storedHashes::get) ?: return null
-    return GoalPlanningSweepOutcome.PreparedAll(scope.identity, shared.provenance, descriptors, null)
-  }
-
-  private fun legacyStoredHashes(scope: PlanningScope): Map<Int, String>? {
-    val storedHashes = mutableMapOf<Int, String>()
-    scope.planned.forEach { subtask ->
-      val governedPath = scope.governedPathOf(subtask) ?: return null
-      val stored = legacyPreparations.findStoredSubtaskPlan(scope.identity, subtask.id, governedPath)
-      if (stored != null) storedHashes[subtask.id] = stored.subSpecHash
-      val matches = stored != null && stored.manifestOrder == scope.orderOf(subtask)
-      if (subtask in scope.pending && !(matches && stored.subSpecHash == scope.diskHashOf(subtask))) return null
-    }
-    return storedHashes
-  }
-
   private fun runPlanSkeleton(scope: PlanningScope): GoalPlanningSweepOutcome {
     val request = scope.request
     val issueKey = scope.state.manifest.issueKey
@@ -171,6 +163,17 @@ public class PlanWorkflowGoalPlanningSource(
       )
     }
     val linked = linkedPlan(scope)
+    val feasibilityNeedsReview =
+      linked?.let { plan ->
+        val state = plan.feasibilityState ?: return@let true
+        val snapshot = PlanBundleFeasibility.capture(planner, scope.canonicalRepository, scope.state.manifest.issueKey)
+        !PlanBundleFeasibility.approved(
+          state,
+          snapshot,
+          plan.records[PLAN_SUBTASKS_STEP_ID],
+          PLAN_SUBTASKS_STEP_ID,
+        )
+      } ?: false
     val replanned =
       if (linked == null) {
         legacyDriftedIds(scope)
@@ -195,6 +198,8 @@ public class PlanWorkflowGoalPlanningSource(
             repoRoot = request.repoRoot,
             settledSubtaskIds = scope.settledIds,
             agentId = agentId,
+            feasibilityAdoption =
+              feasibilityNeedsReview || linked.feasibilityState?.mode == PlanBundleFeasibilityMode.APPROVED,
           ),
           inputFor,
         )
@@ -250,6 +255,7 @@ public class PlanWorkflowGoalPlanningSource(
           settledSubtaskIds = scope.settledIds,
           agentId = agentId,
           forcedSubtaskIds = forcedSubtaskIds,
+          feasibilityAdoption = true,
         ),
         inputFor,
       )
@@ -316,12 +322,20 @@ public class PlanWorkflowGoalPlanningSource(
     workflowId: String,
     snapshot: WorkflowStateSnapshot?,
   ): LinkedPlan? {
-    if (snapshot == null || snapshot.steps.none { it.stepId == PLAN_SUBTASKS_STEP_ID }) return null
+    if (snapshot == null) return null
+    val feasibilityFamily = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
+    val feasibilityState =
+      if (feasibilityFamily.contains(snapshot.artifacts)) {
+        feasibilityCodec.decode(feasibilityFamily.value(snapshot.artifacts), "$workflowId/${feasibilityFamily.label()}")
+      } else {
+        null
+      }
+    if (snapshot.steps.none { it.stepId == PLAN_SUBTASKS_STEP_ID }) return null
     val bundle =
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.value(snapshot.artifacts)
         ?.let(::decodePlanBundleFromArtifact)
         ?: return null
-    return LinkedPlan(workflowId, bundle, decodePhaseRecords(snapshot.artifacts))
+    return LinkedPlan(workflowId, bundle, decodePhaseRecords(snapshot.artifacts), feasibilityState)
   }
 
   private fun PlanningScope.descriptors(recordedHash: (Int) -> String?): List<GovernedGoalSubtaskDescriptor>? =
@@ -361,6 +375,7 @@ public class PlanWorkflowGoalPlanningSource(
     val workflowId: String,
     val bundle: FeatureTaskRuntimePlanBundle,
     val records: Map<String, FeatureTaskRuntimePhaseRecord>,
+    val feasibilityState: FeatureTaskRuntimePlanBundleFeasibilityState?,
   )
 
   private class PlanningScope(

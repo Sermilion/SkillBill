@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.core.domain.repository
 
+import dev.skillbill.desktop.core.domain.model.ChatModelsRead
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
@@ -23,6 +24,9 @@ interface ExecutionChatRepository {
 
   /** [agentId] with its reasoning model from the machine config, or the CLI's own default when the config sets none. */
   suspend fun agentFor(agentId: String): ChatAgent
+
+  /** Reads the selected profile's available models without sending a chat prompt. */
+  suspend fun models(agent: ChatAgent, repositoryRoot: String): ChatModelsRead
 
   /** The agent ids a chat can run on, in a stable order. */
   fun agents(): List<String>

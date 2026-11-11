@@ -21,13 +21,13 @@ internal object InstallerDesktopFixtures {
     buildIdentity: String = FIXTURE_BUILD_IDENTITY,
   ): Path {
     val os = System.getProperty("os.name").lowercase()
-    val app = root.resolve(if (os.contains("mac")) "Skill Bill.app" else "Skill Bill")
+    val app = root.resolve(if (os.contains("mac")) "Sona.app" else "Sona")
     val executable =
       app.resolve(
         when {
-          os.contains("mac") -> "Contents/MacOS/Skill Bill"
-          os.contains("win") -> "bin/Skill Bill.bat"
-          else -> "bin/Skill Bill"
+          os.contains("mac") -> "Contents/MacOS/Sona"
+          os.contains("win") -> "Sona.exe"
+          else -> "bin/Sona"
         },
       )
     Files.createDirectories(executable.parent)

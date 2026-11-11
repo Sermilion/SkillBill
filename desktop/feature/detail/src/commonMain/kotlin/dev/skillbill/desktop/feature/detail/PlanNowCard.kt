@@ -88,7 +88,7 @@ internal fun PlanNowBlock(item: WorkItem, detail: Detail) {
           Box(Modifier.size(6.dp).background(colors.stBlocked, CircleShape))
           BasicText("No output for ${elapsedText(requireNotNull(quietSince), ticker.now.value)}", style = SkillBillTheme.type.tSm.copy(color = colors.stBlocked, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium))
         } else {
-          Box(Modifier.size(6.dp).background(colors.stActive, CircleShape).sbPulse())
+          Box(Modifier.size(6.dp).sbPulse().background(colors.stActive, CircleShape))
           (detail.planOutputUpdatedAt ?: latestStructured?.updatedAt)?.let { lastOutput ->
             BasicText("Last output ${elapsedText(lastOutput, ticker.now.value)} ago", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
           }

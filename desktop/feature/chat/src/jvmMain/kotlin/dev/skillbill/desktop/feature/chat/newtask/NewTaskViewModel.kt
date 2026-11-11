@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ChatModel
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
@@ -69,10 +70,13 @@ data class NewTaskUiState(
 sealed interface NewTaskAction {
   data class TextChanged(val text: String) : NewTaskAction
   data class ChooseBaseBranch(val branch: String) : NewTaskAction
+  data object SwitchToDefaultBranch : NewTaskAction
+  data object UseCurrentBranchAsBase : NewTaskAction
   data object RetryBranches : NewTaskAction
   data class ChooseRepository(val repository: NewTaskRepository) : NewTaskAction
   data class SubmitRepositoryPath(val path: String) : NewTaskAction
   data class ChooseAgent(val agentId: String) : NewTaskAction
+  data class ChooseModel(val model: ChatModel?) : NewTaskAction
   data object AddRepository : NewTaskAction
   data object OpenRepositoryPicker : NewTaskAction
   data object CloseRepositoryPicker : NewTaskAction
@@ -139,16 +143,25 @@ class NewTaskViewModel(
     val target = draft
     when (action) {
       is NewTaskAction.TextChanged -> {
-        if (target.text != action.text) target.cursorMcpDependency = CursorMcpDependency.Unspecified
+        if (target.text != action.text) target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
         target.text = action.text
       }
       is NewTaskAction.ChooseBaseBranch -> {
         if (!canChangeContext(target)) return
         pathCheck?.cancel()
-        target.cursorMcpDependency = CursorMcpDependency.Unspecified
+        target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
         target.baseBranch = action.branch
         target.rebindChat()
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
+      }
+      NewTaskAction.SwitchToDefaultBranch -> switchToDefaultBranch(target)
+      NewTaskAction.UseCurrentBranchAsBase -> {
+        if (!canChangeContext(target)) return
+        val loaded = mutableState.value.branchRead as? BranchReadState.Loaded ?: return
+        if (loaded.root != target.repository?.root) return
+        target.baseBranch = loaded.branches.currentBranch.orEmpty()
+        target.rebindChat()
+        mutableState.update { it.copy(repositoryError = null) }
       }
       NewTaskAction.RetryBranches -> target.repository?.root?.let { readBranches(target, it) }
       is NewTaskAction.ChooseRepository -> {
@@ -156,9 +169,20 @@ class NewTaskViewModel(
       }
       is NewTaskAction.SubmitRepositoryPath -> submitPath(target, action.path)
       NewTaskAction.AddRepository -> addRepository(target)
+      is NewTaskAction.ChooseModel -> {
+        if (!canChangeContext(target)) return
+        val agent = target.selectedAgent ?: return
+        if (agent.agentId != target.agentId) return
+        agentReads.remove(target)?.cancel()
+        target.agentChosen = true
+        val selected = agent.copy(model = action.model?.id, effort = null)
+        target.selectedAgent = selected
+        mutableState.update { it.copy(agent = selected) }
+        target.rebindChat()
+      }
       is NewTaskAction.ChooseAgent -> {
         if (!canChangeContext(target)) return
-        target.cursorMcpDependency = CursorMcpDependency.Unspecified
+        target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
         target.agentChosen = true
         target.agentId = action.agentId
         readAgent(target) { resolveAgent(target, action.agentId) }
@@ -321,7 +345,7 @@ class NewTaskViewModel(
   private fun selectRepository(target: NewTaskDraft, repository: NewTaskRepository, listed: RepositoryBranches? = null) {
     if (!canChangeContext(target)) return
     pathCheck?.cancel()
-    target.cursorMcpDependency = CursorMcpDependency.Unspecified
+    target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
     if (repository.root != target.repository?.root) target.baseBranch = ""
     target.repository = repository
     target.rebindChat()
@@ -385,6 +409,29 @@ class NewTaskViewModel(
 
   private fun showRepositoryError(target: NewTaskDraft, message: String) {
     if (isSelected(target)) mutableState.update { it.copy(repositoryError = message) }
+  }
+
+  private fun switchToDefaultBranch(target: NewTaskDraft) {
+    if (!canChangeContext(target)) return
+    val loaded = mutableState.value.branchRead as? BranchReadState.Loaded ?: return
+    val root = target.repository?.root ?: return
+    if (loaded.root != root || loaded.branches.defaultBranch == null) return
+    target.branchSwitching = true
+    viewModelScope.launch {
+      try {
+        when (val result = branches.switchToDefaultBranch(root, loaded.branches.currentBranch)) {
+          is Outcome.Failure -> showRepositoryError(target, readProblemText(result.error))
+          is Outcome.Success -> {
+            target.baseBranch = ""
+            target.rebindChat()
+            if (isSelected(target)) mutableState.update { it.copy(repositoryError = null) }
+          }
+        }
+      } finally {
+        target.branchSwitching = false
+        readBranches(target)
+      }
+    }
   }
 
   private fun canChangeContext(target: NewTaskDraft): Boolean {

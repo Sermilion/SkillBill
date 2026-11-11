@@ -17,7 +17,7 @@ data class ChatAgent(
 /** Provider permission scope; operator chats start in [Act], independently of execution lifecycle. */
 enum class ChatPermissionMode { ReadOnly, Act }
 
-enum class CursorMcpDependency { Unspecified, ProjectUserOnly, TeamDashboardRequired }
+enum class CursorMcpDependency { ProjectUserOnly, TeamDashboardRequired }
 
 /** What a chat is about: one [Execution], or [NewTask] work with no execution yet. [repositoryRoot] is where the agent runs. */
 sealed interface ChatScope {
@@ -80,7 +80,7 @@ data class ChatTurnRequest(
   val mode: ChatPermissionMode,
   val prompt: String,
   val images: List<ChatImage> = emptyList(),
-  val cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
+  val cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly,
 )
 
 /** The run a new-task action starts when clicked; [wire] is its value in the action block and on the start chips. */
@@ -98,7 +98,8 @@ enum class NewTaskActionKind(val wire: String) {
 
 /**
  * A null [start] sends [instruction] as the next turn; otherwise clicking the action starts that run. [title] names a started
- * goal or plan. [branch] is the git branch a started run works on; null runs it on the chat's checkout as it is.
+ * goal or plan. [branch] is the git branch a started run works on; null runs it on the chat's checkout as it is. [verify]
+ * carries a verify start's QA and review mode.
  */
 data class ChatSuggestedAction(
   val label: String,
@@ -108,9 +109,10 @@ data class ChatSuggestedAction(
   val title: String? = null,
   val target: String? = null,
   val branch: String? = null,
+  val verify: VerifyStartChoices = VerifyStartChoices(),
 )
 
-data class ChatToolCall(val id: String, val name: String, val input: String, val summary: String?)
+data class ChatToolCall(val id: String, val name: String, val input: String, val summary: String?, val workingDirectory: String? = null)
 
 /** What one turn streams back; a turn ends with [Completed] or [Failed]. */
 sealed interface ChatEvent {
@@ -172,6 +174,7 @@ data class ChatNewTaskContext(
   val pendingTurnLineIndex: Int? = null,
   val changesBaseline: ChatChangesBaseline? = null,
   val changesCaptureAttempted: Boolean = false,
+  val changesAttributedPaths: Set<String>? = null,
 )
 
 data class ChatChangesBaseline(
@@ -179,6 +182,8 @@ data class ChatChangesBaseline(
   val untrackedPaths: List<String>,
   val stashSha: String?,
   val takenAt: Instant,
+  val projectId: String? = null,
+  val worktrees: Map<String, ChatChangesBaseline> = emptyMap(),
 )
 
 /**
@@ -195,4 +200,8 @@ data class ChatHistoryEntry(
   val lines: List<ChatHistoryLine>,
   val newTask: ChatNewTaskContext? = null,
   val summary: String? = null,
+  /** The app session linked by a native listing; transient metadata, absent on stored app history and older callers. */
+  val appSessionId: String? = null,
+  /** The checkout where this provider conversation was established, when known. */
+  val executionCheckoutRoot: String? = null,
 )

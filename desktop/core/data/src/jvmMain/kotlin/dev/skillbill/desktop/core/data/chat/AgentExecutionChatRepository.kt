@@ -40,6 +40,7 @@ class AgentExecutionChatRepository(
   private val catalog: AgentSessionCatalog,
   private val diagnostics: Diagnostics,
   private val summarizer: ChatSummarizer,
+  private val modelCatalog: ChatModelCatalog,
 ) : ExecutionChatRepository {
   private val resolver = ChatAgentResolver(runtimeConfig::machineConfig, diagnostics)
 
@@ -47,6 +48,8 @@ class AgentExecutionChatRepository(
     resolver.resolve(item, detail, runOptions)
 
   override suspend fun agentFor(agentId: String): ChatAgent = resolver.forAgent(agentId)
+
+  override suspend fun models(agent: ChatAgent, repositoryRoot: String) = modelCatalog.read(agent, repositoryRoot)
 
   override fun agents(): List<String> = transports.map { it.agentId }.sorted()
 

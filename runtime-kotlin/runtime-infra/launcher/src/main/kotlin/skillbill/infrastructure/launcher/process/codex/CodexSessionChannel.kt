@@ -11,6 +11,7 @@ import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionCapt
 import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionChannel
 import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionOutcome
 import skillbill.infrastructure.launcher.process.interaction.SerializedStdinWriter
+import skillbill.ports.agentrun.model.AgentRunModelObserver
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.approval.ApprovalOwnerEffects
@@ -33,6 +34,7 @@ internal data class CodexSessionLaunch(
   val savedThread: String?,
   val outputSink: AgentRunOutputSink,
   val workspaceRoots: List<String> = emptyList(),
+  val modelObserver: AgentRunModelObserver? = null,
 )
 
 internal class CodexSessionChannel(
@@ -159,6 +161,7 @@ internal class CodexSessionChannel(
         is CodexThreadOpening.Refused -> return stop(opening.reason)
         is CodexThreadOpening.Opened -> opening.threadId
       }
+    launch.modelObserver?.reported(effectiveModel)
     synchronized(captureLock) { threadId = returned }
     expectedResponse = TURN_ID
     sendRequest(

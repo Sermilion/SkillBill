@@ -1,6 +1,7 @@
 package skillbill.engine.operation.core
 
 import skillbill.contracts.operationcard.OperationCardDetails
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import java.nio.file.Path
 
 /**
@@ -103,6 +104,7 @@ public data class OperationArguments(
   val spec: String? = null,
   val target: String? = null,
   val qa: String? = null,
+  val qaDevice: QaNamedDevice? = null,
   val includePrereleases: Boolean = false,
   val format: OperationOutputFormat = OperationOutputFormat.TEXT,
 )

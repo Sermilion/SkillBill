@@ -2,6 +2,7 @@ package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
 import skillbill.infrastructure.host.scratch.testAgentRunScratchRoot
+import skillbill.infrastructure.launcher.process.ApprovalTestOwner
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRequest
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRunner
@@ -9,6 +10,10 @@ import skillbill.infrastructure.launcher.process.launch.JvmAgentRunProcessRunner
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunTermination
+import skillbill.ports.approval.ApprovalOwnerAuthority
+import skillbill.ports.approval.ApprovalOwnerEffects
+import skillbill.ports.approval.model.ApprovalOwnerOpenRequest
+import skillbill.ports.approval.model.ApprovalOwnerOpenResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import java.nio.file.Files
 import kotlin.test.Test
@@ -18,7 +23,7 @@ import kotlin.test.assertFalse
 
 class CodexPhaseSessionTest {
   @Test
-  fun `registered codex worker resumes exhausted app server turns and harvests only final prose`() {
+  fun `owned codex worker resumes exhausted app server turns and harvests only final prose`() {
     val directory = Files.createTempDirectory("codex-phase-session")
     try {
       val script = directory.resolve("server.sh")
@@ -48,6 +53,19 @@ class CodexPhaseSessionTest {
           headlessAgentRunAdapters(
             runner,
             ALL_EXECUTABLES_AVAILABLE,
+            workerBinding =
+              AgentRunWorkerBinding(
+                approvals =
+                  AgentRunApprovalOwners(
+                    object : ApprovalOwnerAuthority {
+                      override fun open(
+                        request: ApprovalOwnerOpenRequest,
+                        effects: ApprovalOwnerEffects,
+                      ): ApprovalOwnerOpenResult = ApprovalOwnerOpenResult.Opened(ApprovalTestOwner())
+                    },
+                    LAUNCH_TEST_CLOCK,
+                  ),
+              ),
             diagnostics = NoopRuntimeDiagnostics,
             clock = LAUNCH_TEST_CLOCK,
           )[SupportedAgent.CODEX],
@@ -58,12 +76,13 @@ class CodexPhaseSessionTest {
             repoRoot = directory,
             timeout = null,
             additionalWritableDirectories = listOf(directory.resolve("qa")),
-            approval = AgentRunApprovalRequirement.OutsideApproval,
+            approval = AgentRunApprovalRequirement.Owned("test-run"),
           ),
         )
 
       assertEquals(AgentRunTermination.Exited(0), result.termination, result.stderr)
       assertEquals("Completed work", result.stdout)
+      assertContains(result.stderr, "Readian authentication or upstream request failed")
       assertEquals("6", Files.readString(directory.resolve("turn-count")).trim())
       val frames = Files.readString(directory.resolve("frames"))
       assertEquals(5, frames.lineSequence().count { it.contains("\"method\":\"thread/resume\"") })
@@ -79,6 +98,7 @@ class CodexPhaseSessionTest {
 
   private fun providerScript(): String =
     """
+    printf '%s\n' 'Readian authentication or upstream request failed' >&2
     count=0
     if [[ -f turn-count ]]; then count=${'$'}(cat turn-count); fi
     count=${'$'}((count + 1))

@@ -12,11 +12,14 @@ import skillbill.contracts.workflow.payload.WorkflowArtifactKeys
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.projectstore.model.specBundleRoots
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
+import skillbill.ports.workflow.decomposition.model.DecompositionManifestBundleProjection
+import skillbill.text.sha256HexUtf8
 import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestWriteResult
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
+import java.io.IOException
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -71,6 +74,24 @@ object TestDecompositionManifestStore : DecompositionManifestStore {
 
   override fun findDecompositionManifestFilesWithoutRecovery(repoRoot: Path): List<Path> =
     findDecompositionManifestFiles(repoRoot)
+
+  override fun <T> writeBundleAtomically(
+    writes: List<Pair<Path, String>>,
+    projection: DecompositionManifestBundleProjection,
+    verify: () -> T,
+  ): T {
+    val expected = projection.expectedBefore.associateBy { it.path.toAbsolutePath().normalize() }
+    writes.forEach { (path, _) ->
+      if (path.toAbsolutePath().normalize() !in expected) {
+        throw IOException("Guarded bundle write has no before identity for '$path'.")
+      }
+    }
+    (projection.expectedBefore + projection.protectedFiles).forEach { identity ->
+      val actual = if (Files.isRegularFile(identity.path)) sha256HexUtf8(Files.readString(identity.path)) else null
+      if (actual != identity.sha256) throw IOException("Guarded bundle identity changed for '${identity.path}'.")
+    }
+    return writeBundleAtomically(writes, verify)
+  }
 
   override fun <T> writeBundleAtomically(
     writes: List<Pair<Path, String>>,

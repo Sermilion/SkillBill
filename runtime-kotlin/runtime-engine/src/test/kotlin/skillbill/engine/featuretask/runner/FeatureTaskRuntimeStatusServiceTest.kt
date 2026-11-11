@@ -15,6 +15,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBri
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
@@ -1289,7 +1290,13 @@ internal fun statusHarness(): StatusHarness {
       testHarnessClock,
       NoopRuntimeDiagnostics,
     )
-  val decomposeTerminalRecorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock)
+  val decomposeTerminalRecorder =
+    FeatureTaskRuntimeDecomposeTerminalRecorder(
+      database,
+      testHarnessClock,
+      PlanBundleFeasibilityStateCodec(featureTaskRuntimeWireArtifactValidatorForTest()),
+      NoopRuntimeDiagnostics,
+    )
   val runInvariantsStore =
     FeatureTaskRuntimeRunInvariantsStore(
       database,

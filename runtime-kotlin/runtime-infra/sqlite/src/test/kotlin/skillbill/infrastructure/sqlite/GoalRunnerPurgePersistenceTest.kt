@@ -155,6 +155,7 @@ class GoalRunnerPurgePersistenceTest {
       "goal_subtask_events",
       "feature_task_phase_settlements",
       "worktree_edit_journal",
+      "monitor_ci_cycles",
       "producer_output_evidence",
       "rejected_output_diagnostics",
       "agent_activity_stamps",

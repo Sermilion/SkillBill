@@ -10,6 +10,9 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 @ContributesTo(AppScope::class)
 interface UsageBindings {
   @Provides
+  fun claudeUsageReader(collector: ClaudeUsageCollector): ClaudeUsageReader = collector
+
+  @Provides
   fun usageScheduler(): UsageScheduler = CoroutineUsageScheduler
 
   @Provides

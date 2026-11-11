@@ -49,6 +49,7 @@ private object ApprovalKeys {
   const val DECISION_SOURCE = "decision_source"
   const val SELECTED_OPTION_ID = "selected_option_id"
   const val RULE_ID = "rule_id"
+  const val RULE_PATTERN = "rule_pattern"
   const val PROVIDER_PAYLOAD = "provider_payload"
   const val DELIVERY = "delivery"
   const val PROVIDER_DISPOSITION = "provider_disposition"
@@ -107,6 +108,7 @@ internal fun ApprovalCard.toJson(): JsonObject = buildJsonObject {
   decisionSource?.let { put(ApprovalKeys.DECISION_SOURCE, it) }
   selectedOptionId?.let { put(ApprovalKeys.SELECTED_OPTION_ID, it) }
   ruleId?.let { put(ApprovalKeys.RULE_ID, it) }
+  rulePattern?.let { put(ApprovalKeys.RULE_PATTERN, it) }
   put(ApprovalKeys.PROVIDER_PAYLOAD, providerPayload)
   delivery?.let { put(ApprovalKeys.DELIVERY, it) }
   put(ApprovalKeys.PROVIDER_DISPOSITION, providerDisposition)
@@ -139,6 +141,7 @@ private fun JsonObject.decodeApprovalCard(): ApprovalCard? {
     decisionSource = string(ApprovalKeys.DECISION_SOURCE),
     selectedOptionId = string(ApprovalKeys.SELECTED_OPTION_ID),
     ruleId = string(ApprovalKeys.RULE_ID),
+    rulePattern = string(ApprovalKeys.RULE_PATTERN),
     providerPayload = string(ApprovalKeys.PROVIDER_PAYLOAD) ?: return null,
     delivery = string(ApprovalKeys.DELIVERY),
     providerDisposition = string(ApprovalKeys.PROVIDER_DISPOSITION) ?: "none",

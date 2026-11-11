@@ -1,3 +1,26 @@
+## [2026-11-10] SKILL-535 — Capture the primary checkout at registration
+Areas: runtime-engine featuretask/work projection; runtime-ports IDE status; runtime-infra SQLite and contracts; runtime-contracts; orchestration IDE status schema
+- MEDIUM feature. Capture the primary repository root while linked-checkout metadata exists, persist it separately from execution identity, and project it through normal, incompatible, and blocked IDE status snapshots.
+- Migration 121 adds nullable root columns without backfilling historical rows; optional schema serialization emits the field when present and preserves legacy omission compatibility.
+- Pattern: failure snapshots reuse the eligible registration already resolved for the work item; absent source registration stays null.
+- Limits: desktop read-model transport and chat use are handled at their owning boundaries.
+Feature flag: N/A
+Acceptance criteria: 1/1 implemented in this boundary
+
+## [2026-11-08] SKILL-527 durable monitor cycles and goal QA evidence
+Areas: runtime-engine featuretask monitor and QA; runtime-ports; runtime-infra/sqlite and workflow; runtime-domain; runtime-contracts; runtime-core; runtime-cli; platform-pack QA guidance
+- MEDIUM feature. Migration 118 adds monitor_ci_cycles keyed by workflow and cycle. Monitor writes start, throttled full-check observations and terminal outcomes, including check completion times and repair attribution.
+- MonitorFixBrief reads the latest workflow cycle instead of issue-keyed memory, preserving failing checks and the conflict base branch across restart. Goal cycles use the parent workflow identity.
+- Non-conflict cycle writes record best-effort diagnostics. Failure to persist a conflicted outcome or read its publication context blocks repair rather than bypassing the base-branch merge check.
+- MonitorCiCycleRecorder is reusable. Cycle records own check DTOs to avoid a ports package cycle, and purge and archive restoration include the new table.
+- Goal QA retains actual QA and qa_fix invocation occurrences, stages, screenshots and a last frame through the existing outcome repository, without adding a goal runForGoal phase-record sink.
+- Migration 119 imports embedded QA occurrences into versioned storage while preserving source records. Legacy details remain readable; unsupported history versions fail with recovery guidance. Desktop read schema advances to 119.
+- Invocation-bound progress and screenshot commands retain bounded PNG/JPEG evidence before cleanup. Registered frame capture rejects uniform blank images; pack QA guidance registers all screenshots.
+- Limits: cycle ordering loads one workflow's rows into Kotlin, and each row stores at most 200 checks. Unrecoverable old QA history stays unavailable; headless runs may lack a frame.
+- Migration numbering follows the integrated 117 baseline, replacing the spec's proposed 109. The standalone monitor ledger is unchanged.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented across the parent feature
+
 ## [2026-11-05] SKILL-452 subtask 5 — operations and review-launch provider-limit pause
 Areas: runtime-engine operation core, verify, pr-review-fix, featureguardcleanup; runtime-application review verification and parallel review; runtime-cli operation
 - OperationStepRunner maps PhaseLaunchFailureKind.PROVIDER_LIMIT to Refused(Blocked) with subtask-1 pause copy; ordinary launch failures stay Failed.

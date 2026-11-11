@@ -10,6 +10,8 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairDecision
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairStep
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceSettlement
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
@@ -42,15 +44,18 @@ public data class AcceptanceCriterionRepairCommit(
   public val phase: FeatureTaskRuntimePhaseStateRequest,
   public val evidence: AcceptanceCriterionRepairAuditEvidence?,
   internal val attemptStatus: FeatureTaskRuntimeImplementationAttemptStatus? = null,
-  internal val nextSteps: Map<AcceptanceCriterionRepairStage, String> = emptyMap(),
-  internal val additionalPhaseId: String? = null,
-  internal val additionalAttemptStatus: FeatureTaskRuntimeImplementationAttemptStatus? = null,
+  internal val stepRoles: AcceptanceCriterionRepairStepRoles? = null,
   internal val repairChangedPaths: List<String> = emptyList(),
+  internal val discoveryFallbackCriteria: List<String> = emptyList(),
+  internal val discoveryStrayCriteria: List<String> = emptyList(),
+  internal val verificationGapIds: List<String> = emptyList(),
 )
 
 public sealed interface AcceptanceCriterionRepairMutation {
   public data class Discover(
     public val admission: AcceptanceCriterionRepairAdmission,
+    public val initialAudit: AcceptanceCriterionProseAudit? = null,
+    public val initialClarification: String? = null,
   ) : AcceptanceCriterionRepairMutation
 
   public data class ProseAudit(val audit: AcceptanceCriterionProseAudit) : AcceptanceCriterionRepairMutation
@@ -68,6 +73,7 @@ public sealed interface AcceptanceCriterionRepairMutation {
     val evidenceRef: String,
     val treeDigest: String,
     val checkpointId: String,
+    val fileManifestIntroduced: List<String> = emptyList(),
   ) : AcceptanceCriterionRepairMutation
 
   public data class Outcome(val outcome: AcceptanceCriterionRepairOutcome) : AcceptanceCriterionRepairMutation
@@ -77,6 +83,8 @@ public sealed interface AcceptanceCriterionRepairMutation {
   ) : AcceptanceCriterionRepairMutation
 
   public data object PrepareInteractionTrace : AcceptanceCriterionRepairMutation
+
+  public data class PlanCompleted(val criterionRef: String, val planGeneration: Int) : AcceptanceCriterionRepairMutation
 }
 
 public enum class AcceptanceCriterionRepairRefusal(public val wireValue: String) {
@@ -107,6 +115,7 @@ internal sealed interface AcceptanceCriterionRepairVersionPlan {
 
   class Recovery(
     val families: List<String>,
+    val storedVersions: List<String>,
     val regenerated: Map<String, Any?>,
     val rejectedRecord: ByteArray,
     val detail: String,
@@ -141,6 +150,11 @@ internal data class AcceptanceCriterionRepairInvocation(
   val accounting: AcceptanceCriterionRepairState,
 )
 
+internal data class AcceptanceCriterionGapReask(
+  val scopeKey: String,
+  val reason: String,
+)
+
 public class AcceptanceCriterionRepairRunState internal constructor(
   hydration: AcceptanceCriterionRepairHydration,
   internal val binding: AcceptanceCriterionRepairBinding? = null,
@@ -157,8 +171,18 @@ public class AcceptanceCriterionRepairRunState internal constructor(
   @Volatile internal var traceReaskScope: String? = null
     private set
 
+  @Volatile internal var gapReask: AcceptanceCriterionGapReask? = null
+    private set
+
   internal fun recordTraceReask(key: String) {
     traceReaskScope = key
+  }
+
+  internal fun recordGapReask(
+    key: String,
+    reason: String,
+  ) {
+    gapReask = AcceptanceCriterionGapReask(key, reason)
   }
 
   @Volatile internal var invocation: AcceptanceCriterionRepairInvocation? = null
@@ -185,37 +209,16 @@ public class AcceptanceCriterionRepairRunState internal constructor(
     invocation = snapshot?.let { AcceptanceCriterionRepairInvocation(phase.phaseId, phase.attemptCount, it) }
   }
 
-  internal val priorRepairFailures: String?
-    get() {
-      val state = snapshot ?: return null
-      val current = state.currentCriterionRef ?: return null
-      val failures = state.outcomes.filter { it.criterionRef == current && !it.successful }
-      if (failures.isEmpty()) return null
-      val recent = failures.takeLast(FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES)
-      return buildString {
-        appendLine("Earlier unsuccessful repair evidence for $current")
-        appendLine(
-          "Showing the latest ${recent.size} of ${failures.size} unsuccessful outcomes for this criterion, " +
-            "including outcomes retained across operator resume. The complete history remains in durable accounting.",
-        )
-        appendLine(
-          "Use these reports as counterexamples to check against current source. They do not establish that " +
-            "a gap is still open, and they do not reopen another criterion. Preserve fixes that already hold.",
-        )
-        recent.forEach { outcome ->
-          appendLine()
-          appendLine("Outcome ${outcome.outcomeId}, ${outcome.kind.wireValue}:")
-          appendLine(outcome.evidenceRef)
-        }
-      }.trimEnd()
-    }
+  internal val promptFocus: AcceptanceRepairPromptFocus?
+    get() = snapshot?.let(AcceptanceRepairPromptFocus::from)
 
   internal val currentCriterionContext: String?
     get() {
       val state = snapshot ?: return null
       val current = state.currentCriterionRef
-      if (state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY) {
-        return "Initial full audit of the authored acceptance criteria against current source." +
+      if (AcceptanceRepairDecision.auditKind(state) == AcceptanceRepairStep.Discover) {
+        val refs = AcceptanceRepairDecision.discoveryCriteria(state).joinToString(", ") { it.canonicalRef }
+        return "Audit all unresolved authored criteria without open gaps ($refs) against current source." +
           state.pendingClarificationQuestion?.let { " Read-only clarification: $it" }.orEmpty()
       }
       if (current == null) {
@@ -233,9 +236,9 @@ public class AcceptanceCriterionRepairRunState internal constructor(
       }
       val criterion = state.criteria.firstOrNull { it.canonicalRef == current } ?: return null
       val identity = criterion.originalAlias?.let { "$it ($current)" } ?: current
-      val failures = state.unsuccessfulTotals.getOrDefault(current, 0)
+      val used = state.chargedAttempts.getOrDefault(current, 0)
       val reserved = state.reservation?.takeIf { it.criterionRef == current }?.reservationId
-      val remaining = (FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES - failures).coerceAtLeast(0)
+      val remaining = (FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES - used).coerceAtLeast(0)
       val authoredQueue =
         state.criteria
           .filter { it.canonicalRef in state.pendingAuditRefs || it.canonicalRef in state.unresolvedQueue }
@@ -243,8 +246,9 @@ public class AcceptanceCriterionRepairRunState internal constructor(
       val queuePosition = authoredQueue.indexOf(criterion).takeIf { it >= 0 }?.plus(1)
       val gap = criterion.evidenceRef.takeUnless { it == state.specDigest } ?: "Not assessed."
       return "mode=${state.mode.wireValue}; stage=${state.stage.wireValue}; criterion $identity; " +
-        "retained failures: $failures of ${FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES}; " +
-        "remaining failures: $remaining; queue position: ${queuePosition ?: "unavailable"} of ${authoredQueue.size}; " +
+        "charged attempts: $used of ${FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES}; " +
+        "remaining charged attempts: $remaining; " +
+        "queue position: ${queuePosition ?: "unavailable"} of ${authoredQueue.size}; " +
         "live cycle: ${reserved ?: "none"}; " +
         "authored criterion: ${criterion.originalText}; latest gap: $gap" +
         state.pendingClarificationQuestion?.let { "; read-only clarification: $it" }.orEmpty()
@@ -267,6 +271,7 @@ public sealed interface AcceptanceCriterionRepairWriteResult {
     internal val interactionTraceSkipped: Boolean = false,
     internal val newAnyChangeRechecks: List<String> = emptyList(),
     internal val droppedRechecks: List<String> = emptyList(),
+    internal val droppedLateFindingCount: Int = 0,
   ) : AcceptanceCriterionRepairWriteResult
 
   public data class CommittedWithProjectionFailure(

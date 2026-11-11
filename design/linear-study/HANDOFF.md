@@ -1,6 +1,6 @@
-# Skill Bill desktop app, Linear design: implementation handoff
+# Sona desktop app, Linear design: implementation handoff
 
-This document and the prototype next to it are everything needed to plan and build a new Skill Bill desktop app. Nothing here depends on private links or on the machine where it was written. Paths are relative to the repository root.
+This document and the prototype next to it are everything needed to plan and build a new Sona desktop app. Nothing here depends on private links or on the machine where it was written. Paths are relative to the repository root.
 
 - Prototype: `design/linear-study/index.html` (open it in a browser; see [README](README.md)).
 - The old desktop app, `desktop-tray/`, was the behavior reference while this was written. It has since been removed; the app built from this handoff is `desktop/`.
@@ -14,7 +14,7 @@ Revised 2026-10-30 to match the Compose app in `desktop/`: collapsible detail se
 
 ## 1. Outcome
 
-A new desktop app that shows and controls Skill Bill work, built to this design, that feels instant: selecting a goal or spec paints in the same frame, the board follows the runtime within a fraction of a second, and an active goal does not make the app stutter.
+A new desktop app that shows and controls Sona work, built to this design, that feels instant: selecting a goal or spec paints in the same frame, the board follows the runtime within a fraction of a second, and an active goal does not make the app stutter.
 
 The current app takes about 5 seconds to open a goal or spec. Section 5.2 explains why, with measurements, and section 5.4 lists the runtime changes that remove the cause.
 
@@ -191,7 +191,7 @@ Rules for the new app:
 
 1. **One runtime graph and one long-lived read path per database session.** Reads reuse an open read-only connection (or a small pool) with a warm page cache. Schema compatibility is verified once at open and again only when the signal's `generation` changes or the database file identity changes (needs runtime change R1).
 2. **Reads never hold a transaction open.** A read transaction is short and closes before the result is emitted, so writers can checkpoint the WAL.
-3. **Observation is signal-driven, never polled.** The runtime writes `<database>.skill-bill-commit-signal` atomically after each commit (`DesktopCommitSignalPublisher.kt`, contract `DesktopCommitSignal` and `DesktopReadSchema` in `runtime-contracts`). Format, one `key=value` per line: `generation=<uuid>`, then one line per topic with its revision (`goals=…`, `phases=…`, `activity=…`). Watch the file's directory with `WatchService`, filter by file name, parse, and publish a `StateFlow<SignalSnapshot>`. A new `generation` means a full resynchronization. A watcher overflow means reread the file. Do not rely on Room or SQLDelight invalidation: it only sees writes made by its own process, and Skill Bill's writers are other processes.
+3. **Observation is signal-driven, never polled.** The runtime writes `<database>.skill-bill-commit-signal` atomically after each commit (`DesktopCommitSignalPublisher.kt`, contract `DesktopCommitSignal` and `DesktopReadSchema` in `runtime-contracts`). Format, one `key=value` per line: `generation=<uuid>`, then one line per topic with its revision (`goals=…`, `phases=…`, `activity=…`). Watch the file's directory with `WatchService`, filter by file name, parse, and publish a `StateFlow<SignalSnapshot>`. A new `generation` means a full resynchronization. A watcher overflow means reread the file. Do not rely on Room or SQLDelight invalidation: it only sees writes made by its own process, and Sona's writers are other processes.
 4. **Each query observes only its topics.** Map the signal to the topic revision the query depends on, `distinctUntilChanged`, then re-query. With runtime change R2, queries also receive the changed item ids and re-read only those rows.
 5. **One shared observation per query, not one per owner.** The main window, the tray and the notifications share the same board flow (`stateIn` / `shareIn` in the session scope, keyed by query parameters).
 6. **Selection paints from memory.** The clicked row already holds the header facts (title, lifecycle, step, progress, durations, agent, model, branch). Render them in the same frame, then load detail lists in the background. Prefetch the detail of the focused row while the user moves with J and K.
@@ -267,7 +267,9 @@ The seam that keeps it possible later: the app reaches data only through reposit
 
 ## 6. Design system
 
-Linear's structure with Skill Bill's colors: a darker app frame, one inset content panel with a 12 px radius, dense 13 px interface type, hairline borders, and a single amber accent used for focus, the current step and the one primary action.
+Linear's structure with Sona's colors: a darker app frame, one inset content panel with a 12 px radius, dense 13 px interface type, hairline borders, and a single amber accent used for focus, the current step and the one primary action.
+
+Sona uses the Ping drawing in `design/sona-logo-linear.html`. The shared `BrandMark` renders the same three solid bands clipped to a disc at every size, in one foreground color. The sidebar, tray, notifications and component examples share this mark. Runtime commands, paths and code identifiers retain their existing names.
 
 ### 6.1 Color tokens (dark only)
 
@@ -367,7 +369,7 @@ Every screen is built from these. Dimensions are in `ds/components.css`; inputs 
 | Component | Purpose and key specs |
 | --- | --- |
 | Icon | 16 px line icon; sizes 12, 14, 16, 20. |
-| BrandMark | The SB monogram, 16–32 px. |
+| BrandMark | The Sona Ping mark, 16–32 px. Three solid bands clipped to a disc, using the drawing in `design/sona-logo-linear.html`. |
 | StatusIcon | Section 6.4. |
 | Kbd | 17 px key cap, shown in tooltips, menus, buttons, command menu. |
 | Button | 28 px (24 small). Variants: secondary, primary (accent), ghost, danger (red text), danger-solid. Optional icon and trailing kbd. Disabled at 45% opacity. |
@@ -424,7 +426,7 @@ Every screen is built from these. Dimensions are in `ds/components.css`; inputs 
 ## 8. Shell and layout
 
 - **Window:** frame color `bg-frame`; sidebar on the left; the content panel inset 8 px with a 12 px radius and a hairline border. The main window opens unmaximized and centered, sized to show the sidebar, the document column and the details pane comfortably: 1400×900 content dp, capped at 90% of the usable screen.
-- **Sidebar (236 px):** brand row with the command menu button; Work (count of live items) and History; a collapsible Board section listing Needs you (amber attention badge), Goal runs, Standalone phases, Operations and Finished today, each with its count; at the bottom Specs and Terminal (toggles, highlighted when open), Settings and Keyboard shortcuts.
+- **Sidebar (236 px):** brand row with the command menu button; Work (count of live items) and History; a collapsible Board section listing Needs you (amber attention badge), Goal runs, Standalone phases, Operations and Finished today, each with its count; Board navigation icons always use the white foreground color, including inactive rows; at the bottom Specs and Terminal (toggles, highlighted when open), Settings and Keyboard shortcuts.
 - **Work area:** the view header and body on the left, the optional Specs pane on the right (it never changes what the main panel shows), the optional terminal docked at the bottom of the main column.
 - **Details pane** on the right of a detail view: 272 px, or 380 px while it holds the subtask inspector (every goal with subtasks, since one is always selected). One scroll, padding 16 px 20 px 32 px, sections 24 px apart. Hidden while the Specs pane is open, when toggled off (⌘I) and below 1080 px; then the inspector opens inside the selected subtask row instead.
 - **Settings** replaces the sidebar with its own navigation and a Back to app button.
@@ -529,13 +531,13 @@ Each row shows its config key and default. Saving shows "Saved to config.json" (
 
 ### 9.8 Tray popover and notifications
 
-- Popover: brand, stats Running, Needs you, Done 24h; tabs Goals, Phases, Operations with counts and an attention dot; compact rows; "Finished in the last hour" under Phases and Operations; footer Open Skill Bill, Refresh, Settings, Quit. It opens on the last tab used.
+- Popover: brand, stats Running, Needs you, Done 24h; tabs Goals, Phases, Operations with counts and an attention dot; compact rows; "Finished in the last hour" under Phases and Operations; footer Open Sona, Refresh, Settings, Quit. It opens on the last tab used.
 - Notifications fire only on lifecycle transitions (the six keys above), respect the settings, and open the exact item when clicked.
 - Platform integration (tray icon, macOS status item, notifications, start at login, KDE behavior) is solved in `desktop-tray`; see its ARCHITECTURE.md.
 
 ### 9.9 Problem states
 
-"Loading your work", "Couldn't load your work" ("Check the database path in Settings, then try refreshing."), "Skill Bill runtime unavailable" / "Skill Bill runtime not installed." / "The installed Skill Bill runtime is not the build this app was packaged with." with "Install a matched runtime and desktop pair with `<reinstall command>`, then retry.", "Opening your database", "Skill Bill is switching to the selected database.", and the storage failures missing, access, busy, corrupt, incompatible schema, incompatible record (desktop `ProblemCode`, `StorageFailure`). Failed refreshes keep the last data with a stale indication.
+"Loading your work", "Couldn't load your work" ("Check the database path in Settings, then try refreshing."), "Sona runtime unavailable" / "Sona runtime not installed." / "The installed Sona runtime is not the build this app was packaged with." with "Install a matched runtime and desktop pair with `<reinstall command>`, then retry.", "Opening your database", "Sona is switching to the selected database.", and the storage failures missing, access, busy, corrupt, incompatible schema, incompatible record (desktop `ProblemCode`, `StorageFailure`). Failed refreshes keep the last data with a stale indication.
 
 ---
 

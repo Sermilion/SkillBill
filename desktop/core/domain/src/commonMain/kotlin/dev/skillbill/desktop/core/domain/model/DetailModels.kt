@@ -114,6 +114,7 @@ data class Detail(
   val planSubtaskLatestLines: Map<Int, String> = emptyMap(),
   val standalonePlan: StandalonePlanProgress? = null,
   val verifyRun: VerifyRunDetails? = null,
+  val goalFinishCards: List<PhaseCard> = emptyList(),
 )
 
 data class ValidationBranchRun(
@@ -175,6 +176,84 @@ data class ValidationGateRun(
   val exitCode: Int?,
 )
 
+enum class PhaseCardState {
+  Running,
+  Done,
+  Failed,
+  Blocked,
+  Skipped,
+  Paused,
+}
+
+data class PhaseCard(
+  val phaseId: String,
+  val state: PhaseCardState,
+  val round: Int?,
+  val startedAt: Instant?,
+  val finishedAt: Instant?,
+  val durationMillis: Long?,
+  val agentId: String?,
+  val model: String?,
+  val effort: String?,
+  val blockedReason: String?,
+  val files: List<String>,
+  val edit: PhaseCardEdit?,
+  val activityLabel: String?,
+  val activityAt: Instant?,
+  val output: PhaseCardOutput?,
+  val pullRequestUrl: String?,
+  val pullRequestNumber: Int?,
+  val ciCycles: List<CiCycle>,
+  val repairedChecks: List<CiCheck>,
+  val conflictBaseBranch: String?,
+  val fixCommitSha: String?,
+)
+
+data class PhaseCardEdit(
+  val recordedAt: Instant,
+  val fileCount: Int,
+  val insertions: Int,
+  val deletions: Int,
+  val samplePaths: List<String>,
+)
+
+data class PhaseCardOutput(
+  val verdict: String?,
+  val buildReceipt: ValidationResult?,
+  val validationReceipt: ValidationResult?,
+  val historyReceipt: PhaseCardHistoryReceipt?,
+  val commitSha: String?,
+  val pushedBranch: String?,
+  val pushed: Boolean?,
+  val pullRequestUrl: String?,
+  val pullRequestNumber: Int?,
+)
+
+data class PhaseCardHistoryReceipt(
+  val changedPaths: List<String>?,
+  val historyWritten: Boolean?,
+  val decisionsRecorded: Boolean?,
+)
+
+data class CiCycle(
+  val cycle: Int,
+  val startedAt: Instant,
+  val observedAt: Instant,
+  val finishedAt: Instant?,
+  val outcome: String?,
+  val headSha: String?,
+  val checks: List<CiCheck>,
+)
+
+data class CiCheck(
+  val name: String,
+  val bucket: String,
+  val link: String?,
+  val startedAt: Instant?,
+  val completedAt: Instant?,
+  val durationMillis: Long?,
+)
+
 /** Retained review and audit results of the current or a completed subtask. */
 data class SubtaskPhaseResults(
   val subtaskId: Int,
@@ -185,6 +264,7 @@ data class SubtaskPhaseResults(
   val runningReviewPass: RunningReviewPass? = null,
   val auditResult: SubtaskAuditResult? = null,
   val execution: SubtaskExecution? = null,
+  val phaseCards: List<PhaseCard> = emptyList(),
 )
 
 data class SubtaskExecution(
@@ -210,7 +290,23 @@ enum class AuditOutcome { Passed, Failed, Running, Unknown }
 
 data class AuditCriterion(val ref: String, val text: String, val met: Boolean, val fixedInAttempt: Int?)
 
-data class AuditAttempt(val number: Int, val passed: Boolean, val uncoveredCount: Int, val nextPhaseId: String?)
+data class AuditAttempt(
+  val number: Int,
+  val passed: Boolean?,
+  val uncoveredCount: Int?,
+  val nextPhaseId: String?,
+  val unavailableReason: String? = null,
+) {
+  init {
+    require(
+      if (unavailableReason == null) {
+        passed != null && uncoveredCount != null && uncoveredCount >= 0 && passed == (uncoveredCount == 0)
+      } else {
+        unavailableReason.isNotBlank() && passed == null && uncoveredCount == null && nextPhaseId == null
+      },
+    )
+  }
+}
 
 data class RunningReviewPass(val passNumber: Int, val lanes: List<RunningReviewLane>)
 
@@ -263,6 +359,8 @@ data class GoalAssessmentResult(
   val exitReason: String?,
   val fixRan: Boolean,
   val findings: List<GoalAssessmentFinding>,
+  val fixCommitSha: String? = null,
+  val unavailableReason: String? = null,
 )
 
 data class GoalAssessmentFinding(

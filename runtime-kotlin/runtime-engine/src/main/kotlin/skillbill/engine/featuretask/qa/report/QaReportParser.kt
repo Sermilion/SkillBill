@@ -16,7 +16,7 @@ public object QaReportParser {
   private val SECTION_BREAK = Regex("^#{1,3}\\s")
   private val DIGIT = Regex("\\d")
   private val COVERAGE_LINE =
-    Regex("^[-*]\\s*([a-z][a-z0-9-]{0,31})\\s*:\\s*(passed|findings_open|findings|skipped|incomplete)\\b")
+    Regex("^[-*]\\s*([a-z][a-z0-9-]{0,31})\\s*:\\s*(passed|covered|findings_open|findings|skipped|incomplete)\\b")
   private val REASON_TOKEN = Regex("(?<![A-Za-z0-9_])reason:\\s*([a-z_]+)", RegexOption.IGNORE_CASE)
   private val BACKEND_TOKEN = Regex("backend:\\s*(real|mocked|none)")
 
@@ -33,6 +33,7 @@ public object QaReportParser {
     val assertionsReported = assertionLines.any(String::isNotBlank)
     val isolationReported = sectionLines(text, "isolation").any(String::isNotBlank)
     val parsedAssertions = QaReportSections.assertions(assertionLines, evidencePrefix)
+    val parsedScreenshots = QaReportSections.screenshots(sectionLines(text, "screenshots"), evidencePrefix)
     val findingsWarnings =
       if (verdict == QaVerdict.PASSED && findings.isNotEmpty()) {
         listOf(
@@ -62,12 +63,18 @@ public object QaReportParser {
       reason = reasonOf(text, verdict),
       findings = findings,
       reference = reference,
-      warnings = findingsWarnings + reportWarnings(parsedAssertions, findings) + coverageWarnings,
+      warnings =
+        findingsWarnings + reportWarnings(parsedAssertions, findings) + coverageWarnings +
+          listOfNotNull(
+            "QA screenshot inventory rejected ${parsedScreenshots.rejected} entries"
+              .takeIf { parsedScreenshots.rejected > 0 },
+          ),
       coverage = coverage,
       assertionsReported = assertionsReported,
       coverageWarnings = coverageWarnings,
       assertions = parsedAssertions.assertions,
       temporaryEdits = QaReportSections.temporaryEdits(sectionLines(text, "temporary edits")),
+      screenshots = parsedScreenshots.screenshots,
     )
   }
 
@@ -159,7 +166,7 @@ public object QaReportParser {
 
   private fun verdictOfWord(word: String): QaVerdict =
     when (word) {
-      "passed" -> QaVerdict.PASSED
+      "passed", "covered" -> QaVerdict.PASSED
       "skipped" -> QaVerdict.SKIPPED
       "incomplete" -> QaVerdict.INCOMPLETE
       else -> QaVerdict.FINDINGS_OPEN

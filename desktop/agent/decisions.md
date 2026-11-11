@@ -1,3 +1,28 @@
+## [2026-11-11] Keep runtime identities and persistent paths during the Sona rename
+Context: SKILL-538 renames desktop presentation while existing callers, login registration and saved data must remain usable.
+Decision: Use Sona in displayed copy, artwork and desktop package names. Retain runtime CLI/MCP identities, /skill-bill, skillbill-actions, SKILL_BILL_* names, dev.skillbill packages, saved-state paths, bundle ID, upgrade UUID and the Linux autostart filename.
+Reason: Renaming those interfaces or paths would change what existing installations use. Keeping them preserves compatibility without a data or registration-path migration.
+
+## [2026-11-11] Restrict Sona lifecycle ownership to current targets
+Context: The desktop package rename must preserve historical apps, registrations, unrelated launchers and saved runtime data.
+Decision: Activate, restart, roll back and remove only current Sona targets and verified registrations. Linux menu ownership requires both Exec and Icon; restore registrations with the app on failure. Preserve historical Skill Bill and SkillBill outputs.
+Reason: A package rename does not upgrade the old app in place. Historical cleanup would delete an installation the rename must preserve, and partial registration writes could leave a launcher pointing at a rolled-back app.
+
+## [2026-11-11] Give the macOS tray owned PNG bytes
+Context: macOS needs the shared Ping image, while tray-file retention can prune older render paths.
+Decision: Carry rendered PNG bytes through native install/update. Retain paths and file retention for other NativeTray consumers; macOS keeps status dots and its native numeric title without a bitmap count badge. Wait for native update/disposal and clear callbacks on cleanup.
+Reason: Owned bytes remain usable after path pruning. The native title avoids repeating the count on the small mark; reported failures retain fallback behavior, and synchronous cleanup prevents actions after disposal.
+
+## [2026-11-10] Persist rule_pattern only in chat files when set
+Context: Saved chats from builds before pattern rules must reopen with the same decision text they had at save time.
+Decision: ChatApprovalStore writes rule_pattern only when rulePattern is non-null and treats a missing key on read as an exact rule for display.
+Reason: Optional persistence preserves load compatibility without inventing pattern metadata for legacy cards.
+
+## [2026-11-10] Defer pattern validation to the runtime decide path
+Context: The desktop similar editor must save operator-edited patterns without reimplementing runtime grammar and safety rules.
+Decision: Save stays disabled only on blank trimmed text and forwards the pattern through decide; INVALID_PATTERN and other refusals render under the field without local reinterpretation.
+Reason: One runtime owner keeps wildcards, unsafe-command blocks and bare-star refusals aligned with stored-rule auto-allow behavior.
+
 ## [2026-11-08] Size the usage card to its rows and name each empty state
 Context: The card reserved two meter rows, so Codex with one weekly window and Cursor by name showed blank space. "No usage data" covered loading, failed reads and Claude before its first reply alike.
 Decision: The card holds the header plus one row per window up to two, one row for a message, and no rows for a name-only agent. Empty states say what is happening: "Loading…" while Codex reads, "Couldn't read usage" after a failed read, "Refresh delayed" when throttled, and "Shows after the next Claude reply" before Claude has reported.
@@ -584,3 +609,8 @@ Context: Cursor Act chat added `--auto-review`, which let the provider decide to
 Decision: Both chat transports launch the provider's standard ACP arguments. Remove Cursor's automatic-review argument override. Verify that publishing requests from either provider produce full pending cards and send no permission response until an operator decision is delivered.
 Reason: Interactive permission decisions belong to the operator. Retain provider-issued options, session identity checks, read-only mode and unsupported-interaction handling.
 Superseded by: Default all provider launches to native permission bypass (2026-11-07)
+
+## [2026-11-10] Keep complete suggested-action instructions
+Context: The 2000-character instruction limit dropped goal start cards containing detailed requirements. A separate 16000-character action-block limit also rejected longer intake.
+Decision: Remove both size caps from suggested-action decoding and remove the instruction-length restriction from both chat prompts. Keep nonblank instructions, label limits, valid modes, supported starts and block structure checks.
+Reason: Start cards must retain the operator's requirements and resolved decisions. The regression test decodes an instruction longer than both former caps and checks its complete value and sibling action.

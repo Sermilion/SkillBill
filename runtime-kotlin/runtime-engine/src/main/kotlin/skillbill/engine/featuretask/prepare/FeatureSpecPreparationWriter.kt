@@ -7,6 +7,7 @@ import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.decompositionPlanningResult
 import skillbill.application.decomposition.decompositionPlanningSubtask
 import skillbill.application.decomposition.defaultFeatureBranch
+import skillbill.application.decomposition.loadValidatedDecompositionManifest
 import skillbill.application.decomposition.loadValidatedDecompositionManifestPersistingRepair
 import skillbill.application.decomposition.model.DecompositionManifestWriteRequest
 import skillbill.application.decomposition.model.DecompositionPlanningResultOptions
@@ -27,6 +28,7 @@ import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.projectstore.model.resolveSpecPath
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
+import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
 import java.io.IOException
@@ -146,8 +148,18 @@ public class FeatureSpecPreparationWriter(
     )
   }
 
+  internal fun authoredManifest(parentSpecPath: Path): DecompositionManifest =
+    loadPreparedManifest(parentSpecPath.resolveSibling(AUTHORED_MANIFEST_FILE)).manifest
+
+  internal fun authoredManifestWithoutRepair(parentSpecPath: Path): DecompositionManifest =
+    loadValidatedDecompositionManifest(
+      parentSpecPath.resolveSibling(AUTHORED_MANIFEST_FILE),
+      fileStore,
+      decompositionManifestValidator,
+    ).manifest
+
   internal fun authoredSubtasks(parentSpecPath: Path): List<DecompositionSubtask> =
-    loadPreparedManifest(parentSpecPath.resolveSibling(AUTHORED_MANIFEST_FILE)).manifest.subtasks
+    authoredManifest(parentSpecPath).subtasks
 
   private fun authoredText(
     fieldPath: String,

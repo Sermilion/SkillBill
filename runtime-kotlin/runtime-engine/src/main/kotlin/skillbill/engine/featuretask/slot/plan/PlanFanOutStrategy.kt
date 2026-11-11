@@ -89,11 +89,17 @@ public class PlanFanOutStrategy private constructor(
 
   override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> =
     if (isSubtaskStep(stepId)) {
+      val feasibility = BundleFeasibilityStep()
       PhaseStepDescriptor(
         PhaseBindingFamily.PlanningFanOut,
-        PlanSubtasksStepHooks,
+        feasibility,
       ) { run, planning, outputSink, captureStreamOutput ->
-        runSubtasks(run, planning, outputSink, captureStreamOutput)
+        val planned = runSubtasks(run, planning, outputSink, captureStreamOutput)
+        if (planned is PhaseOutcome.Completed) {
+          feasibility.run(run, planning, outputSink, captureStreamOutput)
+        } else {
+          planned
+        }
       }
     } else {
       PhaseStepDescriptor(
@@ -121,13 +127,6 @@ public class PlanFanOutStrategy private constructor(
       } finally {
         planning.releaseFanOutWave(run)
       }
-    if (outcome is PhaseOutcome.Completed) {
-      val settled =
-        checkNotNull(outcome.output.normalizedOutput) {
-          "Plan fan-out completion for '${run.phaseId}' must carry a normalized output."
-        }
-      planning.settleRuntimeAuthoredCompletion(run.phaseId, settled)
-    }
     return outcome
   }
 

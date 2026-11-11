@@ -1,6 +1,7 @@
 package skillbill.ports.qa
 
 import skillbill.ports.qa.model.QaReportSource
+import skillbill.ports.qa.model.QaRetainedScreenshot
 import skillbill.ports.qa.model.QaWorkspace
 import java.nio.file.Path
 
@@ -26,6 +27,14 @@ interface QaWorkspacePort {
     repoRoot: Path,
     reference: String,
   ): QaReportSource?
+
+  fun retainScreenshot(
+    repoRoot: Path,
+    invocationId: String,
+    sourcePath: Path,
+    label: String,
+    asFrame: Boolean,
+  ): QaRetainedScreenshot
 
   /** Removes the invocation owner record of [workspace] so the finished invocation can no longer take a lease. */
   fun close(workspace: QaWorkspace)

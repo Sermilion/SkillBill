@@ -56,7 +56,11 @@ class AgentExecutionChatRepositoryTest {
     val settings = FakeAppSettingsRepository()
     val config = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(RuntimeConfigRepository::class.java)) { _, _, _ -> error("unused") } as RuntimeConfigRepository
     val summarizer = ChatSummarizer(host, settings, { error("unused") }, store, diagnostics, ApplicationCoroutineScope(backgroundScope))
-    val repository = AgentExecutionChatRepository(setOf(claude), config, store, AgentSessionCatalog(host, settings, store, diagnostics), diagnostics, summarizer)
+    val catalog = AgentSessionCatalog(host, settings, store, diagnostics)
+    val modelCatalog = ChatModelCatalog(
+      host, { error("unused") }, { error("unused") }, dev.skillbill.desktop.core.data.usage.UsageProfileResolver(host), settings, diagnostics,
+    )
+    val repository = AgentExecutionChatRepository(setOf(claude), config, store, catalog, diagnostics, summarizer, modelCatalog)
     assertEquals(ChatSteeringPolicy.LiveWhenAvailable, repository.steeringPolicy("claude"))
     for ((session, id) in listOf("one" to "a", "one" to "b", "two" to "c")) {
       repository.steer(ChatSteeringRequest(session, "claude", id, "guidance"))
@@ -92,7 +96,9 @@ class AgentExecutionChatRepositoryTest {
       val settings = FakeAppSettingsRepository()
       val summarizer = ChatSummarizer(host, settings, { error("unused") }, store, diagnostics, ApplicationCoroutineScope(backgroundScope))
       val catalog = AgentSessionCatalog(host, settings, store, diagnostics)
-      AgentExecutionChatRepository(setOf(claude), unusedConfig, store, catalog, diagnostics, summarizer)
+      AgentExecutionChatRepository(setOf(claude), unusedConfig, store, catalog, diagnostics, summarizer,
+        ChatModelCatalog(host, { error("unused") }, { error("unused") },
+          dev.skillbill.desktop.core.data.usage.UsageProfileResolver(host), settings, diagnostics))
     }
 
     val events = repository.send(chatRequest(agent = ChatAgent("codex", null, null))).toList()

@@ -88,7 +88,7 @@ sealed interface UsageRefreshCapability {
   data object Unsupported : UsageRefreshCapability
   data class Pull(val family: UsageRefreshFamily, val minimumInterval: Duration = Duration.ZERO) : UsageRefreshCapability
 }
-enum class UsageRefreshFamily { CodexSnapshot, TeamSpend, AggregatedActivity }
+enum class UsageRefreshFamily { CodexSnapshot, ClaudeSnapshot, TeamSpend, AggregatedActivity }
 sealed interface UsageRefreshAvailability {
   data object Ready : UsageRefreshAvailability
   data object Checking : UsageRefreshAvailability

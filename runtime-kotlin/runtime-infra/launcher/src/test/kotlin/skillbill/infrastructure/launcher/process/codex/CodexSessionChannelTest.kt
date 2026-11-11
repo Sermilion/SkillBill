@@ -7,6 +7,7 @@ import skillbill.approval.model.ApprovalProviderDisposition
 import skillbill.contracts.approval.ApprovalProviderRequestId
 import skillbill.contracts.approval.ApprovalState
 import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionOutcome
+import skillbill.ports.agentrun.model.AgentRunModelObserver
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.approval.model.ApprovalDecisionResult
 import skillbill.ports.approval.model.ApprovalDeliveryState
@@ -31,6 +32,23 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CodexSessionChannelTest {
+  @Test
+  fun `model is reported from the provider handshake before turn completion`() {
+    val models = mutableListOf<String?>()
+    val channel = channel(observer = AgentRunModelObserver(models::add))
+    try {
+      channel.attach(SessionProcess())
+      assertEquals(emptyList(), models)
+      channel.observe("""{"id":1,"result":{"userAgent":"codex_cli_rs/9.0.0 (test)"}}""" + "\n")
+      assertEquals(emptyList(), models)
+      channel.observe(threadResponse())
+      assertEquals<List<String?>>(listOf("worker-model"), models)
+      assertNull(channel.outcome())
+    } finally {
+      channel.finish()
+    }
+  }
+
   @Test
   fun `stale turn failures in the resumed thread do not poison the active turn`() {
     val channel = channel(savedThread = "thread-1")
@@ -227,20 +245,23 @@ class CodexSessionChannelTest {
     }
   }
 
-  private fun channel(savedThread: String? = null) =
-    CodexSessionChannel(
-      CodexSessionLaunch(
-        "scoped briefing",
-        "/checkout",
-        "worker-model",
-        "high",
-        savedThread,
-        AgentRunOutputSink.NONE,
-        listOf("/qa"),
-      ),
-      Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
-      NoopRuntimeDiagnostics,
-    )
+  private fun channel(
+    savedThread: String? = null,
+    observer: AgentRunModelObserver? = null,
+  ) = CodexSessionChannel(
+    CodexSessionLaunch(
+      "scoped briefing",
+      "/checkout",
+      "worker-model",
+      "high",
+      savedThread,
+      AgentRunOutputSink.NONE,
+      listOf("/qa"),
+      modelObserver = observer,
+    ),
+    Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
+    NoopRuntimeDiagnostics,
+  )
 
   private fun threadResponse() =
     """{"id":2,"result":{"thread":{"id":"thread-1"},"model":"worker-model",""" +

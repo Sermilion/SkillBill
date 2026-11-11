@@ -26,6 +26,7 @@ WORK_TMPDIRS+=("$REPO_ROOT")
 cp "$SOURCE_REPO_ROOT/install.sh" "$SOURCE_REPO_ROOT/uninstall.sh" "$SOURCE_REPO_ROOT/LICENSE" "$REPO_ROOT/"
 cp -R "$SOURCE_REPO_ROOT/skills" "$SOURCE_REPO_ROOT/platform-packs" "$SOURCE_REPO_ROOT/orchestration" "$SOURCE_REPO_ROOT/agent-addons" "$REPO_ROOT/"
 mkdir -p "$REPO_ROOT/scripts"
+cp "$SOURCE_REPO_ROOT/scripts/desktop_legacy_cleanup_smoke_test.sh" "$REPO_ROOT/scripts/"
 cp "$SOURCE_REPO_ROOT/scripts/desktop_source_install_smoke_test.sh" "$REPO_ROOT/scripts/"
 INSTALL_SH="$REPO_ROOT/install.sh"
 
@@ -316,16 +317,16 @@ make_desktop_bundle() {
   WORK_TMPDIRS+=("$work")
   case "$token" in
     macos-arm64|macos-x64)
-      executable="$work/Skill Bill.app/Contents/MacOS/Skill Bill"
-      write_smoke_build_identity "$work/Skill Bill.app/Contents/app/resources/build-identity.properties"
+      executable="$work/Sona.app/Contents/MacOS/Sona"
+      write_smoke_build_identity "$work/Sona.app/Contents/app/resources/build-identity.properties"
       ;;
     windows-x64)
-      executable="$work/Skill Bill/bin/Skill Bill.bat"
-      write_smoke_build_identity "$work/Skill Bill/app/resources/build-identity.properties"
+      executable="$work/Sona/Sona.exe"
+      write_smoke_build_identity "$work/Sona/app/resources/build-identity.properties"
       ;;
     *)
-      executable="$work/Skill Bill/bin/Skill Bill"
-      write_smoke_build_identity "$work/Skill Bill/lib/app/resources/build-identity.properties"
+      executable="$work/Sona/bin/Sona"
+      write_smoke_build_identity "$work/Sona/lib/app/resources/build-identity.properties"
       ;;
   esac
   mkdir -p "$(dirname "$executable")"
@@ -344,18 +345,18 @@ APP
 desktop_app_target() {
   local fake_home="$1"
   case "$TOKEN" in
-    macos-arm64|macos-x64) printf '%s/Applications/Skill Bill.app' "$fake_home" ;;
-    windows-x64) printf '%s/AppData/Local/SkillBill/Desktop/Skill Bill' "$fake_home" ;;
-    *) printf '%s/.local/share/skillbill/desktop/Skill Bill' "$fake_home" ;;
+    macos-arm64|macos-x64) printf '%s/Applications/Sona.app' "$fake_home" ;;
+    windows-x64) printf '%s/AppData/Local/SkillBill/Desktop/Sona' "$fake_home" ;;
+    *) printf '%s/.local/share/skillbill/desktop/Sona' "$fake_home" ;;
   esac
 }
 
 desktop_app_executable() {
   local app_target="$1"
   case "$TOKEN" in
-    macos-arm64|macos-x64) printf '%s/Contents/MacOS/Skill Bill' "$app_target" ;;
-    windows-x64) printf '%s/bin/Skill Bill.bat' "$app_target" ;;
-    *) printf '%s/bin/Skill Bill' "$app_target" ;;
+    macos-arm64|macos-x64) printf '%s/Contents/MacOS/Sona' "$app_target" ;;
+    windows-x64) printf '%s/Sona.exe' "$app_target" ;;
+    *) printf '%s/bin/Sona' "$app_target" ;;
   esac
 }
 
@@ -579,6 +580,15 @@ CURL
   printf '%s' "$work"
 }
 
+desktop_cache_stubs="$(mktemp -d)"
+WORK_TMPDIRS+=("$desktop_cache_stubs")
+for desktop_command in qdbus6 qdbus update-desktop-database kbuildsycoca6 kbuildsycoca5; do
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$desktop_cache_stubs/$desktop_command"
+  chmod +x "$desktop_cache_stubs/$desktop_command"
+done
+export PATH="$desktop_cache_stubs:$PATH"
+
+bash "$REPO_ROOT/scripts/desktop_legacy_cleanup_smoke_test.sh"
 bash "$REPO_ROOT/scripts/desktop_source_install_smoke_test.sh"
 
 echo "=== install smoke test ==="
@@ -897,6 +907,18 @@ echo ""
 echo "--- scenario 9: replay automatically installs the checksum-verified desktop app ---"
 FAKE_HOME="$(mktemp -d)"
 seed_selection_json "$FAKE_HOME"
+case "$TOKEN" in
+  macos-arm64|macos-x64) OLD_PACKAGE_ROOT="$FAKE_HOME/Applications" ;;
+  windows-x64) OLD_PACKAGE_ROOT="$FAKE_HOME/AppData/Local/SkillBill/Desktop" ;;
+  *) OLD_PACKAGE_ROOT="$FAKE_HOME/.local/share/skillbill/desktop" ;;
+esac
+mkdir -p "$OLD_PACKAGE_ROOT/Skill Bill.app" "$OLD_PACKAGE_ROOT/SkillBill"
+printf 'legacy app sentinel\n' > "$OLD_PACKAGE_ROOT/Skill Bill.app/sentinel"
+printf 'historical app sentinel\n' > "$OLD_PACKAGE_ROOT/SkillBill/sentinel"
+mkdir -p "$FAKE_HOME/.local/bin" "$FAKE_HOME/.local/share/applications"
+printf 'legacy windows launcher\n' > "$FAKE_HOME/.local/bin/skillbill-desktop.cmd"
+ln -s "$OLD_PACKAGE_ROOT/SkillBill/skillbill-desktop" "$FAKE_HOME/.local/bin/skillbill-desktop"
+printf '[Desktop Entry]\nName=SkillBill\nExec=skillbill-desktop\nIcon=skillbill.png\n' > "$FAKE_HOME/.local/share/applications/skillbill.desktop"
 STATE_FIXTURE="$(mktemp -d)"
 WORK_TMPDIRS+=("$STATE_FIXTURE")
 STATE_FILES=(
@@ -928,6 +950,11 @@ for install_attempt in 1 2; do
     cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "reinstall $install_attempt changed $state_file"
   done
 done
+[[ "$(cat "$OLD_PACKAGE_ROOT/Skill Bill.app/sentinel")" == 'legacy app sentinel' ]] || fail "Sona activation changed the Skill Bill app"
+[[ "$(cat "$OLD_PACKAGE_ROOT/SkillBill/sentinel")" == 'historical app sentinel' ]] || fail "Sona activation changed the historical SkillBill app"
+[[ "$(cat "$FAKE_HOME/.local/bin/skillbill-desktop.cmd")" == 'legacy windows launcher' ]] || fail "Sona activation changed the old Windows launcher"
+[[ "$(readlink "$FAKE_HOME/.local/bin/skillbill-desktop")" == "$OLD_PACKAGE_ROOT/SkillBill/skillbill-desktop" ]] || fail "Sona activation changed the old POSIX launcher"
+[[ -f "$FAKE_HOME/.local/share/applications/skillbill.desktop" ]] || fail "Sona activation removed the old Linux entry"
 pass "repeated installation preserves runs, project data, chats, settings, databases, journals, and backups"
 
 MIGRATION_RUNTIME_COPY="$STATE_FIXTURE/previous-runtime-cli"
@@ -946,15 +973,15 @@ DESKTOP_APP="$(desktop_app_target "$FAKE_HOME")"
 DESKTOP_EXECUTABLE="$(desktop_app_executable "$DESKTOP_APP")"
 assert_file_exists "desktop app launcher installed" "$DESKTOP_EXECUTABLE"
 if [[ "$TOKEN" == "windows-x64" ]]; then
-  [[ -f "$FAKE_HOME/.local/bin/skillbill-desktop.cmd" ]] && pass "desktop app launcher installed" || fail "desktop app launcher is missing"
+  [[ -f "$FAKE_HOME/.local/bin/sona.cmd" ]] && pass "desktop app launcher installed" || fail "desktop app launcher is missing"
 else
   [[ -x "$DESKTOP_EXECUTABLE" ]] && pass "desktop app launcher is executable" || fail "desktop app launcher is not executable"
-  [[ -L "$FAKE_HOME/.local/bin/skillbill-desktop" ]] && pass "desktop app launcher symlink installed" || fail "desktop app launcher symlink is missing"
+  [[ -L "$FAKE_HOME/.local/bin/sona" ]] && pass "desktop app launcher symlink installed" || fail "desktop app launcher symlink is missing"
 fi
 if [[ "$TOKEN" == "linux-x64" ]]; then
-  [[ -f "$FAKE_HOME/.local/share/applications/skillbill.desktop" ]] && pass "Linux desktop entry installed" || fail "Linux desktop entry is missing"
-  grep -Fxq "Icon=$DESKTOP_APP/lib/Skill Bill.png" "$FAKE_HOME/.local/share/applications/skillbill.desktop" && pass "Linux desktop entry uses the packaged icon" || fail "Linux desktop entry has no packaged icon"
-  grep -Fxq 'StartupWMClass=dev-skillbill-desktop-app-DesktopLauncherKt' "$FAKE_HOME/.local/share/applications/skillbill.desktop" && pass "Linux desktop entry matches the app window" || fail "Linux desktop entry has no matching window identity"
+  [[ -f "$FAKE_HOME/.local/share/applications/sona.desktop" ]] && pass "Linux desktop entry installed" || fail "Linux desktop entry is missing"
+  grep -Fxq "Icon=$DESKTOP_APP/lib/Sona.png" "$FAKE_HOME/.local/share/applications/sona.desktop" && pass "Linux desktop entry uses the packaged icon" || fail "Linux desktop entry has no packaged icon"
+  grep -Fxq 'StartupWMClass=dev-skillbill-desktop-app-DesktopLauncherKt' "$FAKE_HOME/.local/share/applications/sona.desktop" && pass "Linux desktop entry matches the app window" || fail "Linux desktop entry has no matching window identity"
 fi
 
 echo ""
@@ -999,19 +1026,24 @@ for state_file in "${STATE_FILES[@]}"; do
       ;;
   esac
 done
+[[ "$(cat "$OLD_PACKAGE_ROOT/Skill Bill.app/sentinel")" == 'legacy app sentinel' ]] || fail "uninstall changed the Skill Bill app"
+[[ "$(cat "$OLD_PACKAGE_ROOT/SkillBill/sentinel")" == 'historical app sentinel' ]] || fail "uninstall changed the historical SkillBill app"
+[[ "$(cat "$FAKE_HOME/.local/bin/skillbill-desktop.cmd")" == 'legacy windows launcher' ]] || fail "uninstall changed the old Windows launcher"
+[[ "$(readlink "$FAKE_HOME/.local/bin/skillbill-desktop")" == "$OLD_PACKAGE_ROOT/SkillBill/skillbill-desktop" ]] || fail "uninstall changed the old POSIX launcher"
+[[ -f "$FAKE_HOME/.local/share/applications/skillbill.desktop" ]] || fail "uninstall removed the old Linux entry"
 pass "uninstall preserves databases, SQLite journals, and backups"
 for install_entry in runtime installed-skills skills platform-packs orchestration agent-addons baseline-manifest.json .stale-cache; do
   assert_file_absent "uninstall removes $install_entry" "$FAKE_HOME/.skill-bill/$install_entry"
 done
 assert_file_absent "uninstall removes the desktop app" "$DESKTOP_APP"
 if [[ "$TOKEN" == "windows-x64" ]]; then
-  assert_file_absent "uninstall removes the desktop launcher" "$FAKE_HOME/.local/bin/skillbill-desktop.cmd"
+  assert_file_absent "uninstall removes the desktop launcher" "$FAKE_HOME/.local/bin/sona.cmd"
 else
-  assert_file_absent "uninstall removes the desktop launcher" "$FAKE_HOME/.local/bin/skillbill-desktop"
-  [[ ! -L "$FAKE_HOME/.local/bin/skillbill-desktop" ]] || fail "uninstall left a dangling desktop launcher"
+  assert_file_absent "uninstall removes the desktop launcher" "$FAKE_HOME/.local/bin/sona"
+  [[ ! -L "$FAKE_HOME/.local/bin/sona" ]] || fail "uninstall left a dangling desktop launcher"
 fi
 if [[ "$TOKEN" == "linux-x64" ]]; then
-  assert_file_absent "uninstall removes the Linux desktop entry" "$FAKE_HOME/.local/share/applications/skillbill.desktop"
+  assert_file_absent "uninstall removes the Linux desktop entry" "$FAKE_HOME/.local/share/applications/sona.desktop"
 fi
 
 echo ""

@@ -6,12 +6,14 @@ import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionCapt
 import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionChannel
 import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionOutcome
 import skillbill.infrastructure.launcher.process.interaction.SerializedStdinWriter
+import skillbill.ports.agentrun.model.AgentRunModelObserver
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.approval.ApprovalOwnerEffects
 import skillbill.ports.approval.model.ApprovalOwnerSession
 import skillbill.ports.approval.model.ApprovalPendingWait
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.workflow.taskruntime.model.skeleton.LAUNCH_MODEL_TOKEN_PATTERN
 import java.time.Clock
 
 internal class CursorSessionChannel(
@@ -19,6 +21,7 @@ internal class CursorSessionChannel(
   clock: Clock,
   private val output: AgentRunOutputSink,
   private val diagnostics: RuntimeDiagnostics,
+  modelObserver: AgentRunModelObserver? = null,
 ) : AgentRunSessionChannel {
   private var writer: SerializedStdinWriter? = null
   private val providerName = launch.provider.name
@@ -50,6 +53,7 @@ internal class CursorSessionChannel(
       },
       onCard = {},
       record = diagnostics::warning,
+      onModel = { model -> model.takeIf(LAUNCH_MODEL_TOKEN_PATTERN::matches)?.let { modelObserver?.reported(it) } },
     )
   val effects: ApprovalOwnerEffects get() = protocol
 

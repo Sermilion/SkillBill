@@ -1,4 +1,4 @@
-/* Skill Bill — Linear study · component library
+/* Sona — Linear study · component library
  * Every component is a function that returns an HTML string and records where it was used.
  * Screens (app/screens.js) may only call these functions plus the layout primitives in components.css. */
 (function () {
@@ -126,16 +126,18 @@
   }
 
   /* ---------- Brand mark ---------- */
+  let brandMarkId = 0;
   function BrandMark(size) {
     track('BrandMark');
     const s = size || 20;
-    return `<svg class="sb-mark" style="width:${s}px;height:${s}px" viewBox="0 0 64 64" aria-hidden="true">
-      <defs><linearGradient id="sbt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e1e24"/><stop offset="1" stop-color="#0b0b0d"/></linearGradient>
-      <linearGradient id="sba" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3c462"/><stop offset=".55" stop-color="#e9a81c"/><stop offset="1" stop-color="#c98a0e"/></linearGradient></defs>
-      <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#sbt)"/>
-      <rect x="2.25" y="2.25" width="59.5" height="59.5" rx="13.75" fill="none" stroke="#fff" stroke-opacity=".1" stroke-width=".5"/>
-      <circle cx="32" cy="32" r="15.6" fill="none" stroke="url(#sba)" stroke-width="4.25"/>
-      <path d="M32 32L32 22.6A9.4 9.4 0 1 1 23.5 36Z" fill="url(#sba)"/></svg>`;
+    const clip = `sona-ping-${++brandMarkId}`;
+    return `<svg class="sb-mark" style="width:${s}px;height:${s}px" viewBox="0 0 100 100" aria-hidden="true">
+      <defs><clipPath id="${clip}"><circle cx="50" cy="50" r="44"/></clipPath></defs>
+      <g clip-path="url(#${clip})" fill="none" stroke="currentColor">
+        <circle cx="18.9" cy="81.1" r="13" stroke-width="26"/>
+        <circle cx="18.9" cy="81.1" r="47" stroke-width="22"/>
+        <circle cx="18.9" cy="81.1" r="80" stroke-width="22"/>
+      </g></svg>`;
   }
 
   /* ---------- Status icon: shape carries the state, color reinforces it ---------- */
@@ -155,7 +157,7 @@
   function StatusIcon(state, frac, opts) {
     track('StatusIcon');
     const o = opts || {};
-    const c = `var(--st-${(STATES[state] || STATES.pending).tone})`;
+    const c = o.monochrome ? 'var(--fg)' : `var(--st-${(STATES[state] || STATES.pending).tone})`;
     const ink = 'var(--bg-panel)';
     let inner;
     switch (state) {
@@ -759,7 +761,7 @@
   /* ---------- Tray popover ---------- */
   function TrayPopover(o) {
     track('TrayPopover');
-    return `<div class="sb-tray"><div class="sb-tray-hd">${BrandMark(18)}<span>Skill Bill</span></div><div class="sb-tray-stats">${o.stats.map((x) => `<div><b style="color:${x.color || 'var(--fg)'}">${esc(x.value)}</b><span>${esc(x.label)}</span></div>`).join('')}</div><div class="sb-tray-tabs">${o.tabs}</div><div class="sb-tray-body">${join(o.rows)}</div><div class="sb-tray-ft">${join(o.footer)}</div></div>`;
+    return `<div class="sb-tray"><div class="sb-tray-hd">${BrandMark(18)}<span>Sona</span></div><div class="sb-tray-stats">${o.stats.map((x) => `<div><b style="color:${x.color || 'var(--fg)'}">${esc(x.value)}</b><span>${esc(x.label)}</span></div>`).join('')}</div><div class="sb-tray-tabs">${o.tabs}</div><div class="sb-tray-body">${join(o.rows)}</div><div class="sb-tray-ft">${join(o.footer)}</div></div>`;
   }
 
   /* ---------- New task: open chats, transcript, composer, home, pickers ---------- */
@@ -1065,13 +1067,26 @@
       return `<span class="file" title="${p}">${p.replace(/\/+$/, '').split('/').pop()}</span>${m.slice(p.length)}`;
     });
     const out = [];
-    let list = null, fence = null;
+    let list = null, fence = null, tableEnd = -1;
+    const lines = String(text || '').split('\n');
+    const cells = (line) => line.trim().replace(/^\||\|$/g, '').split('|').map((cell) => cell.trim());
     const flush = () => { if (list) { out.push(`<${list.tag}>${list.items.map((i) => `<li>${inline(i.text)}${i.sub.length ? `<ul>${i.sub.map((x) => `<li>${inline(x)}</li>`).join('')}</ul>` : ''}</li>`).join('')}</${list.tag}>`); list = null; } };
-    String(text || '').split('\n').forEach((raw) => {
+    lines.forEach((raw, index) => {
+      if (index < tableEnd) return;
       if (fence) { if (/^\s*```/.test(raw)) { out.push(`<pre>${esc(fence.join('\n'))}</pre>`); fence = null; } else fence.push(raw); return; }
       const line = raw.trim();
       if (line.startsWith('```')) { flush(); fence = []; return; }
       if (!line) return flush();
+      if (line.startsWith('|') && lines[index + 1] && cells(lines[index + 1]).length === cells(line).length && cells(lines[index + 1]).every((cell) => /^:?-{3,}:?$/.test(cell))) {
+        flush();
+        const headings = cells(line), records = [];
+        tableEnd = index + 2;
+        while (tableEnd < lines.length && lines[tableEnd].trim().startsWith('|')) {
+          records.push(`<div class="sb-report-record"><dl>${cells(lines[tableEnd++]).map((cell, column) => `<dt>${inline(headings[column] || '')}</dt><dd>${inline(cell)}</dd>`).join('')}</dl></div>`);
+        }
+        out.push(records.join(''));
+        return;
+      }
       if (/^#+\s/.test(line)) { flush(); out.push(`<h4>${inline(line.replace(/^#+\s*/, ''))}</h4>`); return; }
       const m = raw.match(/^(\s*)(\d+[.)]|[-*])\s+(.*)$/);
       if (m) {
@@ -1155,8 +1170,15 @@
    * unfinished run's intent (its first criterion) to one line with the full text in the tooltip; `foot` follows. */
   function WorkSummary(o) {
     track('WorkSummary');
-    return `<section class="sb-wsum" aria-label="${esc(o.label)}"><div class="sb-wsum-lb">${esc(o.label)}${o.note ? `<span>· ${esc(o.note)}</span>` : ''}</div><p class="${cx('sb-wsum-tx', o.oneLine && 'is-one')}"${o.oneLine && o.tip ? ` title="${esc(o.tip)}"` : ''}>${o.html}</p>${o.foot ? `<div class="sb-wsum-ft">${esc(o.foot)}</div>` : ''}</section>`;
+    return `<section class="sb-wsum" aria-label="${esc(o.label)}"><div class="sb-wsum-lb">${esc(o.label)}${o.note ? `<span>· ${esc(o.note)}</span>` : ''}</div><p class="${cx('sb-wsum-tx', o.oneLine && 'is-one')}"${o.oneLine && o.tip ? ` title="${esc(o.tip)}"` : ''}>${o.html}</p>${o.link || ''}${o.foot ? `<div class="sb-wsum-ft">${esc(o.foot)}</div>` : ''}</section>`;
   }
+  function VerifyContext(o) {
+    track('VerifyContext');
+    const config = { 'non-goals': ['x', 'exclusion', 'exclusions'], constraints: ['shield', 'requirement', 'requirements'], rollout: ['arrowRight'] }[o.kind];
+    const note = o.kind === 'rollout' ? 'Release approach' : `${o.items.length} ${config[o.items.length === 1 ? 1 : 2]}`;
+    return `<section class="sb-vcontext is-${esc(o.kind)}"><button type="button" class="hd" aria-expanded="${!!o.open}"${act(o.act, o.arg)}><span class="glyph">${Icon(config[0])}</span><span class="copy"><span class="title">${esc(o.label)}</span>${!o.open ? `<span class="preview">${esc(o.preview)}</span>` : ''}<span class="note">${esc(note)}</span></span>${Icon(o.open ? 'chevronDown' : 'chevronRight', 'xs')}</button>${o.open ? `<div class="body">${o.items.map((html) => `<div class="entry"><div>${html}</div></div>`).join('')}</div>` : ''}</section>`;
+  }
+
   /* "Select all N" as the first row of a selectable list: one checkbox for the whole group, mixed while part is selected.
    * `boxed` pads it as the first row inside a Box; `rule` draws a hairline under it (a receipt's findings and tests); `note`
    * trails it ("Keep rows are left out"). */
@@ -1438,7 +1460,7 @@
   }
   /* A faint 11.5px label over its text (`html`) or its FileChips (`chips`): Evidence, What's missing, Not found, Expected,
    * Steps. */
-  function FieldText(o) { track('FieldText'); return `<div class="sb-ftx"><div class="lb">${esc(o.label)}</div>${o.chips ? FileChips(o.chips) : o.html}</div>`; }
+  function FieldText(o) { track('FieldText'); return `<div class="sb-ftx"><div class="lb">${esc(o.label)}</div>${o.chips ? FileChips(o.chips) : ''}${o.html || ''}</div>`; }
   /* The line under a gap criterion that takes it out of fixes: "Not a code gap here?" with Not in this repo and Spec
    * question, or what the mark means and Clear mark. */
   function MarkRow(o) { track('MarkRow'); return `<div class="sb-marks"><span>${esc(o.text)}</span>${join(o.actions)}</div>`; }
@@ -1476,7 +1498,7 @@
   /* A faint 11.5px caption with a hairline to the right edge: Plan. */
   function MiniRule(text) { track('MiniRule'); return `<div class="sb-mrule">${esc(text)}</div>`; }
   /* Label and value pairs in a 112px label column: a step's inputs, the flag audit. [label, value, mono]. */
-  function KeyValues(rows) { track('KeyValues'); return `<dl class="sb-kv">${rows.map(([k, v, mono]) => `<dt>${esc(k)}</dt><dd class="${cx(mono && 'mono')}">${esc(v)}</dd>`).join('')}</dl>`; }
+  function KeyValues(rows) { track('KeyValues'); return `<dl class="sb-kv">${rows.map(([k, v, mono]) => `<dt>${esc(k)}</dt><dd class="${cx(mono && 'mono')}">${mono ? esc(v) : ReportText(v)}</dd>`).join('')}</dl>`; }
   /* Checks as lines, each a green check or a red cross and its text: the flag audit. */
   function CheckLines(items) { track('CheckLines'); return `<div class="sb-chks">${items.map((c) => `<div class="it"><span style="--c:${c.ok ? 'var(--st-done)' : 'var(--st-failed)'}">${Icon(c.ok ? 'check' : 'x', 'xs')}</span>${esc(c.text)}</div>`).join('')}</div>`; }
   /* Changed files per directory: the path, a 6px bar against the largest and the count. Past `max` (7) one faint line sums
@@ -1736,7 +1758,7 @@
     ChatStatusMark, ChatTabs, SuggestionChip, ChatMessage, ChatTranscript, ChatPill, Composer, StepLine, NewTaskHome,
     InboxList, InboxRow, FilterBar, TargetPicker, QueuedRow, QueuePanel, ChatChangesPill, ChatChangeRow, ChatChangesPanel, ResumeRow, ResumePalette,
     QaVerdict, QaChip, QaItem, QaFold, QaResults, QaLive, QaPreview, QaStageList, QaShots, QaRounds, ReportText, DeviceSwitcher, DeviceOption, DevicePanel,
-    SegmentBar, CheckTally, RunOutcome, CheckRow, StepTimeline, WorkSummary, SelectAll, SelectionBar,
+    SegmentBar, CheckTally, RunOutcome, CheckRow, StepTimeline, WorkSummary, VerifyContext, SelectAll, SelectionBar,
     ValidationDoc, FlagStrip, Tag, LinkButton, BoxNote, ReportPart, BranchRun,
     VerifyDoc, VerifyHeader, Banner, Fold, Quote, VerifySection, Badge, CriterionRow, FieldText, MarkRow, FileChip, FileChips, RouteSwitch,
     ReceiptFinding, TestValueRow, BadgeGrid, MiniRule, KeyValues, CheckLines, DirBars, TextLink, VerifyQa,

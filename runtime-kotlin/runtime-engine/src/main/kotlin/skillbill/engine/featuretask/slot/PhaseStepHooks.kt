@@ -29,7 +29,6 @@ import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseStandalonePublicationStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
-import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ReviewFindingVerdict
@@ -47,6 +46,7 @@ import skillbill.workflow.taskruntime.model.review.ReviewPassResolution
  */
 public interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStepLaunchHooks<B> {
   public val contextKind: PhaseStepHookContextKind get() = PhaseStepHookContextKind.COMMON
+  public val launchHandoffSelection: PhaseLaunchHandoffSelection get() = PhaseLaunchHandoffSelection.DEFAULT
 
   /** The rule a [completionRejection] of this step is recorded under in the durable block reason. */
   public val completionRejectionRule: String
@@ -96,13 +96,15 @@ public interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStepLa
   }
 }
 
-/** A step that owns one serial acceptance-repair mutation attempt and rejects an unfinished agent completion. */
+public enum class PhaseLaunchHandoffSelection {
+  DEFAULT,
+  BUNDLE_FEASIBILITY,
+}
+
+/** A step that owns one serial acceptance-repair mutation attempt. */
 internal interface PhaseAcceptanceRepairHooks {
   /** Whether the accepted step owns one serial acceptance-repair mutation attempt. */
   val serialAcceptanceRepairStep: Boolean
-
-  /** The failure code an agent completion that left the step unfinished is rejected with. */
-  val unfinishedAgentCompletionRejection: FeatureTaskRuntimeFailureCode
 }
 
 /** A step whose agent launch can be refused after briefing persistence. */
@@ -271,6 +273,13 @@ internal interface PhaseLaunchReconciliationHooks {
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
   )
+}
+
+internal interface PhaseLaunchCompletionReconciliationHooks {
+  fun completeBeforeLaunch(
+    run: PhaseRun,
+    context: PhaseAttemptLaunchHookContext,
+  ): PhaseOutcome?
 }
 
 /** A step that launches an implementation turn. */
@@ -680,6 +689,16 @@ public class PhaseBoundStepHooks<B : PhaseAcceptedStepExecution> internal constr
   private val hooks: PhaseStepHooks<B>,
   private val binding: B,
 ) {
+  internal val launchHandoffSelection: PhaseLaunchHandoffSelection
+    get() = hooks.launchHandoffSelection
+
+  internal fun settleCompletedRound(
+    context: PhaseStepOutputContext,
+    capture: ValidatedOutputCapture,
+    attested: NormalizedFeatureTaskRuntimePhaseOutput,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): AttemptResult? = hooks.settleCompletedRound(context, capture, attested, outputMap)
+
   internal fun beforeAgentLaunch(
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
