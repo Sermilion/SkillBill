@@ -937,3 +937,12 @@ completed and skipped specs, execution identities, commits, and history. An unre
 with its clauses and missing prerequisite. Old completed plans remain readable and reopen planning for
 review before implementation; their unit plans and completed work remain intact. Execution status
 updates alone do not invalidate approval.
+
+## Interrupted legacy planning adoption
+
+Goal continuation reopens an ownerless planning workflow when compatibility adoption
+left `plan_subtasks` pending but the workflow marked running. It preserves phase
+records, accepted unit plans and feasibility history, and rebases the bundle snapshot
+before the required fresh feasibility review. Repeating continuation does not add
+another adoption or discard completed work. A worker ownership record, an active
+feasibility launch, or a running phase still refuses this recovery.

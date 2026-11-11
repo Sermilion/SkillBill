@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLo
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
 import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
+import skillbill.engine.featuretask.phase.planning.PlanBundleSnapshots
 import skillbill.engine.featuretask.phase.planning.authoredBundleReasonForTest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
@@ -26,6 +27,8 @@ import skillbill.engine.goalrunner.planning.source.findImportedSubtaskPlanWorkfl
 import skillbill.engine.goalrunner.planning.source.findLinkedSubtaskPlanWorkflowId
 import skillbill.engine.goalrunner.planning.source.findReopenedSubtaskPlanWorkflowId
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.featurespec.model.FeatureSpecPreparationMode
+import skillbill.featurespec.model.FeatureSpecWriteResult
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -34,6 +37,10 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.text.sha256HexUtf8
+import skillbill.workflow.decomposition.encodeDecompositionManifestWireMap
+import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
+import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -43,6 +50,7 @@ import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.artifact.decodePlanBundleFromArtifact
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleOrigin
@@ -51,9 +59,11 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPl
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -369,6 +379,150 @@ class PlanSubtasksReopeningTest {
     }
   }
 
+  @Test
+  fun `legacy feasibility adoption repairs an ownerless running pending phase and retains accepted plans`() {
+    val home = Files.createTempDirectory("legacy-plan-adoption")
+    try {
+      val database = phaseRunDatabase(home, testHarnessClock)
+      val execution = ExecutionPlanAdmissionFixture(SkeletonDefinition.PLAN, database = database)
+      val selectedId = "wftr-adopted-plan"
+      val records = acceptedRecords()
+      seedPlans(database, execution, selectedId, "wftr-older-plan", records)
+      val (bundle, manifestPath) = seedLegacyBundle(home, database, selectedId)
+      val replan = PlanSubtasksReplan("SKILL-384", selectedId, home, setOf(1), feasibilityAdoption = true)
+      val reopening = reopening(database)
+      assertTrue(reopening.reopenWithRebasedBundle(replan))
+      val adopted = database.read { requireNotNull(it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId)) }
+      val adoptedBundle =
+        requireNotNull(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.value(adopted.artifacts))
+      val lookupService =
+        FeatureTaskContinuationLookupService(
+          database,
+          testWorkflowSnapshotValidator,
+          execution.compatibility,
+          NoopRuntimeDiagnostics,
+        )
+      val lookup = lookup(database, execution, lookupService)
+      val identity = execution.identity(selectedId)
+      val candidate =
+        assertIs<FeatureTaskContinuationLookupResult.Resumable>(
+          lookup.lookupSelected(identity.normalizedIssueKey, listOf(identity.repositoryIdentity), selectedId),
+        ).candidate
+      assertNotNull(lookupService.claimForTest(candidate, execution.inputs))
+
+      assertTrue(reopening.reopenWithRebasedBundle(replan))
+      val recovered = database.read { requireNotNull(it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId)) }
+      assertEquals(WorkflowStatus.PENDING, recovered.workflowStatus)
+      assertEquals(adopted.artifacts, recovered.artifacts)
+      assertEquals(bundle.subtasks, assertNotNull(decodePlanBundleFromArtifact(adoptedBundle)).subtasks)
+      assertEquals(
+        sha256HexUtf8(Files.readString(manifestPath)),
+        assertNotNull(decodePlanBundleFromArtifact(adoptedBundle)).manifestSha256,
+      )
+      val retained = decodePhaseRecords(recovered.artifacts)
+      records.filterKeys { it != "plan_subtasks" }.forEach { (phase, record) -> assertEquals(record, retained[phase]) }
+      assertTrue(reopening.reopenWithRebasedBundle(replan))
+      assertEquals(recovered, database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId) })
+      database.transaction { unit ->
+        unit.workflowStates.saveAcceptedSnapshotMutation(
+          WorkflowFamily.TASK_RUNTIME,
+          recovered.copy(workflowStatus = WorkflowStatus.RUNNING),
+        )
+        val before = requireNotNull(unit.workflowStates.getFeatureTaskWorkflow(selectedId))
+        assertTrue(
+          unit.workflowStates.acquireFeatureTaskRuntimeWorker(
+            FeatureTaskRuntimeWorkerOwnership(
+              selectedId, 1, "plan-owner-token-12345678", "host", "boot", 1234, "birth",
+              FeatureTaskRuntimeWorkerLeaseState.ACTIVE, testHarnessClock.instant().toString(),
+              testHarnessClock.instant().plusSeconds(30).toString(), "plan_subtasks", 1,
+            ),
+            before.updatedAt,
+          ),
+        )
+      }
+      val owned = database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId) }
+      assertFalse(reopening.reopenWithRebasedBundle(replan))
+      assertEquals(owned, database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId) })
+    } finally {
+      home.toFile().deleteRecursively()
+    }
+  }
+
+  private fun seedLegacyBundle(
+    home: Path,
+    database: DatabaseSessionFactory,
+    selectedId: String,
+  ): Pair<FeatureTaskRuntimePlanBundle, Path> {
+    val directory = Files.createDirectories(home.resolve(".feature-specs/SKILL-384-recovery"))
+    val parent = Files.writeString(directory.resolve("spec.md"), "# Recovery\n")
+    val child =
+      Files.writeString(
+        directory.resolve("subtask.md"),
+        "## Acceptance Criteria\n\n1. Retain completed work.\n\n" +
+          "## Implementation Details\n\nKeep the existing plan.\n",
+      )
+    val manifest =
+      DecompositionManifest(
+        issueKey = "SKILL-384",
+        featureName = "recovery",
+        parentSpecPath = home.relativize(parent).toString(),
+        baseBranch = "main",
+        featureBranch = "feat/recovery",
+        currentSubtaskIntent = CurrentSubtaskIntent(1, "start"),
+        subtasks = listOf(DecompositionSubtask(1, "Retained", home.relativize(child).toString())),
+      )
+    val manifestPath = directory.resolve("decomposition-manifest.yaml")
+    writeManifest(manifestPath, manifest)
+    val snapshots = PlanBundleSnapshots(planner())
+    val bundle =
+      snapshots.capture(
+        home,
+        FeatureSpecWriteResult(
+          FeatureSpecPreparationMode.DECOMPOSED,
+          home.relativize(parent).toString(),
+          "",
+          home.relativize(manifestPath).toString(),
+          listOf(home.relativize(child).toString()),
+        ),
+        FeatureTaskRuntimePlanBundleOrigin.EXISTING,
+      )
+    database.transaction { unit ->
+      val snapshot = requireNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId))
+      unit.workflowStates.saveAcceptedSnapshotMutation(
+        WorkflowFamily.TASK_RUNTIME,
+        snapshot.copy(
+          artifacts =
+            DurableWorkflowArtifacts.fromMap(
+              snapshot.artifacts +
+                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.entry(
+                  bundle.asWorkflowArtifactEntry(),
+                ),
+            ),
+        ),
+      )
+    }
+    val progressed =
+      manifest.copy(
+        status = "in_progress",
+        subtasks =
+          manifest.subtasks.map {
+            it.copy(status = "complete")
+          },
+      )
+    writeManifest(manifestPath, progressed)
+    return bundle to manifestPath
+  }
+
+  private fun writeManifest(
+    path: Path,
+    manifest: DecompositionManifest,
+  ) {
+    TestDecompositionManifestStore.writeTextAtomically(
+      path,
+      TestDecompositionManifestStore.encodeManifestYaml(encodeDecompositionManifestWireMap(manifest)),
+    )
+  }
+
   private fun seedImportedChild(
     database: DatabaseSessionFactory,
     execution: ExecutionPlanAdmissionFixture,
@@ -484,21 +638,24 @@ class PlanSubtasksReopeningTest {
     }
   }
 
+  private fun planner(): FeatureTaskRuntimeDecompositionPlanner =
+    FeatureTaskRuntimeDecompositionPlanner(
+      FeatureSpecPreparationRuntime(),
+      FeatureSpecPreparationWriter(
+        testDecompositionManifestValidator,
+        TestDecompositionManifestStore,
+        testDecompositionManifestWriter,
+        RUNNER_TEST_PROJECT_STORE,
+      ),
+      FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE),
+      RUNNER_TEST_PROJECT_STORE,
+      TestDecompositionManifestStore,
+    )
+
   private fun reopening(database: DatabaseSessionFactory): PlanSubtasksReopening =
     PlanSubtasksReopening(
       database,
-      FeatureTaskRuntimeDecompositionPlanner(
-        FeatureSpecPreparationRuntime(),
-        FeatureSpecPreparationWriter(
-          testDecompositionManifestValidator,
-          TestDecompositionManifestStore,
-          testDecompositionManifestWriter,
-          RUNNER_TEST_PROJECT_STORE,
-        ),
-        FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE),
-        RUNNER_TEST_PROJECT_STORE,
-        TestDecompositionManifestStore,
-      ),
+      planner(),
       FeatureTaskRuntimeDecomposeTerminalRecorder(
         database,
         testHarnessClock,

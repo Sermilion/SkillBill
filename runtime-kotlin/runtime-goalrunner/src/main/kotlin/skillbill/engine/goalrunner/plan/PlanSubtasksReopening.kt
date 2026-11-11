@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerm
 import skillbill.engine.featuretask.phase.record.asPendingForOperatorResume
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -80,17 +81,26 @@ public class PlanSubtasksReopening(
           unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, replan.planWorkflowId)
             ?: return@transaction null
         if (!snapshot.hasPlanSubtasksStep()) return@transaction null
-        if (snapshot.workflowStatus == WorkflowStatus.RUNNING) return@transaction true to null
         val owned = unitOfWork.workflowStates.getFeatureTaskRuntimeWorkerOwnership(replan.planWorkflowId) != null
         if (owned) return@transaction null
         val phaseRecords = decodePhaseRecords(snapshot.artifacts)
         val phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS
         val original = phaseRecords[phaseId] ?: return@transaction null
+        if (snapshot.workflowStatus == WorkflowStatus.RUNNING && original.status != WorkflowStepStatus.PENDING) {
+          return@transaction null
+        }
         val rechecked = PlanBundleFeasibility.capture(decompositionPlanner, replan.repoRoot, replan.issueKey)
         if (rechecked.identity != captured.identity) return@transaction null
         val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
         val state = feasibilityStateFor(replan, captured, original, snapshot.artifacts)
-        adoptedPendingOutcome(state, original, captured)?.let { return@transaction it }
+        if (snapshot.workflowStatus == WorkflowStatus.RUNNING && state.activeLaunch != null) return@transaction null
+        adoptedPendingOutcome(state, original, captured)?.let { outcome ->
+          return@transaction if (outcome.first) {
+            restorePendingAdoption(replan, snapshot, unitOfWork.workflowStates, original.attemptCount)
+          } else {
+            outcome
+          }
+        }
         val ledger = decodePhaseLedger(snapshot.artifacts)
         val repair =
           CompletedUpstreamRepairRequest(
@@ -112,13 +122,7 @@ public class PlanSubtasksReopening(
             retry.sequenceNumber,
             family.contains(snapshot.artifacts),
           ) ?: return@transaction null
-        val semanticReopen = requiresSemanticReopen(state, captured)
-        val rebasedBundle =
-          if (semanticReopen || replan.forcedSubtaskIds.isNotEmpty()) {
-            rebasedFeasibilityBundle(replan, snapshot.artifacts) ?: return@transaction null
-          } else {
-            null
-          }
+        val rebasedBundle = rebasedFeasibilityBundle(replan, snapshot.artifacts) ?: return@transaction null
         val update = completedUpstreamRepairWorkflowUpdate(repair, phasesToReopen, reopenedRecords, retry)
         val patch = update.artifactsPatch.orEmpty() + feasibilityReopeningPatch(nextState, rebasedBundle)
         val updated =
@@ -132,6 +136,30 @@ public class PlanSubtasksReopening(
       }
     reportFeasibilityAdoption(replan, outcome)
     return outcome?.first == true
+  }
+
+  private fun restorePendingAdoption(
+    replan: PlanSubtasksReplan,
+    snapshot: WorkflowStateSnapshot,
+    states: WorkflowStateRepository,
+    attempt: Int,
+  ): Pair<Boolean, Int?>? {
+    val rebased = rebasedFeasibilityBundle(replan, snapshot.artifacts) ?: return null
+    val updated =
+      snapshot.copy(
+        workflowStatus = WorkflowStatus.PENDING,
+        finishedAt = null,
+        artifacts =
+          DurableWorkflowArtifacts.fromMap(
+            snapshot.artifacts +
+              DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.entry(
+                rebased.asWorkflowArtifactEntry(),
+              ),
+          ),
+      )
+    if (updated == snapshot) return true to null
+    states.saveAcceptedSnapshotMutation(WorkflowFamily.TASK_RUNTIME, updated)
+    return true to attempt
   }
 
   private fun feasibilityReopeningPatch(
@@ -187,13 +215,6 @@ public class PlanSubtasksReopening(
         )
     }
   }
-
-  private fun requiresSemanticReopen(
-    state: FeatureTaskRuntimePlanBundleFeasibilityState,
-    captured: PlanBundleFeasibilitySnapshot,
-  ): Boolean =
-    state.mode == PlanBundleFeasibilityMode.APPROVED &&
-      state.approval?.immutableFingerprint != captured.fingerprint
 
   private fun feasibilityStateFor(
     replan: PlanSubtasksReplan,
