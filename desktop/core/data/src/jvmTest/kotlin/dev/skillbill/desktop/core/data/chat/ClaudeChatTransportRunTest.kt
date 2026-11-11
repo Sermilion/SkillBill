@@ -38,6 +38,7 @@ import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -178,9 +179,13 @@ class ClaudeChatTransportRunTest {
     val claude = FakeClaude()
     val transport = transport(claude)
     val request = chatRequest()
-    val original = async { transport.run(request).toList() }
+    val beforeReceived = CompletableDeferred<Unit>()
+    val original = async {
+      transport.run(request).onEach { if (it == ChatEvent.TextDelta("Before")) beforeReceived.complete(Unit) }.toList()
+    }
     val (uuid, _) = claude.nextMessage()
     claude.print(replay(uuid), textDelta("Before"))
+    beforeReceived.await()
     val delivery = async { transport.steer(ChatSteeringRequest(request.sessionId, "claude", "delivery", "Guidance")) }
     val (followUp, text) = claude.nextMessage()
     assertEquals("Guidance", text)
