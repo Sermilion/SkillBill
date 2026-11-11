@@ -1,11 +1,9 @@
 <div align="center">
 
-# Sona
+<img src="docs/assets/sona-readme-hero.png" alt="Sona, the development environment for coding agents, with the desktop app showing a goal run" width="100%">
 
 **An agentic development environment, or ADE.**
 Prepare work, run coding agents, and inspect the results in one desktop app, with progress that survives interruptions.
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-4c1.svg)](LICENSE)
 
 [Quickstart](#quickstart) · [How it works](#how-it-works) · [Watching runs](#watching-and-controlling-runs) · [Platform packs](#platform-packs) · [Docs](#documentation)
 
