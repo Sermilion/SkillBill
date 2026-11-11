@@ -148,12 +148,12 @@ fun ApplicationScope.TrayHost(
       paths,
       availability,
       tooltip = if (linux) state.trayHover() else when {
-        state.problem != null -> "Skill Bill could not refresh the board · ${state.problem?.summary()}"
-        state.stale -> "Skill Bill is showing stale work data"
-        status == TrayStatus.Failed -> "Skill Bill has a failed goal"
-        status == TrayStatus.NeedsYou -> "Skill Bill needs you"
-        running > 0 -> "Skill Bill, $running running"
-        else -> "Skill Bill is idle"
+        state.problem != null -> "Sona could not refresh the board · ${state.problem?.summary()}"
+        state.stale -> "Sona is showing stale work data"
+        status == TrayStatus.Failed -> "Sona has a failed goal"
+        status == TrayStatus.NeedsYou -> "Sona needs you"
+        running > 0 -> "Sona, $running running"
+        else -> "Sona is idle"
       },
       primaryAction = {
         if (!mainVisible) intents.send(HostIntent.ShowMain)
@@ -175,7 +175,7 @@ fun ApplicationScope.TrayHost(
   }
   if (visible) Window(
     onCloseRequest = { visible = false },
-    title = "Skill Bill tray",
+    title = "Sona tray",
     icon = skillBillIcon(),
     transparent = true,
     alwaysOnTop = true,

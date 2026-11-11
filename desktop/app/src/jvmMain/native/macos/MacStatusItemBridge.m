@@ -129,7 +129,7 @@ JNIEXPORT jboolean JNICALL Java_dev_skillbill_desktop_app_tray_macos_MacStatusIt
     }
     statusItem.button.target = statusTarget;
     statusItem.button.action = @selector(activate:);
-    NSImage *image = [[NSImage imageWithSystemSymbolName:@"checkmark.circle" accessibilityDescription:@"Skill Bill"] copy];
+    NSImage *image = [[NSImage imageWithSystemSymbolName:@"checkmark.circle" accessibilityDescription:@"Sona"] copy];
     [image setTemplate:YES];
     statusItem.button.image = image;
     [image release];
@@ -165,7 +165,7 @@ JNIEXPORT void JNICALL Java_dev_skillbill_desktop_app_tray_macos_MacStatusItemBr
   onMainAsync(^{
     if (statusItem == nil) return;
     NSString *symbol = [kind isEqualToString:@"failed"] ? @"exclamationmark.triangle" : ([kind isEqualToString:@"needs_you"] ? @"bell.badge" : ([kind isEqualToString:@"running"] ? @"bolt" : @"checkmark.circle"));
-    NSImage *image = [[NSImage imageWithSystemSymbolName:symbol accessibilityDescription:@"Skill Bill"] copy];
+    NSImage *image = [[NSImage imageWithSystemSymbolName:symbol accessibilityDescription:@"Sona"] copy];
     [image setTemplate:YES];
     statusItem.button.image = image;
     [image release];
@@ -184,7 +184,7 @@ JNIEXPORT void JNICALL Java_dev_skillbill_desktop_app_tray_macos_MacStatusItemBr
     [menu addItem:phaseGroup];
     [phaseGroup release];
     [menu addItem:NSMenuItem.separatorItem];
-    NSArray *labels = @[@"Open Skill Bill", @"Refresh now", @"Settings", @"Quit"];
+    NSArray *labels = @[@"Open Sona", @"Refresh now", @"Settings", @"Quit"];
     NSArray *actions = @[@2000, @2002, @2003, @2004];
     for (NSInteger i = 0; i < labels.count; i++) {
       NSMenuItem *entry = [[NSMenuItem alloc] initWithTitle:labels[i] action:@selector(activate:) keyEquivalent:@""];

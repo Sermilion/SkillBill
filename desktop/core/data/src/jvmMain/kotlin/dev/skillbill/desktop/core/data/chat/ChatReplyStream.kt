@@ -71,7 +71,7 @@ private class DecodedActions(val actions: List<ChatSuggestedAction>, val dropped
 
 private fun droppedActionsNotice(reasons: List<String>): String {
   val count = if (reasons.size == 1) "a suggested action" else "${reasons.size} suggested actions"
-  return "\n\n_Skill Bill could not show $count: ${reasons.distinct().joinToString("; ")}. Ask the agent to send it again._"
+  return "\n\n_Sona could not show $count: ${reasons.distinct().joinToString("; ")}. Ask the agent to send it again._"
 }
 
 private fun decodeActions(source: String, diagnostics: Diagnostics): DecodedActions? {

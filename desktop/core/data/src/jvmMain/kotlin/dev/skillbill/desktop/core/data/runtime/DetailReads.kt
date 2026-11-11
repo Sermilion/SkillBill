@@ -75,7 +75,7 @@ internal class RuntimeDetailReads(
         }
         loaded.copy(sections = sections)
       }
-    } ?: DetailRead.Failed(ReadProblem.Runtime("Skill Bill database is not present."))
+    } ?: DetailRead.Failed(ReadProblem.Runtime("Sona database is not present."))
   }
 
   override suspend fun activity(id: String): DetailRead = read("detail_activity") { component ->
