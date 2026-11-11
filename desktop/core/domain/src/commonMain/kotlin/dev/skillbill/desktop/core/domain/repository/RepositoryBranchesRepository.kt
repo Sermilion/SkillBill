@@ -8,6 +8,6 @@ import dev.skillbill.desktop.core.common.Outcome
 interface RepositoryBranchesRepository {
   suspend fun branches(path: String): RepositoryBranchesRead
 
-  /** Switches to the default branch on operator request, preserving local changes or returning the checkout refusal. */
-  suspend fun switchToDefaultBranch(path: String, expectedCurrentBranch: String?): Outcome<Unit, ReadProblem>
+  /** Returns the selected default-branch checkout root, reusing an existing worktree or switching without discarding changes. */
+  suspend fun switchToDefaultBranch(path: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem>
 }

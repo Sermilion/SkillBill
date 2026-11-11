@@ -118,7 +118,8 @@ internal fun NewTaskComposer(
   Column(Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     // A draft whose repository is gone refuses every turn, so it has no activity to report and is not "Ready".
     chat?.takeUnless { it.repositoryMissing }?.let { key(it) { ChatActivityPill(it.thread) } }
-    NewTaskBranchWarning(state, draft, pickersEnabled, onAction)
+    val transcript = chat?.thread?.transcript?.collectAsState()?.value.orEmpty()
+    NewTaskBranchWarning(state, draft, pickersEnabled, onAction, draft.branchChoiceRequested || newTaskNeedsBranchWarning(transcript))
     Box(Modifier.fillMaxWidth()) {
       SbInput(
         draft.text, { onAction(NewTaskAction.TextChanged(it)) },

@@ -12,6 +12,9 @@ import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.DetectedAgentsRead
 import dev.skillbill.desktop.core.domain.model.RepositoryBranches
+import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.NewTaskKind
+import dev.skillbill.desktop.core.domain.model.newWorkBranchProblem
 import dev.skillbill.desktop.core.domain.model.RepositoryBranchesRead
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.FolderChoice
@@ -212,8 +215,25 @@ class NewTaskViewModel(
         if (loadsIntoTarget && target.chat.value != null) agentReads.remove(target)?.cancel()
         mutableState.update { it.copy(resumePickerOpen = false) }
       }
-      is NewTaskAction.RunSuggestedAction -> target.sendSuggestedAction(action.action)
+      is NewTaskAction.RunSuggestedAction -> {
+        if (action.action.mode == ChatPermissionMode.Act && requestBranchChoice(target)) return
+        target.branchChoiceRequested = false
+        target.sendSuggestedAction(action.action)
+      }
     }
+  }
+
+  fun start(kind: NewTaskKind, target: String?, action: ChatSuggestedAction?) {
+    val current = draft
+    if (action?.branch.isNullOrBlank() && requestBranchChoice(current)) return
+    current.start(kind, target = target, action = action)
+  }
+
+  private fun requestBranchChoice(target: NewTaskDraft): Boolean {
+    val loaded = mutableState.value.branchRead as? BranchReadState.Loaded ?: return false
+    if (loaded.root != target.repository?.root || loaded.branches.newWorkBranchProblem(target.baseBranch) == null) return false
+    target.branchChoiceRequested = true
+    return true
   }
 
   private fun isSelected(target: NewTaskDraft): Boolean = chats.selected.value === target
@@ -247,6 +267,7 @@ class NewTaskViewModel(
 
   private fun send(target: NewTaskDraft) {
     if (!target.canSend()) return
+    target.branchChoiceRequested = false
     if (target.text.trim() != RESUME_COMMAND) return target.send()
     target.text = ""
     chats.refreshSaved()
@@ -421,6 +442,12 @@ class NewTaskViewModel(
           is Outcome.Failure -> showRepositoryError(target, readProblemText(result.error))
           is Outcome.Success -> {
             target.baseBranch = ""
+            target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
+            val repository = NewTaskRepository(result.value, checkNotNull(target.repository).name)
+            if ((mutableState.value.repositories + target.addedRepositories).none { it.root == repository.root }) {
+              target.addedRepositories += repository
+            }
+            target.repository = repository
             target.rebindChat()
             if (isSelected(target)) mutableState.update { it.copy(repositoryError = null) }
           }

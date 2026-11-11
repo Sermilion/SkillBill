@@ -582,6 +582,15 @@
     const replying = nt.chats.find((chat) => chat.stream);
     const empty = () => chatFromSaved(null, { repo: 'skill-bill', agent: 'claude' });
     const stopped = (chat) => Object.assign(chat, { stream: null, queue: [] });
+    if (scenario === 'branch-read' || scenario === 'branch-edit') {
+      const c = empty();
+      c.currentBranch = 'feature/current';
+      c.defaultWorktree = '/repo/main checkout';
+      c.branchIntent = scenario === 'branch-edit';
+      c.lines = [{ role: 'operator', text: c.branchIntent ? 'Fix the sharing flow' : 'Explain the sharing flow' },
+        { role: 'agent', text: c.branchIntent ? 'Choose a branch before editing.' : 'I will inspect the sharing flow without changing files.' }];
+      nt.chats = [c]; nt.active = 0;
+    }
     if (scenario === 'fresh') { nt.chats = [empty()]; nt.active = 0; }
     if (scenario === 'two') { nt.chats = samples.slice(0, 2).map(stopped); nt.active = 0; }
     if (scenario === 'busy') { nt.chats = samples; nt.active = 0; }
@@ -1359,6 +1368,15 @@
     'chat-quick'(text) { ntCur().draft = text; focusComposer(); render(); },
     /* A suggested action clicked while a reply runs joins the queue as an action; otherwise it is sent. */
     'chat-suggested'(text) { const c = ntCur(); if (c.stream) { c.queue.push({ id: queueSeq++, text, action: true }); focusComposer(); return render(); } c.draft = text; A['chat-send'](); },
+    'chat-default-branch'() {
+      const c = ntCur();
+      c.checkoutRoot = c.defaultWorktree || c.checkoutRoot;
+      c.currentBranch = (D.REPO_BRANCHES[c.repo] || {}).defaultBranch || 'main';
+      c.branch = ''; c.branchIntent = false;
+      c.lines.push({ role: 'agent', text: `Selected ${c.checkoutRoot || c.repo}. Earlier conversation and unsent text are retained.` });
+      render();
+    },
+    'chat-current-base'() { const c = ntCur(); c.branch = c.currentBranch; c.branchIntent = false; render(); },
     'nt-agent-menu'(a, el) { st.popover = Object.assign({ type: 'nt-agent', above: true }, anchorPos(el)); render(); },
     'nt-agent-pick'(a) { ntCur().agent = a; st.popover = null; focusComposer(); render(); },
 

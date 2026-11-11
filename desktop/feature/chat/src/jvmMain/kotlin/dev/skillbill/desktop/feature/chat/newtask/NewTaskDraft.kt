@@ -126,6 +126,7 @@ class NewTaskDraft internal constructor(
       if (repositoryState?.root != value?.root) {
         previewTracker?.second?.end()
         previewTracker = null
+        branchChoiceRequested = false
         acceptedKeyState = null
         issueKeyProposals = emptyList()
         offerState.value = NewTaskOffer()
@@ -133,6 +134,7 @@ class NewTaskDraft internal constructor(
       repositoryState = value
     }
   var addedRepositories: List<NewTaskRepository> by mutableStateOf(emptyList())
+  internal var branchChoiceRequested: Boolean by mutableStateOf(false)
   internal var branchSwitching: Boolean by mutableStateOf(false)
   var baseBranch: String by mutableStateOf("")
   var agentId: String? by mutableStateOf(null)

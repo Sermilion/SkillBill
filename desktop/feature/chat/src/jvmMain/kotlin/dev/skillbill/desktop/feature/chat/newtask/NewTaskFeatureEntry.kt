@@ -63,7 +63,7 @@ class NewTaskFeatureEntry(
       onOpenChatChanges = { source, path -> changesWindows.openChat(source, ChangeScope.All, path) },
       onStart = { wire, target, action ->
         NewTaskActionKind.entries.firstOrNull { it.wire == wire }?.toNewTaskKind()?.let { kind ->
-          viewModel.draft.start(kind, target = target, action = action)
+          viewModel.start(kind, target, action)
         }
       },
     )

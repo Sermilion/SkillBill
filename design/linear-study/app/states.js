@@ -215,6 +215,8 @@
       ['New task', 'Nine open chats', 'new-task/state/many'], ['New task', 'Twenty chats with overflow', 'new-task/state/lots'],
       ['New task', 'Confirm closing a replying chat', 'new-task/state/closing'], ['New task', 'Few recent chats', 'new-task/state/few'],
       ['New task', 'Queued messages', 'new-task/queue'],
+      ['New task', 'Read-only chat on feature branch', 'new-task/state/branch-read'],
+      ['New task', 'Branch choice before edits', 'new-task/state/branch-edit'],
       ['Chat changes', 'Chat with changes', 'new-task/state/changes'],
       ...['none', 'few', 'many', 'resumed'].map((id) => ['Chat changes', { none: 'No changes yet', few: 'Three files', many: 'Seventeen files', resumed: 'Resumed chat' }[id], `new-task/changes/${id}`]),
       ...['pending', 'firstRun', 'noAgent', 'noRepo', 'detectionFailed'].map((id) => ['New task', { pending: 'Board read pending', firstRun: 'First run, ready', noAgent: 'No agent detected', noRepo: 'Choose a repository', detectionFailed: 'Agent detection failed' }[id], `new-task/state/${id}`]),

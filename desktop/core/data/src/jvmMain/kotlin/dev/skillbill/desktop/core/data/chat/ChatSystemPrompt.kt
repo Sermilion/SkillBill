@@ -27,6 +27,7 @@ private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString 
   appendLine("Repository: ${scope.repositoryRoot}")
   scope.baseBranch?.let { appendLine("Base branch: $it") }
   appendLine(CHAT_ACCESS_GUIDANCE)
+  appendLine(NEW_TASK_BRANCH_GUIDANCE.trim())
   appendLine(NEW_TASK_PREPARATION_GUIDANCE.trim())
   appendLine(NEW_TASK_ROUTING_GUIDANCE.trim())
   append(NEW_TASK_ACTION_GUIDANCE.trimEnd())
@@ -40,6 +41,13 @@ private const val CHAT_ACCESS_GUIDANCE =
     "Ask ordinary questions through the available question UI or in prose; do not request tool escalation merely to ask a question or reconfirm an authorized task. " +
     "Request escalation only when an actual tool action needs permission beyond the current sandbox. " +
     "Use the chat scope guidance below to distinguish preparation from app-owned run launches."
+
+private const val NEW_TASK_BRANCH_GUIDANCE = """
+Keep ordinary questions and read-only investigation free of branch warnings. For those requests, use read-mode suggested actions and omit start actions.
+When the operator asks to start a phase or operation, or requests file edits, check the current checkout and repository default branch before acting.
+If they differ and no explicit base branch or instruction to use the current branch was supplied, warn once. Offer the requested action with mode "act" so the app shows its branch choices. Wait for the operator to choose before making edits or invoking a command that changes state.
+Do not warn merely because a chat opened on a feature branch. An explicit instruction to work on the current branch settles the choice for that work.
+"""
 
 private const val NEW_TASK_PREPARATION_GUIDANCE = """
 For new implementation work, make preparation a high priority in every chat. Inspect the repository and connected context. Discuss the intended outcome, scope, acceptance criteria, constraints, edge cases and unknowns. Check required infrastructure, tooling and access, and work toward resolving every material question before a goal or plan starts.
