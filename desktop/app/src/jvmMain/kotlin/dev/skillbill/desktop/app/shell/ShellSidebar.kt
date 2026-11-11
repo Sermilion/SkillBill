@@ -71,7 +71,7 @@ fun ShellSidebar(
   var boardExpanded by rememberSaveable { mutableStateOf(true) }
   Sidebar(
     top = {
-      WorkspaceSwitcher("Skill Bill") {
+      WorkspaceSwitcher("Sona") {
         SbIconButton(LucideIcons.search, "Command menu", onOpenCommandMenu, size = SbControlSize.Small, shortcut = "$MOD_KEY K")
       }
     },

@@ -1,3 +1,17 @@
+## [2026-11-11] SKILL-538 rename desktop app to Sona
+Areas: desktop/app copy, tray and packaging; desktop/core/data and designsystem; desktop/feature/chat, config, settings, specs and tray; desktop/build-logic; docs/assets; root installer/uninstaller; scripts smoke and USB display; runtime-cli installer fixtures
+- MEDIUM feature. Desktop windows, menus, tray labels, settings, chat guidance, data messages and readable build diagnostics now call the app Sona.
+- Renamed the canonical and docs Ping SVGs, generated PNG/ICO/ICNS and their consumers to Sona. Preserved the supplied drawing and selected design study; skillBillIcon and BrandMark keep their APIs.
+- TrayIconRenderResult is reusable within tray consumers. It carries owned PNG bytes beside retained paths; macOS consumes bytes through JNI, keeps status dots and its native numeric title, and reports image failures through the existing fallback. Other platforms retain count badges.
+- Native update and disposal wait for main-thread completion; cleanup clears callbacks. Package metadata and readers agree on Sona.app/Contents/MacOS/Sona, Sona/Sona.exe and Sona/bin/Sona, with sona launchers and sona.desktop.
+- Activation and removal use current Sona targets and verified registrations. Linux ownership matches both Exec and Icon; staged registration writes and app backups restore prior outputs on failure. Historical apps, registrations and unrelated occupants remain outside cleanup.
+- Retained CLI/MCP and package identities, /skill-bill commands, environment names, saved state, bundle ID, Windows upgrade UUID and release archive names. Linux autostart keeps skill-bill-desktop.desktop with Name=Sona; no data migration.
+- Existing prompt assertions and runtime-cli installer fixtures follow the new copy and package layouts. Regression coverage covers byte lifetime, bridge failures, coexistence, ownership refusal and registration rollback.
+- Limits: the supplied capability_absent warning leaves visual QA unclaimed. Native macOS AppKit behavior and macOS/Windows package execution remain unverified by the supplied material.
+- Renaming the package means an installed copy of the old app is not upgraded in place and has to be removed by hand.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-10] SKILL-529 desktop always allow similar
 Areas: desktop/core/domain, core/data approval and chat, feature/chat production and JVM tests
 - Pending approval cards show Always allow similar when the runtime supplies a suggested pattern and no pattern refusal; an inline editor prefills the pattern, saves through decide with alwaysAllow and an optional pattern, and stays open with runtime refusal text.

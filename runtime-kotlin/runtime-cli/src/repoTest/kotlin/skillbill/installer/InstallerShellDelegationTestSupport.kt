@@ -728,14 +728,14 @@ internal object InstallerShellFixtures {
       |app_root="${'$'}root/app/build/compose/binaries/main/app"
       |case "${'$'}(uname -s)" in
       |  Darwin*)
-      |    app="${'$'}app_root/Skill Bill.app/Contents/MacOS/Skill Bill"
-      |    resources="${'$'}app_root/Skill Bill.app/Contents/app/resources" ;;
+      |    app="${'$'}app_root/Sona.app/Contents/MacOS/Sona"
+      |    resources="${'$'}app_root/Sona.app/Contents/app/resources" ;;
       |  Linux*)
-      |    app="${'$'}app_root/Skill Bill/bin/Skill Bill"
-      |    resources="${'$'}app_root/Skill Bill/lib/app/resources" ;;
+      |    app="${'$'}app_root/Sona/bin/Sona"
+      |    resources="${'$'}app_root/Sona/lib/app/resources" ;;
       |  MINGW*|MSYS*|CYGWIN*)
-      |    app="${'$'}app_root/Skill Bill/bin/Skill Bill.bat"
-      |    resources="${'$'}app_root/Skill Bill/app/resources" ;;
+      |    app="${'$'}app_root/Sona/Sona.exe"
+      |    resources="${'$'}app_root/Sona/app/resources" ;;
       |  *) printf '%s\n' 'Unsupported desktop fixture host' >&2; exit 1 ;;
       |esac
       |mkdir -p "${'$'}(dirname "${'$'}app")" "${'$'}resources"
@@ -754,14 +754,14 @@ internal object InstallerShellFixtures {
     val os = currentDesktopOs()
     val appTarget =
       when (os) {
-        "macos" -> desktopRoot.resolve("SkillBill.app")
-        else -> desktopRoot.resolve("SkillBill")
+        "macos" -> desktopRoot.resolve("Sona.app")
+        else -> desktopRoot.resolve("Sona")
       }
     val executable =
       when (os) {
-        "macos" -> appTarget.resolve("Contents/MacOS/SkillBill")
-        "windows" -> appTarget.resolve("bin/SkillBill.bat")
-        else -> appTarget.resolve("bin/SkillBill")
+        "macos" -> appTarget.resolve("Contents/MacOS/Sona")
+        "windows" -> appTarget.resolve("Sona.exe")
+        else -> appTarget.resolve("bin/Sona")
       }
     Files.createDirectories(executable.parent)
     Files.writeString(executable, "")
@@ -776,12 +776,12 @@ internal object InstallerShellFixtures {
   ): Path =
     when (os) {
       "windows" -> {
-        val launcher = binDir.resolve("skillbill-desktop.cmd")
-        Files.writeString(launcher, "@echo off\ncall \"${executable}\" %*\n")
+        val launcher = binDir.resolve("sona.cmd")
+        Files.writeString(launcher, "@echo off\nREM Managed by Sona install.sh\n\"${executable}\" %*\n")
         launcher
       }
       else -> {
-        val launcher = binDir.resolve("skillbill-desktop")
+        val launcher = binDir.resolve("sona")
         Files.createSymbolicLink(launcher, executable)
         launcher
       }
@@ -936,12 +936,12 @@ internal object PrebuiltReleaseStager {
     val os = System.getProperty("os.name").lowercase()
     val appRoot =
       when {
-        os.contains("mac") -> "Skill Bill.app/Contents/MacOS"
-        os.contains("win") -> "Skill Bill/bin"
-        else -> "Skill Bill/bin"
+        os.contains("mac") -> "Sona.app/Contents/MacOS"
+        os.contains("win") -> "Sona"
+        else -> "Sona/bin"
       }
     val staging = Files.createTempDirectory("skillbill-desktop-image")
-    val launcher = staging.resolve(appRoot).resolve(if (os.contains("win")) "Skill Bill.bat" else "Skill Bill")
+    val launcher = staging.resolve(appRoot).resolve(if (os.contains("win")) "Sona.exe" else "Sona")
     Files.createDirectories(launcher.parent)
     Files.writeString(launcher, "#!/usr/bin/env bash\nexit 0\n")
     if (!os.contains("win")) launcher.toFile().setExecutable(true)
@@ -970,9 +970,9 @@ internal object PrebuiltReleaseStager {
 
   fun desktopLauncherPath(): String =
     when (hostToken().substringBefore('-')) {
-      "macos" -> "Skill Bill.app/Contents/MacOS/Skill Bill"
-      "windows" -> "Skill Bill/bin/Skill Bill.bat"
-      else -> "Skill Bill/bin/Skill Bill"
+      "macos" -> "Sona.app/Contents/MacOS/Sona"
+      "windows" -> "Sona/Sona.exe"
+      else -> "Sona/bin/Sona"
     }
 
   private fun writeRuntimeImageZip(

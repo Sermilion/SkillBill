@@ -17,6 +17,7 @@ object NativeTrayHost {
 
   @Composable
   fun MacStatusItem(
+    imagePng: ByteArray,
     kind: TrayStatus,
     running: Int,
     goals: List<WorkItem>,
@@ -35,6 +36,7 @@ object NativeTrayHost {
     DisposableEffect(Unit) {
       val active = java.util.concurrent.atomic.AtomicBoolean(true)
       MacStatusItemBridge.install(
+        imagePng,
         { if (active.get()) currentPrimary.value() },
         { if (active.get()) currentMenuAction.value(it) },
         { if (active.get()) currentAvailable.value() },
@@ -52,7 +54,7 @@ object NativeTrayHost {
     }
     SideEffect {
       try {
-        MacStatusItemBridge.update(kind, running,
+        MacStatusItemBridge.update(imagePng, kind, running,
           goals.take(8).map { "${it.issueKey ?: it.stepLabel}: ${it.summary.take(50)}" },
           phases.take(8).map { "${it.control.phaseId ?: it.stepLabel} · ${it.outcomeLabel()}: ${it.summary.take(50)}" })
       } catch (_: Exception) {

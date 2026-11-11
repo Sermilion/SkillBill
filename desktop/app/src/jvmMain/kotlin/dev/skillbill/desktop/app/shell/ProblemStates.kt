@@ -55,11 +55,11 @@ fun ProblemStatePanel(problem: ShellProblem, onRefresh: () -> Unit = {}, onRetry
   Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
     when (problem) {
       is ShellProblem.RuntimeUnavailable -> EmptyState(
-        "Skill Bill runtime unavailable",
+        "Sona runtime unavailable",
         LucideIcons.warn,
         body = runtimeUnavailableBody(problem.problem, SkillBillTheme.type.mono.fontFamily),
       ) { SbButton("Retry", onRetry, variant = SbButtonVariant.Primary) }
-      ShellProblem.Opening -> EmptyState("Opening your database", LucideIcons.refresh, body = "Skill Bill is switching to the selected database.")
+      ShellProblem.Opening -> EmptyState("Opening your database", LucideIcons.refresh, body = "Sona is switching to the selected database.")
       is ShellProblem.SessionFailed -> EmptyState(LOAD_FAILED, LucideIcons.alert, body = storageFailureText(problem.failure), actions = loadActions)
       is ShellProblem.BoardFailed -> EmptyState(LOAD_FAILED, LucideIcons.alert, body = boardFailureBody(problem.problem), actions = loadActions)
       ShellProblem.Loading -> EmptyState("Loading your work", LucideIcons.inbox)
@@ -75,8 +75,8 @@ private fun boardFailureBody(problem: ReadProblem): String = when (problem) {
 /** The reinstall command is set in the mono face, as the prototype's `<span class="mono">` in this state's body. */
 private fun runtimeUnavailableBody(problem: RuntimeBuildProblem, mono: FontFamily?): AnnotatedString {
   val reason = when (problem) {
-    is RuntimeBuildProblem.NotInstalled -> "Skill Bill runtime not installed."
-    is RuntimeBuildProblem.Mismatched -> "The installed Skill Bill runtime is not the build this app was packaged with."
+    is RuntimeBuildProblem.NotInstalled -> "Sona runtime not installed."
+    is RuntimeBuildProblem.Mismatched -> "The installed Sona runtime is not the build this app was packaged with."
     is RuntimeBuildProblem.Unreadable -> "The runtime or desktop build identity could not be read."
   }
   val identities = when (problem) {

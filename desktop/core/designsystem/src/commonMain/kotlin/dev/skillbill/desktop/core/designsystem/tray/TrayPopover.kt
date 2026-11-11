@@ -73,7 +73,7 @@ fun TrayPopover(
     ) {
       BrandMark(18.dp)
       // `.sb-tray-hd` is 600 13px on a 1.0 line.
-      BasicText("Skill Bill", style = type.tBase.copy(color = colors.fg, fontWeight = FontWeight.SemiBold, lineHeight = 13.sp), maxLines = 1)
+      BasicText("Sona", style = type.tBase.copy(color = colors.fg, fontWeight = FontWeight.SemiBold, lineHeight = 13.sp), maxLines = 1)
       if (headerEnd != null) {
         Spacer(Modifier.weight(1f))
         CompositionLocalProvider(LocalContentColor provides colors.fgFaint) { headerEnd() }

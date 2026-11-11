@@ -89,7 +89,7 @@ internal fun Project.registerSharedRuntimeVersionCheck() {
   }
   val verifyImage = tasks.register<VerifyPackagedRuntimeFreeTask>("verifyPackagedRuntimeFree") {
     group = "verification"
-    description = "Fails when the desktop application image packages Skill Bill runtime module jars."
+    description = "Fails when the desktop application image packages Sona runtime module jars."
     imageDirectory.set(layout.buildDirectory.dir("compose/binaries/main/app"))
     runtimeModuleNames.set(runtimeModules)
   }

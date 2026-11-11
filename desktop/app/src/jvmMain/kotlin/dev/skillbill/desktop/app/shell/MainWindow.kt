@@ -113,7 +113,7 @@ fun ApplicationScope.MainWindow(
   Window(
     onCloseRequest = { closeScope.launch { if (window.chat.closeChatsSafely()) onCloseRequest() } },
     visible = visible,
-    title = "Skill Bill",
+    title = "Sona",
     icon = skillBillIcon(),
     state = windowState,
     onPreviewKeyEvent = onPreviewKeyEvent@{ event ->

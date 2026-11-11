@@ -253,9 +253,9 @@ class InstallerShellDelegationTest {
   fun `source desktop build installs the host bundle and executable layout`() {
     val launchers =
       listOf(
-        "Darwin" to "Skill Bill.app/Contents/MacOS/Skill Bill",
-        "Linux" to "Skill Bill/bin/Skill Bill",
-        "MINGW64_NT-10.0" to "Skill Bill/bin/Skill Bill.bat",
+        "Darwin" to "Sona.app/Contents/MacOS/Sona",
+        "Linux" to "Sona/bin/Sona",
+        "MINGW64_NT-10.0" to "Sona/Sona.exe",
       )
     launchers.forEach { (host, launcher) ->
       val run = runInstallerShell(input = "1\nclaude\noff\nskip\n", fromSource = true, hostUname = host)

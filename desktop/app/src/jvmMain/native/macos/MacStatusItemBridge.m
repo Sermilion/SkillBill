@@ -20,10 +20,6 @@ static NSMenu *contextMenu;
 }
 @end
 
-static void onMainAsync(dispatch_block_t block) {
-  dispatch_async(dispatch_get_main_queue(), block);
-}
-
 static void onMainWaiting(dispatch_block_t block) {
   if (NSThread.isMainThread) {
     block();
@@ -103,6 +99,54 @@ static NSArray *strings(JNIEnv *env, jobjectArray values) {
   return result;
 }
 
+static NSData *imageData(JNIEnv *env, jbyteArray bytes) {
+  if (bytes == NULL) return nil;
+  jsize length = (*env)->GetArrayLength(env, bytes);
+  if (length <= 0) return nil;
+  NSMutableData *data = [[NSMutableData alloc] initWithLength:(NSUInteger)length];
+  if (data == nil) return nil;
+  (*env)->GetByteArrayRegion(env, bytes, 0, length, (jbyte *)data.mutableBytes);
+  if ((*env)->ExceptionCheck(env)) {
+    (*env)->ExceptionClear(env);
+    [data release];
+    return nil;
+  }
+  return data;
+}
+
+static NSImage *decodedImage(NSData *data) {
+  if (data == nil) return nil;
+  NSImage *image = [[NSImage alloc] initWithData:data];
+  if (image != nil) {
+    [image setTemplate:NO];
+    [image setSize:NSMakeSize(18.0, 18.0)];
+  }
+  return image;
+}
+
+static void disposeStatusItem(void) {
+  if (statusItem != nil) {
+    [[NSStatusBar systemStatusBar] removeStatusItem:statusItem];
+    [statusItem release];
+  }
+  statusItem = nil;
+  if (rightClickMonitor != nil) {
+    [NSEvent removeMonitor:rightClickMonitor];
+    [rightClickMonitor release];
+  }
+  rightClickMonitor = nil;
+  [contextMenu release];
+  contextMenu = nil;
+  [statusTarget release];
+  statusTarget = nil;
+  if (appResignObserver != nil) {
+    [NSNotificationCenter.defaultCenter removeObserver:appResignObserver];
+    [appResignObserver release];
+  }
+  appResignObserver = nil;
+  releaseBridgeClass();
+}
+
 static NSMenu *submenu(NSArray *values, NSInteger base) {
   NSMenu *menu = [[NSMenu alloc] initWithTitle:@""];
   for (NSUInteger i = 0; i < values.count; i++) {
@@ -115,24 +159,28 @@ static NSMenu *submenu(NSArray *values, NSInteger base) {
   return menu;
 }
 
-JNIEXPORT jboolean JNICALL Java_dev_skillbill_desktop_app_tray_macos_MacStatusItemBridge_nativeInstall(JNIEnv *env, jclass klass) {
+JNIEXPORT jboolean JNICALL Java_dev_skillbill_desktop_app_tray_macos_MacStatusItemBridge_nativeInstall(JNIEnv *env, jclass klass, jbyteArray imageBytes) {
   (*env)->GetJavaVM(env, &javaVM);
+  NSData *imageDataCopy = imageData(env, imageBytes);
+  NSImage *image = decodedImage(imageDataCopy);
+  [imageDataCopy release];
+  if (image == nil) return JNI_FALSE;
   if (bridgeClass == NULL) bridgeClass = (*env)->NewGlobalRef(env, klass);
   __block BOOL failed = NO;
   onMainWaiting(^{
-    if (statusItem != nil) return;
+    if (statusItem != nil || bridgeClass == NULL) { failed = YES; return; }
     statusTarget = [SkillBillStatusTarget new];
     statusItem = [[[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength] retain];
     if (statusItem == nil) {
       failed = YES;
+      [statusTarget release];
+      statusTarget = nil;
       return;
     }
     statusItem.button.target = statusTarget;
     statusItem.button.action = @selector(activate:);
-    NSImage *image = [[NSImage imageWithSystemSymbolName:@"checkmark.circle" accessibilityDescription:@"Skill Bill"] copy];
-    [image setTemplate:YES];
     statusItem.button.image = image;
-    [image release];
+    statusItem.button.accessibilityLabel = @"Sona";
     statusItem.button.menu = nil;
     rightClickMonitor = [[NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskRightMouseDown handler:^NSEvent *(NSEvent *event) {
       if (statusItem == nil || event.window != statusItem.button.window) return event;
@@ -153,22 +201,25 @@ JNIEXPORT jboolean JNICALL Java_dev_skillbill_desktop_app_tray_macos_MacStatusIt
       if (attached) (*javaVM)->DetachCurrentThread(javaVM);
     }] retain];
   });
+  [image release];
+  if (failed) onMainWaiting(^{ disposeStatusItem(); });
   return failed ? JNI_FALSE : JNI_TRUE;
 }
 
-JNIEXPORT void JNICALL Java_dev_skillbill_desktop_app_tray_macos_MacStatusItemBridge_nativeUpdate(JNIEnv *env, jclass klass, jstring kindValue, jint count, jobjectArray goals, jobjectArray phases) {
+JNIEXPORT jboolean JNICALL Java_dev_skillbill_desktop_app_tray_macos_MacStatusItemBridge_nativeUpdate(JNIEnv *env, jclass klass, jbyteArray imageBytes, jstring kindValue, jint count, jobjectArray goals, jobjectArray phases) {
+  NSData *imageDataCopy = imageData(env, imageBytes);
+  NSImage *image = decodedImage(imageDataCopy);
+  [imageDataCopy release];
+  if (image == nil) return JNI_FALSE;
   const char *kindChars = (*env)->GetStringUTFChars(env, kindValue, NULL);
   NSString *kind = [NSString stringWithUTF8String:kindChars ?: "idle"];
   (*env)->ReleaseStringUTFChars(env, kindValue, kindChars);
   NSArray *goalLabels = strings(env, goals);
   NSArray *phaseLabels = strings(env, phases);
-  onMainAsync(^{
+  __block BOOL updated = NO;
+  onMainWaiting(^{
     if (statusItem == nil) return;
-    NSString *symbol = [kind isEqualToString:@"failed"] ? @"exclamationmark.triangle" : ([kind isEqualToString:@"needs_you"] ? @"bell.badge" : ([kind isEqualToString:@"running"] ? @"bolt" : @"checkmark.circle"));
-    NSImage *image = [[NSImage imageWithSystemSymbolName:symbol accessibilityDescription:@"Skill Bill"] copy];
-    [image setTemplate:YES];
     statusItem.button.image = image;
-    [image release];
     statusItem.button.title = [kind isEqualToString:@"running"] && count > 0 ? [NSString stringWithFormat:@"%d", count] : @"";
     NSMenu *menu = [[NSMenu alloc] initWithTitle:@""];
     NSMenuItem *goalGroup = [[NSMenuItem alloc] initWithTitle:@"Goals" action:nil keyEquivalent:@""];
@@ -184,7 +235,7 @@ JNIEXPORT void JNICALL Java_dev_skillbill_desktop_app_tray_macos_MacStatusItemBr
     [menu addItem:phaseGroup];
     [phaseGroup release];
     [menu addItem:NSMenuItem.separatorItem];
-    NSArray *labels = @[@"Open Skill Bill", @"Refresh now", @"Settings", @"Quit"];
+    NSArray *labels = @[@"Open Sona", @"Refresh now", @"Settings", @"Quit"];
     NSArray *actions = @[@2000, @2002, @2003, @2004];
     for (NSInteger i = 0; i < labels.count; i++) {
       NSMenuItem *entry = [[NSMenuItem alloc] initWithTitle:labels[i] action:@selector(activate:) keyEquivalent:@""];
@@ -196,30 +247,12 @@ JNIEXPORT void JNICALL Java_dev_skillbill_desktop_app_tray_macos_MacStatusItemBr
     if (contextMenu != nil) [contextMenu release];
     contextMenu = [menu retain];
     [menu release];
+    updated = YES;
   });
+  [image release];
+  return updated ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL Java_dev_skillbill_desktop_app_tray_macos_MacStatusItemBridge_nativeDispose(JNIEnv *env, jclass klass) {
-  onMainAsync(^{
-    if (statusItem != nil) {
-      [[NSStatusBar systemStatusBar] removeStatusItem:statusItem];
-      [statusItem release];
-    }
-    statusItem = nil;
-    if (rightClickMonitor != nil) {
-      [NSEvent removeMonitor:rightClickMonitor];
-      [rightClickMonitor release];
-    }
-    rightClickMonitor = nil;
-    [contextMenu release];
-    contextMenu = nil;
-    [statusTarget release];
-    statusTarget = nil;
-    if (appResignObserver != nil) {
-      [NSNotificationCenter.defaultCenter removeObserver:appResignObserver];
-      [appResignObserver release];
-    }
-    appResignObserver = nil;
-    releaseBridgeClass();
-  });
+  onMainWaiting(^{ disposeStatusItem(); });
 }

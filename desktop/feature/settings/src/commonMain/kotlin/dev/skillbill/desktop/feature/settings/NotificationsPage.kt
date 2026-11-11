@@ -34,7 +34,7 @@ fun NotificationsPage(state: SettingsUiState, onAction: (SettingsAction) -> Unit
     title = "Preview",
     rows = listOf {
       SettingRow(stacked = true, control = {
-        Toast(ToastData("INF-7 is blocked", "Review left 2 Blocker findings on subtask 3 · infra-terraform", ToastLead.System, "Skill Bill", "now")) {}
+        Toast(ToastData("INF-7 is blocked", "Review left 2 Blocker findings on subtask 3 · infra-terraform", ToastLead.System, "Sona", "now")) {}
       })
     },
   )

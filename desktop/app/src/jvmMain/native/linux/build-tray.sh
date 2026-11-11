@@ -35,11 +35,11 @@ text = text.replace(right_click, right_click.replace('PCB_RCLICK', 'PCB_CLICK'))
 tooltip = 'tray->tooltip_text ? tray->tooltip_text : "",\n                              ""); /* description */'
 if text.count(tooltip) != 1:
     raise SystemExit("ComposeNativeTray tooltip description patch no longer matches")
-text = text.replace(tooltip, '"Skill Bill",\n                              tray->tooltip_text ? tray->tooltip_text : "");')
+text = text.replace(tooltip, '"Sona",\n                              tray->tooltip_text ? tray->tooltip_text : "");')
 title = 'return sd_bus_message_append(reply, "s", tray->title ? tray->title : "");'
 if text.count(title) != 1:
     raise SystemExit("ComposeNativeTray title patch no longer matches")
-text = text.replace(title, 'return sd_bus_message_append(reply, "s", "Skill Bill");')
+text = text.replace(title, 'return sd_bus_message_append(reply, "s", "Sona");')
 source.write_text(text)
 PY
 case "$(uname -m)" in

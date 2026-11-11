@@ -1,3 +1,18 @@
+## [2026-11-11] Keep runtime identities and persistent paths during the Sona rename
+Context: SKILL-538 renames desktop presentation while existing callers, login registration and saved data must remain usable.
+Decision: Use Sona in displayed copy, artwork and desktop package names. Retain runtime CLI/MCP identities, /skill-bill, skillbill-actions, SKILL_BILL_* names, dev.skillbill packages, saved-state paths, bundle ID, upgrade UUID and the Linux autostart filename.
+Reason: Renaming those interfaces or paths would change what existing installations use. Keeping them preserves compatibility without a data or registration-path migration.
+
+## [2026-11-11] Restrict Sona lifecycle ownership to current targets
+Context: The desktop package rename must preserve historical apps, registrations, unrelated launchers and saved runtime data.
+Decision: Activate, restart, roll back and remove only current Sona targets and verified registrations. Linux menu ownership requires both Exec and Icon; restore registrations with the app on failure. Preserve historical Skill Bill and SkillBill outputs.
+Reason: A package rename does not upgrade the old app in place. Historical cleanup would delete an installation the rename must preserve, and partial registration writes could leave a launcher pointing at a rolled-back app.
+
+## [2026-11-11] Give the macOS tray owned PNG bytes
+Context: macOS needs the shared Ping image, while tray-file retention can prune older render paths.
+Decision: Carry rendered PNG bytes through native install/update. Retain paths and file retention for other NativeTray consumers; macOS keeps status dots and its native numeric title without a bitmap count badge. Wait for native update/disposal and clear callbacks on cleanup.
+Reason: Owned bytes remain usable after path pruning. The native title avoids repeating the count on the small mark; reported failures retain fallback behavior, and synchronous cleanup prevents actions after disposal.
+
 ## [2026-11-10] Persist rule_pattern only in chat files when set
 Context: Saved chats from builds before pattern rules must reopen with the same decision text they had at save time.
 Decision: ChatApprovalStore writes rule_pattern only when rulePattern is non-null and treats a missing key on read as an exact rule for display.

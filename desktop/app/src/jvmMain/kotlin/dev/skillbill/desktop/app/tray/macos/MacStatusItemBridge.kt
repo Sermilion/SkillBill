@@ -1,73 +1,99 @@
 package dev.skillbill.desktop.app.tray.macos
 
+import dev.skillbill.desktop.app.tray.TrayDiagnostics
 import dev.skillbill.desktop.core.data.runtime.currentDesktopTempRoot
 import dev.skillbill.desktop.core.domain.model.TrayStatus
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+
+internal interface MacStatusItemOperations {
+  fun install(imagePng: ByteArray): Boolean
+  fun update(imagePng: ByteArray, kind: String, count: Int, goals: Array<String>, phases: Array<String>): Boolean
+  fun dispose()
+}
 
 object MacStatusItemBridge {
   @Volatile private var primaryAction: (() -> Unit)? = null
   @Volatile private var menuAction: ((Int) -> Unit)? = null
   @Volatile private var dismissAction: (() -> Unit)? = null
+  @Volatile private var onFailure: (() -> Unit)? = null
   @Volatile private var loaded = false
 
-  fun install(onPrimary: () -> Unit, onMenuAction: (Int) -> Unit, onAvailable: () -> Unit, onFailure: () -> Unit, onDismiss: () -> Unit) {
-    loaded = false
+  internal var operations: MacStatusItemOperations = ProductionOperations
+
+  fun install(
+    imagePng: ByteArray,
+    onPrimary: () -> Unit,
+    onMenuAction: (Int) -> Unit,
+    onAvailable: () -> Unit,
+    onFailure: () -> Unit,
+    onDismiss: () -> Unit,
+  ) {
+    if (loaded) dispose()
+    clearCallbacks()
     statusItemAnchor = null
     primaryAction = onPrimary
     menuAction = onMenuAction
     dismissAction = onDismiss
-    try {
-      val library = MacStatusItemBridge::class.java.getResourceAsStream("/macos/libskillbilltray.dylib")
-        ?: error("native tray library unavailable")
-      val path = Files.createTempFile(currentDesktopTempRoot(), "skillbill-tray-", ".dylib")
-      library.use { Files.copy(it, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING) }
-      path.toFile().deleteOnExit()
-      System.load(path.toAbsolutePath().toString())
-      loaded = nativeInstall()
-      if (loaded) onAvailable() else {
-        try {
-          nativeDispose()
-        } finally {
-          onFailure()
-        }
-      }
+    this.onFailure = onFailure
+    loaded = try {
+      operations.install(imagePng)
     } catch (_: Exception) {
-      try {
-        nativeDispose()
-      } finally {
-        loaded = false
-        onFailure()
-      }
+      false
     } catch (_: LinkageError) {
-      try {
-        nativeDispose()
-      } finally {
-        loaded = false
-        onFailure()
-      }
+      false
     }
+    if (loaded) onAvailable() else fail()
   }
 
-  fun update(kind: TrayStatus, count: Int, goals: List<String>, phases: List<String>) {
+  fun update(imagePng: ByteArray, kind: TrayStatus, count: Int, goals: List<String>, phases: List<String>): Boolean {
     val token = when (kind) {
       TrayStatus.Failed -> "failed"
       TrayStatus.NeedsYou -> "needs_you"
       TrayStatus.Running -> "running"
       TrayStatus.Idle -> "idle"
     }
-    if (loaded) nativeUpdate(token, count, goals.toTypedArray(), phases.toTypedArray())
+    if (!loaded) return false
+    val updated = try {
+      operations.update(imagePng, token, count, goals.toTypedArray(), phases.toTypedArray())
+    } catch (_: Exception) {
+      false
+    } catch (_: LinkageError) {
+      false
+    }
+    if (!updated) fail()
+    return updated
   }
 
   fun dispose() {
     try {
-      if (loaded) nativeDispose()
+      operations.dispose()
     } finally {
       loaded = false
-      primaryAction = null
-      menuAction = null
-      dismissAction = null
+      clearCallbacks()
       statusItemAnchor = null
     }
+  }
+
+  private fun fail() {
+    val failure = onFailure
+    loaded = false
+    statusItemAnchor = null
+    try {
+      operations.dispose()
+    } catch (_: Exception) {
+    } catch (_: LinkageError) {
+    }
+    clearCallbacks()
+    TrayDiagnostics.record("tray_icon_failed")
+    failure?.invoke()
+  }
+
+  private fun clearCallbacks() {
+    primaryAction = null
+    menuAction = null
+    dismissAction = null
+    onFailure = null
   }
 
   data class StatusItemAnchor(
@@ -96,7 +122,31 @@ object MacStatusItemBridge {
   @JvmStatic fun onMenuAction(index: Int) { menuAction?.invoke(index) }
   @JvmStatic fun onDismissPopover() { dismissAction?.invoke() }
 
-  @JvmStatic private external fun nativeInstall(): Boolean
-  @JvmStatic private external fun nativeUpdate(kind: String, count: Int, goals: Array<String>, phases: Array<String>)
+  private object ProductionOperations : MacStatusItemOperations {
+    private var libraryLoaded = false
+
+    override fun install(imagePng: ByteArray): Boolean {
+      if (!libraryLoaded) {
+        val library = MacStatusItemBridge::class.java.getResourceAsStream("/macos/libskillbilltray.dylib")
+          ?: error("native tray library unavailable")
+        val path = Files.createTempFile(currentDesktopTempRoot(), "skillbill-tray-", ".dylib")
+        library.use { Files.copy(it, path, StandardCopyOption.REPLACE_EXISTING) }
+        path.toFile().deleteOnExit()
+        System.load(path.toAbsolutePath().toString())
+        libraryLoaded = true
+      }
+      return nativeInstall(imagePng)
+    }
+
+    override fun update(imagePng: ByteArray, kind: String, count: Int, goals: Array<String>, phases: Array<String>) =
+      nativeUpdate(imagePng, kind, count, goals, phases)
+
+    override fun dispose() {
+      if (libraryLoaded) nativeDispose()
+    }
+  }
+
+  @JvmStatic private external fun nativeInstall(imagePng: ByteArray): Boolean
+  @JvmStatic private external fun nativeUpdate(imagePng: ByteArray, kind: String, count: Int, goals: Array<String>, phases: Array<String>): Boolean
   @JvmStatic private external fun nativeDispose()
 }
