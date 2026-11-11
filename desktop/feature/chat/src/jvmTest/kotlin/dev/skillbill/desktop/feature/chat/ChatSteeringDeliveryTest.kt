@@ -61,7 +61,8 @@ class ChatSteeringDeliveryTest {
 
     assertEquals(listOf(original, later), thread.queued.value)
     assertTrue(thread.queued.value.first().images.single() === image)
-    assertEquals("Follow-up queued: turn already ended", thread.transcript.value.filterIsInstance<ChatMessage.Notice>().single().text)
+    assertEquals(listOf("unknown", "Follow-up queued: turn already ended"),
+      thread.transcript.value.filterIsInstance<ChatMessage.Notice>().map { it.text })
     assertFalse(thread.hasDeliveryClaim())
     assertEquals(null, thread.delivery.value)
     assertEquals(1, drains)

@@ -1,3 +1,18 @@
+## [2026-11-11] SKILL-530 live chat steering and shared recovery
+Areas: desktop/feature/chat, desktop/feature/chat/newtask, desktop/core/domain, desktop/core/data/chat, desktop/core/testing, desktop/app, runtime-kotlin/runtime-infra/launcher
+- Claude and Codex Send now deliver queued text and images into active work in both chat types, preserving task context, reply collection and approvals. Stop remains explicit; Cursor and Junie retain their previous policy.
+- reusable: ChatThread claims original queue entries once in order. ChatSteeringDelivery coordinates both consumers, retained delivery updates and retirement through the typed repository boundary.
+- Known rejection or proven non-delivery restores originals before later additions, with a visible reason and diagnostic. Provider policy stays separate from current live availability.
+- Possible transmission without acknowledgement retains visible text and images as uncertain and blocks automatic drain. Late matching acknowledgement accepts without replay; warned Retry retires the old identity before restoring originals. Discard requires confirmation.
+- Accepted guidance inserts one Operator entry and closes the preceding Agent segment without ending the provider turn or replacing tool and approval identities.
+- Close, clear, rebind, resume, disposal and application quit retain or expose unresolved recovery. Session, database and process-generation fences reject stale ownership.
+- New Task claims Send now batches and registers ordinary turns under its transition lock before returning. This excludes later additions from an earlier claim and preserves immediate Stop and image-only input; asynchronous work retains its configured dispatcher.
+- Active handles, claims and recovery images remain in memory. Recovery lasts only for the live application session; no saved chat schema or workflow contract changed.
+- Limits: authenticated live-provider behavior and native macOS/Windows remain unverified. QA was not repeated after later gate repairs changed the tree.
+Feature size: MEDIUM
+Feature flag: N/A
+Acceptance criteria: 1/1 parent criterion implemented in source across 9/9 refined subtask criteria; live-provider behavior remains unverified.
+
 ## [2026-11-08] SKILL-528 chat changes indicator
 Areas: desktop/feature/chat/newtask, desktop/core/domain, desktop/core/data, desktop/core/testing, desktop/core/designsystem, runtime-kotlin/runtime-ports, runtime-kotlin/runtime-infra/workflow, runtime-kotlin/runtime-core
 - New Task captures HEAD, pre-existing untracked paths, an optional unreferenced stash SHA and capture time before its first agent turn. Saved drafts retain the baseline and capture-attempt state; older started chats load without a baseline, and malformed baseline data records a diagnostic without losing the transcript.

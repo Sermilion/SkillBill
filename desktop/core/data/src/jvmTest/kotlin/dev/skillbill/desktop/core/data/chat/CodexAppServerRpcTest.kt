@@ -63,16 +63,22 @@ class CodexAppServerRpcTest {
     val rejected = async {
       rpc.steer("delivery-1", "thread", "turn", emptyList(), { acquire -> acquire() }, { register -> register() }, {})
     }
-    acknowledgeWrite(input.receive())
+    val rejectedFrame = input.receive()
+    assertTrue(rejectedFrame.acquireWrite())
     output.send(line("""{"id":1,"error":{"code":-32602,"message":"turn busy"}}"""))
+    yield()
+    rejectedFrame.written.complete(true)
     assertIs<ChatSteeringResult.Rejected>(rejected.await())
 
     val accepted = async {
       rpc.steer("delivery-2", "thread", "turn", emptyList(), { acquire -> acquire() }, { register -> register() }, {})
     }
-    acknowledgeWrite(input.receive())
+    val acceptedFrame = input.receive()
+    assertTrue(acceptedFrame.acquireWrite())
     output.send(line("""{"method":"item/agentMessage/delta","params":{"threadId":"thread","turnId":"turn","itemId":"message","delta":"Still running"}}"""))
     output.send(line("""{"id":2,"result":{"turnId":"turn"}}"""))
+    yield()
+    acceptedFrame.written.complete(true)
     output.send(line("""{"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed"}}}"""))
 
     assertIs<ChatSteeringResult.Accepted>(accepted.await())
@@ -109,7 +115,7 @@ class CodexAppServerRpcTest {
 
     assertEquals(2, updates.size)
     assertIs<ChatSteeringResult.Rejected>(updates.last())
-    assertEquals("turn busy", (updates.last() as ChatSteeringResult.Rejected).reason)
+    assertEquals("turn busy\n-32602", (updates.last() as ChatSteeringResult.Rejected).reason)
     output.send(line("""{"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed"}}}"""))
     drain.join()
     approval.release()
@@ -150,7 +156,7 @@ class CodexAppServerRpcTest {
       terminalEmitted.await()
 
       val rejection = assertIs<ChatSteeringResult.Rejected>(updates.receive())
-      assertEquals("turn busy", rejection.reason)
+      assertEquals("turn busy\n-32602", rejection.reason)
       approval.release()
       output.close()
     }
@@ -178,7 +184,7 @@ class CodexAppServerRpcTest {
     rpc.drainReadySteeringResponses()
 
     val rejection = assertIs<ChatSteeringResult.Rejected>(updates.receive())
-    assertEquals("turn busy", rejection.reason)
+    assertEquals("turn busy\n-32602", rejection.reason)
     rpc.releaseSteering()
     output.close()
     approval.release()
@@ -229,7 +235,7 @@ class CodexAppServerRpcTest {
     acknowledgeWrite(frame)
 
     assertIs<ChatSteeringResult.Accepted>(steer.await())
-    assertEquals(listOf(ChatSteeringResult.Accepted("delivery-racing-ack")), updates)
+    assertEquals(listOf<ChatSteeringResult>(ChatSteeringResult.Accepted("delivery-racing-ack")), updates)
     output.send(line("""{"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed"}}}"""))
     drain.join()
     approval.release()

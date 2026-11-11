@@ -347,6 +347,7 @@ class NewTaskViewModelTest {
     assertEquals(chatRepo.agent, draft.selectedAgent)
     assertEquals(chipText(chatRepo.agent), chipText(model.state.value.agent))
     advanceUntilIdle()
+    runCurrent()
 
     assertEquals("codex", draft.agentId)
     assertEquals("codex", model.state.value.agent?.agentId)
@@ -394,6 +395,7 @@ class NewTaskViewModelTest {
     runCurrent()
     codexRead.complete(Unit)
     advanceUntilIdle()
+    runCurrent()
 
     assertEquals("codex", a.chat.value?.agent?.agentId)
     assertNotEquals(firstSession, a.chat.value?.sessionId)

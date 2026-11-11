@@ -260,7 +260,8 @@ class NewTaskDraftTest {
     assertFalse(current.thread.hasDeliveryClaim())
     assertEquals(null, current.thread.delivery.value)
     assertEquals(1, chat.retiredSteering.count { it.third == request.deliveryId })
-    assertEquals(1, current.thread.transcript.value.filterIsInstance<ChatMessage.Operator>().count { it.text == "rejected batch" })
+    assertEquals(listOf("question", "rejected batch\n\nlater"),
+      current.thread.transcript.value.filterIsInstance<ChatMessage.Operator>().map { it.text })
   }
 
   @Test

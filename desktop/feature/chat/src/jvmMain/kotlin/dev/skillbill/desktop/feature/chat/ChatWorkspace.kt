@@ -365,8 +365,9 @@ class ChatWorkspace(
     sessions.values.toList().forEach { session ->
       if (session.thread.hasDeliveryClaim()) {
         synchronized(session) { session.recoveryOnly = true }
-        if (session.steering != null) {
-          session.steering.detach { chat.end(session.sessionId) }
+        val steering = session.steering
+        if (steering != null) {
+          steering.detach { chat.end(session.sessionId) }
         } else {
           chat.end(session.sessionId)
           chat.awaitEnd(session.sessionId)
@@ -863,7 +864,7 @@ class ChatWorkspace(
       val session = sessions[id]
       when {
         stopped == null -> session?.append(ChatMessage.Notice(PAUSE_TIMEOUT_NOTICE))
-        stopped.sections is DetailSections.Gone -> session?.let(turns::markGone)
+        stopped.sections is DetailSections.Gone -> if (session != null) turns.markGone(session)
         else -> {
           session?.busyState?.value = true
           resumeAfter(session?.turnJob ?: Job().apply { complete() }, id, stopped.header)
@@ -882,7 +883,7 @@ class ChatWorkspace(
       turn.join()
       val fresh = turns.freshRead(header)
       if (fresh?.sections is DetailSections.Gone) {
-        sessions[id]?.let(turns::markGone)
+        sessions[id]?.let { turns.markGone(it) }
         return@launch
       }
       val current = fresh?.header

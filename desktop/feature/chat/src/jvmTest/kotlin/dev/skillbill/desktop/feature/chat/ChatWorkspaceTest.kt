@@ -403,7 +403,7 @@ class ChatWorkspaceTest {
     runCurrent()
 
     assertEquals(2, chat.requests.size)
-    assertEquals("rejected batch\n\nlater", chat.requests.last().prompt)
+    assertEquals("No execution changes since your last turn.\n\nquestion\n\nrejected batch\n\nlater", chat.requests.last().prompt)
     assertTrue(chat.requests.last().images.single() === image)
     assertFalse(session.thread.hasDeliveryClaim())
     assertEquals(null, session.thread.delivery.value)

@@ -165,7 +165,7 @@ internal class ChatTurns(
     session.append(ChatMessage.Notice(MAIN_CHECKOUT_NOT_SWITCHED_NOTICE + (worktree.mainCheckoutDetail?.let { ": $it" }.orEmpty()) + "."))
   }
 
-  fun markGone(session: ChatSession) {
+  suspend fun markGone(session: ChatSession) {
     if (session.goneState.value) return
     session.recoveryOnly = true
     if (session.thread.hasDeliveryClaim()) {
