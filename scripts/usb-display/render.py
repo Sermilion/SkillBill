@@ -67,11 +67,11 @@ def pages(board):
 def render(board, now, page_index=0, error=None, usage=None):
     image = Image.new("RGB", (WIDTH, HEIGHT), BG)
     draw = ImageDraw.Draw(image)
-    icon = Path(__file__).with_name("skill_bill.png")
+    icon = Path(__file__).with_name("sona.png")
     if not icon.exists():
         icon = (
             Path(__file__).resolve().parents[2]
-            / "desktop/core/designsystem/src/commonMain/composeResources/drawable/skill_bill.png"
+            / "desktop/core/designsystem/src/commonMain/composeResources/drawable/sona.png"
         )
     if icon.exists():
         with Image.open(icon) as source:

@@ -12,6 +12,7 @@ import java.security.MessageDigest
 import java.util.UUID
 
 data class TrayIconPaths(val png: String, val ico: String)
+data class TrayIconRenderResult(val paths: TrayIconPaths, val imagePng: ByteArray)
 
 /** Keeps the current tray icon and the one before it in [directory], named by content so a changed icon always has a new path. */
 class TrayIconFiles(private val directory: () -> Path) {
@@ -77,13 +78,20 @@ class TrayIconFiles(private val directory: () -> Path) {
   }
 }
 
-fun renderTrayIcon(files: TrayIconFiles, status: TrayStatus, running: Int, showOverlay: Boolean, reducedMotion: Boolean): TrayIconPaths {
+fun renderTrayIcon(
+  files: TrayIconFiles,
+  status: TrayStatus,
+  running: Int,
+  showOverlay: Boolean,
+  reducedMotion: Boolean,
+  showRunningCount: Boolean = showOverlay,
+): TrayIconRenderResult {
   val properties = IconRenderProperties()
   val png = ComposableIconUtils.renderComposableToPngBytes(properties) {
-    SkillBillTheme(reducedMotion) { TrayIconRenderer.Content(status, running, showOverlay) }
+    SkillBillTheme(reducedMotion) { TrayIconRenderer.Content(status, running, showOverlay, showRunningCount) }
   }
   val ico = ComposableIconUtils.renderComposableToIcoBytes(properties) {
-    SkillBillTheme(reducedMotion) { TrayIconRenderer.Content(status, running, showOverlay) }
+    SkillBillTheme(reducedMotion) { TrayIconRenderer.Content(status, running, showOverlay, showRunningCount) }
   }
-  return files.write(png, ico)
+  return TrayIconRenderResult(files.write(png, ico), png)
 }

@@ -18,11 +18,11 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 
 object TrayIconRenderer {
   @Composable
-  fun Content(state: TrayStatus, running: Int, showOverlay: Boolean) {
+  fun Content(state: TrayStatus, running: Int, showOverlay: Boolean, showRunningCount: Boolean = showOverlay) {
     val icon = skillBillIcon()
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
       Image(icon, contentDescription = null, modifier = Modifier.fillMaxSize())
-      if (showOverlay && state == TrayStatus.Running && running > 0) {
+      if (showRunningCount && state == TrayStatus.Running && running > 0) {
         Box(Modifier.align(Alignment.BottomEnd).size(18.dp).background(Color(0xFF3FB950), CircleShape), contentAlignment = Alignment.Center) {
           Text(if (running > 99) "99+" else running.toString(), color = Color.White, style = SkillBillTheme.type.tXs)
         }

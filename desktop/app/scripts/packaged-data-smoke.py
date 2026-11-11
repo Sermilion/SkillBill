@@ -19,7 +19,7 @@ for path in image.rglob("*.jar"):
     if path.parent.name == "app":
         with zipfile.ZipFile(path) as archive:
             if any(name.startswith("skillbill/") and name.endswith(".class") for name in archive.namelist()):
-                raise SystemExit(f"The desktop image contains Skill Bill runtime classes: {path}")
+                raise SystemExit(f"The desktop image contains Sona runtime classes: {path}")
 required_library = None
 if sys.platform == "darwin":
     required_library = "macos/libskillbilltray.dylib"
@@ -63,7 +63,7 @@ with tempfile.TemporaryDirectory(prefix="skillbill-packaged-smoke-") as director
     empty_path = root / "empty-path"
     empty_path.mkdir()
     (home / "tmp").mkdir()
-    cfgs = list(packaged.rglob("Skill Bill.cfg"))
+    cfgs = list(packaged.rglob("Sona.cfg"))
     if len(cfgs) != 1:
         raise SystemExit(f"Expected one launcher configuration, found {len(cfgs)}.")
     cfg = cfgs[0]
@@ -81,11 +81,11 @@ with tempfile.TemporaryDirectory(prefix="skillbill-packaged-smoke-") as director
     )
     cfg.write_text(content)
     if sys.platform == "darwin":
-        launcher = packaged / "Skill Bill.app/Contents/MacOS/Skill Bill"
+        launcher = packaged / "Sona.app/Contents/MacOS/Sona"
     elif sys.platform == "win32":
-        launcher = packaged / "Skill Bill/Skill Bill.exe"
+        launcher = packaged / "Sona/Sona.exe"
     else:
-        launcher = packaged / "Skill Bill/bin/Skill Bill"
+        launcher = packaged / "Sona/bin/Sona"
     environment = os.environ.copy()
     environment.update(PATH=str(empty_path), HOME=str(home), USERPROFILE=str(home))
     environment.pop("CLASSPATH", None)

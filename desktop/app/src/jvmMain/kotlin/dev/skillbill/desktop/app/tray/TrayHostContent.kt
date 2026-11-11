@@ -79,7 +79,7 @@ fun ApplicationScope.TrayHost(
   val overlay = NativeTrayHost.showsOverlay(System.getProperty("os.name"))
   val iconFiles = remember { TrayIconFiles { currentDesktopTempRoot().resolve("tray-icons") } }
   DisposableEffect(iconFiles) { onDispose { iconFiles.close() } }
-  var iconPaths by remember { mutableStateOf<TrayIconPaths?>(null) }
+  var renderedIcon by remember { mutableStateOf<RenderedTrayIcon?>(null) }
   LaunchedEffect(available.probeComplete, available.available) {
     if (available.probeComplete && !available.available) {
       visible = false
@@ -102,13 +102,15 @@ fun ApplicationScope.TrayHost(
   val phases = loaded?.let { it.livePhases + it.finishedPhases + it.liveOperations + it.finishedOperations }.orEmpty()
   // This sits above the gate below because a failure here closes that gate, which would cancel an effect inside it.
   LaunchedEffect(status, running, overlay, reducedMotion) {
-    if (mac) return@LaunchedEffect
     fun fail() {
       TrayDiagnostics.record("tray_icon_failed")
       availability.unavailable()
     }
     try {
-      iconPaths = withContext(Dispatchers.IO) { renderTrayIcon(iconFiles, status, running, overlay, reducedMotion) }
+      val result = withContext(Dispatchers.IO) {
+        renderTrayIcon(iconFiles, status, running, if (mac) true else overlay, reducedMotion, showRunningCount = !mac)
+      }
+      renderedIcon = RenderedTrayIcon(result, status, running)
     } catch (failure: CancellationException) {
       throw failure
     } catch (_: Exception) {
@@ -117,7 +119,7 @@ fun ApplicationScope.TrayHost(
       fail()
     }
   }
-  if (!available.probeComplete || available.available) if (mac) NativeTrayHost.MacStatusItem(status, running, goals, phases,
+  if (!available.probeComplete || available.available) if (mac) renderedIcon?.let { rendered -> NativeTrayHost.MacStatusItem(rendered.result.imagePng, rendered.status, rendered.running, goals, phases,
     onPrimary = { scope.launch(Dispatchers.Main) {
       if (!mainVisible) {
         intents.send(HostIntent.ShowMain)
@@ -143,9 +145,9 @@ fun ApplicationScope.TrayHost(
     onAvailable = availability::available,
     onFailure = availability::unavailable,
     onDismiss = { scope.launch(Dispatchers.Main) { visible = false } },
-  ) else {
-    iconPaths?.let { paths -> NativeTrayFiles(
-      paths,
+  ) } else {
+    renderedIcon?.let { rendered -> NativeTrayFiles(
+      rendered.result.paths,
       availability,
       tooltip = if (linux) state.trayHover() else when {
         state.problem != null -> "Sona could not refresh the board · ${state.problem?.summary()}"
@@ -231,6 +233,8 @@ fun ApplicationScope.TrayHost(
     }
   }
 }
+
+private data class RenderedTrayIcon(val result: TrayIconRenderResult, val status: TrayStatus, val running: Int)
 
 @Composable
 private fun NativeTrayFiles(paths: TrayIconPaths, availability: TrayAvailability, tooltip: String, primaryAction: () -> Unit) {

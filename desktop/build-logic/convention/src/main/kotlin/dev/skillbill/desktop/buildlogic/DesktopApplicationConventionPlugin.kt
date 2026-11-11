@@ -34,7 +34,7 @@ class DesktopApplicationConventionPlugin : Plugin<Project> {
       this.javaHome = javaHome
       nativeDistributions {
         modules("java.sql", "java.net.http", "java.management", "jdk.unsupported", "jdk.net", "jdk.security.auth")
-        packageName = "Skill Bill"
+        packageName = "Sona"
         this.packageVersion = packageVersion
         macOS {
           bundleID = "dev.skillbill.desktop"
