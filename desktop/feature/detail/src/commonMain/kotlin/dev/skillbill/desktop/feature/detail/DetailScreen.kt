@@ -179,8 +179,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
             val verifyRun = loaded?.detail?.verifyRun
             if (verifyRun != null) VerifyHeader(verifyRun, onAction) {
               if (state.sections != SectionsUi.Gone) {
-                val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
-                RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction)
+                VerifyHeaderActions(state, verifyRun, view, recoverFocus, onAction) { if (!host.chatOpen) host.onToggleChat() }
               }
             } else DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }, qa = if (qaRow) QaHeaderFacts(qaView?.testedCommit, qaView?.criteriaSource) else null, validation = validationRow, planReady = item.isStandalonePlan() && planFinished(item, loaded?.detail), planBlocked = item.isStandalonePlan() && hasBlockedSubtasks(loaded?.detail?.standalonePlan)) {
               if (state.sections != SectionsUi.Gone) {

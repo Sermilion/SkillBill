@@ -3,22 +3,33 @@ package dev.skillbill.desktop.feature.detail
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
+import dev.skillbill.desktop.core.designsystem.component.SbTooltip
+import dev.skillbill.desktop.core.designsystem.component.rememberRuntimeText
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
+import dev.skillbill.desktop.core.domain.model.VerifyCompletenessAudit
 import dev.skillbill.desktop.core.domain.model.VerifyFlagAudit
 import dev.skillbill.desktop.core.domain.model.VerifyReviewSection
 import dev.skillbill.desktop.core.domain.model.VerifyTestValueRow
 import dev.skillbill.desktop.core.domain.model.VerifyUnitTestValue
-import dev.skillbill.desktop.core.domain.model.VerifyCompletenessAudit
 
 @Composable
 internal fun VerifyFlagAuditReceipt(receipt: VerifyFlagAudit) {
@@ -43,20 +54,26 @@ internal fun VerifyReviewReceipt(receipt: VerifyReviewSection, leading: @Composa
   VerifyRawFindings(receipt.findings)
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun VerifyFindingRow(finding: dev.skillbill.desktop.core.domain.model.VerifyReviewFinding, leading: @Composable () -> Unit = {}) {
-  Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-      leading()
-      SbLabel(finding.severity, SbLabelStyle.Tint(when (finding.severity.lowercase()) {
-        "blocker", "major" -> SkillBillTheme.colors.stFailed
-        "minor" -> SkillBillTheme.colors.stBlocked
-        else -> SkillBillTheme.colors.fgMuted
-      }))
-      BasicText(finding.ref, style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fg))
-      BasicText(finding.location, style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fgMuted))
+  var open by rememberSaveable(finding.ref, finding.location) { mutableStateOf(false) }
+  Column(Modifier.fillMaxWidth().hairline(Edge.Top, SkillBillTheme.colors.borderSubtle).padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    leading()
+    Column(Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = "Toggle ${finding.ref}", onClick = { open = !open }), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+      FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        SbLabel(finding.severity, SbLabelStyle.Tint(when (finding.severity.lowercase()) {
+          "blocker", "major" -> SkillBillTheme.colors.stFailed
+          "minor" -> SkillBillTheme.colors.stBlocked
+          else -> SkillBillTheme.colors.fgMuted
+        }))
+        BasicText(finding.ref, style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fg))
+        SbTooltip(finding.location) { SbLabel(finding.location.substringAfterLast('/')) }
+        BasicText(if (open) "⌄" else "›", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
+      }
+      BasicText(rememberRuntimeText(finding.description), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2), maxLines = if (open) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis)
+      if (open) BasicText((finding.specialists + "${finding.confidence} confidence").joinToString(" · "), style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted))
     }
-    BasicText(finding.description, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
   }
 }
 
@@ -75,11 +92,12 @@ internal fun VerifyTestValueReceipt(receipt: VerifyUnitTestValue, leading: @Comp
   }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun VerifyTestRow(row: VerifyTestValueRow, leading: @Composable () -> Unit = {}) {
-  Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-      leading()
+  Column(Modifier.fillMaxWidth().hairline(Edge.Top, SkillBillTheme.colors.borderSubtle).padding(vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    leading()
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
       SbLabel(row.verdict, SbLabelStyle.Tint(when (row.verdict.lowercase()) {
         "valuable" -> SkillBillTheme.colors.stDone
         "weak" -> SkillBillTheme.colors.stBlocked
@@ -91,8 +109,8 @@ internal fun VerifyTestRow(row: VerifyTestValueRow, leading: @Composable () -> U
     }
     if (row.files.isNotEmpty()) BasicText(row.files.joinToString(", "), style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fgMuted))
     if (row.locations.isNotEmpty()) BasicText(row.locations.joinToString(", "), style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fgMuted))
-    BasicText(row.why, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
-    BasicText(row.action, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
+    BasicText(rememberRuntimeText(row.why), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
+    BasicText(rememberRuntimeText(row.action), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
   }
 }
 
