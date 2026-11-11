@@ -72,8 +72,8 @@ internal fun VerifyTestRow(row: VerifyTestValueRow, selectable: Boolean = false,
         }
         trailing()
       }
-      if (row.why.isNotBlank()) BasicText(verifyText(row.why), style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted, fontWeight = FontWeight.Normal))
-      if (row.action.isNotBlank()) BasicText(verifyText("→ ${row.action}"), style = SkillBillTheme.type.tXs.copy(color = colors.fg2, fontWeight = FontWeight.Normal))
+      if (row.why.isNotBlank()) VerifyReportText(row.why)
+      if (row.action.isNotBlank()) VerifyReportText(row.action)
       extra()
     }
   }

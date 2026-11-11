@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
-import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.domain.model.VerifyRunDetails
 
 internal fun DetailSections.verifySection(key: String, title: String, count: String? = null, end: (@Composable () -> Unit)? = null, content: DetailSections.() -> Unit) {
@@ -43,12 +42,12 @@ internal fun VerifyQuote(text: String) {
   val colors = SkillBillTheme.colors
   val rule = colors.borderStrong
   Column(Modifier.fillMaxWidth().background(colors.bgInset, RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp)).drawBehind { drawRect(rule, size = Size(2.dp.toPx(), size.height)) }) {
-    BasicText(verifyText(text), Modifier.padding(horizontal = 12.dp, vertical = 8.dp), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
+    VerifyReportText(text, Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
   }
 }
 
 @Composable
-internal fun VerifyWorkSummary(run: VerifyRunDetails, summary: String) {
+internal fun VerifyWorkSummary(run: VerifyRunDetails, summary: String, onScrollToSection: (String) -> Unit) {
   val intent = run.verdict?.summary == null
   VerifyBox(Modifier.padding(top = 20.dp), fill = SkillBillTheme.colors.bgRaised.copy(alpha = .55f)) {
     Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -56,9 +55,8 @@ internal fun VerifyWorkSummary(run: VerifyRunDetails, summary: String) {
         BasicText(if (intent) "What this work is meant to do" else "What this work does", style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted, fontWeight = FontWeight.Medium, lineHeight = 1.45.em))
         if (intent) BasicText("· from the extracted criteria", style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal, lineHeight = 1.45.em))
       }
-      SbTooltip(summary) {
-        BasicText(verifyText(summary), style = SkillBillTheme.type.tBase.copy(color = SkillBillTheme.colors.fg, lineHeight = 1.55.em), maxLines = if (intent) 1 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis)
-      }
+      BasicText(verifyText(summary.replace(Regex("\\s+"), " ").trim()), style = SkillBillTheme.type.tBase.copy(color = SkillBillTheme.colors.fg, lineHeight = 1.55.em), maxLines = if (intent) 1 else 3, overflow = TextOverflow.Ellipsis)
+      if (!intent) VerifyTextLink("Full summary in Verdict step") { onScrollToSection(verifyStepKey("verdict")) }
       if (intent) {
         val more = (run.criteria.size - 1).takeIf { it > 0 }?.let { "$it more criteria below. " }.orEmpty()
         BasicText("${more}A summary of the change comes with the verdict${if (verifyRunState(run) == VerifyRunState.Parked) ", after you confirm" else ""}.", style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal))

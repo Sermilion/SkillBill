@@ -1417,7 +1417,11 @@
     return [m[1], key].filter(Boolean).join(' · ');
   }
   const freeText = (intake) => !!intake && !/^(spec:|https?:\/\/)/i.test(intake);
-  const auditCounts = (r) => { const c = { PASS: 0, PARTIAL: 0, FAIL: 0 }; if (r.audit) r.audit.grades.forEach((g) => { c[g.status]++; }); return c; };
+  const auditCounts = (r) => {
+    const c = { PASS: 0, PARTIAL: 0, FAIL: 0, UNGRADED: 0 };
+    r.criteria.forEach((cr) => { const g = r.audit && r.audit.grades.find((g) => g.n === cr.n); c[g && g.status || 'UNGRADED']++; });
+    return c;
+  };
   /* Anything with a gap can be selected for fixing: review findings, Partial and Missing criteria, test rows that are not
    * Keep, open QA findings. A Missing criterion defaults to a goal (new work needs a plan, review and QA); the rest to chat. */
   function fixItems(r) {
@@ -1508,9 +1512,9 @@
       ],
       actions: verifyActions(it, ctx), after });
   }
-  function verifySummary(ctx) {
+  function verifySummary(ctx, it) {
     const r = ctx.r;
-    if (ctx.state === 'finished') return r.verdict && r.verdict.summary ? S.WorkSummary({ label: 'What this work does', html: md(r.verdict.summary) }) : '';
+    if (ctx.state === 'finished') return r.verdict && r.verdict.summary ? S.WorkSummary({ label: 'What this work does', html: md(r.verdict.summary.replace(/\s+/g, ' ').trim()), link: S.TextLink({ label: 'Full summary in Verdict step', act: 'v-jump', arg: `${it.id}|verdict` }) }) : '';
     if (!['running', 'stopped', 'parked'].includes(ctx.state) || !r.criteria.length) return '';
     const first = r.criteria[0];
     return S.WorkSummary({ label: 'What this work is meant to do', note: 'from the extracted criteria', html: md(first.text), oneLine: true, tip: first.text,
@@ -1527,8 +1531,8 @@
     const fg = (t) => `<small class="is-fg">${esc(t)}</small>`;
     const cells = [
       { key: 'Criteria', jump: 'criteria', value: r.audit ? `${c.PASS}<small> / ${r.criteria.length} met</small>` : `${r.criteria.length}<small> extracted</small>`,
-        sub: r.audit ? ([c.PARTIAL && `${c.PARTIAL} partial`, c.FAIL && `${c.FAIL} missing`].filter(Boolean).join(' · ') || 'all met') : 'not audited',
-        bar: { segs: r.audit ? [{ n: c.PASS, tone: 'done' }, { n: c.PARTIAL, tone: 'blocked' }, { n: c.FAIL, tone: 'failed' }] : [] } },
+        sub: r.audit ? ([c.PARTIAL && `${c.PARTIAL} partial`, c.FAIL && `${c.FAIL} missing`, c.UNGRADED && `${c.UNGRADED} ungraded`].filter(Boolean).join(' · ') || (r.criteria.length ? 'all met' : 'no criteria')) : 'not audited',
+        bar: { segs: r.audit ? [{ n: c.PASS, tone: 'done' }, { n: c.PARTIAL, tone: 'blocked' }, { n: c.FAIL, tone: 'failed' }, { n: c.UNGRADED, tone: 'faint' }] : [] } },
       { key: 'Review', jump: 'code_review', value: r.review ? `${r.review.findings.length}<small> findings</small>` : '<small>—</small>',
         sub: r.review ? (['Nit', 'Minor', 'Major', 'Blocker'].filter((k) => sev[k]).map((k) => `${sev[k]} ${k.toLowerCase()}`).join(' · ') || 'clean') : reviewStep.status === 'running' ? '<span class="is-active">running</span>' : 'not run',
         bar: { segs: !r.review ? [] : r.review.findings.length ? [{ n: sev.Nit || 0, tone: 'faint' }, { n: sev.Minor || 0, tone: 'blocked' }, { n: (sev.Major || 0) + (sev.Blocker || 0), tone: 'failed' }] : [{ n: 1, tone: 'done' }] } },
@@ -1566,7 +1570,7 @@
         text: ctx.state === 'superseded' ? 'Abandoned while the criteria were waiting for confirmation.' : `${why} Steps 1 to ${done} finished and their results are kept below; resuming starts again at ${(VSTEP[s.id] || s.id).toLowerCase()}.` });
     }
     const vd = r.verdict || { verdict: '', findings: [] };
-    const text = vd.findings.filter((f) => !f.startsWith('Warning:')).map((f) => f.replace(/^\*\*[A-Z ]+\*\*\s*[—-]\s*/, '')).join(' ');
+    const text = 'Verification finished. See Steps for findings and evidence.';
     return S.RunOutcome({ aria: 'Verify outcome', tone: V_TONE[vd.verdict] || 'faint', icon: vd.verdict === 'APPROVE' ? 'check' : vd.verdict === 'REQUEST CHANGES' ? 'x' : 'warn', label: 'Verdict', verdict: vd.verdict, text: md(text),
       note: vd.findings.some((f) => f.startsWith('Warning:')) ? 'QA had open findings, so the runtime lowered APPROVE to APPROVE WITH FIXES.' : null,
       when: { value: esc(vDur(r.startedAt, r.finishedAt)), note: fmtStamp(r.finishedAt) }, cells: verifyCells(it, ctx) });
@@ -1581,23 +1585,23 @@
     const shown = r.criteria.filter((cr) => { const g = grade(cr.n); return !r.audit || filt === 'all' || (filt === 'gaps' ? g && g.status !== 'PASS' : g && g.status === 'PASS'); });
     const rows = shown.map((cr) => {
       const g = grade(cr.n), key = 'c:' + cr.n, gap = !!g && g.status !== 'PASS', mark = ctx.marks[key];
-      const badge = mark ? { text: mark === 'repo' ? 'Not in this repo' : 'Spec question', tone: 'faint' } : g ? { text: V_GRADE[g.status][0], tone: V_GRADE[g.status][1] } : { text: ctx.state === 'parked' ? 'To confirm' : 'Not audited', tone: 'faint' };
+      const badge = mark ? { text: mark === 'repo' ? 'Not in this repo' : 'Spec question', tone: 'faint' } : g ? { text: V_GRADE[g.status][0], tone: V_GRADE[g.status][1] } : { text: ctx.state === 'parked' ? 'To confirm' : r.audit ? 'No grade' : 'Not audited', tone: 'faint' };
       const marks = grid && gap ? S.MarkRow(mark
         ? { text: mark === 'repo' ? 'Left out of fixes: the work lives in another repository.' : 'Left out of fixes until the spec is settled.', actions: [S.Button({ label: 'Clear mark', size: 'sm', act: 'vf-mark', arg: `${it.id}|${key}|none` })] }
         : { text: 'Not a code gap here?', actions: [S.Button({ label: 'Not in this repo', size: 'sm', act: 'vf-mark', arg: `${it.id}|${key}|repo` }), S.Button({ label: 'Spec question', size: 'sm', act: 'vf-mark', arg: `${it.id}|${key}|spec` })] }) : '';
       const body = g ? [
-        g.evidence.length ? S.FieldText({ label: 'Evidence', chips: g.evidence.map((e) => S.FileChip({ label: e, act: 'toast', arg: `Opened ${e} in the Changes window` })) }) : '',
+        g.evidence.length ? S.FieldText({ label: 'Evidence', chips: g.evidence.filter((e) => !/\s/.test(e)).map((e) => S.FileChip({ label: e, act: 'toast', arg: `Opened ${e} in the Changes window` })), html: g.evidence.filter((e) => /\s/.test(e)).map(S.ReportText).join('') }) : '',
         g.missing ? S.FieldText({ label: "What's missing", html: md(g.missing) }) : '',
         g.notFound ? S.FieldText({ label: 'Not found', html: md(g.notFound) }) : '', marks].join('')
-        : `<div class="t-muted">${ctx.state === 'parked' ? 'The audit runs after you confirm.' : 'The completeness audit has not run yet.'}</div>`;
+        : `<div class="t-muted">${ctx.state === 'parked' ? 'The audit runs after you confirm.' : r.audit ? 'No grade was recorded for this criterion. See Completeness audit in Steps.' : 'The completeness audit has not run yet.'}</div>`;
       const sel = grid && gap ? selCtl(it, ctx, key) : {};
       return S.CriterionRow({ id: `crit-${cr.n}`, n: cr.n, html: md(cr.text), badge, body, open: st.vOpen.has(`${it.id}:c:${cr.n}`), act: 'v-toggle', arg: `${it.id}:c:${cr.n}`,
         select: grid, lead: sel.lead || '', end: sel.end || '', hint: grid && gap ? sel.hint : null });
     });
-    const fold = (k, label, items, count) => (items.length ? S.Fold({ label, count, items: items.map(md), open: st.vOpen.has(`${it.id}:${k}`), act: 'v-toggle', arg: `${it.id}:${k}` }) : '');
+    const fold = (k, label, items) => (items.length ? S.VerifyContext({ kind: k, label, preview: items[0].replace(/\s+/g, ' ').trim(), items: items.map(S.ReportText), open: st.vOpen.has(`${it.id}:${k}`), act: 'v-toggle', arg: `${it.id}:${k}` }) : '');
     return S.VerifySection({ id: 'sec-criteria', title: 'Criteria', count: r.criteria.length,
       end: r.audit ? [S.Segmented({ act: 'v-filter', value: `${it.id}|${filt}`, items: [{ id: `${it.id}|all`, label: 'All' }, { id: `${it.id}|gaps`, label: `Gaps ${c.PARTIAL + c.FAIL}` }, { id: `${it.id}|met`, label: `Met ${c.PASS}` }] })] : null,
-      sub: r.audit ? null : ctx.state === 'parked' ? 'Extracted from the intake. The audit grades the code against this list once you confirm.' : ctx.state === 'superseded' ? 'Extracted but never confirmed. The newer run extracted its own list.' : 'Extracted and confirmed. Grades appear after the completeness audit.',
+      sub: r.audit ? (c.UNGRADED ? 'Audit results are incomplete. See Completeness audit in Steps.' : null) : ctx.state === 'parked' ? 'Extracted from the intake. The audit grades the code against this list once you confirm.' : ctx.state === 'superseded' ? 'Extracted but never confirmed. The newer run extracted its own list.' : 'Extracted and confirmed. Grades appear after the completeness audit.',
       body: [S.Box([grid ? selAll(it, ctx, 'criterion', { boxed: true }) : '', rows.length ? rows.join('') : S.CriterionRow({ empty: 'Nothing in this filter.' })]),
         fold('non-goals', 'Non-goals', r.nonGoals, r.nonGoals.length), fold('constraints', 'Technical constraints', r.constraints, r.constraints.length), fold('rollout', 'Rollout', r.rollout ? [r.rollout] : [], null)] });
   }
@@ -1612,9 +1616,10 @@
     if (s.status !== 'completed') return 'pend';
     if (s.id === 'verdict' && r.verdict && r.verdict.verdict === 'REQUEST CHANGES') return 'bad';
     if (s.id === 'completeness_audit' && auditCounts(r).FAIL) return 'bad';
+    if (s.id === 'completeness_audit' && !r.criteria.length) return 'pend';
     const warn = { qa: !!(r.qa && (r.qa.findings.length || r.qa.details.assertions.some((a) => a.outcome === 'not_exercised'))), code_review: !!(r.review && r.review.findings.length),
       unit_test_value_check: !!(r.unitTestValue && (r.unitTestValue.rows || []).some((x) => x.verdict !== 'Valuable')), feature_flag_audit: !!(r.flagAudit && r.flagAudit.verdict === 'fail'),
-      completeness_audit: !!(r.audit && r.audit.verdict === 'had_gaps'), verdict: !!(r.verdict && r.verdict.verdict !== 'APPROVE') };
+      completeness_audit: !!(r.audit && (auditCounts(r).PARTIAL || auditCounts(r).UNGRADED)), verdict: !!(r.verdict && r.verdict.verdict !== 'APPROVE') };
     return warn[s.id] ? 'warn' : 'done';
   }
   const tally = (list, key) => Object.entries(list.reduce((m, x) => { m[x[key]] = (m[x[key]] || 0) + 1; return m; }, {})).map(([k, n]) => ({ text: `${n} ${k.toLowerCase()}` }));
@@ -1664,7 +1669,7 @@
       case 'feature_flag_audit': {
         const f = r.flagAudit;
         if (!f) return none;
-        if (f.verdict === 'skipped') return { sum: [{ text: 'Skipped' }, { text: f.skipReason, tone: 'faint' }], body: '' };
+        if (f.verdict === 'skipped') return { sum: [{ text: 'Skipped' }], body: f.skipReason ? S.ReportText(f.skipReason) : '' };
         const ok = f.checks.filter((x) => x.passed).length;
         return { sum: [{ text: f.verdict === 'pass' ? 'Passed' : 'Failed', tone: f.verdict === 'pass' ? 'done' : 'failed' }, { text: f.flagName, mono: true }, { text: `${ok}/${f.checks.length} checks` }],
           body: S.KeyValues([['Flag', f.flagName, true], ['Pattern', f.pattern], ['Issues', f.issues]]) + S.CheckLines(f.checks.map((x) => ({ ok: x.passed, text: x.text }))) };
@@ -1684,7 +1689,7 @@
         if (ctx.stop === s) return { sum: [{ text: 'Stopped here', tone: 'blocked' }, { text: 'no receipt recorded' }], body: '' };
         const t = r.unitTestValue;
         if (!t) return none;
-        if (t.verdict === 'skipped') return { sum: [{ text: 'Skipped' }, { text: t.skipReason, tone: 'faint' }], body: '' };
+        if (t.verdict === 'skipped') return { sum: [{ text: 'Skipped' }], body: t.skipReason ? S.ReportText(t.skipReason) : '' };
         const plan = [['Keep', 'done', t.keep], ['Rewrite', 'blocked', t.rewrite], ['Delete', 'failed', t.delete && t.delete !== 'None.' ? t.delete : null], ['Add', 'accent', t.missing]].filter((p) => p[2]);
         return { sum: [{ text: t.overall, tone: 'strong' }, ...tally(t.rows, 'verdict')],
           body: `<div class="t-muted">${md(t.summary)}</div><div>${selAll(it, ctx, 'test', { rule: true, note: 'Keep rows are left out' })}${t.rows.map((x, i) => {
@@ -1696,7 +1701,7 @@
       case 'completeness_audit': {
         if (!r.audit) return none;
         const c = auditCounts(r);
-        return { sum: [{ text: `${c.PASS} met`, tone: 'done' }, c.PARTIAL ? { text: `${c.PARTIAL} partial`, tone: 'blocked' } : null, c.FAIL ? { text: `${c.FAIL} missing`, tone: 'failed' } : null], body: jump('Show the graded criteria', 'criteria') };
+        return { sum: [c.PASS ? { text: `${c.PASS} met`, tone: 'done' } : null, c.PARTIAL ? { text: `${c.PARTIAL} partial`, tone: 'blocked' } : null, c.FAIL ? { text: `${c.FAIL} missing`, tone: 'failed' } : null, c.UNGRADED ? { text: `${c.UNGRADED} ungraded`, tone: 'blocked' } : null, !r.criteria.length ? { text: 'No criteria', tone: 'faint' } : null], body: (r.audit.findings || []).map(S.ReportText).join('') + jump('Show the graded criteria', 'criteria') };
       }
       case 'qa': {
         if (r.qaSelection !== 'on' || !r.qa) return { sum: [{ text: r.qaSelection !== 'on' ? 'Off for this run' : 'No report recorded' }], body: '' };
@@ -1704,7 +1709,7 @@
         return { sum: [open ? { text: `${open} open ${open === 1 ? 'finding' : 'findings'}`, tone: 'failed' } : { text: 'Passed', tone: 'done' }, { text: `${passed} of ${as.length} checks passed` }, gaps ? { text: `${gaps} not tested`, tone: 'blocked' } : null],
           body: verifyQa(st, it, ctx) };
       }
-      case 'verdict': return r.verdict ? { sum: [{ text: r.verdict.verdict, tone: V_TONE[r.verdict.verdict] }], body: '' } : none;
+      case 'verdict': return r.verdict ? { sum: [{ text: r.verdict.verdict, tone: V_TONE[r.verdict.verdict] }], body: [r.verdict.summary, ...r.verdict.findings].filter(Boolean).map(S.ReportText).join('') } : none;
     }
     return { sum: [], body: '' };
   }
@@ -1755,7 +1760,7 @@
    * Activity and the selection bar. */
   function verifyDoc(st, it) {
     const ctx = verifyCtx(st, it);
-    return S.VerifyDoc([verifyHeader(st, it, ctx), verifySummary(ctx), verifyOutcome(it, ctx), verifyCriteria(st, it, ctx), verifySteps(st, it, ctx), verifyActivity(st, it), verifyBar(it, ctx)]);
+    return S.VerifyDoc([verifyHeader(st, it, ctx), verifySummary(ctx, it), verifyOutcome(it, ctx), verifyCriteria(st, it, ctx), verifySteps(st, it, ctx), verifyActivity(st, it), verifyBar(it, ctx)]);
   }
 
   function detail(st) {

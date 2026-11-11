@@ -86,6 +86,10 @@ Code review needs a pack root, conforming manifest/`content.md`, registered poin
 
 Write direct, active prose. Cut filler, stale wording, praise and repetition. Preserve names, numbers and qualifications. Commits/PRs/docs lead with the outcome and explain changes and reasons. Avoid unsupported "successfully", "perfect", "comprehensive", and "robust". Prefer clear names and small functions. Follow Comments for scoped Kotlin.
 
+When implementing designs, keep status cards and overview elements brief. Show the current status and a short summary. Never put walls of text, full reports, evidence tables, or detailed findings in an overview. Put findings and supporting evidence in the relevant expandable Steps section.
+
+When adding or changing UI, update the matching design HTML files in the same change. Keep the reference design and implementation consistent, including layout, content hierarchy, interactions, and narrow layouts.
+
 ## Testing
 
 Write few, high-value tests; name the realistic bug each would catch before authoring. Assert observable boundaries, not implementation structure. `skill-bill operation unit-test-value-check` is the review gate.

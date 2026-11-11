@@ -70,6 +70,120 @@ import kotlin.time.Instant
 @OptIn(ExperimentalTestApi::class)
 class VerifyDesignTest {
   @Test
+  fun `criterion grades refresh and audit prose remains readable at narrow widths`() = runComposeUiTest {
+    val evidence = "SyncTest.kt:322 proves the local edit survives. The pending change remains until the next write confirms it."
+    var grade by mutableStateOf<VerifyCriterionGrade?>(null)
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        Column(Modifier.width(330.dp)) {
+          VerifyCriterionRow(VerifyCriteriaViewRow(1, "Local edits survive.", grade), open = true)
+        }
+      }
+    }
+    onNodeWithText("NOT AUDITED").assertExists()
+    runOnIdle { grade = VerifyCriterionGrade(1, "PASS", "Local edits survive.", listOf(evidence), null, null, emptyList()) }
+    onNodeWithText("NOT AUDITED").assertDoesNotExist()
+    onNodeWithText("PASS").assertExists()
+    val layouts = mutableListOf<TextLayoutResult>()
+    onNodeWithText(evidence).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+    kotlin.test.assertTrue(layouts.single().lineCount > 1)
+    kotlin.test.assertFalse(layouts.single().hasVisualOverflow)
+  }
+
+  @Test
+  fun `criteria summary never treats an empty or incomplete audit as all met`() {
+    val run = verifyDesignFixture().copy(workflowStatus = "completed")
+    fun grade(number: Int) = VerifyCriterionGrade(number, "PASS", "criterion", emptyList(), null, null, emptyList())
+    val cases = listOf(
+      emptyList<VerifyCriterionGrade>() to "2 ungraded",
+      listOf(grade(1)) to "1 ungraded",
+      listOf(grade(1), grade(99)) to "1 ungraded",
+      listOf(grade(1), grade(2)) to "all met",
+      listOf(grade(1), grade(2), grade(99).copy(status = "FAIL")) to "all met",
+    )
+    cases.forEach { (grades, expected) ->
+      val audited = run.copy(completenessAudit = VerifyCompletenessAudit("all_pass", emptyList(), grades))
+      val cell = verifyOutcomeView(audited).cells.first { it.title == "Criteria" }
+      assertEquals(expected, cell.note)
+      val rows = verifyCriteriaView(audited, VerifyCriteriaFilter.All).rows
+      assertEquals(grades.filter { it.number in 1..2 }, rows.mapNotNull { it.grade })
+      val step = VerifyRunStep("completeness_audit", "completed", 1)
+      assertEquals(if (expected == "all met") VerifyScoreTone.Green else VerifyScoreTone.Amber, verifyStepTone(audited, step))
+      assertEquals(rows.count { it.grade == null }, verifyStepSummaryParts(audited, step).firstOrNull { it.text.endsWith("ungraded") }?.text?.substringBefore(' ')?.toInt() ?: 0)
+    }
+    assertEquals("0 / 2 met", verifyOutcomeView(run.copy(completenessAudit = VerifyCompletenessAudit("all_pass", emptyList(), emptyList()))).cells.first().value)
+    assertEquals("not audited", verifyScoreNotes(run)["Criteria"])
+  }
+
+  @Test
+  fun `context disclosures preserve full text and long work summaries stay within three lines`() = runComposeUiTest {
+    val summary = "Preserves edits while a sync write is in flight. ".repeat(20)
+    val run = verifyDesignFixture().copy(workflowStatus = "completed", verdict = VerifyRunVerdict("REQUEST CHANGES", emptyList(), summary))
+    var narrow by mutableStateOf(false)
+    var jump = ""
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        val list = rememberLazyListState()
+        val collapse = rememberSectionCollapse()
+        LazyColumn(Modifier.width(if (narrow) 330.dp else 700.dp).background(SkillBillTheme.colors.bgPanel).padding(16.dp), state = list) {
+          item { VerifyWorkSummary(run, summary) { jump = it } }
+          verifyContextSection(collapse, "scope", VerifyContextKind.NonGoals, listOf("Changing the retention window.", "Replacing the sync protocol."))
+          verifyContextSection(collapse, "constraints", VerifyContextKind.Constraints, listOf("Preserve records inside the retention window.", "Keep pending edits until the next write confirms them."))
+          verifyContextSection(collapse, "rollout", VerifyContextKind.Rollout, listOf("1. Enable for a small workspace.\n2. Check pending edits before expanding."))
+        }
+      }
+    }
+    val layouts = mutableListOf<TextLayoutResult>()
+    onNodeWithText(summary.trim()).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+    assertEquals(3, layouts.single().lineCount)
+    onNodeWithText("Full summary in Verdict step").performClick()
+    assertEquals(verifyStepKey("verdict"), jump)
+    onNodeWithText("Replacing the sync protocol.").assertDoesNotExist()
+    val directory = File("build/reports/verify-design").apply { mkdirs() }
+    ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(directory, "context-collapsed.png"))
+    runOnIdle { narrow = true }
+    ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(directory, "context-collapsed-narrow.png"))
+    listOf("Non-goals", "Technical constraints", "Rollout").forEach { label ->
+      onNode(hasScrollToIndexAction()).performScrollToNode(hasText(label))
+      onNodeWithText(label).performClick()
+    }
+    onNodeWithText("Check pending edits before expanding.").assertExists()
+    onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Non-goals"))
+    onNodeWithText("Replacing the sync protocol.").assertExists()
+    ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(directory, "context-expanded-narrow.png"))
+  }
+
+  @Test
+  fun `long verdict findings stay in the expandable step instead of the overview`() = runComposeUiTest {
+    val report = "## Acceptance criteria\n\n| Criterion | Status | Gap |\n| --- | --- | --- |\n" + "| 1 | PARTIAL | Missing race coverage |\n".repeat(40)
+    val warning = "Warning: QA could not exercise the offline flow."
+    val run = verifyDesignFixture().copy(
+      workflowStatus = "completed",
+      steps = listOf(VerifyRunStep("verdict", "completed", 1)),
+      verdict = VerifyRunVerdict("REQUEST CHANGES", listOf(report, warning), "Preserves edits during sync."),
+    )
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        val list = rememberLazyListState()
+        val collapse = rememberSectionCollapse()
+        LazyColumn(Modifier.width(700.dp), state = list) {
+          item { VerifyOutcomeCard(verifyOutcomeView(run), {}) }
+          DetailSections(this, collapse, list).verifyStepsTimeline(run, verifyDesignState(run), emptyList(), {}, {})
+        }
+      }
+    }
+
+    onNodeWithText("Verification finished. See Steps for findings and evidence.").assertIsDisplayed()
+    onNodeWithText(report).assertDoesNotExist()
+    onNodeWithText(warning).assertDoesNotExist()
+    onNodeWithContentDescription("Toggle step verdict").performClick()
+    onNodeWithText("Acceptance criteria").assertExists()
+    onAllNodesWithText("Missing race coverage").onFirst().assertExists()
+    onNodeWithText(warning).assertExists()
+    assertEquals("REQUEST CHANGES\n\nPreserves edits during sync.\n\n$report\n$warning", verifyReportText(run))
+  }
+
+  @Test
   fun `lifecycle cards distinguish waiting running stopped superseded and verdicts`() {
     val run = verifyDesignFixture()
     val cases = listOf(

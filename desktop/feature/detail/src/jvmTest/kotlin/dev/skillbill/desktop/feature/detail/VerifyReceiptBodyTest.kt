@@ -1,11 +1,15 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.VerifyCompletenessAudit
 import dev.skillbill.desktop.core.domain.model.VerifyCriterionGrade
@@ -20,6 +24,23 @@ import kotlin.test.assertEquals
 
 @OptIn(ExperimentalTestApi::class)
 class VerifyReceiptBodyTest {
+  @Test
+  fun `narrow receipt fields render report structure instead of raw markdown`() = runComposeUiTest {
+    val report = "## Recovery\n\n1. Preserve local edits.\n2. Retry the write.\n\n" +
+      "| Criterion | Status |\n| --- | --- |\n| Local edits | PARTIAL |\n\n" +
+      "```kotlin\nwrite(localEdits)\n```"
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        Column(Modifier.width(330.dp)) { VerifyReceiptField("Evidence", report) }
+      }
+    }
+
+    onNodeWithText(report).assertDoesNotExist()
+    listOf("Recovery", "1.", "Preserve local edits.", "2.", "Retry the write.", "Criterion", "Local edits", "Status", "PARTIAL", "write(localEdits)").forEach {
+      onNodeWithText(it).assertExists()
+    }
+  }
+
   @Test
   fun `completeness receipt shows unparsed findings with a verdict`() = runComposeUiTest {
     var target = ""

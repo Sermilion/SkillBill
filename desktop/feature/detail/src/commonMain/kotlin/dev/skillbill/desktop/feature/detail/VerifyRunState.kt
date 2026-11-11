@@ -77,7 +77,13 @@ internal fun rememberVerifySectionScroller(
     { key ->
       scope.launch {
         if (key == VERIFY_CRITERIA_KEY && collapse.isCollapsed(VERIFY_CRITERIA_KEY)) collapse.toggle(VERIFY_CRITERIA_KEY)
-        if (key.startsWith("verify-step-") && collapse.isCollapsed(VERIFY_STEPS_KEY)) collapse.toggle(VERIFY_STEPS_KEY)
+        if (key.startsWith("verify-step-")) {
+          if (collapse.isCollapsed(VERIFY_STEPS_KEY)) collapse.toggle(VERIFY_STEPS_KEY)
+          workflowId?.let { id ->
+            val row = verifyStepCollapseKey(id, key.removePrefix("verify-step-"))
+            if (collapse.isCollapsed(row, default = true)) collapse.toggle(row, default = true)
+          }
+        }
         if (key == VERIFY_QA_KEY) {
           if (collapse.isCollapsed(VERIFY_STEPS_KEY)) collapse.toggle(VERIFY_STEPS_KEY)
           workflowId?.let { id ->

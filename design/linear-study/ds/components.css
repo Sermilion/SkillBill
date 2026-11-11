@@ -2169,3 +2169,32 @@ button.sb-mon-rh:focus-visible { outline-offset: -2px; }
 .sb-changes-header h2 { margin: 0 0 4px; font-size: var(--t-md); font-weight: 600; }
 .sb-changes-dialog > sb-design-surface { flex: 1; min-height: 0; }
 @media (max-width: 900px) { .sb-changes-layer { padding: 8px; } .sb-changes-header > .t-faint { display: none; } }
+
+/* Verify context panels share the Compose layout and collapse behavior. */
+.sb-wsum-tx:not(.is-one) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.sb-vcontext { --context-tone: var(--fg-muted); margin-top: 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-inset); overflow: hidden; }
+.sb-vcontext.is-constraints { --context-tone: var(--st-blocked); }
+.sb-vcontext.is-rollout { --context-tone: var(--accent-text); }
+.sb-vcontext > .hd { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px; border: 0; background: none; color: var(--fg-2); text-align: left; font: inherit; cursor: pointer; }
+.sb-vcontext > .hd:hover { background: var(--bg-hover); }
+.sb-vcontext .glyph { display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: 8px; color: var(--context-tone); background: color-mix(in srgb, var(--context-tone) 10%, transparent); }
+.sb-vcontext .copy { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.sb-vcontext .title { font-weight: 500; }
+.sb-vcontext .preview { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--t-sm); color: var(--fg-muted); }
+.sb-vcontext .note { font-size: var(--t-xs); color: var(--context-tone); }
+.sb-vcontext .body { border-top: 1px solid var(--border-subtle); padding: 4px 16px; }
+.sb-vcontext .entry { padding: 12px 0; }
+.sb-vcontext .entry + .entry { border-top: 1px solid var(--border-subtle); }
+.sb-vcontext .entry > div { padding-left: 12px; border-left: 2px solid color-mix(in srgb, var(--context-tone) 50%, transparent); overflow-wrap: anywhere; }
+.sb-vcontext .entry .sb-report { margin: 0; }
+
+.sb-report { container-type: inline-size; line-height: 1.5; }
+.sb-vstep > .card > .bd { container-type: inline-size; }
+.sb-report-record { border-top: 1px solid var(--border-subtle); padding-top: 8px; margin-bottom: 8px; }
+.sb-report-record dl { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 6px 12px; margin: 0; }
+.sb-report-record dt { color: var(--fg-faint); font-size: var(--t-xs); }
+.sb-report-record dd { margin: 0; min-width: 0; }
+@container (max-width: 400px) {
+  .sb-report-record dl, .sb-kv { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .sb-report-record dd, .sb-kv dd { margin-bottom: 6px; }
+}

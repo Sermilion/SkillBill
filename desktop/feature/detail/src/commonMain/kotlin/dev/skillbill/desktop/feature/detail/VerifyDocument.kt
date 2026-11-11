@@ -33,7 +33,7 @@ internal fun DetailSections.verifyDocument(state: DetailUiState, run: VerifyRunD
   }
 
   verifySummary(run)?.let { summary ->
-    item(key = "verify-summary") { VerifyWorkSummary(run, summary) }
+    item(key = "verify-summary") { VerifyWorkSummary(run, summary, onScrollToSection) }
   }
 
   item(key = "verify-outcome") {

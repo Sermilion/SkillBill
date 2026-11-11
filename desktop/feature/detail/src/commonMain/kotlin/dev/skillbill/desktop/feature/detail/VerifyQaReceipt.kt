@@ -113,7 +113,10 @@ private fun VerifyQaFinding(row: QaFindingRow, key: String, collapse: SectionCol
           BasicText("Open", style = SkillBillTheme.type.tXs.copy(color = colors.stFailed))
           VerifyChevron(open)
         }
-        row.observed?.let { BasicText(verifyText(it), Modifier.padding(start = 24.dp), style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted), maxLines = if (open) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis) }
+        row.observed?.let {
+          if (open) VerifyReportText(it, Modifier.padding(start = 24.dp))
+          else BasicText(verifyText(it), Modifier.padding(start = 24.dp), style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
       }
       if (allowed) Box(Modifier.width(104.dp).padding(top = 8.dp, end = 10.dp), contentAlignment = Alignment.TopEnd) { fix?.let { VerifyFixRoute(it, state, onAction) } }
     }
@@ -130,7 +133,7 @@ private fun VerifyQaFinding(row: QaFindingRow, key: String, collapse: SectionCol
 private fun VerifyQaField(label: String, text: String) {
   Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
     BasicText(label, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint))
-    BasicText(verifyText(text), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
+    VerifyReportText(text)
   }
 }
 
@@ -138,7 +141,7 @@ private fun VerifyQaField(label: String, text: String) {
 private fun VerifyQaDetail(row: QaDetailRow, tone: Color, passed: Boolean) {
   if (passed) Column(Modifier.fillMaxWidth().padding(start = 36.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
     BasicText(row.title, style = SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.fg2))
-    BasicText(verifyText(row.detail), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
+    VerifyReportText(row.detail)
     if (row.evidencePaths.isNotEmpty()) Box(Modifier.padding(top = 4.dp)) { VerifyQaEvidence(row.evidencePaths) }
   } else Row(Modifier.fillMaxWidth().hairline(Edge.Top, SkillBillTheme.colors.borderSubtle).padding(horizontal = 12.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
     Canvas(Modifier.size(16.dp)) {
@@ -146,7 +149,7 @@ private fun VerifyQaDetail(row: QaDetailRow, tone: Color, passed: Boolean) {
     }
     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
       BasicText(row.title, style = SkillBillTheme.type.tBaseMedium.copy(color = SkillBillTheme.colors.fg))
-      BasicText(verifyText(row.detail), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
+      VerifyReportText(row.detail)
       VerifyQaEvidence(row.evidencePaths)
     }
   }

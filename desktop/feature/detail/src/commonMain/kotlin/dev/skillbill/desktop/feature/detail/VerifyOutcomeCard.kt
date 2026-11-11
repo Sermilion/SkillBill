@@ -33,7 +33,7 @@ internal fun verifyOutcomeView(run: VerifyRunDetails): VerifyOutcomeView {
       }
       "$why Finished steps keep their results below; resuming starts again at ${step?.let { verifyStepName(it.stepId).lowercase() } ?: "the last step"}."
     }
-    VerifyRunState.Finished -> findings.filterNot { it.startsWith("Warning:") }.joinToString("\n").removePrefix("**VERDICT** —").trimStart()
+    VerifyRunState.Finished -> "Verification finished. See Steps for findings and evidence."
   }
   fun hasRun(stepId: String): Boolean = run.steps.firstOrNull { it.stepId == stepId }?.status in setOf("completed", "skipped")
   fun cell(title: String, value: String, segments: List<VerifyScoreSegment>, stepId: String, key: String = verifyStepKey(stepId)) =
@@ -79,7 +79,7 @@ internal fun verifyOutcomeView(run: VerifyRunDetails): VerifyOutcomeView {
     VerifyScoreSegment(run.flagAudit?.checks?.count { !it.passed } ?: 0, VerifyScoreTone.Red),
   ).filter { it.count > 0 }
   val criteriaValue =
-    if (grades.isEmpty()) "${run.criteria.size} extracted"
+    if (run.completenessAudit == null) "${run.criteria.size} extracted"
     else "${criterionGrades.count { it.status.equals("PASS", true) }} / ${run.criteria.size} met"
   val testsValue = when {
     tests == null -> "—"
@@ -104,7 +104,7 @@ internal fun verifyOutcomeView(run: VerifyRunDetails): VerifyOutcomeView {
     else -> run.qaVerdict ?: "unavailable"
   }
   val cells = if (state == VerifyRunState.Parked || state == VerifyRunState.Superseded) emptyList() else listOf(
-    cell("Criteria", criteriaValue, if (grades.isEmpty()) emptyList() else criteriaSegments, "completeness_audit", VERIFY_CRITERIA_KEY),
+    cell("Criteria", criteriaValue, if (run.completenessAudit == null) emptyList() else criteriaSegments, "completeness_audit", VERIFY_CRITERIA_KEY),
     cell("Review", review?.let { "$reviewFindingCount ${if (reviewFindingCount == 1) "finding" else "findings"}" } ?: "—", reviewSegments, "code_review"),
     cell("Tests", testsValue, testSegments, "unit_test_value_check"),
     if (qaSelected) cell("QA", qaValue, qaSegments, "qa", VERIFY_QA_KEY)

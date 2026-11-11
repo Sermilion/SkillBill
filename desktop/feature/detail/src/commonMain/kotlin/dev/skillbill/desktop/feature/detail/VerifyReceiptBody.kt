@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -42,7 +43,7 @@ internal fun VerifyFlagAuditReceipt(receipt: VerifyFlagAudit) {
     receipt.checks.forEach { check ->
       Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         CompositionLocalProvider(LocalContentColor provides if (check.passed) SkillBillTheme.colors.stDone else SkillBillTheme.colors.stFailed) { SbIcon(if (check.passed) LucideIcons.check else LucideIcons.x, 12.dp) }
-        BasicText(check.text, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
+        VerifyReportText(check.text, Modifier.weight(1f))
       }
     }
     VerifyRawFindings(receipt.findings)
@@ -70,7 +71,10 @@ internal fun VerifyFindingRow(finding: dev.skillbill.desktop.core.domain.model.V
         (finding.specialists + "${finding.confidence} confidence").forEach { BasicText(it, style = SkillBillTheme.type.t2xs.copy(color = colors.fgMuted, fontWeight = FontWeight.Normal)) }
         trailing()
       }
-      BasicText(verifyText(finding.description), Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = "Toggle ${finding.ref}", onClick = { open = !open }), style = SkillBillTheme.type.tSm.copy(color = colors.fg2), maxLines = if (open) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis)
+      Column(Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = "Toggle ${finding.ref}", onClick = { open = !open })) {
+        if (open) VerifyReportText(finding.description)
+        else BasicText(verifyText(finding.description), style = SkillBillTheme.type.tSm.copy(color = colors.fg2), maxLines = 2, overflow = TextOverflow.Ellipsis)
+      }
       extra()
     }
   }
@@ -84,9 +88,19 @@ internal fun VerifyCompletenessReceipt(receipt: VerifyCompletenessAudit, onScrol
 
 @Composable
 internal fun VerifyReceiptField(label: String, value: String, mono: Boolean = false) {
-  Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-    BasicText(label, Modifier.width(112.dp), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
-    BasicText(verifyText(value), Modifier.weight(1f), style = (if (mono) SkillBillTheme.type.monoSm else SkillBillTheme.type.tSm).copy(color = SkillBillTheme.colors.fg2))
+  BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val labelContent: @Composable () -> Unit = { BasicText(label, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint)) }
+    val valueContent: @Composable () -> Unit = {
+      if (mono) BasicText(value, style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fg2))
+      else VerifyReportText(value)
+    }
+    if (maxWidth < 400.dp) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      labelContent()
+      valueContent()
+    } else Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+      Column(Modifier.width(112.dp)) { labelContent() }
+      Column(Modifier.weight(1f)) { valueContent() }
+    }
   }
 }
 

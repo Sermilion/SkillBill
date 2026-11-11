@@ -95,12 +95,12 @@ internal fun verifyStepHasReceipt(run: VerifyRunDetails, step: VerifyRunStep): B
   return when (step.stepId) {
   "collect_inputs" -> step.status == "completed"
   "extract_criteria" -> run.criteria.isNotEmpty() || run.criteriaRaw != null
-  "feature_flag_audit" -> run.flagAudit != null && run.flagAudit?.verdict != "skipped"
+  "feature_flag_audit" -> run.flagAudit?.let { it.verdict != "skipped" || !it.skipReason.isNullOrBlank() || it.findings.any(String::isNotBlank) } == true
   "code_review" -> step.status != "running" && run.reviewFindings != null
-  "unit_test_value_check" -> run.unitTestValue != null && run.unitTestValue?.verdict != "skipped"
+  "unit_test_value_check" -> run.unitTestValue?.let { it.verdict != "skipped" || !it.skipReason.isNullOrBlank() || it.findings.any(String::isNotBlank) } == true
   "completeness_audit" -> run.completenessAudit != null
   "qa" -> run.qaSelection == "on" && (run.qa != null || !run.qaReportText.isNullOrBlank())
-  "verdict" -> false
+  "verdict" -> run.verdict != null
   "gather_diff" -> run.changedFiles.isNotEmpty()
   else -> false
   }
@@ -198,8 +198,8 @@ private fun VerifyReceiptBody(run: VerifyRunDetails, step: VerifyRunStep, collap
           else BasicText(run.qaVerdict?.takeIf { it.isNotBlank() } ?: "skipped", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
         }
         "verdict" -> run.verdict?.let { receipt ->
-          listOfNotNull(receipt.verdict, receipt.summary).forEach { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2)) }
-          receipt.findings.forEach { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2)) }
+          receipt.summary?.let { VerifyReportText(it) }
+          receipt.findings.forEach { VerifyReportText(it) }
         }
         "gather_diff" -> {
           VerifyChangedDirectories(run.changedFiles)
