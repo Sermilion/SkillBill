@@ -364,7 +364,7 @@ internal class CodexAppServerRpc(
         } else if (!written) {
           classifyAndComplete(pending)
         } else {
-          response.await()
+          classifyAndComplete(pending)
         }
       }
     }

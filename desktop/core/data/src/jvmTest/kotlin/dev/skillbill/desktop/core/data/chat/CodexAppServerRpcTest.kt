@@ -82,7 +82,7 @@ class CodexAppServerRpcTest {
   }
 
   @Test
-  fun `written steering published as uncertain is replaced by a retained authoritative rejection`() = runTest {
+  fun `written steering returns uncertain while active output continues and late rejection replaces it`() = runTest {
     val input = Channel<ChatProcessInput>(Channel.UNLIMITED)
     val output = Channel<ChatProcessOutput>(Channel.UNLIMITED)
     val events = mutableListOf<ChatEvent>()
@@ -94,18 +94,74 @@ class CodexAppServerRpcTest {
       rpc.steer("delivery-late-rejection", "thread", "turn", emptyList(), { acquire -> acquire() },
         { register -> register() }) { updates += it }
     }
-    acknowledgeWrite(input.receive())
-    output.send(line("""{"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed"}}}"""))
-    drain.join()
+    val frame = input.receive()
+    acknowledgeWrite(frame)
+    output.send(line("""{"method":"item/agentMessage/delta","params":{"threadId":"thread","turnId":"turn","itemId":"message","delta":"Still running"}}"""))
+    yield()
 
     assertIs<ChatSteeringResult.DeliveryUncertain>(steer.await())
     assertIs<ChatSteeringResult.DeliveryUncertain>(updates.single())
+    assertTrue(ChatEvent.TextDelta("Still running") in events)
     output.send(line("""{"id":1,"error":{"code":-32602,"message":"turn busy"}}"""))
-    rpc.drainReadySteeringResponses()
+    yield()
 
     assertEquals(2, updates.size)
     assertIs<ChatSteeringResult.Rejected>(updates.last())
     assertEquals("turn busy", (updates.last() as ChatSteeringResult.Rejected).reason)
+    output.send(line("""{"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed"}}}"""))
+    drain.join()
+    approval.release()
+    output.close()
+  }
+
+  @Test
+  fun `written steering returns uncertain while active and late acceptance replaces it`() = runTest {
+    val input = Channel<ChatProcessInput>(Channel.UNLIMITED)
+    val output = Channel<ChatProcessOutput>(Channel.UNLIMITED)
+    val updates = mutableListOf<ChatSteeringResult>()
+    val approval = CodexChatApproval({ true }, {}, RecordingDiagnostics(), {}, "/checkout")
+    val rpc = CodexAppServerRpc(input, output, RecordingDiagnostics(), {}, approval)
+    val drain = launch { rpc.drainTurn("thread", "turn") }
+    val steer = async {
+      rpc.steer("delivery-late-acceptance", "thread", "turn", emptyList(), { acquire -> acquire() },
+        { register -> register() }) { updates += it }
+    }
+    acknowledgeWrite(input.receive())
+
+    assertIs<ChatSteeringResult.DeliveryUncertain>(steer.await())
+    output.send(line("""{"id":1,"result":{"turnId":"turn"}}"""))
+    yield()
+
+    assertEquals(2, updates.size)
+    assertIs<ChatSteeringResult.DeliveryUncertain>(updates.first())
+    assertIs<ChatSteeringResult.Accepted>(updates.last())
+    output.send(line("""{"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed"}}}"""))
+    drain.join()
+    approval.release()
+    output.close()
+  }
+
+  @Test
+  fun `acknowledgement racing write completion wins over uncertainty`() = runTest {
+    val input = Channel<ChatProcessInput>(Channel.UNLIMITED)
+    val output = Channel<ChatProcessOutput>(Channel.UNLIMITED)
+    val updates = mutableListOf<ChatSteeringResult>()
+    val approval = CodexChatApproval({ true }, {}, RecordingDiagnostics(), {}, "/checkout")
+    val rpc = CodexAppServerRpc(input, output, RecordingDiagnostics(), {}, approval)
+    val drain = launch { rpc.drainTurn("thread", "turn") }
+    val steer = async {
+      rpc.steer("delivery-racing-ack", "thread", "turn", emptyList(), { acquire -> acquire() },
+        { register -> register() }) { updates += it }
+    }
+    val frame = input.receive()
+    output.send(line("""{"id":1,"result":{"turnId":"turn"}}"""))
+    yield()
+    acknowledgeWrite(frame)
+
+    assertIs<ChatSteeringResult.Accepted>(steer.await())
+    assertEquals(listOf(ChatSteeringResult.Accepted("delivery-racing-ack")), updates)
+    output.send(line("""{"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed"}}}"""))
+    drain.join()
     approval.release()
     output.close()
   }
