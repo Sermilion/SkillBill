@@ -104,6 +104,7 @@ internal fun ParallelCodeReviewInitialRun.delegatedStageLaunch(): ReviewDelegate
     projectStoreRoot = request.projectStoreRoot,
     timeout = request.timeout,
     modelOverride = request.modelOverride,
+    effortOverride = request.effortOverride,
     promptSuffix =
       listOf(addOnOrStandalone, request.directiveSuffix)
         .filter(String::isNotBlank)

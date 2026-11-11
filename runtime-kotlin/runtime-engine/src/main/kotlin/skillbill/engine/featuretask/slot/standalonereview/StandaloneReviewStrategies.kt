@@ -828,7 +828,8 @@ public abstract class StandaloneReviewStrategy(
             laneProgressIdleTimeout =
               launch.skillRunRequest.progressIdleTimeout
                 ?: READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes,
-            modelOverride = run.launchAssignment?.launch?.effectiveModel,
+            modelOverride = launch.skillRunRequest.modelOverride,
+            effortOverride = launch.skillRunRequest.effortOverride,
             directiveSuffix = supplement(run, binding).orEmpty(),
           )
         when (val outcome = delegatedRunner.run(request)) {

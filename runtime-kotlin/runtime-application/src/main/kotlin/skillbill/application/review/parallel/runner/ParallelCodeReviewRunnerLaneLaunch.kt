@@ -290,6 +290,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
                 promptOverride =
                   standaloneReportOnlyPrompt(args.request, args.launch.prompt),
                 modelOverride = args.modelOverride,
+                effortOverride = args.request.effortOverride,
                 reviewEvidenceBroker = args.bound.broker,
                 reviewEvidenceEndpoint = args.bound.endpoint,
                 openCodeIdentity = openCodeIdentity,
