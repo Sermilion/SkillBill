@@ -68,6 +68,19 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
       Files.delete(replacementLink)
       createSymlinkOrSkip(replacementLink, replacement)
 
+      val reapplied = port.linkNativeAgents(request)
+      assertTrue(reapplied.outcome.skipped.any { it.path == replacementLink })
+      assertEquals(
+        originalEntries.filter { it.installedPath == replacementLink },
+        NativeAgentLinkInventory.read(fixture.home, listOf(cacheRoot), fixture.repoRoot),
+      )
+
+      port.linkNativeAgents(request.copy(linkRequest = request.linkRequest.copy(selectedPlatforms = emptyList())))
+      assertEquals(
+        originalEntries.filter { it.installedPath == replacementLink },
+        NativeAgentLinkInventory.read(fixture.home, listOf(cacheRoot), fixture.repoRoot),
+      )
+
       val result = port.unlinkNativeAgents(request)
 
       assertEquals(listOf(replacement), result.retainedPaths)

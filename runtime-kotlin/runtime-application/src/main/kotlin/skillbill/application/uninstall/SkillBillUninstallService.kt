@@ -127,13 +127,26 @@ class SkillBillUninstallService(
     val recorder = UninstallMutationRecorder(diagnostics)
     if (uninstallFileSystem.exists(stateRoot)) {
       uninstallFileSystem.withConfigTransaction(home, environment) {
-        removeInstallState(
-          uninstallFileSystem,
-          stateRoot,
-          removed,
-          recorder,
-          InstallStateRemovalOptions(uninstallFileSystem.configLockFilePaths(home, environment), preserveGeneratedOnly),
-        )
+        val preservation =
+          discoverNativeAgentPreservationTargets(
+            stateRoot,
+            home,
+            environment,
+            installNativeAgentLinkPort,
+            recorder,
+          )
+        if (preservation.complete) {
+          removeInstallState(
+            uninstallFileSystem,
+            stateRoot,
+            removed,
+            recorder,
+            InstallStateRemovalOptions(
+              uninstallFileSystem.configLockFilePaths(home, environment) + preservation.retainedPaths,
+              preserveGeneratedOnly,
+            ),
+          )
+        }
       }
     }
     return UninstallResult(recorder.failed(), removed, emptyList(), recorder.failureMessages())

@@ -16,6 +16,9 @@ import skillbill.infrastructure.skills.nativeagent.discovery.discoverNativeAgent
 import skillbill.infrastructure.skills.nativeagent.discovery.discoverNativeAgentSourceEntriesInRoots
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.infrastructure.skills.nativeagent.rendering.nativeAgentCompositionRepoRoot
+import skillbill.infrastructure.skills.nativeagent.support.agentDirectoryEntries
+import skillbill.infrastructure.skills.nativeagent.support.agentObservedAttributes
+import skillbill.infrastructure.skills.nativeagent.support.verifyObservedDirectory
 import skillbill.infrastructure.skills.nativeagent.validation.validateNativeAgentArtifactsForInstall
 import skillbill.install.model.AgentTarget
 import skillbill.install.model.SupportedAgent
@@ -334,6 +337,33 @@ internal fun unlinkProviderAgents(
     NativeAgentRemovalOutcome(removed, retainedPaths.toList())
   }
   return if (sharedJournal == null) withNativeAgentMutationJournal(journal, mutation) else mutation()
+}
+
+internal fun discoverNativeAgentPreservationTargets(
+  stateRoot: Path,
+  home: Path,
+  environment: Map<String, String>,
+): List<Path> {
+  val normalizedStateRoot = stateRoot.toAbsolutePath().normalize()
+  return NativeAgentProvider.entries.flatMap { provider ->
+    provider.inventoryHomeAgentDirs(home, environment).flatMap { target ->
+      target.observedParent?.let { parent ->
+        verifyObservedDirectory(parent, "inspect ${provider.name} native-agent profile root")
+      }
+      val entries = agentDirectoryEntries(target.path, "list ${provider.name} native-agent directory")
+      val retained = entries.mapNotNull { link ->
+        val attributes = agentObservedAttributes(link, "inspect ${provider.name} native-agent link", followLinks = false)
+        if (!attributes.isSymbolicLink) return@mapNotNull null
+        val rawTarget = Files.readSymbolicLink(link)
+        val resolvedTarget = link.parent.resolve(rawTarget).toAbsolutePath().normalize()
+        resolvedTarget.takeIf { it.startsWith(normalizedStateRoot) }
+      }
+      target.observedParent?.let { parent ->
+        verifyObservedDirectory(parent, "inspect ${provider.name} native-agent profile root")
+      }
+      retained
+    }
+  }.distinct()
 }
 
 private fun nativeAgentRemovalCandidates(

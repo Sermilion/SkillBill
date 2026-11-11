@@ -15,6 +15,14 @@ import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 
 internal object NativeAgentLinkInventoryBootstrap {
+  sealed interface RemovalOutcome {
+    data object Removed : RemovalOutcome
+
+    data object Absent : RemovalOutcome
+
+    data object PreservedReplacement : RemovalOutcome
+  }
+
   data class BootstrapPlan(
     val retain: List<NativeAgentLinkInventoryEntry>,
     val remove: List<NativeAgentLinkInventoryEntry>,
@@ -219,11 +227,11 @@ internal object NativeAgentLinkInventoryBootstrap {
     home: Path,
     managedRoots: List<Path>,
     beforeMutation: (Path) -> Unit,
-  ) {
+  ): RemovalOutcome {
     val link = entry.installedPath
     val provider = NativeAgentLinkInventoryPaths.provider(entry.provider)
-    if (link.fileName.toString() != provider.fileName(entry.logicalName)) return
-    if (!agentPathIsSymbolicLink(link, "inspect managed ${provider.name} agent link")) return
+    if (link.fileName.toString() != provider.fileName(entry.logicalName)) return RemovalOutcome.Absent
+    if (!agentPathIsSymbolicLink(link, "inspect managed ${provider.name} agent link")) return RemovalOutcome.Absent
     val rawTarget = readManagedLinkTarget(link)
     val resolved = (link.parent ?: link.toAbsolutePath().parent).resolve(rawTarget).toAbsolutePath().normalize()
     if (
@@ -232,6 +240,8 @@ internal object NativeAgentLinkInventoryBootstrap {
     ) {
       beforeMutation(link)
       Files.deleteIfExists(link)
+      return RemovalOutcome.Removed
     }
+    return RemovalOutcome.PreservedReplacement
   }
 }

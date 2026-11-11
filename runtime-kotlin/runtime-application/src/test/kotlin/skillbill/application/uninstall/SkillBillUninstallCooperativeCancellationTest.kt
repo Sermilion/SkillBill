@@ -27,6 +27,8 @@ import skillbill.ports.install.model.InstallCleanupResult
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentLinkOperationRequest
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentLinkOperationResult
+import skillbill.ports.install.nativeagent.model.InstallNativeAgentPreservationRequest
+import skillbill.ports.install.nativeagent.model.InstallNativeAgentPreservationResult
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentUnlinkOperationResult
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.system.HostPlatformPort
@@ -222,4 +224,8 @@ private object StubInstallNativeAgentLinkPort : InstallNativeAgentLinkPort {
   override fun unlinkNativeAgents(
     request: InstallNativeAgentLinkOperationRequest,
   ): InstallNativeAgentUnlinkOperationResult = InstallNativeAgentUnlinkOperationResult(emptyList())
+
+  override fun discoverPreservedTargets(
+    request: InstallNativeAgentPreservationRequest,
+  ): InstallNativeAgentPreservationResult = InstallNativeAgentPreservationResult(emptyList())
 }

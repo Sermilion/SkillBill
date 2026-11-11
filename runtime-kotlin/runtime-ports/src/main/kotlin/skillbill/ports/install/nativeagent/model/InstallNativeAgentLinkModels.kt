@@ -19,3 +19,13 @@ data class InstallNativeAgentUnlinkOperationResult(
   val unlinked: List<Path>,
   val retainedPaths: List<Path> = emptyList(),
 )
+
+data class InstallNativeAgentPreservationRequest(
+  val stateRoot: Path,
+  val home: Path,
+  val environment: Map<String, String>,
+)
+
+data class InstallNativeAgentPreservationResult(
+  val retainedPaths: List<Path>,
+)

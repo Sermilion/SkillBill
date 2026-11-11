@@ -28,6 +28,8 @@ import skillbill.ports.install.model.NativeAgentLinkOutcome
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentLinkOperationRequest
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentLinkOperationResult
+import skillbill.ports.install.nativeagent.model.InstallNativeAgentPreservationRequest
+import skillbill.ports.install.nativeagent.model.InstallNativeAgentPreservationResult
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentUnlinkOperationResult
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.system.HostPlatformPort
@@ -110,6 +112,46 @@ class SkillBillUninstallDestructiveSemanticsTest {
     assertFalse(result.failed)
     assertTrue(Files.exists(runtimeJar), "unlinking live JARs breaks later getResourceAsStream in the old JVM")
     assertFalse(Files.exists(installedSkills))
+  }
+
+  @Test
+  fun `clear install state preserves discovered native agent targets`() {
+    val home = Files.createTempDirectory("skillbill-app-clear-preserved-target")
+    val stateRoot = home.resolve(".skill-bill")
+    val worker = stateRoot.resolve("user-workers/custom.md")
+    Files.createDirectories(worker.parent)
+    Files.writeString(worker, "user-owned worker")
+    Files.writeString(stateRoot.resolve("stale-state"), "remove")
+    val nativeAgentPort =
+      object : InstallNativeAgentLinkPort {
+        override fun linkNativeAgents(
+          request: InstallNativeAgentLinkOperationRequest,
+        ): InstallNativeAgentLinkOperationResult =
+          InstallNativeAgentLinkOperationResult(NativeAgentLinkOutcome(emptyList(), emptyList()))
+
+        override fun unlinkNativeAgents(
+          request: InstallNativeAgentLinkOperationRequest,
+        ): InstallNativeAgentUnlinkOperationResult = InstallNativeAgentUnlinkOperationResult(emptyList())
+
+        override fun discoverPreservedTargets(
+          request: InstallNativeAgentPreservationRequest,
+        ): InstallNativeAgentPreservationResult = InstallNativeAgentPreservationResult(listOf(worker))
+      }
+    val service =
+      SkillBillUninstallService(
+        installAgentService = InstallAgentService(DestructiveSemanticsInstallAgentTargetPort),
+        installNativeAgentLinkPort = nativeAgentPort,
+        installMcpRegistrationPort = SucceedingMcpRegistrationPort,
+        uninstallFileSystem = LocalUninstallPathsPort(),
+        hostPlatform = DestructiveSemanticsHostPlatformPort,
+        diagnostics = NoopDestructiveSemanticsDiagnostics,
+      )
+
+    val result = service.clearInstallState(stateRoot, home, emptyMap(), preserveGeneratedOnly = false)
+
+    assertFalse(result.failed)
+    assertTrue(Files.exists(worker))
+    assertFalse(Files.exists(stateRoot.resolve("stale-state")))
   }
 
   @Test
@@ -290,6 +332,10 @@ private object DestructiveSemanticsInstallNativeAgentLinkPort : InstallNativeAge
   override fun unlinkNativeAgents(
     request: InstallNativeAgentLinkOperationRequest,
   ): InstallNativeAgentUnlinkOperationResult = InstallNativeAgentUnlinkOperationResult(emptyList())
+
+  override fun discoverPreservedTargets(
+    request: InstallNativeAgentPreservationRequest,
+  ): InstallNativeAgentPreservationResult = InstallNativeAgentPreservationResult(emptyList())
 }
 
 private object DestructiveSemanticsHostPlatformPort : HostPlatformPort {

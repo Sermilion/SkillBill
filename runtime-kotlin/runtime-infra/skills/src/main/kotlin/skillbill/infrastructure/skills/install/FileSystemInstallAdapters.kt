@@ -5,6 +5,7 @@ import skillbill.infrastructure.skills.install.apply.InstallApplyPorts
 import skillbill.infrastructure.skills.install.apply.InstallCleanupOperations
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
 import skillbill.infrastructure.skills.install.nativeagent.link.InstallNativeAgentOperations
+import skillbill.infrastructure.skills.install.nativeagent.link.discoverNativeAgentPreservationTargets
 import skillbill.infrastructure.skills.install.opencode.opencodeConfigRoots
 import skillbill.infrastructure.skills.install.plan.buildInstallStagingIntent
 import skillbill.infrastructure.skills.install.plan.codexAgentsPath
@@ -55,6 +56,8 @@ import skillbill.ports.install.model.NativeAgentSkippedLink
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentLinkOperationRequest
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentLinkOperationResult
+import skillbill.ports.install.nativeagent.model.InstallNativeAgentPreservationRequest
+import skillbill.ports.install.nativeagent.model.InstallNativeAgentPreservationResult
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentUnlinkOperationResult
 import skillbill.ports.install.plan.InstallPlanningFactsPort
 import skillbill.ports.install.plan.InstallPlatformSkillMaterializationPort
@@ -346,6 +349,13 @@ class FileSystemInstallNativeAgentLinks(
     val outcome = InstallNativeAgentOperations.unlinkAgentsResult(provider, fsRequest)
     return InstallNativeAgentUnlinkOperationResult(outcome.removed, outcome.retainedPaths)
   }
+
+  override fun discoverPreservedTargets(
+    request: InstallNativeAgentPreservationRequest,
+  ): InstallNativeAgentPreservationResult =
+    InstallNativeAgentPreservationResult(
+      discoverNativeAgentPreservationTargets(request.stateRoot, request.home, request.environment),
+    )
 }
 
 @Inject

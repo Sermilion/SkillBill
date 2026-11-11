@@ -14,6 +14,7 @@ import skillbill.ports.install.model.NativeAgentLinkProvider
 import skillbill.ports.install.model.NativeAgentLinkRequest
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentLinkOperationRequest
+import skillbill.ports.install.nativeagent.model.InstallNativeAgentPreservationRequest
 import skillbill.ports.system.UninstallPathsPort
 import java.nio.file.Path
 
@@ -77,8 +78,36 @@ internal fun cleanupNativeAgentInstallLinks(
         recorder.recordFailure("native agent cleanup failed for ${provider.name.lowercase()}", error)
       }
   }
-  return NativeAgentCleanupResult(complete, retainedPaths.toList())
+  val preservation =
+    discoverNativeAgentPreservationTargets(
+      plan.stateRoot,
+      plan.home,
+      plan.environment,
+      installNativeAgentLinkPort,
+      recorder,
+    )
+  retainedPaths += preservation.retainedPaths
+  return NativeAgentCleanupResult(complete && preservation.complete, retainedPaths.toList())
 }
+
+internal fun discoverNativeAgentPreservationTargets(
+  stateRoot: Path,
+  home: Path,
+  environment: Map<String, String>,
+  installNativeAgentLinkPort: InstallNativeAgentLinkPort,
+  recorder: UninstallMutationRecorder,
+): NativeAgentCleanupResult =
+  catchingNonCancellation {
+    installNativeAgentLinkPort.discoverPreservedTargets(
+      InstallNativeAgentPreservationRequest(stateRoot, home, environment),
+    )
+  }.fold(
+    onSuccess = { result -> NativeAgentCleanupResult(true, result.retainedPaths) },
+    onFailure = { error ->
+      recorder.recordFailure("native agent preservation discovery failed", error)
+      NativeAgentCleanupResult(false, emptyList())
+    },
+  )
 
 internal data class NativeAgentCleanupResult(val complete: Boolean, val retainedPaths: List<Path>)
 
