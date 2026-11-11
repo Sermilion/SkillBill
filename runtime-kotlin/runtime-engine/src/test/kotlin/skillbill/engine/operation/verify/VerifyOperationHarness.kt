@@ -20,6 +20,7 @@ import skillbill.application.workflow.model.WorkflowServiceOpenArgs
 import skillbill.application.workflow.model.WorkflowUpdateRequest
 import skillbill.application.workflow.model.WorkflowUpdateResult
 import skillbill.application.workflow.service.WorkflowService
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.featuretask.phaserun.qa.InMemoryQaWorkspaces
 import skillbill.engine.featuretask.phaserun.qa.RecordingQaLeases
 import skillbill.engine.featuretask.phaserun.testStandalonePhasePublisher
@@ -223,13 +224,16 @@ internal class VerifyOperationHarness : AutoCloseable {
     mode: String? = null,
     instructions: String? = null,
     qa: String? = null,
-  ): OperationOutcome = invoke(OperationArguments(spec = SPEC, target = range, mode = mode, qa = qa), instructions)
+    qaDevice: QaNamedDevice? = null,
+  ): OperationOutcome =
+    invoke(OperationArguments(spec = SPEC, target = range, mode = mode, qa = qa, qaDevice = qaDevice), instructions)
 
   fun confirm(
     token: String,
     target: String? = null,
     qa: String? = null,
-  ): OperationOutcome = invoke(OperationArguments(confirm = token, target = target, qa = qa))
+    qaDevice: QaNamedDevice? = null,
+  ): OperationOutcome = invoke(OperationArguments(confirm = token, target = target, qa = qa, qaDevice = qaDevice))
 
   val qaWorkspaceDirectory: Path get() = qaRoot.resolve(QA_INVOCATION)
 

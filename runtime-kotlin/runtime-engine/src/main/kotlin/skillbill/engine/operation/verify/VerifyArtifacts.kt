@@ -40,6 +40,7 @@ internal object VerifyWorkflow {
   const val HEAD_REVISION = "head_revision"
   const val REVIEW_MODE = "review_mode"
   const val QA_SELECTION = "qa_selection"
+  const val QA_DEVICE = "qa_device"
   const val ISSUE_KEY = "issue_key"
   const val SUPERSEDED_BY = "superseded_by"
   const val WITHDRAWN_AT = "withdrawn_at"

@@ -1,5 +1,8 @@
 package skillbill.engine.work.control.model
 
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.workflow.verify.model.VerifyQaSelection
+import skillbill.workflow.verify.model.VerifyReviewMode
 import java.nio.file.Path
 import java.util.concurrent.CompletionStage
 
@@ -57,7 +60,16 @@ public data class OperationStartRequest(
   public val checkout: StandaloneCheckout = StandaloneCheckout(),
   public val confirmation: OperatorConfirmation? = null,
   public val proposalChanges: String? = null,
+  public val verifyOptions: VerifyStartOptions = VerifyStartOptions(),
 )
+
+public data class VerifyStartOptions(
+  public val qa: VerifyQaSelection? = null,
+  public val mode: VerifyReviewMode? = null,
+  public val qaDevice: QaNamedDevice? = null,
+) {
+  public val requested: Boolean get() = qa != null || mode != null || qaDevice != null
+}
 
 public data class OperatorConfirmation(
   public val token: String,

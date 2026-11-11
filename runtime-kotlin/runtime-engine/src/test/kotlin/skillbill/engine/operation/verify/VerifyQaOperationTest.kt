@@ -1,5 +1,7 @@
 package skillbill.engine.operation.verify
 
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.engine.featuretask.model.execution.QaNamedDeviceKind
 import skillbill.engine.featuretask.qa.report.QaVerdict
 import skillbill.engine.featuretask.qa.report.qaTestExpected
 import skillbill.engine.featuretask.qa.report.qaTestReport
@@ -100,6 +102,24 @@ class VerifyQaOperationTest {
       assertContains(directive, "QA report (verdict: passed):")
       assertContains(directive, written)
       assertEquals(written, qaReport(harness, token)["report_text"])
+    }
+  }
+
+  @Test
+  fun `the proposal's QA device reaches the QA step after confirm and a confirm cannot switch devices`() {
+    VerifyOperationHarness().use { harness ->
+      harness.qaManifests = listOf(ANDROID_PACK)
+      val proposed = QaNamedDevice(QaNamedDeviceKind.SERIAL, "emulator-5554")
+      val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose(qa = "on", qaDevice = proposed)).token
+      harness.runner.sideEffects[VerifyPromptSections.QA_STEP] = {
+        harness.qaWorkspaces.report = qaTestReport(QaVerdict.PASSED, expected())
+      }
+
+      val switched = harness.confirm(token, qaDevice = QaNamedDevice(QaNamedDeviceKind.AVD, "Pixel_10_Pro"))
+
+      assertIs<OperationOutcome.Blocked>(switched)
+      assertIs<OperationOutcome.Completed>(harness.confirm(token))
+      assertContains(harness.runner.input(VerifyPromptSections.QA_STEP).directive, "emulator-5554")
     }
   }
 

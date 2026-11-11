@@ -26,6 +26,7 @@ import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewSeverity
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
+import skillbill.workflow.verify.model.VerifyReviewMode
 
 /** The multi-agent review the delegated mode runs; production wires `ParallelCodeReviewRunner.run`. */
 public interface VerifyDelegatedReviewer {
@@ -42,17 +43,6 @@ public class ParallelVerifyReviewer(
 
   override fun inlineReviewRubrics(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?> =
     reviewRunner.resolveInlineReviewRubrics(request)
-}
-
-internal enum class VerifyReviewMode(val wireValue: String) {
-  INLINE("inline"),
-  DELEGATED("delegated"),
-  ;
-
-  companion object {
-    fun fromWire(value: String?): VerifyReviewMode? =
-      if (value == null) INLINE else entries.firstOrNull { it.wireValue == value }
-  }
 }
 
 internal data class VerifyCodeReview(

@@ -139,7 +139,7 @@ public class VerifyQaStep(
       execution.withExecution(run.context.repoRoot, QaPolicy.ON, revision = run.target.headRevision) { qa ->
         when (val target = qa.target) {
           is QaExecutionTarget.Skipped -> QaStepLaunchResult.Report(QaReports.skipped(target.reason, target.detail))
-          is QaExecutionTarget.Supported -> launch(run, target.checkout, qa, prior)
+          is QaExecutionTarget.Supported -> launch(run, target.checkout, qa.copy(namedDevice = run.qaDevice), prior)
         }
       }
     when (val inner = launchResult.value) {
