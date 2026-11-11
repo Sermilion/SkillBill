@@ -196,7 +196,7 @@ class CursorAcpSession(
         val reason = body.text(K.STOP_REASON)
         val failure = providerFailure ?: when {
           reason != "end_turn" -> "$providerName prompt ended with $reason."
-          launch.provider == AcpProvider.OpenCode && textSnapshot().isBlank() -> {
+          textSnapshot().isBlank() -> {
             record("seam=$seam outcome=empty_assistant_response")
             "$providerName prompt ended without assistant text."
           }
