@@ -124,6 +124,9 @@ class NewTaskDraft internal constructor(
     get() = repositoryState
     set(value) {
       if (repositoryState?.root != value?.root) {
+        previewTracker?.second?.end()
+        previewTracker = null
+        branchChoiceRequested = false
         acceptedKeyState = null
         issueKeyProposals = emptyList()
         offerState.value = NewTaskOffer()
@@ -131,8 +134,9 @@ class NewTaskDraft internal constructor(
       repositoryState = value
     }
   var addedRepositories: List<NewTaskRepository> by mutableStateOf(emptyList())
+  internal var branchChoiceRequested: Boolean by mutableStateOf(false)
   var baseBranch: String by mutableStateOf("")
-  internal var branchSwitching by mutableStateOf(false)
+  internal var branchSwitching: Boolean by mutableStateOf(false)
   var agentId: String? by mutableStateOf(null)
 
   /** True once the operator picks an agent for this draft; until then it follows the default agent setting. */

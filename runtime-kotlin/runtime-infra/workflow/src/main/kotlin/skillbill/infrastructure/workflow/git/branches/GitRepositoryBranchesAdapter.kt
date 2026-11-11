@@ -61,7 +61,7 @@ class GitRepositoryBranchesAdapter : RepositoryBranchesPort {
             WorkflowGitOperationResult.Failed(
               error = "Could not determine the default branch. Set origin/HEAD and try again.",
             )
-          else -> runGitCommand(path, "switch", defaultBranch)
+          else -> selectDefaultCheckout(path, read.repositoryRoot, defaultBranch)
         }
       }
       is RepositoryBranchesResult.NotARepository ->
@@ -70,6 +70,37 @@ class GitRepositoryBranchesAdapter : RepositoryBranchesPort {
         )
       is RepositoryBranchesResult.Failed -> WorkflowGitOperationResult.Failed(error = read.message)
     }
+
+  private fun selectDefaultCheckout(
+    path: Path,
+    root: String,
+    defaultBranch: String,
+  ): WorkflowGitOperationResult {
+    val listed = runGitCommand(path, "worktree", "list", "--porcelain", "-z")
+    if (listed is WorkflowGitOperationResult.Failed) return listed
+    val checkout =
+      listed.value.split("\u0000\u0000")
+        .map { it.split('\u0000') }
+        .firstOrNull { "branch refs/heads/$defaultBranch" in it }
+        ?.firstOrNull { it.startsWith("worktree ") }?.removePrefix("worktree ")
+    if (checkout != null) {
+      return when (val target = branches(Path.of(checkout))) {
+        is RepositoryBranchesResult.Listed ->
+          if (target.currentBranch == defaultBranch) {
+            WorkflowGitOperationResult.Ok(target.repositoryRoot)
+          } else {
+            WorkflowGitOperationResult.Failed(error = "The default branch checkout changed. Refresh and try again.")
+          }
+        is RepositoryBranchesResult.NotARepository ->
+          WorkflowGitOperationResult.Failed(error = "Default branch worktree is unavailable: $checkout")
+        is RepositoryBranchesResult.Failed -> WorkflowGitOperationResult.Failed(error = target.message)
+      }
+    }
+    return when (val switched = runGitCommand(path, "switch", defaultBranch)) {
+      is WorkflowGitOperationResult.Failed -> switched
+      is WorkflowGitOperationResult.Ok -> WorkflowGitOperationResult.Ok(root)
+    }
+  }
 
   private fun parseRef(line: String): RawBranchRef? {
     val fields = line.split('\t')

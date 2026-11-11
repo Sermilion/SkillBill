@@ -14,18 +14,18 @@ import dev.skillbill.desktop.core.designsystem.component.Callout
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
-import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.domain.model.newWorkBranchProblem
+import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.feature.chat.ChatMessage
 
 @Composable
-internal fun NewTaskBranchWarning(state: NewTaskUiState, draft: NewTaskDraft, enabled: Boolean, onAction: (NewTaskAction) -> Unit) {
+internal fun NewTaskBranchWarning(state: NewTaskUiState, draft: NewTaskDraft, enabled: Boolean, onAction: (NewTaskAction) -> Unit, requested: Boolean) {
   val loaded = (state.branchRead as? BranchReadState.Loaded)?.takeIf { it.root == draft.repository?.root }
   val branches = loaded?.branches
-  val warning = branches?.newWorkBranchProblem(null)
+  val warning = branches?.newWorkBranchProblem(draft.baseBranch)?.takeIf { requested }
   Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
     if (warning != null) {
       Callout(FeedbackTone.Warn, body = warning, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-      if (draft.baseBranch.isNotBlank()) SbLabel("Selected base branch: ${draft.baseBranch}")
       FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         branches.defaultBranch?.let { default ->
           SbButton("Switch to $default", { onAction(NewTaskAction.SwitchToDefaultBranch) }, enabled = enabled, size = SbControlSize.Small)
@@ -38,3 +38,10 @@ internal fun NewTaskBranchWarning(state: NewTaskUiState, draft: NewTaskDraft, en
     state.repositoryError?.let { Callout(FeedbackTone.Error, body = it) }
   }
 }
+
+internal fun newTaskNeedsBranchWarning(transcript: List<ChatMessage>): Boolean =
+  when (val latest = transcript.lastOrNull { it is ChatMessage.Operator || it is ChatMessage.Agent }) {
+    is ChatMessage.Agent -> latest.actions.any { it.start != null || it.mode == ChatPermissionMode.Act }
+    is ChatMessage.Operator -> latest.action?.let { it.start != null || it.mode == ChatPermissionMode.Act } == true
+    else -> false
+  }

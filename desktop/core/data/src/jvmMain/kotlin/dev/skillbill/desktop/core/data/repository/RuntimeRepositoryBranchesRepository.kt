@@ -57,7 +57,7 @@ class RuntimeRepositoryBranchesRepository(
     }
   }
 
-  override suspend fun switchToDefaultBranch(path: String, expectedCurrentBranch: String?): Outcome<Unit, ReadProblem> {
+  override suspend fun switchToDefaultBranch(path: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> {
     val runtime = sessions.sessions.value?.runtime
       ?: return Outcome.Failure(ReadProblem.Runtime("No database session is open."))
     val target = try {
@@ -71,7 +71,7 @@ class RuntimeRepositoryBranchesRepository(
     val outcome = when (read) {
       is Outcome.Failure -> read
       is Outcome.Success -> when (val result = read.value) {
-        is WorkflowGitOperationResult.Ok -> Outcome.Success(Unit)
+        is WorkflowGitOperationResult.Ok -> Outcome.Success(result.value)
         is WorkflowGitOperationResult.Failed -> Outcome.Failure(ReadProblem.Runtime(result.error))
       }
     }

@@ -1,11 +1,9 @@
 <div align="center">
 
-# Sona
+<img src="docs/assets/sona-readme-hero.png" alt="Sona, the development environment for coding agents, with the desktop app showing a goal run" width="100%">
 
 **An agentic development environment, or ADE.**
 Prepare work, run coding agents, and inspect the results in one desktop app, with progress that survives interruptions.
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-4c1.svg)](LICENSE)
 
 [Quickstart](#quickstart) · [How it works](#how-it-works) · [Watching runs](#watching-and-controlling-runs) · [Platform packs](#platform-packs) · [Docs](#documentation)
 
@@ -179,7 +177,3 @@ Some diagnostic events still queue locally while telemetry is off. Workflow stat
 ## Contributing
 
 See [Contributing](CONTRIBUTING.md), the [source-generation guide](docs/skill-source-generation.md), and the [scaffold payload contract](orchestration/shell-content-contract/SCAFFOLD_PAYLOAD.md) before changing contracts. The runtime and desktop app build separately.
-
-## License
-
-[MIT](LICENSE). See the [licensing summary](docs/licensing.md) for details.

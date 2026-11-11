@@ -128,7 +128,8 @@ internal fun NewTaskComposer(
     delivery?.let { pending ->
       chat?.let { current -> ChatDeliveryRecovery(pending, current::retryDelivery, current::discardDelivery, current.thread::keepOpen) }
     }
-    NewTaskBranchWarning(state, draft, pickersEnabled, onAction)
+    val transcript = chat?.thread?.transcript?.collectAsState()?.value.orEmpty()
+    NewTaskBranchWarning(state, draft, pickersEnabled, onAction, draft.branchChoiceRequested || newTaskNeedsBranchWarning(transcript))
     Box(Modifier.fillMaxWidth()) {
       SbInput(
         draft.text, { onAction(NewTaskAction.TextChanged(it)) },

@@ -2184,12 +2184,14 @@
     const pop = st.popover || {};
     const n = c.queue.length;
     const repoPill = empty
-      ? S.ChatPill({ icon: 'folder', html: c.repo ? repoAndBranch(c.repo, baseBranch(c)) : 'Choose repository', need: !c.repo, chevron: 'chevronDown', act: 'pk-toggle', expanded: pop.type === 'target', id: 'nt-target', tip: 'Change repository or base branch' })
-      : S.ChatPill({ icon: 'folder', html: repoAndBranch(c.repo, baseBranch(c)), tip: `${c.repo} / ${baseBranch(c)}` });
+      ? S.ChatPill({ icon: 'folder', html: c.repo ? repoAndBranch(c.repo, c.currentBranch || baseBranch(c)) : 'Choose repository', need: !c.repo, chevron: 'chevronDown', act: 'pk-toggle', expanded: pop.type === 'target', id: 'nt-target', tip: 'Change repository or base branch' })
+      : S.ChatPill({ icon: 'folder', html: repoAndBranch(c.repo, c.currentBranch || baseBranch(c)), tip: `${c.repo} / ${baseBranch(c)}` });
     const model = agentModel(c.agent);
     const chg = chatChanges(c);
     const agentPill = S.ChatPill({ lead: agentDot(c.agent), text: model ? `${c.agent} · ${model}` : c.agent, chevron: 'chevronDown', act: 'nt-agent-menu', expanded: pop.type === 'nt-agent', disabled: !!c.stream, tip: c.stream ? 'Wait for the current reply to finish' : 'Change agent' });
-    return S.Composer({
+    const warning = c.branchIntent && c.currentBranch !== defaultBranch(c.repo) && !c.branch
+      ? `<div class="nt-branch-warning" role="status">${S.Callout({ tone: 'warn', body: `This checkout is on ${esc(c.currentBranch)}. New work normally starts from ${esc(defaultBranch(c.repo))}. Switch to ${esc(defaultBranch(c.repo))} or explicitly use ${esc(c.currentBranch)} as the base branch before starting.` })}<div class="l-row g-2" style="flex-wrap:wrap">${S.Button({ label: `Switch to ${defaultBranch(c.repo)}`, size: 'sm', act: 'chat-default-branch', disabled: !!c.stream })}${S.Button({ label: 'Use current branch as base', size: 'sm', act: 'chat-current-base', disabled: !!c.stream })}</div></div>` : '';
+    return warning + S.Composer({
       id: 'composer-' + c.id, chatId: c.id, value: c.draft, label: `Message for ${chatLabel(c)}`,
       placeholder: empty ? 'Describe the work, or paste an issue key or spec path' : `Reply to ${c.agent}`,
       chips: empty ? D.QUICK_STARTS.map((q) => S.SuggestionChip({ label: q, note: q === 'QA my branch' && qaDeviceName(st) ? `on ${qaDeviceName(st)}` : null, act: 'chat-quick', arg: q })) : [],

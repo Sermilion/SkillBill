@@ -95,7 +95,8 @@ class GitRepositoryBranchesAdapterTest {
 
     assertIs<WorkflowGitOperationResult.Failed>(adapter.switchToDefaultBranch(repo, "stale"))
     assertEquals("feature/current", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo)).currentBranch)
-    assertIs<WorkflowGitOperationResult.Ok>(adapter.switchToDefaultBranch(repo, "feature/current"))
+    val switched = assertIs<WorkflowGitOperationResult.Ok>(adapter.switchToDefaultBranch(repo, "feature/current"))
+    assertEquals(repo.toRealPath().toString(), switched.value)
     assertEquals("main", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo)).currentBranch)
 
     git(repo, "checkout", "--detach")
@@ -119,6 +120,25 @@ class GitRepositoryBranchesAdapterTest {
     assertEquals("operator edits", Files.readString(file))
     assertEquals("untracked notes", Files.readString(repo.resolve("notes.txt")))
     assertEquals("feature/current", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo)).currentBranch)
+  }
+
+  @Test
+  fun `default branch in another worktree returns its root and preserves both checkouts`() {
+    val repo = repository("main")
+    git(repo, "commit", "--allow-empty", "-m", "base")
+    git(repo, "switch", "-c", "feature/current")
+    val main = tempFolder().resolve("main checkout")
+    git(repo, "worktree", "add", main.toString(), "main")
+    Files.writeString(main.resolve("main-notes.txt"), "main edits")
+    Files.writeString(repo.resolve("feature-notes.txt"), "feature edits")
+
+    val selected = assertIs<WorkflowGitOperationResult.Ok>(adapter.switchToDefaultBranch(repo, "feature/current"))
+
+    assertEquals(main.toRealPath().toString(), selected.value)
+    assertEquals("feature/current", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo)).currentBranch)
+    assertEquals("main", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(main)).currentBranch)
+    assertEquals("main edits", Files.readString(main.resolve("main-notes.txt")))
+    assertEquals("feature edits", Files.readString(repo.resolve("feature-notes.txt")))
   }
 
   private fun repository(initialBranch: String): Path =

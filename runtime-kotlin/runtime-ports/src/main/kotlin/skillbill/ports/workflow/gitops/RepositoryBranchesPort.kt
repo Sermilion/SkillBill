@@ -14,7 +14,10 @@ interface RepositoryBranchesPort {
   /** Lists local and remote-tracking branches of the repository containing [path], newest commit first. */
   fun branches(path: Path): RepositoryBranchesResult
 
-  /** Switches to the default branch without discarding changes, refusing a changed checkout identity. */
+  /**
+   * Selects an existing default-branch worktree, or switches this checkout without discarding changes.
+   * Returns the selected checkout root in the success value, refusing a changed checkout identity.
+   */
   fun switchToDefaultBranch(
     path: Path,
     expectedCurrentBranch: String?,
