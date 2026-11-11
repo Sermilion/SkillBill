@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -20,6 +18,8 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -33,8 +33,8 @@ import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.designsystem.detail.SbBox
-import dev.skillbill.desktop.core.designsystem.detail.rememberSectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.Section
+import dev.skillbill.desktop.core.designsystem.detail.rememberSectionCollapse
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.navigation.Crumb
 import dev.skillbill.desktop.core.designsystem.navigation.Pager
@@ -169,10 +169,14 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         val narrow = LocalShellLayout.current.drawerMode
         val inset = if (narrow) 16.dp else 40.dp
         val side = maxOf(inset, (maxWidth - (DOC_MAX_WIDTH - inset * 2)) / 2)
+        val verifyRun = loaded?.detail?.verifyRun
+        val fixBarVisible = verifyRun != null && verifySelectionAllowed(verifyRun) && state.fixSelection.isNotEmpty()
+        val fixBarHeight = remember(verifyRun?.workflowId) { mutableStateOf(0.dp) }
+        val density = LocalDensity.current
         LazyColumn(
           Modifier.fillMaxSize(),
           state = listState,
-          contentPadding = PaddingValues(start = side, end = side, top = if (narrow) 20.dp else 32.dp, bottom = if (narrow) 48.dp else 64.dp),
+          contentPadding = PaddingValues(start = side, end = side, top = if (narrow) 20.dp else 32.dp, bottom = maxOf(if (narrow) 48.dp else 64.dp, if (fixBarVisible) fixBarHeight.value + 16.dp else 0.dp)),
         ) {
           val sections = DetailSections(this, collapse, listState, assessmentOrder, keys, planScreenState)
           sections.item(key = "header") {
@@ -205,6 +209,9 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
             Column(Modifier.padding(top = DocBlockGap)) { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
           }
           sections.document(state, view, paneShown, onAction, qaView, scrollToFinding, validationPage, scrollToVerifySection)
+        }
+        if (fixBarVisible) Box(Modifier.align(Alignment.BottomCenter).padding(horizontal = side, vertical = 16.dp).onSizeChanged { fixBarHeight.value = with(density) { it.height.toDp() } }) {
+          VerifyFixBar(verifyFixItems(verifyRun, state.criterionMarks), state, true, onAction)
         }
       }
       DetailPeek(

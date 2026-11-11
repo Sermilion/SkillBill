@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -16,17 +17,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.component.SbLabel
-import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
-import dev.skillbill.desktop.core.designsystem.component.Segmented
-import dev.skillbill.desktop.core.designsystem.component.SegmentedOption
-import dev.skillbill.desktop.core.designsystem.component.rememberRuntimeText
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
-import dev.skillbill.desktop.core.designsystem.detail.Section
 import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 import dev.skillbill.desktop.core.domain.model.VerifyCriterionGrade
@@ -51,15 +49,14 @@ internal fun verifyCriteriaView(run: VerifyRunDetails, filter: VerifyCriteriaFil
 internal fun DetailSections.verifyCriteriaSection(view: VerifyCriteriaView, run: VerifyRunDetails, state: DetailUiState, items: List<FixItem>, onAction: (DetailAction) -> Unit) {
   if (view.allCount == 0 && view.raw == null && view.nonGoals.isEmpty() && view.technicalConstraints.isEmpty() && view.rolloutExpectation == null) return
   val sectionCollapse = collapse
-  verifySection(VERIFY_CRITERIA_KEY, "Criteria", view.allCount.toString()) {
-    val allowed = verifySelectionAllowed(run)
-    if (view.showFilter) item(key = "verify-filter") {
-      Segmented(VerifyCriteriaFilter.entries.map { filter -> SegmentedOption(filter, when (filter) {
-        VerifyCriteriaFilter.All -> "All"
-        VerifyCriteriaFilter.Gaps -> "Gaps ${view.gapCount}"
-        VerifyCriteriaFilter.Met -> "Met ${view.metCount}"
-      }) }, selected = view.filter, onSelect = { onAction(DetailAction.SetVerifyCriteriaFilter(it)) })
-    }
+  val allowed = verifySelectionAllowed(run)
+  verifySection(VERIFY_CRITERIA_KEY, "Criteria", view.allCount.toString(), end = if (view.showFilter) ({
+    VerifyRouteSwitch(VerifyCriteriaFilter.entries.map { filter -> filter to when (filter) {
+      VerifyCriteriaFilter.All -> "All"
+      VerifyCriteriaFilter.Gaps -> "Gaps ${view.gapCount}"
+      VerifyCriteriaFilter.Met -> "Met ${view.metCount}"
+    } }, view.filter, large = true) { onAction(DetailAction.SetVerifyCriteriaFilter(it)) }
+  }) else null) {
     if (!view.showFilter && view.allCount > 0) item(key = "verify-criteria-sub") {
       val text = when (verifyRunState(run)) {
         VerifyRunState.Parked -> "Extracted from the intake. The audit grades the code against this list once you confirm."
@@ -71,15 +68,15 @@ internal fun DetailSections.verifyCriteriaSection(view: VerifyCriteriaView, run:
     val selectAll = allowed && selectAllState(items.filter { it.kind == FixKind.Criterion }, state.fixSelection) != null
     val count = view.rows.size.coerceAtLeast(1) + if (selectAll) 1 else 0
     if (selectAll) item(key = "verify-select-all-criteria") {
-      Column(Modifier.fillMaxWidth().sbBoxSegment(0, count).padding(12.dp)) { VerifyFixSelectAll(items, FixKind.Criterion, state, allowed, onAction) }
+      Column(Modifier.fillMaxWidth().sbBoxSegment(0, count, borderColor = SkillBillTheme.colors.border).padding(horizontal = 12.dp, vertical = 6.dp)) { VerifyFixSelectAll(items, FixKind.Criterion, state, allowed, onAction) }
     }
     view.rows.forEachIndexed { index, row -> item(key = "verify-criterion-${row.number}") {
       val fix = items.filterIsInstance<FixItem.Criterion>().firstOrNull { it.grade.number == row.number }
       val key = "verify-criterion:${view.workflowId}:${row.number}"
-      VerifyCriterionRow(row, Modifier.sbBoxSegment(index + if (selectAll) 1 else 0, count),
+      VerifyCriterionRow(row, Modifier.sbBoxSegment(index + if (selectAll) 1 else 0, count, borderColor = SkillBillTheme.colors.border),
         open = !sectionCollapse.isCollapsed(key, default = true), onToggle = { sectionCollapse.toggle(key, default = true) },
         pendingLabel = if (verifyRunState(run) == VerifyRunState.Parked) "To confirm" else "Not audited",
-        mark = state.criterionMarks[row.number],
+        mark = state.criterionMarks[row.number], selectable = allowed && view.showFilter,
         leading = { if (allowed && fix != null) VerifyFixCheckbox(fix, state, onAction) },
         end = { if (allowed && fix != null) VerifyFixRoute(fix, state, onAction) },
         extra = { if (allowed && fix != null) VerifyFixItemDetails(fix, items, onAction) })
@@ -88,16 +85,23 @@ internal fun DetailSections.verifyCriteriaSection(view: VerifyCriteriaView, run:
       BasicText("Nothing in this filter.", Modifier.sbBoxSegment(if (selectAll) 1 else 0, count).padding(12.dp), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
     }
     view.raw?.let { raw -> item(key = "verify-criteria-raw") { VerifyQuote(raw) } }
-    view.nonGoals.takeIf { it.isNotEmpty() }?.let { contextFold(sectionCollapse, "$VERIFY_NON_GOALS_KEY:${view.workflowId}", "Non-goals", it.joinToString("\n")) }
-    view.technicalConstraints.takeIf { it.isNotEmpty() }?.let { contextFold(sectionCollapse, "$VERIFY_TECHNICAL_CONSTRAINTS_KEY:${view.workflowId}", "Technical constraints", it.joinToString("\n")) }
-    view.rolloutExpectation?.let { contextFold(sectionCollapse, "$VERIFY_ROLLOUT_EXPECTATION_KEY:${view.workflowId}", "Rollout", it) }
+    view.nonGoals.takeIf { it.isNotEmpty() }?.let { contextFold(sectionCollapse, "$VERIFY_NON_GOALS_KEY:${view.workflowId}", "Non-goals", it) }
+    view.technicalConstraints.takeIf { it.isNotEmpty() }?.let { contextFold(sectionCollapse, "$VERIFY_TECHNICAL_CONSTRAINTS_KEY:${view.workflowId}", "Technical constraints", it) }
+    view.rolloutExpectation?.let { contextFold(sectionCollapse, "$VERIFY_ROLLOUT_EXPECTATION_KEY:${view.workflowId}", "Rollout", listOf(it)) }
   }
 }
 
-private fun LazyListScope.contextFold(collapse: SectionCollapse, key: String, title: String, content: String) {
+private fun LazyListScope.contextFold(collapse: SectionCollapse, key: String, title: String, items: List<String>) {
   item(key = key) {
-    Section(title, collapsed = collapse.isCollapsed(key, default = true), onToggle = { collapse.toggle(key, default = true) }) {
-      BasicText(rememberRuntimeText(content), Modifier.padding(start = 8.dp), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
+    VerifyFold(title, open = !collapse.isCollapsed(key, default = true), onToggle = { collapse.toggle(key, default = true) }, count = items.size.takeUnless { title == "Rollout" }) {
+      Column(Modifier.padding(start = 26.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        items.forEach { text ->
+          Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            BasicText("•", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
+            BasicText(verifyText(text), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
+          }
+        }
+      }
     }
   }
 }
@@ -106,7 +110,7 @@ private fun LazyListScope.contextFold(collapse: SectionCollapse, key: String, ti
 @OptIn(ExperimentalLayoutApi::class)
 internal fun VerifyCriterionRow(
   row: VerifyCriteriaViewRow, modifier: Modifier = Modifier, open: Boolean = false, onToggle: () -> Unit = {},
-  pendingLabel: String = "Not audited", mark: CriterionMark? = null,
+  pendingLabel: String = "Not audited", mark: CriterionMark? = null, selectable: Boolean = false,
   leading: @Composable () -> Unit = {}, end: @Composable () -> Unit = {}, extra: @Composable () -> Unit = {},
 ) {
   val colors = SkillBillTheme.colors
@@ -117,24 +121,24 @@ internal fun VerifyCriterionRow(
     "FAIL" -> colors.stFailed
     else -> colors.fgFaint
   }
-  Column(modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle)) {
-    Row(Modifier.padding(horizontal = 12.dp, vertical = 9.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      leading()
-      Row(Modifier.weight(1f).clickable(role = Role.Button, onClickLabel = "Toggle criterion ${row.number}", onClick = onToggle).semantics { stateDescription = if (open) "Expanded" else "Collapsed" }, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        BasicText(row.number.toString(), style = SkillBillTheme.type.monoSm.copy(color = colors.fgFaint))
-        BasicText(rememberRuntimeText(row.text), Modifier.weight(1f), style = SkillBillTheme.type.tBase.copy(color = colors.fg), maxLines = if (open) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis)
-        Column(horizontalAlignment = Alignment.End) {
-          SbLabel(when (mark) { CriterionMark.NotInRepo -> "Not in this repo"; CriterionMark.SpecQuestion -> "Spec question"; null -> grade?.status ?: pendingLabel }, SbLabelStyle.Tint(gradeColor))
-          BasicText(if (open) "⌄" else "›", style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint))
+  Column(modifier.fillMaxWidth().then(if (row.number > 1) Modifier.hairline(Edge.Top, colors.borderSubtle) else Modifier)) {
+    Row {
+      if (selectable) Column(Modifier.width(30.dp).padding(start = 12.dp, top = 11.dp)) { leading() }
+      Row(Modifier.weight(1f).clickable(role = Role.Button, onClickLabel = "Toggle criterion ${row.number}", onClick = onToggle).semantics { stateDescription = if (open) "Expanded" else "Collapsed" }.padding(start = if (selectable) 2.dp else 12.dp, end = 12.dp, top = 9.dp, bottom = 9.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        BasicText(row.number.toString(), Modifier.width(22.dp).padding(top = 2.dp), style = SkillBillTheme.type.monoSm.copy(fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.fgFaint))
+        BasicText(verifyText(row.text), Modifier.weight(1f), style = SkillBillTheme.type.tBase.copy(color = colors.fg, lineHeight = 1.45.em), maxLines = if (open) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis)
+        Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+          VerifyBadge(when (mark) { CriterionMark.NotInRepo -> "Not in this repo"; CriterionMark.SpecQuestion -> "Spec question"; null -> grade?.status ?: pendingLabel }, gradeColor)
+          VerifyChevron(open)
         }
       }
-      end()
+      if (selectable) Column(Modifier.width(104.dp).padding(top = 8.dp, end = 10.dp), horizontalAlignment = Alignment.End) { end() }
     }
-    if (open) Column(Modifier.padding(start = 44.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    if (open) Column(Modifier.padding(start = if (selectable) 62.dp else 44.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
       if (grade == null) BasicText(if (pendingLabel == "To confirm") "The audit runs after you confirm." else "The completeness audit has not run yet.", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
       grade?.evidence?.takeIf { it.isNotEmpty() }?.let { evidence ->
         BasicText("Evidence", style = SkillBillTheme.type.tXs.copy(color = colors.fgFaint))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { evidence.forEach { SbLabel(it) } }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { evidence.forEach { VerifyFileChip(it) } }
       }
       grade?.missing?.let { VerifyCriterionField("What's missing", it) }
       grade?.notFound?.let { VerifyCriterionField("Not found", it) }
@@ -147,6 +151,6 @@ internal fun VerifyCriterionRow(
 private fun VerifyCriterionField(label: String, text: String) {
   Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
     BasicText(label, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint))
-    BasicText(rememberRuntimeText(text), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
+    BasicText(verifyText(text), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
   }
 }

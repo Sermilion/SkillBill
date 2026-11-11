@@ -1,6 +1,8 @@
 package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
@@ -28,9 +30,10 @@ class VerifyReceiptBodyTest {
       }
     }
 
-    onNodeWithText("Verdict:").assertExists()
+    onNodeWithText(unparsed).assertDoesNotExist()
+    onNodeWithText("Original report").performClick()
     onNodeWithText(unparsed).assertExists()
-    onNodeWithText("View criteria").performClick()
+    onNodeWithText("Show the graded criteria").performClick()
     assertEquals(VERIFY_CRITERIA_KEY, target)
   }
 
@@ -46,8 +49,9 @@ class VerifyReceiptBodyTest {
       }
     }
 
-    onNodeWithText("Verdict:").assertExists()
-    onNodeWithText("View criteria").assertExists()
+    onNodeWithText("Show the graded criteria").assertExists()
+    onNodeWithText(gradeLine).assertDoesNotExist()
+    onNodeWithText("Original report").performClick()
     onNodeWithText(gradeLine).assertExists()
     onNodeWithText(extraLine).assertExists()
   }
@@ -62,6 +66,8 @@ class VerifyReceiptBodyTest {
     }
 
     onNodeWithText("Flag is declared").assertExists()
+    onNodeWithText(raw).assertDoesNotExist()
+    onNodeWithText("Original report").performClick()
     onNodeWithText(raw).assertExists()
   }
 
@@ -77,23 +83,31 @@ class VerifyReceiptBodyTest {
     }
 
     onNodeWithText("Parsed finding description").assertExists()
+    onNodeWithText(raw).assertDoesNotExist()
+    onNodeWithText("Original report").performClick()
     onNodeWithText(raw).assertExists()
   }
 
   @Test
   fun `partially parsed unit test value shows original findings and keeps rows`() = runComposeUiTest {
-    val raw = "Additional test value rationale"
+    val raw = "## Missing cases\n\n- Populate the store before cleanup.\n\n| Test or area | Verdict | Why |\n| --- | --- | --- |\n| Populated cleanup | Weak | Retains an old row |"
     setContent {
       SkillBillTheme(reducedMotion = true) {
         VerifyTestValueReceipt(
           VerifyUnitTestValue("mixed", listOf("Overall: mixed", raw), null, "mixed", null,
-            listOf(VerifyTestValueRow("Parser", "valuable", "high", emptyList(), "Catches malformed input", "Keep", emptyList())),
+            listOf(VerifyTestValueRow("Parser", "valuable", "high", listOf("ParserTest.kt:12"), "Catches malformed input", "Keep", listOf("`ParserTest.kt:12`"))),
             emptyList(), emptyList(), emptyList(), emptyList()),
         )
       }
     }
 
     onNodeWithText("Catches malformed input").assertExists()
-    onNodeWithText(raw).assertExists()
+    onAllNodesWithText("ParserTest.kt:12").assertCountEquals(1)
+    onNodeWithText(raw).assertDoesNotExist()
+    onNodeWithText("Original report").performClick()
+    onNodeWithText("Missing cases").assertExists()
+    onNodeWithText("Populate the store before cleanup.").assertExists()
+    onNodeWithText("Populated cleanup").assertExists()
+    onNodeWithText("Retains an old row").assertExists()
   }
 }

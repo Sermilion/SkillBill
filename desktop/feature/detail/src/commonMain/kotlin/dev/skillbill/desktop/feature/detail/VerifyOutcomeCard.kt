@@ -7,7 +7,7 @@ import kotlin.time.Instant
 internal data class VerifyScoreSegment(val count: Int, val tone: VerifyScoreTone)
 internal enum class VerifyScoreTone { Green, Amber, Red, Active, Faint }
 internal data class VerifyScoreCell(val title: String, val value: String, val segments: List<VerifyScoreSegment>, val targetKey: String, val note: String = "")
-internal data class VerifyOutcomeView(val title: String, val verdict: String?, val message: String, val tone: VerifyScoreTone, val qaLowered: Boolean, val cells: List<VerifyScoreCell>, val headline: String = "", val elapsed: String? = null, val startedAt: Instant? = null, val finishedAt: Instant? = null)
+internal data class VerifyOutcomeView(val title: String, val verdict: String?, val message: String, val tone: VerifyScoreTone, val qaLowered: Boolean, val cells: List<VerifyScoreCell>, val headline: String = "", val elapsed: String? = null, val startedAt: Instant? = null, val finishedAt: Instant? = null, val state: VerifyRunState = VerifyRunState.Pending)
 
 internal fun verifyOutcomeView(run: VerifyRunDetails): VerifyOutcomeView {
   val state = verifyRunState(run)
@@ -105,7 +105,7 @@ internal fun verifyOutcomeView(run: VerifyRunDetails): VerifyOutcomeView {
   }
   val cells = if (state == VerifyRunState.Parked || state == VerifyRunState.Superseded) emptyList() else listOf(
     cell("Criteria", criteriaValue, if (grades.isEmpty()) emptyList() else criteriaSegments, "completeness_audit", VERIFY_CRITERIA_KEY),
-    cell("Review", review?.let { reviewFindingCount.toString() } ?: "—", reviewSegments, "code_review"),
+    cell("Review", review?.let { "$reviewFindingCount ${if (reviewFindingCount == 1) "finding" else "findings"}" } ?: "—", reviewSegments, "code_review"),
     cell("Tests", testsValue, testSegments, "unit_test_value_check"),
     if (qaSelected) cell("QA", qaValue, qaSegments, "qa", VERIFY_QA_KEY)
     else cell("Flag audit", flagValue, flagSegments, "feature_flag_audit"),
@@ -139,5 +139,5 @@ internal fun verifyOutcomeView(run: VerifyRunDetails): VerifyOutcomeView {
   }
   val notes = verifyScoreNotes(run)
   val elapsed = run.startedAt?.let { start -> run.finishedAt?.let { activityDuration((it - start).inWholeMilliseconds.coerceAtLeast(0)) } }
-  return VerifyOutcomeView(title, verdict.takeIf { state == VerifyRunState.Finished && it.isNotBlank() }, message, stateTone, state == VerifyRunState.Finished && warning, cells.map { it.copy(note = notes[it.title].orEmpty()) }, headline, elapsed, run.startedAt.takeIf { state == VerifyRunState.Running }, run.finishedAt)
+  return VerifyOutcomeView(title, verdict.takeIf { state == VerifyRunState.Finished && it.isNotBlank() }, message, stateTone, state == VerifyRunState.Finished && warning, cells.map { it.copy(note = notes[it.title].orEmpty()) }, headline, elapsed, run.startedAt, run.finishedAt, state)
 }

@@ -8,39 +8,40 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.component.SbLabel
-import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
-import dev.skillbill.desktop.core.designsystem.component.SbTooltip
-import dev.skillbill.desktop.core.designsystem.component.rememberRuntimeText
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
+import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
+import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.domain.model.VerifyCompletenessAudit
 import dev.skillbill.desktop.core.domain.model.VerifyFlagAudit
 import dev.skillbill.desktop.core.domain.model.VerifyReviewSection
-import dev.skillbill.desktop.core.domain.model.VerifyTestValueRow
-import dev.skillbill.desktop.core.domain.model.VerifyUnitTestValue
 
 @Composable
 internal fun VerifyFlagAuditReceipt(receipt: VerifyFlagAudit) {
   Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
     receipt.skipReason?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Skipped", it) }
-    receipt.flagName?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Flag", it) }
+    receipt.flagName?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Flag", it, mono = true) }
     receipt.pattern?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Pattern", it) }
     receipt.issues?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Issues", it) }
     receipt.checks.forEach { check ->
       Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        SbLabel(if (check.passed) "PASS" else "FAIL", SbLabelStyle.Tint(if (check.passed) SkillBillTheme.colors.stDone else SkillBillTheme.colors.stFailed))
+        CompositionLocalProvider(LocalContentColor provides if (check.passed) SkillBillTheme.colors.stDone else SkillBillTheme.colors.stFailed) { SbIcon(if (check.passed) LucideIcons.check else LucideIcons.x, 12.dp) }
         BasicText(check.text, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
       }
     }
@@ -49,100 +50,52 @@ internal fun VerifyFlagAuditReceipt(receipt: VerifyFlagAudit) {
 }
 
 @Composable
-internal fun VerifyReviewReceipt(receipt: VerifyReviewSection, leading: @Composable (dev.skillbill.desktop.core.domain.model.VerifyReviewFinding) -> Unit = {}) {
-  if (receipt.items.isNotEmpty()) receipt.items.forEach { finding -> VerifyFindingRow(finding) { leading(finding) } }
+internal fun VerifyReviewReceipt(receipt: VerifyReviewSection, selectable: Boolean = false, trailing: @Composable (dev.skillbill.desktop.core.domain.model.VerifyReviewFinding) -> Unit = {}, extra: @Composable (dev.skillbill.desktop.core.domain.model.VerifyReviewFinding) -> Unit = {}, leading: @Composable (dev.skillbill.desktop.core.domain.model.VerifyReviewFinding) -> Unit = {}) {
+  receipt.items.forEach { finding -> VerifyFindingRow(finding, selectable, { trailing(finding) }, { extra(finding) }) { leading(finding) } }
   VerifyRawFindings(receipt.findings)
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun VerifyFindingRow(finding: dev.skillbill.desktop.core.domain.model.VerifyReviewFinding, leading: @Composable () -> Unit = {}) {
+internal fun VerifyFindingRow(finding: dev.skillbill.desktop.core.domain.model.VerifyReviewFinding, selectable: Boolean = false, trailing: @Composable () -> Unit = {}, extra: @Composable () -> Unit = {}, leading: @Composable () -> Unit = {}) {
   var open by rememberSaveable(finding.ref, finding.location) { mutableStateOf(false) }
-  Column(Modifier.fillMaxWidth().hairline(Edge.Top, SkillBillTheme.colors.borderSubtle).padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    leading()
-    Column(Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = "Toggle ${finding.ref}", onClick = { open = !open }), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-      FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        SbLabel(finding.severity, SbLabelStyle.Tint(when (finding.severity.lowercase()) {
-          "blocker", "major" -> SkillBillTheme.colors.stFailed
-          "minor" -> SkillBillTheme.colors.stBlocked
-          else -> SkillBillTheme.colors.fgMuted
-        }))
-        BasicText(finding.ref, style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fg))
-        SbTooltip(finding.location) { SbLabel(finding.location.substringAfterLast('/')) }
-        BasicText(if (open) "⌄" else "›", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
+  val colors = SkillBillTheme.colors
+  Row(Modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    if (selectable) Column(Modifier.width(22.dp)) { leading() }
+    Column { VerifyBadge(finding.severity, when (finding.severity.lowercase()) { "blocker", "major" -> colors.stFailed; "minor" -> colors.stBlocked; else -> colors.fgFaint }) }
+    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+        BasicText(finding.ref, style = SkillBillTheme.type.t2xs.copy(color = colors.fg2))
+        VerifyFileChip(finding.location.substringAfterLast('/'), finding.location)
+        (finding.specialists + "${finding.confidence} confidence").forEach { BasicText(it, style = SkillBillTheme.type.t2xs.copy(color = colors.fgMuted, fontWeight = FontWeight.Normal)) }
+        trailing()
       }
-      BasicText(rememberRuntimeText(finding.description), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2), maxLines = if (open) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis)
-      if (open) BasicText((finding.specialists + "${finding.confidence} confidence").joinToString(" · "), style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted))
+      BasicText(verifyText(finding.description), Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = "Toggle ${finding.ref}", onClick = { open = !open }), style = SkillBillTheme.type.tSm.copy(color = colors.fg2), maxLines = if (open) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis)
+      extra()
     }
-  }
-}
-
-@Composable
-internal fun VerifyTestValueReceipt(receipt: VerifyUnitTestValue, leading: @Composable (Int, VerifyTestValueRow) -> Unit = { _, _ -> }) {
-  Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    receipt.skipReason?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Skipped", it) }
-    receipt.overall?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Overall", it) }
-    receipt.summary?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Summary", it) }
-    receipt.rows.forEachIndexed { index, row -> VerifyTestRow(row) { leading(index, row) } }
-    VerifyTestPlanGroup("Keep", receipt.keep)
-    VerifyTestPlanGroup("Rewrite", receipt.rewrite)
-    VerifyTestPlanGroup("Delete", receipt.delete)
-    VerifyTestPlanGroup("Add (missing cases)", receipt.missingCases)
-    VerifyRawFindings(receipt.findings)
-  }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-internal fun VerifyTestRow(row: VerifyTestValueRow, leading: @Composable () -> Unit = {}) {
-  Column(Modifier.fillMaxWidth().hairline(Edge.Top, SkillBillTheme.colors.borderSubtle).padding(vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-    leading()
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-      SbLabel(row.verdict, SbLabelStyle.Tint(when (row.verdict.lowercase()) {
-        "valuable" -> SkillBillTheme.colors.stDone
-        "weak" -> SkillBillTheme.colors.stBlocked
-        "harmful" -> SkillBillTheme.colors.stFailed
-        else -> SkillBillTheme.colors.fgMuted
-      }))
-      BasicText(row.area, style = SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.fg))
-      BasicText(row.confidence, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted))
-    }
-    if (row.files.isNotEmpty()) BasicText(row.files.joinToString(", "), style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fgMuted))
-    if (row.locations.isNotEmpty()) BasicText(row.locations.joinToString(", "), style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fgMuted))
-    BasicText(rememberRuntimeText(row.why), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
-    BasicText(rememberRuntimeText(row.action), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
   }
 }
 
 @Composable
 internal fun VerifyCompletenessReceipt(receipt: VerifyCompletenessAudit, onScrollToSection: (String) -> Unit) {
-  receipt.verdict?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Verdict", it) }
   VerifyRawFindings(receipt.findings)
-  BasicText(
-    "View criteria",
-    Modifier.clickable(role = Role.Button, onClickLabel = "View criteria", onClick = { onScrollToSection(VERIFY_CRITERIA_KEY) }).padding(vertical = 4.dp),
-    style = SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.stActive),
-  )
+  VerifyTextLink("Show the graded criteria") { onScrollToSection(VERIFY_CRITERIA_KEY) }
 }
 
 @Composable
-private fun VerifyTestPlanGroup(title: String, values: List<String>) {
-  if (values.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-    BasicText(title, style = SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.fg))
-    values.forEach { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2)) }
-  }
-}
-
-@Composable
-private fun VerifyReceiptField(label: String, value: String) {
+internal fun VerifyReceiptField(label: String, value: String, mono: Boolean = false) {
   Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-    BasicText("$label:", style = SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.fgMuted))
-    BasicText(value, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
+    BasicText(label, Modifier.width(112.dp), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
+    BasicText(verifyText(value), Modifier.weight(1f), style = (if (mono) SkillBillTheme.type.monoSm else SkillBillTheme.type.tSm).copy(color = SkillBillTheme.colors.fg2))
   }
 }
 
 @Composable
-private fun VerifyRawFindings(findings: List<String>) {
+internal fun VerifyRawFindings(findings: List<String>) {
   val visibleFindings = findings.filter { it.isNotBlank() }
-  visibleFindings.forEach { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2)) }
+  if (visibleFindings.isEmpty()) return
+  var open by rememberSaveable(findings) { mutableStateOf(false) }
+  VerifyFold("Original report", open, { open = !open }, note = "includes unparsed details") {
+    Column(Modifier.padding(start = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { visibleFindings.forEach { VerifyReportText(it) } }
+  }
 }
