@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.model.core
 
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.config.model.CompactionSettings
+import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
@@ -53,6 +54,8 @@ public interface FeatureTaskRuntimeRunFacts {
 
   /** The environment launched agents inherit. */
   public val environment: Map<String, String>
+
+  public val openCodeIdentity: OpenCodeLaunchIdentity?
 
   /** The repository the run changes. */
   public val repoRoot: Path

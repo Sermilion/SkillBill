@@ -158,6 +158,7 @@ public class DefaultPhaseRunner(
           modelObserver = observation.modelObserver,
           modelOverride = facts.modelOverride,
           effortOverride = facts.effortOverride,
+          openCodeIdentity = facts.openCodeIdentity,
           compaction = facts.compaction,
           outputSink = outputSink,
           promptOverride = composePrompt(input),

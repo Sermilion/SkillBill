@@ -2,9 +2,11 @@ package skillbill.engine.featuretask.phaserun
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
+import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.phaserun.monitor.MonitorAttemptTarget
 import skillbill.error.core.catchingNonCancellation
+import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
@@ -19,6 +21,12 @@ import java.time.Clock
 import java.time.Duration
 import java.util.UUID
 
+public data class WorkflowStatusLaunch(
+  public val workBranch: String? = null,
+  public val goalScoped: Boolean = false,
+  public val agentId: String? = null,
+)
+
 @Inject
 public class StandalonePhaseRegistrationFactory(
   private val repositories: RepositoryEnclosingRootPort,
@@ -28,22 +36,30 @@ public class StandalonePhaseRegistrationFactory(
   private val diagnostics: RuntimeDiagnostics,
   private val environment: EnvironmentContext,
 ) {
+  public fun openCodeIdentity(
+    repoRoot: Path,
+    agentId: String,
+  ): OpenCodeLaunchIdentity? {
+    if (agentId != SupportedAgent.OPENCODE.wireValue) return null
+    val canonicalRoot = repositories.canonicalPath(repoRoot)
+    return OpenCodeLaunchIdentity.capture(environment.environment, environment.userHome, canonicalRoot)
+  }
+
   internal fun workflowRegistration(
     repoRoot: Path,
     issueKey: String?,
     workflowId: String,
-    workBranch: String? = null,
-    goalScoped: Boolean = false,
+    launch: WorkflowStatusLaunch = WorkflowStatusLaunch(),
   ): IdeStatusWorkflowRegistration {
     val canonicalRoot = repositories.canonicalPath(repoRoot)
     return IdeStatusWorkflowRegistration(
       repositoryIdentity =
-        if (goalScoped) {
+        if (launch.goalScoped) {
           repositories.primaryRepositoryIdentity(canonicalRoot)
         } else {
           repositories.repositoryIdentity(canonicalRoot)
         },
-      branchCorrelation = workBranch ?: branchSource.checkedOutBranch(canonicalRoot) ?: "HEAD",
+      branchCorrelation = launch.workBranch ?: branchSource.checkedOutBranch(canonicalRoot) ?: "HEAD",
       issueKey = issueKey,
       workflowId = workflowId,
       invocationId = "workflow-$workflowId-${UUID.randomUUID()}",
@@ -51,6 +67,7 @@ public class StandalonePhaseRegistrationFactory(
       lifecycleState = "active",
       startedAt = clock.instant(),
       agentEnvironment = agentEnvironment(),
+      openCodeIdentity = openCodeIdentity(canonicalRoot, launch.agentId.orEmpty()),
     )
   }
 
@@ -59,6 +76,7 @@ public class StandalonePhaseRegistrationFactory(
     phaseId: String,
     invocationId: String,
     issueKey: String?,
+    agentId: String? = null,
   ): StandalonePhaseStatusRegistration {
     val canonicalRoot = repositories.canonicalPath(repoRoot)
     val now = clock.instant()
@@ -78,6 +96,7 @@ public class StandalonePhaseRegistrationFactory(
       leaseExpiresAt = now.plus(LEASE_DURATION),
       processOwner = processOwner(),
       agentEnvironment = agentEnvironment(),
+      openCodeIdentity = openCodeIdentity(canonicalRoot, agentId.orEmpty()),
     )
   }
 
@@ -85,9 +104,10 @@ public class StandalonePhaseRegistrationFactory(
     attempt: MonitorAttemptTarget,
     phaseId: String,
     invocationId: String,
+    agentId: String? = null,
   ): StandalonePhaseStatusRegistration {
     val head = attempt.target.head.tip
-    return phaseRegistration(attempt.primaryRoot, phaseId, invocationId, issueKey = null).copy(
+    return phaseRegistration(attempt.primaryRoot, phaseId, invocationId, issueKey = null, agentId = agentId).copy(
       branchCorrelation = head.ref,
       monitorTarget =
         StandaloneMonitorTarget(

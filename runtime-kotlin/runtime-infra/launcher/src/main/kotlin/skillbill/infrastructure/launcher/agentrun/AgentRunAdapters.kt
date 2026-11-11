@@ -68,7 +68,6 @@ internal sealed interface LauncherResolution {
 }
 
 private const val CURSOR_MCP_DEPENDENCY_ENV = "SKILL_BILL_CURSOR_MCP_DEPENDENCY"
-private const val OPENCODE_CONFIG_DIR_ENV = "OPENCODE_CONFIG_DIR"
 
 private fun resolveCursorMcpDependency(
   request: CursorMcpDependencyRequirement,
@@ -435,6 +434,7 @@ internal class ProcessAgentRunAdapter(
           },
         inheritEnvironment = command.inheritEnvironment,
         environmentPassthroughKeys = command.environmentPassthroughKeys,
+        removedEnvironmentKeys = command.removedEnvironmentKeys,
       ),
     review =
       AgentRunProcessReviewFields(
@@ -552,7 +552,8 @@ internal class ProcessAgentRunAdapter(
           command.environment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR]
             ?: inheritedEnvironment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR]
         } else if (launch.provider == AcpProvider.OpenCode) {
-          command.environment[OPENCODE_CONFIG_DIR_ENV] ?: inheritedEnvironment[OPENCODE_CONFIG_DIR_ENV]
+          command.environment[AgentHomeEnvironmentKeys.OPENCODE_CONFIG_DIR]
+            ?: inheritedEnvironment[AgentHomeEnvironmentKeys.OPENCODE_CONFIG_DIR]
         } else {
           null
         }
@@ -847,6 +848,7 @@ internal fun headlessAgentRunAdapters(
       databasePath = workerBinding.databasePath,
       runtimeMcpBin = workerBinding.runtimeMcpBin,
       bindingEnvironment = workerBinding.providerEnvironment,
+      userHome = workerBinding.userHome,
     ),
   ).associate { builder ->
     builder.agent to

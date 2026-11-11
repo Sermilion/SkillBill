@@ -45,6 +45,7 @@ internal data class AgentRunCommand(
   val sessionEffort: String? = null,
   val preflightFailure: String? = null,
   val sessionMcpServers: List<CursorAcpMcpServer> = emptyList(),
+  val removedEnvironmentKeys: Set<String> = emptySet(),
 )
 
 internal enum class AgentRunApprovalProtocol {

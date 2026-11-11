@@ -80,6 +80,9 @@ import dev.skillbill.desktop.core.domain.model.MachineConfigCompactionField
 import dev.skillbill.desktop.core.domain.model.MachineConfigExecutionMatrixEditIntent
 import dev.skillbill.desktop.core.domain.model.MachineConfigPhaseTierEdit
 import dev.skillbill.desktop.core.domain.model.ModelDirective
+import dev.skillbill.desktop.core.domain.model.AdvertisedAgentChoices
+import dev.skillbill.desktop.core.domain.model.AdvertisedChoice
+import dev.skillbill.desktop.core.domain.model.AdvertisedEffortSupport
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.PhaseInstructionFilesRead
 import dev.skillbill.desktop.core.domain.model.ProjectConfig
@@ -397,6 +400,8 @@ internal fun ConfigPage(
   val rowIndex = remember { mutableStateOf(emptyMap<String, ConfigEdit>()) }
   var rowIndexRevision by remember { mutableStateOf(-1) }
   var rowIndexPage by remember { mutableStateOf("") }
+  var advertisedChoices by remember { mutableStateOf<AdvertisedAgentChoices?>(null) }
+  var catalogRefresh by remember { mutableStateOf(0) }
 
   val changedOnDisk = conflictedRows.isNotEmpty()
   val resolutionBusy = pendingConflictResolution != null
@@ -701,6 +706,35 @@ internal fun ConfigPage(
     hint = rowHints.value[rowKey]
   }
 
+  fun setOpenCodeFieldError(rowKey: String, field: String, message: String?) {
+    val updated = rowErrors.value[rowKey].orEmpty().toMutableMap().apply {
+      if (message == null) remove(field) else put(field, message)
+    }
+    rowErrors.value = if (updated.isEmpty()) rowErrors.value - rowKey else rowErrors.value + (rowKey to updated)
+    if (editorKey == rowKey && editorPage == page) errors = updated
+  }
+
+  fun validateOpenCodeDraft(rowKey: String, fields: Map<String, String>, choices: AdvertisedAgentChoices?) {
+    val model = fields[ConfigFileKeys.MODEL].orEmpty()
+    when (choices) {
+      is AdvertisedAgentChoices.InvalidSelection ->
+        if (choices.requestedModel == model) {
+          setOpenCodeFieldError(rowKey, ConfigFileKeys.MODEL, "Refresh the OpenCode model list and choose an advertised model before saving.")
+        }
+      is AdvertisedAgentChoices.Choices -> {
+        if (choices.selectedModel.id != model) return
+        setOpenCodeFieldError(rowKey, ConfigFileKeys.MODEL, null)
+        val effort = fields[ConfigFileKeys.EFFORT].orEmpty()
+        val offered = choices.effort as? AdvertisedEffortSupport.Offered
+        val effortError = if (effort.isNotBlank() && (offered == null || offered.values.none { it.id == effort })) {
+          "This OpenCode model does not offer that effort value. Clear it or choose an advertised value."
+        } else null
+        setOpenCodeFieldError(rowKey, ConfigFileKeys.EFFORT, effortError)
+      }
+      else -> Unit
+    }
+  }
+
   fun activate(rowKey: String): Boolean {
     if (rowKey !in openRows || rowIndexRevision != readRevision || rowIndexPage != page || rowIndex.value[rowKey] == null) return false
     selectActiveRow(rowKey)
@@ -747,10 +781,24 @@ internal fun ConfigPage(
   fun updateDraftField(rowKey: String, field: String, value: Map<String, String>) {
     if (pendingConflictResolution != null || sessions.hasConflictResolution() || sessions.hasWriteInFlight()) return
     activate(rowKey)
-    rowDrafts.value = rowDrafts.value + (rowKey to value)
-    rowErrors.value = rowErrors.value - rowKey
-    rowHints.value = rowHints.value - rowKey
     val row = rowIndex.value[rowKey]
+    val previous = rowDrafts.value[rowKey] ?: row?.fields.orEmpty()
+    val openCodeModelRow = page == "models" && agent == "opencode" && row?.modelRow != null
+    val modelChanged = openCodeModelRow && previous[ConfigFileKeys.MODEL] != value[ConfigFileKeys.MODEL]
+    val effortChanged = openCodeModelRow && previous[ConfigFileKeys.EFFORT] != value[ConfigFileKeys.EFFORT]
+    rowDrafts.value = rowDrafts.value + (rowKey to value)
+    if (modelChanged) advertisedChoices = null
+    if (openCodeModelRow) {
+      val currentErrors = rowErrors.value[rowKey].orEmpty()
+      val retainedErrors = if (modelChanged) {
+        currentErrors - ConfigFileKeys.MODEL - ConfigFileKeys.EFFORT
+      } else if (effortChanged) currentErrors - ConfigFileKeys.EFFORT else currentErrors
+      rowErrors.value = if (retainedErrors.isEmpty()) rowErrors.value - rowKey else rowErrors.value + (rowKey to retainedErrors)
+      if (effortChanged && !modelChanged) validateOpenCodeDraft(rowKey, value, advertisedChoices)
+    } else {
+      rowErrors.value = rowErrors.value - rowKey
+    }
+    rowHints.value = rowHints.value - rowKey
     if (page == "models" && row?.modelRow == ModelRowKind.PHASE && (field == ConfigFileKeys.MODEL || field == ConfigFileKeys.EFFORT)) {
       val basis = rowBases.value[rowKey] ?: basisOf(document)
       if (basis != null) {
@@ -774,7 +822,7 @@ internal fun ConfigPage(
     }
     if (editorKey == rowKey && editorPage == page) {
       draft = value
-      errors = emptyMap()
+      errors = rowErrors.value[rowKey].orEmpty()
       hint = null
     }
   }
@@ -893,6 +941,22 @@ internal fun ConfigPage(
     val key = targetKey ?: return
     val row = rowIndex.value[key] ?: return
     val submitted = rowDrafts.value[key] ?: row.fields
+    if (page == "models" && agent == "opencode" && row.modelRow != null) {
+      val catalog = advertisedChoices as? AdvertisedAgentChoices.Choices
+      val model = submitted[ConfigFileKeys.MODEL].orEmpty()
+      if (catalog == null || catalog.selectedModel.id != model || catalog.models.none { it.id == model }) {
+        setOpenCodeFieldError(key, ConfigFileKeys.MODEL, "Refresh the OpenCode model list and choose an advertised model before saving.")
+        return
+      }
+      val effort = submitted[ConfigFileKeys.EFFORT].orEmpty()
+      if (effort.isNotBlank()) {
+        val offered = catalog.effort as? AdvertisedEffortSupport.Offered
+        if (offered == null || offered.values.none { it.id == effort }) {
+          setOpenCodeFieldError(key, ConfigFileKeys.EFFORT, "This OpenCode model does not offer that effort value. Clear it or choose an advertised value.")
+          return
+        }
+      }
+    }
     if (saving || sessions.hasConflictResolution() || sessions.hasWriteInFlight() || !enabled || key in conflictedRows || !projectSelectionLoaded || document !is ConfigDocument.Present && document !is ConfigDocument.Absent || rowIndexRevision != readRevision || rowIndex.value[key] !== row) return
     selectActiveRow(key)
     draft = submitted
@@ -1320,7 +1384,9 @@ internal fun ConfigPage(
       }
       SettingsGroup(
         title = "Tiers",
-        rows = built.filter { it.group == "Tiers" }.map { row -> rowFor(row, onActivate = { activate(row.key) }) },
+        rows = built.filter { it.group == "Tiers" }.map { row ->
+          rowFor(row, onActivate = { activate(row.key) }, onFieldChange = { field, input -> editModelDraft(row, field, input) })
+        },
       )
       defaults.phases.map { it.group }.distinct().forEach { kind ->
         val groupRows = built.filter { it.group == kind.name.replace('_', ' ') }
@@ -1871,6 +1937,59 @@ internal fun ConfigPage(
       (page != "models" || session.agent.value == agent && sessions.selectedAgent.value == agent)
   }
   val currentRow = activeShortcutRowKey()?.let { renderedRows[it] }
+  val selectedCatalogModel = currentRow?.let { row ->
+    (rowDrafts.value[row.key] ?: row.fields)[ConfigFileKeys.MODEL]
+  }
+  if (page == "models" && agent == "opencode") {
+    val selectable = currentRow != null && enabled && !saving && !sessions.hasConflictResolution() &&
+      !sessions.hasWriteInFlight() && commentConfirmation == null && currentRow.key !in conflictedRows
+    OpenCodeCatalogChoices(
+      result = advertisedChoices,
+      selectable = selectable,
+      retry = { catalogRefresh++ },
+      chooseModel = { choice ->
+        if (selectable) currentRow?.let { row ->
+          if (rowIndex.value[row.key] === row && row.key in openRows && editorKey == row.key &&
+            editorPage == "models" && sessions.selectedAgent.value == "opencode"
+          ) {
+            updateDraftField(
+              row.key,
+              ConfigFileKeys.MODEL,
+              (rowDrafts.value[row.key] ?: row.fields) + (ConfigFileKeys.MODEL to choice.id),
+            )
+          }
+        }
+      },
+      chooseEffort = { choice ->
+        if (selectable) currentRow?.let { row ->
+          if (rowIndex.value[row.key] === row && row.key in openRows && editorKey == row.key &&
+            editorPage == "models" && sessions.selectedAgent.value == "opencode"
+          ) {
+            updateDraftField(
+              row.key,
+              ConfigFileKeys.EFFORT,
+              (rowDrafts.value[row.key] ?: row.fields) + (ConfigFileKeys.EFFORT to choice.id),
+            )
+          }
+        }
+      },
+    )
+  }
+  LaunchedEffect(page, agent, currentRow?.key, selectedCatalogModel, preferredRepo, catalogRefresh) {
+    advertisedChoices = null
+    if (page == "models" && agent == "opencode") {
+      val choices = repository.advertisedAgentChoices(
+        dev.skillbill.desktop.core.domain.repository.AdvertisedAgentChoicesRequest(preferredRepo, selectedCatalogModel),
+      )
+      advertisedChoices = choices
+      currentRow?.let { row ->
+        val currentFields = rowDrafts.value[row.key] ?: row.fields
+        if (currentFields[ConfigFileKeys.MODEL] == selectedCatalogModel) {
+          validateOpenCodeDraft(row.key, currentFields, choices)
+        }
+      }
+    }
+  }
   LaunchedEffect(page, readRevision, rowIndexRevision, rowIndexPage, editorKey, pendingConflictResolution) {
     val pending = pendingConflictResolution
     if (pending != null) {
@@ -2475,6 +2594,69 @@ internal fun ModelAgentTabs(
       modelAgentSelection(selected, proposed, agents, enabled)?.let(onSelect)
     },
   )
+}
+
+@Composable
+private fun OpenCodeCatalogChoices(
+  result: AdvertisedAgentChoices?,
+  selectable: Boolean,
+  retry: () -> Unit,
+  chooseModel: (AdvertisedChoice) -> Unit,
+  chooseEffort: (AdvertisedChoice) -> Unit,
+) {
+  when (result) {
+    null -> Hint("Loading OpenCode model choices…", FeedbackTone.Neutral)
+    is AdvertisedAgentChoices.Unavailable -> Callout(
+      FeedbackTone.Warn,
+      title = "OpenCode choices unavailable",
+      body = when (result.reason) {
+        AdvertisedAgentChoices.Unavailable.Reason.EXECUTABLE -> "OpenCode could not be started. Check its installation and retry."
+        AdvertisedAgentChoices.Unavailable.Reason.AUTHENTICATION -> "OpenCode could not authenticate. Sign in through OpenCode and retry."
+        AdvertisedAgentChoices.Unavailable.Reason.CAPABILITY -> "This OpenCode version does not advertise model selection."
+      },
+      actions = { SbButton("Retry", retry) },
+    )
+    is AdvertisedAgentChoices.InvalidSelection -> Callout(
+      FeedbackTone.Warn,
+      title = "OpenCode model is unavailable",
+      body = "${result.requestedModel} is not in the advertised model list. Choose an offered model or edit the ID.",
+      actions = { SbButton("Refresh", retry) },
+    )
+    is AdvertisedAgentChoices.Failed -> Callout(
+      FeedbackTone.Error,
+      title = "OpenCode choices could not be read",
+      body = "Check OpenCode and retry. No model choices were saved.",
+      actions = { SbButton("Retry", retry) },
+    )
+    is AdvertisedAgentChoices.Choices -> {
+      Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        BasicText("Advertised OpenCode models", style = SkillBillTheme.type.tSm)
+        SbMenu(result.models.map { choice ->
+          SbMenuEntry.Item(
+            choice.label,
+            { chooseModel(choice) },
+            detail = choice.id,
+            mono = true,
+            checked = choice.id == result.selectedModel.id,
+            enabled = selectable,
+            reason = if (selectable) null else "Open a model row to select its directive",
+          )
+        }, searchHint = "Select a model")
+        when (val support = result.effort) {
+          AdvertisedEffortSupport.Unsupported -> Hint("This model does not advertise effort choices.", FeedbackTone.Neutral)
+          is AdvertisedEffortSupport.Offered -> {
+            BasicText("Effort choices for ${result.selectedModel.id}", style = SkillBillTheme.type.tSm)
+            SbMenu(
+              listOf(SbMenuEntry.Item("No effort", { chooseEffort(AdvertisedChoice("", "No effort")) }, enabled = selectable)) +
+                support.values.map { choice ->
+                  SbMenuEntry.Item(choice.label, { chooseEffort(choice) }, detail = choice.id, mono = true, enabled = selectable)
+                },
+            )
+          }
+        }
+      }
+    }
+  }
 }
 
 @Composable

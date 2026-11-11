@@ -1,6 +1,8 @@
 package skillbill.ports.install.mcp.model
 
 import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
+import skillbill.contracts.system.AgentHomeEnvironmentKeys
+import skillbill.contracts.system.OpenCodeEnvironmentKeys
 import skillbill.install.model.McpRegistrationOutcome
 import java.nio.file.Path
 
@@ -33,12 +35,12 @@ data class InstallMcpProfileEnvironment(
   companion object {
     const val CLAUDE_CONFIG_DIR_ENV: String = "CLAUDE_CONFIG_DIR"
     const val CODEX_HOME_ENV: String = "CODEX_HOME"
-    const val OPENCODE_CONFIG_DIR_ENV: String = "OPENCODE_CONFIG_DIR"
-    const val OPENCODE_CONFIG_ENV: String = "OPENCODE_CONFIG"
-    const val OPENCODE_CONFIG_CONTENT_ENV: String = "OPENCODE_CONFIG_CONTENT"
-    const val XDG_CONFIG_HOME_ENV: String = "XDG_CONFIG_HOME"
+    const val OPENCODE_CONFIG_DIR_ENV: String = AgentHomeEnvironmentKeys.OPENCODE_CONFIG_DIR
+    const val OPENCODE_CONFIG_ENV: String = OpenCodeEnvironmentKeys.CONFIG_FILE
+    const val OPENCODE_CONFIG_CONTENT_ENV: String = OpenCodeEnvironmentKeys.CONFIG_CONTENT
+    const val XDG_CONFIG_HOME_ENV: String = OpenCodeEnvironmentKeys.XDG_CONFIG_HOME
     const val PWD_ENV: String = "PWD"
-    const val OPENCODE_DISABLE_PROJECT_CONFIG_ENV: String = "OPENCODE_DISABLE_PROJECT_CONFIG"
+    const val OPENCODE_DISABLE_PROJECT_CONFIG_ENV: String = OpenCodeEnvironmentKeys.DISABLE_PROJECT_CONFIG
     const val PROGRAM_DATA_ENV: String = "ProgramData"
 
     fun from(environment: Map<String, String>): InstallMcpProfileEnvironment? {

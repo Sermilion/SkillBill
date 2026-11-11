@@ -1,5 +1,9 @@
 package skillbill.infrastructure.skills.install.opencode
 
+import skillbill.contracts.system.AgentHomeEnvironmentKeys
+import skillbill.contracts.system.OpenCodeEnvironmentKeys
+import skillbill.contracts.system.OpenCodeLaunchIdentity
+import skillbill.contracts.system.OpenCodeLaunchIdentityFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.install.model.McpRegistrationFailureCode
 import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
@@ -39,21 +43,16 @@ internal fun opencodeConfigRoots(
       }
       directory.normalize()
     }
-  val xdgRoot =
-    environment[InstallMcpProfileEnvironment.XDG_CONFIG_HOME_ENV]
-      ?.takeIf(String::isNotBlank)
-      ?.let { resolve(it, resolvedWorkingDirectory) }
-      ?: homeRoot.resolve(".config")
+  requireWorkingDirectoryForRelativeOverrides(environment, resolvedWorkingDirectory)
+  val launchIdentity = captureLaunchIdentity(environment, homeRoot, resolvedWorkingDirectory)
+  val xdgRoot = Path.of(launchIdentity.effectiveConfigHome)
   val globalDirectory = xdgRoot.resolve("opencode").normalize()
   val additionalDirectory =
-    environment[InstallMcpProfileEnvironment.OPENCODE_CONFIG_DIR_ENV]
-      ?.takeIf(String::isNotBlank)
-      ?.let { resolve(it, resolvedWorkingDirectory) }
+    launchIdentity.configDirectory.value?.takeIf(String::isNotBlank)
+      ?.let { Path.of(launchIdentity.effectiveConfigDirectory) }
   val configDirectory = additionalDirectory ?: globalDirectory
   val explicitConfig =
-    environment[InstallMcpProfileEnvironment.OPENCODE_CONFIG_ENV]
-      ?.takeIf(String::isNotBlank)
-      ?.let { resolve(it, resolvedWorkingDirectory) }
+    launchIdentity.effectiveConfigFile?.let(Path::of)
   val projectConfigDisabled =
     environment[InstallMcpProfileEnvironment.OPENCODE_DISABLE_PROJECT_CONFIG_ENV]
       ?.trim()
@@ -96,6 +95,37 @@ internal fun opencodeConfigRoots(
     projectConfigEnabled = projectConfigEnabled,
   )
 }
+
+private fun requireWorkingDirectoryForRelativeOverrides(
+  environment: Map<String, String>,
+  resolvedWorkingDirectory: Path?,
+) {
+  val relativeOverrides =
+    listOf(
+      OpenCodeEnvironmentKeys.XDG_CONFIG_HOME,
+      AgentHomeEnvironmentKeys.OPENCODE_CONFIG_DIR,
+      OpenCodeEnvironmentKeys.CONFIG_FILE,
+    ).mapNotNull { key -> environment[key]?.takeIf(String::isNotBlank) }
+  if (resolvedWorkingDirectory == null && relativeOverrides.any { !parsePath(it).isAbsolute }) {
+    invalid("Relative OpenCode paths require an explicit working directory; supply PWD and retry.")
+  }
+}
+
+private fun captureLaunchIdentity(
+  environment: Map<String, String>,
+  homeRoot: Path,
+  workingDirectory: Path?,
+): OpenCodeLaunchIdentity =
+  try {
+    OpenCodeLaunchIdentity.capture(
+      environment + (OpenCodeEnvironmentKeys.HOME to homeRoot.toString()),
+      homeRoot,
+      workingDirectory ?: homeRoot,
+    )
+  } catch (failure: SkillBillRuntimeException) {
+    if (failure.code != OpenCodeLaunchIdentityFailureCode.INVALID_PATH) throw failure
+    invalid("Invalid OpenCode path value; correct the provider configuration and retry.", failure)
+  }
 
 private fun ancestorDirectories(start: Path): List<Path> {
   val result = mutableListOf<Path>()
@@ -179,19 +209,6 @@ private fun rethrowInterruption(error: IOException) {
 
 private fun rootConfigFiles(directory: Path): List<Path> =
   listOf("opencode.json", "opencode.jsonc").map(directory::resolve)
-
-private fun resolve(
-  value: String,
-  workingDirectory: Path?,
-): Path {
-  val path = parsePath(value)
-  if (path.isAbsolute) return path
-  val base =
-    workingDirectory ?: invalid(
-      "Relative OpenCode path '$value' requires an explicit working directory; supply PWD and retry.",
-    )
-  return base.resolve(path)
-}
 
 private fun parsePath(value: String): Path =
   try {

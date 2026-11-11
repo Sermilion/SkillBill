@@ -16,7 +16,6 @@ class FeatureTaskRuntimeResumeLaunchAssignmentTest {
   fun `same-agent resume keeps the recorded model when the matrix has drifted`() {
     val recorded = assignment("codex", "gpt-6.1-sol", "high")
 
-    assertEquals(recorded, FeatureTaskRuntimeResumeLaunchAssignment.recordedForAgent(recorded, "codex"))
     assertEquals(
       PhaseModelDirective("gpt-6.1-sol", "high"),
       FeatureTaskRuntimeResumeLaunchAssignment.modelDirective(
@@ -29,12 +28,11 @@ class FeatureTaskRuntimeResumeLaunchAssignmentTest {
   }
 
   @Test
-  fun `resume with a different agent uses that agent's matrix instead of the recorded model`() {
+  fun `resume with a different caller agent keeps the accepted model and effort`() {
     val recorded = assignment("codex", "gpt-6.1-sol", "high")
 
-    assertNull(FeatureTaskRuntimeResumeLaunchAssignment.recordedForAgent(recorded, "cursor"))
     assertEquals(
-      PhaseModelDirective("cursor-grok-4.6-high"),
+      PhaseModelDirective("gpt-6.1-sol", "high"),
       FeatureTaskRuntimeResumeLaunchAssignment.modelDirective(
         recorded,
         "cursor",
@@ -45,37 +43,34 @@ class FeatureTaskRuntimeResumeLaunchAssignmentTest {
   }
 
   @Test
-  fun `resume with a different agent omits a recorded model when the selected agent has no matrix entry`() {
-    val recorded = assignment("codex", "gpt-6.1-sol", "high")
+  fun `resume without an accepted model keeps the provider default after matrix changes`() {
+    val recorded = assignment("opencode", null, null)
 
     assertNull(
       FeatureTaskRuntimeResumeLaunchAssignment.modelDirective(
         recorded,
         "cursor",
         "audit_plan_fix",
-        FeatureTaskRuntimeModelAssignment(),
+        FeatureTaskRuntimeModelAssignment(matrix = matrix()),
       ),
     )
   }
 
   @Test
-  fun `used assignments replace recorded steps whose agent is not the selected resume agent`() {
+  fun `used assignments retain admitted providers and include newly admitted steps`() {
     val recorded = mapOf("audit_plan_fix" to assignment("codex", "gpt-6.1-sol", "high"))
-    val current = mapOf("audit_plan_fix" to assignment("cursor", "cursor-grok-4.6-high", effort = null))
+    val next = assignment("opencode", "provider/new-model", effort = null).copy(stepId = "qa")
+    val current = mapOf("audit_plan_fix" to assignment("cursor", "cursor-grok-4.6-high", null), "qa" to next)
 
     assertEquals(
-      current,
-      FeatureTaskRuntimeResumeLaunchAssignment.usedAssignments(recorded, current) { "cursor" },
-    )
-    assertEquals(
-      recorded,
-      FeatureTaskRuntimeResumeLaunchAssignment.usedAssignments(recorded, current) { "codex" },
+      recorded + ("qa" to next),
+      FeatureTaskRuntimeResumeLaunchAssignment.usedAssignments(recorded, current),
     )
   }
 
   private fun assignment(
     agentId: String,
-    model: String,
+    model: String?,
     effort: String?,
   ): StepLaunchAssignment =
     StepLaunchAssignment(

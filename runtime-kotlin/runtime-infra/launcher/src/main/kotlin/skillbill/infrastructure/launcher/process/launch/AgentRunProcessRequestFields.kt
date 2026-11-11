@@ -50,6 +50,7 @@ data class AgentRunProcessEnvironmentFields(
   val environment: Map<String, String> = emptyMap(),
   val inheritEnvironment: Boolean = true,
   val environmentPassthroughKeys: Set<String> = emptySet(),
+  val removedEnvironmentKeys: Set<String> = emptySet(),
 )
 
 data class AgentRunProcessReviewFields(

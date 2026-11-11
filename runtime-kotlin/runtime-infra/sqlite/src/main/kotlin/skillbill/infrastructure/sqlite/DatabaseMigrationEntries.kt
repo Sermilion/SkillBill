@@ -54,6 +54,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.monitor.recordMonitor
 import skillbill.infrastructure.sqlite.core.migration.area.operation.OperationProposalsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationConfirmationExecutions
 import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationLaunchRetention
+import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationOpenCodeIdentity
 import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationProposalCards
 import skillbill.infrastructure.sqlite.core.migration.area.optionalRepairEvidenceColumn
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion2
@@ -75,6 +76,7 @@ import skillbill.infrastructure.sqlite.core.migration.persistLegacyGoalPlanningR
 import skillbill.infrastructure.sqlite.core.migration.rekeyProducerOutputEvidenceByAgent
 import skillbill.infrastructure.sqlite.core.schema.installDesktopReadCompatibility
 import skillbill.infrastructure.sqlite.core.schema.recordLaunchAgentEnvironment
+import skillbill.infrastructure.sqlite.core.schema.recordOpenCodeLaunchIdentity
 import skillbill.infrastructure.sqlite.core.schema.recordStandalonePhaseLaunchScope
 import skillbill.infrastructure.sqlite.core.schema.saveStandalonePhaseLaunch
 import skillbill.infrastructure.sqlite.core.schema.separateAgentActivityRevisions
@@ -1134,4 +1136,12 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 120,
       name = "record-standalone-reported-model",
       operation = ::recordStandaloneReportedModel,
+    ) +
+    DatabaseMigration(
+      version = 121,
+      name = "record-opencode-launch-identity",
+      operation = { connection ->
+        recordOpenCodeLaunchIdentity(connection)
+        addOperationOpenCodeIdentity(connection)
+      },
     )

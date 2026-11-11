@@ -24,11 +24,10 @@ import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
 
 class RecordedLaunchAssignmentResumeTest {
   @Test
-  fun `resuming a claude recorded validate step under cursor does not launch the claude model`() {
+  fun `resuming a recorded validate step retains its provider model and effort after caller changes`() {
     withCapturedContext { context ->
       val recorded = claudeOpusAssignment()
       val claudeResume =
@@ -52,16 +51,17 @@ class RecordedLaunchAssignmentResumeTest {
         )
       val cursorRun = phaseRun(cursorResume)
       val cursorLaunched = FeatureTaskRuntimeRunLoopLaunch.launchedModelDirective(cursorRun)
-      assertEquals(SupportedAgent.CURSOR.id, cursorRun.resolvedAgent.resolvedAgentId)
-      assertNull(cursorRun.launchAssignment)
-      assertEquals("claude-opus-5-5-high", cursorLaunched.modelOverride)
-      assertNull(cursorLaunched.effortOverride)
+      assertEquals(SupportedAgent.CLAUDE.id, cursorRun.resolvedAgent.resolvedAgentId)
+      assertEquals(recorded, cursorRun.launchAssignment)
+      assertEquals(PhaseModelProfileClassifier.ANTHROPIC_OPUS_55, cursorLaunched.modelOverride)
+      assertEquals("high", cursorLaunched.effortOverride)
 
       val cursorDefault = phaseRun(context.resumedAs(SupportedAgent.CURSOR.id, recorded))
       val defaultLaunched = FeatureTaskRuntimeRunLoopLaunch.launchedModelDirective(cursorDefault)
-      assertNull(cursorDefault.launchAssignment)
-      assertNull(defaultLaunched.modelOverride)
-      assertNull(defaultLaunched.effortOverride)
+      assertEquals(recorded, cursorDefault.launchAssignment)
+      assertEquals(SupportedAgent.CLAUDE.id, cursorDefault.resolvedAgent.resolvedAgentId)
+      assertEquals(PhaseModelProfileClassifier.ANTHROPIC_OPUS_55, defaultLaunched.modelOverride)
+      assertEquals("high", defaultLaunched.effortOverride)
     }
   }
 }

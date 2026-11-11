@@ -10,6 +10,8 @@ import skillbill.contracts.operationcard.OperationCardStatus
 import skillbill.contracts.operationcard.OperationLaunchContext
 import skillbill.contracts.operationcard.OperationLaunchRetention
 import skillbill.contracts.qa.QaDeviceLaunchTokens.QA_DEVICE_FLAG
+import skillbill.contracts.system.OpenCodeEnvironmentKeys
+import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.featuretask.model.execution.launchArguments
@@ -334,10 +336,39 @@ public class WorkNewTaskStart(
     val selection = confirmation.selection?.trim()?.takeIf(String::isNotEmpty)
     val refusal = confirmationRefusal(operationId, selection) ?: revalidationRefusal(confirmation.token)
     if (refusal != null) return NewTaskStartResult.Refused(refusal)
+    operationIdentityConflict(confirmation.token)?.let { return NewTaskStartResult.Refused(it) }
     return when (val admitted = launches.admit(confirmation.token, operationId, selection)) {
       is CardAdmission.Refused -> NewTaskStartResult.Refused(admitted.reason)
       is CardAdmission.Admitted ->
         launchConfirmation(repoRoot, ConfirmationRun(confirmation.token, admitted.executionId), selection, admitted)
+    }
+  }
+
+  private fun operationIdentityConflict(token: String): String? {
+    val launch = launches.launchContext(token) ?: return null
+    val accepted =
+      launch.openCodeIdentity
+        ?.takeIf { launch.selectedAgent == SupportedAgent.OPENCODE.wireValue } ?: return null
+    val currentEnvironment = environment.environment + launches.agentHomes().filterValues(String::isNotBlank)
+    val cleared = launches.agentHomes().filterValues(String::isBlank).keys
+    val pinnedProfile =
+      launch.selectedProfile
+        ?: "".takeIf { accepted.configDirectory.supplied && accepted.configDirectory.value.isNullOrBlank() }
+    val current =
+      OpenCodeLaunchIdentity.capture(
+        currentEnvironment - cleared,
+        environment.userHome,
+        Path.of(launch.checkoutRoot),
+        pinnedProfile,
+      )
+    return when {
+      accepted.conflictsWith(current) != null ->
+        "The accepted OpenCode identity conflicts at ${accepted.conflictsWith(current)}. " +
+          "Restore the accepted setting and confirm again."
+      accepted.inlineConfigPresent && environment.environment[OpenCodeEnvironmentKeys.CONFIG_CONTENT] == null ->
+        "The accepted OpenCode inline configuration is unavailable. " +
+          "Restore OPENCODE_CONFIG_CONTENT and confirm again."
+      else -> null
     }
   }
 
@@ -396,6 +427,8 @@ public class WorkNewTaskStart(
         launch.launchId,
         run,
         OperationAgentHomes.pinned(launch.selectedAgent, launch.selectedProfile),
+        launch.openCodeIdentity,
+        environment.environment[OpenCodeEnvironmentKeys.CONFIG_CONTENT],
       )
     return launchRuntimeCommand(checkoutRoot, ownership, args, binding)
   }
@@ -415,40 +448,50 @@ public class WorkNewTaskStart(
         is BranchCheckout.Ready -> resolved.workspace
         is BranchCheckout.Refused -> return NewTaskStartResult.Refused(resolved.reason)
       }
+    val effectiveRun = run.withOpenCodeIdentity(agentId, environment, workspace.root)
     val retention =
-      when (val retained = launchRetention(run, workspace)) {
+      when (val retained = launchRetention(effectiveRun, workspace)) {
         is LaunchRetention.Kept -> retained.retention
         is LaunchRetention.Refused -> return NewTaskStartResult.Refused(retained.reason)
       }
     val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
-    val ownedTarget = arguments.launchTarget.takeUnless { run.holder.id == QA_PHASE }
+    val ownedTarget = arguments.launchTarget.takeUnless { effectiveRun.holder.id == QA_PHASE }
     val ownership =
-      listOfNotNull("$identity:${run.holder.id}:standalone", ownedTarget, branch?.let { "branch:$it" })
+      listOfNotNull("$identity:${effectiveRun.holder.id}:standalone", ownedTarget, branch?.let { "branch:$it" })
         .joinToString(":")
     val args =
-      listOf(run.verb, run.name) + arguments.operation + listOf("--agent", agentId) +
-        run.qaDevice.launchArguments()
-    if (run.launchId != null) {
+      listOf(effectiveRun.verb, effectiveRun.name) + arguments.operation + listOf("--agent", agentId) +
+        effectiveRun.qaDevice.launchArguments()
+    if (effectiveRun.launchId != null) {
       val context =
         OperationLaunchContext(
-          launchId = run.launchId,
-          operationId = run.name,
+          launchId = effectiveRun.launchId,
+          operationId = effectiveRun.name,
           repositoryIdentity = identity,
           databaseIdentity = "",
           checkoutRoot = workspace.root.toString(),
           branch = branch.orEmpty(),
           originalArguments = arguments.operation,
           selectedAgent = agentId,
-          selectedProfile = run.profile,
-          holderId = run.holder.id,
+          selectedProfile = effectiveRun.profile,
+          holderId = effectiveRun.holder.id,
           retention = retention,
+          openCodeIdentity = effectiveRun.openCodeIdentity,
         )
-      saveLaunch(context, workspace, run.holder)
+      saveLaunch(context, workspace, effectiveRun.holder)
     }
     val binding =
-      run.launchId?.let { OperationBinding(it, null, OperationAgentHomes.pinned(agentId, run.profile)) }
+      effectiveRun.launchId?.let {
+        OperationBinding(
+          it,
+          null,
+          OperationAgentHomes.pinned(agentId, effectiveRun.profile),
+          effectiveRun.openCodeIdentity,
+          effectiveRun.inlineOpenCodeConfig,
+        )
+      }
     val result = launchRuntimeCommand(workspace.root, ownership, args, binding)
-    if (result is NewTaskStartResult.Refused && workspace.held) releaseAfterRefusal(workspace.root, run.holder)
+    if (result is NewTaskStartResult.Refused && workspace.held) releaseAfterRefusal(workspace.root, effectiveRun.holder)
     return result
   }
 
@@ -575,6 +618,9 @@ public class WorkNewTaskStart(
             emptyMap(),
             launchId,
             binding?.agentHomes,
+            binding?.openCodeIdentity,
+            binding?.inlineOpenCodeConfig,
+            binding?.confirmation != null,
           ),
         )
       }
@@ -736,11 +782,6 @@ public class WorkNewTaskStart(
     return if (title != null && leadsWithKey) "$issueKey\n$title\n\n$requirements" else requirements
   }
 
-  private fun appendBase(
-    intake: String,
-    baseBranch: String?,
-  ): String = baseBranch?.takeIf(String::isNotBlank)?.let { "$intake\n\nUse $it as the base branch." } ?: intake
-
   private enum class IdentityOrigin { TYPED, URL }
 
   private data class StandaloneRun(
@@ -749,14 +790,42 @@ public class WorkNewTaskStart(
     val holder: BranchWorktreeHolder,
     val launchId: String? = null,
     val profile: String? = null,
+    val openCodeIdentity: OpenCodeLaunchIdentity? = null,
+    val inlineOpenCodeConfig: String? = null,
     val qaDevice: QaNamedDevice? = null,
     val proposalChanges: String? = null,
-  )
+  ) {
+    fun withOpenCodeIdentity(
+      agentId: String,
+      environment: EnvironmentContext,
+      root: Path,
+    ): StandaloneRun =
+      if (agentId == SupportedAgent.OPENCODE.wireValue) {
+        val pinnedHomes = OperationAgentHomes.pinned(agentId, profile)
+        val identityEnvironment =
+          environment.environment + pinnedHomes.filterValues(String::isNotBlank) -
+            pinnedHomes.filterValues(String::isBlank).keys
+        copy(
+          openCodeIdentity =
+            OpenCodeLaunchIdentity.capture(
+              identityEnvironment,
+              environment.userHome,
+              root,
+              profile,
+            ),
+          inlineOpenCodeConfig = environment.environment[OpenCodeEnvironmentKeys.CONFIG_CONTENT],
+        )
+      } else {
+        this
+      }
+  }
 
   private data class OperationBinding(
     val launchId: String?,
     val confirmation: ConfirmationRun?,
     val agentHomes: Map<String, String>?,
+    val openCodeIdentity: OpenCodeLaunchIdentity? = null,
+    val inlineOpenCodeConfig: String? = null,
   )
 
   private data class ConfirmationRun(
@@ -834,3 +903,8 @@ public class WorkNewTaskStart(
 
 private val PR_REVIEW_FIX_MODE_TARGET =
   Regex("""mode:(local|remote)(?:\s+(.+))?""", RegexOption.DOT_MATCHES_ALL)
+
+private fun appendBase(
+  intake: String,
+  baseBranch: String?,
+): String = baseBranch?.takeIf(String::isNotBlank)?.let { "$intake\n\nUse $it as the base branch." } ?: intake

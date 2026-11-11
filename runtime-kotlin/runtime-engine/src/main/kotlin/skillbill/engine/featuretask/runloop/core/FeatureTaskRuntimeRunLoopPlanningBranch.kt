@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.runloop.core
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeResolvedPhaseAgent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.phaseLoopContext
@@ -134,13 +135,19 @@ internal object FeatureTaskRuntimeRunLoopPlanningBranch {
     specSource: SpecSource,
     reentry: PendingReentry?,
   ): PhaseRun {
+    val recorded = context.runState.stepLaunchAssignment(phaseId)
     val resolvedAgent =
-      FeatureTaskRuntimeAgentResolver.resolve(
+      recorded?.let {
+        FeatureTaskRuntimeResolvedPhaseAgent(
+          phaseId = phaseId,
+          invokedAgentId = it.agentId,
+          configuredAgentOverrideId = null,
+        )
+      } ?: FeatureTaskRuntimeAgentResolver.resolve(
         phaseId = phaseId,
         assignment = request.agentAssignment,
         invokedAgentId = request.invokedAgentId,
       )
-    val recorded = context.runState.stepLaunchAssignment(phaseId)
     val resolvedAgentId = resolvedAgent.resolvedAgentId
     return PhaseRun(
       phaseId = phaseId,
@@ -158,7 +165,7 @@ internal object FeatureTaskRuntimeRunLoopPlanningBranch {
       specSource = specSource,
       policy = context.acceptedStepPolicy(phaseId),
       projectStoreRoot = context.projectStoreRoot,
-      launchAssignment = FeatureTaskRuntimeResumeLaunchAssignment.recordedForAgent(recorded, resolvedAgentId),
+      launchAssignment = recorded,
       reentry = reentry,
       failureContinuationOutput =
         (context.runState.strategyFor(phaseId).stepHooks(phaseId) as? PhaseUpstreamFailureContinuationHooks)

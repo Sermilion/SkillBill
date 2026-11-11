@@ -2381,6 +2381,7 @@ private val expectedMigrationDefinitions =
     118 to "record-monitor-ci-cycles",
     119 to "record-qa-panel-occurrences",
     120 to "record-standalone-reported-model",
+    121 to "record-opencode-launch-identity",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

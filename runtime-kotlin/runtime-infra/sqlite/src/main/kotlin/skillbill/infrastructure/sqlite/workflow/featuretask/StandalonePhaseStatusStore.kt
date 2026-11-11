@@ -35,10 +35,13 @@ import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.core.schema.AGENT_ENVIRONMENT_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.LAUNCH_SCOPE_COLUMN
+import skillbill.infrastructure.sqlite.core.schema.OPEN_CODE_IDENTITY_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.REPORTED_MODEL_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.agentEnvironmentJson
+import skillbill.infrastructure.sqlite.core.schema.openCodeIdentityJson
 import skillbill.infrastructure.sqlite.core.schema.readAgentEnvironment
 import skillbill.infrastructure.sqlite.core.schema.readLaunchScope
+import skillbill.infrastructure.sqlite.core.schema.readOpenCodeIdentity
 import skillbill.infrastructure.sqlite.core.schema.readStandaloneReportedModel
 import skillbill.infrastructure.sqlite.idestatus.readPlanActivity
 import skillbill.infrastructure.sqlite.idestatus.writePlanActivity
@@ -117,10 +120,11 @@ internal class StandalonePhaseStatusStore(
         invocation_id, phase_id, status_store_id, run_sequence, status_revision,
         lifecycle_state, current_step, started_at, updated_at, lease_owner,
         lease_generation, lease_expires_at, owner_host_identity, owner_boot_identity, owner_pid, owner_birth_token,
-        launch_agent_id, launch_arguments_json, $AGENT_ENVIRONMENT_COLUMN, $LAUNCH_SCOPE_COLUMN,
+        launch_agent_id, launch_arguments_json, $AGENT_ENVIRONMENT_COLUMN, $OPEN_CODE_IDENTITY_COLUMN,
+        $LAUNCH_SCOPE_COLUMN,
         $MONITOR_TARGET_COLUMN_LIST
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         $MONITOR_TARGET_PLACEHOLDERS
       )
       """.trimIndent(),
@@ -150,6 +154,7 @@ internal class StandalonePhaseStatusStore(
           request.launchAgentId,
           request.launchArguments?.let(JsonCodec::valueToJsonString),
           agentEnvironmentJson(request.agentEnvironment),
+          openCodeIdentityJson(request.openCodeIdentity),
           request.launchScope.wireValue,
         ) + request.monitorTarget.columnValues(),
       )
@@ -618,8 +623,8 @@ internal class StandalonePhaseStatusStore(
       INSERT INTO ide_status_workflow_execution(
         execution_id, repository_identity, branch_correlation, issue_key, workflow_id,
         invocation_id, status_store_id, run_sequence, status_revision, lifecycle_state,
-        started_at, updated_at, $AGENT_ENVIRONMENT_COLUMN
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?)
+        started_at, updated_at, $AGENT_ENVIRONMENT_COLUMN, $OPEN_CODE_IDENTITY_COLUMN
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?)
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -635,6 +640,7 @@ internal class StandalonePhaseStatusStore(
         updatedAt,
         updatedAt,
         agentEnvironmentJson(request.agentEnvironment),
+        openCodeIdentityJson(request.openCodeIdentity),
       )
       statement.executeUpdate()
     }
@@ -666,6 +672,7 @@ internal class StandalonePhaseStatusStore(
       startedAt = workflowExecutionInstant("started_at"),
       updatedAt = workflowExecutionInstant("updated_at"),
       agentEnvironment = readAgentEnvironment("workflow-status"),
+      openCodeIdentity = readOpenCodeIdentity("workflow-status"),
     )
 
   private fun ResultSet.workflowExecutionInstant(column: String): Instant {
@@ -856,6 +863,7 @@ internal class StandalonePhaseStatusStore(
       launchAgentId = getString("launch_agent_id"),
       launchArguments = readLaunchArguments(),
       agentEnvironment = readAgentEnvironment("standalone-status"),
+      openCodeIdentity = readOpenCodeIdentity("standalone-status"),
       launchScope = readLaunchScope("standalone-status"),
       monitorTarget = monitorTarget,
       monitorCleanup = readMonitorCleanup("standalone-status", monitorTarget != null),

@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconc
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
+import skillbill.engine.featuretask.phaserun.WorkflowStatusLaunch
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goal.GoalRunnerWedgeClass
 import skillbill.engine.goal.goalRepositoryIdentity
@@ -190,8 +191,7 @@ public class GoalRunnerRunPreparation(
       request.repoRoot,
       request.issueKey,
       state.parentWorkflowId,
-      state.manifest.goalWorkBranch(),
-      goalScoped = true,
+      WorkflowStatusLaunch(workBranch = state.manifest.goalWorkBranch(), goalScoped = true),
     )
     val persistedControl =
       manifestStore.bindRepositoryIdentity(

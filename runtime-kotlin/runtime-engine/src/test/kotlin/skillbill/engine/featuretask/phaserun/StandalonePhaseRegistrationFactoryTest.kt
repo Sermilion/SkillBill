@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phaserun
 
 import skillbill.application.TestRepositoryEnclosingRoot
+import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.system.CheckedOutBranchSource
@@ -19,14 +20,19 @@ class StandalonePhaseRegistrationFactoryTest {
     val operator =
       factory(
         mapOf(
-          "CLAUDE_CONFIG_DIR" to "/home/dev/.claude-work",
+          AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR to "/home/dev/.claude-work",
+          AgentHomeEnvironmentKeys.OPENCODE_CONFIG_DIR to "/home/dev/.config/opencode",
           "CODEX_HOME" to "  ",
           "PATH" to "/usr/bin",
           "HOME" to "/home/dev",
           "ANTHROPIC_API_KEY" to "secret",
         ),
       )
-    val expected = mapOf("CLAUDE_CONFIG_DIR" to "/home/dev/.claude-work")
+    val expected =
+      mapOf(
+        AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR to "/home/dev/.claude-work",
+        AgentHomeEnvironmentKeys.OPENCODE_CONFIG_DIR to "/home/dev/.config/opencode",
+      )
     assertEquals(expected, operator.phaseRegistration(root, "monitor", "run-1", null).agentEnvironment)
     assertEquals(expected, operator.workflowRegistration(root, "SKILL-1", "goal-parent").agentEnvironment)
 

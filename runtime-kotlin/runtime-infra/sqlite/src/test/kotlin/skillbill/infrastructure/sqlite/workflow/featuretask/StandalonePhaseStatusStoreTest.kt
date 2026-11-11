@@ -2,6 +2,7 @@ package skillbill.infrastructure.sqlite.workflow.featuretask
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.encodeQaDetails
+import skillbill.infrastructure.sqlite.core.schema.OPEN_CODE_IDENTITY_COLUMN
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.ports.agentrun.activity.model.AgentRunActivity
 import skillbill.ports.agentrun.activity.model.AgentRunActivityKind
@@ -260,7 +261,7 @@ class StandalonePhaseStatusStoreTest {
             "'invocation' AS invocation_id, 'execution' AS execution_id, 'store' AS status_store_id, " +
             "'1' AS run_sequence, '1' AS status_revision, 'active' AS lifecycle_state, " +
             "'2026-10-09 05:35:36' AS started_at, '2026-10-09T05:36:00Z' AS updated_at, " +
-            "NULL AS agent_environment_json",
+            "NULL AS agent_environment_json, NULL AS $OPEN_CODE_IDENTITY_COLUMN",
         )
       }
       val normalizations = mutableListOf<String>()

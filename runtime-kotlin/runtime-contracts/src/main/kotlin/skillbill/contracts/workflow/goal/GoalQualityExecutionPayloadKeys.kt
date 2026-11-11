@@ -53,6 +53,7 @@ object GoalQualityExecutionPayloadKeys {
   const val MODEL_DIRECTIVES = "model_directives"
   const val MODEL_MATRIX = "model_matrix"
   const val ADDONS = "addons"
+  const val OPEN_CODE_IDENTITY = "open_code_identity"
   const val SLUG = "slug"
   const val SOURCE_IDENTITY = "source_identity"
   const val CONTENT_SHA256 = "content_sha256"

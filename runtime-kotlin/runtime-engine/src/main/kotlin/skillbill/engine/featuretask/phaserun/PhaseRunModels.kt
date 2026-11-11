@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.config.model.CompactionSettings
+import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
@@ -73,6 +74,7 @@ public data class PhaseRunRequest(
   internal val acceptedGoalQualityPlanText: String? = null,
   public val acceptedGoalQualityAgentId: String? = null,
   public val modelObserver: AgentRunModelObserver? = null,
+  public val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 ) {
   init {
     require(definitionId.isNotBlank()) { "PhaseRunRequest.definitionId is required." }
@@ -168,6 +170,7 @@ public data class InMemoryPhaseRunFacts(
   override val modelAssignment: FeatureTaskRuntimeModelAssignment = request.modelAssignment
   override val compactionSettings: CompactionSettings = CompactionSettings.DEFAULT
   override val environment: Map<String, String> = emptyMap()
+  override val openCodeIdentity: OpenCodeLaunchIdentity? = request.openCodeIdentity
   override val repoRoot: Path = request.repoRoot
   override val timeout: Duration? = request.timeout
   override val requestedCodeReviewMode: CodeReviewExecutionMode? = request.codeReviewMode
