@@ -947,6 +947,7 @@ class ChatWorkspace(
   // Stops the agent process the chat kept between turns; a reply it was streaming on its own stops where it is.
   private fun endAgent(session: ChatSession) {
     chat.end(session.sessionId)
+    session.thread.clearBackgroundCommands()
     session.endStreaming()
   }
 

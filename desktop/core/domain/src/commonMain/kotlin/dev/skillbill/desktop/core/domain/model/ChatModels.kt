@@ -131,6 +131,15 @@ sealed interface ChatEvent {
   /** A permission request of this chat's process, or its settled outcome; the same card may arrive again as it changes. */
   data class ApprovalRequested(val card: ApprovalCard) : ChatEvent
 
+  /**
+   * The shell command of tool call [callId] keeps running in the background as [taskId] after its call returned. It is not
+   * reply text: it may arrive between turns, and it never opens or ends a reply.
+   */
+  data class BackgroundTaskStarted(val taskId: String, val callId: String) : ChatEvent
+
+  /** The background command [taskId] finished, failed or was stopped, including when its agent process ended. */
+  data class BackgroundTaskEnded(val taskId: String) : ChatEvent
+
   data object Completed : ChatEvent
 
   data class Failed(val failure: ChatFailure, val detail: String?) : ChatEvent

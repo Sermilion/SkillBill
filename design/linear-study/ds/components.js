@@ -1723,6 +1723,13 @@
     const tip = `${b.cmd} · ${b.kind}${b.usual ? ' · usually ' + fmtDur(b.usual, true) : ''}`;
     return `<span class="${cx('sb-build-chip', buildTone(b))}" data-tip="${esc(tip)}"><span class="sb-build-spin" aria-hidden="true"></span>${esc(b.short)}${buildClock(b)}</span>`;
   }
+  /* Chat composer, beside the activity label: a command the chat waits on, either left running in the background or running
+   * for a few seconds in the current turn. Spinner, a short name such as "gradlew check", the ticking time; what it runs on
+   * hover. It never shows the full command. */
+  function CommandChip(c) {
+    track('CommandChip');
+    return `<span class="sb-build-chip" data-tip="${esc(c.detail)}"><span class="sb-build-spin" aria-hidden="true"></span>${esc(c.name)}${Clock({ ms: c.ms, t0: c.t0, live: true, secs: true })}</span>`;
+  }
   /* Run document, right under the header: Building, Build passed or Build failed, the full command, the time with the usual
    * time or how far over it, a bar against the usual time while it runs, then project type, tool, pid, start, exit code and
    * the previous build of the same command. */
@@ -1763,7 +1770,7 @@
     VerifyDoc, VerifyHeader, Banner, Fold, Quote, VerifySection, Badge, CriterionRow, FieldText, MarkRow, FileChip, FileChips, RouteSwitch,
     ReceiptFinding, TestValueRow, BadgeGrid, MiniRule, KeyValues, CheckLines, DirBars, TextLink, VerifyQa,
     StageStrip, PlanNow, FeedFilter, PlanFeed, BoxHead, PlanBundle, Transcript, FactList, BriefFold, BriefBody, BriefingTeaser, SpecBar, PropPill,
-    BuildChip, BuildStrip,
+    BuildChip, BuildStrip, CommandChip,
     MonitorDoc, CapPips, OutcomeActions, MonitorCycles, MonitorBox, MonitorSummary, MonitorLine, ShaChip, MonBadge, MonitorGroup, FoldLine,
     MonitorCheckRow, LogTail, NextLine, RepairAgent, ChangedFileRow, ResolveBar, SideBySide, ConflictFileRow, PublishSteps, EventLines,
   };

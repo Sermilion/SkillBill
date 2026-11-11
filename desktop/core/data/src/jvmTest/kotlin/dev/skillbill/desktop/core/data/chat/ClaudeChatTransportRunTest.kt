@@ -273,6 +273,49 @@ class ClaudeChatTransportRunTest {
     claude.stopped.await()
   }
 
+  // A background command's start and end are not reply text: between turns they must not open a reply that never completes.
+  @Test
+  fun `background commands report to the owning turn or unprompted without opening a reply, and end with the process`() = runTest {
+    val claude = FakeClaude()
+    val transport = transport(claude)
+    val unprompted = Channel<ChatEvent>(Channel.UNLIMITED)
+    val follower = launch(start = CoroutineStart.UNDISPATCHED) { transport.unprompted("session-1").collect { unprompted.send(it) } }
+    suspend fun nextUnprompted(count: Int) = List(count) { unprompted.receive() }
+
+    val first = async { transport.run(chatRequest()).toList() }
+    val (uuid, _) = claude.nextMessage()
+    claude.print(
+      replay(uuid),
+      """{"type":"assistant","message":{"content":[{"type":"tool_use","id":"bash-1","name":"Bash","input":{"command":"./gradlew check","run_in_background":true}}]}}""",
+      """{"type":"system","subtype":"task_started","task_id":"b1","tool_use_id":"bash-1","is_backgrounded":true,"task_type":"local_bash"}""",
+      """{"type":"system","subtype":"task_started","task_id":"b2","tool_use_id":"bash-1","is_backgrounded":true,"task_type":"local_bash"}""",
+      """{"type":"result","is_error":false,"result":""}""",
+    )
+    val turn = first.await()
+    assertEquals("bash-1", (turn.first() as ChatEvent.ToolUse).call.id)
+    assertEquals(
+      listOf(ChatEvent.BackgroundTaskStarted("b1", "bash-1"), ChatEvent.BackgroundTaskStarted("b2", "bash-1"), ChatEvent.Completed),
+      turn.drop(1),
+    )
+
+    claude.print(
+      """{"type":"system","subtype":"task_updated","task_id":"b1","patch":{"status":"completed"}}""",
+      """{"type":"system","subtype":"task_notification","task_id":"b1","status":"completed"}""",
+      """{"type":"system","subtype":"task_notification","task_id":"unknown","status":"completed"}""",
+      textDelta("The build passed"),
+      """{"type":"result","is_error":false,"result":"The build passed"}""",
+    )
+    assertEquals(
+      listOf(ChatEvent.BackgroundTaskEnded("b1"), ChatEvent.TextDelta("The build passed"), ChatEvent.Completed),
+      nextUnprompted(3),
+    )
+
+    transport.end("session-1")
+    claude.stopped.await()
+    assertEquals(listOf<ChatEvent>(ChatEvent.BackgroundTaskEnded("b2")), nextUnprompted(1))
+    follower.cancel()
+  }
+
   // A live process keeps the directory it started in; reusing it after the goal's worktree moved sent the turn to a dead path.
   @Test
   fun `a turn in another directory stops the live process and resumes the session in a new one there`() = runTest {
