@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ApprovalRulesResult
@@ -39,10 +40,10 @@ import dev.skillbill.desktop.feature.chat.newtask.NewTaskChats
 import dev.skillbill.desktop.feature.chat.newtask.NewTaskRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -325,8 +326,8 @@ class ChatWorkspace(
     cursorMcpDependencies.remove(id)
     pastedImages.remove(id)
     operationCards.remove(id)
-    session.job.cancel()
     chat.end(session.sessionId)
+    session.job.cancel()
     // Read now, because a restart can rotate the session id.
     chat.requestSummary(session.sessionId)
     tabState.update { it.without(id) }
@@ -347,8 +348,8 @@ class ChatWorkspace(
     observer = null
     sessions.values.forEach {
       val idle = !it.busyState.value
-      it.job.cancel()
       chat.end(it.sessionId)
+      it.job.cancel()
       if (idle) chat.requestSummary(it.sessionId)
     }
     sessions.clear()
@@ -499,9 +500,13 @@ class ChatWorkspace(
     session.stoppableState.value = false
     session.thread.dropUnprompted = true
     val running = session.turnJob
+    val runningSessionId = session.sessionId
     if (running != null) {
       session.stoppedTurn = running
-      running.cancel()
+      scope.launch(start = CoroutineStart.UNDISPATCHED) {
+        if (requestStop(runningSessionId) != ChatStopSettlement.Settled) running.cancel()
+        running.join()
+      }
     } else {
       // No turn collects an unprompted reply, so ending the process is this path's job.
       launchTurn(session) {
@@ -607,10 +612,12 @@ class ChatWorkspace(
     if (session.goneState.value) return
     session.queuedState.value = emptyList()
     val running = session.turnJob
+    val runningSessionId = session.sessionId
+    if (running != null) session.stoppedTurn = running
     session.busyState.value = true
     session.stoppableState.value = false
     launchTurn(session) {
-      running?.cancelAndJoin()
+      if (running != null) stopTurnAndJoin(session, runningSessionId, running)
       endAgent(session)
       session.restart(UUID.randomUUID().toString())
       session.replaceTranscript(listOf(stateCard(session.item), ChatMessage.Notice(CLEARED_NOTICE)))
@@ -645,10 +652,12 @@ class ChatWorkspace(
     if (session.goneState.value || (entry.executionId != null && entry.executionId != session.item.id)) return
     session.queuedState.value = emptyList()
     val running = session.turnJob
+    val runningSessionId = session.sessionId
+    if (running != null) session.stoppedTurn = running
     session.busyState.value = true
     session.stoppableState.value = false
     launchTurn(session) {
-      running?.cancelAndJoin()
+      if (running != null) stopTurnAndJoin(session, runningSessionId, running)
       turns.followWorktree(session)
       val lines = try {
         chat.openSavedChat(entry)
@@ -745,7 +754,7 @@ class ChatWorkspace(
   private suspend fun settleTurn(session: ChatSession, turn: Job) {
     if (session.turnJob !== turn) return
     try {
-      if (session.stoppedTurn === turn && turn.isCancelled) withContext(NonCancellable) { turns.finishStopped(session) }
+      if (session.stoppedTurn === turn) withContext(NonCancellable) { turns.finishStopped(session) }
     } finally {
       if (session.turnJob === turn) {
         session.turnJob = null
@@ -754,6 +763,23 @@ class ChatWorkspace(
         session.stoppableState.value = false
       }
     }
+  }
+
+  private suspend fun stopTurnAndJoin(session: ChatSession, sessionId: String, turn: Job) {
+    if (requestStop(sessionId) != ChatStopSettlement.Settled) turn.cancel()
+    turn.join()
+    if (session.stoppedTurn === turn) {
+      session.stoppedTurn = null
+      withContext(NonCancellable) { turns.finishStopped(session) }
+    }
+  }
+
+  private suspend fun requestStop(sessionId: String): ChatStopSettlement = try {
+    chat.stopTurn(sessionId)
+  } catch (cancelled: CancellationException) {
+    throw cancelled
+  } catch (_: Exception) {
+    ChatStopSettlement.CollectorCancellationRequired
   }
 
   private suspend fun awaitExecutionStopped(header: WorkItem, deadline: Instant): DetailState? =

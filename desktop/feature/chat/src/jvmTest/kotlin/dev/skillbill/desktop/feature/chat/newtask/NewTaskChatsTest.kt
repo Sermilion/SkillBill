@@ -221,7 +221,7 @@ class NewTaskChatsTest {
     chat.summaryUpdateEvents.emit("saved-z")
     runCurrent()
 
-    assertTrue(chats.saved.value.any { it.sessionId == "saved-z" })
+    assertTrue(chats.saved.value.entries.any { it.sessionId == "saved-z" })
     a.close()
   }
 

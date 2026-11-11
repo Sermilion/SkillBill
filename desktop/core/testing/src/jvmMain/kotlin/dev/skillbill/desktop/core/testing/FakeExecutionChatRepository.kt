@@ -7,9 +7,11 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SessionMoveResult
+import dev.skillbill.desktop.core.domain.model.SavedChatProjection
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import kotlinx.coroutines.flow.Flow
@@ -67,6 +69,8 @@ class FakeExecutionChatRepository(
     ended += sessionId
   }
 
+  override suspend fun stopTurn(sessionId: String): ChatStopSettlement = ChatStopSettlement.CollectorCancellationRequired
+
   /** Every `moveSessions` call as (fromRoot, toRoot); [moveResult] answers it. */
   val moveCalls: MutableList<Pair<String, String>> = Collections.synchronizedList(mutableListOf())
   var moveResult: suspend (String, String) -> SessionMoveResult = { _, _ -> SessionMoveResult(0, 0, 0) }
@@ -79,10 +83,10 @@ class FakeExecutionChatRepository(
   /** Saved chats by session id, as the store keeps them. */
   val saved: MutableMap<String, ChatHistoryEntry> = Collections.synchronizedMap(linkedMapOf())
 
-  override suspend fun savedChats(executionId: String, repositoryRoot: String, currentSessionId: String): List<ChatHistoryEntry> =
-    saved.values.filter { entry ->
+  override suspend fun savedChats(executionId: String, repositoryRoot: String, currentSessionId: String): SavedChatProjection =
+    SavedChatProjection(saved.values.filter { entry ->
       entry.sessionId != currentSessionId && entry.executionId == executionId && entry.lines.any { it.role == ChatHistoryRole.Operator }
-    }.sortedByDescending { it.updatedAt }
+    }.sortedByDescending { it.updatedAt })
 
   override suspend fun openSavedChat(entry: ChatHistoryEntry): List<ChatHistoryLine> = entry.lines
 
@@ -90,11 +94,11 @@ class FakeExecutionChatRepository(
     saved[entry.sessionId] = entry
   }
 
-  override suspend fun savedNewTaskDrafts(limit: Int?): List<ChatHistoryEntry> {
+  override suspend fun savedNewTaskDrafts(limit: Int?): SavedChatProjection {
     val drafts = saved.values.filter { entry ->
       entry.newTask != null && entry.lines.any { it.role == ChatHistoryRole.Operator }
     }.sortedByDescending { it.updatedAt }
-    return if (limit == null) drafts else drafts.take(limit)
+    return SavedChatProjection(if (limit == null) drafts else drafts.take(limit))
   }
 
   override suspend fun deleteSavedChat(sessionId: String) {

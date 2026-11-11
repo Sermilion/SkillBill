@@ -1,6 +1,8 @@
 package dev.skillbill.desktop.feature.chat
 
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatImage
@@ -87,6 +89,55 @@ class ChatStopTest {
       currentCoroutineContext().ensureActive()
       fake.saveChat(entry)
     }
+  }
+
+  @Test
+  fun `stop retains the collector until repository terminal delivery settles`() = runTest {
+    val item = workItem("SKILL-535")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    val stopRequested = CompletableDeferred<Unit>()
+    val releaseTerminal = CompletableDeferred<Unit>()
+    val terminalDelivered = CompletableDeferred<Unit>()
+    var collectorClosed = false
+    var turns = 0
+    fake.events = {
+      if (++turns == 1) flowOf(ChatEvent.Completed) else flow {
+        try {
+          emit(ChatEvent.TextDelta("partial"))
+          releaseTerminal.await()
+          emit(ChatEvent.Failed(ChatFailure.ProcessFailed, "Provider stop settled"))
+          terminalDelivered.complete(Unit)
+        } finally {
+          collectorClosed = true
+        }
+      }
+    }
+    val repository = object : ExecutionChatRepository by fake {
+      override suspend fun stopTurn(sessionId: String): ChatStopSettlement {
+        stopRequested.complete(Unit)
+        terminalDelivered.await()
+        return ChatStopSettlement.Settled
+      }
+    }
+    val workspace = workspace(repository)
+    workspace.open(item)
+    runCurrent()
+    workspace.send(item.id, "question")
+    runCurrent()
+
+    workspace.stop(item.id)
+    runCurrent()
+
+    assertTrue(stopRequested.isCompleted)
+    assertFalse(collectorClosed)
+    assertTrue(workspace.session(item.id)!!.busy.value)
+    releaseTerminal.complete(Unit)
+    runCurrent()
+    assertTrue(collectorClosed)
+    val session = workspace.session(item.id)!!
+    assertFalse(session.busy.value)
+    assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Error>().count { it.text == "Provider stop settled" })
+    assertEquals(ChatMessage.Notice(STOPPED_NOTICE), session.transcript.value.last())
   }
 
   @Test

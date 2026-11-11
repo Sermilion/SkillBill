@@ -13,6 +13,7 @@ import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
@@ -30,6 +31,7 @@ import dev.skillbill.desktop.feature.chat.savedText
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -232,14 +234,15 @@ internal class NewTaskChat(
   private var turnJob: Job? = null
 
   private suspend fun finishTurn(turn: Job) {
+    if (turnJob !== turn) return
     thread.stoppableState.value = false
     thread.endStreaming()
     pendingTurnLineIndex = null
-    val stopped = turn === stoppedTurn && turn.isCancelled
+    val stopped = turn === stoppedTurn
     if (stopped) thread.append(ChatMessage.Notice(STOPPED_NOTICE))
     try {
       withContext(NonCancellable) {
-        if (stopped && !started) rotateSession()
+        if (stopped && !started && agent.agentId != "opencode") rotateSession()
         changesTracker.endTurn()
         if (!save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
         changesTracker.refresh()
@@ -249,6 +252,7 @@ internal class NewTaskChat(
       thread.stoppableState.value = false
       thread.busyState.value = false
       turnJob = null
+      stoppedTurn = null
     }
   }
 
@@ -267,7 +271,12 @@ internal class NewTaskChat(
     thread.dropUnprompted = true
     turnJob?.let {
       stoppedTurn = it
-      it.cancel()
+      val running = it
+      val oldSessionId = sessionId
+      scope.launch(dispatcher, start = CoroutineStart.UNDISPATCHED) {
+        if (requestStop(oldSessionId) != ChatStopSettlement.Settled) running.cancel()
+        running.join()
+      }
     } ?: stopUnprompted()
   }
 
@@ -295,7 +304,8 @@ internal class NewTaskChat(
     if (observer != null) observer.cancelAndJoin()
     val activeTurn = turnJob
     if (activeTurn != null) {
-      activeTurn.cancel()
+      val activeSessionId = sessionId
+      if (requestStop(activeSessionId) != ChatStopSettlement.Settled) activeTurn.cancel()
       activeTurn.join()
     }
     turnJob = null
@@ -318,8 +328,16 @@ internal class NewTaskChat(
     changesTracker.end()
     thread.queuedState.value = emptyList()
     thread.stoppableState.value = false
-    job.cancel()
     chat.end(sessionId)
+    job.cancel()
+  }
+
+  private suspend fun requestStop(sessionId: String): ChatStopSettlement = try {
+    chat.stopTurn(sessionId)
+  } catch (cancelled: CancellationException) {
+    throw cancelled
+  } catch (_: Exception) {
+    ChatStopSettlement.CollectorCancellationRequired
   }
 
   internal suspend fun persist(): Boolean = save()
@@ -345,7 +363,8 @@ internal class NewTaskChat(
     withContext(scope.coroutineContext.minusKey(Job)) { acceptPendingMessage() }
     var opened = false
     var seenEvent = false
-    val preamble = pendingReplay?.takeIf { !started }?.let { newTaskReplayPreamble(it, repositoryRoot, baseBranch) }
+    val preamble = pendingReplay?.takeIf { !started && agent.agentId != "opencode" }
+      ?.let { newTaskReplayPreamble(it, repositoryRoot, baseBranch) }
     val prompt = if (preamble == null) text else "$preamble\n\n$text"
     chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, prompt, images, cursorMcpDependency)).collect { event ->
 

@@ -175,7 +175,7 @@ class NewTaskDraftTest {
 
     draft.refreshSaved()
     runCurrent()
-    assertEquals(listOf(first, second), draft.saved.value)
+    assertEquals(listOf(first, second), draft.saved.value.entries)
     draft.discardSaved(first)
     draft.discardSaved(second)
     draft.discardSaved(first)
@@ -185,7 +185,7 @@ class NewTaskDraftTest {
 
     assertTrue(first.sessionId in chat.saved)
     assertTrue(second.sessionId in chat.saved)
-    assertTrue(draft.saved.value.isEmpty())
+    assertTrue(draft.saved.value.entries.isEmpty())
     assertEquals(2, toasts.host.toasts.size)
     assertEquals("Discarded Fix footer", toasts.host.toasts.last().data.title)
     advanceTimeBy(4_999)
@@ -194,14 +194,14 @@ class NewTaskDraftTest {
     assertTrue(second.sessionId in chat.saved)
     toasts.host.toasts.last().data.actions.single().onClick()
     runCurrent()
-    assertEquals(listOf(second), draft.saved.value)
+    assertEquals(listOf(second), draft.saved.value.entries)
 
     advanceTimeBy(1)
     runCurrent()
 
     assertTrue(first.sessionId !in chat.saved)
     assertTrue(second.sessionId in chat.saved)
-    assertEquals(listOf(second), draft.saved.value)
+    assertEquals(listOf(second), draft.saved.value.entries)
   }
 
   @Test
@@ -224,7 +224,7 @@ class NewTaskDraftTest {
     val draft = NewTaskDraft(repository, FakeWorkControlRepository(), testDatabaseSessionController(), toasts, WindowCoroutineScope(backgroundScope), Clock.System)
     draft.refreshSaved()
     runCurrent()
-    assertEquals(listOf(entry), draft.saved.value)
+    assertEquals(listOf(entry), draft.saved.value.entries)
 
     draft.discardSaved(entry)
     runCurrent()
@@ -233,16 +233,16 @@ class NewTaskDraftTest {
     assertTrue(deleting.isCompleted)
     draft.refreshSaved()
     runCurrent()
-    assertTrue(draft.saved.value.isEmpty())
+    assertTrue(draft.saved.value.entries.isEmpty())
     assertTrue(entry.sessionId in chat.saved)
 
     toasts.host.toasts.single().data.actions.single().onClick()
     runCurrent()
-    assertTrue(draft.saved.value.isEmpty())
+    assertTrue(draft.saved.value.entries.isEmpty())
     completeDelete.complete(Unit)
     runCurrent()
     assertTrue(entry.sessionId !in chat.saved)
-    assertTrue(draft.saved.value.isEmpty())
+    assertTrue(draft.saved.value.entries.isEmpty())
   }
 
   // Reusing ChatTurns.freshRead would mark a chat with no execution gone.
@@ -325,7 +325,7 @@ class NewTaskDraftTest {
     next.repository = NewTaskRepository(root, "repo")
     next.refreshSaved()
     runCurrent()
-    next.resume(next.saved.value.single())
+    next.resume(next.saved.value.entries.single())
     runCurrent()
     assertEquals("main", next.baseBranch)
     assertEquals(2, next.chat.value?.thread?.transcript?.value?.size)
@@ -336,7 +336,7 @@ class NewTaskDraftTest {
     next.discard()
     runCurrent()
     assertFalse(sessionId in chat.saved)
-    assertEquals(emptyList(), next.saved.value)
+    assertEquals(emptyList(), next.saved.value.entries)
   }
 
   @Test
