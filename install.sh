@@ -1972,6 +1972,92 @@ install_desktop_app_launcher() {
   [[ -z "$launcher_backup" ]] || rm -f "$launcher_backup"
 }
 
+linux_legacy_desktop_is_owned() {
+  local legacy_app="$1/Skill Bill"
+  local legacy_launcher="$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop"
+  local legacy_entry="${XDG_DATA_HOME:-$HOME/.local/share}/applications/skillbill.desktop"
+  local has_owner=0
+  [[ ! -L "$legacy_app" ]] || return 1
+  if [[ -e "$legacy_launcher" || -L "$legacy_launcher" ]]; then
+    [[ -L "$legacy_launcher" && "$(readlink "$legacy_launcher")" == "$legacy_app/bin/Skill Bill" ]] || return 1
+    has_owner=1
+  fi
+  if [[ -e "$legacy_entry" || -L "$legacy_entry" ]]; then
+    [[ -f "$legacy_entry" && ! -L "$legacy_entry" ]] || return 1
+    grep -Fxq 'Name=Skill Bill' "$legacy_entry" || return 1
+    grep -Fxq "Exec=$(desktop_quoted_exec_path "$legacy_launcher")" "$legacy_entry" || return 1
+    grep -Fxq "Icon=$legacy_app/lib/Skill Bill.png" "$legacy_entry" || return 1
+    grep -Fxq 'StartupWMClass=dev-skillbill-desktop-app-DesktopLauncherKt' "$legacy_entry" || return 1
+    has_owner=1
+  fi
+  [[ "$has_owner" -eq 1 ]]
+}
+
+migrate_kde_desktop_pin() {
+  case "${XDG_CURRENT_DESKTOP:-}:${KDE_FULL_SESSION:-}" in
+    *KDE*|*:true) ;;
+    *) return 0 ;;
+  esac
+  local dbus_command
+  if command -v qdbus6 >/dev/null 2>&1; then
+    dbus_command=qdbus6
+  elif command -v qdbus >/dev/null 2>&1; then
+    dbus_command=qdbus
+  else
+    warn "Could not update the old KDE dock pin because qdbus is unavailable. Unpin Skill Bill and pin Sona."
+    return 0
+  fi
+  if ! "$dbus_command" org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript '
+    var surfaces = desktops().concat(panels());
+    for (var i = 0; i < surfaces.length; i++) {
+      var widgets = surfaces[i].widgets();
+      for (var j = 0; j < widgets.length; j++) {
+        var widget = widgets[j];
+        widget.currentConfigGroup = ["General"];
+        var entries = String(widget.readConfig("launchers", [])).split(",");
+        var changed = false;
+        for (var k = 0; k < entries.length; k++) {
+          if (entries[k] === "applications:skillbill.desktop") {
+            entries[k] = "applications:sona.desktop";
+            changed = true;
+          }
+        }
+        if (changed) widget.writeConfig("launchers", entries);
+      }
+    }
+  ' >/dev/null; then
+    warn "Could not update the old KDE dock pin. Unpin Skill Bill and pin Sona."
+  fi
+}
+
+cleanup_linux_legacy_desktop() {
+  local install_root="$1" legacy_app="$1/Skill Bill"
+  local legacy_launcher="$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop"
+  local applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+  local legacy_entry="$applications_dir/skillbill.desktop"
+  if [[ -e "$legacy_app" || -L "$legacy_app" || -e "$legacy_launcher" || -L "$legacy_launcher" || -e "$legacy_entry" || -L "$legacy_entry" ]]; then
+    if linux_legacy_desktop_is_owned "$install_root"; then
+      if rm -rf -- "$legacy_app" && rm -f -- "$legacy_launcher" "$legacy_entry"; then
+        ok "Removed the previous desktop installation."
+      else
+        warn "Could not finish removing the previous desktop installation under $install_root. Re-run the installer to retry."
+      fi
+    else
+      warn "Preserved legacy desktop files whose ownership could not be confirmed under $install_root."
+      return 0
+    fi
+  fi
+  migrate_kde_desktop_pin
+  if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database "$applications_dir" || warn "Could not refresh the desktop application database."
+  fi
+  if command -v kbuildsycoca6 >/dev/null 2>&1; then
+    kbuildsycoca6 || warn "Could not refresh the KDE application cache."
+  elif command -v kbuildsycoca5 >/dev/null 2>&1; then
+    kbuildsycoca5 || warn "Could not refresh the KDE application cache."
+  fi
+}
+
 BUILT_DESKTOP_APP_SOURCE=""
 # Replacing the app bundle on disk does not affect a copy that is already running, so
 # the installer stops it and relaunches the new build. Matching the full executable
@@ -2223,6 +2309,9 @@ activate_staged_desktop_app() {
   launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
   [[ "$os" != "windows" ]] || launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
   local -a running_pids=() running_paths=("$executable")
+  if [[ "$os" == "linux" ]] && linux_legacy_desktop_is_owned "$install_root"; then
+    running_paths+=("$install_root/Skill Bill/bin/Skill Bill" "$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop")
+  fi
   local running_pid
   if [[ -e "$launcher_path" || -L "$launcher_path" ]]; then
     running_paths+=("$launcher_path")
@@ -2267,6 +2356,9 @@ activate_staged_desktop_app() {
     err "The desktop app files were installed, but its launcher could not be installed."
     DESKTOP_APP_INSTALL_RESULT="launcher failed"
     return 1
+  fi
+  if [[ "$os" == "linux" ]]; then
+    cleanup_linux_legacy_desktop "$install_root"
   fi
   ok "Desktop app installed at $app_target"
   DESKTOP_APP_INSTALL_RESULT="installed at $app_target"

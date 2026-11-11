@@ -26,6 +26,7 @@ WORK_TMPDIRS+=("$REPO_ROOT")
 cp "$SOURCE_REPO_ROOT/install.sh" "$SOURCE_REPO_ROOT/uninstall.sh" "$SOURCE_REPO_ROOT/LICENSE" "$REPO_ROOT/"
 cp -R "$SOURCE_REPO_ROOT/skills" "$SOURCE_REPO_ROOT/platform-packs" "$SOURCE_REPO_ROOT/orchestration" "$SOURCE_REPO_ROOT/agent-addons" "$REPO_ROOT/"
 mkdir -p "$REPO_ROOT/scripts"
+cp "$SOURCE_REPO_ROOT/scripts/desktop_legacy_cleanup_smoke_test.sh" "$REPO_ROOT/scripts/"
 cp "$SOURCE_REPO_ROOT/scripts/desktop_source_install_smoke_test.sh" "$REPO_ROOT/scripts/"
 INSTALL_SH="$REPO_ROOT/install.sh"
 
@@ -579,6 +580,15 @@ CURL
   printf '%s' "$work"
 }
 
+desktop_cache_stubs="$(mktemp -d)"
+WORK_TMPDIRS+=("$desktop_cache_stubs")
+for desktop_command in qdbus6 qdbus update-desktop-database kbuildsycoca6 kbuildsycoca5; do
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$desktop_cache_stubs/$desktop_command"
+  chmod +x "$desktop_cache_stubs/$desktop_command"
+done
+export PATH="$desktop_cache_stubs:$PATH"
+
+bash "$REPO_ROOT/scripts/desktop_legacy_cleanup_smoke_test.sh"
 bash "$REPO_ROOT/scripts/desktop_source_install_smoke_test.sh"
 
 echo "=== install smoke test ==="
