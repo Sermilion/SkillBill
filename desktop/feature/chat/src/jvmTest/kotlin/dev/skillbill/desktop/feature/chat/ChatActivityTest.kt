@@ -1,7 +1,12 @@
 package dev.skillbill.desktop.feature.chat
 
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.runComposeUiTest
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.testing.workItem
 import kotlinx.coroutines.Job
@@ -9,7 +14,11 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
+@OptIn(ExperimentalTestApi::class)
 class ChatActivityTest {
   private val agent = ChatAgent("codex", null, null)
 
@@ -99,6 +108,112 @@ class ChatActivityTest {
     assertEquals("Waiting for response...", chatActivityStatus(true, agent, false, listOf(waiting)))
     assertEquals("Ready", chatActivityStatus(false, agent, false, listOf(waiting)))
     assertEquals("Reading MainActivity.kt", toolActivityLabel(ChatToolCall("read", "Read", """{"file_path":"/repo/MainActivity.kt"}""", null)))
+  }
+
+  // Codex and Cursor end their process with the turn, so what they wait on is a command still running in the reply.
+  @Test
+  fun `a running shell command gets a chip only after a few seconds and loses it with its result`() {
+    val clock = MutableClock()
+    val thread = ChatThread(clock)
+    fun waiting() = waitingCommands(thread.backgroundCommands.value, thread.transcript.value, clock.now).map { it.name }
+
+    val build = ChatToolCall("build", "Terminal", """{"rawInput":{"command":"cd desktop && ./gradlew :feature:chat:jvmTest --tests '*Chat*'"}}""", null)
+    thread.show(agent, ChatEvent.ToolUse(build))
+    thread.show(agent, ChatEvent.ToolUse(ChatToolCall("read", "Read", """{"file_path":"/repo/View.kt"}""", null)))
+    assertEquals(emptyList(), waiting())
+    clock.now += 3.seconds
+    assertEquals(listOf("gradlew jvmTest"), waiting())
+    thread.show(agent, ChatEvent.ToolUse(build.copy(input = """{"status":"in_progress"}""")))
+    assertEquals(listOf("gradlew jvmTest"), waiting())
+    thread.show(agent, ChatEvent.ToolResult(build.id, "BUILD SUCCESSFUL", false))
+    assertEquals(emptyList(), waiting())
+
+    thread.show(agent, ChatEvent.ToolUse(ChatToolCall("serve", "shell", "/bin/zsh -lc 'npm run dev'", null)))
+    clock.now += 5.seconds
+    assertEquals(listOf("npm dev"), waiting())
+    thread.show(agent, ChatEvent.Failed(ChatFailure.ProcessFailed, "stopped"))
+    assertEquals(emptyList(), waiting())
+  }
+
+  // Claude keeps its process after the turn, so a background command outlives the reply that started it.
+  @Test
+  fun `background commands stay after the turn until each ends or the process stops`() {
+    val clock = MutableClock()
+    val thread = ChatThread(clock)
+    fun waiting() = waitingCommands(thread.backgroundCommands.value, thread.transcript.value, clock.now)
+
+    val build = ChatToolCall("build", "Bash", """{"command":"./gradlew check","run_in_background":true}""", "Run the desktop checks")
+    thread.show(agent, ChatEvent.ToolUse(build))
+    thread.show(agent, ChatEvent.ToolUse(ChatToolCall("tail", "Bash", """{"command":"tail -f /tmp/app.log"}""", "tail -f /tmp/app.log")))
+    thread.show(agent, ChatEvent.BackgroundTaskStarted("b1", "build"))
+    thread.show(agent, ChatEvent.BackgroundTaskStarted("b2", "tail"))
+    thread.show(agent, ChatEvent.BackgroundTaskStarted("b1", "build"))
+    thread.show(agent, ChatEvent.ToolResult("build", "Command running in background with ID: b1.", false))
+    thread.show(agent, ChatEvent.ToolResult("tail", "Command running in background with ID: b2.", false))
+    thread.show(agent, ChatEvent.Completed)
+
+    assertEquals(
+      listOf(WaitingCommand("b1", "gradlew check", "Run the desktop checks", clock.now), WaitingCommand("b2", "tail app.log", "tail -f /tmp/app.log", clock.now)),
+      waiting(),
+    )
+    assertEquals("Ready", chatActivityStatus(false, agent, false, thread.transcript.value))
+    thread.show(agent, ChatEvent.BackgroundTaskEnded("b1"))
+    assertEquals(listOf("b2"), waiting().map { it.id })
+    thread.clearBackgroundCommands()
+    assertEquals(emptyList(), waiting())
+  }
+
+  @Test
+  fun `the pill shows the waiting command beside ready and drops it when the command ends`() = runComposeUiTest {
+    val thread = ChatThread(Clock.System)
+    thread.show(agent, ChatEvent.ToolUse(ChatToolCall("build", "Bash", """{"command":"./gradlew assembleDebug"}""", null)))
+    thread.show(agent, ChatEvent.Completed)
+    setContent { SkillBillTheme(reducedMotion = true) { ChatActivityPill(thread) } }
+
+    onNodeWithText("Ready").assertExists()
+    onNodeWithText("gradlew assembleDebug").assertDoesNotExist()
+    runOnIdle { thread.show(agent, ChatEvent.BackgroundTaskStarted("b1", "build")) }
+    onNodeWithText("Ready").assertExists()
+    onNodeWithText("gradlew assembleDebug").assertExists()
+    runOnIdle { thread.show(agent, ChatEvent.BackgroundTaskEnded("b1")) }
+    onNodeWithText("gradlew assembleDebug").assertDoesNotExist()
+  }
+
+  @Test
+  fun `command names stay short and name the step that matters`() {
+    val names = mapOf(
+      "./gradlew :feature:chat:jvmTest --tests '*ChatActivityTest' --continue" to "gradlew jvmTest",
+      "cd desktop && ./gradlew check 2>&1 | tail -50" to "gradlew check",
+      "/bin/zsh -lc 'cd /repo && make -j8'" to "make",
+      "JAVA_HOME=/opt/jdk timeout 600 xcodebuild -scheme App build" to "xcodebuild App",
+      "export CI=1; pnpm run build:prod" to "pnpm build:prod",
+      "python3 -m pytest -q tests/" to "python3 pytest",
+      "sleep 4 && echo done" to "sleep 4",
+      "cargo test --workspace" to "cargo test",
+      "docker compose -f infra/docker-compose.yml up --build" to "docker compose",
+      "node scripts/a-really-long-generated-script-name-for-release.mjs" to "node",
+      "cd /repo" to "command",
+    )
+    assertEquals(names, names.mapValues { (command, _) -> commandName(command) })
+    assertEquals(true, commandName("./gradlew assembleInternalDebugAndroidTest").length <= 32)
+  }
+
+  @Test
+  fun `each agent's shell call is read from where it puts the command`() {
+    fun command(name: String, input: String) = shellCommand(ChatToolCall("call", name, input, null))
+
+    assertEquals("./gradlew check", command("Bash", """{"command":"./gradlew check","run_in_background":true}"""))
+    assertEquals("/bin/zsh -lc 'make'", command("shell", "/bin/zsh -lc 'make'"))
+    assertEquals("./gradlew check", command("functions.exec_command", """{"cmd":"./gradlew check"}"""))
+    assertEquals("./gradlew check", command("Terminal", """{"toolCallId":"t1","kind":"execute","rawInput":{"command":"./gradlew check"}}"""))
+    assertEquals("./gradlew check", command("`./gradlew check`", """{"rawInput":{"command":["./gradlew","check"]}}"""))
+    assertEquals(null, command("Read", "./gradlew"))
+    assertEquals(null, command("mcp__tools__run_task", """{"command":"./gradlew check"}"""))
+    assertEquals(null, command("Terminal", """{"toolCallId":"t1","status":"in_progress"}"""))
+  }
+
+  private class MutableClock(var now: Instant = Instant.fromEpochMilliseconds(1_000_000)) : Clock {
+    override fun now(): Instant = now
   }
 
   @Test

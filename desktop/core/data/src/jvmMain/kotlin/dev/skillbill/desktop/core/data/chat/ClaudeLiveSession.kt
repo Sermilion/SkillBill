@@ -67,6 +67,7 @@ internal class ClaudeLiveSession(
   private var streamStarted = false
   private var wroteText = false
   private var usageDiagnosticRecorded = false
+  private val backgroundTasks = LinkedHashSet<String>()
 
   /** Routes the reply to the message [uuid] into [sink]; false once the process ended, so the caller starts a new one. */
   fun register(uuid: String, sink: SendChannel<ChatEvent>): Boolean = synchronized(lock) {
@@ -127,6 +128,7 @@ internal class ClaudeLiveSession(
   fun abandon() {
     val waiting = close()
     approval?.release()
+    endBackgroundTasks(target)
     target?.close()
     target = null
     unpromptedOpen = false
@@ -167,7 +169,8 @@ internal class ClaudeLiveSession(
       openReply()
       return
     }
-    val decoded = decodeClaudeLine(text)
+    val (background, decoded) = decodeClaudeLine(text).partition { it.isBackgroundTask }
+    background.forEach(::showBackgroundTask)
     val events = buildList {
       if (ChatEvent.MessageStarted in decoded) wroteText = false
       if (wroteText && root?.startsClaudeTextBlock() == true) add(ChatEvent.TextDelta(TEXT_BLOCK_SEPARATOR))
@@ -238,6 +241,7 @@ internal class ClaudeLiveSession(
     }
     input.cancel()
     val (sink, stream) = active
+    endBackgroundTasks(sink)
     val events = stream?.accept(failure) ?: listOf(failure)
     if (sink != null) {
       events.forEach { sink.trySend(it) }
@@ -263,6 +267,28 @@ internal class ClaudeLiveSession(
     if (sink != null) sink.trySend(event) else unprompted(event)
   }
 
+  /**
+   * A background command is not reply text, so like a card it goes to the turn that owns the stream, else through
+   * [unprompted], without opening a reply. An end is reported once, and only for a command this process started.
+   */
+  private fun showBackgroundTask(event: ChatEvent) {
+    val shown = when (event) {
+      is ChatEvent.BackgroundTaskStarted -> backgroundTasks.add(event.taskId)
+      is ChatEvent.BackgroundTaskEnded -> backgroundTasks.remove(event.taskId)
+      else -> false
+    }
+    if (!shown) return
+    val sink = target
+    if (sink != null) sink.trySend(event) else unprompted(event)
+  }
+
+  // The process takes its background commands with it, so each one it started ends with it.
+  private fun endBackgroundTasks(sink: SendChannel<ChatEvent>?) {
+    val ended = backgroundTasks.map(ChatEvent::BackgroundTaskEnded)
+    backgroundTasks.clear()
+    ended.forEach { if (sink != null) sink.trySend(it) else unprompted(it) }
+  }
+
   private fun openReply() {
     reply = ChatReplyStream(diagnostics)
     wroteText = false
@@ -285,6 +311,7 @@ internal class ClaudeLiveSession(
   private fun exited(failure: ChatEvent.Failed) {
     val waiting = close()
     approval?.release()
+    endBackgroundTasks(target)
     when {
       target != null || unpromptedOpen -> emit(failure)
       waiting.isEmpty() -> diagnostics.record("chat.live_process_exited")
@@ -303,6 +330,9 @@ internal class ClaudeLiveSession(
 }
 
 private const val RATE_LIMIT_EVENT = "rate_limit_event"
+
+private val ChatEvent.isBackgroundTask: Boolean
+  get() = this is ChatEvent.BackgroundTaskStarted || this is ChatEvent.BackgroundTaskEnded
 
 private fun userMessage(uuid: String, text: String, images: List<ChatImage>): String = buildJsonObject {
   put("type", "user")

@@ -48,6 +48,11 @@ internal class ChatThread(private val clock: Clock) {
   val stoppableState = MutableStateFlow(false)
   val stoppable: StateFlow<Boolean> = stoppableState.asStateFlow()
 
+  private val backgroundCommandsState = MutableStateFlow<List<WaitingCommand>>(emptyList())
+
+  /** The commands this chat's agent left running in the background, oldest first, until each one ends. */
+  val backgroundCommands: StateFlow<List<WaitingCommand>> = backgroundCommandsState.asStateFlow()
+
   @Volatile
   var dropUnprompted = false
 
@@ -252,8 +257,22 @@ internal class ChatThread(private val clock: Clock) {
 
   fun appendTool(call: ChatToolCall) = updateStreaming { message ->
     val exists = message.tools.any { it.call.id == call.id }
-    message.copy(tools = if (exists) message.tools.map { if (it.call.id == call.id) it.copy(call = call) else it }
-      else message.tools + ChatToolEntry(call, startedAt = clock.now()))
+    message.copy(tools = if (exists) message.tools.map { if (it.call.id == call.id) it.copy(call = call, command = shellCommand(call) ?: it.command) else it }
+      else message.tools + ChatToolEntry(call, startedAt = clock.now(), command = shellCommand(call)))
+  }
+
+  /** Shows the shell command of tool call [callId] as running in the background as [taskId]. */
+  fun backgroundTaskStarted(taskId: String, callId: String) {
+    val entry = messages.value.firstNotNullOfOrNull { message -> (message as? ChatMessage.Agent)?.tools?.firstOrNull { it.call.id == callId } }
+    val waiting = entry?.waitingCommand(taskId, clock.now()) ?: return
+    backgroundCommandsState.update { running -> if (running.any { it.id == taskId }) running else running + waiting }
+  }
+
+  fun backgroundTaskEnded(taskId: String) = backgroundCommandsState.update { running -> running.filterNot { it.id == taskId } }
+
+  /** Forgets every background command, for when the agent process that ran them is stopped. */
+  fun clearBackgroundCommands() {
+    backgroundCommandsState.value = emptyList()
   }
 
   fun recordToolResult(result: ChatEvent.ToolResult) = messages.update { list ->
@@ -311,6 +330,8 @@ internal fun ChatThread.show(agent: ChatAgent?, event: ChatEvent) {
     is ChatEvent.ToolResult -> recordToolResult(event)
     is ChatEvent.SuggestedActions -> suggestActions(event.actions)
     is ChatEvent.ApprovalRequested -> showApproval(event.card)
+    is ChatEvent.BackgroundTaskStarted -> backgroundTaskStarted(event.taskId, event.callId)
+    is ChatEvent.BackgroundTaskEnded -> backgroundTaskEnded(event.taskId)
     ChatEvent.Completed -> endStreaming()
     is ChatEvent.Failed -> {
       endStreaming()

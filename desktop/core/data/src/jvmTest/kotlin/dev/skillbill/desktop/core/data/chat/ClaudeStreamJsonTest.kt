@@ -49,4 +49,30 @@ class ClaudeStreamJsonTest {
       decodeClaudeLine("""{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"bash-1","content":"clean"}]}}"""),
     )
   }
+  @Test
+  fun `only a backgrounded shell command reports its start, and either end report ends it`() {
+    fun decode(line: String) = decodeClaudeLine(line)
+
+    assertEquals(
+      listOf(ChatEvent.BackgroundTaskStarted("b1", "bash-1")),
+      decode("""{"type":"system","subtype":"task_started","task_id":"b1","tool_use_id":"bash-1","description":"Build","is_backgrounded":true,"task_type":"local_bash"}"""),
+    )
+    assertEquals(
+      emptyList(),
+      decode("""{"type":"system","subtype":"task_started","task_id":"a1","tool_use_id":"agent-1","is_backgrounded":true,"task_type":"local_agent"}"""),
+    )
+    assertEquals(
+      emptyList(),
+      decode("""{"type":"system","subtype":"task_started","task_id":"b2","tool_use_id":"bash-2","is_backgrounded":false,"task_type":"local_bash"}"""),
+    )
+    assertEquals(
+      listOf(ChatEvent.BackgroundTaskEnded("b1")),
+      decode("""{"type":"system","subtype":"task_updated","task_id":"b1","patch":{"status":"completed","end_time":1}}"""),
+    )
+    assertEquals(emptyList(), decode("""{"type":"system","subtype":"task_updated","task_id":"b1","patch":{"status":"running"}}"""))
+    assertEquals(
+      listOf(ChatEvent.BackgroundTaskEnded("b1")),
+      decode("""{"type":"system","subtype":"task_notification","task_id":"b1","tool_use_id":"bash-1","status":"failed"}"""),
+    )
+  }
 }

@@ -89,6 +89,7 @@ internal class NewTaskChat(
   internal fun changeModel(next: ChatAgent) {
     if (thread.busy.value || closing || next == agent) return
     chat.end(sessionId)
+    thread.clearBackgroundCommands()
     agent = next
     thread.agentState.value = next
     scope.launch(job + dispatcher) {
@@ -260,6 +261,7 @@ internal class NewTaskChat(
       chat.deleteSavedChat(old)
     }
     unpromptedJob?.cancel()
+    thread.clearBackgroundCommands()
     if (!closing) observeUnprompted()
   }
 
@@ -274,6 +276,7 @@ internal class NewTaskChat(
 
   private fun stopUnprompted() {
     chat.end(sessionId)
+    thread.clearBackgroundCommands()
     scope.launch(job + dispatcher) {
       try {
         thread.endStreaming()
@@ -370,6 +373,11 @@ internal class NewTaskChat(
   }
 
   private suspend fun showUnprompted(event: ChatEvent) {
+    if (event is ChatEvent.BackgroundTaskStarted || event is ChatEvent.BackgroundTaskEnded) {
+      // A background command is not a reply, and it still runs or ends after the operator stopped one.
+      thread.show(thread.agentState.value, event)
+      return
+    }
     if (thread.dropUnprompted) return
     if (event is ChatEvent.ApprovalRequested || event is ChatEvent.Notice) {
       // A card is not reply text: it neither opens a turn nor holds the composer busy.

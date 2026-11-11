@@ -161,6 +161,7 @@ internal class ChatTurns(
       followWorktreeWhileLocked(session)
       if (session.started && session.startedRoot != session.item.workingRoot()) {
         chat.end(session.sessionId)
+        session.thread.clearBackgroundCommands()
         session.restart(UUID.randomUUID().toString())
       }
     }
@@ -190,6 +191,7 @@ internal class ChatTurns(
     val currentRoot = session.item.workingRoot()
     if (currentSource != source || currentRoot != root || currentSource == currentRoot) return
     chat.end(session.sessionId)
+    session.thread.clearBackgroundCommands()
     val result = try {
       chat.moveSessions(source, root)
     } catch (cancelled: CancellationException) {
@@ -309,6 +311,11 @@ internal class ChatTurns(
    * composer while it streams unless an operator turn already does, and is saved once it ends.
    */
   suspend fun unprompted(session: ChatSession, event: ChatEvent) {
+    if (event is ChatEvent.BackgroundTaskStarted || event is ChatEvent.BackgroundTaskEnded) {
+      // A background command is not a reply, and it still runs or ends after the operator stopped one.
+      session.thread.show(session.agentState.value, event)
+      return
+    }
     if (session.thread.dropUnprompted) return
     if (event is ChatEvent.ApprovalRequested || event is ChatEvent.Notice) {
       // A card is not a reply: it neither holds the composer nor ends with a completion, so it never starts an own turn.

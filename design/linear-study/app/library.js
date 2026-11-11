@@ -150,6 +150,16 @@
         buildDemo('First run, no usual time', S.BuildChip(buildAt('first', 'ts'))),
         buildDemo('Failed', S.BuildChip(X.buildOf(null, it('ph-rk-validation')))),
       ].join('')}</div>`],
+      ['CommandChip', 'Beside a chat’s activity label while the chat waits on a command: one left running in the background (Claude), or one running for 3 seconds or more in the current turn (every agent). Spinner, a short name made from the command, the ticking time; hover shows what it runs. More than one adds a +N tag.', () => {
+        const t0 = Date.now();
+        const chip = (name, detail, ms) => S.CommandChip({ name, detail, ms, t0 });
+        const row = (...parts) => `<div class="l-row g-6" style="align-items:center">${parts.join('')}</div>`;
+        return `<div class="l-row g-6 l-wrap">${[
+          buildDemo('Background build after the turn', row(S.Label({ text: 'Ready', dot: false }), chip('gradlew check', 'Run the desktop checks', 42000))),
+          buildDemo('Long command in the turn', row(S.Label({ text: 'Running command...' }), chip('npm dev', 'npm run dev', 5000))),
+          buildDemo('Waiting on two', row(S.Label({ text: 'Ready', dot: false }), chip('cargo test', 'cargo test --workspace', 91000), S.Tag({ text: '+1' }))),
+        ].join('')}</div>`;
+      }],
       ['GroupHeader', 'Board section: Needs you, Goal runs, Standalone phases, Operations, Finished today.', () => S.Box([S.GroupHeader({ lead: S.StatusIcon('blocked'), label: 'Needs you', count: 3 }), S.GroupHeader({ lead: S.StatusIcon('active', 0.5), label: 'Operations', count: 2 })])],
       ['SubtaskRow', 'One line of the Subtasks index: number, status, title, commit, live timer. Click selects it. Selected uses bg-active with the 2px accent bar; the running subtask keeps its amber tint (bg-selected) while not selected. In narrow windows the selected row expands in place with the inspector content.', () => `<div class="l-col g-4">${S.SubtaskList({ label: 'Demo subtasks', rows: [
         S.SubtaskRow({ num: '02', state: 'done', title: 'Point every module at the remote backend', meta: [S.ShortId({ value: it('INF-7').subtasks[1].commit, label: 'commit' })], act: 'noop' }),
