@@ -8,7 +8,7 @@ Areas: desktop/feature/chat, desktop/feature/chat/newtask, desktop/core/domain, 
 - Close, clear, rebind, resume, disposal and application quit retain or expose unresolved recovery. Session, database and process-generation fences reject stale ownership.
 - New Task claims Send now batches and registers ordinary turns under its transition lock before returning. This excludes later additions from an earlier claim and preserves immediate Stop and image-only input; asynchronous work retains its configured dispatcher.
 - Active handles, claims and recovery images remain in memory. Recovery lasts only for the live application session; no saved chat schema or workflow contract changed.
-- Limits: authenticated live-provider behavior and native macOS/Windows remain unverified. QA was not repeated after later gate repairs changed the tree.
+- Limits: authenticated live-provider behavior and native macOS/Windows remain unverified. Validation changed code after QA settled, so QA does not cover the final tree.
 Feature size: MEDIUM
 Feature flag: N/A
 Acceptance criteria: 1/1 parent criterion implemented in source across 9/9 refined subtask criteria; live-provider behavior remains unverified.

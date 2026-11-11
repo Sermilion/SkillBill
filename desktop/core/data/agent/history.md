@@ -7,7 +7,7 @@ Areas: desktop/core/data/chat, desktop/core/domain, runtime-kotlin/runtime-infra
 - Completion closes new steering admission while retaining submitted registrations for buffered replies. Teardown classifies unresolved requests from write evidence without keeping the process alive solely for acknowledgement.
 - reusable: CodexTurnImages owns a unique directory for initial and steering images, uses collision-safe files and serializes creation with cleanup. Rejection retains files until turn teardown.
 - Both transports publish retained per-session delivery updates until retirement and use the shared queue's fallback, uncertainty and explicit retry ownership. No provider idempotency or reconciliation guarantee is assumed.
-- Limits: authenticated provider behavior remains unverified, and QA did not cover the final gate-repaired tree. No durable chat schema or runtime workflow contract changed.
+- Limits: authenticated provider behavior remains unverified. Validation changed code after QA settled, so QA does not cover the final tree. No durable chat schema or runtime workflow contract changed.
 Feature size: MEDIUM
 Feature flag: N/A
 Acceptance criteria: 4/4 Codex subtask criteria implemented in source; shared Claude and consumer coverage is recorded in desktop/feature/chat/agent/history.md.
