@@ -104,6 +104,7 @@ internal class ChatTurns(
 
   /** Follows a removed worktree, then ends the agent session when the started root is not the one the next turn runs in. */
   suspend fun followRoot(session: ChatSession) {
+    session.awaitAcceptedPersistence()
     followWorktree(session)
     if (session.thread.hasDeliveryClaim()) return
     if (session.item.goalWorktree != null && session.started && session.startedRoot != session.item.workingRoot()) {
@@ -117,6 +118,7 @@ internal class ChatTurns(
    * root and posts the notice. A started Claude or Codex session whose move had no failure keeps its id and resumes in the root.
    */
   suspend fun followWorktree(session: ChatSession) {
+    session.awaitAcceptedPersistence()
     val replacing = worktreeGone(session.item) && !session.worktreeRemovedNoticed ||
       session.started && session.startedRoot != session.item.workingRoot()
     if (replacing && session.thread.hasDeliveryClaim()) {
@@ -272,6 +274,7 @@ internal class ChatTurns(
 
   /** Closes a turn the operator stopped: a session the agent never created is not saved, and the next turn opens a new one. */
   suspend fun finishStopped(session: ChatSession) {
+    session.awaitAcceptedPersistence()
     session.endStreaming()
     session.append(ChatMessage.Notice(STOPPED_NOTICE))
     val agent = session.agentState.value
@@ -294,9 +297,21 @@ internal class ChatTurns(
     return true
   }
 
+  internal fun acceptedTranscript(session: ChatSession): ChatHistoryEntry? {
+    val agent = session.agentState.value ?: return null
+    val lines = session.historyLines()
+    val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
+    return ChatHistoryEntry(session.sessionId, session.item.id, agent, clock.now(), title, lines)
+  }
+
+  internal suspend fun saveAccepted(session: ChatSession, entry: ChatHistoryEntry) {
+    session.transcriptSaveLock.withLock { chat.saveChat(entry) }
+  }
+
   private suspend fun save(session: ChatSession, agent: ChatAgent) {
     val lines = session.historyLines()
     val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
-    chat.saveChat(ChatHistoryEntry(session.sessionId, session.item.id, agent, clock.now(), title, lines))
+    val entry = ChatHistoryEntry(session.sessionId, session.item.id, agent, clock.now(), title, lines)
+    session.transcriptSaveLock.withLock { chat.saveChat(entry) }
   }
 }

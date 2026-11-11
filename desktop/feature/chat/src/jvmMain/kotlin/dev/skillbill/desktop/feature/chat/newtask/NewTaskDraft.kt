@@ -421,44 +421,48 @@ class NewTaskDraft internal constructor(
   /** Opens a new agent session on the current repository, branch and agent, keeping the transcript. */
   internal fun rebindChat() {
     val current = chatState.value ?: return
-    if (current.thread.deferDestructiveAction("change the draft context")) return
-    val agent = selectedAgent ?: return
-    val repo = repository ?: return
-    if (closing || current.repositoryMissing || current.thread.busy.value || offerState.value.starting) return
-    val branch = baseBranch.ifBlank { null }
-    if (current.repositoryRoot == repo.root && current.baseBranch == branch && current.agent.agentId == agent.agentId) return
-    val lines = current.thread.transcript.value
-    val previousId = current.sessionId
-    val replay = (current.pendingReplay?.takeIf { !current.started }
-      ?: NewTaskReplay(current.agent.agentId, current.repositoryRoot, current.baseBranch, lines))
-      .takeIf { newTaskReplayPreamble(it, repo.root, branch) != null }
-    if (!current.end()) return
-    val sameRepository = current.repositoryRoot == repo.root
-    val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay,
-      changesBaseline = current.changesBaseline.takeIf { sameRepository },
-      resumedChanges = current.changesResumed && sameRepository,
-      changesCaptureAttempted = (current.changesCaptureAttempted || current.started || current.changesBaseline != null) && sameRepository)
-    val switched = "Switched to ${chipText(agent)} in ${repo.name}."
-    val notice = if (replay != null) "$switched It gets the earlier conversation with your next message." else switched
-    next.thread.showCapability(agent)
-    next.thread.replaceTranscript(lines + ChatMessage.Notice(notice))
-    scope.launch {
-      current.job.join()
-      if (!cards.hasOutstanding(current.thread) && !current.thread.hasDeliveryClaim()) {
-        val lock = saveLocks[previousId]
-        if (lock != null) {
-          lock.withLock {
-            chats.deleteSavedChat(previousId)
-            retainedThreads.remove(previousId, current.thread)
-            saveLocks.remove(previousId, lock)
-            synchronized(cardOwners) { cardOwners.remove(current.thread) }
-          }
-        } else chats.deleteSavedChat(previousId)
+    synchronized(current.transitionLock) {
+      if (current.deferAcceptedSave(::rebindChat)) return
+      if (current.thread.deferDestructiveAction("change the draft context")) return
+      val agent = selectedAgent ?: return
+      val repo = repository ?: return
+      if (closing || current.repositoryMissing || current.thread.busy.value || offerState.value.starting) return
+      val branch = baseBranch.ifBlank { null }
+      if (current.repositoryRoot == repo.root && current.baseBranch == branch && current.agent.agentId == agent.agentId) return
+      val lines = current.thread.transcript.value
+      val previousId = current.sessionId
+      val replay = (current.pendingReplay?.takeIf { !current.started }
+        ?: NewTaskReplay(current.agent.agentId, current.repositoryRoot, current.baseBranch, lines))
+        .takeIf { newTaskReplayPreamble(it, repo.root, branch) != null }
+      if (!current.end()) return
+      val sameRepository = current.repositoryRoot == repo.root
+      val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay,
+        changesBaseline = current.changesBaseline.takeIf { sameRepository },
+        resumedChanges = current.changesResumed && sameRepository,
+        changesCaptureAttempted = (current.changesCaptureAttempted || current.started || current.changesBaseline != null) && sameRepository)
+      val switched = "Switched to ${chipText(agent)} in ${repo.name}."
+      val notice = if (replay != null) "$switched It gets the earlier conversation with your next message." else switched
+      next.thread.showCapability(agent)
+      next.thread.replaceTranscript(lines + ChatMessage.Notice(notice))
+      scope.launch {
+        current.job.join()
+        current.awaitAcceptedSaves()
+        if (!cards.hasOutstanding(current.thread) && !current.thread.hasDeliveryClaim()) {
+          val lock = saveLocks[previousId]
+          if (lock != null) {
+            lock.withLock {
+              chats.deleteSavedChat(previousId)
+              retainedThreads.remove(previousId, current.thread)
+              saveLocks.remove(previousId, lock)
+              synchronized(cardOwners) { cardOwners.remove(current.thread) }
+            }
+          } else chats.deleteSavedChat(previousId)
+        }
+        if (!next.persist() && chatState.value === next) {
+          next.thread.append(ChatMessage.Notice("This draft could not be saved. Keep it open and try again."))
+        }
+        refreshSaved()
       }
-      if (!next.persist() && chatState.value === next) {
-        next.thread.append(ChatMessage.Notice("This draft could not be saved. Keep it open and try again."))
-      }
-      refreshSaved()
     }
   }
 

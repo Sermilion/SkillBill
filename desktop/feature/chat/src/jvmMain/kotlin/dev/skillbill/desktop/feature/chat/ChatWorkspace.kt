@@ -323,22 +323,25 @@ class ChatWorkspace(
       return
     }
     val session = sessions[id] ?: return
-    if (session.thread.deferDestructiveAction("close this chat")) {
-      activate(id)
-      setPaneOpen(true)
-      return
+    synchronized(session) {
+      if (deferAcceptedPersistence(session) { close(id) }) return
+      if (session.thread.deferDestructiveAction("close this chat")) {
+        activate(id)
+        setPaneOpen(true)
+        return
+      }
+      sessions.remove(id)
+      drafts.remove(id)
+      cursorMcpDependencies.remove(id)
+      pastedImages.remove(id)
+      operationCards.remove(id)
+      session.job.cancel()
+      chat.end(session.sessionId)
+      // Read now, because a restart can rotate the session id.
+      chat.requestSummary(session.sessionId)
+      tabState.update { it.without(id) }
+      observeActive()
     }
-    sessions.remove(id)
-    drafts.remove(id)
-    cursorMcpDependencies.remove(id)
-    pastedImages.remove(id)
-    operationCards.remove(id)
-    session.job.cancel()
-    chat.end(session.sessionId)
-    // Read now, because a restart can rotate the session id.
-    chat.requestSummary(session.sessionId)
-    tabState.update { it.without(id) }
-    observeActive()
   }
 
   /** Ends every chat, and every New task chat's agent process with its saved draft kept. Resumes are cancelled first, so a quit mid-act leaves the execution paused rather than half resumed. */
@@ -349,6 +352,7 @@ class ChatWorkspace(
       return false
     }
     if (!newTask.closeAll()) return false
+    sessions.values.toList().forEach { it.awaitAcceptedPersistence() }
     closeExecutionChats()
     return true
   }
@@ -374,6 +378,22 @@ class ChatWorkspace(
     }
     approvalTabs.keys.toList().forEach(::close)
     observeActive()
+  }
+
+  private fun deferAcceptedPersistence(session: ChatSession, action: () -> Unit): Boolean {
+    if (!session.hasPendingAcceptedPersistence()) return false
+    scope.launch {
+      session.awaitAcceptedPersistence()
+      action()
+    }
+    return true
+  }
+
+  private fun persistAccepted(session: ChatSession) {
+    val entry = turns.acceptedTranscript(session) ?: return
+    val save = scope.launch(start = CoroutineStart.LAZY) { turns.saveAccepted(session, entry) }
+    session.trackAcceptedPersistence(save)
+    save.start()
   }
 
   internal fun retryDelivery(id: String, deliveryId: String) {
@@ -552,7 +572,8 @@ class ChatWorkspace(
     } else {
       (session.steering ?: ChatSteeringDelivery(chat, diagnostics, session.thread, CoroutineScope(scope.coroutineContext + session.job), session,
         { captured -> sessions[id] === session && session.job.isActive && session.sessionId == captured },
-        { drainQueue(session) }).also { session.steering = it }).send(session.sessionId, agent.agentId)
+        { drainQueue(session) },
+        { persistAccepted(session) }).also { session.steering = it }).send(session.sessionId, agent.agentId)
     }
   }
 
@@ -627,12 +648,14 @@ class ChatWorkspace(
    */
   fun switchAgent(id: String, agentId: String) {
     val session = sessions[id] ?: return
+    if (deferAcceptedPersistence(session) { switchAgent(id, agentId) }) return
     if (session.thread.deferDestructiveAction("switch agents")) return
     if (session.busyState.value || session.agentState.value?.agentId == agentId) return
     cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
     session.busyState.value = true
     session.stoppableState.value = false
     launchTurn(session) {
+      session.awaitAcceptedPersistence()
       val agent = chat.agentFor(agentId)
       session.agentState.value = agent
       session.agentSupportedState.value = chat.supports(agentId)
@@ -650,6 +673,7 @@ class ChatWorkspace(
    */
   fun clear(id: String) {
     val session = sessions[id] ?: return
+    if (deferAcceptedPersistence(session) { clear(id) }) return
     if (session.thread.deferDestructiveAction("clear this chat")) return
     cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
     pastedImages.remove(id)
@@ -662,6 +686,7 @@ class ChatWorkspace(
     session.stoppableState.value = false
     launchTurn(session) {
       running?.cancelAndJoin()
+      session.awaitAcceptedPersistence()
       endAgent(session)
       session.restart(UUID.randomUUID().toString())
       session.replaceTranscript(listOf(stateCard(session.item), ChatMessage.Notice(CLEARED_NOTICE)))
@@ -690,6 +715,7 @@ class ChatWorkspace(
    */
   fun resume(id: String, entry: ChatHistoryEntry) {
     val session = sessions[id] ?: return
+    if (deferAcceptedPersistence(session) { resume(id, entry) }) return
     if (session.thread.deferDestructiveAction("resume another chat")) return
     cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
     session.resumeChoicesState.value = null

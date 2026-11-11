@@ -84,12 +84,13 @@ internal class NewTaskChat(
   private val diagnostics: Diagnostics,
   private val canRecover: () -> Boolean = { true },
 ) {
-  private val transitionLock = Any()
+  internal val transitionLock = Any()
   private val transitionDispatcher = if (dispatcher == Dispatchers.Unconfined) {
     diagnostics.record("chat.unconfined_transitions")
     dispatcher
   } else dispatcher.limitedParallelism(1)
   private val finishingTurns = mutableSetOf<Job>()
+  private val acceptedSaves = mutableSetOf<Job>()
   private val sessionIdState = MutableStateFlow(initialSessionId)
   val sessionIdFlow: StateFlow<String> = sessionIdState.asStateFlow()
   val sessionId: String get() = sessionIdState.value
@@ -117,7 +118,7 @@ internal class NewTaskChat(
   private var recoveryOnly = false
   private val steering = ChatSteeringDelivery(chat, diagnostics, thread,
     CoroutineScope(scope.coroutineContext + job + transitionDispatcher), transitionLock,
-    { captured -> job.isActive && !closing && sessionId == captured && canPersist() }, ::scheduleDrain)
+    { captured -> job.isActive && !closing && sessionId == captured && canPersist() }, ::scheduleDrain, ::persistAccepted)
   @Volatile
   var started = initiallyStarted
     private set
@@ -273,6 +274,7 @@ internal class NewTaskChat(
 
   private suspend fun rotateSession() {
     if (thread.hasDeliveryClaim() || recoveryOnly) return
+    awaitAcceptedSaves()
     val old = sessionId
     saveLock.withLock {
       sessionIdState.value = UUID.randomUUID().toString()
@@ -324,6 +326,7 @@ internal class NewTaskChat(
       closing = true
       unpromptedReplyActive = false
     }
+    awaitAcceptedSaves()
     thread.clearQueuedEntries()
     val observer = unpromptedJob
     if (observer != null) observer.cancelAndJoin()
@@ -498,6 +501,43 @@ internal class NewTaskChat(
       is ChatMessage.OperationCard -> message.savedOperationCardLine()
       is ChatMessage.StateLine -> null
     }
+  }
+
+  private fun persistAccepted() {
+    val acceptedSessionId = sessionId
+    val lines = snapshotLines()
+    val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
+    val context = ChatNewTaskContext(repositoryRoot, baseBranch, started, pendingTurnLineIndex, changesTracker.baseline, changesTracker.captureAttempted)
+    val entry = ChatHistoryEntry(acceptedSessionId, null, agent, clock.now(), title, lines, context)
+    val save = scope.launch(transitionDispatcher, start = CoroutineStart.LAZY) {
+      val saved = saveLock.withLock {
+        if (canPersist()) chat.saveNewTaskDraft(entry)
+        else false
+      }
+      if (saved) onSaved()
+    }
+    synchronized(transitionLock) {
+      acceptedSaves += save
+      save.invokeOnCompletion { synchronized(transitionLock) { acceptedSaves -= save } }
+    }
+    save.start()
+  }
+
+  internal suspend fun awaitAcceptedSaves() {
+    while (true) {
+      val pending = synchronized(transitionLock) { acceptedSaves.toList() }
+      if (pending.isEmpty()) return
+      pending.forEach { it.join() }
+    }
+  }
+
+  internal fun deferAcceptedSave(action: () -> Unit): Boolean {
+    if (synchronized(transitionLock) { acceptedSaves.all { it.isCompleted } }) return false
+    scope.launch {
+      awaitAcceptedSaves()
+      action()
+    }
+    return true
   }
 
   private suspend fun save(): Boolean {

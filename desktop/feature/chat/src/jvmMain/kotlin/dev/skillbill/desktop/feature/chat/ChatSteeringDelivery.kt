@@ -18,6 +18,7 @@ internal class ChatSteeringDelivery(
   private val ownerLock: Any,
   private val valid: (String) -> Boolean,
   private val drain: () -> Unit,
+  private val accepted: () -> Unit = {},
 ) {
   private class Attempt(val request: ChatSteeringRequest, val entries: List<QueuedChatMessage>) {
     var observer: Job? = null
@@ -73,6 +74,7 @@ internal class ChatSteeringDelivery(
         thread.endStreaming()
         thread.append(ChatMessage.Operator(attempt.request.text, attempt.entries.singleOrNull()?.action,
           attempt.request.images, deliveryId = result.deliveryId))
+        accepted()
         retire(attempt)
         if (!settling) drain()
       }

@@ -12,6 +12,7 @@ import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -74,6 +75,23 @@ class ChatSession internal constructor(
   internal var pauseWatch: Job? = null
   internal var unpromptedObserver: Job? = null
   internal var approvalObserver: Job? = null
+  internal val transcriptSaveLock = Mutex()
+  private val acceptedPersistences = mutableSetOf<Job>()
+
+  internal fun trackAcceptedPersistence(job: Job) = synchronized(this) {
+    acceptedPersistences += job
+    job.invokeOnCompletion { synchronized(this) { acceptedPersistences -= job } }
+  }
+
+  internal fun hasPendingAcceptedPersistence(): Boolean = synchronized(this) { acceptedPersistences.any { !it.isCompleted } }
+
+  internal suspend fun awaitAcceptedPersistence() {
+    while (true) {
+      val pending = synchronized(this) { acceptedPersistences.toList() }
+      if (pending.isEmpty()) return
+      pending.forEach { it.join() }
+    }
+  }
 
   /** The next turn opens [newSessionId] and sends the full snapshot, as a first turn does. */
   internal fun restart(newSessionId: String) {
