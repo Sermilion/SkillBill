@@ -379,7 +379,7 @@ class NewTaskDraft internal constructor(
   }
 
   /** Ends the chat and deletes its saved draft; the selections and any typed text stay. False when there was no chat to discard. */
-  internal fun discard(): Boolean {
+  internal suspend fun discard(): Boolean {
     if (closing) return false
     val current = chatState.value ?: return false
     val saveLock = saveLocks[current.sessionId]
@@ -398,7 +398,7 @@ class NewTaskDraft internal constructor(
   internal fun discardSaved(entry: ChatHistoryEntry) {
     if (closing) return
     if (chatState.value?.sessionId == entry.sessionId) {
-      discard()
+      scope.launch { discard() }
       return
     }
     savedChats.discardSaved(entry)
@@ -421,9 +421,14 @@ class NewTaskDraft internal constructor(
   /** Opens a new agent session on the current repository, branch and agent, keeping the transcript. */
   internal fun rebindChat() {
     val current = chatState.value ?: return
-    synchronized(current.transitionLock) {
-      if (current.deferAcceptedSave(::rebindChat)) return
-      if (current.thread.deferDestructiveAction("change the draft context")) return
+    scope.launch {
+      rebindChat(current)
+    }
+  }
+
+  private suspend fun rebindChat(current: NewTaskChat) {
+    val rebind = synchronized(current.transitionLock) {
+      if (current.deferAcceptedSave { rebindChat() } || current.thread.deferDestructiveAction("change the draft context")) return
       val agent = selectedAgent ?: return
       val repo = repository ?: return
       if (closing || current.repositoryMissing || current.thread.busy.value || offerState.value.starting) return
@@ -434,37 +439,48 @@ class NewTaskDraft internal constructor(
       val replay = (current.pendingReplay?.takeIf { !current.started }
         ?: NewTaskReplay(current.agent.agentId, current.repositoryRoot, current.baseBranch, lines))
         .takeIf { newTaskReplayPreamble(it, repo.root, branch) != null }
-      if (!current.end()) return
-      val sameRepository = current.repositoryRoot == repo.root
-      val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay,
-        changesBaseline = current.changesBaseline.takeIf { sameRepository },
-        resumedChanges = current.changesResumed && sameRepository,
-        changesCaptureAttempted = (current.changesCaptureAttempted || current.started || current.changesBaseline != null) && sameRepository)
-      val switched = "Switched to ${chipText(agent)} in ${repo.name}."
-      val notice = if (replay != null) "$switched It gets the earlier conversation with your next message." else switched
-      next.thread.showCapability(agent)
-      next.thread.replaceTranscript(lines + ChatMessage.Notice(notice))
-      scope.launch {
-        current.job.join()
-        current.awaitAcceptedSaves()
-        if (!cards.hasOutstanding(current.thread) && !current.thread.hasDeliveryClaim()) {
-          val lock = saveLocks[previousId]
-          if (lock != null) {
-            lock.withLock {
-              chats.deleteSavedChat(previousId)
-              retainedThreads.remove(previousId, current.thread)
-              saveLocks.remove(previousId, lock)
-              synchronized(cardOwners) { cardOwners.remove(current.thread) }
-            }
-          } else chats.deleteSavedChat(previousId)
-        }
-        if (!next.persist() && chatState.value === next) {
-          next.thread.append(ChatMessage.Notice("This draft could not be saved. Keep it open and try again."))
-        }
-        refreshSaved()
+      Rebind(agent, repo, branch, lines, previousId, replay)
+    } ?: return
+    val (agent, repo, branch, lines, previousId, replay) = rebind
+    if (!current.end()) return
+    val sameRepository = current.repositoryRoot == repo.root
+    val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay,
+      changesBaseline = current.changesBaseline.takeIf { sameRepository },
+      resumedChanges = current.changesResumed && sameRepository,
+      changesCaptureAttempted = (current.changesCaptureAttempted || current.started || current.changesBaseline != null) && sameRepository)
+    val switched = "Switched to ${chipText(agent)} in ${repo.name}."
+    val notice = if (replay != null) "$switched It gets the earlier conversation with your next message." else switched
+    next.thread.showCapability(agent)
+    next.thread.replaceTranscript(lines + ChatMessage.Notice(notice))
+    scope.launch {
+      current.job.join()
+      current.awaitAcceptedSaves()
+      if (!cards.hasOutstanding(current.thread) && !current.thread.hasDeliveryClaim()) {
+        val lock = saveLocks[previousId]
+        if (lock != null) {
+          lock.withLock {
+            chats.deleteSavedChat(previousId)
+            retainedThreads.remove(previousId, current.thread)
+            saveLocks.remove(previousId, lock)
+            synchronized(cardOwners) { cardOwners.remove(current.thread) }
+          }
+        } else chats.deleteSavedChat(previousId)
       }
+      if (!next.persist() && chatState.value === next) {
+        next.thread.append(ChatMessage.Notice("This draft could not be saved. Keep it open and try again."))
+      }
+      refreshSaved()
     }
   }
+
+  private data class Rebind(
+    val agent: ChatAgent,
+    val repository: NewTaskRepository,
+    val branch: String?,
+    val lines: List<ChatMessage>,
+    val previousId: String,
+    val replay: NewTaskReplay?,
+  )
 
   /** Opens [entry] in this empty draft on its agent session, or with only Discard offered when its repository no longer exists. */
   internal fun resume(entry: ChatHistoryEntry): Boolean {
@@ -502,7 +518,12 @@ class NewTaskDraft internal constructor(
   }
 
   internal fun dispose() {
-    if (chatState.value?.end() == false) return
+    scope.launch { disposeAndAwait() }
+  }
+
+  internal suspend fun disposeAndAwait() {
+    val current = chatState.value
+    if (current?.end() == false) return
     chatState.value = null
     images = emptyList()
     clearChatFeedback()
@@ -557,7 +578,7 @@ class NewTaskDraft internal constructor(
   }
 
   // Waits for the cancelled turn first, so a save it had in flight cannot recreate a deleted draft or miss the refreshed list.
-  private fun leave(current: NewTaskChat, beforeLeave: () -> Unit = {}, afterEnd: suspend () -> Unit): Boolean {
+  private suspend fun leave(current: NewTaskChat, beforeLeave: () -> Unit = {}, afterEnd: suspend () -> Unit): Boolean {
     if (!current.end()) return false
     beforeLeave()
     if (chatState.value === current) {

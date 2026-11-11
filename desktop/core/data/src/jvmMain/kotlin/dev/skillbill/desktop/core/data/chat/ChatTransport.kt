@@ -42,6 +42,9 @@ interface ChatTransport {
 
   /** Stops the process kept for [sessionId] between turns; a transport that keeps none has nothing to stop. */
   fun end(sessionId: String) = Unit
+
+  /** Waits until cleanup started by [end] has published any retained steering responses. */
+  suspend fun awaitEnd(sessionId: String) = Unit
 }
 
 /** Registers each agent's transport; another agent adds one more provider here. */

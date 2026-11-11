@@ -59,6 +59,9 @@ interface ExecutionChatRepository {
    */
   fun end(sessionId: String)
 
+  /** Waits for [end] cleanup to publish any retained steering responses. */
+  suspend fun awaitEnd(sessionId: String) {}
+
   /**
    * What `/resume` offers, newest first: every agent CLI's own sessions in [repositoryRoot], and the app's saved chats of
    * [executionId] for agents without a session store. The chat now open as [currentSessionId] is left out. A store that cannot

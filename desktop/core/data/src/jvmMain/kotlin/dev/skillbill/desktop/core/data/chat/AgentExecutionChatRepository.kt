@@ -97,6 +97,8 @@ class AgentExecutionChatRepository(
 
   override fun end(sessionId: String) = transports.forEach { it.end(sessionId) }
 
+  override suspend fun awaitEnd(sessionId: String) = transports.forEach { it.awaitEnd(sessionId) }
+
   override suspend fun savedChats(executionId: String, repositoryRoot: String, currentSessionId: String): List<ChatHistoryEntry> =
     withContext(Dispatchers.IO) { catalog.list(executionId, repositoryRoot, currentSessionId, resolver::forAgent) }
 

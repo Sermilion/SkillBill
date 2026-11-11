@@ -101,6 +101,10 @@ class FakeExecutionChatRepository(
     ended += sessionId
   }
 
+  var awaitEndAction: suspend (String) -> Unit = {}
+
+  override suspend fun awaitEnd(sessionId: String) = awaitEndAction(sessionId)
+
   /** Every `moveSessions` call as (fromRoot, toRoot); [moveResult] answers it. */
   val moveCalls: MutableList<Pair<String, String>> = Collections.synchronizedList(mutableListOf())
   var moveResult: suspend (String, String) -> SessionMoveResult = { _, _ -> SessionMoveResult(0, 0, 0) }

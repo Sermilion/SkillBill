@@ -4,10 +4,12 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
 import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 internal class ChatSteeringDelivery(
@@ -103,16 +105,25 @@ internal class ChatSteeringDelivery(
     }
   }
 
-  fun detach(stop: () -> Unit) = synchronized(ownerLock) {
-    val previous = settling
-    settling = true
-    try {
+  suspend fun detach(stop: () -> Unit) {
+    val (attempt, previous) = synchronized(ownerLock) {
+      val current = active
+      val wasSettling = settling
+      settling = true
       settle()
       stop()
-      settle()
-      active?.let(::retire)
-    } finally {
-      settling = previous
+      current to wasSettling
+    }
+    if (attempt != null) withContext(NonCancellable) { repository.awaitEnd(attempt.request.sessionId) }
+    synchronized(ownerLock) {
+      try {
+        if (attempt != null) {
+          settle()
+          active?.let(::retire)
+        }
+      } finally {
+        settling = previous
+      }
     }
   }
 

@@ -350,24 +350,37 @@ internal class NewTaskChat(
     saved
   }
 
-  fun end(): Boolean = synchronized(transitionLock) {
-    unpromptedReplyActive = false
-    changesTracker.end()
-    if (thread.hasDeliveryClaim()) {
-      recoveryOnly = true
-      steering.detach { chat.end(sessionId) }
-      thread.deferDestructiveAction("dispose of this draft")
-      job.children.forEach { it.cancel() }
-      thread.endStreaming()
-      thread.stoppableState.value = false
-      thread.busyState.value = false
-      if (thread.hasDeliveryClaim()) return@synchronized false
+  suspend fun end(): Boolean {
+    val hasClaim = synchronized(transitionLock) {
+      unpromptedReplyActive = false
+      changesTracker.end()
+      if (thread.hasDeliveryClaim()) {
+        recoveryOnly = true
+        thread.deferDestructiveAction("dispose of this draft")
+        true
+      } else false
     }
-    thread.clearQueuedEntries()
-    thread.stoppableState.value = false
-    job.cancel()
-    chat.end(sessionId)
-    true
+    if (hasClaim) steering.detach { chat.end(sessionId) }
+    synchronized(transitionLock) {
+      if (hasClaim && thread.hasDeliveryClaim()) {
+        job.children.forEach { it.cancel() }
+        thread.endStreaming()
+        thread.stoppableState.value = false
+        thread.busyState.value = false
+        return false
+      }
+      if (hasClaim && thread.queued.value.isNotEmpty()) {
+        recoveryOnly = false
+        thread.stoppableState.value = false
+        thread.busyState.value = false
+        return false
+      }
+      thread.clearQueuedEntries()
+      thread.stoppableState.value = false
+      job.cancel()
+      if (!hasClaim) chat.end(sessionId)
+      return true
+    }
   }
 
   fun retryDelivery(deliveryId: String) {

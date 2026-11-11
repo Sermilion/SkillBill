@@ -212,7 +212,7 @@ class NewTaskChats(
 
   /** Ends [draft]'s chat, deletes its save and removes it, with no toast. */
   fun discard(draft: NewTaskDraft) {
-    if (draft in openState.value && draft.discard()) remove(draft)
+    scope.launch { if (draft in openState.value && draft.discard()) remove(draft) }
   }
 
   /** Deletes [entry], removing the open chat that holds it like a tab's Discard does. */
@@ -259,7 +259,9 @@ class NewTaskChats(
 
   internal fun refreshSaved() = savedChats.refresh()
 
-  internal fun disposeAll() = openState.value.forEach { it.dispose() }
+  internal suspend fun disposeAll() {
+    openState.value.forEach { it.disposeAndAwait() }
+  }
 
   /** Closes every open chat. False when any one fails to save; that chat stays open, so calling again retries it. */
   internal suspend fun closeAll(): Boolean = openState.value.map { draft ->

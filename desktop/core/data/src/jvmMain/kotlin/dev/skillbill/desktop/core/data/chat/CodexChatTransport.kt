@@ -290,4 +290,8 @@ class CodexChatTransport(
     val active = activeTurns[sessionId]
     if (active != null) active.cancel()
   }
+
+  override suspend fun awaitEnd(sessionId: String) {
+    activeTurns[sessionId]?.join()
+  }
 }

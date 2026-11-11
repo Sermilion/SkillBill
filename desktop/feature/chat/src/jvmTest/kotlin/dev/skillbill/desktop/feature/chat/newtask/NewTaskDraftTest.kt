@@ -39,6 +39,7 @@ import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatWorkspace
 import dev.skillbill.desktop.feature.chat.STOPPED_NOTICE
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -224,9 +225,14 @@ class NewTaskDraftTest {
     chat.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
     chat.steeringResult = { ChatSteeringResult.DeliveryUncertain(it.deliveryId, "Awaiting acknowledgement") }
     var turns = 0
+    val finishFirst = CompletableDeferred<Unit>()
     chat.events = {
       turns++
-      if (turns == 1) flow { emit(ChatEvent.TextDelta("reply")); awaitCancellation() } else flowOf(ChatEvent.Completed)
+      if (turns == 1) flow {
+        emit(ChatEvent.TextDelta("reply"))
+        finishFirst.await()
+        emit(ChatEvent.Completed)
+      } else flowOf(ChatEvent.Completed)
     }
     val draft = draft()
     draft.say("question")
@@ -241,6 +247,8 @@ class NewTaskDraftTest {
     runCurrent()
     val request = chat.steeringRequests.single()
     assertTrue(current.thread.hasDeliveryClaim())
+    finishFirst.complete(Unit)
+    runCurrent()
 
     chat.retainedSteering.value = mapOf((request.sessionId to request.deliveryId) to
       ChatSteeringUpdate(request.sessionId, ChatSteeringResult.Rejected(request.deliveryId, "turn already ended")))
@@ -253,6 +261,45 @@ class NewTaskDraftTest {
     assertEquals(null, current.thread.delivery.value)
     assertEquals(1, chat.retiredSteering.count { it.third == request.deliveryId })
     assertEquals(1, current.thread.transcript.value.filterIsInstance<ChatMessage.Operator>().count { it.text == "rejected batch" })
+  }
+
+  @Test
+  fun `new task teardown retains ownership until cancellation cleanup publishes rejection`() = runTest {
+    chat.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
+    chat.steeringResult = { ChatSteeringResult.DeliveryUncertain(it.deliveryId, "Awaiting acknowledgement") }
+    chat.events = { flow { emit(ChatEvent.TextDelta("reply")); awaitCancellation() } }
+    val cleanupStarted = CompletableDeferred<Unit>()
+    val cleanupFinished = CompletableDeferred<Unit>()
+    chat.awaitEndAction = {
+      cleanupStarted.complete(Unit)
+      cleanupFinished.await()
+    }
+    val draft = draft()
+    draft.say("question")
+    runCurrent()
+    val current = checkNotNull(draft.chat.value)
+    val image = ChatImage(byteArrayOf(6), "image/png")
+    draft.text = "rejected batch"
+    draft.addPastedImage(image)
+    draft.send()
+    draft.sendNow()
+    runCurrent()
+    val request = chat.steeringRequests.single()
+    val ending = async { current.end() }
+    cleanupStarted.await()
+
+    chat.retainedSteering.value = mapOf((request.sessionId to request.deliveryId) to
+      ChatSteeringUpdate(request.sessionId, ChatSteeringResult.Rejected(request.deliveryId, "turn already ended")))
+    runCurrent()
+    assertTrue(current.thread.hasDeliveryClaim())
+    assertTrue(chat.retiredSteering.none { it.third == request.deliveryId })
+
+    cleanupFinished.complete(Unit)
+    assertFalse(ending.await())
+    assertEquals(listOf("rejected batch"), current.thread.queued.value.map { it.text })
+    assertTrue(current.thread.queued.value.single().images.single() === image)
+    assertFalse(current.thread.hasDeliveryClaim())
+    assertEquals(1, chat.retiredSteering.count { it.third == request.deliveryId })
   }
 
   @Test

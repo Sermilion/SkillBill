@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -60,12 +61,47 @@ class ChatSteeringDeliveryTest {
 
     assertEquals(listOf(original, later), thread.queued.value)
     assertTrue(thread.queued.value.first().images.single() === image)
-    assertEquals("turn already ended", thread.transcript.value.filterIsInstance<ChatMessage.Notice>().single().text)
+    assertEquals("Follow-up queued: turn already ended", thread.transcript.value.filterIsInstance<ChatMessage.Notice>().single().text)
     assertFalse(thread.hasDeliveryClaim())
     assertEquals(null, thread.delivery.value)
     assertEquals(1, drains)
     assertEquals(1, repository.retiredSteering.count { it.third == id })
     assertEquals(0, rejected)
+  }
+
+  @Test
+  fun `teardown waits for cancellation cleanup before final settlement and retirement`() = runTest {
+    val repository = FakeExecutionChatRepository()
+    repository.steeringResult = { ChatSteeringResult.DeliveryUncertain(it.deliveryId, "unknown") }
+    val cleanupStarted = CompletableDeferred<Unit>()
+    val cleanupFinished = CompletableDeferred<Unit>()
+    repository.awaitEndAction = {
+      cleanupStarted.complete(Unit)
+      cleanupFinished.await()
+    }
+    val thread = ChatThread(Clock.System)
+    val image = dev.skillbill.desktop.core.domain.model.ChatImage(byteArrayOf(4), "image/png")
+    val original = QueuedChatMessage("batch", null, false, images = listOf(image))
+    thread.enqueue(original)
+    val delivery = ChatSteeringDelivery(repository, RecordingDiagnostics(), thread, backgroundScope, Any(), { true }, {})
+    delivery.send("session", "codex")
+    runCurrent()
+    val id = thread.delivery.value!!.deliveryId
+    val teardown = async { delivery.detach { repository.end("session") } }
+    cleanupStarted.await()
+
+    repository.retainedSteering.value = mapOf(("session" to id) to
+      ChatSteeringUpdate("session", ChatSteeringResult.Rejected(id, "turn already ended")))
+    runCurrent()
+    assertTrue(thread.hasDeliveryClaim())
+    assertTrue(repository.retiredSteering.none { it.third == id })
+
+    cleanupFinished.complete(Unit)
+    teardown.await()
+    assertEquals(listOf(original), thread.queued.value)
+    assertTrue(thread.queued.value.single().images.single() === image)
+    assertFalse(thread.hasDeliveryClaim())
+    assertEquals(1, repository.retiredSteering.count { it.third == id })
   }
 
   @Test

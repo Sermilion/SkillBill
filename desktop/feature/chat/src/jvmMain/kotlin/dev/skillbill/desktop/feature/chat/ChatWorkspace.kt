@@ -244,8 +244,10 @@ class ChatWorkspace(
   }
 
   override fun closeChats() {
-    newTask.disposeAll()
-    closeExecutionChats()
+    scope.launch {
+      newTask.disposeAll()
+      closeExecutionChats()
+    }
   }
 
   override suspend fun closeChatsSafely(): Boolean = closeAll()
@@ -353,18 +355,23 @@ class ChatWorkspace(
     }
     if (!newTask.closeAll()) return false
     sessions.values.toList().forEach { it.awaitAcceptedPersistence() }
-    closeExecutionChats()
-    return true
+    return closeExecutionChats()
   }
 
-  private fun closeExecutionChats() {
+  private suspend fun closeExecutionChats(): Boolean {
     resumeJobs.toList().forEach { it.cancel() }
     resumeJobs.clear()
+    var closed = true
     sessions.values.toList().forEach { session ->
       if (session.thread.hasDeliveryClaim()) {
+        synchronized(session) { session.recoveryOnly = true }
+        if (session.steering != null) {
+          session.steering.detach { chat.end(session.sessionId) }
+        } else {
+          chat.end(session.sessionId)
+          chat.awaitEnd(session.sessionId)
+        }
         synchronized(session) {
-          session.recoveryOnly = true
-          session.steering?.detach { chat.end(session.sessionId) } ?: chat.end(session.sessionId)
           session.thread.deferDestructiveAction("close this chat")
           session.turnJob?.cancel()
           session.resumeJob?.cancel()
@@ -373,11 +380,18 @@ class ChatWorkspace(
           session.busyState.value = false
           session.stoppableState.value = false
         }
+        if (session.thread.hasDeliveryClaim() || session.thread.queued.value.isNotEmpty()) {
+          synchronized(session) { session.recoveryOnly = session.thread.hasDeliveryClaim() }
+          closed = false
+          activate(session.id)
+          setPaneOpen(true)
+        }
       }
-      if (!session.thread.hasDeliveryClaim()) close(session.id)
+      if (!session.thread.hasDeliveryClaim() && session.thread.queued.value.isEmpty()) close(session.id)
     }
     approvalTabs.keys.toList().forEach(::close)
     observeActive()
+    return closed
   }
 
   private fun deferAcceptedPersistence(session: ChatSession, action: () -> Unit): Boolean {
