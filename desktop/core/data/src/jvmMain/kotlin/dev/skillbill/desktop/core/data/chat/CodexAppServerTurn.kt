@@ -4,10 +4,12 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.ApprovalCard
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.NonCancellable
@@ -18,6 +20,7 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.selects.select
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -25,6 +28,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import skillbill.infrastructure.launcher.process.codex.CodexAppServerProtocol
+import skillbill.infrastructure.launcher.process.codex.CodexSteerResponse
 import skillbill.infrastructure.launcher.process.codex.CodexThreadOpening
 
 internal fun codexAppServerTurn(
@@ -36,6 +40,9 @@ internal fun codexAppServerTurn(
   prompt: String,
   imagePaths: List<String>,
   saveThread: (String) -> Boolean,
+  registerActive: (CodexAppServerRpc, String, String) -> Unit,
+  clearActive: (CodexAppServerRpc) -> Unit,
+  releaseRpc: (CodexAppServerRpc) -> Unit,
   openApproval: (
     writeLine: (String) -> Boolean,
     stopProcess: () -> Unit,
@@ -118,6 +125,7 @@ internal fun codexAppServerTurn(
     activeThread to activeTurn
     }
     approval.bindTurn(activeThread, activeTurn)
+    registerActive(rpc, activeThread, activeTurn)
     rpc.drainTurn(activeThread, activeTurn)
   } catch (_: TimeoutCancellationException) {
     approval.stop("Codex did not complete its opening handshake in time.")
@@ -133,12 +141,26 @@ internal fun codexAppServerTurn(
     diagnostics.record("chat.codex_app_server_failed")
     eventSink(ChatEvent.Failed(ChatFailure.ProcessFailed, failure.message ?: "Codex app-server session failed."))
   } finally {
-    approval.release()
-    input.close()
-    reader.cancelAndJoin()
-    output.cancel()
-    cards.close()
-    withContext(NonCancellable) { cardsJob.join() }
+    withContext(NonCancellable) {
+      suspend fun cleanup(action: suspend () -> Unit) {
+        try {
+          action()
+        } catch (_: Throwable) {
+          diagnostics.record("chat.codex_cleanup_failed")
+        }
+      }
+      cleanup { rpc.closeAndSettleSteering() }
+      cleanup { clearActive(rpc) }
+      cleanup { input.close() }
+      cleanup { reader.cancelAndJoin() }
+      cleanup { rpc.drainReadySteeringResponses() }
+      cleanup { rpc.releaseSteering() }
+      cleanup { releaseRpc(rpc) }
+      cleanup { approval.release() }
+      cleanup { output.cancel() }
+      cleanup { cards.close() }
+      cleanup { cardsJob.cancelAndJoin() }
+    }
   }
 }
 
@@ -156,6 +178,19 @@ internal class CodexAppServerRpc(
   private val streamedTextItems = mutableMapOf<String, StringBuilder>()
   private val startedTools = mutableSetOf<String>()
   private val itemFacts = LinkedHashMap<CodexChatItemIdentity, JsonObject>()
+  private val steering = linkedMapOf<JsonPrimitive, PendingSteer>()
+  private var steeringOpen = true
+
+  private data class PendingSteer(
+    val deliveryId: String,
+    val expectedTurnId: String,
+    val frame: ChatProcessInput,
+    val result: CompletableDeferred<ChatSteeringResult>,
+    val onUpdate: (ChatSteeringResult) -> Unit,
+  ) {
+    var latest: ChatSteeringResult? = null
+    var authoritative = false
+  }
 
   suspend fun call(method: String, params: JsonObject, result: (JsonObject) -> Unit) {
     val id = nextId++
@@ -167,16 +202,17 @@ internal class CodexAppServerRpc(
     if (!written) throw CodexSessionFailure("Codex $method delivery is uncertain; it will not be replayed.")
     while (true) {
       val message = nextMessage()
-      if (message.string("method") == "error" && message["id"] == null) {
+      val requestMethod = CodexAppServerProtocol.rpcRequestMethod(message)
+      if (requestMethod == "error" && !CodexAppServerProtocol.hasRpcId(message)) {
         handleErrorNotification(message)
         continue
       }
-      if (message["id"] != null && message["method"] != null) {
+      if (CodexAppServerProtocol.hasRpcId(message) && CodexAppServerProtocol.hasRpcMethod(message)) {
         if (early.size >= MAX_EARLY_MESSAGES) throw CodexSessionFailure("Codex sent too many early requests.")
         early.addLast(message)
         continue
       }
-      if (message["id"] == JsonPrimitive(id)) {
+      if (CodexAppServerProtocol.rpcResponseId(message) == JsonPrimitive(id)) {
         message.obj("error")?.let {
           throw CodexSessionFailure(providerError(it) ?: "$method was rejected by Codex.")
         }
@@ -194,11 +230,12 @@ internal class CodexAppServerRpc(
   suspend fun drainTurn(threadId: String, turnId: String) {
     while (true) {
       val message = if (early.isEmpty()) nextMessage() else early.removeFirst()
-      val method = message.string("method") ?: continue
-      if (message["id"] != null) {
-        approval.handleServerRequest(message, itemFacts)
-        continue
+      val method = CodexAppServerProtocol.rpcRequestMethod(message)
+      if (handleRpcFrame(message)) continue
+      if (CodexAppServerProtocol.hasRpcMethod(message) && method == null) {
+        throw CodexSessionFailure("Codex app-server sent a malformed method envelope.")
       }
+      if (method == null) continue
       if (method == "error") {
         handleErrorNotification(message)
         continue
@@ -251,6 +288,10 @@ internal class CodexAppServerRpc(
         "item/completed" -> emitCompletedItem(params.obj("item"))
         "turn/completed" -> {
           approval.turnEnded(threadId, turnId)
+          closeSteeringAdmission()
+          drainReadySteeringResponses()
+          settlePendingSteering()
+          input.close()
           val turn = params.obj("turn")
           val error = providerError(turn?.obj("error"))
           if (turn?.string("status") == "completed" && providerFailure == null) {
@@ -258,17 +299,212 @@ internal class CodexAppServerRpc(
           } else {
             emit(ChatEvent.Failed(ChatFailure.ProcessFailed, providerFailure ?: error ?: "Codex turn ended without a completed status."))
           }
+          drainReadySteeringResponses()
           return
         }
         "turn/failed", "turn/interrupted" -> {
           approval.turnEnded(threadId, turnId)
+          closeSteeringAdmission()
+          drainReadySteeringResponses()
+          settlePendingSteering()
+          input.close()
           val detail = providerFailure ?: providerError(params.obj("turn")?.obj("error")) ?: "Codex turn failed."
           emit(ChatEvent.Failed(ChatFailure.ProcessFailed, detail))
+          drainReadySteeringResponses()
           return
         }
         "serverRequest/resolved" -> Unit
         else -> diagnostics.record("chat.codex_app_server_unknown_notification")
       }
+    }
+  }
+
+  suspend fun steer(
+    deliveryId: String,
+    threadId: String,
+    turnId: String,
+    inputs: List<JsonObject>,
+    acquireWrite: (() -> Boolean) -> Boolean,
+    onRegistered: (() -> Boolean) -> Boolean,
+    onUpdate: (ChatSteeringResult) -> Unit,
+  ): ChatSteeringResult {
+    if (synchronized(steering) { !steeringOpen || steering.values.any { it.deliveryId == deliveryId } }) {
+      if (!isSteeringOpen()) return ChatSteeringResult.NoActiveTurn(deliveryId, "Codex turn is no longer active")
+      return ChatSteeringResult.Rejected(deliveryId, "This delivery is already tracked")
+    }
+    val id = synchronized(steering) {
+      if (!steeringOpen) return ChatSteeringResult.NoActiveTurn(deliveryId, "Codex turn is no longer active")
+      nextId++
+    }
+    val response = CompletableDeferred<ChatSteeringResult>()
+    val frame = ChatProcessInput(
+      CodexAppServerProtocol.steerRequest(id, threadId, turnId, inputs).toString(),
+    ) { input ->
+      acquireWrite {
+        synchronized(steering) { steeringOpen && input.acquireUnconditionally() }
+      }
+    }
+    val pending = PendingSteer(deliveryId, turnId, frame, response, onUpdate)
+    val registered = onRegistered {
+      synchronized(steering) {
+        if (!steeringOpen) false else {
+          steering[JsonPrimitive(id)] = pending
+          true
+        }
+      }
+    }
+    if (!registered) return ChatSteeringResult.NoActiveTurn(deliveryId, "Codex turn ended before the follow-up was registered")
+    try {
+      input.send(frame)
+    } catch (_: kotlinx.coroutines.channels.ClosedSendChannelException) {
+      synchronized(steering) { steering.remove(JsonPrimitive(id)) }
+      return ChatSteeringResult.NoActiveTurn(deliveryId, "Codex turn ended before the follow-up was written")
+    }
+    return select {
+      response.onAwait { result -> latestResult(pending, result) }
+      frame.written.onAwait { written ->
+        if (response.isCompleted) {
+          latestResult(pending, response.await())
+        } else if (!written) {
+          classifyAndComplete(pending)
+        } else {
+          classifyAndComplete(pending)
+        }
+      }
+    }
+  }
+
+  fun closeAndSettleSteering() {
+    closeSteeringAdmission()
+    settlePendingSteering()
+  }
+
+  fun settleSteering(deliveryId: String) {
+    synchronized(steering) { steering.values.filter { it.deliveryId == deliveryId }.toList() }
+      .forEach(::classifyAndComplete)
+  }
+
+  private fun closeSteeringAdmission() {
+    synchronized(steering) { steeringOpen = false }
+  }
+
+  private fun settlePendingSteering() {
+    synchronized(steering) { steering.values.toList() }.forEach { pending ->
+      classifyAndComplete(pending)
+    }
+  }
+
+  fun releaseSteering() {
+    synchronized(steering) { steering.clear() }
+  }
+
+  internal suspend fun drainReadySteeringResponses() {
+    while (true) {
+      val outputItem = output.tryReceive().getOrNull() ?: return
+      val line = (outputItem as? ChatProcessOutput.Line)?.text ?: continue
+      val message = parseStreamLine(line)
+      if (message == null) {
+        diagnostics.record("chat.codex_app_server_malformed_shutdown_frame")
+        continue
+      }
+      if (!CodexAppServerProtocol.hasRpcId(message) && !CodexAppServerProtocol.hasRpcMethod(message)) {
+        diagnostics.record("chat.codex_app_server_malformed_shutdown_frame")
+        continue
+      }
+      try {
+        handleRpcFrame(message)
+      } catch (_: CodexSessionFailure) {
+        diagnostics.record("chat.codex_app_server_malformed_shutdown_frame")
+      }
+    }
+  }
+
+  private suspend fun handleRpcFrame(message: JsonObject): Boolean {
+    if (CodexAppServerProtocol.hasRpcId(message) && CodexAppServerProtocol.hasRpcMethod(message)) {
+      if (CodexAppServerProtocol.rpcRequestMethod(message) == null) {
+        throw CodexSessionFailure("Codex app-server sent a malformed method envelope.")
+      }
+      approval.handleServerRequest(message, itemFacts)
+      return true
+    }
+    if (CodexAppServerProtocol.hasRpcId(message) && !CodexAppServerProtocol.hasRpcMethod(message)) {
+      routeSteeringResponse(message)
+      return true
+    }
+    return false
+  }
+
+  private fun routeSteeringResponse(message: JsonObject) {
+    val responseId = CodexAppServerProtocol.rpcResponseId(message)
+    val pending = responseId?.let { synchronized(steering) { steering[it] } }
+    if (pending == null) {
+      diagnostics.record("chat.codex_rpc_response_unmatched")
+      return
+    }
+    val outcome = steerResponse(message, pending)
+    val authoritative = outcome !is ChatSteeringResult.DeliveryUncertain
+    completeSteering(pending, outcome, authoritative)
+  }
+
+  private fun completeSteering(
+    pending: PendingSteer,
+    result: ChatSteeringResult,
+    authoritative: Boolean,
+  ) {
+    val shouldPublish = synchronized(steering) {
+      val key = steering.entries.firstOrNull { it.value === pending }?.key
+      if (pending.authoritative) return
+      if (authoritative) {
+        pending.authoritative = true
+        pending.latest = result
+        key?.let(steering::remove)
+        true
+      } else if (pending.latest == null) {
+        pending.latest = result
+        true
+      } else {
+        false
+      }
+    }
+    pending.result.complete(result)
+    if (shouldPublish) {
+      try {
+        pending.onUpdate(result)
+      } catch (cancelled: CancellationException) {
+        throw cancelled
+      } catch (_: Throwable) {
+        diagnostics.record("chat.codex_steering_update_failed")
+      }
+    }
+  }
+
+  private fun classifyAndComplete(pending: PendingSteer): ChatSteeringResult {
+    val classified = classify(pending)
+    completeSteering(pending, classified, classified is ChatSteeringResult.NoActiveTurn)
+    return latestResult(pending, classified)
+  }
+
+  private fun latestResult(pending: PendingSteer, fallback: ChatSteeringResult): ChatSteeringResult =
+    synchronized(steering) { pending.latest ?: fallback }
+
+  private fun classify(pending: PendingSteer): ChatSteeringResult =
+    if (pending.frame.revokeBeforeWrite()) {
+      pending.frame.written.complete(false)
+      ChatSteeringResult.NoActiveTurn(pending.deliveryId, "Codex turn ended before the follow-up was written")
+    } else {
+      ChatSteeringResult.DeliveryUncertain(pending.deliveryId, "Codex may have received this follow-up; acknowledgement is pending")
+    }
+
+  private fun isSteeringOpen(): Boolean = synchronized(steering) { steeringOpen }
+
+  private fun steerResponse(message: JsonObject, pending: PendingSteer): ChatSteeringResult {
+    return when (val response = CodexAppServerProtocol.steerResponse(message, pending.expectedTurnId)) {
+      is CodexSteerResponse.Accepted ->
+        ChatSteeringResult.Accepted(pending.deliveryId)
+      is CodexSteerResponse.Rejected ->
+        ChatSteeringResult.Rejected(pending.deliveryId, response.diagnostic)
+      is CodexSteerResponse.Uncertain ->
+        ChatSteeringResult.DeliveryUncertain(pending.deliveryId, response.diagnostic)
     }
   }
 
@@ -349,7 +585,11 @@ internal class CodexAppServerRpc(
     while (true) {
       when (val item = output.receiveCatching().getOrNull()) {
         is ChatProcessOutput.StdoutEnded -> {
-          continue
+          closeAndSettleSteering()
+          val failure = item.readFailure?.let { "Codex app-server stdout failed: $it" }
+            ?: "Codex app-server stdout closed before the turn completed."
+          val stderr = item.stderrTail.takeLast(1200)
+          throw CodexSessionFailure(listOf(failure, stderr).filter(String::isNotBlank).joinToString("\n"))
         }
         is ChatProcessOutput.Line -> {
           val message = parseStreamLine(item.text)
@@ -361,15 +601,23 @@ internal class CodexAppServerRpc(
             throw CodexSessionFailure("Codex app-server sent a malformed protocol frame.")
           }
           seenProtocolFrame = true
-          if (message["id"] == null && message["method"] == null) {
+          if (!CodexAppServerProtocol.hasRpcId(message) && !CodexAppServerProtocol.hasRpcMethod(message)) {
             throw CodexSessionFailure("Codex app-server sent a frame without a method or response identity.")
           }
           return message
         }
-        is ChatProcessOutput.StartFailed -> throw CodexSessionFailure(item.message)
-        is ChatProcessOutput.Exited ->
+        is ChatProcessOutput.StartFailed -> {
+          closeAndSettleSteering()
+          throw CodexSessionFailure(item.message)
+        }
+        is ChatProcessOutput.Exited -> {
+          closeAndSettleSteering()
           throw CodexSessionFailure("Codex app-server exited (${item.code}): ${item.stderrTail.takeLast(1200)}")
-        null -> throw CodexSessionFailure("Codex app-server closed its output before the turn completed.")
+        }
+        null -> {
+          closeAndSettleSteering()
+          throw CodexSessionFailure("Codex app-server closed its output before the turn completed.")
+        }
       }
     }
   }

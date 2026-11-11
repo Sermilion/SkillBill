@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalClipboard
@@ -42,7 +43,7 @@ class NewTaskImagePasteTest {
     val repository = FakeExecutionChatRepository()
     val draft = NewTaskDraft(
       repository, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
-      WindowCoroutineScope(backgroundScope), Clock.System,
+      WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics(),
     ).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       this.repository = NewTaskRepository("/work/app", "app")

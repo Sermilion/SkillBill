@@ -6,6 +6,10 @@ import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
+import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
+import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SessionMoveResult
@@ -29,6 +33,20 @@ interface ExecutionChatRepository {
 
   fun supports(agentId: String): Boolean
 
+  fun steeringPolicy(agentId: String): ChatSteeringPolicy = ChatSteeringPolicy.LegacySendNow
+
+  fun steeringUpdates(agentId: String, sessionId: String): Flow<ChatSteeringUpdate> = emptyFlow()
+
+  fun settleSteering(agentId: String, sessionId: String, deliveryId: String): ChatSteeringResult =
+    ChatSteeringResult.DeliveryUncertain(deliveryId, "Delivery could not be confirmed; the follow-up remains retained")
+
+  fun retireSteering(agentId: String, sessionId: String, deliveryId: String) = Unit
+
+  suspend fun steer(request: ChatSteeringRequest): ChatSteeringResult =
+    ChatSteeringResult.Unsupported(request.deliveryId, "Live delivery is unavailable")
+
+  val steeringUpdates: Flow<ChatSteeringUpdate> get() = emptyFlow()
+
   /** A cold flow that runs one turn per collection and never throws to its collector; cancelling the collection ends the turn. */
   fun send(request: ChatTurnRequest): Flow<ChatEvent>
 
@@ -44,6 +62,9 @@ interface ExecutionChatRepository {
    * that session resumes it in a new process. Hiding a chat must not call this; closing it does.
    */
   fun end(sessionId: String)
+
+  /** Waits for [end] cleanup to publish any retained steering responses. */
+  suspend fun awaitEnd(sessionId: String) {}
 
   /**
    * What `/resume` offers, newest first: every agent CLI's own sessions in [repositoryRoot], and the app's saved chats of

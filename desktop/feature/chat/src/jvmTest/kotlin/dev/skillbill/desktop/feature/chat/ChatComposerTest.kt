@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat
 
+import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.focus.FocusManager
@@ -66,7 +67,7 @@ class ChatComposerTest {
     val workspace = ChatWorkspace(
       FakeExecutionChatRepository(), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),
       WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
-      unconfinedNewTaskChats(),
+      unconfinedNewTaskChats(), diagnostics = RecordingDiagnostics(),
     )
     val item = workItem("SKILL-1")
     workspace.open(item)
@@ -136,7 +137,7 @@ class ChatComposerTest {
     val workspace = ChatWorkspace(
       FakeExecutionChatRepository(), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),
       WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
-      unconfinedNewTaskChats(),
+      unconfinedNewTaskChats(), diagnostics = RecordingDiagnostics(),
     )
     val item = workItem("SKILL-469")
     workspace.open(item)
@@ -182,7 +183,7 @@ class ChatComposerTest {
     val workspace = ChatWorkspace(
       FakeExecutionChatRepository(supported = setOf("claude")), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),
       WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
-      unconfinedNewTaskChats(),
+      unconfinedNewTaskChats(), diagnostics = RecordingDiagnostics(),
     )
     val item = workItem("SKILL-450")
     workspace.open(item)
@@ -233,7 +234,7 @@ class ChatComposerTest {
     val workspace = ChatWorkspace(
       FakeExecutionChatRepository(), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),
       WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
-      unconfinedNewTaskChats(),
+      unconfinedNewTaskChats(), diagnostics = RecordingDiagnostics(),
     )
     val item = workItem("SKILL-1")
     workspace.open(item)

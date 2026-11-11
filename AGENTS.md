@@ -38,7 +38,7 @@ Goals use runtime-owned `<state>/goals/<repo>/<goal>/checkout` worktrees, remove
 
 ## Product Intent
 
-Read [Runtime command guidance](docs/runtime-command-guidance.md) before invoking, planning, designing, changing, or reviewing runtime commands or workflows. It owns phase/operation behavior, retired names, agent execution, and goal commits/checkpoints.
+Read [Runtime command guidance](docs/runtime-command-guidance.md) before runtime command or workflow work. It defines phases, operations, retired names, agent strategies, build gates, one-commit-per-subtask, and checkpoints.
 
 ## Taxonomy
 
@@ -78,17 +78,11 @@ Scaffold with `skill-bill new`, optionally `--payload <file>`. Author with `show
 
 Code review needs a pack root, conforming manifest/`content.md`, registered pointers, README catalog, pack tests, and validation. Routing contenders declare `validation_gate`; goal build runs the dominant pack's gate. Standalone and goal validation check the full project. Legacy packs may parse `declared_quality_check_file`; routing, install, and scaffold ignore it. Feature-task/verify use horizontal and manifest surfaces; legacy `skills/<platform>/` overrides are prohibited.
 
-## Runtime Agent Behavior And Commits
-
-[Runtime command guidance](docs/runtime-command-guidance.md) owns injected agent strategies, build gates, one-commit-per-subtask, and checkpoint rules.
-
 ## Writing And Comments
 
 Write direct, active prose. Cut filler, stale wording, praise and repetition. Preserve names, numbers and qualifications. Commits/PRs/docs lead with the outcome and explain changes and reasons. Avoid unsupported "successfully", "perfect", "comprehensive", and "robust". Prefer clear names and small functions. Follow Comments for scoped Kotlin.
 
-When implementing designs, keep status cards and overview elements brief. Show the current status and a short summary. Never put walls of text, full reports, evidence tables, or detailed findings in an overview. Put findings and supporting evidence in the relevant expandable Steps section.
-
-When adding or changing UI, update the matching design HTML files in the same change. Keep the reference design and implementation consistent, including layout, content hierarchy, interactions, and narrow layouts.
+For UI work, keep overview cards brief, evidence in expandable Steps, and matching design HTML current across layout, hierarchy, interactions, and narrow layouts.
 
 ## Testing
 

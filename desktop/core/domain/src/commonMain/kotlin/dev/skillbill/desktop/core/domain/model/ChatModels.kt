@@ -47,6 +47,27 @@ class ChatImage(val bytes: ByteArray, val mediaType: String) {
   override fun toString(): String = "ChatImage($mediaType, ${bytes.size} bytes)"
 }
 
+data class ChatSteeringRequest(
+  val sessionId: String,
+  val agentId: String,
+  val deliveryId: String,
+  val text: String,
+  val images: List<ChatImage> = emptyList(),
+)
+
+sealed interface ChatSteeringResult {
+  val deliveryId: String
+  data class Accepted(override val deliveryId: String) : ChatSteeringResult
+  data class Unsupported(override val deliveryId: String, val reason: String) : ChatSteeringResult
+  data class NoActiveTurn(override val deliveryId: String, val reason: String) : ChatSteeringResult
+  data class Rejected(override val deliveryId: String, val reason: String) : ChatSteeringResult
+  data class DeliveryUncertain(override val deliveryId: String, val reason: String) : ChatSteeringResult
+}
+
+data class ChatSteeringUpdate(val sessionId: String, val result: ChatSteeringResult)
+
+enum class ChatSteeringPolicy { LegacySendNow, LiveWhenAvailable }
+
 /**
  * One operator message; [firstTurn] opens [sessionId], later turns resume it. [images] live for the session only and are
  * never saved.

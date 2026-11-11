@@ -101,6 +101,10 @@ class ClaudeChatTransportRunTest {
       opened += command
       launch {
         for (message in input) {
+          if (!message.acquireWrite()) {
+            message.written.complete(false)
+            continue
+          }
           try {
             if (INITIALIZE_REQUEST in message.line) {
               loginOutput.forEach { stdout.send(ChatProcessOutput.Line(it)) }
@@ -164,7 +168,6 @@ class ClaudeChatTransportRunTest {
       usageClock,
     )
   }
-
 
   // A background build the agent started used to die when its turn's process exited, and nothing reported back.
   @Test

@@ -115,7 +115,7 @@ internal fun coordinationModeFor(header: WorkItem): ChatPermissionMode =
 
 /** The directory an execution's agent runs in: its checkout while present, else its captured primary root or legacy root. */
 internal fun WorkItem.workingRoot(): String =
-  if (checkoutRoot.isNotBlank() && File(checkoutRoot).isDirectory) checkoutRoot
+  if (goalWorktree?.state != GoalWorktreeState.Removed && checkoutRoot.isNotBlank() && File(checkoutRoot).isDirectory) checkoutRoot
   else primaryRepositoryRoot?.takeIf(String::isNotBlank) ?: repositoryRoot
 
 /** One fresh read of the execution: [detail] and [runOptions] are null when the detail could not be read. */
@@ -141,6 +141,7 @@ internal class ChatTurns(
 
   /** Turns [state] into a read, or null after marking the session gone. Every read refreshes the session's header and mode. */
   suspend fun accept(session: ChatSession, state: DetailState?): ExecutionRead? {
+    session.awaitAcceptedPersistence()
     val sections = state?.sections
     if (sections is DetailSections.Gone) {
       markGone(session)
@@ -148,6 +149,7 @@ internal class ChatTurns(
     }
     val header = state?.header ?: session.item
     session.item = header
+    if (session.thread.hasDeliveryClaim() || session.thread.delivery.value != null) return null
     followRoot(session)
     session.coordinationModeState.value = coordinationModeFor(header)
     if (sections is DetailSections.Loaded) return ExecutionRead(header, sections.detail, sections.runOptions)
@@ -158,6 +160,15 @@ internal class ChatTurns(
   /** Follows a removed checkout, then ends the agent session when its root differs from the next turn's root. */
   suspend fun followRoot(session: ChatSession) {
     session.worktreeMoveLock.withLock {
+      val replacing = relocationSource(session.item)?.let { it != session.item.workingRoot() } == true ||
+        session.started && session.startedRoot != session.item.workingRoot()
+      if (replacing && session.thread.hasDeliveryClaim()) {
+        session.steering?.detach { chat.end(session.sessionId) } ?: chat.end(session.sessionId)
+        if (session.thread.deferDestructiveAction("change the chat checkout")) {
+          session.recoveryOnly = true
+          return
+        }
+      }
       followWorktreeWhileLocked(session)
       if (session.started && session.startedRoot != session.item.workingRoot()) {
         chat.end(session.sessionId)
@@ -172,10 +183,22 @@ internal class ChatTurns(
    * Claude or Codex session whose move had no failure keeps its id and resumes in that root.
    */
   suspend fun followWorktree(session: ChatSession) {
-    session.worktreeMoveLock.withLock { followWorktreeWhileLocked(session) }
+    session.worktreeMoveLock.withLock {
+      val replacing = relocationSource(session.item)?.let { it != session.item.workingRoot() } == true ||
+        session.started && session.startedRoot != session.item.workingRoot()
+      if (replacing && session.thread.hasDeliveryClaim()) {
+        session.steering?.detach { chat.end(session.sessionId) } ?: chat.end(session.sessionId)
+        if (session.thread.deferDestructiveAction("change the chat checkout")) {
+          session.recoveryOnly = true
+          return
+        }
+      }
+      followWorktreeWhileLocked(session)
+    }
   }
 
   internal suspend fun followWorktreeWhileLocked(session: ChatSession) {
+    if (session.thread.hasDeliveryClaim() || session.thread.delivery.value != null) return
     val item = session.item
     if (!session.worktreeRemovedNoticed) {
       val source = relocationSource(item)
@@ -359,6 +382,17 @@ internal class ChatTurns(
     val agent = session.agentState.value ?: return false
     save(session, agent)
     return true
+  }
+
+  internal fun acceptedTranscript(session: ChatSession): ChatHistoryEntry? {
+    val agent = session.agentState.value ?: return null
+    val lines = session.historyLines()
+    val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
+    return ChatHistoryEntry(session.sessionId, session.item.id, agent, clock.now(), title, lines, executionCheckoutRoot = session.startedRoot)
+  }
+
+  internal suspend fun saveAccepted(session: ChatSession, entry: ChatHistoryEntry) {
+    session.transcriptSaveLock.withLock { chat.saveChat(entry) }
   }
 
   internal suspend fun save(session: ChatSession, agent: ChatAgent) {

@@ -87,6 +87,12 @@ You can also run selected phases or operations without launching a full feature 
 
 See [runtime command guidance](docs/runtime-command-guidance.md) for command syntax, available operations, and confirmation behavior.
 
+### Skill
+
+| Command | Purpose |
+| --- | --- |
+| `/skill-bill` | Run the durable feature workflow or resume a saved goal. |
+
 ## Watching and controlling runs
 
 The desktop app lists live, recent, and stalled work across repositories. Open a goal to inspect its subtasks, pipeline, recent activity, and review, audit, and QA results. Use the run controls to pause, stop, resume, or re-run work.

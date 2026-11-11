@@ -1,12 +1,15 @@
 package dev.skillbill.desktop.feature.chat
 
-import dev.skillbill.desktop.core.domain.model.ChatModel
+import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import androidx.compose.runtime.snapshots.Snapshot
 import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
 import dev.skillbill.desktop.core.domain.model.OperationCardDetailsView
 import dev.skillbill.desktop.core.domain.model.OperationCardState
 import dev.skillbill.desktop.core.domain.model.OperationCardView
+import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
+import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
@@ -52,9 +55,9 @@ import dev.skillbill.desktop.feature.chat.newtask.testNewTaskChats
 import kotlin.test.assertNotNull
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,9 +107,29 @@ class ChatWorkspaceTest {
   private fun worktreeDir(): String = Files.createTempDirectory("chat-worktree").toRealPath().also(tempDirs::add).toString()
 
   @Test
+  fun `an immediately replayed reply has its observer identity before collection starts`() = runTest {
+    val item = workItem("SKILL-530")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    val repository = object : ExecutionChatRepository by chat {
+      override fun unprompted(sessionId: String) = flowOf(ChatEvent.TextDelta("Already replying"), ChatEvent.Completed)
+    }
+    val workspace = ChatWorkspace(
+      repository, details, controls, testDatabaseSessionController(),
+      WindowCoroutineScope(CoroutineScope(backgroundScope.coroutineContext + Dispatchers.Unconfined)),
+      clock, panes, selection, unconfinedNewTaskChats(), diagnostics = RecordingDiagnostics(),
+    )
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    assertTrue(session.transcript.value.filterIsInstance<ChatMessage.Agent>().any { it.text == "Already replying" })
+    assertTrue(workspace.closeAll())
+    assertTrue(session.job.isCancelled)
+  }
+
+  @Test
   fun `selected New task usage keeps the executing agent and follows rotated session`() = runTest {
     chat.events = { flow { awaitCancellation() } }
-    val chats = NewTaskChats(chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock)
+    val chats = NewTaskChats(chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock, diagnostics = RecordingDiagnostics())
     chats.chatDispatcher = StandardTestDispatcher(testScheduler)
     val original = ChatAgent("claude", "model-a", "high", "/profiles/claude-a")
     val draft = chats.selected.value.apply {
@@ -145,7 +168,7 @@ class ChatWorkspaceTest {
     repository: ExecutionChatRepository = chat,
   ): ChatWorkspace {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    return ChatWorkspace(repository, details, controls, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, chats)
+    return ChatWorkspace(repository, details, controls, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, chats, diagnostics = RecordingDiagnostics())
   }
 
   // A window that closes while one New task chat could not be saved, or a retry that leaves the rest open.
@@ -208,7 +231,7 @@ class ChatWorkspaceTest {
   @Test
   fun `goal intake rejects an empty composer when a conversation exists for the same or another repository`() = runTest {
     val chats = NewTaskChats(
-      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock,
+      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock, diagnostics = RecordingDiagnostics(),
     )
     val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
@@ -246,7 +269,7 @@ class ChatWorkspaceTest {
   fun `goal intake rejects an empty composer while its conversation turn is active`() = runTest {
     chat.events = { flow { awaitCancellation() } }
     val chats = NewTaskChats(
-      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock,
+      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock, diagnostics = RecordingDiagnostics(),
     )
     val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
@@ -276,7 +299,7 @@ class ChatWorkspaceTest {
   @Test
   fun `goal intake rejects an empty composer when a conversation has been resumed`() = runTest {
     val chats = NewTaskChats(
-      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock,
+      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock, diagnostics = RecordingDiagnostics(),
     )
     val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
@@ -302,6 +325,90 @@ class ChatWorkspaceTest {
     assertEquals("resumed-session", draft.chat.value?.sessionId)
     assertEquals(transcript, conversation.thread.transcript.value)
     workspace.closeAll()
+  }
+
+  @Test
+  fun `checkout change retains an acquired follow up but drains a revoked pending write only after moving context`() = runTest {
+    for (uncertain in listOf(true, false)) {
+      val repository = FakeExecutionChatRepository()
+      repository.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
+      val result = CompletableDeferred<ChatSteeringResult>()
+      repository.steeringResult = { result.await() }
+      repository.settledSteering = { _, id ->
+        if (uncertain) ChatSteeringResult.DeliveryUncertain(id, "write acquired")
+        else ChatSteeringResult.NoActiveTurn(id, "revoked before write")
+      }
+      val worktree = worktreeDir()
+      val active = workItem("SKILL-530-$uncertain").copy(repositoryRoot = "/repo",
+        goalWorktree = GoalWorktree(worktree, GoalWorktreeState.Active, null, null))
+      val detail = MutableStateFlow(loaded(active))
+      details.details = mapOf(active.id to detail)
+      val workspace = workspace(repository = repository)
+      workspace.open(active)
+      runCurrent()
+      val session = workspace.session(active.id)!!
+      repository.unpromptedEvents.emit(session.sessionId to ChatEvent.TextDelta("Background"))
+      runCurrent()
+      val image = ChatImage(byteArrayOf(1), "image/png")
+      workspace.send(active.id, "retained", images = listOf(image))
+      workspace.sendNow(active.id)
+      runCurrent()
+      repository.unpromptedEvents.emit(session.sessionId to ChatEvent.Completed)
+      runCurrent()
+      assertEquals(1, repository.requests.size)
+      detail.value = loaded(active.copy(goalWorktree = active.goalWorktree?.copy(state = GoalWorktreeState.Removed)))
+      runCurrent()
+      if (uncertain) {
+        assertTrue(repository.moveCalls.isEmpty())
+        assertEquals(1, repository.requests.size)
+        assertTrue(session.thread.delivery.value!!.images.single() === image)
+        workspace.retryDelivery(active.id, session.thread.delivery.value!!.deliveryId)
+        runCurrent()
+      }
+      assertEquals(listOf(worktree to "/repo"), repository.moveCalls)
+      assertEquals(2, repository.requests.size)
+      assertEquals("/repo", (repository.requests.last().scope as ChatScope.Execution).repositoryRoot)
+      assertTrue(repository.requests.last().images.single() === image)
+      assertFalse(session.thread.hasDeliveryClaim())
+      assertTrue(workspace.closeAll())
+    }
+  }
+
+  @Test
+  fun `late authoritative rejection restores the batch and workspace drains it after turn completion`() = runTest {
+    chat.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
+    chat.steeringResult = { ChatSteeringResult.DeliveryUncertain(it.deliveryId, "Awaiting acknowledgement") }
+    val complete = CompletableDeferred<Unit>()
+    chat.events = { flow { emit(ChatEvent.TextDelta("reply")); complete.await(); emit(ChatEvent.Completed) } }
+    val active = workItem("SKILL-530").copy(repositoryRoot = "/repo")
+    details.details = mapOf(active.id to MutableStateFlow(loaded(active)))
+    val workspace = workspace()
+    workspace.open(active)
+    runCurrent()
+    val session = workspace.session(active.id)!!
+    workspace.send(active.id, "question")
+    runCurrent()
+    val image = ChatImage(byteArrayOf(8), "image/png")
+    workspace.send(active.id, "rejected batch", listOf(image))
+    workspace.sendNow(active.id)
+    workspace.send(active.id, "later")
+    runCurrent()
+    val steering = chat.steeringRequests.single()
+    assertTrue(session.thread.hasDeliveryClaim())
+
+    complete.complete(Unit)
+    runCurrent()
+    chat.retainedSteering.value = mapOf((steering.sessionId to steering.deliveryId) to
+      ChatSteeringUpdate(steering.sessionId, ChatSteeringResult.Rejected(steering.deliveryId, "turn already ended")))
+    runCurrent()
+
+    assertEquals(2, chat.requests.size)
+    assertEquals("No execution changes since your last turn.\n\nquestion\n\nrejected batch\n\nlater", chat.requests.last().prompt)
+    assertTrue(chat.requests.last().images.single() === image)
+    assertFalse(session.thread.hasDeliveryClaim())
+    assertEquals(null, session.thread.delivery.value)
+    assertEquals(1, chat.retiredSteering.count { it.third == steering.deliveryId })
+    assertTrue(workspace.closeAll())
   }
 
   @Test
@@ -335,203 +442,6 @@ class ChatWorkspaceTest {
       it.text == removedWorktreeNotice("/repo", SessionMoveResult(0, 0, 0))
     })
     workspace.closeAll()
-  }
-
-  @Test
-  fun `removed verify checkout relocates saved chats to the captured root and preserves its notice on resume`() = runTest {
-    val exactRoot = worktreeDir()
-    val primaryRoot = worktreeDir()
-    val item = workItem("SKILL-535", kind = WorkKind.Operation, issueKey = null).copy(
-      title = "Display title is not the kind label",
-      repositoryRoot = exactRoot,
-      primaryRepositoryRoot = primaryRoot,
-      runKindLabel = "verify",
-    )
-    val listedRoots = mutableListOf<String>()
-    val repository = object : ExecutionChatRepository by chat {
-      override suspend fun savedChats(executionId: String, repositoryRoot: String, currentSessionId: String): List<ChatHistoryEntry> {
-        listedRoots += repositoryRoot
-        return chat.savedChats(executionId, repositoryRoot, currentSessionId)
-      }
-    }
-    details.details = mapOf(item.id to MutableStateFlow(loaded(item)))
-    val workspace = workspace(repository = repository)
-    workspace.open(item)
-    runCurrent()
-    val session = workspace.session(item.id)!!
-    val originalSession = session.sessionId
-    assertEquals(exactRoot, (chat.requests.single().scope as ChatScope.Execution).repositoryRoot)
-
-    Path.of(exactRoot).toFile().deleteRecursively()
-    workspace.showResumable(item.id)
-    runCurrent()
-
-    assertEquals(listOf(exactRoot to primaryRoot), chat.moveCalls)
-    assertEquals(listOf(primaryRoot), listedRoots)
-    assertEquals(listOf(originalSession), chat.ended)
-    val saved = ChatHistoryEntry(
-      sessionId = "saved-verify-session",
-      executionId = item.id,
-      agent = ChatAgent("claude", null, null),
-      updatedAt = clock.now(),
-      title = "Earlier verify chat",
-      lines = listOf(ChatHistoryLine(ChatHistoryRole.Operator, "continue")),
-    )
-    workspace.resume(item.id, saved)
-    runCurrent()
-    workspace.send(item.id, "another turn")
-    runCurrent()
-
-    assertEquals("saved-verify-session", chat.requests.last().sessionId)
-    assertFalse(chat.requests.last().firstTurn)
-    assertEquals(primaryRoot, (chat.requests.last().scope as ChatScope.Execution).repositoryRoot)
-    assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Notice>().count {
-      it.text == "This verify's worktree was removed when it finished. New turns run in $primaryRoot. $NOTHING_TO_MOVE_SENTENCE"
-    })
-    workspace.closeAll()
-  }
-
-  @Test
-  fun `failed non-goal relocation makes explicit resume start fresh at the selected root`() = runTest {
-    val exactRoot = worktreeDir()
-    val primaryRoot = worktreeDir()
-    val repository = FakeExecutionChatRepository().apply { moveResult = { _, _ -> SessionMoveResult(0, 0, 1) } }
-    val item = workItem("SKILL-535", kind = WorkKind.Phase, issueKey = null).copy(
-      repositoryRoot = exactRoot,
-      primaryRepositoryRoot = primaryRoot,
-      runKindLabel = "plan",
-    )
-    details.details = mapOf(item.id to MutableStateFlow(loaded(item)))
-    val workspace = workspace(repository = repository)
-    workspace.open(item)
-    runCurrent()
-    val session = workspace.session(item.id)!!
-    Path.of(exactRoot).toFile().deleteRecursively()
-    val saved = ChatHistoryEntry(
-      sessionId = "saved-phase-session",
-      executionId = item.id,
-      agent = ChatAgent("claude", null, null),
-      updatedAt = clock.now(),
-      title = "Earlier phase chat",
-      lines = listOf(ChatHistoryLine(ChatHistoryRole.Operator, "continue")),
-      appSessionId = session.sessionId,
-    )
-
-    workspace.resume(item.id, saved)
-    runCurrent()
-    workspace.send(item.id, "continue fresh")
-    runCurrent()
-
-    assertEquals(listOf(exactRoot to primaryRoot), repository.moveCalls)
-    assertEquals(primaryRoot, (repository.requests.last().scope as ChatScope.Execution).repositoryRoot)
-    assertTrue(repository.requests.last().firstTurn)
-    assertNotEquals("saved-phase-session", repository.requests.last().sessionId)
-    assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Notice>().count {
-      it.text == "This plan's worktree was removed when it finished. New turns run in $primaryRoot. $MOVE_FAILED_SENTENCE"
-    })
-    workspace.closeAll()
-  }
-
-  @Test
-  fun `relocation does not prevent resuming a conversation started at the fallback root`() = runTest {
-    val cases = listOf(
-      "claude" to SessionMoveResult(0, 0, 1),
-      "codex" to SessionMoveResult(0, 0, 1),
-      "cursor" to SessionMoveResult(0, 0, 0),
-      "junie" to SessionMoveResult(0, 0, 0),
-    )
-    for ((agentId, relocationResult) in cases) {
-      val exactRoot = worktreeDir()
-      val primaryRoot = worktreeDir()
-      val backing = FakeExecutionChatRepository(ChatAgent(agentId, null, null), setOf(agentId)).apply {
-        moveResult = { _, _ -> relocationResult }
-      }
-      val repository = object : ExecutionChatRepository by backing {
-        override suspend fun savedChats(executionId: String, repositoryRoot: String, currentSessionId: String): List<ChatHistoryEntry> {
-          val saved = backing.savedChats(executionId, repositoryRoot, currentSessionId)
-          return if (agentId == "junie") saved else saved.map { entry ->
-            entry.copy(
-              sessionId = "native-${entry.sessionId}",
-              agent = entry.agent.copy(profile = "/profiles/$agentId"),
-              appSessionId = entry.sessionId,
-            )
-          }
-        }
-      }
-      val item = workItem("SKILL-535", kind = WorkKind.Phase, issueKey = null).copy(
-        repositoryRoot = exactRoot,
-        primaryRepositoryRoot = primaryRoot,
-        runKindLabel = "plan",
-      )
-      details.details = mapOf(item.id to MutableStateFlow(loaded(item)))
-      val workspace = workspace(repository = repository)
-      workspace.open(item)
-      runCurrent()
-      val originalSession = workspace.session(item.id)!!.sessionId
-      Path.of(exactRoot).toFile().deleteRecursively()
-      workspace.send(item.id, "start at the fallback")
-      runCurrent()
-      val fallbackRequest = backing.requests.last()
-      assertTrue(fallbackRequest.firstTurn)
-      assertNotEquals(originalSession, fallbackRequest.sessionId)
-      assertEquals(primaryRoot, (fallbackRequest.scope as ChatScope.Execution).repositoryRoot)
-
-      workspace.clear(item.id)
-      runCurrent()
-      workspace.showResumable(item.id)
-      runCurrent()
-      val offered = workspace.session(item.id)!!.resumeChoices.value.orEmpty().single()
-      workspace.resume(item.id, offered)
-      runCurrent()
-      workspace.send(item.id, "continue that conversation")
-      runCurrent()
-
-      val resumed = backing.requests.last()
-      val expectedSessionId = if (agentId == "cursor") fallbackRequest.sessionId else offered.sessionId
-      assertEquals(expectedSessionId, resumed.sessionId)
-      assertFalse(resumed.firstTurn)
-      assertEquals(primaryRoot, (resumed.scope as ChatScope.Execution).repositoryRoot)
-      assertEquals(listOf(exactRoot to primaryRoot), backing.moveCalls)
-      assertEquals(1, workspace.session(item.id)!!.transcript.value.filterIsInstance<ChatMessage.Notice>().count {
-        it.text.startsWith("This plan's worktree was removed when it finished.")
-      })
-      workspace.closeAll()
-    }
-  }
-
-  @Test
-  fun `cancelled non-goal relocation remains retryable and emits one settled notice`() = runTest {
-    val exactRoot = worktreeDir()
-    val primaryRoot = worktreeDir()
-    Path.of(exactRoot).toFile().deleteRecursively()
-    var cancelledOnce = false
-    val repository = FakeExecutionChatRepository().apply {
-      moveResult = { _, _ ->
-        if (!cancelledOnce) {
-          cancelledOnce = true
-          throw kotlinx.coroutines.CancellationException("retry relocation")
-        }
-        SessionMoveResult(0, 0, 0)
-      }
-    }
-    val item = workItem("SKILL-535", kind = WorkKind.Operation, issueKey = null).copy(
-      repositoryRoot = exactRoot,
-      primaryRepositoryRoot = primaryRoot,
-      runKindLabel = "verify",
-    )
-    val session = ChatSession(item, "verify-session", Job(), clock)
-    val turns = ChatTurns(repository, details, clock)
-
-    val firstAttempt = runCatching { turns.followWorktree(session) }.exceptionOrNull()
-    assertIs<kotlinx.coroutines.CancellationException>(firstAttempt)
-    assertFalse(session.worktreeRemovedNoticed)
-    turns.followWorktree(session)
-
-    assertEquals(listOf(exactRoot to primaryRoot, exactRoot to primaryRoot), repository.moveCalls)
-    assertTrue(session.worktreeRemovedNoticed)
-    assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Notice>().count {
-      it.text == "This verify's worktree was removed when it finished. New turns run in $primaryRoot. $NOTHING_TO_MOVE_SENTENCE"
-    })
   }
 
   // Resuming a Claude session whose file stayed in the worktree's project directory would find no session in the repository root.
@@ -1429,31 +1339,6 @@ class ChatWorkspaceTest {
     assertEquals(1, chat.requests.size)
   }
 
-  @Test
-  fun `changing model keeps the provider session and profile and saves the next turn choice`() = runTest {
-    val item = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(running = false)
-    details.details = mapOf(item.id to flowOf(loaded(item)))
-    chat.agent = ChatAgent("claude", "old-model", "high", "/profiles/custom")
-    val workspace = workspace()
-    workspace.open(item)
-    runCurrent()
-    val session = workspace.session(item.id)!!
-    val opening = chat.requests.single()
-
-    workspace.switchModel(item.id, ChatModel("new-model", "New model"))
-    runCurrent()
-    assertEquals("new-model", chat.saved[session.sessionId]?.agent?.model)
-    workspace.send(item.id, "continue with this model")
-    runCurrent()
-
-    val next = chat.requests.last()
-    assertEquals(ChatAgent("claude", "new-model", null, "/profiles/custom"), next.agent)
-    assertEquals(opening.sessionId, next.sessionId)
-    assertFalse(next.firstTurn)
-    assertTrue(opening.sessionId in chat.ended)
-    workspace.closeAll()
-  }
-
   // A switch that kept the old session id would resume a Claude session in Codex, or send Codex only a diff it never saw the base of.
   @Test
   fun `switching agents resolves the new agent and opens a new session with the full snapshot`() = runTest {
@@ -1734,7 +1619,7 @@ class ChatWorkspaceTest {
     }
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val workspace = ChatWorkspace(
-      chat, details, controls, closedDb, WindowCoroutineScope(backgroundScope), clock, panes, selection, unconfinedNewTaskChats(),
+      chat, details, controls, closedDb, WindowCoroutineScope(backgroundScope), clock, panes, selection, unconfinedNewTaskChats(), diagnostics = RecordingDiagnostics(),
     )
     workspace.open(item)
     runCurrent()

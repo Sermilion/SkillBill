@@ -12,11 +12,64 @@ import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Clock
 
 class ChatThreadTest {
+  @Test
+  fun `claimed originals survive completion drain and fallback restores their metadata before later entries`() {
+    val thread = ChatThread(Clock.System)
+    val image = ChatImage(byteArrayOf(7), "image/png")
+    var rejected = false
+    val first = QueuedChatMessage("first", pauseAndAct = true, images = listOf(image), action = null, onRejected = { rejected = true })
+    val later = QueuedChatMessage("later", pauseAndAct = false, action = null)
+    thread.enqueue(first)
+    val claim = thread.claimDelivery("one")!!
+    thread.enqueue(later)
+    assertNull(thread.claimDelivery("two"))
+    assertNull(thread.takeQueuedMessage())
+    thread.reduceDelivery(ChatSteeringResult.Rejected("one", "not sent"))
+    val restored = thread.takeQueuedEntries()
+    assertTrue(restored.first() === first)
+    assertTrue(restored.first().images.single() === image)
+    assertEquals(listOf(first, later), restored)
+    restored.first().onRejected!!.invoke()
+    assertTrue(rejected)
+    assertEquals(listOf(first), claim.entries)
+
+    thread.enqueue(first)
+    thread.claimDelivery("uncertain")
+    thread.enqueue(later)
+    thread.reduceDelivery(ChatSteeringResult.DeliveryUncertain("uncertain", "unknown"))
+    val rejection = thread.reduceDelivery(ChatSteeringResult.Rejected("uncertain", "late failure"))
+    assertEquals(ChatThread.DeliveryTransition.Restored("late failure"), rejection)
+    assertFalse(thread.hasDeliveryClaim())
+    assertNull(thread.delivery.value)
+    assertEquals(listOf(first, later), thread.takeQueuedEntries())
+    assertEquals(ChatThread.DeliveryTransition.Ignored, thread.reduceDelivery(ChatSteeringResult.Rejected("uncertain", "duplicate")))
+  }
+
+  @Test
+  fun `unavailable transport result does not restore an uncertain batch`() {
+    val thread = ChatThread(Clock.System)
+    val original = QueuedChatMessage("first", null, false)
+    val later = QueuedChatMessage("later", null, false)
+    thread.enqueue(original)
+    thread.claimDelivery("uncertain")
+    thread.enqueue(later)
+    thread.reduceDelivery(ChatSteeringResult.DeliveryUncertain("uncertain", "unknown"))
+
+    assertEquals(ChatThread.DeliveryTransition.Ignored,
+      thread.reduceDelivery(ChatSteeringResult.NoActiveTurn("uncertain", "transport unavailable")))
+    assertTrue(thread.hasDeliveryClaim())
+    assertEquals(listOf(later), thread.queued.value)
+  }
+
   @Test
   fun `agent questions and tool calls never create permission cards without a harness request`() {
     val thread = ChatThread(Clock.System)

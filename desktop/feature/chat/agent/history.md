@@ -1,3 +1,18 @@
+## [2026-11-11] SKILL-530 live chat steering and shared recovery
+Areas: desktop/feature/chat, desktop/feature/chat/newtask, desktop/core/domain, desktop/core/data/chat, desktop/core/testing, desktop/app, runtime-kotlin/runtime-infra/launcher
+- Claude and Codex Send now deliver queued text and images into active work in both chat types, preserving task context, reply collection and approvals. Stop remains explicit; Cursor and Junie retain their previous policy.
+- reusable: ChatThread claims original queue entries once in order. ChatSteeringDelivery coordinates both consumers, retained delivery updates and retirement through the typed repository boundary.
+- Known rejection or proven non-delivery restores originals before later additions, with a visible reason and diagnostic. Provider policy stays separate from current live availability.
+- Possible transmission without acknowledgement retains visible text and images as uncertain and blocks automatic drain. Late matching acknowledgement accepts without replay; warned Retry retires the old identity before restoring originals. Discard requires confirmation.
+- Accepted guidance inserts one Operator entry and closes the preceding Agent segment without ending the provider turn or replacing tool and approval identities.
+- Close, clear, rebind, resume, disposal and application quit retain or expose unresolved recovery. Session, database and process-generation fences reject stale ownership.
+- New Task claims Send now batches and registers ordinary turns under its transition lock before returning. This excludes later additions from an earlier claim and preserves immediate Stop and image-only input; asynchronous work retains its configured dispatcher.
+- Active handles, claims and recovery images remain in memory. Recovery lasts only for the live application session; no saved chat schema or workflow contract changed.
+- Limits: authenticated live-provider behavior and native macOS/Windows remain unverified. Validation changed code after QA settled, so QA does not cover the final tree.
+Feature size: MEDIUM
+Feature flag: N/A
+Acceptance criteria: 1/1 parent criterion implemented in source across 9/9 refined subtask criteria; live-provider behavior remains unverified.
+
 ## [2026-11-10] SKILL-535 — Continue chats after checkout removal
 Areas: desktop/feature/chat production and JVM tests
 - Select the existing checkout when present, then the captured primary root, then the legacy repository root for turns, saved-chat listing, and resume.
@@ -5,8 +20,8 @@ Areas: desktop/feature/chat production and JVM tests
 - Successful Claude/Codex moves may resume the saved session; failed moves and other providers start fresh at the selected root. Resume preserves one-time removal notices and goal-only notice order.
 - Reuse `ExecutionChatRepository.moveSessions`; keep relocation outcome and notices in chat-session state. Notices identify Verify/phase/operation runs and the destination.
 - Limits: deleted historical checkouts without a distinct captured root keep the legacy fallback; no root discovery, provider format, or branch-switch behavior was added.
-Feature flag: N/A
-Acceptance criteria: 2/2 implemented in this boundary
+- Feature flag: N/A
+- Acceptance criteria: 2/2 implemented in this boundary
 
 ## [2026-11-08] SKILL-528 chat changes indicator
 Areas: desktop/feature/chat/newtask, desktop/core/domain, desktop/core/data, desktop/core/testing, desktop/core/designsystem, runtime-kotlin/runtime-ports, runtime-kotlin/runtime-infra/workflow, runtime-kotlin/runtime-core

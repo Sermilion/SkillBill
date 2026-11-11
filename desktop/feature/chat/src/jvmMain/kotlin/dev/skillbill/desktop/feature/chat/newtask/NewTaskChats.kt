@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
@@ -13,8 +14,8 @@ import dev.skillbill.desktop.core.ui.feedback.ToastMessage
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
-import dev.skillbill.desktop.feature.chat.RunOpener
 import dev.skillbill.desktop.feature.chat.UnavailableApprovalFeed
+import dev.skillbill.desktop.feature.chat.RunOpener
 import dev.skillbill.desktop.feature.chat.UnavailableRunOpener
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -113,6 +114,7 @@ class NewTaskChats(
   private val clock: Clock,
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
   private val changesRepository: ChatChangesRepository = UnavailableChatChanges,
+  private val diagnostics: Diagnostics,
   private val runs: RunOpener = UnavailableRunOpener,
 ) {
   private val scope = windowScope.scope
@@ -192,6 +194,10 @@ class NewTaskChats(
 
   /** Closes [draft], or asks first when its agent is still replying. */
   fun requestClose(draft: NewTaskDraft) {
+    if (draft.chat.value?.thread?.deferDestructiveAction("close this draft") == true) {
+      select(draft)
+      return
+    }
     if (draft.chat.value?.thread?.busy?.value == true) pendingCloseState.value = draft else scope.launch { close(draft) }
   }
 
@@ -209,7 +215,7 @@ class NewTaskChats(
 
   /** Ends [draft]'s chat, deletes its save and removes it, with no toast. */
   fun discard(draft: NewTaskDraft) {
-    if (draft in openState.value && draft.discard()) remove(draft)
+    scope.launch { if (draft in openState.value && draft.discard()) remove(draft) }
   }
 
   /** Deletes [entry], removing the open chat that holds it like a tab's Discard does. */
@@ -256,7 +262,9 @@ class NewTaskChats(
 
   internal fun refreshSaved() = savedChats.refresh()
 
-  internal fun disposeAll() = openState.value.forEach { it.dispose() }
+  internal suspend fun disposeAll() {
+    openState.value.forEach { it.disposeAndAwait() }
+  }
 
   /** Closes every open chat. False when any one fails to save; that chat stays open, so calling again retries it. */
   internal suspend fun closeAll(): Boolean = openState.value.map { draft ->
@@ -329,7 +337,7 @@ class NewTaskChats(
   }
 
   private fun create(): NewTaskDraft {
-    val draft = NewTaskDraft(chats, workControls, databaseSession, toasts, windowScope, clock, approvals, savedChats, changesRepository, runs)
+    val draft = NewTaskDraft(chats, workControls, databaseSession, toasts, windowScope, clock, approvals, savedChats, changesRepository, diagnostics, runs)
     draft.chatDispatcher = chatDispatcher
     replyWatches[draft] = watchReplies(draft)
     return draft

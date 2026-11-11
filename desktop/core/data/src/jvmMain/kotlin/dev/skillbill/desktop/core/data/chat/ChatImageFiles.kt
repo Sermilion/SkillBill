@@ -39,6 +39,38 @@ internal fun writeChatImages(sessionId: String, images: List<ChatImage>): List<S
   }
 }
 
+internal class CodexTurnImages private constructor(private val directory: Path) {
+  private val lock = Any()
+  private var closed = false
+
+  fun write(images: List<ChatImage>): List<String> = synchronized(lock) {
+    check(!closed) { "Codex turn image scope is closed" }
+    images.map { image ->
+      val file = Files.createTempFile(directory, "image-", if (image.mediaType == "image/jpeg") ".jpg" else ".png")
+      file.toFile().deleteOnExit()
+      Files.write(file, image.bytes)
+      file.toRealPath().toString()
+    }
+  }
+
+  @OptIn(ExperimentalPathApi::class)
+  fun close() = synchronized(lock) {
+    if (closed) return
+    closed = true
+    directory.deleteRecursively()
+  }
+
+  companion object {
+    fun create(sessionId: String): CodexTurnImages {
+      val parent = containedDirectory(sessionId) ?: throw IOException("Invalid chat session id")
+      Files.createDirectories(parent)
+      val directory = Files.createTempDirectory(parent, "codex-turn-")
+      directory.toFile().deleteOnExit()
+      return CodexTurnImages(directory)
+    }
+  }
+}
+
 /** The operator [text] followed by one line per image path, or just those lines when the text is blank. */
 internal fun withImageFooter(text: String, paths: List<String>): String {
   val block = "Attached images (open each file to view it):\n" +

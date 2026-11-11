@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import skillbill.infrastructure.launcher.process.codex.CodexRpcKeys as K
 
@@ -20,6 +21,14 @@ sealed interface CodexThreadOpening {
   data class Opened(val threadId: String) : CodexThreadOpening
 
   data class Refused(val reason: String) : CodexThreadOpening
+}
+
+sealed interface CodexSteerResponse {
+  data object Accepted : CodexSteerResponse
+
+  data class Rejected(val diagnostic: String) : CodexSteerResponse
+
+  data class Uncertain(val diagnostic: String) : CodexSteerResponse
 }
 
 object CodexAppServerProtocol {
@@ -99,9 +108,75 @@ object CodexAppServerProtocol {
       put(K.APPROVAL_POLICY, K.NEVER_POLICY)
     }
 
+  fun steerParams(
+    threadId: String,
+    expectedTurnId: String,
+    input: List<JsonObject>,
+  ): JsonObject =
+    buildJsonObject {
+      put(K.THREAD_ID, threadId)
+      put(K.INPUT, JsonArray(input))
+      put(K.EXPECTED_TURN_ID, expectedTurnId)
+    }
+
+  fun steerRequest(
+    id: Int,
+    threadId: String,
+    expectedTurnId: String,
+    input: List<JsonObject>,
+  ): JsonObject =
+    buildJsonObject {
+      put(K.ID, id)
+      put(K.METHOD, K.TURN_STEER_METHOD)
+      put(K.PARAMS, steerParams(threadId, expectedTurnId, input))
+    }
+
+  fun rpcResponseId(message: JsonObject): JsonPrimitive? =
+    if (K.METHOD in message) null else message[K.ID] as? JsonPrimitive
+
+  fun rpcRequestMethod(message: JsonObject): String? =
+    (message[K.METHOD] as? JsonPrimitive)?.takeIf { it.isString }?.content
+
+  fun hasRpcMethod(message: JsonObject): Boolean = K.METHOD in message
+
+  fun hasRpcId(message: JsonObject): Boolean = K.ID in message
+
+  fun steerTurnId(
+    result: JsonObject,
+    expectedTurnId: String,
+  ): String? = result.text(K.TURN_ID)?.takeIf { it == expectedTurnId }
+
+  fun steerResponse(
+    message: JsonObject,
+    expectedTurnId: String,
+  ): CodexSteerResponse {
+    if (K.ERROR in message) {
+      val error = message.obj(K.ERROR)
+      if (error == null || !error.hasRpcErrorShape() || K.RESULT in message) {
+        return CodexSteerResponse.Uncertain("Codex returned a malformed steering error")
+      }
+      return CodexSteerResponse.Rejected(
+        providerError(error).ifBlank { "Codex rejected this follow-up" },
+      )
+    }
+    val result =
+      message.obj(K.RESULT)
+        ?: return CodexSteerResponse.Uncertain("Codex returned a malformed steering response")
+    return if (steerTurnId(result, expectedTurnId) != null) {
+      CodexSteerResponse.Accepted
+    } else {
+      CodexSteerResponse.Uncertain("Codex did not confirm the targeted turn")
+    }
+  }
+
+  private fun JsonObject.hasRpcErrorShape(): Boolean {
+    val code = this[K.CODE] as? JsonPrimitive ?: return false
+    return !code.isString && code.longOrNull != null && text(K.MESSAGE) != null
+  }
+
   fun textInput(text: String): JsonObject =
     buildJsonObject {
-      put(K.TYPE, "text")
+      put(K.TYPE, TEXT_TYPE)
       put(K.TEXT, text)
       put(K.TEXT_ELEMENTS, JsonArray(emptyList()))
     }
@@ -137,6 +212,7 @@ object CodexAppServerProtocol {
   private fun CodexThreadSettings.roots(): JsonArray =
     JsonArray((listOf(cwd) + workspaceRoots).distinct().map(::JsonPrimitive))
 
+  internal const val TEXT_TYPE = "text"
   internal const val LOCAL_IMAGE_TYPE = "localImage"
 }
 

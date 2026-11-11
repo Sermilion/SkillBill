@@ -1,12 +1,12 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
-import dev.skillbill.desktop.core.domain.model.ChatModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ChatModel
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
@@ -73,13 +73,13 @@ data class NewTaskUiState(
 sealed interface NewTaskAction {
   data class TextChanged(val text: String) : NewTaskAction
   data class ChooseBaseBranch(val branch: String) : NewTaskAction
-  data object RetryBranches : NewTaskAction
   data object SwitchToDefaultBranch : NewTaskAction
   data object UseCurrentBranchAsBase : NewTaskAction
+  data object RetryBranches : NewTaskAction
   data class ChooseRepository(val repository: NewTaskRepository) : NewTaskAction
   data class SubmitRepositoryPath(val path: String) : NewTaskAction
-  data class ChooseModel(val model: ChatModel?) : NewTaskAction
   data class ChooseAgent(val agentId: String) : NewTaskAction
+  data class ChooseModel(val model: ChatModel?) : NewTaskAction
   data object AddRepository : NewTaskAction
   data object OpenRepositoryPicker : NewTaskAction
   data object CloseRepositoryPicker : NewTaskAction
@@ -162,10 +162,11 @@ class NewTaskViewModel(
         if (!canChangeContext(target)) return
         val loaded = mutableState.value.branchRead as? BranchReadState.Loaded ?: return
         if (loaded.root != target.repository?.root) return
-        val current = loaded.branches.currentBranch ?: return
-        onAction(NewTaskAction.ChooseBaseBranch(current))
+        target.baseBranch = loaded.branches.currentBranch.orEmpty()
+        target.rebindChat()
+        mutableState.update { it.copy(repositoryError = null) }
       }
-      NewTaskAction.RetryBranches -> if (!target.branchSwitching && branchReadJob?.isActive != true) target.repository?.root?.let { readBranches(target, it) }
+      NewTaskAction.RetryBranches -> target.repository?.root?.let { readBranches(target, it) }
       is NewTaskAction.ChooseRepository -> {
         selectRepository(target, action.repository)
       }
@@ -183,6 +184,7 @@ class NewTaskViewModel(
         target.rebindChat()
       }
       is NewTaskAction.ChooseAgent -> {
+        if (!canChangeContext(target)) return
         target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
         target.agentChosen = true
         target.agentId = action.agentId
@@ -460,7 +462,8 @@ class NewTaskViewModel(
   }
 
   private fun canChangeContext(target: NewTaskDraft): Boolean {
+    if (target.chat.value?.thread?.deferDestructiveAction("change the draft context") == true) return false
     val current = target.chat.value
-    return !target.branchSwitching && current?.repositoryMissing != true && current?.thread?.busy?.value != true && !target.offer.value.starting
+    return current?.repositoryMissing != true && current?.thread?.busy?.value != true && !target.offer.value.starting
   }
 }

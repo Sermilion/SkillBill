@@ -1,5 +1,10 @@
 package dev.skillbill.desktop.core.data.chat
 
+import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
+import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import dev.skillbill.desktop.core.common.ApplicationCoroutineScope
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
@@ -9,6 +14,7 @@ import dev.skillbill.desktop.core.domain.usage.UsageObservationSink
 import dev.skillbill.desktop.core.domain.usage.model.UsageProfileLookup
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -67,12 +73,44 @@ class ClaudeChatTransport internal constructor(
 
   override val agentId = "claude"
   override val approvalCapable = true
+  override val steeringPolicy = ChatSteeringPolicy.LiveWhenAvailable
 
   private val scope = appScope.scope
   private val sessions = ConcurrentHashMap<String, ClaudeLiveSession>()
   private val stopping = ConcurrentHashMap<String, Job>()
   private val unpromptedEvents = MutableSharedFlow<Pair<String, ChatEvent>>(extraBufferCapacity = UNPROMPTED_BUFFER)
   private val processGenerations = AtomicLong()
+
+  private val deliveryOwners = ConcurrentHashMap<Pair<String, String>, ClaudeLiveSession>()
+  private val deliveryUpdates = MutableStateFlow<Map<Pair<String, String>, ChatSteeringUpdate>>(emptyMap())
+
+  override suspend fun steer(request: ChatSteeringRequest): ChatSteeringResult {
+    val session = sessions[request.sessionId]
+      ?: return ChatSteeringResult.NoActiveTurn(request.deliveryId, "Claude has no active process")
+    val key = request.sessionId to request.deliveryId
+    if (deliveryOwners.putIfAbsent(key, session) != null) {
+      diagnostics.record("chat.steering_duplicate_request")
+      return ChatSteeringResult.Rejected(request.deliveryId, "This delivery is already tracked")
+    }
+    return session.steer(request)
+  }
+
+  override fun steeringUpdates(sessionId: String): Flow<ChatSteeringUpdate> = flow {
+    deliveryUpdates.collect { snapshot ->
+      snapshot.values.filter { it.sessionId == sessionId }.forEach { emit(it) }
+    }
+  }
+
+  override fun settleSteering(sessionId: String, deliveryId: String): ChatSteeringResult =
+    deliveryOwners[sessionId to deliveryId]?.settleSteering(deliveryId)
+      ?: ChatSteeringResult.NoActiveTurn(deliveryId, "No pending Claude delivery remains")
+
+  override fun retireSteering(sessionId: String, deliveryId: String) {
+    val key = sessionId to deliveryId
+    deliveryOwners.remove(key)?.retireSteering(deliveryId)
+    deliveryUpdates.update { it - key }
+    diagnostics.record("chat.steering_retired")
+  }
 
   override fun run(request: ChatTurnRequest): Flow<ChatEvent> = flow {
     val selectedProfile = request.agent.profile ?: settings.settings.first().claudeConfigDir
@@ -149,6 +187,14 @@ class ClaudeChatTransport internal constructor(
       processGeneration,
       usageSink,
       clock,
+      { result ->
+        val key = sessionId to result.deliveryId
+        if (deliveryOwners[key]?.processGeneration == processGeneration) {
+          deliveryUpdates.update { snapshot ->
+            if (deliveryOwners[key]?.processGeneration == processGeneration) snapshot + (key to ChatSteeringUpdate(sessionId, result)) else snapshot
+          }
+        } else diagnostics.record("chat.steering_retired_or_stale_update")
+      },
     ) { event -> unpromptedEvents.tryEmit(sessionId to event) }
     val opening = approvals.open(
       sessionId = sessionId,
@@ -191,6 +237,7 @@ class ClaudeChatTransport internal constructor(
         }
       } finally {
         watchdog?.cancel()
+        session.abandon()
         sessions.remove(sessionId, session)
       }
     }
@@ -202,6 +249,7 @@ class ClaudeChatTransport internal constructor(
   }
 
   private fun stop(sessionId: String, session: ClaudeLiveSession) {
+    session.abandon()
     usageSink.revokeSession(sessionId, session.processGeneration)
     val job = session.job
     stopping[sessionId] = job

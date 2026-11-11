@@ -101,4 +101,3 @@ internal fun GoalAssessmentState.word(): String = when (this) {
   GoalAssessmentState.Pending -> "Pending"
   GoalAssessmentState.Skipped -> "Skipped"
 }
-
