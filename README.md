@@ -171,7 +171,3 @@ Some diagnostic events still queue locally while telemetry is off. Workflow stat
 ## Contributing
 
 See [Contributing](CONTRIBUTING.md), the [source-generation guide](docs/skill-source-generation.md), and the [scaffold payload contract](orchestration/shell-content-contract/SCAFFOLD_PAYLOAD.md) before changing contracts. The runtime and desktop app build separately.
-
-## License
-
-[MIT](LICENSE). See the [licensing summary](docs/licensing.md) for details.
