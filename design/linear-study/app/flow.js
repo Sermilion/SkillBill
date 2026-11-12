@@ -71,6 +71,11 @@
   const chatContexts = new Map();
   function changesFor(id) {
     if (chatContexts.has(id)) return chatContexts.get(id);
+    /* The Diff comments catalog: the SKILL-474 sample, files with parsed hunks and no subtask scopes. */
+    if (id === 'review-sample') {
+      const R = D.REVIEW_SAMPLE, files = R.files.map((f) => ({ path: f.path, status: f.st, add: f.ins, del: f.del, hunks: f.hunks }));
+      return { goal: R.goal, branch: R.branch, subtasks: [], all: files, other: [], working: [] };
+    }
     if (id === 'SKILL-512') {
       const it = item(id);
       return { ...D.RECORDED_CHANGES, subtasks: D.RECORDED_CHANGES.subtasks.map((sub, index) => ({ ...sub, state: subtaskState(it, it.subtasks[index]) === 'complete' ? 'done' : subtaskState(it, it.subtasks[index]) })) };
@@ -113,5 +118,26 @@
   delete sample.executions; delete sample.attempts; delete sample.startedAgo; delete sample.exec;
   sample.specBundle = sample.subtasks.map((sub) => sub.spec);
   sample.pipeline = { done: ['preplan', 'plan'], now: 'implement' };
+  /* Phase ledgers from the recorded run: subtasks 1 to 4 as recorded (with their block incidents), 5 to 20 repeat those
+   * ledgers later in time, and subtask 21 is cut short mid-run. Activity and the details panel both read `phaseLog`. */
+  const rec = D.ACTIVITY_RECORD, ms = (t) => new Date(t).getTime(), iso = (n) => new Date(n).toISOString();
+  const logs = {};
+  rec.groups.forEach((g) => { logs[g.n] = (logs[g.n] || []).concat(g.ph); });
+  /* The record's two block incidents belong to subtasks 2 and 3 (its blocked stop and its audit_plan_fix gap). */
+  const INCIDENT_SUBTASK = [2, 3];
+  const base = [1, 2, 3, 4].map((n) => logs[n]);
+  let cursor = ms(base[3][base[3].length - 1].e) + 30 * 60000;
+  sample.subtasks.forEach((sub) => {
+    const n = sub.id;
+    if (n <= 4) { sub.phaseLog = logs[n].map((p) => ({ ...p })); }
+    else if (n <= 21) {
+      const src = base[(n - 1) % 4], shift = cursor - ms(src[0].s);
+      sub.phaseLog = src.map((p) => ({ ...p, s: iso(ms(p.s) + shift), e: p.e ? iso(ms(p.e) + shift) : null }));
+      if (n === 21) { sub.phaseLog = sub.phaseLog.slice(0, 6); sub.phaseLog[5].e = null; sub.phaseLog[5].t = null; }
+      cursor = ms(sub.phaseLog[sub.phaseLog.length - 1].e || sub.phaseLog[sub.phaseLog.length - 1].s) + 2 * 60000;
+    }
+    sub.blocks = rec.incidents.filter((inc, i) => INCIDENT_SUBTASK[i] === n).map((inc) => ({ at: inc.at, why: inc.why, phase: inc.phase, n: inc.n, disp: inc.disp }));
+  });
+  sample.started = '31 Oct 20:34';
   D.items.push(sample);
 })();

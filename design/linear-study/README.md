@@ -37,9 +37,12 @@ The top bar switches between four views:
 | `app/states.js` | State examples and the States catalog. Examples use the same detail renderers and stay out of the everyday board sample. |
 | `app/flow.js` | Adapts the selected run or chat to Activity and Changes, and parses patches for inline comments. |
 | `app/main.js` | State, actions, keyboard model, command menu, menus, dialogs, toasts, terminal tabs, live clocks. |
-| `app/surfaces.js`, `app/activity.js`, `app/changes.js`, `app/comments.js` | Scoped Activity, Changes and Diff comments views, sample records and interactions. |
-| `ds/surfaces.css`, `ds/activity.css`, `ds/changes.css`, `ds/comments.css` | Shared token aliases and styles for those views. |
+| `app/review.js` | The Changes window and Diff comments: scopes, files, diffs and review threads, composed from components. State lives in `st.cw` and `st.reviews`. |
 | `index.html` | Page shell and documentation chrome styles. |
+
+## Reuse check
+
+Screens compose components; they do not write component markup or styles. Run `node scripts/check-reuse.mjs` (add `--list` for every location). It fails when a file under `app/` writes a component class (`sb-…`) or an inline `style` attribute, or defines a component outside `ds/components.js`. Screens may use the layout primitives (`l-row`, `l-col`, `l-grow`, `l-wrap`, `l-top`, `l-fill`, `g-N`, `hide-sm`) and the text utilities (`t-fg`, `t-2`, `t-muted`, `t-faint`, the status colors, `t-xs`, `t-sm`, `t-md`, `t-strong`, `mono`, `tnum`, `trunc`). The catalog pages may use their `doc-…` page classes, and the Foundations page may style token samples. When a screen needs a shape no component draws, add the component (with a catalog card) rather than markup in the screen.
 
 ## Status
 
@@ -47,21 +50,17 @@ Design reference only. Nothing here ships. The Compose implementation built to t
 
 ## Activity, Changes and Diff comments
 
-Open `index.html`, choose a goal on Work and browse its detail. Activity is embedded below Changes, with the selected goal's subtasks, recorded phases, blocks and recent updates. Expand a group or use the timeline to inspect its phases.
+Open `index.html`, choose a goal on Work and browse its detail. Activity sits below Changes and reads the goal's own records: each subtask's phase ledger (`phaseLog`, or the same phase cards the details panel shows), fix loops, blocks, idle gaps and the run's events. SKILL-512 carries the recorded SKILL-455 run. Expand a group, or click a timeline segment to open its group.
 
 Click Open changes in the Changes overview. The window opens over that same goal. Choose a scope and file, then hover a diff line and click + to draft a comment. Pending comments stay in one review while you switch files in that scope. Add review publishes them together locally. Close changes or press Escape to return to the goal. Comments and scope choices survive closing and reopening the window.
 
 The Work board includes "Changes window with subtask scopes", a 33-subtask example with recorded patches for trying the picker, ranges and comments. The IDE status goal also has an illustrative patch. Other runs and chats show their own sample file list. A file without a patch says "No text diff was recorded for this file." Chat changes and Verify's Open changes action use the same window with their own context.
 
-States keeps the extra examples for comparing variants:
-
-- Recorded activity has five historical and synthetic scenarios.
-- Changes window retains the 33-subtask scope example.
-- Diff comments has four scenarios covering writing a review, published threads, agent review and review fixes.
+States links the examples: `#changes` shows the window inline over the 33-subtask run, and `#comments/1` to `#comments/4` show the SKILL-474 review sample in four scenarios (writing a review, published threads, agent review, review fixes).
 
 All data is part of this HTML prototype. Refreshing resets local interactions. No files, reviews or runs are changed.
 
-`app/surfaces.js` owns the scoped view lifecycle and in-memory snapshots. Each view has a controller under `app/` and a stylesheet under `ds/`. Their local styles inherit the shared tokens through `ds/surfaces.css`; they do not affect other screens. All modules load from the same `index.html`, including with `file://`.
+Activity is part of `app/screens.js`; the Changes window and Diff comments are `app/review.js`. Both use only components from `ds/components.js`, and their state lives in the prototype's `st` until the page reloads. All modules load from the same `index.html`, including with `file://`.
 
 ## Usage limits card
 
