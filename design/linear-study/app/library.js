@@ -281,6 +281,25 @@
         const colors = Object.fromEntries(D.USAGE.providers.map((p) => [p, D.AGENTS[p.toLowerCase()].color]));
         return `<div class="l-row g-4 l-wrap l-top">${[['normal', 'claude'], ['low', null], ['signedout', null], ['nodata', 'codex']].map(([id, def]) => `<div class="l-col g-2">${caption(id)}<div class="doc-stage">${inert(S.Popover({ x: 0, y: 0, flush: true, role: 'dialog', body: S.UsagePanel(Object.assign({}, D.USAGE.scenarios[id], { id: 'demo-usage-panel-' + id, provider: 'Codex', providers: D.USAGE.providers, colors, agents, defaultAgent: def })) }))}</div></div>`).join('')}</div>`;
       }],
+      ['RunAppButton', 'Run app (SONA-10). A split button in a goal’s run actions, shown when the repository’s platform pack declares an app-run recipe (Android today). The main part builds debug and opens the app on the sidebar QA pick; Let QA choose resolves to the first ready device, else boots the first AVD. The chevron opens DevicePanel under itself and changes the same pick. While a build runs it reads Building… and the chevron becomes Stop. On only for a completed goal (builds in a temporary worktree on its branch) and a goal in monitoring (builds in the goal checkout while CI runs); off for every other state and while a CI repair edits the checkout. RunAppStatus is the one line under the actions; its log link opens the “Run app · <key>” terminal tab. Try it on NEWS-168 (completed) or NEWS-174 (monitoring), or open #run-app/<state>.', () => {
+        const dev = (name, o) => Object.assign({ name, mono: /_/.test(name) }, o || {});
+        const p8 = dev('Pixel 8 Pro'), avd = dev('Pixel_Tablet_API_35', { boots: true }), emu = dev('Pixel_7_API_34');
+        const b = (o) => `<b>${esc(o)}</b>`;
+        const demo = (label, btn, status, href) => `<div class="l-col g-2" style="min-width:300px">${caption(label)}${inert(`<div class="l-col g-2"><div class="l-row g-2">${S.RunAppButton(Object.assign({ id: 'demo' }, btn))}</div>${status ? S.RunAppStatus(status) : ''}</div>`)}${href ? `<a class="t-faint" style="font-size:var(--t-xs)" href="#run-app/${href}">Open in the prototype</a>` : ''}</div>`;
+        return `<div class="l-row g-6 l-wrap l-top">${[
+          demo('Completed goal, phone picked', { device: p8, state: 'idle' }, null, 'ready'),
+          demo('Stopped AVD picked: boots it first', { device: avd, state: 'idle' }, null, 'avd'),
+          demo('Building', { device: p8, state: 'building' }, { state: 'building', tab: 1, html: `Building for ${b('Pixel 8 Pro')} · <code>gradlew :app:installDebug</code>` }, 'building'),
+          demo('Running', { device: p8, state: 'idle' }, { state: 'running', tab: 1, html: `Running on ${b('Pixel 8 Pro')} · opened 14:32` }, 'running'),
+          demo('Build failed', { device: p8, state: 'idle' }, { state: 'failed', tab: 1, html: `Build failed · <code>:app:compileDebugKotlin</code> · nothing was installed on ${b('Pixel 8 Pro')}` }, 'failed'),
+          demo('Device leased by a QA run', { device: p8, state: 'idle' }, { state: 'contended', tab: 1, html: `${b('Pixel_7_API_34')} is in use by QA run ${b('SKILL-514')}. Nothing was installed. Pick another device.` }, 'contended'),
+          demo('Stopped by you', { device: p8, state: 'idle' }, { state: 'stopped', tab: 1, text: 'Build stopped. Nothing new was installed.' }, 'stopped'),
+          demo('Monitoring: on, builds in the goal checkout', { device: p8, state: 'idle' }, null, 'monitoring'),
+          demo('Off: blocked, paused, failed or still running', { device: p8, state: 'off', reason: 'state' }, { state: 'off', text: 'Run app turns on when the goal completes or reaches monitoring.' }, 'blocked'),
+          demo('Off: a CI repair edits the checkout', { device: p8, state: 'off', reason: 'repair' }, { state: 'off', text: 'Off while a CI repair edits the checkout. Run app turns back on when monitoring resumes.' }),
+          demo('Off: adb not found', { device: null, state: 'off', reason: 'adb' }, { state: 'off', text: 'adb not found. Install Android SDK Platform-Tools, or set ANDROID_HOME.' }, 'noadb'),
+        ].join('')}</div>`;
+      }],
       ['DeviceSwitcher', 'The last row of the sidebar: the device QA runs started from the app use. Glyph with a pip (green when the pick is ready, orange while a device needs a fix, grey when nothing is ready, red when adb is missing), the name over one faint line, an up-down chevron. It opens DevicePanel above itself.', () => `<div class="l-row g-6 l-wrap l-top">${[
         devSwitchDemo('Let QA choose, 2 ready', devList('mixed'), 'auto'),
         devSwitchDemo('Phone picked', devList('mixed'), 'p8'),

@@ -421,6 +421,8 @@ input { font: inherit; color: inherit; }
 /* Detail document */
 .sb-doc { max-width: 780px; margin: 0 auto; padding: 32px 40px 64px; display: flex; flex-direction: column; gap: 28px; }
 .sb-doc-hd { display: flex; flex-direction: column; gap: 10px; }
+/* Buttons line up on their top edge: the run actions column can carry note and status lines under its buttons. */
+.sb-doc-acts { align-items: flex-start; }
 .sb-doc-ti { margin: 0; font: 600 var(--t-2xl)/1.25 var(--font-sans); letter-spacing: -0.012em; color: var(--fg); text-wrap: balance; }
 .sb-doc-sub { color: var(--fg-muted); font-size: var(--t-base); line-height: 1.55; }
 .sb-sec { display: flex; flex-direction: column; gap: 10px; }
@@ -2198,3 +2200,30 @@ button.sb-mon-rh:focus-visible { outline-offset: -2px; }
   .sb-report-record dl, .sb-kv { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .sb-report-record dd, .sb-kv dd { margin-bottom: 6px; }
 }
+
+/* Run app (SONA-10): split button in the goal run actions, and its status line */
+.sb-runbtn { display: inline-flex; flex: none; align-self: flex-start; width: max-content; align-items: stretch; height: 28px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--bg-raised); }
+.sb-runbtn button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--fg); font: 500 var(--t-sm)/1 var(--font-sans); cursor: pointer; white-space: nowrap; transition: background var(--dur-fast) var(--ease); }
+.sb-runbtn button:hover { background: var(--bg-overlay); }
+.sb-runbtn button[disabled] { cursor: default; }
+.sb-runbtn button[disabled]:hover { background: transparent; }
+.sb-runbtn .sb-icon { width: 14px; height: 14px; color: var(--st-done); }
+.sb-runbtn-main { padding: 0 10px; border-radius: var(--r-sm) 0 0 var(--r-sm); }
+.sb-runbtn-side { padding: 0 7px; border-left: 1px solid var(--border) !important; border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+.sb-runbtn-side .sb-icon { color: var(--fg-muted); width: 12px; height: 12px; }
+.sb-runbtn-side.is-stop .sb-icon { color: var(--st-failed); }
+.sb-runbtn-side.is-stop:hover { background: color-mix(in srgb, var(--st-failed) 10%, transparent); }
+.sb-runbtn-sep { color: var(--fg-faint); }
+.sb-runbtn-dev { color: var(--fg-muted); max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.sb-runbtn-dev.mono { font-family: var(--font-mono); font-size: var(--t-xs); }
+.sb-runbtn-main.is-busy { color: var(--fg-muted); }
+.sb-runbtn.is-off { opacity: 0.45; }
+.sb-runbtn.is-off .sb-runbtn-side { pointer-events: auto; }
+.sb-runbtn-spin { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--st-active) 30%, transparent); border-top-color: var(--st-active); animation: sb-spin 0.8s linear infinite; flex: none; }
+.sb-runbtn-spin.is-sm { width: 10px; height: 10px; }
+.sb-runapp-st { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-xs); color: var(--fg-muted); }
+.sb-runapp-st .sb-dot { flex: none; }
+.sb-runapp-st b { color: var(--fg); font-weight: 500; }
+.sb-runapp-st code { font-family: var(--font-mono); font-size: var(--t-xs); color: var(--fg-2); }
+.sb-runapp-st.is-off { color: var(--fg-faint); }
+.sb-term-out .ok { color: var(--st-done); } .sb-term-out .er { color: var(--st-failed); } .sb-term-out .wn { color: var(--st-blocked); }

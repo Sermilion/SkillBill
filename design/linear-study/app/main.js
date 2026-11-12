@@ -7,6 +7,9 @@
   const root = document.getElementById('root');
   const toastRoot = document.getElementById('toast-root');
   let chatSeq = 1, queueSeq = 1, undoTimer = null;
+  /* Run app (SONA-10): sample output and the pending step timers of the one run playing. */
+  const R = D.APP_RUN;
+  let appTimers = [];
 
   const st = {
     mode: modeFromHash(),
@@ -34,7 +37,9 @@
     nt: seedNewTask(), focusNext: null,
     /* QA device in the sidebar footer: which list the app found (data.js QA_DEVICES), the picked device ('auto' lets QA
      * choose), the popup's keyboard index and whether a refresh is running. qaOpen: open QA result rows and folds. */
-    qaDev: { list: D.QA_DEVICES.live, selected: 'auto', kb: 0, checking: false }, build: Object.assign({}, D.BUILD.live), qaOpen: new Set(),
+    qaDev: { list: D.QA_DEVICES.live, selected: 'auto', kb: 0, checking: false },
+    /* Run app (SONA-10), per goal id: { state (building, running, failed, contended, stopped), device, step, tab, at, holder }. */
+    appRun: {}, build: Object.assign({}, D.BUILD.live), qaOpen: new Set(),
     usage: { provider: 'Codex', scenario: 'normal', override: null, last: null },
     /* Validation runs: open report parts (indexes) and open checks (ids) per item, unset until the first toggle so the
      * defaults apply. Verify runs: open steps, criteria rows and folds ("<id>:s:<step>", "<id>:c:<n>"), the criteria filter,
@@ -75,6 +80,14 @@
     if (page === 'new-task') return { view: 'newtask', open: open === 'state' ? rest[0] === 'closing' ? 'closing' : null : open || null, scenario: open === 'state' ? rest[0] : null, variant: open === 'picker' || open === 'resume' || open === 'changes' ? rest[0] || null : null };
     if (page === 'detail' && open) return { view: 'detail', id: decodeURIComponent(open), open: null, inspector: rest[0], resultTab: rest[1] };
     if (page === 'build') return { view: 'detail', id: D.BUILD.focus, open: null, build: { state: open || D.BUILD.live.state, type: rest[0] || D.BUILD.live.type } };
+    /* #run-app/<scenario> opens an Android sample goal with Run app in one state. On NEWS-168 (completed): ready, building,
+     * running, failed, contended, stopped, noadb, avd (a stopped AVD picked, so the run boots it first). monitoring opens
+     * NEWS-174 (watching CI); blocked opens NEWS-176 and active opens NEWS-171, where the button is off. */
+    if (page === 'run-app') {
+      const scenario = open || 'ready';
+      const id = { monitoring: 'NEWS-174', blocked: 'NEWS-176', active: 'NEWS-171' }[scenario] || 'NEWS-168';
+      return { view: 'detail', id, open: null, runApp: { scenario, id } };
+    }
     if (page === 'qa-device') return { view: 'work', open: 'devices', devices: open && open in D.QA_DEVICES.lists ? open : null };
     if (page === 'usage') return { view: 'work', open: 'usage', usageScenario: open in D.USAGE.scenarios ? open : 'normal' };
     if (page === 'specs') return open === 'project' ? { view: 'work', specs: true, project: rest[0] } : { view: 'work', specs: true, sel: open ? decodeURIComponent([open, ...rest].join('/')) : null };
@@ -113,6 +126,7 @@
       st.propsOpen = true; st.specsOpen = false;
     }
     if (r.build) st.build = r.build;
+    if (r.runApp) seedRunApp(r.runApp.scenario, r.runApp.id);
     if (r.devices) { st.qaDev.list = r.devices; st.qaDev.selected = 'auto'; }
     if (r.specs) {
       st.specsOpen = true;
@@ -358,7 +372,7 @@
     render();
   }
   function openChanges(work, scope, file) {
-    st.changeReturnFocus = document.activeElement?.id || `changes-open-${st.detailId}`;
+    st.changeReturnFocus = document.activeElement?.id || null;
     st.changeView = { work, scope, file };
     st.popover = null; st.dialog = null;
     st.focusNext = 'changes-close';
@@ -397,6 +411,70 @@
   }
 
   function openItem(id) { st.detailId = id; go('detail'); }
+
+  /* ---------- Run app (SONA-10) ---------- */
+  /* One terminal tab per goal, reused on every run: "Run app · <key>", directory the goal checkout. */
+  function appRunTab(it) {
+    let tab = st.termTabs.find((t) => t.runApp === it.id);
+    if (!tab) {
+      tab = { id: st.termSeq++, runApp: it.id, directory: X.repoOf(it.repo).path, name: `Run app · ${it.id}`, branch: it.branch, log: [] };
+      st.termTabs.push(tab); relabelTabs();
+    }
+    tab.log = []; tab.live = true;
+    return tab;
+  }
+  const now = () => new Date().toTimeString().slice(0, 5);
+  /* The ordered steps of one run: [delay ms, status step, lines]. */
+  function appRunSteps(it, d, fail) {
+    const steps = [[150, 'lease', R.head(it.id, d.wire).concat(R.lease(d.name))]];
+    if (d.boots) steps.push([1100, `emulator @${d.name}`, R.boot(d.name)]);
+    if (fail) return steps.concat([[900, 'gradlew :app:installDebug', R.fail.slice(0, 2)], [900, 'gradlew :app:installDebug', R.fail.slice(2)], [200, null, R.release(d.name).concat([['er', 'Build failed. Nothing was installed.']])]]);
+    return steps.concat([
+      [700, 'gradlew :app:installDebug', R.gradle.slice(0, 3)],
+      [1200, 'gradlew :app:installDebug', R.gradle.slice(3)],
+      [600, 'am start -n dev.acme.newsreader/.MainActivity', R.launch(d.serial)],
+      [300, null, R.release(d.name).concat([['ok', `Running on ${d.name}.`]])],
+    ]);
+  }
+  function startAppRun(id, fail) {
+    const it = item(id); if (!it || !X.runAppEligible(it)) return;
+    const target = X.runAppTarget(st); if (!target.device) return;
+    appTimers.forEach(clearTimeout); appTimers = [];
+    const d = target.device, tab = appRunTab(it);
+    st.termActive = tab.id; st.termOpen = true;
+    st.appRun[id] = { state: 'building', device: d, step: 'taking the device lease', tab: tab.id };
+    render();
+    let at = 0;
+    appRunSteps(it, d, fail).forEach(([delay, step, lines], i, all) => {
+      at += delay;
+      appTimers.push(setTimeout(() => {
+        const run = st.appRun[id]; if (!run || run.state !== 'building') return;
+        tab.log.push(...lines); if (step) run.step = step;
+        if (i === all.length - 1) {
+          tab.live = false;
+          st.appRun[id] = Object.assign({}, run, { state: fail ? 'failed' : 'running', at: now() });
+          toast(fail ? { state: 'failed', title: 'Build failed', body: `${it.id} did not build. Open the Run app tab for the log.` } : { state: 'done', title: `Running on ${d.name}`, body: `${it.id} · debug build opened on the device.` });
+        }
+        render();
+      }, at));
+    });
+  }
+  /* Static scenarios for the #run-app route and the States links. */
+  function seedRunApp(scenario, id) {
+    const it = X.lookup(id); if (!it) return;
+    appTimers.forEach(clearTimeout); appTimers = [];
+    delete st.appRun[it.id];
+    st.qaDev.list = scenario === 'noadb' ? 'noAdb' : 'mixed';
+    st.qaDev.selected = scenario === 'avd' ? 'avd1' : 'p8';
+    if (['ready', 'avd', 'noadb', 'monitoring', 'blocked', 'active'].includes(scenario)) return;
+    const d = X.runAppTarget(st).device, tab = appRunTab(it);
+    if (scenario === 'contended') { const leased = { id: 'emu1', name: 'Pixel_7_API_34', mono: true, wire: 'serial:emulator-5554' }; tab.log = R.head(it.id, leased.wire).concat(R.contended(leased.name, 'SKILL-514')); tab.live = false; st.appRun[it.id] = { state: 'contended', device: leased, holder: 'SKILL-514', tab: tab.id }; }
+    else if (scenario === 'failed') { tab.log = R.head(it.id, d.wire).concat(R.lease(d.name), R.fail, R.release(d.name), [['er', 'Build failed. Nothing was installed.']]); tab.live = false; st.appRun[it.id] = { state: 'failed', device: d, tab: tab.id, at: '14:32' }; }
+    else if (scenario === 'running') { tab.log = R.head(it.id, d.wire).concat(R.lease(d.name), R.gradle, R.launch(d.serial), R.release(d.name), [['ok', `Running on ${d.name}.`]]); tab.live = false; st.appRun[it.id] = { state: 'running', device: d, tab: tab.id, at: '14:32' }; }
+    else if (scenario === 'stopped') { tab.log = R.head(it.id, d.wire).concat(R.lease(d.name), R.gradle.slice(0, 2), [['wn', 'Stopped by you.'], ...R.release(d.name)]); tab.live = false; st.appRun[it.id] = { state: 'stopped', device: d, tab: tab.id }; }
+    else if (scenario === 'building') { tab.log = R.head(it.id, d.wire).concat(R.lease(d.name), R.gradle.slice(0, 2)); st.appRun[it.id] = { state: 'building', device: d, step: 'gradlew :app:installDebug', tab: tab.id }; }
+    st.termActive = tab.id; st.termOpen = true;
+  }
   function openTerminalFor(it) {
     const r = X.repoOf(it ? it.repo : 'skill-bill');
     const id = st.termSeq++;
@@ -1335,6 +1413,24 @@
       st.qaDev.selected = id; closeDevices();
     },
     'feed-all'(id) { st.feedAll.add(id); render(); },
+
+    /* Run app (SONA-10): build and open the goal's app on the QA pick; the chevron opens the device popup under itself. */
+    'app-run'(id) { startAppRun(id, false); },
+    'app-run-stop'(id) {
+      const run = st.appRun[id]; if (!run || run.state !== 'building') return;
+      appTimers.forEach(clearTimeout); appTimers = [];
+      const tab = st.termTabs.find((t) => t.id === run.tab);
+      if (tab) { tab.log.push(['wn', 'Stopped by you.'], ...R.release(run.device.name)); tab.live = false; }
+      st.appRun[id] = Object.assign({}, run, { state: 'stopped' }); render();
+    },
+    'app-run-device'(id, el) {
+      if (st.popover && st.popover.type === 'devices') return closeDevices();
+      const anchor = el || document.getElementById(`app-run-dev-${id}`);
+      if (!anchor) return;
+      st.qaDev.kb = Math.max(0, X.deviceOptions(X.deviceList(st)).findIndex((d) => d.id === st.qaDev.selected));
+      st.popover = Object.assign({ type: 'devices', runApp: id, gap: 4, flush: true, cls: 'sb-pop--dev', steady: true, role: 'dialog', focus: 'device-list' }, anchorPos(anchor));
+      A['dev-refresh'](true);
+    },
 
     /* New task: open chats (NewTaskChats) */
     'chat-select'(id) { selectChat(id); },
