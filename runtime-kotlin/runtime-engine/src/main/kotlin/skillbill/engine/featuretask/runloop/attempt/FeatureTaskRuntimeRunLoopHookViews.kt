@@ -406,6 +406,8 @@ internal fun FeatureTaskRuntimePlanBundleFeasibilityState.blockedReason(): Strin
     }
     settledLaunches.lastOrNull { it.outcome == PlanBundleFeasibilityLaunchOutcome.REFUSED }
       ?.let { append("\nLatest invalid-output reason: ${it.value}") }
+    settledLaunches.lastOrNull { it.outcome == PlanBundleFeasibilityLaunchOutcome.BLOCKED }
+      ?.let { append("\nSafety block: ${it.value}") }
   }
 
 internal fun PlanBundleFeasibilityIdentity.hasRawBaseline(): Boolean =
