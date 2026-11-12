@@ -38,13 +38,16 @@ internal fun repositoryPillMode(chat: NewTaskChat?, busy: Boolean, starting: Boo
   else -> RepositoryPillMode.Interactive
 }
 
-internal fun repositoryPillBranch(root: String?, read: BranchReadState): String = when (read) {
-  is BranchReadState.Loaded -> if (read.root == root) read.branches.currentBranch ?: "detached HEAD" else "Reading branch"
-  is BranchReadState.Failed -> "Branch unavailable"
-  BranchReadState.Idle, is BranchReadState.Reading -> "Reading branch"
+/** The chosen base branch, or the live checkout branch while no base is chosen. */
+internal fun repositoryPillBranch(baseBranch: String, root: String?, read: BranchReadState): String = baseBranch.ifBlank {
+  when (read) {
+    is BranchReadState.Loaded -> if (read.root == root) read.branches.currentBranch ?: "detached HEAD" else "Reading branch"
+    is BranchReadState.Failed -> "Branch unavailable"
+    BranchReadState.Idle, is BranchReadState.Reading -> "Reading branch"
+  }
 }
 
-/** The repository and current checkout branch chip; a long branch shrinks first, so the repository name and the chevron stay readable. */
+/** The repository and branch chip; a long branch shrinks first, so the repository name and the chevron stay readable. */
 @Composable
 internal fun NewTaskRepositoryPill(mode: RepositoryPillMode, repositoryName: String?, branch: String, focusRequester: FocusRequester, onClick: () -> Unit) {
   val why = when (mode) {

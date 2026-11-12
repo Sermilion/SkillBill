@@ -555,10 +555,8 @@ internal object FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement {
         ?: return RepairIntentPreparation.Unavailable("Feasibility repair intent has no active admitted launch.")
     val violation = stagedIntentViolation(context, candidate, active)
     if (violation != null) return RepairIntentPreparation.Unsafe(violation)
-    return if (candidate.value.lineSequence().firstOrNull() != PlanBundleFeasibility.REPAIRED) {
-      RepairIntentPreparation.InvalidOutput(
-        PlanBundleFeasibility.REPAIR_REQUIRED + "\nThe planner must report repaired, then await review.",
-      )
+    return if (!PlanBundleFeasibility.reportsRepaired(candidate.value)) {
+      RepairIntentPreparation.InvalidOutput(PlanBundleFeasibility.REPAIR_HEADER_REFUSAL)
     } else if (active.intendedAfterIdentity != null) {
       RepairIntentPreparation.Ready(current)
     } else {

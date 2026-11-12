@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFi
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibility
 import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
 import skillbill.engine.featuretask.phase.planning.PlanBundleSnapshots
 import skillbill.engine.featuretask.phase.planning.authoredBundleReasonForTest
@@ -57,6 +58,14 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleOri
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImportSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityIdentity
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunch
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunchKind
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunchOutcome
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityRepositoryBaseline
+import skillbill.workflow.taskruntime.model.planning.blockPlanBundleFeasibilityLaunch
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
@@ -445,6 +454,123 @@ class PlanSubtasksReopeningTest {
       assertEquals(owned, database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId) })
     } finally {
       home.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `goal resume of a safety-blocked feasibility review opens a fresh review cycle`() {
+    val home = Files.createTempDirectory("blocked-feasibility-adoption")
+    try {
+      val database = phaseRunDatabase(home, testHarnessClock)
+      val execution = ExecutionPlanAdmissionFixture(SkeletonDefinition.PLAN, database = database)
+      val selectedId = "wftr-blocked-plan"
+      seedPlans(database, execution, selectedId, "wftr-older-plan", acceptedRecords())
+      seedLegacyBundle(home, database, selectedId)
+      val codec = PlanBundleFeasibilityStateCodec(featureTaskRuntimeWireArtifactValidatorForTest())
+      val captured = PlanBundleFeasibility.capture(planner(), home, "SKILL-384")
+      seedSafetyBlockedFeasibility(database, selectedId, codec, captured.identity)
+
+      val reopening = reopening(database)
+      assertTrue(reopening.hasReopenableBlockedFeasibility(selectedId))
+      val replan =
+        PlanSubtasksReplan(
+          issueKey = "SKILL-384",
+          planWorkflowId = selectedId,
+          repoRoot = home,
+          settledSubtaskIds = setOf(1),
+          feasibilityAdoption = true,
+        )
+      assertTrue(reopening.reopenWithRebasedBundle(replan))
+      assertFalse(reopening.hasReopenableBlockedFeasibility(selectedId))
+
+      val reopened = database.read { requireNotNull(it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId)) }
+      val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
+      val state = codec.decode(family.value(reopened.artifacts), "test")
+      assertEquals(PlanBundleFeasibilityMode.REVIEW, state.mode)
+      assertEquals(0, state.reviewRoundsStarted)
+      assertNull(state.activeLaunch)
+      assertTrue(state.currentCycleId.orEmpty().startsWith("$selectedId:plan_subtasks:retry-"))
+      assertEquals(
+        PlanBundleFeasibilityLaunchOutcome.BLOCKED,
+        state.cycleHistory.single().settledLaunches.single().outcome,
+      )
+      assertEquals(WorkflowStepStatus.PENDING, decodePhaseRecords(reopened.artifacts)["plan_subtasks"]?.status)
+    } finally {
+      home.toFile().deleteRecursively()
+    }
+  }
+
+  private fun seedSafetyBlockedFeasibility(
+    database: DatabaseSessionFactory,
+    selectedId: String,
+    codec: PlanBundleFeasibilityStateCodec,
+    identity: PlanBundleFeasibilityIdentity,
+  ) {
+    val cycleId = "$selectedId:plan_subtasks:cycle-1"
+    val launch =
+      PlanBundleFeasibilityLaunch(
+        "$selectedId:$cycleId:1",
+        "plan_subtasks",
+        1,
+        PlanBundleFeasibilityLaunchKind.REVIEW,
+        identity,
+        null,
+        null,
+        cycleId = cycleId,
+        sequence = 1,
+        repositoryBaseline = PlanBundleFeasibilityRepositoryBaseline("head", emptyList(), emptyMap()),
+      )
+    val launched =
+      FeatureTaskRuntimePlanBundleFeasibilityState(
+        revision = 1,
+        mode = PlanBundleFeasibilityMode.REVIEW,
+        identity = identity,
+        acceptedLines = emptyList(),
+        conflicts = emptyList(),
+        changedSubtaskIds = emptyList(),
+        requiredRefs = identity.subtasks.flatMap { it.criterionRefs },
+        carriedRefs = emptyList(),
+        reviewRoundsStarted = 1,
+        repairLaunchesStarted = 0,
+        activeLaunch = launch,
+        settledLaunches = emptyList(),
+        lastReviewValue = null,
+        approval = null,
+        legacyOrigin = false,
+        currentCycleId = cycleId,
+      )
+    val blocked =
+      assertNotNull(
+        blockPlanBundleFeasibilityLaunch(
+          launched,
+          launch.transitionId,
+          "Feasibility changed repository paths outside its admitted authority: src/Operator.kt.",
+        ),
+      )
+    database.transaction { unit ->
+      val snapshot = requireNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId))
+      val records =
+        decodePhaseRecords(snapshot.artifacts).mapValues { (phase, record) ->
+          if (phase == "plan_subtasks") {
+            record.copy(status = WorkflowStepStatus.BLOCKED, blockedReason = "Bundle feasibility is blocked.")
+          } else {
+            record
+          }
+        }
+      unit.workflowStates.saveAcceptedSnapshotMutation(
+        WorkflowFamily.TASK_RUNTIME,
+        snapshot.copy(
+          workflowStatus = WorkflowStatus.BLOCKED,
+          artifacts =
+            DurableWorkflowArtifacts.fromMap(
+              snapshot.artifacts +
+                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
+                  records.mapValues { it.value.asWorkflowArtifactEntry() },
+                ) +
+                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY.entry(codec.encode(blocked)),
+            ),
+        ),
+      )
     }
   }
 

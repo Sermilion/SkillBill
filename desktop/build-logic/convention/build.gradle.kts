@@ -29,6 +29,9 @@ val desktopCatalog = layout.projectDirectory.file("../../gradle/libs.versions.to
 tasks.withType<Test>().configureEach {
   useJUnitPlatform()
   inputs.file(desktopCatalog).withPropertyName("desktopVersionCatalog")
+  inputs.file("../../app/build.gradle.kts").withPropertyName("sourceRunLauncher")
+  inputs.file("../../../runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/persistence/RuntimeDatabaseEnvironmentKeys.kt")
+    .withPropertyName("runtimeDatabaseEnvironmentKeys")
   systemProperty("skillbill.desktop.catalog", desktopCatalog.absolutePath)
   maxHeapSize = "1g"
   val taskKey = "${rootDir.absolutePath}$path".hashCode().toUInt().toString(radix = 16).padStart(8, '0')

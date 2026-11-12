@@ -57,7 +57,7 @@ class RuntimeRepositoryBranchesRepository(
     }
   }
 
-  override suspend fun switchToDefaultBranch(path: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> {
+  override suspend fun switchToBranch(path: String, branch: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> {
     val runtime = sessions.sessions.value?.runtime
       ?: return Outcome.Failure(ReadProblem.Runtime("No database session is open."))
     val target = try {
@@ -66,7 +66,7 @@ class RuntimeRepositoryBranchesRepository(
       return Outcome.Failure(ReadProblem.Runtime("Invalid repository path."))
     }
     val read = readOrProblem(runtime, diagnostics) {
-      gitReadLock.mutex.withLock { withContext(Dispatchers.IO) { runtime.repositoryBranchesPort.switchToDefaultBranch(target, expectedCurrentBranch) } }
+      gitReadLock.mutex.withLock { withContext(Dispatchers.IO) { runtime.repositoryBranchesPort.switchToBranch(target, branch, expectedCurrentBranch) } }
     }
     val outcome = when (read) {
       is Outcome.Failure -> read

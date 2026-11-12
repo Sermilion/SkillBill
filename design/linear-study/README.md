@@ -49,7 +49,7 @@ Design reference only. Nothing here ships. The Compose implementation built to t
 
 Open `index.html`, choose a goal on Work and browse its detail. Activity is embedded below Changes, with the selected goal's subtasks, recorded phases, blocks and recent updates. Expand a group or use the timeline to inspect its phases.
 
-Click Open changes in the detail header or Changes overview. The window opens over that same goal. Choose a scope and file, then hover a diff line and click + to draft a comment. Pending comments stay in one review while you switch files in that scope. Add review publishes them together locally. Close changes or press Escape to return to the goal. Comments and scope choices survive closing and reopening the window.
+Click Open changes in the Changes overview. The window opens over that same goal. Choose a scope and file, then hover a diff line and click + to draft a comment. Pending comments stay in one review while you switch files in that scope. Add review publishes them together locally. Close changes or press Escape to return to the goal. Comments and scope choices survive closing and reopening the window.
 
 The Work board includes "Changes window with subtask scopes", a 33-subtask example with recorded patches for trying the picker, ranges and comments. The IDE status goal also has an illustrative patch. Other runs and chats show their own sample file list. A file without a patch says "No text diff was recorded for this file." Chat changes and Verify's Open changes action use the same window with their own context.
 

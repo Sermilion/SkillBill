@@ -149,14 +149,7 @@ class NewTaskViewModel(
         if (target.text != action.text) target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
         target.text = action.text
       }
-      is NewTaskAction.ChooseBaseBranch -> {
-        if (!canChangeContext(target)) return
-        pathCheck?.cancel()
-        target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
-        target.baseBranch = action.branch
-        target.rebindChat()
-        mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
-      }
+      is NewTaskAction.ChooseBaseBranch -> chooseBaseBranch(target, action.branch)
       NewTaskAction.SwitchToDefaultBranch -> switchToDefaultBranch(target)
       NewTaskAction.UseCurrentBranchAsBase -> {
         if (!canChangeContext(target)) return
@@ -432,18 +425,42 @@ class NewTaskViewModel(
     if (isSelected(target)) mutableState.update { it.copy(repositoryError = message) }
   }
 
+  /** Moves the chat onto a checkout of the chosen base [branch], so the base and the working directory never differ; blank is the default branch. */
+  private fun chooseBaseBranch(target: NewTaskDraft, branch: String) {
+    if (!canChangeContext(target)) return
+    pathCheck?.cancel()
+    mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
+    val root = target.repository?.root ?: return
+    val loaded = (mutableState.value.branchRead as? BranchReadState.Loaded)?.takeIf { it.root == root }?.branches
+    val checkout = branch.ifBlank { loaded?.defaultBranch.orEmpty() }
+    if (loaded == null || checkout.isBlank() || checkout == loaded.currentBranch) {
+      target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
+      target.baseBranch = branch
+      target.rebindChat()
+      return
+    }
+    val remote = loaded.remote.any { it.name == checkout }
+    switchCheckout(target, root, checkout, loaded.currentBranch, if (remote) checkout.substringAfter('/') else branch)
+  }
+
   private fun switchToDefaultBranch(target: NewTaskDraft) {
     if (!canChangeContext(target)) return
     val loaded = mutableState.value.branchRead as? BranchReadState.Loaded ?: return
     val root = target.repository?.root ?: return
-    if (loaded.root != root || loaded.branches.defaultBranch == null) return
+    val defaultBranch = loaded.branches.defaultBranch
+    if (loaded.root != root || defaultBranch == null) return
+    switchCheckout(target, root, defaultBranch, loaded.branches.currentBranch, "")
+  }
+
+  /** Re-points [target] at the checkout of [branch] and adopts [baseBranch]; a failure keeps the old root and base and shows why. */
+  private fun switchCheckout(target: NewTaskDraft, root: String, branch: String, expectedCurrentBranch: String?, baseBranch: String) {
     target.branchSwitching = true
     viewModelScope.launch {
       try {
-        when (val result = branches.switchToDefaultBranch(root, loaded.branches.currentBranch)) {
+        when (val result = branches.switchToBranch(root, branch, expectedCurrentBranch)) {
           is Outcome.Failure -> showRepositoryError(target, readProblemText(result.error))
           is Outcome.Success -> {
-            target.baseBranch = ""
+            target.baseBranch = baseBranch
             target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
             val repository = NewTaskRepository(result.value, checkNotNull(target.repository).name)
             if ((mutableState.value.repositories + target.addedRepositories).none { it.root == repository.root }) {

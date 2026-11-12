@@ -44,6 +44,7 @@ import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityReopening
 import skillbill.workflow.taskruntime.model.planning.isPlanBundleFeasibilityApprovalCandidateEligible
 import skillbill.workflow.taskruntime.model.planning.reopenApprovedPlanBundleFeasibilityCycle
+import skillbill.workflow.taskruntime.model.planning.reopenBlockedPlanBundleFeasibilityCycle
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Clock
@@ -71,6 +72,16 @@ public class PlanSubtasksReopening(
   private val diagnostics: RuntimeDiagnostics,
 ) {
   private val engine = WorkflowEngine()
+
+  internal fun hasReopenableBlockedFeasibility(planWorkflowId: String): Boolean =
+    database.read { unitOfWork ->
+      val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
+      val artifacts =
+        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, planWorkflowId)?.artifacts
+          ?.takeIf(family::contains)
+      val state = artifacts?.let { feasibilityCodec.decode(family.value(it), "$planWorkflowId/${family.label()}") }
+      state?.mode == PlanBundleFeasibilityMode.BLOCKED && state.activeLaunch == null
+    }
 
   internal fun reopenWithRebasedBundle(replan: PlanSubtasksReplan): Boolean =
     database.transaction { unit ->
@@ -258,30 +269,35 @@ public class PlanSubtasksReopening(
     retrySequence: Int,
     retainedArtifact: Boolean,
   ): FeatureTaskRuntimePlanBundleFeasibilityState? {
+    val cycleId = "${replan.planWorkflowId}:plan_subtasks:retry-$retrySequence"
     return when (mode) {
       PlanBundleFeasibilityMode.APPROVED ->
-        reopenApprovedPlanBundleFeasibilityCycle(
-          this,
-          captured.identity,
-          "${replan.planWorkflowId}:plan_subtasks:retry-$retrySequence",
-          retrySequence,
-          original,
-        ) ?: return null
-      else ->
-        copy(
-          revision = revision + if (retainedArtifact) 1 else 0,
-          reopenings =
-            reopenings +
-              PlanBundleFeasibilityReopening(
-                original.attemptCount,
-                revision.takeIf { retainedArtifact },
-                retrySequence,
-                PLAN_BUNDLE_FEASIBILITY_FULL_V2_REVIEW_ADOPTION_REASON,
-                original,
-              ),
-        )
+        reopenApprovedPlanBundleFeasibilityCycle(this, captured.identity, cycleId, retrySequence, original)
+          ?: return null
+      PlanBundleFeasibilityMode.BLOCKED ->
+        reopenBlockedPlanBundleFeasibilityCycle(this, cycleId, retrySequence, original)
+          ?: adoptionReopening(original, retrySequence, retainedArtifact)
+      else -> adoptionReopening(original, retrySequence, retainedArtifact)
     }
   }
+
+  private fun FeatureTaskRuntimePlanBundleFeasibilityState.adoptionReopening(
+    original: FeatureTaskRuntimePhaseRecord,
+    retrySequence: Int,
+    retainedArtifact: Boolean,
+  ): FeatureTaskRuntimePlanBundleFeasibilityState =
+    copy(
+      revision = revision + if (retainedArtifact) 1 else 0,
+      reopenings =
+        reopenings +
+          PlanBundleFeasibilityReopening(
+            original.attemptCount,
+            revision.takeIf { retainedArtifact },
+            retrySequence,
+            PLAN_BUNDLE_FEASIBILITY_FULL_V2_REVIEW_ADOPTION_REASON,
+            original,
+          ),
+    )
 
   private fun feasibilityStateFor(
     replan: PlanSubtasksReplan,

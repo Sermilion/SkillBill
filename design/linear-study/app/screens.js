@@ -72,7 +72,51 @@
     if (plan) out.push(S.Button({ label: 'Implement', icon: 'play', variant: ready && !st.implemented.has(it.id) ? 'primary' : 'secondary', act: 'plan-implement', arg: it.id, disabled: !ready || st.implemented.has(it.id) }));
     if (!ready) out.push(S.Button({ label: 'Cancel', icon: 'x', variant: 'danger', act: 'cancel', arg: it.id, disabled: !ro.canCancel }));
     if (it.incident && it.incident.recovery === 'available' && !st.recovered.has(it.id)) out.push(S.Button({ label: 'Recover', icon: 'refresh', act: 'recover', arg: it.id, disabled: it.refreshFailed || !recoveryOffered(st, it), tip: recoveryOffered(st, it) ? null : 'Confirm the prerequisites first' }));
-    return `<div class="l-col g-2"><div class="l-row g-2 l-wrap">${out.join('')}</div>${ro.canLaunch && resumable(it) ? `<span class="t-faint" style="font-size:var(--t-xs)">Starts the installed agent harness</span>` : ''}${plan && !ready ? `<span class="t-faint" style="font-size:var(--t-xs)">Implement turns on when every spec is saved</span>` : ''}${it.refreshFailed ? S.Hint({ tone: 'warn', text: 'Refresh the detail before using run controls.' }) : ''}</div>`;
+    const run = runAppView(st, it);
+    if (run) out.push(run.button);
+    return `<div class="l-col g-2"><div class="l-row g-2 l-wrap">${out.join('')}</div>${ro.canLaunch && resumable(it) ? `<span class="t-faint" style="font-size:var(--t-xs)">Starts the installed agent harness</span>` : ''}${plan && !ready ? `<span class="t-faint" style="font-size:var(--t-xs)">Implement turns on when every spec is saved</span>` : ''}${it.refreshFailed ? S.Hint({ tone: 'warn', text: 'Refresh the detail before using run controls.' }) : run && !it.refreshFailed ? run.status : ''}</div>`;
+  }
+
+  /* ---------- Run app (SONA-10) ---------- */
+  /* Shown on goals whose routed pack declares an app-run recipe for the device platform (sample: `appRun` on the repository).
+   * The device is the sidebar QA pick; Let QA choose resolves to the first ready device, else the first stopped AVD. */
+  function runAppTarget(st) {
+    const list = deviceList(st);
+    if (!list) return { problem: 'adb not found. Install Android SDK Platform-Tools, or set ANDROID_HOME.' };
+    const picked = st.qaDev.selected !== 'auto' && list.find((d) => d.id === st.qaDev.selected);
+    const d = picked || list.find((x) => x.state === 'ready') || list.find((x) => x.state === 'stopped');
+    if (!d) return { problem: 'No device. Plug in a phone with USB debugging on, or create an AVD.' };
+    return { device: { id: d.id, name: d.name, mono: d.kind === 'emu', boots: d.state === 'stopped', serial: d.kind === 'emu' ? 'emulator-5556' : 'R5CT1234ABC', wire: d.kind === 'emu' && !d.running ? `avd:${d.name}` : `serial:${d.kind === 'emu' ? 'emulator-5556' : 'R5CT1234ABC'}` }, auto: !picked };
+  }
+  const runAppEligible = (it) => it && it.kind === 'goal' && (repoOf(it.repo).appRun || []).includes('android');
+  /* Run app is on for a completed goal and for a goal in monitoring (watching CI on its PR). Every other state is off: the
+   * code is still changing, and an agent writing in the checkout would race the build. A CI repair (monitor_fix) edits the
+   * checkout, so it turns the button off until monitoring resumes. */
+  const runAppMonitoring = (it) => it.lifecycle === 'active' && it.step === 'monitor';
+  function runAppBlocker(st, it, target) {
+    if (it.refreshFailed) return 'Refresh the detail before using run controls.';
+    if (it.lifecycle === 'active' && it.step === 'monitor_fix') return 'Off while a CI repair edits the checkout. Run app turns back on when monitoring resumes.';
+    if (it.lifecycle !== 'terminal' && !runAppMonitoring(it)) return 'Run app turns on when the goal completes or reaches monitoring.';
+    return target.problem || null;
+  }
+  function runAppView(st, it) {
+    if (!runAppEligible(it)) return null;
+    const target = runAppTarget(st), run = st.appRun[it.id] || { state: 'idle' };
+    const reason = runAppBlocker(st, it, target);
+    const busy = run.state === 'building';
+    const device = busy ? run.device : target.device;
+    const where = it.lifecycle === 'terminal' ? `Builds in a temporary worktree on ${it.branch}` : 'Builds in the goal checkout while CI runs';
+    const tip = device ? `${where}, then opens it on ${device.name}${device.boots ? ' after booting it' : ''}${target.auto ? ' (Let QA choose picked it)' : ''}` : null;
+    const button = S.RunAppButton({ id: it.id, device, tip, state: busy ? 'building' : reason ? 'off' : 'idle', reason,
+      expanded: !!st.popover && st.popover.type === 'devices' && st.popover.runApp === it.id });
+    const name = (d) => `<b>${S.esc(d.name)}</b>`;
+    const status = busy ? S.RunAppStatus({ state: 'building', tab: run.tab, html: `Building for ${name(run.device)} · <code>${S.esc(run.step)}</code>` })
+      : run.state === 'running' ? S.RunAppStatus({ state: 'running', tab: run.tab, html: `Running on ${name(run.device)} · opened ${S.esc(run.at)}` })
+      : run.state === 'failed' ? S.RunAppStatus({ state: 'failed', tab: run.tab, html: `Build failed · <code>:app:compileDebugKotlin</code> · nothing was installed on ${name(run.device)}` })
+      : run.state === 'contended' ? S.RunAppStatus({ state: 'contended', tab: run.tab, html: `${name(run.device)} is in use by QA run <b>${S.esc(run.holder)}</b>. Nothing was installed. Pick another device.` })
+      : run.state === 'stopped' ? S.RunAppStatus({ state: 'stopped', tab: run.tab, text: 'Build stopped. Nothing new was installed.' })
+      : reason ? S.RunAppStatus({ state: 'off', text: reason }) : '';
+    return { button, status };
   }
 
   /* ---------- shell ---------- */
@@ -1790,7 +1834,7 @@
     else if (mon) parts.push(monitorDoc(st, it));
     else parts.push(S.DocHeader({
       eyebrow: [plan ? planBadge(it) : lifeLabel(it), it.stalled ? S.Label({ text: 'Stalled', color: 'var(--st-blocked)', tint: true, dot: false }) : '', S.IdTag(rowKey(it)), it.issue && !goal ? S.IdTag(it.issue) : '', S.Label({ text: kindWord(it), dot: false }), it.lifecycle !== 'terminal' ? S.Label({ text: it.fresh && !it.refreshFailed ? 'fresh' : 'stale', color: it.fresh && !it.refreshFailed ? 'var(--st-done)' : 'var(--fg-faint)' }) : '', plan && it.model ? S.Label({ text: `${it.model}${it.effort ? ` · ${it.effort} effort` : ''}`, dot: false }) : ''],
-      title: it.title, sub: location, actions: [runActions(st, it), S.Button({ label: 'Open changes', icon: 'diff', act: 'changes-open', arg: it.id, id: `changes-open-${it.id}` })],
+      title: it.title, sub: location, actions: [runActions(st, it)],
     }));
     /* Validation runs get no strip: their live card already names the running check command. */
     const build = !val && !ver && !mon && buildOf(st, it);
@@ -1989,7 +2033,9 @@
   /* ---------- Terminal pane (feature/terminal) ---------- */
   function terminal(st) {
     const tab = st.termTabs.find((t) => t.id === st.termActive);
-    const body = tab
+    const body = tab && tab.log
+      ? tab.log.map(([c, t]) => (c ? `<span class="${c}">${esc(t)}</span>` : esc(t))).join('\n') + (tab.live ? '\n<span class="cur"></span>' : '')
+      : tab
       ? `<span class="m">${esc(tab.directory)}</span>\n<span class="p">➜</span>  <span class="d">${esc(tab.name)}</span>${tab.branch ? ` <span class="b">(${esc(tab.branch)})</span>` : ''} <span class="cur"></span>`
       : '';
     if (!tab) return S.TerminalPane({ tabs: [], height: st.termHeight, body: S.EmptyState({ icon: 'terminal', title: 'No terminal tabs', actions: [S.Button({ label: 'New terminal tab', icon: 'plus', act: 'term-new' })] }) });
@@ -2358,7 +2404,7 @@
     isPlanRun, planStrip, planNow, planTeaser, planActivity, planBundle, planTranscript, planBriefing, PLAN_STAGES,
     specOf, specPath, specControl, specMenuItems, specPanelItems, specProject, specAgent, specBar, get specRows() { return specRows; },
     isMonitorRun, monitorDoc, monitorCard, monitorCycles, monStepPanel, monCiBoard,
-    isValidationRun, shapeReport, validationCard, validationDoc, valDur, verifyOutcome, checkRow, valDefaultParts, valDefaultChecks, checkExpandable, verifyCtx, verifyState, fixItems, verifyFixText, verifyQaDemo, VSTEP, devicePanelView, deviceTrigger, deviceOptions, devicePickable, deviceList,
+    isValidationRun, shapeReport, validationCard, validationDoc, valDur, verifyOutcome, checkRow, valDefaultParts, valDefaultChecks, checkExpandable, verifyCtx, verifyState, fixItems, verifyFixText, verifyQaDemo, VSTEP, devicePanelView, deviceTrigger, deviceOptions, devicePickable, deviceList, runAppView, runAppTarget, runAppEligible,
     get rows() { return rows; },
   };
 })();

@@ -62,10 +62,17 @@ class NewTaskBranchWarningTest {
   }
 
   @Test
-  fun `pill shows live checkout independently of selected base and never borrows another repository branch`() {
+  fun `pill shows live checkout while no base is chosen and never borrows another repository branch`() {
     val read = BranchReadState.Loaded("/repo", RepositoryBranches("/repo", "main", emptyList(), emptyList(), "feature/current"))
-    assertEquals("feature/current", repositoryPillBranch("/repo", read))
-    assertEquals("Reading branch", repositoryPillBranch("/other", read))
-    assertEquals("detached HEAD", repositoryPillBranch("/repo", read.copy(branches = read.branches.copy(currentBranch = null))))
+    assertEquals("feature/current", repositoryPillBranch("", "/repo", read))
+    assertEquals("Reading branch", repositoryPillBranch("", "/other", read))
+    assertEquals("detached HEAD", repositoryPillBranch("", "/repo", read.copy(branches = read.branches.copy(currentBranch = null))))
+  }
+
+  @Test
+  fun `pill shows the chosen base branch over the live checkout`() {
+    val read = BranchReadState.Loaded("/repo", RepositoryBranches("/repo", "main", emptyList(), emptyList(), "main"))
+    assertEquals("release/2.0", repositoryPillBranch("release/2.0", "/repo", read))
+    assertEquals("release/2.0", repositoryPillBranch("release/2.0", "/repo", BranchReadState.Idle))
   }
 }

@@ -480,7 +480,7 @@
   /* ---------- Detail document ---------- */
   function DocHeader(o) {
     track('DocHeader');
-    return `<div class="sb-doc-hd">${o.eyebrow ? `<div class="l-row g-2 l-wrap">${join(o.eyebrow)}</div>` : ''}<h1 class="sb-doc-ti">${esc(o.title)}</h1>${o.sub ? `<div class="sb-doc-sub">${o.sub}</div>` : ''}${o.actions ? `<div class="l-row g-2 l-wrap">${join(o.actions)}</div>` : ''}</div>`;
+    return `<div class="sb-doc-hd">${o.eyebrow ? `<div class="l-row g-2 l-wrap">${join(o.eyebrow)}</div>` : ''}<h1 class="sb-doc-ti">${esc(o.title)}</h1>${o.sub ? `<div class="sb-doc-sub">${o.sub}</div>` : ''}${o.actions ? `<div class="l-row g-2 l-wrap sb-doc-acts">${join(o.actions)}</div>` : ''}</div>`;
   }
   /* With `toggle` (an action) the title, count and a faint chevron form one button that collapses the body; the end slot stays.
    * `peek` shows under the header while collapsed instead of nothing (a plan run's Briefing teaser). */
@@ -1584,6 +1584,34 @@
       <div class="sb-devpop-ft"><span>${o.checking ? 'Checking…' : 'Checked just now'}</span><span class="l-grow"></span>${Kbd('↑ ↓ ↵')}</div></div>`;
   }
 
+  /* ---------- Run app (SONA-10): build the goal's app and open it on the picked QA device ---------- */
+  /* A split button in the goal's run actions. The main part runs on `device` (the sidebar QA pick, or the device Let QA choose
+   * would take); the chevron opens DevicePanel under itself and changes the same sidebar pick. While a build runs the main part
+   * reads Building… and the chevron becomes Stop. `disabled` carries the reason as a tooltip and as the status line.
+   * o: { id, device: { name, mono, boots }, state (idle, building, running, failed, contended, off), step, ms, reason, expanded } */
+  function RunAppButton(o) {
+    track('RunAppButton');
+    const busy = o.state === 'building';
+    const off = o.state === 'off';
+    const label = busy ? 'Building…' : 'Run app';
+    const name = o.device ? o.device.name : 'No device';
+    const main = `<button type="button" class="${cx('sb-runbtn-main', busy && 'is-busy')}"${busy || off ? ' disabled' : act('app-run', o.id)} data-tip="${esc(off ? o.reason : o.tip || `Build debug and open it on ${name}${o.device && o.device.boots ? ', booting it first' : ''}`)}">${busy ? '<span class="sb-runbtn-spin"></span>' : Icon('play')}<span>${esc(label)}</span><span class="sb-runbtn-sep">·</span><span class="${cx('sb-runbtn-dev', o.device && o.device.mono && 'mono')}">${esc(name)}</span></button>`;
+    const side = busy
+      ? `<button type="button" class="sb-runbtn-side is-stop"${act('app-run-stop', o.id)}${tipAttrs('Stop the build')} aria-label="Stop the build">${Icon('stop', 'xs')}</button>`
+      : `<button type="button" class="sb-runbtn-side" id="app-run-dev-${esc(o.id)}"${act('app-run-device', o.id)} aria-haspopup="dialog" aria-expanded="${!!o.expanded}"${tipAttrs('Choose device')} aria-label="Choose device">${Icon('chevronDown', 'xs')}</button>`;
+    return `<span class="${cx('sb-runbtn', off && 'is-off')}" role="group" aria-label="Run app">${main}${side}</span>`;
+  }
+  /* The line under the run actions for the last Run app: building (spinner, step, time), running (green), failed (red),
+   * contended (orange, names the run holding the device) or the disabled reason. Log links open the run's terminal tab. */
+  function RunAppStatus(o) {
+    track('RunAppStatus');
+    if (!o || !o.state || o.state === 'idle') return '';
+    const tone = { building: 'var(--st-active)', running: 'var(--st-done)', failed: 'var(--st-failed)', contended: 'var(--st-blocked)', stopped: 'var(--fg-faint)', off: 'var(--fg-faint)' }[o.state];
+    const log = o.tab ? LinkButton({ label: o.state === 'failed' ? 'Open log' : 'Show log', act: 'term-tab', arg: o.tab }) : '';
+    const lead = o.state === 'building' ? '<span class="sb-runbtn-spin is-sm"></span>' : `<i class="sb-dot" style="--c:${tone}"></i>`;
+    return `<span class="${cx('sb-runapp-st', 'is-' + o.state)}">${lead}<span>${o.html || esc(o.text)}</span>${log}</span>`;
+  }
+
   /* ---------- Plan run: a standalone plan phase (plan run design; desktop PlanStatus, PlanNowCard, PlanActivity, PlanSubtasks) ---------- */
   /* One glyph per stage or unit state: queued (dashed ring), now (green spinner), quiet (slow orange spinner), done (green
    * check), blocked (orange warning). */
@@ -1770,7 +1798,7 @@
     VerifyDoc, VerifyHeader, Banner, Fold, Quote, VerifySection, Badge, CriterionRow, FieldText, MarkRow, FileChip, FileChips, RouteSwitch,
     ReceiptFinding, TestValueRow, BadgeGrid, MiniRule, KeyValues, CheckLines, DirBars, TextLink, VerifyQa,
     StageStrip, PlanNow, FeedFilter, PlanFeed, BoxHead, PlanBundle, Transcript, FactList, BriefFold, BriefBody, BriefingTeaser, SpecBar, PropPill,
-    BuildChip, BuildStrip, CommandChip,
+    BuildChip, BuildStrip, CommandChip, RunAppButton, RunAppStatus,
     MonitorDoc, CapPips, OutcomeActions, MonitorCycles, MonitorBox, MonitorSummary, MonitorLine, ShaChip, MonBadge, MonitorGroup, FoldLine,
     MonitorCheckRow, LogTail, NextLine, RepairAgent, ChangedFileRow, ResolveBar, SideBySide, ConflictFileRow, PublishSteps, EventLines,
   };

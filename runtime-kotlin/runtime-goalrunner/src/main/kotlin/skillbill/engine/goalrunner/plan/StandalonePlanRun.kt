@@ -470,13 +470,14 @@ public class StandalonePlanRun(
     }
     if (bundleServices.reports.manifestExists(issueKey, repoRoot)) {
       return if (completedPlan == null && found is FeatureTaskContinuationLookupResult.Resumable) {
-        resume(
-          found.candidate,
-          intake,
-          ResumeLocation(repoRoot, sourceRoot, activeSelection.preserveLegacyBundle),
-          inputFor,
-          statusPublisher,
-        )
+        reopenBlockedFeasibility(issueKey, found.candidate.workflowId, repoRoot, inputFor)
+          ?: resume(
+            found.candidate,
+            intake,
+            ResumeLocation(repoRoot, sourceRoot, activeSelection.preserveLegacyBundle),
+            inputFor,
+            statusPublisher,
+          )
       } else {
         settleExistingManifest(issueKey, intake, location, activeSelection, inputFor)
       }
@@ -781,6 +782,26 @@ public class StandalonePlanRun(
         protectedSpecSha256 = protectedSpecSha256,
       )
     return runEntry(input, repoRoot, statusPublisher)
+  }
+
+  private fun reopenBlockedFeasibility(
+    issueKey: String,
+    workflowId: String,
+    repoRoot: Path,
+    inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
+  ): StandalonePlanResult? {
+    if (!bundleServices.reopening.hasReopenableBlockedFeasibility(workflowId)) return null
+    val settledIds = PlanBundleFeasibility.capture(decompositionPlanner, repoRoot, issueKey).settledSubtaskIds
+    return replanSubtasks(
+      PlanSubtasksReplan(
+        issueKey = issueKey,
+        planWorkflowId = workflowId,
+        repoRoot = repoRoot,
+        settledSubtaskIds = settledIds,
+        feasibilityAdoption = true,
+      ),
+      inputFor,
+    )
   }
 
   private fun resumeAdmissionProblem(
@@ -1095,17 +1116,6 @@ public class StandalonePlanRun(
     return null
   }
 
-  private fun <T> legacyTransferAttempt(block: () -> T): Result<T> =
-    try {
-      Result.success(block())
-    } catch (failure: IOException) {
-      Result.failure(failure)
-    } catch (failure: UncheckedIOException) {
-      Result.failure(failure)
-    } catch (failure: SecurityException) {
-      Result.failure(failure)
-    }
-
   private fun legacyBundleTransferFailure(
     sourceRoot: Path,
     targetRoot: Path,
@@ -1116,6 +1126,17 @@ public class StandalonePlanRun(
 
   private fun specHash(specPath: Path): String = sha256HexUtf8(fileStore.readText(specPath))
 }
+
+private fun <T> legacyTransferAttempt(block: () -> T): Result<T> =
+  try {
+    Result.success(block())
+  } catch (failure: IOException) {
+    Result.failure(failure)
+  } catch (failure: UncheckedIOException) {
+    Result.failure(failure)
+  } catch (failure: SecurityException) {
+    Result.failure(failure)
+  }
 
 private val LIVE_PLAN_REPORT_PHASES =
   setOf(

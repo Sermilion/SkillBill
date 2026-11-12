@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionInteractionTraceRound
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
+import skillbill.engine.featuretask.runloop.attempt.blockedReason
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
@@ -50,8 +51,6 @@ import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeP
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
-import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
-import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunchOutcome
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
@@ -247,7 +246,7 @@ internal object PhaseAttemptContinuations {
         PhaseBlockRequest(
           run = run,
           attemptCount = context.loop.iteration,
-          reason = state?.let(::planBundleFeasibilityBlockedReason) ?: continuation.reason,
+          reason = state?.blockedReason() ?: continuation.reason,
           observability = context.observability,
           payload = BlockAndPersistPayload(fileManifest = continuation.fileManifest),
         ),
@@ -266,23 +265,6 @@ internal object PhaseAttemptContinuations {
     )
     return null
   }
-
-  private fun planBundleFeasibilityBlockedReason(state: FeatureTaskRuntimePlanBundleFeasibilityState): String =
-    buildString {
-      append("Bundle feasibility is blocked. ")
-      if (state.conflicts.isEmpty()) {
-        append("No open cited conflicts were recorded.")
-      } else {
-        append("Open cited conflicts:\n")
-        append(state.conflicts.joinToString("\n") { "${it.ref}: ${it.line}" })
-      }
-      state.settledLaunches.lastOrNull {
-        it.outcome == PlanBundleFeasibilityLaunchOutcome.REFUSED
-      }?.let { append("\nLatest invalid-output reason: ${it.value}") }
-      state.settledLaunches.lastOrNull {
-        it.outcome == PlanBundleFeasibilityLaunchOutcome.BLOCKED
-      }?.let { append("\nSafety block: ${it.value}") }
-    }
 
   internal fun settleRetryableTerminal(
     recorder: PhaseRunRecords,

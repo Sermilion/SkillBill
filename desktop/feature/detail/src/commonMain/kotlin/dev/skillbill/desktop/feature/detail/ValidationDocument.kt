@@ -1,5 +1,9 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
+import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.WorkItem
@@ -17,7 +21,9 @@ internal fun DetailSections.validationDocument(
   val item = state.header
   incident(state, view, onAction)
   item(key = "validation-card") {
-    ValidationOutcomeCard(item, detail, page.shape)
+    Column(Modifier.padding(top = DocBlockGap)) {
+      ValidationOutcomeCard(item, detail, page.shape)
+    }
   }
   validationFlagStrip(page)
   validationChecksSection(item, detail, state, onAction)
