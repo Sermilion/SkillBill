@@ -209,6 +209,16 @@ data class QaCapabilityDeclaration(
   }
 }
 
+data class AppRunDeclaration(
+  val platforms: Set<QaTargetKind>,
+  val script: String,
+) {
+  init {
+    require(platforms.isNotEmpty()) { "app_run.platforms must name at least one target kind." }
+    require(script.isNotBlank()) { "app_run.script must be a non-blank pack-relative path." }
+  }
+}
+
 data class ValidationGateExecutedWorkSignal(
   val format: ValidationGateExecutedWorkFormat,
 )
@@ -252,6 +262,7 @@ data class PlatformManifest(
   val customFields: CustomFieldMap = CustomFieldMap.EMPTY,
   val requiredRubricCompanions: Map<String, List<String>> = emptyMap(),
   val buildTools: List<BuildToolDeclaration> = emptyList(),
+  val appRun: AppRunDeclaration? = null,
 ) {
   val routedSkillName: String? = declaredFiles.baseline?.let { "bill-$slug-code-review" }
 }

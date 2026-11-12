@@ -61,6 +61,10 @@ declared_files:
 qa_capability:
   platforms: [android, desktop]
   guidance_file: qa/kmp-qa.md
+app_run:
+  contract_version: "0.1"
+  platforms: [android]
+  script: app-run/android-app-run.sh
 build_tools:
   - executable: gradlew
     display_executable: ./gradlew

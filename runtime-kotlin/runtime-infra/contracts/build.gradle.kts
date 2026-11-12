@@ -127,6 +127,7 @@ governedResources {
     "block-incident-schema.yaml",
     "SKILL-435: canonical block-incident schema",
   )
+  copy("copyAppRunConfigSchema", "app-run-config-schema.yaml", "SONA-10: canonical app-run override config schema")
   copy(
     "copyProducerOutputEvidenceSchema",
     "producer-output-evidence-schema.yaml",

@@ -1,9 +1,13 @@
 
 package skillbill.infrastructure.skills.scaffold.platformpack.loader
 
+import skillbill.infrastructure.skills.scaffold.platformpack.loader.apprun.AppRunManifestKeys
+import skillbill.infrastructure.skills.scaffold.runtime.service.contract.APP_RUN_CONTRACT_VERSION
+import skillbill.scaffold.model.AppRunDeclaration
 import skillbill.scaffold.model.PointerSpec
 import skillbill.scaffold.model.QaCapabilityDeclaration
 import skillbill.scaffold.model.QaTargetKind
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -81,7 +85,8 @@ internal fun parseQaCapability(
   val raw = manifest["qa_capability"] ?: return null
   val capability =
     raw as? Map<*, *> ?: invalidManifestSchema("Platform pack '$slug': 'qa_capability' must be a mapping when present.")
-  val platforms = parseQaTargetKinds(capability["platforms"], slug)
+  val platforms =
+    parseQaTargetKinds(capability["platforms"], slug, "qa_capability.platforms", "QA target kind")
   val guidanceFile = requireQaGuidanceFile(capability, slug, packRoot)
   val hints =
     (capability["discovery_hints"] ?: emptyList<String>()) as? List<*>
@@ -102,23 +107,102 @@ internal fun parseQaCapability(
 private fun parseQaTargetKinds(
   raw: Any?,
   slug: String,
+  field: String,
+  duplicateLabel: String,
 ): Set<QaTargetKind> {
   val items =
     (raw as? List<*>)?.takeIf(List<*>::isNotEmpty)
-      ?: invalidManifestSchema("Platform pack '$slug': 'qa_capability.platforms' must be a non-empty list.")
+      ?: invalidManifestSchema("Platform pack '$slug': '$field' must be a non-empty list.")
   val kinds = LinkedHashSet<QaTargetKind>()
   for (value in items) {
     val token =
       (value as? String)?.takeIf(QaTargetKind::isValid)
         ?: invalidManifestSchema(
-          "Platform pack '$slug': 'qa_capability.platforms' item '$value' must be a string matching " +
+          "Platform pack '$slug': '$field' item '$value' must be a string matching " +
             "${QaTargetKind.PATTERN_SOURCE}.",
         )
     if (!kinds.add(QaTargetKind(token))) {
-      invalidManifestSchema("Platform pack '$slug': 'qa_capability.platforms' repeats QA target kind '$token'.")
+      invalidManifestSchema("Platform pack '$slug': '$field' repeats $duplicateLabel '$token'.")
     }
   }
   return kinds
+}
+
+internal fun parseAppRun(
+  manifest: Map<*, *>,
+  slug: String,
+  packRoot: Path,
+): AppRunDeclaration? {
+  if (!manifest.containsKey(AppRunManifestKeys.APP_RUN)) return null
+  val raw = manifest[AppRunManifestKeys.APP_RUN]
+  val appRun =
+    raw as? Map<*, *> ?: invalidManifestSchema(
+      "Platform pack '$slug': '${AppRunManifestKeys.APP_RUN}' must be a mapping when present.",
+    )
+  if (appRun[AppRunManifestKeys.CONTRACT_VERSION] != APP_RUN_CONTRACT_VERSION) {
+    invalidManifestSchema(
+      "Platform pack '$slug': '${AppRunManifestKeys.APP_RUN}.${AppRunManifestKeys.CONTRACT_VERSION}' " +
+        "must be '$APP_RUN_CONTRACT_VERSION'.",
+    )
+  }
+  return AppRunDeclaration(
+    platforms =
+      parseQaTargetKinds(
+        appRun[AppRunManifestKeys.PLATFORMS],
+        slug,
+        "${AppRunManifestKeys.APP_RUN}.${AppRunManifestKeys.PLATFORMS}",
+        "target kind",
+      ),
+    script = requireAppRunScript(appRun, slug, packRoot),
+  )
+}
+
+private fun requireAppRunScript(
+  appRun: Map<*, *>,
+  slug: String,
+  packRoot: Path,
+): String {
+  val script = appRun[AppRunManifestKeys.SCRIPT] as? String
+  val scriptPattern = Regex("^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$")
+  if (script.isNullOrBlank() || !scriptPattern.matches(script) || script.split('/').contains("..")) {
+    invalidManifestSchema(
+      "Platform pack '$slug': 'app_run.script' must be a pack-relative POSIX path without '..' segments.",
+    )
+  }
+  val root = packRoot.toAbsolutePath().normalize()
+  val resolved = root.resolve(script).normalize()
+  if (Path.of(script).isAbsolute || !resolved.startsWith(root)) {
+    invalidManifestSchema("Platform pack '$slug': 'app_run.script' must stay inside the pack.")
+  }
+  val regularFile =
+    try {
+      Files.isRegularFile(resolved)
+    } catch (failure: SecurityException) {
+      invalidManifestSchemaFromPath("Platform pack '$slug': 'app_run.script' '$script' cannot be inspected.", failure)
+    }
+  if (!regularFile) {
+    invalidManifestSchema("Platform pack '$slug': 'app_run.script' '$script' is not an existing regular file.")
+  }
+  val realPackRoot =
+    try {
+      packRoot.toRealPath()
+    } catch (failure: IOException) {
+      invalidManifestSchemaFromPath("Platform pack '$slug': 'app_run.script' pack root cannot be resolved.", failure)
+    } catch (failure: SecurityException) {
+      invalidManifestSchemaFromPath("Platform pack '$slug': 'app_run.script' pack root cannot be resolved.", failure)
+    }
+  val realScript =
+    try {
+      resolved.toRealPath()
+    } catch (failure: IOException) {
+      invalidManifestSchemaFromPath("Platform pack '$slug': 'app_run.script' '$script' cannot be resolved.", failure)
+    } catch (failure: SecurityException) {
+      invalidManifestSchemaFromPath("Platform pack '$slug': 'app_run.script' '$script' cannot be resolved.", failure)
+    }
+  if (!realScript.startsWith(realPackRoot)) {
+    invalidManifestSchema("Platform pack '$slug': 'app_run.script' resolves outside the pack.")
+  }
+  return script
 }
 
 private fun requireQaGuidanceFile(

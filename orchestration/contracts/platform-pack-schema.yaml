@@ -418,6 +418,36 @@ properties:
           type: string
           minLength: 1
           maxLength: 200
+  app_run:
+    type: object
+    additionalProperties: false
+    x-runtime-anchored: true
+    required: [contract_version, platforms, script]
+    properties:
+      contract_version:
+        type: string
+        const: "0.1"
+      platforms:
+        type: array
+        minItems: 1
+        maxItems: 8
+        uniqueItems: true
+        items:
+          type: string
+          pattern: "^[a-z][a-z0-9-]{0,31}$"
+      script:
+        type: string
+        pattern: "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"
+        allOf:
+          - not:
+              pattern: "\\.\\."
+    description: >
+      Optional pack app-run recipe. The runtime runs bash <pack>/<script> <boot|run>,
+      passes the platform in APP_RUN_PLATFORM, and reads marker lines in the forms
+      ##app-run serial <serial>, ##app-run step <name>, ##app-run candidates <modules>,
+      ##app-run failed-task <task>, ##app-run launched <package/activity>, and
+      ##app-run failure <reason>. A later ios platform needs no schema change.
+      Absence means no app-run recipe; malformed shapes fail loudly.
   build_tools:
     type: array
     x-runtime-anchored: true
@@ -670,6 +700,10 @@ x-coherence-checks:
     description: >
       `qa_capability.guidance_file` must resolve to an existing markdown file
       inside the pack root. Enforced in `ShellContentLoader.parseQaCapability`.
+  app-run-script-in-pack:
+    description: >
+      `app_run.script` resolves to an existing regular file inside the pack root.
+      Enforced in ShellContentLoader.parseAppRun
   addon-usage-references-declared-pointers:
     description: >
       Every `addon_usage.<skill-dir>[]` entrypoint and companion pointer must

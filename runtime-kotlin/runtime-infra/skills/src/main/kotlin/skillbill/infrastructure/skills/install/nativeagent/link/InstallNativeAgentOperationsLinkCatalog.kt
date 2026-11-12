@@ -95,6 +95,7 @@ private fun stageReviewCatalogPack(
     buildList {
       add(source.resolve("platform.yaml"))
       manifest.qaCapability?.guidanceFile?.let { guidance -> add(source.resolve(guidance)) }
+      manifest.appRun?.script?.let { script -> add(source.resolve(script)) }
       manifest.declaredFiles.baseline?.let { baseline -> add(baseline.toPath()) }
       addAll(manifest.declaredFiles.areas.values.map { area -> area.toPath() })
       val declaredAddons =

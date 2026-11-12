@@ -3,6 +3,7 @@ package skillbill.infrastructure.skills.scaffold.runtime.service.contract
 import skillbill.scaffold.model.PlatformManifest
 import java.nio.file.Path
 import kotlin.io.path.relativeTo
+import skillbill.contracts.apprun.APP_RUN_CONTRACT_VERSION as CONTRACTS_APP_RUN_CONTRACT_VERSION
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS as POLICY_APPROVED_CODE_REVIEW_AREAS
 import skillbill.scaffold.policy.PLATFORM_PACK_PRESETS as POLICY_PLATFORM_PACK_PRESETS
 import skillbill.scaffold.policy.SCAFFOLD_PAYLOAD_VERSION as POLICY_SCAFFOLD_PAYLOAD_VERSION
@@ -10,6 +11,7 @@ import skillbill.scaffold.policy.displayNameFromSlug as policyDisplayNameFromSlu
 import skillbill.scaffold.policy.platformpack.PLATFORM_PACK_SHELL_CONTRACT_VERSION as POLICY_SHELL_CONTRACT_VERSION
 
 internal val SHELL_CONTRACT_VERSION: String get() = POLICY_SHELL_CONTRACT_VERSION
+internal val APP_RUN_CONTRACT_VERSION: String get() = CONTRACTS_APP_RUN_CONTRACT_VERSION
 
 internal val SCAFFOLD_PAYLOAD_VERSION: String get() = POLICY_SCAFFOLD_PAYLOAD_VERSION
 internal const val CONTENT_BODY_FILENAME: String = "content.md"

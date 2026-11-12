@@ -1,9 +1,12 @@
 package skillbill.di.scaffold
 
 import me.tatarka.inject.annotations.Provides
+import skillbill.infrastructure.host.system.FileSystemAppRunConfig
 import skillbill.infrastructure.host.system.FileSystemRepoLocalConfig
 import skillbill.infrastructure.skills.scaffold.FileSystemRepoValidationGateway
 import skillbill.infrastructure.workflow.validation.FileSystemValidationGateRunner
+import skillbill.ports.apprun.AppRunConfigContractValidator
+import skillbill.ports.apprun.AppRunConfigPort
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.projectstore.ProjectStorePort
@@ -11,6 +14,9 @@ import skillbill.ports.validation.RepoValidationGateway
 import skillbill.ports.validation.ValidationGateRunner
 
 internal interface RuntimeScaffoldValidationProvides {
+  @Provides
+  fun appRunConfigPort(validator: AppRunConfigContractValidator): AppRunConfigPort = FileSystemAppRunConfig(validator)
+
   @Provides
   fun repoLocalConfigPort(
     diagnostics: RuntimeDiagnostics,

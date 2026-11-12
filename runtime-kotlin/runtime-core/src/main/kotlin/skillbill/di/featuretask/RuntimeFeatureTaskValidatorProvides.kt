@@ -1,10 +1,12 @@
 package skillbill.di.featuretask
 
 import me.tatarka.inject.annotations.Provides
+import skillbill.infrastructure.contracts.AppRunConfigSchemaValidator
 import skillbill.infrastructure.contracts.BlockIncidentSchemaValidator
 import skillbill.infrastructure.contracts.ProducerOutputEvidenceSchemaValidator
 import skillbill.infrastructure.contracts.RejectedOutputDiagnosticSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
+import skillbill.ports.apprun.AppRunConfigContractValidator
 import skillbill.ports.blockincident.BlockIncidentContractValidator
 import skillbill.ports.diagnostics.ProducerOutputEvidenceValidator
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
@@ -34,4 +36,7 @@ internal interface RuntimeFeatureTaskValidatorProvides {
 
   @Provides
   fun blockIncidentContractValidator(): BlockIncidentContractValidator = BlockIncidentSchemaValidator()
+
+  @Provides
+  fun appRunConfigContractValidator(): AppRunConfigContractValidator = AppRunConfigSchemaValidator()
 }

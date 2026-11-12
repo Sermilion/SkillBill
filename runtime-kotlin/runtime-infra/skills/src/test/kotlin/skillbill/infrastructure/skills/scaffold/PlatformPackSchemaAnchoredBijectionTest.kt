@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.scaffold
 
+import skillbill.infrastructure.skills.scaffold.platformpack.loader.apprun.AppRunManifestKeys
 import skillbill.infrastructure.skills.scaffold.platformpack.manifest.anchoredTopLevelFieldNames
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -19,6 +20,7 @@ class PlatformPackSchemaAnchoredBijectionTest {
       "declared_quality_check_file",
       "validation_gate",
       "qa_capability",
+      AppRunManifestKeys.APP_RUN,
       "build_tools",
       "code_review_composition",
       "fallback_capabilities",

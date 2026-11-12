@@ -268,10 +268,14 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
     Files.writeString(
       manifest,
       Files.readString(manifest) +
-        "\nqa_capability:\n  platforms: [android]\n  guidance_file: qa/android-qa.md\n",
+        "\nqa_capability:\n  platforms: [android]\n  guidance_file: qa/android-qa.md\n" +
+        "app_run:\n  contract_version: '0.1'\n  platforms: [android]\n  script: app-run/android-app-run.sh\n",
     )
     Files.createDirectories(sourcePack.resolve("qa"))
     Files.writeString(sourcePack.resolve("qa/android-qa.md"), "Exercise the declared Android flows.")
+    Files.createDirectories(sourcePack.resolve("app-run"))
+    val appRunScript = "#!/usr/bin/env bash\nprintf '##app-run serial emulator-5554\\n'\n"
+    Files.writeString(sourcePack.resolve("app-run/android-app-run.sh"), appRunScript)
     Files.createDirectories(sourcePack.resolve("agent"))
     Files.writeString(sourcePack.resolve("agent/history.md"), "boundary history")
     Files.writeString(sourcePack.resolve("unrelated-custom-file.txt"), "not review runtime content")
@@ -295,6 +299,9 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
       "Exercise the declared Android flows.",
       Files.readString(installedPack.resolve(capability.guidanceFile)),
     )
+    val appRun = assertNotNull(loadPlatformManifest(installedPack).appRun)
+    assertEquals("app-run/android-app-run.sh", appRun.script)
+    assertEquals(appRunScript, Files.readString(installedPack.resolve(appRun.script)))
     assertTrue(Files.isRegularFile(installedPack.resolve("platform.yaml")))
     assertTrue(
       Files.isRegularFile(installedPack.resolve("code-review/bill-kotlin-code-review/content.md")),

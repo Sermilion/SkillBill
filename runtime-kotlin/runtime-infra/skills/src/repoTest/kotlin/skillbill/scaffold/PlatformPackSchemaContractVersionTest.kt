@@ -2,7 +2,10 @@ package skillbill.scaffold
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
+import skillbill.contracts.apprun.APP_RUN_CONFIG_CONTRACT_VERSION
+import skillbill.infrastructure.contracts.locator.apprun.AppRunConfigSchemaPaths
 import skillbill.infrastructure.skills.scaffold.platformpack.manifest.PlatformPackSchemaPaths
+import skillbill.infrastructure.skills.scaffold.runtime.service.contract.APP_RUN_CONTRACT_VERSION
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
 import skillbill.scaffold.policy.UNIVERSAL_CODE_REVIEW_AREAS
@@ -15,6 +18,21 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class PlatformPackSchemaContractVersionTest {
+  @Test
+  fun `app run schema versions match their runtime constants`() {
+    val root = repoRootFromTest()
+    val packSchema = YAMLMapper().readTree(Files.readString(root.resolve(PlatformPackSchemaPaths.REPO_RELATIVE_PATH)))
+    val appRunVersion =
+      packSchema.path(
+        "properties",
+      ).path("app_run").path("properties").path("contract_version").path("const")
+    assertEquals(APP_RUN_CONTRACT_VERSION, appRunVersion.asText())
+
+    val configSchema = YAMLMapper().readTree(Files.readString(root.resolve(AppRunConfigSchemaPaths.REPOSITORY_PATH)))
+    val configVersion = configSchema.path("properties").path("contract_version").path("const")
+    assertEquals(APP_RUN_CONFIG_CONTRACT_VERSION, configVersion.asText())
+  }
+
   @Test
   fun `schema contract_version const matches SHELL_CONTRACT_VERSION`() {
     val schemaFile = repoRootFromTest().resolve(PlatformPackSchemaPaths.REPO_RELATIVE_PATH)
