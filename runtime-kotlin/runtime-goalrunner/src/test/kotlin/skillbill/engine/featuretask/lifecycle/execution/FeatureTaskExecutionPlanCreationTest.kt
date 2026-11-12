@@ -735,9 +735,9 @@ class FeatureTaskExecutionPlanCreationTest {
       AcceptingFeatureTaskRuntimeWireArtifactValidator, NoopRuntimeDiagnostics, testHarnessClock,
       ProjectCheckout(
         TestRepositoryEnclosingRoot,
+        database,
         testProjectStore,
         InPlaceGoalWorktreeResources,
-        NoopWorkflowGitOperations,
       ),
     )
 

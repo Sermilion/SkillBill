@@ -1,6 +1,7 @@
 package skillbill.di.goal
 
 import me.tatarka.inject.annotations.Provides
+import skillbill.application.runtime.RuntimeSingleton
 import skillbill.engine.featuretask.model.execution.GoalChildHistoryDraftWriter
 import skillbill.engine.featuretask.persist.GoalRunnerGoalChildHistoryDraftStore
 import skillbill.engine.featuretask.slot.intake.PlanSpecIntakePreparation
@@ -15,7 +16,7 @@ import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairOperations
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairRunnerPort
 
 internal interface RuntimeGoalRunnerStoreProvides : RuntimeGoalRunnerProjectionProvides {
-  @Provides
+  @Provides @RuntimeSingleton
   fun goalRunnerManifestStore(store: WorkflowGoalRunnerManifestStore): GoalRunnerManifestStore = store
 
   @Provides

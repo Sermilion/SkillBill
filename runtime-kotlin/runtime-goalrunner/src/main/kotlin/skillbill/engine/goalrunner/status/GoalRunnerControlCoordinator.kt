@@ -27,6 +27,7 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.WorkflowStatus
 import java.nio.file.Path
 import java.time.Clock
@@ -74,17 +75,30 @@ internal class GoalRunnerControlCoordinator(
     beforeMutation: (UnitOfWork) -> Unit = {},
   ): Boolean =
     database.transaction { unitOfWork ->
-      val currentLease = unitOfWork.goalRunnerControls.controlState(parentWorkflowId).executionLease
+      val control = unitOfWork.goalRunnerControls.controlState(parentWorkflowId)
+      val currentLease = control.executionLease
       if (currentLease?.ownerToken != expectedOwnerToken) {
         return@transaction false
       }
       if (expectedOwnerGeneration != null && currentLease?.generation != expectedOwnerGeneration) {
         return@transaction false
       }
-      if (unitOfWork.workflowStates.get(
-          WorkflowFamily.TASK_RUNTIME,
-          parentWorkflowId,
-        )?.workflowStatus == WorkflowStatus.ABANDONED
+      val parent = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, parentWorkflowId)
+      if (parent?.workflowStatus == WorkflowStatus.ABANDONED) {
+        return@transaction false
+      }
+      val issue = parent?.decompositionRuntime()?.issueKey
+      val owner =
+        control.repositoryIdentity?.let { identity ->
+          issue?.let {
+            unitOfWork.goalPlanningOwnership.findByIssue(
+              identity,
+              FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(it),
+            )
+          }
+        }
+      if (owner?.parentWorkflowId == parentWorkflowId &&
+        unitOfWork.goalPlanningOwnership.checkoutRecovery(owner) != null
       ) {
         return@transaction false
       }

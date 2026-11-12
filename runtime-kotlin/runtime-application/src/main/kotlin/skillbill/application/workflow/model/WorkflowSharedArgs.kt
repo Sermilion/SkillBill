@@ -25,6 +25,7 @@ data class WorkflowServiceOpenArgs(
   val routeScope: FeatureTaskRouteScope = FeatureTaskRouteScope.STANDALONE,
   val executionPlan: ValidatedFeatureTaskRuntimeExecutionPlan? = null,
   val initialArtifacts: WorkflowArtifactPatch = WorkflowArtifactPatch.EMPTY,
+  val workflowId: String? = null,
 )
 
 data class WorkflowServiceOpenFeatureTaskArgs(
@@ -37,6 +38,7 @@ data class WorkflowServiceOpenFeatureTaskArgs(
   val routeScope: FeatureTaskRouteScope = FeatureTaskRouteScope.STANDALONE,
   val executionPlan: ValidatedFeatureTaskRuntimeExecutionPlan? = null,
   val initialArtifacts: WorkflowArtifactPatch = WorkflowArtifactPatch.EMPTY,
+  val workflowId: String? = null,
 )
 
 data class RepairFeatureTaskRuntimeIdentityArgs(

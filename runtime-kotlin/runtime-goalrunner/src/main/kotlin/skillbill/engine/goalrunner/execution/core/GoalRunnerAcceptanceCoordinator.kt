@@ -12,6 +12,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerAcceptanceEvidence
 import skillbill.engine.goalrunner.model.GoalRunnerCompleteRequest
 import skillbill.engine.goalrunner.model.GoalRunnerCompleteResult
 import skillbill.engine.goalrunner.monitoring.GoalWorktreeCompletionSettlement
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -27,12 +28,18 @@ import java.time.ZoneOffset
 @Inject
 public class GoalRunnerAcceptanceCoordinator(
   private val manifestStore: GoalRunnerManifestStore,
+  private val database: DatabaseSessionFactory,
   private val gitOperations: WorkflowGitOperations,
   private val clock: Clock,
   private val executionRoots: GoalExecutionRootResolver,
   private val worktreeSettlement: GoalWorktreeCompletionSettlement,
 ) {
   public fun accept(request: GoalRunnerAcceptRequest): GoalRunnerAcceptResult {
+    request.repoRoot?.let { executionRoots.prepareControlCheckout(request.issueKey, it) }
+    return database.transaction { acceptWithCheckoutFence(request) }
+  }
+
+  private fun acceptWithCheckoutFence(request: GoalRunnerAcceptRequest): GoalRunnerAcceptResult {
     val rejection = acceptanceRejection(request)
     if (rejection != null) {
       return GoalRunnerAcceptResult.Rejected(request.issueKey, rejection)
@@ -83,6 +90,15 @@ public class GoalRunnerAcceptanceCoordinator(
   }
 
   public fun complete(request: GoalRunnerCompleteRequest): GoalRunnerCompleteResult {
+    request.repoRoot?.let { executionRoots.prepareControlCheckout(request.issueKey, it) }
+    val result = database.transaction { completeWithCheckoutFence(request) }
+    if (result is GoalRunnerCompleteResult.Completed) {
+      manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.let(worktreeSettlement::settle)
+    }
+    return result
+  }
+
+  private fun completeWithCheckoutFence(request: GoalRunnerCompleteRequest): GoalRunnerCompleteResult {
     val repoRoot =
       request.repoRoot
         ?: return GoalRunnerCompleteResult.Rejected(
@@ -120,7 +136,6 @@ public class GoalRunnerAcceptanceCoordinator(
       }
     val completedAt = clock.instant().atOffset(ZoneOffset.UTC).toString()
     val saved = manifestStore.saveOperatorGoalCompletion(loaded, commitSha, request.reason, completedAt)
-    worktreeSettlement.settle(saved)
     return GoalRunnerCompleteResult.Completed(
       issueKey = saved.manifest.issueKey,
       parentWorkflowId = saved.parentWorkflowId,

@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.monitoring
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goal.goalRepositoryRootFromIdentity
@@ -9,12 +10,16 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.model.GOAL_MAIN_CHECKOUT_CHECKED_OUT
 import skillbill.goalrunner.model.GOAL_MAIN_CHECKOUT_FAILED
 import skillbill.goalrunner.model.GOAL_MAIN_CHECKOUT_SKIPPED_UNCOMMITTED_CHANGES
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.goalrunner.model.GoalPlanningOwnership
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
 import skillbill.ports.workflow.goalworktree.model.GoalBranchCheckout
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
+import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Clock
 
@@ -25,10 +30,13 @@ public class GoalWorktreeCompletionSettlement(
   private val repositories: RepositoryEnclosingRootPort,
   private val diagnostics: RuntimeDiagnostics,
   private val clock: Clock,
+  private val database: DatabaseSessionFactory,
 ) {
   public fun settle(state: GoalRunnerManifestState) {
     val parentWorkflowId = state.parentWorkflowId
-    catchingNonCancellation { settleUnchecked(parentWorkflowId, state.manifest.featureBranch) }.onFailure { failure ->
+    catchingNonCancellation {
+      settleUnchecked(parentWorkflowId, state.manifest.featureBranch, state.manifest.issueKey)
+    }.onFailure { failure ->
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
         "goal worktree cleanup failed: seam=goal_worktree.settle",
@@ -43,6 +51,7 @@ public class GoalWorktreeCompletionSettlement(
   private fun settleUnchecked(
     parentWorkflowId: String,
     featureBranch: String?,
+    issueKey: String,
   ) {
     val control = manifestStore.controlState(parentWorkflowId)
     val path = control.executionWorktreePath?.let(Path::of) ?: return
@@ -54,7 +63,28 @@ public class GoalWorktreeCompletionSettlement(
       recordRetained(parentWorkflowId, CLEANUP_FAILED, "the primary repository root could not be resolved")
       return
     }
-    when (val settlement = worktrees.settle(GoalWorktreeSettleRequest(root, path))) {
+    val ownership =
+      database.read { unit ->
+        val selectedPlanWorkflowId =
+          unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, parentWorkflowId)
+            ?.step(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN)
+            ?.planWorkflowId
+        val owner = selectedPlanWorkflowId?.let(unit.goalPlanningOwnership::findByWorkflow)
+        owner?.takeIf {
+          it.state == GoalPlanningOwnership.State.TRANSFERRED &&
+            it.parentWorkflowId == parentWorkflowId &&
+            it.workflowId == selectedPlanWorkflowId &&
+            it.repositoryIdentity == control.repositoryIdentity &&
+            it.normalizedIssueKey == normalizeRequiredIssueKey(issueKey) &&
+            it.ownedPath.toAbsolutePath().normalize() == path.toAbsolutePath().normalize()
+        }
+      }
+    when (
+      val settlement =
+        worktrees.settle(
+          GoalWorktreeSettleRequest(root, path, ownership, control.repositoryIdentity, issueKey, parentWorkflowId),
+        )
+    ) {
       GoalWorktreeSettlement.Removed, GoalWorktreeSettlement.Absent -> {
         val mainCheckout = control.goalCompletedAt?.let { mainCheckoutOutcome(root, featureBranch) }
         manifestStore.updateControlState(parentWorkflowId) { current ->

@@ -52,9 +52,9 @@ class WorkflowIssueKeyPersistenceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -110,9 +110,9 @@ class WorkflowIssueKeyPersistenceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 

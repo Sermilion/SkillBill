@@ -27,6 +27,8 @@ import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.InMemoryFeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.UnavailableFeatureTaskPhaseSettlementRepository
 import skillbill.ports.filesystem.model.DatabaseFileObservation
+import skillbill.ports.goalrunner.EmptyGoalPlanningOwnershipRepository
+import skillbill.ports.goalrunner.GoalPlanningOwnershipRepository
 import skillbill.ports.goalrunner.UnaddressedFindingsRepository
 import skillbill.ports.goalrunner.UnavailableUnaddressedFindingsRepository
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
@@ -73,6 +75,7 @@ import skillbill.ports.review.diffcomment.UnavailableDiffCommentStore
 import java.time.Instant
 
 abstract class UnitOfWorkDefaults : UnitOfWork {
+  open override val goalPlanningOwnership: GoalPlanningOwnershipRepository = EmptyGoalPlanningOwnershipRepository
   open override val databaseFileObservation: DatabaseFileObservation? = null
   open override val workBoardReadModel: WorkBoardReadModelRepository = EmptyBoardReadModel()
   open override val unaddressedFindings: UnaddressedFindingsRepository = UnavailableUnaddressedFindingsRepository

@@ -607,9 +607,9 @@ class DecompositionManifestCommitProjectionTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val opened =

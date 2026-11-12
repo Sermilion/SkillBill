@@ -4,31 +4,64 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.workflow.model.GoalExecutionRootAccess
 import skillbill.application.workflow.model.GoalExecutionRootOptions
 import skillbill.goalrunner.model.GoalRunnerControlState
+import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.goalrunner.model.GoalPlanningOwnership
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.projectstore.model.ProjectStoreLocation
 import skillbill.ports.repository.RepositoryEnclosingRootPort
-import skillbill.ports.workflow.gitops.WorkflowGitOperations
-import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
-import skillbill.workflow.decomposition.baseForSubtask
-import skillbill.workflow.decomposition.branchForSubtask
-import skillbill.workflow.decomposition.executionRootSubtaskId
+import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
 @Inject
 class ProjectCheckout(
   private val repositories: RepositoryEnclosingRootPort,
+  private val database: DatabaseSessionFactory,
   private val projectStore: ProjectStorePort,
   private val worktrees: GoalWorktreeResources,
-  private val git: WorkflowGitOperations,
 ) {
   fun repositoryIdentityCandidates(repoRoot: Path): List<String> =
     listOf(repositories.primaryRepositoryIdentity(repoRoot), repositories.repositoryIdentity(repoRoot)).distinct()
 
   fun store(repoRoot: Path): ProjectStoreLocation = projectStore.resolve(repoRoot)
+
+  fun recoverGoalCheckout(
+    issueKey: String,
+    invokedRoot: Path,
+  ): GoalWorktreeResult? {
+    val normalizedIssue = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey)
+    val candidates = repositoryIdentityCandidates(invokedRoot)
+    val ownership =
+      database.read { unit ->
+        val owner =
+          candidates.firstNotNullOfOrNull {
+            unit.goalPlanningOwnership.findByIssue(it, normalizedIssue)
+          } ?: return@read null
+        val parent = owner.parentWorkflowId ?: return@read null
+        val control = unit.goalRunnerControls.controlState(parent)
+        val selected =
+          unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, parent)
+            ?.step(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN)?.planWorkflowId
+        val matchesOwner =
+          owner.state == GoalPlanningOwnership.State.TRANSFERRED && owner.workflowId == selected &&
+            owner.repositoryIdentity == control.repositoryIdentity
+        val matchesPath =
+          control.executionWorktreePath?.let(Path::of)?.toAbsolutePath()?.normalize() ==
+            owner.ownedPath.toAbsolutePath().normalize()
+        owner.takeIf { matchesOwner && matchesPath && unit.goalPlanningOwnership.checkoutRecovery(owner) != null }
+      } ?: return null
+    return worktrees.createOrAdopt(
+      invokedRoot,
+      issueKey,
+      ownership.ownedPath,
+      ownership.initialCommit,
+      ownership,
+    )
+  }
 
   fun ensureGoalExecutionRoot(
     controlState: GoalRunnerControlState,
@@ -50,88 +83,68 @@ class ProjectCheckout(
         )
       return GoalExecutionRootAccess.Ready(repositories.optionalRealPath(candidate) ?: invokedRoot, false)
     }
-    if (repositories.optionalRealPath(recorded) != null) return GoalExecutionRootAccess.Ready(recorded, false)
-    if (!options.recreateCompleted) return GoalExecutionRootAccess.Ready(invokedRoot, false)
-    return recreateWorktree(manifest, invokedRoot, recorded, options)
+    return if (repositories.optionalRealPath(recorded) != null || options.ownership != null) {
+      verifyRecorded(recorded, controlState, manifest, invokedRoot, options)
+    } else {
+      GoalExecutionRootAccess.Failed(
+        "the recorded goal checkout $recorded is missing. Restore or inspect that path, including unpublished and " +
+          "untracked work, before retrying; a branch or base revision cannot prove that missing work is recoverable.",
+      )
+    }
   }
 
-  private fun recreateWorktree(
+  private fun verifyRecorded(
+    recorded: Path,
+    controlState: GoalRunnerControlState,
     manifest: DecompositionManifest,
     invokedRoot: Path,
-    recorded: Path,
     options: GoalExecutionRootOptions,
   ): GoalExecutionRootAccess {
-    val primaryRoot = repositories.primaryRepositoryRoot(invokedRoot)
-    val subtaskId = options.revisionSubtaskId ?: manifest.executionRootSubtaskId()
-    val revision = worktreeRevision(manifest, primaryRoot, subtaskId, options.requireExistingBranch)
-    if (revision is GoalRevision.Failed) return GoalExecutionRootAccess.Failed(revision.reason)
-    val value = (revision as GoalRevision.Ready).value
-    val resolved =
-      if (value.isBlank()) {
-        (git.headCommitSha(primaryRoot) as? WorkflowGitOperationResult.Ok)?.value?.trim()
-          ?: return GoalExecutionRootAccess.Failed("could not read the base revision for the goal worktree")
-      } else {
-        value
-      }
-    return when (val result = worktrees.createOrAdopt(primaryRoot, manifest.issueKey, recorded, resolved)) {
-      is GoalWorktreeResult.Created -> GoalExecutionRootAccess.Ready(result.path, true)
-      is GoalWorktreeResult.Adopted -> GoalExecutionRootAccess.Ready(result.path, true)
-      is GoalWorktreeResult.Failed -> GoalExecutionRootAccess.Failed(result.reason)
+    val ownership = options.ownership
+    if (options.allowLegacyRecordedPath && ownership == null) return GoalExecutionRootAccess.Ready(recorded, false)
+    if (ownership == null || !matchesOwner(ownership, recorded, controlState, manifest, options)) {
+      return GoalExecutionRootAccess.Failed(
+        "the recorded goal checkout $recorded has no matching transferred ownership proof. " +
+          "Preserve the path and reconcile its owner before retrying.",
+      )
     }
-  }
-
-  private fun worktreeRevision(
-    manifest: DecompositionManifest,
-    primaryRoot: Path,
-    subtaskId: Int?,
-    requireExistingBranch: Boolean,
-  ): GoalRevision {
-    val subtask = subtaskId?.let { id -> manifest.subtasks.firstOrNull { it.id == id } }
-    val branch =
-      subtaskId?.let { manifest.branchForSubtask(it) }?.takeIf(String::isNotBlank)
-        ?: manifest.featureBranch
-    val required = requireExistingBranch || subtask?.hasStarted() == true
-    val label = subtaskId ?: "the active subtask"
-    if (branch.isNullOrBlank()) {
-      return if (required) {
-        GoalRevision.Failed("the goal branch for subtask $label is not recorded")
-      } else {
-        GoalRevision.Ready(subtaskId?.let { manifest.baseForSubtask(it) } ?: manifest.baseBranch)
-      }
-    }
-    return existingBranchRevision(
-      primaryRoot,
-      branch,
-      required,
-      label,
-      subtaskId?.let { manifest.baseForSubtask(it) } ?: manifest.baseBranch,
-    )
-  }
-
-  private fun existingBranchRevision(
-    primaryRoot: Path,
-    branch: String,
-    required: Boolean,
-    label: Any,
-    base: String,
-  ): GoalRevision {
-    return when (val exists = git.branchExists(primaryRoot, branch)) {
-      is WorkflowGitOperationResult.Failed ->
-        GoalRevision.Failed(
-          "could not check whether goal branch '$branch' exists: ${exists.error}",
+    return when (
+      val verified =
+        worktrees.createOrAdopt(
+          invokedRoot,
+          manifest.issueKey,
+          recorded,
+          ownership.initialCommit,
+          ownership,
         )
-      is WorkflowGitOperationResult.Ok ->
-        when {
-          exists.value.trim() == "true" -> GoalRevision.Ready(branch)
-          required -> GoalRevision.Failed("goal branch '$branch' for subtask $label is missing")
-          else -> GoalRevision.Ready(base)
-        }
+    ) {
+      is GoalWorktreeResult.Failed ->
+        GoalExecutionRootAccess.Failed(
+          "the recorded goal checkout $recorded could not be verified: ${verified.reason}",
+        )
+      is GoalWorktreeResult.Created -> GoalExecutionRootAccess.Ready(recorded, true)
+      is GoalWorktreeResult.Adopted ->
+        GoalExecutionRootAccess.Ready(recorded, controlState.executionWorktreeRemovedAt != null)
     }
   }
-}
 
-private sealed interface GoalRevision {
-  data class Ready(val value: String) : GoalRevision
+  private fun matchesOwner(
+    ownership: GoalPlanningOwnership,
+    recorded: Path,
+    controlState: GoalRunnerControlState,
+    manifest: DecompositionManifest,
+    options: GoalExecutionRootOptions,
+  ): Boolean =
+    sameOwner(ownership, controlState, options) &&
+      ownership.normalizedIssueKey == FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(manifest.issueKey) &&
+      ownership.ownedPath.toAbsolutePath().normalize() == recorded.toAbsolutePath().normalize()
 
-  data class Failed(val reason: String) : GoalRevision
+  private fun sameOwner(
+    ownership: GoalPlanningOwnership,
+    controlState: GoalRunnerControlState,
+    options: GoalExecutionRootOptions,
+  ): Boolean =
+    ownership.state == GoalPlanningOwnership.State.TRANSFERRED &&
+      ownership.parentWorkflowId == options.parentWorkflowId &&
+      ownership.repositoryIdentity == controlState.repositoryIdentity
 }

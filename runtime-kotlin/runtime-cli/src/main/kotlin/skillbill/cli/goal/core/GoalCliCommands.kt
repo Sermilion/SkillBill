@@ -293,8 +293,9 @@ class GoalRunCommand(
         invokedAgentId = invokedAgentId,
         intake = intake,
       )
+    val establishedExecution = goalRunner.hasEstablishedExecution(planningCheck)
     if (!goalRunner.requiresPlanning(planningCheck)) {
-      return true
+      return establishedExecution || prepareExistingGoalCheckout(planningCheck, intake)
     }
     val planned =
       planLauncher.run(
@@ -333,6 +334,15 @@ class GoalRunCommand(
       mapOf(GoalIncidentPresentationKeys.INCIDENT_DETAILS to detail.incidentPayload()),
       exitCode = 1,
     )
+    return false
+  }
+
+  private fun prepareExistingGoalCheckout(
+    request: GoalRunnerRunRequest,
+    intake: String,
+  ): Boolean {
+    val refusal = planLauncher.prepareGoalCheckout(request.issueKey, intake, request.repoRoot) ?: return true
+    state.completeText(refusal.planReportText(request.issueKey), emptyMap(), exitCode = 1)
     return false
   }
 
