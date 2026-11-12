@@ -202,7 +202,7 @@ class CliRunInputsRuntimeTest {
       CliRuntime.run(
         listOf("--home", home.toString(), "uninstall", "--dry-run", "--format", "json"),
         CliRuntimeContext(
-          environment = emptyMap(),
+          environment = mapOf("APPDATA" to home.resolve("AppData/Roaming").toString()),
           userHome = home,
           hostPlatformPort = StubHostPlatformPort("Windows 11"),
         ),

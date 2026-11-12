@@ -7,6 +7,8 @@ import skillbill.infrastructure.skills.install.plan.claudeConfigRoots
 import skillbill.infrastructure.skills.install.plan.codexConfigRoots
 import skillbill.infrastructure.skills.install.plan.installConfigRoots
 import skillbill.infrastructure.skills.install.plan.resolveInstallHome
+import skillbill.infrastructure.skills.nativeagent.support.devinAgentsDirectory
+import skillbill.infrastructure.skills.nativeagent.support.devinConfigRoot
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.system.HostPlatformPort
 import java.nio.file.Path
@@ -23,7 +25,7 @@ internal object InstallOperationsPaths {
       "Unknown agent '$agent'. Supported agents: ${SUPPORTED_AGENTS.joinToString { it.wireValue }}."
     }
     val resolvedHome = resolveInstallHome(home, hostPlatform)
-    return agentPaths(resolvedHome, installConfigRoots(resolvedHome, environment)).getValue(supported)
+    return agentPaths(resolvedHome, installConfigRoots(resolvedHome, environment, hostPlatform)).getValue(supported)
   }
 
   fun claudeRoots(
@@ -67,5 +69,14 @@ internal object InstallOperationsPaths {
   ): Path {
     val resolvedHome = resolveInstallHome(home, hostPlatform)
     return resolvedHome.resolve(requireNotNull(SupportedAgent.CURSOR.simpleHomeDirectory)).resolve("agents")
+  }
+
+  fun devinAgentsPath(
+    home: Path?,
+    environment: Map<String, String>,
+    hostPlatform: HostPlatformPort,
+  ): Path {
+    val resolvedHome = resolveInstallHome(home, hostPlatform)
+    return devinAgentsDirectory(devinConfigRoot(resolvedHome, environment, hostPlatform))
   }
 }

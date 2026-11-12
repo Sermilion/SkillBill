@@ -56,6 +56,16 @@ enum class SupportedAgent(
     honorsAdditionalWritableDirectories = false,
     loadsRuntimeMcpHeadless = false,
   ),
+  DEVIN(
+    "devin",
+    "devin-agents",
+    "md",
+    null,
+    ".config/devin/mcp_config.json",
+    false,
+    honorsAdditionalWritableDirectories = false,
+    loadsRuntimeMcpHeadless = false,
+  ),
   ;
 
   val id: String get() = wireValue

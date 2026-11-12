@@ -7,6 +7,7 @@ import skillbill.infrastructure.skills.install.nativeagent.uninstallCursorAgentM
 import skillbill.infrastructure.skills.install.nativeagent.uninstallJunieAgentMarkdown
 import skillbill.infrastructure.skills.install.plan.CLAUDE_AGENTS_KIND
 import skillbill.infrastructure.skills.install.plan.CURSOR_AGENTS_KIND
+import skillbill.infrastructure.skills.install.plan.DEVIN_AGENTS_KIND
 import skillbill.infrastructure.skills.install.plan.JUNIE_AGENTS_KIND
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.infrastructure.skills.nativeagent.support.agentPathExists
@@ -154,6 +155,25 @@ object InstallNativeAgentOperations {
     ) +
       unlinkedFromCache
   }
+
+  fun linkDevinAgents(request: NativeAgentLinkRequest): NativeAgentLinkOutcome {
+    val resolvedRequest = resolveNativeAgentLinkRequest(request)
+    return linkProviderAgents(
+      provider = NativeAgentProvider.Devin,
+      request = resolvedRequest,
+      detectTargets = { home ->
+        NativeAgentProvider.Devin.activeHomeAgentDirs(home, resolvedRequest.environment).map { path ->
+          AgentTarget(DEVIN_AGENTS_KIND, path.toFileLocation())
+        }
+      },
+    )
+  }
+
+  fun unlinkDevinAgents(request: NativeAgentLinkRequest): List<Path> =
+    unlinkProviderAgents(
+      provider = NativeAgentProvider.Devin,
+      request = resolveNativeAgentLinkRequest(request),
+    )
 }
 
 private fun resolveNativeAgentLinkRequest(request: NativeAgentLinkRequest): NativeAgentLinkRequest =
