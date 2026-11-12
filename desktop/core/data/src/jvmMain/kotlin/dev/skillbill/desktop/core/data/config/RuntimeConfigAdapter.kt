@@ -415,7 +415,7 @@ private fun telemetryLevelFromSnapshot(
     return TelemetryLevelRead.Failed(
       ReadProblem.Runtime(
         "Telemetry is enabled but no install_id is configured at '$path'. " +
-          "Run 'skill-bill telemetry enable' to create one.",
+          "Run 'sona telemetry enable' to create one.",
       ),
     )
   }

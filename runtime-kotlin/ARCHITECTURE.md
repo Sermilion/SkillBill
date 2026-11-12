@@ -1132,17 +1132,20 @@ skillbill.workflow.verify
   `skillbill.workflow.taskruntime.FeatureTaskRuntimePhaseWorkflowDefinition`
   (id prefix `wftr`, contract version `FEATURE_TASK_RUNTIME_CONTRACT_VERSION`);
   persisted rows use `workflow_name=bill-feature-task` and `mode=runtime`.
-- `skill-bill feature-task` and `feature-task-stats` are the CLI surfaces for
+- `sona feature-task` and `feature-task-stats` are the CLI surfaces for
   this workflow family.
 
 ## Listed skill catalog
 
-- `skill-bill` is the only listed skill (SKILL-383). Its full-run form
-  launches `skill-bill goal` after one confirmation gate. `phase:<name>`
-  translates to `skill-bill phase <name>` and `operation:<name>` to
-  `skill-bill operation <name>`; the dispatcher relays one operator
+- The only listed skill has canonical source name `skill-bill` (SKILL-383) and
+  public command `/sona`. Its full-run form launches `sona goal` after one
+  confirmation gate. `phase:<name>` translates to `sona phase <name>` and
+  `operation:<name>` to `sona operation <name>`; the dispatcher relays one operator
   confirmation for operations that exit `awaiting_confirmation`.
-  `skill-bill goal status` stays CLI-only.
+  `sona goal status` stays CLI-only. The MCP executable is `sona-mcp`, registered
+  under server name `sona`. The desktop launcher is `sona-app`, with visible
+  name Sona. The final SONA-5 subtask leaves `skill-bill` as a notice-only
+  compatibility command.
 - The text of the retired listed skills moved verbatim into
   `skills/skill-bill/content.md` and into directive resources under
   `runtime-engine/src/main/resources/skillbill/engine/<owner package path>/`,
@@ -1167,13 +1170,13 @@ verify family. Every invocation id has the `opr-` prefix.
   `GoalRunnerSubtaskLauncher` directly.
 - `OperationRegistry` is the explicit list in `RuntimeOperationProvides`
   (runtime-core). `OperationExecutor` is the inbound API. runtime-cli reaches
-  it through `RuntimeComponent.operationExecutor` for `skill-bill operation`.
+  it through `RuntimeComponent.operationExecutor` for `sona operation`.
 - `OperationConfirmationGate` owns the two-invocation confirmation. Proposals
   persist through `OperationProposalRepository` (runtime-ports) in the
   `operation_proposals` table. `SqliteOperationProposalStore` owns the
   `anchors_json` wire keys (`OperationProposalPayloadKeys`).
 - Operations: `update-check` shares the text formatter with
-  `skill-bill update-check`. `release` tags through
+  `sona update-check`. `release` tags through
   `WorkflowGitReleaseTagOperations`.
 - Checklist operations load the text of the skills they replace from their
   directive resources (SKILL-383). Kotlin prompt objects keep only the

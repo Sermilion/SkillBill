@@ -87,7 +87,7 @@ class FileSystemReviewNativeAgentPreflightTest {
       }
 
     assertTrue(error.message.orEmpty().contains("active provider directory is missing"))
-    assertContains(error.message.orEmpty(), "Repair with: skill-bill install apply")
+    assertContains(error.message.orEmpty(), "Repair with: sona install apply")
   }
 
   @Test
@@ -116,7 +116,7 @@ class FileSystemReviewNativeAgentPreflightTest {
         assertEquals(SkillStagingFailureCode.MISSING_INSTALLED_NATIVE_AGENT, failure.code)
       }
 
-    assertContains(failure.message.orEmpty(), "skill-bill install apply")
+    assertContains(failure.message.orEmpty(), "Repair with: sona install apply")
   }
 
   @Test

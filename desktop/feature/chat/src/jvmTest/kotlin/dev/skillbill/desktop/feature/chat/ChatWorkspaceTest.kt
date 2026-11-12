@@ -668,8 +668,17 @@ class ChatWorkspaceTest {
     val request = chat.requests.single()
     assertEquals(ChatPermissionMode.Act, request.mode)
     assertTrue(request.prompt.contains("Do not edit source files"))
-    assertTrue(request.prompt.contains("--db '/selected database.db' prepare-review --invocation-id 'original-review'"))
-    assertTrue(request.prompt.contains("record-feedback"))
+    assertTrue(
+      request.prompt.contains("sona --db '/selected database.db' prepare-review --invocation-id 'original-review'"),
+    )
+    assertTrue(request.prompt.contains("Use the returned review_run_id."))
+    assertTrue(request.prompt.contains("start-review-action --run-id <review_run_id> --action verify --format json"))
+    assertTrue(request.prompt.contains("Retain its action_id."))
+    assertTrue(request.prompt.contains("record-feedback --run-id <review_run_id> --event fix_applied"))
+    assertTrue(
+      request.prompt.contains("finish-review-action --run-id <review_run_id> --action-id <action_id> --format json"),
+    )
+    assertTrue(request.prompt.contains("Pass --failed if you could not finish the requested work."))
     workspace.closeAll()
   }
 

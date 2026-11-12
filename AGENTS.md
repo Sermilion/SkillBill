@@ -4,6 +4,13 @@
 
 skill-bill owns skill authoring, routing, validation, installation, measurement, orchestration, telemetry, workflow state, and workflow shells.
 
+The public commands are `/sona` and `sona`. The MCP executable is `sona-mcp`
+and its server name is `sona`. The desktop launcher is `sona-app`, with the
+visible name Sona. The canonical listed-skill source remains
+`skills/skill-bill/`, sidecars retain `internal-for: skill-bill`, and durable
+state paths and raw operation identities keep their existing names. The final
+SONA-5 subtask leaves the legacy `skill-bill` command as a notice-only entry.
+
 Required contracts:
 
 - Authored source is `content.md` (plus governed sidecars); generated `SKILL.md` is install output. Listed-skill staging: `SKILL.md`, `.content-hash`, pointers, optional `native-agents/` — no `content.md` copy.
@@ -82,7 +89,7 @@ Pack-owned add-on files live flat under `platform-packs/<slug>/addons/`, use low
 
 ## Skill Authoring
 
-Scaffold with `skill-bill new`, optionally `--payload <file>`. Author with `show`, `fill`, `edit`, `validate`, and `render`. `create-and-fill` handles one content-managed skill. Kinds: `horizontal`, `platform-pack`, `add-on`. Follow `orchestration/shell-content-contract/SCAFFOLD_PAYLOAD.md`. Validator/manifest/install/link failures roll back atomically.
+Scaffold with `sona new`, optionally `--payload <file>`. Author with `show`, `fill`, `edit`, `validate`, and `render`. `create-and-fill` handles one content-managed skill. Kinds: `horizontal`, `platform-pack`, `add-on`. Follow `orchestration/shell-content-contract/SCAFFOLD_PAYLOAD.md`. Validator/manifest/install/link failures roll back atomically.
 
 ## Adding Platforms
 
@@ -96,7 +103,7 @@ For UI work, keep overview cards brief, evidence in expandable Steps, and matchi
 
 ## Testing
 
-Write few, high-value tests; name the realistic bug each would catch before authoring. Assert observable boundaries, not implementation structure. `skill-bill operation unit-test-value-check` is the review gate.
+Write few, high-value tests; name the realistic bug each would catch before authoring. Assert observable boundaries, not implementation structure. `sona operation unit-test-value-check` is the review gate.
 
 Tests must not depend on wall-clock time or thread scheduling. Ban `Thread.sleep`, shell `sleep N`, other real sleeps, racing timeouts, idle windows, poll intervals, elapsed-time/poll-count assertions, real-time deadline polling, latch/join timeouts, and real `delay` outside `runTest`. Never widen sleeps or deadlines for CI. Control transitions with injected clocks/schedulers, fake `Clock`, `runTest` virtual time, or code-signalled latches. Leave real-time-only behavior untested.
 
@@ -128,4 +135,4 @@ Single-owner keys stay local, such as `SqliteReviewTelemetryPayloadKeys` in `run
 
 ## Quality Checks
 
-Prefer `/skill-bill phase:validation`, CLI `skill-bill phase validation`. Like goal validate, it discovers and runs repository, build, script, and CI checks, then repairs failures. Compilation alone is insufficient. Use stable base commands, platform routers, explicit gate argv, validator-backed rules, and acceptance/rejection tests.
+Prefer `/sona phase:validation`, CLI `sona phase validation`. Like goal validate, it discovers and runs repository, build, script, and CI checks, then repairs failures. Compilation alone is insufficient. Use stable base commands, platform routers, explicit gate argv, validator-backed rules, and acceptance/rejection tests.
