@@ -9,6 +9,7 @@ import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
 import skillbill.ports.filesystem.model.DatabaseFileObservation
+import skillbill.ports.goalrunner.GoalPlanningOwnershipRepository
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
@@ -47,6 +48,7 @@ interface UnitOfWork : GoalRunnerPersistenceSession {
   val workList: WorkListRepository
   val workBoardReadModel: WorkBoardReadModelRepository
   override val goalPlanningPreparations: GoalPlanningPreparationRepository
+  val goalPlanningOwnership: GoalPlanningOwnershipRepository
   override val goalRunnerControls: GoalRunnerControlRepository
   val unaddressedFindings: UnaddressedFindingsRepository
   val agentActivityStamps: AgentActivityStampRepository

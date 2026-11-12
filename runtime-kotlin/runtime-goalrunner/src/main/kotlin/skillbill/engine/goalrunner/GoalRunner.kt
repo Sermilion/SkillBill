@@ -62,6 +62,12 @@ public class GoalRunner(
     repoRoot: Path,
   ): GoalIntakeAdmission = intakeAdmission.admission(intake, repoRoot)
 
+  public fun hasEstablishedExecution(request: GoalRunnerRunRequest): Boolean {
+    val state = manifestStore.loadOccupyingByIssueKey(request.issueKey, request.repoRoot)?.state ?: return false
+    return manifestStore.controlState(state.parentWorkflowId).executionWorktreePath != null ||
+      state.manifest.subtasks.any { !it.workflowId.isNullOrBlank() }
+  }
+
   public fun requiresPlanning(request: GoalRunnerRunRequest): Boolean =
     manifestStore.loadOccupyingByIssueKey(request.issueKey, request.repoRoot) == null &&
       intakeAdmission.intakePreparation.prepare(request) == null

@@ -2436,6 +2436,8 @@ private val expectedMigrationDefinitions =
     120 to "record-standalone-reported-model",
     121 to "add-approval-rule-patterns",
     122 to "record-primary-repository-root",
+    123 to "add-goal-planning-ownership",
+    124 to "record-goal-planning-git-worktree-identity",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

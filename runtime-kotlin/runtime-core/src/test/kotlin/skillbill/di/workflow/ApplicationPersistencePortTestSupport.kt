@@ -1249,7 +1249,6 @@ internal fun testWorkflowService(
         TestRepositoryEnclosingRoot,
         testProjectStore,
         InPlaceGoalWorktreeResources,
-        NoopWorkflowGitOperations,
       ),
   )
 

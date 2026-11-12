@@ -1,5 +1,7 @@
 package skillbill.engine.goalrunner
 
+import skillbill.application.FakeDatabaseSessionFactory
+import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.execution.core.goalRunnerDeps
@@ -12,6 +14,7 @@ import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.goalrunner.model.GoalPlanningOwnership
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -209,6 +212,7 @@ class GoalRunnerExecutionRootTest {
         TestRepositoryEnclosingRoot,
         NoopRuntimeDiagnostics,
         Clock.systemUTC(),
+        FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
       )
 
     settlement.settle(state)
@@ -298,6 +302,14 @@ private class RecordingGoalWorktrees(
   var settlements = 0
   val checkoutBranches = mutableListOf<String>()
 
+  override fun plannedPath(
+    repoRoot: Path,
+    issueKey: String,
+    reservationId: String?,
+  ): Path = repoRoot
+
+  override fun gitWorktreeIdentity(path: Path): String? = null
+
   override fun checkoutGoalBranch(
     primaryRoot: Path,
     branch: String,
@@ -312,6 +324,7 @@ private class RecordingGoalWorktrees(
     issueKey: String,
     recordedPath: Path?,
     revision: String,
+    ownership: GoalPlanningOwnership?,
   ): GoalWorktreeResult {
     creations += 1
     return result

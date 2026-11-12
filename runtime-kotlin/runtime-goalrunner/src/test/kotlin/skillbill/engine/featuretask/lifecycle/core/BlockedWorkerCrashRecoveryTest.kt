@@ -162,8 +162,8 @@ class BlockedWorkerCrashRecoveryTest {
           TestRepositoryEnclosingRoot,
           FixedProjectStorePort(Files.createTempDirectory("goal-execution-root-test")),
           InPlaceGoalWorktreeResources,
-          NoopWorkflowGitOperations,
         ),
+        database,
       ),
     )
 

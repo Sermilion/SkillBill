@@ -219,7 +219,6 @@ private fun newService(): WorkflowService =
         TestRepositoryEnclosingRoot,
         testProjectStore,
         InPlaceGoalWorktreeResources,
-        NoopWorkflowGitOperations,
       ),
   )
 

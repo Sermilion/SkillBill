@@ -52,6 +52,7 @@ public data class FeatureTaskRuntimeRunRequest(
   public override val skeletonDefinition: SkeletonDefinition? = null,
   public override val protectedSpecSha256: String? = null,
   public override val planIntake: String? = null,
+  public override val planIntakeRoot: Path? = null,
   public override val stopAfterIntake: Boolean = false,
   public val acceptanceCriterionRepair: AcceptanceCriterionRepairRunState? = null,
   public override val activityParentWorkflowId: String? = null,
@@ -98,9 +99,11 @@ public data class FeatureTaskRuntimeRunInput(
   internal val protectedSpecSha256: String? = null,
   internal val openArtifacts: WorkflowArtifactPatch = WorkflowArtifactPatch.EMPTY,
   public val planIntake: String? = null,
+  public val planIntakeRoot: Path? = null,
   public val qaSelection: FeatureTaskRuntimeQaSelection? = null,
   internal val inheritRecordedPlanningTimeout: Boolean = false,
   public val activityParentWorkflowId: String? = null,
+  public val workflowIdForCreation: String? = null,
 )
 
 public data class FeatureTaskRuntimeGoalContinuationContext(

@@ -54,7 +54,6 @@ class WorkflowIssueKeyPersistenceTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -112,7 +111,6 @@ class WorkflowIssueKeyPersistenceTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 

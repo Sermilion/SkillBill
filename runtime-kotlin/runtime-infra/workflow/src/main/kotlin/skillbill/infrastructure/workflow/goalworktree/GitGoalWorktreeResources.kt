@@ -1,7 +1,6 @@
 package skillbill.infrastructure.workflow.goalworktree
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.infrastructure.host.jvm.deleteRecursively
 import skillbill.infrastructure.host.jvm.resolveTelemetryStateDir
 import skillbill.infrastructure.workflow.monitor.GitRun
 import skillbill.infrastructure.workflow.monitor.NO_PROMPT_ENVIRONMENT
@@ -16,6 +15,7 @@ import skillbill.infrastructure.workflow.worktree.worktreeGit
 import skillbill.infrastructure.workflow.worktree.worktreePathProblem
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.goalrunner.model.GoalPlanningOwnership
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.time.RuntimeTimingPort
 import skillbill.ports.time.model.RuntimeWaitResult
@@ -24,6 +24,7 @@ import skillbill.ports.workflow.goalworktree.model.GoalBranchCheckout
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -36,6 +37,7 @@ import kotlin.time.Duration.Companion.seconds
 private const val GOALS_DIRECTORY = "goals"
 private const val CHECKOUT_DIRECTORY = "checkout"
 private const val REMOVAL_MARKER_SUFFIX = ".removing"
+private const val OWNERSHIP_MARKER = "skill-bill-ownership"
 private const val WORKTREE_FIELD_PREFIX = "worktree "
 private val GOAL_SEGMENT_UNSAFE = Regex("[^A-Za-z0-9._-]")
 private val UNUSABLE_GOAL_SEGMENTS = setOf("", ".", "..")
@@ -59,10 +61,24 @@ class GitGoalWorktreeResources(
     issueKey: String,
     recordedPath: Path?,
     revision: String,
+    ownership: GoalPlanningOwnership?,
   ): GoalWorktreeResult =
     try {
       if (recordedPath != null) {
-        createOrAdoptAt(repoRoot, canonicalTarget(recordedPath), revision)
+        val proof =
+          ownership
+            ?: return GoalWorktreeResult.Failed(
+              "the recorded goal checkout $recordedPath has no ownership proof. Preserve it and reconcile its " +
+                "owner before retrying.",
+            )
+        val normalizedPath = recordedPath.toAbsolutePath().normalize()
+        if (!matchesReservation(proof, repoRoot, normalizedPath, issueKey, revision)) {
+          return GoalWorktreeResult.Failed(
+            "the recorded goal checkout $recordedPath does not match its ownership proof. Preserve it and " +
+              "inspect the ownership record.",
+          )
+        }
+        createOrAdoptAt(repoRoot, canonicalTarget(recordedPath), revision, proof)
       } else {
         createOrAdoptAtStatePath(repoRoot, issueKey, revision)
       }
@@ -71,6 +87,18 @@ class GitGoalWorktreeResources(
     } catch (failure: SecurityException) {
       preparationFailed(issueKey, failure)
     }
+
+  private fun matchesReservation(
+    proof: GoalPlanningOwnership,
+    repoRoot: Path,
+    normalizedPath: Path,
+    issueKey: String,
+    revision: String,
+  ): Boolean =
+    proof.ownedPath.toAbsolutePath().normalize() == normalizedPath &&
+      plannedPath(repoRoot, issueKey, proof.reservationId).toAbsolutePath().normalize() == normalizedPath &&
+      proof.normalizedIssueKey == FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey) &&
+      reservationStateMatches(proof, revision, normalizedPath)
 
   override fun checkoutHolding(
     repoRoot: Path,
@@ -95,11 +123,42 @@ class GitGoalWorktreeResources(
     branch: String,
   ): GoalBranchCheckout = checkoutGoalBranchAt(primaryRoot, branch)
 
+  override fun plannedPath(
+    repoRoot: Path,
+    issueKey: String,
+    reservationId: String?,
+  ): Path =
+    canonicalTarget(
+      statePath(
+        requireNotNull(repositoryStateKey(repoRoot) as? RepositoryStateKeyResult.Resolved).key,
+        issueKey,
+        reservationId,
+      ),
+    )
+
+  override fun gitWorktreeIdentity(path: Path): String? =
+    try {
+      val result = worktreeGit(path, "rev-parse", "--path-format=absolute", "--git-dir")
+      if (!result.ok) null else Path.of(result.output.trim()).toRealPath().toString()
+    } catch (_: IOException) {
+      null
+    } catch (_: SecurityException) {
+      null
+    }
+
   override fun retentionVerdict(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained? {
     val path = request.worktreePath
-    if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return null
+    val proof = ownershipProofRetention(request)
+    if (proof != null || !Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return proof
     val ownership = ownershipRetention(request)
-    if (ownership != null || removalInterrupted(path)) return ownership
+    if (ownership != null) return ownership
+    if (Files.exists(removalMarker(path), LinkOption.NOFOLLOW_LINKS)) {
+      return retained(
+        MonitorRetentionReason.UNOWNED_RESOURCE,
+        path,
+        "an interrupted removal needs inspection; preserve the checkout and its removal receipt",
+      )
+    }
     return worktreeDirtyRetention(path)?.let { retained(it.reason, path, it.detail) } ?: publicationRetention(path)
   }
 
@@ -121,6 +180,49 @@ class GitGoalWorktreeResources(
         )
       }
     return listingRetention(request.primaryRoot, path, realPath)
+  }
+
+  private fun ownershipProofRetention(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained? {
+    val path = request.worktreePath
+    val ownership = request.ownership
+    if (ownership == null || !matchesTransferredOwner(request, ownership)) {
+      return retained(
+        MonitorRetentionReason.UNOWNED_RESOURCE,
+        path,
+        "a matching transferred goal ownership record is required before cleanup; preserve the path and " +
+          "reconcile ownership",
+      )
+    }
+    val root = goalsRoot(request.primaryRoot)
+    val pathProblem =
+      root?.let { worktreePathProblem(path, it, "the goals directory") }
+        ?: if (root == null) "the goals directory could not be resolved" else null
+    pathProblem?.let { problem ->
+      return retained(MonitorRetentionReason.UNOWNED_RESOURCE, path, problem)
+    }
+    if (Files.exists(path, LinkOption.NOFOLLOW_LINKS) &&
+      (ownership.gitWorktreeIdentity == null || verifiedIdentity(path, ownership) != ownership.gitWorktreeIdentity)
+    ) {
+      return retained(
+        MonitorRetentionReason.UNOWNED_RESOURCE,
+        path,
+        "the checkout Git directory does not match its ownership record; preserve the path and inspect its " +
+          "registration",
+      )
+    }
+    return null
+  }
+
+  private fun matchesTransferredOwner(
+    request: GoalWorktreeSettleRequest,
+    ownership: GoalPlanningOwnership,
+  ): Boolean {
+    val issueKey = request.issueKey?.takeIf { it.isNotBlank() } ?: return false
+    val path = request.worktreePath.toAbsolutePath().normalize()
+    return matchesControlOwner(request, ownership) &&
+      ownership.normalizedIssueKey == FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey) &&
+      ownership.ownedPath.toAbsolutePath().normalize() == path &&
+      plannedPath(request.primaryRoot, issueKey, ownership.reservationId).toAbsolutePath().normalize() == path
   }
 
   private fun listingRetention(
@@ -197,14 +299,15 @@ class GitGoalWorktreeResources(
 
   override fun settle(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement {
     val path = request.worktreePath
+    ownershipProofRetention(request)?.let { return it }
     if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
       val prune = worktreeGit(request.primaryRoot, "worktree", "prune")
       if (!prune.ok) diagnostics.warning("goal worktree prune failed: seam=goal_worktree.settle path=$path", null)
-      deleteQuietly(removalMarker(path))
       return GoalWorktreeSettlement.Absent
     }
-    retentionVerdict(request)?.let { return it }
-    val failure = if (removalInterrupted(path)) finishInterruptedRemoval(path) else remove(request.primaryRoot, path)
+    val failure =
+      retentionVerdict(request)
+        ?: remove(request.primaryRoot, path, requireNotNull(request.ownership))
     if (failure != null) return failure
     val prune = worktreeGit(request.primaryRoot, "worktree", "prune")
     if (!prune.ok) {
@@ -221,41 +324,79 @@ class GitGoalWorktreeResources(
   private fun remove(
     primaryRoot: Path,
     path: Path,
+    ownership: GoalPlanningOwnership,
   ): GoalWorktreeSettlement.Retained? {
+    val expectedGitIdentity = ownership.gitWorktreeIdentity
     val marker = removalMarker(path)
-    try {
+    markForRemoval(path, ownership)?.let { return it }
+    val unsafe = removalSafety(primaryRoot, path, ownership, expectedGitIdentity)
+    if (unsafe != null) {
+      deleteQuietly(marker)
+      return unsafe
+    }
+    val removal = worktreeGit(primaryRoot, "worktree", "remove", "--force", path.toString())
+    return if (removal.ok) {
+      null
+    } else {
+      if (!removal.timedOut) deleteQuietly(marker)
+      retained(MonitorRetentionReason.CLEANUP_FAILED, path, "git worktree remove failed: ${removal.output}")
+    }
+  }
+
+  private fun removalSafety(
+    primaryRoot: Path,
+    path: Path,
+    ownership: GoalPlanningOwnership,
+    expectedGitIdentity: String?,
+  ): GoalWorktreeSettlement.Retained? {
+    val listing = listWorktrees(primaryRoot)
+    if (verifiedIdentity(path, ownership) != expectedGitIdentity || !listing.ok ||
+      entryOf(listing, path.toAbsolutePath().normalize()) != WorktreeEntry.FINISHED
+    ) {
+      return retained(
+        MonitorRetentionReason.UNOWNED_RESOURCE,
+        path,
+        "the checkout Git directory changed before removal; preserve the path and inspect ownership",
+      )
+    }
+    val changed =
+      worktreeDirtyRetention(path)?.let { retained(it.reason, path, it.detail) } ?: publicationRetention(path)
+    if (changed != null) {
+      return changed
+    }
+    if (verifiedIdentity(path, ownership) != expectedGitIdentity) {
+      return retained(MonitorRetentionReason.UNOWNED_RESOURCE, path, "checkout ownership changed before removal")
+    }
+    return null
+  }
+
+  private fun markForRemoval(
+    path: Path,
+    ownership: GoalPlanningOwnership,
+  ): GoalWorktreeSettlement.Retained? {
+    val expectedGitIdentity = ownership.gitWorktreeIdentity
+    val marker = removalMarker(path)
+    return try {
+      if (expectedGitIdentity == null || verifiedIdentity(path, ownership) != expectedGitIdentity) {
+        return retained(
+          MonitorRetentionReason.UNOWNED_RESOURCE,
+          path,
+          "the checkout Git directory changed before removal; preserve the path and inspect ownership",
+        )
+      }
       val identity =
-        removalIdentity(path)
+        removalIdentity(path, "$expectedGitIdentity\n${ownership.reservationId}")
           ?: return retained(
             MonitorRetentionReason.CLEANUP_FAILED,
             path,
             "the removal directory identity is unavailable",
           )
-      Files.deleteIfExists(marker)
       Files.writeString(marker, identity, CREATE_NEW, WRITE)
-    } catch (failure: IOException) {
-      return retained(MonitorRetentionReason.CLEANUP_FAILED, path, "could not mark the removal: ${failure.message}")
-    }
-    val removal = worktreeGit(primaryRoot, "worktree", "remove", "--force", path.toString())
-    if (removal.ok) return null
-    if (!removal.timedOut) deleteQuietly(marker)
-    return retained(MonitorRetentionReason.CLEANUP_FAILED, path, "git worktree remove failed: ${removal.output}")
-  }
-
-  private fun finishInterruptedRemoval(path: Path): GoalWorktreeSettlement.Retained? {
-    diagnostics.warning(
-      "goal worktree removal was interrupted, finishing it: seam=goal_worktree.settle path=$path",
-      null,
-    )
-    return try {
-      deleteRecursively(path)
       null
     } catch (failure: IOException) {
-      retained(
-        MonitorRetentionReason.CLEANUP_FAILED,
-        path,
-        "could not finish the interrupted removal: ${failure.message}",
-      )
+      retained(MonitorRetentionReason.CLEANUP_FAILED, path, "could not mark the removal: ${failure.message}")
+    } catch (failure: SecurityException) {
+      retained(MonitorRetentionReason.CLEANUP_FAILED, path, "could not mark the removal: ${failure.message}")
     }
   }
 
@@ -268,38 +409,6 @@ class GitGoalWorktreeResources(
       diagnostics.warning("goal worktree cleanup failed: seam=goal_worktree.settle path=$target", failure)
     }
   }
-
-  private fun removalInterrupted(path: Path): Boolean {
-    val marker = removalMarker(path)
-    if (!Files.exists(marker, LinkOption.NOFOLLOW_LINKS)) return false
-    try {
-      val identity = removalIdentity(path)
-      if (identity != null && Files.isRegularFile(marker, LinkOption.NOFOLLOW_LINKS) &&
-        Files.readString(marker) == identity
-      ) {
-        return true
-      }
-      diagnostics.warning("goal worktree removal identity mismatch: seam=goal_worktree.settle path=$path", null)
-    } catch (failure: IOException) {
-      diagnostics.warning("goal worktree removal identity unavailable: seam=goal_worktree.settle path=$path", failure)
-    }
-    return false
-  }
-
-  private fun removalIdentity(path: Path): String? {
-    val attributes = Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
-    if (!attributes.isDirectory) return null
-    val key = attributes.fileKey() ?: return null
-    return "$key\n${attributes.creationTime()}"
-  }
-
-  private fun removalMarker(path: Path): Path = path.resolveSibling("${path.fileName}$REMOVAL_MARKER_SUFFIX")
-
-  private fun retained(
-    reason: MonitorRetentionReason,
-    path: Path,
-    detail: String,
-  ) = GoalWorktreeSettlement.Retained(reason, path, detail)
 
   private fun goalsRoot(repoRoot: Path): Path? {
     val key = repositoryStateKey(repoRoot) as? RepositoryStateKeyResult.Resolved ?: return null
@@ -333,15 +442,24 @@ class GitGoalWorktreeResources(
           "could not resolve the Git common directory ${key.commonDirectory}: ${key.failure.message}",
         )
       is RepositoryStateKeyResult.Resolved -> {
-        val target =
-          resolveTelemetryStateDir(environment.environment, environment.userHome)
-            .resolve(GOALS_DIRECTORY)
-            .resolve(key.key)
-            .resolve(segment)
-            .resolve(CHECKOUT_DIRECTORY)
-        createOrAdoptAt(repoRoot, canonicalTarget(target), revision)
+        createOrAdoptAt(repoRoot, canonicalTarget(statePath(key.key, issueKey, null)), revision)
       }
     }
+  }
+
+  private fun statePath(
+    repositoryKey: String,
+    issueKey: String,
+    reservationId: String?,
+  ): Path {
+    val segment = GOAL_SEGMENT_UNSAFE.replace(issueKey, "-")
+    require(segment !in UNUSABLE_GOAL_SEGMENTS)
+    val issuePath =
+      resolveTelemetryStateDir(environment.environment, environment.userHome)
+        .resolve(GOALS_DIRECTORY)
+        .resolve(repositoryKey)
+        .resolve(segment)
+    return (reservationId?.let { issuePath.resolve(it) } ?: issuePath).resolve(CHECKOUT_DIRECTORY)
   }
 
   private fun canonicalTarget(target: Path): Path {
@@ -355,39 +473,168 @@ class GitGoalWorktreeResources(
     repoRoot: Path,
     target: Path,
     revision: String,
+    ownership: GoalPlanningOwnership? = null,
   ): GoalWorktreeResult {
     if (Files.isSymbolicLink(target)) {
       return GoalWorktreeResult.Failed("the goal worktree path $target is a symbolic link.")
+    }
+    if (Files.exists(removalMarker(target), LinkOption.NOFOLLOW_LINKS)) {
+      return GoalWorktreeResult.Failed(
+        "the goal worktree path $target has an interrupted removal marker. Preserve the path and inspect it " +
+          "before retrying.",
+      )
     }
     val listing = listWorktrees(repoRoot)
     if (!listing.ok) {
       return GoalWorktreeResult.Failed("could not list worktrees for $target: ${listing.output}")
     }
-    val entry = entryOf(listing, target)
+    val result = resolveWorktreeEntry(repoRoot, target, revision, ownership, entryOf(listing, target))
+    return if (ownership != null && result !is GoalWorktreeResult.Failed) {
+      verifyOwnedResult(repoRoot, target, ownership, result)
+    } else {
+      result
+    }
+  }
+
+  private fun resolveWorktreeEntry(
+    repoRoot: Path,
+    target: Path,
+    revision: String,
+    ownership: GoalPlanningOwnership?,
+    entry: WorktreeEntry,
+  ): GoalWorktreeResult {
     val present = Files.exists(target, LinkOption.NOFOLLOW_LINKS)
     return when {
       entry == WorktreeEntry.UNLISTED && present -> adoptConcurrentOrFail(repoRoot, target)
       entry == WorktreeEntry.UNLISTED -> add(repoRoot, target, revision)
+      !present && ownership != null ->
+        GoalWorktreeResult.Failed(
+          "the recorded goal worktree $target is missing. Preserve its record and " +
+            "inspect its registration before retrying.",
+        )
       !present -> pruneAndAdd(repoRoot, target, revision)
       !isRealDirectory(target) -> GoalWorktreeResult.Failed("the goal worktree path $target is not a directory.")
-      removalInterrupted(target) -> discardInterruptedRemoval(repoRoot, target, revision)
+      entry == WorktreeEntry.FINISHED && !sameRepository(repoRoot, target) ->
+        GoalWorktreeResult.Failed(
+          "the goal worktree path $target is registered to a different Git repository. Preserve it and " +
+            "inspect its ownership.",
+        )
       entry == WorktreeEntry.FINISHED -> GoalWorktreeResult.Adopted(target)
       else -> awaitInitializing(repoRoot, target)
     }
   }
 
-  private fun discardInterruptedRemoval(
+  private fun verifyOwnedResult(
     repoRoot: Path,
     target: Path,
-    revision: String,
+    ownership: GoalPlanningOwnership,
+    result: GoalWorktreeResult,
   ): GoalWorktreeResult {
-    diagnostics.warning(
-      "goal worktree removal was interrupted, recreating it: seam=goal_worktree path=$target",
-      null,
-    )
-    deleteRecursively(target)
-    Files.deleteIfExists(removalMarker(target))
-    return pruneAndAdd(repoRoot, target, revision)
+    if (result is GoalWorktreeResult.Created && !verifyCreatedOwnership(repoRoot, target, ownership)) {
+      return GoalWorktreeResult.Failed(
+        "could not establish ownership of $target after creation. Preserve the path and inspect its registration.",
+      )
+    }
+    val identity = verifiedIdentity(target, ownership)
+    if (identity == null ||
+      (ownership.state != GoalPlanningOwnership.State.RESERVED && identity != ownership.gitWorktreeIdentity)
+    ) {
+      return GoalWorktreeResult.Failed(
+        "the goal worktree path $target lacks matching checkout ownership evidence. " +
+          "Preserve it and inspect ownership.",
+      )
+    }
+    return when (result) {
+      is GoalWorktreeResult.Created -> GoalWorktreeResult.Created(target, identity)
+      is GoalWorktreeResult.Adopted -> GoalWorktreeResult.Adopted(target, identity)
+      is GoalWorktreeResult.Failed -> result
+    }
+  }
+
+  private fun verifyCreatedOwnership(
+    repoRoot: Path,
+    target: Path,
+    ownership: GoalPlanningOwnership,
+  ): Boolean {
+    val head = worktreeGit(target, "rev-parse", "HEAD")
+    val listing = listWorktrees(repoRoot)
+    val registered =
+      listing.ok && entryOf(
+        listing,
+        target,
+      ) == WorktreeEntry.FINISHED && sameRepository(repoRoot, target)
+    val matchesRevision = head.ok && head.output.trim() == ownership.initialCommit
+    return registered && matchesRevision && ownership.state == GoalPlanningOwnership.State.RESERVED &&
+      writeOwnershipMarker(target, ownership)
+  }
+
+  private fun markerValue(
+    path: Path,
+    ownership: GoalPlanningOwnership,
+    identity: String,
+  ): String? {
+    val directoryIdentity = removalIdentity(path, identity) ?: return null
+    return listOf(
+      ownership.reservationId,
+      ownership.repositoryIdentity,
+      ownership.ownedPath.toAbsolutePath().normalize().toString(),
+      ownership.initialCommit,
+      directoryIdentity,
+    ).joinToString("\n")
+  }
+
+  private fun writeOwnershipMarker(
+    path: Path,
+    ownership: GoalPlanningOwnership,
+  ): Boolean {
+    return try {
+      val identity = gitWorktreeIdentity(path) ?: return false
+      val value = markerValue(path, ownership, identity) ?: return false
+      Files.writeString(Path.of(identity).resolve(OWNERSHIP_MARKER), value, CREATE_NEW, WRITE)
+      verifiedIdentity(path, ownership) == identity
+    } catch (_: IOException) {
+      false
+    } catch (_: SecurityException) {
+      false
+    }
+  }
+
+  private fun verifiedIdentity(
+    path: Path,
+    ownership: GoalPlanningOwnership,
+  ): String? {
+    return try {
+      val identity = gitWorktreeIdentity(path) ?: return null
+      val marker = Path.of(identity).resolve(OWNERSHIP_MARKER)
+      val expected = markerValue(path, ownership, identity) ?: return null
+      if (Files.isRegularFile(marker, LinkOption.NOFOLLOW_LINKS) && Files.readString(marker) == expected) {
+        identity
+      } else {
+        null
+      }
+    } catch (_: IOException) {
+      null
+    } catch (_: SecurityException) {
+      null
+    }
+  }
+
+  private fun sameRepository(
+    repoRoot: Path,
+    target: Path,
+  ): Boolean {
+    fun commonDirectory(path: Path): Path? {
+      val result = worktreeGit(path, "rev-parse", "--git-common-dir")
+      if (!result.ok) return null
+      val commonValue = result.output.trim().takeIf(String::isNotBlank) ?: return null
+      val common = Path.of(commonValue)
+      return (if (common.isAbsolute) common else path.resolve(common)).toRealPath()
+    }
+    return try {
+      commonDirectory(repoRoot) != null && commonDirectory(repoRoot) == commonDirectory(target)
+    } catch (_: IOException) {
+      false
+    }
   }
 
   private fun pruneAndAdd(
@@ -421,7 +668,6 @@ class GitGoalWorktreeResources(
       return GoalWorktreeResult.Failed("could not create the goal worktree at $target: invalid revision '$revision'.")
     }
     Files.createDirectories(target.parent)
-    Files.deleteIfExists(removalMarker(target))
     val added =
       invokeGitProcess(
         repoRoot,
@@ -456,7 +702,8 @@ class GitGoalWorktreeResources(
       return null
     }
     return when (entryOf(listing, target)) {
-      WorktreeEntry.FINISHED -> GoalWorktreeResult.Adopted(target)
+      WorktreeEntry.FINISHED ->
+        if (sameRepository(repoRoot, target)) GoalWorktreeResult.Adopted(target) else null
       WorktreeEntry.INITIALIZING -> awaitInitializing(repoRoot, target)
       WorktreeEntry.UNLISTED -> null
     }
@@ -493,7 +740,13 @@ class GitGoalWorktreeResources(
     }
     val entry = entryOf(listing, target)
     return when {
-      isRealDirectory(target) && entry == WorktreeEntry.FINISHED -> GoalWorktreeResult.Adopted(target)
+      isRealDirectory(target) && entry == WorktreeEntry.FINISHED && sameRepository(repoRoot, target) ->
+        GoalWorktreeResult.Adopted(target)
+      isRealDirectory(target) && entry == WorktreeEntry.FINISHED ->
+        GoalWorktreeResult.Failed(
+          "the goal worktree path $target is registered to a different Git repository. " +
+            "Preserve it and inspect its ownership.",
+        )
       isRealDirectory(target) && entry == WorktreeEntry.INITIALIZING -> null
       else ->
         GoalWorktreeResult.Failed(
@@ -510,17 +763,53 @@ class GitGoalWorktreeResources(
       "incomplete: run git worktree unlock $target, delete that directory and run git worktree prune. " +
       "Then run the goal again."
 
-  private fun isRealDirectory(target: Path): Boolean = Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)
-
   private fun listWorktrees(repoRoot: Path): GitRun = monitorGit(repoRoot, "worktree", "list", "--porcelain", "-z")
+}
 
-  private fun entryOf(
-    listing: GitRun,
-    target: Path,
-  ): WorktreeEntry {
-    val record =
-      parseWorktreeRecords(listing.output)
-        .firstOrNull { "$WORKTREE_FIELD_PREFIX$target" in it } ?: return WorktreeEntry.UNLISTED
-    return if (LOCKED_INITIALIZING_FIELD in record) WorktreeEntry.INITIALIZING else WorktreeEntry.FINISHED
-  }
+private fun reservationStateMatches(
+  proof: GoalPlanningOwnership,
+  revision: String,
+  path: Path,
+): Boolean =
+  proof.state != GoalPlanningOwnership.State.SUPERSEDED &&
+    (proof.state != GoalPlanningOwnership.State.RESERVED || proof.initialCommit == revision.trim()) &&
+    (proof.state == GoalPlanningOwnership.State.RESERVED || Files.isDirectory(path))
+
+private fun matchesControlOwner(
+  request: GoalWorktreeSettleRequest,
+  ownership: GoalPlanningOwnership,
+): Boolean =
+  ownership.state == GoalPlanningOwnership.State.TRANSFERRED &&
+    !ownership.parentWorkflowId.isNullOrBlank() &&
+    !request.parentWorkflowId.isNullOrBlank() && ownership.parentWorkflowId == request.parentWorkflowId &&
+    request.repositoryIdentity != null && ownership.repositoryIdentity == request.repositoryIdentity
+
+private fun removalIdentity(
+  path: Path,
+  gitIdentity: String,
+): String? {
+  val attributes = Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+  if (!attributes.isDirectory) return null
+  val key = attributes.fileKey() ?: return null
+  return "$key\n${attributes.creationTime()}\n$gitIdentity"
+}
+
+private fun removalMarker(path: Path): Path = path.resolveSibling("${path.fileName}$REMOVAL_MARKER_SUFFIX")
+
+private fun retained(
+  reason: MonitorRetentionReason,
+  path: Path,
+  detail: String,
+) = GoalWorktreeSettlement.Retained(reason, path, detail)
+
+private fun isRealDirectory(target: Path): Boolean = Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)
+
+private fun entryOf(
+  listing: GitRun,
+  target: Path,
+): WorktreeEntry {
+  val record =
+    parseWorktreeRecords(listing.output)
+      .firstOrNull { "$WORKTREE_FIELD_PREFIX$target" in it } ?: return WorktreeEntry.UNLISTED
+  return if (LOCKED_INITIALIZING_FIELD in record) WorktreeEntry.INITIALIZING else WorktreeEntry.FINISHED
 }

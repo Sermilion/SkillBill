@@ -159,16 +159,25 @@ public class GoalIntakePreparation(
     storeOnly: Boolean = false,
   ): Path? {
     if (!storeOnly) referencedSpecPath(intake, repoRoot)?.let { return it }
-    if (namesSpecPath(intake)) {
+    val legacyReference = intake.contains(LegacyProjectStatePaths.FEATURE_SPECS_PREFIX)
+    if (namesSpecPath(intake) && !storeOnly && !legacyReference) {
       invalidIntake("parent_spec", "the supplied spec path does not contain a readable spec.md.")
     }
     return when (
       val resolved = specPathResolver.resolve(FeatureSpecPathResolveInput(issueKey, null, repoRoot))
     ) {
       is FeatureSpecPathResolveResult.Explicit -> Path.of(resolved.specPath)
-      is FeatureSpecPathResolveResult.SingleMatch ->
-        Path.of(resolved.specPath).takeUnless { storeOnly && resolved.origin == FeatureSpecOrigin.LEGACY }
-      is FeatureSpecPathResolveResult.NoMatch -> null
+      is FeatureSpecPathResolveResult.SingleMatch -> {
+        val path = Path.of(resolved.specPath).takeUnless { storeOnly && resolved.origin == FeatureSpecOrigin.LEGACY }
+        if (legacyReference && path != null) legacySpecIntake.recordStoreResolution(issueKey, path)
+        path
+      }
+      is FeatureSpecPathResolveResult.NoMatch ->
+        if (namesSpecPath(intake)) {
+          invalidIntake("parent_spec", "the supplied spec path does not contain a readable spec.md.")
+        } else {
+          null
+        }
       is FeatureSpecPathResolveResult.Ambiguous ->
         invalidIntake("parent_spec", "multiple specs match $issueKey; supply the spec path.")
     }

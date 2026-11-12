@@ -182,7 +182,8 @@ fun testGoalRunnerStatusService(
           ports.gitOperations,
           TestRepositoryEnclosingRoot,
           ports.diagnostics,
-          ProjectCheckout(TestRepositoryEnclosingRoot, ports.projectStore, ports.goalWorktrees, ports.gitOperations),
+          ProjectCheckout(TestRepositoryEnclosingRoot, ports.projectStore, ports.goalWorktrees),
+          database,
         ),
         GoalWorktreeCompletionSettlement(
           manifestStore,
@@ -190,6 +191,7 @@ fun testGoalRunnerStatusService(
           TestRepositoryEnclosingRoot,
           ports.diagnostics,
           clock,
+          database,
         ),
       ),
     repositoryRoot = testRepositoryRoot,
@@ -210,7 +212,8 @@ fun testGoalRunnerStatusService(
             ports.gitOperations,
             TestRepositoryEnclosingRoot,
             ports.diagnostics,
-            ProjectCheckout(TestRepositoryEnclosingRoot, ports.projectStore, ports.goalWorktrees, ports.gitOperations),
+            ProjectCheckout(TestRepositoryEnclosingRoot, ports.projectStore, ports.goalWorktrees),
+            database,
           ),
       ),
     purgeCoordinator =
@@ -276,6 +279,7 @@ fun testGoalRunnerRepairCoordinator(
   phaseRecorder: FeatureTaskRuntimePhaseRecorder = goalRunnerDefaultPhaseRecorder(),
   clock: Clock = testHarnessClock,
   ports: GoalRunnerStatusTestPorts = GoalRunnerStatusTestPorts(),
+  database: DatabaseSessionFactory = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
 ): GoalRunnerRepairCoordinator =
   GoalRunnerRepairCoordinator(
     manifestStore, phaseRecorder.phaseQuery, ports.workerSupervisor,
@@ -291,7 +295,8 @@ fun testGoalRunnerRepairCoordinator(
       ports.gitOperations,
       TestRepositoryEnclosingRoot,
       ports.diagnostics,
-      ProjectCheckout(TestRepositoryEnclosingRoot, ports.projectStore, ports.goalWorktrees, ports.gitOperations),
+      ProjectCheckout(TestRepositoryEnclosingRoot, ports.projectStore, ports.goalWorktrees),
+      database,
     ),
   )
 

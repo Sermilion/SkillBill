@@ -116,7 +116,7 @@ class WorkflowService(
     incompleteFeatureTaskIdentityError(args)?.let { return it }
     val family = args.kind.workflowFamily()
     val stepId = args.currentStepId ?: family.definition.defaultInitialStepId
-    val workflowId = generateWorkflowId(family.definition.workflowIdPrefix, clock, workflowIdRandom)
+    val workflowId = args.workflowId ?: generateWorkflowId(family.definition.workflowIdPrefix, clock, workflowIdRandom)
     val effectiveSessionId =
       resolveEffectiveSessionId(
         args.kind,
@@ -662,6 +662,7 @@ fun WorkflowService.openFeatureTask(args: WorkflowServiceOpenFeatureTaskArgs): W
       routeScope = args.routeScope,
       executionPlan = args.executionPlan,
       initialArtifacts = args.initialArtifacts,
+      workflowId = args.workflowId,
     ),
   )
 }

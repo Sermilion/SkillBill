@@ -63,7 +63,6 @@ import skillbill.ports.review.pullrequest.model.ReviewPullRequest
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
-import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
@@ -176,7 +175,6 @@ internal class VerifyOperationHarness : AutoCloseable {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val verify =

@@ -59,6 +59,8 @@ public sealed interface StandalonePlanResult {
 public data class StandalonePlanLaunch(
   public val agentId: String? = null,
   public val scope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
+  public val executionRoot: Path? = null,
+  public val workflowIdForCreation: String? = null,
 ) {
   public fun forPhase(target: String): StandalonePhaseLaunch =
     StandalonePhaseLaunch(
@@ -85,10 +87,23 @@ public class StandalonePlanRun(
   private val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val seedRecorder: FeatureTaskRuntimePlanSeedRecorder,
-  private val reopening: PlanSubtasksReopening,
-  private val planReports: StandalonePlanReportBuilder,
+  private val bundleServices: PlanBundleServices,
+  private val planningOwnership: GoalPlanningCheckoutOwnership,
 ) {
   public fun issueKeyOf(intake: String): String = intakePreparation.issueKeyOf(intake)
+
+  public fun prepareGoalCheckout(
+    issueKey: String,
+    intake: String?,
+    repoRoot: Path,
+  ): StandalonePlanResult.Refused? {
+    val launch = StandalonePlanLaunch(scope = IdeStatusLaunchScope.GOAL)
+    val completedPlan = eligibleCompletedPlan(issueKey, intake, repoRoot)
+    return when (val prepared = prepareGoalPlanningOwnership(issueKey, intake, repoRoot, launch, completedPlan)) {
+      is GoalPlanningLaunch.Ready -> null
+      is GoalPlanningLaunch.Refused -> StandalonePlanResult.Refused(prepared.reason, prepared.workflowId)
+    }
+  }
 
   internal fun replanSubtasks(
     replan: PlanSubtasksReplan,
@@ -106,7 +121,7 @@ public class StandalonePlanRun(
       )
     return try {
       catchingNonCancellation {
-        if (!reopening.reopenWithRebasedBundle(replan)) {
+        if (!bundleServices.reopening.reopenWithRebasedBundle(replan)) {
           return@catchingNonCancellation refused(
             publisher,
             "Plan workflow '$planWorkflowId' for $issueKey has no `plan_subtasks` step to re-plan.",
@@ -129,7 +144,7 @@ public class StandalonePlanRun(
         resume(
           found.candidate,
           null,
-          repoRoot,
+          ResumeLocation(repoRoot, replan.sourceRoot),
           { specPath -> withPublisher(inputFor(specPath).copy(inheritRecordedPlanningTimeout = true), publisher) },
           publisher,
         )
@@ -148,7 +163,7 @@ public class StandalonePlanRun(
     FeatureTaskRuntimeRunEventSink { event ->
       sink.emit(event)
       if (event is FeatureTaskRuntimeRunEvent.PhaseCompleted && event.phaseId in LIVE_PLAN_REPORT_PHASES) {
-        publisher.publishPlanReport { planReports.build(issueKey, repoRoot) }
+        publisher.publishPlanReport { bundleServices.reports.build(issueKey, repoRoot) }
       }
     }
 
@@ -165,6 +180,13 @@ public class StandalonePlanRun(
     launch: StandalonePlanLaunch = StandalonePlanLaunch(),
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
   ): StandalonePlanResult {
+    val completedPlan = eligibleCompletedPlan(issueKey, suppliedIntake, repoRoot)
+    val prepared = prepareGoalPlanningOwnership(issueKey, suppliedIntake, repoRoot, launch, completedPlan)
+    val effectiveLaunch =
+      when (prepared) {
+        is GoalPlanningLaunch.Ready -> prepared.launch
+        is GoalPlanningLaunch.Refused -> launch
+      }
     val publisher =
       statusPublisherFactory.forPlan(
         repoRoot = repoRoot,
@@ -173,14 +195,23 @@ public class StandalonePlanRun(
         launch = launch.forPhase(suppliedIntake ?: issueKey),
       )
     return try {
+      if (prepared is GoalPlanningLaunch.Refused) {
+        return refused(publisher, prepared.reason, prepared.workflowId)
+      }
       catchingNonCancellation {
         runInternal(
           issueKey,
           suppliedIntake,
           repoRoot,
-          publisher,
+          PlanRunSelection(publisher, completedPlan),
         ) { specPath ->
-          val input = inputFor(specPath)
+          val original = inputFor(specPath)
+          val input =
+            original.copy(
+              repoRoot = effectiveLaunch.executionRoot ?: original.repoRoot,
+              planIntakeRoot = repoRoot,
+              workflowIdForCreation = effectiveLaunch.workflowIdForCreation,
+            )
           withPublisher(
             input.copy(
               inheritRecordedPlanningTimeout = launch.scope == IdeStatusLaunchScope.GOAL || input.timeout == null,
@@ -194,13 +225,74 @@ public class StandalonePlanRun(
     }
   }
 
+  private fun prepareGoalPlanningOwnership(
+    issueKey: String,
+    suppliedIntake: String?,
+    repoRoot: Path,
+    launch: StandalonePlanLaunch,
+    completedPlan: PlanWorkflowSelection?,
+  ): GoalPlanningLaunch {
+    if (launch.scope != IdeStatusLaunchScope.GOAL) {
+      return planningOwnership.prepare(
+        issueKey,
+        repoRoot,
+        launch,
+        GoalPlanningSelection(existingPlan = true, selectedWorkflowId = null, supersedableWorkflowId = null),
+      )
+    }
+    val discoveredPlan =
+      goalRepositoryIdentityCandidates(repoRoot, repositories).firstNotNullOfOrNull { identity ->
+        planLookup.lookupAfterCrashRecovery(issueKey, identity)
+          .takeIf { it != FeatureTaskContinuationLookupResult.NoMatch }
+      }
+    val selectedWorkflowId =
+      completedPlan?.workflowId
+        ?: discoveredPlan?.forLaunchedSpec(issueKey, suppliedIntake, repoRoot)?.selectedWorkflowId()
+    val supersedableWorkflowId =
+      if (completedPlan == null) {
+        (discoveredPlan as? FeatureTaskContinuationLookupResult.Resumable)?.candidate?.workflowId
+      } else {
+        null
+      }
+    val hasNewIntake =
+      suppliedIntake?.trim()?.takeIf { it.isNotEmpty() && !it.equals(issueKey, ignoreCase = true) } != null
+    val existingManifest = bundleServices.reports.manifestExists(issueKey, repoRoot)
+    val reusableGoal = hasReusableDecomposedParent(issueKey, repoRoot)
+    val existingPlan = selectedWorkflowId != null || existingManifest && !hasNewIntake || reusableGoal
+    return planningOwnership.prepare(
+      issueKey,
+      repoRoot,
+      launch,
+      GoalPlanningSelection(existingPlan, selectedWorkflowId, supersedableWorkflowId),
+    )
+  }
+
+  private fun FeatureTaskContinuationLookupResult.selectedWorkflowId(): String? =
+    when (this) {
+      is FeatureTaskContinuationLookupResult.Resumable -> candidate.workflowId
+      is FeatureTaskContinuationLookupResult.AlreadyRunning -> candidate.workflowId
+      is FeatureTaskContinuationLookupResult.NeedsIdentityRepair -> workflowId
+      else -> null
+    }
+
+  private data class PlanRunSelection(
+    val publisher: StandalonePhaseStatusEventSink,
+    val completedPlan: PlanWorkflowSelection?,
+  )
+
+  private data class ResumeLocation(
+    val repoRoot: Path,
+    val sourceRoot: Path = repoRoot,
+  )
+
   private fun runInternal(
     issueKey: String,
     suppliedIntake: String?,
     repoRoot: Path,
-    statusPublisher: StandalonePhaseStatusEventSink,
+    selection: PlanRunSelection,
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
   ): StandalonePlanResult {
+    val (statusPublisher, completedPlan) = selection
     val intake =
       suppliedIntake?.takeIf { supplied ->
         val normalized = supplied.trim()
@@ -216,21 +308,16 @@ public class StandalonePlanRun(
     if (hasReusableDecomposedParent(issueKey, repoRoot)) {
       return open(issueKey, intake, repoRoot, inputFor, statusPublisher)
     }
-    if (planReports.manifestExists(issueKey, repoRoot)) {
-      if (found is FeatureTaskContinuationLookupResult.Resumable) {
-        return resume(found.candidate, intake, repoRoot, inputFor, statusPublisher)
+    if (bundleServices.reports.manifestExists(issueKey, repoRoot)) {
+      return if (completedPlan == null && found is FeatureTaskContinuationLookupResult.Resumable) {
+        resume(found.candidate, intake, ResumeLocation(repoRoot), inputFor, statusPublisher)
+      } else {
+        settleExistingManifest(issueKey, intake, repoRoot, selection, inputFor)
       }
-      return settleExistingManifest(
-        issueKey,
-        intake,
-        repoRoot,
-        statusPublisher,
-        inputFor,
-      )
     }
     return when (found) {
       is FeatureTaskContinuationLookupResult.Resumable ->
-        resume(found.candidate, intake, repoRoot, inputFor, statusPublisher)
+        resume(found.candidate, intake, ResumeLocation(repoRoot), inputFor, statusPublisher)
       is FeatureTaskContinuationLookupResult.AlreadyRunning ->
         refused(
           statusPublisher,
@@ -262,14 +349,11 @@ public class StandalonePlanRun(
     issueKey: String,
     intake: String?,
     repoRoot: Path,
-    statusPublisher: StandalonePhaseStatusEventSink,
+    selection: PlanRunSelection,
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
   ): StandalonePlanResult {
-    val completed =
-      planLookup.completedSelection(issueKey, goalRepositoryIdentityCandidates(repoRoot, repositories))
-        ?.takeIf { selected ->
-          selected.terminal == null || isLaunchedSpec(selected.terminal.parentSpecPath, issueKey, intake, repoRoot)
-        }
+    val (statusPublisher, completedPlan) = selection
+    val completed = completedPlan
     if (completed == null) {
       return open(
         issueKey,
@@ -293,7 +377,7 @@ public class StandalonePlanRun(
       ) {
         val settledIds = feasibility.settledSubtaskIds
         return replanSubtasks(
-          PlanSubtasksReplan(issueKey, id, repoRoot, settledIds, feasibilityAdoption = true),
+          PlanSubtasksReplan(issueKey, id, repoRoot, repoRoot, settledIds, feasibilityAdoption = true),
           inputFor,
         )
       }
@@ -304,7 +388,7 @@ public class StandalonePlanRun(
           terminal.decompositionManifestPath,
           terminal.subtaskSpecPaths,
         )
-      statusPublisher.settlePlan("completed", result.workflowId, planReports.build(issueKey, repoRoot))
+      statusPublisher.settlePlan("completed", result.workflowId, bundleServices.reports.build(issueKey, repoRoot))
       return result
     }
     return refused(
@@ -313,6 +397,20 @@ public class StandalonePlanRun(
         "Run `skill-bill $issueKey` to execute it.",
     )
   }
+
+  private fun eligibleCompletedPlan(
+    issueKey: String,
+    intake: String?,
+    repoRoot: Path,
+  ): PlanWorkflowSelection? =
+    if (!bundleServices.reports.manifestExists(issueKey, repoRoot)) {
+      null
+    } else {
+      planLookup.completedSelection(issueKey, goalRepositoryIdentityCandidates(repoRoot, repositories))
+        ?.takeIf { selected ->
+          selected.terminal == null || isLaunchedSpec(selected.terminal.parentSpecPath, issueKey, intake, repoRoot)
+        }
+    }
 
   private fun open(
     issueKey: String,
@@ -351,6 +449,7 @@ public class StandalonePlanRun(
   private fun adoptFeasibilityForResume(
     candidate: FeatureTaskContinuationCandidate,
     repoRoot: Path,
+    sourceRoot: Path = repoRoot,
   ): Boolean {
     val selected = planLookup.selection(candidate.workflowId)
     val selectedPhase = selected?.phaseRecord
@@ -359,7 +458,7 @@ public class StandalonePlanRun(
       val current =
         PlanBundleFeasibility.capture(
           decompositionPlanner,
-          repoRoot,
+          sourceRoot,
           candidate.executionIdentity.normalizedIssueKey,
         )
       val completedApproval =
@@ -377,12 +476,13 @@ public class StandalonePlanRun(
           selectedPhase.status == WorkflowStepStatus.COMPLETED &&
           selectedFeasibility.mode != PlanBundleFeasibilityMode.BLOCKED && !completedApproval
       return !needsFullReview ||
-        reopening.reopenWithRebasedBundle(
+        bundleServices.reopening.reopenWithRebasedBundle(
           PlanSubtasksReplan(
             candidate.executionIdentity.normalizedIssueKey,
             candidate.workflowId,
             repoRoot,
-            current.settledSubtaskIds,
+            sourceRoot = sourceRoot,
+            settledSubtaskIds = current.settledSubtaskIds,
             feasibilityAdoption = true,
           ),
         )
@@ -393,10 +493,11 @@ public class StandalonePlanRun(
   private fun resume(
     candidate: FeatureTaskContinuationCandidate,
     intake: String?,
-    repoRoot: Path,
+    location: ResumeLocation,
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
     statusPublisher: StandalonePhaseStatusEventSink?,
   ): StandalonePlanResult {
+    val (repoRoot, sourceRoot) = location
     if (database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, candidate.workflowId) }
         ?.hasPlanSubtasksStep() == false
     ) {
@@ -408,8 +509,8 @@ public class StandalonePlanRun(
         candidate.workflowId,
       )
     }
-    val specPath = decompositionPlanner.bundlePath(repositories.canonicalPath(repoRoot), candidate.governedSpecPath)
-    if (!adoptFeasibilityForResume(candidate, repoRoot)) {
+    val specPath = decompositionPlanner.bundlePath(sourceRoot, candidate.governedSpecPath)
+    if (!adoptFeasibilityForResume(candidate, repoRoot, sourceRoot)) {
       return refused(
         statusPublisher,
         "Plan workflow '${candidate.workflowId}' could not adopt its retained plan_subtasks output " +
@@ -497,7 +598,7 @@ public class StandalonePlanRun(
       }
     when (result) {
       is StandalonePlanResult.Completed ->
-        statusSink?.settlePlan("completed", result.workflowId, planReports.build(report.issueKey, repoRoot))
+        statusSink?.settlePlan("completed", result.workflowId, bundleServices.reports.build(report.issueKey, repoRoot))
       is StandalonePlanResult.Blocked -> statusSink?.settleBlocked(result.reason, result.workflowId)
       is StandalonePlanResult.Refused -> statusSink?.settleBlocked(result.reason, result.workflowId)
     }

@@ -157,6 +157,7 @@ public data class InMemoryPhaseRunFacts(
   override val activityParentWorkflowId: String? = null
   override val protectedSpecSha256: String? = null
   override val planIntake: String? = null
+  override val planIntakeRoot: Path? = null
   override val stopAfterIntake: Boolean = false
   override val issueKey: String = intake.issueKey
   override val qaSelection: FeatureTaskRuntimeQaSelection? = request.qaSelection

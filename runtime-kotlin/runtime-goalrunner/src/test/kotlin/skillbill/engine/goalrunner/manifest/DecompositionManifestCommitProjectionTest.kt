@@ -609,7 +609,6 @@ class DecompositionManifestCommitProjectionTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val opened =

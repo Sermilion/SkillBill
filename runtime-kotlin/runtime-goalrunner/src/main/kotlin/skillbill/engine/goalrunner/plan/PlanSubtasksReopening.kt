@@ -49,6 +49,7 @@ internal data class PlanSubtasksReplan(
   val issueKey: String,
   val planWorkflowId: String,
   val repoRoot: Path,
+  val sourceRoot: Path = repoRoot,
   val settledSubtaskIds: Set<Int>,
   val agentId: String? = null,
   val forcedSubtaskIds: Set<Int> = emptySet(),
@@ -74,7 +75,7 @@ public class PlanSubtasksReopening(
   }
 
   private fun reopenForFeasibility(replan: PlanSubtasksReplan): Boolean {
-    val captured = PlanBundleFeasibility.capture(decompositionPlanner, replan.repoRoot, replan.issueKey)
+    val captured = PlanBundleFeasibility.capture(decompositionPlanner, replan.sourceRoot, replan.issueKey)
     val outcome =
       database.transaction<Pair<Boolean, Int?>?> { unitOfWork ->
         val snapshot =
@@ -89,7 +90,7 @@ public class PlanSubtasksReopening(
         if (snapshot.workflowStatus == WorkflowStatus.RUNNING && original.status != WorkflowStepStatus.PENDING) {
           return@transaction null
         }
-        val rechecked = PlanBundleFeasibility.capture(decompositionPlanner, replan.repoRoot, replan.issueKey)
+        val rechecked = PlanBundleFeasibility.capture(decompositionPlanner, replan.sourceRoot, replan.issueKey)
         if (rechecked.identity != captured.identity) return@transaction null
         val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
         val state = feasibilityStateFor(replan, captured, original, snapshot.artifacts)
@@ -339,7 +340,7 @@ public class PlanSubtasksReopening(
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.value(artifacts)
         ?.let(::decodePlanBundleFromArtifact) ?: return null
     return PlanBundleSnapshots(decompositionPlanner)
-      .rebase(replan.repoRoot, replan.issueKey, bundle, replan.settledSubtaskIds)
+      .rebase(replan.sourceRoot, replan.issueKey, bundle, replan.settledSubtaskIds)
       ?.withoutPlannedUnits(replan.forcedSubtaskIds)
       ?: return null
   }
@@ -347,7 +348,7 @@ public class PlanSubtasksReopening(
   private fun rebasePlanBundle(replan: PlanSubtasksReplan) {
     val bundle = planBundles.loadPlanBundle(replan.planWorkflowId) ?: return
     PlanBundleSnapshots(decompositionPlanner)
-      .rebase(replan.repoRoot, replan.issueKey, bundle, replan.settledSubtaskIds)
+      .rebase(replan.sourceRoot, replan.issueKey, bundle, replan.settledSubtaskIds)
       ?.let { rebased ->
         planBundles.replacePlanBundle(replan.planWorkflowId, rebased.withoutPlannedUnits(replan.forcedSubtaskIds))
       }

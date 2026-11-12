@@ -68,7 +68,7 @@ public class RuntimeIntakeStrategy(private val planIntake: () -> FeatureTaskRunt
         request.workflowId,
         request.issueKey,
         request.planIntake,
-        request.repoRoot,
+        request.planIntakeRoot ?: request.repoRoot,
         request.runInvariants.specReference,
       )
     val prose =

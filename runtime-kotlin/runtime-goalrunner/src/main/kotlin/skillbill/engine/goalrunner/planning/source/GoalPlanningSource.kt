@@ -24,7 +24,6 @@ import skillbill.engine.goalrunner.plan.StandalonePlanLaunch
 import skillbill.engine.goalrunner.plan.StandalonePlanResult
 import skillbill.engine.goalrunner.plan.StandalonePlanRun
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
-import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
 import skillbill.engine.goalrunner.planning.outcome.canonicalStore
 import skillbill.engine.goalrunner.planning.outcome.resolvedGovernedPath
 import skillbill.engine.goalrunner.planning.outcome.resolvedSubSpecPath
@@ -97,15 +96,15 @@ public class PlanWorkflowGoalPlanningSource(
   ) = PlanningScope(
     state = state,
     request = request,
+    sourceRepository = request.sourceRepoRoot,
     identity =
       GoalPlanningIdentity(
         state.parentWorkflowId,
         FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(state.manifest.issueKey),
-        state.controlState.repositoryIdentity ?: goalRepositoryIdentity(request.repoRoot, repositories),
+        state.controlState.repositoryIdentity ?: goalRepositoryIdentity(request.sourceRepoRoot, repositories),
       ),
-    fallbackPlanIdentities = goalRepositoryIdentityCandidates(request.repoRoot, repositories),
-    canonicalRepository = canonicalRepository(request.repoRoot, repositories),
-    store = canonicalStore(projectStore.resolve(request.repoRoot), repositories),
+    fallbackPlanIdentities = goalRepositoryIdentityCandidates(request.sourceRepoRoot, repositories),
+    store = canonicalStore(projectStore.resolve(request.sourceRepoRoot), repositories),
   )
 
   private fun fromPlanWorkflow(scope: PlanningScope): GoalPlanningSweepOutcome.PreparedAll? =
@@ -119,7 +118,7 @@ public class PlanWorkflowGoalPlanningSource(
     val snapshot =
       PlanBundleFeasibility.capture(
         planner,
-        scope.canonicalRepository,
+        scope.sourceRepository,
         scope.state.manifest.issueKey,
       )
     val feasibilityState = requireNotNull(plan.feasibilityState)
@@ -148,7 +147,7 @@ public class PlanWorkflowGoalPlanningSource(
   ): Boolean {
     val unit = bundle.subtask(subtask.id) ?: return false
     val unitRecord = records[FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitRecordId(subtask.id)]
-    return snapshots.unitComplete(scope.canonicalRepository, unit, unitRecord)
+    return snapshots.unitComplete(scope.sourceRepository, unit, unitRecord)
   }
 
   private fun runPlanSkeleton(scope: PlanningScope): GoalPlanningSweepOutcome {
@@ -166,7 +165,7 @@ public class PlanWorkflowGoalPlanningSource(
     val feasibilityNeedsReview =
       linked?.let { plan ->
         val state = plan.feasibilityState ?: return@let true
-        val snapshot = PlanBundleFeasibility.capture(planner, scope.canonicalRepository, scope.state.manifest.issueKey)
+        val snapshot = PlanBundleFeasibility.capture(planner, scope.sourceRepository, scope.state.manifest.issueKey)
         !PlanBundleFeasibility.approved(
           state,
           snapshot,
@@ -185,8 +184,8 @@ public class PlanWorkflowGoalPlanningSource(
         planRun.run(
           issueKey,
           null,
-          request.repoRoot,
-          StandalonePlanLaunch(agentId, IdeStatusLaunchScope.GOAL),
+          request.sourceRepoRoot,
+          StandalonePlanLaunch(agentId, IdeStatusLaunchScope.GOAL, executionRoot = request.repoRoot),
           inputFor,
         )
           .forceReplanOf(replanned, scope, agentId, inputFor)
@@ -196,6 +195,7 @@ public class PlanWorkflowGoalPlanningSource(
             issueKey = issueKey,
             planWorkflowId = linked.workflowId,
             repoRoot = request.repoRoot,
+            sourceRoot = request.sourceRepoRoot,
             settledSubtaskIds = scope.settledIds,
             agentId = agentId,
             feasibilityAdoption =
@@ -252,6 +252,7 @@ public class PlanWorkflowGoalPlanningSource(
           issueKey = scope.state.manifest.issueKey,
           planWorkflowId = workflowId,
           repoRoot = scope.request.repoRoot,
+          sourceRoot = scope.request.sourceRepoRoot,
           settledSubtaskIds = scope.settledIds,
           agentId = agentId,
           forcedSubtaskIds = forcedSubtaskIds,
@@ -310,8 +311,8 @@ public class PlanWorkflowGoalPlanningSource(
     }
 
   private fun PlanningScope.governsParentSpec(governedSpecPath: String): Boolean =
-    resolvedGovernedPath(canonicalRepository, store, governedSpecPath, repositories) ==
-      resolvedGovernedPath(canonicalRepository, store, state.manifest.parentSpecPath, repositories)
+    resolvedGovernedPath(sourceRepository, store, governedSpecPath, repositories) ==
+      resolvedGovernedPath(sourceRepository, store, state.manifest.parentSpecPath, repositories)
 
   private fun loadPlan(workflowId: String): LinkedPlan? =
     database.read { unitOfWork ->
@@ -351,12 +352,12 @@ public class PlanWorkflowGoalPlanningSource(
   private fun PlanningScope.governedPathOf(subtask: DecompositionSubtask): String? =
     subtask.specPath.takeIf(String::isNotBlank)?.let { specPath ->
       val governed =
-        resolveFeatureTaskGovernedSpecPath(repositories, projectStore, request.repoRoot, Path.of(specPath))
+        resolveFeatureTaskGovernedSpecPath(repositories, projectStore, request.sourceRepoRoot, Path.of(specPath))
       (governed as? FeatureTaskGovernedSpecPathResult.Ok)?.relativePath
     }
 
   private fun PlanningScope.diskHashOf(subtask: DecompositionSubtask): String? {
-    val path: Path = resolvedSubSpecPath(canonicalRepository, store, subtask.specPath, repositories) ?: return null
+    val path: Path = resolvedSubSpecPath(sourceRepository, store, subtask.specPath, repositories) ?: return null
     return if (fileStore.isRegularFile(path)) sha256HexUtf8(fileStore.readText(path)) else null
   }
 
@@ -383,7 +384,7 @@ public class PlanWorkflowGoalPlanningSource(
     val request: GoalRunnerRunRequest,
     val identity: GoalPlanningIdentity,
     val fallbackPlanIdentities: List<String>,
-    val canonicalRepository: Path,
+    val sourceRepository: Path,
     val store: ProjectStoreLocation,
   ) {
     val planned: List<DecompositionSubtask> =

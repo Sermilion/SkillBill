@@ -389,7 +389,7 @@ class PlanSubtasksReopeningTest {
       val records = acceptedRecords()
       seedPlans(database, execution, selectedId, "wftr-older-plan", records)
       val (bundle, manifestPath) = seedLegacyBundle(home, database, selectedId)
-      val replan = PlanSubtasksReplan("SKILL-384", selectedId, home, setOf(1), feasibilityAdoption = true)
+      val replan = PlanSubtasksReplan("SKILL-384", selectedId, home, home, setOf(1), feasibilityAdoption = true)
       val reopening = reopening(database)
       assertTrue(reopening.reopenWithRebasedBundle(replan))
       val adopted = database.read { requireNotNull(it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId)) }

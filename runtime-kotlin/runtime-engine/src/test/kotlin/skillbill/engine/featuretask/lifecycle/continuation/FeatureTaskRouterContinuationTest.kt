@@ -61,7 +61,6 @@ class FeatureTaskRouterContinuationTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val lookup =

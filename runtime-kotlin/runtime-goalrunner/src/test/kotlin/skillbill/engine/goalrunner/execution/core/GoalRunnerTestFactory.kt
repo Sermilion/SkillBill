@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.execution.core
 
 import skillbill.application.FakeDatabaseSessionFactory
+import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.idestatus.AgentActivityStampWriter
@@ -49,6 +50,7 @@ import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 import skillbill.engine.goalrunner.planning.source.PREPARE_ALL_GOAL_PLANNING_SOURCE
 import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
+import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.history.GoalHistoryCompletion
 import skillbill.model.RepositoryRoot
 import skillbill.ports.agentrun.AgentRunLauncher
@@ -67,6 +69,7 @@ import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
+import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
@@ -94,6 +97,7 @@ import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.NoopGoalPlanningPreparationEnvelopeValidator
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import kotlin.random.Random
@@ -308,6 +312,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
           TestRepositoryEnclosingRoot,
           wiring.diagnostics,
           wiring.clock,
+          goalRunnerTestDatabase(wiring.manifestStore),
         ),
       ),
     diagnostics = wiring.diagnostics,
@@ -346,7 +351,8 @@ private fun goalRunnerRunPreparation(
       wiring.gitOperations,
       TestRepositoryEnclosingRoot,
       wiring.diagnostics,
-      ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore, wiring.goalWorktrees, wiring.gitOperations),
+      ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore, wiring.goalWorktrees),
+      goalRunnerTestDatabase(wiring.manifestStore),
     ),
   )
 
@@ -471,7 +477,6 @@ private fun testNoChangeChildCloser(
           TestRepositoryEnclosingRoot,
           testProjectStore,
           InPlaceGoalWorktreeResources,
-          NoopWorkflowGitOperations,
         ),
     ),
   )
@@ -622,3 +627,22 @@ internal val NoPullRequestWriter =
   GoalRunnerPullRequestWriter { _, _, _ ->
     PhaseRunResult.Completed("test-pr", listOf("pr"), null, "no pull request written")
   }
+
+private fun goalRunnerTestDatabase(store: GoalRunnerManifestStore): FakeDatabaseSessionFactory =
+  FakeDatabaseSessionFactory(
+    InMemoryWorkflowStates(),
+    goalRunnerControls =
+      object : GoalRunnerControlRepository by
+      EmptyGoalRunnerControlRepository {
+        override fun controlState(parentWorkflowId: String) = store.controlState(parentWorkflowId)
+
+        override fun persistControlState(
+          parentWorkflowId: String,
+          state: GoalRunnerControlState,
+        ) = if (state.executionWorktreePath?.let { Files.isDirectory(Path.of(it)) } == true) {
+          store.persistControlState(parentWorkflowId, state)
+        } else {
+          state
+        }
+      },
+  )

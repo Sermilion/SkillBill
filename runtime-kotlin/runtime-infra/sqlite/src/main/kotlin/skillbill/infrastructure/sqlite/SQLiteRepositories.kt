@@ -32,6 +32,7 @@ import skillbill.infrastructure.sqlite.workflow.MonitorCiCycleStore
 import skillbill.infrastructure.sqlite.workflow.WorktreeEditJournalStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.AgentActivityStampStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.StandalonePhaseStatusStore
+import skillbill.infrastructure.sqlite.workflow.goalrunner.GoalPlanningOwnershipStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.GoalPlanningPreparationStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.GoalPlanningPreparationLegacySql
 import skillbill.infrastructure.sqlite.workflow.goalrunner.restoreOwnedGoalTables
@@ -56,6 +57,7 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
 import skillbill.ports.filesystem.model.DatabaseFileObservation
+import skillbill.ports.goalrunner.GoalPlanningOwnershipRepository
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.goalrunner.UnaddressedFindingsRepository
@@ -148,6 +150,8 @@ internal class SQLiteUnitOfWork(
   override val workBoardReadModel: WorkBoardReadModelRepository = SqliteWorkBoardReadModelStore(connection, diagnostics)
   override val goalPlanningPreparations: GoalPlanningPreparationRepository =
     GoalPlanningPreparationStore(connection)
+  override val goalPlanningOwnership: GoalPlanningOwnershipRepository =
+    GoalPlanningOwnershipStore(connection)
   override val goalRunnerControls: GoalRunnerControlRepository =
     GoalRunnerControlStore(connection)
   override val unaddressedFindings: UnaddressedFindingsRepository = SQLiteUnaddressedFindingsRepository(connection)

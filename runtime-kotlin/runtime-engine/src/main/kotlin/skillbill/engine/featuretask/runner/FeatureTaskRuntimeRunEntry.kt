@@ -278,6 +278,7 @@ public class FeatureTaskRuntimeRunEntry(
         ),
       protectedSpecSha256 = input.protectedSpecSha256,
       planIntake = input.planIntake,
+      planIntakeRoot = input.planIntakeRoot,
     )
 
   private fun intakeCompleted(workflowId: String): Boolean = runner.intakeCompleted(workflowId)
@@ -448,6 +449,7 @@ public class FeatureTaskRuntimeRunEntry(
           governedSpecPath = identities.governedSpecPath("unassigned", input.repoRoot, specPath),
           routeScope = scope,
           initialArtifacts = input.openArtifacts,
+          workflowId = input.workflowIdForCreation,
           executionPlan =
             executionPlans.resolveCreation(
               FeatureTaskRuntimeExecutionPlanCreationRequest(

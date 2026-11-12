@@ -442,7 +442,6 @@ class FeatureTaskContinuationLookupServiceTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     return Fixture(

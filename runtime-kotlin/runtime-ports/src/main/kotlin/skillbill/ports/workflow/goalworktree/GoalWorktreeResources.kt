@@ -1,5 +1,6 @@
 package skillbill.ports.workflow.goalworktree
 
+import skillbill.ports.goalrunner.model.GoalPlanningOwnership
 import skillbill.ports.workflow.goalworktree.model.GoalBranchCheckout
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
@@ -7,16 +8,25 @@ import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
 import java.nio.file.Path
 
 interface GoalWorktreeResources {
+  fun plannedPath(
+    repoRoot: Path,
+    issueKey: String,
+    reservationId: String? = null,
+  ): Path
+
+  fun gitWorktreeIdentity(path: Path): String?
+
   /**
-   * Creates the goal's detached worktree at [revision], or adopts the one git already lists at [recordedPath] or at the
-   * goal's state path. Adopts only once git has finished creating the worktree, and may wait for a concurrent launch to
-   * finish. Never removes or overwrites an existing directory.
+   * Creates the goal's detached worktree at [revision]. A recorded path requires matching durable [ownership]; an
+   * existing registered checkout is adopted only after Git finishes creating it and confirms the same repository.
+   * May wait for a concurrent launch to finish. Never removes or overwrites an existing directory.
    */
   fun createOrAdopt(
     repoRoot: Path,
     issueKey: String,
     recordedPath: Path?,
     revision: String,
+    ownership: GoalPlanningOwnership? = null,
   ): GoalWorktreeResult
 
   /** Returns the worktree that has [branch] checked out, or null when none does or the list cannot be read. */
@@ -25,7 +35,7 @@ interface GoalWorktreeResources {
     branch: String,
   ): Path?
 
-  /** Removes an owned clean worktree or returns the reason it must stay. */
+  /** Removes a clean worktree only when [GoalWorktreeSettleRequest] carries matching transferred ownership. */
   fun settle(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement
 
   /** Reads the retention decision without changing the worktree or repository. */

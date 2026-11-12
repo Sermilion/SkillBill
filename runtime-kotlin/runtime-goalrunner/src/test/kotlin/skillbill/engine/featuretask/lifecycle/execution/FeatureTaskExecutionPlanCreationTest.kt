@@ -737,7 +737,6 @@ class FeatureTaskExecutionPlanCreationTest {
         TestRepositoryEnclosingRoot,
         testProjectStore,
         InPlaceGoalWorktreeResources,
-        NoopWorkflowGitOperations,
       ),
     )
 

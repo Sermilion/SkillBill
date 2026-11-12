@@ -154,7 +154,6 @@ class DecompositionDiskBootstrapTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -213,7 +212,6 @@ class DecompositionDiskBootstrapTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -277,7 +275,6 @@ class DecompositionDiskBootstrapTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -336,7 +333,6 @@ class DecompositionDiskBootstrapTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -432,7 +428,6 @@ class DecompositionDiskBootstrapTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
   }
@@ -483,7 +478,6 @@ class DecompositionDiskBootstrapTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -566,7 +560,6 @@ class DecompositionDiskBootstrapTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -639,7 +632,6 @@ class DecompositionDiskBootstrapTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -670,7 +662,6 @@ class DecompositionDiskBootstrapTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 

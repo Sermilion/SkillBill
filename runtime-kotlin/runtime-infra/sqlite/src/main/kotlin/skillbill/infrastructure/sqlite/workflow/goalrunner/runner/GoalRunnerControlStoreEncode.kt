@@ -61,6 +61,7 @@ internal fun GoalRunnerControlState.toArtifactMap(source: Map<String, Any?>? = n
     "paused_at" to pausedAt,
     "stop_after_consumed" to stopAfterConsumed,
     "repository_identity" to repositoryIdentity,
+    SharedGoalRunnerControlPayloadKeys.PLANNING_SOURCE_ROOT to planningSourceRoot,
     "execution_lease" to executionLease?.toArtifactMap(source?.get("execution_lease") as? Map<*, *>),
     "active_duration_ms" to activeDurationMs,
     "active_duration_as_of" to activeDurationAsOf,

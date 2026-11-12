@@ -223,7 +223,6 @@ class WorkflowServiceTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -279,7 +278,6 @@ class WorkflowServiceTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val opened =
@@ -335,7 +333,6 @@ class WorkflowServiceTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val historyArtifact = """{"plan":{"mode":"decompose"},"history_note":"retain-me"}"""
@@ -398,7 +395,6 @@ class WorkflowServiceTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val opened =
@@ -448,7 +444,6 @@ class WorkflowServiceTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val opened =
@@ -515,7 +510,6 @@ class WorkflowServiceTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val opened =
@@ -726,7 +720,6 @@ class WorkflowServiceTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     assertFailsWith<SkillBillRuntimeException> {
@@ -773,7 +766,6 @@ class WorkflowServiceTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -823,7 +815,6 @@ class WorkflowServiceTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val opened = assertIs<WorkflowOpenResult.Ok>(service.openTestRuntime("ftr-001"))
@@ -956,7 +947,6 @@ class WorkflowServiceTest {
           TestRepositoryEnclosingRoot,
           testProjectStore,
           InPlaceGoalWorktreeResources,
-          NoopWorkflowGitOperations,
         ),
     )
 }
@@ -2469,7 +2459,6 @@ class WorkflowUpdateAcknowledgementBudgetTest {
           TestRepositoryEnclosingRoot,
           testProjectStore,
           InPlaceGoalWorktreeResources,
-          NoopWorkflowGitOperations,
         ),
     )
 }
@@ -4368,7 +4357,6 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
             TestRepositoryEnclosingRoot,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
