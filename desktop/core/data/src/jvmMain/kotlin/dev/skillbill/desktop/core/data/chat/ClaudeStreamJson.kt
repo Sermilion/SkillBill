@@ -43,7 +43,23 @@ internal fun decodeClaudeLine(line: String): List<ChatEvent> {
       true -> listOf(ChatEvent.Failed(ChatFailure.ProcessFailed, root.string("result") ?: root.string("subtype")))
       null -> emptyList()
     }
+    "system" -> listOfNotNull(root.backgroundTaskEvent())
     else -> emptyList()
+  }
+}
+
+// A task's end arrives as a `task_updated` status patch and again as its `task_notification`; either one ends it.
+private fun JsonObject.backgroundTaskEvent(): ChatEvent? {
+  val taskId = string("task_id") ?: return null
+  return when (string("subtype")) {
+    "task_started" -> {
+      val backgrounded = (this["is_backgrounded"] as? JsonPrimitive)?.booleanOrNull != false
+      val callId = string("tool_use_id")
+      if (string("task_type") == "local_bash" && backgrounded && callId != null) ChatEvent.BackgroundTaskStarted(taskId, callId) else null
+    }
+    "task_notification" -> ChatEvent.BackgroundTaskEnded(taskId)
+    "task_updated" -> obj("patch")?.string("status")?.takeIf { it != "running" && it != "pending" }?.let { ChatEvent.BackgroundTaskEnded(taskId) }
+    else -> null
   }
 }
 

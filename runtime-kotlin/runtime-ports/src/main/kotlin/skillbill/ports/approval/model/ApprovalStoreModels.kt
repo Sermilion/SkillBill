@@ -23,6 +23,7 @@ data class ApprovalStoredRequest(
   val record: ApprovalRequestRecord,
   val facts: ApprovalGrantFacts,
   val delivery: ApprovalDeliveryProgress? = null,
+  val rulePattern: String? = null,
 )
 
 enum class ApprovalDeliveryProgress { CLAIMED, WRITTEN, UNCERTAIN, NOT_REQUIRED }

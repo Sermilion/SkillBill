@@ -71,7 +71,7 @@ class AcceptanceCriterionRepairSourceIdentityTest {
           Files.createDirectories(changed.parent)
           Files.writeString(changed, "changed after repair\n")
         }
-        complete(recorder, "audit", 2, "satisfied", "The production requirement is satisfied.")
+        complete(recorder, "audit", 2, "satisfied", "AC-001.G1: closed @ source.txt:1")
 
         val state = assertNotNull(scope.snapshot)
         assertEquals(
@@ -82,7 +82,7 @@ class AcceptanceCriterionRepairSourceIdentityTest {
           },
           state.outcomes.single().kind,
         )
-        assertEquals(if (changedPath != null) 1 else 0, state.unsuccessfulTotals.getOrDefault("AC-001", 0))
+        assertEquals(if (changedPath != null) 1 else 0, state.chargedAttempts.getOrDefault("AC-001", 0))
         assertEquals(
           if (changedPath != null) {
             AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED

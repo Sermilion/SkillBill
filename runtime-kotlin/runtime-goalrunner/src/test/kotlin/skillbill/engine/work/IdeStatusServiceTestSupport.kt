@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWi
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.GoalRunnerRestoredChildReference
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
@@ -331,7 +332,7 @@ internal fun ideStatusService(
           database,
           runtimeWorkflowPersistence,
         ),
-      decomposeTerminalRecorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
+      decomposeTerminalRecorder = ideStatusDecomposeRecorder(database),
     )
   val goalStatusService =
     testGoalRunnerStatusService(
@@ -381,6 +382,14 @@ internal fun ideStatusService(
     incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, ideStatusClock),
   )
 }
+
+private fun ideStatusDecomposeRecorder(database: DatabaseSessionFactory) =
+  FeatureTaskRuntimeDecomposeTerminalRecorder(
+    database,
+    testHarnessClock,
+    PlanBundleFeasibilityStateCodec(featureTaskRuntimeWireArtifactValidatorForTest()),
+    NoopRuntimeDiagnostics,
+  )
 
 private fun testPlanReports(manifestStore: GoalRunnerManifestStore) =
   StandalonePlanReportBuilder(

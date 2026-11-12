@@ -11,12 +11,27 @@ import dev.skillbill.desktop.core.domain.model.OperationCardView
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import kotlin.time.Instant
 
-/** One tool call; [startedAt] is when the agent announced it and [finishedAt] when its result arrived. */
+/**
+ * One tool call; [startedAt] is when the agent announced it and [finishedAt] when its result arrived. [command] is the shell
+ * command it runs, kept when a later update of the call no longer repeats it.
+ */
 data class ChatToolEntry(
   val call: ChatToolCall,
   val result: ChatEvent.ToolResult? = null,
   val startedAt: Instant? = null,
   val finishedAt: Instant? = null,
+  val command: String? = null,
+)
+
+enum class ChatDeliveryStatus { Pending, Uncertain }
+
+data class ChatDeliveryView(
+  val deliveryId: String,
+  val text: String,
+  val images: List<ChatImage>,
+  val status: ChatDeliveryStatus = ChatDeliveryStatus.Pending,
+  val reason: String = "Waiting for Claude to acknowledge this follow-up.",
+  val blockedAction: String? = null,
 )
 
 /** One line of a chat transcript. */
@@ -28,7 +43,7 @@ sealed interface ChatMessage {
    * An operator message; [action] is the suggested action it came from, whose instruction is [text]. [images] were pasted with it
    * and live in memory for the session only.
    */
-  data class Operator(val text: String, val action: ChatSuggestedAction? = null, val images: List<ChatImage> = emptyList()) : ChatMessage
+  data class Operator(val text: String, val action: ChatSuggestedAction? = null, val images: List<ChatImage> = emptyList(), val deliveryId: String? = null) : ChatMessage
 
   /** An agent answer; [streaming] while its turn runs, [tools] in the order the agent used them. */
   data class Agent(

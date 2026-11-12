@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,10 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
@@ -29,10 +34,14 @@ import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.component.SbMenu
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
 import dev.skillbill.desktop.core.designsystem.component.SbPopoverPlacement
+import dev.skillbill.desktop.core.designsystem.component.SbTooltip
+import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
+import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
@@ -45,7 +54,7 @@ import kotlinx.coroutines.Dispatchers
 
 /**
  * The active chat's input. Enter sends and Shift+Enter starts a new line; "Pause and act" shows only while the execution runs.
- * Stop ends the running reply and returns queued messages to the draft; Send now ends the reply and sends the queue as one turn.
+ * Stop ends the running reply and returns ordinary queued messages to the draft. Send now follows the provider delivery policy.
  * The input stays editable while a turn runs. Submitting queues a message until the current turn ends.
  * A draft of `/resume` or `/clear` is a command: it shows highlighted and runs even while a turn runs. `/resume` opens the
  * saved-chat picker; `/clear` ends the running turn and starts a new conversation.
@@ -66,6 +75,7 @@ internal fun ChatComposer(
   val cursorMcpDependency = workspace.cursorMcpDependencies[id] ?: CursorMcpDependency.ProjectUserOnly
   val choices by session.resumeChoices.collectAsState()
   val queued by session.queued.collectAsState()
+  val delivery by session.thread.delivery.collectAsState()
   val prefixChoice by session.prefixChoice.collectAsState()
   val focus = remember(session) { FocusRequester() }
   val gate = remember(session) { SendNowGate() }
@@ -74,7 +84,7 @@ internal fun ChatComposer(
   val command = text.trim().takeIf { it in CHAT_COMMANDS }
   val images = workspace.pastedImages[id].orEmpty()
   val ready = command != null || (supported && !gone && (text.isNotBlank() || images.isNotEmpty()))
-  val sendNow = stoppable && queued.isNotEmpty() && text.isBlank() && images.isEmpty() && supported && !gone
+  val sendNow = delivery == null && stoppable && queued.isNotEmpty() && text.isBlank() && images.isEmpty() && supported && !gone
   fun run(command: String) {
     workspace.drafts.remove(id)
     when (command) {
@@ -103,6 +113,10 @@ internal fun ChatComposer(
   }
   Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     ChatActivityPill(session.thread, gone)
+    delivery?.let {
+      ChatDeliveryRecovery(it, { key -> workspace.retryDelivery(id, key) },
+        { key -> workspace.discardDelivery(id, key) }, session.thread::keepOpen)
+    }
     prefixChoice?.takeIf { !gone }?.let { pending ->
       IssuePrefixPicker(pending.choices, enabled = !busy) { workspace.choosePrefix(id, it) }
     }
@@ -153,7 +167,7 @@ internal fun ChatComposer(
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       ModeBadge(ChatPermissionMode.Act)
       AgentPicker(
-        agent, workspace.agents, session.item.repositoryRoot, enabled = !busy && !gone,
+        agent, workspace.agents, session.item.repositoryRoot, enabled = delivery == null && !busy && !gone,
         loadModels = workspace::models, onChooseModel = { workspace.switchModel(id, it) },
       ) { workspace.switchAgent(id, it) }
       if (agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
@@ -171,7 +185,7 @@ internal fun ChatComposer(
         }
         if (coordinationMode == ChatPermissionMode.ReadOnly) {
           SbButton(
-            if (busy) "Queue pause and act" else "Pause and act",
+            if (busy || delivery != null) "Queue pause and act" else "Pause and act",
             { submit { chatId, message, pastedImages, dependency ->
               workspace.pauseAndAct(chatId, message, pastedImages, dependency)
             } },
@@ -183,7 +197,7 @@ internal fun ChatComposer(
           label = when {
             command != null -> "Send"
             sendNow -> "Send now"
-            busy -> "Queue"
+            busy || delivery != null -> "Queue"
             else -> "Send"
           },
           onClick = { press(viaEnter = false) },

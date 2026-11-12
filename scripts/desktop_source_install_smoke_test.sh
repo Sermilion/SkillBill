@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 task_dir="$(mktemp -d)"
 trap 'rm -rf "$task_dir"' EXIT
-sed -n '/^build_source_desktop_app() {/,/^}/p; /^install_selected_desktop_app() {/,/^}/p; /^stage_selected_desktop_app() {/,/^}/p; /^activate_staged_desktop_app() {/,/^}/p; /^desktop_app_target_path() {/,/^}/p; /^desktop_app_executable_path() {/,/^}/p; /^desktop_app_legacy_executable_path() {/,/^}/p; /^desktop_app_running_pids() {/,/^}/p; /^stop_desktop_app() {/,/^}/p; /^desktop_app_hosts_installer() {/,/^}/p; /^run_detached() {/,/^}/p; /^schedule_desktop_app_restart() {/,/^}/p' "$repo_root/install.sh" > "$task_dir/install-functions.sh"
+sed -n '/^build_source_desktop_app() {/,/^}/p; /^install_selected_desktop_app() {/,/^}/p; /^stage_selected_desktop_app() {/,/^}/p; /^activate_staged_desktop_app() {/,/^}/p; /^desktop_app_target_path() {/,/^}/p; /^desktop_app_executable_path() {/,/^}/p; /^desktop_quoted_exec_path() {/,/^}/p; /^check_desktop_app_launcher_ownership() {/,/^}/p; /^prepare_desktop_app_launcher() {/,/^}/p; /^discard_desktop_app_launcher_stage() {/,/^}/p; /^install_desktop_app_launcher() {/,/^}/p; /^linux_legacy_desktop_is_owned() {/,/^}/p; /^migrate_kde_desktop_pin() {/,/^}/p; /^cleanup_linux_legacy_desktop() {/,/^}/p; /^desktop_app_running_pids() {/,/^}/p; /^stop_desktop_app() {/,/^}/p; /^desktop_app_hosts_installer() {/,/^}/p; /^run_detached() {/,/^}/p; /^schedule_desktop_app_restart() {/,/^}/p' "$repo_root/install.sh" > "$task_dir/install-functions.sh"
 source "$task_dir/install-functions.sh"
 
 RUNTIME_KOTLIN_DIR="$task_dir/checkout/runtime-kotlin"
@@ -18,12 +18,13 @@ warn() { printf '%s\n' "$*" >&2; }
 err() { printf '%s\n' "$*" >&2; }
 ok() { printf '%s\n' "$*"; }
 ensure_build_jvm() { return 0; }
+migrate_kde_desktop_pin() { return 0; }
+update-desktop-database() { return 0; }
+kbuildsycoca6() { return 0; }
 host_os() { printf 'macos'; }
 host_token() { err 'Source install queried the release host token.'; exit 1; }
 resolve_desktop_app_release_asset() { err 'Source install queried release assets.'; exit 1; }
 desktop_app_install_root() { printf '%s' "$task_dir/install"; }
-desktop_app_legacy_target_path() { printf '%s/SkillBill.app' "$2"; }
-install_desktop_app_launcher() { ln -sf "$3" "$task_dir/bin/skillbill-desktop"; }
 launch_desktop_app() { printf '%s\n' "$3" >> "$task_dir/launched"; }
 init_prebuilt_work_dir() { mkdir -p "$task_dir/staging"; }
 prebuilt_work_dir() { printf '%s' "$task_dir/staging"; }
@@ -38,35 +39,40 @@ set -euo pipefail
 if [[ -f fail-build ]]; then
   exit 23
 fi
-mkdir -p 'app/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS'
-printf '#!/usr/bin/env bash\nprintf "source desktop app\\n"\n' > 'app/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS/Skill Bill'
-chmod +x 'app/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS/Skill Bill'
-printf 'commit=1111111111111111111111111111111111111111\n' > 'app/build/compose/binaries/main/app/Skill Bill.app/Contents/build-identity.properties'
+mkdir -p 'app/build/compose/binaries/main/app/Sona.app/Contents/MacOS'
+printf '#!/usr/bin/env bash\nprintf "source desktop app\\n"\n' > 'app/build/compose/binaries/main/app/Sona.app/Contents/MacOS/Sona'
+chmod +x 'app/build/compose/binaries/main/app/Sona.app/Contents/MacOS/Sona'
+printf 'commit=1111111111111111111111111111111111111111\n' > 'app/build/compose/binaries/main/app/Sona.app/Contents/build-identity.properties'
 BUILD
 chmod +x "$task_dir/checkout/desktop/gradlew"
 
 install_selected_desktop_app
-app="$task_dir/install/Skill Bill.app/Contents/MacOS/Skill Bill"
+app="$task_dir/install/Sona.app/Contents/MacOS/Sona"
 [[ "$("$app")" == 'source desktop app' ]]
-[[ "$(readlink "$task_dir/bin/skillbill-desktop")" == "$app" ]]
-[[ "$DESKTOP_APP_INSTALL_RESULT" == "installed at $task_dir/install/Skill Bill.app" ]]
+[[ "$(readlink "$task_dir/bin/sona")" == "$app" ]]
+[[ "$DESKTOP_APP_INSTALL_RESULT" == "installed at $task_dir/install/Sona.app" ]]
 if [[ -e "$task_dir/launched" ]]; then
   err 'Installer launched a desktop app that was not running.'
   exit 1
 fi
+mkdir -p "$task_dir/install/Skill Bill.app" "$task_dir/install/SkillBill.app"
+printf 'legacy package sentinel\n' > "$task_dir/install/Skill Bill.app/sentinel"
+printf 'historical package sentinel\n' > "$task_dir/install/SkillBill.app/sentinel"
 
 stage_selected_desktop_app
 printf 'commit=2222222222222222222222222222222222222222\n' > "$BUILT_DESKTOP_APP_SOURCE/Contents/build-identity.properties"
-printf '#!/usr/bin/env bash\nprintf "replaced desktop build\\n"\n' > "$BUILT_DESKTOP_APP_SOURCE/Contents/MacOS/Skill Bill"
+printf '#!/usr/bin/env bash\nprintf "replaced desktop build\\n"\n' > "$BUILT_DESKTOP_APP_SOURCE/Contents/MacOS/Sona"
 activate_staged_desktop_app
-[[ "$(cat "$task_dir/install/Skill Bill.app/Contents/build-identity.properties")" == 'commit=1111111111111111111111111111111111111111' ]]
+[[ "$(cat "$task_dir/install/Sona.app/Contents/build-identity.properties")" == 'commit=1111111111111111111111111111111111111111' ]]
 [[ "$("$app")" == 'source desktop app' ]]
+[[ "$(cat "$task_dir/install/Skill Bill.app/sentinel")" == 'legacy package sentinel' ]]
+[[ "$(cat "$task_dir/install/SkillBill.app/sentinel")" == 'historical package sentinel' ]]
 
 (exec -a "$app" sleep 60) &
 running_app=$!
-unrelated_app_dir="$task_dir/other/Skill Bill.app/Contents/MacOS"
+unrelated_app_dir="$task_dir/other/Sona.app/Contents/MacOS"
 mkdir -p "$unrelated_app_dir"
-(exec -a "$unrelated_app_dir/Skill Bill" sleep 60) &
+(exec -a "$unrelated_app_dir/Sona" sleep 60) &
 unrelated_app=$!
 trap 'kill "$running_app" "$unrelated_app" 2>/dev/null || true; rm -rf "$task_dir"' EXIT
 sleep 0.5
@@ -78,7 +84,7 @@ fi
 kill -0 "$unrelated_app"
 [[ "$(cat "$task_dir/launched")" == "$app" ]]
 
-(exec -a "$task_dir/bin/skillbill-desktop" sleep 60) &
+(exec -a "$task_dir/bin/sona" sleep 60) &
 running_app=$!
 sleep 0.5
 install_selected_desktop_app
@@ -122,6 +128,57 @@ fi
 [[ "$(tail -n 1 "$task_dir/launched")" == "$app" ]]
 kill -0 "$unrelated_app"
 
+host_os() { printf 'linux'; }
+RUNTIME_LAUNCHER_BIN_DIR="$task_dir/linux-bin"
+XDG_DATA_HOME="$task_dir/xdg"
+export XDG_DATA_HOME
+linux_app="$task_dir/install/Sona"
+linux_stage="$task_dir/linux-stage/Sona"
+mkdir -p "$linux_app/bin" "$linux_app/lib" "$linux_stage/bin" "$linux_stage/lib" "$XDG_DATA_HOME/applications" "$RUNTIME_LAUNCHER_BIN_DIR"
+printf 'previous app\n' > "$linux_app/bin/Sona"
+printf 'new app\n' > "$linux_stage/bin/Sona"
+printf 'icon\n' > "$linux_stage/lib/Sona.png"
+chmod +x "$linux_app/bin/Sona" "$linux_stage/bin/Sona"
+ln -s "$linux_app/bin/Sona" "$RUNTIME_LAUNCHER_BIN_DIR/sona"
+printf '[Desktop Entry]\nName=Sona\nExec="%s"\nIcon=%s\n' "$RUNTIME_LAUNCHER_BIN_DIR/sona" "$linux_app/lib/Sona.png" > "$XDG_DATA_HOME/applications/sona.desktop"
+STAGED_DESKTOP_APP_SOURCE="$linux_stage"
+mv() {
+  if [[ "$1" == "$XDG_DATA_HOME/applications/sona.desktop.stage."* && "$2" == "$XDG_DATA_HOME/applications/sona.desktop" ]]; then
+    return 1
+  fi
+  command mv "$@"
+}
+if activate_staged_desktop_app; then
+  err 'Installer accepted a failed Linux menu registration write.'
+  exit 1
+fi
+unset -f mv
+[[ "$(cat "$linux_app/bin/Sona")" == 'previous app' ]]
+[[ "$(readlink "$RUNTIME_LAUNCHER_BIN_DIR/sona")" == "$linux_app/bin/Sona" ]]
+grep -Fxq "Icon=$linux_app/lib/Sona.png" "$XDG_DATA_HOME/applications/sona.desktop"
+[[ ! -e "$linux_app/lib/Sona.png" ]]
+rm "$RUNTIME_LAUNCHER_BIN_DIR/sona"
+printf 'unrelated launcher\n' > "$RUNTIME_LAUNCHER_BIN_DIR/sona"
+printf 'unrelated menu entry\n' > "$XDG_DATA_HOME/applications/sona.desktop"
+if activate_staged_desktop_app; then
+  err 'Installer replaced unrelated Sona registration files.'
+  exit 1
+fi
+[[ "$(cat "$linux_app/bin/Sona")" == 'previous app' ]]
+[[ "$(cat "$RUNTIME_LAUNCHER_BIN_DIR/sona")" == 'unrelated launcher' ]]
+[[ "$(cat "$XDG_DATA_HOME/applications/sona.desktop")" == 'unrelated menu entry' ]]
+rm "$RUNTIME_LAUNCHER_BIN_DIR/sona"
+ln -s "$linux_app/bin/Sona" "$RUNTIME_LAUNCHER_BIN_DIR/sona"
+if activate_staged_desktop_app; then
+  err 'Installer replaced an unrelated Linux menu entry.'
+  exit 1
+fi
+[[ "$(cat "$linux_app/bin/Sona")" == 'previous app' ]]
+[[ "$(readlink "$RUNTIME_LAUNCHER_BIN_DIR/sona")" == "$linux_app/bin/Sona" ]]
+[[ "$(cat "$XDG_DATA_HOME/applications/sona.desktop")" == 'unrelated menu entry' ]]
+
+host_os() { printf 'macos'; }
+RUNTIME_LAUNCHER_BIN_DIR="$task_dir/bin"
 touch "$task_dir/checkout/desktop/fail-build"
 if install_selected_desktop_app; then
   err 'Installer accepted a failed desktop source build.'
@@ -129,7 +186,7 @@ if install_selected_desktop_app; then
 fi
 [[ "$DESKTOP_APP_INSTALL_RESULT" == 'build failed' ]]
 [[ "$("$app")" == 'source desktop app' ]]
-[[ "$(readlink "$task_dir/bin/skillbill-desktop")" == "$app" ]]
+[[ "$(readlink "$task_dir/bin/sona")" == "$app" ]]
 
 INSTALL_SOURCE="prebuilt"
 host_token() { printf 'macos-arm64'; }

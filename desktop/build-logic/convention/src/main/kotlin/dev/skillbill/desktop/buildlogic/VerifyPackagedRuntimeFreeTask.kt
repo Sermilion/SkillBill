@@ -26,7 +26,7 @@ abstract class VerifyPackagedRuntimeFreeTask : DefaultTask() {
   fun verify() {
     val offenders = packagedRuntimeJars(imageDirectory.get().asFile, runtimeModuleNames.get().toSet())
     if (offenders.isNotEmpty()) {
-      throw GradleException("The desktop image contains Skill Bill runtime module jars:\n${offenders.joinToString("\n")}")
+      throw GradleException("The desktop image contains Sona runtime module jars:\n${offenders.joinToString("\n")}")
     }
   }
 }

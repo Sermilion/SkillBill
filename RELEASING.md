@@ -24,6 +24,8 @@ archive plus its `.sha256` sidecar to the GitHub Release for that tag:
 
 - self-contained runtime images for **CLI** and **MCP**
   (`runtime-cli-<version>-<os>-<arch>.zip`, `runtime-mcp-<version>-<os>-<arch>.zip`)
+- native Sona installers, `sona-<version>-macos-arm64.dmg`,
+  `sona-<version>-windows-x64.msi`, and `sona-<version>-linux-x64.deb`
 - the desktop app distribution built from `desktop/`
   (`skill-bill-desktop-<version>-<os>-<arch>.tar.gz`)
 
@@ -66,6 +68,68 @@ was dropped. Installers ship **unsigned for v1** (see
 > leg queues until it comes back; the workflow's `fail-fast: false` strategy lets
 > the hosted Windows/Linux legs publish regardless, with the macOS asset filled
 > in once the mini runs.
+
+## Sona desktop downloads on Hetzner
+
+After a stable GitHub Release publishes, `publish-downloads` uploads the verified
+native installers and checksums to bucket `sonadesktop` at
+`https://hel1.your-objectstorage.com`. Prereleases and manual staging releases
+never replace these downloads. Existing runtime and desktop archives remain
+part of the GitHub Release for the command-line installer.
+
+| Platform | Fixed download URL |
+| --- | --- |
+| macOS Apple Silicon | https://sonadesktop.hel1.your-objectstorage.com/latest/sona-latest-macos-arm64.dmg |
+| Windows x64 | https://sonadesktop.hel1.your-objectstorage.com/latest/sona-latest-windows-x64.msi |
+| Debian/Ubuntu x64 | https://sonadesktop.hel1.your-objectstorage.com/latest/sona-latest-linux-x64.deb |
+
+Append `.sha256` for each checksum. Its record names the fixed installer filename.
+Native packages contain the root license in the app resources. Before publication,
+each build host extracts its installer and compares that license with the root
+`LICENSE`, then verifies the installer checksum.
+
+### Initial infrastructure setup
+
+Add repository secrets `HETZNER_ACCESS_KEY_ID` and `HETZNER_SECRET_ACCESS_KEY`
+to `Sermilion/SkillBill`. Existing ZeroAccount secrets cannot be read back through
+GitHub. Use the original credentials from the secret store if they cover this
+bucket, or create a new Hetzner S3 key. Never commit credential values.
+
+Grant anonymous `s3:GetObject` for `arn:aws:s3:::sonadesktop/latest/*` only.
+Do not grant public listing or writes. Keep object versioning disabled in this
+new bucket so overwriting fixed keys does not retain old installer bytes. The
+workflow does not change bucket policies or versioning. Do not change
+ZeroAccount's bucket.
+
+Downloads use Hetzner's bucket hostname and HTTPS directly. No custom domain,
+DNS changes, proxy, or additional server is required.
+
+Before calling downloads live, verify an anonymous GET through the bucket
+hostname for all installers and checksums, check their SHA-256 values, and check
+range requests. Credential access and anonymous reads still need verification
+against the live bucket. Local tests do not establish readiness.
+
+### Retention and recovery
+
+The bucket stores fixed installer and checksum keys under `latest/`, plus
+`release.json` and a temporary `promotion.json`. It stores no versioned release
+history. Promotion runs serialize through one Actions concurrency group.
+Other writers must not run concurrently. The recorded version floor prevents
+an older queued run from replacing a newer completed or interrupted promotion.
+A version cannot replace installer bytes already recorded for that same version.
+
+Every upload verifies remote bytes, length, cache headers, content type,
+attachment filename, and release metadata. The release record advances only
+after all installers and checksums pass. Promotion replaces objects one at a
+time, so downloads can briefly have mismatched checksums during upload or cache
+refresh. Wait beyond the 300-second freshness window and retry.
+
+If storage publication fails after GitHub publication, rerun the failed
+`publish-downloads` job. It downloads the existing published installers and
+resumes verified objects without rebuilding. Do not delete state records to
+force a retry. Invalid state or existing objects without state fail with a
+recovery error. Preserve them and recover under exclusive writer access using
+trusted release assets. A newer successful promotion replaces the partial set.
 
 ## Staging a release for downstream testing
 

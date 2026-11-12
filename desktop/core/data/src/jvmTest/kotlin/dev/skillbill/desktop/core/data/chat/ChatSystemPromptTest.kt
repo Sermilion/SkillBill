@@ -65,10 +65,10 @@ class ChatSystemPromptTest {
 
   // An agent without routing guidance improvises verify or demands criteria before forwarding a Linear link.
   @Test
-  fun `the new-task prompt routes applicable work and verify intake through Skill Bill`() {
+  fun `the new-task prompt routes applicable work and verify intake through Sona`() {
     val prompt = scopeSystemPrompt(ChatScope.NewTask("/work/app", null))
 
-    assertTrue("Route applicable work through Skill Bill by default after preparation" in prompt)
+    assertTrue("Route applicable work through Sona by default after preparation" in prompt)
     assertTrue("explicitly asks you to do it yourself" in prompt)
     assertTrue("installed skill-bill skill's current command instructions" in prompt)
     assertTrue("including one called phase verify, to operation:verify" in prompt)
@@ -127,7 +127,7 @@ class ChatSystemPromptTest {
     assertTrue("Never set \"start\" to \"release\"" in prompt)
     assertTrue("Verify findings" in prompt)
     assertTrue("must not set \"start\":\"verify\"" in prompt)
-    assertFalse("Route applicable work through Skill Bill" in prompt)
+    assertFalse("Route applicable work through Sona" in prompt)
     assertFalse("Readiness advice" in prompt)
   }
 }

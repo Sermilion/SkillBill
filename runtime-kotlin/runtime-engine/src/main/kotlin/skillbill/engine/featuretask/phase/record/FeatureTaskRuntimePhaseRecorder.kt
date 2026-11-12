@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistenc
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingRecorder
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeFindingVerificationPort
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeReviewCheckpointRecorder
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeReviewGenerationPort
@@ -74,6 +75,7 @@ public class FeatureTaskRuntimePhaseRecorder private constructor(
     diagnostics: RuntimeDiagnostics,
     phaseSettlementService: FeatureTaskPhaseSettlementService,
     clock: Clock,
+    feasibilityCodec: PlanBundleFeasibilityStateCodec,
   ) : this(
     phaseRecorderParts(
       FeatureTaskRuntimePhaseRecorderInjected(
@@ -86,6 +88,7 @@ public class FeatureTaskRuntimePhaseRecorder private constructor(
         phaseSettlementService,
         clock,
       ),
+      feasibilityCodec,
     ),
   )
 
@@ -278,6 +281,7 @@ private data class FeatureTaskRuntimePhaseRecorderParts(
 
 private fun phaseRecorderParts(
   injected: FeatureTaskRuntimePhaseRecorderInjected,
+  feasibilityCodec: PlanBundleFeasibilityStateCodec,
 ): FeatureTaskRuntimePhaseRecorderParts {
   val workflowPersistence =
     FeatureTaskRuntimeWorkflowPersistence(
@@ -313,6 +317,7 @@ private fun phaseRecorderParts(
         injected.wireArtifactValidator,
         injected.phaseSettlementService,
         injected.clock,
+        feasibilityCodec,
       ),
     reviewCheckpoint =
       FeatureTaskRuntimeReviewCheckpointRecorder(

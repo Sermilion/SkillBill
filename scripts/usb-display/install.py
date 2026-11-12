@@ -65,8 +65,8 @@ def install(args):
         shutil.copy2(source / name, target / name)
     shutil.copy2(
         source.parents[1]
-        / "desktop/core/designsystem/src/commonMain/composeResources/drawable/skill_bill.png",
-        target / "skill_bill.png",
+        / "desktop/core/designsystem/src/commonMain/composeResources/drawable/sona.png",
+        target / "sona.png",
     )
     command = [
         str(python),

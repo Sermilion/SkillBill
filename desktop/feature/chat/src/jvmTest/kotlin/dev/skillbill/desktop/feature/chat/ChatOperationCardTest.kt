@@ -11,6 +11,9 @@ import dev.skillbill.desktop.core.domain.model.OperationCardOptionView
 import dev.skillbill.desktop.core.domain.model.OperationCardState
 import dev.skillbill.desktop.core.domain.model.OperationCardThreadView
 import dev.skillbill.desktop.core.domain.model.OperationCardView
+import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
+import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
+import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -198,7 +201,10 @@ class ChatOperationCardTest {
       operationCards[updated.launchId] = updated
       newTaskOutcome = NewTaskStartOutcome.AwaitingConfirmation("SKILL-1", NewTaskKind.Verify, updated.launchId)
     }
-    val request = NewTaskStart("/repo", "", null, "codex", NewTaskKind.Verify, null, null, target = "spec:/repo/spec.md")
+    val request = NewTaskStart(
+      "/repo", "", null, "codex", NewTaskKind.Verify, null, null, target = "spec:/repo/spec.md",
+      verify = VerifyStartChoices(VerifyQaChoice.On, VerifyReviewModeChoice.Delegated),
+    )
     val coordinator = OperationCardCoordinator(controls, backgroundScope, { request })
     coordinator.remember(original.launchId, request)
     val thread = ChatThread(Clock.System)
@@ -214,6 +220,7 @@ class ChatOperationCardTest {
     val sent = controls.newTaskRequests.single()
     assertEquals(request.target, sent.target)
     assertEquals("Exclude deployment and add accessibility coverage", sent.proposalChanges)
+    assertEquals(request.verify, sent.verify)
     assertNull(sent.confirmation)
     assertEquals("Revised criteria", thread.operationCard(updated.token)?.card?.summary)
 
@@ -221,6 +228,40 @@ class ChatOperationCardTest {
     runCurrent()
     assertEquals(updated.token, controls.newTaskRequests.last().confirmation?.token)
     assertEquals(2, controls.newTaskRequests.size)
+  }
+
+  @Test
+  fun `a verify choice switch replaces the proposal with the new choices and dismisses the old card`() = runTest {
+    val original = verify()
+    val updated = original.copy(token = "revised-token", launchId = "revised-launch")
+    val controls = FakeWorkControlRepository().apply {
+      operationCards[original.launchId] = original
+      operationCards[updated.launchId] = updated
+      newTaskOutcome = NewTaskStartOutcome.AwaitingConfirmation("SKILL-1", NewTaskKind.Verify, updated.launchId)
+    }
+    val request = NewTaskStart(
+      "/repo", "", null, "codex", NewTaskKind.Verify, null, null, target = "WE-1", branch = "feat/we-1",
+      verify = VerifyStartChoices(reviewMode = VerifyReviewModeChoice.Delegated),
+    )
+    val coordinator = OperationCardCoordinator(controls, backgroundScope, { request })
+    coordinator.remember(original.launchId, request)
+    val thread = ChatThread(Clock.System)
+    thread.showOperationCard(original)
+    val switched = VerifyStartChoices(VerifyQaChoice.On, VerifyReviewModeChoice.Delegated)
+
+    coordinator.actions(thread).onChangeVerify(original.token, switched)
+    runCurrent()
+
+    val sent = controls.newTaskRequests.single()
+    assertEquals(request.copy(verify = switched), sent)
+    assertEquals(listOf(original.token), controls.dismissedCards)
+    assertNotNull(thread.operationCard(updated.token))
+
+    controls.newTaskOutcome = NewTaskStartOutcome.AwaitingConfirmation("SKILL-1", NewTaskKind.Verify, "third-launch")
+    coordinator.actions(thread).onAdjust(updated.token)
+    coordinator.submitAdjustment(thread, "Only the first criterion")
+    runCurrent()
+    assertEquals(switched, controls.newTaskRequests.last().verify)
   }
 
   @Test

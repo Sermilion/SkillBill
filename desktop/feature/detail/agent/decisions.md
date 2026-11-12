@@ -1,3 +1,8 @@
+## [2026-11-11] Match Verify states without bypassing proposal confirmation
+Context: The linear-study Verify reference has framed summaries and outcomes, compact criterion disclosures, receipt summaries and state-specific run controls. The detail page showed unstyled text and generic run controls.
+Decision: Keep Verify presentation local to the detail feature. Use the existing parsed projection, run controls, fix actions and collapse state. Link parked runs to Chat for criteria review and intake adjustment, where the operator's proposal card owns confirmation.
+Reason: Matching the reference's presentation must preserve the app's confirmation boundary. A detail-page button cannot confirm a proposal by launching or resuming an operation.
+
 ## [2026-11-08] Share phase choices across pane and inline inspectors
 Context: SKILL-527 requires each goal and subtask, including Goal finish, to retain its selected phase while paging and changing layouts.
 Decision: Store explicit choices in window-scoped SubtaskSelections keyed by work item and SubtaskKey. Share card rendering between pane and inline rows, clear choices on database-session changes and resolve stale choices against available cards.

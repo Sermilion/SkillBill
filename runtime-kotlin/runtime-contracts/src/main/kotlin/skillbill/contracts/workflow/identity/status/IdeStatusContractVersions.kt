@@ -37,6 +37,7 @@ object WorkBuildPayloadKeys {
 object IdeStatusPayloadKeys {
   const val LIFECYCLE_STATE = "lifecycle_state"
   const val BRANCH_CORRELATION = "branch_correlation"
+  const val PRIMARY_REPOSITORY_ROOT = WorkBoardReadModelPayloadKeys.PRIMARY_REPOSITORY_ROOT
   const val EXECUTION_SCOPE = "execution_scope"
   const val EXECUTION_ID = "execution_id"
   const val STATUS_STORE_ID = "status_store_id"

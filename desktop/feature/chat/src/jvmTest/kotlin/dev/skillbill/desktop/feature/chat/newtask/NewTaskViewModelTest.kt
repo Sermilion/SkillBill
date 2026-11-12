@@ -1,5 +1,8 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.ChatModel
 import androidx.lifecycle.viewModelScope
 import dev.skillbill.desktop.core.common.Outcome
@@ -15,6 +18,7 @@ import dev.skillbill.desktop.core.domain.model.DetectedAgent
 import dev.skillbill.desktop.core.domain.model.DetectedAgentsRead
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
+import dev.skillbill.desktop.core.domain.model.RepositoryBranch
 import dev.skillbill.desktop.core.domain.model.RepositoryBranches
 import dev.skillbill.desktop.core.domain.model.RepositoryBranchesRead
 import dev.skillbill.desktop.core.domain.model.SpecBundleRef
@@ -82,6 +86,209 @@ class NewTaskViewModelTest {
 
   private fun viewModel(board: FakeWorkBoardRepository, chats: NewTaskChats, specs: SpecRepository = FakeSpecs(), branches: RepositoryBranchesRepository = FakeBranches(), folders: FolderChooser = FolderChooser { FolderChoice.Cancelled }, settings: AppSettingsRepository = FakeAppSettingsRepository(), diagnostics: RecordingDiagnostics = RecordingDiagnostics()) =
     NewTaskViewModel(chats, board, specs, branches, folders, FakeExecutionChatRepository(), detecting(), FIXED_CLOCK, settings, diagnostics)
+
+  @Test
+  fun `branch choice is explicit and a failed default switch preserves it and reports the error`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val chats = testNewTaskChats()
+    val draft = chats.selected.value
+    draft.repository = NewTaskRepository("/repo", "repo")
+    var current = "feature/current"
+    var refuseSwitch = true
+    val branches = object : RepositoryBranchesRepository {
+      override suspend fun branches(path: String) = RepositoryBranchesRead.Listed(
+        RepositoryBranches(path, "main", emptyList(), emptyList(), current),
+      )
+      override suspend fun switchToBranch(path: String, branch: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> {
+        assertEquals("main", branch)
+        assertEquals("feature/current", expectedCurrentBranch)
+        if (refuseSwitch) return Outcome.Failure(ReadProblem.Runtime("Local edits would be overwritten"))
+        current = "main"
+        return Outcome.Success(path)
+      }
+    }
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), chats, branches = branches)
+    runCurrent()
+    assertEquals("", draft.baseBranch)
+    model.onAction(NewTaskAction.UseCurrentBranchAsBase)
+    assertEquals("feature/current", draft.baseBranch)
+    model.onAction(NewTaskAction.SwitchToDefaultBranch)
+    runCurrent()
+    assertEquals("feature/current", draft.baseBranch)
+    assertEquals("feature/current", (model.state.value.branchRead as BranchReadState.Loaded).branches.currentBranch)
+    assertTrue(model.state.value.repositoryError.orEmpty().contains("Local edits would be overwritten"))
+
+    refuseSwitch = false
+    model.onAction(NewTaskAction.SwitchToDefaultBranch)
+    runCurrent()
+    assertEquals("", draft.baseBranch)
+    assertEquals("main", (model.state.value.branchRead as BranchReadState.Loaded).branches.currentBranch)
+    assertEquals(null, model.state.value.repositoryError)
+    model.viewModelScope.cancel()
+  }
+
+  @Test
+  fun `switch to default worktree rebinds the chat and preserves its conversation and draft`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val original = createTempDirectory("feature-checkout").toString()
+    val main = createTempDirectory("main-checkout").toString()
+    val chat = FakeExecutionChatRepository()
+    val chats = testNewTaskChats(chat)
+    val draft = chats.selected.value.apply { repository = NewTaskRepository(original, "repo") }
+    val branches = object : RepositoryBranchesRepository {
+      override suspend fun branches(path: String) = RepositoryBranchesRead.Listed(
+        RepositoryBranches(path, "main", emptyList(), emptyList(), if (path == main) "main" else "feature/current"),
+      )
+      override suspend fun switchToBranch(path: String, branch: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> {
+        assertEquals(original, path)
+        assertEquals("main", branch)
+        assertEquals("feature/current", expectedCurrentBranch)
+        return Outcome.Success(main)
+      }
+    }
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), chats, branches = branches)
+    runCurrent()
+    draft.text = "Explain the sharing flow"
+    model.onAction(NewTaskAction.Send)
+    runCurrent()
+    val before = checkNotNull(draft.chat.value)
+    draft.text = "Keep this unsent draft"
+
+    model.onAction(NewTaskAction.SwitchToDefaultBranch)
+    runCurrent()
+
+    val after = checkNotNull(draft.chat.value)
+    assertEquals(main, draft.repository?.root)
+    assertEquals(main, after.repositoryRoot)
+    assertNotEquals(before.sessionId, after.sessionId)
+    assertTrue(after.thread.transcript.value.filterIsInstance<ChatMessage.Operator>().any { it.text == "Explain the sharing flow" })
+    assertEquals("Keep this unsent draft", draft.text)
+    assertEquals("main", (model.state.value.branchRead as BranchReadState.Loaded).branches.currentBranch)
+    model.viewModelScope.cancel()
+  }
+
+  @Test
+  fun `choosing a base branch moves the chat onto the worktree that holds it`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val original = createTempDirectory("fix-checkout").toString()
+    val feature = createTempDirectory("feature-checkout").toString()
+    val chat = FakeExecutionChatRepository()
+    val chats = testNewTaskChats(chat)
+    val draft = chats.selected.value.apply { repository = NewTaskRepository(original, "repo") }
+    val switches = mutableListOf<Triple<String, String, String?>>()
+    val branches = object : RepositoryBranchesRepository {
+      override suspend fun branches(path: String) = RepositoryBranchesRead.Listed(
+        RepositoryBranches(path, "main", emptyList(), emptyList(), if (path == feature) "feat/qa-fixes" else "fix/rotation"),
+      )
+      override suspend fun switchToBranch(path: String, branch: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> {
+        switches += Triple(path, branch, expectedCurrentBranch)
+        return Outcome.Success(feature)
+      }
+    }
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), chats, branches = branches)
+    runCurrent()
+    draft.text = "Explain the sharing flow"
+    model.onAction(NewTaskAction.Send)
+    runCurrent()
+
+    model.onAction(NewTaskAction.ChooseBaseBranch("feat/qa-fixes"))
+    runCurrent()
+
+    assertEquals(listOf(Triple<String, String, String?>(original, "feat/qa-fixes", "fix/rotation")), switches)
+    val rebound = checkNotNull(draft.chat.value)
+    assertEquals(feature, draft.repository?.root)
+    assertEquals(feature, rebound.repositoryRoot)
+    assertEquals("feat/qa-fixes", rebound.baseBranch)
+    val read = model.state.value.branchRead as BranchReadState.Loaded
+    assertEquals("feat/qa-fixes", read.branches.currentBranch)
+    assertEquals("feat/qa-fixes", repositoryPillBranch(draft.baseBranch, draft.repository?.root, read))
+    model.viewModelScope.cancel()
+  }
+
+  @Test
+  fun `a failed base branch switch keeps the chat root and base and reports the error`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val chats = testNewTaskChats()
+    val draft = chats.selected.value.apply { repository = NewTaskRepository("/repo", "repo") }
+    val branches = object : RepositoryBranchesRepository {
+      override suspend fun branches(path: String) = RepositoryBranchesRead.Listed(
+        RepositoryBranches(path, "main", emptyList(), emptyList(), "fix/rotation"),
+      )
+      override suspend fun switchToBranch(path: String, branch: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> =
+        Outcome.Failure(ReadProblem.Runtime("Local edits would be overwritten"))
+    }
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), chats, branches = branches)
+    runCurrent()
+    model.onAction(NewTaskAction.UseCurrentBranchAsBase)
+
+    model.onAction(NewTaskAction.ChooseBaseBranch("feat/qa-fixes"))
+    runCurrent()
+
+    assertEquals("/repo", draft.repository?.root)
+    assertEquals("fix/rotation", draft.baseBranch)
+    assertEquals(false, draft.branchSwitching)
+    assertTrue(model.state.value.repositoryError.orEmpty().contains("Local edits would be overwritten"))
+    model.viewModelScope.cancel()
+  }
+
+  @Test
+  fun `choosing a remote branch adopts the local tracking branch it checks out`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val chats = testNewTaskChats()
+    val draft = chats.selected.value.apply { repository = NewTaskRepository("/repo", "repo") }
+    var current = "main"
+    val branches = object : RepositoryBranchesRepository {
+      override suspend fun branches(path: String) = RepositoryBranchesRead.Listed(
+        RepositoryBranches(path, "main", emptyList(), listOf(RepositoryBranch("origin/feature/x", Instant.fromEpochSeconds(0))), current),
+      )
+      override suspend fun switchToBranch(path: String, branch: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> {
+        assertEquals("origin/feature/x", branch)
+        current = "feature/x"
+        return Outcome.Success(path)
+      }
+    }
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), chats, branches = branches)
+    runCurrent()
+
+    model.onAction(NewTaskAction.ChooseBaseBranch("origin/feature/x"))
+    runCurrent()
+
+    assertEquals("feature/x", draft.baseBranch)
+    assertEquals("feature/x", (model.state.value.branchRead as BranchReadState.Loaded).branches.currentBranch)
+    model.viewModelScope.cancel()
+  }
+
+  @Test
+  fun `quick operation asks for branch choice only when started and respects the explicit current base`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val controls = FakeWorkControlRepository()
+    val chats = testNewTaskChats(controls = controls)
+    val draft = chats.selected.value.apply { repository = NewTaskRepository("/repo", "repo") }
+    val branches = FakeBranches { path -> RepositoryBranchesRead.Listed(
+      RepositoryBranches(path, "main", emptyList(), emptyList(), "feature/current"),
+    ) }
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), chats, branches = branches)
+    runCurrent()
+    assertEquals(false, draft.branchChoiceRequested)
+    draft.text = "Explain sharing"
+    model.onAction(NewTaskAction.Send)
+    runCurrent()
+
+    model.start(NewTaskKind.Verify, "Check sharing", null)
+    runCurrent()
+    assertEquals(true, draft.branchChoiceRequested)
+    assertTrue(controls.newTaskRequests.isEmpty())
+
+    model.onAction(NewTaskAction.RunSuggestedAction(ChatSuggestedAction("Explain", "Explain the flow", ChatPermissionMode.ReadOnly)))
+    runCurrent()
+    assertEquals(false, draft.branchChoiceRequested)
+    model.start(NewTaskKind.Verify, "Check sharing", null)
+    model.onAction(NewTaskAction.UseCurrentBranchAsBase)
+    model.start(NewTaskKind.Verify, "Check sharing", null)
+    runCurrent()
+    assertEquals("feature/current", controls.newTaskRequests.single().baseBranch)
+    model.viewModelScope.cancel()
+  }
 
   @Test
   fun `model selection keeps an existing draft session and applies to its next message`() = runTest {
@@ -196,7 +403,7 @@ class NewTaskViewModelTest {
       ChatNewTaskContext("/work/app", "main"),
     )
     chatRepo.saved[entry.sessionId] = entry
-    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK)
+    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, diagnostics = RecordingDiagnostics())
     val draft = chats.selected.value
     val model = NewTaskViewModel(chats, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, chatRepo, detecting("claude"), FIXED_CLOCK, FakeAppSettingsRepository(), RecordingDiagnostics())
     runCurrent()
@@ -227,14 +434,14 @@ class NewTaskViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val events = MutableSharedFlow<ChatEvent>()
     val chatRepository = FakeExecutionChatRepository().apply { this.events = { events } }
-    val chats = NewTaskChats(chatRepository, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK)
+    val chats = NewTaskChats(chatRepository, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, diagnostics = RecordingDiagnostics())
     val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/app", "app")
       agentId = "claude"
       text = "add export"
     }
-    val workspace = ChatWorkspace(chatRepository, FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, ShellPanes(), SelectionHolder(), chats)
+    val workspace = ChatWorkspace(chatRepository, FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, ShellPanes(), SelectionHolder(), chats, diagnostics = RecordingDiagnostics())
     val first = viewModel(FakeWorkBoardRepository(loadedBoard()), chats)
     advanceUntilIdle()
     first.onAction(NewTaskAction.Send)
@@ -393,7 +600,7 @@ class NewTaskViewModelTest {
   fun `choosing another agent after a chat rebinds that chat`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val chatRepo = FakeExecutionChatRepository(supported = setOf("claude", "codex"))
-    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK)
+    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, diagnostics = RecordingDiagnostics())
     val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository(createTempDirectory("new-task-repo").toString(), "repo")
@@ -411,6 +618,7 @@ class NewTaskViewModelTest {
     assertEquals(chatRepo.agent, draft.selectedAgent)
     assertEquals(chipText(chatRepo.agent), chipText(model.state.value.agent))
     advanceUntilIdle()
+    runCurrent()
 
     assertEquals("codex", draft.agentId)
     assertEquals("codex", model.state.value.agent?.agentId)
@@ -458,6 +666,7 @@ class NewTaskViewModelTest {
     runCurrent()
     codexRead.complete(Unit)
     advanceUntilIdle()
+    runCurrent()
 
     assertEquals("codex", a.chat.value?.agent?.agentId)
     assertNotEquals(firstSession, a.chat.value?.sessionId)
@@ -538,7 +747,7 @@ class NewTaskViewModelTest {
   fun `repository and branch picker changes after a reply rebind and replay the chat`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val chatRepo = FakeExecutionChatRepository().apply { events = { flowOf(ChatEvent.TextDelta("answer"), ChatEvent.Completed) } }
-    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK)
+    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, diagnostics = RecordingDiagnostics())
     val repository = NewTaskRepository(createTempDirectory("new-task-repo").toString(), "repo")
     val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
@@ -599,9 +808,10 @@ class NewTaskViewModelTest {
     assertEquals(listOf("/work/app", "/work/app", "/work/app"), branches.calls)
     assertEquals(BranchReadState.Loaded("/work/app", listed("/work/app").branches), model.state.value.branchRead)
     model.onAction(NewTaskAction.ChooseBaseBranch("origin/rel"))
+    assertEquals(false, model.state.value.repositoryPickerOpen)
+    advanceUntilIdle()
 
     assertEquals("origin/rel", draft.baseBranch)
-    assertEquals(false, model.state.value.repositoryPickerOpen)
     model.viewModelScope.cancel()
   }
 
@@ -742,7 +952,7 @@ class NewTaskViewModelTest {
       replies += reply
       flow { for (event in reply) emit(event) }
     }
-    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK)
+    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, diagnostics = RecordingDiagnostics())
     val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository(createTempDirectory("new-task-repo").toString(), "repo")
@@ -798,6 +1008,8 @@ class NewTaskViewModelTest {
 
   private class FakeBranches(private val read: suspend (String) -> RepositoryBranchesRead = { listed(it) }) : RepositoryBranchesRepository {
     val calls = mutableListOf<String>()
+
+    override suspend fun switchToBranch(path: String, branch: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> = Outcome.Success(path)
 
     override suspend fun branches(path: String): RepositoryBranchesRead {
       calls += path

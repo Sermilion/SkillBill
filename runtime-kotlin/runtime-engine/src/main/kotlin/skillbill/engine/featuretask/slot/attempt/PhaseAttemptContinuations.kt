@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionInteractionTraceRound
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
+import skillbill.engine.featuretask.runloop.attempt.blockedReason
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
@@ -50,6 +51,7 @@ import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeP
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal object PhaseAttemptContinuations {
@@ -225,6 +227,41 @@ internal object PhaseAttemptContinuations {
       loop.iteration,
       failedIteration,
       FeatureTaskRuntimeContinuationKind.PROCESS_RETRY,
+    )
+    return null
+  }
+
+  internal fun settleBundleFeasibilityContinuation(
+    recorder: PhaseRunRecords,
+    context: FixLoopBranchContext,
+    continuation: AttemptResult.BundleFeasibilityContinuation,
+  ): PhaseOutcome? {
+    val run = context.run
+    val state = recorder.loadPlanBundleFeasibility(run.request.workflowId)
+    if (state == null || state.mode == PlanBundleFeasibilityMode.BLOCKED) {
+      return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
+        context.progress,
+        context.loopTransitions,
+        recorder,
+        PhaseBlockRequest(
+          run = run,
+          attemptCount = context.loop.iteration,
+          reason = state?.blockedReason() ?: continuation.reason,
+          observability = context.observability,
+          payload = BlockAndPersistPayload(fileManifest = continuation.fileManifest),
+        ),
+      )
+    }
+    val loop = context.loop
+    loop.iteration += 1
+    loop.continuationSegmentCount += 1
+    loop.priorCorrection = null
+    context.observability.continuation(
+      run.phaseId,
+      context.agentId,
+      loop.iteration,
+      loop.continuationSegmentCount,
+      FeatureTaskRuntimeContinuationKind.BUNDLE_FEASIBILITY,
     )
     return null
   }

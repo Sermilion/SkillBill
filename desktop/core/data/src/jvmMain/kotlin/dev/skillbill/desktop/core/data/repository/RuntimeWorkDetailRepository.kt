@@ -24,7 +24,7 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 class RuntimeWorkDetailRepository(private val sessions: DatabaseSessionManager) : WorkDetailRepository {
   override suspend fun resolve(id: String): WorkDetailResolution {
     val component = sessions.sessions.value
-      ?: return WorkDetailResolution.Failed(ReadProblem.Runtime("Skill Bill database is not available."))
+      ?: return WorkDetailResolution.Failed(ReadProblem.Runtime("Sona database is not available."))
     val result = component.favoriteResolver.resolve(id)
     if (!sessions.isCurrent(component)) return WorkDetailResolution.Failed(ReadProblem.Runtime("Database session changed during favorite lookup."))
     return when (result) {

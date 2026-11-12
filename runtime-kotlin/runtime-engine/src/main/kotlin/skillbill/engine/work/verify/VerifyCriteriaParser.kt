@@ -70,7 +70,8 @@ internal object VerifyCriteriaParser {
         current != null -> grades[grades.lastIndex] = detail(current, line)
       }
     }
-    return grades.map { it.copy(locations = VerifyReceiptLocations.of(it.missing, it.notFound)) }
+    val tagged = grades.map { it.copy(locations = VerifyReceiptLocations.of(it.missing, it.notFound)) }
+    return (tagged + VerifyCriteriaTableParser.grades(lines.flatMap(String::lines))).distinctBy { it.number }
   }
 
   private fun detail(

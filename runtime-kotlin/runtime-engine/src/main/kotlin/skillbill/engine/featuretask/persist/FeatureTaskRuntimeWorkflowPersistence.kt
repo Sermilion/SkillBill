@@ -4,7 +4,6 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.normalizeIssueKey
-import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStatusRead
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairVersionPlan
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
@@ -39,7 +38,7 @@ import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.isPreContractAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionAuditResult
-import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.supersededAcceptanceCriterionRepairStateVersion
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.toImplementationProgress
 import skillbill.workflow.taskruntime.artifact.toQaRepairState
@@ -230,11 +229,10 @@ public class FeatureTaskRuntimeWorkflowPersistence
           validateSerialArtifacts(record.artifacts - family.label())
           return@read AcceptanceCriterionRepairStatusRead.PreContract
         }
-        if (payload?.isPreviousVersionAcceptanceCriterionRepairState() == true) {
+        val storedVersion = payload?.supersededAcceptanceCriterionRepairStateVersion()
+        if (storedVersion != null) {
           validateSerialArtifacts(record.artifacts - supersededSerialLabels(record.artifacts))
-          return@read AcceptanceCriterionRepairStatusRead.SupersededVersion(
-            ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION,
-          )
+          return@read AcceptanceCriterionRepairStatusRead.SupersededVersion(storedVersion)
         }
         validateSerialArtifacts(record.artifacts)
         payload?.let {
@@ -249,7 +247,7 @@ public class FeatureTaskRuntimeWorkflowPersistence
         val repair = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
         val result = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_AUDIT_RESULT
         if (FeatureTaskRuntimeWorkflowArtifactMap.from(repair.value(artifacts))
-            .isPreviousVersionAcceptanceCriterionRepairState()
+            .supersededAcceptanceCriterionRepairStateVersion() != null
         ) {
           add(repair.label())
         }

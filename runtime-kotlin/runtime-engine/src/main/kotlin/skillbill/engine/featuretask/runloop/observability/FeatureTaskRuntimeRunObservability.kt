@@ -23,6 +23,7 @@ public enum class FeatureTaskRuntimeContinuationKind(internal val wireValue: Str
   AUDIT_MISSING_BASELINE("audit_missing_baseline"),
   AUDIT_NON_SHRINKING_ROUND("audit_non_shrinking_round"),
   IMPLEMENTATION_CRITERION_TURN("implementation_criterion_turn"),
+  BUNDLE_FEASIBILITY("bundle_feasibility"),
   ;
 
   internal companion object {

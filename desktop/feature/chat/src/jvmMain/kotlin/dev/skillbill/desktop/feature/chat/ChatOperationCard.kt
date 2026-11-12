@@ -47,12 +47,16 @@ import dev.skillbill.desktop.core.domain.model.OperationCardDetailsView
 import dev.skillbill.desktop.core.domain.model.OperationCardState
 import dev.skillbill.desktop.core.domain.model.OperationCardThreadView
 import dev.skillbill.desktop.core.domain.model.OperationCardView
+import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
+import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
+import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
 
 private val SUMMARY_MAX_HEIGHT = 220.dp
 
 /**
  * What an operation card can do. Each callback is a click the operator made on that card: [onConfirm] is the only way to
  * start the parked continuation, and [onAdjust] asks for a replacement proposal instead of confirming the old one.
+ * [onChangeVerify] replaces a verify proposal with one using other QA or review mode choices.
  */
 internal data class ChatOperationCardActions(
   val onChooseOption: (token: String, ordinal: String, optionId: String) -> Unit,
@@ -62,6 +66,7 @@ internal data class ChatOperationCardActions(
   val onAdjust: (token: String) -> Unit,
   val canAdjust: (token: String) -> Boolean,
   val onOpenRun: (token: String) -> Unit = {},
+  val onChangeVerify: (token: String, choices: VerifyStartChoices) -> Unit = { _, _ -> },
 )
 
 /** True once the operator confirmed a verify proposal and its run went ahead; the card token is that run's id. */
@@ -311,6 +316,9 @@ private fun OperationCardControls(message: ChatMessage.OperationCard, actions: C
   val adjustable = actions?.canAdjust?.invoke(card.token) == true
   Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+      (card.details as? OperationCardDetailsView.Verify)?.let { details ->
+        VerifyChoiceButtons(card.token, details, actions, sharedActionsEnabled && adjustable)
+      }
       if (isPrReviewFix) {
         SbButton(
           label = "Choose recommended",
@@ -345,6 +353,36 @@ private fun OperationCardControls(message: ChatMessage.OperationCard, actions: C
     val note = offReason ?: missing ?: ADJUST_UNAVAILABLE.takeUnless { adjustable }
     note?.let { BasicText(it, style = type.tSm.copy(color = colors.fgMuted)) }
   }
+}
+
+/** Switches that replace a verify proposal; confirm cannot change its QA or review mode. */
+@Composable
+private fun VerifyChoiceButtons(
+  token: String,
+  details: OperationCardDetailsView.Verify,
+  actions: ChatOperationCardActions?,
+  enabled: Boolean,
+) {
+  val qa = VerifyQaChoice.entries.firstOrNull { it.wire == details.qa } ?: VerifyQaChoice.Off
+  val reviewMode = VerifyReviewModeChoice.entries.firstOrNull { it.wire == details.mode } ?: VerifyReviewModeChoice.Inline
+  val otherQa = if (qa == VerifyQaChoice.On) VerifyQaChoice.Off else VerifyQaChoice.On
+  val otherMode = if (reviewMode == VerifyReviewModeChoice.Inline) VerifyReviewModeChoice.Delegated else VerifyReviewModeChoice.Inline
+  SbButton(
+    label = "Turn QA ${otherQa.wire}",
+    onClick = { actions?.onChangeVerify?.invoke(token, VerifyStartChoices(otherQa, reviewMode)) },
+    variant = SbButtonVariant.Secondary,
+    size = SbControlSize.Small,
+    enabled = enabled,
+    modifier = Modifier.semantics { contentDescription = "Turn QA ${otherQa.wire}: replace this proposal" },
+  )
+  SbButton(
+    label = "Use ${otherMode.wire} review",
+    onClick = { actions?.onChangeVerify?.invoke(token, VerifyStartChoices(qa, otherMode)) },
+    variant = SbButtonVariant.Secondary,
+    size = SbControlSize.Small,
+    enabled = enabled,
+    modifier = Modifier.semantics { contentDescription = "Use ${otherMode.wire} review: replace this proposal" },
+  )
 }
 
 private const val ADJUST_UNAVAILABLE = "Adjust is unavailable on this window's copy; start the operation again from the chat."

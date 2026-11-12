@@ -67,6 +67,7 @@ public class StandalonePhaseRegistrationFactory(
       lifecycleState = "active",
       startedAt = clock.instant(),
       agentEnvironment = agentEnvironment(),
+      primaryRepositoryRoot = repositories.primaryRepositoryRoot(canonicalRoot).toString(),
       openCodeIdentity = openCodeIdentity(canonicalRoot, launch.agentId.orEmpty()),
     )
   }
@@ -96,6 +97,7 @@ public class StandalonePhaseRegistrationFactory(
       leaseExpiresAt = now.plus(LEASE_DURATION),
       processOwner = processOwner(),
       agentEnvironment = agentEnvironment(),
+      primaryRepositoryRoot = repositories.primaryRepositoryRoot(canonicalRoot).toString(),
       openCodeIdentity = openCodeIdentity(canonicalRoot, agentId.orEmpty()),
     )
   }

@@ -31,7 +31,7 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateExecutionEvidenceFromArtifact
 import skillbill.workflow.taskruntime.artifact.isPreContractAcceptanceCriterionRepairState
-import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.supersededAcceptanceCriterionRepairStateVersion
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionAuditAttempt
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -83,16 +83,27 @@ internal fun projectSubtaskAudit(
   val totalCount = criteria.size.takeIf { state != null }
   val projectedAttempts =
     attempts.mapIndexed { index, attempt ->
+      if (attempt.unavailableReason != null) {
+        degradation.record(
+          source = GoalRunnerSubtaskReadSource.SUBTASK_AUDIT_HISTORY,
+          expected = "discovery_scope_for_attempt:${attempt.id}",
+          used = "historical_result_unavailable",
+        )
+      }
       val lastBudgetAttempt =
         index == attempts.lastIndex && state?.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED
+      val nextPhase =
+        attempt.uncoveredCount?.let { count ->
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX
+            .takeIf { count > 0 && attempt.unavailableReason == null && !lastBudgetAttempt }
+        }
       GoalRunnerSubtaskAuditAttempt(
         id = attempt.id,
         number = attempt.number,
         passed = attempt.passed,
         uncoveredCount = attempt.uncoveredCount,
-        nextPhaseId =
-          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX
-            .takeIf { attempt.uncoveredCount > 0 && !lastBudgetAttempt },
+        nextPhaseId = nextPhase,
+        unavailableReason = attempt.unavailableReason,
       )
     }
   return GoalRunnerSubtaskAuditResult(
@@ -116,7 +127,7 @@ private fun readAuditState(
     catchingNonCancellation {
       val payload = FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
       if (payload.isPreContractAcceptanceCriterionRepairState() ||
-        payload.isPreviousVersionAcceptanceCriterionRepairState()
+        payload.supersededAcceptanceCriterionRepairStateVersion() != null
       ) {
         null
       } else {

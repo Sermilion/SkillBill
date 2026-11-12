@@ -2083,7 +2083,7 @@ internal fun ConfigPage(
         SbButton("Cancel", { warning = false; commentConfirmation = null }, enabled = enabled)
         SbButton("Save anyway", { scope.launch { save(commentConfirmation?.rowKey, true) } }, enabled = enabled)
       }, body = {
-        SbDialogText("${path.substringAfterLast('/')} has comments. Saving rewrites the file and removes them. Skill Bill asks once per file each time the app runs.")
+        SbDialogText("${path.substringAfterLast('/')} has comments. Saving rewrites the file and removes them. Sona asks once per file each time the app runs.")
       })
     }
   }

@@ -178,6 +178,31 @@ class SubtaskInspectorResultsTest {
   }
 
   @Test
+  fun `missing historical discovery scope keeps current audit criteria and review results visible`() = runComposeUiTest {
+    val audit = SubtaskAuditResult(
+      AuditOutcome.Passed, 1, 1,
+      listOf(AuditCriterion("AC-001", "Retains the saved state", true, null)),
+      listOf(
+        AuditAttempt(1, null, null, null, "Discovery scope was not retained for this historical audit."),
+        AuditAttempt(2, true, 0, null),
+      ),
+      2,
+    )
+    val retained = results(ReviewPass(1, "approved", 0, emptyList(), emptyList())).copy(
+      degradedReadSource = "subtask_audit_history",
+      auditResult = audit,
+    )
+    show("complete", emptyDetail.copy(phaseResults = listOf(retained)))
+
+    onNodeWithText("Pass 1").assertExists()
+    onNodeWithText("Passed · 1 of 1 criteria met").assertExists()
+    onNodeWithText("Retains the saved state").assertExists()
+    onNodeWithText("Attempt 1 · Historical result unavailable").assertExists()
+    onNodeWithText("Some historical audit results are unavailable because their discovery scope was not retained.").assertExists()
+    onNodeWithText("Review and audit ran, but their results could not be read.", substring = true).assertDoesNotExist()
+  }
+
+  @Test
   fun `a passed audit shows criteria fixed in a later attempt and prior gaps`() = runComposeUiTest {
     val results = SubtaskPhaseResults(
       1,

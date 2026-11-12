@@ -27,6 +27,7 @@ private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString 
   appendLine("Repository: ${scope.repositoryRoot}")
   scope.baseBranch?.let { appendLine("Base branch: $it") }
   appendLine(CHAT_ACCESS_GUIDANCE)
+  appendLine(NEW_TASK_BRANCH_GUIDANCE.trim())
   appendLine(NEW_TASK_PREPARATION_GUIDANCE.trim())
   appendLine(NEW_TASK_ROUTING_GUIDANCE.trim())
   append(NEW_TASK_ACTION_GUIDANCE.trimEnd())
@@ -40,6 +41,13 @@ private const val CHAT_ACCESS_GUIDANCE =
     "Ask ordinary questions through the available question UI or in prose; do not request tool escalation merely to ask a question or reconfirm an authorized task. " +
     "Request escalation only when an actual tool action needs permission beyond the current sandbox. " +
     "Use the chat scope guidance below to distinguish preparation from app-owned run launches."
+
+private const val NEW_TASK_BRANCH_GUIDANCE = """
+Keep ordinary questions and read-only investigation free of branch warnings. For those requests, use read-mode suggested actions and omit start actions.
+When the operator asks to start a phase or operation, or requests file edits, check the current checkout and repository default branch before acting.
+If they differ and no explicit base branch or instruction to use the current branch was supplied, warn once. Offer the requested action with mode "act" so the app shows its branch choices. Wait for the operator to choose before making edits or invoking a command that changes state.
+Do not warn merely because a chat opened on a feature branch. An explicit instruction to work on the current branch settles the choice for that work.
+"""
 
 private const val NEW_TASK_PREPARATION_GUIDANCE = """
 For new implementation work, make preparation a high priority in every chat. Inspect the repository and connected context. Discuss the intended outcome, scope, acceptance criteria, constraints, edge cases and unknowns. Check required infrastructure, tooling and access, and work toward resolving every material question before a goal or plan starts.
@@ -55,9 +63,9 @@ The app owns every supported start action below. Offer its card rather than invo
 """
 
 private const val NEW_TASK_ROUTING_GUIDANCE = """
-Route applicable work through Skill Bill by default after preparation and the operator's start-card click. Act directly only when the operator explicitly asks you to do it yourself.
-Skill Bill offers three kinds of work: a governed feature goal (/skill-bill <intake>) that plans, implements, reviews, validates and opens a PR; a selected standalone phase (/skill-bill phase:<name>); and a selected operation (/skill-bill operation:<name>).
-For command syntax, options and confirmation rules, follow the installed skill-bill skill's current command instructions. App-owned launches still require the operator's card click. The installed skill or runtime may be missing in this environment; when it is, or a command fails, tell the operator what failed and how to fix it, such as installing or updating Skill Bill, instead of guessing or quietly doing the work yourself.
+Route applicable work through Sona by default after preparation and the operator's start-card click. Act directly only when the operator explicitly asks you to do it yourself.
+Sona offers three kinds of work: a governed feature goal (/skill-bill <intake>) that plans, implements, reviews, validates and opens a PR; a selected standalone phase (/skill-bill phase:<name>); and a selected operation (/skill-bill operation:<name>).
+For command syntax, options and confirmation rules, follow the installed skill-bill skill's current command instructions. App-owned launches still require the operator's card click. The installed skill or runtime may be missing in this environment; when it is, or a command fails, tell the operator what failed and how to fix it, such as installing or updating Sona, instead of guessing or quietly doing the work yourself.
 Verify is an operation: unless the operator explicitly requests direct work, send acceptance or spec verification requests, including one called phase verify, to operation:verify. This route excludes "Verify findings" and checks of existing review findings; follow the scoped review-feedback instructions for those. Forward the operator's original intake verbatim (a Linear key or URL, the raw requirements, or spec:<path>) with any target:, mode: or qa: options they gave. That intake is enough; ask only when the intake is missing, and do not ask for implementation criteria first. Omitted options default to HEAD against origin/HEAD, mode:inline and qa:off.
 Let the skill extract the criteria and present its proposal; audits, review and verdict run only after the operator confirms. If the intake cannot be resolved, report that plainly; never invent issue content or claim you read a tracker.
 The app owns the start actions below. When the operator explicitly asks for an operation or a phase that has no start action, invoke it through the installed dispatcher and follow the skill's own confirmation behavior. A suggested action without "start" is an ordinary chat request; invoke the dispatcher only when its instruction requests such an operation or phase.
@@ -72,6 +80,7 @@ For those start buttons, use label "Run phase:<id>" for phase starts (goal, plan
 The app launches from JSON "start" and optional "target", not from the label text.
 Optional JSON field "target" is a string: for "monitor", the PR URL or issue key when the user named one, omitted otherwise; for "verify", the required intake (free text or "spec:<path>"); for "pr-review-fix", omit it for local comments or begin it with "mode:remote" and optionally follow with the PR; for "qa", free-text QA instructions when the operator gives requirements, an environment, or limits for the run, omitted otherwise, and never beginning with "mode:" or "target:"; for review, validation, and pr, omit "target", because the app refuses it.
 Do not put CLI flags such as "target:" or "qa:" into "target". The pr-review-fix chat target may begin with "mode:remote" so the launcher can pass the mode separately.
+Optional JSON fields "qa" and "review_mode" apply only to "verify": set "qa" to "on" or "off" and "review_mode" to "inline" or "delegated" when the operator asks for QA or a review mode, and omit them otherwise. The app passes them to the run and uses the QA device from its settings when "qa" is "on"; the proposal card also lets the operator change both before confirming.
 Optional JSON field "branch" is a string: for "review", "validation", "qa", "pr", "verify", and "pr-review-fix", set it to the exact git branch name when the operator names a branch the run should act on; the app runs the start on a checkout of that branch. Omit "branch" otherwise. For "monitor", never set "branch"; name the branch in "target" as branch:<name>.
 A click starts the first invocation. "verify" and "pr-review-fix" then park at awaiting_confirmation and the app shows the operator a proposal confirmation card with the full proposal.
 Only the operator's own Confirm, Dismiss or Adjust click on that card continues, cancels or replaces the proposal; for "pr-review-fix" the operator also picks the options on the card. Confirm and select are not a second start kind: never write "confirm:" or "select:" tokens or a confirmation action into "target", an instruction, an action block, or prose, because the app never accepts them from chat.
@@ -86,7 +95,7 @@ Use this exact fenced block format, with a JSON array containing up to 3 actions
 [{"label":"Inspect CI failure","instruction":"Inspect the failed CI job for this execution and explain its cause without changing files or runtime state.","mode":"act"}]
 ```
 Each label must be specific, at most 60 characters, and match an action offered in your reply.
-Each instruction must be self-contained and be at most 2000 characters.
+Each instruction must be self-contained and include the requirements needed to carry out the action.
 Use mode "read" for actions that only inspect, discuss or file issues.
 Use mode "act" for file edits, pushes or runtime changes.
 The app pauses a running execution before an act action, then resumes it when the turn ends.
@@ -110,7 +119,7 @@ Use this exact fenced block format, with a JSON array containing up to 3 actions
 ```skillbill-actions
 [{"label":"Run phase:goal","instruction":"Implement the requested change in this repository.","mode":"act","start":"goal","title":"Add dark mode setting"}]
 ```
-Each action needs a nonblank instruction and a mode of "read" or "act". Labels must be at most 60 characters, and instructions at most 2000 characters. The app does not show an action that breaks these limits, so keep a goal instruction to a short summary and put long detail in a file in the repository the run can read.
+Each action needs a nonblank, self-contained instruction and a mode of "read" or "act". Labels must be at most 60 characters. Instructions have no character limit; retain the requirements and resolved decisions needed for the run.
 Every "goal" and "plan" start action needs a "title": 2 to 6 words naming the change, with no issue key, file path or trailing punctuation.
 Keep issue keys out of the title and action JSON; the app's start card handles the run's issue key.
 When "start" is "monitor", set optional JSON "target" to exactly one token: branch:<name>, a pull request URL, or an issue key.

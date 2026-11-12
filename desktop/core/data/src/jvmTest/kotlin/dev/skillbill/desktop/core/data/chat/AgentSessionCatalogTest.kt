@@ -139,6 +139,7 @@ class AgentSessionCatalogTest {
     val listed = catalog.list("wf-1", root, "current", ::ChatAgentFor).entries
 
     assertEquals(listOf("c-1" to "Fix the lint job's formatter step", "c-2" to null), listed.map { it.sessionId to it.summary })
+    assertEquals(listOf("c-1", null), listed.map { it.appSessionId })
   }
 
   @Suppress("FunctionName")

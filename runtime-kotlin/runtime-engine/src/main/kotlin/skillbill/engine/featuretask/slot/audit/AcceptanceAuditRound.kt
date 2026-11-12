@@ -2,6 +2,8 @@ package skillbill.engine.featuretask.slot.audit
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
+import skillbill.engine.featuretask.model.audit.AcceptanceGapAuditScope
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionInteractionTraceRound
 import skillbill.engine.featuretask.phase.core.auditProseValue
@@ -22,6 +24,13 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapReportParser
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapStatus
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceGapVerificationResolver
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairDecision
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairStep
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangeClaimValidation
 import skillbill.workflow.taskruntime.model.audit.auditNeedsClarification
 import skillbill.workflow.taskruntime.model.audit.awaitsAuditClarification
@@ -64,12 +73,113 @@ internal object AcceptanceAuditRound :
     }
     val claimed = auditsClaim(context)
     val verdict = outputMap[SharedPayloadKeys.VERDICT] as? String
+    acceptanceGapRejection(run, outputMap)?.let { return it }
     return when {
       claimed -> noChangeRoundRejection(context, outputMap)
       verdict in NO_CHANGE_WORDS ->
         "Audit verdict '$verdict' requires a no-change claim on the implementation output."
       else -> null
     }
+  }
+
+  private fun acceptanceGapRejection(
+    run: PhaseRun,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): String? {
+    val scope = (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair ?: return null
+    val completed =
+      (outputMap[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() == WorkflowStepStatus.COMPLETED
+    if (run.phaseId != scope.steps?.audit || !completed) return null
+    val prose = auditProseValue(outputMap) ?: return null
+    val discovery = AcceptanceGapAuditScope.discoveryCriteria(scope) != null
+    return when {
+      discovery && auditNeedsClarification(outputMap[SharedPayloadKeys.VERDICT] as? String) -> null
+      scope.snapshot == null -> initialDiscoveryRejection(scope, prose)
+      else -> scopedGapRejection(scope, checkNotNull(scope.snapshot), prose)
+    }
+  }
+
+  private fun scopedGapRejection(
+    scope: AcceptanceCriterionRepairRunState,
+    state: AcceptanceCriterionRepairState,
+    prose: String,
+  ): String? {
+    val malformed =
+      when {
+        state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
+          verificationReportRejection(state, prose)
+        AcceptanceRepairDecision.auditKind(state) == AcceptanceRepairStep.Discover ->
+          discoveryReportRejection(state, prose)
+        else -> null
+      }
+    return malformed?.let { reaskGapOutput(scope, state, it) }
+  }
+
+  private fun discoveryReportRejection(
+    state: AcceptanceCriterionRepairState,
+    prose: String,
+  ): String? {
+    val open =
+      AcceptanceCriterionGapReportParser.openCriteria(prose)
+        ?: return "End the discovery report with an Open criteria line naming only the listed criteria."
+    val discoveryRefs = AcceptanceRepairDecision.discoveryRefs(state)
+    return AcceptanceCriterionGapReportParser.parse(prose, open).malformed
+      ?: open.firstOrNull { it !in discoveryRefs }?.let { "Open criteria names $it outside the discovery scope." }
+  }
+
+  private fun verificationReportRejection(
+    state: AcceptanceCriterionRepairState,
+    prose: String,
+  ): String? {
+    val criterion = state.criteria.singleOrNull { it.canonicalRef == state.currentCriterionRef } ?: return null
+    val verification = AcceptanceGapVerificationResolver.resolve(state, criterion, prose, treeMatches = true)
+    return verification.missingGapIds.takeIf { it.isNotEmpty() }?.let { missing ->
+      val forms =
+        missing.joinToString("; ") { gapId ->
+          "$gapId: closed @ <path>:<line> or $gapId: open @ <path>:<line>"
+        }
+      "Missing status lines for ${missing.joinToString()}. Verify is read-only, and closed gaps are settled. " +
+        "Report each listed gap using exactly one line: $forms. A line range is allowed. Retry once."
+    }
+  }
+
+  private fun initialDiscoveryRejection(
+    scope: AcceptanceCriterionRepairRunState,
+    prose: String,
+  ): String? {
+    if (!scope.freshDiscoveryRequired()) return null
+    val open =
+      AcceptanceCriterionGapReportParser.openCriteria(prose)
+        ?: return reaskInitialDiscovery(scope, "End discovery with an Open criteria line.")
+    val refs = AcceptanceGapAuditScope.discoveryCriteria(scope).orEmpty().map { it.first }.toSet()
+    val malformed =
+      AcceptanceCriterionGapReportParser.parse(prose, open).malformed
+        ?: open.firstOrNull { it !in refs }?.let { "Open criteria names $it outside the authored catalog." }
+    return malformed?.let { reaskInitialDiscovery(scope, it) }
+  }
+
+  private fun reaskInitialDiscovery(
+    scope: AcceptanceCriterionRepairRunState,
+    reason: String,
+  ): String? = reaskGapOutput(scope, null, "Initial acceptance gap report is malformed. $reason")
+
+  private fun reaskGapOutput(
+    scope: AcceptanceCriterionRepairRunState,
+    state: AcceptanceCriterionRepairState?,
+    reason: String,
+  ): String? {
+    val key = AcceptanceGapAuditScope.key(scope, state) ?: return null
+    if (scope.gapReask?.scopeKey == key) return null
+    val verify = state?.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION
+    val reask =
+      if (verify) {
+        reason
+      } else {
+        "$reason Report every numbered gap using AC-002.G1: <missing production behavior> @ <path>:<line> " +
+          "or a line range, then retry once."
+      }
+    scope.recordGapReask(key, reask)
+    return reask
   }
 
   private fun interactionTraceRejection(
@@ -148,8 +258,31 @@ internal object AcceptanceAuditRound :
     return if (auditsClaim(context)) {
       noChangeAcceptedOutput(context, attested)
     } else {
-      attested
+      verifyAcceptedOutput(capture, outputMap, attested)
     }
+  }
+
+  private fun verifyAcceptedOutput(
+    capture: ValidatedOutputCapture,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+    attested: NormalizedFeatureTaskRuntimePhaseOutput,
+  ): NormalizedFeatureTaskRuntimePhaseOutput {
+    val repair =
+      (capture.run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.snapshot
+        ?.takeIf { it.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION }
+        ?: return attested
+    val criterion = repair.criteria.singleOrNull { it.canonicalRef == repair.currentCriterionRef } ?: return attested
+    val open = criterion.gaps.filter { it.status == AcceptanceCriterionGapStatus.OPEN }
+    if (open.isEmpty()) return attested
+    val prose = auditProseValue(outputMap).orEmpty()
+    val verification = AcceptanceGapVerificationResolver.resolve(repair, criterion, prose, treeMatches = true)
+    val verdict =
+      if (verification.openGapsAfter == 0) {
+        FeatureTaskRuntimeVerdict.SATISFIED
+      } else {
+        FeatureTaskRuntimeVerdict.PROGRESS
+      }
+    return stampVerdict(attested, verdict)
   }
 
   private fun auditsClaim(context: PhaseStepOutputContext): Boolean {

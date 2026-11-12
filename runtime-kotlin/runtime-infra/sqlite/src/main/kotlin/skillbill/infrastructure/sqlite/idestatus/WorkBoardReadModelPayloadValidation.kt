@@ -395,7 +395,8 @@ internal object WorkBoardReadModelPayloadValidation {
     fun invalidFieldGroup12(fields: Map<String, Any?>): Boolean =
       !optionalInstant(fields, WorkBoardReadModelPayloadKeys.STALLED_SINCE) ||
         !optionalText(fields, WorkBoardReadModelPayloadKeys.CURRENT_ACTIVITY) ||
-        !optionalText(fields, WorkBoardReadModelPayloadKeys.BRANCH_CORRELATION)
+        !optionalText(fields, WorkBoardReadModelPayloadKeys.BRANCH_CORRELATION) ||
+        !optionalNonBlankText(fields, WorkBoardReadModelPayloadKeys.PRIMARY_REPOSITORY_ROOT)
 
     fun invalidFieldGroup13(fields: Map<String, Any?>): Boolean =
       !requiredText(fields, WorkBoardReadModelPayloadKeys.CONTRACT_VERSION)

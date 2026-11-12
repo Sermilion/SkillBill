@@ -18,6 +18,7 @@ import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.OperationCardReference
 import dev.skillbill.desktop.core.domain.model.OperationCardState
+import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -39,6 +40,8 @@ import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
+import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
+import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
 
 /** Relative to the user's home, beside the settings file. */
 internal const val CHAT_STORE_PATH = ".skill-bill/desktop/chats"
@@ -107,6 +110,8 @@ private object ChatStoreKeys {
   const val TITLE = "title"
   const val TARGET = "target"
   const val BRANCH = "branch"
+  const val QA = "qa"
+  const val REVIEW_MODE = "review_mode"
   const val APPROVAL = "approval"
   const val OPERATION_CARD = "operation_card"
   const val TOKEN = "token"
@@ -117,6 +122,7 @@ private object ChatStoreKeys {
   const val REFUSAL = "refusal"
   const val SUMMARY = "summary"
   const val SUMMARY_SOURCE_UPDATED_AT = "summary_source_updated_at_ms"
+  const val EXECUTION_CHECKOUT_ROOT = "execution_checkout_root"
 }
 
 /** What one session file holds; the workspace writes the conversation fields and the transports write the resume fields. */
@@ -135,6 +141,7 @@ private data class StoredChat(
   val newTask: ChatNewTaskContext? = null,
   val summary: String? = null,
   val summarySourceUpdatedAt: Instant? = null,
+  val executionCheckoutRoot: String? = null,
 )
 
 /**
@@ -227,6 +234,7 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
         updatedAt = if (exists && stored.lines == entry.lines) stored.updatedAt else entry.updatedAt,
         lines = entry.lines,
         newTask = entry.newTask,
+        executionCheckoutRoot = entry.executionCheckoutRoot ?: stored.executionCheckoutRoot,
       )
     }
     if (!saved) return false
@@ -485,6 +493,7 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
   }
   chat.summary?.let { put(ChatStoreKeys.SUMMARY, it) }
   chat.summarySourceUpdatedAt?.let { put(ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT, it.toEpochMilliseconds()) }
+  chat.executionCheckoutRoot?.let { put(ChatStoreKeys.EXECUTION_CHECKOUT_ROOT, it) }
   put(
     ChatStoreKeys.EXCHANGES,
     buildJsonArray {
@@ -557,6 +566,7 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
     },
     summary = root.string(ChatStoreKeys.SUMMARY)?.takeIf { it.isNotBlank() },
     summarySourceUpdatedAt = (root[ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT] as? JsonPrimitive)?.longOrNull?.let(Instant::fromEpochMilliseconds),
+    executionCheckoutRoot = root.string(ChatStoreKeys.EXECUTION_CHECKOUT_ROOT),
   )
 }
 
@@ -656,6 +666,8 @@ private fun ChatSuggestedAction.toJson(): JsonObject = buildJsonObject {
   title?.let { put(ChatStoreKeys.TITLE, it) }
   target?.takeIf { it.isNotBlank() }?.let { put(ChatStoreKeys.TARGET, it) }
   branch?.takeIf { it.isNotBlank() }?.let { put(ChatStoreKeys.BRANCH, it) }
+  verify.qa?.let { put(ChatStoreKeys.QA, it.wire) }
+  verify.reviewMode?.let { put(ChatStoreKeys.REVIEW_MODE, it.wire) }
 }
 
 private fun JsonObject.actions(key: String, diagnostics: Diagnostics): List<ChatSuggestedAction> {
@@ -696,7 +708,12 @@ private fun JsonObject.toAction(diagnostics: Diagnostics): ChatSuggestedAction? 
   if (ChatStoreKeys.TITLE in this && title == null) diagnostics.record("chat.store_malformed_action")
   val target = string(ChatStoreKeys.TARGET)?.trim()?.takeIf { it.isNotBlank() }
   val branch = string(ChatStoreKeys.BRANCH)?.trim()?.takeIf { it.isNotBlank() }
-  return ChatSuggestedAction(label, instruction, mode, start, title, target, branch)
+  val qa = VerifyQaChoice.entries.firstOrNull { it.wire == string(ChatStoreKeys.QA) }
+  val reviewMode = VerifyReviewModeChoice.entries.firstOrNull { it.wire == string(ChatStoreKeys.REVIEW_MODE) }
+  if ((ChatStoreKeys.QA in this && qa == null) || (ChatStoreKeys.REVIEW_MODE in this && reviewMode == null)) {
+    diagnostics.record("chat.store_malformed_action")
+  }
+  return ChatSuggestedAction(label, instruction, mode, start, title, target, branch, VerifyStartChoices(qa, reviewMode))
 }
 
 private fun JsonObject.objects(key: String): List<JsonObject> = (get(key) as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }

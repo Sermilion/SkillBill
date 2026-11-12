@@ -1,7 +1,7 @@
 package skillbill.infrastructure.sqlite.workflow.featuretask
 
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.infrastructure.sqlite.core.migration.area.idestatus.encodeQaDetails
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails.encodeQaDetails
 import skillbill.infrastructure.sqlite.core.schema.OPEN_CODE_IDENTITY_COLUMN
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.ports.agentrun.activity.model.AgentRunActivity
@@ -28,6 +28,7 @@ import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import java.nio.file.Files
+import java.nio.file.Path
 import java.sql.DriverManager
 import java.time.Clock
 import java.time.Instant
@@ -38,6 +39,67 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class StandalonePhaseStatusStoreTest {
+  @Test
+  fun `registrations persist primary roots independently for standalone and workflow executions`() {
+    val userHome = Files.createTempDirectory("standalone-primary-root")
+    val database = checklistDatabase(userHome)
+    val standalone =
+      checklistRegistration().copy(
+        primaryRepositoryRoot = "/primary/standalone",
+        leaseExpiresAt = Instant.parse("2099-01-01T00:00:00Z"),
+      )
+    val workflow =
+      IdeStatusWorkflowRegistration(
+        repositoryIdentity = "repo",
+        branchCorrelation = "main",
+        issueKey = "SKILL-535",
+        workflowId = "goal-parent",
+        invocationId = "workflow-run",
+        executionId = "workflow-execution",
+        lifecycleState = "active",
+        startedAt = Instant.EPOCH,
+        primaryRepositoryRoot = "/primary/workflow",
+      )
+
+    val registered =
+      database.transaction {
+        val standaloneRecord = it.standalonePhaseStatuses.register(standalone)
+        it.standalonePhaseStatuses.registerWorkflow(workflow)
+        standaloneRecord
+      }
+    assertEquals(
+      StandalonePhaseStatusUpdateResult.ACCEPTED,
+      database.transaction {
+        it.standalonePhaseStatuses.update(
+          StandalonePhaseStatusUpdate(
+            executionId = registered.executionId,
+            expectedRevision = registered.statusRevision,
+            leaseOwner = registered.leaseOwner,
+            leaseGeneration = registered.leaseGeneration,
+            lifecycleState = "terminal",
+            currentStep = "complete",
+            currentActivity = null,
+            updatedAt = Instant.parse("2026-11-10T00:00:00Z"),
+            finishedAt = Instant.parse("2026-11-10T00:00:00Z"),
+            terminalResult = "complete",
+          ),
+        )
+      },
+    )
+    val reopened = checklistDatabase(userHome)
+
+    assertEquals(
+      "/primary/standalone",
+      reopened.read { it.standalonePhaseStatuses.readByInvocation(standalone.invocationId) }
+        ?.primaryRepositoryRoot,
+    )
+    assertEquals(
+      "/primary/workflow",
+      reopened.read { it.standalonePhaseStatuses.latestWorkflowExecution(workflow.workflowId) }
+        ?.primaryRepositoryRoot,
+    )
+  }
+
   @Test
   fun `tool completion replaces its start and retained activity keeps stream provenance`() {
     val database = checklistDatabase()
@@ -156,7 +218,7 @@ class StandalonePhaseStatusStoreTest {
   fun `a malformed or unknown version checklist reads as null with a diagnostic and the row still returns`() {
     val diagnostics = RecordingChecklistDiagnostics()
     val warnings = diagnostics.warnings
-    val database = checklistDatabase(diagnostics)
+    val database = checklistDatabase(diagnostics = diagnostics)
     database.transaction { it.standalonePhaseStatuses.register(checklistRegistration()) }
 
     listOf("{\"contract_version\":\"9.9\"}", "{\"contract_version\":\"0.1\"}").forEach { stored ->
@@ -180,7 +242,7 @@ class StandalonePhaseStatusStoreTest {
   fun `stored QA details round trip, and an unknown outcome reads as null with a warning`() {
     val diagnostics = RecordingChecklistDiagnostics()
     val warnings = diagnostics.warnings
-    val database = checklistDatabase(diagnostics)
+    val database = checklistDatabase(diagnostics = diagnostics)
     database.transaction { it.standalonePhaseStatuses.register(checklistRegistration()) }
     val details = QaRunDetails(reportPath = "/qa/report.md", skipReason = "empty_scope")
 
@@ -204,12 +266,14 @@ class StandalonePhaseStatusStoreTest {
     assertTrue("bogus" in warning, warning)
   }
 
-  private fun checklistDatabase(diagnostics: RuntimeDiagnostics = NoopChecklistDiagnostics) =
-    sqliteDatabaseSessionFactory(
-      userHome = Files.createTempDirectory("standalone-checklist"),
-      environment = mapOf("TEST" to "1"),
-      diagnostics = diagnostics,
-    )
+  private fun checklistDatabase(
+    userHome: Path = Files.createTempDirectory("standalone-checklist"),
+    diagnostics: RuntimeDiagnostics = NoopChecklistDiagnostics,
+  ) = sqliteDatabaseSessionFactory(
+    userHome = userHome,
+    environment = mapOf("TEST" to "1"),
+    diagnostics = diagnostics,
+  )
 
   private fun checklistRegistration() =
     StandalonePhaseStatusRegistration(

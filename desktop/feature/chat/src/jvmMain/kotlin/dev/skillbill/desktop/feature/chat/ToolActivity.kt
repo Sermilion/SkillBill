@@ -51,7 +51,7 @@ internal fun toolActivityLabel(call: ChatToolCall): String {
   return if (compact.length > ACTIVITY_LIMIT) compact.take(ACTIVITY_LIMIT - 3) + "..." else compact
 }
 
-private fun toolArguments(input: String): JsonObject? {
+internal fun toolArguments(input: String): JsonObject? {
   if (!input.trimStart().startsWith("{")) return null
   return try {
     Json.parseToJsonElement(input) as? JsonObject

@@ -14,7 +14,7 @@ RUNTIME_MCP_INSTALL_DIR="$RUNTIME_INSTALL_ROOT/runtime-mcp"
 RUNTIME_CLI_BIN="$RUNTIME_CLI_INSTALL_DIR/bin/runtime-cli"
 RUNTIME_MCP_BIN="$RUNTIME_MCP_INSTALL_DIR/bin/runtime-mcp"
 RUNTIME_LAUNCHER_BIN_DIR="${SKILL_BILL_BIN_DIR:-$HOME/.local/bin}"
-DESKTOP_APP_DEFAULT_NAME="Skill Bill"
+DESKTOP_APP_DEFAULT_NAME="Sona"
 DESKTOP_APP_INSTALL_DIR="${SKILL_BILL_DESKTOP_APP_DIR:-}"
 
 RED='\033[0;31m'
@@ -290,7 +290,7 @@ default_desktop_app_install_dir() {
   local os="$1"
   case "$os" in
     macos)
-      if [[ -d "$HOME/Applications/$DESKTOP_APP_DEFAULT_NAME.app" || -d "$HOME/Applications/SkillBill.app" ]]; then
+      if [[ -d "$HOME/Applications/$DESKTOP_APP_DEFAULT_NAME.app" ]]; then
         printf '%s' "$HOME/Applications"
       else
         printf '%s' "/Applications"
@@ -434,7 +434,7 @@ desktop_app_executable_path() {
       printf '%s' "$app_target/Contents/MacOS/$DESKTOP_APP_DEFAULT_NAME"
       ;;
     windows)
-      printf '%s' "$app_target/bin/$DESKTOP_APP_DEFAULT_NAME.bat"
+      printf '%s' "$app_target/$DESKTOP_APP_DEFAULT_NAME.exe"
       ;;
     *)
       printf '%s' "$app_target/bin/$DESKTOP_APP_DEFAULT_NAME"
@@ -442,54 +442,42 @@ desktop_app_executable_path() {
   esac
 }
 
-legacy_desktop_app_target_path() {
-  local os="$1" install_root="$2"
-  case "$os" in
-    macos)
-      printf '%s/SkillBill.app' "$install_root"
-      ;;
-    *)
-      printf '%s/SkillBill' "$install_root"
-      ;;
-  esac
-}
-
-legacy_desktop_app_executable_path() {
-  local os="$1" app_target="$2"
-  case "$os" in
-    macos)
-      printf '%s/Contents/MacOS/SkillBill' "$app_target"
-      ;;
-    windows)
-      printf '%s/bin/SkillBill.bat' "$app_target"
-      ;;
-    *)
-      printf '%s/bin/SkillBill' "$app_target"
-      ;;
-  esac
+desktop_quoted_exec_path() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '"%s"' "$value"
 }
 
 remove_desktop_launcher() {
   local os="$1"
   local app_target="$2"
   local expected_target
-  local legacy_target
   local link_path
   local actual_target
 
   expected_target="$(desktop_app_executable_path "$os" "$app_target")"
-  legacy_target="$(legacy_desktop_app_executable_path "$os" "$(legacy_desktop_app_target_path "$os" "$(dirname "$app_target")")")"
   case "$os" in
     windows)
-      link_path="$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop.cmd"
-      if [[ -f "$link_path" ]]; then
+      link_path="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
+      if [[ -f "$link_path" && ! -L "$link_path" ]]; then
+        local expected_windows
+        if command -v cygpath >/dev/null 2>&1; then expected_windows="$(cygpath -w "$expected_target")"; else expected_windows="${expected_target//\//\\}"; fi
+        if ! tr -d '\r' < "$link_path" | grep -Fxq "\"$expected_windows\" %*" || ! tr -d '\r' < "$link_path" | grep -Fxq 'REM Managed by Sona install.sh'; then
+          warn "  skipped $link_path (does not target this Sona install)"
+          SKIPPED_TARGETS+=("$link_path")
+          return 0
+        fi
         rm -f "$link_path"
         REMOVED_TARGETS+=("$link_path")
-        ok "  removed skillbill-desktop.cmd"
+        ok "  removed sona.cmd"
+      elif [[ -e "$link_path" || -L "$link_path" ]]; then
+        warn "  skipped $link_path (not an owned Sona launcher)"
+        SKIPPED_TARGETS+=("$link_path")
       fi
       ;;
     *)
-      link_path="$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop"
+      link_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
       if [[ ! -L "$link_path" ]]; then
         if [[ -e "$link_path" ]]; then
           warn "  skipped $link_path (not a symlink)"
@@ -498,47 +486,47 @@ remove_desktop_launcher() {
         return 0
       fi
       actual_target="$(readlink "$link_path")"
-      if [[ "$actual_target" != "$expected_target" && "$actual_target" != "$legacy_target" ]]; then
+      if [[ "$actual_target" != "$expected_target" ]]; then
         warn "  skipped $link_path (points outside this desktop install)"
         SKIPPED_TARGETS+=("$link_path")
         return 0
       fi
       rm -f "$link_path"
       REMOVED_TARGETS+=("$link_path")
-      ok "  removed skillbill-desktop"
+      ok "  removed sona"
       ;;
   esac
 }
 
 remove_linux_desktop_entry() {
-  local desktop_file="${XDG_DATA_HOME:-$HOME/.local/share}/applications/skillbill.desktop"
-  local icon_file="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/512x512/apps/skillbill.png"
-
-  if [[ -f "$desktop_file" ]] && grep -q -E '^Name=(Skill Bill|SkillBill)$' "$desktop_file"; then
-    rm -f "$desktop_file"
-    REMOVED_TARGETS+=("$desktop_file")
-    ok "  removed Linux desktop entry"
-  fi
-  if [[ -f "$icon_file" ]]; then
-    rm -f "$icon_file"
-    REMOVED_TARGETS+=("$icon_file")
-    ok "  removed Linux desktop icon"
+  local app_target="$1" launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
+  local desktop_file="${XDG_DATA_HOME:-$HOME/.local/share}/applications/sona.desktop"
+  local quoted_launcher expected_icon
+  quoted_launcher="$(desktop_quoted_exec_path "$launcher_path")"
+  expected_icon="$app_target/lib/Sona.png"
+  if [[ -e "$desktop_file" || -L "$desktop_file" ]]; then
+    if [[ -f "$desktop_file" && ! -L "$desktop_file" ]] && grep -Fxq "Exec=$quoted_launcher" "$desktop_file" && grep -Fxq "Icon=$expected_icon" "$desktop_file"; then
+      rm -f "$desktop_file"
+      REMOVED_TARGETS+=("$desktop_file")
+      ok "  removed Linux desktop entry"
+    else
+      warn "  skipped $desktop_file (not an owned Sona entry)"
+      SKIPPED_TARGETS+=("$desktop_file")
+    fi
   fi
 }
 
 remove_desktop_app() {
   local os
   local app_target
-  local legacy_target
 
   os="$(desktop_host_os)"
   app_target="$(desktop_app_install_path "$os")"
-  legacy_target="$(legacy_desktop_app_target_path "$os" "$(dirname "$app_target")")"
 
   info "Removing desktop app install for $os: $app_target"
   remove_desktop_launcher "$os" "$app_target"
   if [[ "$os" == "linux" ]]; then
-    remove_linux_desktop_entry
+    remove_linux_desktop_entry "$app_target"
   fi
   if [[ -d "$app_target" ]]; then
     rm -rf "$app_target"
@@ -546,11 +534,6 @@ remove_desktop_app() {
     ok "  removed desktop app"
   else
     info "  no desktop app install found"
-  fi
-  if [[ "$legacy_target" != "$app_target" && -d "$legacy_target" ]]; then
-    rm -rf "$legacy_target"
-    REMOVED_TARGETS+=("$legacy_target")
-    ok "  removed legacy desktop app"
   fi
 }
 

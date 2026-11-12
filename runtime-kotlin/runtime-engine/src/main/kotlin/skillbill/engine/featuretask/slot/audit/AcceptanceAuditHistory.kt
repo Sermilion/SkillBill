@@ -4,7 +4,8 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExe
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.workflow.model.repair.FocusedRepairStrategy
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairDecision
+import skillbill.workflow.taskruntime.model.audit.AcceptanceRepairStep
 
 internal fun auditCurrentExecution(
   stepId: String,
@@ -12,14 +13,14 @@ internal fun auditCurrentExecution(
 ): IdeStatusCurrentPhaseExecution? {
   val repair =
     context.acceptanceCriterionRepair
-      ?.takeUnless { it.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY }
+      ?.takeUnless { AcceptanceRepairDecision.auditKind(it) == AcceptanceRepairStep.Discover }
   repair?.currentCriterionRef?.let { criterion ->
     return IdeStatusCurrentPhaseExecution(
       phaseId = stepId,
       kind = IdeStatusCurrentPhaseExecutionKind.ATTEMPT,
       criterionRef = criterion,
       count =
-        (repair.unsuccessfulTotals.getOrDefault(criterion, 0) + 1)
+        (repair.chargedAttempts.getOrDefault(criterion, 0) + 1)
           .coerceAtMost(FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES),
     )
   }

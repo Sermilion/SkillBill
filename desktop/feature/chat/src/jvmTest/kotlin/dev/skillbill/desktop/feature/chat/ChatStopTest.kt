@@ -1,5 +1,9 @@
 package dev.skillbill.desktop.feature.chat
 
+import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
+import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
+import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
@@ -73,7 +77,7 @@ class ChatStopTest {
     controlRepo: WorkControlRepository = controls,
   ): ChatWorkspace {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    return ChatWorkspace(chatRepo, details, controlRepo, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, unconfinedNewTaskChats())
+    return ChatWorkspace(chatRepo, details, controlRepo, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, unconfinedNewTaskChats(), diagnostics = RecordingDiagnostics())
   }
 
   private fun hangingAfterOpening() {

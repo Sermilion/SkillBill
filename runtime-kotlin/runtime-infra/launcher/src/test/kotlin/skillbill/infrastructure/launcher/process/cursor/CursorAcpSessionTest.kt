@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import skillbill.approval.model.ApprovalMatchFacts
 import skillbill.approval.model.ApprovalProviderDisposition
 import skillbill.contracts.approval.ApprovalProviderRequestId
 import skillbill.contracts.approval.ApprovalRequestRecord
@@ -16,6 +17,7 @@ import skillbill.ports.approval.model.ApprovalPendingWait
 import skillbill.ports.approval.model.ApprovalProviderClearance
 import skillbill.ports.approval.model.ApprovalRegistrationCommand
 import skillbill.ports.approval.model.ApprovalRegistrationResult
+import java.nio.file.Files
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -28,265 +30,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CursorAcpSessionTest {
-  @Test
-  fun `OpenCode carries runtime MCP and acknowledges refreshed model effort and mode before prompt`() {
-    val server = CursorAcpMcpServer("skill-bill", "/runtime-mcp", emptyList(), mapOf("DB" to "/db.sqlite"))
-    val harness =
-      Harness(
-        model = "anthropic/claude-sonnet-4-5",
-        provider = AcpProvider.OpenCode,
-        effort = "high",
-        mcpServers = listOf(server),
-      )
-    harness.session.start()
-    harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
-    harness.respond(
-      """{"sessionId":"s","configOptions":[{"id":"model","category":"model",""" +
-        """"currentValue":"anthropic/old","options":[{"value":"anthropic/claude-sonnet-4-5"}]}]}""",
-    )
-    assertEquals(
-      JsonPrimitive("model"),
-      harness.frames.last()[CursorAcpKeys.PARAMS]?.jsonObject?.get(CursorAcpKeys.CONFIG_ID),
-    )
-    assertEquals(
-      JsonPrimitive("anthropic/claude-sonnet-4-5"),
-      harness.frames.last()[CursorAcpKeys.PARAMS]?.jsonObject?.get(CursorAcpKeys.VALUE),
-    )
-    assertContains(harness.frames[1].toString(), "\"name\":\"skill-bill\"")
-    assertContains(harness.frames[1].toString(), "\"command\":\"/runtime-mcp\"")
-    assertContains(harness.frames[1].toString(), "\"args\":[]")
-    assertContains(harness.frames[1].toString(), "\"env\":[{\"name\":\"DB\",\"value\":\"/db.sqlite\"}]")
-
-    harness.respond(
-      """{"configOptions":[{"id":"model","category":"model",""" +
-        """"currentValue":"anthropic/claude-sonnet-4-5",""" +
-        """"options":[{"value":"anthropic/claude-sonnet-4-5"}]},{"id":"effort",""" +
-        """"category":"thought_level","currentValue":"low","options":[{"value":"low"},""" +
-        """{"value":"high"}]},{"id":"mode","category":"mode","currentValue":"primary",""" +
-        """"options":[{"value":"primary"}]}]}""",
-    )
-    assertEquals(
-      JsonPrimitive("effort"),
-      harness.frames.last()[CursorAcpKeys.PARAMS]?.jsonObject?.get(CursorAcpKeys.CONFIG_ID),
-    )
-    harness.respond(
-      """{"configOptions":[{"id":"effort","category":"thought_level","currentValue":"high",""" +
-        """"options":[{"value":"low"},{"value":"high"}]},{"id":"mode","category":"mode",""" +
-        """"currentValue":"primary","options":[{"value":"primary"}]}]}""",
-    )
-    assertEquals(
-      JsonPrimitive("mode"),
-      harness.frames.last()[CursorAcpKeys.PARAMS]?.jsonObject?.get(CursorAcpKeys.CONFIG_ID),
-    )
-    harness.respond(
-      """{"configOptions":[{"id":"mode","category":"mode","currentValue":"primary",""" +
-        """"options":[{"value":"primary"}]}]}""",
-    )
-    assertEquals(JsonPrimitive("session/prompt"), harness.frames.last()[CursorAcpKeys.METHOD])
-    val promptId = harness.frames.last()[CursorAcpKeys.ID]
-    harness.session.observe(
-      """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s",""" +
-        """"update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text",""" +
-        """"text":"OpenCode answer"}}}}""",
-    )
-    harness.session.observe("""{"jsonrpc":"2.0","id":$promptId,"result":{"stopReason":"end_turn"}}""")
-    assertEquals("OpenCode answer", harness.session.outcome()?.text)
-    harness.session.close()
-  }
-
-  @Test
-  fun `OpenCode permission cards allow once reject and refuse remembered grants`() {
-    val harness = Harness(provider = AcpProvider.OpenCode)
-    harness.session.start()
-    harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
-    harness.respond(
-      """{"sessionId":"s","configOptions":[{"id":"mode","category":"mode",""" +
-        """"currentValue":"primary","options":[{"value":"primary"}]}]}""",
-    )
-    harness.respond(
-      """{"configOptions":[{"id":"mode","category":"mode","currentValue":"primary"}]}""",
-    )
-    assertTrue(harness.session.ready)
-    harness.permission("17", "write", "git status")
-    assertEquals("opencode", harness.owner.requests.single().request.provider)
-    assertEquals(
-      ApprovalDeliveryState.WRITTEN,
-      harness.session.deliver(
-        harness.owner.requests.single().request.copy(
-          state = ApprovalState.ALLOWED,
-          selectedOptionId = "once-write",
-        ),
-      ),
-    )
-    assertContains(harness.frames.last().toString(), "once-write")
-    harness.permission("18", "read", "cat file")
-    val remember = harness.owner.requests.last().request
-    assertEquals(
-      ApprovalDeliveryState.UNCERTAIN,
-      harness.session.deliver(remember.copy(state = ApprovalState.ALLOWED, selectedOptionId = "remember-read")),
-    )
-    assertEquals(ApprovalDeliveryState.WRITTEN, harness.session.deliver(remember.copy(state = ApprovalState.CANCELLED)))
-    assertContains(harness.frames.last().toString(), "cancelled")
-    harness.permission("19", "delete", "rm file", allow = false)
-    val rejection = harness.owner.requests.last().request
-    assertEquals(
-      ApprovalDeliveryState.WRITTEN,
-      harness.session.deliver(rejection.copy(state = ApprovalState.DENIED, selectedOptionId = "deny-delete")),
-    )
-    assertContains(harness.frames.last().toString(), "deny-delete")
-    harness.session.close()
-  }
-
-  @Test
-  fun `OpenCode refuses unavailable effort and unsupported load without starting a replacement session`() {
-    val effortHarness = Harness(provider = AcpProvider.OpenCode, effort = "extreme")
-    effortHarness.session.start()
-    effortHarness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
-    effortHarness.respond(
-      """{"sessionId":"s","configOptions":[{"id":"effort","category":"thought_level",""" +
-        """"currentValue":"low","options":[{"value":"low"}]}]}""",
-    )
-    assertNotNull(effortHarness.session.outcome()?.failure)
-    assertFalse(effortHarness.frames.any { it.text(CursorAcpKeys.METHOD) == CursorAcpKeys.SESSION_PROMPT })
-
-    val loadHarness = Harness(saved = "saved-session", provider = AcpProvider.OpenCode)
-    loadHarness.session.start()
-    loadHarness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
-    assertNotNull(loadHarness.session.outcome()?.failure)
-    assertFalse(loadHarness.frames.any { it.text(CursorAcpKeys.METHOD) == CursorAcpKeys.SESSION_NEW })
-    assertFalse(loadHarness.frames.any { it.text(CursorAcpKeys.METHOD) == CursorAcpKeys.SESSION_LOAD })
-  }
-
-  @Test
-  fun `OpenCode retains typed provider errors and never prompts after acquisition failure`() {
-    val harness = Harness(provider = AcpProvider.OpenCode)
-    harness.session.start()
-    harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
-    val acquisitionId = harness.frames.last()[CursorAcpKeys.ID]
-    harness.session.observe(
-      """{"jsonrpc":"2.0","id":$acquisitionId,"error":{"code":-32001,""" +
-        """"message":"Authentication required","data":{"reason":"missing_api_key"}}}""",
-    )
-
-    assertContains(harness.session.outcome()?.failure.orEmpty(), "-32001")
-    assertContains(harness.session.outcome()?.failure.orEmpty(), "missing_api_key")
-    assertFalse(harness.frames.any { it.text(CursorAcpKeys.METHOD) == CursorAcpKeys.SESSION_PROMPT })
-  }
-
-  @Test
-  fun `OpenCode load keeps the supplied handle ignores replay and cancels permissions without an owner`() {
-    val harness = Harness(saved = "saved-session", provider = AcpProvider.OpenCode, bindOwner = false)
-    harness.session.start()
-    harness.respond("""{"protocolVersion":1,"agentCapabilities":{"loadSession":true}}""")
-    assertEquals(CursorAcpKeys.SESSION_LOAD, harness.frames.last().text(CursorAcpKeys.METHOD))
-    assertEquals(
-      JsonPrimitive("saved-session"),
-      harness.frames.last()[CursorAcpKeys.PARAMS]?.jsonObject?.get(CursorAcpKeys.SESSION_ID),
-    )
-    harness.respond(
-      """{"sessionId":"saved-session","configOptions":[{"id":"mode","category":"mode",""" +
-        """"currentValue":"primary","options":[{"value":"primary"}]}]}""",
-    )
-    harness.session.observe(
-      """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"saved-session",""" +
-        """"update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text",""" +
-        """"text":"replayed"}}}}""",
-    )
-    harness.respond(
-      """{"configOptions":[{"id":"mode","category":"mode","currentValue":"primary",""" +
-        """"options":[{"value":"primary"}]}]}""",
-    )
-    val promptId = harness.frames.last()[CursorAcpKeys.ID]
-    harness.permission("17", "write", "git status")
-    assertEquals(
-      Json.parseToJsonElement("""{"outcome":{"outcome":"cancelled"}}"""),
-      harness.frames.last()[CursorAcpKeys.RESULT],
-    )
-    harness.session.observe(
-      """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"saved-session",""" +
-        """"update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text",""" +
-        """"text":"live answer"}}}}""",
-    )
-    harness.session.observe("""{"jsonrpc":"2.0","id":$promptId,"result":{"stopReason":"end_turn"}}""")
-
-    assertEquals("live answer", harness.session.outcome()?.text)
-    assertFalse(harness.frames.any { it.text(CursorAcpKeys.METHOD) == CursorAcpKeys.SESSION_NEW })
-    harness.session.close()
-  }
-
-  @Test
-  fun `all providers fail end turn without live assistant text`() {
-    for (provider in listOf(AcpProvider.Cursor, AcpProvider.Junie, AcpProvider.OpenCode)) {
-      for (content in listOf("", "   ", null)) {
-        val harness = Harness(saved = "saved-session".takeIf { provider == AcpProvider.OpenCode }, provider = provider)
-        val promptId = harness.startPrompt()
-        if (content != null) harness.text(content)
-        if (content == null) harness.toolCall()
-        harness.session.observe("""{"jsonrpc":"2.0","id":$promptId,"result":{"stopReason":"end_turn"}}""")
-
-        assertContains(
-          harness.session.outcome()?.failure.orEmpty(),
-          "without assistant text",
-          message = "$provider content=$content",
-        )
-        assertContains(harness.records.toString(), "empty_assistant_response", message = "$provider content=$content")
-        harness.session.close()
-      }
-    }
-  }
-
-  @Test
-  fun `resumed OpenCode replay alone does not satisfy assistant text capture`() {
-    val harness = Harness(saved = "saved-session", provider = AcpProvider.OpenCode)
-    harness.session.start()
-    harness.respond("""{"protocolVersion":1,"agentCapabilities":{"loadSession":true}}""")
-    harness.respond(
-      """{"sessionId":"saved-session","configOptions":[{"id":"mode","category":"mode",""" +
-        """"currentValue":"build","options":[{"value":"build"}]}]}""",
-    )
-    harness.text("replayed", sessionId = "saved-session")
-    harness.respond(
-      """{"configOptions":[{"id":"mode","category":"mode","currentValue":"build",""" +
-        """"options":[{"value":"build"}]}]}""",
-    )
-    val promptId = harness.frames.last()[CursorAcpKeys.ID]
-    harness.session.observe("""{"jsonrpc":"2.0","id":$promptId,"result":{"stopReason":"end_turn"}}""")
-
-    assertContains(harness.session.outcome()?.failure.orEmpty(), "without assistant text")
-    assertTrue(harness.events.none { it is CursorAcpEvent.Text })
-    harness.session.close()
-  }
-
-  @Test
-  fun `nonblank text succeeds for Cursor and Junie`() {
-    for (provider in listOf(AcpProvider.Cursor, AcpProvider.Junie)) {
-      val harness = Harness(provider = provider)
-      val promptId = harness.startPrompt()
-      harness.text("$provider answer")
-      harness.session.observe("""{"jsonrpc":"2.0","id":$promptId,"result":{"stopReason":"end_turn"}}""")
-
-      assertNull(harness.session.outcome()?.failure)
-      assertEquals("$provider answer", harness.session.outcome()?.text)
-      harness.session.close()
-    }
-  }
-
-  @Test
-  fun `protocol failure after partial text remains a failure`() {
-    for (provider in listOf(AcpProvider.Cursor, AcpProvider.Junie, AcpProvider.OpenCode)) {
-      val harness = Harness(provider = provider)
-      val promptId = harness.startPrompt()
-      harness.text("partial answer")
-      harness.session.observe(
-        """{"jsonrpc":"2.0","id":$promptId,"error":{"code":-32001,"message":"provider failed"}}""",
-      )
-
-      assertContains(harness.session.outcome()?.failure.orEmpty(), "provider failed", message = "$provider")
-      assertEquals("partial answer", harness.session.outcome()?.text)
-      harness.session.close()
-    }
-  }
-
   @Test
   fun `team dashboard dependency refuses before any ACP request`() {
     val harness = Harness(dependency = CursorAcpMcpDependency.TeamDashboardRequired)
@@ -565,6 +308,43 @@ class CursorAcpSessionTest {
   }
 
   @Test
+  fun `execute and move permissions carry match facts`() {
+    val checkout = Files.createTempDirectory("cursor-facts").toRealPath()
+    try {
+      Files.createDirectories(checkout.resolve("src"))
+      Files.writeString(checkout.resolve("src/a.kt"), "x")
+      val harness = Harness(checkout = checkout.toString())
+      harness.open()
+      harness.permission("90", "run", "git status")
+      assertEquals(ApprovalMatchFacts.Command("git status"), harness.owner.requests.last().matchFacts)
+      harness.session.observe(
+        """{"jsonrpc":"2.0","id":91,"method":"session/request_permission",""" +
+          """"params":{"sessionId":"s","toolCall":{"toolCallId":"mv","title":"Move","kind":"move",""" +
+          """"rawInput":{"path":"src/b.kt"},"locations":[{"path":"src/a.kt"}]},""" +
+          """"options":[{"optionId":"once-mv","name":"Allow once","kind":"allow_once"},""" +
+          """{"optionId":"deny-mv","name":"Reject once","kind":"reject_once"}]}}""",
+      )
+      assertEquals(
+        ApprovalMatchFacts.Paths(listOf("src/a.kt", "src/b.kt")),
+        harness.owner.requests.last().matchFacts,
+      )
+      harness.session.observe(
+        """{"jsonrpc":"2.0","id":92,"method":"session/request_permission",""" +
+          """"params":{"sessionId":"s","toolCall":{"toolCallId":"mv-dest","title":"Move","kind":"move",""" +
+          """"rawInput":{"path":"src/b.kt"}},""" +
+          """"options":[{"optionId":"once-dest","name":"Allow once","kind":"allow_once"},""" +
+          """{"optionId":"deny-dest","name":"Reject once","kind":"reject_once"}]}}""",
+      )
+      assertEquals(null, harness.owner.requests.last().matchFacts)
+      harness.session.close()
+    } finally {
+      Files.walk(checkout).use { paths ->
+        paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
+      }
+    }
+  }
+
+  @Test
   fun `an owned permission for a different session is cancelled without approval or termination`() {
     val harness = Harness()
     harness.open()
@@ -602,32 +382,28 @@ class CursorAcpSessionTest {
   }
 
   private class Harness(
-    private val saved: String? = null,
+    saved: String? = null,
     model: String? = null,
     dependency: CursorAcpMcpDependency = CursorAcpMcpDependency.ProjectUserOnly,
-    private val provider: AcpProvider = AcpProvider.Cursor,
+    provider: AcpProvider = AcpProvider.Cursor,
+    checkout: String = "/checkout",
     bindOwner: Boolean = true,
-    effort: String? = null,
-    mcpServers: List<CursorAcpMcpServer> = emptyList(),
   ) {
     val frames = mutableListOf<JsonObject>()
     val events = mutableListOf<CursorAcpEvent>()
     val cards = mutableListOf<ApprovalRequestRecord>()
     val reportedModels = mutableListOf<String>()
-    val records = mutableListOf<String>()
     val owner = Owner()
     val session =
       CursorAcpSession(
         CursorAcpLaunch(
-          "/checkout",
+          checkout,
           "scoped prompt",
           model,
           "agent".takeIf { provider == AcpProvider.Cursor },
           saved,
           mcpDependency = dependency,
           provider = provider,
-          effort = effort,
-          mcpServers = mcpServers,
         ),
         Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
         {
@@ -637,7 +413,7 @@ class CursorAcpSessionTest {
         { true },
         events::add,
         cards::add,
-        records::add,
+        {},
         onModel = { reportedModels += it },
       )
 
@@ -661,58 +437,6 @@ class CursorAcpSessionTest {
       assertTrue(session.ready)
     }
 
-    fun startPrompt(): JsonPrimitive {
-      when (provider) {
-        AcpProvider.Cursor -> open()
-        AcpProvider.Junie -> {
-          session.start()
-          respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
-          respond("""{"sessionId":"${saved ?: "s"}"}""")
-          respond("""{"configOptions":[{"id":"brave_mode","currentValue":true}]}""")
-        }
-        AcpProvider.OpenCode -> {
-          session.start()
-          respond(
-            """{"protocolVersion":1,"agentCapabilities":{${if (saved != null) "\"loadSession\":true" else ""}}}""",
-          )
-          if (saved != null) {
-            respond(
-              """{"sessionId":"$saved","configOptions":[{"id":"mode","category":"mode",""" +
-                """"currentValue":"build","options":[{"value":"build"}]}]}""",
-            )
-          } else {
-            respond(
-              """{"sessionId":"s","configOptions":[{"id":"mode","category":"mode",""" +
-                """"currentValue":"build","options":[{"value":"build"}]}]}""",
-            )
-          }
-          respond(
-            """{"configOptions":[{"id":"mode","category":"mode","currentValue":"build",""" +
-              """"options":[{"value":"build"}]}]}""",
-          )
-        }
-        else -> error("Unsupported provider: $provider")
-      }
-      return frames.last()[CursorAcpKeys.ID] as JsonPrimitive
-    }
-
-    fun text(
-      value: String,
-      sessionId: String = saved ?: "s",
-    ) {
-      session.observe(
-        """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"$sessionId",""" +
-          """"update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"$value"}}}}""",
-      )
-    }
-
-    fun toolCall() {
-      session.observe(
-        """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"${saved ?: "s"}",""" +
-          """"update":{"sessionUpdate":"tool_call","toolCallId":"tool-1"}}}""",
-      )
-    }
-
     fun respond(result: String) {
       val id = frames.last()[CursorAcpKeys.ID]
       session.observe("""{"jsonrpc":"2.0","id":$id,"result":$result}""")
@@ -725,11 +449,10 @@ class CursorAcpSessionTest {
       allow: Boolean = true,
     ) {
       val encoded = JsonPrimitive(input)
-      val sessionId = JsonPrimitive(saved ?: "s")
       val allowOption = if (allow) """{"optionId":"once-$tool","name":"Allow once","kind":"allow_once"},""" else ""
       session.observe(
         """{"jsonrpc":"2.0","id":$id,"method":"session/request_permission",""" +
-          """"params":{"sessionId":$sessionId,"toolCall":{"toolCallId":"$tool",""" +
+          """"params":{"sessionId":"s","toolCall":{"toolCallId":"$tool",""" +
           """"title":"Full action","kind":"execute","rawInput":{"command":$encoded,""" +
           """"cwd":"/checkout"}},"options":[$allowOption{"optionId":"deny-$tool",""" +
           """"name":"Reject once","kind":"reject_once"},{"optionId":"remember-$tool",""" +

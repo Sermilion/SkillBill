@@ -72,7 +72,7 @@ public class AcceptanceAuditStrategy :
     return when (stepId) {
       entryStep -> AcceptanceAuditPromptSections.sections(inputs)
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX ->
-        AuditPlanFixPromptSections.sections(inputs.currentAcceptanceCriterion, inputs.priorAcceptanceRepairFailures)
+        AuditPlanFixPromptSections.sections(inputs)
       else -> AuditImplementFixPromptSections.sections(inputs)
     }
   }

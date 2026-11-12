@@ -9,6 +9,10 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
+import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
+import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
+import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SessionMoveResult
@@ -59,6 +63,37 @@ class AgentExecutionChatRepository(
 
   override fun supports(agentId: String): Boolean = transports.any { it.agentId == agentId }
 
+  override fun steeringPolicy(agentId: String): ChatSteeringPolicy =
+    transports.firstOrNull { it.agentId == agentId }?.steeringPolicy ?: ChatSteeringPolicy.LegacySendNow
+
+  override suspend fun steer(request: ChatSteeringRequest): ChatSteeringResult {
+    val transport = transports.firstOrNull { it.agentId == request.agentId }
+    if (transport == null) {
+      diagnostics.record("chat.steering_unsupported")
+      return ChatSteeringResult.Unsupported(request.deliveryId, "Live delivery is unavailable")
+    }
+    val result = transport.steer(request)
+    when (result) {
+      is ChatSteeringResult.Accepted -> Unit
+      is ChatSteeringResult.DeliveryUncertain -> diagnostics.record("chat.steering_uncertain")
+      else -> diagnostics.record("chat.steering_fallback")
+    }
+    return result
+  }
+
+  override fun steeringUpdates(agentId: String, sessionId: String): Flow<ChatSteeringUpdate> =
+    transports.firstOrNull { it.agentId == agentId }?.steeringUpdates(sessionId) ?: kotlinx.coroutines.flow.emptyFlow()
+
+  override fun settleSteering(agentId: String, sessionId: String, deliveryId: String): ChatSteeringResult {
+    diagnostics.record("chat.steering_settled_for_teardown")
+    return transports.firstOrNull { it.agentId == agentId }?.settleSteering(sessionId, deliveryId)
+      ?: ChatSteeringResult.NoActiveTurn(deliveryId, "The chat transport is unavailable")
+  }
+
+  override fun retireSteering(agentId: String, sessionId: String, deliveryId: String) {
+    transports.firstOrNull { it.agentId == agentId }?.retireSteering(sessionId, deliveryId)
+  }
+
   override fun send(request: ChatTurnRequest): Flow<ChatEvent> = flow {
     val transport = transports.firstOrNull { it.agentId == request.agent.agentId }
     if (transport == null) {
@@ -83,6 +118,10 @@ class AgentExecutionChatRepository(
 
   override fun end(sessionId: String) {
     activeTurns[sessionId]?.transport?.end(sessionId) ?: transports.forEach { it.end(sessionId) }
+  }
+
+  override suspend fun awaitEnd(sessionId: String) {
+    activeTurns[sessionId]?.transport?.awaitEnd(sessionId) ?: transports.forEach { it.awaitEnd(sessionId) }
   }
 
   override suspend fun stopTurn(sessionId: String): ChatStopSettlement {

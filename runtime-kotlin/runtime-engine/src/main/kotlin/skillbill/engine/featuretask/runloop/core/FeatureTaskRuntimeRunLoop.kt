@@ -3,9 +3,15 @@ package skillbill.engine.featuretask.runloop.core
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.spec.SpecIntentProjectionResolver
 import skillbill.contracts.projectstore.LegacyProjectStatePaths
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolver
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchResolver
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeResolvedPhaseAgent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
 import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationBoundaryMemory
 import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompletion
@@ -21,9 +27,11 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitio
 import skillbill.engine.featuretask.runloop.state.coupledProgress
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.coupledSession
+import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.PhaseBindingFactory
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.PhaseUpstreamFailureContinuationHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
 import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
 import skillbill.engine.featuretask.slot.attempt.phaseAttemptLaunchCollaborationScope
@@ -45,8 +53,11 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.nio.file.Path
 import java.time.Clock
 
@@ -61,7 +72,7 @@ public class FeatureTaskRuntimeRunLoopContext internal constructor(
   internal val qualityGateCycles: RuntimeQualityGateCycles,
   override val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
   override val diffResolver: DiffResolverPort,
-  internal val projectStoreRoot: Path,
+  internal val phaseRunFactory: FeatureTaskRuntimePhaseRunFactory,
 ) : PhaseRunLoopAttemptCollaborators {
   internal val commitPushManifestCompletion: CommitPushManifestCompletion?
     get() = runState.commitPushManifestCompletion
@@ -238,7 +249,7 @@ public open class FeatureTaskRuntimeRunLoopEntry(
   private val diffResolver: DiffResolverPort,
   private val implementationChecklistStore: FeatureTaskImplementationChecklistStore,
   private val commitPushManifestCompletion: CommitPushManifestCompletion,
-  private val projectStore: ProjectStorePort,
+  private val phaseRunFactory: FeatureTaskRuntimePhaseRunFactory,
 ) {
   public fun context(
     request: FeatureTaskRuntimeRunFacts,
@@ -257,7 +268,7 @@ public open class FeatureTaskRuntimeRunLoopEntry(
       qualityGateCycles,
       sharedEvidenceResolver,
       diffResolver,
-      projectStore.resolve(request.repoRoot).root,
+      phaseRunFactory,
     )
   }
 
@@ -291,6 +302,100 @@ public open class FeatureTaskRuntimeRunLoopEntry(
     loop.drive(outputSink, captureStreamOutput, afterStepSettlement)
     return loop.report()
   }
+}
+
+@Inject
+public class FeatureTaskRuntimePhaseRunFactory(
+  private val stepLaunchResolver: FeatureTaskRuntimeStepLaunchResolver,
+  private val projectStore: ProjectStorePort,
+) {
+  internal fun build(
+    context: FeatureTaskRuntimeRunLoopContext,
+    phaseId: String,
+    request: FeatureTaskRuntimeRunFacts,
+    specSource: SpecSource,
+    reentry: PendingReentry?,
+  ): PhaseRun {
+    val recorded = context.runState.stepLaunchAssignment(phaseId)
+    val resolvedAgent = resolveAgent(context, phaseId, request, recorded)
+    val resolvedAgentId = resolvedAgent.resolvedAgentId
+    val repairState =
+      (request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.snapshot
+    val criterion =
+      repairState?.let { state ->
+        state.criteria.singleOrNull { it.canonicalRef == state.currentCriterionRef }
+      }
+    val escalatedRepair =
+      phaseId == (request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.steps?.repair &&
+        criterion?.escalated == true
+    val reasoningDirective =
+      if (escalatedRepair) {
+        FeatureTaskRuntimeModelResolver.reasoningTierDirective(resolvedAgentId, request.modelAssignment)
+      } else {
+        null
+      }
+    val escalatedAssignment =
+      reasoningDirective?.let { directive ->
+        stepLaunchResolver.resolveDirective(
+          phaseId,
+          resolvedAgentId,
+          directive,
+          if (request.goalContinuation == null) {
+            LaunchEnvironmentKind.INHERITED
+          } else {
+            LaunchEnvironmentKind.GOVERNED_CHILD
+          },
+        )
+      }
+    return PhaseRun(
+      phaseId = phaseId,
+      declaration =
+        phaseDeclaration(
+          phaseId,
+          request.runInvariants.featureSize,
+          context.runState.unselectedStepIds(),
+        ),
+      resolvedAgent = resolvedAgent,
+      modelDirective =
+        reasoningDirective ?: FeatureTaskRuntimeResumeLaunchAssignment.modelDirective(
+          recorded,
+          resolvedAgentId,
+          phaseId,
+          request.modelAssignment,
+        ),
+      compaction = request.compactionSettings.directiveFor(phaseId),
+      request = request,
+      specSource = specSource,
+      policy = context.acceptedStepPolicy(phaseId),
+      projectStoreRoot = projectStore.resolve(request.repoRoot).root,
+      launchAssignment =
+        escalatedAssignment ?: FeatureTaskRuntimeResumeLaunchAssignment.recordedForAgent(recorded, resolvedAgentId),
+      reentry = reentry,
+      failureContinuationOutput =
+        (context.runState.strategyFor(phaseId).stepHooks(phaseId) as? PhaseUpstreamFailureContinuationHooks)
+          ?.failureContinuationOutput(context.state.outputs()),
+    )
+  }
+
+  private fun resolveAgent(
+    context: FeatureTaskRuntimeRunLoopContext,
+    phaseId: String,
+    request: FeatureTaskRuntimeRunFacts,
+    recorded: StepLaunchAssignment?,
+  ): FeatureTaskRuntimeResolvedPhaseAgent =
+    FeatureTaskRuntimeAgentResolver.resolve(
+      phaseId = phaseId,
+      assignment = request.agentAssignment,
+      invokedAgentId = request.invokedAgentId,
+    ).let { resolved ->
+      val priorPhase = context.state.phase(phaseId).record
+      val providerPaused =
+        priorPhase?.status == WorkflowStepStatus.PAUSED &&
+          FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(priorPhase.blockedReason.orEmpty())
+      recorded?.takeIf { providerPaused }?.let { assignment ->
+        resolved.copy(invokedAgentId = assignment.agentId, configuredAgentOverrideId = null)
+      } ?: resolved
+    }
 }
 
 public class FeatureTaskRuntimeRunLoop internal constructor(

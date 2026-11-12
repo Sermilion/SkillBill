@@ -46,6 +46,7 @@ import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.feature.chat.AgentPicker
 import dev.skillbill.desktop.feature.chat.CursorMcpPicker
+import dev.skillbill.desktop.feature.chat.ChatDeliveryRecovery
 import dev.skillbill.desktop.feature.chat.ChatActivityPill
 import dev.skillbill.desktop.feature.chat.ClipboardImageReader
 import dev.skillbill.desktop.feature.chat.ImageChip
@@ -83,23 +84,29 @@ internal fun NewTaskComposer(
   val chat by draft.chat.collectAsState()
   val busy = chat?.let { key(it) { it.thread.busy.collectAsState().value } } ?: false
   val stoppable = chat?.let { key(it) { it.thread.stoppable.collectAsState().value } } ?: false
+  val delivery = chat?.let { key(it) { it.thread.delivery.collectAsState().value } }
   val queued = chat?.let { key(it) { it.thread.queued.collectAsState().value } }.orEmpty()
-  val changes = chat?.let { key(it) { it.changes.collectAsState().value } } ?: ChatChangesState.None
+  val changesRoot = chat?.repositoryRoot ?: draft.repository?.root
+  val preview = remember(draft, chat, changesRoot) { changesRoot?.takeIf { chat == null }?.let(draft::previewChanges) }
+  LaunchedEffect(preview) { preview?.observe() }
+  val changes = chat?.let { key(it) { it.changes.collectAsState().value } }
+    ?: preview?.let { key(it) { it.state.collectAsState().value } } ?: ChatChangesState.None
   val gate = remember(chat) { SendNowGate() }
   val cursorMcpDependency = draft.cursorMcpDependency
   val offer by draft.offer.collectAsState()
-  val ready = !offer.starting && draft.canSend()
-  val sendNow = stoppable && queued.isNotEmpty() && draft.text.isBlank() && draft.images.isEmpty() && !offer.starting
+  val ready = !offer.starting && !draft.branchSwitching && draft.canSend()
+  val sendNow = delivery == null && stoppable && queued.isNotEmpty() && draft.text.isBlank() && draft.images.isEmpty() && !offer.starting
   val pickersDisabledWhy = when {
+    delivery != null -> "Resolve the pending follow-up first"
     busy -> PICKERS_DISABLED_BUSY
-    offer.starting -> PICKERS_DISABLED_STARTING
+    offer.starting || draft.branchSwitching -> PICKERS_DISABLED_STARTING
     chat?.repositoryMissing == true -> PICKERS_DISABLED_MISSING_REPO
     else -> null
   }
   val pickersEnabled = pickersDisabledWhy == null
   val saved by draft.saved.collectAsState()
   val submit = {
-    val startsTurn = ready && !busy && draft.text.trim() != RESUME_COMMAND
+    val startsTurn = ready && !busy && delivery == null && draft.text.trim() != RESUME_COMMAND
     draft.cursorMcpDependency = cursorMcpDependency
     onAction(NewTaskAction.Send)
     if (startsTurn) focusManager.clearFocus()
@@ -118,6 +125,11 @@ internal fun NewTaskComposer(
   Column(Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     // A draft whose repository is gone refuses every turn, so it has no activity to report and is not "Ready".
     chat?.takeUnless { it.repositoryMissing }?.let { key(it) { ChatActivityPill(it.thread) } }
+    delivery?.let { pending ->
+      chat?.let { current -> ChatDeliveryRecovery(pending, current::retryDelivery, current::discardDelivery, current.thread::keepOpen) }
+    }
+    val transcript = chat?.thread?.transcript?.collectAsState()?.value.orEmpty()
+    NewTaskBranchWarning(state, draft, pickersEnabled, onAction, draft.branchChoiceRequested || newTaskNeedsBranchWarning(transcript))
     Box(Modifier.fillMaxWidth()) {
       SbInput(
         draft.text, { onAction(NewTaskAction.TextChanged(it)) },
@@ -153,7 +165,7 @@ internal fun NewTaskComposer(
     if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        RepositoryPicker(state, draft, chat, busy, offer.starting, focus, now, Modifier.weight(1f, fill = false), onAction)
+        RepositoryPicker(state, draft, chat, busy || delivery != null, offer.starting || draft.branchSwitching, focus, now, Modifier.weight(1f, fill = false), onAction)
         AgentPicker(
           state.agent, state.agents, draft.repository?.root, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy,
           loadModels = draft::models, onChooseModel = { onAction(NewTaskAction.ChooseModel(it)) },
@@ -163,7 +175,7 @@ internal fun NewTaskComposer(
         }
       }
       Row(Modifier.wrapContentWidth(unbounded = true), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        ChatChangesAnchor(chat, changes, focus, now, onOpenChanges)
+        ChatChangesAnchor(chat, changes, focus, onOpenChanges, changesRoot)
         if (stoppable) {
           SbButton(
             "Stop", { onAction(NewTaskAction.Stop); focus.requestFocus() },
@@ -174,7 +186,7 @@ internal fun NewTaskComposer(
         SbButton(
           when {
             sendNow -> "Send now"
-            busy -> "Queue"
+            busy || delivery != null -> "Queue"
             else -> "Send"
           },
           { press(false) },

@@ -3,6 +3,7 @@ package dev.skillbill.desktop.core.data.chat
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
+import dev.skillbill.desktop.core.data.usage.cursorEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
@@ -17,6 +18,7 @@ import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.io.File
 import java.io.IOException
+import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 
 /** Agents whose CLI keeps its own session store; the rest only resume chats the app saved. */
@@ -57,6 +59,8 @@ class AgentSessionCatalog(
         session.id, saved?.executionId, agent, session.updatedAt,
         saved?.title ?: session.title ?: "${session.agentId} session", saved?.lines.orEmpty(),
         summary = saved?.summary,
+        appSessionId = saved?.sessionId,
+        executionCheckoutRoot = root,
       )
     }
     val appSaved = store.savedChats(executionId)
@@ -87,7 +91,24 @@ class AgentSessionCatalog(
         throw IOException("Could not save the provider thread for this chat. Try opening it again.")
       }
     } else if (entry.agent.agentId == "cursor") {
-      store.saveAgentSession(entry.sessionId, entry.sessionId)
+      val storageId = entry.appSessionId ?: entry.sessionId
+      val environment = cursorEnvironment(host.variables, entry.agent.profile)
+      val profile = environment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR]
+        ?: environment["HOME"]
+        ?: host.userHome
+      val existingBinding = store.cursorSessionBinding(storageId)
+      if (existingBinding != null) {
+        if (!store.saveAgentSession(storageId, entry.sessionId)) {
+          throw IOException("Could not save the provider thread for this chat. Try opening it again.")
+        }
+      } else {
+        val root = entry.executionCheckoutRoot
+          ?: throw IOException("The saved Cursor checkout is unknown. Start an explicit new chat; history was not replaced.")
+        val binding = CursorSessionBinding(profile, Path.of(root).toAbsolutePath().normalize().toString())
+        if (!store.saveCursorSession(storageId, entry.sessionId, binding)) {
+          throw IOException("Could not save the provider thread for this chat. Try opening it again.")
+        }
+      }
     }
     if (entry.lines.isNotEmpty()) return entry.lines
     val file = listed[entry.sessionId]?.file ?: return emptyList()

@@ -1829,22 +1829,10 @@ desktop_app_target_path() {
   local os="$1" install_root="$2"
   case "$os" in
     macos)
-      printf '%s/Skill Bill.app' "$install_root"
+      printf '%s/Sona.app' "$install_root"
       ;;
     *)
-      printf '%s/Skill Bill' "$install_root"
-      ;;
-  esac
-}
-
-desktop_app_legacy_target_path() {
-  local os="$1" install_root="$2"
-  case "$os" in
-    macos)
-      printf '%s/SkillBill.app' "$install_root"
-      ;;
-    *)
-      printf '%s/SkillBill' "$install_root"
+      printf '%s/Sona' "$install_root"
       ;;
   esac
 }
@@ -1853,28 +1841,13 @@ desktop_app_executable_path() {
   local os="$1" app_target="$2"
   case "$os" in
     macos)
-      printf '%s/Contents/MacOS/Skill Bill' "$app_target"
+      printf '%s/Contents/MacOS/Sona' "$app_target"
       ;;
     windows)
-      printf '%s/bin/Skill Bill.bat' "$app_target"
+      printf '%s/Sona.exe' "$app_target"
       ;;
     *)
-      printf '%s/bin/Skill Bill' "$app_target"
-      ;;
-  esac
-}
-
-desktop_app_legacy_executable_path() {
-  local os="$1" app_target="$2"
-  case "$os" in
-    macos)
-      printf '%s/Contents/MacOS/SkillBill' "$app_target"
-      ;;
-    windows)
-      printf '%s/bin/SkillBill.bat' "$app_target"
-      ;;
-    *)
-      printf '%s/bin/SkillBill' "$app_target"
+      printf '%s/bin/Sona' "$app_target"
       ;;
   esac
 }
@@ -1886,58 +1859,202 @@ desktop_quoted_exec_path() {
   printf '"%s"' "$value"
 }
 
-install_desktop_app_launcher() {
-  local os="$1" app_target="$2" executable="$3"
-  local launcher_path launcher_temp windows_executable legacy_executable
-  mkdir -p "$RUNTIME_LAUNCHER_BIN_DIR" || return 1
-
+check_desktop_app_launcher_ownership() {
+  local os="$1" app_target="$2" executable="$3" launcher_path windows_executable
+  launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
   if [[ "$os" == "windows" ]]; then
-    launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop.cmd"
-    if [[ -e "$launcher_path" ]] && ! grep -q '^REM Managed by Skill Bill install.sh$' "$launcher_path"; then
+    launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
+    if command -v cygpath >/dev/null 2>&1; then windows_executable="$(cygpath -w "$executable")"; else windows_executable="${executable//\//\\}"; fi
+    if [[ -e "$launcher_path" || -L "$launcher_path" ]] && { [[ ! -f "$launcher_path" || -L "$launcher_path" ]] || ! tr -d '\r' < "$launcher_path" | grep -Fxq "\"$windows_executable\" %*" || ! tr -d '\r' < "$launcher_path" | grep -Fxq 'REM Managed by Sona install.sh'; }; then
       err "Refusing to overwrite an unrelated desktop launcher: $launcher_path"
       return 1
     fi
-    if command -v cygpath >/dev/null 2>&1; then
-      windows_executable="$(cygpath -w "$executable")"
-    else
-      windows_executable="${executable//\//\\}"
-    fi
-    launcher_temp="$launcher_path.tmp.$$"
-    {
-      printf '@echo off\r\n'
-      printf 'REM Managed by Skill Bill install.sh\r\n'
-      printf '"%s" %%*\r\n' "$windows_executable"
-    } > "$launcher_temp" || return 1
-    mv -f "$launcher_temp" "$launcher_path" || return 1
     return 0
   fi
-
-  launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop"
-  legacy_executable="$(desktop_app_legacy_executable_path "$os" "$(desktop_app_legacy_target_path "$os" "$(dirname "$app_target")")")"
-  if [[ -e "$launcher_path" || -L "$launcher_path" ]]; then
-    if [[ ! -L "$launcher_path" || ( "$(readlink "$launcher_path")" != "$executable" && "$(readlink "$launcher_path")" != "$legacy_executable" ) ]]; then
-      err "Refusing to overwrite an unrelated desktop launcher: $launcher_path"
+  if [[ -e "$launcher_path" || -L "$launcher_path" ]] && { [[ ! -L "$launcher_path" ]] || [[ "$(readlink "$launcher_path")" != "$executable" ]]; }; then
+    err "Refusing to overwrite an unrelated desktop launcher: $launcher_path"
+    return 1
+  fi
+  if [[ "$os" == "linux" ]]; then
+    local desktop_file="${XDG_DATA_HOME:-$HOME/.local/share}/applications/sona.desktop"
+    local quoted_launcher expected_icon
+    quoted_launcher="$(desktop_quoted_exec_path "$launcher_path")"
+    expected_icon="$app_target/lib/Sona.png"
+    if [[ -e "$desktop_file" || -L "$desktop_file" ]] && { [[ ! -f "$desktop_file" || -L "$desktop_file" ]] || ! grep -Fxq "Exec=$quoted_launcher" "$desktop_file" || ! grep -Fxq "Icon=$expected_icon" "$desktop_file"; }; then
+      err "Refusing to overwrite an unrelated desktop entry: $desktop_file"
       return 1
     fi
   fi
-  ln -sfn "$executable" "$launcher_path" || return 1
+}
 
+prepare_desktop_app_launcher() {
+  local os="$1" app_target="$2" executable="$3"
+  local launcher_path launcher_temp windows_executable applications_dir desktop_file quoted_launcher
+  local staged_desktop=""
+  local expected_icon="$app_target/lib/Sona.png"
+  mkdir -p "$RUNTIME_LAUNCHER_BIN_DIR" || return 1
+  check_desktop_app_launcher_ownership "$os" "$app_target" "$executable" || return 1
+  launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
+  [[ "$os" != "windows" ]] || launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
   if [[ "$os" == "linux" ]]; then
-    local applications_dir desktop_file quoted_launcher
     applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
-    desktop_file="$applications_dir/skillbill.desktop"
+    desktop_file="$applications_dir/sona.desktop"
     quoted_launcher="$(desktop_quoted_exec_path "$launcher_path")"
+    if [[ -e "$desktop_file" || -L "$desktop_file" ]]; then
+      if [[ ! -f "$desktop_file" || -L "$desktop_file" ]] || ! grep -Fxq "Exec=$quoted_launcher" "$desktop_file" || ! grep -Fxq "Icon=$expected_icon" "$desktop_file"; then
+        err "Refusing to overwrite an unrelated desktop entry: $desktop_file"
+        return 1
+      fi
+    fi
     mkdir -p "$applications_dir" || return 1
-    cat > "$desktop_file" <<ENTRY
+    staged_desktop="$desktop_file.stage.$$"
+    if ! cat > "$staged_desktop" <<ENTRY
 [Desktop Entry]
-Name=Skill Bill
+Name=Sona
 Type=Application
 Exec=$quoted_launcher
-Icon=$app_target/lib/Skill Bill.png
+Icon=$expected_icon
 StartupWMClass=dev-skillbill-desktop-app-DesktopLauncherKt
 Terminal=false
 Categories=Development;
 ENTRY
+    then
+      rm -f "$staged_desktop"
+      return 1
+    fi
+  fi
+
+  launcher_temp="$launcher_path.stage.$$"
+  if [[ "$os" == "windows" ]]; then
+    if command -v cygpath >/dev/null 2>&1; then windows_executable="$(cygpath -w "$executable")"; else windows_executable="${executable//\//\\}"; fi
+    { printf '@echo off\r\n'; printf 'REM Managed by Sona install.sh\r\n'; printf '"%s" %%*\r\n' "$windows_executable"; } > "$launcher_temp" || { rm -f "$staged_desktop"; return 1; }
+  else
+    ln -s "$executable" "$launcher_temp" || { rm -f "$staged_desktop"; return 1; }
+  fi
+}
+
+discard_desktop_app_launcher_stage() {
+  local os="$1" launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
+  [[ "$os" != "windows" ]] || launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
+  rm -f "$launcher_path.stage.$$"
+  if [[ "$os" == "linux" ]]; then rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/applications/sona.desktop.stage.$$"; fi
+}
+
+install_desktop_app_launcher() {
+  local os="$1" app_target="$2" executable="$3"
+  local launcher_path launcher_temp desktop_file launcher_backup="" desktop_backup="" staged_desktop=""
+  launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
+  [[ "$os" != "windows" ]] || launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
+  launcher_temp="$launcher_path.stage.$$"
+  check_desktop_app_launcher_ownership "$os" "$app_target" "$executable" || { discard_desktop_app_launcher_stage "$os"; return 1; }
+  if [[ "$os" == "linux" ]]; then
+    desktop_file="${XDG_DATA_HOME:-$HOME/.local/share}/applications/sona.desktop"
+    staged_desktop="$desktop_file.stage.$$"
+    [[ -f "$desktop_file" ]] && { desktop_backup="$desktop_file.bak.$$"; cp -p "$desktop_file" "$desktop_backup" || { discard_desktop_app_launcher_stage "$os"; return 1; }; }
+  fi
+  if [[ -e "$launcher_path" || -L "$launcher_path" ]]; then launcher_backup="$launcher_path.bak.$$"; mv "$launcher_path" "$launcher_backup" || { [[ -z "$desktop_backup" ]] || rm -f "$desktop_backup"; discard_desktop_app_launcher_stage "$os"; return 1; }; fi
+  if ! mv "$launcher_temp" "$launcher_path"; then
+    [[ -z "$launcher_backup" ]] || mv "$launcher_backup" "$launcher_path"
+    [[ -z "$desktop_backup" ]] || rm -f "$desktop_backup"
+    discard_desktop_app_launcher_stage "$os"
+    return 1
+  fi
+  if [[ "$os" == "linux" ]]; then
+    if ! mv "$staged_desktop" "$desktop_file"; then
+      rm -f "$launcher_path"
+      [[ -z "$launcher_backup" ]] || mv "$launcher_backup" "$launcher_path"
+      [[ -z "$desktop_backup" ]] || mv "$desktop_backup" "$desktop_file"
+      discard_desktop_app_launcher_stage "$os"
+      return 1
+    fi
+    rm -f "$desktop_backup"
+  fi
+  [[ -z "$launcher_backup" ]] || rm -f "$launcher_backup"
+}
+
+linux_legacy_desktop_is_owned() {
+  local legacy_app="$1/Skill Bill"
+  local legacy_launcher="$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop"
+  local legacy_entry="${XDG_DATA_HOME:-$HOME/.local/share}/applications/skillbill.desktop"
+  local has_owner=0
+  [[ ! -L "$legacy_app" ]] || return 1
+  if [[ -e "$legacy_launcher" || -L "$legacy_launcher" ]]; then
+    [[ -L "$legacy_launcher" && "$(readlink "$legacy_launcher")" == "$legacy_app/bin/Skill Bill" ]] || return 1
+    has_owner=1
+  fi
+  if [[ -e "$legacy_entry" || -L "$legacy_entry" ]]; then
+    [[ -f "$legacy_entry" && ! -L "$legacy_entry" ]] || return 1
+    grep -Fxq 'Name=Skill Bill' "$legacy_entry" || return 1
+    grep -Fxq "Exec=$(desktop_quoted_exec_path "$legacy_launcher")" "$legacy_entry" || return 1
+    grep -Fxq "Icon=$legacy_app/lib/Skill Bill.png" "$legacy_entry" || return 1
+    grep -Fxq 'StartupWMClass=dev-skillbill-desktop-app-DesktopLauncherKt' "$legacy_entry" || return 1
+    has_owner=1
+  fi
+  [[ "$has_owner" -eq 1 ]]
+}
+
+migrate_kde_desktop_pin() {
+  case "${XDG_CURRENT_DESKTOP:-}:${KDE_FULL_SESSION:-}" in
+    *KDE*|*:true) ;;
+    *) return 0 ;;
+  esac
+  local dbus_command
+  if command -v qdbus6 >/dev/null 2>&1; then
+    dbus_command=qdbus6
+  elif command -v qdbus >/dev/null 2>&1; then
+    dbus_command=qdbus
+  else
+    warn "Could not update the old KDE dock pin because qdbus is unavailable. Unpin Skill Bill and pin Sona."
+    return 0
+  fi
+  if ! "$dbus_command" org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript '
+    var surfaces = desktops().concat(panels());
+    for (var i = 0; i < surfaces.length; i++) {
+      var widgets = surfaces[i].widgets();
+      for (var j = 0; j < widgets.length; j++) {
+        var widget = widgets[j];
+        widget.currentConfigGroup = ["General"];
+        var entries = String(widget.readConfig("launchers", [])).split(",");
+        var changed = false;
+        for (var k = 0; k < entries.length; k++) {
+          if (entries[k] === "applications:skillbill.desktop") {
+            entries[k] = "applications:sona.desktop";
+            changed = true;
+          }
+        }
+        if (changed) widget.writeConfig("launchers", entries);
+      }
+    }
+  ' >/dev/null; then
+    warn "Could not update the old KDE dock pin. Unpin Skill Bill and pin Sona."
+  fi
+}
+
+cleanup_linux_legacy_desktop() {
+  local install_root="$1" legacy_app="$1/Skill Bill"
+  local legacy_launcher="$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop"
+  local applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+  local legacy_entry="$applications_dir/skillbill.desktop"
+  if [[ -e "$legacy_app" || -L "$legacy_app" || -e "$legacy_launcher" || -L "$legacy_launcher" || -e "$legacy_entry" || -L "$legacy_entry" ]]; then
+    if linux_legacy_desktop_is_owned "$install_root"; then
+      if rm -rf -- "$legacy_app" && rm -f -- "$legacy_launcher" "$legacy_entry"; then
+        ok "Removed the previous desktop installation."
+      else
+        warn "Could not finish removing the previous desktop installation under $install_root. Re-run the installer to retry."
+      fi
+    else
+      warn "Preserved legacy desktop files whose ownership could not be confirmed under $install_root."
+      return 0
+    fi
+  fi
+  migrate_kde_desktop_pin
+  if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database "$applications_dir" || warn "Could not refresh the desktop application database."
+  fi
+  if command -v kbuildsycoca6 >/dev/null 2>&1; then
+    kbuildsycoca6 || warn "Could not refresh the KDE application cache."
+  elif command -v kbuildsycoca5 >/dev/null 2>&1; then
+    kbuildsycoca5 || warn "Could not refresh the KDE application cache."
   fi
 }
 
@@ -2139,7 +2256,7 @@ stage_selected_desktop_app() {
         return 1
       fi
       case "$normalized_member" in
-        LICENSE|"Skill Bill"|"Skill Bill"/*|"Skill Bill.app"|"Skill Bill.app"/*)
+        LICENSE|Sona|Sona/*|Sona.app|Sona.app/*)
           ;;
         *)
           err "Desktop archive contains an unexpected path: $member"
@@ -2179,27 +2296,39 @@ stage_selected_desktop_app() {
 
 # Replace the live desktop app with the one stage_selected_desktop_app staged.
 activate_staged_desktop_app() {
-  local os app_source app_target legacy_target executable install_root staged_app backup_app
+  local os app_source app_target executable install_root staged_app backup_app launcher_path
   os="$(host_os)"
   app_source="$STAGED_DESKTOP_APP_SOURCE"
   install_root="$(desktop_app_install_root "$os")" || return 1
   app_target="$(desktop_app_target_path "$os" "$install_root")"
-  legacy_target="$(desktop_app_legacy_target_path "$os" "$install_root")"
   executable="$(desktop_app_executable_path "$os" "$app_target")"
-
-  local -a running_pids=()
+  if ! prepare_desktop_app_launcher "$os" "$app_target" "$executable"; then
+    DESKTOP_APP_INSTALL_RESULT="launcher refused"
+    return 1
+  fi
+  launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
+  [[ "$os" != "windows" ]] || launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
+  local -a running_pids=() running_paths=("$executable")
+  if [[ "$os" == "linux" ]] && linux_legacy_desktop_is_owned "$install_root"; then
+    running_paths+=("$install_root/Skill Bill/bin/Skill Bill" "$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop")
+  fi
   local running_pid
+  if [[ -e "$launcher_path" || -L "$launcher_path" ]]; then
+    running_paths+=("$launcher_path")
+  fi
   while IFS= read -r running_pid; do
     [[ -n "$running_pid" ]] && running_pids+=("$running_pid")
-  done < <(desktop_app_running_pids "$executable" \
-    "$(desktop_app_legacy_executable_path "$os" "$legacy_target")" \
-    "$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop")
+  done < <(desktop_app_running_pids "${running_paths[@]}")
 
-  mkdir -p "$install_root" || return 1
-  staged_app="$install_root/.Skill Bill.installing.$$"
-  backup_app="$install_root/.Skill Bill.previous.$$"
+  if ! mkdir -p "$install_root"; then
+    discard_desktop_app_launcher_stage "$os"
+    return 1
+  fi
+  staged_app="$install_root/.Sona.installing.$$"
+  backup_app="$install_root/.Sona.previous.$$"
   rm -rf "$staged_app" "$backup_app"
   if ! cp -R "$app_source" "$staged_app"; then
+    discard_desktop_app_launcher_stage "$os"
     err "Could not stage the desktop app under $install_root."
     DESKTOP_APP_INSTALL_RESULT="install failed"
     return 1
@@ -2207,6 +2336,7 @@ activate_staged_desktop_app() {
   if [[ -e "$app_target" || -L "$app_target" ]]; then
     if ! mv "$app_target" "$backup_app"; then
       rm -rf "$staged_app"
+      discard_desktop_app_launcher_stage "$os"
       err "Could not move the previous desktop app out of the way."
       DESKTOP_APP_INSTALL_RESULT="install failed"
       return 1
@@ -2215,6 +2345,7 @@ activate_staged_desktop_app() {
   if ! mv "$staged_app" "$app_target"; then
     [[ ! -e "$backup_app" ]] || mv "$backup_app" "$app_target"
     rm -rf "$staged_app"
+    discard_desktop_app_launcher_stage "$os"
     err "Could not install the desktop app under $app_target."
     DESKTOP_APP_INSTALL_RESULT="install failed"
     return 1
@@ -2226,8 +2357,8 @@ activate_staged_desktop_app() {
     DESKTOP_APP_INSTALL_RESULT="launcher failed"
     return 1
   fi
-  if [[ "$legacy_target" != "$app_target" && -d "$legacy_target" ]]; then
-    rm -rf "$legacy_target"
+  if [[ "$os" == "linux" ]]; then
+    cleanup_linux_legacy_desktop "$install_root"
   fi
   ok "Desktop app installed at $app_target"
   DESKTOP_APP_INSTALL_RESULT="installed at $app_target"

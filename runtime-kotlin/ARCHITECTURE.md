@@ -201,11 +201,9 @@ a narrowed overload already exists; retained broad inputs require a concrete,
 current orchestration requirement documented here or in the owning area
 `agent/decisions.md`.
 
-Partial acceptance-repair reports retain their current reservation and plan. Retryable agent
-blocks pass through read-only report admission before they can consume a criterion failure.
-That admission distinguishes unfinished implementation from concrete external obstacles.
-Only a completed repair proceeds to independent source verification; continuation cannot
-accept a criterion or reset its prior outcomes.
+Every completed repair settlement proceeds to targeted verification with its edits and current
+reservation intact. A retryable worker block is recorded as a completed repair and verified.
+Any other worker block records a charged `BLOCKED` outcome for the current criterion.
 
 ### Resource Lifetime And Failure
 

@@ -1,2 +1,5 @@
 [mcp_servers.skill-bill]
 command = "skill-bill-mcp"
+
+[mcp_servers.linear-sona]
+url = "https://mcp.linear.app/mcp"

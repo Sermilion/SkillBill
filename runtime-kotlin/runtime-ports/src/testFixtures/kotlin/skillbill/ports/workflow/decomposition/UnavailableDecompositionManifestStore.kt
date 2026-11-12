@@ -1,5 +1,6 @@
 package skillbill.ports.workflow.decomposition
 
+import skillbill.ports.workflow.decomposition.model.DecompositionManifestBundleProjection
 import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import java.nio.file.Path
 import java.time.Instant
@@ -36,6 +37,12 @@ object UnavailableDecompositionManifestStore : DecompositionManifestStore {
 
   override fun <T> writeBundleAtomically(
     writes: List<Pair<Path, String>>,
+    verify: () -> T,
+  ): T = unavailableDecompositionManifestStore()
+
+  override fun <T> writeBundleAtomically(
+    writes: List<Pair<Path, String>>,
+    projection: DecompositionManifestBundleProjection,
     verify: () -> T,
   ): T = unavailableDecompositionManifestStore()
 }

@@ -17,7 +17,7 @@ fun desktopTempRoot(configured: String?, variables: Map<String, String>, userHom
   return try {
     Files.createDirectories(scratch)
   } catch (failure: IOException) {
-    System.err.println("Skill Bill could not create its temp directory $scratch: ${failure.message}")
+    System.err.println("Sona could not create its temp directory $scratch: ${failure.message}")
     Path.of(configured.orEmpty())
   }
 }

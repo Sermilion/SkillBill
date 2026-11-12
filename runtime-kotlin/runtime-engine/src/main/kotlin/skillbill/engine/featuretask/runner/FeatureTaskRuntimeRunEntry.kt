@@ -9,6 +9,7 @@ import skillbill.application.workflow.service.openFeatureTask
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.incident.BlockIncidentEntryReconciler
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskExecutionIdentityResolver
@@ -551,6 +552,13 @@ public class FeatureTaskRuntimeRunEntry(
         FeatureTaskRuntimeResumeLaunchAssignment.usedAssignments(
           admittedExecution.plan.stepLaunchAssignments,
           resolved,
+          { stepId ->
+            FeatureTaskRuntimeAgentResolver.resolve(
+              stepId,
+              input.agentAssignment,
+              input.invokedAgentId,
+            ).resolvedAgentId
+          },
         ),
       )
     if (expected != current) {

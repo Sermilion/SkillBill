@@ -45,6 +45,7 @@ import skillbill.workflow.model.WorkflowContinueStatus
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.verify.model.VerifyQaSelection
+import skillbill.workflow.verify.model.VerifyReviewMode
 import java.nio.file.Path
 import java.time.Clock
 
@@ -105,6 +106,7 @@ public class VerifyOperation(
     target: VerifyTarget,
   ): OperationOutcome {
     val mode = VerifyReviewMode.fromWire(context.arguments.mode) ?: VerifyReviewMode.INLINE
+    val qa = VerifyQaSelection.requested(context.arguments.qa)
     val issueKey = issueKeyOf(context, intake)
     val openArgs =
       WorkflowServiceOpenArgs(
@@ -126,8 +128,14 @@ public class VerifyOperation(
         VerifyWorkflow.HEAD_REVISION to target.headRevision,
         VerifyWorkflow.COMPARISON_SCOPE to target.comparisonScope,
         VerifyWorkflow.REVIEW_MODE to mode.wireValue,
-        VerifyWorkflow.QA_SELECTION to VerifyQaSelection.requested(context.arguments.qa).wireValue,
-      ) + listOfNotNull(issueKey?.let { VerifyWorkflow.ISSUE_KEY to it })
+        VerifyWorkflow.QA_SELECTION to qa.wireValue,
+      ) +
+        listOfNotNull(
+          issueKey?.let { VerifyWorkflow.ISSUE_KEY to it },
+          context.arguments.qaDevice
+            ?.takeIf { qa == VerifyQaSelection.ON }
+            ?.let { VerifyWorkflow.QA_DEVICE to it.wireValue },
+        )
     val started =
       store.write(
         workflowId,
@@ -244,8 +252,20 @@ public class VerifyOperation(
     val intake = VerifyIntake.stored(inputContext)?.label.orEmpty()
     val storedIssueKey = VerifyWorkflow.string(inputContext, VerifyWorkflow.ISSUE_KEY)
     val attempts = snapshot.steps.associate { step -> step.stepId to step.attemptCount }
-    val qa = confirmedQaSelection(workflowId, inputContext, context.arguments.qa) { return it }
-    val run = VerifyRun(context, workflowId, snapshot.sessionId, intake, target, mode, criteria, clock.instant(), qa)
+    val qa = confirmedQa(workflowId, inputContext, context.arguments) { return it }
+    val run =
+      VerifyRun(
+        context,
+        workflowId,
+        snapshot.sessionId,
+        intake,
+        target,
+        mode,
+        criteria,
+        clock.instant(),
+        qa.selection,
+        qa.device,
+      )
     if (snapshot.currentStepId in PARKED_STEPS) {
       return if (criteriaArtifact == null) {
         OperationOutcome.Failed(

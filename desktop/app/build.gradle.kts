@@ -83,17 +83,17 @@ compose.desktop {
     nativeDistributions {
       targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm)
       macOS {
-        iconFile.set(layout.projectDirectory.file("packaging/icons/skill-bill.icns"))
+        iconFile.set(layout.projectDirectory.file("packaging/icons/sona.icns"))
       }
       windows {
-        menuGroup = "Skill Bill"
+        menuGroup = "Sona"
         upgradeUuid = "e9c88238-8cb5-4be4-bb0a-17a1d6de7671"
-        iconFile.set(layout.projectDirectory.file("packaging/icons/skill-bill.ico"))
+        iconFile.set(layout.projectDirectory.file("packaging/icons/sona.ico"))
       }
       linux {
-        packageName = "skill-bill-desktop"
+        packageName = "sona"
         appCategory = "Development"
-        iconFile.set(rootProject.layout.projectDirectory.file("core/designsystem/src/commonMain/composeResources/drawable/skill_bill.png"))
+        iconFile.set(rootProject.layout.projectDirectory.file("core/designsystem/src/commonMain/composeResources/drawable/sona.png"))
       }
     }
   }

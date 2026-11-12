@@ -1,14 +1,24 @@
 package skillbill.engine.featuretask.phase.record
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityRepairAppliedWrite
+import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWrite
+import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWriteResult
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
+import skillbill.engine.featuretask.phase.planning.feasibilityRepairWriteResult
+import skillbill.engine.featuretask.phase.planning.planBundleFeasibilityWriteResult
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
+import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
@@ -19,7 +29,9 @@ import skillbill.workflow.taskruntime.artifact.decomposeTerminalFromWorkflowArti
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanFanOutHistory
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 
@@ -27,6 +39,8 @@ import java.time.Clock
 public class FeatureTaskRuntimeDecomposeTerminalRecorder(
   private val database: DatabaseSessionFactory,
   private val clock: Clock,
+  private val feasibilityCodec: PlanBundleFeasibilityStateCodec,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   public val engine: WorkflowEngine = WorkflowEngine()
 
@@ -252,6 +266,170 @@ public class FeatureTaskRuntimeDecomposeTerminalRecorder(
         ?.let(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE::value)
         ?.let(::decodePlanBundleFromArtifact)
     }
+
+  public fun loadPlanBundleFeasibility(workflowId: String): FeatureTaskRuntimePlanBundleFeasibilityState? =
+    try {
+      database.read { unitOfWork ->
+        val artifacts =
+          unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)?.artifacts?.toMap()
+            ?: return@read null
+        if (!DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY.contains(artifacts)) {
+          return@read null
+        }
+        feasibilityCodec.decode(
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY.value(artifacts),
+          "$workflowId/${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY.label()}",
+        )
+      }
+    } catch (failure: SkillBillRuntimeException) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Could not read plan bundle feasibility for workflow '$workflowId', artifact " +
+          "'${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY.label()}'; " +
+          "preserve the original artifact and recover with a compatible runtime or restore the source workflow record.",
+        failure,
+      )
+      throw failure
+    }
+
+  public fun writePlanBundleFeasibility(
+    request: PlanBundleFeasibilityStateWrite,
+    admitted: AdmittedFeatureTaskRuntimeExecution? = null,
+  ): PlanBundleFeasibilityStateWriteResult {
+    val result =
+      try {
+        database.transaction { unitOfWork ->
+          if (admitted != null && !requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId)) {
+            return@transaction PlanBundleFeasibilityStateWriteResult.Refused("worker ownership changed")
+          }
+          val record =
+            unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, request.workflowId)
+              ?: return@transaction PlanBundleFeasibilityStateWriteResult.Refused("workflow is missing")
+          val phases = decodePhaseRecords(record.artifacts)
+          val phase = phases[request.phaseId]
+          val effectiveAttempt =
+            if (phase?.status == WorkflowStepStatus.RUNNING) phase.attemptCount else (phase?.attemptCount ?: 0) + 1
+          if (effectiveAttempt != request.attempt) {
+            return@transaction PlanBundleFeasibilityStateWriteResult.Refused("phase attempt changed")
+          }
+          val artifacts = record.artifacts.toMap()
+          val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
+          val current =
+            if (family.contains(artifacts)) {
+              feasibilityCodec.decode(family.value(artifacts), "${request.workflowId}/${family.label()}")
+            } else {
+              null
+            }
+          val writeResult = planBundleFeasibilityWriteResult(current, request)
+          if (writeResult is PlanBundleFeasibilityStateWriteResult.Applied) {
+            val encoded = feasibilityCodec.encode(writeResult.state)
+            saveFeasibilityState(unitOfWork, record, encoded)
+          }
+          writeResult
+        }
+      } catch (failure: SkillBillRuntimeException) {
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "Could not read plan bundle feasibility for workflow '${request.workflowId}', artifact " +
+            "'${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY.label()}', " +
+            "phase '${request.phaseId}' attempt ${request.attempt}; preserve the original artifact and recover " +
+            "with a compatible runtime or restore the source workflow record.",
+          failure,
+        )
+        throw failure
+      }
+    if (result is PlanBundleFeasibilityStateWriteResult.Refused) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Refused plan bundle feasibility write for workflow '${request.workflowId}', artifact " +
+          "'${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY.label()}', " +
+          "phase '${request.phaseId}' attempt ${request.attempt}, expected revision ${request.expectedRevision}, " +
+          "observed revision ${result.observedRevision}: ${result.reason}.",
+      )
+    }
+    return result
+  }
+
+  public fun recordFeasibilityRepairApplied(
+    request: PlanBundleFeasibilityRepairAppliedWrite,
+    admitted: AdmittedFeatureTaskRuntimeExecution? = null,
+  ): PlanBundleFeasibilityStateWriteResult =
+    database.transaction { unitOfWork ->
+      if (admitted != null && !requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId)) {
+        return@transaction PlanBundleFeasibilityStateWriteResult.Refused("worker ownership changed")
+      }
+      val record =
+        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, request.workflowId)
+          ?: return@transaction PlanBundleFeasibilityStateWriteResult.Refused("workflow is missing")
+      val phases = decodePhaseRecords(record.artifacts)
+      val phase = phases[request.phaseId]
+      val effectiveAttempt =
+        if (phase?.status == WorkflowStepStatus.RUNNING) {
+          phase.attemptCount
+        } else {
+          (phase?.attemptCount ?: 0) + 1
+        }
+      if (effectiveAttempt != request.attempt) {
+        return@transaction PlanBundleFeasibilityStateWriteResult.Refused("phase attempt changed")
+      }
+      val artifacts = record.artifacts.toMap()
+      val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
+      if (!family.contains(artifacts)) {
+        return@transaction PlanBundleFeasibilityStateWriteResult.Refused("feasibility artifact is missing")
+      }
+      val current = feasibilityCodec.decode(family.value(artifacts), "${request.workflowId}/${family.label()}")
+      val beforeBundle =
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE
+          .value(artifacts)?.let(::decodePlanBundleFromArtifact)
+      val decision = feasibilityRepairWriteResult(current, request, beforeBundle)
+      if (decision !is PlanBundleFeasibilityStateWriteResult.Applied) return@transaction decision
+      val encoded = feasibilityCodec.encode(decision.state)
+      val updated =
+        engine.updateRecord(
+          WorkflowFamily.TASK_RUNTIME.definition,
+          record,
+          WorkflowUpdateInput(
+            workflowStatus = record.workflowStatus,
+            currentStepId = record.currentStepId,
+            stepUpdates = null,
+            artifactsPatch =
+              WorkflowArtifactPatch.from(
+                mapOf(
+                  family.entry(encoded),
+                  DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.entry(
+                    request.bundle.asWorkflowArtifactEntry(),
+                  ),
+                ),
+              ),
+            sessionId = record.sessionId.orEmpty(),
+          ),
+        )
+      unitOfWork.workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
+      decision
+    }
+
+  private fun saveFeasibilityState(
+    unitOfWork: UnitOfWork,
+    record: WorkflowStateSnapshot,
+    encoded: FeatureTaskRuntimeWorkflowArtifactMap,
+  ) {
+    val updated =
+      engine.updateRecord(
+        WorkflowFamily.TASK_RUNTIME.definition,
+        record,
+        WorkflowUpdateInput(
+          workflowStatus = record.workflowStatus,
+          currentStepId = record.currentStepId,
+          stepUpdates = null,
+          artifactsPatch =
+            WorkflowArtifactPatch.from(
+              mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY.entry(encoded)),
+            ),
+          sessionId = record.sessionId.orEmpty(),
+        ),
+      )
+    unitOfWork.workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
+  }
 
   public fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal? =
     database.read { unitOfWork ->

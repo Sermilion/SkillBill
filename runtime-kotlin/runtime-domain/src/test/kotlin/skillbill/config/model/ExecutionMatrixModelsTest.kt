@@ -77,6 +77,10 @@ class ExecutionMatrixModelsTest {
     assertEquals(PhaseModelDirective("gpt-5.6-luna-high"), matrix.directiveFor("cursor", "preplan"))
     assertEquals(PhaseModelDirective("claude-opus-5-thinking-max", "max"), matrix.directiveFor("cursor", "review"))
     assertEquals(PhaseModelDirective("gpt-5.6-luna-xhigh"), matrix.directiveFor("cursor", "audit"))
+    assertEquals(
+      PhaseModelDirective("gpt-5.6-luna-xhigh"),
+      matrix.directiveForTier("cursor", ExecutionTier.REASONING),
+    )
     assertEquals(PhaseModelDirective("cursor-grok-4.5-medium"), matrix.directiveFor("cursor", "pr"))
   }
 

@@ -28,6 +28,9 @@ import dev.skillbill.desktop.core.domain.model.ApprovalCard
 import dev.skillbill.desktop.core.domain.model.ApprovalCardGrants
 import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
 import dev.skillbill.desktop.core.domain.model.ApprovalCardOption
+import dev.skillbill.desktop.core.domain.model.ApprovalRule
+import kotlinx.coroutines.SupervisorJob
+import kotlin.time.Clock
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -38,7 +41,7 @@ class ChatApprovalLayoutTest {
   fun `large payload stays folded while decision buttons send the exact choice`() = runComposeUiTest {
     var lineHeight = 0.dp
     val decisions = mutableListOf<Pair<String, Boolean>>()
-    val actions = ChatApprovalActions(true, { _, option, always -> decisions += option to always }, {})
+    val actions = ChatApprovalActions(true, { _, option, always, _ -> decisions += option to always }, {})
     setContent {
       SkillBillTheme(reducedMotion = true) {
         lineHeight = SkillBillTheme.type.tSm.lineHeight.value.dp
@@ -71,7 +74,7 @@ class ChatApprovalLayoutTest {
       SkillBillTheme(reducedMotion = true) {
         LazyColumn(Modifier.width(380.dp)) {
           item { ChatApprovalCard(ChatMessage.Approval(card().copy(state = "unsupported")), null) }
-          item { ChatApprovalCard(ChatMessage.Approval(card().copy(key = card().key.copy(approvalId = "restored")), restoredCopy = true), ChatApprovalActions(true, { _, _, _ -> }, {})) }
+          item { ChatApprovalCard(ChatMessage.Approval(card().copy(key = card().key.copy(approvalId = "restored")), restoredCopy = true), ChatApprovalActions(true, { _, _, _, _ -> }, {})) }
         }
       }
     }
@@ -115,7 +118,7 @@ class ChatApprovalLayoutTest {
       SkillBillTheme(reducedMotion = true) {
         ChatApprovalCard(
           ChatMessage.Approval(card().copy(grants = ApprovalCardGrants(null, reason))),
-          ChatApprovalActions(true, { _, _, _ -> once++ }, { dismissed++ }),
+          ChatApprovalActions(true, { _, _, _, _ -> once++ }, { dismissed++ }),
         )
       }
     }
@@ -125,6 +128,46 @@ class ChatApprovalLayoutTest {
     onNodeWithText("Dismiss").assertIsEnabled().performClick()
     assertEquals(1, once)
     assertEquals(1, dismissed)
+  }
+
+  @Test
+  fun `the similar editor fits a narrow card without clipping the existing buttons`() = runComposeUiTest {
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        LazyColumn(Modifier.width(280.dp)) {
+          item {
+            ChatApprovalCard(
+              ChatMessage.Approval(
+                card().copy(grants = ApprovalCardGrants(null, null, null, suggestedPattern = "git status *")),
+              ),
+              ChatApprovalActions(true, { _, _, _, _ -> }, {}),
+            )
+          }
+        }
+      }
+    }
+    onNodeWithText("Allow once").assertIsDisplayed()
+    onNodeWithText("Always allow similar…").performClick()
+    onNodeWithText("Save rule").assertIsDisplayed()
+    onNodeWithText("Allow once").assertIsDisplayed()
+    onNodeWithText("Deny").assertIsDisplayed()
+  }
+
+  @Test
+  fun `a pattern rule row shows Pattern and Revoke calls back with its id`() = runComposeUiTest {
+    var revoked: String? = null
+    val tab = RepositoryApprovals("/repo", SupervisorJob(), ChatThread(Clock.System))
+    tab.rules.value = RepositoryRulesState.Listed(
+      listOf(ApprovalRule("rule-1", "claude", "profile", "rev", "bash", "/repo", "fp", "2026-01-01", pattern = "git *")),
+    )
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        RepositoryRulesPanel(tab, onRefresh = {}, onRevoke = { revoked = it })
+      }
+    }
+    onNodeWithText("Pattern git *").assertIsDisplayed()
+    onNodeWithContentDescription("Revoke rule rule-1").performClick()
+    assertEquals("rule-1", revoked)
   }
 
   private fun card() = ApprovalCard(

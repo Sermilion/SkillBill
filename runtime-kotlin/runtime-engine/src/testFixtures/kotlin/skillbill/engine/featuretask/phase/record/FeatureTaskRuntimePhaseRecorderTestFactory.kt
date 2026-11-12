@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.phase.record
 
 import skillbill.engine.featuretask.phase.core.InMemoryFeatureTaskPhaseSettlementRepository
 import skillbill.engine.featuretask.phase.core.testPhaseSettlementService
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
@@ -30,4 +31,5 @@ fun featureTaskRuntimePhaseRecorder(
         database,
       ),
     clock = clock,
+    feasibilityCodec = PlanBundleFeasibilityStateCodec(handoffEnvelopeValidator),
   )

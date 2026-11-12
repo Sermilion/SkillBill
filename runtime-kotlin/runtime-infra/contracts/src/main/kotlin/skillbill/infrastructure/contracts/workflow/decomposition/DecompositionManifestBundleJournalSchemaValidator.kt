@@ -11,10 +11,12 @@ import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.BUNDLE_JOURNAL_CONTRACT_VERSION
+import skillbill.contracts.decomposition.BUNDLE_JOURNAL_LEGACY_CONTRACT_VERSION
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidDecompositionManifestBundleJournal
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
+import skillbill.infrastructure.contracts.locator.DecompositionManifestBundleJournalLegacySchemaPaths
 import skillbill.infrastructure.contracts.locator.DecompositionManifestBundleJournalSchemaPaths
 import java.io.IOException
 import kotlin.coroutines.cancellation.CancellationException
@@ -41,18 +43,19 @@ object DecompositionManifestBundleJournalSchemaValidator {
     sourceLabel: String,
   ) {
     val contractVersion = manifest[SharedPayloadKeys.CONTRACT_VERSION]
-    if (contractVersion != BUNDLE_JOURNAL_CONTRACT_VERSION) {
+    if (contractVersion !in setOf(BUNDLE_JOURNAL_CONTRACT_VERSION, BUNDLE_JOURNAL_LEGACY_CONTRACT_VERSION)) {
       throw invalidDecompositionManifestBundleJournal(
         sourceLabel = sourceLabel,
         reason =
           "Unsupported contract_version '$contractVersion'. Supported version is " +
-            "$BUNDLE_JOURNAL_CONTRACT_VERSION. Back up the marker and its staging directory, " +
+            "$BUNDLE_JOURNAL_LEGACY_CONTRACT_VERSION and $BUNDLE_JOURNAL_CONTRACT_VERSION. " +
+            "Back up the marker and its staging directory, " +
             "review evidence manually, then remove the marker only after backup.",
         code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_UNSUPPORTED_CONTRACT_VERSION,
       )
     }
     val instance: JsonNode = mapper.valueToTree(manifest)
-    val errors: Set<ValidationMessage> = schema().validate(instance)
+    val errors: Set<ValidationMessage> = schema(contractVersion as String).validate(instance)
     if (errors.isNotEmpty()) {
       throw invalidDecompositionManifestBundleJournal(
         sourceLabel = sourceLabel,
@@ -122,37 +125,52 @@ object DecompositionManifestBundleJournalSchemaValidator {
       )
     }
 
-  private fun schema(): JsonSchema =
-    ClasspathContractSchemaLoader.compiledSchema(
+  private fun schema(contractVersion: String): JsonSchema {
+    val (classpathResource, expectedSchemaId) =
+      if (contractVersion == BUNDLE_JOURNAL_LEGACY_CONTRACT_VERSION) {
+        val paths = DecompositionManifestBundleJournalLegacySchemaPaths
+        paths.CLASSPATH_RESOURCE to paths.EXPECTED_SCHEMA_ID
+      } else {
+        DecompositionManifestBundleJournalSchemaPaths.CLASSPATH_RESOURCE to
+          DecompositionManifestBundleJournalSchemaPaths.EXPECTED_SCHEMA_ID
+      }
+    val expectedVersion =
+      if (contractVersion == BUNDLE_JOURNAL_LEGACY_CONTRACT_VERSION) {
+        BUNDLE_JOURNAL_LEGACY_CONTRACT_VERSION
+      } else {
+        BUNDLE_JOURNAL_CONTRACT_VERSION
+      }
+    return ClasspathContractSchemaLoader.compiledSchema(
       CompiledSchemaRequest(
-        cacheKey = DecompositionManifestBundleJournalSchemaPaths.CLASSPATH_RESOURCE,
+        cacheKey = classpathResource,
         classLoader = DecompositionManifestBundleJournalSchemaValidator::class.java.classLoader,
-        classpathResource = DecompositionManifestBundleJournalSchemaPaths.CLASSPATH_RESOURCE,
+        classpathResource = classpathResource,
         missingResource = {
           invalidDecompositionManifestBundleJournal(
-            sourceLabel = DecompositionManifestBundleJournalSchemaPaths.CLASSPATH_RESOURCE,
+            sourceLabel = classpathResource,
             reason = "Canonical bundle journal schema resource is missing from the classpath.",
             code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_SCHEMA_RESOURCE_MISSING,
           )
         },
         processingFailure = { cause ->
           invalidDecompositionManifestBundleJournal(
-            sourceLabel = DecompositionManifestBundleJournalSchemaPaths.CLASSPATH_RESOURCE,
+            sourceLabel = classpathResource,
             reason = cause.message ?: cause::class.simpleName.orEmpty(),
             code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_SCHEMA_LOAD_ERROR,
             cause = cause,
           )
         },
         loadFailureLogger = {},
-        expectedSchemaId = DecompositionManifestBundleJournalSchemaPaths.EXPECTED_SCHEMA_ID,
-        expectedContractVersion = BUNDLE_JOURNAL_CONTRACT_VERSION,
+        expectedSchemaId = expectedSchemaId,
+        expectedContractVersion = expectedVersion,
         identityFailure = { reason ->
           invalidDecompositionManifestBundleJournal(
-            sourceLabel = DecompositionManifestBundleJournalSchemaPaths.CLASSPATH_RESOURCE,
+            sourceLabel = classpathResource,
             reason = reason,
             code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_SCHEMA_IDENTITY_ERROR,
           )
         },
       ),
     )
+  }
 }

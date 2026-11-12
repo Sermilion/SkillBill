@@ -127,6 +127,7 @@ for artifact in "$@"; do
   case "${artifact}" in
     *.zip) verify_zip "${artifact}" ;;
     *.tar.gz) verify_tar "${artifact}" ;;
+    *.dmg|*.msi|*.deb) python3 "${repo_root}/scripts/verify_native_artifact_license.py" "${root_license}" "${artifact}" ;;
     *)
       echo "Unsupported artifact type: ${artifact}." >&2
       exit 1

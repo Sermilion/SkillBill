@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.performScrollToNode
@@ -196,7 +197,7 @@ class NewTaskComposerTest {
     chat.events = { events.consumeAsFlow().takeWhile { it != ChatEvent.Completed } }
     val draft = NewTaskDraft(
       chat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
-      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
+      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics(),
     ).apply {
       chatDispatcher = Dispatchers.Unconfined
       repository = NewTaskRepository(
@@ -249,7 +250,7 @@ class NewTaskComposerTest {
     )
     val draft = NewTaskDraft(
       chat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
-      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
+      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics(),
     ).apply {
       chatDispatcher = Dispatchers.Unconfined
       this.repository = repository
@@ -301,7 +302,7 @@ class NewTaskComposerTest {
     )
     val draft = NewTaskDraft(
       chat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
-      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
+      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics(),
     ).apply {
       chatDispatcher = Dispatchers.Unconfined
       this.repository = repository
@@ -353,7 +354,7 @@ class NewTaskComposerTest {
     val missingRepo = NewTaskRepository(missingRoot, "repo")
     val seedDraft = NewTaskDraft(
       missingChat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
-      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
+      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics(),
     ).apply {
       chatDispatcher = Dispatchers.Unconfined
       this.repository = missingRepo
@@ -369,7 +370,7 @@ class NewTaskComposerTest {
     seedDraft.close()
     val missingDraft = NewTaskDraft(
       missingChat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
-      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
+      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics(),
     ).apply {
       chatDispatcher = Dispatchers.Unconfined
       this.repository = missingRepo
@@ -393,7 +394,7 @@ class NewTaskComposerTest {
       busyChat.events = { busyEvents.consumeAsFlow().takeWhile { it != ChatEvent.Completed } }
       val busyDraft = NewTaskDraft(
         busyChat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
-        WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
+        WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics(),
       ).apply {
         chatDispatcher = Dispatchers.Unconfined
         this.repository = repository
@@ -421,7 +422,7 @@ class NewTaskComposerTest {
       }
       val startDraft = NewTaskDraft(
         startChat, hangingControls, testDatabaseSessionController(), ToastQueue(),
-        WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
+        WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics(),
       ).apply {
         chatDispatcher = Dispatchers.Unconfined
         this.repository = repository
@@ -461,7 +462,7 @@ class NewTaskComposerTest {
     )
     val draft = NewTaskDraft(
       chat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
-      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
+      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics(),
     ).apply {
       chatDispatcher = Dispatchers.Unconfined
       this.repository = repository
@@ -508,17 +509,18 @@ class NewTaskComposerTest {
       repository = NewTaskRepository("/work/repository", "repository")
       baseBranch = "short"
     }
+    var read by mutableStateOf(RepositoryBranches("/work/repository", "main", emptyList(), emptyList(), currentBranch = "short"))
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-          NewTaskComposer(NewTaskUiState(), draft) {}
+          NewTaskComposer(NewTaskUiState(branchRead = BranchReadState.Loaded(read.repositoryRoot, read)), draft) {}
         }
       }
     }
     fun repositoryWidth() = onNodeWithText("repository", useUnmergedTree = true).fetchSemanticsNode().size.width
     val shortBranchWidth = repositoryWidth()
 
-    runOnIdle { draft.baseBranch = "b".repeat(200) }
+    runOnIdle { read = read.copy(currentBranch = "b".repeat(200)) }
     waitForIdle()
 
     assertEquals(shortBranchWidth, repositoryWidth())
@@ -652,7 +654,7 @@ class NewTaskComposerTest {
     (app + web).forEach { chats.saved[it.sessionId] = it }
     val draft = NewTaskDraft(
       chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
-      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
+      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System, diagnostics = RecordingDiagnostics(),
     ).apply { repository = NewTaskRepository("/work/app", "app") }
     draft.refreshSaved()
     var state by mutableStateOf(NewTaskUiState())

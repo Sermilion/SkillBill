@@ -13,19 +13,13 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAcknow
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementBlockRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementCompleteRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementEnvelope
-import skillbill.engine.featuretask.slot.PhaseAcceptanceRepairHooks
-import skillbill.engine.featuretask.slot.PhaseStrategyRegistry
-import skillbill.error.core.MalformedJsonTextError
-import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
-import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementWriteResult
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.decodeValidationEvidenceFromArtifact
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
@@ -41,40 +35,10 @@ public class FeatureTaskPhaseSettlementService(
   private val clock: Clock,
   private val database: DatabaseSessionFactory,
   private val blockIncidentCapture: BlockIncidentCapture,
-  private val strategies: PhaseStrategyRegistry,
 ) {
   public fun completeFromAgent(
     request: FeatureTaskPhaseSettlementCompleteRequest,
-  ): FeatureTaskPhaseSettlementAcknowledgment {
-    val refusal =
-      strategies.strategies.asSequence()
-        .filter { request.phaseId in it.steps }
-        .mapNotNull {
-          (
-            it.stepHooks(
-              request.phaseId,
-            ) as? PhaseAcceptanceRepairHooks
-          )?.unfinishedAgentCompletionRejection
-        }
-        .firstOrNull()
-    if (refusal != null &&
-      (
-        request.verdict == FeatureTaskRuntimeVerdict.PROGRESS.wireValue ||
-          request.verdict == FeatureTaskRuntimeVerdict.NO_PROGRESS.wireValue
-      )
-    ) {
-      return FeatureTaskPhaseSettlementAcknowledgment(
-        status = FeatureTaskPhaseSettlementAckStatus.ERROR,
-        workflowId = request.workflowId,
-        phaseId = request.phaseId,
-        attempt = request.attempt,
-        kind = KIND_COMPLETE,
-        envelope = null,
-        diagnosticCode = refusal.name,
-      )
-    }
-    return complete(request)
-  }
+  ): FeatureTaskPhaseSettlementAcknowledgment = complete(request)
 
   public fun complete(request: FeatureTaskPhaseSettlementCompleteRequest): FeatureTaskPhaseSettlementAcknowledgment =
     complete(request, repository)
@@ -195,24 +159,10 @@ public class FeatureTaskPhaseSettlementService(
     attempt: Int,
   ): FeatureTaskPhaseSettlementEnvelope? {
     val settlement = repository.find(workflowId, phaseId, attempt) ?: return null
-    val parsed =
-      try {
-        JsonCodec.parseValue(settlement.envelopeJson)
-      } catch (error: MalformedJsonTextError) {
-        throw invalidFeatureTaskRuntimePhaseOutputSchema(
-          "$workflowId/$phaseId/$attempt",
-          "durable settlement is malformed JSON.",
-          FeatureTaskRuntimePhaseOutputFailureCode.MALFORMED,
-          error,
-        )
-      }
     val envelope =
-      JsonCodec.anyToStringAnyMap(parsed)
-        ?: throw invalidFeatureTaskRuntimePhaseOutputSchema(
-          "$workflowId/$phaseId/$attempt",
-          "durable settlement must be a JSON object.",
-          FeatureTaskRuntimePhaseOutputFailureCode.ROOT_NOT_OBJECT,
-        )
+      JsonCodec.parseObjectOrNull(settlement.envelopeJson)
+        ?.let { JsonCodec.anyToStringAnyMap(JsonCodec.jsonElementToValue(it)) }
+        ?: return null
     val wire = envelope.toWorkflowArtifactMap()
     val evidence =
       wire[SharedPayloadKeys.PRODUCED_OUTPUTS]

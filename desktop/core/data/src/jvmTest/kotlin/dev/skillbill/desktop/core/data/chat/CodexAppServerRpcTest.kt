@@ -1,7 +1,11 @@
 package dev.skillbill.desktop.core.data.chat
 
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -65,6 +69,202 @@ class CodexAppServerRpcTest {
 
     val failure = assertIs<ChatEvent.Failed>(events.last())
     assertContains(failure.detail.orEmpty(), "declined")
+  }
+
+  @Test
+  fun `steering replies share the turn reader and rejection leaves the turn usable`() = runTest {
+    val input = Channel<ChatProcessInput>(Channel.UNLIMITED)
+    val output = Channel<ChatProcessOutput>(Channel.UNLIMITED)
+    val events = mutableListOf<ChatEvent>()
+    val approval = CodexChatApproval({ true }, {}, RecordingDiagnostics(), {}, "/checkout")
+    val rpc = CodexAppServerRpc(input, output, RecordingDiagnostics(), { events += it }, approval)
+    val drain = launch { rpc.drainTurn("thread", "turn") }
+
+    val rejected = async {
+      rpc.steer("delivery-1", "thread", "turn", emptyList(), { acquire -> acquire() }, { register -> register() }, {})
+    }
+    val rejectedFrame = input.receive()
+    assertTrue(rejectedFrame.acquireWrite())
+    output.send(line("""{"id":1,"error":{"code":-32602,"message":"turn busy"}}"""))
+    yield()
+    rejectedFrame.written.complete(true)
+    assertIs<ChatSteeringResult.Rejected>(rejected.await())
+
+    val accepted = async {
+      rpc.steer("delivery-2", "thread", "turn", emptyList(), { acquire -> acquire() }, { register -> register() }, {})
+    }
+    val acceptedFrame = input.receive()
+    assertTrue(acceptedFrame.acquireWrite())
+    output.send(line("""{"method":"item/agentMessage/delta","params":{"threadId":"thread","turnId":"turn","itemId":"message","delta":"Still running"}}"""))
+    output.send(line("""{"id":2,"result":{"turnId":"turn"}}"""))
+    yield()
+    acceptedFrame.written.complete(true)
+    output.send(line("""{"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed"}}}"""))
+
+    assertIs<ChatSteeringResult.Accepted>(accepted.await())
+    drain.join()
+    assertTrue(ChatEvent.TextDelta("Still running") in events)
+    assertEquals(ChatEvent.Completed, events.last())
+    approval.release()
+    output.close()
+  }
+
+  @Test
+  fun `written steering returns uncertain while active output continues and late rejection replaces it`() = runTest {
+    val input = Channel<ChatProcessInput>(Channel.UNLIMITED)
+    val output = Channel<ChatProcessOutput>(Channel.UNLIMITED)
+    val events = mutableListOf<ChatEvent>()
+    val updates = mutableListOf<ChatSteeringResult>()
+    val approval = CodexChatApproval({ true }, {}, RecordingDiagnostics(), {}, "/checkout")
+    val rpc = CodexAppServerRpc(input, output, RecordingDiagnostics(), { events += it }, approval)
+    val drain = launch { rpc.drainTurn("thread", "turn") }
+    val steer = async {
+      rpc.steer("delivery-late-rejection", "thread", "turn", emptyList(), { acquire -> acquire() },
+        { register -> register() }) { updates += it }
+    }
+    val frame = input.receive()
+    acknowledgeWrite(frame)
+    output.send(line("""{"method":"item/agentMessage/delta","params":{"threadId":"thread","turnId":"turn","itemId":"message","delta":"Still running"}}"""))
+    yield()
+
+    assertIs<ChatSteeringResult.DeliveryUncertain>(steer.await())
+    assertIs<ChatSteeringResult.DeliveryUncertain>(updates.single())
+    assertTrue(ChatEvent.TextDelta("Still running") in events)
+    output.send(line("""{"id":1,"error":{"code":-32602,"message":"turn busy"}}"""))
+    yield()
+
+    assertEquals(2, updates.size)
+    assertIs<ChatSteeringResult.Rejected>(updates.last())
+    assertEquals("turn busy\n-32602", (updates.last() as ChatSteeringResult.Rejected).reason)
+    output.send(line("""{"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed"}}}"""))
+    drain.join()
+    approval.release()
+    output.close()
+  }
+
+  @Test
+  fun `late rejection replaces terminal uncertainty before tracking is released`() = runTest {
+    val terminalFrames = listOf(
+      """{"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed"}}}""",
+      """{"method":"turn/failed","params":{"threadId":"thread","turn":{"id":"turn","status":"failed"}}}""",
+      """{"method":"turn/interrupted","params":{"threadId":"thread","turn":{"id":"turn","status":"interrupted"}}}""",
+    )
+
+    terminalFrames.forEachIndexed { index, terminalFrame ->
+      val input = Channel<ChatProcessInput>(Channel.UNLIMITED)
+      val output = Channel<ChatProcessOutput>(Channel.UNLIMITED)
+      val updates = Channel<ChatSteeringResult>(Channel.UNLIMITED)
+      val terminalEmitted = CompletableDeferred<Unit>()
+      val approval = CodexChatApproval({ true }, {}, RecordingDiagnostics(), {}, "/checkout")
+      val rpc = CodexAppServerRpc(input, output, RecordingDiagnostics(), { event ->
+        if (event is ChatEvent.Completed || event is ChatEvent.Failed) {
+          output.trySend(line("""{"id":1,"error":{"code":-32602,"message":"turn busy"}}"""))
+          terminalEmitted.complete(Unit)
+        }
+      }, approval)
+      val drain = launch { rpc.drainTurn("thread", "turn") }
+      val steer = async {
+        rpc.steer("delivery-terminal-$index", "thread", "turn", emptyList(), { acquire -> acquire() },
+          { register -> register() }) { updates.trySend(it) }
+      }
+      acknowledgeWrite(input.receive())
+      assertIs<ChatSteeringResult.DeliveryUncertain>(steer.await())
+      assertIs<ChatSteeringResult.DeliveryUncertain>(updates.receive())
+
+      output.send(line(terminalFrame))
+      drain.join()
+      terminalEmitted.await()
+
+      val rejection = assertIs<ChatSteeringResult.Rejected>(updates.receive())
+      assertEquals("turn busy\n-32602", rejection.reason)
+      approval.release()
+      output.close()
+    }
+  }
+
+  @Test
+  fun `cleanup drains a late rejection before releasing steering tracking`() = runTest {
+    val input = Channel<ChatProcessInput>(Channel.UNLIMITED)
+    val output = Channel<ChatProcessOutput>(Channel.UNLIMITED)
+    val updates = Channel<ChatSteeringResult>(Channel.UNLIMITED)
+    val approval = CodexChatApproval({ true }, {}, RecordingDiagnostics(), {}, "/checkout")
+    val rpc = CodexAppServerRpc(input, output, RecordingDiagnostics(), {}, approval)
+    val drain = launch { rpc.drainTurn("thread", "turn") }
+    val steer = async {
+      rpc.steer("delivery-cleanup-rejection", "thread", "turn", emptyList(), { acquire -> acquire() },
+        { register -> register() }) { updates.trySend(it) }
+    }
+    acknowledgeWrite(input.receive())
+    assertIs<ChatSteeringResult.DeliveryUncertain>(steer.await())
+    assertIs<ChatSteeringResult.DeliveryUncertain>(updates.receive())
+
+    drain.cancelAndJoin()
+    rpc.closeAndSettleSteering()
+    output.send(line("""{"id":1,"error":{"code":-32602,"message":"turn busy"}}"""))
+    rpc.drainReadySteeringResponses()
+
+    val rejection = assertIs<ChatSteeringResult.Rejected>(updates.receive())
+    assertEquals("turn busy\n-32602", rejection.reason)
+    rpc.releaseSteering()
+    output.close()
+    approval.release()
+  }
+
+  @Test
+  fun `written steering returns uncertain while active and late acceptance replaces it`() = runTest {
+    val input = Channel<ChatProcessInput>(Channel.UNLIMITED)
+    val output = Channel<ChatProcessOutput>(Channel.UNLIMITED)
+    val updates = mutableListOf<ChatSteeringResult>()
+    val approval = CodexChatApproval({ true }, {}, RecordingDiagnostics(), {}, "/checkout")
+    val rpc = CodexAppServerRpc(input, output, RecordingDiagnostics(), {}, approval)
+    val drain = launch { rpc.drainTurn("thread", "turn") }
+    val steer = async {
+      rpc.steer("delivery-late-acceptance", "thread", "turn", emptyList(), { acquire -> acquire() },
+        { register -> register() }) { updates += it }
+    }
+    acknowledgeWrite(input.receive())
+
+    assertIs<ChatSteeringResult.DeliveryUncertain>(steer.await())
+    output.send(line("""{"id":1,"result":{"turnId":"turn"}}"""))
+    yield()
+
+    assertEquals(2, updates.size)
+    assertIs<ChatSteeringResult.DeliveryUncertain>(updates.first())
+    assertIs<ChatSteeringResult.Accepted>(updates.last())
+    output.send(line("""{"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed"}}}"""))
+    drain.join()
+    approval.release()
+    output.close()
+  }
+
+  @Test
+  fun `acknowledgement racing write completion wins over uncertainty`() = runTest {
+    val input = Channel<ChatProcessInput>(Channel.UNLIMITED)
+    val output = Channel<ChatProcessOutput>(Channel.UNLIMITED)
+    val updates = mutableListOf<ChatSteeringResult>()
+    val approval = CodexChatApproval({ true }, {}, RecordingDiagnostics(), {}, "/checkout")
+    val rpc = CodexAppServerRpc(input, output, RecordingDiagnostics(), {}, approval)
+    val drain = launch { rpc.drainTurn("thread", "turn") }
+    val steer = async {
+      rpc.steer("delivery-racing-ack", "thread", "turn", emptyList(), { acquire -> acquire() },
+        { register -> register() }) { updates += it }
+    }
+    val frame = input.receive()
+    output.send(line("""{"id":1,"result":{"turnId":"turn"}}"""))
+    yield()
+    acknowledgeWrite(frame)
+
+    assertIs<ChatSteeringResult.Accepted>(steer.await())
+    assertEquals(listOf<ChatSteeringResult>(ChatSteeringResult.Accepted("delivery-racing-ack")), updates)
+    output.send(line("""{"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed"}}}"""))
+    drain.join()
+    approval.release()
+    output.close()
+  }
+
+  private fun acknowledgeWrite(input: ChatProcessInput) {
+    assertTrue(input.acquireWrite())
+    input.written.complete(true)
   }
 
   private fun approvedCommandTurn(decision: ApprovalState, completion: String): List<ChatEvent> = runBlocking {

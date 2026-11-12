@@ -1,17 +1,20 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
-import dev.skillbill.desktop.core.domain.model.ChatModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ChatModel
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.DetectedAgentsRead
 import dev.skillbill.desktop.core.domain.model.RepositoryBranches
+import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.NewTaskKind
+import dev.skillbill.desktop.core.domain.model.newWorkBranchProblem
 import dev.skillbill.desktop.core.domain.model.RepositoryBranchesRead
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.FolderChoice
@@ -70,11 +73,13 @@ data class NewTaskUiState(
 sealed interface NewTaskAction {
   data class TextChanged(val text: String) : NewTaskAction
   data class ChooseBaseBranch(val branch: String) : NewTaskAction
+  data object SwitchToDefaultBranch : NewTaskAction
+  data object UseCurrentBranchAsBase : NewTaskAction
   data object RetryBranches : NewTaskAction
   data class ChooseRepository(val repository: NewTaskRepository) : NewTaskAction
   data class SubmitRepositoryPath(val path: String) : NewTaskAction
-  data class ChooseModel(val model: ChatModel?) : NewTaskAction
   data class ChooseAgent(val agentId: String) : NewTaskAction
+  data class ChooseModel(val model: ChatModel?) : NewTaskAction
   data object AddRepository : NewTaskAction
   data object OpenRepositoryPicker : NewTaskAction
   data object CloseRepositoryPicker : NewTaskAction
@@ -144,13 +149,15 @@ class NewTaskViewModel(
         if (target.text != action.text) target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
         target.text = action.text
       }
-      is NewTaskAction.ChooseBaseBranch -> {
+      is NewTaskAction.ChooseBaseBranch -> chooseBaseBranch(target, action.branch)
+      NewTaskAction.SwitchToDefaultBranch -> switchToDefaultBranch(target)
+      NewTaskAction.UseCurrentBranchAsBase -> {
         if (!canChangeContext(target)) return
-        pathCheck?.cancel()
-        target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
-        target.baseBranch = action.branch
+        val loaded = mutableState.value.branchRead as? BranchReadState.Loaded ?: return
+        if (loaded.root != target.repository?.root) return
+        target.baseBranch = loaded.branches.currentBranch.orEmpty()
         target.rebindChat()
-        mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
+        mutableState.update { it.copy(repositoryError = null) }
       }
       NewTaskAction.RetryBranches -> target.repository?.root?.let { readBranches(target, it) }
       is NewTaskAction.ChooseRepository -> {
@@ -170,6 +177,7 @@ class NewTaskViewModel(
         target.rebindChat()
       }
       is NewTaskAction.ChooseAgent -> {
+        if (!canChangeContext(target)) return
         target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
         target.agentChosen = true
         target.agentId = action.agentId
@@ -202,8 +210,25 @@ class NewTaskViewModel(
         if (loadsIntoTarget && target.chat.value != null) agentReads.remove(target)?.cancel()
         mutableState.update { it.copy(resumePickerOpen = false) }
       }
-      is NewTaskAction.RunSuggestedAction -> target.sendSuggestedAction(action.action)
+      is NewTaskAction.RunSuggestedAction -> {
+        if (action.action.mode == ChatPermissionMode.Act && requestBranchChoice(target)) return
+        target.branchChoiceRequested = false
+        target.sendSuggestedAction(action.action)
+      }
     }
+  }
+
+  fun start(kind: NewTaskKind, target: String?, action: ChatSuggestedAction?) {
+    val current = draft
+    if (action?.branch.isNullOrBlank() && requestBranchChoice(current)) return
+    current.start(kind, target = target, action = action)
+  }
+
+  private fun requestBranchChoice(target: NewTaskDraft): Boolean {
+    val loaded = mutableState.value.branchRead as? BranchReadState.Loaded ?: return false
+    if (loaded.root != target.repository?.root || loaded.branches.newWorkBranchProblem(target.baseBranch) == null) return false
+    target.branchChoiceRequested = true
+    return true
   }
 
   private fun isSelected(target: NewTaskDraft): Boolean = chats.selected.value === target
@@ -237,6 +262,7 @@ class NewTaskViewModel(
 
   private fun send(target: NewTaskDraft) {
     if (!target.canSend()) return
+    target.branchChoiceRequested = false
     if (target.text.trim() != RESUME_COMMAND) return target.send()
     target.text = ""
     chats.refreshSaved()
@@ -399,7 +425,61 @@ class NewTaskViewModel(
     if (isSelected(target)) mutableState.update { it.copy(repositoryError = message) }
   }
 
+  /** Moves the chat onto a checkout of the chosen base [branch], so the base and the working directory never differ; blank is the default branch. */
+  private fun chooseBaseBranch(target: NewTaskDraft, branch: String) {
+    if (!canChangeContext(target)) return
+    pathCheck?.cancel()
+    mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
+    val root = target.repository?.root ?: return
+    val loaded = (mutableState.value.branchRead as? BranchReadState.Loaded)?.takeIf { it.root == root }?.branches
+    val checkout = branch.ifBlank { loaded?.defaultBranch.orEmpty() }
+    if (loaded == null || checkout.isBlank() || checkout == loaded.currentBranch) {
+      target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
+      target.baseBranch = branch
+      target.rebindChat()
+      return
+    }
+    val remote = loaded.remote.any { it.name == checkout }
+    switchCheckout(target, root, checkout, loaded.currentBranch, if (remote) checkout.substringAfter('/') else branch)
+  }
+
+  private fun switchToDefaultBranch(target: NewTaskDraft) {
+    if (!canChangeContext(target)) return
+    val loaded = mutableState.value.branchRead as? BranchReadState.Loaded ?: return
+    val root = target.repository?.root ?: return
+    val defaultBranch = loaded.branches.defaultBranch
+    if (loaded.root != root || defaultBranch == null) return
+    switchCheckout(target, root, defaultBranch, loaded.branches.currentBranch, "")
+  }
+
+  /** Re-points [target] at the checkout of [branch] and adopts [baseBranch]; a failure keeps the old root and base and shows why. */
+  private fun switchCheckout(target: NewTaskDraft, root: String, branch: String, expectedCurrentBranch: String?, baseBranch: String) {
+    target.branchSwitching = true
+    viewModelScope.launch {
+      try {
+        when (val result = branches.switchToBranch(root, branch, expectedCurrentBranch)) {
+          is Outcome.Failure -> showRepositoryError(target, readProblemText(result.error))
+          is Outcome.Success -> {
+            target.baseBranch = baseBranch
+            target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
+            val repository = NewTaskRepository(result.value, checkNotNull(target.repository).name)
+            if ((mutableState.value.repositories + target.addedRepositories).none { it.root == repository.root }) {
+              target.addedRepositories += repository
+            }
+            target.repository = repository
+            target.rebindChat()
+            if (isSelected(target)) mutableState.update { it.copy(repositoryError = null) }
+          }
+        }
+      } finally {
+        target.branchSwitching = false
+        readBranches(target)
+      }
+    }
+  }
+
   private fun canChangeContext(target: NewTaskDraft): Boolean {
+    if (target.chat.value?.thread?.deferDestructiveAction("change the draft context") == true) return false
     val current = target.chat.value
     return current?.repositoryMissing != true && current?.thread?.busy?.value != true && !target.offer.value.starting
   }

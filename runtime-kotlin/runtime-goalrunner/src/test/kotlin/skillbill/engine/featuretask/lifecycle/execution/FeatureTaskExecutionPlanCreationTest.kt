@@ -446,7 +446,7 @@ class FeatureTaskExecutionPlanCreationTest {
         val ownerBefore = database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId) }
         val identity = execution.identity(workflowId)
         val expectedPlan = ValidatedFeatureTaskRuntimeExecutionPlan.read(execution.encoded, execution.validator)
-        val writes = WorkflowGoalRunnerBlockWrites(testHarnessClock)
+        val writes = WorkflowGoalRunnerBlockWrites(testHarnessClock, NoopRuntimeDiagnostics)
 
         assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError>(changedFact) {
           database.transaction { unit ->
@@ -627,7 +627,7 @@ class FeatureTaskExecutionPlanCreationTest {
           SqliteWorkflowArtifactWireEncoder(),
         ),
         testWorkflowGoalRunnerQualityExecutionStore(database, testWorkflowSnapshotValidator),
-        blockWrites = WorkflowGoalRunnerBlockWrites(testHarnessClock),
+        blockWrites = WorkflowGoalRunnerBlockWrites(testHarnessClock, NoopRuntimeDiagnostics),
       )
 
     fun store() =

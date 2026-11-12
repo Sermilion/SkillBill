@@ -1,3 +1,23 @@
+## [2026-11-11] Keep live-policy Send now separate from Stop
+Context: Both chat consumers previously interrupted a reply for Send now. SKILL-530 requires Claude and Codex follow-ups to preserve ongoing work and its context.
+Decision: Read transport-owned policy separately from availability. Claude and Codex use live delivery with non-stopping queued fallback; Cursor and Junie retain interruption. Explicit Stop keeps cancellation authority.
+Reason: An unavailable live handle must not turn guidance into cancellation or create a replacement process.
+
+## [2026-11-11] Keep uncertain delivery out of automatic replay
+Context: The operator removed duplicate-free delivery as an acceptance requirement while retaining visible uncertainty and warned explicit retry. Local delivery IDs are not provider idempotency keys.
+Decision: Require matching provider acknowledgement for acceptance. Restore proven unsent or rejected entries in order; retain possible writes until late acknowledgement, explicit warned Retry or confirmed discard. Retire the old identity before retry.
+Reason: Automatic replay after a possible write can duplicate guidance. Session and generation fences keep late acknowledgements associated with their original attempt, so they cannot consume a newer retry.
+
+## [2026-11-11] Keep unresolved follow-ups with their session recovery owner
+Context: Queue claims contain original text, images and metadata. Saved chat records do not persist image bytes, and replacing a chat can otherwise discard unresolved work.
+Decision: Retain claims in ChatThread and gate destructive lifecycle actions and application quit on recovery or discard. Keep process handles and recovery images in memory.
+Reason: Recovery must stay reachable without changing durable chat schemas or reconstructing process state. This limits recovery to the live application session.
+
+## [2026-11-11] Admit New Task actions before returning
+Context: Deferring admission lets later messages enter an earlier Send now batch or lets immediate Stop arrive before the ordinary turn is registered.
+Decision: Claim Send now batches and register ordinary turns under the existing transition lock before returning. Keep asynchronous transport and completion work on the configured transition dispatcher.
+Reason: The action boundary must establish queue ownership and the stoppable turn before the next operator action or composer observation, including image-only input.
+
 ## [2026-11-08] Separate proposed keys from accepted launch identity
 Context: A SkillBill chat began by discussing another project's run. The leading key became the new goal identity without an explicit selection.
 Decision: Only complete-key operator messages and visible bare-key acceptance chips select chat identity. The latest selection wins. Linear links propose keys, and missing-key preparation proposes the next local project keys. The picker separates selection from launch. Repository changes invalidate earlier acceptance.
@@ -165,6 +185,7 @@ Reason: The next turn must be a first turn on a fresh session for every agent. T
 Context: Unprompted replies have no turnJob. Abandon emits no terminal event, and unpromptedEvents is a buffered shared flow. showUnprompted takes busy when no turn runs.
 Decision: Stop and Send now set dropUnprompted. unprompted and showUnprompted return immediately while it is true. The next turn clears it only after ensureActive on its first event. A null turnJob ends the agent then finishStopped.
 Reason: A late event would set busy again with nothing collecting it, or append after Stopped. ensureActive keeps a cancelled turn from clearing the flag itself.
+Superseded by: Keep live-policy Send now separate from Stop (2026-11-11), for Claude and Codex Send now only; Stop and legacy-provider behavior still apply.
 
 ## [2026-11-03] Return queued chat text to the draft on Stop
 Context: DrainQueue runs when a turn ends, so Stop would send the next queued message. New-task stopUnprompted also ends in drainQueue.
@@ -185,6 +206,7 @@ Reason: A held key or double tap would kill the running turn. The class has no C
 Context: Stop and Send now both end the running reply, and drainQueue would send after either if the queue remains.
 Decision: sendNow uses the same interrupt as Stop and leaves the queue in place. Stop empties it first.
 Reason: The stopped notice is written in the turn finally before drain runs, so Stopped always precedes the new operator message.
+Superseded by: Keep live-policy Send now separate from Stop (2026-11-11), for Claude and Codex Send now only; Stop and legacy-provider behavior still apply.
 
 ## [2026-11-03] Keep pasted chat images in the session, not in chat history
 Context: Operator messages can carry pasted images, but ChatStore history lines hold text only and images are large.

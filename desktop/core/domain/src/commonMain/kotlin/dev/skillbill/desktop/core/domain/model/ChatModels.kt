@@ -47,6 +47,27 @@ class ChatImage(val bytes: ByteArray, val mediaType: String) {
   override fun toString(): String = "ChatImage($mediaType, ${bytes.size} bytes)"
 }
 
+data class ChatSteeringRequest(
+  val sessionId: String,
+  val agentId: String,
+  val deliveryId: String,
+  val text: String,
+  val images: List<ChatImage> = emptyList(),
+)
+
+sealed interface ChatSteeringResult {
+  val deliveryId: String
+  data class Accepted(override val deliveryId: String) : ChatSteeringResult
+  data class Unsupported(override val deliveryId: String, val reason: String) : ChatSteeringResult
+  data class NoActiveTurn(override val deliveryId: String, val reason: String) : ChatSteeringResult
+  data class Rejected(override val deliveryId: String, val reason: String) : ChatSteeringResult
+  data class DeliveryUncertain(override val deliveryId: String, val reason: String) : ChatSteeringResult
+}
+
+data class ChatSteeringUpdate(val sessionId: String, val result: ChatSteeringResult)
+
+enum class ChatSteeringPolicy { LegacySendNow, LiveWhenAvailable }
+
 /**
  * One operator message; [firstTurn] opens [sessionId], later turns resume it. [images] live for the session only and are
  * never saved.
@@ -78,7 +99,8 @@ enum class NewTaskActionKind(val wire: String) {
 
 /**
  * A null [start] sends [instruction] as the next turn; otherwise clicking the action starts that run. [title] names a started
- * goal or plan. [branch] is the git branch a started run works on; null runs it on the chat's checkout as it is.
+ * goal or plan. [branch] is the git branch a started run works on; null runs it on the chat's checkout as it is. [verify]
+ * carries a verify start's QA and review mode.
  */
 data class ChatSuggestedAction(
   val label: String,
@@ -88,6 +110,7 @@ data class ChatSuggestedAction(
   val title: String? = null,
   val target: String? = null,
   val branch: String? = null,
+  val verify: VerifyStartChoices = VerifyStartChoices(),
 )
 
 data class ChatToolCall(val id: String, val name: String, val input: String, val summary: String?, val workingDirectory: String? = null)
@@ -108,6 +131,15 @@ sealed interface ChatEvent {
 
   /** A permission request of this chat's process, or its settled outcome; the same card may arrive again as it changes. */
   data class ApprovalRequested(val card: ApprovalCard) : ChatEvent
+
+  /**
+   * The shell command of tool call [callId] keeps running in the background as [taskId] after its call returned. It is not
+   * reply text: it may arrive between turns, and it never opens or ends a reply.
+   */
+  data class BackgroundTaskStarted(val taskId: String, val callId: String) : ChatEvent
+
+  /** The background command [taskId] finished, failed or was stopped, including when its agent process ended. */
+  data class BackgroundTaskEnded(val taskId: String) : ChatEvent
 
   data object Completed : ChatEvent
 
@@ -180,6 +212,10 @@ data class ChatHistoryEntry(
   val lines: List<ChatHistoryLine>,
   val newTask: ChatNewTaskContext? = null,
   val summary: String? = null,
+  /** The app session linked by a native listing; transient metadata, absent on stored app history and older callers. */
+  val appSessionId: String? = null,
+  /** The checkout where this provider conversation was established, when known. */
+  val executionCheckoutRoot: String? = null,
 )
 
 /** A saved app-chat file that needs operator recovery instead of provider continuation. */

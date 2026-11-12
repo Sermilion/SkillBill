@@ -92,7 +92,7 @@ class BlockedWorkerCrashRecoveryTest {
       }
 
       assertOtherWorkflowRemainsBlocked(reconciler, database)
-      val writes = WorkflowGoalRunnerBlockWrites(testHarnessClock)
+      val writes = WorkflowGoalRunnerBlockWrites(testHarnessClock, NoopRuntimeDiagnostics)
       assertTrue(
         database.transaction { unit ->
           writes.reopenBlockedPhaseForOperatorResume(

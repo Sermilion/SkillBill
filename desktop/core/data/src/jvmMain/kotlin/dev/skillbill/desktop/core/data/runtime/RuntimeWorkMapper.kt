@@ -24,6 +24,7 @@ import skillbill.idestatus.model.IdeStatusDisplayGroup
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.idestatus.model.IdeStatusFreshness
 import skillbill.idestatus.model.IdeStatusLifecycleState
+import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
@@ -159,6 +160,13 @@ internal fun IdeStatusSnapshot.toWorkItem(verdicts: ItemVerdicts): WorkItem {
     standaloneExecution = execution?.scope == IdeStatusExecutionScope.STANDALONE_PHASE,
     goalWorktree = verdicts.goalWorktree?.toDomainWorktree(),
     build = verdicts.build?.toDomain(),
+    primaryRepositoryRoot = primaryRepositoryRoot?.takeIf(String::isNotBlank),
+    runKindLabel =
+      if (workflowFamily == IdeStatusWorkflowFamily.FEATURE_VERIFY) {
+        "verify"
+      } else {
+        execution?.phaseId?.takeIf(String::isNotBlank)
+      },
   )
 }
 

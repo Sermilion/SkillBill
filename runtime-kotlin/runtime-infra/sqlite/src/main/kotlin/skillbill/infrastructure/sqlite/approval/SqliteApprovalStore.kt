@@ -49,8 +49,8 @@ internal class SqliteApprovalStore(
         INSERT INTO approval_requests (
           approval_id, repository_identity, run_id, process_generation, provider,
           provider_request_id_type, provider_request_id, record_json, terminal_decision_json,
-          action_class, write_capable, input_complete, provider_disposition
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          action_class, write_capable, input_complete, provider_disposition, match_facts_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """.trimIndent(),
       ).use { statement ->
         statement.bindAll(
@@ -62,6 +62,7 @@ internal class SqliteApprovalStore(
               if (facts.writeCapable) 1 else 0,
               if (facts.inputComplete) 1 else 0,
               facts.providerDisposition.wireValue,
+              ApprovalMatchFactsColumn.encode(facts.matchFacts),
             ),
         )
         statement.executeUpdate()
@@ -79,7 +80,11 @@ internal class SqliteApprovalStore(
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(identityValues(identity))
-      statement.executeQuery().use { rows -> if (rows.next()) storedRequest(rows) else null }
+      val stored =
+        statement.executeQuery().use { rows ->
+          if (rows.next()) storedRequest(rows) else null
+        }
+      stored?.let { fillRulePatterns(listOf(it)).single() }
     }
 
   override fun settleAndClaim(
@@ -160,7 +165,7 @@ internal class SqliteApprovalStore(
     connection.prepareStatement(
       """
       SELECT rule_id, repository_identity, provider, profile_identity, protocol_revision, action_kind,
-        working_directory, action_fingerprint, created_at, revoked_at
+        working_directory, action_fingerprint, created_at, revoked_at, pattern
       FROM approval_rules WHERE repository_identity = ? AND revoked_at IS NULL ORDER BY created_at, rule_id
       """.trimIndent(),
     ).use { statement ->
@@ -330,8 +335,8 @@ internal class SqliteApprovalStore(
       """
       INSERT INTO approval_rules (
         rule_id, repository_identity, provider, profile_identity, protocol_revision, action_kind,
-        working_directory, action_fingerprint, created_at, revoked_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        working_directory, action_fingerprint, created_at, revoked_at, pattern
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -345,6 +350,7 @@ internal class SqliteApprovalStore(
         rule.actionFingerprint,
         rule.createdAt,
         rule.revokedAt,
+        rule.pattern,
       )
       statement.executeUpdate()
     }
@@ -379,6 +385,7 @@ internal class SqliteApprovalStore(
       actionFingerprint = rows.getString("action_fingerprint"),
       createdAt = rows.getString("created_at"),
       revokedAt = rows.getString("revoked_at"),
+      pattern = rows.getString("pattern"),
     )
 
   private fun ownerLease(
@@ -398,12 +405,15 @@ internal class SqliteApprovalStore(
       endedAt = rows.getString("ended_at"),
     )
 
-  private fun storedRequests(resultSet: ResultSet): List<ApprovalStoredRequest> =
-    resultSet.use { rows ->
-      buildList {
-        while (rows.next()) add(storedRequest(rows))
+  private fun storedRequests(resultSet: ResultSet): List<ApprovalStoredRequest> {
+    val requests =
+      resultSet.use { rows ->
+        buildList {
+          while (rows.next()) add(storedRequest(rows))
+        }
       }
-    }
+    return fillRulePatterns(requests)
+  }
 
   private fun storedRequest(rows: ResultSet): ApprovalStoredRequest {
     val actionClass =
@@ -425,9 +435,26 @@ internal class SqliteApprovalStore(
         rows.getInt("write_capable") != 0,
         rows.getInt("input_complete") != 0,
         disposition,
+        matchFacts = ApprovalMatchFactsColumn.decode(rows.getString("match_facts_json")),
       ),
       delivery,
     )
+  }
+
+  private fun fillRulePatterns(requests: List<ApprovalStoredRequest>): List<ApprovalStoredRequest> {
+    if (requests.isEmpty()) return requests
+    return connection.prepareStatement(
+      "SELECT pattern FROM approval_rules WHERE rule_id = ? AND repository_identity = ?",
+    ).use { statement ->
+      requests.map { stored ->
+        val ruleId = stored.record.ruleId ?: return@map stored
+        statement.bindAll(ruleId, stored.record.repositoryIdentity)
+        statement.executeQuery().use { rows ->
+          if (!rows.next()) return@map stored
+          stored.copy(rulePattern = rows.getString("pattern"))
+        }
+      }
+    }
   }
 
   private fun <T> knownToken(
@@ -461,7 +488,7 @@ internal class SqliteApprovalStore(
     val scope = settled.authorityScope ?: return false
     return repositoryIdentity == settled.repositoryIdentity &&
       provider == settled.provider &&
-      actionFingerprint == scope.actionFingerprint &&
+      (pattern != null || actionFingerprint == scope.actionFingerprint) &&
       profileIdentity == scope.profileIdentity &&
       protocolRevision == scope.protocolRevision &&
       actionKind == scope.actionKind &&
@@ -474,7 +501,7 @@ internal class SqliteApprovalStore(
   private companion object {
     const val STORED_REQUEST_COLUMNS =
       "record_json, action_class, write_capable, input_complete, " +
-        "provider_disposition, delivery_state"
+        "provider_disposition, delivery_state, match_facts_json"
     const val IDENTITY_MATCH =
       "approval_id = ? AND repository_identity = ? AND run_id = ? AND " +
         "process_generation = ? AND provider = ? " +

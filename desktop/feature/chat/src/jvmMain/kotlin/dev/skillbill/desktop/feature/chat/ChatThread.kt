@@ -9,6 +9,7 @@ import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.OperationCardDetailsView
 import dev.skillbill.desktop.core.domain.model.OperationCardReference
@@ -48,14 +49,125 @@ internal class ChatThread(private val clock: Clock) {
   val stoppableState = MutableStateFlow(false)
   val stoppable: StateFlow<Boolean> = stoppableState.asStateFlow()
 
+  private val backgroundCommandsState = MutableStateFlow<List<WaitingCommand>>(emptyList())
+
+  /** The commands this chat's agent left running in the background, oldest first, until each one ends. */
+  val backgroundCommands: StateFlow<List<WaitingCommand>> = backgroundCommandsState.asStateFlow()
+
   @Volatile
   var dropUnprompted = false
 
   val queuedState = MutableStateFlow<List<QueuedChatMessage>>(emptyList())
   val queued: StateFlow<List<QueuedChatMessage>> = queuedState.asStateFlow()
 
+  private data class DeliveryClaim(val id: String, val entries: List<QueuedChatMessage>, var uncertain: Boolean = false)
+  private val queueLock = Any()
+  private var deliveryClaim: DeliveryClaim? = null
+  private val deliveryState = MutableStateFlow<ChatDeliveryView?>(null)
+  val delivery: StateFlow<ChatDeliveryView?> = deliveryState.asStateFlow()
+
+  data class ClaimedDelivery internal constructor(val deliveryId: String, val entries: List<QueuedChatMessage>)
+
+  sealed interface DeliveryTransition {
+    data object Accepted : DeliveryTransition
+    data class Restored(val reason: String) : DeliveryTransition
+    data class RetainedUncertain(val reason: String) : DeliveryTransition
+    data object Ignored : DeliveryTransition
+  }
+
+  fun enqueue(message: QueuedChatMessage) = synchronized(queueLock) {
+    queuedState.value = queuedState.value + message
+  }
+
+  fun claimDelivery(deliveryId: String): ClaimedDelivery? = synchronized(queueLock) {
+    if (deliveryClaim != null || queuedState.value.isEmpty()) return@synchronized null
+    val entries = queuedState.value
+    queuedState.value = emptyList()
+    deliveryClaim = DeliveryClaim(deliveryId, entries)
+    deliveryState.value = ChatDeliveryView(deliveryId,
+      entries.map { it.text }.filter { it.isNotBlank() }.joinToString("\n\n"), entries.flatMap { it.images })
+    ClaimedDelivery(deliveryId, entries)
+  }
+
+  fun hasDeliveryClaim(): Boolean = synchronized(queueLock) { deliveryClaim != null }
+
+  fun reduceDelivery(result: ChatSteeringResult): DeliveryTransition = synchronized(queueLock) {
+    val claim = deliveryClaim?.takeIf { it.id == result.deliveryId } ?: return@synchronized DeliveryTransition.Ignored
+    when (result) {
+      is ChatSteeringResult.Accepted -> {
+        deliveryClaim = null
+        deliveryState.value = null
+        DeliveryTransition.Accepted
+      }
+      is ChatSteeringResult.DeliveryUncertain -> {
+        if (claim.uncertain) DeliveryTransition.Ignored
+        else {
+          claim.uncertain = true
+          deliveryState.value = deliveryState.value?.copy(status = ChatDeliveryStatus.Uncertain, reason = result.reason)
+          DeliveryTransition.RetainedUncertain(result.reason)
+        }
+      }
+      is ChatSteeringResult.Rejected -> {
+        queuedState.value = claim.entries + queuedState.value
+        deliveryClaim = null
+        deliveryState.value = null
+        DeliveryTransition.Restored(result.reason)
+      }
+      is ChatSteeringResult.Unsupported, is ChatSteeringResult.NoActiveTurn -> {
+        if (claim.uncertain) return@synchronized DeliveryTransition.Ignored
+        queuedState.value = claim.entries + queuedState.value
+        deliveryClaim = null
+        deliveryState.value = null
+        val reason = when (result) {
+          is ChatSteeringResult.Unsupported -> result.reason
+          is ChatSteeringResult.NoActiveTurn -> result.reason
+          else -> error("Expected a known-unsent result")
+        }
+        DeliveryTransition.Restored(reason)
+      }
+    }
+  }
+
+  fun deferDestructiveAction(action: String): Boolean = synchronized(queueLock) {
+    if (deliveryClaim == null) return@synchronized false
+    deliveryState.value = deliveryState.value?.copy(blockedAction = action)
+    true
+  }
+
+  fun keepOpen() = synchronized(queueLock) {
+    deliveryState.value = deliveryState.value?.copy(blockedAction = null)
+  }
+
+  fun releaseDelivery(deliveryId: String, retry: Boolean): Boolean = synchronized(queueLock) {
+    val claim = deliveryClaim?.takeIf { it.id == deliveryId } ?: return@synchronized false
+    if (retry && !claim.uncertain) return@synchronized false
+    if (retry) queuedState.value = claim.entries + queuedState.value
+    deliveryClaim = null
+    deliveryState.value = null
+    true
+  }
+
+  fun takeOrdinaryQueuedEntries(): List<QueuedChatMessage> = synchronized(queueLock) {
+    queuedState.value.also { queuedState.value = emptyList() }
+  }
+
+  fun hasQueuedMessages(): Boolean = synchronized(queueLock) { queuedState.value.isNotEmpty() }
+
+  fun takeQueuedEntries(): List<QueuedChatMessage> = synchronized(queueLock) {
+    if (deliveryClaim != null) return@synchronized emptyList()
+    queuedState.value.also { queuedState.value = emptyList() }
+  }
+
+  fun clearQueuedEntries(): List<QueuedChatMessage> = synchronized(queueLock) {
+    queuedState.value.also { queuedState.value = emptyList() }
+  }
+
+  fun replaceQueuedEntries(entries: List<QueuedChatMessage>) = synchronized(queueLock) {
+    queuedState.value = entries
+  }
+
   fun takeQueuedMessage(): QueuedChatMessage? {
-    val pending = queuedState.getAndUpdate { emptyList() }
+    val pending = takeQueuedEntries()
     val first = pending.firstOrNull() ?: return null
     return first.copy(
       text = pending.map { it.text }.filter { it.isNotBlank() }.joinToString("\n\n"),
@@ -252,8 +364,22 @@ internal class ChatThread(private val clock: Clock) {
 
   fun appendTool(call: ChatToolCall) = updateStreaming { message ->
     val exists = message.tools.any { it.call.id == call.id }
-    message.copy(tools = if (exists) message.tools.map { if (it.call.id == call.id) it.copy(call = call) else it }
-      else message.tools + ChatToolEntry(call, startedAt = clock.now()))
+    message.copy(tools = if (exists) message.tools.map { if (it.call.id == call.id) it.copy(call = call, command = shellCommand(call) ?: it.command) else it }
+      else message.tools + ChatToolEntry(call, startedAt = clock.now(), command = shellCommand(call)))
+  }
+
+  /** Shows the shell command of tool call [callId] as running in the background as [taskId]. */
+  fun backgroundTaskStarted(taskId: String, callId: String) {
+    val entry = messages.value.firstNotNullOfOrNull { message -> (message as? ChatMessage.Agent)?.tools?.firstOrNull { it.call.id == callId } }
+    val waiting = entry?.waitingCommand(taskId, clock.now()) ?: return
+    backgroundCommandsState.update { running -> if (running.any { it.id == taskId }) running else running + waiting }
+  }
+
+  fun backgroundTaskEnded(taskId: String) = backgroundCommandsState.update { running -> running.filterNot { it.id == taskId } }
+
+  /** Forgets every background command, for when the agent process that ran them is stopped. */
+  fun clearBackgroundCommands() {
+    backgroundCommandsState.value = emptyList()
   }
 
   fun recordToolResult(result: ChatEvent.ToolResult) = messages.update { list ->
@@ -311,6 +437,8 @@ internal fun ChatThread.show(agent: ChatAgent?, event: ChatEvent) {
     is ChatEvent.ToolResult -> recordToolResult(event)
     is ChatEvent.SuggestedActions -> suggestActions(event.actions)
     is ChatEvent.ApprovalRequested -> showApproval(event.card)
+    is ChatEvent.BackgroundTaskStarted -> backgroundTaskStarted(event.taskId, event.callId)
+    is ChatEvent.BackgroundTaskEnded -> backgroundTaskEnded(event.taskId)
     ChatEvent.Completed -> endStreaming()
     is ChatEvent.Failed -> {
       endStreaming()

@@ -7,6 +7,7 @@ import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.decompositionPlanningResult
 import skillbill.application.decomposition.decompositionPlanningSubtask
 import skillbill.application.decomposition.defaultFeatureBranch
+import skillbill.application.decomposition.loadValidatedDecompositionManifest
 import skillbill.application.decomposition.loadValidatedDecompositionManifestPersistingRepair
 import skillbill.application.decomposition.model.DecompositionManifestWriteRequest
 import skillbill.application.decomposition.model.DecompositionPlanningResultOptions
@@ -149,6 +150,13 @@ public class FeatureSpecPreparationWriter(
 
   internal fun authoredManifest(parentSpecPath: Path): DecompositionManifest =
     loadPreparedManifest(parentSpecPath.resolveSibling(AUTHORED_MANIFEST_FILE)).manifest
+
+  internal fun authoredManifestWithoutRepair(parentSpecPath: Path): DecompositionManifest =
+    loadValidatedDecompositionManifest(
+      parentSpecPath.resolveSibling(AUTHORED_MANIFEST_FILE),
+      fileStore,
+      decompositionManifestValidator,
+    ).manifest
 
   internal fun authoredSubtasks(parentSpecPath: Path): List<DecompositionSubtask> =
     authoredManifest(parentSpecPath).subtasks

@@ -20,6 +20,9 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProducerOutputRead
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
+import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityRepairAppliedWrite
+import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWrite
+import skillbill.engine.featuretask.model.phase.PlanBundleFeasibilityStateWriteResult
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparation
@@ -67,6 +70,7 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplem
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
@@ -380,6 +384,23 @@ private class DurablePhasePlanRecords(
   private val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
   private val admitted: AdmittedFeatureTaskRuntimeExecution,
 ) : PhasePlanRecords {
+  override fun loadPlanBundleFeasibility(workflowId: String): FeatureTaskRuntimePlanBundleFeasibilityState? =
+    decomposeTerminalRecorder.loadPlanBundleFeasibility(workflowId)
+
+  override fun writePlanBundleFeasibility(
+    request: PlanBundleFeasibilityStateWrite,
+  ): PlanBundleFeasibilityStateWriteResult =
+    admitted.ownedWrite({ decomposeTerminalRecorder.writePlanBundleFeasibility(request, it) }) {
+      decomposeTerminalRecorder.writePlanBundleFeasibility(request)
+    }
+
+  override fun recordFeasibilityRepairApplied(
+    request: PlanBundleFeasibilityRepairAppliedWrite,
+  ): PlanBundleFeasibilityStateWriteResult =
+    admitted.ownedWrite({ decomposeTerminalRecorder.recordFeasibilityRepairApplied(request, it) }) {
+      decomposeTerminalRecorder.recordFeasibilityRepairApplied(request)
+    }
+
   override fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle? =
     decomposeTerminalRecorder.loadPlanBundle(workflowId)
 

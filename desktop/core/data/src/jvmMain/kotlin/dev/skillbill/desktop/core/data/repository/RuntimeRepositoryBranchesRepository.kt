@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import me.tatarka.inject.annotations.Inject
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.RepositoryBranchRef
 import skillbill.ports.workflow.gitops.model.RepositoryBranchesResult
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
@@ -48,12 +49,34 @@ class RuntimeRepositoryBranchesRepository(
       is Outcome.Failure -> unavailable(read.error)
       is Outcome.Success -> when (val result = read.value) {
         is RepositoryBranchesResult.Listed -> RepositoryBranchesRead.Listed(
-          RepositoryBranches(result.repositoryRoot, result.defaultBranch, result.local.map { it.toDomain() }, result.remote.map { it.toDomain() }),
+          RepositoryBranches(result.repositoryRoot, result.defaultBranch, result.local.map { it.toDomain() }, result.remote.map { it.toDomain() }, result.currentBranch),
         )
         is RepositoryBranchesResult.NotARepository -> RepositoryBranchesRead.NotARepository(result.path)
         is RepositoryBranchesResult.Failed -> unavailable(ReadProblem.Runtime(result.message))
       }
     }
+  }
+
+  override suspend fun switchToBranch(path: String, branch: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> {
+    val runtime = sessions.sessions.value?.runtime
+      ?: return Outcome.Failure(ReadProblem.Runtime("No database session is open."))
+    val target = try {
+      Path.of(path)
+    } catch (_: InvalidPathException) {
+      return Outcome.Failure(ReadProblem.Runtime("Invalid repository path."))
+    }
+    val read = readOrProblem(runtime, diagnostics) {
+      gitReadLock.mutex.withLock { withContext(Dispatchers.IO) { runtime.repositoryBranchesPort.switchToBranch(target, branch, expectedCurrentBranch) } }
+    }
+    val outcome = when (read) {
+      is Outcome.Failure -> read
+      is Outcome.Success -> when (val result = read.value) {
+        is WorkflowGitOperationResult.Ok -> Outcome.Success(result.value)
+        is WorkflowGitOperationResult.Failed -> Outcome.Failure(ReadProblem.Runtime(result.error))
+      }
+    }
+    if (outcome is Outcome.Failure) diagnostics.record("desktop_repository_branch_switch_failed")
+    return outcome
   }
 
   private fun unavailable(problem: ReadProblem): RepositoryBranchesRead {

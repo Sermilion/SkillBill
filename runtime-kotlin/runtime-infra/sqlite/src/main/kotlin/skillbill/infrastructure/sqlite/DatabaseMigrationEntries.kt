@@ -25,21 +25,23 @@ import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMig
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelRebuildMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkflowStateVersionMigration
 import skillbill.infrastructure.sqlite.core.migration.area.addApprovalNotRequiredDelivery
+import skillbill.infrastructure.sqlite.core.migration.area.addApprovalRulePatterns
 import skillbill.infrastructure.sqlite.core.migration.area.addGoalContinuationColumns
 import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalLeasesAndGrantFacts
 import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalOwnerLeaseExpiry
 import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalRecordsAndRules
 import skillbill.infrastructure.sqlite.core.migration.area.addReviewFindingActions
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
-import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_DETAILS_COLUMN
-import skillbill.infrastructure.sqlite.core.migration.area.idestatus.SqliteQaDetailsKeys
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.PrimaryRepositoryRootMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.buildrun.recordAgentBuildRuns
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.pruneWorktreeEditJournalToLatestTick
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails.QA_DETAILS_COLUMN
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails.SqliteQaDetailsKeys
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails.recordQaDetails
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaCriteriaSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaFindingsSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaOutcomes
-import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordQaDetails
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordQaFailureKind
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordQaReportText
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneMonitorTarget
@@ -1139,9 +1141,19 @@ internal val databaseMigrations: List<DatabaseMigration> =
     ) +
     DatabaseMigration(
       version = 121,
+      name = "add-approval-rule-patterns",
+      operation = ::addApprovalRulePatterns,
+    ) +
+    DatabaseMigration(
+      version = 122,
       name = "record-opencode-launch-identity",
       operation = { connection ->
         recordOpenCodeLaunchIdentity(connection)
         addOperationOpenCodeIdentity(connection)
       },
+    ) +
+    DatabaseMigration(
+      version = 123,
+      name = "record-primary-repository-root",
+      operation = PrimaryRepositoryRootMigration::apply,
     )

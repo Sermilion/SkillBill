@@ -2,10 +2,15 @@ package skillbill.engine.featuretask.runloop.planning
 
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibility
+import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilitySnapshot
 import skillbill.engine.featuretask.phase.planning.PlanBundleTarget
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.decompositionStatus
 import java.io.IOException
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
@@ -38,11 +43,27 @@ internal object PlanBundleStagingPromotion {
     }
   }
 
+  fun seedFeasibilityRepair(
+    planner: FeatureTaskRuntimeDecompositionPlanner,
+    target: PlanBundleTarget.Staged,
+    repoRoot: Path,
+    diagnostics: RuntimeDiagnostics,
+    provider: String,
+  ): Boolean =
+    try {
+      removeStagingRoot(planner, repoRoot, target.stagingRoot)
+      copyTree(planner, TreeCopy(target.storeDirectory, target.directory, emptySet(), keepExisting = false))
+      true
+    } catch (error: IOException) {
+      RuntimeDiagnosticsBestEffortWarning.record(diagnostics, warning(target, "staging_seed_failed", provider), error)
+      false
+    }
+
   fun promote(
     planner: FeatureTaskRuntimeDecompositionPlanner,
     diagnostics: RuntimeDiagnostics,
     request: PromotionRequest,
-  ) {
+  ): Boolean {
     val target = request.target
     try {
       val skipped = if (request.parentSpecProtected) setOf(PARENT_SPEC_FILE) else emptySet()
@@ -52,13 +73,61 @@ internal object PlanBundleStagingPromotion {
         warning(target, "provider_without_additional_directories", request.provider),
       )
       finishStaging(planner, diagnostics, request)
+      return true
     } catch (error: IOException) {
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
         warning(target, "staging_promotion_failed", request.provider),
         error,
       )
+      return false
     }
+  }
+
+  fun promoteFeasibilityRepair(
+    planner: FeatureTaskRuntimeDecompositionPlanner,
+    request: PromotionRequest,
+    issueKey: String,
+    canonicalBefore: PlanBundleFeasibilitySnapshot,
+    after: PlanBundleFeasibilitySnapshot,
+  ): Boolean {
+    val canonical = PlanBundleFeasibility.capture(planner, request.repoRoot, issueKey)
+    if (canonical.identity == after.identity) return true
+    if (canonical.identity != canonicalBefore.identity ||
+      canonicalBefore.repairViolation(canonical) != null
+    ) {
+      return false
+    }
+    val pending =
+      canonicalBefore.manifest.subtasks.filter {
+        it.status.decompositionStatus() == DecompositionStatus.PENDING
+      }
+    val replacements =
+      pending.map { subtask ->
+        repairReplacement(planner, request, subtask, after) ?: return false
+      }
+    return planner.applyFeasibilityRepair(
+      request.repoRoot,
+      issueKey,
+      canonicalBefore,
+      after,
+      replacements.toMap(),
+    )
+  }
+
+  private fun repairReplacement(
+    planner: FeatureTaskRuntimeDecompositionPlanner,
+    request: PromotionRequest,
+    subtask: DecompositionSubtask,
+    after: PlanBundleFeasibilitySnapshot,
+  ): Pair<Path, String>? {
+    val canonical = planner.bundlePath(request.repoRoot, subtask.specPath).toAbsolutePath().normalize()
+    val relative = request.target.storeDirectory.toAbsolutePath().normalize().relativize(canonical)
+    val staged = request.target.directory.resolve(relative).toAbsolutePath().normalize()
+    val stagingRoot = request.target.directory.toAbsolutePath().normalize()
+    if (relative.startsWith("..") || !staged.startsWith(stagingRoot) || !planner.isBundleFile(staged)) return null
+    val intended = after.identity.subtasks.firstOrNull { it.id == subtask.id }?.rawSpecText ?: return null
+    return (canonical to intended).takeIf { planner.specText(staged) == intended }
   }
 
   fun seedUnit(

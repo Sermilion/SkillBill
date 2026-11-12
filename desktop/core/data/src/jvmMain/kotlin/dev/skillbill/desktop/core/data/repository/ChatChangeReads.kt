@@ -29,6 +29,18 @@ internal class ChatChangeReads(
   private val changes: WorkChangesPort,
   private val clock: Clock,
 ) {
+  fun readCurrentChanges(root: String): ChatChangesRead {
+    val files = when (val result = changes.uncommittedChanges(root)) {
+      is WorkChangeListResult.Listed -> result
+      is WorkChangeListResult.BaseUnavailable -> return ChatChangesRead.Unavailable(result.reason)
+      is WorkChangeListResult.NotARepository -> return ChatChangesRead.Unavailable("Not a repository: ${result.worktreeRoot}")
+      is WorkChangeListResult.Failed -> return ChatChangesRead.Unavailable(result.message)
+    }
+    val mapped = files.files.map { it.toDomain() }.sortedBy(ChangedFile::path)
+    return ChatChangesRead.Listed(ChatChanges(mapped, mapped.sumOf { it.insertions ?: 0 }, mapped.sumOf { it.deletions ?: 0 },
+      0, mapped.isNotEmpty(), files.baseSha, ChangeScopeTimeline(files.baseSha, files.baseSha, emptyList()), "HEAD"))
+  }
+
   fun projectWorktrees(root: String): ChatProjectWorktrees = when (val result = snapshot.projectWorktrees(root)) {
     is WorkTreeProjectResult.Listed -> ChatProjectWorktrees.Listed(result.projectId, result.worktreeRoots)
     is WorkTreeProjectResult.Unavailable -> ChatProjectWorktrees.Unavailable(result.reason)

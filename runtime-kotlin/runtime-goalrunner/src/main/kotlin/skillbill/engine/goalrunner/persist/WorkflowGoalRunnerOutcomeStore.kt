@@ -66,7 +66,7 @@ import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.workflowStatus
-import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.toUpgradedAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionInteractionTrace
 import skillbill.workflow.taskruntime.model.audit.interaction.unknownScenarios
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -603,7 +603,7 @@ internal class WorkflowGoalRunnerReviewBridge(
       val state =
         try {
           FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
-            .toAcceptanceCriterionRepairState(family.label())
+            .toUpgradedAcceptanceCriterionRepairState(family.label())
         } catch (failure: SkillBillRuntimeException) {
           return@read GoalSubtaskUnknownScenarios.Malformed(failure.message.orEmpty())
         }
@@ -623,7 +623,7 @@ internal class WorkflowGoalRunnerReviewBridge(
       val trace =
         if (family.contains(artifacts)) {
           FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
-            .toAcceptanceCriterionRepairState(family.label())
+            .toUpgradedAcceptanceCriterionRepairState(family.label())
             .interactionTrace
         } else {
           AcceptanceCriterionInteractionTrace.EMPTY

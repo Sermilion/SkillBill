@@ -215,21 +215,51 @@ fun BuildChip(build: SbBuild, modifier: Modifier = Modifier) {
           BasicText(build.shortCommand, style = type.t2xs.copy(fontWeight = FontWeight.Normal, color = colors.stFailed), maxLines = 1, softWrap = false)
           BasicText("failed", style = type.tXs.copy(fontWeight = FontWeight.Normal).tabular().copy(color = colors.stFailed), maxLines = 1, softWrap = false)
         } else {
-          BuildSpinner(10.dp, 1.5.dp, slow, null)
-          BasicText(build.shortCommand, style = type.t2xs.copy(fontWeight = FontWeight.Normal, color = colors.fg2), maxLines = 1, softWrap = false)
-          val clockColor = if (slow) colors.stBlocked else colors.fgMuted
-          CompositionLocalProvider(LocalContentColor provides clockColor) {
+          SpinnerChipContent(build.shortCommand, slow) {
             if (build.state == SbBuildState.Running) {
               val (duration, asOf) = build.clockBase()
               SbClock(duration, asOf, live = true, showSeconds = true, style = type.tXs.copy(fontWeight = FontWeight.Normal))
             } else {
-              BasicText(formatActiveDuration(build.elapsedAt(now), true), style = type.tXs.copy(fontWeight = FontWeight.Normal).tabular().copy(color = clockColor), maxLines = 1)
+              BasicText(formatActiveDuration(build.elapsedAt(now), true), style = type.tXs.copy(fontWeight = FontWeight.Normal).tabular().copy(color = LocalContentColor.current), maxLines = 1)
             }
           }
         }
       }
     }
   }
+}
+
+/** A command an agent is waiting on, drawn like a running [BuildChip]: spinner, its short [name] and the time since [startedAt]. */
+@Composable
+fun CommandChip(name: String, startedAt: Instant, modifier: Modifier = Modifier, tooltip: String? = null) {
+  val colors = SkillBillTheme.colors
+  val type = SkillBillTheme.type
+  val chip: @Composable () -> Unit = {
+    Row(
+      modifier.height(22.dp).border(1.dp, colors.border, SkillBillRadius.full).padding(horizontal = 8.dp),
+      horizontalArrangement = Arrangement.spacedBy(6.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      SpinnerChipContent(name, slow = false) {
+        SbClock(0, startedAt, live = true, showSeconds = true, style = type.tXs.copy(fontWeight = FontWeight.Normal))
+      }
+    }
+  }
+  if (tooltip != null) SbTooltip(tooltip, content = chip) else chip()
+}
+
+@Composable
+private fun SpinnerChipContent(label: String, slow: Boolean, clock: @Composable () -> Unit) {
+  val colors = SkillBillTheme.colors
+  BuildSpinner(10.dp, 1.5.dp, slow, null)
+  BasicText(
+    label,
+    style = SkillBillTheme.type.t2xs.copy(fontWeight = FontWeight.Normal, color = colors.fg2),
+    maxLines = 1,
+    softWrap = false,
+    overflow = TextOverflow.Ellipsis,
+  )
+  CompositionLocalProvider(LocalContentColor provides if (slow) colors.stBlocked else colors.fgMuted, content = clock)
 }
 
 @Composable

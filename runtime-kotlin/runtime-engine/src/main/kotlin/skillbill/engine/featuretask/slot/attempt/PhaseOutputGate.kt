@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheck
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMetadata
 import skillbill.engine.featuretask.lifecycle.subtask.FeatureTaskRuntimeSubtaskFinalisation
 import skillbill.engine.featuretask.lifecycle.subtask.FeatureTaskRuntimeSubtaskFinaliseRequest
+import skillbill.engine.featuretask.model.audit.AcceptanceGapAuditScope
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
@@ -20,6 +21,7 @@ import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinal
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinalised
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionInteractionTraceRound
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
+import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.stepOutputContext
 import skillbill.engine.featuretask.runloop.attempt.phaseAttemptContext
@@ -63,6 +65,7 @@ import skillbill.engine.featuretask.runloop.output.payloadFreeSemanticGateConstr
 import skillbill.engine.featuretask.runloop.output.rejectionPath
 import skillbill.engine.featuretask.runloop.output.retryRejectionReason
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
+import skillbill.engine.featuretask.runloop.planning.FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement
 import skillbill.engine.featuretask.runloop.state.FEATURE_TASK_RUNTIME_PROCESS_FAILURE_RULE
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeChildOutput
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
@@ -148,12 +151,21 @@ internal object PhaseOutputGate {
           proseOutput(args) ?: return blankOutputProcessFailure(args),
           args.observability,
         )
-      PhaseSettledEnvelopeRead.None ->
-        unadmittableOutputProcessFailure(
-          args,
-          "Phase '${args.run.phaseId}' attempt ${args.iteration} has no matching durable settlement for workflow " +
-            "'${args.run.request.workflowId}'; captured prose cannot complete a settlement-required phase.",
-        )
+      PhaseSettledEnvelopeRead.None -> {
+        val auditClarification =
+          proseOutput(args)?.takeIf {
+            args.run.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
+          }
+        if (auditClarification != null) {
+          args.settleAcceptedOutput(auditClarification, args.observability)
+        } else {
+          unadmittableOutputProcessFailure(
+            args,
+            "Phase '${args.run.phaseId}' attempt ${args.iteration} has no matching durable settlement for workflow " +
+              "'${args.run.request.workflowId}'; captured prose cannot complete a settlement-required phase.",
+          )
+        }
+      }
       is PhaseSettledEnvelopeRead.Failed -> failedSettlement(args, settled.error)
     }
   }
@@ -559,6 +571,37 @@ internal object PhaseOutputGate {
     args: SettleValidatedOutputAfterFingerprintArgs,
   ): AttemptResult {
     val coupling = settlementCoupling()
+    val terminalMap = args.attested.envelopeWireMap()
+    val terminalReason =
+      terminalBlockedReasonFrom(
+        args.capture.run.phaseId,
+        terminalMap,
+        args.stepHooks.blockedOutputDisposition,
+      )
+    val activeFeasibility =
+      recorder.loadPlanBundleFeasibility(request.workflowId)?.activeLaunch
+        ?.takeIf { it.phaseId == args.capture.run.phaseId }
+    if (terminalReason != null && activeFeasibility != null) {
+      val closed =
+        FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement.refuseUnusableReview(
+          this,
+          args.capture.run,
+          args.capture.iteration,
+          "Feasibility launch ended with terminal output: $terminalReason. " +
+            "Original phase envelope: ${args.attested.canonicalJson}",
+        )
+      val disposition =
+        FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(
+          terminalMap,
+          args.stepHooks.blockedOutputDisposition,
+        )
+      if (closed && disposition == FeatureTaskRuntimeFailureDisposition.RETRYABLE) {
+        return AttemptResult.BundleFeasibilityContinuation(
+          "The feasibility launch returned terminal output: $terminalReason",
+          args.capture.fileManifest,
+        )
+      }
+    }
     return settleValidatedOutputPauseOrTerminal(
       coupling.progress,
       coupling.transitions,
@@ -633,6 +676,7 @@ internal object PhaseOutputGate {
           repositoryFingerprint = args.repositoryFingerprint,
           boundStep = boundStep,
           stepHooks = args.stepHooks,
+          launchHandoffSelection = boundStep.boundHooks.launchHandoffSelection,
         ),
       )
   }
@@ -658,6 +702,13 @@ internal object PhaseOutputGate {
     rule: String,
   ): PhaseStepOutputCheck {
     if (interactionTraceRepair(run.request) != null) {
+      return PhaseStepOutputCheck.Retry(reason, rule)
+    }
+    val repair = (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair
+    val reask = repair?.gapReask
+    val currentScope = repair?.let { AcceptanceGapAuditScope.key(it) }
+    val matchingReask = reask != null && reask.scopeKey == currentScope && reask.reason == reason
+    if (repair?.steps?.audit == run.phaseId && currentScope != null && matchingReask) {
       return PhaseStepOutputCheck.Retry(reason, rule)
     }
     return PhaseStepOutputCheck.Reject(reason, rule)
@@ -700,6 +751,7 @@ internal object PhaseOutputGate {
         observability = observability,
         fileManifest = capture.fileManifest,
         repositoryFingerprint = repositoryFingerprint,
+        launchHandoffSelection = args.launchHandoffSelection,
       )
     val outputPersistence = args.stepHooks as? PhaseAcceptedOutputPersistence
     if (
@@ -746,6 +798,13 @@ internal object PhaseOutputGate {
     val diagnosticRule = rule
     val path = rejectionPath(detail)
     val reason = payloadFreeRejectionReason(rule, path)
+    val feasibilitySettled =
+      FeatureTaskRuntimeRunLoopPlanBundleFeasibilitySettlement.refuseUnusableReview(
+        settlement.settlementContext,
+        capture.run,
+        capture.iteration,
+        "The phase output was rejected before feasibility receipt parsing: $detail",
+      )
     val retryFacingConstraint =
       payloadFreeSemanticGateConstraint(
         rule,
@@ -768,6 +827,12 @@ internal object PhaseOutputGate {
           ),
       ),
     )
+    if (feasibilitySettled) {
+      return AttemptResult.BundleFeasibilityContinuation(
+        "The feasibility output was rejected before receipt parsing: $detail",
+        capture.fileManifest,
+      )
+    }
     return FeatureTaskRuntimeRunLoopOutputPersistence.schemaInvalidAttempt(
       reason,
       capture.fileManifest,

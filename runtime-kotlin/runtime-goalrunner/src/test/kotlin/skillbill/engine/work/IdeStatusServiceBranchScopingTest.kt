@@ -45,7 +45,11 @@ class IdeStatusServiceBranchScopingTest {
     val identity = testGoalRepositoryIdentity(fixture)
     val initial = completedGoalManifestState(fixture, identity)
     val state = initial.copy(manifest = initial.manifest.copy(featureBranch = featureBranch))
-    val database = registeredGoalDatabase(identity, "feat/SKILL-148-initial")
+    val database =
+      registeredGoalDatabase(
+        identity,
+        "feat/SKILL-148-initial",
+      )
     val result =
       ideStatusService(
         database,
@@ -61,6 +65,7 @@ class IdeStatusServiceBranchScopingTest {
     assertEquals("goal-1", result.snapshot.workflowId)
     assertEquals(featureBranch, result.snapshot.branchCorrelation)
     assertEquals("parent-execution", result.snapshot.execution?.executionId)
+    assertEquals("/primary/goal-checkout", result.snapshot.primaryRepositoryRoot)
     assertEquals(IdeStatusLifecycleState.ACTIVE, result.snapshot.lifecycleState)
     assertEquals(0, database.writeCalls)
   }
@@ -318,6 +323,7 @@ class IdeStatusServiceBranchScopingTest {
             lifecycleState = "active",
             startedAt = ideStatusObservedAt.minusSeconds(600),
             updatedAt = ideStatusObservedAt,
+            primaryRepositoryRoot = "/primary/goal-checkout",
           ).takeIf { workflowId == "goal-1" }
 
         override fun readEligible(
@@ -643,7 +649,12 @@ class IdeStatusServiceBranchScopingTest {
   @Test
   fun `verify registered on the checkout branch is selected without an issue key in the branch`() {
     val fixture = gitRepoFixture("ide-status-verify-registered", branch = "chore/cleanup")
-    val database = registeredVerifyDatabase(testGoalRepositoryIdentity(fixture), registeredBranch = "chore/cleanup")
+    val database =
+      registeredVerifyDatabase(
+        testGoalRepositoryIdentity(fixture),
+        registeredBranch = "chore/cleanup",
+        primaryRepositoryRoot = "/primary/verify-checkout",
+      )
 
     val result =
       ideStatusService(database).status(
@@ -653,6 +664,7 @@ class IdeStatusServiceBranchScopingTest {
     assertNull(result.snapshot.problem)
     assertEquals("w-verify", result.snapshot.workflowId)
     assertEquals(IdeStatusWorkflowFamily.FEATURE_VERIFY, result.snapshot.workflowFamily)
+    assertEquals("/primary/verify-checkout", result.snapshot.primaryRepositoryRoot)
   }
 
   @Test
@@ -677,7 +689,12 @@ class IdeStatusServiceBranchScopingTest {
   @Test
   fun `verify registered on another branch is not selected`() {
     val fixture = gitRepoFixture("ide-status-verify-other-branch", branch = "chore/cleanup")
-    val database = registeredVerifyDatabase(testGoalRepositoryIdentity(fixture), registeredBranch = "chore/elsewhere")
+    val database =
+      registeredVerifyDatabase(
+        testGoalRepositoryIdentity(fixture),
+        registeredBranch = "chore/elsewhere",
+        primaryRepositoryRoot = "/ineligible/primary",
+      )
 
     val result =
       ideStatusService(database).status(
@@ -685,6 +702,7 @@ class IdeStatusServiceBranchScopingTest {
       )
 
     assertEquals(IdeStatusProblemCode.NO_MATCHING_WORK, result.snapshot.problem?.code)
+    assertNull(result.snapshot.primaryRepositoryRoot)
   }
 
   @Test
@@ -704,6 +722,7 @@ class IdeStatusServiceBranchScopingTest {
     identity: String,
     registeredBranch: String,
     state: String = "running",
+    primaryRepositoryRoot: String? = null,
   ): TrackingDatabase {
     val workflows = IdeStatusWorkflowStates()
     workflows.saveRecord(WorkflowFamily.VERIFY, verifyRecord("w-verify", "2026-08-06T11:00:00Z"))
@@ -727,6 +746,7 @@ class IdeStatusServiceBranchScopingTest {
             lifecycleState = "active",
             startedAt = ideStatusObservedAt.minusSeconds(600),
             updatedAt = ideStatusObservedAt,
+            primaryRepositoryRoot = primaryRepositoryRoot,
           ).takeIf { workflowId == "w-verify" }
       }
     return TrackingDatabase(work, workflows, statusRepository = statuses)

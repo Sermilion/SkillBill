@@ -1,7 +1,14 @@
 package dev.skillbill.desktop.core.testing
 
-import dev.skillbill.desktop.core.domain.model.ChatModelsRead
+import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
+import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
+import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.transform
+import kotlinx.coroutines.flow.update
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ChatModelsRead
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
@@ -39,8 +46,7 @@ class FakeExecutionChatRepository(
   var agentFor: (String) -> ChatAgent = { ChatAgent(it, null, null) }
   val agentForCalls: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
-  override suspend fun models(agent: ChatAgent, repositoryRoot: String) =
-    ChatModelsRead.Loaded(emptyList())
+  override suspend fun models(agent: ChatAgent, repositoryRoot: String) = ChatModelsRead.Loaded(emptyList())
 
   override suspend fun agentFor(agentId: String): ChatAgent {
     agentForCalls += agentId
@@ -50,6 +56,37 @@ class FakeExecutionChatRepository(
   override fun agents(): List<String> = supported.sorted()
 
   override fun supports(agentId: String): Boolean = agentId in supported
+
+  val steeringPolicies = mutableMapOf<String, ChatSteeringPolicy>()
+  val steeringRequests: MutableList<ChatSteeringRequest> = Collections.synchronizedList(mutableListOf())
+  var steeringResult: suspend (ChatSteeringRequest) -> ChatSteeringResult = {
+    ChatSteeringResult.Unsupported(it.deliveryId, "Live delivery is unavailable")
+  }
+  val retainedSteering = MutableStateFlow<Map<Pair<String, String>, ChatSteeringUpdate>>(emptyMap())
+  val retiredSteering: MutableList<Triple<String, String, String>> = Collections.synchronizedList(mutableListOf())
+
+  override fun steeringPolicy(agentId: String) = steeringPolicies[agentId] ?: ChatSteeringPolicy.LegacySendNow
+
+  override suspend fun steer(request: ChatSteeringRequest): ChatSteeringResult {
+    steeringRequests += request
+    return steeringResult(request)
+  }
+
+  override fun steeringUpdates(agentId: String, sessionId: String): Flow<ChatSteeringUpdate> = retainedSteering.transform { snapshot ->
+    snapshot.values.filter { it.sessionId == sessionId }.forEach { emit(it) }
+  }
+
+  var settledSteering: (String, String) -> ChatSteeringResult = { _, id ->
+    ChatSteeringResult.DeliveryUncertain(id, "Delivery could not be confirmed; the follow-up remains retained")
+  }
+
+  override fun settleSteering(agentId: String, sessionId: String, deliveryId: String): ChatSteeringResult =
+    retainedSteering.value[sessionId to deliveryId]?.result ?: settledSteering(sessionId, deliveryId)
+
+  override fun retireSteering(agentId: String, sessionId: String, deliveryId: String) {
+    retiredSteering += Triple(agentId, sessionId, deliveryId)
+    retainedSteering.update { it - (sessionId to deliveryId) }
+  }
 
   override fun send(request: ChatTurnRequest): Flow<ChatEvent> {
     requests += request
@@ -68,6 +105,10 @@ class FakeExecutionChatRepository(
   override fun end(sessionId: String) {
     ended += sessionId
   }
+
+  var awaitEndAction: suspend (String) -> Unit = {}
+
+  override suspend fun awaitEnd(sessionId: String) = awaitEndAction(sessionId)
 
   override suspend fun stopTurn(sessionId: String): ChatStopSettlement = ChatStopSettlement.CollectorCancellationRequired
 

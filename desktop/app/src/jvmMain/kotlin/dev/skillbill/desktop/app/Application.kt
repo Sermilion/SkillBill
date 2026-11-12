@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModelStore
 import dev.nucleusframework.application.NucleusBackend
@@ -23,6 +24,8 @@ import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
 import dev.skillbill.desktop.core.ui.navigation.SettingsPageId
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 /** The app entry the launcher starts inside the class loader that holds the installed runtime's jars. */
 fun main() {
@@ -51,12 +54,30 @@ fun main() {
     DisposableEffect(component.providerUsageRepository) {
       onDispose { component.providerUsageRepository.closeUsage() }
     }
-    fun closeUsageAndExit() {
-      component.providerUsageRepository.closeUsage()
-      exitApplication()
-    }
     var mainVisible by remember { mutableStateOf(true) }
     var focusRequest by remember { mutableStateOf(0) }
+    val appScope = rememberCoroutineScope()
+    var quitting by remember { mutableStateOf<Job?>(null) }
+    fun closeUsageAndExit() {
+      if (quitting?.isActive == true) return
+      quitting = appScope.launch {
+        try {
+          if (window.chat.closeChatsSafely()) {
+            component.providerUsageRepository.closeUsage()
+            exitApplication()
+          } else {
+            mainVisible = true
+            focusRequest++
+          }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+          throw cancelled
+        } catch (failure: Exception) {
+          System.getLogger("dev.skillbill.desktop").log(System.Logger.Level.WARNING, "desktop:quit-chat-close-failed", failure)
+          mainVisible = true
+          focusRequest++
+        }
+      }
+    }
     val trayStore = remember { ViewModelStore() }
     val trayModel = remember { component.trayViewModel().also { trayStore.put("tray", it) } }
     LaunchedEffect(component.hostIntents, window) {

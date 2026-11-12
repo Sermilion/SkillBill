@@ -17,6 +17,7 @@ data class IdeStatusWorkflowRegistration(
   val lifecycleState: String,
   val startedAt: Instant,
   val agentEnvironment: Map<String, String> = emptyMap(),
+  val primaryRepositoryRoot: String? = null,
   val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 )
 
@@ -34,6 +35,7 @@ data class IdeStatusWorkflowExecution(
   val startedAt: Instant,
   val updatedAt: Instant,
   val agentEnvironment: Map<String, String> = emptyMap(),
+  val primaryRepositoryRoot: String? = null,
   val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 )
 
@@ -118,6 +120,7 @@ data class StandalonePhaseStatusRegistration(
   val agentEnvironment: Map<String, String> = emptyMap(),
   val launchScope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
   val monitorTarget: StandaloneMonitorTarget? = null,
+  val primaryRepositoryRoot: String? = null,
   val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 )
 
@@ -195,6 +198,7 @@ data class StandalonePhaseStatusRecord(
   val liveChecks: LiveChecksAvailability? = null,
   val validationOutcome: StandaloneValidationOutcome? = null,
   val reportedModel: String? = null,
+  val primaryRepositoryRoot: String? = null,
   val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 )
 

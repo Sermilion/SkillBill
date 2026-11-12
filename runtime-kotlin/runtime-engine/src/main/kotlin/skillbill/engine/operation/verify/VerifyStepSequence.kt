@@ -2,6 +2,7 @@ package skillbill.engine.operation.verify
 
 import skillbill.application.telemetry.model.FeatureVerifyFinishedRequest
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.featuretask.persist.UnitTestPathClassifier
 import skillbill.engine.featuretask.qa.report.QaVerdict
 import skillbill.engine.featuretask.slot.codereview.InlineReviewEnvelope
@@ -18,6 +19,7 @@ import skillbill.review.model.ParallelReviewSeverity
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.verify.model.VerifyQaSelection
+import skillbill.workflow.verify.model.VerifyReviewMode
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -40,6 +42,7 @@ internal data class VerifyRun(
   val criteria: VerifyCriteria,
   val startedAt: Instant,
   val qa: VerifyQaSelection?,
+  val qaDevice: QaNamedDevice? = null,
 ) {
   val steps: List<String> get() = VerifyWorkflow.CONFIRMED_STEPS.filter { qa != null || it != VerifyWorkflow.QA }
 }

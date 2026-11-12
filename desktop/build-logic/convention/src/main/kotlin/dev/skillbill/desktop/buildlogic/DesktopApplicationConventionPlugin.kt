@@ -34,7 +34,7 @@ class DesktopApplicationConventionPlugin : Plugin<Project> {
       this.javaHome = javaHome
       nativeDistributions {
         modules("java.sql", "java.net.http", "java.management", "jdk.unsupported", "jdk.net", "jdk.security.auth")
-        packageName = "Skill Bill"
+        packageName = "Sona"
         this.packageVersion = packageVersion
         macOS {
           bundleID = "dev.skillbill.desktop"
@@ -56,6 +56,7 @@ class DesktopApplicationConventionPlugin : Plugin<Project> {
     val resourcesRoot = layout.buildDirectory.dir("generated/app-resources")
     val stage = tasks.register<Sync>("stageBuildIdentityResource") {
       from(tasks.named("writeBuildIdentity"))
+      from(rootProject.layout.projectDirectory.file("../LICENSE"))
       into(resourcesRoot.map { it.dir("common") })
     }
     extensions.getByType(ComposeExtension::class.java).extensions.getByType(DesktopExtension::class.java).application {

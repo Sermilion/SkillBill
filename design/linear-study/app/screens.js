@@ -72,7 +72,51 @@
     if (plan) out.push(S.Button({ label: 'Implement', icon: 'play', variant: ready && !st.implemented.has(it.id) ? 'primary' : 'secondary', act: 'plan-implement', arg: it.id, disabled: !ready || st.implemented.has(it.id) }));
     if (!ready) out.push(S.Button({ label: 'Cancel', icon: 'x', variant: 'danger', act: 'cancel', arg: it.id, disabled: !ro.canCancel }));
     if (it.incident && it.incident.recovery === 'available' && !st.recovered.has(it.id)) out.push(S.Button({ label: 'Recover', icon: 'refresh', act: 'recover', arg: it.id, disabled: it.refreshFailed || !recoveryOffered(st, it), tip: recoveryOffered(st, it) ? null : 'Confirm the prerequisites first' }));
-    return `<div class="l-col g-2"><div class="l-row g-2 l-wrap">${out.join('')}</div>${ro.canLaunch && resumable(it) ? `<span class="t-faint" style="font-size:var(--t-xs)">Starts the installed agent harness</span>` : ''}${plan && !ready ? `<span class="t-faint" style="font-size:var(--t-xs)">Implement turns on when every spec is saved</span>` : ''}${it.refreshFailed ? S.Hint({ tone: 'warn', text: 'Refresh the detail before using run controls.' }) : ''}</div>`;
+    const run = runAppView(st, it);
+    if (run) out.push(run.button);
+    return `<div class="l-col g-2"><div class="l-row g-2 l-wrap">${out.join('')}</div>${ro.canLaunch && resumable(it) ? `<span class="t-faint" style="font-size:var(--t-xs)">Starts the installed agent harness</span>` : ''}${plan && !ready ? `<span class="t-faint" style="font-size:var(--t-xs)">Implement turns on when every spec is saved</span>` : ''}${it.refreshFailed ? S.Hint({ tone: 'warn', text: 'Refresh the detail before using run controls.' }) : run && !it.refreshFailed ? run.status : ''}</div>`;
+  }
+
+  /* ---------- Run app (SONA-10) ---------- */
+  /* Shown on goals whose routed pack declares an app-run recipe for the device platform (sample: `appRun` on the repository).
+   * The device is the sidebar QA pick; Let QA choose resolves to the first ready device, else the first stopped AVD. */
+  function runAppTarget(st) {
+    const list = deviceList(st);
+    if (!list) return { problem: 'adb not found. Install Android SDK Platform-Tools, or set ANDROID_HOME.' };
+    const picked = st.qaDev.selected !== 'auto' && list.find((d) => d.id === st.qaDev.selected);
+    const d = picked || list.find((x) => x.state === 'ready') || list.find((x) => x.state === 'stopped');
+    if (!d) return { problem: 'No device. Plug in a phone with USB debugging on, or create an AVD.' };
+    return { device: { id: d.id, name: d.name, mono: d.kind === 'emu', boots: d.state === 'stopped', serial: d.kind === 'emu' ? 'emulator-5556' : 'R5CT1234ABC', wire: d.kind === 'emu' && !d.running ? `avd:${d.name}` : `serial:${d.kind === 'emu' ? 'emulator-5556' : 'R5CT1234ABC'}` }, auto: !picked };
+  }
+  const runAppEligible = (it) => it && it.kind === 'goal' && (repoOf(it.repo).appRun || []).includes('android');
+  /* Run app is on for a completed goal and for a goal in monitoring (watching CI on its PR). Every other state is off: the
+   * code is still changing, and an agent writing in the checkout would race the build. A CI repair (monitor_fix) edits the
+   * checkout, so it turns the button off until monitoring resumes. */
+  const runAppMonitoring = (it) => it.lifecycle === 'active' && it.step === 'monitor';
+  function runAppBlocker(st, it, target) {
+    if (it.refreshFailed) return 'Refresh the detail before using run controls.';
+    if (it.lifecycle === 'active' && it.step === 'monitor_fix') return 'Off while a CI repair edits the checkout. Run app turns back on when monitoring resumes.';
+    if (it.lifecycle !== 'terminal' && !runAppMonitoring(it)) return 'Run app turns on when the goal completes or reaches monitoring.';
+    return target.problem || null;
+  }
+  function runAppView(st, it) {
+    if (!runAppEligible(it)) return null;
+    const target = runAppTarget(st), run = st.appRun[it.id] || { state: 'idle' };
+    const reason = runAppBlocker(st, it, target);
+    const busy = run.state === 'building';
+    const device = busy ? run.device : target.device;
+    const where = it.lifecycle === 'terminal' ? `Builds in a temporary worktree on ${it.branch}` : 'Builds in the goal checkout while CI runs';
+    const tip = device ? `${where}, then opens it on ${device.name}${device.boots ? ' after booting it' : ''}${target.auto ? ' (Let QA choose picked it)' : ''}` : null;
+    const button = S.RunAppButton({ id: it.id, device, tip, state: busy ? 'building' : reason ? 'off' : 'idle', reason,
+      expanded: !!st.popover && st.popover.type === 'devices' && st.popover.runApp === it.id });
+    const name = (d) => `<b>${S.esc(d.name)}</b>`;
+    const status = busy ? S.RunAppStatus({ state: 'building', tab: run.tab, html: `Building for ${name(run.device)} · <code>${S.esc(run.step)}</code>` })
+      : run.state === 'running' ? S.RunAppStatus({ state: 'running', tab: run.tab, html: `Running on ${name(run.device)} · opened ${S.esc(run.at)}` })
+      : run.state === 'failed' ? S.RunAppStatus({ state: 'failed', tab: run.tab, html: `Build failed · <code>:app:compileDebugKotlin</code> · nothing was installed on ${name(run.device)}` })
+      : run.state === 'contended' ? S.RunAppStatus({ state: 'contended', tab: run.tab, html: `${name(run.device)} is in use by QA run <b>${S.esc(run.holder)}</b>. Nothing was installed. Pick another device.` })
+      : run.state === 'stopped' ? S.RunAppStatus({ state: 'stopped', tab: run.tab, text: 'Build stopped. Nothing new was installed.' })
+      : reason ? S.RunAppStatus({ state: 'off', text: reason }) : '';
+    return { button, status };
   }
 
   /* ---------- shell ---------- */
@@ -82,13 +126,13 @@
     const live = D.items.filter((x) => x.section !== 'finished').length;
     const navOn = (v, sec) => (st.view === v && (sec === undefined || st.section === sec)) || (v === 'work' && sec === undefined && st.view === 'detail');
     return S.Sidebar({
-      top: S.WorkspaceSwitcher({ name: 'Skill Bill', actions: [S.IconButton({ icon: 'search', label: 'Command menu', kbd: '⌘ K', act: 'cmdk', size: 'sm' })] }),
+      top: S.WorkspaceSwitcher({ name: 'Sona', actions: [S.IconButton({ icon: 'search', label: 'Command menu', kbd: '⌘ K', act: 'cmdk', size: 'sm' })] }),
       items: [
         S.SidebarItem({ icon: 'pencil', label: 'New task', count: st.nt.chats.length > 1 ? st.nt.chats.length : null, on: st.view === 'newtask', act: 'nav', arg: 'newtask', tip: 'New task', kbd: 'G N' }),
         S.SidebarItem({ icon: 'target', label: 'Work', count: live, on: navOn('work', null) || st.view === 'detail', act: 'nav', arg: 'work', tip: 'Work', kbd: 'G W' }),
         S.SidebarItem({ icon: 'history', label: 'History', on: st.view === 'history', act: 'nav', arg: 'history', tip: 'History', kbd: 'G H' }),
         S.SidebarSection({ label: 'Board', act: 'sec-toggle', arg: 'board', closed: st.closed.has('board'), items: SECTIONS.map(([id, label, state]) => S.SidebarItem({
-          lead: S.StatusIcon(state, 0.5), label, child: false, act: 'section', arg: id, on: st.view === 'work' && st.section === id,
+          lead: S.StatusIcon(state, 0.5, { monochrome: true }), label, child: false, act: 'section', arg: id, on: st.view === 'work' && st.section === id,
           attention: id === 'needs' && count(id) ? count(id) : null, count: id === 'needs' ? null : count(id),
         })) }),
       ],
@@ -1417,7 +1461,11 @@
     return [m[1], key].filter(Boolean).join(' · ');
   }
   const freeText = (intake) => !!intake && !/^(spec:|https?:\/\/)/i.test(intake);
-  const auditCounts = (r) => { const c = { PASS: 0, PARTIAL: 0, FAIL: 0 }; if (r.audit) r.audit.grades.forEach((g) => { c[g.status]++; }); return c; };
+  const auditCounts = (r) => {
+    const c = { PASS: 0, PARTIAL: 0, FAIL: 0, UNGRADED: 0 };
+    r.criteria.forEach((cr) => { const g = r.audit && r.audit.grades.find((g) => g.n === cr.n); c[g && g.status || 'UNGRADED']++; });
+    return c;
+  };
   /* Anything with a gap can be selected for fixing: review findings, Partial and Missing criteria, test rows that are not
    * Keep, open QA findings. A Missing criterion defaults to a goal (new work needs a plan, review and QA); the rest to chat. */
   function fixItems(r) {
@@ -1508,9 +1556,9 @@
       ],
       actions: verifyActions(it, ctx), after });
   }
-  function verifySummary(ctx) {
+  function verifySummary(ctx, it) {
     const r = ctx.r;
-    if (ctx.state === 'finished') return r.verdict && r.verdict.summary ? S.WorkSummary({ label: 'What this work does', html: md(r.verdict.summary) }) : '';
+    if (ctx.state === 'finished') return r.verdict && r.verdict.summary ? S.WorkSummary({ label: 'What this work does', html: md(r.verdict.summary.replace(/\s+/g, ' ').trim()), link: S.TextLink({ label: 'Full summary in Verdict step', act: 'v-jump', arg: `${it.id}|verdict` }) }) : '';
     if (!['running', 'stopped', 'parked'].includes(ctx.state) || !r.criteria.length) return '';
     const first = r.criteria[0];
     return S.WorkSummary({ label: 'What this work is meant to do', note: 'from the extracted criteria', html: md(first.text), oneLine: true, tip: first.text,
@@ -1527,8 +1575,8 @@
     const fg = (t) => `<small class="is-fg">${esc(t)}</small>`;
     const cells = [
       { key: 'Criteria', jump: 'criteria', value: r.audit ? `${c.PASS}<small> / ${r.criteria.length} met</small>` : `${r.criteria.length}<small> extracted</small>`,
-        sub: r.audit ? ([c.PARTIAL && `${c.PARTIAL} partial`, c.FAIL && `${c.FAIL} missing`].filter(Boolean).join(' · ') || 'all met') : 'not audited',
-        bar: { segs: r.audit ? [{ n: c.PASS, tone: 'done' }, { n: c.PARTIAL, tone: 'blocked' }, { n: c.FAIL, tone: 'failed' }] : [] } },
+        sub: r.audit ? ([c.PARTIAL && `${c.PARTIAL} partial`, c.FAIL && `${c.FAIL} missing`, c.UNGRADED && `${c.UNGRADED} ungraded`].filter(Boolean).join(' · ') || (r.criteria.length ? 'all met' : 'no criteria')) : 'not audited',
+        bar: { segs: r.audit ? [{ n: c.PASS, tone: 'done' }, { n: c.PARTIAL, tone: 'blocked' }, { n: c.FAIL, tone: 'failed' }, { n: c.UNGRADED, tone: 'faint' }] : [] } },
       { key: 'Review', jump: 'code_review', value: r.review ? `${r.review.findings.length}<small> findings</small>` : '<small>—</small>',
         sub: r.review ? (['Nit', 'Minor', 'Major', 'Blocker'].filter((k) => sev[k]).map((k) => `${sev[k]} ${k.toLowerCase()}`).join(' · ') || 'clean') : reviewStep.status === 'running' ? '<span class="is-active">running</span>' : 'not run',
         bar: { segs: !r.review ? [] : r.review.findings.length ? [{ n: sev.Nit || 0, tone: 'faint' }, { n: sev.Minor || 0, tone: 'blocked' }, { n: (sev.Major || 0) + (sev.Blocker || 0), tone: 'failed' }] : [{ n: 1, tone: 'done' }] } },
@@ -1566,7 +1614,7 @@
         text: ctx.state === 'superseded' ? 'Abandoned while the criteria were waiting for confirmation.' : `${why} Steps 1 to ${done} finished and their results are kept below; resuming starts again at ${(VSTEP[s.id] || s.id).toLowerCase()}.` });
     }
     const vd = r.verdict || { verdict: '', findings: [] };
-    const text = vd.findings.filter((f) => !f.startsWith('Warning:')).map((f) => f.replace(/^\*\*[A-Z ]+\*\*\s*[—-]\s*/, '')).join(' ');
+    const text = 'Verification finished. See Steps for findings and evidence.';
     return S.RunOutcome({ aria: 'Verify outcome', tone: V_TONE[vd.verdict] || 'faint', icon: vd.verdict === 'APPROVE' ? 'check' : vd.verdict === 'REQUEST CHANGES' ? 'x' : 'warn', label: 'Verdict', verdict: vd.verdict, text: md(text),
       note: vd.findings.some((f) => f.startsWith('Warning:')) ? 'QA had open findings, so the runtime lowered APPROVE to APPROVE WITH FIXES.' : null,
       when: { value: esc(vDur(r.startedAt, r.finishedAt)), note: fmtStamp(r.finishedAt) }, cells: verifyCells(it, ctx) });
@@ -1581,23 +1629,23 @@
     const shown = r.criteria.filter((cr) => { const g = grade(cr.n); return !r.audit || filt === 'all' || (filt === 'gaps' ? g && g.status !== 'PASS' : g && g.status === 'PASS'); });
     const rows = shown.map((cr) => {
       const g = grade(cr.n), key = 'c:' + cr.n, gap = !!g && g.status !== 'PASS', mark = ctx.marks[key];
-      const badge = mark ? { text: mark === 'repo' ? 'Not in this repo' : 'Spec question', tone: 'faint' } : g ? { text: V_GRADE[g.status][0], tone: V_GRADE[g.status][1] } : { text: ctx.state === 'parked' ? 'To confirm' : 'Not audited', tone: 'faint' };
+      const badge = mark ? { text: mark === 'repo' ? 'Not in this repo' : 'Spec question', tone: 'faint' } : g ? { text: V_GRADE[g.status][0], tone: V_GRADE[g.status][1] } : { text: ctx.state === 'parked' ? 'To confirm' : r.audit ? 'No grade' : 'Not audited', tone: 'faint' };
       const marks = grid && gap ? S.MarkRow(mark
         ? { text: mark === 'repo' ? 'Left out of fixes: the work lives in another repository.' : 'Left out of fixes until the spec is settled.', actions: [S.Button({ label: 'Clear mark', size: 'sm', act: 'vf-mark', arg: `${it.id}|${key}|none` })] }
         : { text: 'Not a code gap here?', actions: [S.Button({ label: 'Not in this repo', size: 'sm', act: 'vf-mark', arg: `${it.id}|${key}|repo` }), S.Button({ label: 'Spec question', size: 'sm', act: 'vf-mark', arg: `${it.id}|${key}|spec` })] }) : '';
       const body = g ? [
-        g.evidence.length ? S.FieldText({ label: 'Evidence', chips: g.evidence.map((e) => S.FileChip({ label: e, act: 'toast', arg: `Opened ${e} in the Changes window` })) }) : '',
+        g.evidence.length ? S.FieldText({ label: 'Evidence', chips: g.evidence.filter((e) => !/\s/.test(e)).map((e) => S.FileChip({ label: e, act: 'toast', arg: `Opened ${e} in the Changes window` })), html: g.evidence.filter((e) => /\s/.test(e)).map(S.ReportText).join('') }) : '',
         g.missing ? S.FieldText({ label: "What's missing", html: md(g.missing) }) : '',
         g.notFound ? S.FieldText({ label: 'Not found', html: md(g.notFound) }) : '', marks].join('')
-        : `<div class="t-muted">${ctx.state === 'parked' ? 'The audit runs after you confirm.' : 'The completeness audit has not run yet.'}</div>`;
+        : `<div class="t-muted">${ctx.state === 'parked' ? 'The audit runs after you confirm.' : r.audit ? 'No grade was recorded for this criterion. See Completeness audit in Steps.' : 'The completeness audit has not run yet.'}</div>`;
       const sel = grid && gap ? selCtl(it, ctx, key) : {};
       return S.CriterionRow({ id: `crit-${cr.n}`, n: cr.n, html: md(cr.text), badge, body, open: st.vOpen.has(`${it.id}:c:${cr.n}`), act: 'v-toggle', arg: `${it.id}:c:${cr.n}`,
         select: grid, lead: sel.lead || '', end: sel.end || '', hint: grid && gap ? sel.hint : null });
     });
-    const fold = (k, label, items, count) => (items.length ? S.Fold({ label, count, items: items.map(md), open: st.vOpen.has(`${it.id}:${k}`), act: 'v-toggle', arg: `${it.id}:${k}` }) : '');
+    const fold = (k, label, items) => (items.length ? S.VerifyContext({ kind: k, label, preview: items[0].replace(/\s+/g, ' ').trim(), items: items.map(S.ReportText), open: st.vOpen.has(`${it.id}:${k}`), act: 'v-toggle', arg: `${it.id}:${k}` }) : '');
     return S.VerifySection({ id: 'sec-criteria', title: 'Criteria', count: r.criteria.length,
       end: r.audit ? [S.Segmented({ act: 'v-filter', value: `${it.id}|${filt}`, items: [{ id: `${it.id}|all`, label: 'All' }, { id: `${it.id}|gaps`, label: `Gaps ${c.PARTIAL + c.FAIL}` }, { id: `${it.id}|met`, label: `Met ${c.PASS}` }] })] : null,
-      sub: r.audit ? null : ctx.state === 'parked' ? 'Extracted from the intake. The audit grades the code against this list once you confirm.' : ctx.state === 'superseded' ? 'Extracted but never confirmed. The newer run extracted its own list.' : 'Extracted and confirmed. Grades appear after the completeness audit.',
+      sub: r.audit ? (c.UNGRADED ? 'Audit results are incomplete. See Completeness audit in Steps.' : null) : ctx.state === 'parked' ? 'Extracted from the intake. The audit grades the code against this list once you confirm.' : ctx.state === 'superseded' ? 'Extracted but never confirmed. The newer run extracted its own list.' : 'Extracted and confirmed. Grades appear after the completeness audit.',
       body: [S.Box([grid ? selAll(it, ctx, 'criterion', { boxed: true }) : '', rows.length ? rows.join('') : S.CriterionRow({ empty: 'Nothing in this filter.' })]),
         fold('non-goals', 'Non-goals', r.nonGoals, r.nonGoals.length), fold('constraints', 'Technical constraints', r.constraints, r.constraints.length), fold('rollout', 'Rollout', r.rollout ? [r.rollout] : [], null)] });
   }
@@ -1612,9 +1660,10 @@
     if (s.status !== 'completed') return 'pend';
     if (s.id === 'verdict' && r.verdict && r.verdict.verdict === 'REQUEST CHANGES') return 'bad';
     if (s.id === 'completeness_audit' && auditCounts(r).FAIL) return 'bad';
+    if (s.id === 'completeness_audit' && !r.criteria.length) return 'pend';
     const warn = { qa: !!(r.qa && (r.qa.findings.length || r.qa.details.assertions.some((a) => a.outcome === 'not_exercised'))), code_review: !!(r.review && r.review.findings.length),
       unit_test_value_check: !!(r.unitTestValue && (r.unitTestValue.rows || []).some((x) => x.verdict !== 'Valuable')), feature_flag_audit: !!(r.flagAudit && r.flagAudit.verdict === 'fail'),
-      completeness_audit: !!(r.audit && r.audit.verdict === 'had_gaps'), verdict: !!(r.verdict && r.verdict.verdict !== 'APPROVE') };
+      completeness_audit: !!(r.audit && (auditCounts(r).PARTIAL || auditCounts(r).UNGRADED)), verdict: !!(r.verdict && r.verdict.verdict !== 'APPROVE') };
     return warn[s.id] ? 'warn' : 'done';
   }
   const tally = (list, key) => Object.entries(list.reduce((m, x) => { m[x[key]] = (m[x[key]] || 0) + 1; return m; }, {})).map(([k, n]) => ({ text: `${n} ${k.toLowerCase()}` }));
@@ -1664,7 +1713,7 @@
       case 'feature_flag_audit': {
         const f = r.flagAudit;
         if (!f) return none;
-        if (f.verdict === 'skipped') return { sum: [{ text: 'Skipped' }, { text: f.skipReason, tone: 'faint' }], body: '' };
+        if (f.verdict === 'skipped') return { sum: [{ text: 'Skipped' }], body: f.skipReason ? S.ReportText(f.skipReason) : '' };
         const ok = f.checks.filter((x) => x.passed).length;
         return { sum: [{ text: f.verdict === 'pass' ? 'Passed' : 'Failed', tone: f.verdict === 'pass' ? 'done' : 'failed' }, { text: f.flagName, mono: true }, { text: `${ok}/${f.checks.length} checks` }],
           body: S.KeyValues([['Flag', f.flagName, true], ['Pattern', f.pattern], ['Issues', f.issues]]) + S.CheckLines(f.checks.map((x) => ({ ok: x.passed, text: x.text }))) };
@@ -1684,7 +1733,7 @@
         if (ctx.stop === s) return { sum: [{ text: 'Stopped here', tone: 'blocked' }, { text: 'no receipt recorded' }], body: '' };
         const t = r.unitTestValue;
         if (!t) return none;
-        if (t.verdict === 'skipped') return { sum: [{ text: 'Skipped' }, { text: t.skipReason, tone: 'faint' }], body: '' };
+        if (t.verdict === 'skipped') return { sum: [{ text: 'Skipped' }], body: t.skipReason ? S.ReportText(t.skipReason) : '' };
         const plan = [['Keep', 'done', t.keep], ['Rewrite', 'blocked', t.rewrite], ['Delete', 'failed', t.delete && t.delete !== 'None.' ? t.delete : null], ['Add', 'accent', t.missing]].filter((p) => p[2]);
         return { sum: [{ text: t.overall, tone: 'strong' }, ...tally(t.rows, 'verdict')],
           body: `<div class="t-muted">${md(t.summary)}</div><div>${selAll(it, ctx, 'test', { rule: true, note: 'Keep rows are left out' })}${t.rows.map((x, i) => {
@@ -1696,7 +1745,7 @@
       case 'completeness_audit': {
         if (!r.audit) return none;
         const c = auditCounts(r);
-        return { sum: [{ text: `${c.PASS} met`, tone: 'done' }, c.PARTIAL ? { text: `${c.PARTIAL} partial`, tone: 'blocked' } : null, c.FAIL ? { text: `${c.FAIL} missing`, tone: 'failed' } : null], body: jump('Show the graded criteria', 'criteria') };
+        return { sum: [c.PASS ? { text: `${c.PASS} met`, tone: 'done' } : null, c.PARTIAL ? { text: `${c.PARTIAL} partial`, tone: 'blocked' } : null, c.FAIL ? { text: `${c.FAIL} missing`, tone: 'failed' } : null, c.UNGRADED ? { text: `${c.UNGRADED} ungraded`, tone: 'blocked' } : null, !r.criteria.length ? { text: 'No criteria', tone: 'faint' } : null], body: (r.audit.findings || []).map(S.ReportText).join('') + jump('Show the graded criteria', 'criteria') };
       }
       case 'qa': {
         if (r.qaSelection !== 'on' || !r.qa) return { sum: [{ text: r.qaSelection !== 'on' ? 'Off for this run' : 'No report recorded' }], body: '' };
@@ -1704,7 +1753,7 @@
         return { sum: [open ? { text: `${open} open ${open === 1 ? 'finding' : 'findings'}`, tone: 'failed' } : { text: 'Passed', tone: 'done' }, { text: `${passed} of ${as.length} checks passed` }, gaps ? { text: `${gaps} not tested`, tone: 'blocked' } : null],
           body: verifyQa(st, it, ctx) };
       }
-      case 'verdict': return r.verdict ? { sum: [{ text: r.verdict.verdict, tone: V_TONE[r.verdict.verdict] }], body: '' } : none;
+      case 'verdict': return r.verdict ? { sum: [{ text: r.verdict.verdict, tone: V_TONE[r.verdict.verdict] }], body: [r.verdict.summary, ...r.verdict.findings].filter(Boolean).map(S.ReportText).join('') } : none;
     }
     return { sum: [], body: '' };
   }
@@ -1755,7 +1804,7 @@
    * Activity and the selection bar. */
   function verifyDoc(st, it) {
     const ctx = verifyCtx(st, it);
-    return S.VerifyDoc([verifyHeader(st, it, ctx), verifySummary(ctx), verifyOutcome(it, ctx), verifyCriteria(st, it, ctx), verifySteps(st, it, ctx), verifyActivity(st, it), verifyBar(it, ctx)]);
+    return S.VerifyDoc([verifyHeader(st, it, ctx), verifySummary(ctx, it), verifyOutcome(it, ctx), verifyCriteria(st, it, ctx), verifySteps(st, it, ctx), verifyActivity(st, it), verifyBar(it, ctx)]);
   }
 
   function detail(st) {
@@ -1785,7 +1834,7 @@
     else if (mon) parts.push(monitorDoc(st, it));
     else parts.push(S.DocHeader({
       eyebrow: [plan ? planBadge(it) : lifeLabel(it), it.stalled ? S.Label({ text: 'Stalled', color: 'var(--st-blocked)', tint: true, dot: false }) : '', S.IdTag(rowKey(it)), it.issue && !goal ? S.IdTag(it.issue) : '', S.Label({ text: kindWord(it), dot: false }), it.lifecycle !== 'terminal' ? S.Label({ text: it.fresh && !it.refreshFailed ? 'fresh' : 'stale', color: it.fresh && !it.refreshFailed ? 'var(--st-done)' : 'var(--fg-faint)' }) : '', plan && it.model ? S.Label({ text: `${it.model}${it.effort ? ` · ${it.effort} effort` : ''}`, dot: false }) : ''],
-      title: it.title, sub: location, actions: [runActions(st, it), S.Button({ label: 'Open changes', icon: 'diff', act: 'changes-open', arg: it.id, id: `changes-open-${it.id}` })],
+      title: it.title, sub: location, actions: [runActions(st, it)],
     }));
     /* Validation runs get no strip: their live card already names the running check command. */
     const build = !val && !ver && !mon && buildOf(st, it);
@@ -1984,7 +2033,9 @@
   /* ---------- Terminal pane (feature/terminal) ---------- */
   function terminal(st) {
     const tab = st.termTabs.find((t) => t.id === st.termActive);
-    const body = tab
+    const body = tab && tab.log
+      ? tab.log.map(([c, t]) => (c ? `<span class="${c}">${esc(t)}</span>` : esc(t))).join('\n') + (tab.live ? '\n<span class="cur"></span>' : '')
+      : tab
       ? `<span class="m">${esc(tab.directory)}</span>\n<span class="p">➜</span>  <span class="d">${esc(tab.name)}</span>${tab.branch ? ` <span class="b">(${esc(tab.branch)})</span>` : ''} <span class="cur"></span>`
       : '';
     if (!tab) return S.TerminalPane({ tabs: [], height: st.termHeight, body: S.EmptyState({ icon: 'terminal', title: 'No terminal tabs', actions: [S.Button({ label: 'New terminal tab', icon: 'plus', act: 'term-new' })] }) });
@@ -2010,7 +2061,7 @@
     return S.ViewHeader({ crumbs: [{ label: 'Settings', act: 'settings-page', arg: 'general' }, { label }], actions: [] }) + `<div class="sb-scroll" data-scroll="settings"><div class="sb-set">${content}</div></div>`;
   }
   function setGeneral(st) {
-    return S.SettingsHeader({ title: 'General', body: 'Where the app reads Skill Bill’s work, which Claude account runs use, and how long finished work stays listed.' }) +
+    return S.SettingsHeader({ title: 'General', body: 'Where the app reads Sona’s work, which Claude account runs use, and how long finished work stays listed.' }) +
       S.SettingsGroup({ title: 'Database', rows: [S.SettingRow({ stack: true, control: `<div class="l-col g-2" style="width:100%">${S.Field({ for: 'db-path', label: 'Database path, blank uses runtime default', control: `<div class="l-row g-2">${S.Input({ id: 'db-path', value: st.prefs.dbDraft, mono: true, placeholder: 'Runtime default', input: 'db-path' })}${S.Button({ label: 'Save settings', variant: 'primary', act: 'db-save', disabled: st.prefs.dbDraft === st.prefs.dbPath })}</div>` })}${st.prefs.dbDraft && !st.prefs.dbDraft.trim() ? S.Hint({ tone: 'error', text: 'The path is only spaces. Clear it to use the default.' }) : ''}${S.Hint({ text: `Current database: ${st.prefs.dbPath || '~/.skill-bill/review-metrics.db'}` })}</div>` })] }) +
       S.SettingsGroup({ title: 'Claude account', rows: [S.SettingRow({ label: 'Claude config directory', desc: 'Runs started here use it as CLAUDE_CONFIG_DIR.', control: `<button type="button" class="sb-pick" data-act="claude-menu">${S.Icon('folder')}<span class="mono">${esc(st.prefs.claudeDir)}</span>${S.Icon('chevronDown')}</button>` })] }) +
       S.SettingsGroup({ title: 'History retention', rows: [S.SettingRow({ label: 'Keep finished work for', desc: 'How long History and the tray list finished work.', control: S.Segmented({ act: 'pref-retention', value: st.prefs.retention, items: ['6h', '24h', '7d'].map((x) => ({ id: x, label: x })) }) })] }) +
@@ -2019,7 +2070,7 @@
   function setNotifications(st) {
     return S.SettingsHeader({ title: 'Notifications', body: 'A notification fires when work changes lifecycle state. Clicking one opens that item.' }) +
       S.SettingsGroup({ title: 'Notify me when', rows: D.NOTIFICATIONS.map(([id, label]) => S.SettingRow({ label, control: S.Toggle({ on: st.prefs.notify[id], act: 'pref-notify', arg: id, label }) })) }) +
-      S.SettingsGroup({ title: 'Preview', rows: [S.SettingRow({ stack: true, control: S.Toast({ system: true, app: 'Skill Bill', when: 'now', title: 'INF-7 is blocked', body: 'Review left 2 Blocker findings on subtask 3 · infra-terraform' }) })] });
+      S.SettingsGroup({ title: 'Preview', rows: [S.SettingRow({ stack: true, control: S.Toast({ system: true, app: 'Sona', when: 'now', title: 'INF-7 is blocked', body: 'Review left 2 Blocker findings on subtask 3 · infra-terraform' }) })] });
   }
 
   /* Models: execution_matrix in ~/.config/skill-bill/config.json */
@@ -2168,7 +2219,7 @@
       ['APP-123', 'From an issue', 'APP-123'],
     ].map(([title, kind, text]) => S.InboxRow({ icon: 'message', title, sub: kind, act: 'chat-quick', arg: text })) }) + (st.nt.readiness ? S.Label({ text: st.nt.readiness, color: st.nt.readiness.startsWith('Ready:') ? 'var(--st-done)' : 'var(--accent)', dot: true }) : '') }) : '';
     return S.NewTaskHome({ scroll: 'nt-home-' + c.id, children: [
-      S.DocHeader({ title: 'What should we ship?', sub: 'Describe the work or paste an issue. Skill Bill plans it, builds it, audits it and opens the PR.' }),
+      S.DocHeader({ title: 'What should we ship?', sub: 'Describe the work or paste an issue. Sona plans it, builds it, audits it and opens the PR.' }),
       S.StepLine(D.NEW_TASK_STEPS),
       recent.length ? S.Section({ title: 'Recent chats', count: recent.length, end: [S.Button({ label: 'Search chats', variant: 'ghost', size: 'sm', kbd: '/resume', act: 'resume-palette' })], body: S.InboxList({ id: 'nt-recent', label: 'Recent chats', rows: recentRows }) }) : '',
       st.nt.homeState ? examples : S.Section({ title: needs.length ? 'Needs you' : 'All clear', count: needs.length || null, end: [S.Button({ label: `${running} running · ${finished} finished today`, icon: 'arrowRight', variant: 'ghost', size: 'sm', act: 'nav', arg: 'work' })], body: needs.length ? S.InboxList({ id: 'nt-needs', label: 'Needs you', rows: needRows }) : '' }),
@@ -2179,12 +2230,14 @@
     const pop = st.popover || {};
     const n = c.queue.length;
     const repoPill = empty
-      ? S.ChatPill({ icon: 'folder', html: c.repo ? repoAndBranch(c.repo, baseBranch(c)) : 'Choose repository', need: !c.repo, chevron: 'chevronDown', act: 'pk-toggle', expanded: pop.type === 'target', id: 'nt-target', tip: 'Change repository or base branch' })
-      : S.ChatPill({ icon: 'folder', html: repoAndBranch(c.repo, baseBranch(c)), tip: `${c.repo} / ${baseBranch(c)}` });
+      ? S.ChatPill({ icon: 'folder', html: c.repo ? repoAndBranch(c.repo, c.currentBranch || baseBranch(c)) : 'Choose repository', need: !c.repo, chevron: 'chevronDown', act: 'pk-toggle', expanded: pop.type === 'target', id: 'nt-target', tip: 'Change repository or base branch' })
+      : S.ChatPill({ icon: 'folder', html: repoAndBranch(c.repo, c.currentBranch || baseBranch(c)), tip: `${c.repo} / ${baseBranch(c)}` });
     const model = agentModel(c.agent);
     const chg = chatChanges(c);
     const agentPill = S.ChatPill({ lead: agentDot(c.agent), text: model ? `${c.agent} · ${model}` : c.agent, chevron: 'chevronDown', act: 'nt-agent-menu', expanded: pop.type === 'nt-agent', disabled: !!c.stream, tip: c.stream ? 'Wait for the current reply to finish' : 'Change agent' });
-    return S.Composer({
+    const warning = c.branchIntent && c.currentBranch !== defaultBranch(c.repo) && !c.branch
+      ? `<div class="nt-branch-warning" role="status">${S.Callout({ tone: 'warn', body: `This checkout is on ${esc(c.currentBranch)}. New work normally starts from ${esc(defaultBranch(c.repo))}. Switch to ${esc(defaultBranch(c.repo))} or explicitly use ${esc(c.currentBranch)} as the base branch before starting.` })}<div class="l-row g-2" style="flex-wrap:wrap">${S.Button({ label: `Switch to ${defaultBranch(c.repo)}`, size: 'sm', act: 'chat-default-branch', disabled: !!c.stream })}${S.Button({ label: 'Use current branch as base', size: 'sm', act: 'chat-current-base', disabled: !!c.stream })}</div></div>` : '';
+    return warning + S.Composer({
       id: 'composer-' + c.id, chatId: c.id, value: c.draft, label: `Message for ${chatLabel(c)}`,
       placeholder: empty ? 'Describe the work, or paste an issue key or spec path' : `Reply to ${c.agent}`,
       chips: empty ? D.QUICK_STARTS.map((q) => S.SuggestionChip({ label: q, note: q === 'QA my branch' && qaDeviceName(st) ? `on ${qaDeviceName(st)}` : null, act: 'chat-quick', arg: q })) : [],
@@ -2351,7 +2404,7 @@
     isPlanRun, planStrip, planNow, planTeaser, planActivity, planBundle, planTranscript, planBriefing, PLAN_STAGES,
     specOf, specPath, specControl, specMenuItems, specPanelItems, specProject, specAgent, specBar, get specRows() { return specRows; },
     isMonitorRun, monitorDoc, monitorCard, monitorCycles, monStepPanel, monCiBoard,
-    isValidationRun, shapeReport, validationCard, validationDoc, valDur, verifyOutcome, checkRow, valDefaultParts, valDefaultChecks, checkExpandable, verifyCtx, verifyState, fixItems, verifyFixText, verifyQaDemo, VSTEP, devicePanelView, deviceTrigger, deviceOptions, devicePickable, deviceList,
+    isValidationRun, shapeReport, validationCard, validationDoc, valDur, verifyOutcome, checkRow, valDefaultParts, valDefaultChecks, checkExpandable, verifyCtx, verifyState, fixItems, verifyFixText, verifyQaDemo, VSTEP, devicePanelView, deviceTrigger, deviceOptions, devicePickable, deviceList, runAppView, runAppTarget, runAppEligible,
     get rows() { return rows; },
   };
 })();

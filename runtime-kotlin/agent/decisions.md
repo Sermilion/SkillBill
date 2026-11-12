@@ -3574,6 +3574,7 @@ Context: SKILL-429 reached audit repair attempt 27 while its selected criterion 
 Decision: Both `progress` and `no_progress` repair reports settle as incomplete outcomes through the existing serial repair owner. The third unsuccessful outcome blocks the selected criterion. Operator resume retains its explicit budget reset. Goal detail projects retained audit and review results for the current subtask as well as paged completed subtasks, so unresolved criteria remain visible during repair and after a block. Validation results remain restricted to completed subtasks.
 
 Evidence: `FeatureTaskRuntimeSerialRepairTest` proves unfinished progress consumes three distinct repair reservations and blocks before review. `GoalRunnerValidationEvidenceProjectionTest` checks running and blocked subtask audit gaps through both goal status projection paths without fabricating completed validation.
+Superseded by: Charge acceptance repairs by verified gap progress (2026-11-10)
 
 ## [2026-10-21] Reopen canceled workflows through accepted operator mutation
 

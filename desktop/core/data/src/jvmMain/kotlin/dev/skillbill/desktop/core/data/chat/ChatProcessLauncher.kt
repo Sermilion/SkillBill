@@ -12,7 +12,6 @@ import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
@@ -94,8 +93,13 @@ fun interface LiveChatProcessLauncher {
 
 data class ChatProcessCleanup(val failure: String? = null)
 
-class ChatProcessInput internal constructor(val line: String) {
+class ChatProcessInput internal constructor(val line: String, private val writePermission: ((ChatProcessInput) -> Boolean)? = null) {
   internal val written = CompletableDeferred<Boolean>()
+  private val ownership = AtomicInteger(0)
+
+  internal fun acquireWrite(): Boolean = writePermission?.invoke(this) ?: acquireUnconditionally()
+  internal fun acquireUnconditionally(): Boolean = ownership.compareAndSet(0, 1)
+  internal fun revokeBeforeWrite(): Boolean = ownership.compareAndSet(0, 2) || ownership.get() == 2
 }
 
 internal suspend fun Channel<ChatProcessInput>.writeAndAwait(line: String): Boolean {
@@ -203,6 +207,10 @@ class ProcessLiveChatLauncher(private val diagnostics: Diagnostics) : LiveChatPr
     try {
       process.outputStream.bufferedWriter(Charsets.UTF_8).use { writer ->
         for (message in input) {
+          if (!message.acquireWrite()) {
+            message.written.complete(false)
+            continue
+          }
           var written = false
           try {
             runInterruptible {
