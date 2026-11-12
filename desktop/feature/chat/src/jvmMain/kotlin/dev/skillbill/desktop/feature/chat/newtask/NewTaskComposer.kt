@@ -222,7 +222,7 @@ private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, chat: N
     NewTaskRepositoryPill(
       mode,
       repository?.name,
-      repositoryPillBranch(repository?.root, state.branchRead),
+      repositoryPillBranch(draft.baseBranch, repository?.root, state.branchRead),
       pillFocus,
     ) { closeFocus = pillFocus; onAction(NewTaskAction.OpenRepositoryPicker) }
     val open = (mode == RepositoryPillMode.Interactive || mode == RepositoryPillMode.Choose) && state.repositoryPickerOpen
