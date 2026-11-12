@@ -67,16 +67,6 @@ public class PlanSubtasksReopening(
 ) {
   private val engine = WorkflowEngine()
 
-  internal fun hasReopenableBlockedFeasibility(planWorkflowId: String): Boolean =
-    database.read { unitOfWork ->
-      val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
-      val artifacts =
-        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, planWorkflowId)?.artifacts
-          ?.takeIf(family::contains)
-      val state = artifacts?.let { feasibilityCodec.decode(family.value(it), "$planWorkflowId/${family.label()}") }
-      state?.mode == PlanBundleFeasibilityMode.BLOCKED && state.activeLaunch == null
-    }
-
   internal fun reopenWithRebasedBundle(replan: PlanSubtasksReplan): Boolean {
     if (replan.feasibilityAdoption) return reopenForFeasibility(replan)
     if (!reopenAtPlanSubtasks(replan.planWorkflowId)) return false
@@ -268,7 +258,9 @@ public class PlanSubtasksReopening(
     original: FeatureTaskRuntimePhaseRecord,
     captured: PlanBundleFeasibilitySnapshot,
   ): Pair<Boolean, Int?>? {
-    if (original.status == WorkflowStepStatus.PENDING &&
+    val pendingAdoption =
+      state.mode != PlanBundleFeasibilityMode.BLOCKED && original.status == WorkflowStepStatus.PENDING
+    if (pendingAdoption &&
       state.reopenings.any {
         it.sourceAttempt == original.attemptCount &&
           it.originalPhaseRecord.outputArtifact == original.outputArtifact
