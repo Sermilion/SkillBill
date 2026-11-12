@@ -7,24 +7,19 @@ import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -33,8 +28,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -48,13 +41,13 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -81,22 +74,6 @@ internal const val MAX_LINE_CHARS = 5_000
 private const val CUT_MARKER_CHARS = 32
 private const val MATCH_ALPHA = 0.22f
 
-/**
- * Gives [content] a width that fits [longestChars] characters of diff text, or the viewport when that is wider, and scrolls
- * sideways when it does not fit: diff rows do not wrap.
- */
-@Composable
-fun DiffHorizontalScroll(longestChars: Int, modifier: Modifier = Modifier, scrollState: ScrollState = rememberScrollState(), content: @Composable () -> Unit) {
-  val measurer = rememberTextMeasurer()
-  val density = LocalDensity.current
-  val mono = changesMono(FONT_SIZE, FontWeight.Normal, SkillBillTheme.colors.fg2, LINE_HEIGHT_SP)
-  val charWidth = remember(measurer, mono, density) { with(density) { measurer.measure("0", mono).size.width.toDp() } }
-  BoxWithConstraints(modifier.fillMaxSize()) {
-    val width = maxOf(maxWidth, GUTTER_WIDTH * 2 + TEXT_START * 2 + charWidth * longestChars)
-    Box(Modifier.horizontalScroll(scrollState).width(width).fillMaxHeight()) { content() }
-  }
-}
-
 /** One row per hunk header and line of [diff], keyed under [key]. */
 data class DiffLineAddress(val hunk: Int, val line: Int)
 
@@ -114,10 +91,22 @@ class DiffLineAffordance(val onAdd: (DiffLine) -> Unit, val onHover: (DiffLine, 
 fun LazyListScope.diffRows(diff: FileDiff, key: String, slots: DiffLineSlots = DiffLineSlots.None, affordance: DiffLineAffordance? = null, highlight: DiffWordHighlight? = null) {
   diff.hunks.forEachIndexed { h, hunk ->
     item(key = "$key:h$h", contentType = "hunk") { HunkHeaderRow(hunk) }
-    hunk.lines.forEachIndexed { i, line ->
-      item(key = "$key:l$h:$i", contentType = "line") { DiffLineRow(line, affordance, key, DiffLineAddress(h, i), highlight) }
-      val threadIds = slots.keys[DiffLineAddress(h, i)].orEmpty()
-      items(threadIds, key = { "thread:$it" }, contentType = { "thread" }, itemContent = slots.content)
+    var first = 0
+    slots.keys.entries.filter { it.key.hunk == h && it.key.line in hunk.lines.indices && it.value.isNotEmpty() }
+      .sortedBy { it.key.line }.forEach { (address, threadIds) ->
+        diffLineRange(hunk, h, first, address.line + 1, key, affordance, highlight)
+        items(threadIds, key = { "thread:$it" }, contentType = { "thread" }, itemContent = slots.content)
+        first = address.line + 1
+      }
+    diffLineRange(hunk, h, first, hunk.lines.size, key, affordance, highlight)
+  }
+}
+
+private fun LazyListScope.diffLineRange(hunk: DiffHunk, h: Int, first: Int, end: Int, key: String, affordance: DiffLineAffordance?, highlight: DiffWordHighlight?) {
+  if (first < end) {
+    items(count = end - first, key = { "$key:l$h:${first + it}" }, contentType = { "line" }) { offset ->
+      val index = first + offset
+      DiffLineRow(hunk.lines[index], affordance, key, DiffLineAddress(h, index), highlight)
     }
   }
 }
@@ -125,7 +114,7 @@ fun LazyListScope.diffRows(diff: FileDiff, key: String, slots: DiffLineSlots = D
 /** How many rows [diffRows] adds for [diff]. */
 fun diffRowCount(diff: FileDiff, slots: DiffLineSlots = DiffLineSlots.None): Int = diff.hunks.indices.sumOf { h ->
   val hunk = diff.hunks[h]
-  hunk.lines.size + 1 + hunk.lines.indices.sumOf { slots.keys[DiffLineAddress(h, it)]?.size ?: 0 }
+  hunk.lines.size + 1 + slots.keys.entries.sumOf { (address, ids) -> if (address.hunk == h && address.line in hunk.lines.indices) ids.size else 0 }
 }
 
 /** The widest row of [diff], in characters of diff text. */
@@ -157,10 +146,13 @@ internal fun displayText(line: DiffLine): String {
 @Composable
 private fun Modifier.gutterRules(): Modifier {
   val color = SkillBillTheme.colors.border
+  val scroll = LocalDiffHorizontalScroll.current
   return drawBehind {
     val stroke = 1.dp.toPx()
     val gutter = GUTTER_WIDTH.toPx()
-    listOf(gutter, gutter * 2).forEach { edge -> drawLine(color, Offset(edge - stroke / 2, 0f), Offset(edge - stroke / 2, size.height), stroke) }
+    val first = gutter - (scroll?.value ?: 0) - stroke / 2
+    drawLine(color, Offset(first, 0f), Offset(first, size.height), stroke)
+    drawLine(color, Offset(first + gutter, 0f), Offset(first + gutter, size.height), stroke)
   }
 }
 
@@ -168,7 +160,7 @@ private fun Modifier.gutterRules(): Modifier {
 private fun HunkHeaderRow(hunk: DiffHunk) {
   val colors = SkillBillTheme.colors
   Row(Modifier.fillMaxWidth().background(colors.diffHunkBg).gutterRules()) {
-    Row(Modifier.padding(start = GUTTER_WIDTH * 2 + TEXT_START, top = 6.dp, bottom = 6.dp, end = TEXT_START), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(Modifier.diffHorizontalOffset().wrapContentWidth(Alignment.Start, unbounded = true).padding(start = GUTTER_WIDTH * 2 + TEXT_START, top = 6.dp, bottom = 6.dp, end = TEXT_START), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
       BasicText(hunk.header, style = changesMono(FONT_SIZE, FontWeight.Normal, colors.stPlanning, LINE_HEIGHT_SP), maxLines = 1, softWrap = false)
       hunk.source?.let { BasicText(it, style = changesMono(FONT_SIZE, FontWeight.Normal, colors.fgFaint, LINE_HEIGHT_SP), maxLines = 1, softWrap = false) }
     }
@@ -193,7 +185,7 @@ private fun DiffLineRow(line: DiffLine, affordance: DiffLineAffordance?, key: St
   val interaction = remember(line) { MutableInteractionSource() }
   val hovered by interaction.collectIsHoveredAsState()
   val focused by interaction.collectIsFocusedAsState()
-  val visibility by animateFloatAsState(if ((hovered || focused) && affordance != null) 1f else 0f, hoverSpec(), label = "diff-comment-affordance")
+  val visibility = animateFloatAsState(if ((hovered || focused) && affordance != null) 1f else 0f, hoverSpec(), label = "diff-comment-affordance")
   val currentAffordance by rememberUpdatedState(affordance)
   LaunchedEffect(hovered, line, affordance != null) { currentAffordance?.onHover(line, hovered) }
   DisposableEffect(line, affordance != null) {
@@ -201,6 +193,7 @@ private fun DiffLineRow(line: DiffLine, affordance: DiffLineAffordance?, key: St
     onDispose { onHover?.invoke(line, false) }
   }
   val density = LocalDensity.current
+  val scroll = LocalDiffHorizontalScroll.current
   val selection = highlight?.selection?.takeIf { it.fileKey == key }
   val word = selection?.word
   val matches = remember(line, word) { word?.let { wordMatchRanges(line, it) }.orEmpty() }
@@ -216,11 +209,12 @@ private fun DiffLineRow(line: DiffLine, affordance: DiffLineAffordance?, key: St
   val textLayout = remember { mutableStateOf<TextLayoutResult?>(null) }
   val currentTap by rememberUpdatedState<(Offset) -> Unit>({ position ->
     val textStart = with(density) { (GUTTER_WIDTH * 2 + TEXT_START).toPx() }
+    val contentX = position.x + (scroll?.value ?: 0)
     when {
-      position.x < with(density) { (GUTTER_WIDTH * 2).toPx() } -> Unit
-      position.x < textStart -> highlight?.clear()
+      contentX < with(density) { (GUTTER_WIDTH * 2).toPx() } -> Unit
+      contentX < textStart -> highlight?.clear()
       else -> {
-        val index = textLayout.value?.charUnder(position.x - textStart)
+        val index = textLayout.value?.charUnder(contentX - textStart)
         when (val hit = index?.let { wordHitAt(line, it) } ?: DiffWordHit.Blank) {
           is DiffWordHit.Word -> highlight?.toggle(DiffWordSelection(key, hit.text, address, hit.start))
           DiffWordHit.Ignored -> Unit
@@ -233,22 +227,26 @@ private fun DiffLineRow(line: DiffLine, affordance: DiffLineAffordance?, key: St
     Modifier.fillMaxWidth().height(LINE_HEIGHT).then(background).gutterRules().then(if (affordance != null) Modifier.hoverable(interaction) else Modifier)
       .then(if (highlight != null) Modifier.pointerInput(Unit) { detectTapGestures(onTap = { currentTap(it) }) } else Modifier),
   ) {
-    androidx.compose.foundation.layout.Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-    GutterCell(line.oldNumber, GUTTER_WIDTH, gutter)
-    GutterCell(line.newNumber, GUTTER_WIDTH, gutter)
-    BasicText(
-      text,
-      Modifier.padding(start = TEXT_START),
-      style = changesMono(FONT_SIZE, FontWeight.Normal, textColor, LINE_HEIGHT_SP),
-      onTextLayout = { textLayout.value = it },
-      maxLines = 1,
-      softWrap = false,
-    )
+    Row(Modifier.diffHorizontalOffset().wrapContentWidth(Alignment.Start, unbounded = true).height(LINE_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
+      GutterCell(line.oldNumber, GUTTER_WIDTH, gutter)
+      GutterCell(line.newNumber, GUTTER_WIDTH, gutter)
+      BasicText(
+        text,
+        Modifier.padding(start = TEXT_START),
+        style = changesMono(FONT_SIZE, FontWeight.Normal, textColor, LINE_HEIGHT_SP),
+        onTextLayout = { textLayout.value = it },
+        maxLines = 1,
+        softWrap = false,
+      )
     }
     if (affordance != null && line.kind != DiffLineKind.NoNewlineMarker) {
       Box(
-        Modifier.offset { IntOffset(with(density) { (GUTTER_WIDTH * 2 - 10.dp).roundToPx() }, 0) }
-          .align(Alignment.CenterStart).size(18.dp).alpha(visibility).scale(.85f + visibility * .15f)
+        Modifier.offset { IntOffset(with(density) { (GUTTER_WIDTH * 2 - 10.dp).roundToPx() } - (scroll?.value ?: 0), 0) }
+          .align(Alignment.CenterStart).size(18.dp).graphicsLayer {
+            alpha = visibility.value
+            scaleX = .85f + visibility.value * .15f
+            scaleY = scaleX
+          }
           .clip(RoundedCornerShape(5.dp)).background(SkillBillTheme.colors.accent)
           .clickable(interactionSource = interaction, indication = null, role = Role.Button) { affordance.onAdd(line) }
           .pointerHoverIcon(PointerIcon.Hand)

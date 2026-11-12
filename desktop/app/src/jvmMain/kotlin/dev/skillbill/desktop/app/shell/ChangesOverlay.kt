@@ -25,6 +25,8 @@ import dev.skillbill.desktop.feature.changes.ChangesScreen
 import dev.skillbill.desktop.feature.changes.ChangesWindowFrame
 import dev.skillbill.desktop.feature.changes.ChangesWindowKeys
 import dev.skillbill.desktop.feature.changes.ChangesWindowViewModel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 /** The share of the main window's width and height the Changes panel takes; the shell stays visible around it. */
 private const val PANEL_SHARE = 0.94f
@@ -40,7 +42,8 @@ fun ChangesOverlay(
   val store = remember { ViewModelStore() }
   DisposableEffect(store) { onDispose { store.clear() } }
   val viewModel = remember { createViewModel(entry.source, entry.scope, entry.selectedPath).also { store.put("changes", it) } }
-  val state by viewModel.state.collectAsState()
+  val title by remember(viewModel) { viewModel.state.map { it.title }.distinctUntilChanged() }
+    .collectAsState(initial = viewModel.state.value.title)
   LaunchedEffect(entry.focusRequest) { if (entry.focusRequest > 0) viewModel.reopen(entry.source, entry.scope, entry.selectedPath) }
   Dialog(
     onClose,
@@ -54,7 +57,7 @@ fun ChangesOverlay(
         Modifier.size(maxWidth * PANEL_SHARE, maxHeight * PANEL_SHARE)
           .clickable(remember { MutableInteractionSource() }, indication = null) { },
       ) {
-        ChangesWindowFrame(state.title, closeAtStart = closeButtonAtStart(), onClose) { ChangesScreen(viewModel, keys, onClose) }
+        ChangesWindowFrame(title, closeAtStart = closeButtonAtStart(), onClose) { ChangesScreen(viewModel, keys, onClose) }
       }
     }
   }
