@@ -88,6 +88,10 @@ class UpdateCheckServiceTest {
     assertEquals(UpdateCheckStatus.UNKNOWN, result.status)
     assertEquals("0.0.0-SNAPSHOT", result.installedVersion)
     assertNull(result.recommendedInstallCommand)
+    assertEquals(
+      "local build carries no version provenance; reinstall with `sona update --release <tag>`",
+      result.reason,
+    )
   }
 
   @Test

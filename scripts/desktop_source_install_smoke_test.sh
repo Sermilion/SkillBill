@@ -5,6 +5,8 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 task_dir="$(mktemp -d)"
 trap 'rm -rf "$task_dir"' EXIT
 sed -n '/^build_source_desktop_app() {/,/^}/p; /^install_selected_desktop_app() {/,/^}/p; /^stage_selected_desktop_app() {/,/^}/p; /^activate_staged_desktop_app() {/,/^}/p; /^desktop_app_target_path() {/,/^}/p; /^desktop_app_executable_path() {/,/^}/p; /^desktop_quoted_exec_path() {/,/^}/p; /^check_desktop_app_launcher_ownership() {/,/^}/p; /^prepare_desktop_app_launcher() {/,/^}/p; /^discard_desktop_app_launcher_stage() {/,/^}/p; /^install_desktop_app_launcher() {/,/^}/p; /^linux_legacy_desktop_is_owned() {/,/^}/p; /^migrate_kde_desktop_pin() {/,/^}/p; /^cleanup_linux_legacy_desktop() {/,/^}/p; /^desktop_app_running_pids() {/,/^}/p; /^stop_desktop_app() {/,/^}/p; /^desktop_app_hosts_installer() {/,/^}/p; /^run_detached() {/,/^}/p; /^schedule_desktop_app_restart() {/,/^}/p' "$repo_root/install.sh" > "$task_dir/install-functions.sh"
+sed -n '/^install_skill_bill_launcher() {/,/^install_runtime_launchers() {/p' "$repo_root/install.sh" | sed '$d' >> "$task_dir/install-functions.sh"
+sed -n '/^is_owned_windows_desktop_launcher() {/,/^}/p' "$repo_root/install.sh" >> "$task_dir/install-functions.sh"
 source "$task_dir/install-functions.sh"
 
 RUNTIME_KOTLIN_DIR="$task_dir/checkout/runtime-kotlin"
@@ -13,6 +15,13 @@ DESKTOP_APP_INSTALL_RESULT=""
 BUILT_DESKTOP_APP_SOURCE=""
 mkdir -p "$RUNTIME_KOTLIN_DIR" "$task_dir/checkout/desktop" "$task_dir/bin"
 RUNTIME_LAUNCHER_BIN_DIR="$task_dir/bin"
+RUNTIME_CLI_BIN="$task_dir/runtime-cli"
+RUNTIME_MCP_BIN="$task_dir/runtime-mcp"
+RECOVERY_DESKTOP_APP_PATH=""
+staged_runtime_build_identity_record() { printf fixture; }
+desktop_app_build_identity_path() { printf fixture; }
+build_identities_match() { return 0; }
+report_desktop_recovery_path() { :; }
 info() { printf '%s\n' "$*"; }
 warn() { printf '%s\n' "$*" >&2; }
 err() { printf '%s\n' "$*" >&2; }
@@ -49,7 +58,7 @@ chmod +x "$task_dir/checkout/desktop/gradlew"
 install_selected_desktop_app
 app="$task_dir/install/Sona.app/Contents/MacOS/Sona"
 [[ "$("$app")" == 'source desktop app' ]]
-[[ "$(readlink "$task_dir/bin/sona")" == "$app" ]]
+[[ "$(readlink "$task_dir/bin/sona-app")" == "$app" ]]
 [[ "$DESKTOP_APP_INSTALL_RESULT" == "installed at $task_dir/install/Sona.app" ]]
 if [[ -e "$task_dir/launched" ]]; then
   err 'Installer launched a desktop app that was not running.'
@@ -84,7 +93,7 @@ fi
 kill -0 "$unrelated_app"
 [[ "$(cat "$task_dir/launched")" == "$app" ]]
 
-(exec -a "$task_dir/bin/sona" sleep 60) &
+(exec -a "$task_dir/bin/sona-app" sleep 60) &
 running_app=$!
 sleep 0.5
 install_selected_desktop_app
@@ -98,7 +107,7 @@ kill -0 "$unrelated_app"
 # The installer runs inside the desktop app's terminal: the app is its parent. Stopping
 # the app there would end the installer, so the restart waits until the installer exits.
 declare -f > "$task_dir/hosted-functions.sh"
-declare -p task_dir RUNTIME_KOTLIN_DIR INSTALL_SOURCE DESKTOP_APP_INSTALL_RESULT BUILT_DESKTOP_APP_SOURCE RUNTIME_LAUNCHER_BIN_DIR > "$task_dir/hosted-vars.sh"
+declare -p task_dir RUNTIME_KOTLIN_DIR INSTALL_SOURCE DESKTOP_APP_INSTALL_RESULT BUILT_DESKTOP_APP_SOURCE RUNTIME_LAUNCHER_BIN_DIR RUNTIME_CLI_BIN RUNTIME_MCP_BIN RECOVERY_DESKTOP_APP_PATH > "$task_dir/hosted-vars.sh"
 cat > "$task_dir/hosted-install.sh" <<'HOSTED'
 set -euo pipefail
 source "$1/hosted-vars.sh"
@@ -139,8 +148,8 @@ printf 'previous app\n' > "$linux_app/bin/Sona"
 printf 'new app\n' > "$linux_stage/bin/Sona"
 printf 'icon\n' > "$linux_stage/lib/Sona.png"
 chmod +x "$linux_app/bin/Sona" "$linux_stage/bin/Sona"
-ln -s "$linux_app/bin/Sona" "$RUNTIME_LAUNCHER_BIN_DIR/sona"
-printf '[Desktop Entry]\nName=Sona\nExec="%s"\nIcon=%s\n' "$RUNTIME_LAUNCHER_BIN_DIR/sona" "$linux_app/lib/Sona.png" > "$XDG_DATA_HOME/applications/sona.desktop"
+ln -s "$linux_app/bin/Sona" "$RUNTIME_LAUNCHER_BIN_DIR/sona-app"
+printf '[Desktop Entry]\nName=Sona\nExec="%s"\nIcon=%s\n' "$RUNTIME_LAUNCHER_BIN_DIR/sona-app" "$linux_app/lib/Sona.png" > "$XDG_DATA_HOME/applications/sona.desktop"
 STAGED_DESKTOP_APP_SOURCE="$linux_stage"
 mv() {
   if [[ "$1" == "$XDG_DATA_HOME/applications/sona.desktop.stage."* && "$2" == "$XDG_DATA_HOME/applications/sona.desktop" ]]; then
@@ -154,31 +163,38 @@ if activate_staged_desktop_app; then
 fi
 unset -f mv
 [[ "$(cat "$linux_app/bin/Sona")" == 'previous app' ]]
-[[ "$(readlink "$RUNTIME_LAUNCHER_BIN_DIR/sona")" == "$linux_app/bin/Sona" ]]
+[[ "$(readlink "$RUNTIME_LAUNCHER_BIN_DIR/sona-app")" == "$linux_app/bin/Sona" ]]
 grep -Fxq "Icon=$linux_app/lib/Sona.png" "$XDG_DATA_HOME/applications/sona.desktop"
 [[ ! -e "$linux_app/lib/Sona.png" ]]
-rm "$RUNTIME_LAUNCHER_BIN_DIR/sona"
-printf 'unrelated launcher\n' > "$RUNTIME_LAUNCHER_BIN_DIR/sona"
+rm "$RUNTIME_LAUNCHER_BIN_DIR/sona-app"
+printf 'unrelated launcher\n' > "$RUNTIME_LAUNCHER_BIN_DIR/sona-app"
 printf 'unrelated menu entry\n' > "$XDG_DATA_HOME/applications/sona.desktop"
 if activate_staged_desktop_app; then
   err 'Installer replaced unrelated Sona registration files.'
   exit 1
 fi
 [[ "$(cat "$linux_app/bin/Sona")" == 'previous app' ]]
-[[ "$(cat "$RUNTIME_LAUNCHER_BIN_DIR/sona")" == 'unrelated launcher' ]]
+[[ "$(cat "$RUNTIME_LAUNCHER_BIN_DIR/sona-app")" == 'unrelated launcher' ]]
 [[ "$(cat "$XDG_DATA_HOME/applications/sona.desktop")" == 'unrelated menu entry' ]]
-rm "$RUNTIME_LAUNCHER_BIN_DIR/sona"
-ln -s "$linux_app/bin/Sona" "$RUNTIME_LAUNCHER_BIN_DIR/sona"
+rm "$RUNTIME_LAUNCHER_BIN_DIR/sona-app"
+ln -s "$linux_app/bin/Sona" "$RUNTIME_LAUNCHER_BIN_DIR/sona-app"
 if activate_staged_desktop_app; then
   err 'Installer replaced an unrelated Linux menu entry.'
   exit 1
 fi
 [[ "$(cat "$linux_app/bin/Sona")" == 'previous app' ]]
-[[ "$(readlink "$RUNTIME_LAUNCHER_BIN_DIR/sona")" == "$linux_app/bin/Sona" ]]
+[[ "$(readlink "$RUNTIME_LAUNCHER_BIN_DIR/sona-app")" == "$linux_app/bin/Sona" ]]
 [[ "$(cat "$XDG_DATA_HOME/applications/sona.desktop")" == 'unrelated menu entry' ]]
 
 host_os() { printf 'macos'; }
 RUNTIME_LAUNCHER_BIN_DIR="$task_dir/bin"
+RUNTIME_CLI_BIN="$task_dir/runtime-cli"
+RUNTIME_MCP_BIN="$task_dir/runtime-mcp"
+RECOVERY_DESKTOP_APP_PATH=""
+staged_runtime_build_identity_record() { printf fixture; }
+desktop_app_build_identity_path() { printf fixture; }
+build_identities_match() { return 0; }
+report_desktop_recovery_path() { :; }
 touch "$task_dir/checkout/desktop/fail-build"
 if install_selected_desktop_app; then
   err 'Installer accepted a failed desktop source build.'
@@ -186,7 +202,7 @@ if install_selected_desktop_app; then
 fi
 [[ "$DESKTOP_APP_INSTALL_RESULT" == 'build failed' ]]
 [[ "$("$app")" == 'source desktop app' ]]
-[[ "$(readlink "$task_dir/bin/sona")" == "$app" ]]
+[[ "$(readlink "$task_dir/bin/sona-app")" == "$app" ]]
 
 INSTALL_SOURCE="prebuilt"
 host_token() { printf 'macos-arm64'; }

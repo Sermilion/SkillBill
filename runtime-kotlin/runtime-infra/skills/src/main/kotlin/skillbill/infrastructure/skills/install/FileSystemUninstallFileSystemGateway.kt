@@ -4,10 +4,13 @@ import skillbill.infrastructure.host.resolveTelemetryConfigMigrationLockPaths
 import skillbill.infrastructure.host.system.FileConfigDocumentLocks
 import skillbill.ports.system.UninstallPathsPort
 import java.io.IOException
+import java.nio.channels.Channels
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
+import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.Comparator
 
@@ -23,6 +26,15 @@ class FileSystemUninstallFileSystemGateway : UninstallPathsPort {
   }
 
   override fun exists(path: Path): Boolean = Files.exists(path)
+
+  override fun isRegularFile(path: Path): Boolean = Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+
+  override fun isDirectory(path: Path): Boolean = Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
+
+  override fun readRegularFile(path: Path): String =
+    Files.newByteChannel(path, setOf(StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)).use { channel ->
+      Channels.newInputStream(channel).bufferedReader().use { reader -> reader.readText() }
+    }
 
   override fun isSymbolicLink(path: Path): Boolean = Files.isSymbolicLink(path)
 

@@ -132,6 +132,8 @@ class CliUninstallRuntimeTest {
     assertFalse(Files.exists(fixture.ownedSymlink))
     assertFalse(Files.exists(fixture.skillBillLauncher))
     assertFalse(Files.exists(fixture.skillBillMcpLauncher))
+    assertFalse(Files.exists(fixture.sonaLauncher))
+    assertFalse(Files.exists(fixture.sonaMcpLauncher))
     assertTrue(Files.exists(fixture.userSkillDir))
     assertTrue(Files.exists(fixture.userLauncher))
   }
@@ -205,9 +207,13 @@ class CliUninstallRuntimeTest {
     Files.createDirectories(binDir)
     val skillBillLauncher = binDir.resolve("skill-bill")
     val skillBillMcpLauncher = binDir.resolve("skill-bill-mcp")
+    val sonaLauncher = binDir.resolve("sona")
+    val sonaMcpLauncher = binDir.resolve("sona-mcp")
     val userLauncher = binDir.resolve("skill-bill-user")
     Files.createSymbolicLink(skillBillLauncher, runtimeCli)
     Files.createSymbolicLink(skillBillMcpLauncher, runtimeMcp)
+    Files.writeString(sonaLauncher, "#!/usr/bin/env bash\n# skill-bill managed launcher\n")
+    Files.createSymbolicLink(sonaMcpLauncher, runtimeMcp)
     Files.writeString(userLauncher, "user launcher\n")
 
     return UninstallFixture(
@@ -219,6 +225,8 @@ class CliUninstallRuntimeTest {
       ownedSymlink = ownedSymlink,
       skillBillLauncher = skillBillLauncher,
       skillBillMcpLauncher = skillBillMcpLauncher,
+      sonaLauncher = sonaLauncher,
+      sonaMcpLauncher = sonaMcpLauncher,
       userLauncher = userLauncher,
     )
   }
@@ -233,5 +241,7 @@ private data class UninstallFixture(
   val ownedSymlink: Path,
   val skillBillLauncher: Path,
   val skillBillMcpLauncher: Path,
+  val sonaLauncher: Path,
+  val sonaMcpLauncher: Path,
   val userLauncher: Path,
 )

@@ -34,6 +34,7 @@ import skillbill.ports.system.HostPlatformPort
 import skillbill.ports.system.UninstallPathsPort
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertFalse
@@ -73,7 +74,7 @@ class SkillBillUninstallDestructiveSemanticsTest {
         nativeSourceRoots = emptyList(),
         mcpAgents = emptyList(),
         launchers = emptyList(),
-        desktop = DesktopRemoval(launcher = null, files = emptyList(), directories = emptyList()),
+        desktop = DesktopRemoval(launchers = emptyList(), files = emptyList(), directories = emptyList()),
       )
 
     val result = service.apply(plan)
@@ -139,7 +140,7 @@ class SkillBillUninstallDestructiveSemanticsTest {
         nativeSourceRoots = emptyList(),
         mcpAgents = emptyList(),
         launchers = emptyList(),
-        desktop = DesktopRemoval(launcher = null, files = emptyList(), directories = emptyList()),
+        desktop = DesktopRemoval(launchers = emptyList(), files = emptyList(), directories = emptyList()),
       )
 
     val result = service.apply(plan)
@@ -151,6 +152,12 @@ class SkillBillUninstallDestructiveSemanticsTest {
 }
 
 private class LocalUninstallPathsPort : UninstallPathsPort {
+  override fun isRegularFile(path: Path): Boolean = Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+
+  override fun isDirectory(path: Path): Boolean = Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
+
+  override fun readRegularFile(path: Path): String = Files.readString(path)
+
   override fun <T> withConfigTransaction(
     userHome: Path,
     environment: Map<String, String>,
@@ -196,6 +203,12 @@ private class LocalUninstallPathsPort : UninstallPathsPort {
 private class FailingStateRootUninstallPathsPort(
   private val home: Path,
 ) : UninstallPathsPort {
+  override fun isRegularFile(path: Path): Boolean = Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+
+  override fun isDirectory(path: Path): Boolean = Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
+
+  override fun readRegularFile(path: Path): String = Files.readString(path)
+
   override fun <T> withConfigTransaction(
     userHome: Path,
     environment: Map<String, String>,

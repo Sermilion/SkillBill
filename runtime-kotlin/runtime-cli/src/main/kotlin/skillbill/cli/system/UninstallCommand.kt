@@ -146,9 +146,10 @@ private fun UninstallPlan.toPayload(
       },
     "desktop" to
       mapOf(
-        "launcher" to desktop.launcher?.path?.toString(),
-        "files" to desktop.files.map { it.toString() },
-        "directories" to desktop.directories.map { it.toString() },
+        "launcher" to desktop.launchers.firstOrNull()?.path?.toString(),
+        "launchers" to desktop.launchers.map { it.path.toString() },
+        "files" to desktop.files.map { it.path.toString() },
+        "directories" to desktop.directories.map { it.path.toString() },
       ),
     "removed" to removed,
     "skipped" to skipped,

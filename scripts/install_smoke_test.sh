@@ -122,6 +122,7 @@ case "$cmd" in
   "--check-packaged-contracts") exit 0 ;;
   "install migrate-legacy-config") exit 0 ;;
   "install migrate-data")
+    if [[ -n "${SKILL_BILL_TEST_MIGRATION_MARKER:-}" ]]; then printf 'prepared\n' > "$SKILL_BILL_TEST_MIGRATION_MARKER"; fi
     if [[ "${SKILL_BILL_TEST_MIGRATION_FAILS:-0}" == "1" ]]; then
       echo "Persisted data migration failed; original data retained." >&2
       exit 1
@@ -691,14 +692,17 @@ if [[ "$REPLAY_OUTPUT" == *"removed IntelliJ plugin"* ||
 fi
 pass "clean install reports no retired IDE plugin removal"
 
-LAUNCHER="$FAKE_HOME/.local/bin/skill-bill"
+LAUNCHER="$FAKE_HOME/.local/bin/sona"
 assert_file_exists "launcher exists" "$LAUNCHER"
+assert_file_exists "legacy launcher remains available" "$FAKE_HOME/.local/bin/skill-bill"
+assert_file_exists "Sona MCP launcher is published" "$FAKE_HOME/.local/bin/sona-mcp"
+assert_file_exists "legacy MCP launcher remains available" "$FAKE_HOME/.local/bin/skill-bill-mcp"
 
 LAUNCHER_VERSION="$(HOME="$FAKE_HOME" "$LAUNCHER" --home "$FAKE_HOME" version 2>/dev/null || true)"
 if [[ "$LAUNCHER_VERSION" == *"skill-bill"* ]]; then
-  pass "skill-bill version succeeds"
+  pass "sona version succeeds"
 else
-  fail "skill-bill version output unexpected: '$LAUNCHER_VERSION'"
+  fail "sona version output unexpected: '$LAUNCHER_VERSION'"
 fi
 
 SKILL_FIRST="$(find "$FAKE_HOME/.claude/skills" -mindepth 1 -maxdepth 1 2>/dev/null | head -n1 || true)"
@@ -969,17 +973,54 @@ for state_file in "${STATE_FILES[@]}"; do
   cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "migration failure changed $state_file"
 done
 pass "failed migration preserves the existing runtime and all saved user data"
+
+# Fail the coupled launcher publication after upgrade preparation, then retry it.
+PUBLICATION_SHIM="$(mktemp -d)"
+WORK_TMPDIRS+=("$PUBLICATION_SHIM")
+SYSTEM_MV="$(command -v mv)"
+cat > "$PUBLICATION_SHIM/mv" <<'SHIM'
+#!/usr/bin/env bash
+case "${1:-}" in
+  */sona-app.stage.*|*/sona-app.cmd.stage.*) [[ -f "$SKILL_BILL_TEST_MIGRATION_MARKER" ]] || exit 74; exit 73 ;;
+esac
+exec "$SKILL_BILL_TEST_SYSTEM_MV" "$@"
+SHIM
+chmod +x "$PUBLICATION_SHIM/mv"
+printf 'unrelated bytes\n' > "$FAKE_HOME/.local/bin/unrelated-entry"
+ln -s "$FAKE_HOME/.local/bin/unrelated-entry" "$FAKE_HOME/.local/bin/unrelated-link"
+PUBLICATION_STATUS=0
+PUBLICATION_OUTPUT="$(run_install "$FAKE_HOME" "PATH=$PUBLICATION_SHIM:$PATH" "SKILL_BILL_TEST_SYSTEM_MV=$SYSTEM_MV" "SKILL_BILL_TEST_MIGRATION_MARKER=$PUBLICATION_SHIM/prepared")" || PUBLICATION_STATUS=$?
+[[ "$PUBLICATION_STATUS" -ne 0 && "$PUBLICATION_OUTPUT" == *"Launcher publication failed"* ]] || fail "publication failure was not reported"
+[[ -f "$PUBLICATION_SHIM/prepared" ]] || fail "migration preparation did not run before publication"
+[[ "$(cat "$FAKE_HOME/.local/bin/unrelated-entry")" == 'unrelated bytes' ]] || fail "publication changed unrelated bytes"
+[[ "$(readlink "$FAKE_HOME/.local/bin/unrelated-link")" == "$FAKE_HOME/.local/bin/unrelated-entry" ]] || fail "publication changed unrelated target"
+"$FAKE_HOME/.local/bin/sona" version >/dev/null || fail "publication failure left no usable CLI"
+for state_file in "${STATE_FILES[@]}"; do
+  cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "publication failure changed $state_file"
+done
+run_install "$FAKE_HOME"
+[[ "$(cat "$FAKE_HOME/.local/bin/unrelated-entry")" == 'unrelated bytes' ]] || fail "retry changed unrelated bytes"
+[[ "$(readlink "$FAKE_HOME/.local/bin/unrelated-link")" == "$FAKE_HOME/.local/bin/unrelated-entry" ]] || fail "retry changed unrelated target"
+[[ -L "$FAKE_HOME/.local/bin/sona-mcp" ]] || fail "retry did not publish MCP entry"
+"$FAKE_HOME/.local/bin/sona" version >/dev/null || fail "retry did not publish a working CLI"
+for state_file in "${STATE_FILES[@]}"; do
+  cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "retry changed $state_file"
+done
+pass "publication failure preserves data and unrelated entries through retry"
 DESKTOP_APP="$(desktop_app_target "$FAKE_HOME")"
 DESKTOP_EXECUTABLE="$(desktop_app_executable "$DESKTOP_APP")"
 assert_file_exists "desktop app launcher installed" "$DESKTOP_EXECUTABLE"
 if [[ "$TOKEN" == "windows-x64" ]]; then
-  [[ -f "$FAKE_HOME/.local/bin/sona.cmd" ]] && pass "desktop app launcher installed" || fail "desktop app launcher is missing"
+  [[ -f "$FAKE_HOME/.local/bin/sona-app.cmd" ]] && pass "desktop app launcher installed" || fail "desktop app launcher is missing"
+  [[ -f "$FAKE_HOME/.local/bin/sona" ]] && pass "CLI launcher installed" || fail "CLI launcher is missing"
 else
   [[ -x "$DESKTOP_EXECUTABLE" ]] && pass "desktop app launcher is executable" || fail "desktop app launcher is not executable"
-  [[ -L "$FAKE_HOME/.local/bin/sona" ]] && pass "desktop app launcher symlink installed" || fail "desktop app launcher symlink is missing"
+  [[ -L "$FAKE_HOME/.local/bin/sona-app" ]] && pass "desktop app launcher symlink installed" || fail "desktop app launcher symlink is missing"
+  [[ -f "$FAKE_HOME/.local/bin/sona" ]] && pass "CLI launcher installed" || fail "CLI launcher is missing"
 fi
 if [[ "$TOKEN" == "linux-x64" ]]; then
   [[ -f "$FAKE_HOME/.local/share/applications/sona.desktop" ]] && pass "Linux desktop entry installed" || fail "Linux desktop entry is missing"
+  grep -Fxq "Exec=\"$FAKE_HOME/.local/bin/sona-app\"" "$FAKE_HOME/.local/share/applications/sona.desktop" && pass "Linux desktop entry launches the renamed app command" || fail "Linux desktop entry does not launch sona-app"
   grep -Fxq "Icon=$DESKTOP_APP/lib/Sona.png" "$FAKE_HOME/.local/share/applications/sona.desktop" && pass "Linux desktop entry uses the packaged icon" || fail "Linux desktop entry has no packaged icon"
   grep -Fxq 'StartupWMClass=dev-skillbill-desktop-app-DesktopLauncherKt' "$FAKE_HOME/.local/share/applications/sona.desktop" && pass "Linux desktop entry matches the app window" || fail "Linux desktop entry has no matching window identity"
 fi
@@ -1037,10 +1078,12 @@ for install_entry in runtime installed-skills skills platform-packs orchestratio
 done
 assert_file_absent "uninstall removes the desktop app" "$DESKTOP_APP"
 if [[ "$TOKEN" == "windows-x64" ]]; then
-  assert_file_absent "uninstall removes the desktop launcher" "$FAKE_HOME/.local/bin/sona.cmd"
+  assert_file_absent "uninstall removes the desktop launcher" "$FAKE_HOME/.local/bin/sona-app.cmd"
+  assert_file_absent "uninstall removes the CLI launcher" "$FAKE_HOME/.local/bin/sona"
 else
-  assert_file_absent "uninstall removes the desktop launcher" "$FAKE_HOME/.local/bin/sona"
-  [[ ! -L "$FAKE_HOME/.local/bin/sona" ]] || fail "uninstall left a dangling desktop launcher"
+  assert_file_absent "uninstall removes the desktop launcher" "$FAKE_HOME/.local/bin/sona-app"
+  assert_file_absent "uninstall removes the CLI launcher" "$FAKE_HOME/.local/bin/sona"
+  [[ ! -L "$FAKE_HOME/.local/bin/sona-app" ]] || fail "uninstall left a dangling desktop launcher"
 fi
 if [[ "$TOKEN" == "linux-x64" ]]; then
   assert_file_absent "uninstall removes the Linux desktop entry" "$FAKE_HOME/.local/share/applications/sona.desktop"

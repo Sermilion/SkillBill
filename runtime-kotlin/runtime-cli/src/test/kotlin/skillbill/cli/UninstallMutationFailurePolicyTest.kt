@@ -41,6 +41,8 @@ import skillbill.ports.repository.toFileLocation
 import skillbill.ports.system.HostPlatformPort
 import skillbill.ports.system.UninstallPathsPort
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -118,6 +120,12 @@ private object ThrowingMcpRegistrationPort : InstallMcpRegistrationPort {
 private val ABSENT_PATH: Path = Path.of("/tmp/skillbill-uninstall-policy/absent")
 
 private object AbsentUninstallPathsPort : UninstallPathsPort {
+  override fun isRegularFile(path: Path): Boolean = Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+
+  override fun isDirectory(path: Path): Boolean = Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
+
+  override fun readRegularFile(path: Path): String = Files.readString(path)
+
   override fun <T> withConfigTransaction(
     userHome: Path,
     environment: Map<String, String>,

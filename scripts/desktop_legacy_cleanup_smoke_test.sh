@@ -7,9 +7,18 @@ trap 'rm -rf "$task_dir"' EXIT
 for function_name in desktop_app_target_path desktop_app_executable_path desktop_quoted_exec_path check_desktop_app_launcher_ownership prepare_desktop_app_launcher discard_desktop_app_launcher_stage install_desktop_app_launcher linux_legacy_desktop_is_owned migrate_kde_desktop_pin cleanup_linux_legacy_desktop activate_staged_desktop_app; do
   sed -n "/^$function_name() {/,/^}/p" "$repo_root/install.sh" >> "$task_dir/functions.sh"
 done
+sed -n '/^install_skill_bill_launcher() {/,/^install_runtime_launchers() {/p' "$repo_root/install.sh" | sed '$d' >> "$task_dir/functions.sh"
+sed -n '/^is_owned_windows_desktop_launcher() {/,/^}/p' "$repo_root/install.sh" >> "$task_dir/functions.sh"
 source "$task_dir/functions.sh"
 
 RUNTIME_LAUNCHER_BIN_DIR="$task_dir/bin"
+RUNTIME_CLI_BIN="$task_dir/runtime-cli"
+RUNTIME_MCP_BIN="$task_dir/runtime-mcp"
+RECOVERY_DESKTOP_APP_PATH=""
+staged_runtime_build_identity_record() { printf fixture; }
+desktop_app_build_identity_path() { printf fixture; }
+build_identities_match() { return 0; }
+report_desktop_recovery_path() { :; }
 XDG_DATA_HOME="$task_dir/xdg"
 XDG_CURRENT_DESKTOP=KDE
 fixture_install_root="$task_dir/install"
@@ -48,7 +57,7 @@ assert_legacy_removed() {
   [[ ! -e "$legacy_launcher" && ! -L "$legacy_launcher" ]]
   [[ ! -e "$legacy_entry" ]]
   [[ -x "$fixture_install_root/Sona/bin/Sona" ]]
-  [[ "$(readlink "$RUNTIME_LAUNCHER_BIN_DIR/sona")" == "$fixture_install_root/Sona/bin/Sona" ]]
+  [[ "$(readlink "$RUNTIME_LAUNCHER_BIN_DIR/sona-app")" == "$fixture_install_root/Sona/bin/Sona" ]]
   [[ "$(cat "$task_dir/state/projects/sentinel")" == 'preserved run and project data' ]]
 }
 
