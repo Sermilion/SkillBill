@@ -88,7 +88,6 @@ internal class ChatSteeringDelivery(
       }
       is ChatThread.DeliveryTransition.RetainedUncertain -> {
         diagnostics.record("chat.steering_retained_uncertain")
-        thread.append(ChatMessage.Notice(transition.reason))
       }
       ChatThread.DeliveryTransition.Ignored -> diagnostics.record("chat.steering_ignored_update")
     }
