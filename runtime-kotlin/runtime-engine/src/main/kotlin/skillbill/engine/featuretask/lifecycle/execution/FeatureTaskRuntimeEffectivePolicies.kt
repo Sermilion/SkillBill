@@ -9,12 +9,14 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudge
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedExecutionPolicy
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.security.MessageDigest
 
 private const val EFFECTIVE_POLICY_CANONICAL_BYTE_LIMIT = 65536
+internal const val GATE_COMMANDS_POLICY_ID = "gate-commands"
 
 public object FeatureTaskRuntimeEffectivePolicies {
   public fun resolve(
@@ -22,7 +24,7 @@ public object FeatureTaskRuntimeEffectivePolicies {
     gate: EffectiveGatePolicyInputs,
   ): List<ResolvedExecutionPolicy> =
     listOf(
-      policy("gate-commands", gate.canonicalInputs()),
+      policy(GATE_COMMANDS_POLICY_ID, gate.canonicalInputs()),
       policy(
         "receipt-interpretation",
         listOf(
@@ -53,6 +55,21 @@ public object FeatureTaskRuntimeEffectivePolicies {
       ),
       policy("finalization", listOf("runtime-owned-commit-push", "retain-uncertain-effects", "terminal-refusal")),
     )
+
+  internal fun matchesRecorded(
+    plan: ResolvedPhaseExecutionPlan,
+    gate: EffectiveGatePolicyInputs,
+  ): Boolean =
+    executionRelevant(plan, resolve(plan, gate).sortedBy { it.id }) == executionRelevant(plan, plan.effectivePolicies)
+
+  internal fun runsGateCommands(plan: ResolvedPhaseExecutionPlan): Boolean =
+    PhaseSlot.QUALITY_GATE in plan.selectedSlots
+
+  private fun executionRelevant(
+    plan: ResolvedPhaseExecutionPlan,
+    policies: List<ResolvedExecutionPolicy>,
+  ): List<ResolvedExecutionPolicy> =
+    if (runsGateCommands(plan)) policies else policies.filterNot { it.id == GATE_COMMANDS_POLICY_ID }
 
   internal fun mapStepIdentityPolicies(
     recorded: ResolvedPhaseExecutionPlan,

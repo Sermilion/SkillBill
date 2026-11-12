@@ -1,3 +1,8 @@
+## [2026-11-12] Gate-less execution plans tolerate changed pack gate commands
+Context: A plan workflow records a `gate-commands` policy digest even though the `plan` definition has no quality-gate slot. After a platform pack changed its `validation_gate` argv, resuming a blocked plan, including a goal's `plan_subtasks` re-plan, refused with an undetailed `incompatible_descriptor`, and the goal could not continue.
+Decision: Policy comparison ignores `gate-commands` only for plans without a `QUALITY_GATE` slot. When no declared candidate reproduces the recorded digest, such a plan resumes on the current repository gate and emits a `seam=execution_plan_gate_commands` warning. The recorded descriptor is unchanged. Plans with a quality gate still refuse changed commands, and the refusal now names the gate drift.
+Reason: A gate-less run never executes gate commands, so their drift cannot change its behavior. Gated runs keep the strict durable-semantics check.
+
 ## [2026-11-12] Resume reopens settled feasibility blocks through the shared planning path
 Context: Blocked feasibility recovery ran only in the existing-manifest branch. An interrupted compatibility adoption could also leave a pending phase with a blocked feasibility cycle, which the adoption replay check treated as already recovered.
 Decision: The shared planning resume path reopens blocked feasibility when its launch has settled. A blocked cycle cannot satisfy the pending-adoption replay check. Reopening archives the rejected cycle and preserves accepted unit plans. Repeated resume of the recovered cycle remains idempotent.
