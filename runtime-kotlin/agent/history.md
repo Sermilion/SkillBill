@@ -1,3 +1,15 @@
+## [2026-11-12] SONA-8 isolate planning worktrees
+Areas: runtime-cli, runtime-application, runtime-core, runtime-engine, runtime-goalrunner, runtime-domain, runtime-ports, runtime-infra/sqlite, runtime-infra/workflow, runtime-contracts
+- MEDIUM feature. Goal and standalone planning reserve a uniquely owned checkout before agent launch. Goal planning, resume, replan and later execution keep the selected workflow and owned execution root without changing caller edits.
+- Repository identity and source resolution stay separate from execution paths. Project-store specs keep their paths; repository-local inputs and legacy bundles copy into the owned checkout while preserving source evidence, hashes and checkpoints.
+- Goal handoff conditionally transfers ownership and records executionWorktreePath in one SQLite transaction. Completed standalone plans use shared settlement; interrupted and goal-scoped planning retain their checkout.
+- reusable: GoalPlanningOwnershipRepository and GoalPlanningCheckoutOwnership coordinate reservations, reconciliation and handoff. Shared worktree resources enforce ownership and retention for both launch paths.
+- Migrations 123 through 125 add ownership, Git directory identity and legacy bundle transfer state. Migration 126 adds the fenced recovery journal without replacing existing records; DesktopReadSchema is 126.
+- Recovery fences runtime writers, verifies the original commit and ownership, and consumes each proof generation once while updating replacement Git identity. Legacy filesystem receipts remain preserved but cannot authorize reconstruction.
+- Limits: dirty, untracked, ignored, unpublished or publication-unknown work remains retained. Missing or ambiguous checkouts without durable recovery proof stop with recovery guidance; reconstruction does not restore revisions beyond the initial commit. Installer changes remain outside scope.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-11-10] SKILL-529 wildcard approval allow rules
 Areas: runtime-domain approval model, runtime-application approval, runtime-contracts and persistence, runtime-infra/sqlite and launcher approval, runtime-ports approval, desktop/core approval and chat
 - MEDIUM feature. Pattern rules extend durable repository approvals beside exact fingerprint rules. ApprovalMatchFacts in runtime-domain owns glob matching, unsafe-command blocking, validation refusals and suggestions; decide and stored-rule auto-allow use optional pattern and persisted match facts.
