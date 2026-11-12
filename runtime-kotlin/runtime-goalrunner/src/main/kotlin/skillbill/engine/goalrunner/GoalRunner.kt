@@ -70,7 +70,10 @@ public class GoalRunner(
 
   public fun requiresPlanning(request: GoalRunnerRunRequest): Boolean =
     manifestStore.loadOccupyingByIssueKey(request.issueKey, request.repoRoot) == null &&
-      intakeAdmission.intakePreparation.prepare(request) == null
+      (
+        manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot) != null ||
+          manifestStore.readByIssueKeyIfPresent(request.issueKey, request.repoRoot) == null
+      )
 
   public fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport =
     runPreparation.guardEntry({

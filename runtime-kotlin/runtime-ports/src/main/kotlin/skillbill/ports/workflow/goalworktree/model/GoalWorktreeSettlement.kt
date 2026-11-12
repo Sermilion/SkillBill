@@ -11,6 +11,7 @@ data class GoalWorktreeSettleRequest(
   val repositoryIdentity: String? = null,
   val issueKey: String? = null,
   val parentWorkflowId: String? = null,
+  val standaloneWorkflowId: String? = null,
 )
 
 sealed interface GoalWorktreeSettlement {

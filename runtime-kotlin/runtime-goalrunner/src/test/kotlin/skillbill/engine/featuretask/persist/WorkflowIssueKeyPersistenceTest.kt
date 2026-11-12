@@ -52,6 +52,7 @@ class WorkflowIssueKeyPersistenceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -109,6 +110,7 @@ class WorkflowIssueKeyPersistenceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),

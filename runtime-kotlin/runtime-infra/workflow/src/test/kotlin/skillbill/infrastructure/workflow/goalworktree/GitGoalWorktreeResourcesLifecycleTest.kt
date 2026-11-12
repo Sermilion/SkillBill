@@ -39,6 +39,7 @@ class GitGoalWorktreeResourcesLifecycleTest {
     }
   }
 
+  private val database = WorktreeTestDatabase()
   private val resources: GitGoalWorktreeResources by lazy { resourcesWith(NoopRuntimeTimingPort) }
 
   private fun resourcesWith(timing: RuntimeTimingPort): GitGoalWorktreeResources =
@@ -49,9 +50,10 @@ class GitGoalWorktreeResourcesLifecycleTest {
       ),
       NoopRuntimeDiagnostics,
       timing,
+      database,
     )
 
-  private val owners = mutableMapOf<Path, GoalPlanningOwnership>()
+  private val owners get() = database.owners
   private val issueKeys = mutableMapOf<Path, String>()
 
   private fun created(issueKey: String = "SKILL-1"): Path {
@@ -67,6 +69,7 @@ class GitGoalWorktreeResourcesLifecycleTest {
         initialCommit = revision,
         state = GoalPlanningOwnership.State.RESERVED,
       )
+    owners[path] = reserved
     val result = assertIs<GoalWorktreeResult.Created>(resources.createOrAdopt(repo, issueKey, path, revision, reserved))
     owners[path] =
       reserved.copy(
@@ -175,6 +178,222 @@ class GitGoalWorktreeResourcesLifecycleTest {
     assertTrue(Files.notExists(worktree))
   }
 
+  private fun removeRecoverableCheckout(): Path {
+    val remote = Files.createDirectories(temp.resolve("recovery-remote.git"))
+    runGit(remote, "init", "--bare", "-b", "main")
+    runGit(repo, "remote", "add", "origin", remote.toString())
+    runGit(repo, "push", "--set-upstream", "origin", "main")
+    val worktree = created()
+    assertEquals(GoalWorktreeSettlement.Removed, resources.settle(settlementRequest(worktree)))
+    return worktree
+  }
+
+  @Test
+  fun `safe removal evidence restores transferred ownership without replaying consumed proof`() {
+    val worktree = removeRecoverableCheckout()
+    val owner = owners.getValue(worktree)
+
+    val restored =
+      assertIs<GoalWorktreeResult.Created>(
+        resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+      )
+    assertEquals(owner.gitWorktreeIdentity, restored.gitWorktreeIdentity)
+    assertEquals(owner.initialCommit, runGit(worktree, "rev-parse", "HEAD").trim())
+    assertEquals("committed\n", Files.readString(worktree.resolve("tracked.txt")))
+    assertIs<GoalWorktreeResult.Adopted>(
+      resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+    )
+    Files.writeString(worktree.resolve("untracked.txt"), "later work")
+    worktree.toFile().deleteRecursively()
+    runGit(repo, "worktree", "prune")
+    assertIs<GoalWorktreeResult.Failed>(
+      resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+    )
+    assertTrue(Files.notExists(worktree))
+  }
+
+  @Test
+  fun `completed standalone planning can recover its safely removed original checkout`() {
+    val remote = Files.createDirectories(temp.resolve("standalone-remote.git"))
+    runGit(remote, "init", "--bare", "-b", "main")
+    runGit(repo, "remote", "add", "origin", remote.toString())
+    runGit(repo, "push", "--set-upstream", "origin", "main")
+    val worktree = created()
+    val owner =
+      owners.getValue(worktree).copy(
+        state = GoalPlanningOwnership.State.INITIALIZED,
+        parentWorkflowId = null,
+      )
+    owners[worktree] = owner
+    val request =
+      settlementRequest(worktree).copy(
+        ownership = owner,
+        parentWorkflowId = null,
+        standaloneWorkflowId = owner.workflowId,
+      )
+    assertEquals(GoalWorktreeSettlement.Removed, resources.settle(request))
+    assertIs<GoalWorktreeResult.Created>(
+      resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+    )
+    assertEquals(owner.initialCommit, runGit(worktree, "rev-parse", "HEAD").trim())
+  }
+
+  @Test
+  fun `a competing recovery cannot consume proof or settle its checkout`() {
+    val worktree = removeRecoverableCheckout()
+    val owner = owners.getValue(worktree)
+    val proof = database.recoveries.getValue(owner.reservationId)
+    withWorktreeRecoveryLock(worktree, { error("unexpected contention") }) {
+      assertIs<GoalWorktreeResult.Failed>(
+        resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+      )
+      assertIs<GoalWorktreeSettlement.Retained>(resources.settle(settlementRequest(worktree)))
+      assertEquals(proof, database.recoveries[owner.reservationId])
+      assertTrue(Files.notExists(worktree))
+    }
+    assertIs<GoalWorktreeResult.Created>(
+      resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+    )
+  }
+
+  @Test
+  fun `recovery refuses a mismatched receipt without creating a replacement checkout`() {
+    val worktree = removeRecoverableCheckout()
+    val owner = owners.getValue(worktree)
+    val proof = database.recoveries.getValue(owner.reservationId).copy(previousGitIdentity = "mismatched")
+    database.recoveries[owner.reservationId] = proof
+
+    assertIs<GoalWorktreeResult.Failed>(
+      resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+    )
+    assertTrue(Files.notExists(worktree))
+    assertEquals(proof, database.recoveries[owner.reservationId])
+  }
+
+  @Test
+  fun `an interrupted recovery claim resumes using the same original proof`() {
+    val worktree = removeRecoverableCheckout()
+    val owner = owners.getValue(worktree)
+    Files.writeString(worktree.resolveSibling("checkout.removing"), "interrupted cleanup")
+
+    assertIs<GoalWorktreeResult.Created>(
+      resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+    )
+    assertIs<GoalWorktreeResult.Adopted>(
+      resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+    )
+  }
+
+  private fun materializeInterruptedRecovery(): Path {
+    val worktree = removeRecoverableCheckout()
+    val owner = owners.getValue(worktree)
+    val proof = database.recoveries.getValue(owner.reservationId)
+    runGit(
+      repo, "worktree", "add", "--detach", "--lock", "--reason", "skill-bill-recovery:${proof.generation}",
+      worktree.toString(), owner.initialCommit,
+    )
+    assertEquals(owner.gitWorktreeIdentity, resources.gitWorktreeIdentity(worktree))
+    assertTrue(Files.notExists(Path.of(requireNotNull(owner.gitWorktreeIdentity)).resolve("skill-bill-ownership")))
+    return worktree
+  }
+
+  @Test
+  fun `recovery resumes after git creates the checkout but before ownership is marked`() {
+    val worktree = materializeInterruptedRecovery()
+    val owner = owners.getValue(worktree)
+    Files.writeString(worktree.resolveSibling("checkout.removing"), "interrupted cleanup")
+
+    val restored =
+      assertIs<GoalWorktreeResult.Created>(
+        resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+      )
+
+    assertEquals(owner.gitWorktreeIdentity, restored.gitWorktreeIdentity)
+    assertEquals(owner.initialCommit, runGit(worktree, "rev-parse", "HEAD").trim())
+    assertEquals("committed\n", Files.readString(worktree.resolve("tracked.txt")))
+    assertEquals(null, database.recoveries[owner.reservationId])
+    assertTrue(Files.notExists(worktree.resolveSibling("checkout.removing")))
+    worktree.toFile().deleteRecursively()
+    runGit(repo, "worktree", "prune")
+    assertIs<GoalWorktreeResult.Failed>(
+      resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+    )
+    assertTrue(Files.notExists(worktree))
+  }
+
+  @Test
+  fun `unmarked recovery refuses changed work revisions and proof without overwriting anything`() {
+    val worktree = materializeInterruptedRecovery()
+    val owner = owners.getValue(worktree)
+    val evidence = database.recoveries.getValue(owner.reservationId)
+    val marker = Path.of(requireNotNull(owner.gitWorktreeIdentity)).resolve("skill-bill-ownership")
+    Files.writeString(worktree.resolve("tracked.txt"), "retained edit")
+    Files.writeString(worktree.resolve("untracked.txt"), "retained notes")
+
+    assertIs<GoalWorktreeResult.Failed>(
+      resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+    )
+    assertEquals("retained edit", Files.readString(worktree.resolve("tracked.txt")))
+    assertEquals("retained notes", Files.readString(worktree.resolve("untracked.txt")))
+    assertEquals(evidence, database.recoveries[owner.reservationId])
+    assertTrue(Files.notExists(marker))
+
+    runGit(worktree, "add", ".")
+    runGit(worktree, "commit", "-m", "retain advanced revision")
+    val advanced = runGit(worktree, "rev-parse", "HEAD").trim()
+    assertIs<GoalWorktreeResult.Failed>(
+      resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+    )
+    assertEquals(advanced, runGit(worktree, "rev-parse", "HEAD").trim())
+    assertEquals(evidence, database.recoveries[owner.reservationId])
+    assertTrue(Files.notExists(marker))
+
+    runGit(worktree, "reset", "--hard", owner.initialCommit)
+    val mismatched = evidence.copy(previousGitIdentity = "mismatched")
+    database.recoveries[owner.reservationId] = mismatched
+    assertIs<GoalWorktreeResult.Failed>(
+      resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+    )
+    assertEquals(mismatched, database.recoveries[owner.reservationId])
+    assertTrue(Files.notExists(marker))
+
+    database.recoveries.remove(owner.reservationId)
+    assertIs<GoalWorktreeResult.Failed>(
+      resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+    )
+    assertTrue(Files.notExists(marker))
+
+    database.recoveries[owner.reservationId] = evidence
+    Files.writeString(marker, "another owner")
+    assertIs<GoalWorktreeResult.Failed>(
+      resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+    )
+    assertEquals("another owner", Files.readString(marker))
+    assertEquals(evidence, database.recoveries[owner.reservationId])
+  }
+
+  @Test
+  fun `a matching recovery claim cannot mark a replacement git checkout`() {
+    val worktree = materializeInterruptedRecovery()
+    val owner = owners.getValue(worktree)
+    val evidence = database.recoveries.getValue(owner.reservationId)
+    val moved = worktree.resolveSibling("retained-checkout")
+    runGit(repo, "worktree", "move", "--force", "--force", worktree.toString(), moved.toString())
+    runGit(repo, "worktree", "add", "--detach", worktree.toString(), owner.initialCommit)
+    val replacementIdentity = requireNotNull(resources.gitWorktreeIdentity(worktree))
+    assertTrue(replacementIdentity != owner.gitWorktreeIdentity)
+
+    assertIs<GoalWorktreeResult.Failed>(
+      resources.createOrAdopt(repo, "SKILL-1", worktree, owner.initialCommit, owner),
+    )
+
+    assertEquals(evidence, database.recoveries[owner.reservationId])
+    assertEquals("committed\n", Files.readString(worktree.resolve("tracked.txt")))
+    assertEquals("committed\n", Files.readString(moved.resolve("tracked.txt")))
+    assertTrue(Files.notExists(Path.of(replacementIdentity).resolve("skill-bill-ownership")))
+    assertTrue(Files.notExists(Path.of(requireNotNull(owner.gitWorktreeIdentity)).resolve("skill-bill-ownership")))
+  }
+
   @Test
   fun `an unlisted directory fails naming the path and stays untouched`() {
     val occupied = Files.createDirectories(temp.toRealPath().resolve("occupied"))
@@ -238,7 +457,7 @@ class GitGoalWorktreeResourcesLifecycleTest {
   }
 
   @Test
-  fun `settlement removes a published worktree that holds only ignored files`() {
+  fun `settlement retains a published worktree that holds ignored files`() {
     Files.writeString(repo.resolve(".gitignore"), "build/\nlocal.properties\n")
     runGit(repo, "add", ".gitignore")
     runGit(repo, "commit", "-m", "ignore build and local properties")
@@ -253,8 +472,10 @@ class GitGoalWorktreeResourcesLifecycleTest {
     Files.writeString(worktree.resolve("runtime-kotlin/build/out.txt"), "gradle\n")
     Files.writeString(worktree.resolve("local.properties"), "sdk.dir=/fake\n")
 
-    assertEquals(GoalWorktreeSettlement.Removed, resources.settle(settlementRequest(worktree)))
-    assertTrue(Files.notExists(worktree))
+    val retained = assertIs<GoalWorktreeSettlement.Retained>(resources.settle(settlementRequest(worktree)))
+    assertEquals(MonitorRetentionReason.UNTRACKED_FILES, retained.reason)
+    assertEquals("gradle\n", Files.readString(worktree.resolve("runtime-kotlin/build/out.txt")))
+    assertEquals("sdk.dir=/fake\n", Files.readString(worktree.resolve("local.properties")))
   }
 
   @Test
@@ -281,7 +502,7 @@ class GitGoalWorktreeResourcesLifecycleTest {
   }
 
   @Test
-  fun `settlement removes a published feature branch worktree and keeps the branch ref`() {
+  fun `settlement retains a published feature branch worktree at an advanced revision`() {
     val remote = temp.toRealPath().resolve("remote-feature-branch.git")
     Files.createDirectories(remote)
     runGit(remote, "init", "--bare", "-b", "main")
@@ -296,8 +517,9 @@ class GitGoalWorktreeResourcesLifecycleTest {
     runGit(worktree, "checkout", "--detach", "HEAD")
     val branchTip = runGit(repo, "rev-parse", "refs/heads/feat/skill-468")
 
-    assertEquals(GoalWorktreeSettlement.Removed, resources.settle(settlementRequest(worktree)))
-    assertTrue(Files.notExists(worktree))
+    val retained = assertIs<GoalWorktreeSettlement.Retained>(resources.settle(settlementRequest(worktree)))
+    assertEquals(MonitorRetentionReason.UNOWNED_RESOURCE, retained.reason)
+    assertEquals("shipped\n", Files.readString(worktree.resolve("feature.txt")))
     assertEquals(branchTip, runGit(repo, "rev-parse", "refs/heads/feat/skill-468"))
   }
 
@@ -313,6 +535,7 @@ class GitGoalWorktreeResourcesLifecycleTest {
     runGit(worktree, "add", "goal.txt")
     runGit(worktree, "commit", "-m", "goal work")
     runGit(worktree, "push", "--set-upstream", "origin", "feat/X")
+    runGit(worktree, "checkout", "--detach", owners.getValue(worktree).initialCommit)
     assertEquals(GoalWorktreeSettlement.Removed, resources.settle(settlementRequest(worktree)))
   }
 
@@ -385,7 +608,7 @@ class GitGoalWorktreeResourcesLifecycleTest {
     val retained =
       assertIs<GoalWorktreeSettlement.Retained>(resources.settle(settlementRequest(worktree)))
 
-    assertEquals(MonitorRetentionReason.CLEANUP_FAILED, retained.reason)
+    assertEquals(MonitorRetentionReason.UNOWNED_RESOURCE, retained.reason)
     assertTrue(Files.notExists(worktree.resolveSibling("checkout.removing")))
     runGit(repo, "worktree", "unlock", worktree.toString())
     Files.writeString(worktree.resolve("tracked.txt"), "later edit\n")

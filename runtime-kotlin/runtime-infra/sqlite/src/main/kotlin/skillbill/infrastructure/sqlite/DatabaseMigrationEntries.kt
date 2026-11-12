@@ -82,6 +82,7 @@ import skillbill.infrastructure.sqlite.core.schema.saveStandalonePhaseLaunch
 import skillbill.infrastructure.sqlite.core.schema.separateAgentActivityRevisions
 import skillbill.infrastructure.sqlite.core.schema.separateDesktopChangeSignals
 import skillbill.infrastructure.sqlite.review.stats.migrateLegacyTelemetryOutboxLedger
+import skillbill.infrastructure.sqlite.workflow.goalrunner.addGoalPlanningCheckoutRecovery
 import skillbill.infrastructure.sqlite.workflow.goalrunner.addGoalPlanningOwnership
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.applyLegacyGoalRunnerControlLedgerMigration
 
@@ -1169,4 +1170,29 @@ internal val databaseMigrations: List<DatabaseMigration> =
           }
         }
       },
+    ) +
+    DatabaseMigration(
+      version = 125,
+      name = "track-legacy-plan-bundle-transfer",
+      operation = { connection ->
+        val exists =
+          connection.createStatement().use { statement ->
+            statement.executeQuery(
+              "SELECT 1 FROM pragma_table_info('goal_planning_ownership') WHERE name = 'legacy_bundle_pending'",
+            ).use { it.next() }
+          }
+        if (!exists) {
+          connection.createStatement().use { statement ->
+            statement.execute(
+              "ALTER TABLE goal_planning_ownership ADD COLUMN legacy_bundle_pending INTEGER " +
+                "CHECK (legacy_bundle_pending IN (0, 1))",
+            )
+          }
+        }
+      },
+    ) +
+    DatabaseMigration(
+      version = 126,
+      name = "fence-goal-planning-checkout-recovery",
+      operation = ::addGoalPlanningCheckoutRecovery,
     )

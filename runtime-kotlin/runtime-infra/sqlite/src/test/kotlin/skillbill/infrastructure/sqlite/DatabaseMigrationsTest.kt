@@ -2438,6 +2438,8 @@ private val expectedMigrationDefinitions =
     122 to "record-primary-repository-root",
     123 to "add-goal-planning-ownership",
     124 to "record-goal-planning-git-worktree-identity",
+    125 to "track-legacy-plan-bundle-transfer",
+    126 to "fence-goal-planning-checkout-recovery",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

@@ -150,6 +150,7 @@ class BlockedWorkerCrashRecoveryTest {
       testGoalRunnerRepairCoordinator(
         TestNoopGoalPlanningManifestStore,
         testWorkflowGoalRunnerOutcomeStore(database),
+        database = database,
       ),
       testBlockIncidentEntryReconciler(database, testHarnessClock, NoopRuntimeDiagnostics),
       GoalExecutionRootResolver(
@@ -160,11 +161,14 @@ class BlockedWorkerCrashRecoveryTest {
         NoopRuntimeDiagnostics,
         ProjectCheckout(
           TestRepositoryEnclosingRoot,
+          database,
           FixedProjectStorePort(Files.createTempDirectory("goal-execution-root-test")),
           InPlaceGoalWorktreeResources,
         ),
         database,
+        { _, _, _, _ -> error("Unexpected plan checkout preparation") },
       ),
+      database,
     )
 
   private fun assertOtherWorkflowRemainsBlocked(

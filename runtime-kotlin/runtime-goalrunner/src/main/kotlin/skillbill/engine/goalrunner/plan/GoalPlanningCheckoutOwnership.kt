@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningOwnership
 import skillbill.ports.goalrunner.model.GoalPlanningOwnershipWriteResult
 import skillbill.ports.repository.RepositoryEnclosingRootPort
@@ -11,15 +12,18 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import skillbill.workflow.model.WorkflowStatus
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.util.UUID
 
 internal sealed interface GoalPlanningLaunch {
-  data class Ready(val launch: StandalonePlanLaunch) : GoalPlanningLaunch
+  data class Ready(val launch: StandalonePlanLaunch, val preserveLegacyBundle: Boolean = false) : GoalPlanningLaunch
 
   data class Refused(val reason: String, val workflowId: String? = null) : GoalPlanningLaunch
 }
@@ -28,6 +32,7 @@ internal data class GoalPlanningSelection(
   val existingPlan: Boolean,
   val selectedWorkflowId: String?,
   val supersedableWorkflowId: String?,
+  val preserveLegacyBundle: Boolean = false,
 )
 
 @Inject
@@ -36,14 +41,89 @@ public class GoalPlanningCheckoutOwnership(
   private val repositories: RepositoryEnclosingRootPort,
   private val worktrees: GoalWorktreeResources,
   private val gitOperations: WorkflowGitOperations,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
+  internal fun supersedablePlan(
+    issueKey: String,
+    repoRoot: Path,
+    resumableWorkflowId: String?,
+    distinctIntake: Boolean,
+    matchesSpec: (String) -> Boolean,
+  ): String? {
+    if (resumableWorkflowId != null) return resumableWorkflowId
+    if (!distinctIntake) return null
+    return database.read { unit ->
+      val owner =
+        unit.goalPlanningOwnership.findByIssue(
+          goalRepositoryIdentity(repoRoot, repositories),
+          FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey),
+        ) ?: return@read null
+      val record = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, owner.workflowId) ?: return@read null
+      val identity = unit.workflowStates.getFeatureTaskExecutionIdentity(owner.workflowId) ?: return@read null
+      owner.workflowId.takeIf {
+        record.workflowStatus == WorkflowStatus.COMPLETED && !matchesSpec(identity.governedSpecPath)
+      }
+    }
+  }
+
+  internal fun settleCompletedStandalone(
+    issueKey: String,
+    sourceRoot: Path,
+    executionRoot: Path,
+    workflowId: String,
+  ) {
+    val identity = goalRepositoryIdentity(sourceRoot, repositories)
+    val ownership = database.read { it.goalPlanningOwnership.findByWorkflow(workflowId) }
+    val result =
+      worktrees.settle(
+        GoalWorktreeSettleRequest(
+          sourceRoot,
+          executionRoot,
+          ownership,
+          identity,
+          issueKey,
+          standaloneWorkflowId = workflowId,
+        ),
+      )
+    if (result is GoalWorktreeSettlement.Retained) {
+      diagnostics.warning(
+        "standalone planning checkout retained: seam=plan_checkout.settle path=${result.path} reason=${result.detail}",
+      )
+    }
+  }
+
+  internal fun prepareCheckoutWrite(
+    issueKey: String,
+    sourceRoot: Path,
+    executionRoot: Path,
+    write: () -> String?,
+  ): String? =
+    database.transaction { unit ->
+      val unavailable =
+        "Checkout preparation refused for $executionRoot because ownership or recovery changed. " +
+          "Preserve the checkout and plan evidence, then retry through the selected workflow's checkout acquisition."
+      val owner =
+        unit.goalPlanningOwnership.findByIssue(
+          goalRepositoryIdentity(sourceRoot, repositories),
+          FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey),
+        ) ?: return@transaction unavailable
+      if (owner.state == GoalPlanningOwnership.State.SUPERSEDED) return@transaction unavailable
+      val matchesPath = owner.ownedPath.toAbsolutePath().normalize() == executionRoot.toAbsolutePath().normalize()
+      if (!matchesPath || owner.gitWorktreeIdentity == null ||
+        unit.goalPlanningOwnership.checkoutRecovery(owner) != null
+      ) {
+        return@transaction unavailable
+      }
+      val access = worktrees.createOrAdopt(sourceRoot, issueKey, executionRoot, owner.initialCommit, owner)
+      if (access is GoalWorktreeResult.Failed) unavailable else write()
+    }
+
   internal fun prepare(
     issueKey: String,
     repoRoot: Path,
     launch: StandalonePlanLaunch,
     selection: GoalPlanningSelection,
   ): GoalPlanningLaunch {
-    if (launch.scope != IdeStatusLaunchScope.GOAL) return GoalPlanningLaunch.Ready(launch)
     val selectedWorkflowId = selection.selectedWorkflowId
     val repositoryIdentity = goalRepositoryIdentity(repoRoot, repositories)
     val normalizedIssue = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey)
@@ -55,7 +135,7 @@ public class GoalPlanningCheckoutOwnership(
     if (ownership != null) {
       resolveExistingOwner(issueKey, repoRoot, launch, selection, ownership)?.let { return it }
     }
-    return reserveAndAcquire(issueKey, repoRoot, launch, selectedWorkflowId)
+    return reserveAndAcquire(issueKey, repoRoot, launch, selectedWorkflowId, selection.preserveLegacyBundle)
   }
 
   private fun resolveExistingOwner(
@@ -74,7 +154,12 @@ public class GoalPlanningCheckoutOwnership(
         ) {
           existingOwner(issueKey, repoRoot, launch, ownership)
         } else if (selection.existingPlan) {
-          GoalPlanningLaunch.Ready(launch)
+          refused(
+            "Selected plan '${selection.selectedWorkflowId}' cannot use checkout ${ownership.ownedPath}, " +
+              "which belongs to workflow '${ownership.workflowId}' and goal '${ownership.parentWorkflowId}'. " +
+              "Preserve the checkout and selected plan, then reconcile their ownership before retrying.",
+            selection.selectedWorkflowId,
+          )
         } else {
           null
         }
@@ -153,12 +238,6 @@ public class GoalPlanningCheckoutOwnership(
   ): GoalPlanningLaunch {
     if (ownership.state == GoalPlanningOwnership.State.RESERVED) {
       reconcileReservation(issueKey, repoRoot, ownership)?.let { return it }
-    } else if (!Files.isDirectory(ownership.ownedPath)) {
-      return refused(
-        "Owned planning checkout ${ownership.ownedPath} is missing and its work cannot be proven recoverable. " +
-          "Preserve the ownership record and restore or inspect that path before retrying.",
-        ownership.workflowId,
-      )
     } else {
       when (
         val access =
@@ -181,10 +260,11 @@ public class GoalPlanningCheckoutOwnership(
     }
     return GoalPlanningLaunch.Ready(
       launch.copy(executionRoot = ownership.ownedPath, workflowIdForCreation = ownership.workflowId),
+      preserveLegacyBundle = ownership.legacyBundlePending != false,
     )
   }
 
-  private fun reconcileReservation(
+  internal fun reconcileReservation(
     issueKey: String,
     repoRoot: Path,
     ownership: GoalPlanningOwnership,
@@ -244,6 +324,7 @@ public class GoalPlanningCheckoutOwnership(
     repoRoot: Path,
     launch: StandalonePlanLaunch,
     selectedWorkflowId: String?,
+    preserveLegacyBundle: Boolean,
   ): GoalPlanningLaunch {
     val repositoryIdentity = goalRepositoryIdentity(repoRoot, repositories)
     val normalizedIssue = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey)
@@ -258,7 +339,14 @@ public class GoalPlanningCheckoutOwnership(
     val reservationId = UUID.randomUUID().toString()
     val path = worktrees.plannedPath(repoRoot, issueKey, reservationId).toAbsolutePath().normalize()
     if (path == repoRoot.toAbsolutePath().normalize()) {
-      return GoalPlanningLaunch.Ready(launch.copy(executionRoot = path))
+      return if (launch.scope == IdeStatusLaunchScope.GOAL) {
+        GoalPlanningLaunch.Ready(launch.copy(executionRoot = path))
+      } else {
+        refused(
+          "Planning checkout path resolved to the caller checkout $path. Preserve the caller worktree and " +
+            "configure a separate runtime-owned checkout path before retrying.",
+        )
+      }
     }
     if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
       return refused(
@@ -276,6 +364,7 @@ public class GoalPlanningCheckoutOwnership(
         ownedPath = path,
         initialCommit = revision.value.trim(),
         state = GoalPlanningOwnership.State.RESERVED,
+        legacyBundlePending = preserveLegacyBundle,
       )
     return when (val stored = database.transaction { it.goalPlanningOwnership.reserve(reservation) }) {
       is GoalPlanningOwnershipWriteResult.Stored -> existingOwner(issueKey, repoRoot, launch, stored.ownership)

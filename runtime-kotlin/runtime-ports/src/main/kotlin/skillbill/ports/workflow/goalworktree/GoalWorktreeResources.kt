@@ -19,6 +19,9 @@ interface GoalWorktreeResources {
   /**
    * Creates the goal's detached worktree at [revision]. A recorded path requires matching durable [ownership]; an
    * existing registered checkout is adopted only after Git finishes creating it and confirms the same repository.
+   * A missing initialized checkout requires matching safe-removal evidence and the original commit before
+   * reconstruction. Consumed evidence cannot authorize another reconstruction. Missing evidence retains the
+   * ownership record and returns a failure with recovery guidance.
    * May wait for a concurrent launch to finish. Never removes or overwrites an existing directory.
    */
   fun createOrAdopt(
@@ -35,7 +38,10 @@ interface GoalWorktreeResources {
     branch: String,
   ): Path?
 
-  /** Removes a clean worktree only when [GoalWorktreeSettleRequest] carries matching transferred ownership. */
+  /**
+   * Removes a clean, published worktree with matching transferred goal or initialized standalone ownership.
+   * Standalone callers fence settlement against worker admission and transfer, and retain advanced revisions.
+   */
   fun settle(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement
 
   /** Reads the retention decision without changing the worktree or repository. */

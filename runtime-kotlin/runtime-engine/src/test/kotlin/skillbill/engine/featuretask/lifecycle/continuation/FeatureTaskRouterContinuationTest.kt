@@ -59,6 +59,7 @@ class FeatureTaskRouterContinuationTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            database,
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),

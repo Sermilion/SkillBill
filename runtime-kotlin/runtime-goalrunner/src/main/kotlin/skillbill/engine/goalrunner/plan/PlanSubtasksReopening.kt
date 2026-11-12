@@ -20,6 +20,8 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerm
 import skillbill.engine.featuretask.phase.record.asPendingForOperatorResume
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.goalrunner.model.GoalPlanningOwnership
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
@@ -27,6 +29,7 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
@@ -54,6 +57,8 @@ internal data class PlanSubtasksReplan(
   val agentId: String? = null,
   val forcedSubtaskIds: Set<Int> = emptySet(),
   val feasibilityAdoption: Boolean = false,
+  val bundleRoot: Path = sourceRoot,
+  val parentWorkflowId: String? = null,
 )
 
 @Inject
@@ -67,15 +72,68 @@ public class PlanSubtasksReopening(
 ) {
   private val engine = WorkflowEngine()
 
-  internal fun reopenWithRebasedBundle(replan: PlanSubtasksReplan): Boolean {
-    if (replan.feasibilityAdoption) return reopenForFeasibility(replan)
-    if (!reopenAtPlanSubtasks(replan.planWorkflowId)) return false
-    rebasePlanBundle(replan)
-    return true
+  internal fun reopenWithRebasedBundle(replan: PlanSubtasksReplan): Boolean =
+    database.transaction { unit ->
+      if (!unit.matchesGoalSelection(replan)) return@transaction false
+      val snapshot =
+        unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, replan.planWorkflowId) ?: return@transaction false
+      if (!snapshot.hasPlanSubtasksStep()) return@transaction false
+      if (unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(replan.planWorkflowId) != null) {
+        return@transaction false
+      }
+      when {
+        snapshot.needsPlanningInitialization() && replan.forcedSubtaskIds.isEmpty() -> {
+          if (snapshot.workflowStatus == WorkflowStatus.RUNNING) {
+            unit.workflowStates.saveAcceptedSnapshotMutation(
+              WorkflowFamily.TASK_RUNTIME,
+              snapshot.copy(workflowStatus = WorkflowStatus.PENDING, finishedAt = null),
+            )
+          }
+          true
+        }
+        replan.feasibilityAdoption -> reopenForFeasibility(replan)
+        !reopenAtPlanSubtasks(replan.planWorkflowId) -> false
+        else -> {
+          rebasePlanBundle(replan)
+          true
+        }
+      }
+    }
+
+  private fun WorkflowStateSnapshot.needsPlanningInitialization(): Boolean {
+    val phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS
+    val incomplete =
+      workflowStatus !in WorkflowStatus.terminalStatuses &&
+        step(phaseId)?.status != WorkflowStepStatus.COMPLETED &&
+        decodePhaseRecords(artifacts)[phaseId]?.status != WorkflowStepStatus.COMPLETED
+    val missingEvidence =
+      !DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.contains(artifacts) ||
+        !DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY.contains(artifacts)
+    return incomplete && missingEvidence
+  }
+
+  private fun UnitOfWork.matchesGoalSelection(replan: PlanSubtasksReplan): Boolean {
+    val parentId = replan.parentWorkflowId ?: return true
+    val owner = goalPlanningOwnership.findByWorkflow(replan.planWorkflowId) ?: return false
+    val control = goalRunnerControls.controlState(parentId)
+    val selected =
+      workflowStates.get(WorkflowFamily.TASK_RUNTIME, parentId)
+        ?.step(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN)?.planWorkflowId
+    val path = replan.repoRoot.toAbsolutePath().normalize()
+    val matchesPath =
+      owner.ownedPath.toAbsolutePath().normalize() == path &&
+        control.executionWorktreePath?.let(Path::of)?.toAbsolutePath()?.normalize() == path
+    return selected == replan.planWorkflowId && matchesPath && owner.parentWorkflowId == parentId &&
+      owner.state == GoalPlanningOwnership.State.TRANSFERRED &&
+      owner.repositoryIdentity == control.repositoryIdentity &&
+      owner.normalizedIssueKey == FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(replan.issueKey) &&
+      goalPlanningOwnership.findByIssue(owner.repositoryIdentity, owner.normalizedIssueKey) == owner &&
+      goalPlanningOwnership.checkoutRecovery(owner) == null &&
+      workflowStates.getFeatureTaskRuntimeWorkerOwnership(replan.planWorkflowId) == null
   }
 
   private fun reopenForFeasibility(replan: PlanSubtasksReplan): Boolean {
-    val captured = PlanBundleFeasibility.capture(decompositionPlanner, replan.sourceRoot, replan.issueKey)
+    val captured = PlanBundleFeasibility.capture(decompositionPlanner, replan.bundleRoot, replan.issueKey)
     val outcome =
       database.transaction<Pair<Boolean, Int?>?> { unitOfWork ->
         val snapshot =
@@ -87,10 +145,10 @@ public class PlanSubtasksReopening(
         val phaseRecords = decodePhaseRecords(snapshot.artifacts)
         val phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS
         val original = phaseRecords[phaseId] ?: return@transaction null
-        if (snapshot.workflowStatus == WorkflowStatus.RUNNING && original.status != WorkflowStepStatus.PENDING) {
+        if (requiresStandaloneSettlement(snapshot, original.status, replan)) {
           return@transaction null
         }
-        val rechecked = PlanBundleFeasibility.capture(decompositionPlanner, replan.sourceRoot, replan.issueKey)
+        val rechecked = PlanBundleFeasibility.capture(decompositionPlanner, replan.bundleRoot, replan.issueKey)
         if (rechecked.identity != captured.identity) return@transaction null
         val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
         val state = feasibilityStateFor(replan, captured, original, snapshot.artifacts)
@@ -138,6 +196,14 @@ public class PlanSubtasksReopening(
     reportFeasibilityAdoption(replan, outcome)
     return outcome?.first == true
   }
+
+  private fun requiresStandaloneSettlement(
+    snapshot: WorkflowStateSnapshot,
+    status: WorkflowStepStatus,
+    replan: PlanSubtasksReplan,
+  ): Boolean =
+    snapshot.workflowStatus == WorkflowStatus.RUNNING && status != WorkflowStepStatus.PENDING &&
+      replan.parentWorkflowId == null
 
   private fun restorePendingAdoption(
     replan: PlanSubtasksReplan,
@@ -340,7 +406,7 @@ public class PlanSubtasksReopening(
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.value(artifacts)
         ?.let(::decodePlanBundleFromArtifact) ?: return null
     return PlanBundleSnapshots(decompositionPlanner)
-      .rebase(replan.sourceRoot, replan.issueKey, bundle, replan.settledSubtaskIds)
+      .rebase(replan.bundleRoot, replan.issueKey, bundle, replan.settledSubtaskIds)
       ?.withoutPlannedUnits(replan.forcedSubtaskIds)
       ?: return null
   }
@@ -348,7 +414,7 @@ public class PlanSubtasksReopening(
   private fun rebasePlanBundle(replan: PlanSubtasksReplan) {
     val bundle = planBundles.loadPlanBundle(replan.planWorkflowId) ?: return
     PlanBundleSnapshots(decompositionPlanner)
-      .rebase(replan.sourceRoot, replan.issueKey, bundle, replan.settledSubtaskIds)
+      .rebase(replan.bundleRoot, replan.issueKey, bundle, replan.settledSubtaskIds)
       ?.let { rebased ->
         planBundles.replacePlanBundle(replan.planWorkflowId, rebased.withoutPlannedUnits(replan.forcedSubtaskIds))
       }

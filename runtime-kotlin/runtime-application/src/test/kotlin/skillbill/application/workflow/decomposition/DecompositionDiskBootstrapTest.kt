@@ -152,6 +152,7 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -210,6 +211,7 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            db,
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -273,6 +275,7 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            db,
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -331,6 +334,7 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            db,
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -426,6 +430,7 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -476,6 +481,7 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            db,
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -558,6 +564,7 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            db,
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -630,6 +637,7 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            db,
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -660,6 +668,7 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            db,
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),

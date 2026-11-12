@@ -195,7 +195,11 @@ class SerialRepairSqliteFixture(
   }
 
   fun owned(block: (AcquiredFeatureTaskRuntimeWorker) -> Unit) =
-    coordinator.runOwned(workflowId, execution.inputs, execution.identity(workflowId)) { _, worker -> block(worker) }
+    coordinator.runOwned(
+      workflowId,
+      execution.inputs,
+      execution.identity(workflowId),
+    ) { _, worker -> block(worker) }
 
   val workflows: FeatureTaskRuntimeWorkflowPersistence
     get() =

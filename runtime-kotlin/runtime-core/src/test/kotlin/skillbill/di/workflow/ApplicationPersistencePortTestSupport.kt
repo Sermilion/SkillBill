@@ -1247,6 +1247,7 @@ internal fun testWorkflowService(
     projectCheckout =
       ProjectCheckout(
         TestRepositoryEnclosingRoot,
+        database,
         testProjectStore,
         InPlaceGoalWorktreeResources,
       ),

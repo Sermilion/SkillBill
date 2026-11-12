@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner
 
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.goalrunner.model.GoalPlanningCheckoutRecovery
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.goalrunner.GOAL_PLANNING_OWNERSHIP_CONTRACT_VERSION
 import skillbill.ports.goalrunner.GoalPlanningOwnershipRepository
@@ -17,8 +18,39 @@ internal class GoalPlanningOwnershipStore(
   private companion object {
     const val SELECT_OWNERSHIP =
       "SELECT contract_version, reservation_id, repository_identity, normalized_issue_key, workflow_id, " +
-        "owned_path, initial_commit, ownership_state, parent_workflow_id, git_worktree_identity " +
+        "owned_path, initial_commit, ownership_state, parent_workflow_id, git_worktree_identity, " +
+        "legacy_bundle_pending " +
         "FROM goal_planning_ownership"
+  }
+
+  override fun checkoutRecovery(ownership: GoalPlanningOwnership): GoalPlanningCheckoutRecovery? =
+    connection.checkoutRecovery(ownership)
+
+  override fun isConsumedCheckoutRecovery(
+    ownership: GoalPlanningOwnership,
+    generation: String,
+  ): Boolean =
+    connection.prepareStatement(
+      "SELECT 1 FROM goal_planning_checkout_recovery WHERE reservation_id = ? AND generation = ? " +
+        "AND recovery_state = ? AND replacement_git_identity = ?",
+    ).use { statement ->
+      statement.bindAll(
+        ownership.reservationId,
+        generation,
+        GoalPlanningCheckoutRecovery.State.CONSUMED.wireValue,
+        ownership.gitWorktreeIdentity,
+      )
+      statement.executeQuery().use { it.next() }
+    }
+
+  override fun advanceCheckoutRecovery(
+    ownership: GoalPlanningOwnership,
+    recovery: GoalPlanningCheckoutRecovery,
+    nextState: GoalPlanningCheckoutRecovery.State,
+    replacementGitIdentity: String?,
+  ): Boolean {
+    if (findByWorkflow(ownership.workflowId) != ownership) return false
+    return connection.advanceCheckoutRecovery(ownership, recovery, nextState, replacementGitIdentity)
   }
 
   override fun reserve(ownership: GoalPlanningOwnership): GoalPlanningOwnershipWriteResult {
@@ -37,8 +69,8 @@ internal class GoalPlanningOwnershipStore(
         """
         INSERT OR IGNORE INTO goal_planning_ownership
           (reservation_id, contract_version, repository_identity, normalized_issue_key, workflow_id,
-           owned_path, initial_commit, ownership_state)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           owned_path, initial_commit, ownership_state, legacy_bundle_pending)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """.trimIndent(),
       ).use { statement ->
         statement.bindAll(
@@ -50,6 +82,7 @@ internal class GoalPlanningOwnershipStore(
           ownership.ownedPath.toString(),
           ownership.initialCommit,
           ownership.state.wireValue,
+          ownership.legacyBundlePending?.let { if (it) 1 else 0 },
         )
         statement.executeUpdate()
       }
@@ -104,12 +137,25 @@ internal class GoalPlanningOwnershipStore(
     parentWorkflowId: String,
     path: Path,
   ): GoalPlanningOwnershipWriteResult {
+    val owner = findByReservation(reservationId)
+    if (owner != null && checkoutRecovery(owner) != null) {
+      return GoalPlanningOwnershipWriteResult.Conflict(owner)
+    }
     val updated =
       connection.prepareStatement(
         """
         UPDATE goal_planning_ownership
         SET ownership_state = ?, parent_workflow_id = ?, updated_at = CURRENT_TIMESTAMP
         WHERE reservation_id = ? AND owned_path = ? AND ownership_state = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM goal_planning_checkout_recovery recovery
+            WHERE recovery.reservation_id = goal_planning_ownership.reservation_id
+              AND recovery.recovery_state <> '${GoalPlanningCheckoutRecovery.State.CONSUMED.wireValue}'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM feature_task_runtime_worker_leases lease
+            WHERE lease.workflow_id = goal_planning_ownership.workflow_id
+          )
         """.trimIndent(),
       ).use { statement ->
         statement.bindAll(
@@ -136,12 +182,21 @@ internal class GoalPlanningOwnershipStore(
     workflowId: String,
     path: Path,
   ): GoalPlanningOwnershipWriteResult {
+    val owner = findByReservation(reservationId)
+    if (owner != null && checkoutRecovery(owner) != null) {
+      return GoalPlanningOwnershipWriteResult.Conflict(owner)
+    }
     val updated =
       connection.prepareStatement(
         """
         UPDATE goal_planning_ownership
         SET ownership_state = ?, updated_at = CURRENT_TIMESTAMP
         WHERE reservation_id = ? AND workflow_id = ? AND owned_path = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM goal_planning_checkout_recovery recovery
+            WHERE recovery.reservation_id = goal_planning_ownership.reservation_id
+              AND recovery.recovery_state <> '${GoalPlanningCheckoutRecovery.State.CONSUMED.wireValue}'
+          )
           AND ownership_state IN (?, ?)
           AND NOT EXISTS (
             SELECT 1 FROM feature_task_runtime_worker_leases WHERE workflow_id = ?
@@ -174,12 +229,21 @@ internal class GoalPlanningOwnershipStore(
     workflowId: String,
     path: Path,
   ): GoalPlanningOwnershipWriteResult {
+    val owner = findByReservation(reservationId)
+    if (owner != null && checkoutRecovery(owner) != null) {
+      return GoalPlanningOwnershipWriteResult.Conflict(owner)
+    }
     val updated =
       connection.prepareStatement(
         """
         UPDATE goal_planning_ownership
         SET ownership_state = ?, updated_at = CURRENT_TIMESTAMP
         WHERE reservation_id = ? AND workflow_id = ? AND owned_path = ? AND ownership_state = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM goal_planning_checkout_recovery recovery
+            WHERE recovery.reservation_id = goal_planning_ownership.reservation_id
+              AND recovery.recovery_state <> '${GoalPlanningCheckoutRecovery.State.CONSUMED.wireValue}'
+          )
           AND NOT EXISTS (
             SELECT 1 FROM goal_planning_ownership active
             WHERE active.reservation_id <> goal_planning_ownership.reservation_id
@@ -218,6 +282,26 @@ internal class GoalPlanningOwnershipStore(
       statement.setString(1, workflowId)
       statement.executeQuery().use { rows -> if (rows.next()) rows.ownership() else null }
     }
+
+  override fun markLegacyBundlePreserved(
+    workflowId: String,
+    path: Path,
+  ): Boolean {
+    val updated =
+      connection.prepareStatement(
+        """
+        UPDATE goal_planning_ownership
+        SET legacy_bundle_pending = 0, updated_at = CURRENT_TIMESTAMP
+        WHERE workflow_id = ? AND owned_path = ? AND
+          (legacy_bundle_pending = 1 OR legacy_bundle_pending IS NULL)
+        """.trimIndent(),
+      ).use { statement ->
+        statement.bindAll(workflowId, path.toString())
+        statement.executeUpdate()
+      }
+    return updated == 1 ||
+      findByWorkflow(workflowId)?.let { it.ownedPath == path && it.legacyBundlePending == false } == true
+  }
 
   override fun findByIssue(
     repositoryIdentity: String,
@@ -291,6 +375,7 @@ internal class GoalPlanningOwnershipStore(
       state = state,
       parentWorkflowId = parentWorkflowId,
       gitWorktreeIdentity = gitWorktreeIdentity,
+      legacyBundlePending = getInt("legacy_bundle_pending").let { if (wasNull()) null else it == 1 },
     )
   }
 

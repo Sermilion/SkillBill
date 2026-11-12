@@ -217,6 +217,7 @@ private fun newService(): WorkflowService =
     projectCheckout =
       ProjectCheckout(
         TestRepositoryEnclosingRoot,
+        FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
         testProjectStore,
         InPlaceGoalWorktreeResources,
       ),

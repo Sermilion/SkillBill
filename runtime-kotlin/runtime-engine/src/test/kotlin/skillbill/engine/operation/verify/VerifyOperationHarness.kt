@@ -173,6 +173,7 @@ internal class VerifyOperationHarness : AutoCloseable {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            database,
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),

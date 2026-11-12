@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.launch
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.runtime.RuntimeSingleton
 import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.GoalExecutionRootAccess
 import skillbill.application.workflow.model.GoalExecutionRootOptions
@@ -14,6 +15,9 @@ import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunPreparation
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.plan.GoalPlanCheckoutPreparer
+import skillbill.engine.goalrunner.planning.source.goalPlanMatches
+import skillbill.engine.goalrunner.planning.source.selectGoalPlanWorkflowId
 import skillbill.engine.goalrunner.status.stopped
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerStopReason
@@ -33,8 +37,8 @@ import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.baseForSubtask
 import skillbill.workflow.decomposition.executionRootSubtaskId
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
-import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Files
 import java.nio.file.Path
@@ -43,6 +47,7 @@ private const val MAX_LISTED_PATHS = 20
 private const val MAX_RECORD_REASON = 200
 
 @Inject
+@RuntimeSingleton
 public class GoalExecutionRootResolver(
   private val manifestStore: GoalRunnerManifestStore,
   private val worktrees: GoalWorktreeResources,
@@ -51,27 +56,40 @@ public class GoalExecutionRootResolver(
   private val diagnostics: RuntimeDiagnostics,
   private val checkout: ProjectCheckout,
   private val database: DatabaseSessionFactory,
+  private val planRun: GoalPlanCheckoutPreparer,
 ) {
   private fun findOwnership(
-    parentWorkflowId: String,
-    repositoryIdentity: String,
-    issueKey: String,
-  ): Pair<String?, GoalPlanningOwnership?> {
-    val selected =
-      database.read { unit ->
-        unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, parentWorkflowId)
-          ?.step(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN)
-          ?.planWorkflowId
-      }
-    val owner =
-      database.read { unit ->
+    state: GoalRunnerManifestState,
+    sourceRoot: Path,
+  ): Pair<String?, GoalPlanningOwnership?> =
+    database.read { unit ->
+      val selected =
+        unit.workflowStates.selectGoalPlanWorkflowId(
+          state,
+          sourceRoot,
+          repositoryEnclosingRootPort,
+          checkout.store(sourceRoot),
+        )
+      val owner =
         selected?.let(unit.goalPlanningOwnership::findByWorkflow)
           ?: unit.goalPlanningOwnership.findByIssue(
-            repositoryIdentity,
-            FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey),
+            goalRepositoryIdentity(sourceRoot, repositoryEnclosingRootPort),
+            FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(state.manifest.issueKey),
           )
-      }
-    return selected to owner
+      selected to owner
+    }
+
+  public fun prepareControlCheckout(
+    issueKey: String,
+    invokedRoot: Path,
+  ) {
+    val recovery = checkout.recoverGoalCheckout(issueKey, invokedRoot)
+    if (recovery is GoalWorktreeResult.Failed) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "goal control checkout recovery refused: seam=goal_execution_root reason=${recovery.reason}",
+      )
+    }
   }
 
   public fun ensureForControlVerb(
@@ -79,63 +97,78 @@ public class GoalExecutionRootResolver(
     invokedRoot: Path,
     revisionSubtaskId: Int? = state.manifest.executionRootSubtaskId(),
     requireExistingBranch: Boolean = false,
-  ): Path? {
-    val control = manifestStore.controlState(state.parentWorkflowId)
-    val recordedPath = control.executionWorktreePath?.let(Path::of)
-    if (recordedPath != null && !Files.isDirectory(recordedPath)) {
-      RuntimeDiagnosticsBestEffortWarning.record(
-        diagnostics,
-        "goal worktree recovery refused: seam=goal_execution_root value_expected=recorded_checkout " +
-          "value_used=retained path=$recordedPath recovery=restore_or_inspect",
-      )
-      return null
-    }
-    val repositoryIdentity =
-      control.repositoryIdentity ?: goalRepositoryIdentity(invokedRoot, repositoryEnclosingRootPort)
-    val (selectedPlanWorkflowId, rawOwnership) =
-      findOwnership(state.parentWorkflowId, repositoryIdentity, state.manifest.issueKey)
-    if (recordedPath == null && rawOwnership == null) {
-      RuntimeDiagnosticsBestEffortWarning.record(
-        diagnostics,
-        "legacy goal control uses its original root: seam=goal_execution_root " +
-          "value_expected=recorded_checkout value_used=$invokedRoot",
-      )
-      return invokedRoot
-    }
-    val ownership =
-      rawOwnership?.takeIf { owner ->
-        recordedPath != null && owner.state == GoalPlanningOwnership.State.TRANSFERRED &&
-          ownerMatchesPlan(owner, repositoryIdentity, state.manifest.issueKey, selectedPlanWorkflowId) &&
-          ownerMatchesParent(owner, state.parentWorkflowId, recordedPath)
-      }
-    return when (
-      val access =
-        checkout.ensureGoalExecutionRoot(
-          control,
-          state.manifest,
-          invokedRoot,
-          options =
-            GoalExecutionRootOptions(
-              recreateCompleted = true,
-              revisionSubtaskId = revisionSubtaskId,
-              requireExistingBranch = requireExistingBranch,
-              ownership = ownership,
-              parentWorkflowId = state.parentWorkflowId,
-              allowLegacyRecordedPath = recordedPath != null && rawOwnership == null,
-            ),
-        )
-    ) {
-      is GoalExecutionRootAccess.Failed -> {
+  ): Path? =
+    database.transaction { unit ->
+      val control = manifestStore.controlState(state.parentWorkflowId)
+      val recordedPath = control.executionWorktreePath?.let(Path::of)
+      val sourceRoot = control.planningSourceRoot?.let(Path::of) ?: invokedRoot
+      val selection = findOwnership(state, sourceRoot)
+      val rawOwnership = selection.second
+      if (isLegacyUnbound(recordedPath, selection)) {
         RuntimeDiagnosticsBestEffortWarning.record(
           diagnostics,
-          "goal worktree recreation failed: seam=goal_execution_root " +
-            "value_expected=worktree value_used=refused reason=${access.reason}",
+          "legacy goal control uses its original root: seam=goal_execution_root " +
+            "value_expected=recorded_checkout value_used=$invokedRoot",
         )
-        null
+        return@transaction invokedRoot
       }
-      is GoalExecutionRootAccess.Ready -> recordReadyRoot(state, recordedPath, rawOwnership, access)
+      val parent = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, state.parentWorkflowId)
+      val planStep = parent?.step(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN)
+      val boundPlan = planStep?.planWorkflowId
+      val boundCheckout =
+        rawOwnership == null || recordedPath != null && rawOwnership.state == GoalPlanningOwnership.State.TRANSFERRED
+      val boundSelection = controlSelectionBound(selection.first, boundPlan, planStep != null, rawOwnership)
+      if (!boundCheckout || !boundSelection ||
+        !unit.planningSelectionMatches(state, sourceRoot, selection, recordedPath)
+      ) {
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "goal control checkout refused: seam=goal_execution_root path=${rawOwnership?.ownedPath ?: recordedPath} " +
+            "selected=${selection.first} owner=${rawOwnership?.workflowId} bound=$boundPlan " +
+            "recovery=preserve_checkout_reconcile_selection_ownership_and_worker_then_resume_goal",
+        )
+        return@transaction null
+      }
+      when (
+        val access =
+          checkout.ensureGoalExecutionRoot(
+            control,
+            state.manifest,
+            invokedRoot,
+            options =
+              GoalExecutionRootOptions(
+                recreateCompleted = true,
+                revisionSubtaskId = revisionSubtaskId,
+                requireExistingBranch = requireExistingBranch,
+                ownership = rawOwnership,
+                parentWorkflowId = state.parentWorkflowId,
+                allowLegacyRecordedPath = recordedPath != null && rawOwnership == null,
+              ),
+          )
+      ) {
+        is GoalExecutionRootAccess.Failed -> {
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "goal worktree recreation failed: seam=goal_execution_root " +
+              "value_expected=worktree value_used=refused reason=${access.reason}",
+          )
+          null
+        }
+        is GoalExecutionRootAccess.Ready -> recordReadyRoot(state, recordedPath, rawOwnership, access)
+      }
     }
-  }
+
+  private fun controlSelectionBound(
+    selected: String?,
+    bound: String?,
+    hasPlanStep: Boolean,
+    owner: GoalPlanningOwnership?,
+  ): Boolean = selected == null || bound == selected || (bound == null && hasPlanStep && owner?.workflowId == selected)
+
+  private fun isLegacyUnbound(
+    recordedPath: Path?,
+    selection: Pair<String?, GoalPlanningOwnership?>,
+  ): Boolean = recordedPath == null && selection.first == null && selection.second == null
 
   private fun recordReadyRoot(
     state: GoalRunnerManifestState,
@@ -170,32 +203,60 @@ public class GoalExecutionRootResolver(
     request: GoalRunnerRunRequest,
   ): GoalRunPreparation {
     val control = manifestStore.controlState(state.parentWorkflowId)
-    val recordedPath = control.executionWorktreePath?.let(Path::of)
-    val repositoryIdentity =
-      control.repositoryIdentity ?: goalRepositoryIdentity(request.repoRoot, repositoryEnclosingRootPort)
-    val (selectedPlanWorkflowId, rawOwnership) =
-      findOwnership(state.parentWorkflowId, repositoryIdentity, request.issueKey)
-    val ownership =
-      rawOwnership?.takeIf { owner ->
-        ownerMatchesPlan(owner, repositoryIdentity, request.issueKey, selectedPlanWorkflowId) &&
-          ownerMatchesParent(owner, state.parentWorkflowId, recordedPath)
+    val hasLaunchedChild = state.manifest.subtasks.any { !it.workflowId.isNullOrBlank() }
+    val boundRoot =
+      if (hasLaunchedChild && control.planningSourceRoot == null) {
+        control.repositoryIdentity?.let(::goalRepositoryRootFromIdentity)
+          ?.let(repositoryEnclosingRootPort::optionalRealPath)
+      } else {
+        null
       }
-    if (recordedPath != null && rawOwnership != null && ownership == null) {
+    return resolveSelected(state, if (boundRoot == null) request else request.copy(sourceRepoRoot = boundRoot))
+  }
+
+  private fun resolveSelected(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+  ): GoalRunPreparation {
+    if (FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(request.issueKey) !=
+      FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(state.manifest.issueKey)
+    ) {
       return blocked(
         state,
         request,
-        "the recorded execution checkout $recordedPath has no matching ownership record. " +
-          "Preserve the path and reconcile its repository, workflow and ownership before retrying.",
+        "the requested issue does not match the goal at ${request.repoRoot}. " +
+          "Preserve the checkout and resume its recorded issue.",
       )
     }
-    if (recordedPath != null && rawOwnership == null) {
-      return resolveLegacyPath(state, request, control, recordedPath)
+    val control = manifestStore.controlState(state.parentWorkflowId)
+    val recordedPath = control.executionWorktreePath?.let(Path::of)
+    val initialSelection = findOwnership(state, request.sourceRepoRoot)
+    acquireLegacySelectedPlan(state, request, initialSelection, recordedPath)?.let {
+      return blocked(state, request, it)
     }
+    val selection = findOwnership(state, request.sourceRepoRoot)
+    val rawOwnership = selection.second
+    if (selection.first != initialSelection.first ||
+      !database.read { it.planningSelectionMatches(state, request.sourceRepoRoot, selection, recordedPath) }
+    ) {
+      return blocked(
+        state,
+        request,
+        "selected plan '${selection.first}' does not match checkout " +
+          "${rawOwnership?.ownedPath ?: recordedPath ?: request.repoRoot} " +
+          "or owner '${rawOwnership?.workflowId}'. Preserve the checkout and plan evidence, then reconcile " +
+          "the repository, issue, selected workflow, ownership and worker before retrying.",
+      )
+    }
+    val ownership = rawOwnership
     val effectiveRecordedPath = recordedPath ?: ownership?.ownedPath
     val launchedChild = state.manifest.subtasks.any { !it.workflowId.isNullOrBlank() }
-    val pathProblem = executionPathProblem(request, effectiveRecordedPath, launchedChild)
-    if (pathProblem != null) return blocked(state, request, pathProblem)
-    return if (effectiveRecordedPath == null && launchedChild) {
+    val pathProblem = executionPathProblem(request, effectiveRecordedPath, launchedChild, ownership)
+    return if (recordedPath != null && rawOwnership == null) {
+      resolveLegacyPath(state, request, control, recordedPath)
+    } else if (pathProblem != null) {
+      blocked(state, request, pathProblem)
+    } else if (effectiveRecordedPath == null && launchedChild) {
       val root = inFlightRoot(control, request)
       val sourceRoot = control.planningSourceRoot?.let(Path::of) ?: request.sourceRepoRoot
       GoalRunPreparation.Prepared(
@@ -203,7 +264,33 @@ public class GoalExecutionRootResolver(
         request.copy(repoRoot = root, sourceRepoRoot = sourceRoot),
       )
     } else {
-      resolveWorktree(state, request, effectiveRecordedPath, ownership)
+      resolveWorktree(state, request, effectiveRecordedPath, selection)
+    }
+  }
+
+  private fun acquireLegacySelectedPlan(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    selection: Pair<String?, GoalPlanningOwnership?>,
+    recordedPath: Path?,
+  ): String? {
+    val selected = selection.first ?: return null
+    if (recordedPath != null || selection.second != null) return null
+    return database.transaction { unit ->
+      val states = unit.workflowStates
+      val root = request.sourceRepoRoot
+      val current = states.selectGoalPlanWorkflowId(state, root, repositoryEnclosingRootPort, checkout.store(root))
+      val identity = unit.goalRunnerControls.controlState(state.parentWorkflowId).repositoryIdentity
+      val matchesRepository = identity == null || identity == goalRepositoryIdentity(root, repositoryEnclosingRootPort)
+      val validSelection =
+        matchesRepository && current == selected &&
+          states.goalPlanMatches(selected, state, root, repositoryEnclosingRootPort, checkout.store(root))
+      if (!validSelection || states.getFeatureTaskRuntimeWorkerOwnership(selected) != null) {
+        "Selected plan '$selected' changed or is occupied at $root. Preserve its evidence and reconcile " +
+          "the selected workflow and worker before retrying."
+      } else {
+        planRun.prepareGoalCheckout(request.issueKey, state.manifest.parentSpecPath, root, selected)?.reason
+      }
     }
   }
 
@@ -211,6 +298,7 @@ public class GoalExecutionRootResolver(
     request: GoalRunnerRunRequest,
     path: Path?,
     launchedChild: Boolean,
+    ownership: GoalPlanningOwnership?,
   ): String? =
     when {
       path == null && !launchedChild -> {
@@ -227,51 +315,70 @@ public class GoalExecutionRootResolver(
             "and establish ownership before retrying; a Git worktree listing alone is not proof."
         }
       }
-      path != null && !Files.isDirectory(path) ->
+      path != null && !Files.isDirectory(path) && ownership == null ->
         "the recorded execution checkout $path is missing. Restore or inspect that path and its " +
-          "unpublished work before retrying; the runtime will not recreate it from a revision alone."
+          "unpublished work before retrying; no matching ownership record authorizes reconciliation."
       else -> null
     }
 
-  private fun ownerMatchesPlan(
+  private fun UnitOfWork.planningSelectionMatches(
+    state: GoalRunnerManifestState,
+    sourceRoot: Path,
+    selection: Pair<String?, GoalPlanningOwnership?>,
+    recordedPath: Path?,
+  ): Boolean {
+    val (selected, owner) = selection
+    val identity = goalRepositoryIdentity(sourceRoot, repositoryEnclosingRootPort)
+    val issueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(state.manifest.issueKey)
+    val control = goalRunnerControls.controlState(state.parentWorkflowId)
+    val manifest = workflowStates.get(WorkflowFamily.TASK_RUNTIME, state.parentWorkflowId)?.decompositionRuntime()
+    val matchesParent =
+      manifest?.issueKey == state.manifest.issueKey && manifest.parentSpecPath == state.manifest.parentSpecPath &&
+        (control.repositoryIdentity == null || control.repositoryIdentity == identity)
+    val current =
+      workflowStates.selectGoalPlanWorkflowId(
+        state,
+        sourceRoot,
+        repositoryEnclosingRootPort,
+        checkout.store(sourceRoot),
+      )
+    if (!matchesParent || current != selected) return false
+    if (owner == null) return selected == null && goalPlanningOwnership.findByIssue(identity, issueKey) == null
+    val matchesWorkflow =
+      if (selected == null) {
+        workflowStates.get(WorkflowFamily.TASK_RUNTIME, owner.workflowId) == null
+      } else {
+        selected == owner.workflowId &&
+          workflowStates.goalPlanMatches(
+            selected,
+            state,
+            sourceRoot,
+            repositoryEnclosingRootPort,
+            checkout.store(sourceRoot),
+          )
+      }
+    return matchesWorkflow && ownerMatchesParent(owner, state.parentWorkflowId, recordedPath) &&
+      matchingOwnership(owner, identity, issueKey)
+  }
+
+  private fun UnitOfWork.matchingOwnership(
     owner: GoalPlanningOwnership,
     identity: String,
     issueKey: String,
-    selectedPlanWorkflowId: String?,
   ): Boolean =
-    owner.repositoryIdentity == identity &&
-      owner.normalizedIssueKey == FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey) &&
-      (
-        selectedPlanWorkflowId == null || owner.workflowId == selectedPlanWorkflowId ||
-          ownerHasNotLaunched(
-            owner,
-            selectedPlanWorkflowId,
-          )
-      ) &&
-      owner.state != GoalPlanningOwnership.State.SUPERSEDED
-
-  private fun ownerHasNotLaunched(
-    owner: GoalPlanningOwnership,
-    selectedPlan: String?,
-  ): Boolean =
-    owner.state != GoalPlanningOwnership.State.SUPERSEDED &&
-      database.read { unit ->
-        unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, owner.workflowId) == null &&
-          (
-            selectedPlan == null ||
-              unit.workflowStates.get(
-                WorkflowFamily.TASK_RUNTIME,
-                selectedPlan,
-              )?.workflowStatus == WorkflowStatus.COMPLETED
-          )
-      }
+    owner.repositoryIdentity == identity && owner.normalizedIssueKey == issueKey &&
+      goalPlanningOwnership.findByWorkflow(owner.workflowId) == owner &&
+      goalPlanningOwnership.findByIssue(identity, issueKey) == owner &&
+      owner.state != GoalPlanningOwnership.State.SUPERSEDED &&
+      workflowStates.getFeatureTaskRuntimeWorkerOwnership(owner.workflowId) == null
 
   private fun ownerMatchesParent(
     owner: GoalPlanningOwnership,
     parentWorkflowId: String,
     path: Path?,
   ): Boolean {
-    val matchingPath = path == null || owner.ownedPath.toAbsolutePath().normalize() == path.toAbsolutePath().normalize()
+    val matchingPath =
+      path == null || owner.ownedPath.toAbsolutePath().normalize() == path.toAbsolutePath().normalize()
     if (path != null && (!matchingPath || owner.state != GoalPlanningOwnership.State.TRANSFERRED)) return false
     return owner.state != GoalPlanningOwnership.State.TRANSFERRED || owner.parentWorkflowId == parentWorkflowId
   }
@@ -322,14 +429,14 @@ public class GoalExecutionRootResolver(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
     recordedPath: Path?,
-    ownership: GoalPlanningOwnership?,
+    selection: Pair<String?, GoalPlanningOwnership?>,
   ): GoalRunPreparation {
+    val ownership = selection.second
     val launchingRoot = repositoryEnclosingRootPort.enclosingRepositoryRoot(request.repoRoot)
     val revision =
-      if (ownership?.state == GoalPlanningOwnership.State.RESERVED) {
+      if (ownership != null) {
         WorkflowGitOperationResult.Ok(ownership.initialCommit)
-      } else if (ownership == null &&
-        worktrees.plannedPath(launchingRoot, request.issueKey).toAbsolutePath().normalize() ==
+      } else if (worktrees.plannedPath(launchingRoot, request.issueKey).toAbsolutePath().normalize() ==
         launchingRoot.toAbsolutePath().normalize()
       ) {
         gitOperations.headCommitSha(launchingRoot)
@@ -340,15 +447,30 @@ public class GoalExecutionRootResolver(
       return blocked(state, request, "could not read the revision for its worktree: ${revision.error}")
     }
     val startPoint = revision.value.trim()
-    return when (
-      val worktree = worktrees.createOrAdopt(launchingRoot, request.issueKey, recordedPath, startPoint, ownership)
-    ) {
-      is GoalWorktreeResult.Failed -> blocked(state, request, worktree.reason)
-      is GoalWorktreeResult.Adopted -> prepared(state, request, launchingRoot, worktree.path, null)
-      is GoalWorktreeResult.Created -> {
-        copyIgnoredFiles(launchingRoot, worktree.path)
-        val dirty = launchingCheckoutDirty(request.issueKey, launchingRoot, startPoint)
-        prepared(state, request, launchingRoot, worktree.path, dirty)
+    return database.transaction { unit ->
+      val currentPath =
+        unit.goalRunnerControls.controlState(state.parentWorkflowId).executionWorktreePath?.let(Path::of)
+      if (!unit.planningSelectionMatches(state, request.sourceRepoRoot, selection, currentPath)) {
+        return@transaction blocked(
+          state,
+          request,
+          "planning ownership changed at ${ownership?.ownedPath ?: recordedPath ?: launchingRoot}. " +
+            "Preserve the checkout and reconcile its selection, ownership and worker before retrying.",
+        )
+      }
+      when (
+        val worktree = worktrees.createOrAdopt(launchingRoot, request.issueKey, recordedPath, startPoint, ownership)
+      ) {
+        is GoalWorktreeResult.Failed -> blocked(state, request, worktree.reason)
+        is GoalWorktreeResult.Adopted -> prepared(state, request, worktree.path, null, selection)
+        is GoalWorktreeResult.Created -> {
+          if (ownership != null && ownership.state != GoalPlanningOwnership.State.RESERVED) {
+            return@transaction prepared(state, request, worktree.path, null, selection)
+          }
+          copyIgnoredFiles(launchingRoot, worktree.path)
+          val dirty = launchingCheckoutDirty(request.issueKey, launchingRoot, startPoint)
+          prepared(state, request, worktree.path, dirty, selection)
+        }
       }
     }
   }
@@ -451,40 +573,28 @@ public class GoalExecutionRootResolver(
   private fun prepared(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
-    launchingRoot: Path,
     worktree: Path,
     dirty: GoalRunnerRunEvent.LaunchingCheckoutDirty?,
+    selection: Pair<String?, GoalPlanningOwnership?>,
   ): GoalRunPreparation {
     val path = worktree.toString()
-    val identity = goalRepositoryIdentity(launchingRoot, repositoryEnclosingRootPort)
     val control =
-      database.transaction { unit ->
-        val current = unit.goalRunnerControls.controlState(state.parentWorkflowId)
-        val selectedPlanWorkflowId =
-          unit.workflowStates
-            .get(WorkflowFamily.TASK_RUNTIME, state.parentWorkflowId)
-            ?.step(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN)
-            ?.planWorkflowId
-        val owned =
-          selectedPlanWorkflowId?.let(unit.goalPlanningOwnership::findByWorkflow)
-            ?: unit.goalPlanningOwnership.findByIssue(
-              identity,
-              FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(request.issueKey),
-            )
-        if (!unit.transferPlanningOwnership(owned, selectedPlanWorkflowId, state.parentWorkflowId, worktree, current)) {
-          return@transaction null
-        }
-        unit.goalRunnerControls.persistControlState(
-          state.parentWorkflowId,
-          current.copy(
-            executionWorktreePath = path,
-            repositoryIdentity = current.repositoryIdentity ?: identity,
-            launchWarning = dirty?.warning ?: current.launchWarning,
-            planningSourceRoot =
-              current.planningSourceRoot ?: request.sourceRepoRoot.toAbsolutePath().normalize().toString(),
-          ),
-        )
-      } ?: return blocked(state, request, "the planning checkout ownership record did not match $path")
+      persistPlanningCheckout(state, request, worktree, dirty, selection) ?: run {
+        val selectedPlanWorkflowId = selection.first ?: selection.second?.workflowId
+        val workerLease =
+          selectedPlanWorkflowId?.let { workflowId ->
+            database.read { unit -> unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId) }
+          }
+        val reason =
+          if (workerLease != null) {
+            "selected plan workflow '${workerLease.workflowId}' still holds a worker lease. Preserve $path, " +
+              "stop that worker or let crash recovery reconcile it before retrying goal adoption."
+          } else {
+            "selected plan '$selectedPlanWorkflowId' or its planning checkout ownership changed at $path. " +
+              "Preserve the path and plan evidence, then reconcile the selection and ownership before retrying."
+          }
+        return blocked(state, request, reason)
+      }
     dirty?.let(request.eventSink::emit)
     return GoalRunPreparation.Prepared(
       state.copy(repoRoot = worktree, controlState = control),
@@ -495,29 +605,70 @@ public class GoalExecutionRootResolver(
     )
   }
 
+  private fun persistPlanningCheckout(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    worktree: Path,
+    dirty: GoalRunnerRunEvent.LaunchingCheckoutDirty?,
+    selection: Pair<String?, GoalPlanningOwnership?>,
+  ): GoalRunnerControlState? =
+    database.transaction { unit ->
+      val path = worktree.toString()
+      val identity = goalRepositoryIdentity(request.sourceRepoRoot, repositoryEnclosingRootPort)
+      val current = unit.goalRunnerControls.controlState(state.parentWorkflowId)
+      val parent =
+        unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, state.parentWorkflowId) ?: return@transaction null
+      val selected = selection.first
+      if (selected != null && parent.step(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN) == null) {
+        return@transaction null
+      }
+      val recordedPath = current.executionWorktreePath?.let(Path::of)
+      if (!unit.planningSelectionMatches(state, request.sourceRepoRoot, selection, recordedPath) ||
+        !unit.transferPlanningOwnership(selection.second, state.parentWorkflowId, worktree, current)
+      ) {
+        return@transaction null
+      }
+      val planStep = parent.step(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN)
+      if (selected != null && planStep?.planWorkflowId == null) {
+        unit.workflowStates.save(
+          WorkflowFamily.TASK_RUNTIME,
+          parent.copy(
+            steps =
+              parent.steps.map { step ->
+                if (step.stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN) {
+                  step.copy(planWorkflowId = selected)
+                } else {
+                  step
+                }
+              },
+          ),
+        )
+      }
+      unit.goalRunnerControls.persistControlState(
+        state.parentWorkflowId,
+        current.copy(
+          executionWorktreePath = path,
+          repositoryIdentity = current.repositoryIdentity ?: identity,
+          launchWarning = dirty?.warning ?: current.launchWarning,
+          planningSourceRoot =
+            current.planningSourceRoot ?: request.sourceRepoRoot.toAbsolutePath().normalize().toString(),
+        ),
+      )
+    }
+
   private fun UnitOfWork.transferPlanningOwnership(
     owner: GoalPlanningOwnership?,
-    selectedPlan: String?,
     parentId: String,
     worktree: Path,
     control: GoalRunnerControlState,
   ): Boolean {
     if (owner == null) return true
-    val selected =
-      selectedPlan == null || owner.workflowId == selectedPlan ||
-        (
-          owner.state != GoalPlanningOwnership.State.SUPERSEDED &&
-            workflowStates.get(WorkflowFamily.TASK_RUNTIME, owner.workflowId) == null &&
-            workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedPlan)?.workflowStatus == WorkflowStatus.COMPLETED
-        )
-    if (owner.state == GoalPlanningOwnership.State.TRANSFERRED) {
-      return selected && owner.parentWorkflowId == parentId
-    }
     val currentPath = control.executionWorktreePath?.let(Path::of)?.toAbsolutePath()?.normalize()
     val expectedPath = worktree.toAbsolutePath().normalize()
     val ownerPathMatches = owner.ownedPath.toAbsolutePath().normalize() == expectedPath
     val controlPathMatches = currentPath == null || currentPath == expectedPath
-    if (!selected || !ownerPathMatches || !controlPathMatches) return false
+    if (!ownerPathMatches || !controlPathMatches || goalPlanningOwnership.checkoutRecovery(owner) != null) return false
+    if (owner.state == GoalPlanningOwnership.State.TRANSFERRED) return owner.parentWorkflowId == parentId
     return goalPlanningOwnership.transfer(owner.reservationId, parentId, worktree) is
       GoalPlanningOwnershipWriteResult.Stored
   }

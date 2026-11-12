@@ -309,10 +309,12 @@ class GoalRunnerTest {
     val outcomeStore = testWorkflowGoalRunnerOutcomeStore(database)
     val report =
       testGoalRunner(
-        manifestStore = manifestStore,
-        subtaskLauncher = TestNoopGoalRunnerSubtaskLauncher,
-        outcomeStore = outcomeStore,
-        pullRequestPort = RecordingPullRequestPort(),
+        goalRunnerDeps(
+          manifestStore,
+          TestNoopGoalRunnerSubtaskLauncher,
+          outcomeStore,
+          RecordingPullRequestPort(),
+        ).toWiring().copy(goalDatabase = database),
       ).run(
         GoalRunnerRunRequest(
           issueKey = "SKILL-352",
@@ -5002,7 +5004,7 @@ internal class InMemoryGoalManifestStore(
     parentWorkflowId: String,
     repositoryIdentity: String,
   ): GoalRunnerControlState {
-    controlState = controlState.copy(repositoryIdentity = repositoryIdentity)
+    controlState = controlState.copy(repositoryIdentity = controlState.repositoryIdentity ?: repositoryIdentity)
     return controlState
   }
 

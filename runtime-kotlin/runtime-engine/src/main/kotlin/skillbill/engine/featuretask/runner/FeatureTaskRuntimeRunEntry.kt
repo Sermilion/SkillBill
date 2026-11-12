@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWor
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
+import skillbill.engine.featuretask.lifecycle.core.WorkerAdmissionSelection
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskExecutionIdentityResolver
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchResolver
@@ -120,9 +121,13 @@ public class FeatureTaskRuntimeRunEntry(
       workflowId,
       effectiveInputs,
       identity,
-      requestedReviewSelection =
-        (goalContinuation?.codeReviewMode ?: request.requestedCodeReviewMode)
-          ?.let { RuntimeReviewSelection.valueOf(it.name) },
+      selection =
+        WorkerAdmissionSelection(
+          requestedReviewSelection =
+            (goalContinuation?.codeReviewMode ?: request.requestedCodeReviewMode)
+              ?.let { RuntimeReviewSelection.valueOf(it.name) },
+          authorizedGoalParentWorkflowId = request.activityParentWorkflowId,
+        ),
     ) { admittedExecution, acquiredWorker ->
       val recovery = repairPreparation.recoverSupersededVersion(acquiredWorker)
       if (recovery is AcceptanceCriterionRepairVersionRecoveryResult.Refused) {
@@ -279,6 +284,7 @@ public class FeatureTaskRuntimeRunEntry(
       protectedSpecSha256 = input.protectedSpecSha256,
       planIntake = input.planIntake,
       planIntakeRoot = input.planIntakeRoot,
+      planSpecResolution = input.planSpecResolution,
     )
 
   private fun intakeCompleted(workflowId: String): Boolean = runner.intakeCompleted(workflowId)

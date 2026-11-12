@@ -92,6 +92,7 @@ class GoalRunnerExecutionRootTest {
         launchFacts()
       }
     val git = BranchRootRecordingGit()
+    val diagnostics = WarningRecordingDiagnostics()
     val worktrees =
       RecordingGoalWorktrees(
         GoalWorktreeResult.Created(worktree),
@@ -100,10 +101,11 @@ class GoalRunnerExecutionRootTest {
     val runner =
       testGoalRunner(
         goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort())
-          .copy(gitOperations = git, goalWorktrees = worktrees),
+          .copy(gitOperations = git, goalWorktrees = worktrees, diagnostics = diagnostics),
       )
 
-    val report = assertIs<GoalRunnerRunReport.Completed>(runner.run(request()))
+    val result = runner.run(request())
+    val report = assertIs<GoalRunnerRunReport.Completed>(result, "$result ${diagnostics.warnings}")
 
     assertEquals("SKILL-56", report.issueKey)
     assertEquals(worktree, launcher.requests.single().skillRunRequest.repoRoot)

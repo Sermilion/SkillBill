@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.goalworktree
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.goalrunner.model.GoalPlanningCheckoutRecovery
 import skillbill.infrastructure.host.jvm.resolveTelemetryStateDir
 import skillbill.infrastructure.workflow.monitor.GitRun
 import skillbill.infrastructure.workflow.monitor.NO_PROMPT_ENVIRONMENT
@@ -14,6 +15,8 @@ import skillbill.infrastructure.workflow.worktree.worktreeDirtyRetention
 import skillbill.infrastructure.workflow.worktree.worktreeGit
 import skillbill.infrastructure.workflow.worktree.worktreePathProblem
 import skillbill.model.EnvironmentContext
+import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningOwnership
 import skillbill.ports.monitor.model.MonitorRetentionReason
@@ -32,12 +35,12 @@ import java.nio.file.Path
 import java.nio.file.StandardOpenOption.CREATE_NEW
 import java.nio.file.StandardOpenOption.WRITE
 import java.nio.file.attribute.BasicFileAttributes
+import java.util.UUID
 import kotlin.time.Duration.Companion.seconds
 
 private const val GOALS_DIRECTORY = "goals"
 private const val CHECKOUT_DIRECTORY = "checkout"
 private const val REMOVAL_MARKER_SUFFIX = ".removing"
-private const val OWNERSHIP_MARKER = "skill-bill-ownership"
 private const val WORKTREE_FIELD_PREFIX = "worktree "
 private val GOAL_SEGMENT_UNSAFE = Regex("[^A-Za-z0-9._-]")
 private val UNUSABLE_GOAL_SEGMENTS = setOf("", ".", "..")
@@ -55,6 +58,7 @@ class GitGoalWorktreeResources(
   private val environment: EnvironmentContext,
   private val diagnostics: RuntimeDiagnostics,
   private val timing: RuntimeTimingPort,
+  private val database: DatabaseSessionFactory,
 ) : GoalWorktreeResources {
   override fun createOrAdopt(
     repoRoot: Path,
@@ -78,7 +82,18 @@ class GitGoalWorktreeResources(
               "inspect the ownership record.",
           )
         }
-        createOrAdoptAt(repoRoot, canonicalTarget(recordedPath), revision, proof)
+        withWorktreeRecoveryLock(
+          canonicalTarget(recordedPath),
+          {
+            GoalWorktreeResult.Failed(
+              "Checkout recovery is already active for $recordedPath. Retry after it finishes.",
+            )
+          },
+        ) {
+          withDurableCheckoutAccess(database, proof) {
+            createOrAdoptAt(repoRoot, canonicalTarget(recordedPath), revision, proof)
+          }
+        }
       } else {
         createOrAdoptAtStatePath(repoRoot, issueKey, revision)
       }
@@ -98,7 +113,7 @@ class GitGoalWorktreeResources(
     proof.ownedPath.toAbsolutePath().normalize() == normalizedPath &&
       plannedPath(repoRoot, issueKey, proof.reservationId).toAbsolutePath().normalize() == normalizedPath &&
       proof.normalizedIssueKey == FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey) &&
-      reservationStateMatches(proof, revision, normalizedPath)
+      reservationStateMatches(proof, revision)
 
   override fun checkoutHolding(
     repoRoot: Path,
@@ -136,15 +151,7 @@ class GitGoalWorktreeResources(
       ),
     )
 
-  override fun gitWorktreeIdentity(path: Path): String? =
-    try {
-      val result = worktreeGit(path, "rev-parse", "--path-format=absolute", "--git-dir")
-      if (!result.ok) null else Path.of(result.output.trim()).toRealPath().toString()
-    } catch (_: IOException) {
-      null
-    } catch (_: SecurityException) {
-      null
-    }
+  override fun gitWorktreeIdentity(path: Path): String? = readWorktreeGitIdentity(path)
 
   override fun retentionVerdict(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained? {
     val path = request.worktreePath
@@ -185,11 +192,11 @@ class GitGoalWorktreeResources(
   private fun ownershipProofRetention(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained? {
     val path = request.worktreePath
     val ownership = request.ownership
-    if (ownership == null || !matchesTransferredOwner(request, ownership)) {
+    if (ownership == null || !matchesSettlementOwner(request, ownership)) {
       return retained(
         MonitorRetentionReason.UNOWNED_RESOURCE,
         path,
-        "a matching transferred goal ownership record is required before cleanup; preserve the path and " +
+        "a matching goal or standalone planning ownership record is required before cleanup; preserve the path and " +
           "reconcile ownership",
       )
     }
@@ -213,13 +220,13 @@ class GitGoalWorktreeResources(
     return null
   }
 
-  private fun matchesTransferredOwner(
+  private fun matchesSettlementOwner(
     request: GoalWorktreeSettleRequest,
     ownership: GoalPlanningOwnership,
   ): Boolean {
     val issueKey = request.issueKey?.takeIf { it.isNotBlank() } ?: return false
     val path = request.worktreePath.toAbsolutePath().normalize()
-    return matchesControlOwner(request, ownership) &&
+    return matchesSettlementActor(request, ownership) &&
       ownership.normalizedIssueKey == FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey) &&
       ownership.ownedPath.toAbsolutePath().normalize() == path &&
       plannedPath(request.primaryRoot, issueKey, ownership.reservationId).toAbsolutePath().normalize() == path
@@ -298,48 +305,108 @@ class GitGoalWorktreeResources(
   }
 
   override fun settle(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement {
+    return try {
+      ownershipProofRetention(request)?.let { return it }
+      withWorktreeRecoveryLock(
+        request.worktreePath,
+        {
+          retained(
+            MonitorRetentionReason.UNOWNED_RESOURCE,
+            request.worktreePath,
+            "checkout recovery is active; preserve the checkout and retry after it finishes",
+          )
+        },
+      ) { settleExclusively(request) }
+    } catch (failure: IOException) {
+      retained(
+        MonitorRetentionReason.CLEANUP_FAILED,
+        request.worktreePath,
+        "checkout settlement failed: ${failure.message}. Preserve the path and inspect its recovery journal.",
+      )
+    } catch (failure: SecurityException) {
+      retained(
+        MonitorRetentionReason.CLEANUP_FAILED,
+        request.worktreePath,
+        "checkout settlement was denied: ${failure.message}. Preserve the path and inspect its recovery journal.",
+      )
+    }
+  }
+
+  private fun settleExclusively(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement {
     val path = request.worktreePath
     ownershipProofRetention(request)?.let { return it }
     if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
-      val prune = worktreeGit(request.primaryRoot, "worktree", "prune")
-      if (!prune.ok) diagnostics.warning("goal worktree prune failed: seam=goal_worktree.settle path=$path", null)
-      return GoalWorktreeSettlement.Absent
-    }
-    val failure =
-      retentionVerdict(request)
-        ?: remove(request.primaryRoot, path, requireNotNull(request.ownership))
-    if (failure != null) return failure
-    val prune = worktreeGit(request.primaryRoot, "worktree", "prune")
-    if (!prune.ok) {
-      diagnostics.warning(
-        "goal worktree prune failed: seam=goal_worktree.settle path=$path reason=${prune.output}",
-        null,
+      return retained(
+        MonitorRetentionReason.UNOWNED_RESOURCE,
+        path,
+        "the checkout is missing and its work cannot be verified; preserve its registration and inspect " +
+          "the ownership record and any unpublished or untracked work before retrying",
       )
     }
-    deleteQuietly(removalMarker(path))
-    deleteQuietly(path.parent)
-    return GoalWorktreeSettlement.Removed
+    val ownership = requireNotNull(request.ownership)
+    val recovery =
+      GoalPlanningCheckoutRecovery(
+        UUID.randomUUID().toString(),
+        requireNotNull(ownership.gitWorktreeIdentity),
+        GoalPlanningCheckoutRecovery.State.FENCED,
+      )
+    val admission =
+      database.owningTransaction { unit ->
+        unit.goalPlanningOwnership.advanceCheckoutRecovery(ownership, recovery, recovery.state)
+      }
+    if (admission !is OwningTransactionResult.Committed || !admission.value) {
+      return retained(
+        MonitorRetentionReason.UNOWNED_RESOURCE,
+        path,
+        "exclusive settlement could not be established; preserve the checkout and retry after all writers stop",
+      )
+    }
+    val failure = retentionVerdict(request) ?: prepareRemoval(request, ownership, recovery)
+    if (failure != null) {
+      if (!finishRecovery(ownership, recovery, ownership.gitWorktreeIdentity)) {
+        diagnostics.warning("checkout fence retained: seam=goal_worktree.settle path=$path recovery=inspect_journal")
+      }
+    }
+    return failure ?: removeProvenCheckout(database, request.primaryRoot, path, ownership)
   }
 
-  private fun remove(
-    primaryRoot: Path,
-    path: Path,
+  private fun prepareRemoval(
+    request: GoalWorktreeSettleRequest,
     ownership: GoalPlanningOwnership,
+    recovery: GoalPlanningCheckoutRecovery,
   ): GoalWorktreeSettlement.Retained? {
-    val expectedGitIdentity = ownership.gitWorktreeIdentity
-    val marker = removalMarker(path)
-    markForRemoval(path, ownership)?.let { return it }
-    val unsafe = removalSafety(primaryRoot, path, ownership, expectedGitIdentity)
-    if (unsafe != null) {
-      deleteQuietly(marker)
-      return unsafe
+    val path = request.worktreePath
+    removalSafety(request.primaryRoot, path, ownership, ownership.gitWorktreeIdentity)?.let { return it }
+    checkoutRemovalProblem(path, ownership)?.let { return it }
+    val locked = Path.of(requireNotNull(ownership.gitWorktreeIdentity)).resolve("locked")
+    if (Files.exists(locked, LinkOption.NOFOLLOW_LINKS) && !isConsumedRecoveryLock(database, ownership, locked)) {
+      return retained(
+        MonitorRetentionReason.UNOWNED_RESOURCE,
+        path,
+        "the checkout has an unknown Git lock; preserve it and identify its owner before retrying cleanup",
+      )
     }
-    val removal = worktreeGit(primaryRoot, "worktree", "remove", "--force", path.toString())
-    return if (removal.ok) {
-      null
+    val failure = markForRemoval(path, ownership)
+    return if (failure != null) {
+      failure
     } else {
-      if (!removal.timedOut) deleteQuietly(marker)
-      retained(MonitorRetentionReason.CLEANUP_FAILED, path, "git worktree remove failed: ${removal.output}")
+      val proven =
+        database.transaction { unit ->
+          unit.goalPlanningOwnership.advanceCheckoutRecovery(
+            ownership,
+            recovery,
+            GoalPlanningCheckoutRecovery.State.PROVEN,
+          )
+        }
+      if (proven) {
+        null
+      } else {
+        retained(
+          MonitorRetentionReason.UNOWNED_RESOURCE,
+          path,
+          "recovery proof could not be committed; preserve the checkout and inspect its ownership journal",
+        )
+      }
     }
   }
 
@@ -462,13 +529,6 @@ class GitGoalWorktreeResources(
     return (reservationId?.let { issuePath.resolve(it) } ?: issuePath).resolve(CHECKOUT_DIRECTORY)
   }
 
-  private fun canonicalTarget(target: Path): Path {
-    val absolute = target.toAbsolutePath().normalize()
-    val ancestor =
-      generateSequence(absolute.parent) { it.parent }.firstOrNull { Files.exists(it) } ?: return absolute
-    return ancestor.toRealPath().resolve(ancestor.relativize(absolute))
-  }
-
   private fun createOrAdoptAt(
     repoRoot: Path,
     target: Path,
@@ -478,23 +538,116 @@ class GitGoalWorktreeResources(
     if (Files.isSymbolicLink(target)) {
       return GoalWorktreeResult.Failed("the goal worktree path $target is a symbolic link.")
     }
-    if (Files.exists(removalMarker(target), LinkOption.NOFOLLOW_LINKS)) {
-      return GoalWorktreeResult.Failed(
-        "the goal worktree path $target has an interrupted removal marker. Preserve the path and inspect it " +
-          "before retrying.",
-      )
-    }
     val listing = listWorktrees(repoRoot)
     if (!listing.ok) {
       return GoalWorktreeResult.Failed("could not list worktrees for $target: ${listing.output}")
     }
-    val result = resolveWorktreeEntry(repoRoot, target, revision, ownership, entryOf(listing, target))
-    return if (ownership != null && result !is GoalWorktreeResult.Failed) {
-      verifyOwnedResult(repoRoot, target, ownership, result)
+    return adoptListedWorktree(repoRoot, target, revision, ownership, listing)
+  }
+
+  private fun adoptListedWorktree(
+    repoRoot: Path,
+    target: Path,
+    revision: String,
+    ownership: GoalPlanningOwnership?,
+    listing: GitRun,
+  ): GoalWorktreeResult {
+    val entry = entryOf(listing, target)
+    if (ownership != null) {
+      val recovery = database.read { it.goalPlanningOwnership.checkoutRecovery(ownership) }
+      if (recovery != null) return reconcileRecovery(repoRoot, target, ownership, recovery, entry)
+    }
+    if (Files.exists(removalMarker(target), LinkOption.NOFOLLOW_LINKS)) {
+      return GoalWorktreeResult.Failed(
+        "the goal worktree path $target has an interrupted removal marker without durable recovery proof. " +
+          "Preserve it and inspect its ownership journal before retrying.",
+      )
+    }
+    val missingOwner =
+      ownership?.takeIf {
+        it.state != GoalPlanningOwnership.State.RESERVED && !Files.exists(target, LinkOption.NOFOLLOW_LINKS)
+      }
+    return if (missingOwner != null) {
+      GoalWorktreeResult.Failed(
+        "the recorded checkout $target is missing without durable recovery proof. Preserve its registration " +
+          "and restore or inspect unpublished and untracked work before retrying.",
+      )
     } else {
-      result
+      val result = resolveWorktreeEntry(repoRoot, target, revision, ownership, entry)
+      if (ownership != null && result !is GoalWorktreeResult.Failed) {
+        verifyOwnedResult(repoRoot, target, ownership, result)
+      } else {
+        result
+      }
     }
   }
+
+  private fun reconcileRecovery(
+    repoRoot: Path,
+    target: Path,
+    ownership: GoalPlanningOwnership,
+    recovery: GoalPlanningCheckoutRecovery,
+    entry: WorktreeEntry,
+  ): GoalWorktreeResult {
+    val present = Files.exists(target, LinkOption.NOFOLLOW_LINKS)
+    val existingMatches =
+      present && entry == WorktreeEntry.FINISHED && sameRepository(repoRoot, target) &&
+        verifiedIdentity(target, ownership) == ownership.gitWorktreeIdentity
+    return when {
+      recovery.previousGitIdentity != ownership.gitWorktreeIdentity || entry == WorktreeEntry.INITIALIZING ->
+        recoveryRefusal(target, "the recorded Git identity is mismatched or still initializing")
+      existingMatches -> {
+        if (finishRecovery(ownership, recovery, ownership.gitWorktreeIdentity)) {
+          deleteQuietly(removalMarker(target))
+          if (recovery.state == GoalPlanningCheckoutRecovery.State.PROVEN) {
+            GoalWorktreeResult.Created(target, ownership.gitWorktreeIdentity)
+          } else {
+            GoalWorktreeResult.Adopted(target, ownership.gitWorktreeIdentity)
+          }
+        } else {
+          recoveryRefusal(target, "checkout admission conflicted with its recovery generation")
+        }
+      }
+      recovery.state != GoalPlanningCheckoutRecovery.State.PROVEN ->
+        recoveryRefusal(target, "no affirmative absence-of-unrecoverable-work proof was recorded")
+      else -> reconstructProvenCheckout(repoRoot, ownership, recovery, present)
+    }
+  }
+
+  private fun reconstructProvenCheckout(
+    repoRoot: Path,
+    ownership: GoalPlanningOwnership,
+    recovery: GoalPlanningCheckoutRecovery,
+    present: Boolean,
+  ): GoalWorktreeResult {
+    val target = ownership.ownedPath
+    prepareRecoveryCheckout(repoRoot, ownership, recovery, present)?.let { return recoveryRefusal(target, it) }
+    val identity =
+      verifiedRecoveryIdentity(repoRoot, ownership, recovery)
+        ?: return recoveryRefusal(target, "the replacement checkout lacks matching creation and revision evidence")
+    if (!finishRecovery(ownership, recovery, identity)) {
+      return recoveryRefusal(target, "the replacement identity conflicted with its durable recovery generation")
+    }
+    deleteQuietly(removalMarker(target))
+    diagnostics.warning(
+      "goal checkout reconstructed: seam=goal_worktree.recovery path=$target revision=${ownership.initialCommit}",
+    )
+    return GoalWorktreeResult.Created(target, identity)
+  }
+
+  private fun finishRecovery(
+    ownership: GoalPlanningOwnership,
+    recovery: GoalPlanningCheckoutRecovery,
+    identity: String?,
+  ): Boolean =
+    database.transaction { unit ->
+      unit.goalPlanningOwnership.advanceCheckoutRecovery(
+        ownership,
+        recovery,
+        GoalPlanningCheckoutRecovery.State.CONSUMED,
+        identity,
+      )
+    }
 
   private fun resolveWorktreeEntry(
     repoRoot: Path,
@@ -566,57 +719,6 @@ class GitGoalWorktreeResources(
     val matchesRevision = head.ok && head.output.trim() == ownership.initialCommit
     return registered && matchesRevision && ownership.state == GoalPlanningOwnership.State.RESERVED &&
       writeOwnershipMarker(target, ownership)
-  }
-
-  private fun markerValue(
-    path: Path,
-    ownership: GoalPlanningOwnership,
-    identity: String,
-  ): String? {
-    val directoryIdentity = removalIdentity(path, identity) ?: return null
-    return listOf(
-      ownership.reservationId,
-      ownership.repositoryIdentity,
-      ownership.ownedPath.toAbsolutePath().normalize().toString(),
-      ownership.initialCommit,
-      directoryIdentity,
-    ).joinToString("\n")
-  }
-
-  private fun writeOwnershipMarker(
-    path: Path,
-    ownership: GoalPlanningOwnership,
-  ): Boolean {
-    return try {
-      val identity = gitWorktreeIdentity(path) ?: return false
-      val value = markerValue(path, ownership, identity) ?: return false
-      Files.writeString(Path.of(identity).resolve(OWNERSHIP_MARKER), value, CREATE_NEW, WRITE)
-      verifiedIdentity(path, ownership) == identity
-    } catch (_: IOException) {
-      false
-    } catch (_: SecurityException) {
-      false
-    }
-  }
-
-  private fun verifiedIdentity(
-    path: Path,
-    ownership: GoalPlanningOwnership,
-  ): String? {
-    return try {
-      val identity = gitWorktreeIdentity(path) ?: return null
-      val marker = Path.of(identity).resolve(OWNERSHIP_MARKER)
-      val expected = markerValue(path, ownership, identity) ?: return null
-      if (Files.isRegularFile(marker, LinkOption.NOFOLLOW_LINKS) && Files.readString(marker) == expected) {
-        identity
-      } else {
-        null
-      }
-    } catch (_: IOException) {
-      null
-    } catch (_: SecurityException) {
-      null
-    }
   }
 
   private fun sameRepository(
@@ -762,18 +864,24 @@ class GitGoalWorktreeResources(
     "$opening. If git worktree list --porcelain still shows it as $LOCKED_INITIALIZING_FIELD, the checkout is " +
       "incomplete: run git worktree unlock $target, delete that directory and run git worktree prune. " +
       "Then run the goal again."
-
-  private fun listWorktrees(repoRoot: Path): GitRun = monitorGit(repoRoot, "worktree", "list", "--porcelain", "-z")
 }
 
 private fun reservationStateMatches(
   proof: GoalPlanningOwnership,
   revision: String,
-  path: Path,
 ): Boolean =
   proof.state != GoalPlanningOwnership.State.SUPERSEDED &&
-    (proof.state != GoalPlanningOwnership.State.RESERVED || proof.initialCommit == revision.trim()) &&
-    (proof.state == GoalPlanningOwnership.State.RESERVED || Files.isDirectory(path))
+    (proof.state != GoalPlanningOwnership.State.RESERVED || proof.initialCommit == revision.trim())
+
+private fun matchesSettlementActor(
+  request: GoalWorktreeSettleRequest,
+  ownership: GoalPlanningOwnership,
+): Boolean {
+  val workflowId = request.standaloneWorkflowId ?: return matchesControlOwner(request, ownership)
+  if (ownership.repositoryIdentity != request.repositoryIdentity) return false
+  if (ownership.parentWorkflowId != null || request.parentWorkflowId != null) return false
+  return ownership.state == GoalPlanningOwnership.State.INITIALIZED && ownership.workflowId == workflowId
+}
 
 private fun matchesControlOwner(
   request: GoalWorktreeSettleRequest,
@@ -784,7 +892,7 @@ private fun matchesControlOwner(
     !request.parentWorkflowId.isNullOrBlank() && ownership.parentWorkflowId == request.parentWorkflowId &&
     request.repositoryIdentity != null && ownership.repositoryIdentity == request.repositoryIdentity
 
-private fun removalIdentity(
+internal fun removalIdentity(
   path: Path,
   gitIdentity: String,
 ): String? {
@@ -794,7 +902,7 @@ private fun removalIdentity(
   return "$key\n${attributes.creationTime()}\n$gitIdentity"
 }
 
-private fun removalMarker(path: Path): Path = path.resolveSibling("${path.fileName}$REMOVAL_MARKER_SUFFIX")
+internal fun removalMarker(path: Path): Path = path.resolveSibling("${path.fileName}$REMOVAL_MARKER_SUFFIX")
 
 private fun retained(
   reason: MonitorRetentionReason,
@@ -813,3 +921,30 @@ private fun entryOf(
       .firstOrNull { "$WORKTREE_FIELD_PREFIX$target" in it } ?: return WorktreeEntry.UNLISTED
   return if (LOCKED_INITIALIZING_FIELD in record) WorktreeEntry.INITIALIZING else WorktreeEntry.FINISHED
 }
+
+private fun canonicalTarget(target: Path): Path {
+  val absolute = target.toAbsolutePath().normalize()
+  val ancestor =
+    generateSequence(absolute.parent) { it.parent }.firstOrNull { Files.exists(it) } ?: return absolute
+  return ancestor.toRealPath().resolve(ancestor.relativize(absolute))
+}
+
+private fun checkoutRemovalProblem(
+  path: Path,
+  ownership: GoalPlanningOwnership,
+): GoalWorktreeSettlement.Retained? {
+  val head = worktreeGit(path, "rev-parse", "HEAD")
+  if (!head.ok || head.output.trim() != ownership.initialCommit) {
+    return retained(
+      MonitorRetentionReason.UNOWNED_RESOURCE,
+      path,
+      "the checkout is not at its original recoverable revision; preserve it and inspect its commits",
+    )
+  }
+  recoveryUntrackedProblem(path)?.let {
+    return retained(MonitorRetentionReason.UNTRACKED_FILES, path, it)
+  }
+  return null
+}
+
+private fun listWorktrees(repoRoot: Path): GitRun = monitorGit(repoRoot, "worktree", "list", "--porcelain", "-z")

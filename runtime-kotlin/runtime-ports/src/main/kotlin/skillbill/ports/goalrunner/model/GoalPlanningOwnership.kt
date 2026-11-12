@@ -12,6 +12,7 @@ data class GoalPlanningOwnership(
   val state: State,
   val parentWorkflowId: String? = null,
   val gitWorktreeIdentity: String? = null,
+  val legacyBundlePending: Boolean? = null,
 ) {
   enum class State(val wireValue: String) {
     RESERVED("reserved"),

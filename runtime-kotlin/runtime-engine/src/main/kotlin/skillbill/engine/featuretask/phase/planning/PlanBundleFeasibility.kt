@@ -148,13 +148,15 @@ public object PlanBundleFeasibility {
     planner: FeatureTaskRuntimeDecompositionPlanner,
     repoRoot: Path,
     issueKey: String,
-  ): PlanBundleFeasibilitySnapshot = captureInDirectory(planner, repoRoot, issueKey, null)
+    resolveSpecPath: (String) -> String = { it },
+  ): PlanBundleFeasibilitySnapshot = captureInDirectory(planner, repoRoot, issueKey, null, resolveSpecPath)
 
   internal fun captureInDirectory(
     planner: FeatureTaskRuntimeDecompositionPlanner,
     repoRoot: Path,
     issueKey: String,
     directory: Path?,
+    resolveSpecPath: (String) -> String = { it },
   ): PlanBundleFeasibilitySnapshot {
     val parent =
       directory?.resolve("spec.md")
@@ -166,7 +168,9 @@ public object PlanBundleFeasibility {
       planner.specText(parent),
       planner.specText(parent.resolveSibling(DECOMPOSITION_MANIFEST_FILENAME)),
       manifest.subtasks.associate {
-        val path = directory?.resolve(Path.of(it.specPath).fileName) ?: planner.bundlePath(repoRoot, it.specPath)
+        val path =
+          directory?.resolve(Path.of(it.specPath).fileName)
+            ?: planner.bundlePath(repoRoot, resolveSpecPath(it.specPath))
         it.id to planner.specText(path)
       },
     )

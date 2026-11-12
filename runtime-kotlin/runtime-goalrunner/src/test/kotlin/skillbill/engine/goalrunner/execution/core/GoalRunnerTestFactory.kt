@@ -12,6 +12,7 @@ import skillbill.application.testProjectStore
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.service.WorkflowService
+import skillbill.contracts.JsonCodec
 import skillbill.engine.diagnostics.block.testBlockIncidentEntryReconciler
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
@@ -46,6 +47,7 @@ import skillbill.engine.goalrunner.monitoring.GoalWorktreeCompletionSettlement
 import skillbill.engine.goalrunner.persist.GoalRunnerNoChangeChildCloser
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.quality.GoalQualityExecutionRead
+import skillbill.engine.goalrunner.persist.taskRuntimeWorkflowRecord
 import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 import skillbill.engine.goalrunner.planning.source.PREPARE_ALL_GOAL_PLANNING_SOURCE
 import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
@@ -85,16 +87,20 @@ import skillbill.ports.telemetry.transport.TelemetryReconciliationRepository
 import skillbill.ports.work.EmptyWorkListRepository
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
+import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
 import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
+import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.specscratch.SpecScratchStore
 import skillbill.ports.workflow.specscratch.UnavailableSpecScratchStore
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.NoopGoalPlanningPreparationEnvelopeValidator
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
@@ -154,6 +160,7 @@ internal data class GoalRunnerTestWiring(
       )
     },
   val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
+  val goalDatabase: DatabaseSessionFactory? = null,
   val assessmentGate: GoalRunnerAssessmentGate = NoopGoalRunnerAssessmentGate,
   val pullRequestWriter: GoalRunnerPullRequestWriter = NoPullRequestWriter,
 )
@@ -312,7 +319,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
           TestRepositoryEnclosingRoot,
           wiring.diagnostics,
           wiring.clock,
-          goalRunnerTestDatabase(wiring.manifestStore),
+          wiring.goalDatabase ?: goalRunnerTestDatabase(wiring.manifestStore),
         ),
       ),
     diagnostics = wiring.diagnostics,
@@ -328,8 +335,9 @@ private fun goalRunnerRunPreparation(
   wiring: GoalRunnerTestWiring,
   executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
   crashReconciler: FeatureTaskRuntimeCrashReconciler,
-): GoalRunnerRunPreparation =
-  GoalRunnerRunPreparation(
+): GoalRunnerRunPreparation {
+  val database = wiring.goalDatabase ?: goalRunnerTestDatabase(wiring.manifestStore)
+  return GoalRunnerRunPreparation(
     wiring.manifestStore,
     wiring.outcomeStore,
     TestRepositoryEnclosingRoot,
@@ -343,6 +351,7 @@ private fun goalRunnerRunPreparation(
       wiring.phaseRecorder,
       wiring.clock,
       GoalRunnerStatusTestPorts(gitOperations = wiring.gitOperations, diagnostics = wiring.diagnostics),
+      database,
     ),
     testBlockIncidentEntryReconciler(TestGoalActivityStampDatabase, wiring.clock, wiring.diagnostics),
     GoalExecutionRootResolver(
@@ -351,10 +360,13 @@ private fun goalRunnerRunPreparation(
       wiring.gitOperations,
       TestRepositoryEnclosingRoot,
       wiring.diagnostics,
-      ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore, wiring.goalWorktrees),
-      goalRunnerTestDatabase(wiring.manifestStore),
+      ProjectCheckout(TestRepositoryEnclosingRoot, database, testProjectStore, wiring.goalWorktrees),
+      database,
+      { _, _, _, _ -> error("Unexpected plan checkout preparation") },
     ),
+    database,
   )
+}
 
 private fun goalRunnerIntakePreparation(wiring: GoalRunnerTestWiring): GoalIntakePreparation {
   val noMatchResolver =
@@ -475,6 +487,7 @@ private fun testNoChangeChildCloser(
       projectCheckout =
         ProjectCheckout(
           TestRepositoryEnclosingRoot,
+          database,
           testProjectStore,
           InPlaceGoalWorktreeResources,
         ),
@@ -628,9 +641,9 @@ internal val NoPullRequestWriter =
     PhaseRunResult.Completed("test-pr", listOf("pr"), null, "no pull request written")
   }
 
-private fun goalRunnerTestDatabase(store: GoalRunnerManifestStore): FakeDatabaseSessionFactory =
+internal fun goalRunnerTestDatabase(store: GoalRunnerManifestStore): FakeDatabaseSessionFactory =
   FakeDatabaseSessionFactory(
-    InMemoryWorkflowStates(),
+    goalRunnerWorkflowStates(store),
     goalRunnerControls =
       object : GoalRunnerControlRepository by
       EmptyGoalRunnerControlRepository {
@@ -646,3 +659,28 @@ private fun goalRunnerTestDatabase(store: GoalRunnerManifestStore): FakeDatabase
         }
       },
   )
+
+private fun goalRunnerWorkflowStates(store: GoalRunnerManifestStore): WorkflowStateRepository {
+  val delegate = InMemoryWorkflowStates()
+  return object : WorkflowStateRepository by delegate {
+    override fun get(
+      family: WorkflowFamily,
+      workflowId: String,
+    ) = if (family == WorkflowFamily.TASK_RUNTIME && store is InMemoryGoalManifestStore &&
+      workflowId == store.parentWorkflowId
+    ) {
+      taskRuntimeWorkflowRecord(workflowId).copy(
+        artifactsJson =
+          JsonCodec.mapToJsonString(
+            mapOf(
+              DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.entry(
+                testDecompositionManifestValidator.encodeManifestWireMap(store.manifest),
+              ),
+            ),
+          ),
+      ).toSnapshot()
+    } else {
+      delegate.get(family, workflowId)
+    }
+  }
+}

@@ -26,6 +26,7 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.model.RepositoryRoot
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.repository.RepositoryEnclosingRootPort
@@ -39,6 +40,7 @@ import java.time.Clock
 @Inject
 public class GoalRunnerRepairCoordinator(
   private val manifestStore: GoalRunnerManifestStore,
+  private val database: DatabaseSessionFactory,
   private val phaseQuery: FeatureTaskRuntimePhaseQuery,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val childRepairStore: GoalRunnerChildRepairStore,
@@ -52,6 +54,11 @@ public class GoalRunnerRepairCoordinator(
   private val parentWedgeDiagnosis = GoalRunnerParentRepairWedgeDiagnosis(clock)
 
   public fun repair(request: GoalRunnerRepairRequest): GoalRunnerRepairResult {
+    executionRoots.prepareControlCheckout(request.issueKey, request.repoRoot ?: repositoryRoot.path)
+    return database.transaction { repairWithCheckoutFence(request) }
+  }
+
+  private fun repairWithCheckoutFence(request: GoalRunnerRepairRequest): GoalRunnerRepairResult {
     val repoRoot = request.repoRoot ?: repositoryRoot.path
     val loaded =
       manifestStore.loadByIssueKey(request.issueKey, repoRoot)

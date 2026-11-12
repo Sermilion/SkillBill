@@ -95,6 +95,8 @@ public interface FeatureTaskRuntimeRunFacts {
 
   public val planIntakeRoot: Path?
 
+  public val planSpecResolution: PlanSpecSeed?
+
   /** Whether this pass ends once the `intake` step settles, before run invariants can be read from the spec. */
   public val stopAfterIntake: Boolean
 

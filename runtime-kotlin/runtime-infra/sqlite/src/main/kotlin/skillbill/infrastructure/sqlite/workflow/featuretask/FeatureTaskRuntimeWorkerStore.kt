@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.workflow.featuretask
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.goalrunner.model.GoalPlanningCheckoutRecovery
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -63,14 +64,28 @@ internal class FeatureTaskRuntimeWorkerStore(
     expectedUpdatedAt: String?,
   ): Boolean =
     if (transactionActive) {
-      acquireInTransaction(ownership, expectedUpdatedAt)
+      acquireInTransaction(ownership, expectedUpdatedAt, null)
     } else {
-      connection.inNestedWriteTransaction(diagnostics) { acquireInTransaction(ownership, expectedUpdatedAt) }
+      connection.inNestedWriteTransaction(diagnostics) { acquireInTransaction(ownership, expectedUpdatedAt, null) }
+    }
+
+  override fun acquireFeatureTaskRuntimeWorkerForGoal(
+    ownership: FeatureTaskRuntimeWorkerOwnership,
+    expectedUpdatedAt: String?,
+    parentWorkflowId: String,
+  ): Boolean =
+    if (transactionActive) {
+      acquireInTransaction(ownership, expectedUpdatedAt, parentWorkflowId)
+    } else {
+      connection.inNestedWriteTransaction(diagnostics) {
+        acquireInTransaction(ownership, expectedUpdatedAt, parentWorkflowId)
+      }
     }
 
   private fun acquireInTransaction(
     ownership: FeatureTaskRuntimeWorkerOwnership,
     expectedUpdatedAt: String?,
+    authorizedGoalParentWorkflowId: String?,
   ): Boolean {
     val claimed =
       connection.prepareStatement(
@@ -84,10 +99,30 @@ internal class FeatureTaskRuntimeWorkerStore(
             SELECT 1 FROM feature_task_runtime_worker_leases lease
             WHERE lease.workflow_id = feature_task_workflows.workflow_id
           )
+          AND NOT EXISTS (
+            SELECT 1 FROM goal_planning_ownership planning_owner
+            WHERE planning_owner.workflow_id = feature_task_workflows.workflow_id
+              AND planning_owner.ownership_state = 'transferred'
+              AND (? IS NULL OR planning_owner.parent_workflow_id IS NULL OR planning_owner.parent_workflow_id != ?)
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM goal_planning_checkout_recovery recovery
+            JOIN goal_planning_ownership planning_owner ON planning_owner.reservation_id = recovery.reservation_id
+            WHERE recovery.recovery_state <> '${GoalPlanningCheckoutRecovery.State.CONSUMED.wireValue}'
+              AND (planning_owner.workflow_id = feature_task_workflows.workflow_id
+                OR planning_owner.parent_workflow_id = feature_task_workflows.workflow_id
+                OR planning_owner.parent_workflow_id = feature_task_workflows.parent_workflow_id)
+          )
           AND ((updated_at IS NULL AND ? IS NULL) OR updated_at = ?)
         """.trimIndent(),
       ).use { statement ->
-        statement.bindAll(ownership.workflowId, expectedUpdatedAt, expectedUpdatedAt)
+        statement.bindAll(
+          ownership.workflowId,
+          authorizedGoalParentWorkflowId,
+          authorizedGoalParentWorkflowId,
+          expectedUpdatedAt,
+          expectedUpdatedAt,
+        )
         statement.executeUpdate() == 1
       }
     if (claimed) {

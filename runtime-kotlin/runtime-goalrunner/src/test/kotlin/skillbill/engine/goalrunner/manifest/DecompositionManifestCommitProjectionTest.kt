@@ -607,6 +607,7 @@ class DecompositionManifestCommitProjectionTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),

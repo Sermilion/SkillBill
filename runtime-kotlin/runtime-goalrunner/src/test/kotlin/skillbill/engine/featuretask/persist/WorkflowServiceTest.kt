@@ -221,6 +221,7 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -276,6 +277,7 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -331,6 +333,7 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -393,6 +396,7 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -442,6 +446,7 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -508,6 +513,7 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -718,6 +724,7 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -764,6 +771,7 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -813,6 +821,7 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),
@@ -945,6 +954,7 @@ class WorkflowServiceTest {
       projectCheckout =
         ProjectCheckout(
           TestRepositoryEnclosingRoot,
+          FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
           testProjectStore,
           InPlaceGoalWorktreeResources,
         ),
@@ -2457,6 +2467,7 @@ class WorkflowUpdateAcknowledgementBudgetTest {
       projectCheckout =
         ProjectCheckout(
           TestRepositoryEnclosingRoot,
+          FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
           testProjectStore,
           InPlaceGoalWorktreeResources,
         ),
@@ -4355,6 +4366,7 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
           ),

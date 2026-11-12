@@ -4,19 +4,23 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.workflow.model.GoalExecutionRootAccess
 import skillbill.application.workflow.model.GoalExecutionRootOptions
 import skillbill.goalrunner.model.GoalRunnerControlState
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.model.GoalPlanningOwnership
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.projectstore.model.ProjectStoreLocation
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
+import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
 @Inject
 class ProjectCheckout(
   private val repositories: RepositoryEnclosingRootPort,
+  private val database: DatabaseSessionFactory,
   private val projectStore: ProjectStorePort,
   private val worktrees: GoalWorktreeResources,
 ) {
@@ -24,6 +28,40 @@ class ProjectCheckout(
     listOf(repositories.primaryRepositoryIdentity(repoRoot), repositories.repositoryIdentity(repoRoot)).distinct()
 
   fun store(repoRoot: Path): ProjectStoreLocation = projectStore.resolve(repoRoot)
+
+  fun recoverGoalCheckout(
+    issueKey: String,
+    invokedRoot: Path,
+  ): GoalWorktreeResult? {
+    val normalizedIssue = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey)
+    val candidates = repositoryIdentityCandidates(invokedRoot)
+    val ownership =
+      database.read { unit ->
+        val owner =
+          candidates.firstNotNullOfOrNull {
+            unit.goalPlanningOwnership.findByIssue(it, normalizedIssue)
+          } ?: return@read null
+        val parent = owner.parentWorkflowId ?: return@read null
+        val control = unit.goalRunnerControls.controlState(parent)
+        val selected =
+          unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, parent)
+            ?.step(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN)?.planWorkflowId
+        val matchesOwner =
+          owner.state == GoalPlanningOwnership.State.TRANSFERRED && owner.workflowId == selected &&
+            owner.repositoryIdentity == control.repositoryIdentity
+        val matchesPath =
+          control.executionWorktreePath?.let(Path::of)?.toAbsolutePath()?.normalize() ==
+            owner.ownedPath.toAbsolutePath().normalize()
+        owner.takeIf { matchesOwner && matchesPath && unit.goalPlanningOwnership.checkoutRecovery(owner) != null }
+      } ?: return null
+    return worktrees.createOrAdopt(
+      invokedRoot,
+      issueKey,
+      ownership.ownedPath,
+      ownership.initialCommit,
+      ownership,
+    )
+  }
 
   fun ensureGoalExecutionRoot(
     controlState: GoalRunnerControlState,
@@ -45,7 +83,7 @@ class ProjectCheckout(
         )
       return GoalExecutionRootAccess.Ready(repositories.optionalRealPath(candidate) ?: invokedRoot, false)
     }
-    return if (repositories.optionalRealPath(recorded) != null) {
+    return if (repositories.optionalRealPath(recorded) != null || options.ownership != null) {
       verifyRecorded(recorded, controlState, manifest, invokedRoot, options)
     } else {
       GoalExecutionRootAccess.Failed(
@@ -84,7 +122,9 @@ class ProjectCheckout(
         GoalExecutionRootAccess.Failed(
           "the recorded goal checkout $recorded could not be verified: ${verified.reason}",
         )
-      else -> GoalExecutionRootAccess.Ready(recorded, false)
+      is GoalWorktreeResult.Created -> GoalExecutionRootAccess.Ready(recorded, true)
+      is GoalWorktreeResult.Adopted ->
+        GoalExecutionRootAccess.Ready(recorded, controlState.executionWorktreeRemovedAt != null)
     }
   }
 

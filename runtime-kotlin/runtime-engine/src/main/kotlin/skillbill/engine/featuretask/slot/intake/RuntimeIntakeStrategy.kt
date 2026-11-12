@@ -69,7 +69,7 @@ public class RuntimeIntakeStrategy(private val planIntake: () -> FeatureTaskRunt
         request.issueKey,
         request.planIntake,
         request.planIntakeRoot ?: request.repoRoot,
-        request.runInvariants.specReference,
+        PlanIntakeSelection(request.runInvariants.specReference, request.planSpecResolution),
       )
     val prose =
       when (settlement) {

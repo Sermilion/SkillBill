@@ -4,11 +4,11 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.goalIntakeSpecBundleDirectory
 import skillbill.contracts.issuekey.issueAndFeature
 import skillbill.contracts.projectstore.LegacyProjectStatePaths
+import skillbill.engine.featuretask.model.core.PlanSpecSeed
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.slot.intake.LegacySpecIntake
 import skillbill.engine.featuretask.slot.intake.LegacySpecRoute
 import skillbill.engine.featuretask.slot.intake.PlanSpecIntakePreparation
-import skillbill.engine.featuretask.slot.intake.PlanSpecSeed
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalIntakeMissingInput
