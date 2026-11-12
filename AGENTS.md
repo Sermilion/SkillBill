@@ -42,7 +42,7 @@ Read [Runtime command guidance](docs/runtime-command-guidance.md) before runtime
 
 ## Linear work tracking
 
-Track work in Linear. Use `SONA` for new issues; Linear assigns the full key. Never mint or reserve local issue keys.
+Track work items for this repository in Linear, except tasks the operator explicitly asks to perform directly on `main`. Do not create Linear issues for those direct tasks. Use the `SONA` team prefix for new issues. Linear assigns the complete issue key. Never mint or reserve local keys as a substitute for a Linear issue.
 
 Use this repository's `linear-sona` MCP from `.codex/config.toml`; verify workspace and team. Switch connections only if instructed.
 

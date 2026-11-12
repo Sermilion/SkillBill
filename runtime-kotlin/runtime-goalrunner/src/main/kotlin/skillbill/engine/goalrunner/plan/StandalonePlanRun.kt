@@ -218,8 +218,7 @@ public class StandalonePlanRun(
     }
     if (planReports.manifestExists(issueKey, repoRoot)) {
       if (found is FeatureTaskContinuationLookupResult.Resumable) {
-        return reopenBlockedFeasibility(issueKey, found.candidate.workflowId, repoRoot, inputFor)
-          ?: resume(found.candidate, intake, repoRoot, inputFor, statusPublisher)
+        return resume(found.candidate, intake, repoRoot, inputFor, statusPublisher)
       }
       return settleExistingManifest(
         issueKey,
@@ -374,6 +373,7 @@ public class StandalonePlanRun(
         } == true
       val needsFullReview =
         selectedFeasibility == null ||
+          selectedFeasibility.mode == PlanBundleFeasibilityMode.BLOCKED && selectedFeasibility.activeLaunch == null ||
           selectedFeasibility.mode == PlanBundleFeasibilityMode.APPROVED && !completedApproval ||
           selectedPhase.status == WorkflowStepStatus.COMPLETED &&
           selectedFeasibility.mode != PlanBundleFeasibilityMode.BLOCKED && !completedApproval
@@ -389,20 +389,6 @@ public class StandalonePlanRun(
         )
     }
     return true
-  }
-
-  private fun reopenBlockedFeasibility(
-    issueKey: String,
-    workflowId: String,
-    repoRoot: Path,
-    inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
-  ): StandalonePlanResult? {
-    if (!reopening.hasReopenableBlockedFeasibility(workflowId)) return null
-    val settledIds = PlanBundleFeasibility.capture(decompositionPlanner, repoRoot, issueKey).settledSubtaskIds
-    return replanSubtasks(
-      PlanSubtasksReplan(issueKey, workflowId, repoRoot, settledIds, feasibilityAdoption = true),
-      inputFor,
-    )
   }
 
   private fun resume(

@@ -56,6 +56,12 @@ Its `phase:<name>` forms run `skill-bill phase <name>`, and its `operation:<name
 forms run `skill-bill operation <name>`, relaying one operator confirmation.
 `skill-bill goal status` stays CLI-only; no skill wraps it.
 
+The shipped Kotlin and KMP goal gates honor the project's Gradle cache settings,
+including verification after a repair. Their legacy `cache_bypassing_*` manifest
+keys select the verification commands but do not force cache bypass. The keys
+and persisted run format stay unchanged. Repository CI commands may still disable
+caching to avoid shared-cache contention.
+
 ## New-task chat preparation and launch
 
 New-task chat gathers repository context, clarifies requirements, checks infrastructure
@@ -139,6 +145,11 @@ the plan's repository and issue key using the existing goal launch controls.
 Goals continue to show changes.
 
 ## Blocked-phase operator decisions
+
+Resuming planning reopens a settled feasibility block with a fresh repository
+baseline. This includes safety blocks caused by unrelated edits in the same
+checkout. The runtime retains the failed cycle, accepted unit plans and commits;
+committing those edits does not require resetting the goal or reverting them.
 
 To resolve a blocked child phase, use
 `skill-bill feature-task retry-blocked <workflow-id> --phase <phase> --reason <reason>`.

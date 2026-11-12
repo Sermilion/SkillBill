@@ -12,11 +12,13 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
@@ -63,6 +65,49 @@ import kotlin.time.Clock
 
 @OptIn(ExperimentalTestApi::class)
 class ChatComposerTest {
+  @Test
+  fun `queued preview keeps distinct live entries and closes when the queue empties`() = runTest {
+    val workspace = ChatWorkspace(
+      FakeExecutionChatRepository(), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),
+      WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
+      unconfinedNewTaskChats(), diagnostics = RecordingDiagnostics(),
+    )
+    val item = workItem("SONA-9")
+    workspace.open(item)
+    val session = workspace.session(item.id)!!
+    val image = ChatImage(byteArrayOf(1, 2, 3), "image/png")
+    session.queuedState.value = listOf(
+      QueuedChatMessage("same text", null, pauseAndAct = false),
+      QueuedChatMessage("same text", null, pauseAndAct = false),
+      QueuedChatMessage("", null, pauseAndAct = false, images = listOf(image)),
+    )
+    runComposeUiTest {
+      setContent {
+        SkillBillTheme(reducedMotion = true) {
+          CompositionLocalProvider(LocalShellInput provides ShellInput()) { ChatComposer(session, workspace) }
+        }
+      }
+      onNodeWithText("3 messages queued").performMouseInput { enter(center) }
+      onAllNodesWithText("same text").assertCountEquals(2)
+      onNodeWithText("Message 1").assertExists()
+      onNodeWithText("Message 2").assertExists()
+      onNodeWithText("Image attachment").assertExists()
+      runOnIdle {
+        session.queuedState.value = listOf(QueuedChatMessage("replacement", null, pauseAndAct = false))
+      }
+      onNodeWithText("replacement").assertExists()
+      onNodeWithText("same text").assertDoesNotExist()
+      onNodeWithText("1 message queued").performMouseInput { moveTo(Offset(-50f, -50f)) }
+      mainClock.advanceTimeBy(200)
+      onNodeWithText("replacement").assertDoesNotExist()
+      onNodeWithText("1 message queued").performMouseInput { enter(center) }
+      onNodeWithText("replacement").assertExists()
+      runOnIdle { session.queuedState.value = emptyList() }
+      onNodeWithText("1 message queued").assertDoesNotExist()
+      onNodeWithText("replacement").assertDoesNotExist()
+    }
+  }
+
   @Test
   fun `reopening a busy chat focuses its draft and Enter queues without waiting for agent preparation`() = runTest {
     val workspace = ChatWorkspace(

@@ -13,7 +13,7 @@
 
   const st = {
     mode: modeFromHash(),
-    view: 'work', prevView: 'work', section: null, filter: '', focus: 0, detailId: 'INF-7', propsOpen: true,
+    view: 'work', prevView: 'work', section: null, filter: '', focus: 0, detailId: 'INF-7', propsOpen: false, paneW: null,
     historyTab: 'all', closed: new Set(), sideOpen: false,
     /* Specs pane: project, selected path (a bundle key, 'done/<key>', or a file under it), expanded rows, filter text, status
      * tab and whether the search field is open. */
@@ -27,8 +27,11 @@
       { id: 2, directory: '~/dev/infra-terraform', name: 'infra-terraform', branch: 'feat/INF-7-remote-state-backend' },
     ],
     chosenAgent: {}, prereqs: new Set(), recovered: new Set(), secCollapse: {}, reasonOpen: new Set(),
-    /* Subtask index: selection per goal ('3' or 'finish'), inline expansion per goal (narrow windows), open breakdowns, full activity feeds */
-    subSel: {}, subOpen: {}, peekSel: {}, bdOpen: new Set(), feedAll: new Set(), narrow: false,
+    /* Subtask index: selection per goal ('3' or 'finish'), open breakdowns, full activity feeds. The details panel is
+     * closed until a subtask is selected or it is toggled (propsOpen); paneW is its dragged width, null for the default. */
+    /* Activity: open state per group ("<item>|<group>"), and the All or Blocks filter per item. */
+    actOpen: {}, actFilter: {},
+    subSel: {}, peekSel: {}, auditMet: new Set(), bdOpen: new Set(), feedAll: new Set(),
     settingsPage: 'general', agent: 'claude', cfgOpen: null, draft: null, matrix: JSON.parse(JSON.stringify(D.MATRIX)), phaseTiers: {},
     compaction: { enabled: true, window: 400000, pct: 70, phases: { review: { window: 600000, pct: 60 } } }, budget: D.BUDGET.map((r) => r.slice()),
     prefs: { dbPath: '', dbDraft: '', claudeDir: '~/.claude', retention: '24h', login: true, notify: Object.fromEntries(D.NOTIFICATIONS.map(([id, , on]) => [id, on])), specType: 'local', gradleWrapper: '', telemetry: 'anonymous', defaultAgent: null },
@@ -56,10 +59,6 @@
   const bootRoute = routeFromHash();
   if (bootRoute) applyRoute(bootRoute);
   relabelTabs();
-  /* Below 1080px the details pane hides and the subtask inspector opens inside its row. */
-  const narrowQuery = window.matchMedia('(max-width: 1080px)');
-  st.narrow = narrowQuery.matches;
-  narrowQuery.addEventListener('change', (e) => { st.narrow = e.matches; render(); });
 
   function modeFromHash() {
     const h = (location.hash || '').replace('#', '');
@@ -76,7 +75,9 @@
    * in it (#specs/SKILL-438, #specs/done/SKILL-446, #specs/SKILL-442/spec.md) and #specs/project/<id> picks a project. */
   function routeFromHash() {
     const [page, open, ...rest] = (location.hash || '').replace('#', '').split('/');
-    if (['activity', 'changes', 'comments'].includes(page)) return { view: page, surfaceScenario: open || null };
+    /* The old #activity links open the recorded run, whose detail holds Activity. */
+    if (page === 'activity') return { view: 'detail', id: 'SKILL-512', open: null };
+    if (['changes', 'comments'].includes(page)) return { view: page, surfaceScenario: open || null };
     if (page === 'new-task') return { view: 'newtask', open: open === 'state' ? rest[0] === 'closing' ? 'closing' : null : open || null, scenario: open === 'state' ? rest[0] : null, variant: open === 'picker' || open === 'resume' || open === 'changes' ? rest[0] || null : null };
     if (page === 'detail' && open) return { view: 'detail', id: decodeURIComponent(open), open: null, inspector: rest[0], resultTab: rest[1] };
     if (page === 'build') return { view: 'detail', id: D.BUILD.focus, open: null, build: { state: open || D.BUILD.live.state, type: rest[0] || D.BUILD.live.type } };
@@ -118,9 +119,9 @@
     }
     if (r.id) st.detailId = r.id;
     /* #detail/<id>/<subtask id | finish>/<phase> selects a subtask or Goal finish and opens one phase card in the details
-     * pane. The older /finish/assessment and /finish/qa links open the goal_assessment and qa cards. */
+     * panel. The older /finish/assessment and /finish/qa links open the goal_assessment and qa cards. */
     if (r.id && r.inspector) {
-      st.subSel[r.id] = r.inspector; st.subOpen[r.id] = true;
+      st.subSel[r.id] = r.inspector;
       const phase = r.resultTab === 'assessment' ? 'goal_assessment' : r.resultTab;
       if (phase) st.peekSel[`${r.id}|${r.inspector}`] = phase;
       st.propsOpen = true; st.specsOpen = false;
@@ -160,8 +161,8 @@
     const everyOpen = { has: () => true };
     run('Detail', () => [['INF-7'], ['DSN-31'], ['NEWS-176'], ['SKILL-417'], ['ATL-402'], ['SKILL-416'], ['ph-rk-review'], ['ph-atl-pr'], ['op-verify'], ['ph-atl-qa'], ['ph-sb-qa'], ['ph-pay-qa'], ['ph-sb-qa-gaps'], ['ph-sb-qa-left'], ['ph-sb-qa-docs'], ['ph-sb-qa-legacy'],
       ['ph-sb-validation'], ['ph-rk-validation'], ['ph-sb-val-limit'], ['ph-sb-validation-done'], ['ph-sb-val-413'], ['ph-sb-val-411'], ['ph-za-validation'], ['ph-sb-val-running'], ['ph-sb-val-waiting'], ['ph-sb-val-repairs'], ['ph-za-val-report'], ['op-verify-confirm'], ['op-verify-nocrit'], ['op-verify-fixes'], ['op-verify-085'], ['op-verify-stopped'], ['op-verify-superseded'], ['ph-sb-plan'], ['ph-atl-plan'], ['ph-news-plan'], ['ph-pay-plan'], ['ph-rk-plan'], ['ph-sb-plan-done'], ['ph-sb-monitor'], ['ph-sb-mon-ci'], ['ph-sb-mon-publish'], ['ph-sb-mon-conflict'], ['ph-sb-mon-wait'], ['ph-sb-mon-green'], ['ph-sb-mon-cap'], ['ph-sb-mon-unresolved'], ['ph-sb-mon-pr-edit'], ['ph-sb-mon-merged']].map(([id]) => as({ view: 'detail', detailId: id, termOpen: false, narrow: false, propsOpen: true, specsOpen: false, secCollapse: { 'incident-evidence': false, 'verify-intake': false }, qaOpen: everyOpen, vOpen: everyOpen, valParts: new Proxy({}, { get: () => everyOpen }), valChecks: new Proxy({}, { get: () => everyOpen }), vSel: { 'op-verify-085': { 'f:F-001': 'chat', 'c:6': 'goal' } }, vMarks: { 'op-verify-085': { 'c:3': 'repo' } } }, () => X.app(st))).join('')
-      + as({ view: 'detail', detailId: 'SKILL-416', termOpen: false, narrow: false, propsOpen: true, specsOpen: false, subSel: { 'SKILL-416': 'finish' } }, () => X.app(st))
-      + as({ view: 'detail', detailId: 'INF-7', termOpen: false, narrow: true }, () => X.app(st)));
+      + as({ view: 'detail', detailId: 'SKILL-416', termOpen: false, propsOpen: true, specsOpen: false, subSel: { 'SKILL-416': 'finish' } }, () => X.app(st))
+      + as({ view: 'detail', detailId: 'INF-7', termOpen: false, propsOpen: true }, () => X.app(st)));
     run('History', () => as({ view: 'history', termOpen: false }, () => X.app(st)));
     /* Every project state, a bundle in each run state, a filter that matches nothing and the open search field; then the
      * spec and panel menus. */
@@ -201,7 +202,7 @@
     /* A `steady` popup plays its opening animation once, not again on each re-render (the QA device popup on Refresh and ↑ ↓). */
     if (st.popover) { const pc = st.popover; out += S.Popover({ x: pc.x, y: pc.y, body: popoverBody(pc), flush: pc.flush, role: pc.role, cls: [pc.cls, pc.steady && pc.drawn ? 'is-steady' : ''].filter(Boolean).join(' ') }); pc.drawn = true; }
     if (st.dialog) out += dialogBody(st.dialog);
-    if (st.changeView) out += X.changesWindow(st.changeView);
+    if (st.changeView) out += window.Review.changesWindow(st, { work: st.changeView.work });
     if (st.cmdk) {
       const it = contextItem();
       out += S.CommandPalette({ context: it ? S.Label({ text: X.rowKey(it), dot: false }) : '', query: st.cmdk.q, list: S.CommandList(filteredGroups(), st.cmdk.hl) });
@@ -371,9 +372,14 @@
     if (st.mode !== 'prototype') { st.mode = 'prototype'; history.replaceState(null, '', '#prototype'); }
     render();
   }
+  /* The Changes window (app/review.js) over a run or chat. `scope` and `file` pick what it opens on. */
   function openChanges(work, scope, file) {
     st.changeReturnFocus = document.activeElement?.id || null;
-    st.changeView = { work, scope, file };
+    const cw = window.Review.cwOf(st, work);
+    if (scope) cw.scope = scope;
+    if (file) cw.selected = file;
+    cw.picker = false;
+    st.changeView = { work };
     st.popover = null; st.dialog = null;
     st.focusNext = 'changes-close';
     render();
@@ -383,30 +389,18 @@
     st.focusNext = st.changeReturnFocus;
     render();
   }
-  root.addEventListener('design-open-changes', (event) => openChanges(event.detail.work, event.detail.scope));
-  root.addEventListener('design-escape', () => { if (st.changeView) closeChanges(); });
+  /* Keys for the Changes window and the Changes and Diff comments catalog pages; Tab stays inside the open window. */
+  let hoverLine = null;
   function changesKeys(event) {
+    const page = st.view === 'changes' || st.view === 'comments';
+    if (!st.changeView && !page) return false;
+    if (window.Review.keys(st, event, A, hoverLine, render)) return true;
     if (!st.changeView) return false;
     if (event.key === 'Escape') { event.preventDefault(); closeChanges(); return true; }
-    if (event.key !== 'Tab') {
-      if (['j', 'k', '[', ']', 'a', 's', '/'].includes(event.key)) {
-        event.preventDefault();
-        root.querySelector('[embedded="window"]').shadowRoot.dispatchEvent(new CustomEvent('design-change-key', { detail: { key: event.key } }));
-      }
-      return true;
-    }
-    const buttons = [];
-    function collect(node) {
-      node.querySelectorAll('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),[tabindex="0"],sb-design-surface').forEach((element) => {
-        if (element.shadowRoot) collect(element.shadowRoot);
-        else if (element.getClientRects().length) buttons.push(element);
-      });
-    }
-    collect(root.querySelector('.sb-changes-dialog'));
-    let active = document.activeElement;
-    while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
-    if (event.shiftKey && active === buttons[0]) { event.preventDefault(); buttons.at(-1)?.focus(); }
-    else if (!event.shiftKey && active === buttons.at(-1)) { event.preventDefault(); buttons[0]?.focus(); }
+    if (event.key !== 'Tab') return true;
+    const items = [...root.querySelectorAll('.sb-sheet button:not([disabled]),.sb-sheet input:not([disabled]),.sb-sheet textarea:not([disabled]),.sb-sheet [tabindex="0"]')].filter((el) => el.getClientRects().length);
+    if (event.shiftKey && document.activeElement === items[0]) { event.preventDefault(); items.at(-1)?.focus(); }
+    else if (!event.shiftKey && document.activeElement === items.at(-1)) { event.preventDefault(); items[0]?.focus(); }
     return true;
   }
 
@@ -593,7 +587,7 @@
       { id: 'refresh', icon: 'refresh', label: 'Refresh' },
       { id: 'qa-device', icon: 'phone', label: 'Choose QA device' },
     ] });
-    groups.push({ head: 'Work', items: D.items.map((x) => ({ id: 'open:' + x.id, lead: X.statusIcon(x), label: `${X.rowKey(x)} ${x.title} ${x.repo}`, html: `<span class="t-faint" style="margin-right:8px">${esc(X.rowKey(x))}</span>${esc(x.title)}`, end: esc(x.repo) })) });
+    groups.push({ head: 'Work', items: D.items.map((x) => ({ id: 'open:' + x.id, lead: X.statusIcon(x), label: `${X.rowKey(x)} ${x.title} ${x.repo}`, html: `${S.IdTag(X.rowKey(x))} ${esc(x.title)}`, end: esc(x.repo) })) });
     groups.push({ head: 'Config', items: [{ id: 'cfg:models', icon: 'cpu', label: 'Configure models' }, { id: 'cfg:compaction', icon: 'gauge', label: 'Configure compaction' }, { id: 'shortcuts', icon: 'keyboard', label: 'Keyboard shortcuts', kbd: '?' }] });
     return groups;
   }
@@ -981,7 +975,11 @@
   const A = {
     noop() {},
     'changes-open'(id) { openChanges(id || st.detailId); },
+    /* A subtask's implement card: the Changes window scoped to that subtask's range. */
+    'changes-subtask'(arg) { const [id, n] = arg.split('|'); openChanges(id, { kind: 'range', from: +n, to: +n }); },
     'changes-close'() { closeChanges(); },
+    /* The Changes window and Diff comments catalog pages (#changes, #comments/<scenario>). */
+    'surface-page'(hash) { location.hash = hash; },
     surface(name) {
       if (name === 'changes') { openChanges(st.detailId); return; }
       if (location.hash === '#' + name) { st.mode = 'prototype'; applyRoute({ view: name }); render(); }
@@ -999,11 +997,21 @@
     /* Goal assessment order; it holds while paging, like section collapse. */
     'assess-order'(id) { st.assessOrder = id; render(); },
     /* Phase tabs in the details pane: open that phase's card and keep focus on its tab. */
-    'peek-pill'(arg) {
+    /* A click on the open pill folds its card; any other pill opens its own. Arrow keys pass 'arrow' and always open. */
+    'peek-pill'(arg, move) {
       const [id, key, phase] = arg.split('|');
-      st.peekSel[`${id}|${key}`] = phase;
+      const open = root.querySelector(`[data-act="peek-pill"][data-arg="${CSS.escape(arg)}"][aria-selected="true"]`);
+      st.peekSel[`${id}|${key}`] = open && move !== 'arrow' ? '' : phase;
       render();
       const el = root.querySelector(`[data-act="peek-pill"][data-arg="${CSS.escape(arg)}"]`);
+      if (el) el.focus({ preventScroll: true });
+    },
+    /* A document Phase pipeline step: select the current subtask, open its phase card and show the panel. */
+    'peek-open'(arg) {
+      const [id, key, phase] = arg.split('|');
+      st.subSel[id] = key; st.peekSel[`${id}|${key}`] = phase; st.propsOpen = true;
+      render(); revealSub();
+      const el = root.querySelector(`.sb-pane [data-act="peek-pill"][data-arg="${CSS.escape(`${id}|${key}|${phase}`)}"]`);
       if (el) el.focus({ preventScroll: true });
     },
     'sec-collapse'(arg) { const [key, def] = arg.split('|'); const now = key in st.secCollapse ? st.secCollapse[key] : def === '1'; st.secCollapse[key] = !now; render(); },
@@ -1022,7 +1030,7 @@
     'toggle-side'() { st.sideOpen = !st.sideOpen; render(); },
     'sec-toggle'(id) { st.closed.has(id) ? st.closed.delete(id) : st.closed.add(id); render(); },
     pager(dir) { const live = D.items.filter((x) => x.section !== 'finished'); const i = live.findIndex((x) => x.id === st.detailId); st.detailId = live[(i + +dir + live.length) % live.length].id; st.reasonOpen.clear(); render(); },
-    'layer-close'() { st.popover = null; render(); },
+    'layer-close'() { st.popover = null; A['cw-layer-close'](); render(); },
     'usage-toggle'(a, el) {
       if (st.popover && st.popover.type === 'usage') return A['usage-close']();
       const anchor = el || document.getElementById('usage-card');
@@ -1246,22 +1254,31 @@
     'tray-open'(id) { openItem(id); },
 
     /* subtask index and inspector */
+    /* A row, or a dependency chip in the panel, selects that subtask and opens the details panel. Rows never expand. */
     'sub-select'(arg) {
       const [id, key] = arg.split('|');
-      const it = item(id);
-      if (!it) return;
-      const same = X.selectedSub(st, it) === key;
-      if (same && !X.paneShown(st)) st.subOpen[id] = st.subOpen[id] === false;
-      else { st.subSel[id] = key; st.subOpen[id] = true; }
+      if (!item(id)) return;
+      st.subSel[id] = key; st.propsOpen = true;
       render(); revealSub();
     },
+    /* ↑/↓ in the focused list and the panel's step buttons. With the panel closed the first press opens it on the default row. */
     'sub-move'(d) {
       const it = item(st.detailId);
       const keys = it ? X.subKeys(it) : [];
       if (!keys.length) return;
       const i = keys.indexOf(X.selectedSub(st, it));
-      st.subSel[it.id] = keys[Math.max(0, Math.min(keys.length - 1, i + +d))]; st.subOpen[it.id] = true;
+      if (st.propsOpen) st.subSel[it.id] = keys[Math.max(0, Math.min(keys.length - 1, i + +d))];
+      st.propsOpen = true;
       render(); revealSub();
+    },
+    /* Details panel width: a step from the keyboard, or 'reset' (double-click on the grip) for the default. */
+    'pane-size'(d) {
+      const it = item(st.detailId), split = root.querySelector('.sb-split');
+      if (!it || !split) return;
+      const pane = root.querySelector('.sb-pane');
+      st.paneW = d === 'reset' ? null : clampPane((pane ? pane.getBoundingClientRect().width : 560) + +d, split);
+      render();
+      const grip = root.querySelector('[data-pane-grip]'); if (grip && d !== 'reset') grip.focus();
     },
     'sub-open'() {
       const it = item(st.detailId);
@@ -1269,6 +1286,25 @@
       const s = key && key !== 'finish' && it.subtasks.find((x) => String(x.id) === key);
       if (s) A['open-file'](`${it.id}/${s.spec}`);
     },
+    /* Activity: a group header toggles it; a timeline segment ("|open") opens its group and scrolls to it. */
+    'act-group'(arg) {
+      const [id, gid, how] = arg.split('|'), k = `${id}|${gid}`;
+      const el = () => root.querySelector(`[data-act="act-group"][data-arg="${CSS.escape(k)}"]`);
+      const now = el() && el().getAttribute('aria-expanded') === 'true';
+      st.actOpen[k] = how === 'open' ? true : !now;
+      render();
+      if (how === 'open' && el()) el().scrollIntoView({ block: 'center', behavior: 'smooth' });
+    },
+    'act-all'(arg) {
+      const [id, open] = arg.split('|'), it = item(id);
+      if (!it) return;
+      X.activityGroups(st, it).forEach((g) => { st.actOpen[`${id}|${g.id}`] = open === '1'; });
+      st.actOpen[`${id}|run`] = open === '1';
+      render();
+    },
+    'act-filter'(arg) { const [id, f] = arg.split('|'); st.actFilter[id] = f; render(); },
+    /* An audit criterion opens in place to show what covers it, or what is missing. */
+    'audit-met'(key) { st.auditMet.has(key) ? st.auditMet.delete(key) : st.auditMet.add(key); render(); },
     'bd-toggle'(key) { st.bdOpen.has(key) ? st.bdOpen.delete(key) : st.bdOpen.add(key); render(); },
     /* QA results: a finding, an untested area or a fold opens and closes in place; focus stays on its head. */
     'qa-toggle'(key) {
@@ -1569,7 +1605,10 @@
     'resume-close'() { st.dialog = null; focusComposer(); render(); },
     'resume-close-self'(a, el, e) { if (e.target === el) A['resume-close'](); },
   };
+  /* Changes window and Diff comments actions (app/review.js). */
+  Object.assign(A, window.Review.actions({ st, render, toast, root, openChanges }));
 
+  const clampPane = (w, split) => Math.round(Math.max(X.PANE_MIN, Math.min(split.clientWidth - 64, w)));
   function revealSub() { const el = root.querySelector('.sb-sub.is-selected'); if (el) el.scrollIntoView({ block: 'nearest' }); }
 
   /* ---------- events ---------- */
@@ -1606,6 +1645,7 @@
   });
   root.addEventListener('input', (e) => {
     const t = e.target, k = t.dataset.input;
+    if (k && /^(cw|cm)-/.test(k) && window.Review.input(st, t, render)) return;
     if (t.id === 'cmdk-input') { st.cmdk.q = t.value; st.cmdk.hl = 0; renderCmdkList(); return; }
     /* The composer keeps its draft per chat and relabels Send / Queue / Send now in place. */
     if (k === 'composer') { const c = chatById(t.dataset.chat); if (c) { c.draft = t.value; const b = document.getElementById('composer-send'); if (b) b.outerHTML = X.ntSendButton(c); } return; }
@@ -1638,7 +1678,7 @@
     let i = tabs.indexOf(tab);
     i = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : Math.max(0, Math.min(tabs.length - 1, i + (e.key === 'ArrowRight' ? 1 : -1)));
     e.preventDefault(); e.stopPropagation();
-    A['peek-pill'](tabs[i].dataset.arg);
+    A['peek-pill'](tabs[i].dataset.arg, 'arrow');
   }, true);
   root.addEventListener('keydown', (e) => {
     if (e.target.id !== 'term-rename-in') return;
@@ -1656,6 +1696,22 @@
     const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
     document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
   });
+  /* drag the details panel's left edge to resize it; double-click returns to the default width */
+  root.addEventListener('mousedown', (e) => {
+    if (!e.target.matches('[data-pane-grip]')) return;
+    e.preventDefault();
+    const grip = e.target, pane = grip.parentElement, split = pane.parentElement, x0 = e.clientX, w0 = pane.getBoundingClientRect().width;
+    grip.classList.add('is-drag');
+    const move = (ev) => { st.paneW = clampPane(w0 + (x0 - ev.clientX), split); pane.style.setProperty('--w', st.paneW + 'px'); };
+    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); render(); };
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+  });
+  root.addEventListener('dblclick', (e) => { if (e.target.matches('[data-pane-grip]')) A['pane-size']('reset'); });
+  root.addEventListener('keydown', (e) => {
+    if (!e.target.matches || !e.target.matches('[data-pane-grip]') || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+    e.preventDefault(); e.stopPropagation();
+    A['pane-size'](e.key === 'ArrowLeft' ? 24 : -24);
+  }, true);
   /* In the command menu, hovering a row moves the highlight there. */
   root.addEventListener('mouseover', (e) => {
     if (!st.cmdk) return;
@@ -1693,6 +1749,21 @@
     const ts = e.target.closest && e.target.closest('[data-ctabs]');
     if (ts && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { ts.scrollLeft += e.deltaY; e.preventDefault(); }
   }, { passive: false });
+  /* Changes strip: press on a column and drag across others to pick a range; a diff line under the pointer is the C target. */
+  root.addEventListener('mousedown', (e) => {
+    const col = e.target.closest && e.target.closest('[data-strip-n]');
+    if (!col || col.disabled) return;
+    if (!window.Review.dragStart(st, +col.dataset.stripN, e, render)) return;
+    const up = () => { window.Review.dragEnd(); document.removeEventListener('mouseup', up); };
+    document.addEventListener('mouseup', up);
+  });
+  root.addEventListener('mouseover', (e) => {
+    if (!e.target.closest) return;
+    const col = e.target.closest('[data-strip-n]');
+    if (col && e.buttons === 1) window.Review.dragOver(st, +col.dataset.stripN, render);
+    const ln = e.target.closest('[data-line]');
+    if (ln) hoverLine = ln.dataset.line;
+  });
   window.addEventListener('hashchange', () => {
     st.changeView = null;
     st.mode = modeFromHash();
@@ -1744,6 +1815,7 @@
       if (st.draft) return A['ed-cancel']();
       if (st.sideOpen) { st.sideOpen = false; return render(); }
       if (/INPUT|TEXTAREA/.test(e.target.tagName)) { e.target.blur(); return; }
+      if (st.view === 'detail' && st.propsOpen) { st.propsOpen = false; render(); const l = root.querySelector('[data-zone="subtasks"]'); if (l) l.focus(); return; }
       if (st.view === 'detail') return go('work');
       if (st.view === 'settings') return go(st.prevView || 'work');
       return;
@@ -1777,7 +1849,7 @@
     if (key === 'P' && e.shiftKey && it) return A['pause-now'](it.id);
     if (key === 'r' && it) return A.launch(it.id);
 
-    /* While the Subtasks list has focus, ↑/↓ move the selection and Enter opens the subtask's spec file. J/K still page. */
+    /* While the Subtasks list has focus, ↑/↓ move the selection (opening the details panel) and Enter opens the subtask's spec file. J/K still page. */
     const inSubs = st.view === 'detail' && document.activeElement && document.activeElement.closest && document.activeElement.closest('[data-zone="subtasks"]');
     if (inSubs && (key === 'ArrowDown' || key === 'ArrowUp')) { e.preventDefault(); return A['sub-move'](key === 'ArrowDown' ? 1 : -1); }
     if (inSubs && key === 'Enter') { e.preventDefault(); return A['sub-open'](); }

@@ -1,3 +1,12 @@
+## [2026-11-12] SONA-9 Preview queued messages
+Areas: desktop/feature/chat
+- The execution composer opens a preview from the queued count on hover, click, or keyboard activation. It lists the live queue in order, including duplicates and image-only entries, without exposing image bytes.
+- The preview updates while open and closes when the queue empties or the pointer exits. Escape dismisses it; keyboard users can focus and scroll it, then return to the composer focus order.
+- The local popup uses design system tokens, window-aware positioning, bounded dimensions, wrapped text, and scrolling. ChatThread retains queue mutation and delivery ownership; persistence and backend behavior are unchanged.
+Feature size: MEDIUM
+Feature flag: N/A
+Acceptance criteria: 2/2 implemented
+
 ## [2026-11-11] SKILL-530 live chat steering and shared recovery
 Areas: desktop/feature/chat, desktop/feature/chat/newtask, desktop/core/domain, desktop/core/data/chat, desktop/core/testing, desktop/app, runtime-kotlin/runtime-infra/launcher
 - Claude and Codex Send now deliver queued text and images into active work in both chat types, preserving task context, reply collection and approvals. Stop remains explicit; Cursor and Junie retain their previous policy.

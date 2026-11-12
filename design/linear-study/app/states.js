@@ -149,6 +149,27 @@
   stuck.subtasks[2].status = 'blocked';
   stuck.subtasks[2].phases = { cards: P.sub3, counts: { validate: 'attempt 3' }, states: Object.assign(Object.fromEntries(D.PHASE_ORDER.map((id, i) => [id, i < D.PHASE_ORDER.indexOf('validate') ? 'done' : ''])), { validate: 'wait' }) };
   stuck.pipeline = { done: D.PHASE_ORDER.slice(0, D.PHASE_ORDER.indexOf('validate')), now: 'validate' };
+  /* Subtask audit states beyond INF-7's passed audits: a failed audit with unmet criteria, and one still running. */
+  function auditExample(label, state, auditResult) {
+    const it = extra('goal', state === 'fail' ? 'blocked' : 'active', label, { catalogPath: '2/audit', step: 'audit', exec: `attempt ${auditResult.attempts.length + (state === 'now' ? 1 : 0)}`, current: 2, done: 1, live: state === 'now' });
+    const sub = it.subtasks[1];
+    sub.status = state === 'fail' ? 'blocked' : 'in_progress'; sub.blocked = state === 'fail' ? 'Audit found 2 criteria not covered after 3 attempts' : null; sub.reviews = []; delete sub.phases;
+    sub.phases = { states: Object.assign(Object.fromEntries(D.PHASE_ORDER.map((id, i) => [id, i < D.PHASE_ORDER.indexOf('audit') ? 'done' : ''])), { audit: state === 'fail' ? 'fail' : 'now' }), counts: { audit: `attempt ${auditResult.attempts.length + (state === 'now' ? 1 : 0)}` } };
+    sub.auditResult = auditResult;
+    it.pipeline = { done: D.PHASE_ORDER.slice(0, D.PHASE_ORDER.indexOf('audit')), now: 'audit' };
+  }
+  const crit = [
+    { ref: 'AC-001', text: 'IDE status reports the parent goal phase, not the finished child phase, within one poll after a child finishes.' },
+    { ref: 'AC-002', text: 'The lease check runs once per poll, and a missing lease reads as idle instead of failing the request.' },
+    { ref: 'AC-003', text: 'A finished child drops its phase label in the same poll that reports the parent phase.' },
+    { ref: 'AC-004', text: 'Status reads stay under 50 ms at 200 tracked runs.' },
+    { ref: 'AC-005', text: 'Both IDE plugins keep their existing status contract; no new field is required.' },
+  ];
+  auditExample('Subtask audit failed', 'fail', { outcome: 'failed', met: 3, total: 5, attemptTotal: 3,
+    summary: 'Two criteria still have no covering change: the poll-level lease check and the read-time budget.',
+    criteria: crit.map((c, i) => Object.assign({}, c, { met: ![1, 3].includes(i), fixedIn: i === 2 ? 2 : null })),
+    attempts: [{ n: 1, passed: false, uncovered: 4, next: 'audit_plan_fix' }, { n: 2, passed: false, uncovered: 3, next: 'audit_implement_fix' }, { n: 3, passed: false, uncovered: 2 }] });
+  auditExample('Subtask audit running', 'now', { outcome: 'running', attempts: [{ n: 1, passed: false, uncovered: 2, next: 'audit_implement_fix' }, { n: 2, passed: false, uncovered: 1, next: 'audit_implement_fix' }] });
   function finishExample(label, phase, states, cards, o) {
     const it = extra('goal', o.state || 'active', label, { catalogPath: `finish/${phase}`, title: 'Keep QA live preview working across display crashes', branch: 'feat/SKILL-512-qa-live-preview', step: phase, summary: o.summary, agent: 'codex', model: 'gpt-6.1-sol', effort: 'high' });
     it.subtasks.forEach((x) => { if (x.status !== 'completed_no_change') x.status = 'complete'; x.blocked = null; delete x.phases; });
@@ -207,7 +228,8 @@
     }).join('')}</tr>`).join('');
     const variants = catalog.special.map((row) => `<tr><th scope="row">${esc(row.type)}</th><td>${X.statusIcon(X.lookup(row.id))} ${link(row.id, row.label)}</td><td>${esc(location(row.id))}</td></tr>`).join('');
     const chats = [
-      ...['real', 'one', 'running', 'long', 'phase'].map((id, i) => ['Activity', ['Recorded run', 'One subtask', 'Running', '33 subtasks', 'Standalone phase'][i], `activity/${id}`]),
+      /* Activity is part of each detail and reads that item's records. */
+      ['Activity', 'Recorded run, 33 subtasks', 'detail/SKILL-512'], ['Activity', 'Running', 'detail/SKILL-417'], ['Activity', 'Blocked, with audit and review loops', 'detail/INF-7'], ['Activity', 'Standalone phase', 'detail/ph-rk-review'],
       ['Changes', 'Subtask scopes and ranges', 'changes'],
       ...['Writing a review', 'Review added', 'After phase review', 'After review fixes'].map((label, i) => ['Diff comments', label, `comments/${i + 1}`]),
       ['New task', 'Home', 'new-task'], ['New task', 'Two idle chats', 'new-task/state/two'],

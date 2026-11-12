@@ -1,5 +1,7 @@
 package skillbill.engine.goalrunner.plan
 
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
@@ -59,11 +61,13 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPl
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImportSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
+import skillbill.workflow.taskruntime.model.planning.PLAN_BUNDLE_FEASIBILITY_FULL_V2_REVIEW_ADOPTION_REASON
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityIdentity
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunch
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunchKind
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunchOutcome
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityReopening
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityRepositoryBaseline
 import skillbill.workflow.taskruntime.model.planning.blockPlanBundleFeasibilityLaunch
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -457,8 +461,11 @@ class PlanSubtasksReopeningTest {
     }
   }
 
-  @Test
-  fun `goal resume of a safety-blocked feasibility review opens a fresh review cycle`() {
+  @ParameterizedTest
+  @ValueSource(booleans = [false, true])
+  fun `goal resume reopens safety-blocked feasibility even after an interrupted pending adoption`(
+    interruptedAdoption: Boolean,
+  ) {
     val home = Files.createTempDirectory("blocked-feasibility-adoption")
     try {
       val database = phaseRunDatabase(home, testHarnessClock)
@@ -469,12 +476,44 @@ class PlanSubtasksReopeningTest {
       val codec = PlanBundleFeasibilityStateCodec(featureTaskRuntimeWireArtifactValidatorForTest())
       val captured = PlanBundleFeasibility.capture(planner(), home, "SKILL-384")
       seedSafetyBlockedFeasibility(database, selectedId, codec, captured.identity)
+      if (interruptedAdoption) {
+        database.transaction { unit ->
+          val snapshot = requireNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId))
+          val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
+          val state = codec.decode(family.value(snapshot.artifacts), "test")
+          val records = decodePhaseRecords(snapshot.artifacts)
+          val pending = requireNotNull(records["plan_subtasks"]).copy(status = WorkflowStepStatus.PENDING)
+          val retained =
+            state.copy(
+              reopenings =
+                listOf(
+                  PlanBundleFeasibilityReopening(
+                    pending.attemptCount,
+                    state.revision,
+                    0,
+                    PLAN_BUNDLE_FEASIBILITY_FULL_V2_REVIEW_ADOPTION_REASON,
+                    pending,
+                  ),
+                ),
+            )
+          unit.workflowStates.saveAcceptedSnapshotMutation(
+            WorkflowFamily.TASK_RUNTIME,
+            snapshot.copy(
+              artifacts =
+                DurableWorkflowArtifacts.fromMap(
+                  snapshot.artifacts + family.entry(codec.encode(retained)) +
+                    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
+                      (records + ("plan_subtasks" to pending)).mapValues { it.value.asWorkflowArtifactEntry() },
+                    ),
+                ),
+            ),
+          )
+        }
+      }
 
       val reopening = reopening(database)
-      assertTrue(reopening.hasReopenableBlockedFeasibility(selectedId))
       val replan = PlanSubtasksReplan("SKILL-384", selectedId, home, setOf(1), feasibilityAdoption = true)
       assertTrue(reopening.reopenWithRebasedBundle(replan))
-      assertFalse(reopening.hasReopenableBlockedFeasibility(selectedId))
 
       val reopened = database.read { requireNotNull(it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId)) }
       val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
@@ -488,6 +527,8 @@ class PlanSubtasksReopeningTest {
         state.cycleHistory.single().settledLaunches.single().outcome,
       )
       assertEquals(WorkflowStepStatus.PENDING, decodePhaseRecords(reopened.artifacts)["plan_subtasks"]?.status)
+      assertTrue(reopening.reopenWithRebasedBundle(replan))
+      assertEquals(reopened, database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId) })
     } finally {
       home.toFile().deleteRecursively()
     }
