@@ -184,7 +184,7 @@ afterEvaluate {
     val state = home.resolve(".skill-bill")
     environment("SKILL_BILL_RUNTIME_DIR", root.resolve("runtime").absolutePath)
     environment("SKILL_BILL_STATE_DIR", state.absolutePath)
-    environment("SKILL_BILL_DB", state.resolve("review-metrics.db").absolutePath)
+    environment("SKILL_BILL_REVIEW_DB", state.resolve("review-metrics.db").absolutePath)
     if (System.getProperty("os.name").contains("linux", true)) {
       environment("SKIKO_RENDER_API", "SOFTWARE_COMPAT")
     }
