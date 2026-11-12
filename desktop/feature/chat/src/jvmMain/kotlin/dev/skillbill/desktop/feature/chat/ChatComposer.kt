@@ -1,34 +1,73 @@
 package dev.skillbill.desktop.feature.chat
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
+import dev.skillbill.desktop.core.designsystem.SkillBillRadius
+import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.layeredShadow
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
@@ -41,6 +80,8 @@ import dev.skillbill.desktop.core.designsystem.component.SbPopover
 import dev.skillbill.desktop.core.designsystem.component.SbPopoverPlacement
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
+import dev.skillbill.desktop.core.designsystem.icon.SbIcon
+import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
@@ -51,6 +92,8 @@ import dev.skillbill.desktop.feature.chat.newtask.IssuePrefixPicker
 import java.io.File
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * The active chat's input. Enter sends and Shift+Enter starts a new line; "Pause and act" shows only while the execution runs.
@@ -163,7 +206,7 @@ internal fun ChatComposer(
         }
       }
     }
-    if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
+    if (queued.isNotEmpty()) QueuedMessagesPreview(queued)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       ModeBadge(ChatPermissionMode.Act)
       AgentPicker(
@@ -208,6 +251,201 @@ internal fun ChatComposer(
         )
       }
     }
+  }
+}
+
+@Composable
+private fun QueuedMessagesPreview(queued: List<QueuedChatMessage>) {
+  val anchorSource = remember { MutableInteractionSource() }
+  val anchorHovered by anchorSource.collectIsHoveredAsState()
+  val anchorFocused by anchorSource.collectIsFocusedAsState()
+  val popupSource = remember { MutableInteractionSource() }
+  val popupHovered by popupSource.collectIsHoveredAsState()
+  val pillFocus = remember { FocusRequester() }
+  val scrollFocus = remember { FocusRequester() }
+  val scrollState = rememberScrollState()
+  val scrollScope = rememberCoroutineScope()
+  val focusManager = LocalFocusManager.current
+  var keyboardOpen by remember { mutableStateOf(false) }
+  var pointerVisited by remember { mutableStateOf(false) }
+  var suppressHover by remember { mutableStateOf(false) }
+  var returnFocusToPill by remember { mutableStateOf(false) }
+  var focusDirection by remember { mutableStateOf<FocusDirection?>(null) }
+  val dismiss = {
+    returnFocusToPill = returnFocusToPill || keyboardOpen
+    keyboardOpen = false
+    suppressHover = pointerVisited || anchorHovered || popupHovered
+  }
+  LaunchedEffect(anchorHovered, popupHovered) {
+    if (anchorHovered || popupHovered) {
+      pointerVisited = true
+    } else if (pointerVisited) {
+      delay(150)
+      if (!anchorHovered && !popupHovered) {
+        pointerVisited = false
+        suppressHover = false
+      }
+    }
+  }
+  LaunchedEffect(keyboardOpen, queued.isNotEmpty()) {
+    if (!keyboardOpen && returnFocusToPill && queued.isNotEmpty()) {
+      pillFocus.requestFocus()
+      focusDirection?.let { focusManager.moveFocus(it) }
+      focusDirection = null
+      returnFocusToPill = false
+    }
+    if (queued.isEmpty()) {
+      keyboardOpen = false
+      returnFocusToPill = false
+    }
+  }
+  val open = queued.isNotEmpty() && (keyboardOpen || (pointerVisited && !suppressHover))
+  val density = LocalDensity.current
+  val window = LocalWindowInfo.current.containerSize
+  val windowWidth = with(density) { window.width.toDp() }
+  val windowHeight = with(density) { window.height.toDp() }
+  val maxWidth = (windowWidth - 24.dp).coerceAtLeast(0.dp).coerceAtMost(SkillBillSize.popoverMax)
+  val maxHeight = (windowHeight - 24.dp).coerceAtLeast(0.dp)
+  val positionProvider = remember(density) {
+    QueuePreviewPositionProvider(with(density) { 8.dp.roundToPx() })
+  }
+  val countLabel = "${queued.size} ${if (queued.size == 1) "message" else "messages"} queued"
+  Box(
+    Modifier.focusRequester(pillFocus)
+      .background(if (anchorFocused) SkillBillTheme.colors.bgHover else Color.Transparent)
+      .hoverable(anchorSource)
+      .onPreviewKeyEvent { event ->
+        if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isMetaPressed || event.isAltPressed) return@onPreviewKeyEvent false
+        when (event.key) {
+          Key.Escape -> { dismiss(); true }
+          Key.Enter, Key.NumPadEnter, Key.Spacebar -> {
+            suppressHover = false
+            keyboardOpen = true
+            true
+          }
+          else -> false
+        }
+      }
+      .clickable(interactionSource = anchorSource, indication = null) {
+        if (keyboardOpen) dismiss() else {
+          suppressHover = false
+          keyboardOpen = true
+        }
+      }
+      .pointerHoverIcon(PointerIcon.Hand)
+      .semantics {
+        role = Role.Button
+        contentDescription = countLabel
+        stateDescription = if (open) "Preview open" else "Preview closed"
+      },
+  ) {
+    SbLabel(countLabel)
+    if (open) {
+      Popup(
+        popupPositionProvider = positionProvider,
+        onDismissRequest = {
+          keyboardOpen = false
+          suppressHover = pointerVisited || anchorHovered || popupHovered
+        },
+        properties = PopupProperties(focusable = keyboardOpen, dismissOnBackPress = keyboardOpen, dismissOnClickOutside = keyboardOpen),
+      ) {
+        val shape = RoundedCornerShape(SkillBillRadius.sm)
+        LaunchedEffect(keyboardOpen) {
+          if (keyboardOpen) scrollFocus.requestFocus()
+        }
+        Column(
+          Modifier.hoverable(popupSource)
+            .widthIn(max = maxWidth)
+            .heightIn(max = maxHeight)
+            .layeredShadow(SkillBillTheme.shadows.popover, shape)
+            .background(SkillBillTheme.colors.bgOverlay, shape)
+            .border(1.dp, SkillBillTheme.colors.borderStrong, shape)
+            .onPreviewKeyEvent { event ->
+              if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isMetaPressed || event.isAltPressed) return@onPreviewKeyEvent false
+              when (event.key) {
+                Key.Escape -> { dismiss(); true }
+                Key.Tab -> {
+                  focusDirection = if (event.isShiftPressed) FocusDirection.Previous else FocusDirection.Next
+                  dismiss()
+                  true
+                }
+                Key.DirectionUp -> { scrollScope.launch { scrollState.scrollTo((scrollState.value - 40).coerceAtLeast(0)) }; true }
+                Key.DirectionDown -> { scrollScope.launch { scrollState.scrollTo((scrollState.value + 40).coerceAtMost(scrollState.maxValue)) }; true }
+                Key.PageUp -> { scrollScope.launch { scrollState.scrollTo((scrollState.value - scrollState.viewportSize).coerceAtLeast(0)) }; true }
+                Key.PageDown -> { scrollScope.launch { scrollState.scrollTo((scrollState.value + scrollState.viewportSize).coerceAtMost(scrollState.maxValue)) }; true }
+                Key.MoveHome -> { scrollScope.launch { scrollState.scrollTo(0) }; true }
+                Key.MoveEnd -> { scrollScope.launch { scrollState.scrollTo(scrollState.maxValue) }; true }
+                else -> false
+              }
+            }
+            .verticalScroll(scrollState)
+            .focusRequester(scrollFocus)
+            .focusable(enabled = keyboardOpen)
+            .padding(10.dp)
+            .semantics { paneTitle = "Queued messages" },
+          verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          BasicText("Queued messages", style = SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.fg))
+          queued.forEachIndexed { index, message ->
+            QueuePreviewEntry(index + 1, message)
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun QueuePreviewEntry(number: Int, message: QueuedChatMessage) {
+  val colors = SkillBillTheme.colors
+  Column(
+    Modifier.fillMaxWidth()
+      .border(1.dp, colors.borderSubtle, RoundedCornerShape(SkillBillRadius.xs))
+      .padding(horizontal = 9.dp, vertical = 7.dp)
+      .semantics {
+        contentDescription = if (message.text.isBlank() && message.images.isNotEmpty()) {
+          "Queued message $number, image attachment"
+        } else {
+          "Queued message $number, ${message.text}"
+        }
+      },
+    verticalArrangement = Arrangement.spacedBy(4.dp),
+  ) {
+    BasicText("Message $number", style = SkillBillTheme.type.t2xs.copy(color = colors.fgFaint))
+    if (message.text.isNotBlank()) {
+      BasicText(
+        message.text,
+        style = SkillBillTheme.type.tXs.copy(color = colors.fg2, lineHeight = 1.35.em),
+        softWrap = true,
+        overflow = TextOverflow.Clip,
+      )
+    }
+    if (message.images.isNotEmpty() && message.text.isBlank()) {
+      Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        SbIcon(LucideIcons.image, SbIconSize.Xs)
+        BasicText("Image attachment", style = SkillBillTheme.type.tXs.copy(color = colors.fg2))
+      }
+    }
+  }
+}
+
+private class QueuePreviewPositionProvider(private val margin: Int) : PopupPositionProvider {
+  override fun calculatePosition(
+    anchorBounds: IntRect,
+    windowSize: IntSize,
+    layoutDirection: LayoutDirection,
+    popupContentSize: IntSize,
+  ): IntOffset {
+    val rightAligned = layoutDirection == LayoutDirection.Ltr
+    val preferredX = if (rightAligned) anchorBounds.left else anchorBounds.right - popupContentSize.width
+    val x = preferredX.coerceIn(margin, (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin))
+    val below = anchorBounds.bottom
+    val y = if (below + popupContentSize.height <= windowSize.height - margin) {
+      below
+    } else {
+      (anchorBounds.top - popupContentSize.height).coerceAtLeast(margin)
+    }
+    return IntOffset(x, y)
   }
 }
 
