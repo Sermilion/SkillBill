@@ -36,8 +36,9 @@ data class DetailUiState(
   val controls: ControlsUiState = ControlsUiState(),
   val subtaskChoice: SubtaskChoice = SubtaskChoice(),
   val phaseChoice: Map<PhaseChoiceKey, String> = emptyMap(),
-  /** The previous detail was left by J or K while its Subtasks list had focus, so this one's list takes focus once it shows. */
+  /** A return to the Subtasks list is pending, including a request carried by J or K. */
   val focusSubtaskList: Boolean = false,
+  val subtaskListTargetAvailable: Boolean = false,
   val changes: ChangesUi = ChangesUi(),
   val qaCaseOverrides: Map<QaCaseKey, Boolean> = emptyMap(),
   val validationCheckOverrides: Map<ValidationCheckKey, Boolean> = emptyMap(),
@@ -75,10 +76,9 @@ sealed interface SubtaskKey {
 }
 
 /**
- * The reader's subtask selection for one item, UI state only. A null [key] means the default selection; [expanded] folds the
- * inline inspector that the selected row shows while the details pane is hidden.
+ * The reader's subtask selection for one item, UI state only. A null [key] means the default selection.
  */
-data class SubtaskChoice(val key: SubtaskKey? = null, val expanded: Boolean = true)
+data class SubtaskChoice(val key: SubtaskKey? = null)
 
 data class PhaseChoiceKey(val itemId: String, val subtask: SubtaskKey)
 
@@ -147,8 +147,8 @@ sealed interface DetailAction {
   data class OpenSpecFile(val path: String) : DetailAction
   data class Navigate(val route: AppRoute) : DetailAction
 
-  /** Selects [key]; with [inline] (the details pane hidden) selecting the selected row again folds or unfolds it. */
-  data class SelectSubtask(val key: SubtaskKey, val inline: Boolean = false) : DetailAction
+  /** Selects [key] in the subject index. */
+  data class SelectSubtask(val key: SubtaskKey) : DetailAction
 
   /** Selects a phase for one subtask of the named item. */
   data class SelectPhase(val itemId: String, val key: SubtaskKey, val phaseId: String) : DetailAction
@@ -159,8 +159,14 @@ sealed interface DetailAction {
   /** Enter in the focused Subtasks index: opens the selected subtask's spec file; Goal finish has none. */
   data object OpenSelectedSubtaskSpec : DetailAction
 
-  /** The Subtasks index took focus, which spends [DetailUiState.focusSubtaskList]. */
+  data object FocusSubtaskList : DetailAction
+
+  data class SubtaskListTargetChanged(val available: Boolean) : DetailAction
+
+  /** The Subtasks index or attached detail fallback completed [DetailUiState.focusSubtaskList]. */
   data object SubtaskListFocused : DetailAction
+
+  data object SubtaskListFocusUnavailable : DetailAction
 
   /** Opens the Changes window on [scope]; a subtask scope opens only for a subtask that can be selected. */
   data class OpenChangesWindow(val scope: ChangeScope = ChangeScope.All) : DetailAction

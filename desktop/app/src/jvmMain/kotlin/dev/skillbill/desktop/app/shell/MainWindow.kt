@@ -131,11 +131,15 @@ fun ApplicationScope.MainWindow(
         window.specsPane.state.value.selectedPath != null,
       )
       if (listNavigation && press?.key == ShellKey.Escape) {
-        window.specsPane.onAction(dev.skillbill.desktop.feature.specs.SpecsAction.Deselect)
-        true
+        press?.let { keyPress ->
+          keyboard.onKey(keyPress) {
+            window.specsPane.onAction(dev.skillbill.desktop.feature.specs.SpecsAction.Deselect)
+            true
+          }
+        } ?: false
       } else if (listNavigation)
         false
-      else press?.let(keyboard::onKey) ?: false
+      else press?.let { keyboard.onKey(it) } ?: false
     },
   ) {
     val awtWindow = this.window

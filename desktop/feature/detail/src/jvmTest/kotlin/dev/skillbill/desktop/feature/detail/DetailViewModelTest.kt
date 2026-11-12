@@ -195,7 +195,7 @@ class DetailViewModelTest {
     selections.setPhase(phaseKey, "review")
     assertEquals(phaseKey.subtask, selections.get(item.id).key)
 
-    val laterChoice = SubtaskChoice(SubtaskKey.Subtask(2), expanded = false)
+    val laterChoice = SubtaskChoice(SubtaskKey.Subtask(2))
     selections.set(item.id, laterChoice)
 
     assertEquals(laterChoice, selections.get(item.id))

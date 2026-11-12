@@ -27,6 +27,7 @@ class ShellInput {
   private val layers = mutableListOf<Layer>()
   private val edits = mutableListOf<Edit>()
   private val screenKeys = mutableMapOf<String, (ScreenKey) -> Boolean>()
+  private val detailControls = mutableMapOf<String, DetailControls>()
   private var textFieldSources = 0
 
   val textInputFocused: Boolean get() = focusedSources.any { it != TERMINAL_SOURCE && it != SUBTASK_LIST_SOURCE }
@@ -65,12 +66,22 @@ class ShellInput {
 
   fun unregisterScreenKeys(entryKey: String, handler: (ScreenKey) -> Boolean) { screenKeys.remove(entryKey, handler) }
 
+  fun registerDetails(entryKey: String, controls: DetailControls) { detailControls[entryKey] = controls }
+
+  fun unregisterDetails(entryKey: String, controls: DetailControls) { detailControls.remove(entryKey, controls) }
+
+  fun toggleDetails(entryKey: String?): Boolean = entryKey?.let(detailControls::get)?.let { it.toggle(); true } ?: false
+
+  fun closeDetails(entryKey: String?): Boolean = entryKey?.let(detailControls::get)?.close?.invoke() ?: false
+
   /** Hands [key] to the screen registered under the top entry's [entryKey] only; true when that screen consumed it. */
   fun dispatchScreenKey(entryKey: String?, key: ScreenKey): Boolean = entryKey?.let(screenKeys::get)?.invoke(key) ?: false
 
   class Layer(val onDismiss: () -> Unit)
 
   class Edit(val onCancel: () -> Unit, val onSave: () -> Unit)
+
+  class DetailControls(val toggle: () -> Unit, val close: () -> Boolean)
 
   companion object {
     const val TERMINAL_SOURCE = "terminal"

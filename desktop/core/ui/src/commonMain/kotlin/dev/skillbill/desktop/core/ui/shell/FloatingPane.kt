@@ -46,6 +46,7 @@ fun FloatingPane(
   onResize: (Int) -> Unit,
   onReset: () -> Unit,
   onDismiss: () -> Unit,
+  modal: Boolean = true,
   content: @Composable () -> Unit,
 ) {
   val colors = SkillBillTheme.colors
@@ -71,7 +72,7 @@ fun FloatingPane(
       enter = slideInHorizontally(animationSpec = menuSpec()) { it },
       exit = slideOutHorizontally(animationSpec = menuSpec()) { it },
     ) {
-      if (open) ShellLayer(onDismiss)
+      if (open && modal) ShellLayer(onDismiss)
       Row(
         Modifier.fillMaxSize().shadow(16.dp).background(colors.bgPanel)
           .pointerInput(Unit) { detectTapGestures { } }

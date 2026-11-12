@@ -25,6 +25,7 @@ import dev.skillbill.desktop.core.ui.navigation.rememberEntryViewModel
 import dev.skillbill.desktop.core.ui.pane.CHAT_SHORTCUT
 import dev.skillbill.desktop.core.ui.pane.ChatCommands
 import dev.skillbill.desktop.core.ui.pane.PaneCommands
+import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import me.tatarka.inject.annotations.Inject
 import me.tatarka.inject.annotations.IntoSet
@@ -80,6 +81,7 @@ class DetailFeatureEntry(
     }
     val state by viewModel.state.collectAsState()
     val shellInput = LocalShellInput.current
+    val drawerMode = LocalShellLayout.current.drawerMode
     ScreenKeyHandler { key ->
       when (key) {
         ScreenKey.Next -> viewModel.step(next = true, keepListFocus = shellInput.subtaskListFocused)
@@ -97,6 +99,7 @@ class DetailFeatureEntry(
       onResetDetails = detailsPaneWidth::reset,
       detailsShortcut = DETAILS_SHORTCUT,
       onToggleDetails = { shellPanes.detailsPaneOpen = !shellPanes.detailsPaneOpen },
+      onOpenDetails = shellPanes::openDetails,
       specsOpen = shellPanes.specsOpen,
       terminalOpen = terminalOpen,
       onToggleSpecs = { shellPanes.specsOpen = !shellPanes.specsOpen },
@@ -106,22 +109,13 @@ class DetailFeatureEntry(
       chatShortcut = CHAT_SHORTCUT,
       onToggleChat = { chat.toggleChat(item) },
     )
-    SideEffect { viewModel.onAction(DetailAction.SetQaPreviewVisible(host.detailsPaneVisible)) }
+    SideEffect {
+      viewModel.onAction(DetailAction.SetQaPreviewVisible(host.detailsSurfaceVisible(drawerMode, state.itemResolved)))
+    }
     DisposableEffect(viewModel) {
       onDispose { viewModel.onAction(DetailAction.SetQaPreviewVisible(false)) }
     }
-    DetailScreen(state, host) { action ->
-      val openDetailsPane = when (action) {
-        is DetailAction.SelectSubtask -> !action.inline
-        is DetailAction.MoveSubtaskSelection -> true
-        else -> false
-      }
-      if (openDetailsPane) {
-        shellPanes.specsOpen = false
-        shellPanes.detailsPaneOpen = true
-      }
-      viewModel.onAction(action)
-    }
+    DetailScreen(state, host, viewModel::onAction)
   }
 
   private fun copy(text: String) {

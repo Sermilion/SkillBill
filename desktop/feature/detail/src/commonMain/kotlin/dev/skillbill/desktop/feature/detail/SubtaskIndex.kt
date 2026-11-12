@@ -34,7 +34,7 @@ class SubtaskSelections(private val session: DatabaseSessionController) {
     val rows = current()
     val ordinary = rows[itemId] ?: SubtaskChoice()
     val returnRow = phaseReturnRows[itemId] ?: return ordinary
-    return SubtaskChoice(returnRow, expanded = if (ordinary.key == returnRow) ordinary.expanded else true)
+    return SubtaskChoice(returnRow)
   }
 
   fun set(itemId: String, choice: SubtaskChoice) {

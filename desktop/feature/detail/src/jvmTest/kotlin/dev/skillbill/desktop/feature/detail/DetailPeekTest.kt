@@ -11,6 +11,8 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.isSelectable
@@ -18,6 +20,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.doubleClick
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.onNodeWithText
@@ -56,11 +59,48 @@ import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
 import dev.skillbill.desktop.core.ui.input.ShellInput
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class DetailPeekTest {
+  @Test
+  fun `subject header follows the index and disables navigation at both ends`() = runComposeUiTest {
+    val detail = emptyDetail.copy(subtasks = listOf(
+      WorkSubtask(1, "First", "completed", null, null, emptyList()),
+      WorkSubtask(2, "Second", "blocked", null, null, emptyList()),
+    ))
+    val state = mutableStateOf(DetailUiState(
+      workItem("goal"), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch,
+      subtaskChoice = SubtaskChoice(SubtaskKey.Subtask(1)),
+    ))
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        Box(Modifier.requiredSize(264.dp, 700.dp)) {
+          DetailsPane(state.value, remember { mutableStateOf(AssessmentOrder.Default) }, {}, { action ->
+            if (action is DetailAction.MoveSubtaskSelection) {
+              val keys = subtaskKeys(state.value.header, detail)
+              val current = keys.indexOf(state.value.subtaskChoice.key)
+              state.value = state.value.copy(subtaskChoice = SubtaskChoice(keys[(current + action.delta).coerceIn(0, keys.lastIndex)]))
+            }
+          })
+        }
+      }
+    }
+
+    onNodeWithText("1/3").assertExists()
+    onNodeWithContentDescription("Close details").assertIsDisplayed().assertWidthIsEqualTo(28.dp)
+    onNodeWithContentDescription("Previous subject").assertIsNotEnabled()
+    onNodeWithContentDescription("Next subject").performClick()
+    onNodeWithText("Subtask 02").assertExists()
+    onNodeWithText("2/3").assertExists()
+    onNodeWithContentDescription("Next subject").performClick()
+    onNodeWithText("Goal finish").assertExists()
+    onNodeWithText("3/3").assertExists()
+    onNodeWithContentDescription("Next subject").assertIsNotEnabled()
+  }
+
   @Test
   fun `restored details width is not capped by the initial default ratio`() = runComposeUiTest {
     setContent {
@@ -132,7 +172,7 @@ class DetailPeekTest {
     ))
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        DetailsPane(state.value, remember { mutableStateOf(AssessmentOrder.Priority) }) {}
+        DetailsPane(state.value, remember { mutableStateOf(AssessmentOrder.Priority) }, {}, {})
       }
     }
 
@@ -153,7 +193,7 @@ class DetailPeekTest {
   }
 
   @Test
-  fun `phase pipeline appears only on the current subtask`() = runComposeUiTest {
+  fun `closed subtask index has no inline pipeline and activation opens its inspector`() = runComposeUiTest {
     val detail = emptyDetail.copy(
       stepPipeline = listOf("implement", "review"),
       goalFinishPipeline = listOf("qa", "qa_fix"),
@@ -169,21 +209,27 @@ class DetailPeekTest {
       SectionsUi.Loaded(detail, null, emptyMap(), emptySet()),
       false,
       epoch,
-      subtaskChoice = SubtaskChoice(SubtaskKey.Subtask(3), expanded = false),
+      subtaskChoice = SubtaskChoice(SubtaskKey.Subtask(3)),
     )
     val open = mutableStateOf(false)
     val input = ShellInput()
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides input) {
-          DetailScreen(state, DetailScreenHost(open.value, "Ctrl I", { open.value = !open.value })) {}
+          DetailScreen(state, DetailScreenHost(open.value, "Ctrl I", { open.value = !open.value }, { open.value = true })) {}
         }
       }
     }
 
-    onAllNodesWithContentDescription("implement, done").assertCountEquals(1)
-    onAllNodesWithContentDescription("review, current").assertCountEquals(1)
+    onAllNodesWithContentDescription("implement, done").assertCountEquals(0)
+    onAllNodesWithContentDescription("review, current").assertCountEquals(0)
     onAllNodesWithContentDescription("qa, pending").assertCountEquals(0)
+    onNodeWithContentDescription("Close details").assertDoesNotExist()
+    onNodeWithText("No phase has run yet.").assertDoesNotExist()
+    onNodeWithText("Current subtask").performScrollTo().performClick()
+    onNodeWithText("Subtask 03").assertExists()
+    onNodeWithText("No phase has run yet.").assertExists()
+    onNodeWithContentDescription("Close details").assertIsDisplayed()
   }
 
   @Test
@@ -205,14 +251,14 @@ class DetailPeekTest {
     )
     val state = mutableStateOf(DetailUiState(
       workItem("goal"), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch,
-      subtaskChoice = SubtaskChoice(SubtaskKey.Subtask(1), expanded = false),
+      subtaskChoice = SubtaskChoice(SubtaskKey.Subtask(1)),
     ))
     val open = mutableStateOf(false)
     val input = ShellInput()
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides input) {
-          DetailScreen(state.value, DetailScreenHost(open.value, "Ctrl I", { open.value = !open.value })) { action ->
+          DetailScreen(state.value, DetailScreenHost(open.value, "Ctrl I", { open.value = !open.value }, { open.value = true })) { action ->
             if (action is DetailAction.SelectPhase) {
               state.value = state.value.copy(phaseChoice = state.value.phaseChoice + (PhaseChoiceKey(action.itemId, action.key) to action.phaseId))
             }
@@ -261,12 +307,14 @@ class DetailPeekTest {
     onNode(hasText("Goal assessment") and isSelectable()).performClick()
     onNodeWithText("Priority").assertIsSelected()
     onNodeWithContentDescription("Close details").performClick()
-    onNodeWithText("An action has no label").assertExists()
+    onNodeWithText("An action has no label").assertDoesNotExist()
     onNodeWithText("Goal finish").performScrollTo().performClick()
     onNodeWithText("Priority").assertIsSelected()
-    runOnIdle { assertTrue(input.dismissTopLayer()) }
+    runOnIdle { assertFalse(input.dismissTopLayer()) }
     onNodeWithText("An action has no label").assertExists()
-    onNodeWithText("Build the view 1").performScrollTo().performClick()
+    onNode(hasText("Build the view 1") and hasClickAction()).performScrollTo().performMouseInput {
+      click(androidx.compose.ui.geometry.Offset(4f, centerY))
+    }
     onNodeWithText("An action has no label").assertDoesNotExist()
     onNodeWithContentDescription("Close details").assertExists()
   }
@@ -277,6 +325,7 @@ class DetailPeekTest {
   fun `goal qa shows what needs the reader first with no full paths`() = runComposeUiTest {
     val dir = invocationDirectory
     val detail = emptyDetail.copy(
+      subtasks = listOf(WorkSubtask(1, "Build the view", "completed", null, null, emptyList())),
       goalFinishPipeline = listOf("qa"),
       goalFinishCards = listOf(finishCard("qa")),
       goalQa = GoalQaResult(
@@ -299,6 +348,7 @@ class DetailPeekTest {
         DetailsPane(
           DetailUiState(workItem("goal", finishedAt = epoch), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch, subtaskChoice = SubtaskChoice(SubtaskKey.GoalFinish)),
           remember { mutableStateOf(AssessmentOrder.Default) },
+          {},
         ) { actions += it }
       }
     }
@@ -323,6 +373,7 @@ class DetailPeekTest {
     val qaA = "/home/me/.skill-bill/qa-A"
     val qaB = "/home/me/.skill-bill/qa-B"
     val detail = emptyDetail.copy(
+      subtasks = listOf(WorkSubtask(1, "Build the view", "completed", null, null, emptyList())),
       goalFinishPipeline = listOf("qa"),
       goalFinishCards = listOf(finishCard("qa")),
       goalQa = GoalQaResult(
@@ -341,6 +392,7 @@ class DetailPeekTest {
         DetailsPane(
           DetailUiState(workItem("goal", finishedAt = epoch), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch, subtaskChoice = SubtaskChoice(SubtaskKey.GoalFinish)),
           remember { mutableStateOf(AssessmentOrder.Default) },
+          {},
         ) { actions += it }
       }
     }
@@ -366,7 +418,7 @@ class DetailPeekTest {
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-          DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {})) {}
+          DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}, {})) {}
         }
       }
     }

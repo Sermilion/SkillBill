@@ -60,7 +60,7 @@ class SubtaskInspectorResultsTest {
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-          SubtaskInspector(item, detail.copy(subtasks = listOf(subtask(status))), subtask(status), emptyMap(), dev.skillbill.desktop.core.domain.model.ActivityResult.Loading, inline = false, renderedAt = epoch) {}
+          SubtaskInspector(item, detail.copy(subtasks = listOf(subtask(status))), subtask(status), emptyMap(), dev.skillbill.desktop.core.domain.model.ActivityResult.Loading, renderedAt = epoch) {}
         }
       }
     }
@@ -114,7 +114,7 @@ class SubtaskInspectorResultsTest {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) {
           key(goalId.value, selectedSubtask.value) {
-            SubtaskInspector(item.copy(id = goalId.value), detail, if (selectedSubtask.value == 1) first else second, choices.value, dev.skillbill.desktop.core.domain.model.ActivityResult.Loading, false, epoch) { action ->
+            SubtaskInspector(item.copy(id = goalId.value), detail, if (selectedSubtask.value == 1) first else second, choices.value, dev.skillbill.desktop.core.domain.model.ActivityResult.Loading, epoch) { action ->
               if (action is DetailAction.SelectPhase) choices.value = choices.value + (PhaseChoiceKey(action.itemId, action.key) to action.phaseId)
             }
           }

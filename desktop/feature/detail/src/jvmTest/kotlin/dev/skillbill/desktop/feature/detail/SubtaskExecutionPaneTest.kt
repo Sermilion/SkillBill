@@ -61,7 +61,7 @@ class SubtaskExecutionPaneTest {
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-          DetailScreen(state.value, DetailScreenHost(open.value, "Ctrl I", { open.value = !open.value })) {
+          DetailScreen(state.value, DetailScreenHost(open.value, "Ctrl I", { open.value = !open.value }, { open.value = true })) {
             if (it is DetailAction.Copy) copied = it
           }
         }
@@ -131,7 +131,7 @@ class SubtaskExecutionPaneTest {
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-          DetailScreen(state.value, DetailScreenHost(open.value, "Ctrl I", { open.value = !open.value })) {
+          DetailScreen(state.value, DetailScreenHost(open.value, "Ctrl I", { open.value = !open.value }, { open.value = true })) {
             if (it is DetailAction.Copy) copied = it
           }
         }

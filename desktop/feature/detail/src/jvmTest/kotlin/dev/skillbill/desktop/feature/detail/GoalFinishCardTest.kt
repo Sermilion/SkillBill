@@ -90,12 +90,12 @@ class GoalFinishCardTest {
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellLayout provides layout.value, LocalShellInput provides input) {
-          DetailScreen(state.value, DetailScreenHost(true, "Ctrl I", {})) {}
+          DetailScreen(state.value, DetailScreenHost(true, "Ctrl I", {}, {})) {}
         }
       }
     }
     onNodeWithText("No assessment result is available for this run.").assertExists()
-    onNodeWithText("Details").assertExists()
+    onNodeWithText("2/2").assertExists()
     onNodeWithText("No assessment result is available for this run.").assertExists()
   }
 

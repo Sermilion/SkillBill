@@ -12,12 +12,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.selected
@@ -49,6 +53,8 @@ import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.HistoryRoute
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
+import dev.skillbill.desktop.core.ui.navigation.LocalEntryKey
+import dev.skillbill.desktop.core.ui.input.LocalShellInput
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import dev.skillbill.desktop.core.ui.status.toSbBuild
 
@@ -60,6 +66,7 @@ internal class DetailScreenHost(
   val detailsPaneOpen: Boolean,
   val detailsShortcut: String,
   val onToggleDetails: () -> Unit,
+  val onOpenDetails: (drawerMode: Boolean) -> Unit,
   val specsOpen: Boolean = false,
   val terminalOpen: Boolean = false,
   val onToggleSpecs: () -> Unit = {},
@@ -71,9 +78,10 @@ internal class DetailScreenHost(
   val detailsWidthDp: Int? = null,
   val onResizeDetails: (Int) -> Unit = {},
   val onResetDetails: () -> Unit = {},
-) {
-  val detailsPaneVisible: Boolean get() = detailsPaneOpen && !chatPaneOpen
-}
+)
+
+internal fun DetailScreenHost.detailsSurfaceVisible(drawerMode: Boolean, itemResolved: Boolean): Boolean =
+  itemResolved && detailsPaneOpen && !chatPaneOpen && !(drawerMode && specsOpen)
 
 private fun sectionCrumb(section: WorkLiveSection?): String = when (section) {
   WorkLiveSection.NeedsYou -> "Needs you"
@@ -110,8 +118,69 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   }
   val item = state.header
   val view = runActionsView(state)
-  val paneShown = host.detailsPaneVisible && !(host.specsOpen && LocalShellLayout.current.drawerMode)
+  val drawerMode = LocalShellLayout.current.drawerMode
+  val paneShown = host.detailsSurfaceVisible(drawerMode, state.itemResolved)
   val recoverFocus = remember { FocusRequester() }
+  val detailsFocus = remember { FocusRequester() }
+  val shellInput = LocalShellInput.current
+  val entryKey = LocalEntryKey.current
+  val completeDetailFocusReturn = {
+    detailsFocus.requestFocus()
+    onAction(DetailAction.SubtaskListFocused)
+  }
+  val currentCompleteDetailFocusReturn = rememberUpdatedState(completeDetailFocusReturn)
+  val closeDetails = {
+    if (paneShown) {
+      host.onToggleDetails()
+      if (state.subtaskListTargetAvailable) {
+        onAction(DetailAction.FocusSubtaskList)
+      } else {
+        completeDetailFocusReturn()
+      }
+    }
+  }
+  val toggleDetails = { if (paneShown) closeDetails() else host.onOpenDetails(drawerMode) }
+  val currentToggleDetails = rememberUpdatedState(toggleDetails)
+  val currentCloseDetails = rememberUpdatedState(closeDetails)
+  val currentPaneShown = rememberUpdatedState(paneShown)
+  val dispatchAction: (DetailAction) -> Unit = { action ->
+    val detail = (state.sections as? SectionsUi.Loaded)?.detail
+    when (action) {
+      is DetailAction.SelectSubtask -> {
+        if (detail != null && action.key in subtaskKeys(item, detail)) {
+          onAction(action)
+          host.onOpenDetails(drawerMode)
+        }
+      }
+      is DetailAction.MoveSubtaskSelection -> {
+        if (detail != null) {
+          if (!paneShown) {
+            selectedSubtask(item, detail, state.subtaskChoice.key)?.let { key ->
+              onAction(DetailAction.SelectSubtask(key))
+              host.onOpenDetails(drawerMode)
+            }
+          } else onAction(action)
+        }
+      }
+      DetailAction.SubtaskListFocusUnavailable -> {
+        completeDetailFocusReturn()
+      }
+      else -> onAction(action)
+    }
+  }
+  LaunchedEffect(state.focusSubtaskList, state.subtaskListTargetAvailable) {
+    if (state.focusSubtaskList && !state.subtaskListTargetAvailable) {
+      currentCompleteDetailFocusReturn.value()
+    }
+  }
+  androidx.compose.runtime.DisposableEffect(shellInput, entryKey) {
+    val controls = dev.skillbill.desktop.core.ui.input.ShellInput.DetailControls(
+      toggle = { currentToggleDetails.value() },
+      close = { if (currentPaneShown.value) { currentCloseDetails.value(); true } else false },
+    )
+    shellInput.registerDetails(entryKey, controls)
+    onDispose { shellInput.unregisterDetails(entryKey, controls) }
+  }
   val listState = rememberLazyListState()
   val planScreenState = rememberPlanScreenState(item.id)
   val qaRow = isStandaloneQa(item)
@@ -126,7 +195,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   val validationPage = if (validationRow && loaded != null) rememberValidationPage(validationShape, item.control.invocationId, listState, collapse, keys, validationChecksShown) else null
   val scrollToVerifySection = rememberVerifySectionScroller(listState, collapse, keys, loaded?.detail?.verifyRun?.workflowId)
   val peekState = rememberSaveableStateHolder()
-  Column(Modifier.fillMaxSize()) {
+  Column(Modifier.fillMaxSize().focusRequester(detailsFocus).focusable()) {
     ViewHeader(
       crumbs = listOf(
         Crumb("Work", onClick = { onAction(DetailAction.Navigate(WorkRoute(null))) }),
@@ -162,7 +231,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close specs pane" else "Specs", host.onToggleSpecs, shortcut = "G S", selected = host.specsOpen)
         SbIconButton(LucideIcons.terminal, if (host.terminalOpen) "Close terminal" else if (qaRow) "Open terminal" else "Terminal", host.onToggleTerminal, shortcut = "⌃ `", selected = host.terminalOpen)
         SbIconButton(LucideIcons.bot, if (host.chatOpen) "Close chat" else "Chat", host.onToggleChat, shortcut = host.chatShortcut, selected = host.chatOpen)
-        SbIconButton(LucideIcons.panelRight, "Toggle details", host.onToggleDetails, shortcut = host.detailsShortcut, selected = host.detailsPaneOpen)
+        SbIconButton(LucideIcons.panelRight, "Toggle details", toggleDetails, shortcut = host.detailsShortcut, selected = host.detailsPaneOpen)
       },
     )
     Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -191,7 +260,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
             } else DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }, qa = if (qaRow) QaHeaderFacts(qaView?.testedCommit, qaView?.criteriaSource) else null, validation = validationRow, planReady = item.isStandalonePlan() && planFinished(item, loaded?.detail), planBlocked = item.isStandalonePlan() && hasBlockedSubtasks(loaded?.detail?.standalonePlan)) {
               if (state.sections != SectionsUi.Gone) {
                 val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
-                RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction)
+                RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, dispatchAction)
                 val report = validationResult
                 if (validationRow && item.lifecycle != Lifecycle.Active && !report.isNullOrBlank()) {
                   SbButton("Copy report", { onAction(DetailAction.Copy(report)) })
@@ -211,7 +280,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
           if (!validationRow && item.reason != null && item.lifecycle != Lifecycle.Terminal) sections.item(key = "reason") {
             Column(Modifier.padding(top = DocBlockGap)) { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
           }
-          sections.document(state, view, paneShown, onAction, qaView, scrollToFinding, validationPage, scrollToVerifySection)
+          sections.document(state, view, paneShown, dispatchAction, qaView, scrollToFinding, validationPage, scrollToVerifySection)
         }
         if (fixBarVisible) Box(Modifier.align(Alignment.BottomCenter).padding(horizontal = side, vertical = 16.dp).onSizeChanged { fixBarHeight.value = with(density) { it.height.toDp() } }) {
           VerifyFixBar(verifyFixItems(verifyRun, state.criterionMarks), state, true, onAction)
@@ -223,10 +292,10 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         requestedWidthDp = host.detailsWidthDp,
         onResize = host.onResizeDetails,
         onReset = host.onResetDetails,
-        onDismiss = { if (host.detailsPaneOpen) host.onToggleDetails() },
+        onDismiss = closeDetails,
       ) {
         peekState.SaveableStateProvider("${item.id}:${state.subtaskChoice.key}") {
-          DetailsPane(state, assessmentOrder, onAction)
+          DetailsPane(state, assessmentOrder, closeDetails, dispatchAction)
         }
       }
     }

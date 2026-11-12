@@ -27,7 +27,7 @@ import dev.skillbill.desktop.core.designsystem.tabular
 import dev.skillbill.desktop.core.designsystem.status.StatusDot
 import dev.skillbill.desktop.core.designsystem.component.Callout
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
-import dev.skillbill.desktop.core.designsystem.component.Hint
+import dev.skillbill.desktop.core.designsystem.component.ExpandableText
 import dev.skillbill.desktop.core.designsystem.component.ShortId
 import dev.skillbill.desktop.core.designsystem.detail.PaneSection
 import dev.skillbill.desktop.core.designsystem.detail.PaneStatus
@@ -81,11 +81,12 @@ internal fun inspectorStatus(item: WorkItem, detail: Detail, key: SubtaskKey): P
 }
 
 @Composable
-internal fun SubtaskInspector(item: WorkItem, detail: Detail, subtask: WorkSubtask, phaseChoice: Map<PhaseChoiceKey, String>, activity: ActivityResult, inline: Boolean, renderedAt: kotlin.time.Instant, onAction: (DetailAction) -> Unit) {
-  val colors = SkillBillTheme.colors
-  Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    if (!inline) BasicText(subtask.name, style = SkillBillTheme.type.tBaseMedium.copy(color = colors.fg, lineHeight = 1.4.em))
-    subtask.blockedReason?.takeIf { it.isNotBlank() }?.let { Hint(it, FeedbackTone.Warn, fold = true) }
+internal fun SubtaskInspector(item: WorkItem, detail: Detail, subtask: WorkSubtask, phaseChoice: Map<PhaseChoiceKey, String>, activity: ActivityResult, renderedAt: kotlin.time.Instant, onAction: (DetailAction) -> Unit) {
+  Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+    BasicText(subtask.name, style = SkillBillTheme.type.tBaseMedium.copy(color = SkillBillTheme.colors.fg, lineHeight = 1.4.em))
+    subtask.blockedReason?.takeIf { it.isNotBlank() }?.let {
+      ExpandableText(it, SkillBillTheme.type.tBase.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 3)
+    }
     SubtaskProperties(detail, subtask, onAction)
     SubtaskPhasesSection(item, detail, subtask, phaseChoice, activity, renderedAt, onAction)
     SubtaskResults(detail, subtask)
