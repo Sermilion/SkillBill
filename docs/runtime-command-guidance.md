@@ -583,6 +583,10 @@ A skipped or incomplete QA report carries one token from this vocabulary in `qa_
 | `browser_unavailable` | The web target needed a browser driver and none was usable. |
 | `partial_coverage` | Verify only: the verdict stands, but an in-scope target was skipped or incomplete, or the report lacked coverage, assertion or isolation evidence. |
 
+## App run
+
+Run `skill-bill app run --goal <key> --qa-device serial:<serial>|avd:<name>` to build and open a goal's Android app. It runs the pack's declared app-run script and does not start an agent. The command refuses goals that are unknown, outside monitoring or completed state, in CI repair, or missing a compatible recipe or checkout. It releases the device lease and any detached worktree when the run ends.
+
 ## Runtime Agent Behavior
 
 When a Codex worker ends a response with `max_output_tokens`, the launcher resumes

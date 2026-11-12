@@ -19,6 +19,16 @@ interface BranchWorktreeResources {
   ): BranchWorktreeCreation
 
   /**
+   * Adds a worktree with a detached HEAD at the tip of [branch] beside [repoRoot]. This works when another checkout
+   * already has the branch checked out. Returns [BranchWorktreeCreation.Missing] when neither local nor origin has it.
+   */
+  fun createDetached(
+    repoRoot: Path,
+    branch: String,
+    holder: BranchWorktreeHolder,
+  ): BranchWorktreeCreation
+
+  /**
    * Adds [holder] to the worktree at [checkoutRoot] when skill-bill created it. Returns true only when [holder] was
    * added by this call; a worktree skill-bill did not create is never recorded.
    */

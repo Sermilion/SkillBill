@@ -58,4 +58,75 @@ internal object GitRepositoryOwnedPathsOperations : RepositoryOwnedPathsGitOpera
     if (tracked !is WorkflowGitOperationResult.Ok) return WorkflowGitNameListResult.Failed(tracked.error)
     return WorkflowGitNameListResult.Listed(tracked.value.orEmpty().split(GIT_NUL).filter(String::isNotEmpty))
   }
+
+  override fun trackedPathsAtCommit(
+    repoRoot: Path,
+    commitSha: String,
+  ): WorkflowGitNameListResult {
+    if (!isCommitSha(commitSha)) return WorkflowGitNameListResult.Failed("'$commitSha' is not a full commit SHA.")
+    val verified = runGitCommand(repoRoot, "rev-parse", "--verify", "$commitSha^{commit}")
+    if (verified !is WorkflowGitOperationResult.Ok) return WorkflowGitNameListResult.Failed(verified.error)
+    val paths = runGitCommand(repoRoot, "ls-tree", "-r", "--name-only", "-z", verified.value.trim())
+    if (paths !is WorkflowGitOperationResult.Ok) return WorkflowGitNameListResult.Failed(paths.error)
+    return WorkflowGitNameListResult.Listed(
+      paths.value.orEmpty().split(GIT_NUL).filter(String::isNotEmpty),
+    )
+  }
+
+  override fun resolveBranchCommit(
+    repoRoot: Path,
+    branch: String,
+  ): WorkflowGitOperationResult {
+    if (branch.startsWith("-") || !runGitCommand(repoRoot, "check-ref-format", "refs/heads/$branch").ok) {
+      return WorkflowGitOperationResult.Failed(error = "'$branch' is not a valid branch name.")
+    }
+    val local = runGitCommand(repoRoot, "rev-parse", "--verify", "refs/heads/$branch^{commit}")
+    if (local is WorkflowGitOperationResult.Ok) return commitShaResult(local)
+    val fetched =
+      runGitCommand(
+        repoRoot,
+        "fetch",
+        "--no-tags",
+        "origin",
+        "+refs/heads/$branch:refs/remotes/origin/$branch",
+      )
+    if (fetched !is WorkflowGitOperationResult.Ok) {
+      return WorkflowGitOperationResult.Failed(
+        error = "Could not fetch origin/$branch for completed-goal routing: ${fetched.error}",
+      )
+    }
+    val remote = runGitCommand(repoRoot, "rev-parse", "--verify", "refs/remotes/origin/$branch^{commit}")
+    return if (remote is WorkflowGitOperationResult.Ok) {
+      commitShaResult(remote)
+    } else {
+      WorkflowGitOperationResult.Failed(
+        error = "Branch '$branch' has no local or cached origin commit: ${remote.error}",
+      )
+    }
+  }
+
+  override fun indexTreeIdentity(repoRoot: Path): WorkflowGitOperationResult {
+    val tree = runGitCommand(repoRoot, "write-tree")
+    return if (tree is WorkflowGitOperationResult.Ok) {
+      val identity = tree.value.trim()
+      if (isCommitSha(identity)) {
+        tree.copy(value = identity)
+      } else {
+        WorkflowGitOperationResult.Failed(error = "Git returned an invalid index tree identity.")
+      }
+    } else {
+      tree
+    }
+  }
+
+  private fun commitShaResult(result: WorkflowGitOperationResult.Ok): WorkflowGitOperationResult =
+    result.value.trim().let { sha ->
+      if (isCommitSha(sha)) {
+        result.copy(value = sha)
+      } else {
+        WorkflowGitOperationResult.Failed(error = "Git returned an invalid commit identity.")
+      }
+    }
+
+  private fun isCommitSha(value: String): Boolean = value.matches(Regex("[0-9a-fA-F]{40}|[0-9a-fA-F]{64}"))
 }

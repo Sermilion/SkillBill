@@ -83,6 +83,21 @@ class GitBranchWorktreeResourcesLifecycleTest {
   }
 
   @Test
+  fun `a detached worktree can use the checked out branch tip and releases cleanly`() {
+    runGit(repo, "checkout", "-b", "feature/x")
+    val tip = runGit(repo, "rev-parse", "HEAD")
+
+    val path = assertIs<BranchWorktreeCreation.Created>(resources.createDetached(repo, "feature/x", review)).path
+
+    assertEquals(tip, runGit(path, "rev-parse", "HEAD"))
+    assertEquals("HEAD", runGit(path, "rev-parse", "--abbrev-ref", "HEAD"))
+    assertEquals("feature/x", runGit(repo, "symbolic-ref", "--short", "HEAD"))
+    assertEquals(BranchWorktreeRelease.Removed(path), resources.release(path, review))
+    assertFalse(Files.exists(path))
+    assertEquals("feature/x", runGit(repo, "symbolic-ref", "--short", "HEAD"))
+  }
+
+  @Test
   fun `the worktree is removed once its last holder releases it and the branch stays`() {
     runGit(repo, "branch", "shared")
     val path = assertIs<BranchWorktreeCreation.Created>(resources.create(repo, "shared", review)).path

@@ -5,6 +5,7 @@ import java.nio.file.Path
 enum class BranchWorktreeHolderKind(val wireValue: String) {
   PHASE("phase"),
   OPERATION("operation"),
+  APP_RUN("app-run"),
 }
 
 data class BranchWorktreeHolder(val kind: BranchWorktreeHolderKind, val id: String)

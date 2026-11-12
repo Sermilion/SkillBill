@@ -15,6 +15,7 @@ import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.qa.QaDeviceLeasePayloadKeys
 import skillbill.contracts.qa.QaOwnedResourcePayloadKeys
+import skillbill.engine.featuretask.qa.lease.QaDeviceFingerprint
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.qa.isQaDeviceLeaseFailure
@@ -31,7 +32,6 @@ import skillbill.ports.qa.model.QaOwnedResourceKind
 import skillbill.ports.qa.model.QaResourceRegistration
 import skillbill.ports.qa.model.QaResourceReleaseOutcome
 import java.nio.file.Path
-import java.security.MessageDigest
 
 @Inject
 class QaCommand(
@@ -165,7 +165,7 @@ class QaLeaseCommand(
 
   override fun run() {
     val root = resolveCliRepositoryRoot(repoRoot, inputs)
-    val fingerprint = deviceFingerprint(device)
+    val fingerprint = QaDeviceFingerprint.of(device)
     val (status, detail) =
       try {
         if (action == ACQUIRE) {
@@ -210,8 +210,5 @@ class QaLeaseCommand(
   private companion object {
     const val ACQUIRE = "acquire"
     const val RELEASE = "release"
-
-    fun deviceFingerprint(serial: String): String =
-      MessageDigest.getInstance("SHA-256").digest(serial.trim().toByteArray()).joinToString("") { "%02x".format(it) }
   }
 }

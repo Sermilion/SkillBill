@@ -3,6 +3,7 @@ package skillbill.cli.core
 import com.github.ajalt.clikt.core.CliktCommand
 import me.tatarka.inject.annotations.Inject
 import skillbill.cli.agentaddon.AgentAddonCommand
+import skillbill.cli.apprun.AppCommand
 import skillbill.cli.codereview.CodeReviewCommand
 import skillbill.cli.config.ConfigCommand
 import skillbill.cli.diffcomment.DiffCommentCommand
@@ -98,6 +99,7 @@ class CliMiscCommands(
   workCommands: WorkTopLevelCommands,
   agentAddonCommand: AgentAddonCommand,
   qaCommand: QaCommand,
+  appCommand: AppCommand,
   diffCommentCommand: DiffCommentCommand,
 ) {
   val commands: List<CliktCommand> =
@@ -110,6 +112,7 @@ class CliMiscCommands(
       workCommands.command,
       agentAddonCommand,
       qaCommand,
+      appCommand,
       diffCommentCommand,
     )
 }

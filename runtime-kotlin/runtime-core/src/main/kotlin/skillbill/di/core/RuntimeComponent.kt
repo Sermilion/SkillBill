@@ -52,6 +52,7 @@ import skillbill.di.scaffold.RuntimeScaffoldValidationProvides
 import skillbill.di.telemetry.RuntimeTelemetryProvides
 import skillbill.di.workflow.RuntimeWorkflowProvides
 import skillbill.di.workflow.RuntimeWorkflowValidatorProvides
+import skillbill.engine.apprun.AppRunService
 import skillbill.engine.diagnostics.block.BlockIncidentInvestigator
 import skillbill.engine.diagnostics.block.report.ProductReportDelivery
 import skillbill.engine.diagnostics.block.report.ProductReportScheduler
@@ -127,6 +128,7 @@ import skillbill.ports.goalrunner.GoalArchiveSnapshotPort
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.selection.InstallSelectionPersistencePort
+import skillbill.ports.process.ShutdownHookPort
 import skillbill.ports.projectstore.ProjectCatalogPort
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.projectstore.RepositoryLineagePort
@@ -337,6 +339,8 @@ abstract class RuntimeComponent(
 
   abstract val phaseRunEntry: PhaseRunEntry
   abstract val qaDeviceLeasePort: QaDeviceLeasePort
+  abstract val shutdownHookPort: ShutdownHookPort
+  abstract val appRunService: AppRunService
   abstract val qaOwnedResourcePort: QaOwnedResourcePort
   abstract val qaWorkspacePort: QaWorkspacePort
   abstract val phaseStrategyLookup: PhaseStrategyLookup

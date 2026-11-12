@@ -78,6 +78,21 @@ object UnavailableRepositoryOwnedPathsGitOperations : RepositoryOwnedPathsGitOpe
 
   override fun trackedPaths(repoRoot: Path): WorkflowGitNameListResult =
     error("WorkflowGitOperations must provide a repository tracked-paths implementation.")
+
+  override fun trackedPathsAtCommit(
+    repoRoot: Path,
+    commitSha: String,
+  ): WorkflowGitNameListResult =
+    WorkflowGitNameListResult.Failed("This git operations implementation cannot read a commit tree.")
+
+  override fun resolveBranchCommit(
+    repoRoot: Path,
+    branch: String,
+  ): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Failed(error = "This git operations implementation cannot resolve branch '$branch'.")
+
+  override fun indexTreeIdentity(repoRoot: Path): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Failed(error = "This git operations implementation cannot read the index tree.")
 }
 
 object UnavailableRepositoryFingerprintGitOperations : RepositoryFingerprintGitOperations {

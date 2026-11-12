@@ -62,6 +62,41 @@ class GitBranchWorktreeResources(
     }
   }
 
+  override fun createDetached(
+    repoRoot: Path,
+    branch: String,
+    holder: BranchWorktreeHolder,
+  ): BranchWorktreeCreation {
+    if (branch.startsWith("-") || !monitorGit(repoRoot, "check-ref-format", "refs/heads/$branch").ok) {
+      return BranchWorktreeCreation.Failed("'$branch' is not a valid branch name.")
+    }
+    val repository =
+      repositoryOf(
+        repoRoot,
+      ) ?: return BranchWorktreeCreation.Failed("$repoRoot is not a Git working tree.")
+    val local = monitorGit(repository.primaryRoot, "show-ref", "--verify", "--quiet", "refs/heads/$branch").ok
+    val fetch =
+      monitorGit(
+        repository.primaryRoot,
+        "fetch",
+        "--no-tags",
+        ORIGIN,
+        "+refs/heads/$branch:refs/remotes/$ORIGIN/$branch",
+      )
+    if (!local && !fetch.ok) return unfetched(repository, branch, fetch)
+    if (local && !fetch.ok) {
+      diagnostics.info(
+        "seam=branch_worktree.fetch outcome=failed_using_local branch=$branch reason=${fetch.output}",
+      )
+    }
+    return try {
+      locked(repository) { addDetached(repository, branch, holder) }
+    } catch (failure: IOException) {
+      diagnostics.warning("seam=branch_worktree.create_detached outcome=failed branch=$branch", failure)
+      BranchWorktreeCreation.Failed("Could not create a detached worktree for $branch: ${failure.message}")
+    }
+  }
+
   override fun hold(
     checkoutRoot: Path,
     holder: BranchWorktreeHolder,
@@ -95,10 +130,7 @@ class GitBranchWorktreeResources(
     return when {
       !top.ok || !head.ok || repository == null ->
         BranchWorktreeObservation.Unavailable("The checkout is missing or Git could not read its identity.")
-      !branch.ok ->
-        BranchWorktreeObservation.Unavailable(
-          "The checkout is on a detached HEAD; check out a branch before starting this operation.",
-        )
+      !branch.ok -> observeDetached(checkoutRoot, repository, top.output.trim(), head.output.trim(), holder)
       else ->
         observeOwnership(
           checkoutRoot,
@@ -106,6 +138,44 @@ class GitBranchWorktreeResources(
           ObservedCheckout(realPath(Path.of(top.output.trim())), branch.output.trim(), head.output.trim()),
           holder,
         )
+    }
+  }
+
+  private fun observeDetached(
+    checkoutRoot: Path,
+    repository: Repository,
+    top: String,
+    head: String,
+    holder: BranchWorktreeHolder,
+  ): BranchWorktreeObservation {
+    val root = realPath(Path.of(top))
+    val admin =
+      adminDirectoryOf(
+        root,
+      ) ?: return BranchWorktreeObservation.Unavailable("The checkout ownership record is unavailable.")
+    return try {
+      locked(repository) {
+        val record =
+          readRecord(
+            admin,
+          ) ?: return@locked BranchWorktreeObservation.Unavailable(
+            "The checkout is on a detached HEAD; " + "check out a branch before starting this operation.",
+          )
+        if (realPath(Path.of(record.path)) != root || record.detachedSha != head) {
+          BranchWorktreeObservation.Unavailable("The managed checkout path or detached commit changed.")
+        } else {
+          BranchWorktreeObservation.RuntimeManaged(
+            root,
+            repository.primaryRoot,
+            record.branch,
+            head,
+            holder.token() in record.holders,
+          )
+        }
+      }
+    } catch (failure: IOException) {
+      diagnostics.warning("seam=branch_worktree.observe outcome=unreadable path=$checkoutRoot", failure)
+      BranchWorktreeObservation.Unavailable("The checkout ownership record could not be read.")
     }
   }
 
@@ -128,7 +198,7 @@ class GitBranchWorktreeResources(
         val record =
           readRecord(admin)
             ?: return@locked BranchWorktreeObservation.Unavailable("The checkout ownership record is unreadable.")
-        if (realPath(Path.of(record.path)) != root || record.branch != actualBranch) {
+        if (realPath(Path.of(record.path)) != root || record.branch != actualBranch || record.detachedSha != null) {
           BranchWorktreeObservation.Unavailable("The managed checkout path or branch changed.")
         } else {
           BranchWorktreeObservation.RuntimeManaged(
@@ -216,16 +286,91 @@ class GitBranchWorktreeResources(
     return BranchWorktreeCreation.Created(path)
   }
 
+  private fun addDetached(
+    repository: Repository,
+    branch: String,
+    holder: BranchWorktreeHolder,
+  ): BranchWorktreeCreation {
+    val localTip = monitorGit(repository.primaryRoot, "rev-parse", "--verify", "refs/heads/$branch^{commit}")
+    val remoteTip =
+      if (localTip.ok) {
+        localTip
+      } else {
+        monitorGit(
+          repository.primaryRoot,
+          "rev-parse",
+          "--verify",
+          "refs/remotes/$ORIGIN/$branch^{commit}",
+        )
+      }
+    if (!remoteTip.ok) return BranchWorktreeCreation.Missing
+    val sha = remoteTip.output.trim()
+    val path =
+      siblingPath(repository.primaryRoot, branch)
+        ?: return BranchWorktreeCreation.Failed(
+          "${repository.primaryRoot} has no parent directory for a $branch worktree.",
+        )
+    return addDetachedAtPath(repository, branch, holder, sha, path)
+  }
+
+  private fun addDetachedAtPath(
+    repository: Repository,
+    branch: String,
+    holder: BranchWorktreeHolder,
+    sha: String,
+    path: Path,
+  ): BranchWorktreeCreation {
+    val added =
+      invokeGitProcess(
+        repository.primaryRoot,
+        listOf(
+          "worktree",
+          "add",
+          "--detach",
+          path.toString(),
+          sha,
+        ),
+        stdin = null,
+        extraEnvironment = WORKTREE_ADD_ENVIRONMENT,
+        deadlineSeconds = GIT_HOOKED_COMMAND_TIMEOUT_SECONDS,
+      )
+    if (added.timedOut || added.readFailure != null || added.exitCode != 0) {
+      val detail = added.readFailure?.message ?: if (added.timedOut) "git timed out" else added.output.trim()
+      return BranchWorktreeCreation.Failed("Could not create a detached worktree for $branch at $path: $detail")
+    }
+    val admin = adminDirectoryOf(path)
+    if (admin == null) {
+      monitorGit(repository.primaryRoot, "worktree", "remove", path.toString())
+      return BranchWorktreeCreation.Failed("Could not read the Git directory of the new worktree at $path.")
+    }
+    try {
+      writeRecord(admin, OwnershipRecord(branch, path.toString(), setOf(holder.token()), sha))
+    } catch (failure: IOException) {
+      val removed = monitorGit(repository.primaryRoot, "worktree", "remove", path.toString())
+      if (!removed.ok) {
+        diagnostics.warning(
+          "seam=branch_worktree.create_detached outcome=cleanup_failed " + "path=$path detail=${removed.output}",
+        )
+      }
+      throw failure
+    }
+    return BranchWorktreeCreation.Created(path)
+  }
+
   private fun remove(
     owned: OwnedCheckout,
     record: OwnershipRecord,
   ): BranchWorktreeRelease {
     val path = owned.root
     val current = monitorGit(path, "symbolic-ref", "--short", "HEAD")
+    val head = monitorGit(path, "rev-parse", "HEAD")
     val problem =
       when {
         record.path != path.toString() -> "it moved from ${record.path}"
-        !current.ok || current.output.trim() != record.branch -> "it no longer has ${record.branch} checked out"
+        record.detachedSha != null && (current.ok || !head.ok || head.output.trim() != record.detachedSha) ->
+          "it is no longer detached at ${record.detachedSha}"
+        record.detachedSha == null && (!current.ok || current.output.trim() != record.branch) ->
+          "it no longer has ${record.branch} checked out"
         else -> null
       }
     if (problem != null) return BranchWorktreeRelease.Kept(path, problem)
@@ -307,7 +452,8 @@ class GitBranchWorktreeResources(
       return null
     }
     val holders = fields.filter { it.first == HOLDER_FIELD }.mapTo(LinkedHashSet()) { it.second }
-    return OwnershipRecord(branch, path, holders)
+    val detachedSha = fields.firstOrNull { it.first == DETACHED_FIELD }?.second
+    return OwnershipRecord(branch, path, holders, detachedSha)
   }
 
   private fun writeRecord(
@@ -316,6 +462,7 @@ class GitBranchWorktreeResources(
   ) {
     val lines =
       listOf("$BRANCH_FIELD ${record.branch}", "$PATH_FIELD ${record.path}") +
+        listOfNotNull(record.detachedSha?.let { "$DETACHED_FIELD $it" }) +
         record.holders.map { "$HOLDER_FIELD $it" }
     val temporary = adminDirectory.resolve("$RECORD_FILE.tmp")
     Files.write(temporary, lines)
@@ -342,7 +489,12 @@ class GitBranchWorktreeResources(
 
   private data class ObservedCheckout(val root: Path, val branch: String, val head: String)
 
-  private data class OwnershipRecord(val branch: String, val path: String, val holders: Set<String>)
+  private data class OwnershipRecord(
+    val branch: String,
+    val path: String,
+    val holders: Set<String>,
+    val detachedSha: String? = null,
+  )
 
   private companion object {
     const val ORIGIN = "origin"
@@ -352,6 +504,7 @@ class GitBranchWorktreeResources(
     const val BRANCH_FIELD = "branch"
     const val PATH_FIELD = "path"
     const val HOLDER_FIELD = "holder"
+    const val DETACHED_FIELD = "detached"
     const val LS_REMOTE_NO_MATCH = 2
     const val MAX_SLUG_LENGTH = 60
     const val FALLBACK_SLUG = "branch"

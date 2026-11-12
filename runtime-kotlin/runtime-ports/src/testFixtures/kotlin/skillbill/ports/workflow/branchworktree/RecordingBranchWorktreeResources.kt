@@ -8,11 +8,13 @@ import java.nio.file.Path
 
 class RecordingBranchWorktreeResources(
   var creation: BranchWorktreeCreation = BranchWorktreeCreation.Missing,
+  var detachedCreation: BranchWorktreeCreation = BranchWorktreeCreation.Missing,
   var holdResult: Boolean = false,
   var releaseResult: BranchWorktreeRelease = BranchWorktreeRelease.NotHeld,
   var observation: BranchWorktreeObservation = BranchWorktreeObservation.Unavailable("No observation configured."),
 ) : BranchWorktreeResources {
   val created: MutableList<Pair<Path, String>> = mutableListOf()
+  val createdDetached: MutableList<Triple<Path, String, BranchWorktreeHolder>> = mutableListOf()
   val held: MutableList<Pair<Path, BranchWorktreeHolder>> = mutableListOf()
   val released: MutableList<Pair<Path, BranchWorktreeHolder>> = mutableListOf()
 
@@ -23,6 +25,15 @@ class RecordingBranchWorktreeResources(
   ): BranchWorktreeCreation {
     created += repoRoot to branch
     return creation
+  }
+
+  override fun createDetached(
+    repoRoot: Path,
+    branch: String,
+    holder: BranchWorktreeHolder,
+  ): BranchWorktreeCreation {
+    createdDetached += Triple(repoRoot, branch, holder)
+    return detachedCreation
   }
 
   override fun hold(
