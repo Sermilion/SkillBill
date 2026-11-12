@@ -14,21 +14,38 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalTestApi::class)
 class ChatDeliveryRecoveryTest {
   @Test
-  fun `shared recovery requires the duplicate warning confirmation and an explicit discard decision`() = runComposeUiTest {
+  fun `steering stays compact and recovery remains available when a chat action is blocked`() = runComposeUiTest {
     val delivery = mutableStateOf(ChatDeliveryView("delivery", "original text", listOf(ChatImage(byteArrayOf(1), "image/png")),
-      ChatDeliveryStatus.Uncertain, "Acknowledgement missing", "close this chat"))
+      ChatDeliveryStatus.Pending, "Acknowledgement missing"))
     val retries = mutableListOf<String>()
     val discards = mutableListOf<String>()
     var keptOpen = false
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        ChatDeliveryRecovery(delivery.value, retries::add, discards::add, { keptOpen = true })
+        ChatDeliveryRecovery(delivery.value, retries::add, discards::add, {
+          keptOpen = true
+          delivery.value = delivery.value.copy(blockedAction = null)
+        })
       }
     }
+    onNodeWithText("Sending steering instructions...").assertExists()
+    runOnIdle { delivery.value = delivery.value.copy(status = ChatDeliveryStatus.Uncertain) }
+    onNodeWithText("Steering instructions have been sent").assertExists()
+    onNodeWithText("Sending steering instructions...").assertDoesNotExist()
+    onNodeWithText("Follow-up delivery uncertain").assertDoesNotExist()
+    onNodeWithText("Acknowledgement missing").assertDoesNotExist()
+    onNodeWithText("original text").assertDoesNotExist()
+    onNodeWithText("[Image #1]").assertDoesNotExist()
+    onNodeWithText("Retry").assertDoesNotExist()
+    onNodeWithText("Discard").assertDoesNotExist()
+    runOnIdle { delivery.value = delivery.value.copy(blockedAction = "close this chat") }
     onNodeWithText("original text").assertExists()
     onNodeWithText("[Image #1]").assertExists()
     onNodeWithText("Keep open").performClick()
     runOnIdle { assertTrue(keptOpen) }
+    onNodeWithText("Retry").assertDoesNotExist()
+    onNodeWithText("Steering instructions have been sent").assertExists()
+    runOnIdle { delivery.value = delivery.value.copy(blockedAction = "close this chat") }
     onNodeWithText("Retry").performClick()
     onNodeWithText(DELIVERY_RETRY_WARNING).assertExists()
     runOnIdle { assertTrue(retries.isEmpty()) }

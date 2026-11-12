@@ -322,6 +322,50 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
     assertEquals(0, fixture.execution.launches)
   }
 
+  @Test
+  fun `changed pack gate commands resume a plan workflow but still refuse a gated goal child`() {
+    fun driftedSeed(
+      definition: SkeletonDefinition,
+    ): Pair<ExecutionPlanAdmissionFixture, InMemoryRuntimeWorkflowRepository> {
+      val states = InMemoryRuntimeWorkflowRepository()
+      val fixture = ExecutionPlanAdmissionFixture(definition, database = FakeDatabaseSessionFactory(states))
+      val current = fixture.inputsFor("gradlew", 420000L)
+      val previousGate =
+        requireNotNull(current.declaration).let { gate ->
+          gate.copy(collectAllFullGateCommand = gate.collectAllFullGateCommand + "--no-build-cache")
+        }
+      fixture.seed(states, "wftr-drift", descriptor = fixture.descriptor(current.copy(declaration = previousGate)))
+      return fixture to states
+    }
+
+    val (planning, planStates) = driftedSeed(SkeletonDefinition.PLAN)
+    val planBefore = planStates.getFeatureTaskWorkflow("wftr-drift")
+    val resumed =
+      planning.recoveryResolver(wrapperForRoot = { "gradlew" })
+        .resolveInputs(root, null, ValidationDepth.FULL, 7.minutes, "wftr-drift")
+    assertEquals(planning.inputsFor("gradlew", 420000L).declaration, resumed.declaration)
+    assertEquals(
+      SkeletonDefinition.PLAN.id,
+      planning.admission.admit(planStates, "wftr-drift", resumed).plan.definitionId,
+    )
+    assertEquals(planBefore, planStates.getFeatureTaskWorkflow("wftr-drift"))
+
+    val (child, childStates) = driftedSeed(SkeletonDefinition.GOAL_CHILD)
+    val error =
+      assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+        child.recoveryResolver(wrapperForRoot = { "gradlew" }).resolveInputs(
+          root,
+          FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+          ValidationDepth.FULL,
+          7.minutes,
+          "wftr-drift",
+        )
+      }
+    assertContains(error.message.orEmpty(), "no longer match any declared platform-pack gate")
+    assertTrue(childStates.getFeatureTaskWorkflow("wftr-drift") != null)
+    assertEquals(0, planning.launches + child.launches)
+  }
+
   private class Fixture {
     val states = InMemoryRuntimeWorkflowRepository()
     val database = FakeDatabaseSessionFactory(states)

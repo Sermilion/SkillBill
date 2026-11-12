@@ -48,7 +48,7 @@ public class FeatureTaskRuntimeExecutionPlanCompatibility(
     if (plan.effectivePolicies.any { supportedById[it.id]?.semanticRevision != it.semanticRevision }) {
       throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
     }
-    if (plan.effectivePolicies != supported) incompatible()
+    if (!FeatureTaskRuntimeEffectivePolicies.matchesRecorded(plan, effectiveInputs)) incompatible()
     if (!codec.encode(plan).contentEquals(codec.encode(decodePlan(requireNotNull(encoded))))) onMapping?.invoke()
     return SupportedExecution(plan, composition.recordedMonitorSemantics)
   }
@@ -73,12 +73,7 @@ public class FeatureTaskRuntimeExecutionPlanCompatibility(
   ): ResolvedPhaseExecutionPlan {
     val plan = requireSupportedComposition(encoded)
     val inputs = effectiveInputs ?: incompatible()
-    val supported =
-      FeatureTaskRuntimeEffectivePolicies.resolve(
-        plan,
-        inputs,
-      ).sortedBy { it.id }
-    if (plan.effectivePolicies != supported) incompatible()
+    if (!FeatureTaskRuntimeEffectivePolicies.matchesRecorded(plan, inputs)) incompatible()
     return plan
   }
 
@@ -178,7 +173,7 @@ public class FeatureTaskRuntimeExecutionPlanCompatibility(
   private fun requireSupportedPolicies(policies: List<ResolvedExecutionPolicy>) {
     val supported =
       setOf(
-        "gate-commands",
+        GATE_COMMANDS_POLICY_ID,
         "receipt-interpretation",
         "retry-budgets",
         "resume-budgets",

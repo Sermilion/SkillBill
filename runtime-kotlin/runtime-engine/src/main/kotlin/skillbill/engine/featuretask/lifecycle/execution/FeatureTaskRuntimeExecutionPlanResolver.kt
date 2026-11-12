@@ -142,7 +142,7 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
     repoRoot: Path,
     plan: ResolvedPhaseExecutionPlan,
   ): EffectiveGatePolicyInputs {
-    val settings = plan.effectivePolicySettings ?: incompatible()
+    val settings = plan.effectivePolicySettings ?: incompatible("Recorded execution settings are missing.")
     val wrapper = config.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot)).config.validationGate.gradleWrapper
     val family =
       if (plan.qualityGateSelection == FeatureTaskRuntimeQualityGateSelection.BUILD) {
@@ -150,24 +150,50 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
       } else {
         ValidationGateCommandFamily.VALIDATION
       }
-    return gateResolver.declaredCandidates().map { candidate ->
-      val slug =
-        when (candidate) {
-          is ValidationGateResolution.Declared -> candidate.packSlug
-          is ValidationGateResolution.Absent -> candidate.routedPackSlug
-          is ValidationGateResolution.Incompatible -> incompatible()
-        }
-      EffectiveGatePolicyInputs(
-        family,
-        slug,
-        (candidate as? ValidationGateResolution.Declared)?.declaration,
-        wrapper,
+    val recorded =
+      gateResolver.declaredCandidates().map { candidate ->
+        val slug =
+          when (candidate) {
+            is ValidationGateResolution.Declared -> candidate.packSlug
+            is ValidationGateResolution.Absent -> candidate.routedPackSlug
+            is ValidationGateResolution.Incompatible -> incompatible()
+          }
+        EffectiveGatePolicyInputs(
+          family,
+          slug,
+          (candidate as? ValidationGateResolution.Declared)?.declaration,
+          wrapper,
+          settings.validationDepth,
+          settings.phaseTimeoutMillis,
+        ).frozen()
+      }.singleOrNull { inputs ->
+        FeatureTaskRuntimeEffectivePolicies.resolve(plan, inputs).sortedBy { it.id } == plan.effectivePolicies
+      }
+    return recorded ?: currentGateForGatelessPlan(repoRoot, plan) ?: incompatible(
+      "The recorded validation gate commands no longer match any declared platform-pack gate.",
+    )
+  }
+
+  private fun currentGateForGatelessPlan(
+    repoRoot: Path,
+    plan: ResolvedPhaseExecutionPlan,
+  ): EffectiveGatePolicyInputs? {
+    if (FeatureTaskRuntimeEffectivePolicies.runsGateCommands(plan)) return null
+    val settings = plan.effectivePolicySettings ?: return null
+    val current =
+      resolveInputs(
+        repoRoot,
+        plan.qualityGateSelection,
         settings.validationDepth,
-        settings.phaseTimeoutMillis,
+        settings.phaseTimeoutMillis?.milliseconds,
       ).frozen()
-    }.singleOrNull { inputs ->
-      FeatureTaskRuntimeEffectivePolicies.resolve(plan, inputs).sortedBy { it.id } == plan.effectivePolicies
-    } ?: incompatible()
+    if (!FeatureTaskRuntimeEffectivePolicies.matchesRecorded(plan, current)) return null
+    diagnostics.warning(
+      "seam=execution_plan_gate_commands value_expected=recorded value_used=current " +
+        "definition=${plan.definitionId} pack=${current.packSlug ?: "none"} " +
+        "reason=definition_runs_no_quality_gate",
+    )
+    return current
   }
 
   private fun requireBuildGate(

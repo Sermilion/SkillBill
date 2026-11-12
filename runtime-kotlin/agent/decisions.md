@@ -9,6 +9,10 @@ Scope: This replaces only the OpenCode product-exclusion conclusion in the 2026-
 Context: Provider exit zero or end_turn can arrive without phase settlement; runtime-owned build repair turns can explicitly omit settlement.
 Decision: Carry the launched prompt's settlement target through PreparedLaunch and require matching durable workflow, phase and attempt evidence when present. Preserve unreadable records and report typed failures; permit captured prose only for non-settling turns.
 Reason: Transport completion cannot grant workflow authority. Prompt-derived requirements preserve repair turns that never received a settlement request and retain the PhaseOutput ownership recorded in SKILL-387.
+## [2026-11-12] Gate-less execution plans tolerate changed pack gate commands
+Context: A plan workflow records a `gate-commands` policy digest even though the `plan` definition has no quality-gate slot. After a platform pack changed its `validation_gate` argv, resuming a blocked plan, including a goal's `plan_subtasks` re-plan, refused with an undetailed `incompatible_descriptor`, and the goal could not continue.
+Decision: Policy comparison ignores `gate-commands` only for plans without a `QUALITY_GATE` slot. When no declared candidate reproduces the recorded digest, such a plan resumes on the current repository gate and emits a `seam=execution_plan_gate_commands` warning. The recorded descriptor is unchanged. Plans with a quality gate still refuse changed commands, and the refusal now names the gate drift.
+Reason: A gate-less run never executes gate commands, so their drift cannot change its behavior. Gated runs keep the strict durable-semantics check.
 
 ## [2026-11-12] Resume reopens settled feasibility blocks through the shared planning path
 Context: Blocked feasibility recovery ran only in the existing-manifest branch. An interrupted compatibility adoption could also leave a pending phase with a blocked feasibility cycle, which the adoption replay check treated as already recovered.

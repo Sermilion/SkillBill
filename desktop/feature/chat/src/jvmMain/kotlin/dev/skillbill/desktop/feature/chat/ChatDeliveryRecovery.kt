@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
-import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.component.SbDialog
 
 internal const val DELIVERY_RETRY_WARNING = "Claude may already have received this follow-up. Retrying may deliver it twice."
 
@@ -34,10 +34,28 @@ internal fun ChatDeliveryRecovery(
   onDiscard: (String) -> Unit,
   onKeepOpen: () -> Unit,
 ) {
+  BasicText(
+    if (delivery.status == ChatDeliveryStatus.Pending) "Sending steering instructions..." else "Steering instructions have been sent",
+    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+    style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted),
+  )
+  if (delivery.blockedAction != null) {
+    SbDialog(title = "Resolve steering delivery", onDismissRequest = onKeepOpen, actions = {}) {
+      ChatDeliveryRecoveryDetails(delivery, onRetry, onDiscard, onKeepOpen)
+    }
+  }
+}
+
+@Composable
+private fun ChatDeliveryRecoveryDetails(
+  delivery: ChatDeliveryView,
+  onRetry: (String) -> Unit,
+  onDiscard: (String) -> Unit,
+  onKeepOpen: () -> Unit,
+) {
   var confirmation by remember(delivery.deliveryId) { mutableStateOf<String?>(null) }
   val bodyStyle = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2)
   Column(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    SbLabel(if (delivery.status == ChatDeliveryStatus.Pending) "Follow-up pending" else "Follow-up delivery uncertain")
     SelectionContainer { BasicText(delivery.reason, style = bodyStyle) }
     Column(Modifier.fillMaxWidth().heightIn(max = 160.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       if (delivery.text.isNotBlank()) SelectionContainer { BasicText(delivery.text, style = bodyStyle) }
