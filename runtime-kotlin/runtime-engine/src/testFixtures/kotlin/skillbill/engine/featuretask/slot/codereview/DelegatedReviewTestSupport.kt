@@ -17,6 +17,7 @@ import skillbill.infrastructure.workflow.decomposition.FileSystemDecompositionMa
 import skillbill.infrastructure.workflow.review.broker.FileSystemReviewEvidenceBroker
 import skillbill.infrastructure.workflow.review.specialists.ClasspathReviewSpecialistContractProvider
 import skillbill.install.model.SupportedAgent
+import skillbill.model.EnvironmentContext
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.config.RepoLocalConfigPort
@@ -50,6 +51,7 @@ fun scriptedDelegatedReviewRunner(
   database: DatabaseSessionFactory,
   home: Path,
   lanes: LaneScript,
+  environment: EnvironmentContext = EnvironmentContext(),
 ): ParallelCodeReviewRunner {
   val envelopeValidator = ReviewContextSchemaValidator()
   val projectStore = FixedProjectStorePort(home.resolve("project-store"))
@@ -73,6 +75,7 @@ fun scriptedDelegatedReviewRunner(
     parentReviewLauncher = lanes,
     reviewEvidenceBrokerFactory = ReviewEvidenceBrokerFactory(::FileSystemReviewEvidenceBroker),
     governedEvidenceEndpointBinder = stubGovernedReviewEvidenceEndpointBinder(home.resolve("review-endpoint")),
+    environment = environment,
   )
 }
 

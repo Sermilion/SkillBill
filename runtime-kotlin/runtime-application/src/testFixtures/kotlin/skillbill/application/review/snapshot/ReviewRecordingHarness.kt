@@ -192,6 +192,7 @@ data class ReviewHarnessConfig(
   val commits: List<RecordedCommit> = emptyList(),
   val learnings: List<LearningRecord> = emptyList(),
   val originScopeKeyPort: RepositoryOriginScopeKeyPort = HARNESS_ORIGIN_UNAVAILABLE,
+  val environment: EnvironmentContext = EnvironmentContext(),
 )
 
 fun ParallelCodeReviewRunner.reviewed(request: ParallelCodeReviewRequest): ParallelCodeReviewResult =
@@ -248,6 +249,7 @@ fun reviewHarness(
     originScopeKeyPort = config.originScopeKeyPort,
     learningsDiagnostics = recordingDiagnostics(recorder),
     routingDiagnostics = recordingDiagnostics(recorder),
+    environment = config.environment,
   )
 }
 
@@ -271,6 +273,7 @@ fun parallelCodeReviewRunnerOf(
   registerParse: (String) -> ParallelReviewParseResult = ParallelReviewFindingParser::parse,
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort = CanonicalRepositoryRoot,
   originScopeKeyPort: RepositoryOriginScopeKeyPort = HARNESS_ORIGIN_UNAVAILABLE,
+  environment: EnvironmentContext = EnvironmentContext(),
   learningsDiagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
   routingDiagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
   clock: Clock = Clock.systemUTC(),
@@ -299,7 +302,7 @@ fun parallelCodeReviewRunnerOf(
   val laneLaunch =
     ParallelCodeReviewRunnerLaneLaunch(
       parentReviewLauncher = parentReviewLauncher,
-      environment = EnvironmentContext(),
+      environment = environment,
       reviewEvidenceBrokerFactory = reviewEvidenceBrokerFactory,
       governedEvidenceEndpointBinder = governedEvidenceEndpointBinder,
       reviewLaunchAgentStaging = reviewLaunchAgentStaging,
