@@ -43,6 +43,7 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
       val fixture = setupApplyFixture()
       Files.createDirectories(fixture.home.resolve(".codex/agents"))
       val cacheRoot = fixture.home.resolve("custom-native-cache")
+      val environment = installTestEnvironment(fixture.home)
       val port =
         FileSystemInstallNativeAgentLinks(PlatformPackCatalogLoader(FileExternalPlatformPackSourceConfigStore()))
       val request =
@@ -54,14 +55,20 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
               skillsRoot = fixture.repoRoot.resolve("skills"),
               home = fixture.home,
               selectedPlatforms = listOf("kotlin"),
-              environment = installTestEnvironment(fixture.home),
+              environment = environment,
               overrides = NativeAgentLinkOverrides(installCacheRoot = cacheRoot),
             ),
         )
       val linked = port.linkNativeAgents(request).outcome.linked
       assertTrue(linked.size > 1)
       val replacementLink = linked.first()
-      val originalEntries = NativeAgentLinkInventory.read(fixture.home, listOf(cacheRoot), fixture.repoRoot)
+      val originalEntries =
+        NativeAgentLinkInventory.read(
+          fixture.home,
+          listOf(cacheRoot),
+          fixture.repoRoot,
+          environment,
+        )
       val replacement = fixture.home.resolve(".skill-bill/user-workers/${replacementLink.fileName}")
       Files.createDirectories(replacement.parent)
       Files.writeString(replacement, "user-owned replacement")
@@ -72,11 +79,17 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
       assertTrue(reapplied.outcome.skipped.any { it.path == replacementLink })
       assertEquals(
         originalEntries,
-        NativeAgentLinkInventory.read(fixture.home, listOf(cacheRoot), fixture.repoRoot),
+        NativeAgentLinkInventory.read(fixture.home, listOf(cacheRoot), fixture.repoRoot, environment),
       )
 
       port.linkNativeAgents(request.copy(linkRequest = request.linkRequest.copy(selectedPlatforms = emptyList())))
-      val remainingEntries = NativeAgentLinkInventory.read(fixture.home, listOf(cacheRoot), fixture.repoRoot)
+      val remainingEntries =
+        NativeAgentLinkInventory.read(
+          fixture.home,
+          listOf(cacheRoot),
+          fixture.repoRoot,
+          environment,
+        )
       assertTrue(remainingEntries.any { it.installedPath == replacementLink })
       assertTrue(remainingEntries.none { it.logicalName.startsWith("bill-kotlin-") })
 
@@ -94,7 +107,7 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
       assertEquals("user-owned replacement", Files.readString(replacementLink))
       assertEquals(
         originalEntries.filter { it.installedPath == replacementLink },
-        NativeAgentLinkInventory.read(fixture.home, listOf(cacheRoot), fixture.repoRoot),
+        NativeAgentLinkInventory.read(fixture.home, listOf(cacheRoot), fixture.repoRoot, environment),
       )
     }
   }
