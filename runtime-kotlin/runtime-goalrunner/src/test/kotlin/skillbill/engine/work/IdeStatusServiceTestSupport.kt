@@ -9,6 +9,8 @@ import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
 import skillbill.engine.RecordingWorkflowGitOperations
+import skillbill.engine.apprun.AppRunCapabilityResolver
+import skillbill.engine.apprun.GoalAppRunPlatforms
 import skillbill.engine.diagnostics.block.testWorkIncidentProjectionBuilder
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
@@ -91,6 +93,7 @@ import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.review.repository.ReviewRepository
+import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
@@ -429,6 +432,10 @@ private fun testBoardProjection(
     repositoryEnclosingRootPort,
     LocalGoalRuntimeStateFileStore(),
     buildRunRepository,
+    GoalAppRunPlatforms(
+      AppRunCapabilityResolver(RecordingWorkflowGitOperations(), InstalledPlatformPackCatalogPort { emptyList() }),
+      NoopRuntimeDiagnostics,
+    ),
   )
 
 internal fun fixtureCheckedOutBranch(repoRoot: Path): String? =

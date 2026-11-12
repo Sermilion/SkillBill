@@ -54,6 +54,7 @@ internal object WorkBoardReadModelPayloadCodec {
       mapOf(
         WorkBoardReadModelPayloadKeys.SNAPSHOT to snapshotMap(row.item.snapshot),
         WorkBoardReadModelPayloadKeys.REPOSITORY_ROOT to row.item.repositoryRoot,
+        WorkBoardReadModelPayloadKeys.APP_RUN_PLATFORMS to row.item.appRunPlatforms,
         WorkBoardReadModelPayloadKeys.FINISHED_AT to row.item.finishedAt?.let(WorkBoardReadModelTime::format),
         WorkBoardReadModelPayloadKeys.FINISHED_AT_SOURCE to row.item.finishedAtSource?.wireValue,
         WorkBoardReadModelPayloadKeys.CONTROL_LEASE to row.item.controlLease?.let(::leaseMap),
@@ -116,6 +117,7 @@ internal object WorkBoardReadModelPayloadCodec {
       WorkBoardItem(
         snapshot = snapshot,
         repositoryRoot = fields.text(WorkBoardReadModelPayloadKeys.REPOSITORY_ROOT),
+        appRunPlatforms = nullableStringList(fields, WorkBoardReadModelPayloadKeys.APP_RUN_PLATFORMS).orEmpty(),
         finishedAt = fields.instant(WorkBoardReadModelPayloadKeys.FINISHED_AT),
         finishedAtSource =
           fields.nullableText(WorkBoardReadModelPayloadKeys.FINISHED_AT_SOURCE)?.let { value ->

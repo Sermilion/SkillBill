@@ -2436,6 +2436,8 @@ private val expectedMigrationDefinitions =
     120 to "record-standalone-reported-model",
     121 to "add-approval-rule-patterns",
     122 to "record-primary-repository-root",
+    123 to "rebuild-work-board-app-run-platforms",
+    124 to "preserve-invalid-work-board-rows",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

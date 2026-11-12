@@ -61,6 +61,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePlanProgress
 import skillbill.ports.idestatus.model.WorkBoardCompletionSource
 import skillbill.ports.idestatus.model.WorkBoardDiagnostic
+import skillbill.ports.idestatus.model.WorkBoardDiagnosticReason
 import skillbill.ports.idestatus.model.WorkBoardItem
 import skillbill.ports.idestatus.model.WorkBoardReadModelKey
 import skillbill.ports.idestatus.model.WorkBoardReadModelPage
@@ -91,6 +92,7 @@ import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.qa.QaRunPreview
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -215,6 +217,21 @@ public class IdeStatusService(
           IdeStatusProblemSnapshots.noMatchingWork(repository.identity, observedAt, currentBranch),
           queryWork,
         )
+    val selectedWorkId = selected.standaloneStatus?.invocationId ?: selected.workflowId
+    val recovery =
+      unitOfWork.workBoardReadModel.readByWorkIds(setOf(selectedWorkId))
+        .filterIsInstance<WorkBoardReadModelPage.Entry.Recovery>()
+        .firstOrNull()
+    if (recovery != null) {
+      return emit(
+        IdeStatusProblemSnapshots.incompatibleRecord(
+          repositoryIdentity = repository.identity,
+          observedAt = observedAt,
+          message = "Work record ${recovery.workId} has ${recovery.failure}. ${recovery.guidance}",
+        ),
+        queryWork,
+      )
+    }
     val monitorRecord = selected.standaloneStatus?.takeIf { it.monitorTarget != null }
     val selectedContext =
       monitorRecord?.let { context.copy(repositoryIdentity = it.repositoryIdentity) } ?: context
@@ -251,6 +268,7 @@ public class IdeStatusService(
       database.read { unitOfWork ->
         val diagnostics = mutableListOf<WorkBoardDiagnostic>()
         val skipDiagnostics = AggregateSkipDiagnostics()
+        val appRunPlatformsMemo = workBoardItemProjection.newAppRunPlatformsMemo()
         val items =
           ids.distinct().mapNotNull { id ->
             val found = workBoardItemProjection.selectedMatch(id, unitOfWork)
@@ -289,7 +307,7 @@ public class IdeStatusService(
             val context =
               IdeStatusProjectionContext(unitOfWork, identity, candidate.branchCorrelation, observedAt, root)
             try {
-              workBoardItemProjection.projectBoardItem(candidate, context, listOfNotNull(work))
+              workBoardItemProjection.projectBoardItem(candidate, context, listOfNotNull(work), appRunPlatformsMemo)
             } catch (error: SkillBillRuntimeException) {
               skipIncompatibleBoardItem(error, diagnostics, skipDiagnostics, this.diagnostics, id)
             }
@@ -432,6 +450,7 @@ public class IdeStatusService(
         incidentHistory = incidentSet.incidentHistory,
         changeBaseline = detailChangeBaseline(standalone, goalRead?.page?.manifest, item, goalWorktree, context),
         goalWorktree = goalWorktree,
+        appRunPlatforms = detailAppRunPlatforms(item, context.repoRoot, goalWorktree),
         standalonePlanProgress = detailPlanProgress(standalone, context, position, planOutput),
         verifyRun = VerifyRunDetailsProjection.project(candidate, context.unitOfWork),
       ).withDerivedStatus().withPlanOutput(planOutput).withValidationBranchRuns(standalone, context.unitOfWork)
@@ -445,6 +464,19 @@ public class IdeStatusService(
       position,
     )
   }
+
+  private fun detailAppRunPlatforms(
+    item: WorkItem?,
+    root: Path,
+    worktree: GoalWorktreeView?,
+  ): List<String> =
+    workBoardItemProjection.appRunPlatformsFor(
+      item?.workflowKind == WorkItemKind.FEATURE_GOAL,
+      item,
+      root,
+      workBoardItemProjection.appRunCheckoutPath(worktree),
+      workBoardItemProjection.newAppRunPlatformsMemo(),
+    )
 
   private fun detailQaPreview(
     goalStatus: GoalRunnerStatusProjection?,
@@ -864,9 +896,18 @@ internal object WorkBoardReadModelRead {
     val finishedFrom = observedAt.minus(request.finishedWithin.duration)
     val filter = normalizeFilter(request.filter)
     val diagnostics = mutableListOf<WorkBoardDiagnostic>()
-    val scanRequest = ScanRequest(observedAt, finishedFrom, filter, diagnostics)
+    val scanRequest =
+      ScanRequest(
+        observedAt,
+        finishedFrom,
+        filter,
+        diagnostics,
+        BoardProjectionWindow(observedAt, finishedFrom, projection.newAppRunPlatformsMemo()),
+      )
+    val useIndex =
+      unitOfWork.workBoardReadModel.isComplete() && unitOfWork.workBoardReadModel.pendingInvalidation() == null
     val result =
-      if (unitOfWork.workBoardReadModel.isComplete() && unitOfWork.workBoardReadModel.pendingInvalidation() == null) {
+      if (useIndex) {
         readIndexed(projection, unitOfWork, request.pageSize, after, scanRequest)
       } else {
         val scanned = scanCandidates(projection, unitOfWork, scanRequest)
@@ -875,6 +916,25 @@ internal object WorkBoardReadModelRead {
         BoardPage(eligible.take(request.pageSize), eligible.size > request.pageSize, scanned.examined)
       }
     val page = result.items
+    if (!useIndex) {
+      unitOfWork.workBoardReadModel.page(
+        WorkBoardReadModelPageQuery(
+          finishedFrom,
+          filter,
+          after?.let { WorkBoardReadModelKey(it.displayPriority, formatReadModelInstant(it.updatedAt), it.workId) },
+          request.pageSize,
+        ),
+      ).entries.filterIsInstance<WorkBoardReadModelPage.Entry.Recovery>().forEach { recovery ->
+        diagnostics +=
+          WorkBoardDiagnostic(
+            reason = WorkBoardDiagnosticReason.INCOMPATIBLE_RECORD,
+            repositoryIdentity = null,
+            workflowId = recovery.workId,
+            failure = recovery.failure,
+            recoveryGuidance = recovery.guidance,
+          )
+      }
+    }
     val hasNext = result.hasNext
     val examined = result.examined
     val nextCursor =
@@ -888,7 +948,7 @@ internal object WorkBoardReadModelRead {
         page.map {
           it.item.copy(observation = observation, databaseFileObservation = unitOfWork.databaseFileObservation)
         },
-      diagnostics = diagnostics,
+      diagnostics = diagnostics.distinct(),
       pageSize = request.pageSize,
       nextCursor = nextCursor,
       observation = observation,
@@ -935,6 +995,17 @@ internal object WorkBoardReadModelRead {
     entry: WorkBoardReadModelPage.Entry,
     request: ScanRequest,
   ): ProjectedBoardItem? {
+    if (entry is WorkBoardReadModelPage.Entry.Recovery) {
+      request.diagnostics +=
+        WorkBoardDiagnostic(
+          reason = WorkBoardDiagnosticReason.INCOMPATIBLE_RECORD,
+          repositoryIdentity = null,
+          workflowId = entry.workId,
+          failure = entry.failure,
+          recoveryGuidance = entry.guidance,
+        )
+      return null
+    }
     val row = (entry as? WorkBoardReadModelPage.Entry.Decoded)?.row
     val needsProjection =
       row == null || row.reprojectAt?.let { !it.isAfter(request.observedAt) } == true ||
@@ -944,7 +1015,7 @@ internal object WorkBoardReadModelRead {
         projection.projectBoardCandidate(
           unitOfWork,
           entry.workId,
-          BoardProjectionWindow(request.observedAt, request.finishedFrom),
+          request.projectionWindow,
           request.diagnostics,
           AggregateSkipDiagnostics(),
         )
@@ -997,14 +1068,30 @@ internal object WorkBoardReadModelRead {
         )
       if (rows.isEmpty()) break
       candidateCursor = rows.last().key
+      val recoveries =
+        unitOfWork.workBoardReadModel.readByWorkIds(rows.map { it.id }.toSet())
+          .filterIsInstance<WorkBoardReadModelPage.Entry.Recovery>()
+          .associateBy { it.workId }
       for (row in rows) {
         if (seenIds.add(row.id)) {
           examined++
+          val recovery = recoveries[row.id]
+          if (recovery != null) {
+            diagnostics +=
+              WorkBoardDiagnostic(
+                reason = WorkBoardDiagnosticReason.INCOMPATIBLE_RECORD,
+                repositoryIdentity = null,
+                workflowId = recovery.workId,
+                failure = recovery.failure,
+                recoveryGuidance = recovery.guidance,
+              )
+            continue
+          }
           val item =
             projection.projectBoardCandidate(
               unitOfWork,
               row.id,
-              BoardProjectionWindow(observedAt, finishedFrom),
+              request.projectionWindow,
               diagnostics,
               skipDiagnostics,
             )
@@ -1031,6 +1118,7 @@ internal object WorkBoardReadModelRead {
     val finishedFrom: Instant,
     val filter: String?,
     val diagnostics: MutableList<WorkBoardDiagnostic>,
+    val projectionWindow: BoardProjectionWindow,
   )
 
   private fun normalizeFilter(value: String?): String? =

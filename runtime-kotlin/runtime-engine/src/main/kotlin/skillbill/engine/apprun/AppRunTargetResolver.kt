@@ -10,7 +10,6 @@ import skillbill.engine.goal.GoalManifestProjectionReader
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goal.GoalRunnerStatusPort
 import skillbill.engine.goal.GoalRunnerStatusRequest
-import skillbill.engine.work.OPEN_CI_MONITOR_STEP
 import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
@@ -23,6 +22,7 @@ import skillbill.ports.workflow.branchworktree.model.BranchWorktreeRelease
 import skillbill.ports.workflow.goalstate.GoalRuntimeStateFileStore
 import skillbill.scaffold.model.QaTargetKind
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR
 import java.nio.file.Path
 
 public sealed interface AppRunTarget {
@@ -80,7 +80,7 @@ public class AppRunTargetResolver(
   ): AppRunGoalRoutingInputResult {
     val monitoring =
       status?.let {
-        it.currentStep == OPEN_CI_MONITOR_STEP && !it.paused && it.executionLiveness == ExecutionLiveness.LIVE
+        it.currentStep == PHASE_MONITOR && !it.paused && it.executionLiveness == ExecutionLiveness.LIVE
       } == true
     if (!monitoring) return routingInputFailure(issueKey, "The goal is not completed or actively monitoring.")
     val checkoutValue = manifest.controlState.executionWorktreePath
@@ -114,7 +114,7 @@ public class AppRunTargetResolver(
     val completed = status?.admittedParentComplete() == true
     val monitoring =
       status?.let {
-        it.currentStep == OPEN_CI_MONITOR_STEP && !it.paused && it.executionLiveness == ExecutionLiveness.LIVE
+        it.currentStep == PHASE_MONITOR && !it.paused && it.executionLiveness == ExecutionLiveness.LIVE
       } == true
     if (!completed && status?.currentStep == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX) {
       return refused(

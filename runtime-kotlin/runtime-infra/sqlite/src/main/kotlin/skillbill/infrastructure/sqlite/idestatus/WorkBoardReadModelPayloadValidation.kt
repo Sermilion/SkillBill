@@ -271,6 +271,7 @@ internal object WorkBoardReadModelPayloadValidation {
   private object Checks {
     val itemChecks =
       listOf(
+        ::invalidAppRunPlatforms,
         ::invalidFieldGroup1,
         ::invalidFieldGroup2,
         ::invalidFieldGroup3,
@@ -278,6 +279,14 @@ internal object WorkBoardReadModelPayloadValidation {
         ::invalidFieldGroup5,
         ::invalidFieldGroup6,
       )
+
+    fun invalidAppRunPlatforms(fields: Map<String, Any?>): Boolean =
+      fields.containsKey(WorkBoardReadModelPayloadKeys.APP_RUN_PLATFORMS) &&
+        WorkBoardReadModelPayloadValidation.nullableStringList(
+          fields,
+          WorkBoardReadModelPayloadKeys.APP_RUN_PLATFORMS,
+        ) == null
+
     val snapshotScalarChecks =
       listOf(
         ::invalidFieldGroup7,

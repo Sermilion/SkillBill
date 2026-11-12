@@ -2,8 +2,12 @@ package skillbill.infrastructure.sqlite.core.migration.area
 
 import skillbill.contracts.persistence.WorkBoardReadModelKeys
 import skillbill.infrastructure.sqlite.core.schema.installWorkBoardChangeTriggers
+import skillbill.infrastructure.sqlite.idestatus.WorkBoardReadModelPayloadCodec
+import skillbill.infrastructure.sqlite.idestatus.WorkBoardReadModelTime
+import skillbill.infrastructure.sqlite.idestatus.WorkBoardRowMetadata
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.sql.Connection
+import java.time.format.DateTimeParseException
 
 internal object WorkBoardReadModelMigration {
   fun apply(connection: Connection) {
@@ -88,6 +92,68 @@ internal object WorkBoardReadModelRebuildMigration {
     connection.createStatement().use { statement ->
       statement.executeUpdate("UPDATE ${WorkBoardReadModelKeys.STATE_TABLE} SET ${WorkBoardReadModelKeys.COMPLETE} = 0")
     }
+  }
+}
+
+internal object WorkBoardAppRunPlatformsMigration {
+  private const val PAYLOAD_PARAMETER = 2
+  private const val GUIDANCE_PARAMETER = 3
+  private const val RECOVERY_GUIDANCE =
+    "The saved board row is incompatible with this runtime. Preserve the database and contact support for recovery."
+
+  fun apply(
+    connection: Connection,
+    diagnostics: RuntimeDiagnostics,
+  ) {
+    connection.createStatement().use { statement ->
+      statement.execute(
+        "CREATE TABLE IF NOT EXISTS ${WorkBoardReadModelKeys.INVALID_ITEMS_TABLE} (" +
+          "${WorkBoardReadModelKeys.WORK_ID} TEXT PRIMARY KEY, " +
+          "${WorkBoardReadModelKeys.PAYLOAD} TEXT NOT NULL, " +
+          "${WorkBoardReadModelKeys.RECOVERY_GUIDANCE} TEXT NOT NULL)",
+      )
+    }
+    val sql =
+      "SELECT ${WorkBoardReadModelKeys.WORK_ID}, ${WorkBoardReadModelKeys.UPDATED_AT}, " +
+        "${WorkBoardReadModelKeys.SEARCH_TEXT}, ${WorkBoardReadModelKeys.FRESHNESS_DEADLINE}, " +
+        "${WorkBoardReadModelKeys.PROJECTED_AT}, ${WorkBoardReadModelKeys.MEMBERSHIP_DEADLINE}, " +
+        "${WorkBoardReadModelKeys.PAYLOAD} FROM ${WorkBoardReadModelKeys.ITEMS_TABLE}"
+    connection.createStatement().use { statement ->
+      statement.executeQuery(sql).use { rows ->
+        while (rows.next()) {
+          val id = rows.getString(WorkBoardReadModelKeys.WORK_ID)
+          val payload = rows.getString(WorkBoardReadModelKeys.PAYLOAD)
+          val metadata =
+            try {
+              WorkBoardRowMetadata(
+                id,
+                WorkBoardReadModelTime.parse(rows.getString(WorkBoardReadModelKeys.UPDATED_AT)),
+                rows.getString(WorkBoardReadModelKeys.SEARCH_TEXT),
+                rows.getString(WorkBoardReadModelKeys.FRESHNESS_DEADLINE)?.let(WorkBoardReadModelTime::parse),
+                WorkBoardReadModelTime.parse(rows.getString(WorkBoardReadModelKeys.PROJECTED_AT)),
+                rows.getString(WorkBoardReadModelKeys.MEMBERSHIP_DEADLINE)?.let(WorkBoardReadModelTime::parse),
+              )
+            } catch (_: DateTimeParseException) {
+              null
+            }
+          val valid = metadata?.let { WorkBoardReadModelPayloadCodec.decode(payload, it) } != null
+          if (!valid) {
+            connection.prepareStatement(
+              "INSERT OR IGNORE INTO ${WorkBoardReadModelKeys.INVALID_ITEMS_TABLE} " +
+                "(${WorkBoardReadModelKeys.WORK_ID}, ${WorkBoardReadModelKeys.PAYLOAD}, " +
+                "${WorkBoardReadModelKeys.RECOVERY_GUIDANCE}) VALUES (?, ?, ?)",
+            ).use { archive ->
+              archive.setString(1, id)
+              archive.setString(PAYLOAD_PARAMETER, payload)
+              archive.setString(GUIDANCE_PARAMETER, RECOVERY_GUIDANCE)
+              archive.executeUpdate()
+            }
+            diagnostics.warning("seam=work_board_read_model_migration work_id=$id value_used=preserved_invalid_row")
+          }
+        }
+      }
+    }
+    WorkBoardReadModelRebuildMigration.apply(connection)
   }
 }
 

@@ -154,7 +154,7 @@ class WorkBoardReadModelStoreTest {
         statement.executeUpdate()
       }
       val entry = store.page(WorkBoardReadModelPageQuery(at.minusSeconds(1), null, null, 10)).entries.single()
-      assertTrue(entry is WorkBoardReadModelPage.Entry.Undecodable)
+      assertTrue(entry is WorkBoardReadModelPage.Entry.Recovery)
       assertTrue(
         SqliteTestDiagnostics.recordedWarnings().single().contains("seam=work_board_read_model_decode work_id=plan-1"),
       )
@@ -237,5 +237,20 @@ class WorkBoardReadModelStoreTest {
       GoalWorktreeView("/goal", GoalWorktreeState.REMOVED),
       WorkBoardReadModelPayloadCodec.decode(legacy, metadata)?.item?.goalWorktree,
     )
+  }
+
+  @Test
+  fun `app run platforms round trip and old rows decode as empty`() {
+    val at = Instant.parse("2026-10-28T10:00:00Z")
+    val original = primaryRootRow()
+    val row = original.copy(item = original.item.copy(appRunPlatforms = listOf("android")))
+    val metadata = WorkBoardRowMetadata(row.workId, at, "plan", null, at, null)
+
+    val decoded = WorkBoardReadModelPayloadCodec.decode(WorkBoardReadModelPayloadCodec.encode(row), metadata)
+    assertEquals(listOf("android"), decoded?.item?.appRunPlatforms)
+    val oldPayload =
+      WorkBoardReadModelPayloadCodec.encode(row)
+        .replace("\"${WorkBoardReadModelPayloadKeys.APP_RUN_PLATFORMS}\":[\"android\"],", "")
+    assertEquals(emptyList(), WorkBoardReadModelPayloadCodec.decode(oldPayload, metadata)?.item?.appRunPlatforms)
   }
 }

@@ -89,6 +89,7 @@ data class WorkDetailItem(
   val incidentHistory: List<WorkIncidentProjection> = emptyList(),
   val changeBaseline: WorkChangeBaseline? = null,
   val goalWorktree: GoalWorktreeView? = null,
+  val appRunPlatforms: List<String> = emptyList(),
   val validationBranchRuns: List<WorkValidationBranchRun> = emptyList(),
   val selectedValidationResult: String? = null,
   val planActivity: List<StandalonePlanActivity> = emptyList(),

@@ -2,6 +2,8 @@ package skillbill.engine.work
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
+import skillbill.engine.apprun.AppRunPlatformsMemo
+import skillbill.engine.apprun.GoalAppRunPlatforms
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goal.goalRepositoryRootFromIdentity
 import skillbill.engine.work.eligibility.workControlEligible
@@ -97,7 +99,10 @@ public class WorkBoardItemProjection(
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val goalRuntimeStateFiles: GoalRuntimeStateFileStore,
   private val buildRunRepository: AgentBuildRunRepository,
+  private val goalAppRunPlatforms: GoalAppRunPlatforms,
 ) {
+  internal fun newAppRunPlatformsMemo(): AppRunPlatformsMemo = goalAppRunPlatforms.newPassMemo()
+
   internal fun withBuilds(
     items: List<WorkBoardItem>,
     now: Instant,
@@ -161,7 +166,7 @@ public class WorkBoardItemProjection(
     diagnostics: MutableList<WorkBoardDiagnostic>,
     skipDiagnostics: AggregateSkipDiagnostics,
   ): WorkBoardItem? {
-    val (observedAt, finishedFrom) = window
+    val observedAt = window.observedAt
     var found: WorkDetailMatch.Found? = null
     return try {
       found = detailMatch(id, unitOfWork) as? WorkDetailMatch.Found ?: return null
@@ -189,7 +194,7 @@ public class WorkBoardItemProjection(
           candidate,
           IdeStatusProjectionContext(unitOfWork, identity, null, observedAt, root),
           work,
-          finishedFrom,
+          window,
           diagnostics,
         )
       }
@@ -197,45 +202,66 @@ public class WorkBoardItemProjection(
       if (!error.isInvalidWorkflowStateFailure() || found == null) {
         skipIncompatibleBoardItem(error, diagnostics, skipDiagnostics, this.diagnostics, id)
       } else {
-        val resolved = found.work
-        val identity = resolved?.repositoryIdentity
-        val root = identity?.let(::decodeRepositoryRoot)
-        if (resolved == null || identity == null || root == null) throw error
-        this.diagnostics.warning(
-          "seam=$IDE_STATUS_STATUS_SEAM value_expected=readable_row value_used=blocked_record workflow_id=$id " +
-            "failure_code=${error.failureCodeLabel()} error=${error.message.orEmpty()}",
-        )
-        val snapshot =
-          IdeStatusProblemSnapshots.blockedWorkRecord(
-            identity,
-            observedAt,
-            resolved.item,
-            error.message.orEmpty(),
-            resolved.workflowExecution?.primaryRepositoryRoot,
-          )
-        ideStatusValidator.validate(snapshot, "work-board:$id")
-        WorkBoardItem(
-          snapshot = snapshot,
-          repositoryRoot = root.toString(),
-          liveSection = workLiveSection(snapshot, null),
-          requiresAttention = workRequiresAttention(snapshot),
-          displayGroup = workDisplayGroup(snapshot, null),
-          displayPriority = workDisplayPriority(snapshot, null),
-          observation = unitOfWork.workList.observation(),
-          databaseFileObservation = unitOfWork.databaseFileObservation,
-        )
+        blockedBoardItem(found, unitOfWork, id, error, window)
       }
     }
+  }
+
+  private fun blockedBoardItem(
+    found: WorkDetailMatch.Found,
+    unitOfWork: UnitOfWork,
+    id: String,
+    error: SkillBillRuntimeException,
+    window: BoardProjectionWindow,
+  ): WorkBoardItem {
+    val resolved = found.work
+    val identity = resolved?.repositoryIdentity
+    val root = identity?.let(::decodeRepositoryRoot)
+    if (resolved == null || identity == null || root == null) throw error
+    this.diagnostics.warning(
+      "seam=$IDE_STATUS_STATUS_SEAM value_expected=readable_row value_used=blocked_record workflow_id=$id " +
+        "failure_code=${error.failureCodeLabel()} error=${error.message.orEmpty()}",
+    )
+    val snapshot =
+      IdeStatusProblemSnapshots.blockedWorkRecord(
+        identity,
+        window.observedAt,
+        resolved.item,
+        error.message.orEmpty(),
+        resolved.workflowExecution?.primaryRepositoryRoot,
+      )
+    ideStatusValidator.validate(snapshot, "work-board:$id")
+    val isGoal = resolved.item.workflowKind == WorkItemKind.FEATURE_GOAL
+    val goalWorktree =
+      goalWorktreeForProjection(isGoal, resolved.item.workflowId, root, unitOfWork)
+    return WorkBoardItem(
+      snapshot = snapshot,
+      repositoryRoot = root.toString(),
+      liveSection = workLiveSection(snapshot, null),
+      requiresAttention = workRequiresAttention(snapshot),
+      displayGroup = workDisplayGroup(snapshot, null),
+      displayPriority = workDisplayPriority(snapshot, null),
+      observation = unitOfWork.workList.observation(),
+      databaseFileObservation = unitOfWork.databaseFileObservation,
+      appRunPlatforms =
+        appRunPlatformsFor(
+          isGoal,
+          resolved.item,
+          root,
+          goalWorktree?.takeIf { it.state != GoalWorktreeState.REMOVED }?.path,
+          window.appRunPlatformsMemo,
+        ),
+    )
   }
 
   internal fun projectRetainedBoardItem(
     candidate: IdeStatusCandidate,
     context: IdeStatusProjectionContext,
     work: List<ResolvedWorkItem>,
-    finishedFrom: Instant,
+    window: BoardProjectionWindow,
     diagnostics: MutableList<WorkBoardDiagnostic>,
   ): WorkBoardItem? {
-    val item = projectBoardItem(candidate, context, work)
+    val item = projectBoardItem(candidate, context, work, window.appRunPlatformsMemo)
     if (item.finishedAt == null && !isFinished(item.snapshot)) return item
     val finishedAt = item.finishedAt
     if (finishedAt == null) {
@@ -248,7 +274,7 @@ public class WorkBoardItemProjection(
         )
       return null
     }
-    return item.takeIf { finishedAt >= finishedFrom && finishedAt <= context.observedAt }
+    return item.takeIf { finishedAt >= window.finishedFrom && finishedAt <= context.observedAt }
   }
 
   internal fun resolvedWorkItems(
@@ -264,6 +290,8 @@ public class WorkBoardItemProjection(
     candidate: IdeStatusCandidate,
     context: IdeStatusProjectionContext,
     work: List<ResolvedWorkItem>,
+    appRunPlatformsMemo: AppRunPlatformsMemo =
+      goalAppRunPlatforms.newPassMemo(),
   ): WorkBoardItem {
     val projection = projector.project(candidate, context.copy(branchCorrelation = candidate.branchCorrelation))
     val snapshot =
@@ -299,6 +327,9 @@ public class WorkBoardItemProjection(
         context.observedAt,
         successfulGoalCompletion = completion.second == WorkBoardCompletionSource.GOAL_COMPLETION,
       )
+    val goalItem = work.firstOrNull()?.item?.takeIf { it.workflowKind == WorkItemKind.FEATURE_GOAL }
+    val goalWorktree =
+      goalItem?.let { goalWorktreeForProjection(true, it.workflowId, context.repoRoot, context.unitOfWork) }
     return WorkBoardItem(
       snapshot,
       context.repoRoot.toString(),
@@ -320,11 +351,69 @@ public class WorkBoardItemProjection(
       doneWithinDay = windowed.doneWithinDay,
       membershipDeadline = windowed.membershipDeadline,
       executingAgentId = projection.executingAgentId,
-      goalWorktree =
-        work.firstOrNull()?.item?.takeIf { it.workflowKind == WorkItemKind.FEATURE_GOAL }
-          ?.let { goalWorktreeView(candidate.workflowId, context.unitOfWork) },
+      goalWorktree = goalWorktree,
+      appRunPlatforms = goalPlatforms(goalItem, context.repoRoot, goalWorktree, appRunPlatformsMemo),
     )
   }
+
+  private fun goalPlatforms(
+    item: WorkItem?,
+    root: Path,
+    worktree: GoalWorktreeView?,
+    memo: AppRunPlatformsMemo,
+  ): List<String> = appRunPlatformsFor(item != null, item, root, appRunCheckoutPath(worktree), memo)
+
+  private fun goalWorktreeForProjection(
+    isGoal: Boolean,
+    workflowId: String,
+    repoRoot: Path,
+    unitOfWork: UnitOfWork,
+  ): GoalWorktreeView? {
+    if (!isGoal) return null
+    return catchingNonCancellation { goalWorktreeView(workflowId, unitOfWork) }.getOrElse { error ->
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "seam=work_projection.app_run_platforms repo=$repoRoot value_used=empty reason=${error.message}",
+        error,
+      )
+      null
+    }
+  }
+
+  private fun goalFeatureBranchForProjection(
+    isGoal: Boolean,
+    item: WorkItem,
+    repoRoot: Path,
+  ): String? {
+    if (!isGoal) return null
+    return catchingNonCancellation { projector.goalFeatureBranch(item, repoRoot) }.getOrElse { error ->
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "seam=work_projection.app_run_platforms repo=$repoRoot value_used=empty reason=${error.message}",
+        error,
+      )
+      null
+    }
+  }
+
+  internal fun appRunPlatformsFor(
+    isGoal: Boolean,
+    item: WorkItem?,
+    repoRoot: Path,
+    worktreePath: String?,
+    memo: AppRunPlatformsMemo =
+      goalAppRunPlatforms.newPassMemo(),
+  ): List<String> =
+    goalAppRunPlatforms.forGoal(
+      isGoal,
+      repoRoot,
+      item?.let { goalFeatureBranchForProjection(isGoal, it, repoRoot) },
+      worktreePath,
+      memo,
+    )
+
+  internal fun appRunCheckoutPath(worktree: GoalWorktreeView?): String? =
+    worktree?.takeIf { it.state != GoalWorktreeState.REMOVED }?.path
 
   internal fun goalWorktreeView(
     workflowId: String,
@@ -788,7 +877,11 @@ public class WorkBoardItemProjection(
   internal fun decodeRepositoryRoot(identity: String): Path? = goalRepositoryRootFromIdentity(identity)
 }
 
-internal data class BoardProjectionWindow(val observedAt: Instant, val finishedFrom: Instant)
+internal data class BoardProjectionWindow(
+  val observedAt: Instant,
+  val finishedFrom: Instant,
+  val appRunPlatformsMemo: AppRunPlatformsMemo = mutableMapOf(),
+)
 
 internal data class ResolvedWorkItem(
   val item: WorkItem,
@@ -887,6 +980,7 @@ internal object WorkBoardReadModelRefresh {
     }
     val ids = if (affected.requiresRebuild) allCandidates(unit, now, finishedFrom) else affected.candidates
     val deleted = affected.nonCandidates.toMutableSet()
+    val projectionWindow = BoardProjectionWindow(now, finishedFrom)
     val rows =
       ids.mapNotNull { id ->
         val item =
@@ -894,7 +988,7 @@ internal object WorkBoardReadModelRefresh {
             projection.projectBoardCandidate(
               unit,
               id,
-              BoardProjectionWindow(now, finishedFrom),
+              projectionWindow,
               mutableListOf(),
               AggregateSkipDiagnostics(),
             )

@@ -23,6 +23,13 @@ public sealed interface AppRunCapabilityResolution {
 
 public data class AppRunRecipe(val packSlug: String, val platforms: Set<QaTargetKind>, val scriptPath: Path)
 
+public fun AppRunCapabilityResolution.platforms(): List<String> =
+  when (this) {
+    is AppRunCapabilityResolution.Declared ->
+      recipes.flatMap { it.platforms }.map(QaTargetKind::wireValue).distinct().sorted()
+    is AppRunCapabilityResolution.Absent, is AppRunCapabilityResolution.Incompatible -> emptyList()
+  }
+
 @Inject
 public class AppRunCapabilityResolver(
   private val gitOperations: WorkflowGitOperations,
@@ -53,31 +60,35 @@ public class AppRunCapabilityResolver(
     }
 
   public fun resolve(input: AppRunGoalRoutingInput): AppRunCapabilityResolution =
+    try {
+      resolve(input, installedCatalog.manifests())
+    } catch (failure: SkillBillRuntimeException) {
+      failure.rethrowUnless(failure.isShellContentContractFailure())
+      AppRunCapabilityResolution.Incompatible(
+        "Installed platform pack discovery failed: ${failure.message ?: failure.javaClass.simpleName}.",
+      )
+    }
+
+  public fun catalogManifests(): List<PlatformManifest> = installedCatalog.manifests()
+
+  public fun resolve(
+    input: AppRunGoalRoutingInput,
+    manifests: List<PlatformManifest>,
+  ): AppRunCapabilityResolution =
     when (val paths = input.trackedPaths()) {
       is WorkflowGitNameListResult.Failed ->
         AppRunCapabilityResolution.Incompatible(
           "Could not read goal tracked paths: ${paths.error}",
         )
-      is WorkflowGitNameListResult.Listed -> resolve(paths.names)
+      is WorkflowGitNameListResult.Listed -> resolve(paths.names, manifests)
     }
 
-  public fun platforms(input: AppRunGoalRoutingInput): List<String> =
-    when (val resolution = resolve(input)) {
-      is AppRunCapabilityResolution.Declared ->
-        resolution.recipes.flatMap { it.platforms }.map(QaTargetKind::wireValue).distinct().sorted()
-      is AppRunCapabilityResolution.Absent, is AppRunCapabilityResolution.Incompatible -> emptyList()
-    }
+  public fun platforms(input: AppRunGoalRoutingInput): List<String> = resolve(input).platforms()
 
-  private fun resolve(paths: List<String>): AppRunCapabilityResolution {
-    val manifests =
-      try {
-        installedCatalog.manifests()
-      } catch (failure: SkillBillRuntimeException) {
-        failure.rethrowUnless(failure.isShellContentContractFailure())
-        return AppRunCapabilityResolution.Incompatible(
-          "Installed platform pack discovery failed: ${failure.message ?: failure.javaClass.simpleName}.",
-        )
-      }
+  private fun resolve(
+    paths: List<String>,
+    manifests: List<PlatformManifest>,
+  ): AppRunCapabilityResolution {
     val routed = routedConcretePacks(manifests, paths)
     val recipes =
       routed.sortedBy(PlatformManifest::slug).mapNotNull { pack ->

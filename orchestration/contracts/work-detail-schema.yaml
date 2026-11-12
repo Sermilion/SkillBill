@@ -49,6 +49,7 @@ $defs:
         type: [string, "null"]
         enum: [standalone_finished_at, workflow_completion, goal_completion, goal_state_entry, estimated_goal_state_entry, null]
       build: { anyOf: [ { $ref: "#/$defs/build" }, { type: "null" } ] }
+      app_run_platforms: {type: array, uniqueItems: true, items: {type: string, pattern: "^[a-z][a-z0-9-]{0,31}$"}}
       feature_title: {type: string}
       subtasks: {type: array, maxItems: 100, description: "One page of up to 100 goal subtasks, whatever page_size was requested.", items: {type: object}}
       phases: {type: array, items: {type: object}}

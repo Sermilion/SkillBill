@@ -15,7 +15,7 @@ import skillbill.model.EnvironmentContext
 import skillbill.ports.UnitOfWork
 import skillbill.ports.idestatus.model.WorkBoardReadModelKey
 import skillbill.ports.idestatus.model.WorkBoardReadModelPage.Entry.Decoded
-import skillbill.ports.idestatus.model.WorkBoardReadModelPage.Entry.Undecodable
+import skillbill.ports.idestatus.model.WorkBoardReadModelPage.Entry.Recovery
 import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkLiveSection
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -193,7 +193,7 @@ class DesktopFixtureCoverageTest {
         unit.workBoardReadModel.page(
           WorkBoardReadModelPageQuery(Instant.EPOCH, filter = null, afterKey = cursor, limit = 100),
         )
-      assertTrue(page.entries.none { it is Undecodable })
+      assertTrue(page.entries.none { it is Recovery })
       val decoded = page.entries.filterIsInstance<Decoded>()
       rows += decoded
       cursor = decoded.lastOrNull()?.key

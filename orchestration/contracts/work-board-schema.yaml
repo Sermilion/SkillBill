@@ -44,6 +44,8 @@ properties:
               missing_completion_time,
               incompatible_record,
             ]
+        failure: {type: string, minLength: 1}
+        recovery_guidance: {type: string, minLength: 1}
   problem:
     type: object
     additionalProperties: false
@@ -72,6 +74,10 @@ $defs:
         anyOf:
           - $ref: "#/$defs/build"
           - type: "null"
+      app_run_platforms:
+        type: array
+        uniqueItems: true
+        items: {type: string, pattern: "^[a-z][a-z0-9-]{0,31}$"}
   build:
     type: object
     additionalProperties: false

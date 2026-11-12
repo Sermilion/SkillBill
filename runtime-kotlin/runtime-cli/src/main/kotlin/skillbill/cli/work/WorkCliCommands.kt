@@ -80,6 +80,7 @@ class WorkBoardCommand(
               WorkBoardPayloadKeys.FINISHED_AT to item.finishedAt?.toString(),
               WorkBoardPayloadKeys.FINISHED_AT_SOURCE to item.finishedAtSource?.wireValue,
               WorkBoardPayloadKeys.BUILD to item.build?.let(::workBuildWireMap),
+              WorkBoardPayloadKeys.APP_RUN_PLATFORMS to item.appRunPlatforms,
             )
           },
         WorkBoardPayloadKeys.OBSERVED_AT to result.observedAt.toString(),

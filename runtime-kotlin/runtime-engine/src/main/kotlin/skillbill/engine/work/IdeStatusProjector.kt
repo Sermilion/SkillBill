@@ -42,6 +42,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePlanReport
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.model.WorkItem
+import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.model.DecompositionManifest
@@ -121,6 +122,18 @@ public class IdeStatusProjector(
       manifest != null &&
         (manifest.featureBranch == currentBranch || manifest.stackBranches.any { it.branch == currentBranch })
     return if (ownsBranch) currentBranch else registeredBranch
+  }
+
+  internal fun goalFeatureBranch(
+    item: WorkItem,
+    repoRoot: Path,
+  ): String? {
+    if (item.workflowKind != WorkItemKind.FEATURE_GOAL) return null
+    val issueKey = item.issueKey ?: return null
+    val state = manifestStore.read(issueKey, repoRoot) ?: return null
+    return state.manifest.takeIf {
+      state.parentWorkflowId == item.workflowId && it.issueKey == issueKey
+    }?.featureBranch
   }
 
   internal fun goalSpecBundle(

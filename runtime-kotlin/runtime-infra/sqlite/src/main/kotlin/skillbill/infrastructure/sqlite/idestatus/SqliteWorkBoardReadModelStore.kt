@@ -40,6 +40,8 @@ internal class SqliteWorkBoardReadModelStore(
   }
 
   override fun upsert(row: WorkBoardReadModelRow) {
+    preserveInvalidItems(setOf(row.workId))
+    if (hasRecovery(row.workId)) return
     connection.prepareStatement(
       """
       INSERT INTO ${WorkBoardReadModelKeys.ITEMS_TABLE} (
@@ -83,6 +85,8 @@ internal class SqliteWorkBoardReadModelStore(
   }
 
   override fun delete(workId: String) {
+    preserveInvalidItems(setOf(workId))
+    if (hasRecovery(workId)) return
     connection.prepareStatement(
       "DELETE FROM ${WorkBoardReadModelKeys.ITEMS_TABLE} WHERE ${WorkBoardReadModelKeys.WORK_ID} = ?",
     )
@@ -93,8 +97,45 @@ internal class SqliteWorkBoardReadModelStore(
   }
 
   override fun deleteAll() {
-    connection.createStatement().use { it.executeUpdate("DELETE FROM ${WorkBoardReadModelKeys.ITEMS_TABLE}") }
+    val workIds =
+      connection.createStatement().use { statement ->
+        val sql = "SELECT ${WorkBoardReadModelKeys.WORK_ID} FROM ${WorkBoardReadModelKeys.ITEMS_TABLE}"
+        statement.executeQuery(sql).use { rows -> buildSet { while (rows.next()) add(rows.getString(1)) } }
+      }
+    preserveInvalidItems(workIds)
+    connection.createStatement().use { statement ->
+      statement.executeUpdate(
+        "DELETE FROM ${WorkBoardReadModelKeys.ITEMS_TABLE} WHERE ${WorkBoardReadModelKeys.WORK_ID} NOT IN " +
+          "(SELECT ${WorkBoardReadModelKeys.WORK_ID} FROM ${WorkBoardReadModelKeys.INVALID_ITEMS_TABLE})",
+      )
+    }
   }
+
+  private fun preserveInvalidItems(workIds: Set<String>) {
+    if (workIds.isEmpty()) return
+    readByWorkIds(workIds)
+      .filterIsInstance<WorkBoardReadModelPage.Entry.Recovery>()
+      .forEach(::preserveRecovery)
+  }
+
+  private fun preserveRecovery(recovery: WorkBoardReadModelPage.Entry.Recovery) {
+    connection.prepareStatement(
+      "INSERT OR IGNORE INTO ${WorkBoardReadModelKeys.INVALID_ITEMS_TABLE} " +
+        "(${WorkBoardReadModelKeys.WORK_ID}, ${WorkBoardReadModelKeys.PAYLOAD}, " +
+        "${WorkBoardReadModelKeys.RECOVERY_GUIDANCE}) VALUES (?, ?, ?)",
+    ).use { archive ->
+      archive.bindAll(recovery.workId, recovery.originalPayload, recovery.guidance)
+      archive.executeUpdate()
+    }
+  }
+
+  private fun hasRecovery(workId: String): Boolean =
+    connection.prepareStatement(
+      "SELECT 1 FROM ${WorkBoardReadModelKeys.INVALID_ITEMS_TABLE} WHERE ${WorkBoardReadModelKeys.WORK_ID} = ?",
+    ).use { statement ->
+      statement.bindAll(workId)
+      statement.executeQuery().use { rows -> rows.next() }
+    }
 
   override fun isComplete(): Boolean =
     connection.createStatement().use { statement ->
@@ -136,6 +177,8 @@ internal class SqliteWorkBoardReadModelStore(
         "${WorkBoardReadModelKeys.PAYLOAD}, ${WorkBoardReadModelKeys.PROJECTED_AT} " +
         "FROM ${WorkBoardReadModelKeys.ITEMS_TABLE} " +
         "WHERE (${WorkBoardReadModelKeys.FINISHED_AT} IS NULL OR ${WorkBoardReadModelKeys.FINISHED_AT} >= ?) " +
+        "AND ${WorkBoardReadModelKeys.WORK_ID} NOT IN " +
+        "(SELECT ${WorkBoardReadModelKeys.WORK_ID} FROM ${WorkBoardReadModelKeys.INVALID_ITEMS_TABLE}) " +
         "AND (? IS NULL OR ${WorkBoardReadModelKeys.SEARCH_TEXT} LIKE '%' || ? || '%' ESCAPE '\\') AND $seek " +
         "ORDER BY ${WorkBoardReadModelKeys.DISPLAY_PRIORITY}, ${WorkBoardReadModelKeys.UPDATED_AT} DESC, " +
         "${WorkBoardReadModelKeys.WORK_ID} LIMIT ?"
@@ -152,9 +195,25 @@ internal class SqliteWorkBoardReadModelStore(
         statement.setString(index++, after.workId)
       }
       statement.setInt(index, query.limit)
-      statement.executeQuery().use { rows -> WorkBoardReadModelPage(decodeRows(rows)) }
+      statement.executeQuery().use { rows ->
+        val entries = (recoveryEntries() + decodeRows(rows)).distinctBy { it.workId }
+        WorkBoardReadModelPage(
+          entries
+            .filter { after == null || compareKeys(it.key, after) > 0 }
+            .sortedWith { left, right -> compareKeys(left.key, right.key) }
+            .take(query.limit),
+        )
+      }
     }
   }
+
+  private fun compareKeys(
+    left: WorkBoardReadModelKey,
+    right: WorkBoardReadModelKey,
+  ): Int =
+    compareValues(left.displayPriority, right.displayPriority).takeIf { it != 0 }
+      ?: compareValues(right.updatedAtText, left.updatedAtText).takeIf { it != 0 }
+      ?: compareValues(left.workId, right.workId)
 
   override fun readByWorkIds(workIds: Set<String>): List<WorkBoardReadModelPage.Entry> {
     if (workIds.isEmpty()) return emptyList()
@@ -167,7 +226,40 @@ internal class SqliteWorkBoardReadModelStore(
         "WHERE ${WorkBoardReadModelKeys.WORK_ID} IN (SELECT value FROM json_each(?))",
     ).use { statement ->
       statement.bindAll(JsonCodec.valueToJsonString(workIds.sorted()))
-      statement.executeQuery().use(::decodeRows)
+      statement.executeQuery().use { rows ->
+        (recoveryEntries(workIds) + decodeRows(rows)).distinctBy { it.workId }
+      }
+    }
+  }
+
+  private fun recoveryEntries(workIds: Set<String>? = null): List<WorkBoardReadModelPage.Entry> {
+    val selection =
+      if (workIds == null) {
+        "SELECT ${WorkBoardReadModelKeys.WORK_ID}, ${WorkBoardReadModelKeys.PAYLOAD}, " +
+          "${WorkBoardReadModelKeys.RECOVERY_GUIDANCE} FROM ${WorkBoardReadModelKeys.INVALID_ITEMS_TABLE}"
+      } else {
+        "SELECT ${WorkBoardReadModelKeys.WORK_ID}, ${WorkBoardReadModelKeys.PAYLOAD}, " +
+          "${WorkBoardReadModelKeys.RECOVERY_GUIDANCE} FROM ${WorkBoardReadModelKeys.INVALID_ITEMS_TABLE} " +
+          "WHERE ${WorkBoardReadModelKeys.WORK_ID} IN (SELECT value FROM json_each(?))"
+      }
+    return connection.prepareStatement(selection).use { statement ->
+      if (workIds != null) statement.bindAll(JsonCodec.valueToJsonString(workIds.sorted()))
+      statement.executeQuery().use { rows ->
+        buildList {
+          while (rows.next()) {
+            val id = rows.getString(1)
+            add(
+              WorkBoardReadModelPage.Entry.Recovery(
+                id,
+                WorkBoardReadModelKey(Int.MIN_VALUE, "", id),
+                rows.getString(2),
+                "invalid_or_unsupported_payload",
+                rows.getString(WorkBoardReadModelKeys.RECOVERY_GUIDANCE),
+              ),
+            )
+          }
+        }
+      }
     }
   }
 
@@ -209,11 +301,23 @@ internal class SqliteWorkBoardReadModelStore(
           }
         if (decoded == null) {
           val category = failedField ?: "payload"
+          val payload = rows.getString(WorkBoardReadModelKeys.PAYLOAD)
+          val guidance =
+            "The saved board row is incompatible with this runtime. " +
+              "Preserve the database and contact support for recovery."
           diagnostics.warning(
             "seam=work_board_read_model_decode work_id=$id value_expected=decoded_row " +
-              "value_used=in_memory_reprojection failure_field=$category",
+              "value_used=recovery_entry failure_field=$category",
           )
-          add(WorkBoardReadModelPage.Entry.Undecodable(id, key))
+          add(
+            WorkBoardReadModelPage.Entry.Recovery(
+              id,
+              key,
+              payload,
+              category,
+              guidance,
+            ),
+          )
         } else {
           add(WorkBoardReadModelPage.Entry.Decoded(decoded, key))
         }

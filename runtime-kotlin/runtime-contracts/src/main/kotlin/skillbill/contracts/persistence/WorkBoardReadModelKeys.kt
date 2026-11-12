@@ -1,6 +1,8 @@
 package skillbill.contracts.persistence
 
 object WorkBoardReadModelKeys {
+  const val INVALID_ITEMS_TABLE = "work_board_invalid_items"
+  const val RECOVERY_GUIDANCE = "recovery_guidance"
   const val ITEMS_TABLE = "work_board_items"
   const val STATE_TABLE = "work_board_read_model_state"
   const val WORK_ID = "work_id"
@@ -22,6 +24,7 @@ object WorkBoardReadModelKeys {
 }
 
 object WorkBoardReadModelPayloadKeys {
+  const val APP_RUN_PLATFORMS = "app_run_platforms"
   const val GOAL_WORKTREE = "goal_worktree"
   const val GOAL_WORKTREE_RETENTION_DETAIL = "retention_detail"
   const val GOAL_WORKTREE_MAIN_CHECKOUT_OUTCOME = "main_checkout_outcome"

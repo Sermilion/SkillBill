@@ -56,6 +56,7 @@ object IdeStatusPayloadKeys {
 
 object WorkBoardPayloadKeys {
   const val BUILD = WorkBuildPayloadKeys.BUILD
+  const val APP_RUN_PLATFORMS = "app_run_platforms"
   const val PAGE_SIZE = "page_size"
   const val NEXT_CURSOR = "next_cursor"
   const val ITEMS = "items"
@@ -71,10 +72,13 @@ object WorkBoardPayloadKeys {
   const val PROBLEM = "problem"
   const val CODE = "code"
   const val MESSAGE = "message"
+  const val FAILURE = "failure"
+  const val RECOVERY_GUIDANCE = "recovery_guidance"
 }
 
 object WorkDetailPayloadKeys {
   const val BUILD = WorkBuildPayloadKeys.BUILD
+  const val APP_RUN_PLATFORMS = WorkBoardPayloadKeys.APP_RUN_PLATFORMS
   const val PAGE_SIZE = WorkBoardPayloadKeys.PAGE_SIZE
   const val NEXT_CURSOR = WorkBoardPayloadKeys.NEXT_CURSOR
   const val EXECUTION_HISTORY = "execution_history"

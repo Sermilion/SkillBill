@@ -2,6 +2,8 @@ package skillbill.di.core
 
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.engine.RecordingWorkflowGitOperations
+import skillbill.engine.apprun.AppRunCapabilityResolver
+import skillbill.engine.apprun.GoalAppRunPlatforms
 import skillbill.engine.diagnostics.block.testWorkIncidentProjectionBuilder
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.goal.GoalRunnerManifestState
@@ -28,6 +30,7 @@ import skillbill.ports.idestatus.NoopIdeStatusValidator
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.projectstore.FixedProjectStorePort
+import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.work.WorkListRepository
@@ -242,6 +245,13 @@ private class SnapshotFixture(
           CanonicalRepositoryRoot,
           LocalGoalRuntimeStateFileStore(),
           SessionAgentBuildRunRepository(database),
+          GoalAppRunPlatforms(
+            AppRunCapabilityResolver(
+              RecordingWorkflowGitOperations(),
+              InstalledPlatformPackCatalogPort { emptyList() },
+            ),
+            NoopRuntimeDiagnostics,
+          ),
         ),
       diagnostics = NoopRuntimeDiagnostics,
       incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, Clock.fixed(observedAt, ZoneOffset.UTC)),

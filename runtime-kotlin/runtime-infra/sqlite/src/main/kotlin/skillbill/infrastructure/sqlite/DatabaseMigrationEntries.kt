@@ -19,6 +19,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.FeedbackEventMigratio
 import skillbill.infrastructure.sqlite.core.migration.area.GoalNoChangeReasonMigration
 import skillbill.infrastructure.sqlite.core.migration.area.GoalTelemetryMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
+import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardAppRunPlatformsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardInvalidationsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDependencyMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
@@ -1146,4 +1147,14 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 122,
       name = "record-primary-repository-root",
       operation = PrimaryRepositoryRootMigration::apply,
+    ) +
+    DatabaseMigration(
+      version = 123,
+      name = "rebuild-work-board-app-run-platforms",
+      operation = WorkBoardAppRunPlatformsMigration::apply,
+    ) +
+    DatabaseMigration(
+      version = 124,
+      name = "preserve-invalid-work-board-rows",
+      operation = WorkBoardAppRunPlatformsMigration::apply,
     )

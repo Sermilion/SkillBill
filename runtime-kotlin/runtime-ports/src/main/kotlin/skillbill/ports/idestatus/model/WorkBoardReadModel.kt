@@ -36,6 +36,12 @@ data class WorkBoardReadModelPage(val entries: List<Entry>) {
       override val workId: String get() = row.workId
     }
 
-    data class Undecodable(override val workId: String, override val key: WorkBoardReadModelKey) : Entry
+    data class Recovery(
+      override val workId: String,
+      override val key: WorkBoardReadModelKey,
+      val originalPayload: String,
+      val failure: String,
+      val guidance: String,
+    ) : Entry
   }
 }

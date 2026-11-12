@@ -66,6 +66,7 @@ data class WorkBoardItem(
   val executingAgentId: String? = null,
   val goalWorktree: GoalWorktreeView? = null,
   val build: WorkBuildView? = null,
+  val appRunPlatforms: List<String> = emptyList(),
 )
 
 data class WorkBoardDiagnostic(
@@ -73,6 +74,8 @@ data class WorkBoardDiagnostic(
   val repositoryIdentity: String?,
   val workflowId: String? = null,
   val invocationId: String? = null,
+  val failure: String? = null,
+  val recoveryGuidance: String? = null,
 )
 
 data class WorkBoardResult(

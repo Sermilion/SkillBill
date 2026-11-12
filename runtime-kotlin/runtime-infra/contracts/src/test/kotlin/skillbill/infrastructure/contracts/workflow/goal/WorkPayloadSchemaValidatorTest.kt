@@ -43,6 +43,7 @@ class WorkPayloadSchemaValidatorTest {
         WorkBoardPayloadKeys.SNAPSHOT to IdeStatusSchemaValidator().toWirePayload(snapshot).toPayload(),
         WorkBoardPayloadKeys.REPOSITORY_ROOT to "/repo",
         WorkBoardPayloadKeys.BUILD to buildPayload("passed"),
+        WorkBoardPayloadKeys.APP_RUN_PLATFORMS to listOf("android"),
       )
     val board =
       mapOf(
@@ -65,6 +66,18 @@ class WorkPayloadSchemaValidatorTest {
 
     validator.validateBoard(JsonCodec.mapToJsonString(board), "build-board")
     validator.validateDetail(JsonCodec.mapToJsonString(detail), "build-detail")
+    val legacyItem = item - WorkBoardPayloadKeys.APP_RUN_PLATFORMS
+    validator.validateBoard(
+      JsonCodec.mapToJsonString(board + (WorkBoardPayloadKeys.ITEMS to listOf(legacyItem))),
+      "board-without-app-run-platforms",
+    )
+    validator.validateDetail(
+      JsonCodec.mapToJsonString(
+        detail +
+          (WorkDetailPayloadKeys.ITEM to (legacyItem + (WorkDetailPayloadKeys.STEP_PIPELINE to emptyList<String>()))),
+      ),
+      "detail-without-app-run-platforms",
+    )
     validateTotalBuildPayloads(board, detail, item)
     assertFailsWith<SkillBillRuntimeException> {
       validator.validateBoard(

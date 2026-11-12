@@ -27,6 +27,8 @@ internal fun workBoardDiagnosticWireMap(diagnostic: WorkBoardDiagnostic): Map<St
     put(WorkBoardPayloadKeys.REPOSITORY_IDENTITY, diagnostic.repositoryIdentity)
     diagnostic.workflowId?.let { put(SharedPayloadKeys.WORKFLOW_ID, it) }
     diagnostic.invocationId?.let { put(IdeStatusPayloadKeys.INVOCATION_ID, it) }
+    diagnostic.failure?.let { put(WorkBoardPayloadKeys.FAILURE, it) }
+    diagnostic.recoveryGuidance?.let { put(WorkBoardPayloadKeys.RECOVERY_GUIDANCE, it) }
   }
 
 internal fun workDetailItemWireMap(
@@ -44,6 +46,7 @@ internal fun workDetailItemWireMap(
     put(WorkBoardPayloadKeys.FINISHED_AT, item.finishedAt?.toString())
     put(WorkBoardPayloadKeys.FINISHED_AT_SOURCE, item.finishedAtSource?.wireValue)
     put(WorkDetailPayloadKeys.BUILD, item.build?.let(::workBuildWireMap))
+    put(WorkDetailPayloadKeys.APP_RUN_PLATFORMS, item.appRunPlatforms)
     put(
       DecompositionPlanningPayloadKeys.DEPENDENCIES,
       item.dependencies.map { entry ->
