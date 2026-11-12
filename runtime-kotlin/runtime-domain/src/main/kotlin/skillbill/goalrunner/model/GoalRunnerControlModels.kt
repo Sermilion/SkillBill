@@ -96,6 +96,7 @@ data class GoalRunnerControlState(
   val pausedAt: String? = null,
   val stopAfterConsumed: Boolean = false,
   val repositoryIdentity: String? = null,
+  val planningSourceRoot: String? = null,
   val executionLease: GoalRunnerExecutionLease? = null,
   val activeDurationMs: Long = 0,
   val activeDurationAsOf: String? = null,

@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner
 
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.goalRunnerDeps
+import skillbill.engine.goalrunner.execution.core.goalRunnerTestDatabase
 import skillbill.engine.goalrunner.execution.core.testGoalRunner
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.model.GoalRunnerCompleteRequest
@@ -52,6 +53,7 @@ class GoalRunnerCompleteTest {
         outcomeStore = RecordingOutcomeStore(),
         phaseRecorder = goalTestPhaseRecorder(),
         ports = GoalRunnerStatusTestPorts(gitOperations = AcceptGitOperations(), goalWorktrees = worktrees),
+        database = goalRunnerTestDatabase(store),
       )
 
     val result = service.complete(completeRequest().copy(repoRoot = worktree))

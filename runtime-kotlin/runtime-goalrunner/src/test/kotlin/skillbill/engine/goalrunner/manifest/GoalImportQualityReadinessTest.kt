@@ -7,11 +7,13 @@ import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
 import skillbill.engine.featuretask.slot.artifactValue
 import skillbill.engine.featuretask.slot.testExecutionPlan
+import skillbill.engine.goalrunner.persist.testGoalPlanningCheckoutOwnership
 import skillbill.engine.goalrunner.persist.testWorkflowGoalRunnerQualityExecutionStore
 import skillbill.goalrunner.model.quality.GoalQualityReadiness
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
@@ -176,6 +178,8 @@ class GoalImportQualityReadinessTest {
     Random(1),
     testProjectStore,
     parentProjection = GoalParentProjectionWriter(testDecompositionManifestValidator),
+    worktrees = InPlaceGoalWorktreeResources,
+    ownership = testGoalPlanningCheckoutOwnership(database),
   )
 
   private data class PlanIdentity(

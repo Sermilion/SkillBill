@@ -9,17 +9,24 @@ import skillbill.application.workflow.decomposition.findDecomposedParentOrCorrup
 import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.application.workflow.decomposition.findOccupyingDecomposedParentWorkflow
 import skillbill.application.workflow.decomposition.importedPlanStepUpdates
+import skillbill.application.workflow.decomposition.isPlanWorkflow
 import skillbill.application.workflow.decomposition.requireRuntimeModeForEngineWrite
 import skillbill.application.workflow.decomposition.withImportedPlan
 import skillbill.application.workflow.persist.generateWorkflowId
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.OccupyingGoalParent
+import skillbill.engine.goalrunner.plan.GoalPlanningCheckoutOwnership
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.goalrunner.model.GoalPlanningOwnership
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
+import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
@@ -34,6 +41,7 @@ import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.model.workflowStatus
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import kotlin.random.Random
@@ -47,8 +55,46 @@ public class WorkflowGoalRunnerManifestLoader(
   private val random: Random,
   private val projectStore: ProjectStorePort,
   private val parentProjection: GoalParentProjectionWriter,
+  private val worktrees: GoalWorktreeResources,
+  private val ownership: GoalPlanningCheckoutOwnership,
 ) {
   private val engine = WorkflowEngine()
+
+  internal fun isIncompletePlan(workflowId: String): Boolean =
+    database.read { unit ->
+      val record = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+      record != null && record.workflowStatus != WorkflowStatus.COMPLETED
+    }
+
+  internal fun reconcileReservation(
+    owner: GoalPlanningOwnership,
+    sourceRoot: Path,
+  ) {
+    val failure = ownership.reconcileReservation(owner.normalizedIssueKey, sourceRoot, owner)
+    if (failure != null) {
+      throw SkillBillRuntimeException(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, failure.reason)
+    }
+  }
+
+  internal fun recoverPlanningCheckout(
+    owner: GoalPlanningOwnership,
+    sourceRoot: Path,
+  ) {
+    val result =
+      worktrees.createOrAdopt(
+        sourceRoot,
+        owner.normalizedIssueKey,
+        owner.ownedPath,
+        owner.initialCommit,
+        owner,
+      )
+    if (result is GoalWorktreeResult.Failed) {
+      throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA,
+        "Planning checkout ${owner.ownedPath} could not be recovered before adoption: ${result.reason}",
+      )
+    }
+  }
 
   internal fun findProjectedManifest(
     repoRoot: Path,
@@ -130,8 +176,13 @@ public class WorkflowGoalRunnerManifestLoader(
     manifest: DecompositionManifest,
     repositoryIdentities: List<String?> = listOf(null),
     independentParent: Boolean = false,
+    planningOwner: GoalPlanningOwnership? = null,
   ): GoalRunnerManifestState? =
     database.transaction { unitOfWork ->
+      if (independentParent && planningOwner == null) {
+        refuseConcurrentPlanningOwner(unitOfWork, repositoryIdentities, manifest.issueKey)
+      }
+      val selectedOwnedPlan = selectedOwnedPlan(unitOfWork, planningOwner, manifest.issueKey, repositoryIdentities)
       val existingRecord =
         if (independentParent) {
           null
@@ -142,7 +193,7 @@ public class WorkflowGoalRunnerManifestLoader(
         }
       existingRecord?.requireRuntimeModeForEngineWrite()
       val existing = existingRecord?.toSnapshot()
-      val attachCompletedPlan = existing == null && !independentParent
+      val attachCompletedPlan = existing == null && (!independentParent || selectedOwnedPlan != null)
       val base =
         existing ?: engine.openRecord(
           WorkflowFamily.TASK_RUNTIME.definition,
@@ -150,20 +201,8 @@ public class WorkflowGoalRunnerManifestLoader(
           WorkflowFamily.TASK_RUNTIME.definition.defaultSessionPrefix,
           "plan",
         )
-      val planWorkflowId =
-        if (attachCompletedPlan) {
-          repositoryIdentities.firstNotNullOfOrNull { identity ->
-            unitOfWork.workflowStates.findCompletedPlanWorkflowId(manifest.issueKey, identity)
-          }
-        } else {
-          null
-        }
-      val qualityPlanWorkflowId =
-        if (attachCompletedPlan) {
-          planWorkflowId ?: unitOfWork.workflowStates.findCompletedPlanWorkflowIdForProjectSpec(manifest)
-        } else {
-          null
-        }
+      val (planWorkflowId, qualityPlanWorkflowId) =
+        completedPlanIds(unitOfWork, manifest, repositoryIdentities, attachCompletedPlan, selectedOwnedPlan)
       val planningTime = unitOfWork.planWorkflowTiming(planWorkflowId)
       val imported =
         engine.updateRecord(
@@ -199,6 +238,92 @@ public class WorkflowGoalRunnerManifestLoader(
         manifest = saved.decompositionRuntime() ?: manifest,
         controlState = unitOfWork.goalRunnerControls.controlState(saved.workflowId),
       )
+    }
+
+  private fun completedPlanIds(
+    unitOfWork: UnitOfWork,
+    manifest: DecompositionManifest,
+    repositoryIdentities: List<String?>,
+    attachCompletedPlan: Boolean,
+    selectedOwnedPlan: String?,
+  ): Pair<String?, String?> {
+    val planWorkflowId =
+      if (attachCompletedPlan) {
+        val activeOwner =
+          repositoryIdentities.filterNotNull().any { identity ->
+            unitOfWork.goalPlanningOwnership.findByIssue(identity, normalizeRequiredIssueKey(manifest.issueKey)) != null
+          }
+        selectedOwnedPlan ?: if (activeOwner) {
+          null
+        } else {
+          repositoryIdentities.firstNotNullOfOrNull { identity ->
+            unitOfWork.workflowStates.findCompletedPlanWorkflowId(manifest.issueKey, identity)
+          }
+        }
+      } else {
+        null
+      }
+    val qualityPlanWorkflowId =
+      if (attachCompletedPlan) {
+        planWorkflowId ?: unitOfWork.workflowStates.findCompletedPlanWorkflowIdForProjectSpec(manifest)
+      } else {
+        null
+      }
+    return planWorkflowId to qualityPlanWorkflowId
+  }
+
+  private fun refuseConcurrentPlanningOwner(
+    unitOfWork: UnitOfWork,
+    repositoryIdentities: List<String?>,
+    issueKey: String,
+  ) {
+    val active =
+      repositoryIdentities.filterNotNull().firstNotNullOfOrNull { identity ->
+        unitOfWork.goalPlanningOwnership.findByIssue(identity, normalizeRequiredIssueKey(issueKey))
+          ?.takeUnless {
+            it.state == GoalPlanningOwnership.State.TRANSFERRED ||
+              it.state == GoalPlanningOwnership.State.SUPERSEDED
+          }
+      }
+    if (active != null) {
+      throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA,
+        "Planning checkout ${active.ownedPath} acquired an owner during intake. Preserve it and retry adoption.",
+      )
+    }
+  }
+
+  private fun selectedOwnedPlan(
+    unitOfWork: UnitOfWork,
+    planningOwner: GoalPlanningOwnership?,
+    issueKey: String,
+    repositoryIdentities: List<String?>,
+  ): String? =
+    planningOwner?.let { expected ->
+      val current = unitOfWork.goalPlanningOwnership.findByWorkflow(expected.workflowId)
+      val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, expected.workflowId)
+      val executionIdentity = unitOfWork.workflowStates.getFeatureTaskExecutionIdentity(expected.workflowId)
+      val normalizedIssueKey = normalizeRequiredIssueKey(issueKey)
+      val ownerMatches =
+        current == expected && expected.state == GoalPlanningOwnership.State.INITIALIZED &&
+          unitOfWork.goalPlanningOwnership.findByIssue(expected.repositoryIdentity, normalizedIssueKey) == expected &&
+          Files.isDirectory(expected.ownedPath)
+      val repositoryMatches =
+        expected.normalizedIssueKey == normalizedIssueKey &&
+          expected.repositoryIdentity in repositoryIdentities.filterNotNull() &&
+          unitOfWork.workflowStates.getFeatureTaskRuntimeWorkerOwnership(expected.workflowId) == null
+      val workflowMatches =
+        record != null && record.toRecord().isPlanWorkflow() &&
+          executionIdentity?.repositoryIdentity == expected.repositoryIdentity &&
+          executionIdentity.normalizedIssueKey == normalizedIssueKey
+      if (!ownerMatches || !repositoryMatches || !workflowMatches) {
+        throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA,
+          "Planning checkout ${expected.ownedPath} changed before adoption. Preserve it and reconcile " +
+            "its ownership, workflow and live worker before retrying.",
+        )
+      }
+      expected.workflowId
     }
 
   internal fun readProjection(

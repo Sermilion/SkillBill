@@ -10,11 +10,13 @@ import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.ports.UnitOfWork
 import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
+import skillbill.ports.goalrunner.model.GoalPlanningOwnership
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatPlan
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatTick
@@ -32,6 +34,11 @@ import java.time.Clock
 import java.time.Duration
 import java.util.UUID
 
+internal data class WorkerAdmissionSelection(
+  val requestedReviewSelection: RuntimeReviewSelection? = null,
+  val authorizedGoalParentWorkflowId: String? = null,
+)
+
 @RuntimeSingleton
 @Inject
 public class FeatureTaskRuntimeWorkerCoordinator(
@@ -46,10 +53,17 @@ public class FeatureTaskRuntimeWorkerCoordinator(
     workflowId: String,
     effectiveInputs: EffectiveGatePolicyInputs,
     expectedIdentity: FeatureTaskExecutionIdentity,
-    requestedReviewSelection: RuntimeReviewSelection? = null,
+    selection: WorkerAdmissionSelection = WorkerAdmissionSelection(),
     block: (AdmittedFeatureTaskRuntimeExecution, AcquiredFeatureTaskRuntimeWorker) -> T,
   ): T {
-    val acquired = acquireOrRecover(workflowId, effectiveInputs, expectedIdentity, requestedReviewSelection)
+    val acquired =
+      acquireOrRecover(
+        workflowId,
+        effectiveInputs,
+        expectedIdentity,
+        selection.requestedReviewSelection,
+        selection.authorizedGoalParentWorkflowId,
+      )
     val ownership = acquired.ownership
     val heartbeats = supervisor.startHeartbeat(heartbeatPlan(workflowId)) { heartbeat(ownership) }
     val writer =
@@ -99,12 +113,30 @@ public class FeatureTaskRuntimeWorkerCoordinator(
     inputs: EffectiveGatePolicyInputs,
     identity: FeatureTaskExecutionIdentity,
     reviewSelection: RuntimeReviewSelection?,
+    authorizedGoalParentWorkflowId: String?,
   ): AcquiredWorker {
+    refuseTransferredPlanWithoutGoalAuthority(workflowId, authorizedGoalParentWorkflowId)
     val existing = database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId) }
     return if (existing == null) {
-      acquireUnowned(workflowId, inputs, identity, reviewSelection)
+      acquireUnowned(workflowId, inputs, identity, reviewSelection, authorizedGoalParentWorkflowId)
     } else {
       recoverOwned(existing, inputs, identity, reviewSelection)
+    }
+  }
+
+  private fun refuseTransferredPlanWithoutGoalAuthority(
+    workflowId: String,
+    authorizedGoalParentWorkflowId: String?,
+  ) {
+    val owner = database.read { it.goalPlanningOwnership.findByWorkflow(workflowId) }
+    if (
+      owner?.state == GoalPlanningOwnership.State.TRANSFERRED &&
+      owner.parentWorkflowId != authorizedGoalParentWorkflowId
+    ) {
+      error(
+        "Plan workflow '$workflowId' was transferred to goal '${owner.parentWorkflowId}' at ${owner.ownedPath}. " +
+          "Resume it through that goal or reconcile the ownership record before retrying standalone work.",
+      )
     }
   }
 
@@ -113,9 +145,13 @@ public class FeatureTaskRuntimeWorkerCoordinator(
     inputs: EffectiveGatePolicyInputs,
     identity: FeatureTaskExecutionIdentity,
     reviewSelection: RuntimeReviewSelection?,
+    authorizedGoalParentWorkflowId: String?,
   ): AcquiredWorker {
     repeat(UNOWNED_ACQUIRE_ATTEMPTS) {
-      when (val claim = claimUnowned(workflowId, inputs, identity, reviewSelection)) {
+      when (
+        val claim =
+          claimUnowned(workflowId, inputs, identity, reviewSelection, authorizedGoalParentWorkflowId)
+      ) {
         is UnownedClaim.Owned -> return claim.acquired
         is UnownedClaim.Recover -> return recoverOwned(claim.existing, inputs, identity, reviewSelection)
         is UnownedClaim.Lost -> Unit
@@ -129,6 +165,7 @@ public class FeatureTaskRuntimeWorkerCoordinator(
     inputs: EffectiveGatePolicyInputs,
     identity: FeatureTaskExecutionIdentity,
     reviewSelection: RuntimeReviewSelection?,
+    authorizedGoalParentWorkflowId: String?,
   ): UnownedClaim {
     var receipt: RuntimeMigrationReceipt? = null
     var committed = false
@@ -138,6 +175,7 @@ public class FeatureTaskRuntimeWorkerCoordinator(
           database.transaction { unitOfWork ->
             val existing = unitOfWork.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId)
             if (existing != null) return@transaction UnownedClaim.Recover(existing)
+            refuseTransferredPlanWithoutGoalAuthority(unitOfWork, workflowId, authorizedGoalParentWorkflowId)
             val row =
               unitOfWork.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
                 ?: throw invalidWorkflowStateSchemaError(
@@ -176,7 +214,8 @@ public class FeatureTaskRuntimeWorkerCoordinator(
                 phaseId = admittedRow.currentStepId,
                 phaseAttempt = currentPhaseAttempt,
               )
-            if (unitOfWork.workflowStates.acquireFeatureTaskRuntimeWorker(ownership, admittedRow.updatedAt)) {
+            val acquired = acquireWorker(unitOfWork, ownership, admittedRow.updatedAt, authorizedGoalParentWorkflowId)
+            if (acquired) {
               UnownedClaim.Owned(AcquiredWorker(ownership, execution, row.toSnapshot(), 0, false, admittedSnapshot))
             } else {
               UnownedClaim.Lost(execution)
@@ -188,6 +227,40 @@ public class FeatureTaskRuntimeWorkerCoordinator(
       result
     } finally {
       if (!committed) receipt?.let { executionAdmission.recordTransactionOutcome(it, committed = false) }
+    }
+  }
+
+  private fun acquireWorker(
+    unitOfWork: UnitOfWork,
+    ownership: FeatureTaskRuntimeWorkerOwnership,
+    updatedAt: String?,
+    authorizedGoalParentWorkflowId: String?,
+  ): Boolean =
+    if (authorizedGoalParentWorkflowId == null) {
+      unitOfWork.workflowStates.acquireFeatureTaskRuntimeWorker(ownership, updatedAt)
+    } else {
+      unitOfWork.workflowStates.acquireFeatureTaskRuntimeWorkerForGoal(
+        ownership,
+        updatedAt,
+        authorizedGoalParentWorkflowId,
+      )
+    }
+
+  private fun refuseTransferredPlanWithoutGoalAuthority(
+    unitOfWork: UnitOfWork,
+    workflowId: String,
+    authorizedGoalParentWorkflowId: String?,
+  ) {
+    val transferredOwner = unitOfWork.goalPlanningOwnership.findByWorkflow(workflowId)
+    if (
+      transferredOwner?.state == GoalPlanningOwnership.State.TRANSFERRED &&
+      transferredOwner.parentWorkflowId != authorizedGoalParentWorkflowId
+    ) {
+      error(
+        "Plan workflow '$workflowId' was transferred to goal '${transferredOwner.parentWorkflowId}' " +
+          "at ${transferredOwner.ownedPath}. Resume it through that goal or reconcile the ownership " +
+          "record before retrying standalone work.",
+      )
     }
   }
 

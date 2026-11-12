@@ -423,7 +423,10 @@ private class DurablePhasePlanRecords(
   override fun recordPlanBundle(
     workflowId: String,
     bundle: FeatureTaskRuntimePlanBundle,
-  ): Boolean = decomposeTerminalRecorder.recordPlanBundle(workflowId, bundle)
+  ): Boolean =
+    admitted.ownedWrite({ decomposeTerminalRecorder.recordPlanBundle(workflowId, bundle, it) }) {
+      decomposeTerminalRecorder.recordPlanBundle(workflowId, bundle)
+    }
 
   override fun recordPlanBundleWithUnits(
     workflowId: String,

@@ -4,10 +4,18 @@ import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowId
 import skillbill.application.workflow.decomposition.isPlanWorkflow
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
+import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goal.goalRepositoryIdentity
+import skillbill.engine.goal.goalRepositoryIdentityCandidates
+import skillbill.engine.goalrunner.planning.outcome.canonicalStore
+import skillbill.engine.goalrunner.planning.outcome.resolvedGovernedPath
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
+import skillbill.ports.projectstore.model.ProjectStoreLocation
+import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
+import skillbill.ports.workflow.toRecord
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -17,6 +25,57 @@ import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.taskruntime.artifact.goalPlanningImport
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImportSource
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.nio.file.Path
+
+internal fun WorkflowStateRepository.selectGoalPlanWorkflowId(
+  state: GoalRunnerManifestState,
+  sourceRoot: Path,
+  repositories: RepositoryEnclosingRootPort,
+  store: ProjectStoreLocation,
+): String? {
+  get(WorkflowFamily.TASK_RUNTIME, state.parentWorkflowId)
+    ?.step(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN)?.planWorkflowId?.let { return it }
+  val identity =
+    GoalPlanningIdentity(
+      state.parentWorkflowId,
+      normalizeRequiredIssueKey(state.manifest.issueKey),
+      state.controlState.repositoryIdentity ?: goalRepositoryIdentity(sourceRoot, repositories),
+    )
+  return findLinkedSubtaskPlanWorkflowId(
+    identity,
+    state.manifest.subtasks,
+    goalRepositoryIdentityCandidates(sourceRoot, repositories),
+  ) { workflowId ->
+    goalPlanMatches(workflowId, state, sourceRoot, repositories, store)
+  }
+}
+
+internal fun WorkflowStateRepository.goalPlanMatches(
+  workflowId: String,
+  state: GoalRunnerManifestState,
+  sourceRoot: Path,
+  repositories: RepositoryEnclosingRootPort,
+  store: ProjectStoreLocation,
+): Boolean {
+  val plan = get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return false
+  val identity = getFeatureTaskExecutionIdentity(workflowId) ?: return false
+  return plan.toRecord().isPlanWorkflow() &&
+    identity.repositoryIdentity == goalRepositoryIdentity(sourceRoot, repositories) &&
+    identity.normalizedIssueKey == normalizeRequiredIssueKey(state.manifest.issueKey) &&
+    governsGoalPlanSpec(identity.governedSpecPath, state, sourceRoot, repositories, store)
+}
+
+private fun governsGoalPlanSpec(
+  planSpec: String,
+  state: GoalRunnerManifestState,
+  sourceRoot: Path,
+  repositories: RepositoryEnclosingRootPort,
+  store: ProjectStoreLocation,
+): Boolean {
+  val canonical = canonicalStore(store, repositories)
+  return resolvedGovernedPath(sourceRoot, canonical, planSpec, repositories) ==
+    resolvedGovernedPath(sourceRoot, canonical, state.manifest.parentSpecPath, repositories)
+}
 
 internal fun WorkflowStateRepository.findReopenedSubtaskPlanWorkflowId(
   issueKey: String,
