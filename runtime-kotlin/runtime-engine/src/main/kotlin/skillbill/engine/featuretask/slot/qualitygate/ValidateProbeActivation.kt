@@ -41,17 +41,14 @@ internal object ValidateProbeActivation {
     val repairedRefs = state.interactionTrace.repairedScenarioRefs
     val repairedPairs =
       repairedRefs.filterNot(catalog::containsKey).map { ref ->
-        pairs[ref]
-          ?: AcceptanceCriterionInteractionTarget.pairOf(ref, state.criteria)
-            ?.takeIf { it.allowedOwners.size == 2 }
-            ?.let {
-                target ->
-              AcceptanceCriterionSameFilePair(target.allowedOwners[0], target.allowedOwners[1], emptyList())
-            }
-          ?: throw invalidInteractionScenarioCatalog(
-            ref,
-            "repaired reference is missing from the bound scenario catalog and generated same-file pairs.",
-          )
+        pairs[ref] ?: AcceptanceCriterionInteractionTarget.pairOf(ref, state.criteria)
+          ?.takeIf { it.allowedOwners.size == 2 }
+          ?.let { target ->
+            AcceptanceCriterionSameFilePair(target.allowedOwners[0], target.allowedOwners[1], emptyList())
+          } ?: throw invalidInteractionScenarioCatalog(
+          ref,
+          "repaired reference is missing from the bound scenario catalog and generated same-file pairs.",
+        )
       }
     val pairCriteria = repairedPairs.flatMap { listOf(it.firstRef, it.secondRef) }.toSet()
     return ValidateProbeScope(

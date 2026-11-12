@@ -74,7 +74,7 @@
     if (it.incident && it.incident.recovery === 'available' && !st.recovered.has(it.id)) out.push(S.Button({ label: 'Recover', icon: 'refresh', act: 'recover', arg: it.id, disabled: it.refreshFailed || !recoveryOffered(st, it), tip: recoveryOffered(st, it) ? null : 'Confirm the prerequisites first' }));
     const run = runAppView(st, it);
     if (run) out.push(run.button);
-    return `<div class="l-col g-2"><div class="l-row g-2 l-wrap">${out.join('')}</div>${ro.canLaunch && resumable(it) ? `<span class="t-faint" style="font-size:var(--t-xs)">Starts the installed agent harness</span>` : ''}${plan && !ready ? `<span class="t-faint" style="font-size:var(--t-xs)">Implement turns on when every spec is saved</span>` : ''}${it.refreshFailed ? S.Hint({ tone: 'warn', text: 'Refresh the detail before using run controls.' }) : run && !it.refreshFailed ? run.status : ''}</div>`;
+    return `<div class="l-col g-2"><div class="l-row g-2 l-wrap">${out.join('')}</div>${ro.canLaunch && resumable(it) ? `<span class="t-faint t-xs">Starts the installed agent harness</span>` : ''}${plan && !ready ? `<span class="t-faint t-xs">Implement turns on when every spec is saved</span>` : ''}${it.refreshFailed ? S.Hint({ tone: 'warn', text: 'Refresh the detail before using run controls.' }) : run && !it.refreshFailed ? run.status : ''}</div>`;
   }
 
   /* ---------- Run app (SONA-10) ---------- */
@@ -222,10 +222,10 @@
     ];
   }
   function workArea(st, header, body) {
-    return `<div class="sb-work"><div class="sb-work-main">${header}<div class="sb-work-body">${body}</div>${st.termOpen ? terminal(st) : ''}</div>${st.specsOpen ? specsPane(st) : ''}</div>`;
+    return S.WorkArea({ header, body, terminal: st.termOpen ? terminal(st) : '', side: st.specsOpen ? specsPane(st) : '' });
   }
   function shell(st, main) {
-    return `<div class="sb-app${st.sideOpen ? ' side-open' : ''}">${st.view === 'settings' ? settingsNav(st) : sidebar(st)}<main class="sb-main">${main}</main></div>`;
+    return S.AppShell({ sideOpen: st.sideOpen, side: st.view === 'settings' ? settingsNav(st) : sidebar(st), main });
   }
 
   /* ---------- Work board (feature/work) ---------- */
@@ -280,10 +280,10 @@
     const label = st.section ? SECTIONS.find((s) => s[0] === st.section)[1] : null;
     const header = S.ViewHeader({
       crumbs: label ? [{ label: 'Work', act: 'nav', arg: 'work' }, { label }] : [{ label: 'Work' }],
-      middle: `<div style="width:min(280px,40vw)">${S.Input({ id: 'work-filter', icon: 'search', placeholder: 'Filter work', value: st.filter, input: 'work-filter' })}</div>`,
+      middle: S.Input({ id: 'work-filter', icon: 'search', placeholder: 'Filter work', value: st.filter, input: 'work-filter', width: 'min(280px, 40vw)' }),
       actions: paneToggles(st),
     });
-    return workArea(st, header, `<div class="sb-scroll" data-scroll="work">${body || empty}</div>`);
+    return workArea(st, header, S.ScrollArea({ id: 'work', body: body || empty }));
   }
 
   /* A no-change pause waits for an operator decision. The app only explains it: the operator settles it in chat or runs the
@@ -292,7 +292,7 @@
     const cmd = `skill-bill goal operator-decision ${it.id} --subtask ${it.current} --decision retry_fix|accept_and_advance|abandon_subtask`;
     return `<div class="l-col g-2">
       ${S.Hint({ tone: 'info', text: `Subtask ${it.current} finished with no code changes and is waiting for your decision. Settle it in chat, or run this command and then resume the goal. Pass --instructions with retry_fix.` })}
-      <div class="l-row g-2"><span class="mono t-muted" style="flex:1;font-size:var(--t-sm)">${esc(cmd)}</span>${S.IconButton({ icon: 'copy', label: 'Copy decision command', act: 'copy', arg: cmd, size: 'sm' })}</div>
+      <div class="l-row g-2"><span class="mono t-muted t-sm l-grow">${esc(cmd)}</span>${S.IconButton({ icon: 'copy', label: 'Copy decision command', act: 'copy', arg: cmd, size: 'sm' })}</div>
     </div>`;
   }
 
@@ -326,8 +326,8 @@
     const tone = inc.recovery === 'available' ? 'info' : 'warn';
     const recovered = st.recovered.has(it.id);
     const body = [
-      `<div class="l-col g-1">${S.ExpandableText({ html: `<span class="t-faint">Cause:</span> ${esc(inc.cause)}` })}${S.ExpandableText({ html: `<span class="t-faint">Next:</span> ${esc(inc.nextAction)}` })}<span class="t-faint" style="font-size:var(--t-xs)">certainty ${esc(inc.certainty)}${inc.unavailableReason ? ' · recovery unavailable: ' + esc(inc.unavailableReason.toLowerCase().replace(/_/g, ' ')) : ''}</span></div>`,
-      inc.prerequisites && !recovered ? `<div class="l-col g-2" style="margin-top:8px">${S.Checklist({ act: 'prereq', items: inc.prerequisites.map((p) => ({ id: it.id + ':' + p.id, text: p.text, checked: st.prereqs.has(it.id + ':' + p.id) })) })}</div>` : '',
+      `<div class="l-col g-1">${S.ExpandableText({ html: `<span class="t-faint">Cause:</span> ${esc(inc.cause)}` })}${S.ExpandableText({ html: `<span class="t-faint">Next:</span> ${esc(inc.nextAction)}` })}<span class="t-faint t-xs">certainty ${esc(inc.certainty)}${inc.unavailableReason ? ' · recovery unavailable: ' + esc(inc.unavailableReason.toLowerCase().replace(/_/g, ' ')) : ''}</span></div>`,
+      inc.prerequisites && !recovered ? `<div class="l-col g-2">${S.Checklist({ act: 'prereq', items: inc.prerequisites.map((p) => ({ id: it.id + ':' + p.id, text: p.text, checked: st.prereqs.has(it.id + ':' + p.id) })) })}</div>` : '',
     ].join('');
     const decision = it.awaitsDecision ? operatorDecision(st, it) : '';
     const evOpen = !isCollapsed(st, 'incident-evidence', true);
@@ -336,7 +336,7 @@
       S.Callout({ tone: recovered ? 'info' : tone, title: recovered ? 'Recovering' : inc.heading, body }) +
       decision +
       evidence +
-      `<div class="l-row g-2 l-wrap t-muted" style="font-size:var(--t-sm)"><span>Report: ${esc(inc.report)}</span>${/issue #/.test(inc.report) ? S.Button({ label: 'Open issue', icon: 'external', size: 'sm', variant: 'ghost', act: 'toast', arg: 'Opened the issue in your browser' }) : ''}</div>` });
+      `<div class="l-row g-2 l-wrap t-muted t-sm"><span>Report: ${esc(inc.report)}</span>${/issue #/.test(inc.report) ? S.Button({ label: 'Open issue', icon: 'external', size: 'sm', variant: 'ghost', act: 'toast', arg: 'Opened the issue in your browser' }) : ''}</div>` });
   }
   /* A decision awaited with no incident gets its own section where the incident would be. */
   function decisionPanel(st, it) {
@@ -361,20 +361,202 @@
     const k = st.subSel[it.id];
     return k && subKeys(it).includes(k) ? k : defaultSub(it);
   }
-  /* The details pane shows unless it is toggled off, the Specs pane is open, or the window is narrower than 1080px.
-   * Where it does not show, the inspector opens inside the selected row instead. */
-  const paneShown = (st) => st.propsOpen && !st.specsOpen && !st.narrow;
+  /* The details panel floats over the document, so it shows whenever it is open, at any window width and beside the Specs
+   * pane. Subtask rows never expand: selecting one opens the panel. Width: the operator's dragged width, else 380px for a
+   * goal and 272px for other runs. */
+  const paneShown = (st) => !!st.propsOpen;
+  const PANE_MIN = 272;
+  /* Default width as the app's FloatingPane: the wide variant (800px) for a goal, 560px otherwise, both capped at 70% of
+   * the work body. A dragged width (st.paneW) replaces it. */
+  const paneWidth = (st, it) => (st.paneW ? `${st.paneW}px` : `min(${it.kind === 'goal' ? 800 : 560}px, 70%)`);
   const specArg = (it, s) => `${it.id}/${s.spec}`;
   const subChip = (it, d) => {
     const t = it.subtasks.find((x) => x.id === d.id);
     return { num: pad(d.id), optional: d.optional, lead: S.StatusIcon(SUB_STATE[t.status], 0.5), act: 'sub-select', arg: `${it.id}|${d.id}`, tip: `Subtask ${pad(d.id)}: ${t.title}${d.optional ? ' (optional)' : ''}` };
   };
-  function subtaskInspector(st, it, s, inline) {
+  /* ---------- Audit and Review records (the app's SubtaskAuditResult and ReviewPass) ----------
+   * A subtask with `auditResult` / `review` uses them as recorded. Others are derived from the compact sample (`audit`,
+   * `reviews`) and the subtask's phase states, so every subtask shows the same parts: criteria, attempts, lanes, refs,
+   * statuses and confidence. */
+  const AREA_OF = (t) => (/secret|sensitive|credential|token|password|leak/i.test(t) ? 'security' : /test|assert/i.test(t) ? 'testing'
+    : /twice|poll|slow|cache|per /i.test(t) ? 'performance' : /module|attached|layer|depend|parent|snapshot/i.test(t) ? 'architecture' : 'code-quality');
+  const platformOf = (it) => ({ 'infra-terraform': 'terraform' })[it.repo] || (/news|android|app/i.test(it.repo || '') ? 'kmp' : 'kotlin');
+  const CONF = { blocker: 'high', critical: 'high', major: 'medium', minor: 'low', nit: 'low' };
+  function reviewModel(it, s) {
+    const ph = subPhaseStates(it, s).review;
+    const base = s.review ? { passes: s.review.passes.slice() } : (() => {
+      const plat = platformOf(it), refs = {};
+      const passes = (s.reviews || []).map((p, i, all) => {
+        const next = all[i + 1], last = i === all.length - 1;
+        const findings = p.findings.map(([sev, text, where]) => {
+          if (!refs[text]) refs[text] = `F-${String(Object.keys(refs).length + 1).padStart(3, '0')}`;
+          const carried = next && next.findings.some((g) => g[1] === text);
+          const status = last ? (s.status === 'complete' || s.status === 'completed_no_change' ? 'fixed' : 'open') : carried ? 'open' : 'fixed';
+          return { ref: refs[text], sev, text, where, status, lane: `bill-${plat}-code-review-${AREA_OF(text)}`, confidence: CONF[String(sev).toLowerCase()] || 'medium' };
+        });
+        const lanes = ['architecture', 'code-quality', 'security', 'testing'].map((a) => `bill-${plat}-code-review-${a}`);
+        findings.forEach((f) => { if (!lanes.includes(f.lane)) lanes.push(f.lane); });
+        return { n: p.n, verdict: p.verdict.replace(/ /g, '_'), lanes, findings };
+      });
+      return { passes };
+    })();
+    if (ph === 'now') {
+      const lanes = (base.passes[0] && base.passes[0].lanes) || ['architecture', 'code-quality', 'security', 'testing'].map((a) => `bill-${platformOf(it)}-code-review-${a}`);
+      base.running = { n: base.passes.length + 1, lanes: lanes.map((name, i) => ({ name, finished: i < Math.ceil(lanes.length / 2) })) };
+    }
+    return base;
+  }
+  function genCriteria(s, n) {
+    const t = s.title.replace(/\.$/, '');
+    const pool = [`${t}, as the subtask spec describes, with no change to unrelated behavior.`, 'Existing callers and persisted data keep working after the change, with no migration step for the operator.',
+      'Tests cover the new behavior and its failure path, and they fail on the previous implementation.', 'Every fallback the change adds records its reason, so a degraded run is visible in the logs.',
+      'The change stays inside the modules the spec names; no new dependency crosses a module boundary.'];
+    return Array.from({ length: n }, (_, k) => ({ ref: `AC-${String(k + 1).padStart(3, '0')}`, text: pool[k % pool.length], met: true }));
+  }
+  function auditModel(it, s) {
+    if (s.auditResult) return s.auditResult;
+    const states = subPhaseStates(it, s), ph = states.audit;
+    if (ph === 'now') return { outcome: 'running', attempts: [{ n: 1, passed: false, uncovered: 1, next: 'audit_implement_fix' }] };
+    const said = s.audit && s.audit.summary ? (/\bboth\b/i.test(s.audit.summary) ? 2 : /\bthree\b/i.test(s.audit.summary) ? 3 : 0) : 0;
+    const n = said || 3;
+    if (ph === 'fail' || ph === 'wait' || (s.audit && /fail|gap|unmet/i.test(s.audit.verdict))) {
+      const criteria = genCriteria(s, n).map((c, k) => (k === 0 ? Object.assign(c, { met: false }) : c));
+      return { outcome: 'failed', met: n - 1, total: n, attemptTotal: 2, summary: s.audit && s.audit.summary, criteria, attempts: [{ n: 1, passed: false, uncovered: 2, next: 'audit_implement_fix' }, { n: 2, passed: false, uncovered: 1 }] };
+    }
+    if (s.audit || ph === 'done') {
+      const criteria = genCriteria(s, n);
+      const tries = 1 + (s.id % 2);
+      if (tries > 1) criteria[criteria.length - 1].fixedIn = 2;
+      return { outcome: 'passed', met: n, total: n, attemptTotal: tries, summary: s.audit && s.audit.summary, criteria,
+        attempts: tries > 1 ? [{ n: 1, passed: false, uncovered: 1, next: 'audit_implement_fix' }, { n: 2, passed: true }] : [{ n: 1, passed: true }] };
+    }
+    const reviewStarted = (s.reviews || []).length || states.review;
+    return !reviewStarted && ['pending', 'in_progress', 'blocked'].includes(s.status) ? { outcome: 'upcoming' } : null;
+  }
+  /* Audit and Review drawn with the Verify result parts: Label for the verdict, ExpandableText for the summary, a Box of
+   * CriterionRows with a Met or Missing Badge (the hint says which attempt fixed it), CheckLines for earlier attempts, and
+   * FindingRows with the ref, severity Badge, state Badge, and the location Chip, lane and confidence when opened. */
+  const sevTone = (sev) => ({ blocker: 'failed', critical: 'failed', major: 'blocked', minor: 'neutral' })[String(sev).toLowerCase()] || 'faint';
+  const FIND_STATE = { open: ['Open', 'var(--st-blocked)'], fixed: ['Fixed', 'var(--st-done)'], accepted: ['Accepted', 'var(--st-active)'], declined: ['Declined', 'var(--fg-faint)'], false_positive: ['False positive', 'var(--fg-faint)'], refuted: ['Refuted', 'var(--fg-faint)'] };
+  const laneChip = (l) => { const n = l.replace(/^bill-/, ''), i = n.indexOf('-code-review-'); return i < 0 ? l : `${n.slice(0, i)} · ${n.slice(i + 13)}`; };
+  /* The goal's shared preplan digest (PLAYBOOK preplan_digest): history and decision findings, reusable patterns, selected
+   * add-ons and the validation strategy. One Fold each, folded to a one-line note; a click opens it in place. Every subtask
+   * shows the same digest, because preplan runs once per goal. */
+  function preplanDigest(it) {
+    if (it.preplan) return it.preplan;
+    const plat = platformOf(it);
+    return {
+      findings: [['agent/history.md', `${it.title.split(' ').slice(0, 4).join(' ')}: earlier attempt`, 'A previous change in this area was reverted after its tests passed locally and failed in CI.'],
+        ['agent/decisions.md', 'Fallbacks emit a record', 'Every degraded path writes a diagnostic; silent fallbacks are rejected in review.']],
+      patterns: [['Reuse the existing repository seam instead of a new client', `${it.repo}/core`], ['Keep the change behind the current module boundary', `${it.repo}`]],
+      addons: [`bill-${plat}-code-review-architecture`, `bill-${plat}-code-review-testing`],
+      validation: 'Run the module checks for every touched module, then the contract tests once at the end.',
+    };
+  }
+  function preplanBody(st, it) {
+    const d = preplanDigest(it), key = (k) => `${it.id}|preplan|${k}`, open = (k) => st.auditMet.has(key(k));
+    const fold = (k, label, note, body) => S.Fold({ label, note, act: 'audit-met', arg: key(k), open: open(k), inset: true, body });
+    return `<div class="l-col g-1">${S.VerifyDoc([
+      fold('hist', 'History and decisions', `${d.findings.length} ${d.findings.length === 1 ? 'heading' : 'headings'} selected`, d.findings.map(([file, heading, why]) => S.PeekOutput({ icon: 'history', html: `<b>${esc(heading)}</b> · ${esc(why)}`, end: file.split('/').pop(), tip: `${file} · ${heading}`, act: 'open-file', arg: `${it.id}/${file}` })).join('')),
+      fold('pat', 'Reusable patterns', `${d.patterns.length} found`, S.KeyValues(d.patterns.map(([what, where]) => [where, what]))),
+      fold('add', 'Add-ons', d.addons.length ? d.addons.map(laneChip).join(', ') : 'none', d.addons.length ? `<div class="l-row g-1 l-wrap">${d.addons.map((a) => S.Label({ text: laneChip(a), dot: false, tip: a })).join('')}</div>` : '<span class="t-muted">No add-on applies.</span>'),
+      fold('val', 'Validation strategy', d.validation.length > 60 ? d.validation.slice(0, 57) + '…' : d.validation, S.Note({ text: d.validation })),
+      /* The goal-level spec files preplan read (spec.md, decomposition-manifest.yaml, traceability.md); subtask specs open
+       * from their plan cards. */
+      ...(() => { const subSpecs = new Set((it.subtasks || []).map((x) => x.spec)); const files = bundleOrder((it.specBundle || []).filter((f) => !subSpecs.has(fileName(f)) && !/^spec_subtask_/.test(fileName(f))));
+        return files.length ? [fold('spec', 'Goal spec', files.map(fileName).join(', '), files.map((f) => S.PeekOutput({ icon: f.endsWith('.yaml') ? 'file' : 'fileText', html: `<span class="mono">${esc(fileName(f))}</span>`, tip: `Open ${f}`, act: 'open-file', arg: `${it.id}/${f}` })).join(''))] : []; })(),
+    ])}<span class="t-faint t-xs">Shared by every subtask in this goal.</span></div>`;
+  }
+  /* A subtask's plan, from its subtask_plan record: the sub-spec it governs, a one-line summary, then three Folds: the
+   * ordered steps with the criteria each covers, criteria coverage, and the record itself (manifest order, hashes, and the
+   * repair the runtime applied when the payload failed its contract). */
+  const hash = (seed) => Array.from({ length: 64 }, (_, k) => '0123456789abcdef'[(seed * 31 + k * 17 + (k * k) % 7) % 16]).join('');
+  function planRecord(it, s) {
+    if (s.plan) return s.plan;
+    const crit = ((auditModel(it, s) || {}).criteria || genCriteria(s, 3)).map((c) => c.ref);
+    const t = s.title.replace(/\.$/, '').toLowerCase();
+    return {
+      summary: `${crit.length} criteria in ${crit.length + 2} steps: ${t}, then tests that fail on the old behavior.`,
+      steps: [[`Read the current code path and the spec for ${t}`, []], ...crit.map((ref, k) => [k === 0 ? `Make the core change: ${t}` : `Cover ${ref} where the spec places it`, [ref]]), ['Add tests for each criterion, including the failure path', crit]],
+      repaired: s.id % 3 === 0 ? { format: 'json', operation: 'closed an unterminated array' } : null,
+    };
+  }
+  function planBody(st, it, s, summary) {
+    const p = planRecord(it, s), key = (k) => `${it.id}|${s.id}|plan|${k}`, open = (k) => st.auditMet.has(key(k));
+    const crit = [...new Set(p.steps.flatMap(([, refs]) => refs))];
+    const by = (ref) => p.steps.map(([, refs], i) => (refs.includes(ref) ? i + 1 : 0)).filter(Boolean);
+    const covered = crit.filter((r) => by(r).length).length;
+    const fold = (k, label, note, body) => S.Fold({ label, note, act: 'audit-met', arg: key(k), open: open(k), inset: true, body });
+    const facts = [['Sub-spec', `${it.id}/${s.spec}`, true], ['Manifest order', String(s.id - 1), true], ['Spec hash', hash(s.id * 7).slice(0, 12) + '…', true], ['Payload hash', hash(s.id * 11).slice(0, 12) + '…', true]];
+    if (p.repaired) facts.push(['Repaired', `${p.repaired.format} · ${p.repaired.operation}`]);
+    return `<div class="l-col g-2">${S.PeekOutput({ icon: 'fileText', html: `<span class="mono">${esc(s.spec)}</span>`, end: `${crit.length} criteria`, tip: `Open ${s.spec}`, act: 'open-file', arg: `${it.id}/${s.spec}` })}
+      ${S.Note({ text: summary || p.summary })}${S.VerifyDoc([
+      /* Steps use the audit's CriterionRow: the step number, its text, one Badge for coverage (the ref, "2 criteria", or
+       * "Setup" for a step that covers none); open, the criteria it covers. */
+      fold('steps', 'Steps', `${p.steps.length} in order`, S.Box(p.steps.map(([text, refs], i) => {
+        const k = key(`step-${i + 1}`);
+        return S.CriterionRow({ n: String(i + 1), html: esc(text), badge: { text: refs.length === 1 ? refs[0] : refs.length ? `${refs.length} criteria` : 'Setup', tone: refs.length ? 'accent' : 'faint' }, act: 'audit-met', arg: k, open: st.auditMet.has(k),
+          body: S.FieldText({ label: 'Covers', html: refs.length ? esc(refs.join(', ')) : 'No criterion; this step prepares the others.' }) });
+      }))),
+      fold('cov', 'Criteria coverage', `${covered} of ${crit.length} covered`, S.CheckLines(crit.map((r) => ({ ok: by(r).length > 0, text: `${r} · ${by(r).length ? `steps ${by(r).join(', ')}` : 'no step covers it'}` })))),
+      fold('rec', 'Plan record', p.repaired ? `order ${s.id - 1} · repaired` : `order ${s.id - 1}`, S.KeyValues(facts)),
+    ])}</div>`;
+  }
+  /* Audit, laid out like Review: the verdict and summary, then one block per attempt, oldest first. Each block has its line
+   * ("Attempt 2 · Gaps found · 2 of 3 criteria uncovered → audit_implement_fix") and the criteria as that attempt graded
+   * them, in the audit's CriterionRows. A criterion counts as met from the attempt that fixed it (`fixedIn`); one without
+   * `fixedIn` was met from the first attempt, unless it is still missing. A running audit ends with "Attempt N · Auditing". */
+  function auditBody(st, it, s, a) {
+    if (a.outcome === 'upcoming') return S.Note({ text: 'Runs after implementation', small: true });
+    const atts = a.attempts || [], run = a.outcome === 'running', crit = a.criteria || [];
+    const counts = a.total != null ? ` · ${a.met} of ${a.total} criteria met` : '';
+    const verdict = { passed: ['Passed' + counts, 'var(--st-done)'], failed: ['Failed' + counts, 'var(--st-failed)'], running: [`Attempt ${atts.length + 1} · Auditing`, 'var(--st-active)'] }[a.outcome] || [a.verdict || 'Unknown', 'var(--fg-faint)'];
+    const metAt = (c, n) => (c.fixedIn ? n >= c.fixedIn : c.met);
+    const parts = [S.Label({ text: verdict[0], color: verdict[1] })];
+    if (!run && a.summary) parts.push(S.ExpandableText({ text: a.summary, cls: 'sb-insp-note' }));
+    const blocks = atts.map((x) => {
+      const graded = crit.map((c) => ({ c, met: metAt(c, x.n) })).sort((p, q) => (p.met === q.met ? 0 : p.met ? 1 : -1));
+      const gaps = crit.length ? graded.filter((g) => !g.met).length : x.uncovered;
+      const result = x.unavailable ? 'Historical result unavailable' : (x.passed || (crit.length && !gaps)) ? 'Passed' : `Gaps found · ${crit.length ? `${gaps} of ${crit.length}` : gaps} ${gaps === 1 && !crit.length ? 'criterion' : 'criteria'} uncovered`;
+      const line = S.InspectorLine({ lead: `Attempt ${x.n}`, parts: [result, x.next ? { html: `→ <span class="mono">${esc(x.next)}</span>` } : null] });
+      const rows = graded.length && !x.unavailable ? S.VerifyDoc([S.Box(graded.map(({ c, met }) => {
+        const key = `${it.id}|${s.id}|${x.n}|${c.ref}`;
+        return S.CriterionRow({ n: c.ref, html: esc(c.text), badge: met ? { text: 'Met', tone: 'done' } : { text: 'Missing', tone: 'failed' }, hint: c.fixedIn === x.n ? 'Fixed in this attempt' : '', act: 'audit-met', arg: key, open: st.auditMet.has(key),
+          body: S.FieldText({ label: met ? 'Covered by' : "What's missing", html: esc(met ? `the change in subtask ${pad(s.id)}${c.fixedIn ? `, from attempt ${c.fixedIn}` : ''}.` : x.next ? `Not covered yet; ${x.next} runs next to address it.` : 'No change in this subtask covers it.') }) });
+      }))]) : '';
+      return `<div class="l-col g-2">${line}${rows}</div>`;
+    });
+    if (run) blocks.push(`<div class="l-col g-2">${S.Label({ text: `Attempt ${atts.length + 1} · Auditing`, color: 'var(--st-active)' })}</div>`);
+    if (!atts.length && crit.length) blocks.push(S.VerifyDoc([S.Box(crit.map((c) => S.CriterionRow({ n: c.ref, html: esc(c.text), badge: c.met ? { text: 'Met', tone: 'done' } : { text: 'Missing', tone: 'failed' } })))]));
+    return `<div class="l-col g-2">${parts.join('')}<div class="l-col g-4">${blocks.join('')}</div></div>`;
+  }
+  const auditEnd = (a) => (a.outcome === 'running' ? `attempt ${(a.attempts || []).length + 1} running` : a.attemptTotal ? plural(a.attemptTotal, 'attempt', 'attempts') : '');
+  /* Review findings use the audit's CriterionRow: the ref, the severity Badge and text, the status as the row Badge; open,
+   * the file and the lane with its confidence. */
+  const FIND_TONE = { open: 'blocked', fixed: 'done', accepted: 'active', declined: 'faint', false_positive: 'faint', refuted: 'faint' };
+  function reviewBody(st, it, s, rv) {
+    const tally = (list) => { const by = {}; list.forEach((f) => { by[f.status] = (by[f.status] || 0) + 1; }); return [list.length ? plural(list.length, 'finding', 'findings') : 'no findings', ...['fixed', 'open', 'accepted', 'declined', 'false_positive', 'refuted'].filter((k) => by[k]).map((k) => `${by[k]} ${FIND_STATE[k][0].toLowerCase()}`)].join(' · '); };
+    const lanes = (list, findings) => `<div class="l-row g-1 l-wrap">${list.map((l) => { const n = findings.filter((f) => f.lane === l).length; return S.Label({ text: n ? `${laneChip(l)} · ${n}` : laneChip(l), color: n ? 'var(--st-blocked)' : 'var(--st-done)', tip: n ? `${l} · ${plural(n, 'finding', 'findings')}` : `${l} · clean` }); }).join('')}</div>`;
+    const blocks = rv.passes.map((p) => `<div class="l-col g-2">${S.InspectorLine({ lead: `Pass ${p.n}`, parts: [(p.verdict[0].toUpperCase() + p.verdict.slice(1)).replace(/_/g, ' '), tally(p.findings)] })}${rv.running ? '' : (p.lanes || []).length ? lanes(p.lanes, p.findings) : ''}${!rv.running && p.findings.length ? S.VerifyDoc([S.Box(p.findings.map((f) => {
+      const key = `${it.id}|${s.id}|${p.n}|${f.ref}`;
+      return S.FindingRow({ ref: f.ref, severity: f.sev, title: f.text, state: FIND_STATE[f.status][0], stateTone: FIND_TONE[f.status], act: 'audit-met', arg: key, open: st.auditMet.has(key),
+        body: S.FieldText({ label: 'Location', chips: f.where ? [S.Chip({ mono: true,  label: f.where.split('/').pop(), act: 'open-file', arg: `${it.id}/${f.where}`, tip: f.where })] : [] }) + S.FieldText({ label: 'Lane', html: esc([f.lane ? laneChip(f.lane) : '', f.confidence ? `${f.confidence} confidence` : ''].filter(Boolean).join(' · ')) }) });
+    }))]) : ''}</div>`);
+    if (rv.running) {
+      const r = rv.running, n = r.lanes.filter((l) => l.finished).length;
+      blocks.push(`<div class="l-col g-2">${S.Label({ text: `Pass ${r.n} · Reviewing · ${n} of ${r.lanes.length} lanes done`, color: 'var(--st-active)' })}<div class="l-row g-1 l-wrap">${r.lanes.map((l) => S.Label({ text: laneChip(l.name), color: l.finished ? 'var(--st-done)' : 'var(--fg-faint)', tip: `${l.name} · ${l.finished ? 'finished' : 'not finished'}` })).join('')}</div></div>`);
+    }
+    return `<div class="l-col g-4">${blocks.join('') || S.Note({ text: 'No review yet', small: true })}</div>`;
+  }
+  const reviewEnd = (rv) => (rv.running ? `pass ${rv.running.n} running` : plural(rv.passes.length, 'pass', 'passes'));
+  function subtaskInspector(st, it, s) {
     const neededBy = it.subtasks.filter((x) => x.deps.some((d) => d.id === s.id)).map((x) => ({ id: x.id, optional: x.deps.find((d) => d.id === s.id).optional }));
-    const cards = (s.phases && s.phases.cards) || {};
+    /* Review and audit live only in their phase cards: nothing repeats them under the pills, open or folded. */
+    const ph = subPhaseSection(st, it, s);
+    const reviewHtml = '', auditHtml = '';
     return S.SubtaskInspector({
-      phases: subPhaseSection(st, it, s), noReview: !!cards.review,
-      title: inline ? null : s.title, blocked: s.blocked, commit: s.commit,
+      phases: ph.html, reviewHtml, auditHtml,
+      title: s.title, blocked: s.blocked, commit: s.commit,
       spec: s.spec, specAct: 'open-file', specArg: specArg(it, s),
       deps: s.deps.map((d) => subChip(it, d)), neededBy: neededBy.map((d) => subChip(it, d)),
       validation: s.validation, reviews: s.reviews, audit: s.audit,
@@ -409,7 +591,7 @@
       sub: `${q.round ? `Round ${q.round} · ` : ''}Invocation <span class="mono">qa-7c1e</span>`,
       targets: [{ label: 'desktop · :desktop:app', tone }],
       rounds: q.rounds, preview, hint: q.hint,
-      callout: q.callout ? S.Callout({ tone: 'warn', body: qaInline(q.callout.text), actions: [S.QaChip(Object.assign({ act: q.callout.chip.mono ? 'open-file' : 'toast', arg: q.callout.chip.mono ? `qa-7c1e/${q.callout.chip.label}` : q.callout.chip.label }, q.callout.chip))] }) : '',
+      callout: q.callout ? S.Callout({ tone: 'warn', body: qaInline(q.callout.text), actions: [S.Chip(Object.assign({ act: q.callout.chip.mono ? 'open-file' : 'toast', arg: q.callout.chip.mono ? `qa-7c1e/${q.callout.chip.label}` : q.callout.chip.label }, q.callout.chip))] }) : '',
       shots: q.shots ? { files: q.shots.slice(-3).reverse(), total: q.shots.length } : null,
       stages: q.done ? { summary: `All ${stages.length} stages ran`, time: q.elapsed } : { stages: rows },
     });
@@ -450,7 +632,30 @@
       const v = it.goalQa ? qaView(it.goalQa, { fixLoop: true }) : null;
       return { title: 'QA', word: v ? v.word : 'No result', tone: v ? QA_CARD_TONE[v.tone] : 'skipped', madeTitle: 'Run', made: it.qaLive ? [{ kind: 'qaLive' }] : [], results: [{ kind: 'qaResults' }] };
     }
-    return null;
+    const state = finishStates(it)[id];
+    if (!state) return null;
+    /* Goal finish phases without a recorded card: the same parts as a subtask card, from what the goal records. */
+    const count = it.finish && it.finish.counts && it.finish.counts[id];
+    const live = ['now', 'wait', 'fail'].includes(state), idx = D.GOAL_FINISH.indexOf(id);
+    const slot = (it.total || 1) * 60 + D.GOAL_FINISH.slice(0, idx).reduce((n, p) => n + Math.round((PHASE_DUR[p] || 120) / 60), 0);
+    const secs = PHASE_DUR[id] || 120, start = phaseClock(it, slot), end = phaseClock(it, slot + Math.round(secs / 60));
+    const f = { title: phaseTitle(id), word: PEEK_WORD_OF[state], round: count || null, agent: it.agent, model: it.model ? `${it.model}${it.effort ? ' · ' + it.effort : ''}` : '',
+      when: live ? `since ${start}` : start, dur: live ? null : fmtSecs(secs), made: [], activity: [[start, 'Started']] };
+    if (live) { f.nowTitle = state === 'now' ? 'Now' : 'Waiting on'; f.now = [{ kind: 'signal', live: state === 'now', icon: state === 'now' ? null : 'warn', wrap: true, text: it.summary || `${phaseTitle(id)} is ${PEEK_WORD_OF[state].toLowerCase()}` }]; }
+    if (id === 'pr') {
+      const n = 100 + ((it.total || 3) * 37) % 800;
+      f.madeTitle = 'Pull request'; f.made = [{ kind: 'out', items: [{ icon: 'external', html: `#${n} ${esc(it.title)}`, toast: `Opened pull request #${n}`, external: true }] }, { kind: 'facts', items: [['Branch', it.branch ? `<span class="mono">${esc(it.branch)}</span>` : 'none'], ['Base', '<span class="mono">main</span>']] }];
+      f.open = { label: 'Open pull request', toast: `Opened pull request #${n}`, external: true };
+    } else if (id === 'monitor' || id === 'monitor_fix') {
+      f.madeTitle = 'Checks'; f.madeEnd = state === 'done' ? 'all passed' : '';
+      f.made = [{ kind: 'checks', rows: [['build', state === 'done' ? 'ok' : 'run', '4m 12s'], ['test', state === 'done' ? 'ok' : 'run', '6m 40s'], ['lint', 'ok', '1m 05s']] }];
+    } else if (id === 'validate') {
+      f.madeTitle = 'Validation'; f.made = [{ kind: 'facts', items: [['Verdict', state === 'done' ? 'passed' : PEEK_WORD_OF[state].toLowerCase()], ['Gate runs', '1']] }, { kind: 'cmd', text: './gradlew check --continue' }];
+    } else {
+      f.madeTitle = 'Record'; f.made = [{ kind: 'text', html: `${state === 'done' ? 'Finished' : PEEK_WORD_OF[state]}${count ? ` on ${esc(count)}` : ''}.` }];
+    }
+    f.activity.push(live ? [phaseClock(it, slot + 4), PEEK_WORD_OF[state], state] : [end, state === 'done' ? 'Finished' : PEEK_WORD_OF[state], state === 'done' ? 'done' : state]);
+    return f;
   }
   function phaseDisplayStates(it, states) {
     return Object.fromEntries(Object.entries(states).map(([phase, value]) => [phase, value === 'now' && (it.lifecycle !== 'active' || !it.live) ? it.lifecycle === 'failed' ? 'fail' : it.lifecycle === 'canceled' ? 'skipped' : 'wait' : value]));
@@ -462,6 +667,12 @@
   }
   function subPhaseStates(it, s) {
     if (s.phases && s.phases.states) return phaseDisplayStates(it, s.phases.states);
+    /* A recorded ledger (phaseLog) decides: a phase that ran is done, an unfinished last entry is running. */
+    if (s.phaseLog && s.phaseLog.length) {
+      const out = {};
+      D.PHASE_ORDER.forEach((id) => { const runs = s.phaseLog.filter((p) => p.p === id); if (runs.length) out[id] = runs[runs.length - 1].e ? 'done' : 'now'; });
+      return phaseDisplayStates(it, out);
+    }
     const out = {};
     if (s.status === 'complete' || s.status === 'completed_no_change') D.PHASE_ORDER.forEach((id) => { out[id] = 'done'; });
     else if (!isFinished(it) && s.id === it.current && it.pipeline && !it.planning) pipelineSteps(it).forEach((p) => { out[p.label] = p.state; });
@@ -475,40 +686,44 @@
     const can = (id) => !!states[id] && !!cardOf(id);
     const live = order.find((id) => ['now', 'fail', 'wait'].includes(states[id]) && can(id));
     const ran = order.filter((id) => states[id] === 'done' && can(id));
+    /* Pills expand: a click opens that phase's card under the row, a click on the open pill folds it ('' = all folded).
+     * Untouched, only a running, blocked or failed phase starts open; finished work starts folded. */
     const pick = st.peekSel[`${it.id}|${key}`];
-    const sel = pick && can(pick) ? pick : live || ran[ran.length - 1] || null;
-    const tabs = S.PhasePipeline(order.map((id) => ({ label: id, state: states[id] || '', count: counts[id] || null, act: can(id) ? 'peek-pill' : null, arg: `${it.id}|${key}|${id}`, selected: id === sel })), { tabs: true, label });
-    return { tabs, card: sel ? peekCard(st, it, sel, cardOf(sel), states[sel]) : '' };
+    const sel = pick === '' ? null : pick && can(pick) ? pick : live || null;
+    const tabs = S.PhasePipeline(order.map((id) => ({ label: id, state: states[id] || '', count: counts[id] || null, act: can(id) ? 'peek-pill' : null, arg: `${it.id}|${key}|${id}`, selected: id === sel, tip: can(id) ? `${id === sel ? 'Hide' : 'Show'} ${id}` : null })), { tabs: true, label, expand: true });
+    return { sel, tabs, card: sel ? peekCard(st, it, sel, cardOf(sel), states[sel]) : '', none: ran.length || live ? 'Select a phase to see what it did.' : 'No phase has run yet.' };
   }
   function peekBlock(st, it, b) {
     switch (b.kind) {
       case 'signal': return S.PeekSignal({ live: b.live, icon: b.icon, wrap: b.wrap, html: esc(b.text), ago: b.ago });
-      case 'edit': return S.PeekSignal({ icon: 'pencil', html: `${esc(b.agent)} edited <span class="path" title="${esc(b.path)}">${esc(b.path.split('/').pop())}</span>`, keep: `<span class="ins">+${b.ins}</span> <span class="del">−${b.del}</span>`, ago: b.ago });
+      case 'edit': return S.PeekSignal({ icon: 'pencil', html: `${esc(b.agent)} edited <span class="mono" title="${esc(b.path)}">${esc(b.path.split('/').pop())}</span>`, keep: S.Counts({ ins: b.ins, del: b.del }), ago: b.ago });
       case 'cmd': return S.PeekCmd(b.text);
       case 'cells': return S.PeekCells(b.cells);
-      case 'text': return `<div class="sb-pk-tx">${b.html}</div>`;
+      case 'text': return S.Note({ html: b.html });
       case 'stats': return S.PeekStats(b.items);
-      case 'out': return b.items.map((o) => S.PeekOutput({ icon: o.icon, html: o.html, end: o.end, tip: o.tip, external: o.external, act: o.toast ? 'toast' : null, arg: o.toast })).join('');
-      case 'finds': return b.rows.map(([severity, title, state]) => S.PeekFinding({ severity, title, state })).join('');
+      case 'out': return b.items.map((o) => S.PeekOutput({ icon: o.icon, html: o.html, end: o.end, tip: o.tip, external: o.external, act: o.act || (o.toast ? 'toast' : null), arg: o.act ? o.arg : o.toast })).join('');
+      case 'finds': return S.VerifyDoc([S.Box(b.rows.map(([severity, title, state], i) => S.FindingRow({ ref: `F-${String(i + 1).padStart(3, '0')}`, severity, title, state: state ? state[0].toUpperCase() + state.slice(1) : null })))]);
       case 'checks': return b.rows.map(([name, state, time, cmd]) => S.PeekCheck({ name, state, time, cmd })).join('');
       case 'facts': return S.PeekFacts(b.items);
+      case 'html': return b.html;
       case 'assessment': {
         const a = it.assessment;
-        if (!a) return S.Box('<div class="sb-result-missing">No assessment result is available for this run.</div>');
-        const rows = assessOrder(a.findings, st.assessOrder).map((f) => S.FindingRow({ stacked: true, severity: f.severity, ref: f.ref, title: f.scenario, meta: `<span class="mono">${esc(f.path)}:${f.line}</span> · ${esc(f.verification.toLowerCase())}`, state: f.state === 'FIXED' ? 'Fixed' : f.state === 'REFUTED' ? 'Refuted' : 'Open', stateColor: f.state === 'FIXED' ? 'var(--st-done)' : 'var(--fg-faint)' }));
+        if (!a) return S.Box(S.Note({ text: 'No assessment result is available for this run.', pad: true }));
+        const rows = assessOrder(a.findings, st.assessOrder).map((f) => { const k = `${it.id}|assess|${f.ref}`; return S.FindingRow({ ref: f.ref, severity: f.severity, title: f.scenario, state: f.state === 'FIXED' ? 'Fixed' : f.state === 'REFUTED' ? 'Refuted' : 'Open', act: 'audit-met', arg: k, open: st.auditMet.has(k),
+          body: S.FieldText({ label: 'Location', chips: [S.Chip({ label: `${f.path.split('/').pop()}:${f.line}`, tip: `${f.path}:${f.line}`, act: 'open-file', arg: f.path })] }) + S.FieldText({ label: 'Verification', html: esc(f.verification.toLowerCase()) }) }); });
         const facts = [a.exit ? ['Exit', esc(a.exit)] : null, a.fixCommit ? ['Fix commit', `<span class="mono">${esc(a.fixCommit)}</span>`] : null].filter(Boolean);
-        return S.Box(rows) + (facts.length ? S.PeekFacts(facts) : '');
+        return S.VerifyDoc([S.Box(rows)]) + (facts.length ? S.PeekFacts(facts) : '');
       }
       case 'monCycles': case 'ciBoard': case 'repair': case 'publish': return monPeekBlock(st, it, b);
       case 'qaLive': return qaLiveBlock(st, it);
-      case 'qaRun': return `<div class="sb-qlive">${b.rounds ? S.QaRounds({ rounds: b.rounds }) : ''}${S.QaPreview({ kind: 'ended', at: b.at, label: `QA preview, last frame at ${b.at}` })}${S.QaShots({ files: b.shots, total: b.total })}${S.QaStageList({ summary: `All ${D.QA_STAGES.length} stages ran`, time: b.time })}</div>`;
-      case 'qaResults': return it.goalQa ? qaResults(st, it.goalQa, { fixLoop: true, fixing: b.fixing, running: it.lifecycle === 'active' && !it.goalQa.outcome }).body : S.Box('<div class="sb-result-missing">No QA result is available for this run.</div>');
-      case 'qaWait': return '<div class="sb-qlive-wait">Results appear here when QA writes its report.</div>';
+      case 'qaRun': return `<div class="l-col g-3">${b.rounds ? S.QaRounds({ rounds: b.rounds }) : ''}${S.QaPreview({ kind: 'ended', at: b.at, label: `QA preview, last frame at ${b.at}` })}${S.QaShots({ files: b.shots, total: b.total })}${S.QaStageList({ summary: `All ${D.QA_STAGES.length} stages ran`, time: b.time })}</div>`;
+      case 'qaResults': return it.goalQa ? qaResults(st, it.goalQa, { fixLoop: true, fixing: b.fixing, running: it.lifecycle === 'active' && !it.goalQa.outcome }).body : S.Box(S.Note({ text: 'No QA result is available for this run.', pad: true }));
+      case 'qaWait': return S.Note({ text: 'Results appear here when QA writes its report.', dashed: true });
       case 'qaFinding': {
         const f = b.finding, key = `peek:${it.id}:${f.id}:${b.state}`;
-        const dir = f.evidencePaths.map((p) => S.QaChip({ icon: 'qaImage', label: qaFile(p), mono: true, tip: p, act: 'open-file', arg: p }));
+        const dir = f.evidencePaths.map((p) => S.Chip({ icon: 'qaImage', label: qaFile(p), mono: true, tip: p, act: 'open-file', arg: p }));
         return S.Box([S.QaItem({ glyph: 'qaBug', tone: b.tone, ref: f.id, title: f.title, state: b.state, line: qaInline(capFirst(f.observed)), act: 'qa-toggle', arg: key, open: st.qaOpen.has(key),
-          fields: [['Expected', qaInline(f.expected)], ['Steps', qaInline(f.steps)]], chips: [...dir, S.QaChip({ icon: 'qaCopy', label: 'Copy steps', act: 'copy', arg: f.steps })] })]);
+          fields: [['Expected', qaInline(f.expected)], ['Steps', qaInline(f.steps)]], chips: [...dir, S.Chip({ icon: 'qaCopy', label: 'Copy steps', act: 'copy', arg: f.steps })] })]);
       }
       default: return '';
     }
@@ -527,47 +742,201 @@
     return S.PhasePeek({ id, state, tone: c.tone, title: c.title, word: c.word, why: c.why,
       agent: ag ? S.Avatar({ name: c.agent, initials: ag.initials, color: ag.color, size: 'sm' }) : '', model: c.model || c.agent || '',
       round: c.round, when: c.when, dur: c.dur, parts, activity: c.activity,
-      foot: c.open ? { label: c.open.label, act: 'toast', arg: c.open.toast || c.open.label, external: c.open.external } : null });
+      foot: c.open ? { label: c.open.label, act: c.open.act || 'toast', arg: c.open.arg || c.open.toast || c.open.label, external: c.open.external } : null });
+  }
+  /* A phase that ran but has no recorded card still opens, with the same parts as the app's SubtaskPhaseCard: header
+   * (agent, model, round, start, duration), why it is blocked, Now or Waiting on while it runs, what it produced, the
+   * last activity and the footer link. Values come from what the subtask records; times and counts the sample lacks are
+   * derived from the goal's start so every card reads like a real one. */
+  /* Phase titles as the app writes them (SubtaskPhases.kt phaseTitle). */
+  const PHASE_TITLE = { goal_assessment: 'Goal assessment', qa: 'QA', qa_fix: 'QA fix', monitor_fix: 'Monitor fix', write_history: 'Write history', commit_push: 'Commit and push', pr: 'Pull request' };
+  const phaseTitle = (id) => PHASE_TITLE[id] || id[0].toUpperCase() + id.slice(1);
+  const PEEK_WORD_OF = { done: 'Done', now: 'Running', wait: 'Blocked', fail: 'Failed', skipped: 'Skipped' };
+  const PHASE_DUR = { preplan: 140, plan: 410, implement: 1130, simplify: 290, audit: 230, review: 380, build: 190, validate: 520, write_history: 70, commit_push: 40,
+    goal_assessment: 600, qa: 900, qa_fix: 700, pr: 60, monitor: 840, monitor_fix: 420 };
+  const fmtSecs = (n) => (n >= 60 ? `${Math.floor(n / 60)}m ${String(n % 60).padStart(2, '0')}s` : `${n}s`);
+  function phaseClock(it, slot) {
+    const m = /(\d{1,2}):(\d{2})/.exec(it.started || '') || [0, 9, 0];
+    const t = (+m[1] * 60 + +m[2] + slot) % 1440;
+    return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  }
+  /* The ledger entries of one phase family (audit and its fixes, review and verify_findings, validate and its fixes). */
+  const LOOP_OF = { audit_plan_fix: 'audit', audit_implement_fix: 'audit', verify_findings: 'review', review_fix: 'review', present_findings: 'review', validate_fix: 'validate', monitor_fix: 'monitor', qa_fix: 'qa' };
+  const logRuns = (s, id) => (s.phaseLog || []).filter((p) => p.p === id || LOOP_OF[p.p] === id);
+  const isoClock = (t) => new Date(t).toISOString().slice(11, 16);
+  const runMs = (p) => (p.e ? new Date(p.e) - new Date(p.s) : 0);
+  function fallbackSubCard(st, it, s, id, state, count) {
+    const c0 = fallbackSubCardBase(st, it, s, id, state, count);
+    const runs = logRuns(s, id);
+    if (!c0 || !runs.length) return c0;
+    const last = runs[runs.length - 1], total = runs.reduce((n, p) => n + runMs(p), 0) / 1000 | 0;
+    const own = runs.filter((p) => p.p === id);
+    const c = Object.assign({}, c0, { when: last.e ? isoClock(runs[0].s) : `since ${isoClock(last.s)}`, dur: last.e ? fmtSecs(total) : null, agent: last.a, model: [last.m, last.f].filter(Boolean).join(' · '),
+      round: runs.length > 1 ? `${own.length} ${own.length === 1 ? 'run' : 'runs'}${runs.length > own.length ? ` · ${runs.length - own.length} fix` : ''}` : count || null,
+      activity: runs.slice(-5).map((p) => [isoClock(p.e || p.s), `${esc(p.p)}${p.v && p.v !== 'null' ? ` <b>${esc(p.v)}</b>` : ''}`, p.e ? 'done' : 'now']) });
+    if (last.t && (c.madeTitle === 'Record' || id === 'implement' || id === 'simplify')) c.made = [{ kind: 'text', html: esc(last.t) }].concat((c.made || []).filter((b) => b.kind !== 'text'));
+    return c;
+  }
+  function fallbackSubCardBase(st, it, s, id, state, count) {
+    if (!state) return null;
+    const order = D.PHASE_ORDER, idx = order.indexOf(id), live = ['now', 'wait', 'fail'].includes(state);
+    const slot = (s.id - 1) * 60 + order.slice(0, idx).reduce((n, p) => n + Math.round((PHASE_DUR[p] || 120) / 60), 0);
+    const secs = PHASE_DUR[id] || 120, start = phaseClock(it, slot), end = phaseClock(it, slot + Math.round(secs / 60));
+    const seed = s.id * 7 + idx * 3;
+    const c = { title: phaseTitle(id), word: PEEK_WORD_OF[state], round: count || null, agent: it.agent, model: it.model ? `${it.model}${it.effort ? ' · ' + it.effort : ''}` : '',
+      when: live ? `since ${start}` : start, dur: live ? null : fmtSecs(secs), made: [], activity: [[start, 'Started']] };
+    const l = it.latest || {};
+    if (live) {
+      if (state === 'wait' || state === 'fail') c.why = `<b>${state === 'fail' ? 'Failed' : 'Blocked'}:</b> ${esc(s.blocked || it.summary || 'waiting for the operator')}`;
+      c.nowTitle = state === 'now' ? 'Now' : 'Waiting on';
+      c.now = [l.activity ? { kind: 'signal', live: state === 'now', text: l.activity.label, ago: `${Math.round(l.activity.ago / 60)}m ago` } : { kind: 'signal', icon: 'warn', wrap: true, text: s.blocked || 'Waiting for the operator' }];
+      if (l.edit) c.now.push({ kind: 'edit', agent: it.agent || 'agent', path: l.edit.path, ins: l.edit.ins, del: l.edit.del, ago: `${Math.round(l.edit.ago / 60)}m ago` });
+    }
+    const spec = s.spec ? [{ kind: 'out', items: [{ icon: 'fileText', html: `<span class="mono">${esc(s.spec)}</span>`, tip: s.spec, toast: `Opened ${s.spec}` }] }] : [];
+    switch (id) {
+      case 'preplan':
+        c.madeTitle = 'Digest'; c.made = [{ kind: 'html', html: preplanBody(st, it) }]; break;
+      case 'plan':
+        c.madeTitle = 'Plan'; c.made = [{ kind: 'html', html: planBody(st, it, s) }]; if (id === 'plan' && s.spec) c.open = { label: 'Open spec file', toast: `Opened ${s.spec}` }; break;
+      case 'implement': case 'simplify': {
+        const e = live && l.edit ? l.edit : { ins: 12 + (seed * 13) % 140, del: 3 + (seed * 5) % 60 };
+        const files = 1 + seed % 6;
+        c.madeTitle = id === 'simplify' ? 'Simplified' : 'Produced';
+        c.made = id === 'simplify'
+          ? [{ kind: 'text', html: esc(s.simplified || 'Folded two helpers that did the same lookup into one and dropped a parameter no caller passed. Behavior is unchanged.') }, { kind: 'stats', items: [[String(Math.max(1, files - 2)), 'files'], [`+${Math.round(e.ins / 4)}`, 'added', 'ok'], [`−${e.del}`, 'removed', 'bad']] }]
+          : [{ kind: 'stats', items: [[String(files), 'files'], [`+${e.ins}`, 'added', 'ok'], [`−${e.del}`, 'removed', 'bad']] }];
+        break;
+      }
+      case 'audit': if (auditModel(it, s)) { const a = auditModel(it, s); c.madeTitle = 'Criteria'; c.madeEnd = auditEnd(a); c.made = [{ kind: 'html', html: auditBody(st, it, s, a) }]; break; }
+      // falls through
+      case 'audit-generic': {
+        const said = s.audit && s.audit.summary ? (/\bboth\b/i.test(s.audit.summary) ? 2 : +((/(\d+)\s+(?:acceptance\s+)?criteri/i.exec(s.audit.summary) || [])[1] || 0)) : 0;
+        const n = said || 3 + seed % 3, met = s.audit && !/fail|unmet|not/i.test(s.audit.verdict) ? n : n - 1;
+        c.madeTitle = 'Criteria'; c.madeEnd = `${met} of ${n}`;
+        c.made = [{ kind: 'checks', rows: Array.from({ length: n }, (_, k) => [`AC-${k + 1} · ${k < met ? 'met by the change' : 'not covered yet'}`, k < met ? 'ok' : 'bad']) }];
+        break;
+      }
+      case 'review': {
+        const rv = reviewModel(it, s);
+        if (rv.passes.length || rv.running) { c.madeTitle = 'Findings'; c.madeEnd = reviewEnd(rv); c.made = [{ kind: 'html', html: reviewBody(st, it, s, rv) }]; rv.passes.forEach((p, k) => c.activity.push([phaseClock(it, slot + 2 + k * 2), `Pass ${p.n} <b>${esc(p.verdict.replace(/_/g, ' '))}</b>`, k === rv.passes.length - 1 && live ? 'wait' : null])); break; }
+        const passes = s.reviews || [];
+        c.madeTitle = 'Findings'; c.madeEnd = passes.length ? `${passes.length} ${passes.length === 1 ? 'pass' : 'passes'}` : '';
+        passes.forEach((p, k) => {
+          c.made.push({ kind: 'text', html: `<b>Pass ${p.n}</b> · ${esc(p.verdict)} · ${p.open} unresolved` });
+          if (p.findings.length) c.made.push({ kind: 'finds', rows: p.findings.map(([sev, text]) => [sev, text, k === passes.length - 1 && live ? 'open' : k < passes.length - 1 ? null : null]) });
+          c.activity.push([phaseClock(it, slot + 2 + k * 2), `Pass ${p.n} <b>${esc(p.verdict)}</b>`, k === passes.length - 1 && live ? 'wait' : null]);
+        });
+        if (!passes.length) c.made.push({ kind: 'text', html: 'Approved. No findings.' });
+        break;
+      }
+      case 'build':
+        c.madeTitle = 'Build'; c.madeEnd = state === 'done' ? 'passed' : '';
+        c.made = [{ kind: 'cmd', text: './gradlew assemble' }, { kind: 'stats', items: [[state === 'done' ? 'passed' : PEEK_WORD_OF[state].toLowerCase(), 'result', state === 'done' ? 'ok' : 'bad'], [fmtSecs(secs), 'took'], ['0', 'warnings']] }];
+        break;
+      case 'validate': {
+        const v = s.validation || { passed: state === 'done', checks: 4 };
+        const names = [['Unit tests', ':test'], ['Lint', 'lint'], ['Format', 'format --check'], ['Contract tests', ':contracts:test'], ['Static analysis', 'detekt'], ['Integration tests', ':it:test'],
+          ['API compatibility', 'apiCheck'], ['Dependency guard', 'dependencyGuard'], ['Schema parity', ':contracts:parity'], ['Migration tests', ':runtime:migrationTest'], ['License headers', 'spotlessCheck'], ['Docs links', 'docs:links'],
+          ['Snapshot tests', ':ui:verifyPaparazzi'], ['Module graph', 'moduleGraphAssert'], ['Binary size', 'sizeCheck'], ['Security scan', 'dependencyCheckAnalyze']];
+        /* The first six checks show; "Show N more checks" opens the whole list in place and "Show fewer" folds it. */
+        const allKey = `${it.id}|${s.id}|validate-all`, all = st.auditMet.has(allKey), shown = all ? v.checks : Math.min(v.checks, 6);
+        const rows = Array.from({ length: shown }, (_, k) => [k < names.length ? names[k][0] : `Check ${k + 1}`, !v.passed && k === v.checks - 1 ? 'bad' : 'ok', fmtSecs(20 + ((seed + k) * 37) % 150), k < names.length ? names[k][1] : `check${k + 1}`]);
+        c.madeTitle = 'Validation'; c.madeEnd = v.passed ? 'passed' : 'failed';
+        c.made = [{ kind: 'facts', items: [['Verdict', v.passed ? 'passed' : 'failed'], ['Checks', String(v.checks)], ['Gate runs', String(count && /\d+/.test(count) ? count.match(/\d+/)[0] : 1)]] }, { kind: 'checks', rows }];
+        if (v.checks > 6) c.made.push({ kind: 'html', html: S.LinkButton({ label: all ? 'Show fewer' : `Show ${v.checks - 6} more checks`, icon: all ? 'chevronUp' : 'chevronDown', act: 'audit-met', arg: allKey }) });
+        c.results = [{ kind: 'facts', items: [['Duration', fmtSecs(secs)], ['Cache', 'warm'], ['Work units', String(12 + seed % 30)], ['Exit code', v.passed ? '0' : '1']] }, { kind: 'cmd', text: './gradlew check --continue' }];
+        c.resultsTitle = 'Gate 1'; c.resultsEnd = v.passed ? 'passed' : 'failed';
+        break;
+      }
+      case 'write_history':
+        c.madeTitle = 'History';
+        c.made = [{ kind: 'stats', items: [['yes', 'written', 'ok'], [String(seed % 3), 'decisions'], [String(1 + seed % 2), 'paths']] }, { kind: 'out', items: [{ icon: 'history', html: '<span class="mono">agent/history.md</span>', end: '1 entry', toast: 'Opened agent/history.md' }] }];
+        c.decisions = seed % 3;
+        break;
+      case 'commit_push':
+        c.madeTitle = 'Commit';
+        c.made = [{ kind: 'facts', items: [['Commit', s.commit ? `<span class="mono">${esc(String(s.commit).slice(0, 8))}</span>` : 'not recorded'], ['Branch', it.branch ? `<span class="mono">${esc(it.branch)}</span>` : 'none']] }];
+        if (it.branch) c.open = { label: 'Open branch', toast: `Opened ${it.branch}`, external: true };
+        break;
+      default: break;
+    }
+    if (!c.made.length) { c.madeTitle = 'Record'; c.made.push({ kind: 'text', html: `${state === 'done' ? 'Finished' : PEEK_WORD_OF[state]}${count ? ` on ${esc(count)}` : ''}.` }); }
+    if (!live) c.activity.push([end, state === 'done' ? 'Finished' : PEEK_WORD_OF[state], state === 'done' ? 'done' : state]);
+    else c.activity.push([phaseClock(it, slot + 6), PEEK_WORD_OF[state], state]);
+    c.activity = c.activity.slice(-5);
+    return c;
   }
   function subPhaseSection(st, it, s) {
-    const states = subPhaseStates(it, s), cards = (s.phases && s.phases.cards) || {};
-    const p = peekTabs(st, it, String(s.id), D.PHASE_ORDER, states, subPhaseCounts(it, s), (id) => cards[id], `Phases of subtask ${pad(s.id)}`);
+    const states = subPhaseStates(it, s), cards = (s.phases && s.phases.cards) || {}, counts = subPhaseCounts(it, s);
+    /* Every card, recorded or generated: implement opens this subtask's changes instead of listing files, and review and
+     * audit show the full findings and criteria lists. */
+    const cardFor = (id) => {
+      let c = cards[id] || fallbackSubCard(st, it, s, id, states[id], counts[id]);
+      if (!c) return null;
+      if (id === 'implement') c = Object.assign({}, c, { made: (c.made || []).filter((b) => b.kind !== 'out'), open: { label: 'Open changes', act: 'changes-subtask', arg: `${it.id}|${s.id}` } });
+      /* write_history opens both files it writes: agent/history.md and agent/decisions.md. */
+      if (id === 'write_history') {
+        const n = c.decisions != null ? c.decisions : 1;
+        const file = (path, icon, end) => ({ icon, html: `<span class="mono">${path}</span>`, end, tip: `Open ${path}`, act: 'open-file', arg: `${it.id}/${path}` });
+        c = Object.assign({}, c, { made: (c.made || []).filter((b) => b.kind !== 'out').concat({ kind: 'out', items: [file('agent/history.md', 'history', '1 entry'), file('agent/decisions.md', 'fileText', n ? `${n} ${n === 1 ? 'decision' : 'decisions'}` : 'unchanged')] }) });
+      }
+      if (cards[id] && id === 'plan') { const text = (c.made || []).find((b) => b.kind === 'text'); c = Object.assign({}, c, { madeTitle: 'Plan', made: [{ kind: 'html', html: planBody(st, it, s, text && text.html.replace(/<[^>]+>/g, '')) }] }); }
+      if (cards[id] && id === 'preplan') c = Object.assign({}, c, { madeTitle: 'Digest', made: [{ kind: 'html', html: preplanBody(st, it) }] });
+      if (cards[id] && id === 'review') { const rv = reviewModel(it, s); if (rv.passes.length || rv.running) c = Object.assign({}, c, { madeTitle: 'Findings', madeEnd: reviewEnd(rv), made: [{ kind: 'html', html: reviewBody(st, it, s, rv) }] }); }
+      if (cards[id] && id === 'audit') { const a = auditModel(it, s); if (a && a.outcome !== 'upcoming') c = Object.assign({}, c, { madeTitle: 'Criteria', madeEnd: auditEnd(a), made: [{ kind: 'html', html: auditBody(st, it, s, a) }] }); }
+      return c;
+    };
+    const p = peekTabs(st, it, String(s.id), D.PHASE_ORDER, states, counts, cardFor, `Phases of subtask ${pad(s.id)}`);
     const vals = D.PHASE_ORDER.map((id) => states[id]);
     const ran = vals.filter((v) => v === 'done').length;
     const note = (s.phases && s.phases.note) || (vals.some(Boolean) && ran < vals.length ? `${ran} of ${vals.length}` : '');
-    return `<div class="sb-peek-sec"><div class="sb-pane-ti"><span>Phases</span>${note ? `<span class="end">${esc(note)}</span>` : ''}</div>${p.tabs}${p.card || '<div class="sb-peek-none">No phase has run yet.</div>'}</div>`;
+    return { sel: p.sel, html: S.PhaseBlock({ title: 'Phases', note, tabs: p.tabs, card: p.card, none: p.none }) };
   }
   function finishResults(st, it) {
     const p = peekTabs(st, it, 'finish', D.GOAL_FINISH, finishStates(it), (it.finish && it.finish.counts) || {}, (id) => finishCard(it, id), 'Goal finish phases');
-    return `<div class="sb-finish-results">${S.PaneSection({ title: 'Goal finish', status: { state: finishState(it) }, body: `<div class="sb-peek-sec">${p.tabs}${p.card || '<div class="sb-peek-none">No phase has run yet.</div>'}</div>` })}</div>`;
+    return S.PaneSection({ body: S.PhaseBlock({ tabs: p.tabs, card: p.card, none: p.none }) });
   }
-  function subtaskSection(st, it, inline) {
-    const sel = selectedSub(st, it);
-    const open = st.subOpen[it.id] !== false;
+  /* The Goal finish row's end: the phase that is running or stopped, then how many of its phases ran. */
+  function finishMeta(it) {
+    const fin = finishStates(it), ids = D.GOAL_FINISH;
+    const at = ids.find((id) => ['now', 'wait', 'fail'].includes(fin[id]));
+    const ran = ids.filter((id) => fin[id] === 'done').length;
+    const tone = at && { now: 'active', wait: 'blocked', fail: 'failed' }[fin[at]];
+    return [at ? S.Label({ text: at, color: `var(--st-${tone})`, mono: true, dot: false }) : '', at || ran ? S.Label({ text: `${ran}/${ids.length}`, dot: false }) : ''];
+  }
+  /* The Subtasks index. Every row is one line; a click selects it and opens the details panel. A row reads as selected
+   * only while the panel shows it. */
+  function subtaskSection(st, it) {
+    const sel = paneShown(st) ? selectedSub(st, it) : null;
     const finished = isFinished(it);
     const rows = it.subtasks.map((s) => {
       const key = String(s.id);
       const current = !finished && s.id === it.current;
       const meta = [s.commit ? S.ShortId({ value: s.commit, label: 'commit' }) : '', current && it.live ? subClock(it) : '', s.status === 'completed_no_change' ? S.Label({ text: 'no change', dot: false }) : ''];
-      return S.SubtaskRow({ num: pad(s.id), state: subDisplayState(it, s), frac: 0.5, title: s.title, current, selected: key === sel, meta, act: 'sub-select', arg: `${it.id}|${key}`, body: inline && key === sel ? subtaskInspector(st, it, s, true) : '', expanded: open });
+      return S.SubtaskRow({ num: pad(s.id), state: subDisplayState(it, s), frac: 0.5, title: s.title, current, selected: key === sel, meta, act: 'sub-select', arg: `${it.id}|${key}` });
     });
-    const fin = finishStates(it), finCounts = (it.finish && it.finish.counts) || {};
-    rows.push(S.SubtaskRow({ num: '··', state: finishState(it), title: 'Goal finish', selected: sel === 'finish', meta: [], act: 'sub-select', arg: `${it.id}|finish`, body: inline && sel === 'finish' ? finishResults(st, it) : S.PhasePipeline(D.GOAL_FINISH.map((id) => ({ label: id, state: fin[id] || '', count: finCounts[id] || null, goal: true }))), expanded: open }));
+    rows.push(S.SubtaskRow({ num: '··', state: finishState(it), title: 'Goal finish', selected: sel === 'finish', meta: finishMeta(it), act: 'sub-select', arg: `${it.id}|finish` }));
     return secBlock(st, 'subtasks', { title: 'Subtasks', count: `${it.done}/${it.total}`, end: [S.ProgressRing(it.done, it.total, { text: false })], body: S.SubtaskList({ label: `Subtasks of ${it.id}`, rows }) }, it.subtasks.length > 10);
   }
-  function inspectorPane(st, it) {
-    const sel = selectedSub(st, it);
-    if (sel === 'finish') return finishResults(st, it);
-    const s = it.subtasks.find((x) => String(x.id) === sel);
-    return S.PaneSection({ title: `Subtask ${pad(s.id)}`, status: { state: subDisplayState(it, s), frac: 0.5 }, body: subtaskInspector(st, it, s, false) });
+  /* The panel for a detail view. A goal's panel is about the selected subtask or Goal finish: the header names it with its
+   * state and steps through the index; the body is its inspector, then Execution, Runs and fixes and the goal's spec files.
+   * Other runs get "Details" with Execution and Runs and fixes. */
+  function detailsPanel(st, it) {
+    const goal = it.kind === 'goal', subs = hasSubtasks(it);
+    const sel = subs ? selectedSub(st, it) : goal ? 'finish' : null;
+    const s = sel && sel !== 'finish' ? it.subtasks.find((x) => String(x.id) === sel) : null;
+    const keys = subKeys(it), i = keys.indexOf(sel);
+    const step = (d, icon, label, kbd) => S.IconButton({ icon, label, kbd, size: 'sm', act: 'sub-move', arg: d, cls: (d < 0 ? i <= 0 : i >= keys.length - 1) ? 'is-off' : '' });
+    const lead = s ? subtaskInspector(st, it, s) : sel === 'finish' ? finishResults(st, it) : '';
+    return S.DetailsPanel({
+      title: s ? `Subtask ${pad(s.id)}` : sel === 'finish' ? 'Goal finish' : 'Details', label: 'Details',
+      status: s ? { state: subDisplayState(it, s), frac: 0.5 } : sel === 'finish' ? { state: finishState(it) } : null,
+      actions: subs ? [S.Label({ text: `${i + 1} / ${keys.length}`, dot: false }), step(-1, 'chevronUp', 'Previous subtask', '↑'), step(1, 'chevronDown', 'Next subtask', '↓')] : [],
+      width: paneWidth(st, it), min: PANE_MIN, closeAct: 'toggle-props',
+      body: (lead ? S.PaneSection({ body: lead }) : '') + executionPane(it) + runsPane(st, it),
+    });
   }
-  /* Spec files: the goal-level files only (subtask specs open from the inspector), manifest, spec.md, then by name. */
-  function specFilesPane(it) {
-    const subSpecs = new Set((it.subtasks || []).map((s) => s.spec));
-    const files = bundleOrder((it.specBundle || []).filter((f) => !subSpecs.has(fileName(f)) && !/^spec_subtask_/.test(fileName(f))));
-    if (!files.length) return '';
-    return S.PaneSection({ title: 'Spec files', body: files.map((f) => S.TreeRow({ level: 0, file: true, lead: S.Icon(f.endsWith('.yaml') ? 'file' : 'fileText', 'sm'), title: fileName(f), meta: [], act: 'open-file', arg: `${it.id}/${f}`, rowIdx: -1 })).join('') });
-  }
+
 
   /* ---------- Details pane: Execution, Runs and fixes ---------- */
   const sum = (m) => Object.values(m || {}).reduce((a, b) => a + b, 0);
@@ -628,11 +997,150 @@
     return out.sort((a, b) => (b.ago == null ? -1 : b.ago) - (a.ago == null ? -1 : a.ago));
   }
   const FEED_MAX = 8;
-  function activitySection(st, it) {
-    const all = activityEntries(it);
-    if (!all.length) return '';
-    return secBlock(st, 'activity', { title: 'Activity', body: `<sb-design-surface screen="activity" embedded="detail" work="${esc(it.id)}"></sb-design-surface>` });
+  /* ---------- Activity (feature/detail ActivitySection), composed from design system parts ----------
+   * Groups come from the item: one per subtask with its phase ledger (`phaseLog`, or the details panel's phase cards when
+   * no ledger was recorded) and its blocks, then Goal finish, then the run's own events. Parts: MetricStrip (phase time,
+   * blocks, subtasks, models), a tall SegmentBar timeline whose segments open their group, MiniRule day labels and idle
+   * gaps, a Fold per group (StatusIcon, number and name, time, duration and agents), EventLines for phases, nested Folds
+   * for fix loops, ExpandableText for summaries and block reasons, and EventLines with icons for the run's events. */
+  const LONG_GAP = 600000;
+  const durTxt = (m) => { if (m < 1000) return '<1s'; const sec = Math.round(m / 1000); if (sec < 60) return `${sec}s`; const n = Math.round(sec / 60); if (n < 60) return `${n}m`; return `${Math.floor(n / 60)}h ${String(n % 60).padStart(2, '0')}m`; };
+  const dayTxt = (t) => new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const MONTHS = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+  function clockOn(it, hhmm) {
+    const m = /(\d{1,2}) ([A-Z][a-z]{2})/.exec(it.started || ''), d = new Date(D.T0);
+    if (m) { d.setUTCMonth(MONTHS[m[2]]); d.setUTCDate(+m[1]); }
+    const t = /(\d{1,2}):(\d{2})/.exec(hhmm || '');
+    if (t) d.setUTCHours(+t[1], +t[2], 0, 0);
+    return d.getTime();
   }
+  const SEC = (v) => [...String(v || '').matchAll(/(\d+)\s*(h|m|s)/g)].reduce((n, [, x, u]) => n + +x * ({ h: 3600000, m: 60000, s: 1000 })[u], 0);
+  /* One subtask's ledger: recorded, or rebuilt from the same phase cards the details panel shows. */
+  function ledgerOf(st, it, s) {
+    if (s.phaseLog && s.phaseLog.length) return s.phaseLog.map((p) => ({ p: p.p, s: new Date(p.s).getTime(), e: p.e ? new Date(p.e).getTime() : null, a: p.a, m: p.m, f: p.f, v: p.v && p.v !== 'null' ? p.v : null, t: p.t }));
+    const states = subPhaseStates(it, s), counts = subPhaseCounts(it, s), cards = (s.phases && s.phases.cards) || {};
+    /* Audit attempts and review passes expand into their runs and fixes, so the ledger matches the panel's records. */
+    return D.PHASE_ORDER.filter((id) => states[id]).flatMap((id) => {
+      const c = cards[id] || fallbackSubCard(st, it, s, id, states[id], counts[id]) || {};
+      const start = clockOn(it, c.when), open = /^since /.test(c.when || '') || ['now', 'wait', 'fail'].includes(states[id]);
+      const wait = ['wait', 'fail'].includes(states[id]) ? states[id] : null;
+      const [m, f] = String(c.model || '').split(' · ');
+      const text = (c.made || []).find((b) => b.kind === 'text');
+      const span = SEC(c.dur) || (open ? 6 * 60000 : 0);
+      const base = { a: c.agent, m, f };
+      let runs = null;
+      if (id === 'audit') { const a = auditModel(it, s); if (a && (a.attempts || []).length > 1) runs = a.attempts.flatMap((x) => [{ p: 'audit', v: x.passed ? 'passed' : `${x.uncovered} uncovered` }, x.next ? { p: x.next } : null].filter(Boolean)); }
+      if (id === 'review') { const r = reviewModel(it, s); if (r.passes.length > 1) runs = r.passes.flatMap((x, i) => [{ p: 'review', v: x.verdict.replace(/_/g, ' ') }, i < r.passes.length - 1 ? { p: 'review_fix' } : null].filter(Boolean)); }
+      if (!runs) return [{ ...base, p: id, s: start, e: open ? null : start + span, v: wait ? null : c.word && !['Done', 'Running'].includes(c.word) ? c.word.toLowerCase() : null, t: text ? text.html.replace(/<[^>]+>/g, '') : null, wait }];
+      const step = Math.max(10000, Math.floor(span / runs.length));
+      return runs.map((r, i) => ({ ...base, ...r, s: start + i * step, e: open && i === runs.length - 1 ? null : start + (i + 1) * step, wait: i === runs.length - 1 ? wait : null }));
+    });
+  }
+  function activityGroups(st, it) {
+    const groups = (it.subtasks || []).map((s) => {
+      const log = ledgerOf(st, it, s);
+      const blocks = (s.blocks && s.blocks.length ? s.blocks.map((b) => ({ ...b, at: b.at ? new Date(b.at).getTime() : null })) : s.blocked ? [{ why: s.blocked, phase: Object.entries(subPhaseStates(it, s)).find(([, v]) => ['wait', 'fail'].includes(v))?.[0] || it.step, at: null }] : []);
+      return { id: `sub-${s.id}`, n: pad(s.id), name: s.title, state: subDisplayState(it, s), log, blocks, s: log[0] ? log[0].s : null, e: log.length && log[log.length - 1].e ? log[log.length - 1].e : null };
+    });
+    if (hasSubtasks(it)) {
+      const fs = finishStates(it), log = D.GOAL_FINISH.filter((id) => fs[id]).map((id) => {
+        const c = finishCard(it, id) || {}, start = clockOn(it, c.when), live = fs[id] === 'now';
+        return { p: id, s: start, e: live ? null : start + SEC(c.dur), a: c.agent, m: String(c.model || '').split(' · ')[0], v: c.word && c.word !== 'Done' ? c.word.toLowerCase() : null, t: null };
+      });
+      if (log.length) groups.push({ id: 'finish', n: '··', name: 'Goal finish', state: finishState(it), log, blocks: [], s: log[0].s, e: log[log.length - 1].e });
+    }
+    return groups;
+  }
+  const agentMark = (a) => (a && D.AGENTS[a] ? S.Avatar({ name: a, initials: D.AGENTS[a].initials, color: D.AGENTS[a].color, size: 'sm' }) : '');
+  const modelTxt = (p) => [String(p.m || '').replace(/^claude-/, ''), p.f].filter(Boolean).join(' · ');
+  /* A ledger entry as one EventLines row: time, dot, phase, duration, verdict, the agent and model, then the summary. */
+  function ledgerRow(p) {
+    const live = !p.e;
+    return [isoClock(p.e || p.s), `<b>${esc(p.p)}</b>${p.wait ? ` · ${p.wait === 'fail' ? 'failed' : 'blocked'}` : live ? ' · running' : ` · ${durTxt(p.e - p.s)}`}${p.v ? ` · ${esc(p.v)}` : ''}${p.a ? ` · ${agentMark(p.a)} ${esc(modelTxt(p))}` : ''}${p.t ? S.ExpandableText({ text: p.t, cls: 'sb-insp-note' }) : ''}`,
+      p.wait === 'fail' ? 'var(--st-failed)' : p.wait ? 'var(--st-blocked)' : live ? 'var(--st-active)' : 'var(--st-done)'];
+  }
+  function groupBodyHtml(st, it, g) {
+    const seq = [...g.log.map((p) => ({ p })), ...g.blocks.map((b) => ({ b }))].sort((x, y) => ((x.p ? x.p.s : x.b.at) ?? Infinity) - ((y.p ? y.p.s : y.b.at) ?? Infinity));
+    const out = []; let rows = [], loop = null, prevEnd = null;
+    const flushRows = () => { if (rows.length) { out.push(S.EventLines(rows)); rows = []; } };
+    const flushLoop = () => {
+      if (!loop) return;
+      if (loop.items.length === 1) rows.push(ledgerRow(loop.items[0]));
+      else {
+        flushRows();
+        const counts = {}; loop.items.forEach((p) => { counts[p.p] = (counts[p.p] || 0) + 1; });
+        const key = `${it.id}|act|${g.id}|${loop.items[0].s}`, total = loop.items.reduce((n, p) => n + (p.e ? p.e - p.s : 0), 0);
+        out.push(S.Fold({ label: `${loop.fam} loop`, note: Object.entries(counts).map(([k, n]) => `${k} ×${n}`).join(', '), end: `${isoClock(loop.items[loop.items.length - 1].e || loop.items[0].s)} · ${durTxt(total)}`, act: 'audit-met', arg: key, open: st.auditMet.has(key), inset: true, body: S.EventLines(loop.items.map(ledgerRow)) }));
+      }
+      loop = null;
+    };
+    seq.forEach((x) => {
+      if (x.b) {
+        flushLoop();
+        const what = [x.b.phase, x.b.n ? `attempt ${x.b.n}` : null, x.b.disp === 'needs_user_action' ? 'needs your decision' : null].filter(Boolean).join(' · ');
+        rows.push([x.b.at ? isoClock(x.b.at) : '', `<b>Blocked</b>${what ? ` · ${esc(what)}` : ''}${x.b.why ? S.ExpandableText({ text: x.b.why, cls: 'sb-insp-note' }) : ''}`, 'var(--st-blocked)']);
+        if (x.b.at) prevEnd = x.b.at;
+        return;
+      }
+      const p = x.p, fam = LOOP_OF[p.p] || p.p;
+      if (prevEnd && p.s - prevEnd > LONG_GAP) { flushLoop(); rows.push(['', `idle ${durTxt(p.s - prevEnd)}`, 'var(--fg-faint)']); }
+      if (loop && loop.fam === fam && loop.items.every((q) => q.e)) loop.items.push(p); else { flushLoop(); loop = { fam, items: [p] }; }
+      prevEnd = p.e || prevEnd;
+    });
+    flushLoop(); flushRows();
+    return out.join('') || S.EventLines([['', g.state === 'pending' ? 'Not started.' : 'No phases recorded.', 'var(--fg-faint)']]);
+  }
+  function activitySection(st, it) {
+    const feed = activityEntries(it);
+    if (it.kind !== 'goal') return feed.length ? secBlock(st, 'activity', { title: 'Activity', count: feed.length, body: S.EventLines(feed) }) : '';
+    const groups = activityGroups(st, it), filter = (st.actFilter || {})[it.id] || 'all';
+    const nBlocks = groups.reduce((n, g) => n + g.blocks.length, 0);
+    const openOf = (g) => { const k = `${it.id}|${g.id}`; return st.actOpen && k in st.actOpen ? st.actOpen[k] : filter === 'blocks' || ['blocked', 'active', 'failed', 'paused'].includes(g.state); };
+    const all = groups.flatMap((g) => g.log), timed = all.filter((p) => p.e);
+    const active = timed.reduce((n, p) => n + (p.e - p.s), 0);
+    const spans = groups.filter((g) => g.s).map((g) => ({ g, s: g.s, e: g.e || g.log.reduce((n, p) => Math.max(n, p.e || p.s), g.s) }));
+    let idle = 0; spans.slice(1).forEach((x, i) => { const gap = x.s - spans[i].e; if (gap > LONG_GAP) idle += gap; });
+    const models = {}; timed.forEach((p) => { const k = String(p.m || '').replace(/^claude-/, ''); if (k) models[k] = (models[k] || 0) + (p.e - p.s); });
+    const topModel = Object.entries(models).sort((x, y) => y[1] - x[1])[0];
+    const fixes = all.filter((p) => /fix/.test(p.p)).length;
+    const metrics = S.MetricStrip([
+      { label: 'Phase time', value: timed.length ? durTxt(active) : 'Not recorded', note: idle ? `${durTxt(idle)} idle` : 'no long gaps' },
+      { label: 'Blocks', value: String(nBlocks), note: nBlocks ? 'stopped for help' : 'none' },
+      { label: 'Subtasks', value: `${it.done || 0}`, unit: `/ ${it.total || 0}`, note: `${all.length} phases · ${fixes} ${fixes === 1 ? 'fix' : 'fixes'}` },
+      { label: 'Models', value: esc(topModel ? topModel[0] : it.model || '—'), note: topModel && active ? `${Math.round(topModel[1] / active * 100)}% of phase time` : 'only model' },
+    ]);
+    const segs = []; let prev = null;
+    spans.forEach(({ g, s, e }) => {
+      if (prev && s - prev > LONG_GAP) segs.push({ tone: 'pending', n: Math.min(s - prev, 3600000), tip: `idle ${durTxt(s - prev)}` });
+      const tone = g.state === 'active' ? 'active' : g.blocks.length || g.state === 'blocked' ? 'blocked' : g.state === 'failed' ? 'failed' : 'done';
+      segs.push({ tone, n: Math.max(e - s, 60000), tip: `${g.n} · ${g.name} · ${durTxt(e - s)}`, act: 'act-group', arg: `${it.id}|${g.id}|open` });
+      prev = e;
+    });
+    const range = spans.length ? `${dayTxt(spans[0].s)} ${isoClock(spans[0].s)} → ${it.live && it.lifecycle === 'active' ? 'now' : `${dayTxt(prev)} ${isoClock(prev)}`}` : '';
+    const shown = groups.filter((g) => filter === 'all' || g.blocks.length || g.state === 'blocked');
+    const body = []; let lastDay = null, lastEnd = null;
+    shown.forEach((g) => {
+      if (g.s) { const d = dayTxt(g.s); if (d !== lastDay) { body.push(S.MiniRule(d)); lastDay = d; } }
+      if (filter === 'all' && lastEnd && g.s && g.s - lastEnd > LONG_GAP) body.push(S.MiniRule(`idle ${durTxt(g.s - lastEnd)}`));
+      const agents = [...new Set(g.log.map((p) => p.a).filter(Boolean))];
+      const len = g.log.reduce((n, p) => n + ((p.e || p.s) - p.s), 0);
+      const tag = g.state === 'active' ? 'running' : g.blocks.length ? `${g.blocks.length} ${g.blocks.length === 1 ? 'block' : 'blocks'}` : g.state === 'blocked' ? 'blocked' : '';
+      body.push(S.Fold({ lead: S.StatusIcon(g.state, 0.5), label: `${g.n}  ${g.name}`, strong: true, note: tag, end: [g.s ? isoClock(g.s) : '', len ? durTxt(len) : '', agents.map(agentMark).join('')].filter(Boolean).join(' · '),
+        act: 'act-group', arg: `${it.id}|${g.id}`, open: openOf(g), inset: true, body: groupBodyHtml(st, it, g) }));
+      lastEnd = g.e || lastEnd;
+    });
+    if (!shown.length) body.push(S.Box(S.BoxNote({ text: 'No blocks in this run.' })));
+    if (feed.length && filter === 'all') {
+      const k = `${it.id}|run`;
+      body.push(S.Fold({ lead: S.StatusIcon(iconState(it), frac(it)), label: 'Goal activity', strong: true, note: `${feed.length} events`, act: 'act-group', arg: `${it.id}|run`, open: st.actOpen && k in st.actOpen ? st.actOpen[k] : true, inset: true, body: S.EventLines(feed) }));
+    }
+    const anyClosed = groups.some((g) => !openOf(g));
+    return secBlock(st, 'activity', { title: 'Activity', count: `${all.length} phases`, end: [
+      S.LinkButton({ label: anyClosed ? 'Expand all' : 'Collapse all', act: 'act-all', arg: `${it.id}|${anyClosed ? 1 : 0}` }),
+      S.Segmented({ act: 'act-filter', value: filter, items: [{ id: 'all', arg: `${it.id}|all`, label: 'All' }, { id: 'blocks', arg: `${it.id}|blocks`, label: `Blocks ${nBlocks}` }] }),
+    ], body: `<div class="l-col g-3">${metrics}${segs.length ? `<div class="l-col g-1">${S.SegmentBar({ segs, tall: true, label: 'Run timeline' })}${range ? S.MiniRule(range) : ''}</div>` : ''}<div class="l-col g-1">${body.join('')}</div></div>` });
+  }
+
 
   /* ---------- QA results (QA results design; desktop feature/detail QaResultsView, QaResultsSection, QaUnblock) ---------- */
   /* The verdict word and the sentence come from counts, never from the agent's prose. Open findings, things QA left behind,
@@ -758,9 +1266,9 @@
     const v = qaView(q, o);
     const base = `qa:${q.runKey}`;
     const toggle = (k) => ({ act: 'qa-toggle', arg: `${base}:${k}`, open: st.qaOpen.has(`${base}:${k}`) });
-    const evidence = (paths) => (v.dir ? paths.map((p) => S.QaChip({ icon: /\.(png|jpe?g|webp)$/i.test(p) ? 'qaImage' : 'qaFile', label: qaFile(p), mono: true, tip: p, act: 'open-file', arg: p }))
-      : o.namesOnly ? paths.map((p) => S.QaChip({ icon: /\.(png|jpe?g|webp|mp4)$/i.test(p) ? 'qaImage' : 'qaFile', label: qaFile(p), mono: true, tip: `${p}. The QA run directory is not stored, so this file does not open.` })) : []);
-    const copy = (label, text) => S.QaChip({ icon: 'qaCopy', label, act: 'copy', arg: text });
+    const evidence = (paths) => (v.dir ? paths.map((p) => S.Chip({ icon: /\.(png|jpe?g|webp)$/i.test(p) ? 'qaImage' : 'qaFile', label: qaFile(p), mono: true, tip: p, act: 'open-file', arg: p }))
+      : o.namesOnly ? paths.map((p) => S.Chip({ icon: /\.(png|jpe?g|webp|mp4)$/i.test(p) ? 'qaImage' : 'qaFile', label: qaFile(p), mono: true, tip: `${p}. The QA run directory is not stored, so this file does not open.` })) : []);
+    const copy = (label, text) => S.Chip({ icon: 'qaCopy', label, act: 'copy', arg: text });
     const needs = v.open.map((f) => S.QaItem(Object.assign({
       glyph: 'qaBug', tone: o.fixing ? 'blocked' : 'failed', ref: f.id, title: shortenPaths(f.title), state: o.fixing ? 'Fixing' : f.state, line: f.observed && qaInline(f.observed),
       fields: [['Expected', f.expected && qaInline(f.expected)], ['Steps', f.steps && qaInline(f.steps)]],
@@ -780,13 +1288,13 @@
       v.passed && listFold('passed', 'Passed', v.passed),
       v.runDetails && S.QaFold(Object.assign({ icon: 'qaDoc', label: 'Run details', body: qaInline(v.runDetails) }, toggle('details'))),
       v.report && S.QaFold(Object.assign({ icon: 'qaDoc', label: 'Full report', preview: v.report.preview, before: v.report.first && qaInline(v.report.first),
-        body: S.ReportText(v.report.text), chips: v.reportPath ? [S.QaChip({ icon: 'qaOpen', label: 'Open report.md', act: 'open-file', arg: v.reportPath })] : [] }, toggle('report'))),
+        body: S.ReportText(v.report.text), chips: v.reportPath ? [S.Chip({ icon: 'qaOpen', label: 'Open report.md', act: 'open-file', arg: v.reportPath })] : [] }, toggle('report'))),
     ];
     return {
       verdict: S.QaVerdict({ tone: v.tone, word: v.word }),
       body: S.QaResults({ sentence: v.sentence, targets: v.targets, folds, groups: [
         { label: o.fixing ? 'Sent to qa_fix' : 'Needs you', items: needs, head: o.selectHead || null }, { label: 'Left behind', items: left }, { label: 'Not tested', items: gaps },
-        { label: 'Unblock', items: unblock, foot: S.QaChip({ icon: 'qaOpen', label: 'Open qa.md', act: 'open-file', arg: '.skill-bill/phases/qa.md', tip: 'Opens .skill-bill/phases/qa.md. The app never writes it.' }) },
+        { label: 'Unblock', items: unblock, foot: S.Chip({ icon: 'qaOpen', label: 'Open qa.md', act: 'open-file', arg: '.skill-bill/phases/qa.md', tip: 'Opens .skill-bill/phases/qa.md. The app never writes it.' }) },
       ] }),
     };
   }
@@ -973,7 +1481,7 @@
     }
     const all = activityEntries(it);
     const showAll = st.feedAll.has(it.id), hidden = showAll ? 0 : Math.max(0, all.length - FEED_MAX);
-    out.push(S.VerifySection({ id: 'sec-val-activity', title: 'Activity', count: all.length, body: all.length ? S.ActivityFeed({ entries: all.slice(hidden), hidden, act: 'feed-all', arg: it.id }) : S.Box(S.BoxNote({ text: 'No activity recorded for this run.' })) }));
+    out.push(S.VerifySection({ id: 'sec-val-activity', title: 'Activity', count: all.length, body: all.length ? S.EventLines(all.slice(hidden), { hidden, act: 'feed-all', arg: it.id }) : S.Box(S.BoxNote({ text: 'No activity recorded for this run.' })) }));
     return S.ValidationDoc(out);
   }
 
@@ -1058,7 +1566,7 @@
     const tally = [['pass', 'passed', 'var(--st-done)'], ['fail', 'failed', 'var(--st-failed)'], ['pending', frozen ? 'unfinished' : 'running', frozen ? 'var(--fg-muted)' : 'var(--st-active)'], ['queued', 'queued', 'var(--fg-faint)']]
       .filter(([b]) => monCount(step.checks, b)).map(([b, word, color]) => ({ n: monCount(step.checks, b), word, color }));
     const sum = S.MonitorSummary([
-      S.MonitorLine({ icon: 'commit', html: `Head ${S.ShaChip({ sha: step.head })} <span class="faint">${esc(step.headNote)}</span>`, end: step.next && !frozen ? `${S.Icon('refresh', 'xs')}<span>read ${esc(step.polled)} · next ${esc(step.next)}</span>` : `<span>${esc(step.polled)}</span>` }),
+      S.MonitorLine({ icon: 'commit', html: `Head ${S.Chip({ mono: true, label: step.head })} <span class="t-faint">${esc(step.headNote)}</span>`, end: step.next && !frozen ? `${S.Icon('refresh', 'xs')}<span>read ${esc(step.polled)} · next ${esc(step.next)}</span>` : `<span>${esc(step.polled)}</span>` }),
       n ? S.SegmentBar({ equal: true, segs: monSorted(step.checks).map((c) => ({ n: 1, tone: frozen && c.bucket === 'pending' ? 'pending' : MON_SEG[c.bucket] })), label: `${n} checks` }) : '',
       n ? S.CheckTally({ items: tally }) : '',
       step.mergeable === 'conflicting' ? S.MonitorLine({ icon: 'merge', color: 'var(--st-blocked)', html: 'GitHub reports the PR as <b>conflicting</b> with main' }) : '',
@@ -1085,7 +1593,7 @@
   }
   function monAgentLine(step, live) {
     const a = monAgent(step.agent);
-    const html = step.summary ? md(step.summary) : live && step.signal ? `<span class="is-live">${esc(step.signal)}</span> <span class="faint">· ${esc(step.ago)}</span>` : esc(step.agent);
+    const html = step.summary ? md(step.summary) : live && step.signal ? `${S.LiveText(step.signal)} <span class="t-faint">· ${esc(step.ago)}</span>` : esc(step.agent);
     return S.RepairAgent({ initials: a.initials, color: a.color, html, sub: `${step.agent} · ${step.model}`, action: live ? S.Button({ label: 'Watch agent', act: 'toast', arg: 'Opened the agent session' }) : '' });
   }
   /* A repair: the agent and what it is doing (or its explanation), the failing check with its log, the files it changed, the
@@ -1101,7 +1609,7 @@
       : step.files.length ? step.files.map((f) => S.ChangedFileRow(f)).join('')
       : S.BoxNote({ text: step.outcome === 'unresolved' ? 'No file changed. The agent found no repository fix for this failure.' : 'No file changed yet.' });
     const box2 = S.MonitorBox({ icon: 'pencil', title: step.prOnly ? 'Pull request' : 'Files changed',
-      sub: step.prOnly ? 'edited with gh pr edit' : step.files.length ? `${step.files.length} files · <span class="ins">+${ins}</span> <span class="del">−${del}</span> · from the edit journal` : 'none',
+      sub: step.prOnly ? 'edited with gh pr edit' : step.files.length ? `${step.files.length} files · ${S.Counts({ ins: ins, del: del })} · from the edit journal` : 'none',
       end: [step.files.length ? S.LinkButton({ label: 'Open diff', act: 'toast', arg: 'Opened the repair diff' }) : '', step.worktree ? S.LinkButton({ label: 'Worktree', act: 'toast', arg: `Opened ${step.worktree}` }) : ''], body: fileRows });
     const box3 = step.gates.length ? S.MonitorBox({ icon: 'check', title: 'Local checks', sub: 'build and validation gates in the worktree', end: live ? [] : ['<span>CI decides; these only allow the push</span>'],
       body: [monGates(step.gates), step.next_ && live ? S.NextLine({ html: md(step.next_) }) : ''] }) : '';
@@ -1113,7 +1621,7 @@
     const live = monState(o.live, step) === 'now';
     const done = step.files.filter((f) => f.state === 'resolved').length;
     const sum = S.MonitorSummary([
-      S.MonitorLine({ icon: 'branch', html: `Merging ${S.ShaChip({ sha: `${step.base}@${step.baseSha}` })} into <span class="mono">${esc(it.branch || '')}</span>`, end: `${step.ahead} commits on ${esc(step.base)}` }),
+      S.MonitorLine({ icon: 'branch', html: `Merging ${S.Chip({ mono: true, label: `${step.base}@${step.baseSha}` })} into <span class="mono">${esc(it.branch || '')}</span>`, end: `${step.ahead} commits on ${esc(step.base)}` }),
       S.ResolveBar({ done, total: step.files.length }),
       S.CheckTally({ items: [{ n: done, word: 'resolved', color: 'var(--st-done)' }, step.files.length - done ? { n: step.files.length - done, word: 'conflicted', color: 'var(--st-blocked)' } : null, { n: step.auto.length, word: 'merged cleanly', color: 'var(--fg-faint)' }].filter(Boolean) }),
     ]);
@@ -1123,7 +1631,7 @@
     const auto = monFoldGroup(st, it, `${scope}:auto`, 'Merged cleanly', step.auto.map((p) => p.split('/').pop()), () => step.auto.map((p) => S.ChangedFileRow({ path: p, stat: false, icon: 'file' })).join(''), false);
     const box1 = S.MonitorBox({ icon: 'merge', title: `Repair ${step.repair} · merge ${step.base}`, sub: [live ? 'running' : 'finished', step.since, step.dur].map(esc).join(' · '),
       end: [step.outcome ? S.MonBadge({ text: 'Repair outcome: fixed', tone: 'ok' }) : ''],
-      body: [sum, S.RepairAgent({ initials: a.initials, color: a.color, html: step.summary ? md(step.summary) : live ? `<span class="is-live">${esc(step.signal)}</span> <span class="faint">· ${esc(step.ago)}</span>` : esc(step.agent), sub: `${step.agent} · ${step.model}`, action: live ? S.Button({ label: 'Watch agent', act: 'toast', arg: 'Opened the agent session' }) : '' }),
+      body: [sum, S.RepairAgent({ initials: a.initials, color: a.color, html: step.summary ? md(step.summary) : live ? `${S.LiveText(step.signal)} <span class="t-faint">· ${esc(step.ago)}</span>` : esc(step.agent), sub: `${step.agent} · ${step.model}`, action: live ? S.Button({ label: 'Watch agent', act: 'toast', arg: 'Opened the agent session' }) : '' }),
         S.MonitorGroup({ label: 'Conflicted files' }), files, auto] });
     const box2 = S.MonitorBox({ icon: 'check', title: 'Local checks', sub: 'run once every conflict is resolved', body: [monGates(step.gates), step.next_ && live ? S.NextLine({ html: md(step.next_) }) : ''] });
     return box1 + box2;
@@ -1137,7 +1645,7 @@
       return S.MonitorBox({ icon: 'tag', title: `Publish repair ${step.repair} · PR edit`, sub: ['done', step.since, step.dur].map(esc).join(' · '), end: ['<span>no commit, no push</span>'],
         body: S.PublishSteps({ steps: [
           { state: 'done', title: `Edited the PR ${step.field}`, when: step.since, html: S.SideBySide({ flush: true, items: [['BEFORE', esc(step.from)], ['AFTER', esc(step.to)]] }) },
-          { state: 'done', title: 'Head unchanged', html: `PR head stays ${S.ShaChip({ sha: step.head })}. Nothing to push.` },
+          { state: 'done', title: 'Head unchanged', html: `PR head stays ${S.Chip({ mono: true, label: step.head })}. Nothing to push.` },
           { state: o.live ? 'now' : 'done', title: 'Grace window', when: `until ${step.grace}`, html: `Failures count again once a check runs after the edit, or at ${esc(step.grace)}.` },
         ] }) });
     }
@@ -1162,8 +1670,8 @@
       S.Button({ label: 'Open PR', icon: 'pr', trail: 'external', act: 'toast', arg: `Opened github.com/${run.pr.slug}/pull/${run.pr.num}` })];
     return S.VerifyHeader({ status: { word: life[0], tone: life[1] }, key: 'monitor', kind: 'phase',
       pills: it.lifecycle === 'active' ? [it.refreshFailed ? { word: 'stale', tone: 'faint' } : { word: 'fresh', tone: 'active' }] : [],
-      html: `<span class="num">#${run.pr.num}</span>${esc(it.title)}`,
-      meta: [{ icon: 'folder', text: r.path, act: 'toast', arg: `Opened ${r.path}` }, { icon: 'branch', html: `<span class="mono">${esc(it.branch)}</span> <span class="arrow">→</span> <span class="mono">${esc(run.pr.base)}</span>` }],
+      html: `<span class="mono">#${run.pr.num}</span>${esc(it.title)}`,
+      meta: [{ icon: 'folder', text: r.path, act: 'toast', arg: `Opened ${r.path}` }, { icon: 'branch', html: `<span class="mono">${esc(it.branch)}</span> <span class="t-faint">→</span> <span class="mono">${esc(run.pr.base)}</span>` }],
       actions });
   }
   const MON_LIFE_HERO = { paused: ['Paused', 'blocked', 'pause'], failed: ['Failed', 'failed', 'x'], canceled: ['Canceled', 'faint', 'x'], idle: ['Pending', 'faint', 'pause'] };
@@ -1199,7 +1707,7 @@
     out.push(S.VerifySection({ id: 'sec-mon-cycles', title: 'Cycles', count: run.cycles.length, end: [esc('A failure starts a repair; a published repair starts the next cycle')], body: monitorCycles(it, run, { live, sel: key }) }));
     if (step) {
       const label = { ci: 'CI', fix: 'Repair', pub: 'Publish' }[kind], id = { ci: 'monitor', fix: 'monitor_fix', pub: 'commit_push' }[kind];
-      out.push(S.VerifySection({ id: 'sec-mon-step', html: `Cycle ${cyc.n} · ${label} <span class="mono">${id}</span>`, end: monState(live, step) === 'now' ? ['<span class="is-live">live</span>'] : [], body: monStepPanel(st, it, step, key, { live }) }));
+      out.push(S.VerifySection({ id: 'sec-mon-step', html: `Cycle ${cyc.n} · ${label} <span class="mono">${id}</span>`, end: monState(live, step) === 'now' ? [S.LiveText('live')] : [], body: monStepPanel(st, it, step, key, { live }) }));
     }
     out.push(S.VerifySection({ id: 'sec-mon-activity', title: 'Activity', count: run.activity.length, body: S.EventLines(run.activity.map(([t, html, tone]) => [t, html, MON_EV[tone]])) }));
     return S.MonitorDoc(out);
@@ -1267,9 +1775,9 @@
     const ev = p.events.filter((e) => planShown(p, e) && e.kind !== 'phase');
     const last = ev[ev.length - 1];
     const quiet = p.elapsed - planLast(p);
-    const sub = (e) => (e.sub ? `<span class="sub">#${e.sub} ·</span> ` : '');
+    const sub = (e) => (e.sub ? `<span class="t-faint">#${e.sub} ·</span> ` : '');
     let step, icon;
-    if (p.stuck && last) { icon = 'clock'; step = `Last step ${sub(last)}${last.kind === 'note' ? esc(last.text) : `${esc(last.verb.toLowerCase())} <code>${esc(planName(last.text))}</code>`} <span class="sub">at ${planAt(p, last.at)}</span>`; }
+    if (p.stuck && last) { icon = 'clock'; step = `Last step ${sub(last)}${last.kind === 'note' ? esc(last.text) : `${esc(last.verb.toLowerCase())} <code>${esc(planName(last.text))}</code>`} <span class="t-faint">at ${planAt(p, last.at)}</span>`; }
     else if (p.noStream || !last) { icon = 'clock'; step = 'This agent does not stream its steps. Saved files appear as they land.'; }
     else {
       icon = { read: 'fileText', write: 'pencil', search: 'search', cmd: 'terminal', note: 'message', mcp: 'link', err: 'warn' }[last.kind] || 'bot';
@@ -1405,7 +1913,7 @@
     const setup = S.FactList({ rows: [
       { label: 'Spec', file: { label: 'spec.md', act: 'open-file', arg: p.bundle + 'spec.md' } },
       { label: 'Size', html: esc(r.size) },
-      { label: 'Ceremony', html: r.ceremony.map(esc).join('<span class="sep">·</span>') },
+      { label: 'Ceremony', html: r.ceremony.map(esc).join(' · ') },
       { label: 'Mandates', html: r.mandates.length ? r.mandates.map(esc).join(', ') : 'none', faint: !r.mandates.length },
       { label: 'Criteria', list: r.acs.map((a, i) => [`AC-00${i + 1}`, a]) },
     ] });
@@ -1572,13 +2080,13 @@
     const reviewStep = r.steps.find((s) => s.id === 'code_review') || {};
     const q = r.qa, tag = (t) => (q ? q.details.assertions.filter((a) => a.outcome === t).length : 0);
     const f = r.flagAudit;
-    const fg = (t) => `<small class="is-fg">${esc(t)}</small>`;
+    const fg = (t) => `<small class="t-fg">${esc(t)}</small>`;
     const cells = [
       { key: 'Criteria', jump: 'criteria', value: r.audit ? `${c.PASS}<small> / ${r.criteria.length} met</small>` : `${r.criteria.length}<small> extracted</small>`,
         sub: r.audit ? ([c.PARTIAL && `${c.PARTIAL} partial`, c.FAIL && `${c.FAIL} missing`, c.UNGRADED && `${c.UNGRADED} ungraded`].filter(Boolean).join(' · ') || (r.criteria.length ? 'all met' : 'no criteria')) : 'not audited',
         bar: { segs: r.audit ? [{ n: c.PASS, tone: 'done' }, { n: c.PARTIAL, tone: 'blocked' }, { n: c.FAIL, tone: 'failed' }, { n: c.UNGRADED, tone: 'faint' }] : [] } },
       { key: 'Review', jump: 'code_review', value: r.review ? `${r.review.findings.length}<small> findings</small>` : '<small>—</small>',
-        sub: r.review ? (['Nit', 'Minor', 'Major', 'Blocker'].filter((k) => sev[k]).map((k) => `${sev[k]} ${k.toLowerCase()}`).join(' · ') || 'clean') : reviewStep.status === 'running' ? '<span class="is-active">running</span>' : 'not run',
+        sub: r.review ? (['Nit', 'Minor', 'Major', 'Blocker'].filter((k) => sev[k]).map((k) => `${sev[k]} ${k.toLowerCase()}`).join(' · ') || 'clean') : reviewStep.status === 'running' ? '<span class="t-done">running</span>' : 'not run',
         bar: { segs: !r.review ? [] : r.review.findings.length ? [{ n: sev.Nit || 0, tone: 'faint' }, { n: sev.Minor || 0, tone: 'blocked' }, { n: (sev.Major || 0) + (sev.Blocker || 0), tone: 'failed' }] : [{ n: 1, tone: 'done' }] } },
       { key: 'Tests', jump: 'unit_test_value_check', value: tv ? (tv.verdict === 'skipped' ? '<small>skipped</small>' : fg(tv.overall)) : '<small>—</small>',
         sub: tv && tv.rows ? ['Valuable', 'Weak', 'Harmful'].filter((k) => tc[k]).map((k) => `${tc[k]} ${k.toLowerCase()}`).join(' · ') : tv ? 'no tests changed' : 'not run',
@@ -1634,7 +2142,7 @@
         ? { text: mark === 'repo' ? 'Left out of fixes: the work lives in another repository.' : 'Left out of fixes until the spec is settled.', actions: [S.Button({ label: 'Clear mark', size: 'sm', act: 'vf-mark', arg: `${it.id}|${key}|none` })] }
         : { text: 'Not a code gap here?', actions: [S.Button({ label: 'Not in this repo', size: 'sm', act: 'vf-mark', arg: `${it.id}|${key}|repo` }), S.Button({ label: 'Spec question', size: 'sm', act: 'vf-mark', arg: `${it.id}|${key}|spec` })] }) : '';
       const body = g ? [
-        g.evidence.length ? S.FieldText({ label: 'Evidence', chips: g.evidence.filter((e) => !/\s/.test(e)).map((e) => S.FileChip({ label: e, act: 'toast', arg: `Opened ${e} in the Changes window` })), html: g.evidence.filter((e) => /\s/.test(e)).map(S.ReportText).join('') }) : '',
+        g.evidence.length ? S.FieldText({ label: 'Evidence', chips: g.evidence.filter((e) => !/\s/.test(e)).map((e) => S.Chip({ mono: true,  label: e, act: 'toast', arg: `Opened ${e} in the Changes window` })), html: g.evidence.filter((e) => /\s/.test(e)).map(S.ReportText).join('') }) : '',
         g.missing ? S.FieldText({ label: "What's missing", html: md(g.missing) }) : '',
         g.notFound ? S.FieldText({ label: 'Not found', html: md(g.notFound) }) : '', marks].join('')
         : `<div class="t-muted">${ctx.state === 'parked' ? 'The audit runs after you confirm.' : r.audit ? 'No grade was recorded for this criterion. See Completeness audit in Steps.' : 'The completeness audit has not run yet.'}</div>`;
@@ -1676,7 +2184,7 @@
     const [word, tone] = V_QA[ctx.r.qaVerdict] || ['Unknown', 'faint'];
     const bits = [open.length && `QA found ${plural(open.length, 'problem', 'problems')}`, gaps.length && `could not test ${plural(gaps.length, 'thing', 'things')}`].filter(Boolean);
     const sentence = (bits.length ? bits.join(' and ') + '. ' : '') + (passed.length === as.length ? `All ${passed.length} checks passed.` : `${passed.length} ${passed.length === 1 ? 'check' : 'checks'} passed.`);
-    const chips = (paths) => (paths || []).map((p) => S.FileChip({ icon: /\.(png|jpe?g|webp|mp4)$/i.test(p) ? 'image' : 'file', label: qaFile(p), tip: `${p}. The QA run directory is not stored, so this file does not open.` }));
+    const chips = (paths) => (paths || []).map((p) => S.Chip({ mono: true,  icon: /\.(png|jpe?g|webp|mp4)$/i.test(p) ? 'image' : 'file', label: qaFile(p), tip: `${p}. The QA run directory is not stored, so this file does not open.` }));
     const key = (k) => `${it.id}:q:${k}`;
     return S.VerifyQa({ word, tone, sentence, head: selAll(it, ctx, 'qa', { boxed: true }),
       needs: open.map((f) => {
@@ -1723,11 +2231,11 @@
         if (!r.review) return none;
         const verdict = humanized(r.review.verdict);
         return { sum: [{ text: capFirst(verdict), tone: /changes/.test(verdict) ? 'failed' : 'blocked' }, ...tally(r.review.findings, 'severity')],
-          body: `<div>${selAll(it, ctx, 'finding', { rule: true })}${r.review.findings.map((f) => {
+          body: `<div>${selAll(it, ctx, 'finding', { rule: true })}${S.Box(r.review.findings.map((f) => {
             const sel = selCtl(it, ctx, 'f:' + f.ref), k = `${it.id}:d:${f.ref}`;
-            return S.ReceiptFinding({ id: `find-${f.ref}`, badge: { text: f.severity, tone: V_SEV[f.severity] || 'faint' }, ref: f.ref, chip: S.FileChip({ label: fileName(f.location), tip: f.location, act: 'open-file', arg: f.location }),
-              meta: [f.specialist, `${f.confidence} confidence`], html: md(f.description), open: st.vOpen.has(k), act: 'v-toggle', arg: k, lead: ctx.pick ? sel.lead : undefined, end: sel.end, hint: sel.hint });
-          }).join('')}</div><div class="l-row">${S.Button({ label: 'Verify findings', act: 'toast', arg: 'Verify findings checks the code in agent chat and records confirmed fixes without changing code' })}</div>` };
+            return S.FindingRow({ id: `find-${f.ref}`, ref: f.ref, severity: f.severity, html: md(f.description), open: st.vOpen.has(k), act: 'v-toggle', arg: k, lead: ctx.pick ? sel.lead : undefined, end: sel.end, hint: sel.hint,
+              body: S.FieldText({ label: 'Location', chips: [S.Chip({ label: fileName(f.location), tip: f.location, act: 'open-file', arg: f.location })] }) + S.FieldText({ label: 'Lane', html: esc([f.specialist, `${f.confidence} confidence`].filter(Boolean).join(' · ')) }) });
+          }))}</div><div class="l-row">${S.Button({ label: 'Verify findings', act: 'toast', arg: 'Verify findings checks the code in agent chat and records confirmed fixes without changing code' })}</div>` };
       }
       case 'unit_test_value_check': {
         if (ctx.stop === s) return { sum: [{ text: 'Stopped here', tone: 'blocked' }, { text: 'no receipt recorded' }], body: '' };
@@ -1738,7 +2246,7 @@
         return { sum: [{ text: t.overall, tone: 'strong' }, ...tally(t.rows, 'verdict')],
           body: `<div class="t-muted">${md(t.summary)}</div><div>${selAll(it, ctx, 'test', { rule: true, note: 'Keep rows are left out' })}${t.rows.map((x, i) => {
             const fixable = ctx.fix.some((y) => y.key === 't:' + i), sel = fixable ? selCtl(it, ctx, 't:' + i) : {};
-            return S.TestValueRow({ badge: { text: x.verdict, tone: T_TONE[x.verdict] || 'faint' }, area: x.area, files: x.files.map((p) => S.FileChip({ label: p, act: 'toast', arg: `Opened ${p} in the Changes window` })),
+            return S.TestValueRow({ badge: { text: x.verdict, tone: T_TONE[x.verdict] || 'faint' }, area: x.area, files: x.files.map((p) => S.Chip({ mono: true,  label: p, act: 'toast', arg: `Opened ${p} in the Changes window` })),
               why: md(x.why), action: md(x.action), lead: ctx.pick ? sel.lead || '' : undefined, end: sel.end, hint: sel.hint });
           }).join('')}</div>` + (plan.length ? S.MiniRule('Plan') + S.BadgeGrid(plan.map(([k, tone, v]) => ({ badge: { text: k, tone }, html: md(v) }))) : '') };
       }
@@ -1772,7 +2280,7 @@
     const all = activityEntries(it), open = st.vOpen.has(`${it.id}:activity`);
     const showAll = st.feedAll.has(it.id), hidden = showAll ? 0 : Math.max(0, all.length - FEED_MAX);
     return S.VerifySection({ body: S.Fold({ label: 'Activity', strong: true, note: 'agent output and tool calls, as today', open, act: 'v-toggle', arg: `${it.id}:activity`, inset: true,
-      body: all.length ? S.ActivityFeed({ entries: all.slice(hidden), hidden, act: 'feed-all', arg: it.id }) : '<div class="t-muted">No activity recorded for this run.</div>' }) });
+      body: all.length ? S.EventLines(all.slice(hidden), { hidden, act: 'feed-all', arg: it.id }) : '<div class="t-muted">No activity recorded for this run.</div>' }) });
   }
   function verifyBar(it, ctx) {
     const items = ctx.pick ? ctx.fix.filter((x) => x.key in ctx.sel) : [];
@@ -1818,9 +2326,9 @@
     const pane = paneShown(st);
     const subs = hasSubtasks(it);
 
-    const location = `<div class="l-row g-1 l-wrap">${S.Button({ label: r.path, icon: 'folder', size: 'sm', variant: 'ghost', act: 'toast', arg: `Opened ${r.path}` })}${it.branch ? S.Button({ label: it.branch, icon: 'branch', size: 'sm', variant: 'ghost', act: 'toast', arg: `Opened ${r.web}/tree/${it.branch}` }) : `<span class="t-faint" style="font-size:var(--t-sm)">no branch</span>`}</div>`;
+    const location = `<div class="l-row g-1 l-wrap">${S.Button({ label: r.path, icon: 'folder', size: 'sm', variant: 'ghost', act: 'toast', arg: `Opened ${r.path}` })}${it.branch ? S.Button({ label: it.branch, icon: 'branch', size: 'sm', variant: 'ghost', act: 'toast', arg: `Opened ${r.web}/tree/${it.branch}` }) : `<span class="t-faint t-sm">no branch</span>`}</div>`;
     const metrics = S.MetricStrip([
-      goal ? (it.planning ? { label: 'Goal stage', value: 'Planning' } : finished || it.current == null ? { label: 'Subtasks', value: `${it.done || 0}`, unit: `/ ${it.total || 0}`, note: 'complete' } : { label: 'Subtask', value: `${it.current}`, unit: `/ ${it.total}`, note: `${it.done} complete · ${it.total - it.done - 1} pending` }) : { label: 'Step', value: `<span class="mono" style="font-size:var(--t-md)">${esc(it.step)}</span>`, note: it.exec ? esc(it.exec) : '&nbsp;' },
+      goal ? (it.planning ? { label: 'Goal stage', value: 'Planning' } : finished || it.current == null ? { label: 'Subtasks', value: `${it.done || 0}`, unit: `/ ${it.total || 0}`, note: 'complete' } : { label: 'Subtask', value: `${it.current}`, unit: `/ ${it.total}`, note: `${it.done} complete · ${it.total - it.done - 1} pending` }) : { label: 'Step', value: `<span class="mono t-md">${esc(it.step)}</span>`, note: it.exec ? esc(it.exec) : '&nbsp;' },
       goal ? { label: 'Phase', value: esc(it.planning ? 'plan' : it.step), note: it.planning ? `${it.planned}/${it.total} plans saved` : esc(it.exec || ' ') } : null,
       finished ? { label: 'Total run time', value: S.fmtDur(it.goalMs), note: `finished ${esc(it.finishedAt || '')}` } : { label: goal ? 'Goal active' : it.kind === 'operation' ? 'Operation elapsed' : 'Phase elapsed', value: clock(it), note: it.live ? 'ticking' : 'last known duration' },
       goal && it.subMs != null && !finished ? { label: 'Subtask active', value: subClock(it), note: it.live ? 'ticking' : 'last known duration' } : null,
@@ -1846,28 +2354,30 @@
     /* A standalone QA run's results come first: they are what the operator reads in a QA report. */
     if (it.qa) { const r = qaResults(st, it.qa, { running: it.lifecycle === 'active' }); parts.push(secBlock(st, 'qa-results', { id: 'sec-qa-results', cls: 'sb-sec--qa', title: 'QA results', badge: r.verdict, body: r.body })); }
     if (!val && !ver && !plan && !mon) parts.push(metrics);
-    if (subs) parts.push(subtaskSection(st, it, !pane));
+    if (subs) parts.push(subtaskSection(st, it));
     if (goal && it.planning) parts.push(secBlock(st, 'subtasks', { title: 'Subtasks', count: `${it.planned}/${it.total} plans saved`, body: S.Hint({ text: 'Subtasks appear here once their plans are saved.' }) }));
-    if (goal && it.pipeline && !it.planning) parts.push(secBlock(st, 'pipeline', { title: 'Phase pipeline', body: S.PhasePipeline(pipelineSteps(it)) }));
+    if (goal && it.pipeline && !it.planning) {
+      const cur = subs && it.subtasks.find((x) => x.id === it.current);
+      parts.push(secBlock(st, 'pipeline', { title: 'Phase pipeline', body: S.PhasePipeline(pipelineSteps(it).map((p) => (cur && p.state ? Object.assign(p, { act: 'peek-open', arg: `${it.id}|${cur.id}|${p.label}`, tip: `Show ${p.label} for subtask ${pad(cur.id)}` }) : p))) }));
+    }
     if (!goal && !plan && !mon && (it.steps || []).length > 1) parts.push(secBlock(st, 'pipeline', { title: 'Phase pipeline', body: S.PhasePipeline(it.steps.map(([label, state]) => ({ label, state, count: state === 'now' ? it.exec : null }))) }));
-    if (goal) parts.push(secBlock(st, 'changes', { title: 'Changes', body: `<sb-design-surface screen="changes" embedded="overview" work="${esc(it.id)}"></sb-design-surface>` }));
+    if (goal) { const ov = window.Review.overview(st, it); parts.push(secBlock(st, 'changes', { title: 'Changes', count: ov.count, end: ov.end, body: ov.body })); }
     if (!plan && !ver && !val && !mon) parts.push(activitySection(st, it));
     /* Standalone phases and operations keep their own validation, phase results and spec bundle in the document. */
-    if (!goal && it.validation) parts.push(secBlock(st, 'validation', { title: 'Validation', body: S.Box(it.validation.map(([n, ok, checks]) => S.FindingRow({ ref: `Subtask ${n}`, title: `${ok ? 'passed' : 'failed'} · ${checks} checks`, state: ok ? 'passed' : 'failed', stateColor: ok ? 'var(--st-done)' : 'var(--st-failed)' }))) }));
+    if (!goal && it.validation) parts.push(secBlock(st, 'validation', { title: 'Validation', body: S.CheckLines(it.validation.map(([n, ok, checks]) => ({ ok, text: `Subtask ${n} · ${ok ? 'passed' : 'failed'} · ${checks} checks` }))) }));
     if (!goal && it.phaseResults) {
       const pr = it.phaseResults;
-      const passes = pr.passes.map((p) => `<div class="l-col g-2"><div class="l-row g-2" style="font-size:var(--t-sm)"><b style="font-weight:500">Review pass ${p.n}</b><span class="t-muted">${esc(p.verdict)}</span><span class="t-faint">· ${p.open} unresolved</span></div>${p.findings.length ? S.Box(p.findings.map(([sev, text, where]) => S.FindingRow({ severity: sev, title: text, meta: `<span class="mono">${esc(where)}</span>` }))) : ''}</div>`).join('');
-      parts.push(secBlock(st, 'phase-results', { title: 'Phase results', body: `<div class="l-col g-4">${passes}${pr.audit ? `<div class="l-row g-2" style="font-size:var(--t-sm)"><b style="font-weight:500">Audit</b><span class="t-muted">${esc(pr.audit.verdict)}</span>${S.ExpandableText({ text: `· ${pr.audit.summary}`, cls: 't-faint' })}</div>` : ''}</div>` }));
+      const passes = pr.passes.map((p) => `<div class="l-col g-2">${S.InspectorLine({ lead: `Review pass ${p.n}`, parts: [p.verdict, `${p.open} unresolved`] })}${p.findings.length ? S.VerifyDoc([S.Box(p.findings.map(([sev, text, where], i) => { const k = `${it.id}|pr|${p.n}|${i}`; return S.FindingRow({ ref: `F-${String(i + 1).padStart(3, '0')}`, severity: sev, title: text, state: p.open ? 'Open' : 'Fixed', act: 'audit-met', arg: k, open: st.auditMet.has(k), body: S.FieldText({ label: 'Location', chips: [S.Chip({ label: where.split('/').pop(), tip: where, act: 'open-file', arg: where })] }) }); }))]) : ''}</div>`).join('');
+      parts.push(secBlock(st, 'phase-results', { title: 'Phase results', body: `<div class="l-col g-4">${passes}${pr.audit ? `<div class="l-row g-2 t-sm"><b class="t-strong">Audit</b><span class="t-muted">${esc(pr.audit.verdict)}</span>${S.ExpandableText({ text: `· ${pr.audit.summary}`, cls: 't-faint' })}</div>` : ''}</div>` }));
     }
     if (!goal && it.specBundle) parts.push(secBlock(st, 'spec-bundle', { title: 'Spec bundle', body: S.Box(bundleOrder(it.specBundle).map((f) => S.TreeRow({ level: 0, file: true, lead: S.Icon(f.endsWith('.yaml') ? 'file' : 'fileText', 'sm'), title: fileName(f), meta: [], act: 'open-file', arg: f, rowIdx: -1 }))) }));
 
-    const props = (goal ? (subs ? inspectorPane(st, it) : finishResults(st, it)) : '') + executionPane(it) + runsPane(st, it) + (goal ? specFilesPane(it) : '');
 
     const header = S.ViewHeader({
       crumbs: [{ label: 'Work', act: 'nav', arg: 'work' }, sec ? { label: sec[1], act: 'section', arg: sec[0] } : { label: 'History', act: 'nav', arg: 'history' }, { label: rowKey(it) }],
       actions: [idx >= 0 ? S.Pager({ index: idx, total: liveList.length }) : '', it.refreshFailed ? S.StaleIndicator() : '', ...paneToggles(st), S.IconButton({ icon: 'panelRight', label: 'Toggle details', kbd: '⌘ I', act: 'toggle-props', on: st.propsOpen })],
     });
-    const body = `<div class="sb-split"><div class="sb-scroll" data-scroll="detail"><div class="sb-doc">${parts.join('')}</div></div>${pane ? `<aside class="sb-pane${goal ? ' sb-pane--wide' : ''}" aria-label="Details">${props}</aside>` : ''}</div>`;
+    const body = S.DetailSplit({ doc: parts.join(''), pane: pane ? detailsPanel(st, it) : '' });
     return workArea(st, header, body);
   }
 
@@ -1878,14 +2388,14 @@
     const list = D.history.filter((h) => (!kind || h.kind === kind) && matches(h, st.filter));
     const body = list.length ? S.GroupHeader({ label: `Finished within ${st.prefs.retention}`, count: list.length }) + list.map((h) => {
       const i = rows.push('item:' + h.id) - 1;
-      return S.ListRow({ id: h.kind === 'goal' ? h.id : h.label, status: S.StatusIcon(h.lifecycle === 'terminal' ? 'done' : h.lifecycle), title: h.title, sub: h.kind === 'goal' ? '' : h.kind === 'operation' ? 'operation' : 'standalone phase', meta: [`<span class="hide-sm">${repoLabel(h.repo)}</span>`, `<span class="tnum t-faint" style="font-size:var(--t-sm);width:56px;text-align:right">${S.fmtDur(h.ms)}</span>`], time: esc(h.at), act: 'open', arg: h.id, focus: st.focus === i, rowIdx: i });
+      return S.ListRow({ id: h.kind === 'goal' ? h.id : h.label, status: S.StatusIcon(h.lifecycle === 'terminal' ? 'done' : h.lifecycle), title: h.title, sub: h.kind === 'goal' ? '' : h.kind === 'operation' ? 'operation' : 'standalone phase', meta: [`<span class="hide-sm">${repoLabel(h.repo)}</span>`, `<span class="tnum t-faint t-sm">${S.fmtDur(h.ms)}</span>`], time: esc(h.at), act: 'open', arg: h.id, focus: st.focus === i, rowIdx: i });
     }).join('') : S.EmptyState({ icon: 'history', title: st.filter ? 'No matching work' : 'No finished work', body: st.filter ? null : `Nothing finished within ${st.prefs.retention}.` });
     const header = S.ViewHeader({
       crumbs: [{ label: 'History' }],
-      middle: `<div class="l-row g-3">${S.ViewTabs({ act: 'history-tab', value: st.historyTab, items: [{ id: 'all', label: 'All' }, { id: 'goals', label: 'Goals' }, { id: 'phases', label: 'Phases' }, { id: 'operations', label: 'Operations' }] })}<div style="width:200px">${S.Input({ id: 'history-filter', icon: 'search', placeholder: 'Filter history', value: st.filter, input: 'work-filter' })}</div></div>`,
+      middle: `<div class="l-row g-3">${S.ViewTabs({ act: 'history-tab', value: st.historyTab, items: [{ id: 'all', label: 'All' }, { id: 'goals', label: 'Goals' }, { id: 'phases', label: 'Phases' }, { id: 'operations', label: 'Operations' }] })}${S.Input({ id: 'history-filter', icon: 'search', placeholder: 'Filter history', value: st.filter, input: 'work-filter', width: '200px' })}</div>`,
       actions: paneToggles(st),
     });
-    return workArea(st, header, `<div class="sb-scroll" data-scroll="history">${body}</div>`);
+    return workArea(st, header, S.ScrollArea({ id: 'history', body }));
   }
 
   /* ---------- Specs pane (specs pane design, variant A "selection bar"; desktop feature/specs SpecsPane, SpecsTree,
@@ -1968,7 +2478,7 @@
       const muted = sp.run === 'canceled';
       specRows.push(path);
       out.push(S.TreeRow({ level, path, toggle: { act: 'spec-toggle', arg: path, label: `${open ? 'Collapse' : 'Expand'} ${sp.key}` }, open, focus: st.specSel === path, muted, lead: specIcon(sp), id: sp.key, title: sp.title, tip: sp.title, ctx: 'spec:' + path, act: 'spec-select', arg: path,
-        trail: `${muted ? '' : `<span class="n">${esc(specCount(sp))}</span>`}${S.IconButton({ icon: 'more', label: `${sp.key} actions`, act: 'spec-menu', arg: path, size: 'sm', cls: 'hover-only' })}`, rowIdx: -1 }));
+        count: muted ? null : specCount(sp), trail: `${S.IconButton({ icon: 'more', label: `${sp.key} actions`, act: 'spec-menu', arg: path, size: 'sm', cls: 'hover-only' })}`, rowIdx: -1 }));
       if (!open) return;
       const child = (sub, o) => { const p = `${path}/${sub}`; specRows.push(p); out.push(S.TreeRow(Object.assign({ level: level + 1, path: p, child: true, file: true, focus: st.specSel === p, ctx: 'spec:' + p, act: 'spec-select', arg: p, rowIdx: -1, meta: [] }, o))); };
       child('spec.md', { lead: S.Icon('fileText', 'sm'), title: 'spec.md' });
@@ -1981,7 +2491,7 @@
     if (done.length) {
       const open = st.specOpen.has('done') || !!q;
       specRows.push('done');
-      out.push(S.TreeRow({ level: 0, path: 'done', toggle: { act: 'spec-toggle', arg: 'done', label: `${open ? 'Collapse' : 'Expand'} done` }, open, focus: st.specSel === 'done', lead: S.Icon('folder', 'sm'), title: 'done', act: 'spec-select', arg: 'done', trail: `<span class="n">${done.length}</span>`, rowIdx: -1 }));
+      out.push(S.TreeRow({ level: 0, path: 'done', toggle: { act: 'spec-toggle', arg: 'done', label: `${open ? 'Collapse' : 'Expand'} done` }, open, focus: st.specSel === 'done', lead: S.Icon('folder', 'sm'), title: 'done', act: 'spec-select', arg: 'done', count: done.length, rowIdx: -1 }));
       if (open) done.forEach((sp) => bundleRows(sp, 1));
     }
     return out.join('');
@@ -2024,20 +2534,16 @@
     const sp = project.checkout && !project.problem ? specOf(st.specSel) : null;
     return S.SidePane({
       title: 'Specs',
-      head: `<button type="button" class="sb-pick" data-act="project-menu" aria-haspopup="menu">${S.RepoIcon(repoOf(project.name))}${esc(project.name)}${S.Icon('chevronDown')}</button>`,
+      head: S.PickerButton({ lead: S.RepoIcon(repoOf(project.name)), label: project.name, act: 'project-menu' }),
       actions: [S.IconButton({ icon: 'more', label: 'Panel actions', act: 'spec-panel-menu', size: 'sm' }), S.IconButton({ icon: 'x', label: 'Close specs pane', kbd: 'G S', act: 'specs-toggle', size: 'sm' })],
-      body: `<div class="sb-filters">${filters}</div><div class="sb-scroll" data-scroll="specs" data-zone="specs" tabindex="0" role="tree" aria-label="Specs">${body}</div>${sp ? specBar(st, sp) : ''}`,
+      bar: filters, body: S.ScrollArea({ id: 'specs', zone: 'specs', tabIndex: 0, role: 'tree', label: 'Specs', body }) + (sp ? specBar(st, sp) : ''),
     });
   }
 
   /* ---------- Terminal pane (feature/terminal) ---------- */
   function terminal(st) {
     const tab = st.termTabs.find((t) => t.id === st.termActive);
-    const body = tab && tab.log
-      ? tab.log.map(([c, t]) => (c ? `<span class="${c}">${esc(t)}</span>` : esc(t))).join('\n') + (tab.live ? '\n<span class="cur"></span>' : '')
-      : tab
-      ? `<span class="m">${esc(tab.directory)}</span>\n<span class="p">➜</span>  <span class="d">${esc(tab.name)}</span>${tab.branch ? ` <span class="b">(${esc(tab.branch)})</span>` : ''} <span class="cur"></span>`
-      : '';
+    const body = tab && tab.log ? S.ShellPrompt({ lines: tab.log, cursor: tab.live }) : tab ? S.ShellPrompt({ dir: tab.directory, name: tab.name, branch: tab.branch }) : '';
     if (!tab) return S.TerminalPane({ tabs: [], height: st.termHeight, body: S.EmptyState({ icon: 'terminal', title: 'No terminal tabs', actions: [S.Button({ label: 'New terminal tab', icon: 'plus', act: 'term-new' })] }) });
     return S.TerminalPane({ tabs: st.termTabs, activeId: st.termActive, renaming: st.termRenaming, height: st.termHeight, body });
   }
@@ -2049,7 +2555,7 @@
   ];
   function settingsNav(st) {
     return S.Sidebar({
-      top: `<div class="l-col g-2" style="padding:2px 0 8px">${S.Button({ label: 'Back to app', icon: 'arrowLeft', variant: 'ghost', act: 'settings-back', kbd: 'esc' })}</div>`,
+      top: `<div class="l-col g-2">${S.Button({ label: 'Back to app', icon: 'arrowLeft', variant: 'ghost', act: 'settings-back', kbd: 'esc' })}</div>`,
       items: SETTINGS_PAGES.map(([sec, pages]) => S.SidebarSection({ label: sec, items: pages.map(([id, icon, label]) => S.SidebarItem({ icon, label, on: st.settingsPage === id, act: 'settings-page', arg: id })) })),
       footer: [],
     });
@@ -2058,12 +2564,12 @@
     const page = st.settingsPage;
     const content = { general: setGeneral, notifications: setNotifications, models: setModels, compaction: setCompaction, project: setProject, telemetry: setTelemetry }[page](st);
     const label = SETTINGS_PAGES.flatMap((s) => s[1]).find((p) => p[0] === page)[2];
-    return S.ViewHeader({ crumbs: [{ label: 'Settings', act: 'settings-page', arg: 'general' }, { label }], actions: [] }) + `<div class="sb-scroll" data-scroll="settings"><div class="sb-set">${content}</div></div>`;
+    return S.ViewHeader({ crumbs: [{ label: 'Settings', act: 'settings-page', arg: 'general' }, { label }], actions: [] }) + S.ScrollArea({ id: 'settings', settings: true, body: content });
   }
   function setGeneral(st) {
     return S.SettingsHeader({ title: 'General', body: 'Where the app reads Sona’s work, which Claude account runs use, and how long finished work stays listed.' }) +
-      S.SettingsGroup({ title: 'Database', rows: [S.SettingRow({ stack: true, control: `<div class="l-col g-2" style="width:100%">${S.Field({ for: 'db-path', label: 'Database path, blank uses runtime default', control: `<div class="l-row g-2">${S.Input({ id: 'db-path', value: st.prefs.dbDraft, mono: true, placeholder: 'Runtime default', input: 'db-path' })}${S.Button({ label: 'Save settings', variant: 'primary', act: 'db-save', disabled: st.prefs.dbDraft === st.prefs.dbPath })}</div>` })}${st.prefs.dbDraft && !st.prefs.dbDraft.trim() ? S.Hint({ tone: 'error', text: 'The path is only spaces. Clear it to use the default.' }) : ''}${S.Hint({ text: `Current database: ${st.prefs.dbPath || '~/.skill-bill/review-metrics.db'}` })}</div>` })] }) +
-      S.SettingsGroup({ title: 'Claude account', rows: [S.SettingRow({ label: 'Claude config directory', desc: 'Runs started here use it as CLAUDE_CONFIG_DIR.', control: `<button type="button" class="sb-pick" data-act="claude-menu">${S.Icon('folder')}<span class="mono">${esc(st.prefs.claudeDir)}</span>${S.Icon('chevronDown')}</button>` })] }) +
+      S.SettingsGroup({ title: 'Database', rows: [S.SettingRow({ stack: true, control: `<div class="l-col g-2 l-fill">${S.Field({ for: 'db-path', label: 'Database path, blank uses runtime default', control: `<div class="l-row g-2">${S.Input({ id: 'db-path', value: st.prefs.dbDraft, mono: true, placeholder: 'Runtime default', input: 'db-path' })}${S.Button({ label: 'Save settings', variant: 'primary', act: 'db-save', disabled: st.prefs.dbDraft === st.prefs.dbPath })}</div>` })}${st.prefs.dbDraft && !st.prefs.dbDraft.trim() ? S.Hint({ tone: 'error', text: 'The path is only spaces. Clear it to use the default.' }) : ''}${S.Hint({ text: `Current database: ${st.prefs.dbPath || '~/.skill-bill/review-metrics.db'}` })}</div>` })] }) +
+      S.SettingsGroup({ title: 'Claude account', rows: [S.SettingRow({ label: 'Claude config directory', desc: 'Runs started here use it as CLAUDE_CONFIG_DIR.', control: S.PickerButton({ icon: 'folder', label: st.prefs.claudeDir, mono: true, act: 'claude-menu' }) })] }) +
       S.SettingsGroup({ title: 'History retention', rows: [S.SettingRow({ label: 'Keep finished work for', desc: 'How long History and the tray list finished work.', control: S.Segmented({ act: 'pref-retention', value: st.prefs.retention, items: ['6h', '24h', '7d'].map((x) => ({ id: x, label: x })) }) })] }) +
       S.SettingsGroup({ rows: [S.SettingRow({ label: 'Start at login', desc: 'Keeps the tray icon running in the background.', control: S.Toggle({ on: st.prefs.login, act: 'pref-toggle', arg: 'login', label: 'Start at login' }) })] });
   }
@@ -2082,7 +2588,7 @@
     const hasOverride = isPhase && !!st.matrix[st.agent].phases[d.target.id];
     const blank = !d.model.trim();
     return `${isPhase ? S.Field({ for: 'ed-tier', label: 'Tier', control: S.Segmented({ act: 'ed-tier', value: d.tier, items: [{ id: 'reasoning', label: 'Reasoning' }, { id: 'implementation', label: 'Implementation' }] }), help: 'Saved under execution_matrix.phase_tiers. It applies to every agent.' }) : ''}
-      <div class="l-row g-3 l-wrap l-top"><div class="l-grow" style="min-width:200px">${S.Field({ for: 'ed-model', label: 'Model', control: S.Input({ id: 'ed-model', value: d.model, mono: true, input: 'ed-model', error: blank }), help: blank ? 'A model is required. To drop an override, use Reset to tier.' : 'Passed to the agent as typed.' })}</div><div style="width:150px">${S.Field({ for: 'ed-effort', label: 'Effort', control: S.Input({ id: 'ed-effort', value: d.effort || '', mono: true, placeholder: 'unset', input: 'ed-effort' }), help: 'Optional.' })}</div></div>
+      <div class="l-row g-3 l-wrap l-top"><div class="l-grow">${S.Field({ for: 'ed-model', label: 'Model', control: S.Input({ id: 'ed-model', value: d.model, mono: true, input: 'ed-model', error: blank }), help: blank ? 'A model is required. To drop an override, use Reset to tier.' : 'Passed to the agent as typed.' })}</div>${S.Field({ width: '150px', for: 'ed-effort', label: 'Effort', control: S.Input({ id: 'ed-effort', value: d.effort || '', mono: true, placeholder: 'unset', input: 'ed-effort' }), help: 'Optional.' })}</div>
       <div class="l-row g-2 l-wrap">${S.Button({ label: 'Save', variant: 'primary', act: 'ed-save', disabled: blank, kbd: '⌘ ↵' })}${S.Button({ label: 'Cancel', variant: 'ghost', act: 'ed-cancel' })}<span class="l-grow"></span>${hasOverride ? S.Button({ label: 'Reset to tier', variant: 'ghost', icon: 'rerun', act: 'ed-reset' }) : ''}</div>`;
   }
   function setModels(st) {
@@ -2106,7 +2612,7 @@
   function fieldEditor(st, fields, removeLabel) {
     const d = st.draft;
     const err = d.error ? S.Hint({ tone: 'error', text: d.error }) : '';
-    return `${fields.map(([key, label]) => `<div style="width:140px">${S.Field({ for: 'ed-' + key, label, control: S.Input({ id: 'ed-' + key, value: d[key], mono: true, input: 'ed-field', error: !!d.error }) })}</div>`).join('')}${err}
+    return `${fields.map(([key, label]) => S.Field({ width: '140px', for: 'ed-' + key, label, control: S.Input({ id: 'ed-' + key, value: d[key], mono: true, input: 'ed-field', error: !!d.error }) })).join('')}${err}
       <div class="l-row g-2 l-wrap">${S.Button({ label: 'Save', variant: 'primary', act: 'ed-save', kbd: '⌘ ↵' })}${S.Button({ label: 'Cancel', variant: 'ghost', act: 'ed-cancel' })}<span class="l-grow"></span>${removeLabel ? S.Button({ label: removeLabel, variant: 'ghost', icon: 'trash', act: 'ed-remove' }) : ''}</div>`;
   }
   function setCompaction(st) {
@@ -2116,8 +2622,8 @@
     return S.SettingsHeader({ title: 'Compaction', body: 'Compacts an agent’s context before it fills. Saved as <span class="mono">compaction</span> in config.json.' }) +
       S.SettingsGroup({ rows: [
         S.SettingRow({ label: 'Compact long phases', desc: 'enabled · default on', control: S.Toggle({ on: c.enabled, act: 'cmp-toggle', label: 'Compact long phases' }) }),
-        S.SettingRow({ label: 'Context window', desc: 'window_tokens · default 400,000', control: `<div style="width:140px">${S.Input({ id: 'cmp-window', value: c.window.toLocaleString('en-US'), mono: true, input: 'cmp-window' })}</div>` }),
-        S.SettingRow({ stack: true, label: `Compact at ${c.pct}%`, desc: `trigger_pct · default 70 · compacts at ${trigger.toLocaleString('en-US')} tokens`, control: `<input type="range" class="sb-range" id="cmp-pct" min="1" max="100" step="1" value="${c.pct}" data-input="cmp-pct" aria-label="Compact at percent">${tooLow ? S.Hint({ tone: 'error', text: 'The trigger must be at least 200,000 tokens.' }) : ''}` }),
+        S.SettingRow({ label: 'Context window', desc: 'window_tokens · default 400,000', control: S.Input({ id: 'cmp-window', value: c.window.toLocaleString('en-US'), mono: true, input: 'cmp-window', width: '140px' }) }),
+        S.SettingRow({ stack: true, label: `Compact at ${c.pct}%`, desc: `trigger_pct · default 70 · compacts at ${trigger.toLocaleString('en-US')} tokens`, control: `${S.Range({ id: 'cmp-pct', min: 1, max: 100, value: c.pct, input: 'cmp-pct', label: 'Compact at percent' })}${tooLow ? S.Hint({ tone: 'error', text: 'The trigger must be at least 200,000 tokens.' }) : ''}` }),
       ] }) +
       S.SettingsGroup({ title: 'Per-phase overrides', end: [S.Button({ label: 'Add phase override', icon: 'plus', size: 'sm', act: 'toast', arg: 'Pick a phase to override' })], rows: Object.keys(c.phases).length
         ? Object.entries(c.phases).map(([id, o]) => { const k = 'cmpphase:' + id; return S.ConfigRow({ label: id, desc: `compaction.phases.${id}`, value: `${fmtCount(o.window)} tokens · ${o.pct}%`, override: true, open: st.cfgOpen === k, act: 'cfg-open', arg: k, tags: [], editor: st.cfgOpen === k ? fieldEditor(st, [['window', 'Context window'], ['pct', 'Trigger percent']], 'Remove override') : '' }); })
@@ -2128,10 +2634,10 @@
     const gw = st.prefs.gradleWrapper;
     const gwBad = gw && (gw.startsWith('/') || gw.split('/').some((s) => s === '..' || s === '.'));
     return S.SettingsHeader({ title: 'Project', body: `Settings in the project store’s <span class="mono">config.yaml</span> (<span class="mono">${esc(project.store.replace('/specs', ''))}</span>), plus the phase instructions committed in the repository.` }) +
-      `<div class="l-row g-2">${S.RepoIcon(repoOf(project.name))}<b style="font-weight:500">${esc(project.name)}</b><span class="l-grow"></span>${S.Button({ label: 'Open config.yaml', icon: 'external', size: 'sm', act: 'toast', arg: 'Opened config.yaml in your editor' })}</div>` +
+      `<div class="l-row g-2">${S.RepoIcon(repoOf(project.name))}<b class="t-strong">${esc(project.name)}</b><span class="l-grow"></span>${S.Button({ label: 'Open config.yaml', icon: 'external', size: 'sm', act: 'toast', arg: 'Opened config.yaml in your editor' })}</div>` +
       S.SettingsGroup({ rows: [
         S.SettingRow({ label: 'Spec source', desc: 'spec_type · default local', control: S.Segmented({ act: 'pref-spectype', value: st.prefs.specType, items: [{ id: 'local', label: 'Local files' }, { id: 'linear', label: 'Linear' }] }) }),
-        S.SettingRow({ stack: true, control: `<div class="l-col g-2" style="width:100%">${S.Field({ for: 'gradle', label: 'Gradle wrapper', control: S.Input({ id: 'gradle', value: gw, mono: true, placeholder: 'gradlew', input: 'gradle', error: gwBad }), help: 'validation_gate.gradle_wrapper. Repo-relative, no “.” or “..” segments. Leave empty to use the repository’s ./gradlew.' })}${gwBad ? S.Hint({ tone: 'error', text: 'Use a repo-relative path without “.” or “..” segments.' }) : ''}</div>` }),
+        S.SettingRow({ stack: true, control: `<div class="l-col g-2 l-fill">${S.Field({ for: 'gradle', label: 'Gradle wrapper', control: S.Input({ id: 'gradle', value: gw, mono: true, placeholder: 'gradlew', input: 'gradle', error: gwBad }), help: 'validation_gate.gradle_wrapper. Repo-relative, no “.” or “..” segments. Leave empty to use the repository’s ./gradlew.' })}${gwBad ? S.Hint({ tone: 'error', text: 'Use a repo-relative path without “.” or “..” segments.' }) : ''}</div>` }),
       ] }) +
       S.SettingsGroup({ title: 'Phase instructions', rows: [
         S.SettingRow({ labelHtml: '<span class="mono">.skill-bill/phases/review.md</span>', label: 'review.md', desc: '1.2 KiB of 16 KiB · read at launch for the review phase', control: S.Button({ label: 'Open', icon: 'external', size: 'sm', act: 'open-file', arg: '.skill-bill/phases/review.md' }) }),
@@ -2152,11 +2658,11 @@
     return S.SettingsHeader({ title: 'Telemetry and agents', body: 'Machine-wide settings in <span class="mono">~/.config/skill-bill/config.json</span>.' }) +
       S.SettingsGroup({ title: 'Telemetry', rows: [
         S.SettingRow({ label: 'Level', desc: 'telemetry.level · default anonymous', control: S.Segmented({ act: 'pref-telemetry', value: st.prefs.telemetry, items: [{ id: 'off', label: 'Off' }, { id: 'anonymous', label: 'Anonymous' }, { id: 'full', label: 'Full' }] }) }),
-        S.SettingRow({ label: 'Proxy URL', desc: 'telemetry.proxy_url · blank uses the default endpoint', control: `<div style="width:220px">${S.Input({ id: 'tel-proxy', value: '', mono: true, placeholder: 'default' })}</div>` }),
-        S.SettingRow({ label: 'Batch size', desc: 'telemetry.batch_size · default 50', control: `<div style="width:80px">${S.Input({ id: 'tel-batch', value: '50', mono: true })}</div>` }),
+        S.SettingRow({ label: 'Proxy URL', desc: 'telemetry.proxy_url · blank uses the default endpoint', control: S.Input({ id: 'tel-proxy', value: '', mono: true, placeholder: 'default', width: '220px' }) }),
+        S.SettingRow({ label: 'Batch size', desc: 'telemetry.batch_size · default 50', control: S.Input({ id: 'tel-batch', value: '50', mono: true, width: '80px' }) }),
       ] }) +
       S.SettingsGroup({ title: 'Agents', end: [S.Label({ text: 'read-only', dot: false })], rows: [agent('claude', true), agent('codex', true), agent('cursor', true), agent('junie', false)] }) +
-      S.SettingsGroup({ title: 'Files', rows: ['~/.config/skill-bill/config.json', '~/.skill-bill/install-selection.json'].map((f) => S.SettingRow({ labelHtml: `<span class="mono" style="font-size:var(--t-sm)">${f}</span>`, label: f, control: S.Button({ label: 'Open', icon: 'external', size: 'sm', act: 'open-file', arg: f }) })) });
+      S.SettingsGroup({ title: 'Files', rows: ['~/.config/skill-bill/config.json', '~/.skill-bill/install-selection.json'].map((f) => S.SettingRow({ labelHtml: `<span class="mono t-sm">${f}</span>`, label: f, control: S.Button({ label: 'Open', icon: 'external', size: 'sm', act: 'open-file', arg: f }) })) });
   }
 
   /* ---------- New task (desktop feature/chat newtask) ---------- */
@@ -2169,11 +2675,11 @@
   const chatEmpty = (c) => !c.lines.length && !c.stream;
   const chatAgo = (m) => (m < 1 ? 'now' : m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m / 60)}h` : m < 2880 ? '1d' : `${Math.floor(m / 1440)}d`);
   const agentModel = (a) => (D.MATRIX[a] ? D.MATRIX[a].reasoning.model : null);
-  const agentDot = (a) => `<i class="sb-dot" style="--c:${agentOf(a).color}"></i>`;
+  const agentDot = (a) => S.Dot(agentOf(a).color);
   const defaultBranch = (repo) => (D.REPO_BRANCHES[repo] || {}).defaultBranch || '';
   const baseBranch = (c) => c.branch || defaultBranch(c.repo);
   const isOpenChat = (st, session) => st.nt.chats.some((c) => c.session === session);
-  const repoAndBranch = (repo, branch) => `${esc(repo)} <span class="faint">/</span> ${esc(branch)}`;
+  const repoAndBranch = (repo, branch) => `${esc(repo)} <span class="t-faint">/</span> ${esc(branch)}`;
 
   /* Send, Queue while a reply runs, or Send now when the draft is empty and messages wait (NewTaskComposer). */
   function ntPrimary(c) {
@@ -2236,7 +2742,7 @@
     const chg = chatChanges(c);
     const agentPill = S.ChatPill({ lead: agentDot(c.agent), text: model ? `${c.agent} · ${model}` : c.agent, chevron: 'chevronDown', act: 'nt-agent-menu', expanded: pop.type === 'nt-agent', disabled: !!c.stream, tip: c.stream ? 'Wait for the current reply to finish' : 'Change agent' });
     const warning = c.branchIntent && c.currentBranch !== defaultBranch(c.repo) && !c.branch
-      ? `<div class="nt-branch-warning" role="status">${S.Callout({ tone: 'warn', body: `This checkout is on ${esc(c.currentBranch)}. New work normally starts from ${esc(defaultBranch(c.repo))}. Switch to ${esc(defaultBranch(c.repo))} or explicitly use ${esc(c.currentBranch)} as the base branch before starting.` })}<div class="l-row g-2" style="flex-wrap:wrap">${S.Button({ label: `Switch to ${defaultBranch(c.repo)}`, size: 'sm', act: 'chat-default-branch', disabled: !!c.stream })}${S.Button({ label: 'Use current branch as base', size: 'sm', act: 'chat-current-base', disabled: !!c.stream })}</div></div>` : '';
+      ? `<div class="l-col g-2" role="status">${S.Callout({ tone: 'warn', body: `This checkout is on ${esc(c.currentBranch)}. New work normally starts from ${esc(defaultBranch(c.repo))}. Switch to ${esc(defaultBranch(c.repo))} or explicitly use ${esc(c.currentBranch)} as the base branch before starting.` })}<div class="l-row g-2 l-wrap">${S.Button({ label: `Switch to ${defaultBranch(c.repo)}`, size: 'sm', act: 'chat-default-branch', disabled: !!c.stream })}${S.Button({ label: 'Use current branch as base', size: 'sm', act: 'chat-current-base', disabled: !!c.stream })}</div></div>` : '';
     return warning + S.Composer({
       id: 'composer-' + c.id, chatId: c.id, value: c.draft, label: `Message for ${chatLabel(c)}`,
       placeholder: empty ? 'Describe the work, or paste an issue key or spec path' : `Reply to ${c.agent}`,
@@ -2376,27 +2882,24 @@
   }
   const resumePalette = (st) => resumePaletteView({ repo: ntChat(st).repo, saved: st.nt.saved, q: st.dialog.q, active: st.dialog.active, showAll: st.dialog.showAll });
 
-  function changesWindow(view) {
-    const model = window.DesignFlow.changesFor(view.work);
-    return `<div class="sb-changes-layer"><section class="sb-changes-dialog" role="dialog" aria-modal="true" aria-labelledby="changes-title"><header class="sb-changes-header"><div><h2 id="changes-title">Changes</h2><span class="t-muted">${esc(model.goal)}</span></div><span class="l-grow"></span><span class="t-faint">Hover a diff line to add a review comment</span>${S.Button({ label: 'Close changes', icon: 'x', act: 'changes-close', id: 'changes-close' })}</header><sb-design-surface screen="changes" embedded="window" work="${esc(view.work)}"${view.scope ? ` scope="${esc(JSON.stringify(view.scope))}"` : ''}${view.file ? ` file="${esc(view.file)}"` : ''}></sb-design-surface></section></div>`;
-  }
-
+  /* The Changes window and Diff comments catalog pages: the same window as in the app, inline, over the SKILL-512 run or
+   * the SKILL-474 review sample with one of its four scenarios. */
   function designSurface(st) {
-    const labels = { activity: 'Recorded activity', changes: 'Changes window', comments: 'Diff comments' };
-    const scenarios = { activity: ['real', 'one', 'running', 'long', 'phase'], changes: [], comments: ['1', '2', '3', '4'] };
-    const scenario = scenarios[st.view].includes(st.surfaceScenario) ? st.surfaceScenario : '';
-    const controls = Object.entries(labels).map(([id, label]) => S.Button({ label, act: 'surface', arg: id, variant: st.view === id ? 'primary' : 'ghost', size: 'sm' }));
-    return `<div class="sb-surface-page"><div class="sb-surface-nav">${S.Button({ label: 'Back to work', icon: 'arrowLeft', act: 'nav', arg: 'work', variant: 'ghost', size: 'sm' })}<span class="l-grow"></span>${controls.join('')}</div><div class="sb-surface-intro"><h1>${labels[st.view]}</h1><p>Interactive sample records. These examples do not change files or start runs.</p></div><div class="sb-surface-scroll" data-scroll="surface"><sb-design-surface screen="${st.view}" scenario="${esc(scenario)}"></sb-design-surface></div></div>`;
+    const scenario = ['1', '2', '3', '4'].includes(st.surfaceScenario) ? st.surfaceScenario : '1';
+    const header = S.ViewHeader({ crumbs: [{ label: 'Work', act: 'nav', arg: 'work' }, { label: st.view === 'comments' ? 'Diff comments' : 'Changes window' }],
+      middle: S.Segmented({ act: 'surface-page', value: st.view === 'comments' ? `comments/${scenario}` : 'changes', items: [{ id: 'changes', label: 'Changes window' }, ...['Writing a review', 'Review added', 'After phase:review', 'After pr-review-fix'].map((label, i) => ({ id: `comments/${i + 1}`, label: `${i + 1} · ${label}` }))] }), actions: [] });
+    const view = st.view === 'comments' ? { work: 'review-sample', inline: true, seed: window.Review.scenarioSeed(scenario) } : { work: 'SKILL-512', inline: true };
+    return workArea(st, header, S.ScrollArea({ id: 'surface', body: window.Review.changesWindow(st, view) }));
   }
 
   /* ---------- page ---------- */
   function app(st) {
-    const views = { work, detail, history, settings: settingsPage, newtask: newTask, activity: designSurface, changes: designSurface, comments: designSurface };
+    const views = { work, detail, history, settings: settingsPage, newtask: newTask, changes: designSurface, comments: designSurface };
     return shell(st, (views[st.view] || work)(st));
   }
 
   window.Screens = {
-    subPhaseStates, finishStates, buildOf, app, work, detail, history, changesWindow, settingsPage, specsPane, terminal, tierOf, lookup, itemBy, subKeys, selectedSub, paneShown,
+    subPhaseStates, finishStates, buildOf, app, work, detail, history, settingsPage, specsPane, terminal, tierOf, lookup, itemBy, subKeys, selectedSub, paneShown, PANE_MIN, paneWidth, activityGroups,
     statusIcon, stepText, clock, rowKey, repoOf, agentOf, LIFE, SECTIONS, resumable, controllable, pauseEligible, recoveryOffered,
     newTask, ntChat, chatLabel, chatStatus, chatEmpty, ntSendButton, pickerItems, targetPicker, targetPickerView, chatMenu, chatTabMenu, queuePanel, chatChanges, changesPanel,
     resumeListing, resumePalette, resumePaletteView,

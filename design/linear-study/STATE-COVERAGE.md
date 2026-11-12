@@ -32,7 +32,7 @@ The catalog includes the existing plan, validation, QA and Verify scenarios. It 
 
 Nine "Goal QA live" rows cover goal QA while it runs, one per scenario: preparing the checkout, Compose UI tests, display up with no window, live, display restarting, restarted without capture, no display, round 2 after a fix, and finished. Each opens Goal finish on the qa phase card.
 
-Goal links ending in `/finish/qa` or `/finish/assessment` select Goal finish and open the qa or goal_assessment phase card; `/<subtask id or finish>/<phase>` opens any phase card. The wide pane shows the selected card before Execution, Runs and fixes, and spec files. The main document does not repeat it. When the pane is unavailable, the selected row shows the same tabs and card inline.
+Goal links ending in `/finish/qa` or `/finish/assessment` select Goal finish and open the qa or goal_assessment phase card; `/<subtask id or finish>/<phase>` opens any phase card. The details panel opens on the selected card, before Execution, Runs and fixes, and spec files. The main document does not repeat it. Subtask rows never expand; the panel floats over the document at every width.
 
 Phase peek rows (design/phase-peek): Subtask blocked at validate, and Goal finish with QA running, qa_fix running, validate running, monitor cycle 2 and done. SKILL-417 subtasks 01 and 02 carry phase cards on the board.
 
@@ -52,7 +52,7 @@ Duplicate standalone mocks have been removed. Activity, Changes window and Diff 
 
 ## Verification
 
-Browser verification uses Chromium at 1440 by 1000, with a 900 px check for the inline Goal finish result. All 187 links in States passed checks for lookup identity, detail rendering, popup presence, and missing values such as undefined or NaN. Assessment / QA switching, absence of duplicate goal results in the main document, and the inline narrow layout also passed. The checked routes had no JavaScript errors or horizontal overflow.
+Browser verification used Chromium at 1440 by 1000, with a 900 px check for the inline Goal finish result. The 2026-11-12 revision removed that inline layout; it was rechecked on INF-7 and SKILL-416 at 1440, 900 and 700 px with the panel open and closed, plus the Components and States pages, with no JavaScript errors. All 187 links in States passed checks for lookup identity, detail rendering, popup presence, and missing values such as undefined or NaN. Assessment / QA switching, absence of duplicate goal results in the main document, and the inline narrow layout also passed. The checked routes had no JavaScript errors or horizontal overflow.
 
 A separate New task interaction check covers queue removal and Undo, clear confirmation, Send now and Stop, picker keyboard navigation and filtering, resume filtering and preview, tab close and Reopen, saved-chat discard and Undo, command menu and navigation.
 
@@ -61,6 +61,8 @@ Components and Foundations rendered through their full scroll heights without Ja
 These checks verify prototype behavior and browser layout. They do not prove pixel parity with a running Compose app. No desktop build or runtime run was launched for this pass.
 
 ## Integrated Activity and Changes coverage
+
+Revised 2026-11-12: Activity, the Changes window and Diff comments no longer embed the imported static views; they are composed from design system components and read item data. Activity examples are item details (SKILL-512 recorded run, SKILL-417 running, INF-7 blocked with loops, ph-rk-review standalone). Interaction checks on the rebuilt views in headless Chromium covered: scope by column, Shift-click range, ] and [, the subtask picker with its filter and Escape, A, the file filter, J and N, adding a comment with + and with C on the hovered line, ⌘↵ to add it to the review, Add review, reply, resolve and the folded thread, delete with confirmation, Escape closing the composer and the window, the running-subtask row, and opening the window from a chat file and from Verify. None threw an error. The text below describes the earlier imported views.
 
 The States catalog now includes five Activity scenarios, a scoped Changes window example and four Diff comments scenarios. Normal Work navigation embeds Activity in the selected goal detail. Its Changes overview and header open a context-specific Changes window, with comments on the selected file's diff. Chat and Verify open that same window with their own context. The catalog retains the original historical and synthetic records for comparison.
 

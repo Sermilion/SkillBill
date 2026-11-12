@@ -42,11 +42,11 @@ Read [Runtime command guidance](docs/runtime-command-guidance.md) before runtime
 
 ## Linear work tracking
 
-Track work in Linear under the `SONA` team. Let Linear assign issue keys; never mint or reserve local substitutes.
+Track repository work in Linear under `SONA`, except direct tasks explicitly requested on `main`; do not create issues for those. Let Linear assign complete keys. Never mint or reserve local keys.
 
-Use this repository's `linear-sona` MCP connection from `.codex/config.toml`. Verify its workspace and team. Use another connection only when the operator instructs you to.
+Use `.codex/config.toml`'s `linear-sona` connection. Verify its workspace and team. Switch connections only on operator instruction.
 
-Before each goal, verify the connection and issue. Confirm the issue exists in the intended workspace and team. Resolve auth, access, or team problems before launch. Chat prep does not start a goal or reserve a key.
+Before each goal, verify its issue in that workspace/team. Resolve access problems before launch. Chat prep does not launch goals or reserve keys.
 
 Use `SONA` only for new work; preserve historical run identities, keys, specs, and history.
 
