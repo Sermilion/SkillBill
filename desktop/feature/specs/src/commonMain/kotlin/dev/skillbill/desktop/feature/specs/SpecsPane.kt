@@ -78,6 +78,7 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
   val shellInput = LocalShellInput.current
   DisposableEffect(shellInput) { onDispose { shellInput.setFocusSource(ShellInput.SPECS_BAR_SOURCE, false) } }
   val filterFocusRequester = remember { FocusRequester() }
+  var searchText by remember(state.searchOpen) { mutableStateOf(state.filterText) }
   var navigateTree by remember { mutableStateOf<(Int) -> Boolean>({ false }) }
   var focusTreeSelection by remember { mutableStateOf<() -> Boolean>({ false }) }
   var previousSearchOpen by remember { mutableStateOf(state.searchOpen) }
@@ -166,7 +167,10 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
     ) {
       Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         if (state.searchOpen || state.filterText.isNotEmpty()) {
-          SbInput(state.filterText, { onAction(SpecsAction.FilterChanged(it)) }, Modifier.weight(1f).focusRequester(filterFocusRequester).gatesShortcutsWhileFocused(), placeholder = FILTER_HINT, leadingIcon = LucideIcons.search)
+          SbInput(searchText, {
+            searchText = it
+            onAction(SpecsAction.FilterChanged(it))
+          }, Modifier.weight(1f).focusRequester(filterFocusRequester).gatesShortcutsWhileFocused(), placeholder = FILTER_HINT, leadingIcon = LucideIcons.search)
           SbIconButton(LucideIcons.x, "Clear filters", { onAction(SpecsAction.ClearFilters) }, size = SbControlSize.Small)
         } else {
           Spacer(Modifier.weight(1f))
