@@ -600,7 +600,7 @@ private fun recoverRetainedRepairCandidate(
 ): FeasibilityLaunchRecovery {
   val violation = retainedRepairCandidateViolation(context, recovery, candidate)
   if (violation != null) return blockInterruptedLaunch(context, run, recovery, violation)
-  if (retained.value.lineSequence().firstOrNull() != PlanBundleFeasibility.REPAIRED) {
+  if (!PlanBundleFeasibility.reportsRepaired(retained.value)) {
     return refuseRetainedLaunch(
       context,
       run,

@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.phase.planning
 
+import skillbill.engine.featuretask.runloop.attempt.blockedReason
 import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionDependency
@@ -349,6 +350,40 @@ class PlanBundleFeasibilityTest {
     )
     val approved = approvedState(snapshot, record(approval(snapshot)))
     assertNull(reopenBlockedPlanBundleFeasibilityCycle(approved, "cycle-2", 1, blockedRecord))
+  }
+
+  @Test
+  fun `repaired header accepts prose after the marker and rejects other first lines`() {
+    val accepted =
+      listOf(
+        "bundle-feasibility-v2: repaired",
+        "bundle-feasibility-v2: repaired  \nConflict 1.3 now locates flavored metadata.",
+        "bundle-feasibility-v2: repaired. Updated pending subtasks 1, 2 and 3.",
+      )
+    val refused =
+      listOf(
+        "",
+        "Repaired the bundle.\nbundle-feasibility-v2: repaired",
+        "bundle-feasibility-v2: repairedness",
+        "bundle-feasibility-v2: repaired-partially",
+        "bundle-feasibility-v2: approved ${snapshot().fingerprint}",
+      )
+    accepted.forEach { assertTrue(PlanBundleFeasibility.reportsRepaired(it), it) }
+    refused.forEach { assertFalse(PlanBundleFeasibility.reportsRepaired(it), it) }
+  }
+
+  @Test
+  fun `blocked reason after an operator retry omits the previous cycle safety block`() {
+    val snapshot = snapshot()
+    val blockedRecord = record(approval(snapshot)).copy(status = WorkflowStepStatus.BLOCKED, attemptCount = 4)
+    val blocked = blockedReviewState(snapshot, "The repository HEAD changed during feasibility work.")
+    assertTrue(blocked.blockedReason().contains("Safety block: The repository HEAD changed"))
+
+    val reopened =
+      assertNotNull(reopenBlockedPlanBundleFeasibilityCycle(blocked, "cycle-retry-7", 7, blockedRecord))
+    val reblocked = reopened.copy(mode = PlanBundleFeasibilityMode.BLOCKED)
+
+    assertFalse(reblocked.blockedReason().contains("Safety block"))
   }
 
   @Test
