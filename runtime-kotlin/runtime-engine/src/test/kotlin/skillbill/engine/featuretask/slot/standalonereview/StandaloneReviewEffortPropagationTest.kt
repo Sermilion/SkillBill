@@ -16,8 +16,8 @@ import skillbill.engine.featuretask.runner.committedRepoBranchSetup
 import skillbill.engine.featuretask.runner.defaultPhaseOutput
 import skillbill.engine.featuretask.runner.facts
 import skillbill.engine.featuretask.runner.telemetryRunnerHarness
-import skillbill.engine.featuretask.slot.codereview.DELEGATED_SPECIALIST_ISSUE_KEY
 import skillbill.engine.featuretask.slot.codereview.DELEGATED_REVIEWED_PATH
+import skillbill.engine.featuretask.slot.codereview.DELEGATED_SPECIALIST_ISSUE_KEY
 import skillbill.engine.featuretask.slot.codereview.LaneScript
 import skillbill.engine.featuretask.slot.codereview.scriptedDelegatedReviewRunner
 import skillbill.engine.featuretask.slot.scriptedReviewPhaseRunner
@@ -28,7 +28,6 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
 import java.nio.file.Files
-import java.nio.file.Path
 import java.time.Clock
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -61,10 +60,23 @@ class StandaloneReviewEffortPropagationTest {
             seedDurableWorkflow = false,
             branchSetup = BranchSetupTestConfig(gitOperations = git),
             repoRoot = repoRoot,
-            launcher = RuntimeRecordingLauncher { request -> facts(defaultPhaseOutput(request)) },
-            agentAssignment = FeatureTaskRuntimeAgentAssignment(
-              perPhaseAgentIds = mapOf(PHASE_REVIEW to SupportedAgent.OPENCODE.id),
-            ),
+            launcher =
+              RuntimeRecordingLauncher { request ->
+                val output =
+                  if (request.skillRunRequest.promptOverride.orEmpty().startsWith(
+                      "Independently verify each finding",
+                    )
+                  ) {
+                    "W-001: complete"
+                  } else {
+                    defaultPhaseOutput(request)
+                  }
+                facts(output)
+              },
+            agentAssignment =
+              FeatureTaskRuntimeAgentAssignment(
+                perPhaseAgentIds = mapOf(PHASE_REVIEW to SupportedAgent.OPENCODE.id),
+              ),
             reviewRunner = scriptedReviewPhaseRunner { error("delegated review must not use the inline runner") },
             delegatedReviewRunner =
               scriptedDelegatedReviewRunner(

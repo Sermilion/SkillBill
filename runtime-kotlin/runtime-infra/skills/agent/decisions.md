@@ -1,3 +1,18 @@
+## [2026-11-12] Preserve OpenCode configuration and managed ownership
+Context: OpenCode stores MCP settings in JSON/JSONC, and native-agent paths can contain user replacements.
+Decision: Edit and validate only the managed subtree, recheck before atomic publication, and require recorded identity and target ownership for removal. Journal native-agent link mutations and preserve unrelated providers.
+Reason: Generic reserialization loses comments and unrelated settings. A name or cache path alone does not prove ownership, and independent filesystem publications are not one transaction.
+
+## [2026-11-12] Map neutral capabilities to OpenCode permissions
+Context: OpenCode specialists need primary mode and provider-specific permission keys, while neutral sources declare capabilities.
+Decision: Map declared capabilities to exact permissions after default denial, reject unmapped capabilities, and omit model and variant directives. Sources without tool declarations retain host defaults.
+Reason: Exact keys preserve declared authority without granting every MCP tool. An invented model would override execution selection, and rendered permissions alone do not prove review isolation.
+
+## [2026-11-12] Keep the additive OpenCode inventory extension at version 0.2
+Context: Native-agent inventory adds an OpenCode provider without new required fields or changed record meaning.
+Decision: Extend the provider enum in schema 0.2 and retain existing migration steps.
+Reason: Existing populated 0.2 records satisfy the extended contract, so a version bump or rewrite would add no required transformation.
+
 # Boundary decisions
 
 ## [2026-10-09] Stage optional code-quality idioms only from review baselines

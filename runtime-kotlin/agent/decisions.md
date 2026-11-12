@@ -1,3 +1,15 @@
+## [2026-11-12] Use acknowledged ACP for OpenCode runtime execution
+Context: OpenCode needs headless runtime execution with actual model and effort consumption, approvals and complete capture.
+Decision: Reuse ACP session, approval and process owners, acknowledge advertised configuration before prompting, and retain the runtime continuation wrapper. Require matching durable settlement when the launched prompt requests it.
+Reason: A registered command or transport completion cannot establish that the selected configuration reached the provider or grant workflow authority. Prompt-derived settlement preserves repair turns that do not settle.
+Revisit when: Live provider QA establishes sustained execution and cancellation or OpenCode changes ACP configuration.
+Scope: This replaces only the OpenCode product-exclusion conclusion in the 2026-08-09 runtime-only engine decision. Its rejected-driver rationale, zcode removal and legacy-data quarantine remain relevant.
+
+## [2026-11-12] Retain OpenCode identity without persisting inline configuration
+Context: Resumed work must retain its admitted profile and model assignment even when environment or defaults change.
+Decision: Persist optional identity facts and the presence and fingerprint of inline configuration, keeping its contents ephemeral. Acquire advertised choices through a temporary ACP setup session without prompting.
+Reason: Persisting inline content could copy credentials. Reselecting defaults could redirect admitted work, and the editor needs current provider choices before saving directives.
+
 ## [2026-11-09] Map Cursor CLI model slugs to the advertised ACP variant
 Context: Cursor `--list-models` and `execution_matrix` use slugs such as `composer-2.5` and `cursor-grok-4.6-high`. ACP `session/new` advertises one parameterized value per base (`composer-2.5[fast=true]`) and accepts only those exact strings. Exact-match selection stopped the session before the prompt.
 Decision: `resolveAcpModel` uses an exact advertised value when present. Otherwise it strips the `cursor-` prefix, treats `auto` as `default`, and peels trailing effort or speed tokens until a base has exactly one advertised variant. Ambiguous and unknown bases stay unresolved and still stop. `session/set_config_option` and `session/set_model` send that selected variant, not the original slug. Tests pin the 2026-11-09 `session/new` advertised set.

@@ -71,20 +71,24 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
       val reapplied = port.linkNativeAgents(request)
       assertTrue(reapplied.outcome.skipped.any { it.path == replacementLink })
       assertEquals(
-        originalEntries.filter { it.installedPath == replacementLink },
+        originalEntries,
         NativeAgentLinkInventory.read(fixture.home, listOf(cacheRoot), fixture.repoRoot),
       )
 
       port.linkNativeAgents(request.copy(linkRequest = request.linkRequest.copy(selectedPlatforms = emptyList())))
-      assertEquals(
-        originalEntries.filter { it.installedPath == replacementLink },
-        NativeAgentLinkInventory.read(fixture.home, listOf(cacheRoot), fixture.repoRoot),
-      )
+      val remainingEntries = NativeAgentLinkInventory.read(fixture.home, listOf(cacheRoot), fixture.repoRoot)
+      assertTrue(remainingEntries.any { it.installedPath == replacementLink })
+      assertTrue(remainingEntries.none { it.logicalName.startsWith("bill-kotlin-") })
 
       val result = port.unlinkNativeAgents(request)
 
       assertEquals(listOf(replacement), result.retainedPaths)
-      assertEquals(linked.drop(1).toSet(), result.unlinked.toSet())
+      assertEquals(
+        remainingEntries.map {
+          it.installedPath
+        }.filterNot { it == replacementLink }.toSet(),
+        result.unlinked.toSet(),
+      )
       result.unlinked.forEach { link -> assertFalse(Files.exists(link, LinkOption.NOFOLLOW_LINKS)) }
       assertEquals(replacement, readSymlinkTarget(replacementLink))
       assertEquals("user-owned replacement", Files.readString(replacementLink))

@@ -216,7 +216,7 @@ class CursorAcpSessionTest {
 
   @Test
   fun `all providers fail end turn without live assistant text`() {
-    for (provider in AcpProvider.values()) {
+    for (provider in listOf(AcpProvider.Cursor, AcpProvider.Junie, AcpProvider.OpenCode)) {
       for (content in listOf("", "   ", null)) {
         val harness = Harness(saved = "saved-session".takeIf { provider == AcpProvider.OpenCode }, provider = provider)
         val promptId = harness.startPrompt()
@@ -224,8 +224,12 @@ class CursorAcpSessionTest {
         if (content == null) harness.toolCall()
         harness.session.observe("""{"jsonrpc":"2.0","id":$promptId,"result":{"stopReason":"end_turn"}}""")
 
-        assertContains(harness.session.outcome()?.failure.orEmpty(), "without assistant text", "$provider content=$content")
-        assertContains(harness.records.toString(), "empty_assistant_response", "$provider content=$content")
+        assertContains(
+          harness.session.outcome()?.failure.orEmpty(),
+          "without assistant text",
+          message = "$provider content=$content",
+        )
+        assertContains(harness.records.toString(), "empty_assistant_response", message = "$provider content=$content")
         harness.session.close()
       }
     }
@@ -237,11 +241,13 @@ class CursorAcpSessionTest {
     harness.session.start()
     harness.respond("""{"protocolVersion":1,"agentCapabilities":{"loadSession":true}}""")
     harness.respond(
-      """{"sessionId":"saved-session","configOptions":[{"id":"mode","category":"mode","currentValue":"build","options":[{"value":"build"}]}]}""",
+      """{"sessionId":"saved-session","configOptions":[{"id":"mode","category":"mode",""" +
+        """"currentValue":"build","options":[{"value":"build"}]}]}""",
     )
     harness.text("replayed", sessionId = "saved-session")
     harness.respond(
-      """{"configOptions":[{"id":"mode","category":"mode","currentValue":"build","options":[{"value":"build"}]}]}""",
+      """{"configOptions":[{"id":"mode","category":"mode","currentValue":"build",""" +
+        """"options":[{"value":"build"}]}]}""",
     )
     val promptId = harness.frames.last()[CursorAcpKeys.ID]
     harness.session.observe("""{"jsonrpc":"2.0","id":$promptId,"result":{"stopReason":"end_turn"}}""")
@@ -267,7 +273,7 @@ class CursorAcpSessionTest {
 
   @Test
   fun `protocol failure after partial text remains a failure`() {
-    for (provider in AcpProvider.values()) {
+    for (provider in listOf(AcpProvider.Cursor, AcpProvider.Junie, AcpProvider.OpenCode)) {
       val harness = Harness(provider = provider)
       val promptId = harness.startPrompt()
       harness.text("partial answer")
@@ -275,7 +281,7 @@ class CursorAcpSessionTest {
         """{"jsonrpc":"2.0","id":$promptId,"error":{"code":-32001,"message":"provider failed"}}""",
       )
 
-      assertContains(harness.session.outcome()?.failure.orEmpty(), "provider failed", "$provider")
+      assertContains(harness.session.outcome()?.failure.orEmpty(), "provider failed", message = "$provider")
       assertEquals("partial answer", harness.session.outcome()?.text)
       harness.session.close()
     }
@@ -599,7 +605,7 @@ class CursorAcpSessionTest {
     private val saved: String? = null,
     model: String? = null,
     dependency: CursorAcpMcpDependency = CursorAcpMcpDependency.ProjectUserOnly,
-    provider: AcpProvider = AcpProvider.Cursor,
+    private val provider: AcpProvider = AcpProvider.Cursor,
     bindOwner: Boolean = true,
     effort: String? = null,
     mcpServers: List<CursorAcpMcpServer> = emptyList(),
@@ -666,27 +672,44 @@ class CursorAcpSessionTest {
         }
         AcpProvider.OpenCode -> {
           session.start()
-          respond("""{"protocolVersion":1,"agentCapabilities":{${if (saved != null) "\"loadSession\":true" else ""}}}""")
+          respond(
+            """{"protocolVersion":1,"agentCapabilities":{${if (saved != null) "\"loadSession\":true" else ""}}}""",
+          )
           if (saved != null) {
-            respond("""{"sessionId":"$saved","configOptions":[{"id":"mode","category":"mode","currentValue":"build","options":[{"value":"build"}]}]}""")
+            respond(
+              """{"sessionId":"$saved","configOptions":[{"id":"mode","category":"mode",""" +
+                """"currentValue":"build","options":[{"value":"build"}]}]}""",
+            )
           } else {
-            respond("""{"sessionId":"s","configOptions":[{"id":"mode","category":"mode","currentValue":"build","options":[{"value":"build"}]}]}""")
+            respond(
+              """{"sessionId":"s","configOptions":[{"id":"mode","category":"mode",""" +
+                """"currentValue":"build","options":[{"value":"build"}]}]}""",
+            )
           }
-          respond("""{"configOptions":[{"id":"mode","category":"mode","currentValue":"build","options":[{"value":"build"}]}]}""")
+          respond(
+            """{"configOptions":[{"id":"mode","category":"mode","currentValue":"build",""" +
+              """"options":[{"value":"build"}]}]}""",
+          )
         }
+        else -> error("Unsupported provider: $provider")
       }
       return frames.last()[CursorAcpKeys.ID] as JsonPrimitive
     }
 
-    fun text(value: String, sessionId: String = saved ?: "s") {
+    fun text(
+      value: String,
+      sessionId: String = saved ?: "s",
+    ) {
       session.observe(
-        """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"$sessionId","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"$value"}}}}""",
+        """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"$sessionId",""" +
+          """"update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"$value"}}}}""",
       )
     }
 
     fun toolCall() {
       session.observe(
-        """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"${saved ?: "s"}","update":{"sessionUpdate":"tool_call","toolCallId":"tool-1"}}}""",
+        """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"${saved ?: "s"}",""" +
+          """"update":{"sessionUpdate":"tool_call","toolCallId":"tool-1"}}}""",
       )
     }
 

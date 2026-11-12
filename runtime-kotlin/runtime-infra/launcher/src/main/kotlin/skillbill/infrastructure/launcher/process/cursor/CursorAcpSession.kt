@@ -194,14 +194,15 @@ class CursorAcpSession(
       K.SESSION_SET_MODE -> prompt()
       K.SESSION_PROMPT -> {
         val reason = body.text(K.STOP_REASON)
-        val failure = providerFailure ?: when {
-          reason != "end_turn" -> "$providerName prompt ended with $reason."
-          textSnapshot().isBlank() -> {
-            record("seam=$seam outcome=empty_assistant_response")
-            "$providerName prompt ended without assistant text."
+        val failure =
+          providerFailure ?: when {
+            reason != "end_turn" -> "$providerName prompt ended with $reason."
+            textSnapshot().isBlank() -> {
+              record("seam=$seam outcome=empty_assistant_response")
+              "$providerName prompt ended without assistant text."
+            }
+            else -> null
           }
-          else -> null
-        }
         finish(failure)
       }
     }

@@ -232,7 +232,19 @@ private class LocalUninstallPathsPort : UninstallPathsPort {
   override fun removeTreeExcept(
     path: Path,
     retainedPaths: Collection<Path>,
-  ): List<Path> = removeTree(path)
+  ): List<Path> {
+    val retained = retainedPaths.map { it.toAbsolutePath().normalize() }
+    val removed = mutableListOf<Path>()
+    Files.walk(path).use { stream ->
+      stream.sorted(Comparator.reverseOrder()).forEach { entry ->
+        val identity = entry.toAbsolutePath().normalize()
+        if (retained.none { it.startsWith(identity) } && Files.deleteIfExists(entry)) {
+          removed.add(entry)
+        }
+      }
+    }
+    return removed
+  }
 }
 
 private class FailingStateRootUninstallPathsPort(

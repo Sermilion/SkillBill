@@ -259,15 +259,7 @@ internal class ProcessAgentRunAdapter(
             captureDisplayOutput = false,
           )
         val process = processRequest(command, streamRequest)
-        when (command.approvalProtocol) {
-          AgentRunApprovalProtocol.CURSOR_ACP ->
-            launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.Cursor)
-          AgentRunApprovalProtocol.JUNIE_ACP ->
-            launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.Junie)
-          AgentRunApprovalProtocol.OPENCODE_ACP ->
-            launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.OpenCode)
-          else -> launchOtherSession(streamRequest, command, process)
-        }
+        launchSession(streamRequest, command, process, cursorDependency)
       }.getOrElse { failure ->
         primaryFailure = failure
         throw failure
@@ -278,6 +270,22 @@ internal class ProcessAgentRunAdapter(
       }
     }
   }
+
+  private fun launchSession(
+    request: SkillRunRequest,
+    command: AgentRunCommand,
+    process: AgentRunProcessRequest,
+    cursorDependency: CursorAcpMcpDependency,
+  ): AgentRunLaunchOutcome =
+    when (command.approvalProtocol) {
+      AgentRunApprovalProtocol.CURSOR_ACP ->
+        launchAcpSession(request, command, process, cursorDependency, AcpProvider.Cursor)
+      AgentRunApprovalProtocol.JUNIE_ACP ->
+        launchAcpSession(request, command, process, cursorDependency, AcpProvider.Junie)
+      AgentRunApprovalProtocol.OPENCODE_ACP ->
+        launchAcpSession(request, command, process, cursorDependency, AcpProvider.OpenCode)
+      else -> launchOtherSession(request, command, process)
+    }
 
   private fun launchOtherSession(
     request: SkillRunRequest,

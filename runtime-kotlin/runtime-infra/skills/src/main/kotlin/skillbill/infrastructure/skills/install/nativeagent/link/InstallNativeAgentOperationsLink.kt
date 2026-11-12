@@ -351,13 +351,15 @@ internal fun discoverNativeAgentPreservationTargets(
         verifyObservedDirectory(parent, "inspect ${provider.name} native-agent profile root")
       }
       val entries = agentDirectoryEntries(target.path, "list ${provider.name} native-agent directory")
-      val retained = entries.mapNotNull { link ->
-        val attributes = agentObservedAttributes(link, "inspect ${provider.name} native-agent link", followLinks = false)
-        if (!attributes.isSymbolicLink) return@mapNotNull null
-        val rawTarget = Files.readSymbolicLink(link)
-        val resolvedTarget = link.parent.resolve(rawTarget).toAbsolutePath().normalize()
-        resolvedTarget.takeIf { it.startsWith(normalizedStateRoot) }
-      }
+      val retained =
+        entries.mapNotNull { link ->
+          val attributes =
+            agentObservedAttributes(link, "inspect ${provider.name} native-agent link", followLinks = false)
+          if (!attributes.isSymbolicLink) return@mapNotNull null
+          val rawTarget = Files.readSymbolicLink(link)
+          val resolvedTarget = link.parent.resolve(rawTarget).toAbsolutePath().normalize()
+          resolvedTarget.takeIf { it.startsWith(normalizedStateRoot) }
+        }
       target.observedParent?.let { parent ->
         verifyObservedDirectory(parent, "inspect ${provider.name} native-agent profile root")
       }
