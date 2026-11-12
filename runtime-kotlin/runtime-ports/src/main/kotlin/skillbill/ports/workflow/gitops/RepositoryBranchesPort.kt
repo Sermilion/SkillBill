@@ -15,11 +15,13 @@ interface RepositoryBranchesPort {
   fun branches(path: Path): RepositoryBranchesResult
 
   /**
-   * Selects an existing default-branch worktree, or switches this checkout without discarding changes.
+   * Selects an existing worktree that holds [branch], or switches this checkout to it without discarding changes.
+   * A remote-tracking [branch] such as `origin/feature` is checked out as a new local tracking branch.
    * Returns the selected checkout root in the success value, refusing a changed checkout identity.
    */
-  fun switchToDefaultBranch(
+  fun switchToBranch(
     path: Path,
+    branch: String,
     expectedCurrentBranch: String?,
   ): WorkflowGitOperationResult
 }

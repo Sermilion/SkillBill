@@ -18,6 +18,7 @@ import dev.skillbill.desktop.core.domain.model.DetectedAgent
 import dev.skillbill.desktop.core.domain.model.DetectedAgentsRead
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
+import dev.skillbill.desktop.core.domain.model.RepositoryBranch
 import dev.skillbill.desktop.core.domain.model.RepositoryBranches
 import dev.skillbill.desktop.core.domain.model.RepositoryBranchesRead
 import dev.skillbill.desktop.core.domain.model.SpecBundleRef
@@ -98,7 +99,8 @@ class NewTaskViewModelTest {
       override suspend fun branches(path: String) = RepositoryBranchesRead.Listed(
         RepositoryBranches(path, "main", emptyList(), emptyList(), current),
       )
-      override suspend fun switchToDefaultBranch(path: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> {
+      override suspend fun switchToBranch(path: String, branch: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> {
+        assertEquals("main", branch)
         assertEquals("feature/current", expectedCurrentBranch)
         if (refuseSwitch) return Outcome.Failure(ReadProblem.Runtime("Local edits would be overwritten"))
         current = "main"
@@ -137,8 +139,9 @@ class NewTaskViewModelTest {
       override suspend fun branches(path: String) = RepositoryBranchesRead.Listed(
         RepositoryBranches(path, "main", emptyList(), emptyList(), if (path == main) "main" else "feature/current"),
       )
-      override suspend fun switchToDefaultBranch(path: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> {
+      override suspend fun switchToBranch(path: String, branch: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> {
         assertEquals(original, path)
+        assertEquals("main", branch)
         assertEquals("feature/current", expectedCurrentBranch)
         return Outcome.Success(main)
       }
@@ -161,6 +164,97 @@ class NewTaskViewModelTest {
     assertTrue(after.thread.transcript.value.filterIsInstance<ChatMessage.Operator>().any { it.text == "Explain the sharing flow" })
     assertEquals("Keep this unsent draft", draft.text)
     assertEquals("main", (model.state.value.branchRead as BranchReadState.Loaded).branches.currentBranch)
+    model.viewModelScope.cancel()
+  }
+
+  @Test
+  fun `choosing a base branch moves the chat onto the worktree that holds it`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val original = createTempDirectory("fix-checkout").toString()
+    val feature = createTempDirectory("feature-checkout").toString()
+    val chat = FakeExecutionChatRepository()
+    val chats = testNewTaskChats(chat)
+    val draft = chats.selected.value.apply { repository = NewTaskRepository(original, "repo") }
+    val switches = mutableListOf<Triple<String, String, String?>>()
+    val branches = object : RepositoryBranchesRepository {
+      override suspend fun branches(path: String) = RepositoryBranchesRead.Listed(
+        RepositoryBranches(path, "main", emptyList(), emptyList(), if (path == feature) "feat/qa-fixes" else "fix/rotation"),
+      )
+      override suspend fun switchToBranch(path: String, branch: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> {
+        switches += Triple(path, branch, expectedCurrentBranch)
+        return Outcome.Success(feature)
+      }
+    }
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), chats, branches = branches)
+    runCurrent()
+    draft.text = "Explain the sharing flow"
+    model.onAction(NewTaskAction.Send)
+    runCurrent()
+
+    model.onAction(NewTaskAction.ChooseBaseBranch("feat/qa-fixes"))
+    runCurrent()
+
+    assertEquals(listOf(Triple<String, String, String?>(original, "feat/qa-fixes", "fix/rotation")), switches)
+    val rebound = checkNotNull(draft.chat.value)
+    assertEquals(feature, draft.repository?.root)
+    assertEquals(feature, rebound.repositoryRoot)
+    assertEquals("feat/qa-fixes", rebound.baseBranch)
+    val read = model.state.value.branchRead as BranchReadState.Loaded
+    assertEquals("feat/qa-fixes", read.branches.currentBranch)
+    assertEquals("feat/qa-fixes", repositoryPillBranch(draft.baseBranch, draft.repository?.root, read))
+    model.viewModelScope.cancel()
+  }
+
+  @Test
+  fun `a failed base branch switch keeps the chat root and base and reports the error`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val chats = testNewTaskChats()
+    val draft = chats.selected.value.apply { repository = NewTaskRepository("/repo", "repo") }
+    val branches = object : RepositoryBranchesRepository {
+      override suspend fun branches(path: String) = RepositoryBranchesRead.Listed(
+        RepositoryBranches(path, "main", emptyList(), emptyList(), "fix/rotation"),
+      )
+      override suspend fun switchToBranch(path: String, branch: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> =
+        Outcome.Failure(ReadProblem.Runtime("Local edits would be overwritten"))
+    }
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), chats, branches = branches)
+    runCurrent()
+    model.onAction(NewTaskAction.UseCurrentBranchAsBase)
+
+    model.onAction(NewTaskAction.ChooseBaseBranch("feat/qa-fixes"))
+    runCurrent()
+
+    assertEquals("/repo", draft.repository?.root)
+    assertEquals("fix/rotation", draft.baseBranch)
+    assertEquals(false, draft.branchSwitching)
+    assertTrue(model.state.value.repositoryError.orEmpty().contains("Local edits would be overwritten"))
+    model.viewModelScope.cancel()
+  }
+
+  @Test
+  fun `choosing a remote branch adopts the local tracking branch it checks out`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val chats = testNewTaskChats()
+    val draft = chats.selected.value.apply { repository = NewTaskRepository("/repo", "repo") }
+    var current = "main"
+    val branches = object : RepositoryBranchesRepository {
+      override suspend fun branches(path: String) = RepositoryBranchesRead.Listed(
+        RepositoryBranches(path, "main", emptyList(), listOf(RepositoryBranch("origin/feature/x", Instant.fromEpochSeconds(0))), current),
+      )
+      override suspend fun switchToBranch(path: String, branch: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> {
+        assertEquals("origin/feature/x", branch)
+        current = "feature/x"
+        return Outcome.Success(path)
+      }
+    }
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), chats, branches = branches)
+    runCurrent()
+
+    model.onAction(NewTaskAction.ChooseBaseBranch("origin/feature/x"))
+    runCurrent()
+
+    assertEquals("feature/x", draft.baseBranch)
+    assertEquals("feature/x", (model.state.value.branchRead as BranchReadState.Loaded).branches.currentBranch)
     model.viewModelScope.cancel()
   }
 
@@ -714,9 +808,10 @@ class NewTaskViewModelTest {
     assertEquals(listOf("/work/app", "/work/app", "/work/app"), branches.calls)
     assertEquals(BranchReadState.Loaded("/work/app", listed("/work/app").branches), model.state.value.branchRead)
     model.onAction(NewTaskAction.ChooseBaseBranch("origin/rel"))
+    assertEquals(false, model.state.value.repositoryPickerOpen)
+    advanceUntilIdle()
 
     assertEquals("origin/rel", draft.baseBranch)
-    assertEquals(false, model.state.value.repositoryPickerOpen)
     model.viewModelScope.cancel()
   }
 
@@ -914,7 +1009,7 @@ class NewTaskViewModelTest {
   private class FakeBranches(private val read: suspend (String) -> RepositoryBranchesRead = { listed(it) }) : RepositoryBranchesRepository {
     val calls = mutableListOf<String>()
 
-    override suspend fun switchToDefaultBranch(path: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> = Outcome.Success(path)
+    override suspend fun switchToBranch(path: String, branch: String, expectedCurrentBranch: String?): Outcome<String, ReadProblem> = Outcome.Success(path)
 
     override suspend fun branches(path: String): RepositoryBranchesRead {
       calls += path

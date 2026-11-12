@@ -45,25 +45,21 @@ class GitRepositoryBranchesAdapter : RepositoryBranchesPort {
     }
   }
 
-  override fun switchToDefaultBranch(
+  override fun switchToBranch(
     path: Path,
+    branch: String,
     expectedCurrentBranch: String?,
   ): WorkflowGitOperationResult =
     when (val read = branches(path)) {
-      is RepositoryBranchesResult.Listed -> {
-        val defaultBranch = read.defaultBranch
+      is RepositoryBranchesResult.Listed ->
         when {
           read.currentBranch != expectedCurrentBranch ->
             WorkflowGitOperationResult.Failed(
               error = "The checkout branch changed. Review the current branch and try again.",
             )
-          defaultBranch == null ->
-            WorkflowGitOperationResult.Failed(
-              error = "Could not determine the default branch. Set origin/HEAD and try again.",
-            )
-          else -> selectDefaultCheckout(path, read.repositoryRoot, defaultBranch)
+          read.currentBranch == branch -> WorkflowGitOperationResult.Ok(read.repositoryRoot)
+          else -> selectCheckout(path, read.repositoryRoot, branch)
         }
-      }
       is RepositoryBranchesResult.NotARepository ->
         WorkflowGitOperationResult.Failed(
           error = "${read.path} is not a git repository.",
@@ -71,36 +67,47 @@ class GitRepositoryBranchesAdapter : RepositoryBranchesPort {
       is RepositoryBranchesResult.Failed -> WorkflowGitOperationResult.Failed(error = read.message)
     }
 
-  private fun selectDefaultCheckout(
+  private fun selectCheckout(
     path: Path,
     root: String,
-    defaultBranch: String,
+    branch: String,
   ): WorkflowGitOperationResult {
+    val switchArgs =
+      when {
+        hasRef(path, "refs/heads/$branch") -> listOf("switch", branch)
+        hasRef(path, "refs/remotes/$branch") -> listOf("switch", "--track", branch)
+        else -> return WorkflowGitOperationResult.Failed(error = "Branch $branch was not found. Refresh and try again.")
+      }
     val listed = runGitCommand(path, "worktree", "list", "--porcelain", "-z")
     if (listed is WorkflowGitOperationResult.Failed) return listed
     val checkout =
       listed.value.split("\u0000\u0000")
         .map { it.split('\u0000') }
-        .firstOrNull { "branch refs/heads/$defaultBranch" in it }
+        .firstOrNull { "branch refs/heads/$branch" in it }
         ?.firstOrNull { it.startsWith("worktree ") }?.removePrefix("worktree ")
     if (checkout != null) {
       return when (val target = branches(Path.of(checkout))) {
         is RepositoryBranchesResult.Listed ->
-          if (target.currentBranch == defaultBranch) {
+          if (target.currentBranch == branch) {
             WorkflowGitOperationResult.Ok(target.repositoryRoot)
           } else {
-            WorkflowGitOperationResult.Failed(error = "The default branch checkout changed. Refresh and try again.")
+            WorkflowGitOperationResult.Failed(error = "The $branch checkout changed. Refresh and try again.")
           }
         is RepositoryBranchesResult.NotARepository ->
-          WorkflowGitOperationResult.Failed(error = "Default branch worktree is unavailable: $checkout")
+          WorkflowGitOperationResult.Failed(error = "The $branch worktree is unavailable: $checkout")
         is RepositoryBranchesResult.Failed -> WorkflowGitOperationResult.Failed(error = target.message)
       }
     }
-    return when (val switched = runGitCommand(path, "switch", defaultBranch)) {
+    return when (val switched = runGitCommand(path, switchArgs)) {
       is WorkflowGitOperationResult.Failed -> switched
       is WorkflowGitOperationResult.Ok -> WorkflowGitOperationResult.Ok(root)
     }
   }
+
+  private fun hasRef(
+    path: Path,
+    ref: String,
+  ): Boolean = runGitCommand(path, "show-ref", "--verify", "--quiet", ref) is WorkflowGitOperationResult.Ok
 
   private fun parseRef(line: String): RawBranchRef? {
     val fields = line.split('\t')
