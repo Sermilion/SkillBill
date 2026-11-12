@@ -15,14 +15,16 @@ object McpJsonConfig {
   ): McpMutationResult {
     val beforeContent = if (Files.exists(path)) Files.readString(path) else ""
     val settings = readJsonObject(path).toMutableMap()
-    val servers = mutableStringAnyMap(settings["mcpServers"])
-    servers["skill-bill"] =
+    val servers = mutableStringAnyMap(settings[McpConfigKeys.MCP_SERVERS])
+    servers.remove(McpConfigKeys.SKILL_BILL_SERVER)
+    servers.remove(McpConfigKeys.SONA_SERVER)
+    servers[McpConfigKeys.SONA_SERVER] =
       linkedMapOf(
-        "type" to "stdio",
-        "command" to command,
-        "args" to emptyList<String>(),
+        McpConfigKeys.TYPE to McpConfigKeys.STDIO,
+        McpConfigKeys.COMMAND to command,
+        McpConfigKeys.ARGS to emptyList<String>(),
       )
-    settings["mcpServers"] = servers
+    settings[McpConfigKeys.MCP_SERVERS] = servers
     val afterContent = JsonCodec.mapToJsonString(settings) + "\n"
     val changed = beforeContent != afterContent
     if (changed) {
@@ -36,13 +38,16 @@ object McpJsonConfig {
     path: Path,
   ): McpMutationResult {
     val settings = readJsonObject(path).toMutableMap()
-    val servers = mutableStringAnyMap(settings["mcpServers"])
-    val changed = servers.remove("skill-bill") != null
+    val servers = mutableStringAnyMap(settings[McpConfigKeys.MCP_SERVERS])
+    val changed =
+      servers.containsKey(McpConfigKeys.SKILL_BILL_SERVER) || servers.containsKey(McpConfigKeys.SONA_SERVER)
     if (changed) {
+      servers.remove(McpConfigKeys.SKILL_BILL_SERVER)
+      servers.remove(McpConfigKeys.SONA_SERVER)
       if (servers.isEmpty()) {
-        settings.remove("mcpServers")
+        settings.remove(McpConfigKeys.MCP_SERVERS)
       } else {
-        settings["mcpServers"] = servers
+        settings[McpConfigKeys.MCP_SERVERS] = servers
       }
       writeJson(path, settings)
     }
@@ -69,3 +74,13 @@ fun writeJson(
 
 fun mutableStringAnyMap(value: Any?): MutableMap<String, Any?> =
   JsonCodec.anyToStringAnyMap(value)?.toMutableMap() ?: linkedMapOf()
+
+internal object McpConfigKeys {
+  const val MCP_SERVERS = "mcpServers"
+  const val SKILL_BILL_SERVER = "skill-bill"
+  const val SONA_SERVER = "sona"
+  const val TYPE = "type"
+  const val STDIO = "stdio"
+  const val COMMAND = "command"
+  const val ARGS = "args"
+}

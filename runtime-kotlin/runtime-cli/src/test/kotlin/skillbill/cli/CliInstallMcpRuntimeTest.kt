@@ -212,7 +212,7 @@ class CliInstallMcpRuntimeTest {
     assertTrue(mcpProfileEntries(register).all { entry -> entry["changed"] == true })
     listOf(defaultConfig, workConfig).forEach { path ->
       val servers = decodeJsonObject(Files.readString(path))["mcpServers"] as Map<*, *>
-      val skillBill = servers["skill-bill"] as Map<*, *>
+      val skillBill = servers["sona"] as Map<*, *>
       assertEquals("stdio", skillBill["type"])
       assertEquals("/tmp/runtime-mcp", skillBill["command"])
     }
@@ -234,7 +234,7 @@ class CliInstallMcpRuntimeTest {
     assertTrue(mcpProfileEntries(unregister).all { entry -> entry["changed"] == true })
     listOf(defaultConfig, workConfig).forEach { path ->
       assertFalse(
-        "skill-bill" in (decodeJsonObject(Files.readString(path))["mcpServers"] as? Map<*, *> ?: emptyMap<Any, Any>()),
+        "sona" in (decodeJsonObject(Files.readString(path))["mcpServers"] as? Map<*, *> ?: emptyMap<Any, Any>()),
       )
     }
     assertEquals("work", decodeJsonObject(Files.readString(workConfig))["theme"])

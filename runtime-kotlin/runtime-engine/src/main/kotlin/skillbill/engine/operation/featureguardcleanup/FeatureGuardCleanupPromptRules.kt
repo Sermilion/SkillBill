@@ -36,9 +36,9 @@ internal object FeatureGuardCleanupPromptRules {
       "stabilization checklist. Remove the flag exactly as that proposal describes, in the Remove order below: " +
       "flag checks, inline the winning path, delete Legacy files, delete Legacy tests, remove the flag " +
       "definition, remove unused dependencies. Do not touch code the proposal does not name; if the plan cannot " +
-      "be applied as written, stop and report why. Do not run `skill-bill phase validation`, `./gradlew check`, " +
+      "be applied as written, stop and report why. Do not run `sona phase validation`, `./gradlew check`, " +
       "or any other check suite: the runtime runs the validation phase after this step, and that run is the " +
-      "checklist's `skill-bill phase validation` item and Step 4. Finish with a short report of the files " +
+      "checklist's `sona phase validation` item and Step 4. Finish with a short report of the files " +
       "changed and deleted.\n\n" +
       "Apply these feature-guard cleanup rules:"
 

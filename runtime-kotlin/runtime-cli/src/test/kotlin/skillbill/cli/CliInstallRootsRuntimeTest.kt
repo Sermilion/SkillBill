@@ -31,8 +31,7 @@ class CliInstallRootsRuntimeTest {
     assertContains(register.stderr, malformed.toString())
     assertEquals("{ not valid json", Files.readString(malformed))
     val servers = decodeJsonObject(Files.readString(defaultConfig))["mcpServers"] as Map<*, *>
-    assertTrue("other" in servers)
-    assertTrue("skill-bill" in servers)
+    assertEquals(setOf("other", "sona"), servers.keys)
   }
 
   @Test
@@ -65,7 +64,7 @@ class CliInstallRootsRuntimeTest {
     assertEquals(1, unregister.exitCode)
     assertContains(liveStdout.toString(), defaultConfig.toString())
     assertFalse(
-      "skill-bill" in (
+      "sona" in (
         decodeJsonObject(
           Files.readString(defaultConfig),
         )["mcpServers"] as? Map<*, *> ?: emptyMap<Any, Any>()

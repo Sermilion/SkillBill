@@ -1,10 +1,10 @@
 You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
 loop (preplan -> plan -> plan_subtasks -> implement -> simplify -> audit -> qa -> review -> verify_findings -> validate -> write_history -> commit_push -> pr -> monitor)
 for issue SKILL-65. The runtime owns the loop; do not run other phases, do not open
-or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+or continue any other skill-bill workflow, and do not call `sona workflow continue`.
 Execute this supplied phase briefing with the current installed runtime.
 The initial user-facing goal invocation owns update checks and launch confirmation.
-Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher
+Do not call `mcp__sona__update_check`, ask whether to update, or repeat dispatcher
 intake, preflight, or confirmation, including on retries and continuation.
 Reading the installed skill-bill skill does not make this phase a new invocation.
 
@@ -63,7 +63,7 @@ your final prose.
 ## Validation ownership
 Only the validate phase may run the pack validation gate
 (`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check --continue`,
-`skill-bill phase validation`, or any other full repository check suite. The build phase owns the separate
+`sona phase validation`, or any other full repository check suite. The build phase owns the separate
 compile-only gate. This phase must not compile, build,
 execute tests, or run check to prove the work. Ignore any Validation Strategy, plan note,
 acceptance text, review habit, or prior habit that asks you to run check here — that work waits
@@ -116,7 +116,7 @@ The subtask_scope projection and repository checkpoint list the only owned paths
 for this session. Work exclusively inside that boundary. Reading configuration and instructions that
 apply to owned paths is permitted narrow discovery. Forbidden: repository-wide search for
 simplification opportunities, edits outside listed paths, `./gradlew` build or check, test execution,
-`skill-bill phase review`, review subagents, delegated review, or spawning other agents.
+`sona phase review`, review subagents, delegated review, or spawning other agents.
 
 ## Project authoring discipline (discover before write)
 Discovery. Before the first code write, and again whenever owned or repair scope changes, discover what
@@ -204,17 +204,17 @@ scoped_owned_paths:
 - diff: read the branch diff yourself; it is not delivered in this briefing
 
 ## Required final output (durable settlement)
-Finish this phase through the skill-bill MCP settlement tools, not by printing a JSON envelope.
+Finish this phase through the sona MCP settlement tools, not by printing a JSON envelope.
 The tools may be deferred in this session: load them first with ToolSearch
-`select:mcp__skill-bill__feature_task_phase_complete,mcp__skill-bill__feature_task_phase_block`.
-- Finished: call `mcp__skill-bill__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
+`select:mcp__sona__feature_task_phase_complete,mcp__sona__feature_task_phase_block`.
+- Finished: call `mcp__sona__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
   phase_id "simplify", attempt 1, and value: one prose string carrying everything
   the next phase needs (what this phase produced, deviations from the briefing, what was
   deliberately left to later phases). When a value content section follows, it defines value and
   overrides this description: carry its content as prose or as JSON text, whichever is clearer, and
   emit any exact literal it names with nothing added. Otherwise the runtime does not validate the
   shape of value. Optional summary: one sentence.
-- Cannot finish because of a concrete obstacle: call `mcp__skill-bill__feature_task_phase_block` with the same
+- Cannot finish because of a concrete obstacle: call `mcp__sona__feature_task_phase_block` with the same
   workflow_id, phase_id, and attempt, a reason string naming the obstacle, and failure_disposition
   one of "retryable",
   "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
