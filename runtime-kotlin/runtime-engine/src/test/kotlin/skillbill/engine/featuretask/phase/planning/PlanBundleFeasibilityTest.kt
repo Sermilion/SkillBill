@@ -8,18 +8,22 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
+import skillbill.workflow.taskruntime.model.planning.PLAN_BUNDLE_FEASIBILITY_OPERATOR_RETRY_REASON
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityAcceptedLine
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityApprovalCandidate
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityConflict
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityDependencyHash
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunch
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunchKind
+import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityLaunchOutcome
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityReviewScope
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityReviewScopeResult
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityStateValidation
+import skillbill.workflow.taskruntime.model.planning.blockPlanBundleFeasibilityLaunch
 import skillbill.workflow.taskruntime.model.planning.publishPlanBundleFeasibilityApproval
 import skillbill.workflow.taskruntime.model.planning.reopenApprovedPlanBundleFeasibilityCycle
+import skillbill.workflow.taskruntime.model.planning.reopenBlockedPlanBundleFeasibilityCycle
 import skillbill.workflow.taskruntime.model.planning.settlePlanBundleFeasibilityRepair
 import skillbill.workflow.taskruntime.model.planning.settlePlanBundleFeasibilityReview
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -296,6 +300,58 @@ class PlanBundleFeasibilityTest {
   }
 
   @Test
+  fun `operator retry opens a fresh review cycle from a safety-blocked launch`() {
+    val snapshot = snapshot()
+    val blockedRecord = record(approval(snapshot)).copy(status = WorkflowStepStatus.BLOCKED, attemptCount = 4)
+    val blocked = blockedReviewState(snapshot, "Feasibility changed repository paths outside its admitted authority.")
+
+    val reopened =
+      assertNotNull(reopenBlockedPlanBundleFeasibilityCycle(blocked, "cycle-retry-7", 7, blockedRecord))
+
+    assertNull(reopened.invalidReason())
+    assertEquals(PlanBundleFeasibilityMode.REVIEW, reopened.mode)
+    assertEquals(blocked.revision + 1, reopened.revision)
+    assertEquals("cycle-retry-7", reopened.currentCycleId)
+    assertEquals(0, reopened.reviewRoundsStarted)
+    assertEquals(0, reopened.repairLaunchesStarted)
+    assertEquals(snapshot.criterionRefs, reopened.requiredRefs)
+    assertEquals(blocked.settledLaunches, reopened.settledLaunches)
+    val history = reopened.cycleHistory.single()
+    assertEquals("cycle-1", history.cycleId)
+    assertEquals(PlanBundleFeasibilityLaunchOutcome.BLOCKED, history.settledLaunches.single().outcome)
+    val reopening = reopened.reopenings.single()
+    assertEquals(PLAN_BUNDLE_FEASIBILITY_OPERATOR_RETRY_REASON, reopening.reason)
+    assertEquals(4, reopening.sourceAttempt)
+    assertEquals(7, reopening.retryLedgerSequence)
+    val projection =
+      assertIs<PlanBundleFeasibilityReviewScopeResult.Valid>(
+        PlanBundleFeasibilityReviewScope.derive(snapshot.identity, reopened),
+      ).projection
+    assertEquals(snapshot.criterionRefs, projection.requiredRefs)
+  }
+
+  @Test
+  fun `operator retry reopen refuses unblocked or reused cycles`() {
+    val snapshot = snapshot()
+    val blockedRecord = record(approval(snapshot)).copy(status = WorkflowStepStatus.BLOCKED)
+    val blocked = blockedReviewState(snapshot, "blocked")
+
+    assertNull(reopenBlockedPlanBundleFeasibilityCycle(blocked, "cycle-1", 1, blockedRecord))
+    assertNull(reopenBlockedPlanBundleFeasibilityCycle(blocked, " ", 1, blockedRecord))
+    assertNull(reopenBlockedPlanBundleFeasibilityCycle(blocked, "cycle-2", -1, blockedRecord))
+    assertNull(
+      reopenBlockedPlanBundleFeasibilityCycle(
+        blocked.copy(mode = PlanBundleFeasibilityMode.REVIEW),
+        "cycle-2",
+        1,
+        blockedRecord,
+      ),
+    )
+    val approved = approvedState(snapshot, record(approval(snapshot)))
+    assertNull(reopenBlockedPlanBundleFeasibilityCycle(approved, "cycle-2", 1, blockedRecord))
+  }
+
+  @Test
   fun `reopening after criterion removal preserves readable historical evidence`() {
     val before = snapshot().copy(specTexts = mapOf(1 to spec("First requirement") + "2. Second requirement.\n"))
     val phaseRecord = record(approval(before))
@@ -453,6 +509,44 @@ class PlanBundleFeasibilityTest {
         )?.copy(approvalCandidate = candidate),
       )
     return assertNotNull(publishPlanBundleFeasibilityApproval(settled, record.phaseId, record.attemptCount, 2))
+  }
+
+  private fun blockedReviewState(
+    snapshot: PlanBundleFeasibilitySnapshot,
+    reason: String,
+  ): FeatureTaskRuntimePlanBundleFeasibilityState {
+    val launch =
+      PlanBundleFeasibilityLaunch(
+        transitionId = "review-1",
+        phaseId = "plan_subtasks",
+        attempt = 1,
+        kind = PlanBundleFeasibilityLaunchKind.REVIEW,
+        baselineIdentity = snapshot.identity,
+        repairDirectory = null,
+        intendedAfterIdentity = null,
+        cycleId = "cycle-1",
+        sequence = 1,
+      )
+    val active =
+      FeatureTaskRuntimePlanBundleFeasibilityState(
+        revision = 1,
+        mode = PlanBundleFeasibilityMode.REVIEW,
+        identity = snapshot.identity,
+        acceptedLines = emptyList(),
+        conflicts = emptyList(),
+        changedSubtaskIds = emptyList(),
+        requiredRefs = snapshot.criterionRefs,
+        carriedRefs = emptyList(),
+        reviewRoundsStarted = 1,
+        repairLaunchesStarted = 0,
+        activeLaunch = launch,
+        settledLaunches = emptyList(),
+        lastReviewValue = null,
+        approval = null,
+        legacyOrigin = false,
+        currentCycleId = launch.cycleId,
+      )
+    return assertNotNull(blockPlanBundleFeasibilityLaunch(active, launch.transitionId, reason))
   }
 
   private fun approvalAcceptedLines(

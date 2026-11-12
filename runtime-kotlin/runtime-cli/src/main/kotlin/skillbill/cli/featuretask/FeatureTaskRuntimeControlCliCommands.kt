@@ -4,6 +4,7 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.workflow.model.BlockedPhaseRetryArtifacts
 import skillbill.application.workflow.model.RepairFeatureTaskRuntimeIdentityArgs
 import skillbill.application.workflow.model.WorkflowUpdateResult
 import skillbill.application.workflow.service.WorkflowService
@@ -145,6 +146,7 @@ class FeatureTaskRuntimeRetryBlockedCommand(
   private val workflowService: WorkflowService,
   private val state: CliRunState,
   private val crashReconciler: FeatureTaskRuntimeCrashReconciler,
+  private val phaseRetryArtifacts: BlockedPhaseRetryArtifacts,
 ) : DocumentedCliCommand(
     "retry-blocked",
     "Reopen one blocked runtime phase after an operator-applied fix.",
@@ -160,7 +162,8 @@ class FeatureTaskRuntimeRetryBlockedCommand(
 
   override fun run() {
     crashReconciler.reconcile(workflowId)
-    val result = workflowService.retryBlockedFeatureTaskRuntimePhase(workflowId, phaseId, reason, mandate)
+    val result =
+      workflowService.retryBlockedFeatureTaskRuntimePhase(workflowId, phaseId, reason, mandate, phaseRetryArtifacts)
     state.complete(result.toPayload(encoder), format, exitCode = if (result is WorkflowUpdateResult.Error) 1 else 0)
   }
 }
