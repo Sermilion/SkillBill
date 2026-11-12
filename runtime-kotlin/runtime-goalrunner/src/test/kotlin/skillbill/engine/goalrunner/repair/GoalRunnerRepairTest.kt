@@ -423,7 +423,7 @@ internal class GoalRunnerRepairTest : GoalRunnerRepairFixtures() {
     assertEquals(GoalRunnerRepairStatus.OPERATOR_REQUIRED, result.status)
     assertContains(
       result.refusalReason.orEmpty(),
-      "skill-bill goal reset $ISSUE_KEY --hard --yes",
+      "sona goal reset $ISSUE_KEY --hard --yes",
     )
   }
 
@@ -479,7 +479,7 @@ internal class GoalRunnerRepairTest : GoalRunnerRepairFixtures() {
     assertEquals(GoalRunnerRepairStatus.OPERATOR_REQUIRED, result.status)
     assertContains(
       result.refusalReason.orEmpty(),
-      "skill-bill goal reset $ISSUE_KEY --subtask 1 --delete-child-workflow",
+      "sona goal reset $ISSUE_KEY --subtask 1 --delete-child-workflow",
     )
   }
 

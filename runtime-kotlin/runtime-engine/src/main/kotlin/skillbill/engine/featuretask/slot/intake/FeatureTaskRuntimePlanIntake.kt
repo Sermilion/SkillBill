@@ -117,6 +117,6 @@ public class FeatureTaskRuntimePlanIntake(
     }
 
   private companion object {
-    const val RESUME_HINT = "Resume with `skill-bill phase plan <KEY> <requirements>`."
+    const val RESUME_HINT = "Resume with `sona phase plan <KEY> <requirements>`."
   }
 }

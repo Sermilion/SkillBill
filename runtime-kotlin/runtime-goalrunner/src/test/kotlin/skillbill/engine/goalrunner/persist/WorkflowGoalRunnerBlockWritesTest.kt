@@ -336,13 +336,13 @@ class WorkflowGoalRunnerBlockWritesTest {
         "wftr-parent",
         "wedged",
         "implement",
-        recoveryCommand = "skill-bill goal reset SKILL-1 --hard --yes",
+        recoveryCommand = "sona goal reset SKILL-1 --hard --yes",
       ),
       workflows,
       incidents,
     )
     assertEquals(
-      "skill-bill goal reset SKILL-1 --hard --yes",
+      "sona goal reset SKILL-1 --hard --yes",
       recordedRecoveryCommand("wftr-parent"),
     )
 

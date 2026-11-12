@@ -264,7 +264,7 @@ internal object QaPromptSections {
     |  targets also state the disposable database or its absence, outbound substitutes, and rejected configuration.
     |  Never include secret values.
     |- When you capture a screenshot, save it under `${qa.workspace.directory}/evidence/` and immediately retain it with
-    |  `skill-bill qa screenshot --invocation ${qa.workspace.invocationId} --file <absolute path> --label <label>`.
+    |  `sona qa screenshot --invocation ${qa.workspace.invocationId} --file <absolute path> --label <label>`.
     |  Put the returned `path` in the inventory so the report points to the retained file.
     |  Include every captured image, even when no finding uses it. Capture the final useful rendered state with `--frame`. Add a `## Screenshots`
     |  section with one line per image in capture order:
@@ -287,14 +287,14 @@ internal object QaPromptSections {
     |Live progress:
     |
     |- Write a plan file in the invocation directory with this shape, then register it before the first flow with
-    |  `skill-bill qa plan --invocation $invocationId --file <path>`:
+    |  `sona qa plan --invocation $invocationId --file <path>`:
     |  `{"contract_version": "$QA_CHECKLIST_CONTRACT_VERSION", "cases": [{"id": "<case id>", "title": "<title>",
     |  "steps": [{"text": "<step>"}]}]}`.
     |- Report each target kind listed in the QA run section with
-    |  `skill-bill qa target --invocation $invocationId --name <kind> --state running|ready|skipped
+    |  `sona qa target --invocation $invocationId --name <kind> --state running|ready|skipped
     |  [--detail <text>]`.
     |- Mark each step `running` and then `passed` or `failed` with
-    |  `skill-bill qa step --invocation $invocationId --case <case id> --step <number> --status <status>
+    |  `sona qa step --invocation $invocationId --case <case id> --step <number> --status <status>
     |  [--note <text>] [--finding <finding id> [--finding-title <title>]] [--evidence <path>]...`. Steps count
     |  from 1 within their case. Pass the finding id you use in the report, and evidence paths that start with
     |  `${qa.expected.evidencePrefix}`.
@@ -309,7 +309,7 @@ internal object QaPromptSections {
   }
 
   private fun goalStageRules(invocationId: String): String =
-    "Report real execution stages when they start and settle with `skill-bill qa stage --invocation " +
+    "Report real execution stages when they start and settle with `sona qa stage --invocation " +
       "$invocationId --name <stage> --state running|done|warn|skipped [--detail <short reason>]`. Use " +
       "pack-declared operation names, report only work that happened, and explain skipped display work on " +
       "headless runs. The runtime records timestamps and leaves unreported stages unknown. " +
@@ -322,14 +322,14 @@ internal object QaPromptSections {
   ): String =
     """
     |- Before installing on a device, take its lease with
-    |  `skill-bill qa lease acquire --invocation $invocationId --device <serial>`. A `contended`
+    |  `sona qa lease acquire --invocation $invocationId --device <serial>`. A `contended`
     |  result means another run owns the device: do not use it or release its lease. When no target was named,
     |  pick a free authorized target and lease it, then follow the pack guidance to try another untried target if
     |  needed. Preserve a named target; skip with the reason if it cannot be used. If no candidate can be used,
     |  report `skipped` and describe the obstacles;
     |  call it device-contended only when every authorized candidate is leased by someone else.
     |  Release leases this invocation acquired before switching targets and when done with
-    |  `skill-bill qa lease release --invocation $invocationId --device <serial>`.
+    |  `sona qa lease release --invocation $invocationId --device <serial>`.
     """.trimMargin() + namedDevice?.let(::namedDeviceLine).orEmpty()
 
   private fun namedDeviceLine(device: QaNamedDevice): String =
@@ -356,11 +356,11 @@ internal object QaPromptSections {
     |  container, volume and network you create.
     |- Before starting each Compose project, standalone container, named volume, network or background process,
     |  register it with
-    |  `skill-bill qa resource register --invocation $invocationId --kind <kind> --identity <identity>`.
+    |  `sona qa resource register --invocation $invocationId --kind <kind> --identity <identity>`.
     |  The kinds are `compose_project`, `container`, `volume`, `network`, `process` and `directory`. Do not use a
     |  resource whose registration returns `conflict` or `rejected`.
     |- Release what you no longer need with
-    |  `skill-bill qa resource release --invocation $invocationId --kind <kind> --identity <identity>`.
+    |  `sona qa resource release --invocation $invocationId --kind <kind> --identity <identity>`.
     |  The runtime tears down everything still registered when QA ends.
     |- Never run Docker prune commands. Never stop or remove a container, volume, network, Compose project or
     |  process you did not create in this run. Leave the operator's development stack alone.

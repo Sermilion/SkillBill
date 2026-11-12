@@ -56,7 +56,7 @@ internal fun recoverCommand(
     return null
   }
   return buildString {
-    append("skill-bill work recover ").append(workId)
+    append("sona work recover ").append(workId)
       .append(" --incident ").append(projection.incidentToken)
       .append(" --revision ").append(projection.revision)
     projection.prerequisites.forEach { append(" --confirm-prerequisite ").append(it.kind) }

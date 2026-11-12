@@ -71,7 +71,7 @@ class WorkIncidentPayloadMappingTest {
         .removePrefix("Recover: ")
 
     val expectedCommand =
-      "skill-bill work recover SKILL-435 --incident bi_123 --revision 4 " +
+      "sona work recover SKILL-435 --incident bi_123 --revision 4 " +
         "--confirm-prerequisite credentials_configured --confirm-prerequisite external_service_available"
     assertEquals(expectedCommand, jsonCommand)
     assertEquals(jsonCommand, textCommand)

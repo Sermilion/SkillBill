@@ -315,7 +315,7 @@ internal fun rejectAmbiguousRetainedQuality(
       WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
       "This parent has ambiguous historical quality state. Provide authoritative original evidence or explicitly " +
         "choose a fresh quality execution with new cycles: " +
-        "skill-bill goal fresh-quality ${request.issueKey} --reason \"<why>\".",
+        "sona goal fresh-quality ${request.issueKey} --reason \"<why>\".",
     )
   }
 }

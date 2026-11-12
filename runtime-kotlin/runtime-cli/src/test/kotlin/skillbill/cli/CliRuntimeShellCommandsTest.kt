@@ -355,7 +355,7 @@ class CliRuntimeShellCommandsTest {
     assertEquals(1, result.exitCode)
     assertEquals(
       "doctor skill was retired in SKILL-32; use " +
-        "`skill-bill show bill-feature --repo-root ${
+        "`sona show bill-feature --repo-root ${
           Path.of("").toAbsolutePath().normalize()
         } --content none` instead.",
       result.stdout,
@@ -441,7 +441,7 @@ class CliRuntimeShellCommandsTest {
     assertEquals("verdict", continued["continue_step_id"])
     assertEquals("verdict", continued["resume_step_id"])
     assertEquals(
-      "skill-bill --db '$dbPath' verify-workflow show '$workflowId' --format json",
+      "sona --db '$dbPath' verify-workflow show '$workflowId' --format json",
       continued["read_only_full_state_command"],
     )
     assertFalse(continued.containsKey("artifacts"))

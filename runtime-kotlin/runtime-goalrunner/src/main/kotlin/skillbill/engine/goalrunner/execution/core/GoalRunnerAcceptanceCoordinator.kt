@@ -138,7 +138,7 @@ public class GoalRunnerAcceptanceCoordinator(
     val lease = manifestStore.executionLease(loaded.parentWorkflowId)
     return when {
       lease != null && lease.expiresAt.isAfter(clock.instant()) ->
-        "Goal '$issueKey' is running (pid ${lease.pid}). Stop it with `skill-bill goal stop $issueKey` first."
+        "Goal '$issueKey' is running (pid ${lease.pid}). Stop it with `sona goal stop $issueKey` first."
       loaded.controlState.goalCompletedAt != null && loaded.manifest.unfinishedSubtaskIds().isEmpty() ->
         "Goal '$issueKey' is already complete."
       else -> null

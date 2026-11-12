@@ -153,7 +153,7 @@ public class GoalRunnerFinalization(
               reason = GoalRunnerStopReason.BLOCKED,
               blockedReason =
                 reason +
-                  " Resume explicitly with skill-bill goal resume ${request.issueKey} before running the goal again.",
+                  " Resume explicitly with sona goal resume ${request.issueKey} before running the goal again.",
               workflowId = finalState.parentWorkflowId,
               lastResumableStep = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT,
             ),

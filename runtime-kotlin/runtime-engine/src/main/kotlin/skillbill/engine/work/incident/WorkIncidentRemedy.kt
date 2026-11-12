@@ -30,7 +30,7 @@ internal fun workIncidentRemedy(facts: WorkIncidentRemedyFacts): String? {
     facts.responsibleCategory == BlockIncidentResponsibleCategory.SKILL_BILL_DEFECT ||
       (facts.noWorkaroundKnown && facts.responsibleCategory == BlockIncidentResponsibleCategory.UNRESOLVED)
   return if (fileable) {
-    "If this is a skill-bill bug, file an issue at $SKILL_BILL_NEW_ISSUE_URL " +
+    "If this is a sona bug, file an issue at $SKILL_BILL_NEW_ISSUE_URL " +
       "and include incident ${facts.incidentToken}."
   } else {
     null
@@ -60,7 +60,7 @@ internal object WorkIncidentUnblockCommands {
     issueKey: () -> String?,
   ): String? {
     if (status != WorkflowStatus.BLOCKED || readiness != GoalQualityReadiness.HISTORICAL_AMBIGUITY) return null
-    return issueKey()?.let { "skill-bill goal fresh-quality $it --reason \"<why>\"" }
+    return issueKey()?.let { "sona goal fresh-quality $it --reason \"<why>\"" }
   }
 
   private fun WorkflowStateSnapshot.goalQualityReadiness(): GoalQualityReadiness? {

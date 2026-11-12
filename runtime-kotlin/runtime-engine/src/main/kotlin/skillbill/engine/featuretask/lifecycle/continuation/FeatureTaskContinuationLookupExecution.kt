@@ -59,7 +59,7 @@ internal fun executeFeatureTaskContinuationLookup(
       workflowId = identityLess.workflow.workflowId,
       summary =
         "Workflow '${identityLess.workflow.workflowId}' has no immutable execution identity; " +
-          "run `skill-bill feature-task repair-identity` for that workflow id before continuing.",
+          "run `sona feature-task repair-identity` for that workflow id before continuing.",
     )
   }
   val validated =

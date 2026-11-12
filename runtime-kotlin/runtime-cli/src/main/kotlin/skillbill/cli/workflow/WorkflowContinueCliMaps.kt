@@ -17,7 +17,7 @@ internal fun standardContinueMap(
   val quotedDbPath = "'${dbPath.replace("'", "'\"'\"'")}'"
   val quotedWorkflowId = "'${view.resume.snapshot.workflowId.replace("'", "'\"'\"'")}'"
   map["read_only_full_state_command"] =
-    "skill-bill --db $quotedDbPath verify-workflow show $quotedWorkflowId --format json"
+    "sona --db $quotedDbPath verify-workflow show $quotedWorkflowId --format json"
   decompositionExtras.forEach { (key, value) -> map[key] = value }
   map["db_path"] = dbPath
   if (view.continueStatus == WorkflowContinueStatus.BLOCKED) {

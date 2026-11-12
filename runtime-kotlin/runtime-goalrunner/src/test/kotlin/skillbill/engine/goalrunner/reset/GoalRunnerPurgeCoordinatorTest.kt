@@ -111,6 +111,7 @@ class GoalRunnerPurgeCoordinatorTest {
 
     assertContains(result.refusalReason.orEmpty(), "unpublished_commits")
     assertContains(result.refusalReason.orEmpty(), "git worktree remove --force $path")
+    assertContains(result.refusalReason.orEmpty(), "Then run sona goal purge SKILL-245 again.")
     assertFalse(purgeCalled)
     assertTrue(result.removedPaths.isEmpty())
   }

@@ -301,8 +301,8 @@ class GoalRunnerReplanTest {
         idleReplanService(store)
           .replan(GoalRunnerReplanRequest("SKILL-56", 3, includeSharedPreplan = true))
       }
-    assertTrue(failure.message!!.contains("skill-bill goal purge SKILL-56"), failure.message)
-    assertTrue(failure.message!!.contains("skill-bill phase plan SKILL-56"), failure.message)
+    assertTrue(failure.message!!.contains("sona goal purge SKILL-56"), failure.message)
+    assertTrue(failure.message!!.contains("sona phase plan SKILL-56"), failure.message)
     assertEquals(0, store.scopedReplanCount)
     assertEquals(setOf(1, 2, 3), store.plannedSubtaskIds.toSet())
     assertTrue(store.sharedPreplanPrepared)

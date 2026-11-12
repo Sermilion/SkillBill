@@ -289,7 +289,7 @@ public class GoalRunnerPurgeCoordinator(
     val worktreeRefusal =
       worktreePaths.firstNotNullOfOrNull { path ->
         if (repoRoot.toAbsolutePath().normalize().startsWith(path.toAbsolutePath().normalize())) {
-          "Run skill-bill goal purge $issueKey from the main checkout, not from the goal's worktree at $path."
+          "Run sona goal purge $issueKey from the main checkout, not from the goal's worktree at $path."
         } else {
           val verdict =
             worktrees.retentionVerdict(
@@ -298,7 +298,7 @@ public class GoalRunnerPurgeCoordinator(
           verdict?.let {
             "Goal '$issueKey' has ${it.reason.wireValue} in its worktree at $path. " +
               "Keep the work, or discard it with: " +
-              "git worktree remove --force $path. Then run skill-bill goal purge $issueKey again."
+              "git worktree remove --force $path. Then run sona goal purge $issueKey again."
           }
         }
       }
