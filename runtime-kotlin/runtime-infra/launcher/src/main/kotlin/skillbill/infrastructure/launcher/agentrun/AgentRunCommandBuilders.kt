@@ -20,8 +20,6 @@ import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.model.ReviewLaunchIsolationStrategy
 import skillbill.review.context.model.launch.ReviewConversationIsolation
-import java.net.URI
-import java.net.URISyntaxException
 import java.nio.file.Path
 import kotlin.io.path.invariantSeparatorsPathString
 import kotlin.time.Duration
@@ -154,32 +152,6 @@ internal fun goalContinuationEnvironment(request: SkillRunRequest): Map<String, 
         put(tokens.QA_SELECTION_ENV, context.qaSelection?.wireValue.orEmpty())
       }
   }.orEmpty()
-
-internal fun resolveClaudeModelDirective(
-  directive: String?,
-  providerEnvironment: Map<String, String>,
-): String? = directive?.let { remapClaudeModel(it, providerEnvironment) }
-
-internal fun isOfficialAnthropicEndpoint(baseUrl: String): Boolean {
-  val host = anthropicEndpointHost(baseUrl) ?: return false
-  return host == "anthropic.com" || host.endsWith(".anthropic.com")
-}
-
-private fun anthropicEndpointHost(baseUrl: String): String? {
-  val trimmed = baseUrl.trim()
-  if (trimmed.isEmpty()) return null
-  val candidate = if ("://" in trimmed) trimmed else "https://$trimmed"
-  return try {
-    URI(candidate).host
-  } catch (_: URISyntaxException) {
-    null
-  }?.lowercase()
-}
-
-internal val ANTHROPIC_MODEL_ALIASES = setOf("opus", "sonnet", "haiku")
-
-internal fun isAnthropicModelReference(model: String): Boolean =
-  model.startsWith("claude-") || model in ANTHROPIC_MODEL_ALIASES
 
 internal class ClaudeAgentRunCommandBuilder(
   internal val providerEnvironment: Map<String, String> = System.getenv(),

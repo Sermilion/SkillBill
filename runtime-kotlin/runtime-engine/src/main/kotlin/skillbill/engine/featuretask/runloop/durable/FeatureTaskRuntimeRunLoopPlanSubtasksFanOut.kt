@@ -29,7 +29,6 @@ import skillbill.engine.featuretask.runloop.planning.PromotionRequest
 import skillbill.engine.featuretask.runloop.planning.StagedUnit
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
-import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseBindingFactory
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStrategy
@@ -468,8 +467,6 @@ private class FeatureTaskRuntimeRunLoopPlanUnitState(
   override fun runnerFor(stepId: String) = parent.runnerFor(stepId)
 
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = parent.selectedOwnerOf(stepId)
-
-  override val modelDirectiveSupplements: ModelDirectiveSupplements get() = parent.modelDirectiveSupplements
 
   override val phaseInstructionSource: PhaseInstructionFileSource get() = parent.phaseInstructionSource
 

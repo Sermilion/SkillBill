@@ -1,3 +1,13 @@
+## [2026-11-12] Remove automatic mutation probes
+Context: Validation instructed agents to copy the checkout, remove production behavior, run up to six changed tests, and strengthen surviving tests. The operator requested removing this work from every phase.
+Decision: Delete probe instructions, activation, scope construction and output settlement. Keep the stored optional probe fields and their readers for historical evidence. New validation completes on required project checks without generating probe evidence or warnings about its absence.
+Reason: Passing project checks must not trigger unrequested mutation experiments or test rewrites. Existing output envelopes, telemetry and history remain readable without modifying stored records.
+
+## [2026-11-12] Use shared phase instructions for every model
+Context: Model supplements and exact-name classification added instructions and alias handling for Opus 5.5.
+Decision: Remove supplement resources, composition hooks, the environment switch and model classification. Pass operator model and effort values through to the harness. Retain stored profile tokens and fixed strategy aliases solely for reading and resuming historical records.
+Reason: Model choice must not change Sona's workflow behavior. Keeping the existing record shape preserves accepted assignments, digests, checkpoints and completed work without rewriting user stores. The compatible validation change accepts legacy metadata without classifying its model. Provider transport adapters still own their command and protocol formats.
+
 ## [2026-11-10] SKILL-534 separate review freshness from completed approval compatibility
 Context: Incremental review judges exact bundle bytes, while the existing immutable manifest fingerprint excludes execution progress.
 Decision: Hash unnormalized UTF-8 parent, raw manifest and complete child text beside the immutable fingerprint. Require raw identity matches for carry-forward and repair protection; retain immutable-fingerprint compatibility for completed approval.

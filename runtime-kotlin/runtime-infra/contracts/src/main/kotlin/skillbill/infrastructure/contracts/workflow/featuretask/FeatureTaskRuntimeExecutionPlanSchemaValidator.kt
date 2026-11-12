@@ -22,9 +22,6 @@ import skillbill.error.shellcontent.malformedStepLaunchAssignment
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeExecutionPlanSchemaPaths
-import skillbill.workflow.taskruntime.model.skeleton.LaunchProviderNamespace
-import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
-import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfileClassifier
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
@@ -244,8 +241,6 @@ private fun validateStepLaunchAssignments(
   if (stepIds.any { it.isBlank() || it !in selected }) {
     throw incoherentStepLaunchAssignments("unknown or blank step_id")
   }
-  val profileByStep = rows.associate { it.path(Keys.STEP_ID).asText() to classifiedAssignmentProfile(it) }
-  validateSelectedStrategyProfiles(instance, profileByStep)
 }
 
 private fun stepLaunchAssignmentRows(instance: JsonNode): List<JsonNode>? {
@@ -255,38 +250,6 @@ private fun stepLaunchAssignmentRows(instance: JsonNode): List<JsonNode>? {
     throw malformedStepLaunchAssignment("step_launch_assignments must be an array")
   }
   return assignments.toList()
-}
-
-private fun classifiedAssignmentProfile(row: JsonNode): String {
-  val namespace = assignmentNamespace(row)
-  val effective = row.path(Keys.EFFECTIVE_MODEL).takeIf { it.isTextual && !it.isNull }?.asText()
-  val profile = assignmentProfile(row)
-  if (profile != PhaseModelProfileClassifier.classify(namespace, effective)) {
-    throw incoherentStepLaunchAssignments("profile contradicts classifier")
-  }
-  return profile.wireValue
-}
-
-private fun assignmentNamespace(row: JsonNode): LaunchProviderNamespace =
-  LaunchProviderNamespace.fromWire(row.path(Keys.PROVIDER_NAMESPACE).asText())
-    ?: throw malformedStepLaunchAssignment("unknown provider_namespace")
-
-private fun assignmentProfile(row: JsonNode): PhaseModelProfile =
-  PhaseModelProfile.fromWire(row.path(Keys.PROFILE).asText())
-    ?: throw malformedStepLaunchAssignment("unknown profile")
-
-private fun validateSelectedStrategyProfiles(
-  instance: JsonNode,
-  profileByStep: Map<String, String>,
-) {
-  instance.path(Keys.SELECTED_STRATEGIES).forEach { strategy ->
-    val steps = strategy.path(Keys.SELECTED_STEPS).map(JsonNode::asText)
-    val hasOpus = steps.any { profileByStep[it] == PhaseModelProfile.OPUS_5_5.wireValue }
-    val isHistoricalOpusStrategy = strategy.path(Keys.STRATEGY_ID).asText().endsWith(HISTORICAL_OPUS_STRATEGY_ID_SUFFIX)
-    if (isHistoricalOpusStrategy && !hasOpus) {
-      throw incoherentStepLaunchAssignments("slot strategy profile does not match participating steps")
-    }
-  }
 }
 
 private fun validateExecutionPlanTraversal(
@@ -416,4 +379,3 @@ private fun canonicalPlanValue(
   }
 
 private const val MAX_POLICY_IDENTITIES = 256
-private const val HISTORICAL_OPUS_STRATEGY_ID_SUFFIX = "-opus-5-5"

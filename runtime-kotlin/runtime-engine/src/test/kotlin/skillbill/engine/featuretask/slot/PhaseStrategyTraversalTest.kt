@@ -198,7 +198,6 @@ class PhaseStrategyTraversalTest {
           definition to mapOf(strategy.slot to PhaseStrategyBinding.Fixed(strategy.strategyId)),
         ),
       ),
-      ModelDirectiveSupplements(enabled = true),
     )
   }
 }

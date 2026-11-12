@@ -49,7 +49,6 @@ import skillbill.engine.featuretask.slot.PhaseLaunchReviewTier
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
 import skillbill.engine.featuretask.slot.carriesPackBuildCommand
 import skillbill.engine.featuretask.slot.implementationTurn
-import skillbill.engine.featuretask.slot.qualitygate.ValidateProbeActivation
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
@@ -70,7 +69,6 @@ import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeP
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionFailureClassification
-import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
@@ -518,13 +516,11 @@ internal object PhaseLaunchPreparation {
       validationGateTriagePlan = run.validationGateTriagePlan,
       validationGateRepair = run.validationGateRepair,
       validationGateTriage = run.validationGateTriage,
-      validateProbeScopeSource = { ValidateProbeActivation.scopeFor(run.request, run.validationGateTriage) },
       agentRunValidateFallback = run.agentRunValidateFallback,
       packBuildCommand = packCommand(run, checkpointResolutionArgs(run), carriesBuild = true),
       mutating = run.policy.mutating,
       singleAgentSession = run.policy.singleAgentSession,
       repoRoot = run.request.repoRoot,
-      stepProfile = run.launchAssignment?.profile ?: PhaseModelProfile.CANONICAL,
       implementationChecklistAddress = implementationChecklistAddress(run),
     ).withAcceptanceGapInputs(acceptanceRepair, acceptanceAuditProse)
   }

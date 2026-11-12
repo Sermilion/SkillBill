@@ -302,6 +302,6 @@ x-coherence-checks:
   - name: step_launch_assignment_limits
     description: >-
       At most 128 step launch assignments may be represented. Each step_id exists in the
-      traversal, assignments are unique, profile equals the classifier result for
-      (provider_namespace, effective_model), and a slot strategy is an Opus variant if and
-      only if at least one participating step is opus-5-5.
+      traversal and assignments are unique. Profile and provider metadata remain readable
+      for historical records and do not select runtime behavior. New launches pass configured
+      model and effort values through with the canonical profile.

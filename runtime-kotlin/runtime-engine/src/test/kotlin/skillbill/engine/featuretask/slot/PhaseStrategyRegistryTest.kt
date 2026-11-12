@@ -92,7 +92,7 @@ class PhaseStrategyRegistryTest {
   fun `a missing definition binding cannot resolve an execution plan`() {
     val registry = PhaseStrategyRegistry(listOf(reviewStrategy("inline")))
     val lookup =
-      PhaseStrategyLookup(registry, PhaseStrategySelection(registry, emptyMap()), ModelDirectiveSupplements(true))
+      PhaseStrategyLookup(registry, PhaseStrategySelection(registry, emptyMap()))
 
     assertFailsWith<UnknownPhaseStrategyError> { lookup.executionPlan(facts(CodeReviewExecutionMode.INLINE)) }
     assertFailsWith<PhaseStrategySelectionSlotMismatchError> {
@@ -151,7 +151,7 @@ class PhaseStrategyRegistryTest {
             ),
         ),
       )
-    val lookup = PhaseStrategyLookup(registry, selection, ModelDirectiveSupplements(true))
+    val lookup = PhaseStrategyLookup(registry, selection)
 
     assertSame(
       inline,
