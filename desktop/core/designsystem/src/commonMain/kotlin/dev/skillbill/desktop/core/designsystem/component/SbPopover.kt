@@ -62,7 +62,7 @@ private val POPOVER_WIDTH_MARGIN = 12.dp
 // placePopover keeps the panel 8px inside the window.
 private val POPOVER_WINDOW_MARGIN = 8.dp
 
-enum class SbPopoverPlacement { Auto, Above, AboveEnd }
+enum class SbPopoverPlacement { Auto, Above, AboveEnd, Below }
 
 @Composable
 fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset = DpOffset.Zero, width: Dp? = null, returnFocusTo: FocusRequester? = null, maxWidth: Dp = POPOVER_MAX_WIDTH, placement: SbPopoverPlacement = SbPopoverPlacement.Auto, arrowKeysMoveFocus: Boolean = true, specMenuKeyboard: Boolean = false, keyboardShortcuts: Map<Key, () -> Unit> = emptyMap(), title: String = "Menu", content: @Composable ColumnScope.() -> Unit) {
@@ -171,6 +171,7 @@ internal class PopoverPositionProvider(private val offset: IntOffset, private va
     val top = when (placement) {
       // placePopover flips to `top - height - 8`: the anchor's top edge, 8px clear, without the downward gap or offset.
       SbPopoverPlacement.Auto -> if (below + popupContentSize.height <= windowSize.height - margin) below else anchorBounds.top - popupContentSize.height - margin
+      SbPopoverPlacement.Below -> below
       SbPopoverPlacement.Above, SbPopoverPlacement.AboveEnd -> (anchorBounds.top - popupContentSize.height - gap + offset.y).takeIf { it >= margin } ?: below
     }
     return IntOffset((left + offset.x).coerceIn(margin, (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin)), top.coerceIn(margin, (windowSize.height - popupContentSize.height - margin).coerceAtLeast(margin)))

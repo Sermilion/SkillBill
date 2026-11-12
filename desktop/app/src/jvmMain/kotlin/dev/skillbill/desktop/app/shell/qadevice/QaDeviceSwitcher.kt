@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
+import dev.skillbill.desktop.core.designsystem.component.SbPopoverPlacement
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
@@ -61,7 +62,7 @@ fun QaDeviceSwitcher(state: QaDevicePickerState, modifier: Modifier = Modifier) 
         .border(1.dp, colors.borderSubtle, shape)
         .sbFocusRing(interaction, shape)
         .focusRequester(focus)
-        .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = state::open)
+        .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = { state.open() })
         .semantics { contentDescription = "QA device: ${closed.title}, ${closed.subtitle}" }
         .padding(horizontal = 8.dp),
       verticalAlignment = Alignment.CenterVertically,
@@ -94,6 +95,6 @@ fun QaDeviceSwitcher(state: QaDevicePickerState, modifier: Modifier = Modifier) 
       }
       SbIcon(LucideIcons.chevronsUpDown, SbIconSize.Sm)
     }
-    QaDeviceDropdown(state, focus)
+    QaDeviceDropdown(state, focus, QaDeviceMenuAnchor.Sidebar, SbPopoverPlacement.Above)
   }
 }

@@ -1595,7 +1595,7 @@
     const off = o.state === 'off';
     const label = busy ? 'Building…' : 'Run app';
     const name = o.device ? o.device.name : 'No device';
-    const main = `<button type="button" class="${cx('sb-runbtn-main', busy && 'is-busy')}"${busy || off ? ' disabled' : act('app-run', o.id)} data-tip="${esc(off ? o.reason : o.tip || `Build debug and open it on ${name}${o.device && o.device.boots ? ', booting it first' : ''}`)}">${busy ? '<span class="sb-runbtn-spin"></span>' : Icon('play')}<span>${esc(label)}</span><span class="sb-runbtn-sep">·</span><span class="${cx('sb-runbtn-dev', o.device && o.device.mono && 'mono')}">${esc(name)}</span></button>`;
+    const main = `<button type="button" class="${cx('sb-runbtn-main', busy && 'is-busy')}"${busy || off ? ' disabled' : act('app-run', o.id)} data-tip="${esc(o.reason || o.tip || `Build debug and open it on ${name}${o.device && o.device.boots ? ', booting it first' : ''}`)}">${busy ? '<span class="sb-runbtn-spin"></span>' : Icon('play')}<span>${esc(label)}</span><span class="sb-runbtn-sep">·</span><span class="${cx('sb-runbtn-dev', o.device && o.device.mono && 'mono')}">${esc(name)}</span></button>`;
     const side = busy
       ? `<button type="button" class="sb-runbtn-side is-stop"${act('app-run-stop', o.id)}${tipAttrs('Stop the build')} aria-label="Stop the build">${Icon('stop', 'xs')}</button>`
       : `<button type="button" class="sb-runbtn-side" id="app-run-dev-${esc(o.id)}"${act('app-run-device', o.id)} aria-haspopup="dialog" aria-expanded="${!!o.expanded}"${tipAttrs('Choose device')} aria-label="Choose device">${Icon('chevronDown', 'xs')}</button>`;
@@ -1606,8 +1606,8 @@
   function RunAppStatus(o) {
     track('RunAppStatus');
     if (!o || !o.state || o.state === 'idle') return '';
-    const tone = { building: 'var(--st-active)', running: 'var(--st-done)', failed: 'var(--st-failed)', contended: 'var(--st-blocked)', stopped: 'var(--fg-faint)', off: 'var(--fg-faint)' }[o.state];
-    const log = o.tab ? LinkButton({ label: o.state === 'failed' ? 'Open log' : 'Show log', act: 'term-tab', arg: o.tab }) : '';
+    const tone = { building: 'var(--st-active)', running: 'var(--st-done)', failed: 'var(--st-failed)', problem: 'var(--st-failed)', contended: 'var(--st-blocked)', stopped: 'var(--fg-faint)', off: 'var(--fg-faint)' }[o.state];
+    const log = o.tab ? LinkButton({ label: o.state === 'failed' || o.state === 'problem' ? 'Open log' : 'Show log', act: 'term-tab', arg: o.tab }) : '';
     const lead = o.state === 'building' ? '<span class="sb-runbtn-spin is-sm"></span>' : `<i class="sb-dot" style="--c:${tone}"></i>`;
     return `<span class="${cx('sb-runapp-st', 'is-' + o.state)}">${lead}<span>${o.html || esc(o.text)}</span>${log}</span>`;
   }

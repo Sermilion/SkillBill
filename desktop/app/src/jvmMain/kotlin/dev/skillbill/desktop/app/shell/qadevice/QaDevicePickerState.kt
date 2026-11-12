@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.domain.qa.QaDeviceDiscovery
 import dev.skillbill.desktop.core.domain.qa.QaDeviceDiscoveryRepository
 import dev.skillbill.desktop.core.domain.qa.QaDevicePick
+import dev.skillbill.desktop.core.domain.qa.leaseHolderIssueKeys
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.feedback.ToastMessage
@@ -32,7 +33,10 @@ data class QaDevicePickerUi(
   val checking: Boolean = false,
   val open: Boolean = false,
   val keyboardIndex: Int = 0,
+  val anchor: QaDeviceMenuAnchor = QaDeviceMenuAnchor.Sidebar,
 )
+
+enum class QaDeviceMenuAnchor { Sidebar, RunApp }
 
 @Inject
 @SingleIn(WindowScope::class)
@@ -56,11 +60,11 @@ class QaDevicePickerState(
     }
   }
 
-  fun open() {
-    if (mutableUi.value.open) return
+  fun open(anchor: QaDeviceMenuAnchor = QaDeviceMenuAnchor.Sidebar) {
+    if (mutableUi.value.open && mutableUi.value.anchor == anchor) return
     mutableUi.update { current ->
       val rows = qaDeviceRows(current.pick, current.result)
-      current.copy(open = true, keyboardIndex = selectedRowIndex(rows, current.pick).coerceAtLeast(0))
+      current.copy(open = true, anchor = anchor, keyboardIndex = selectedRowIndex(rows, current.pick).coerceAtLeast(0))
     }
     refresh()
   }
@@ -69,11 +73,7 @@ class QaDevicePickerState(
     discoveryJob?.cancel()
     val items = board.view.value.lastLoaded?.items.orEmpty()
     val roots = items.map { it.repositoryRoot }.distinct()
-    val labels = items.mapNotNull { item ->
-      val invocation = item.control.invocationId?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-      val issue = item.issueKey?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-      invocation to issue
-    }.toMap()
+    val labels = leaseHolderIssueKeys(items)
     val job = scope.scope.launch(start = CoroutineStart.LAZY) {
       mutableUi.update { it.copy(checking = true) }
       try {

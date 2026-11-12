@@ -45,7 +45,7 @@ fun DocHeader(
       subtitle != null -> BasicText(subtitle, style = type.tBase.copy(color = colors.fgMuted, lineHeight = 1.55.em))
     }
     actions?.let {
-      FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically, content = it)
+      FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.Top, content = it)
     }
   }
 }

@@ -7,6 +7,7 @@ kotlin {
     implementation(projects.core.common)
   }
   sourceSets.jvmMain.dependencies {
+    implementation(projects.core.ui)
     implementation(libs.pty4j)
     implementation(libs.jediterm.core)
     implementation(libs.jediterm.ui)

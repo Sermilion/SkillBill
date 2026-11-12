@@ -74,28 +74,44 @@
     if (it.incident && it.incident.recovery === 'available' && !st.recovered.has(it.id)) out.push(S.Button({ label: 'Recover', icon: 'refresh', act: 'recover', arg: it.id, disabled: it.refreshFailed || !recoveryOffered(st, it), tip: recoveryOffered(st, it) ? null : 'Confirm the prerequisites first' }));
     const run = runAppView(st, it);
     if (run) out.push(run.button);
-    return `<div class="l-col g-2"><div class="l-row g-2 l-wrap">${out.join('')}</div>${ro.canLaunch && resumable(it) ? `<span class="t-faint" style="font-size:var(--t-xs)">Starts the installed agent harness</span>` : ''}${plan && !ready ? `<span class="t-faint" style="font-size:var(--t-xs)">Implement turns on when every spec is saved</span>` : ''}${it.refreshFailed ? S.Hint({ tone: 'warn', text: 'Refresh the detail before using run controls.' }) : run && !it.refreshFailed ? run.status : ''}</div>`;
+    const activeBuild = (st.appRun[it.id] || {}).state === 'building';
+    const runStatus = it.refreshFailed
+      ? activeBuild && run ? run.status : S.Hint({ tone: 'warn', text: 'Refresh the detail before using run controls.' })
+      : run ? run.status : '';
+    return `<div class="l-col g-2"><div class="l-row g-2 l-wrap">${out.join('')}</div>${ro.canLaunch && resumable(it) ? `<span class="t-faint" style="font-size:var(--t-xs)">Starts the installed agent harness</span>` : ''}${plan && !ready ? `<span class="t-faint" style="font-size:var(--t-xs)">Implement turns on when every spec is saved</span>` : ''}${runStatus}</div>`;
   }
 
   /* ---------- Run app (SONA-10) ---------- */
   /* Shown on goals whose routed pack declares an app-run recipe for the device platform (sample: `appRun` on the repository).
    * The device is the sidebar QA pick; Let QA choose resolves to the first ready device, else the first stopped AVD. */
   function runAppTarget(st) {
+    if (st.qaDev.checking) return { problem: 'Looking for devices…' };
+    if (st.qaDev.list === 'adbFailed') return { problem: 'adb could not list devices. Open the device panel for details.' };
     const list = deviceList(st);
     if (!list) return { problem: 'adb not found. Install Android SDK Platform-Tools, or set ANDROID_HOME.' };
-    const picked = st.qaDev.selected !== 'auto' && list.find((d) => d.id === st.qaDev.selected);
+    const picked = st.qaDev.selected !== 'auto' && (list.find((d) => d.id === st.qaDev.selected && (d.state === 'ready' || d.state === 'leased' || d.state === 'stopped'))
+      || list.find((d) => d.runningAvdName === st.qaDev.selected || `avd:${d.runningAvdName}` === st.qaDev.selected));
     const d = picked || list.find((x) => x.state === 'ready') || list.find((x) => x.state === 'stopped');
     if (!d) return { problem: 'No device. Plug in a phone with USB debugging on, or create an AVD.' };
     return { device: { id: d.id, name: d.name, mono: d.kind === 'emu', boots: d.state === 'stopped', serial: d.kind === 'emu' ? 'emulator-5556' : 'R5CT1234ABC', wire: d.kind === 'emu' && !d.running ? `avd:${d.name}` : `serial:${d.kind === 'emu' ? 'emulator-5556' : 'R5CT1234ABC'}` }, auto: !picked };
   }
   const runAppEligible = (it) => it && it.kind === 'goal' && (repoOf(it.repo).appRun || []).includes('android');
+  function runAppProblemMessage(run) {
+    if (run.message) return run.message;
+    if (run.problem === 'module' && !run.candidates?.length) return 'No Android app module found.';
+    if (run.problem === 'module') return `Several app modules: ${run.candidates.join(', ')}. Set module in .skill-bill/app-run.yaml.`;
+    if (run.problem === 'launch') return `Built and installed, but the app did not open on ${run.device.name}.`;
+    if (run.problem === 'boot') return `${run.device.name} did not boot. Nothing was installed.`;
+    if (run.problem === 'failed') return `Run app failed with exit ${run.exitCode}.`;
+    return run.message || 'Run app failed.';
+  }
   /* Run app is on for a completed goal and for a goal in monitoring (watching CI on its PR). Every other state is off: the
    * code is still changing, and an agent writing in the checkout would race the build. A CI repair (monitor_fix) edits the
    * checkout, so it turns the button off until monitoring resumes. */
   const runAppMonitoring = (it) => it.lifecycle === 'active' && it.step === 'monitor';
   function runAppBlocker(st, it, target) {
     if (it.refreshFailed) return 'Refresh the detail before using run controls.';
-    if (it.lifecycle === 'active' && it.step === 'monitor_fix') return 'Off while a CI repair edits the checkout. Run app turns back on when monitoring resumes.';
+    if (it.step === 'monitor_fix') return 'Off while a CI repair edits the checkout. Run app turns back on when monitoring resumes.';
     if (it.lifecycle !== 'terminal' && !runAppMonitoring(it)) return 'Run app turns on when the goal completes or reaches monitoring.';
     return target.problem || null;
   }
@@ -105,17 +121,17 @@
     const reason = runAppBlocker(st, it, target);
     const busy = run.state === 'building';
     const device = busy ? run.device : target.device;
-    const where = it.lifecycle === 'terminal' ? `Builds in a temporary worktree on ${it.branch}` : 'Builds in the goal checkout while CI runs';
-    const tip = device ? `${where}, then opens it on ${device.name}${device.boots ? ' after booting it' : ''}${target.auto ? ' (Let QA choose picked it)' : ''}` : null;
-    const button = S.RunAppButton({ id: it.id, device, tip, state: busy ? 'building' : reason ? 'off' : 'idle', reason,
+    const button = S.RunAppButton({ id: it.id, device, state: busy ? 'building' : reason ? 'off' : 'idle', reason,
       expanded: !!st.popover && st.popover.type === 'devices' && st.popover.runApp === it.id });
     const name = (d) => `<b>${S.esc(d.name)}</b>`;
     const status = busy ? S.RunAppStatus({ state: 'building', tab: run.tab, html: `Building for ${name(run.device)} · <code>${S.esc(run.step)}</code>` })
+      : reason ? S.RunAppStatus({ state: 'off', text: reason })
       : run.state === 'running' ? S.RunAppStatus({ state: 'running', tab: run.tab, html: `Running on ${name(run.device)} · opened ${S.esc(run.at)}` })
       : run.state === 'failed' ? S.RunAppStatus({ state: 'failed', tab: run.tab, html: `Build failed · <code>:app:compileDebugKotlin</code> · nothing was installed on ${name(run.device)}` })
       : run.state === 'contended' ? S.RunAppStatus({ state: 'contended', tab: run.tab, html: `${name(run.device)} is in use by QA run <b>${S.esc(run.holder)}</b>. Nothing was installed. Pick another device.` })
       : run.state === 'stopped' ? S.RunAppStatus({ state: 'stopped', tab: run.tab, text: 'Build stopped. Nothing new was installed.' })
-      : reason ? S.RunAppStatus({ state: 'off', text: reason }) : '';
+      : run.state === 'problem' ? S.RunAppStatus({ state: 'problem', tab: run.tab, text: runAppProblemMessage(run) })
+      : '';
     return { button, status };
   }
 

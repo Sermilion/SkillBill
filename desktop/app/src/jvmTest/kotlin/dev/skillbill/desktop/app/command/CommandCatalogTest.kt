@@ -116,6 +116,7 @@ class CommandCatalogTest {
     override fun newTerminalTab() = Unit
     override fun openTerminal(directory: Path?) = Unit
     override fun openTerminal(item: dev.skillbill.desktop.core.domain.model.WorkItem) = Unit
+    override fun openAppRunLog(goalKey: String, directory: Path?) = Unit
     override fun specProjectSelected(checkout: Path?) = Unit
     override fun chatRepositorySelected(root: Path?) = Unit
     override fun closeTerminals() = Unit

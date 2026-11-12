@@ -444,11 +444,6 @@ class RuntimeWorkControlRepository(
     qaDevice = qaDevice.takeIf { qa == VerifyQaChoice.On },
   )
 
-  private fun QaDevicePick.toRuntimeDevice(): QaNamedDevice = QaNamedDevice(
-    if (kind == QaDevicePickKind.Serial) QaNamedDeviceKind.SERIAL else QaNamedDeviceKind.AVD,
-    value,
-  )
-
   private fun NewTaskStart.usesQaDevice(): Boolean =
     kind == NewTaskKind.Qa || kind == NewTaskKind.GoalRun || (kind == NewTaskKind.Verify && verify.qa == VerifyQaChoice.On)
 

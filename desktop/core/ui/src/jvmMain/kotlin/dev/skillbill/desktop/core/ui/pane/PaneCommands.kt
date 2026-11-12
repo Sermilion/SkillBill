@@ -30,6 +30,9 @@ interface PaneCommands {
 
   fun openTerminal(item: WorkItem)
 
+  /** Opens or selects the reusable Run app output tab for [goalKey]. Closing the tab does not stop the run. */
+  fun openAppRunLog(goalKey: String, directory: Path?)
+
   /** The spec picker's project checkout; null when the project has none, which resolves to home. */
   fun specProjectSelected(checkout: Path?)
 

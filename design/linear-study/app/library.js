@@ -298,6 +298,8 @@
           demo('Off: blocked, paused, failed or still running', { device: p8, state: 'off', reason: 'state' }, { state: 'off', text: 'Run app turns on when the goal completes or reaches monitoring.' }, 'blocked'),
           demo('Off: a CI repair edits the checkout', { device: p8, state: 'off', reason: 'repair' }, { state: 'off', text: 'Off while a CI repair edits the checkout. Run app turns back on when monitoring resumes.' }),
           demo('Off: adb not found', { device: null, state: 'off', reason: 'adb' }, { state: 'off', text: 'adb not found. Install Android SDK Platform-Tools, or set ANDROID_HOME.' }, 'noadb'),
+          demo('Off: adb could not list devices', { device: null, state: 'off', reason: 'adb' }, { state: 'off', text: 'adb could not list devices. Open the device panel for details.' }, 'adbfailed'),
+          demo('Run problem', { device: p8, state: 'idle' }, { state: 'problem', tab: 1, text: 'Several app modules: :app, :demo. Set module in .skill-bill/app-run.yaml.' }, 'problem'),
         ].join('')}</div>`;
       }],
       ['DeviceSwitcher', 'The last row of the sidebar: the device QA runs started from the app use. Glyph with a pip (green when the pick is ready, orange while a device needs a fix, grey when nothing is ready, red when adb is missing), the name over one faint line, an up-down chevron. It opens DevicePanel above itself.', () => `<div class="l-row g-6 l-wrap l-top">${[

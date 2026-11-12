@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,6 +53,7 @@ fun SbButton(
   variant: SbButtonVariant = SbButtonVariant.Secondary, size: SbControlSize = SbControlSize.Regular,
   icon: ImageVector? = null, shortcut: String? = null, enabled: Boolean = true,
   tooltip: String? = null, tooltipShortcut: String? = null,
+  contentSlot: (@Composable RowScope.() -> Unit)? = null,
 ) {
   val colors = SkillBillTheme.colors
   val shape = RoundedCornerShape(SkillBillRadius.sm)
@@ -105,11 +107,15 @@ fun SbButton(
           }
           CompositionLocalProvider(LocalContentColor provides iconColor) { SbIcon(it, SbIconSize.Sm) }
         }
-        label?.let {
-          val style = if (size == SbControlSize.Regular) SkillBillTheme.type.tSmMedium else SkillBillTheme.type.tXs
-          BasicText(it, style = style.copy(color = fg, lineHeight = 1.em), maxLines = 1, softWrap = false)
+        if (contentSlot != null) {
+          contentSlot()
+        } else {
+          label?.let {
+            val style = if (size == SbControlSize.Regular) SkillBillTheme.type.tSmMedium else SkillBillTheme.type.tXs
+            BasicText(it, style = style.copy(color = fg, lineHeight = 1.em), maxLines = 1, softWrap = false)
+          }
+          shortcut?.let { Kbd(it.split(' ').filter(String::isNotBlank), onAccent = variant == SbButtonVariant.Primary) }
         }
-        shortcut?.let { Kbd(it.split(' ').filter(String::isNotBlank), onAccent = variant == SbButtonVariant.Primary) }
       }
     }
   }

@@ -11,6 +11,8 @@ import dev.skillbill.desktop.core.designsystem.component.ToastLead
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.ui.changes.ChangesWindows
+import dev.skillbill.desktop.core.ui.apprun.AppRunController
+import dev.skillbill.desktop.core.ui.apprun.RunAppDeviceHost
 import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
@@ -52,6 +54,8 @@ class DetailFeatureEntry(
   private val paneCommands: PaneCommands,
   private val chat: ChatCommands,
   private val changesWindows: ChangesWindows,
+  private val runAppDevices: RunAppDeviceHost,
+  private val appRuns: AppRunController,
 ) : FeatureEntry {
   override fun renders(route: AppRoute): Boolean = route is DetailRoute
 
@@ -87,6 +91,9 @@ class DetailFeatureEntry(
       }
     }
     val terminalOpen by paneCommands.terminalOpen.collectAsState()
+    val appRunPick by runAppDevices.pick.collectAsState()
+    val appRunDiscovery by runAppDevices.discovery.collectAsState()
+    val appRunStates by appRuns.states.collectAsState()
     val shownChatId by chat.shownChatId.collectAsState()
     val host = DetailScreenHost(
       detailsPaneOpen = shellPanes.detailsPaneOpen,
@@ -100,6 +107,19 @@ class DetailFeatureEntry(
       chatPaneOpen = shellPanes.chatOpen,
       chatShortcut = CHAT_SHORTCUT,
       onToggleChat = { chat.toggleChat(item) },
+      runApp = RunAppHostUi(
+        goalKey = item.issueKey ?: item.id,
+        pick = appRunPick,
+        discovery = appRunDiscovery,
+        states = appRunStates,
+        onRun = { target -> appRuns.run(state.header, target.pick, target.sourcePick) },
+        onStop = { appRuns.stop(state.header.issueKey ?: state.header.id) },
+        onOpenLog = { paneCommands.openAppRunLog(state.header.issueKey ?: state.header.id, java.nio.file.Path.of(state.header.repositoryRoot)) },
+        onOpenDevices = runAppDevices::openDeviceMenu,
+        refreshDevices = runAppDevices::refreshDevices,
+        deviceMenu = { focus -> runAppDevices.DeviceMenu(focus) },
+        formatOpenedAt = { formatInstant(it, "HH:mm") },
+      ),
     )
     SideEffect { viewModel.onAction(DetailAction.SetQaPreviewVisible(host.detailsPaneVisible)) }
     DisposableEffect(viewModel) {

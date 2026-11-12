@@ -81,7 +81,7 @@
     if (page === 'detail' && open) return { view: 'detail', id: decodeURIComponent(open), open: null, inspector: rest[0], resultTab: rest[1] };
     if (page === 'build') return { view: 'detail', id: D.BUILD.focus, open: null, build: { state: open || D.BUILD.live.state, type: rest[0] || D.BUILD.live.type } };
     /* #run-app/<scenario> opens an Android sample goal with Run app in one state. On NEWS-168 (completed): ready, building,
-     * running, failed, contended, stopped, noadb, avd (a stopped AVD picked, so the run boots it first). monitoring opens
+     * running, failed, contended, stopped, noadb, adbfailed, problem, avd (a stopped AVD picked, so the run boots it first). monitoring opens
      * NEWS-174 (watching CI); blocked opens NEWS-176 and active opens NEWS-171, where the button is off. */
     if (page === 'run-app') {
       const scenario = open || 'ready';
@@ -426,13 +426,14 @@
   const now = () => new Date().toTimeString().slice(0, 5);
   /* The ordered steps of one run: [delay ms, status step, lines]. */
   function appRunSteps(it, d, fail) {
-    const steps = [[150, 'lease', R.head(it.id, d.wire).concat(R.lease(d.name))]];
-    if (d.boots) steps.push([1100, `emulator @${d.name}`, R.boot(d.name)]);
+    const steps = [[120, 'Preparing the checkout', R.head(it.id, d.wire)]];
+    if (d.boots) steps.push([1100, `Booting ${d.name}`, R.boot(d.name)]);
+    steps.push([150, `Leasing ${d.name}`, R.lease(d.name)]);
     if (fail) return steps.concat([[900, 'gradlew :app:installDebug', R.fail.slice(0, 2)], [900, 'gradlew :app:installDebug', R.fail.slice(2)], [200, null, R.release(d.name).concat([['er', 'Build failed. Nothing was installed.']])]]);
     return steps.concat([
       [700, 'gradlew :app:installDebug', R.gradle.slice(0, 3)],
       [1200, 'gradlew :app:installDebug', R.gradle.slice(3)],
-      [600, 'am start -n dev.acme.newsreader/.MainActivity', R.launch(d.serial)],
+      [600, 'Opening the app', R.launch(d.serial)],
       [300, null, R.release(d.name).concat([['ok', `Running on ${d.name}.`]])],
     ]);
   }
@@ -442,7 +443,7 @@
     appTimers.forEach(clearTimeout); appTimers = [];
     const d = target.device, tab = appRunTab(it);
     st.termActive = tab.id; st.termOpen = true;
-    st.appRun[id] = { state: 'building', device: d, step: 'taking the device lease', tab: tab.id };
+    st.appRun[id] = { state: 'building', device: d, step: 'Preparing the checkout', tab: tab.id };
     render();
     let at = 0;
     appRunSteps(it, d, fail).forEach(([delay, step, lines], i, all) => {
@@ -464,15 +465,16 @@
     const it = X.lookup(id); if (!it) return;
     appTimers.forEach(clearTimeout); appTimers = [];
     delete st.appRun[it.id];
-    st.qaDev.list = scenario === 'noadb' ? 'noAdb' : 'mixed';
+    st.qaDev.list = scenario === 'noadb' ? 'noAdb' : scenario === 'adbfailed' ? 'adbFailed' : 'mixed';
     st.qaDev.selected = scenario === 'avd' ? 'avd1' : 'p8';
-    if (['ready', 'avd', 'noadb', 'monitoring', 'blocked', 'active'].includes(scenario)) return;
+    if (['ready', 'avd', 'noadb', 'adbfailed', 'monitoring', 'blocked', 'active'].includes(scenario)) return;
     const d = X.runAppTarget(st).device, tab = appRunTab(it);
     if (scenario === 'contended') { const leased = { id: 'emu1', name: 'Pixel_7_API_34', mono: true, wire: 'serial:emulator-5554' }; tab.log = R.head(it.id, leased.wire).concat(R.contended(leased.name, 'SKILL-514')); tab.live = false; st.appRun[it.id] = { state: 'contended', device: leased, holder: 'SKILL-514', tab: tab.id }; }
     else if (scenario === 'failed') { tab.log = R.head(it.id, d.wire).concat(R.lease(d.name), R.fail, R.release(d.name), [['er', 'Build failed. Nothing was installed.']]); tab.live = false; st.appRun[it.id] = { state: 'failed', device: d, tab: tab.id, at: '14:32' }; }
     else if (scenario === 'running') { tab.log = R.head(it.id, d.wire).concat(R.lease(d.name), R.gradle, R.launch(d.serial), R.release(d.name), [['ok', `Running on ${d.name}.`]]); tab.live = false; st.appRun[it.id] = { state: 'running', device: d, tab: tab.id, at: '14:32' }; }
     else if (scenario === 'stopped') { tab.log = R.head(it.id, d.wire).concat(R.lease(d.name), R.gradle.slice(0, 2), [['wn', 'Stopped by you.'], ...R.release(d.name)]); tab.live = false; st.appRun[it.id] = { state: 'stopped', device: d, tab: tab.id }; }
     else if (scenario === 'building') { tab.log = R.head(it.id, d.wire).concat(R.lease(d.name), R.gradle.slice(0, 2)); st.appRun[it.id] = { state: 'building', device: d, step: 'gradlew :app:installDebug', tab: tab.id }; }
+    else if (scenario === 'problem') { tab.log = R.head(it.id, d.wire).concat([['er', 'Several app modules were found.']]); tab.live = false; st.appRun[it.id] = { state: 'problem', device: d, message: 'Several app modules: :app, :demo. Set module in .skill-bill/app-run.yaml.', tab: tab.id }; }
     st.termActive = tab.id; st.termOpen = true;
   }
   function openTerminalFor(it) {

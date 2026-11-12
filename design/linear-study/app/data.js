@@ -1167,7 +1167,7 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
     mixed: [
       { id: 'p8', kind: 'phone', name: 'Pixel 8 Pro', transport: 'USB', api: 'Android 15', state: 'ready' },
       { id: 's23', kind: 'phone', name: 'Galaxy S23', transport: 'Wi-Fi', api: 'Android 14', state: 'ready' },
-      { id: 'emu1', kind: 'emu', name: 'Pixel_7_API_34', running: true, state: 'leased', lease: 'SKILL-514' },
+      { id: 'emu1', kind: 'emu', name: 'Pixel_7_API_34', running: true, runningAvdName: 'avd1', state: 'leased', lease: 'SKILL-514' },
       { id: 'avd1', kind: 'emu', name: 'Pixel_Tablet_API_35', running: false, state: 'stopped' },
       { id: 'avd2', kind: 'emu', name: 'Small_Phone_API_29', running: false, state: 'stopped' },
     ],

@@ -76,7 +76,7 @@ internal fun WorkBoardItem.toWorkItem(sessionId: Long): WorkItem = snapshot.toWo
     repositoryRoot, finishedAt, liveSection, displayGroup, displayPriority, requiresAttention, controlEligible, pauseEligible,
     running, recentlyFinishedPhase, doneWithinDay, freshnessDeadline, membershipDeadline, exactPauseReason, controlLease,
     observation, databaseFileObservation, sessionId, executingAgentId, finishedAtSource, goalWorktree, build,
-  ),
+  ), appRunPlatforms,
 )
 
 /** The detail read carries no membership verdicts; those stay on the board row. */
@@ -86,11 +86,11 @@ internal fun WorkDetailItem.toWorkItem(sessionId: Long): WorkItem = snapshot.toW
     running, recentlyFinishedPhase = false, doneWithinDay = false, freshnessDeadline, membershipDeadline = null,
     exactPauseReason, controlLease, observation, databaseFileObservation, sessionId,
     completionSource = finishedAtSource, goalWorktree = goalWorktree, build = build,
-  ),
+  ), appRunPlatforms,
 )
 
 /** Field-by-field copy; the id rule: a standalone phase is its invocation, anything else its workflow. */
-internal fun IdeStatusSnapshot.toWorkItem(verdicts: ItemVerdicts): WorkItem {
+internal fun IdeStatusSnapshot.toWorkItem(verdicts: ItemVerdicts, appRunPlatforms: List<String> = emptyList()): WorkItem {
   val id = if (execution?.scope == IdeStatusExecutionScope.STANDALONE_PHASE) execution?.invocationId else workflowId ?: execution?.invocationId
   val phase = currentPhaseExecution?.let {
     PhaseExecution(it.phaseId, it.kind.toDomain(), it.count, it.total, it.criterionRef)
@@ -137,6 +137,7 @@ internal fun IdeStatusSnapshot.toWorkItem(verdicts: ItemVerdicts): WorkItem {
     awaitsOperatorDecision = pauseReason?.awaitsOperatorDecision == true,
     currentSubtaskId = currentSubtask?.id,
     reason = verdicts.exactPauseReason ?: pauseReason?.label ?: planning?.reason,
+    appRunPlatforms = appRunPlatforms.toSet(),
     control = WorkControlIdentity(
       sessionId = verdicts.sessionId,
       workflowId = workflowId,

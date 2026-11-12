@@ -13,4 +13,8 @@ kotlin {
     api(libs.lifecycle.viewmodel.compose)
     api(libs.kotlinx.coroutines.core)
   }
+  sourceSets.jvmTest.dependencies {
+    implementation(projects.core.testing)
+    implementation(libs.kotlinx.coroutines.test)
+  }
 }

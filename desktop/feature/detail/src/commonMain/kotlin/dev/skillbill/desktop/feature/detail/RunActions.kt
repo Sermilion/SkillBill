@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -36,7 +37,12 @@ internal fun RunActions(
   menuOpen: Boolean,
   recoverFocus: FocusRequester,
   onAction: (ControlsAction) -> Unit,
+  runAppHost: RunAppHostUi? = null,
 ) {
+  val runApp = view.runApp
+  if (runApp != null && runAppHost?.discovery == null) {
+    LaunchedEffect(runAppHost?.goalKey) { runAppHost?.refreshDevices?.invoke() }
+  }
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
       view.pauseAfter?.let { ActionButton(it, LucideIcons.pause, "P") { onAction(ControlsAction.PauseAfterSubtask) } }
@@ -52,9 +58,19 @@ internal fun RunActions(
         ActionButton(button, LucideIcons.play, variant = if (button.enabled) SbButtonVariant.Primary else SbButtonVariant.Secondary) { onAction(ControlsAction.ImplementPlan) }
         AgentPicker(view, agentChoices, menuOpen, onAction)
       }
+      if (runApp != null && runAppHost != null) {
+        RunAppSplitButton(
+          view = runApp,
+          deviceMenu = runAppHost.deviceMenu,
+          onRun = { runApp.target?.let(runAppHost.onRun) },
+          onStop = runAppHost.onStop,
+          onOpenDevices = runAppHost.onOpenDevices,
+        )
+      }
       view.cancel?.let { ActionButton(it, LucideIcons.x, variant = SbButtonVariant.Danger) { onAction(ControlsAction.Cancel) } }
       view.recover?.let { ActionButton(it, LucideIcons.refresh, modifier = Modifier.focusRequester(recoverFocus)) { onAction(ControlsAction.Recover) } }
     }
+    if (runApp?.status != null && runAppHost != null) RunAppStatusLine(runApp.status) { runAppHost.onOpenLog() }
     // `.t-faint` at `--t-xs`, regular weight.
     if (view.launchNote) BasicText("Starts the installed agent harness", style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal))
     if (view.implementationNote) BasicText("Implement turns on when every spec is saved", style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal))

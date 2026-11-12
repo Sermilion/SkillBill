@@ -256,7 +256,7 @@ class PlanActionsTest {
     val state = finishedPlanState(planOptions(goalStarted = true))
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        RunActions(runActionsView(state), listOf("claude", "codex"), false, remember { FocusRequester() }) {}
+        RunActions(runActionsView(state), listOf("claude", "codex"), false, remember { FocusRequester() }, onAction = {})
       }
     }
 

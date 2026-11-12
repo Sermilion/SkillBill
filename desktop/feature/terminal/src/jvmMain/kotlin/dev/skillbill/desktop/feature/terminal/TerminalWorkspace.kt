@@ -13,6 +13,7 @@ import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.input.ShellInput
 import dev.skillbill.desktop.core.ui.pane.PaneCommands
+import dev.skillbill.desktop.core.ui.apprun.AppRunController
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import kotlinx.coroutines.CoroutineScope
@@ -56,7 +57,7 @@ data class TerminalUiState(
   val renamingId: Long? = null,
 )
 
-data class TerminalTabUi(val id: Long, val label: String, val directory: Path, val fallbackRoot: Path? = null, val notice: String? = null)
+data class TerminalTabUi(val id: Long, val label: String, val directory: Path, val fallbackRoot: Path? = null, val notice: String? = null, val appRunGoalKey: String? = null)
 
 // A drag reports many deltas; the height is written once it has been still this long.
 private val HEIGHT_WRITE_DELAY = 300.milliseconds
@@ -76,6 +77,7 @@ class TerminalWorkspace(
   selection: SelectionHolder,
   private val settingsRepository: AppSettingsRepository,
   private val launcher: ShellLauncher,
+  private val appRuns: AppRunController,
   private val panes: ShellPanes,
   private val input: ShellInput,
   private val toasts: ToastQueue,
@@ -108,7 +110,7 @@ class TerminalWorkspace(
   val state: StateFlow<TerminalUiState> = combine(tabs, renaming, storedHeight, draggedHeight) { current, renamingId, stored, dragged ->
     val labels = terminalTabLabels(current.tabs)
     TerminalUiState(
-      tabs = current.tabs.map { TerminalTabUi(it.id, labels.getValue(it.id), Path.of(it.directory), it.fallbackRoot?.let(Path::of), it.notice) },
+      tabs = current.tabs.map { TerminalTabUi(it.id, labels.getValue(it.id), Path.of(it.directory), it.fallbackRoot?.let(Path::of), it.notice, it.appRunGoalKey) },
       activeId = current.activeId,
       paneOpen = current.paneOpen,
       heightDp = dragged ?: stored.toFloat(),
@@ -162,6 +164,11 @@ class TerminalWorkspace(
   override fun openTerminal(directory: Path?) = addTab(directory)
 
   override fun openTerminal(item: WorkItem) = addTab(item.toSelectedRoot())
+
+  override fun openAppRunLog(goalKey: String, directory: Path?) {
+    val path = tabDirectory(directory, userHome)
+    update(tabs.value.withAppRunTab(goalKey, nextId++, path.toString()))
+  }
 
   override fun specProjectSelected(checkout: Path?) = startSelection.specProjectSelected(checkout)
 
@@ -232,7 +239,9 @@ class TerminalWorkspace(
   /** The tab's session, created on first use; a tab that is no longer listed gets a closed one. */
   fun session(id: Long): TerminalSession {
     sessions[id]?.let { return it }
-    val session = TerminalSession(launcher, { process, settings -> jediTermView(process, settings, ::focusChanged) }) {
+    val appRunGoalKey = tabs.value.tabs.firstOrNull { it.id == id }?.appRunGoalKey
+    val selectedLauncher = appRunGoalKey?.let { AppRunLogLauncher(appRuns.output(it)) } ?: launcher
+    val session = TerminalSession(selectedLauncher, { process, settings -> jediTermView(process, settings, ::focusChanged) }) {
       scope.launch { closeTab(id) }
     }
     if (tabs.value.tabs.none { it.id == id }) session.close() else sessions[id] = session

@@ -57,16 +57,21 @@ import dev.skillbill.desktop.core.domain.qa.QaDeviceTransport
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 
 @Composable
-internal fun QaDeviceDropdown(state: QaDevicePickerState, switcherFocus: FocusRequester) {
+internal fun QaDeviceDropdown(
+  state: QaDevicePickerState,
+  switcherFocus: FocusRequester,
+  anchor: QaDeviceMenuAnchor = QaDeviceMenuAnchor.Sidebar,
+  placement: SbPopoverPlacement = SbPopoverPlacement.Above,
+) {
   val ui by state.ui.collectAsState()
   val rows = qaDeviceRows(ui.pick, ui.result)
-  if (ui.open) ShellLayer(state::close)
+  if (ui.open && ui.anchor == anchor) ShellLayer(state::close)
   SbPopover(
-    expanded = ui.open,
+    expanded = ui.open && ui.anchor == anchor,
     onDismissRequest = state::close,
     width = 300.dp,
     maxWidth = 300.dp,
-    placement = SbPopoverPlacement.Above,
+    placement = placement,
     returnFocusTo = switcherFocus,
     arrowKeysMoveFocus = false,
     keyboardShortcuts = mapOf(

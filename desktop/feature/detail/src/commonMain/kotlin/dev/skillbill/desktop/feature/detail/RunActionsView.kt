@@ -6,6 +6,9 @@ import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
 import dev.skillbill.desktop.core.domain.model.IncidentProgress
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkKind
+import dev.skillbill.desktop.core.domain.qa.QaDeviceDiscovery
+import dev.skillbill.desktop.core.domain.qa.QaDevicePick
+import dev.skillbill.desktop.core.ui.apprun.AppRunState
 
 internal const val REFRESH_BEFORE_CONTROLS = "Refresh the detail before using run controls."
 internal const val WORKING = "Working…"
@@ -40,10 +43,33 @@ internal data class RunActionsView(
   val implement: ControlButton? = null,
   val implementationNote: Boolean = false,
   val goalStartedNote: Boolean = false,
+  val runApp: RunAppView? = null,
+)
+
+internal data class RunAppView(
+  val label: String,
+  val device: String,
+  val monospace: Boolean,
+  val enabled: Boolean,
+  val busy: Boolean,
+  val tooltip: String,
+  val status: RunAppStatusView?,
+  val target: RunAppTarget?,
+)
+
+internal data class RunAppStatusView(val tone: RunAppTone, val text: String, val logLabel: String?)
+
+internal enum class RunAppTone { Building, Running, Failed, Contended, Stopped, Off }
+
+internal data class RunAppInputs(
+  val pick: QaDevicePick?,
+  val discovery: QaDeviceDiscovery?,
+  val runState: AppRunState,
+  val openedAtLabel: String? = null,
 )
 
 /** HANDOFF 9.2 items 4, 5 and 7 as rules D-A to D-F: presence, labels and enablement only; nothing is sorted or timed. */
-internal fun runActionsView(state: DetailUiState): RunActionsView {
+internal fun runActionsView(state: DetailUiState, runApp: RunAppInputs? = null): RunActionsView {
   val item = state.header
   val controls = state.controls
   val loaded = state.sections as? SectionsUi.Loaded
@@ -100,6 +126,55 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
 
   val decision = if (item.awaitsOperatorDecision) operatorDecisionNeeded(item.issueKey, item.currentSubtaskId) else null
 
+  val runAppView = runApp?.let { inputs ->
+    when (val availability = runAppAvailability(item, inputs.discovery, inputs.pick, state.stale || state.sections is SectionsUi.Failed)) {
+      RunAppAvailability.Hidden -> null
+      is RunAppAvailability.Disabled, is RunAppAvailability.Enabled -> {
+        val target = when (availability) {
+          is RunAppAvailability.Disabled -> availability.target
+          is RunAppAvailability.Enabled -> availability.target
+          RunAppAvailability.Hidden -> null
+        }
+        val building = inputs.runState as? AppRunState.Building
+        val reason = (availability as? RunAppAvailability.Disabled)?.reason
+        val status = when {
+          building != null -> RunAppStatusView(RunAppTone.Building, "Building for ${building.device} · ${building.step}", "Show log")
+          reason != null -> RunAppStatusView(RunAppTone.Off, reason, null)
+          inputs.runState is AppRunState.Running -> RunAppStatusView(
+            RunAppTone.Running,
+            "Running on ${inputs.runState.device} · opened ${inputs.openedAtLabel ?: inputs.runState.openedAt.toString().substringAfter('T').take(5)}",
+            "Show log",
+          )
+          inputs.runState is AppRunState.BuildFailed -> RunAppStatusView(
+            RunAppTone.Failed,
+            "Build failed · ${inputs.runState.task} · nothing was installed on ${inputs.runState.device}",
+            "Open log",
+          )
+          inputs.runState is AppRunState.Contended -> RunAppStatusView(
+            RunAppTone.Contended,
+            "${inputs.runState.device} is in use by QA run ${inputs.runState.holderLabel}. Nothing was installed. Pick another device.",
+            "Show log",
+          )
+          inputs.runState is AppRunState.Stopped -> RunAppStatusView(RunAppTone.Stopped, "Build stopped. Nothing new was installed.", "Show log")
+          inputs.runState is AppRunState.Problem -> RunAppStatusView(RunAppTone.Failed, inputs.runState.message, "Open log")
+          else -> null
+        }
+        val device = building?.device ?: target?.pick?.displayName ?: "No device"
+        val busy = building != null
+        RunAppView(
+          label = if (busy) "Building…" else "Run app",
+          device = device,
+          monospace = target?.monospace == true || target?.pick?.kind == dev.skillbill.desktop.core.domain.qa.QaDevicePickKind.Avd,
+          enabled = availability is RunAppAvailability.Enabled && !busy,
+          busy = busy,
+          tooltip = reason ?: "Build debug and open it on $device${if (target?.boots == true) ", booting it first" else ""}",
+          status = status,
+          target = target,
+        )
+      }
+    }
+  }
+
   return RunActionsView(
     usable = usable,
     refreshNeeded = (loaded != null && (state.stale || options == null)) || state.sections is SectionsUi.Failed,
@@ -120,6 +195,7 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
     implement = implement,
     implementationNote = implement != null && !goalStarted && !planFinished(item, loaded?.detail),
     goalStartedNote = implement != null && goalStarted,
+    runApp = runAppView,
   )
 }
 

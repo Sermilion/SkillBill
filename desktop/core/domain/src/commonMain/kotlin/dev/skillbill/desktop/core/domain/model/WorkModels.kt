@@ -137,6 +137,7 @@ data class WorkItem(
   val build: WorkBuild? = null,
   val primaryRepositoryRoot: String? = null,
   val runKindLabel: String? = null,
+  val appRunPlatforms: Set<String> = emptySet(),
 ) {
   val checkoutRoot: String get() = goalWorktree?.takeIf { it.state != GoalWorktreeState.Removed }?.path ?: repositoryRoot
 }

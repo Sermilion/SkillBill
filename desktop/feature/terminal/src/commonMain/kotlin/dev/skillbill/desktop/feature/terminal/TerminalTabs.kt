@@ -8,12 +8,19 @@ data class TerminalTab(
   val customName: String? = null,
   val fallbackRoot: String? = null,
   val notice: String? = null,
+  val appRunGoalKey: String? = null,
 )
 
 /** The window's tabs in creation order. It lives in memory only; no tab survives the window. */
 data class TerminalTabsState(val tabs: List<TerminalTab> = emptyList(), val activeId: Long? = null, val paneOpen: Boolean = false)
 
 internal fun TerminalTabsState.withTab(tab: TerminalTab): TerminalTabsState = copy(tabs = tabs + tab, activeId = tab.id, paneOpen = true)
+
+internal fun TerminalTabsState.withAppRunTab(goalKey: String, newId: Long, directory: String): TerminalTabsState {
+  val existing = tabs.firstOrNull { it.appRunGoalKey == goalKey }
+  return if (existing != null) copy(activeId = existing.id, paneOpen = true)
+  else withTab(TerminalTab(newId, directory, "Run app · $goalKey", appRunGoalKey = goalKey))
+}
 
 /** Trims [name]; a blank name drops the custom name, so the tab shows its default again. */
 internal fun TerminalTabsState.renamed(id: Long, name: String): TerminalTabsState =

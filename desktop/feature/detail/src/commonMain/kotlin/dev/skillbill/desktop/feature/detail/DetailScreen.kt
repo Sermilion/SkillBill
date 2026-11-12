@@ -44,6 +44,10 @@ import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.WorkLiveSection
+import dev.skillbill.desktop.core.domain.qa.QaDeviceDiscovery
+import dev.skillbill.desktop.core.domain.qa.QaDevicePick
+import dev.skillbill.desktop.core.ui.apprun.AppRunState
+import kotlin.time.Instant
 import dev.skillbill.desktop.core.ui.feedback.StaleIndicator
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
@@ -68,9 +72,24 @@ internal class DetailScreenHost(
   val chatPaneOpen: Boolean = false,
   val chatShortcut: String = "",
   val onToggleChat: () -> Unit = {},
+  val runApp: RunAppHostUi? = null,
 ) {
   val detailsPaneVisible: Boolean get() = detailsPaneOpen && !specsOpen && !chatPaneOpen
 }
+
+internal class RunAppHostUi(
+  val goalKey: String,
+  val pick: QaDevicePick?,
+  val discovery: QaDeviceDiscovery?,
+  val states: Map<String, AppRunState>,
+  val onRun: (RunAppTarget) -> Unit,
+  val onStop: () -> Unit,
+  val onOpenLog: () -> Unit,
+  val onOpenDevices: () -> Unit,
+  val refreshDevices: () -> Unit,
+  val deviceMenu: @Composable (FocusRequester) -> Unit,
+  val formatOpenedAt: (Instant) -> String,
+)
 
 private fun sectionCrumb(section: WorkLiveSection?): String = when (section) {
   WorkLiveSection.NeedsYou -> "Needs you"
@@ -106,7 +125,11 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
     return
   }
   val item = state.header
-  val view = runActionsView(state)
+  val runState = host.runApp?.let { it.states[it.goalKey] ?: AppRunState.Idle }
+  val runInputs = host.runApp?.let { inputs ->
+    RunAppInputs(inputs.pick, inputs.discovery, runState ?: AppRunState.Idle, (runState as? AppRunState.Running)?.openedAt?.let(inputs.formatOpenedAt))
+  }
+  val view = runActionsView(state, runInputs)
   val paneShown = host.detailsPaneVisible && (item.kind != WorkKind.Goal || LocalShellLayout.current.showDetailsPane)
   val recoverFocus = remember { FocusRequester() }
   val listState = rememberLazyListState()
@@ -188,7 +211,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
             } else DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }, qa = if (qaRow) QaHeaderFacts(qaView?.testedCommit, qaView?.criteriaSource) else null, validation = validationRow, planReady = item.isStandalonePlan() && planFinished(item, loaded?.detail), planBlocked = item.isStandalonePlan() && hasBlockedSubtasks(loaded?.detail?.standalonePlan)) {
               if (state.sections != SectionsUi.Gone) {
                 val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
-                RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction)
+                RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction, host.runApp)
                 val report = validationResult
                 if (validationRow && item.lifecycle != Lifecycle.Active && !report.isNullOrBlank()) {
                   SbButton("Copy report", { onAction(DetailAction.Copy(report)) })

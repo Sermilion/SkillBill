@@ -5,9 +5,9 @@ data class QaDevicePick(val kind: QaDevicePickKind, val value: String, val displ
     value.none { it.isWhitespace() || it.code in 0x00..0x1f || it.code in 0x7f..0x9f } && displayName.isNotBlank()
 }
 
-enum class QaDevicePickKind(val wireValue: String) {
-  Serial("serial"),
-  Avd("avd"),
+enum class QaDevicePickKind(val wireValue: String, val platform: String) {
+  Serial("serial", "android"),
+  Avd("avd", "android"),
 }
 
 enum class QaDeviceState { Ready, Unauthorized, Offline, Leased, Unsupported }

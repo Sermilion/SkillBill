@@ -86,6 +86,18 @@ class TerminalTabsTest {
   }
 
   @Test
+  fun `run app log reuses a goal tab and opens separate tabs for other goals`() {
+    val first = TerminalTabsState().withAppRunTab("NEWS-168", 1, "/work/goal")
+    val reused = first.withAppRunTab("NEWS-168", 2, "/work/goal")
+    val secondGoal = reused.withAppRunTab("NEWS-174", 3, "/work/other")
+
+    assertEquals(1, reused.tabs.size)
+    assertEquals(1L, reused.activeId)
+    assertEquals(listOf("Run app · NEWS-168", "Run app · NEWS-174"), secondGoal.tabs.map { it.name })
+    assertEquals(3L, secondGoal.activeId)
+  }
+
+  @Test
   fun `a linked worktree is named after its main checkout`() {
     val name = terminalProjectName("/work/wt/feature/src", "/home/me", { false }) { git ->
       if (git == "/work/wt/feature/.git") "gitdir: /work/skill-bill/.git/worktrees/feature\n" else null

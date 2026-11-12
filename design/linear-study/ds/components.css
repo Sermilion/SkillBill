@@ -1468,7 +1468,7 @@ button.sb-chk-hd:focus-visible { outline-offset: -2px; }
 .sb-vhd .mi:hover, .sb-vhd .mi:hover .mono { color: var(--fg); }
 .sb-vhd .mi.is-link { color: var(--accent-text); }
 .sb-vhd .mi.is-link:hover { color: var(--accent-text); text-decoration: underline; }
-.sb-vhd > .ac { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sb-vhd > .ac { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; }
 /* Banner */
 .sb-banner { display: flex; align-items: flex-start; gap: var(--sp-2); margin-top: var(--sp-3); padding: 10px var(--sp-3); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: var(--r-md); background: var(--accent-tint); font-size: var(--t-sm); color: var(--fg-2); }
 .sb-banner > .sb-icon { margin-top: 2px; }
