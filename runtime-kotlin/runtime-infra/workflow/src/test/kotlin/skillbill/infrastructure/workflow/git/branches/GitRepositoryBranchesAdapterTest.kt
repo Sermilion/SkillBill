@@ -93,9 +93,9 @@ class GitRepositoryBranchesAdapterTest {
     assertEquals("main", feature.defaultBranch)
     assertEquals("feature/current", feature.currentBranch)
 
-    assertIs<WorkflowGitOperationResult.Failed>(adapter.switchToDefaultBranch(repo, "stale"))
+    assertIs<WorkflowGitOperationResult.Failed>(adapter.switchToBranch(repo, "main", "stale"))
     assertEquals("feature/current", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo)).currentBranch)
-    val switched = assertIs<WorkflowGitOperationResult.Ok>(adapter.switchToDefaultBranch(repo, "feature/current"))
+    val switched = assertIs<WorkflowGitOperationResult.Ok>(adapter.switchToBranch(repo, "main", "feature/current"))
     assertEquals(repo.toRealPath().toString(), switched.value)
     assertEquals("main", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo)).currentBranch)
 
@@ -116,7 +116,7 @@ class GitRepositoryBranchesAdapterTest {
     Files.writeString(file, "operator edits")
     Files.writeString(repo.resolve("notes.txt"), "untracked notes")
 
-    assertIs<WorkflowGitOperationResult.Failed>(adapter.switchToDefaultBranch(repo, "feature/current"))
+    assertIs<WorkflowGitOperationResult.Failed>(adapter.switchToBranch(repo, "main", "feature/current"))
     assertEquals("operator edits", Files.readString(file))
     assertEquals("untracked notes", Files.readString(repo.resolve("notes.txt")))
     assertEquals("feature/current", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo)).currentBranch)
@@ -132,13 +132,63 @@ class GitRepositoryBranchesAdapterTest {
     Files.writeString(main.resolve("main-notes.txt"), "main edits")
     Files.writeString(repo.resolve("feature-notes.txt"), "feature edits")
 
-    val selected = assertIs<WorkflowGitOperationResult.Ok>(adapter.switchToDefaultBranch(repo, "feature/current"))
+    val selected = assertIs<WorkflowGitOperationResult.Ok>(adapter.switchToBranch(repo, "main", "feature/current"))
 
     assertEquals(main.toRealPath().toString(), selected.value)
     assertEquals("feature/current", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo)).currentBranch)
     assertEquals("main", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(main)).currentBranch)
     assertEquals("main edits", Files.readString(main.resolve("main-notes.txt")))
     assertEquals("feature edits", Files.readString(repo.resolve("feature-notes.txt")))
+  }
+
+  @Test
+  fun `a branch held by another worktree returns that worktree and leaves this checkout alone`() {
+    val repo = repository("main")
+    git(repo, "commit", "--allow-empty", "-m", "base")
+    git(repo, "branch", "feat/qa-fixes")
+    git(repo, "switch", "-c", "fix/rotation")
+    val feature = tempFolder().resolve("feature checkout")
+    git(repo, "worktree", "add", feature.toString(), "feat/qa-fixes")
+
+    val selected = adapter.switchToBranch(repo, "feat/qa-fixes", "fix/rotation")
+    assertIs<WorkflowGitOperationResult.Ok>(selected)
+
+    assertEquals(feature.toRealPath().toString(), selected.value)
+    assertEquals("fix/rotation", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo)).currentBranch)
+  }
+
+  @Test
+  fun `a local branch no worktree holds is switched to in place`() {
+    val repo = repository("main")
+    git(repo, "commit", "--allow-empty", "-m", "base")
+    git(repo, "branch", "feat/qa-fixes")
+
+    val switched = assertIs<WorkflowGitOperationResult.Ok>(adapter.switchToBranch(repo, "feat/qa-fixes", "main"))
+
+    assertEquals(repo.toRealPath().toString(), switched.value)
+    assertEquals("feat/qa-fixes", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo)).currentBranch)
+  }
+
+  @Test
+  fun `a remote-tracking branch is checked out as a local tracking branch`() {
+    val repo = repository("main")
+    git(repo, "commit", "--allow-empty", "-m", "base")
+    git(repo, "remote", "add", "origin", "https://invalid.invalid/skillbill.git")
+    git(repo, "update-ref", "refs/remotes/origin/feature/x", "HEAD")
+
+    assertIs<WorkflowGitOperationResult.Ok>(adapter.switchToBranch(repo, "origin/feature/x", "main"))
+
+    assertEquals("feature/x", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo)).currentBranch)
+    assertEquals("origin/feature/x", git(repo, "rev-parse", "--abbrev-ref", "feature/x@{upstream}").trim())
+  }
+
+  @Test
+  fun `an unknown branch is refused and the checkout stays`() {
+    val repo = repository("main")
+    git(repo, "commit", "--allow-empty", "-m", "base")
+
+    assertIs<WorkflowGitOperationResult.Failed>(adapter.switchToBranch(repo, "missing", "main"))
+    assertEquals("main", assertIs<RepositoryBranchesResult.Listed>(adapter.branches(repo)).currentBranch)
   }
 
   private fun repository(initialBranch: String): Path =
