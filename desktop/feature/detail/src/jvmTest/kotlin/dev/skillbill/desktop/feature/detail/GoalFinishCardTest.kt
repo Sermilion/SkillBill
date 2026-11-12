@@ -75,8 +75,8 @@ class GoalFinishCardTest {
   }
 
   @Test
-  fun `Goal finish uses one selected card inline in a narrow window and in the wide pane`() = runComposeUiTest {
-    val layout = mutableStateOf(ShellLayout(showDetailsPane = false, drawerMode = true))
+  fun `Goal finish keeps the details overlay available in drawer mode`() = runComposeUiTest {
+    val layout = mutableStateOf(ShellLayout(drawerMode = true))
     val input = ShellInput()
     val detail = emptyDetail.copy(
       subtasks = listOf(WorkSubtask(1, "Build", "completed", null, null, emptyList())),
@@ -95,12 +95,7 @@ class GoalFinishCardTest {
       }
     }
     onNodeWithText("No assessment result is available for this run.").assertExists()
-    onNodeWithText("Details").assertDoesNotExist()
-    runOnIdle { layout.value = ShellLayout(showDetailsPane = true, drawerMode = false) }
     onNodeWithText("Details").assertExists()
-    onNodeWithText("No assessment result is available for this run.").assertExists()
-    runOnIdle { layout.value = ShellLayout(showDetailsPane = false, drawerMode = true) }
-    onNodeWithText("Details").assertDoesNotExist()
     onNodeWithText("No assessment result is available for this run.").assertExists()
   }
 

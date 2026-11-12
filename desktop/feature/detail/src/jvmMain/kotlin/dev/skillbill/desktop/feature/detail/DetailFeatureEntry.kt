@@ -52,6 +52,7 @@ class DetailFeatureEntry(
   private val paneCommands: PaneCommands,
   private val chat: ChatCommands,
   private val changesWindows: ChangesWindows,
+  private val detailsPaneWidth: DetailsPaneWidth,
 ) : FeatureEntry {
   override fun renders(route: AppRoute): Boolean = route is DetailRoute
 
@@ -88,8 +89,12 @@ class DetailFeatureEntry(
     }
     val terminalOpen by paneCommands.terminalOpen.collectAsState()
     val shownChatId by chat.shownChatId.collectAsState()
+    val detailsWidthDp by detailsPaneWidth.widthDp.collectAsState()
     val host = DetailScreenHost(
       detailsPaneOpen = shellPanes.detailsPaneOpen,
+      detailsWidthDp = detailsWidthDp,
+      onResizeDetails = detailsPaneWidth::resizeTo,
+      onResetDetails = detailsPaneWidth::reset,
       detailsShortcut = DETAILS_SHORTCUT,
       onToggleDetails = { shellPanes.detailsPaneOpen = !shellPanes.detailsPaneOpen },
       specsOpen = shellPanes.specsOpen,

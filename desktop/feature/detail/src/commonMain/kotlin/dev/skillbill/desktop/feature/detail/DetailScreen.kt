@@ -68,8 +68,11 @@ internal class DetailScreenHost(
   val chatPaneOpen: Boolean = false,
   val chatShortcut: String = "",
   val onToggleChat: () -> Unit = {},
+  val detailsWidthDp: Int? = null,
+  val onResizeDetails: (Int) -> Unit = {},
+  val onResetDetails: () -> Unit = {},
 ) {
-  val detailsPaneVisible: Boolean get() = detailsPaneOpen && !specsOpen && !chatPaneOpen
+  val detailsPaneVisible: Boolean get() = detailsPaneOpen && !chatPaneOpen
 }
 
 private fun sectionCrumb(section: WorkLiveSection?): String = when (section) {
@@ -107,7 +110,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   }
   val item = state.header
   val view = runActionsView(state)
-  val paneShown = host.detailsPaneVisible && (item.kind != WorkKind.Goal || LocalShellLayout.current.showDetailsPane)
+  val paneShown = host.detailsPaneVisible && !(host.specsOpen && LocalShellLayout.current.drawerMode)
   val recoverFocus = remember { FocusRequester() }
   val listState = rememberLazyListState()
   val planScreenState = rememberPlanScreenState(item.id)
@@ -217,6 +220,9 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
       DetailPeek(
         open = paneShown,
         wide = detailsPaneWide(item),
+        requestedWidthDp = host.detailsWidthDp,
+        onResize = host.onResizeDetails,
+        onReset = host.onResetDetails,
         onDismiss = { if (host.detailsPaneOpen) host.onToggleDetails() },
       ) {
         peekState.SaveableStateProvider("${item.id}:${state.subtaskChoice.key}") {

@@ -176,11 +176,10 @@ fun ApplicationScope.MainWindow(
         SideEffect { keyboard.clearFocus = { focusManager.clearFocus() } }
         CompositionLocalProvider(LocalShellInput provides window.input) {
           BoxWithConstraints(Modifier.fillMaxSize()) {
-            val narrow = maxWidth < NARROW_WIDTH
             val drawerMode = maxWidth < DRAWER_WIDTH
             SideEffect { keyboard.drawerMode = drawerMode }
             val panes = window.panes
-            val layout = ShellLayout(showDetailsPane = panes.detailsPaneOpen && !panes.specsOpen && !panes.chatOpen && !narrow, drawerMode = drawerMode)
+            val layout = ShellLayout(drawerMode = drawerMode)
             // Below the drawer breakpoint every view header leads with the sidebar toggle, as `.sb-side-toggle`.
             val sidebarToggle: (() -> Unit)? = remember(drawerMode, panes) { if (drawerMode) ({ panes.drawerOpen = !panes.drawerOpen }) else null }
             CompositionLocalProvider(LocalShellLayout provides layout, LocalSidebarToggle provides sidebarToggle) {

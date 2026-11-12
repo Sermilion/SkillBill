@@ -1,9 +1,13 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
@@ -13,11 +17,19 @@ import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.doubleClick
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentFinding
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentFindingState
@@ -49,6 +61,61 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class DetailPeekTest {
+  @Test
+  fun `restored details width is not capped by the initial default ratio`() = runComposeUiTest {
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides remember { ShellInput() }) {
+          Box(Modifier.requiredSize(900.dp, 700.dp).testTag("details-body")) {
+            DetailPeek(true, true, 800, {}, {}, {}) { BasicText("Details content") }
+          }
+        }
+      }
+    }
+
+    val bodyWidth = onNodeWithTag("details-body").fetchSemanticsNode().boundsInRoot.width
+    val bodyLeft = onNodeWithTag("details-body").fetchSemanticsNode().boundsInRoot.left
+    val gripLeft = onNodeWithContentDescription("Details panel resize separator").fetchSemanticsNode().boundsInRoot.left
+    assertEquals(100f / 900f, (gripLeft - bodyLeft) / bodyWidth, 0.01f)
+  }
+
+  @Test
+  fun `compact details fill the body without exposing a resize grip`() = runComposeUiTest {
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides remember { ShellInput() }) {
+          Box(Modifier.requiredSize(700.dp, 600.dp)) {
+            DetailPeek(true, false, 640, {}, {}, {}) { BasicText("Details content") }
+          }
+        }
+      }
+    }
+
+    onNodeWithContentDescription("Details panel resize separator").assertDoesNotExist()
+    onNodeWithText("Details content").assertIsDisplayed()
+  }
+
+  @Test
+  fun `details grip uses 24dp keyboard steps and double click clears the override`() = runComposeUiTest {
+    val resized = mutableListOf<Int>()
+    var reset = false
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides remember { ShellInput() }) {
+          Box(Modifier.requiredSize(900.dp, 700.dp)) {
+            DetailPeek(true, true, 500, { resized += it }, { reset = true }, {}) { BasicText("Details content") }
+          }
+        }
+      }
+    }
+    val grip = onNodeWithContentDescription("Details panel resize separator")
+    grip.performSemanticsAction(SemanticsActions.RequestFocus)
+    grip.performKeyInput { keyDown(Key.DirectionLeft); keyUp(Key.DirectionLeft) }
+    assertEquals(listOf(524), resized)
+    grip.performMouseInput { doubleClick() }
+    runOnIdle { assertEquals(true, reset) }
+  }
+
   @Test
   fun `goal details show only the selected desktop QA preview and remove its ended image`() = runComposeUiTest {
     val preview = GoalQaPreview("goal-qa", "/qa/goal", listOf("desktop"), true, null)

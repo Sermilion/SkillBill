@@ -38,6 +38,7 @@ class FakeAppSettingsRepository(initial: AppSettings = AppSettings.DEFAULT) : Ap
   var favoriteWriteFailure = false
   var specFavoriteWriteFailure = false
   var qaDeviceReadFailure = false
+  var detailsWidthWriteFailure = false
   var favoriteReadFailure: Boolean
     get() = favoriteReadFailureState.value
     set(value) { favoriteReadFailureState.value = value }
@@ -79,6 +80,12 @@ class FakeAppSettingsRepository(initial: AppSettings = AppSettings.DEFAULT) : Ap
 
   override suspend fun setChatWidthDp(widthDp: Int) = change {
     it.copy(chatWidthDp = widthDp.coerceIn(AppSettings.CHAT_WIDTH_MIN_DP, AppSettings.CHAT_WIDTH_MAX_DP))
+  }
+
+  override suspend fun setDetailsWidthDp(widthDp: Int?): Outcome<Unit, SettingsRejection> {
+    if (widthDp != null && widthDp < AppSettings.DETAILS_WIDTH_MIN_DP) return Outcome.Failure(SettingsRejection.InvalidDetailsWidth)
+    if (detailsWidthWriteFailure) return Outcome.Failure(SettingsRejection.WriteFailed)
+    return change { it.copy(detailsWidthDp = widthDp) }
   }
 
   override suspend fun setTrayLastTab(tab: TrayTab) = change { it.copy(trayLastTab = tab) }
