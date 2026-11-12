@@ -62,8 +62,17 @@ class ValidateProbeActivationTest {
   }
 
   @Test
+  fun `rechecked criterion retains its repaired pair when shared file evidence changes`() {
+    val scope = assertNotNull(ValidateProbeActivation.scopeFor(request(listOf("AC-001+AC-003")), false))
+
+    assertEquals(listOf("AC-001", "AC-003"), scope.requiredCriteria.map { it.criterionRef })
+    assertEquals(emptyList(), scope.repairedPairs.single().sharedPaths)
+    assertTrue("shared file evidence unavailable after recheck" in ValidateProbePrompt.directive(scope))
+  }
+
+  @Test
   fun `unknown scenarios and pairs without shared production evidence still fail validation preparation`() {
-    listOf("IS-999", "AC-003+AC-999", "AC-001+AC-003", "AC-003+AC-003").forEach { unknown ->
+    listOf("IS-999", "AC-003+AC-999", "AC-003+AC-003").forEach { unknown ->
       val request = request(listOf("IS-004", "AC-003+AC-004", unknown))
       val original = request.acceptanceCriterionRepair?.snapshot
 
