@@ -335,7 +335,9 @@ public class PlanSubtasksReopening(
     original: FeatureTaskRuntimePhaseRecord,
     captured: PlanBundleFeasibilitySnapshot,
   ): Pair<Boolean, Int?>? {
-    if (original.status == WorkflowStepStatus.PENDING &&
+    val pendingAdoption =
+      state.mode != PlanBundleFeasibilityMode.BLOCKED && original.status == WorkflowStepStatus.PENDING
+    if (pendingAdoption &&
       state.reopenings.any {
         it.sourceAttempt == original.attemptCount &&
           it.originalPhaseRecord.outputArtifact == original.outputArtifact

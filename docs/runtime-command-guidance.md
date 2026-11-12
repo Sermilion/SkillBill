@@ -146,6 +146,11 @@ Goals continue to show changes.
 
 ## Blocked-phase operator decisions
 
+Resuming planning reopens a settled feasibility block with a fresh repository
+baseline. This includes safety blocks caused by unrelated edits in the same
+checkout. The runtime retains the failed cycle, accepted unit plans and commits;
+committing those edits does not require resetting the goal or reverting them.
+
 To resolve a blocked child phase, use
 `skill-bill feature-task retry-blocked <workflow-id> --phase <phase> --reason <reason>`.
 The reason applies only to that reopened phase. When the operator also supplies a

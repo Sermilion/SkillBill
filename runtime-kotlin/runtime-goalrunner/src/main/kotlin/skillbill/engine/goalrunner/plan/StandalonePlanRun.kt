@@ -469,17 +469,16 @@ public class StandalonePlanRun(
       return open(issueKey, intake, location, inputFor, statusPublisher)
     }
     if (bundleServices.reports.manifestExists(issueKey, repoRoot)) {
-      return if (completedPlan == null && found is FeatureTaskContinuationLookupResult.Resumable) {
-        reopenBlockedFeasibility(issueKey, found.candidate.workflowId, repoRoot, inputFor)
-          ?: resume(
+      return when (found) {
+        is FeatureTaskContinuationLookupResult.Resumable ->
+          resume(
             found.candidate,
             intake,
             ResumeLocation(repoRoot, sourceRoot, activeSelection.preserveLegacyBundle),
             inputFor,
             statusPublisher,
           )
-      } else {
-        settleExistingManifest(issueKey, intake, location, activeSelection, inputFor)
+        else -> settleExistingManifest(issueKey, intake, location, activeSelection, inputFor)
       }
     }
     return when (found) {
@@ -721,6 +720,7 @@ public class StandalonePlanRun(
         } == true
       val needsFullReview =
         selectedFeasibility == null ||
+          selectedFeasibility.mode == PlanBundleFeasibilityMode.BLOCKED && selectedFeasibility.activeLaunch == null ||
           selectedFeasibility.mode == PlanBundleFeasibilityMode.APPROVED && !completedApproval ||
           selectedPhase.status == WorkflowStepStatus.COMPLETED &&
           selectedFeasibility.mode != PlanBundleFeasibilityMode.BLOCKED && !completedApproval
@@ -782,26 +782,6 @@ public class StandalonePlanRun(
         protectedSpecSha256 = protectedSpecSha256,
       )
     return runEntry(input, repoRoot, statusPublisher)
-  }
-
-  private fun reopenBlockedFeasibility(
-    issueKey: String,
-    workflowId: String,
-    repoRoot: Path,
-    inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
-  ): StandalonePlanResult? {
-    if (!bundleServices.reopening.hasReopenableBlockedFeasibility(workflowId)) return null
-    val settledIds = PlanBundleFeasibility.capture(decompositionPlanner, repoRoot, issueKey).settledSubtaskIds
-    return replanSubtasks(
-      PlanSubtasksReplan(
-        issueKey = issueKey,
-        planWorkflowId = workflowId,
-        repoRoot = repoRoot,
-        settledSubtaskIds = settledIds,
-        feasibilityAdoption = true,
-      ),
-      inputFor,
-    )
   }
 
   private fun resumeAdmissionProblem(
