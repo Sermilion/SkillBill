@@ -40,6 +40,16 @@ Goals use runtime-owned `<state>/goals/<repo>/<goal>/checkout` worktrees, remove
 
 Read [Runtime command guidance](docs/runtime-command-guidance.md) before runtime command or workflow work. It defines phases, operations, retired names, agent strategies, build gates, one-commit-per-subtask, and checkpoints.
 
+## Linear work tracking
+
+Track every work item for this repository in Linear. Use the `SONA` team prefix for new issues. Linear assigns the complete issue key. Never mint or reserve local keys as a substitute for a Linear issue.
+
+Use the project-scoped `linear-sona` MCP connection declared in `.codex/config.toml` for this repository. Verify its workspace and `SONA` team before using it. Do not substitute another Linear connection without the operator's instruction.
+
+Before starting any goal, verify the Linear connection and read the linked issue. The issue must exist and belong to the intended Sona team and workspace. Do not start a goal without a verified Linear issue. If authentication fails, the issue is inaccessible, or the `SONA` team is unavailable, report the problem and resolve it before launch. Chat preparation does not start a goal or reserve an issue key.
+
+Preserve existing run identities, issue keys, specs, and history. The `SONA` prefix applies to new work and does not rename historical records.
+
 ## Taxonomy
 
 - `skills/` — canonical user-facing skill source; `skills/skill-bill/` is the only listed skill
