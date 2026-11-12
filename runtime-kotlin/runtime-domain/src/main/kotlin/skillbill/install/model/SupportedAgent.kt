@@ -63,8 +63,8 @@ enum class SupportedAgent(
     null,
     ".config/devin/mcp_config.json",
     false,
-    honorsAdditionalWritableDirectories = false,
-    loadsRuntimeMcpHeadless = false,
+    honorsAdditionalWritableDirectories = true,
+    loadsRuntimeMcpHeadless = true,
   ),
   ;
 

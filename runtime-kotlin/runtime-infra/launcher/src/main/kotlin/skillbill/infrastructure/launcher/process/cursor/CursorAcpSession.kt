@@ -28,6 +28,8 @@ data class CursorAcpLaunch(
   val images: List<CursorAcpImage> = emptyList(),
   val mcpDependency: CursorAcpMcpDependency = CursorAcpMcpDependency.ProjectUserOnly,
   val provider: AcpProvider = AcpProvider.Cursor,
+  val mcpServers: List<AcpStdioMcpServer> = emptyList(),
+  val additionalDirectories: List<String> = emptyList(),
 ) {
   constructor(
     cwd: String,
@@ -49,6 +51,15 @@ fun cursorAcpDependencyRefusal(dependency: CursorAcpMcpDependency): String? =
   }
 
 data class CursorAcpImage(val data: String, val mimeType: String)
+
+data class AcpStdioMcpServer(
+  val name: String,
+  val command: String,
+  val args: List<String>,
+  val env: List<AcpEnvVariable>,
+)
+
+data class AcpEnvVariable(val name: String, val value: String)
 
 sealed interface CursorAcpEvent {
   data class Text(val text: String) : CursorAcpEvent
@@ -157,7 +168,7 @@ class CursorAcpSession(
   private fun response(message: JsonObject) {
     val body =
       message.obj(K.RESULT)
-        ?: return stop("$providerName rejected $expectedMethod: ${message.obj(K.ERROR)?.text(K.MESSAGE).orEmpty()}")
+        ?: return stop(acpRejection(launch, expectedMethod, message.obj(K.ERROR), selectingModel()))
     when (expectedMethod) {
       K.INITIALIZE -> initialize(body)
       K.AUTHENTICATE -> acquireSession()
@@ -207,6 +218,10 @@ class CursorAcpSession(
     if (launch.images.isNotEmpty() && capabilities.obj(K.PROMPT_CAPABILITIES)?.flag(K.IMAGE) != true) {
       return stop("$providerName did not advertise image prompts; no prompt was sent.")
     }
+    sessionContextRefusal(launch, capabilities)?.let { reason ->
+      record("seam=$seam outcome=session_context_unsupported")
+      return stop(reason)
+    }
     login(body)
   }
 
@@ -225,7 +240,10 @@ class CursorAcpSession(
       if (launch.savedSession == null) K.SESSION_NEW else K.SESSION_LOAD,
       buildJsonObject {
         put(K.CWD, launch.cwd)
-        put(K.MCP_SERVERS, JsonArray(emptyList()))
+        put(K.MCP_SERVERS, acpMcpServers(launch.mcpServers))
+        if (launch.additionalDirectories.isNotEmpty()) {
+          put(K.ADDITIONAL_DIRECTORIES, JsonArray(launch.additionalDirectories.map(::JsonPrimitive)))
+        }
         launch.savedSession?.let { put(K.SESSION_ID, it) }
       },
     )
@@ -259,8 +277,16 @@ class CursorAcpSession(
       model?.let(onModel)
       return selectMode()
     }
+    if (config == null && launch.provider.exactModels && setup.obj(K.MODELS) == null) {
+      record("seam=$seam outcome=model_metadata_absent reported_identity=unavailable")
+      return selectMode()
+    }
     if (config == null) selectLegacyModel(requested) else configureModel(config, requested)
   }
+
+  private fun selectingModel(): Boolean =
+    expectedMethod == K.SESSION_SET_MODEL ||
+      (expectedMethod == K.SESSION_SET_CONFIG && !pendingConfigIsMode && !selectingBypass)
 
   private fun configureModel(
     config: JsonObject,
@@ -318,7 +344,12 @@ class CursorAcpSession(
     requested: String,
     advertised: List<String>,
   ): String? {
-    val selected = resolveAcpModel(requested, advertised) ?: return null
+    val selected =
+      if (launch.provider.exactModels) {
+        requested.takeIf { it in advertised }
+      } else {
+        resolveAcpModel(requested, advertised)
+      } ?: return null
     if (selected != requested) {
       record("seam=$seam outcome=model_variant_resolved requested=$requested selected=$selected")
     }

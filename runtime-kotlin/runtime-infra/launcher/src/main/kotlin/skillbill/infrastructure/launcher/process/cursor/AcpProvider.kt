@@ -8,6 +8,8 @@ data class AcpProvider(
   val acpArguments: List<String>,
   val authMethodId: String?,
   val lacksTeamDashboardMcp: Boolean,
+  val exactModels: Boolean = false,
+  val loginCommand: String? = null,
 ) {
   val seam: String get() = "${id}_acp"
 
@@ -28,6 +30,17 @@ data class AcpProvider(
         listOf("--acp"),
         authMethodId = null,
         lacksTeamDashboardMcp = false,
+      )
+
+    val Devin =
+      AcpProvider(
+        SupportedAgent.DEVIN.wireValue,
+        "Devin",
+        listOf("acp"),
+        authMethodId = null,
+        lacksTeamDashboardMcp = false,
+        exactModels = true,
+        loginCommand = "devin auth login",
       )
   }
 }

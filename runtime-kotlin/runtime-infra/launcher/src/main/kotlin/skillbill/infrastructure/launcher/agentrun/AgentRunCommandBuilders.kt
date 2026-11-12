@@ -8,6 +8,7 @@ import skillbill.infrastructure.launcher.mcp.claudeRuntimeMcpArguments
 import skillbill.infrastructure.launcher.mcp.claudeRuntimeSettlementToolArguments
 import skillbill.infrastructure.launcher.mcp.codexRuntimeMcpArguments
 import skillbill.infrastructure.launcher.process.codex.CODEX_OUTPUT_EXHAUSTED
+import skillbill.infrastructure.launcher.process.cursor.AcpStdioMcpServer
 import skillbill.infrastructure.launcher.process.launch.AgentRunIdlePolicy
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
@@ -41,6 +42,7 @@ internal data class AgentRunCommand(
   val streamsProviderEvents: Boolean = false,
   val approvalProtocol: AgentRunApprovalProtocol? = null,
   val sessionModel: String? = null,
+  val acpMcpServers: List<AcpStdioMcpServer> = emptyList(),
 )
 
 internal enum class AgentRunApprovalProtocol {
@@ -48,6 +50,7 @@ internal enum class AgentRunApprovalProtocol {
   CODEX_APP_SERVER,
   CURSOR_ACP,
   JUNIE_ACP,
+  DEVIN_ACP,
 }
 
 internal enum class AgentRunCommandKind {
@@ -72,6 +75,9 @@ internal interface AgentRunCommandBuilder {
     requireNotNull(AGENT_LAUNCHER_CLIS[agent]) {
       "Agent '${agent.id}' has a headless command builder but no declared launcher CLI."
     }
+
+  /** An expected, operator-correctable reason to refuse [request] before any command is built or spawned. */
+  fun launchRefusal(request: SkillRunRequest): String?
 
   fun build(request: SkillRunRequest): AgentRunCommand
 
@@ -201,6 +207,8 @@ internal class ClaudeAgentRunCommandBuilder(
     command: AgentRunCommand,
     diagnostics: RuntimeDiagnostics,
   ): ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)? = null
+
+  override fun launchRefusal(request: SkillRunRequest): String? = null
 
   override fun build(request: SkillRunRequest): AgentRunCommand {
     requireProcessLaunch(request, reviewIsolation)
@@ -347,6 +355,8 @@ internal class CodexAgentRunCommandBuilder(
     } else {
       CodexOutputTokenContinuation(command, diagnostics)::nextLaunch
     }
+
+  override fun launchRefusal(request: SkillRunRequest): String? = null
 
   override fun build(request: SkillRunRequest): AgentRunCommand {
     requireProcessLaunch(request, reviewIsolation)

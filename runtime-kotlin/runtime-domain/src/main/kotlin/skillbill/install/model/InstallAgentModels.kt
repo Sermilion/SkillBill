@@ -70,6 +70,7 @@ val MODEL_DIRECTIVE_CAPABLE_AGENTS: Set<SupportedAgent> =
     SupportedAgent.CLAUDE,
     SupportedAgent.CODEX,
     SupportedAgent.CURSOR,
+    SupportedAgent.DEVIN,
   )
 
 fun supportsModelDirective(agentId: String?): Boolean {

@@ -2,6 +2,7 @@ package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
+import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
 import skillbill.workflow.taskruntime.model.skeleton.LaunchModelProvenance
@@ -35,6 +36,12 @@ internal fun resolveAgentRunLaunchModel(
   }
   return resolveClaudeLaunchModel(request, providerEnvironment)
 }
+
+internal fun devinLaunchModelRefusal(request: SkillRunRequest): String? =
+  request.effortOverride?.takeIf(String::isNotBlank)?.let { effort ->
+    "Devin does not accept a separate effort assignment ('$effort'); select the full Devin model UID " +
+      "(for example swe-2-high) as the model and remove the effort. The phase was not started."
+  }
 
 private fun resolveClaudeLaunchModel(
   request: AgentRunLaunchModelRequest,

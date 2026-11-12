@@ -24,6 +24,11 @@ internal object CursorAcpKeys {
   const val SESSION_ID = "sessionId"
   const val CWD = "cwd"
   const val MCP_SERVERS = "mcpServers"
+  const val ARGS = "args"
+  const val ENV = "env"
+  const val ADDITIONAL_DIRECTORIES = "additionalDirectories"
+  const val SESSION_CAPABILITIES = "sessionCapabilities"
+  const val AUTH_REQUIRED_CODE = -32000
   const val PROMPT = "prompt"
   const val TYPE = "type"
   const val TEXT = "text"
