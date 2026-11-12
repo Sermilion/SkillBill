@@ -137,11 +137,11 @@
         })) }),
       ],
       footer: [
-        S.UsageCard(Object.assign({}, usage, { act: 'usage-toggle', expanded: !!st.popover && st.popover.type === 'usage' })),
         S.SidebarItem({ icon: 'fileText', label: 'Specs', act: 'specs-toggle', on: st.specsOpen, tip: 'Specs pane', kbd: 'G S' }),
         S.SidebarItem({ icon: 'terminal', label: 'Terminal', act: 'term-toggle', on: st.termOpen, tip: 'Terminal', kbd: '⌃ `' }),
         S.SidebarItem({ icon: 'sliders', label: 'Settings', act: 'nav', arg: 'settings', tip: 'Settings', kbd: 'G ,' }),
         S.SidebarItem({ icon: 'keyboard', label: 'Keyboard shortcuts', act: 'shortcuts', tip: 'Keyboard shortcuts', kbd: '?' }),
+        S.UsageCard(Object.assign({}, usage, { act: 'usage-toggle', expanded: !!st.popover && st.popover.type === 'usage' })),
         deviceSwitcher(st),
       ],
     });
