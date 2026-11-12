@@ -47,6 +47,9 @@ internal object ValidateProbePrompt {
 
   private fun pairs(scope: ValidateProbeScope): String =
     scope.repairedPairs
-      .joinToString("; ") { "${it.pairRef} (shared production files ${it.sharedPaths.joinToString(", ")})" }
+      .joinToString("; ") {
+        val evidence = if (it.sharedPaths.isEmpty()) "shared file evidence unavailable after recheck" else "shared production files ${it.sharedPaths.joinToString(", ")}"
+        "${it.pairRef} ($evidence)"
+      }
       .ifEmpty { NONE }
 }

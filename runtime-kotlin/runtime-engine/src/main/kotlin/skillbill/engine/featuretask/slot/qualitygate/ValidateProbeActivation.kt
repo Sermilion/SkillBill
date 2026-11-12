@@ -9,6 +9,8 @@ import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionIntera
 import skillbill.engine.featuretask.runner.skeletonDefinitionFor
 import skillbill.error.shellcontent.invalidInteractionScenarioCatalog
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTarget
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionSameFilePair
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 internal object ValidateProbeActivation {
@@ -39,7 +41,9 @@ internal object ValidateProbeActivation {
     val repairedRefs = state.interactionTrace.repairedScenarioRefs
     val repairedPairs =
       repairedRefs.filterNot(catalog::containsKey).map { ref ->
-        pairs[ref] ?: throw invalidInteractionScenarioCatalog(
+        pairs[ref] ?: AcceptanceCriterionInteractionTarget.pairOf(ref, state.criteria)?.takeIf { it.allowedOwners.size == 2 }?.let { target ->
+          AcceptanceCriterionSameFilePair(target.allowedOwners[0], target.allowedOwners[1], emptyList())
+        } ?: throw invalidInteractionScenarioCatalog(
           ref,
           "repaired reference is missing from the bound scenario catalog and generated same-file pairs.",
         )

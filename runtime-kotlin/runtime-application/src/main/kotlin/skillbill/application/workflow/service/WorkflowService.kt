@@ -16,6 +16,7 @@ import skillbill.application.workflow.decomposition.continueExistingWorkflow
 import skillbill.application.workflow.decomposition.resolveDecompositionProjectionOwner
 import skillbill.application.workflow.decomposition.syncDecompositionParentRuntime
 import skillbill.application.workflow.decomposition.withDecompositionRuntime
+import skillbill.application.workflow.model.BlockedPhaseRetryArtifacts
 import skillbill.application.workflow.model.BuildFeatureTaskExecutionIdentityArgs
 import skillbill.application.workflow.model.ContinueExistingWorkflowArgs
 import skillbill.application.workflow.model.DecompositionRuntimeWriteArgs
@@ -341,7 +342,12 @@ class WorkflowService(
     phaseId: String,
     reason: String,
     mandate: String? = null,
-  ): WorkflowUpdateResult = blockedPhaseRetry.retry(database, workflowId, phaseId, reason, mandate)
+    phaseArtifacts: BlockedPhaseRetryArtifacts? = null,
+  ): WorkflowUpdateResult =
+    blockedPhaseRetry.retry(
+      database,
+      BlockedPhaseRetryCommand(workflowId, phaseId, reason, mandate, phaseArtifacts),
+    )
 
   fun repairFeatureTaskRuntimeIdentity(args: RepairFeatureTaskRuntimeIdentityArgs): WorkflowUpdateResult {
     val workflowId = args.workflowId

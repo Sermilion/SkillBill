@@ -404,8 +404,11 @@ internal fun FeatureTaskRuntimePlanBundleFeasibilityState.blockedReason(): Strin
       append("Open cited conflicts:\n")
       append(conflicts.joinToString("\n") { "${it.ref}: ${it.line}" })
     }
-    settledLaunches.lastOrNull { it.outcome == PlanBundleFeasibilityLaunchOutcome.REFUSED }
+    val cycleLaunches = settledLaunches.filter { currentCycleId == null || it.cycleId == currentCycleId }
+    cycleLaunches.lastOrNull { it.outcome == PlanBundleFeasibilityLaunchOutcome.REFUSED }
       ?.let { append("\nLatest invalid-output reason: ${it.value}") }
+    cycleLaunches.lastOrNull { it.outcome == PlanBundleFeasibilityLaunchOutcome.BLOCKED }
+      ?.let { append("\nSafety block: ${it.value}") }
   }
 
 internal fun PlanBundleFeasibilityIdentity.hasRawBaseline(): Boolean =

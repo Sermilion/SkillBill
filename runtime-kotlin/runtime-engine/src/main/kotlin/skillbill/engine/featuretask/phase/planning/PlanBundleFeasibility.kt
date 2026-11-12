@@ -122,9 +122,17 @@ public object PlanBundleFeasibility {
   internal const val PREFIX: String = "bundle-feasibility-v2:"
   public const val HISTORICAL_PREFIX: String = "bundle-feasibility-v1:"
   internal const val REPAIRED: String = "$PREFIX repaired"
+  private val REPAIRED_HEADER = Regex("""bundle-feasibility-v2: repaired(?:[^\w-].*)?""")
   private val REVIEW_HEADER = Regex("""bundle-feasibility-v2: (approved|changes_requested) ([0-9a-f]{64})""")
   private val REVIEW_LINE = Regex("""(criterion|conflict) ([1-9][0-9]*\.[1-9][0-9]*): (\S.*)""")
   private val CITATION = Regex("""(?:^|\s)([^\s:]+):([1-9][0-9]*)(?=\s|$|[),.;])""")
+
+  internal fun reportsRepaired(value: String): Boolean =
+    value.lineSequence().firstOrNull()?.trimEnd()?.let(REPAIRED_HEADER::matches) == true
+
+  internal const val REPAIR_HEADER_REFUSAL: String =
+    "$REPAIR_REQUIRED\nThe planner must report repaired, then await review. " +
+      "The first line of produced_outputs.value must begin with '$REPAIRED'."
 
   public data class ReviewReceipt(
     val approved: Boolean,

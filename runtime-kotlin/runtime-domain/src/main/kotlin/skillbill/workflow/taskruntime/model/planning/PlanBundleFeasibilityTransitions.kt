@@ -323,19 +323,7 @@ public fun reopenApprovedPlanBundleFeasibilityCycle(
   phaseRecord: FeatureTaskRuntimePhaseRecord,
 ): FeatureTaskRuntimePlanBundleFeasibilityState? {
   if (!state.canReopenApprovedCycle(cycleId, retryLedgerSequence)) return null
-  val priorCycleId = state.currentCycleId ?: state.settledLaunches.lastOrNull()?.cycleId ?: return null
-  val history =
-    PlanBundleFeasibilityCycleHistory(
-      priorCycleId,
-      state.identity,
-      state.acceptedLines.toList(),
-      state.conflicts.toList(),
-      state.reviewRoundsStarted,
-      state.repairLaunchesStarted,
-      state.settledLaunches.filter { it.cycleId == priorCycleId },
-      state.lastReviewValue,
-      state.approval,
-    )
+  val history = state.currentCycleHistory() ?: return null
   return state.copy(
     revision = state.revision + 1,
     mode = PlanBundleFeasibilityMode.REVIEW,
@@ -362,6 +350,61 @@ public fun reopenApprovedPlanBundleFeasibilityCycle(
           "approved-cycle-reopened",
           phaseRecord,
         ),
+  )
+}
+
+public fun reopenBlockedPlanBundleFeasibilityCycle(
+  state: FeatureTaskRuntimePlanBundleFeasibilityState,
+  cycleId: String,
+  retryLedgerSequence: Int,
+  phaseRecord: FeatureTaskRuntimePhaseRecord,
+): FeatureTaskRuntimePlanBundleFeasibilityState? {
+  val validCycle =
+    cycleId.isNotBlank() && cycleId != state.currentCycleId && state.cycleHistory.none { it.cycleId == cycleId }
+  val blocked = state.mode == PlanBundleFeasibilityMode.BLOCKED && state.activeLaunch == null
+  val validRetry = retryLedgerSequence >= 0 && phaseRecord.attemptCount >= 1
+  val reopenable = blocked && validRetry && state.invalidReason() == null
+  if (!validCycle || !reopenable) return null
+  val history = state.currentCycleHistory() ?: return null
+  return state.copy(
+    revision = state.revision + 1,
+    mode = PlanBundleFeasibilityMode.REVIEW,
+    acceptedLines = emptyList(),
+    conflicts = emptyList(),
+    changedSubtaskIds = emptyList(),
+    requiredRefs = state.identity.subtasks.flatMap { it.criterionRefs },
+    carriedRefs = emptyList(),
+    reviewRoundsStarted = 0,
+    repairLaunchesStarted = 0,
+    activeLaunch = null,
+    approval = null,
+    approvalCandidate = null,
+    currentCycleId = cycleId,
+    cycleHistory = state.cycleHistory + history,
+    reopenings =
+      state.reopenings +
+        PlanBundleFeasibilityReopening(
+          phaseRecord.attemptCount,
+          state.revision,
+          retryLedgerSequence,
+          PLAN_BUNDLE_FEASIBILITY_OPERATOR_RETRY_REASON,
+          phaseRecord,
+        ),
+  )
+}
+
+private fun FeatureTaskRuntimePlanBundleFeasibilityState.currentCycleHistory(): PlanBundleFeasibilityCycleHistory? {
+  val priorCycleId = currentCycleId ?: settledLaunches.lastOrNull()?.cycleId ?: return null
+  return PlanBundleFeasibilityCycleHistory(
+    priorCycleId,
+    identity,
+    acceptedLines.toList(),
+    conflicts.toList(),
+    reviewRoundsStarted,
+    repairLaunchesStarted,
+    settledLaunches.filter { it.cycleId == priorCycleId },
+    lastReviewValue,
+    approval,
   )
 }
 

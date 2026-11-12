@@ -25,10 +25,12 @@ import skillbill.application.uninstall.SkillBillUninstallService
 import skillbill.application.updatecheck.SkillBillUpdateService
 import skillbill.application.updatecheck.UpdateCheckService
 import skillbill.application.work.WorkListService
+import skillbill.application.workflow.model.BlockedPhaseRetryArtifacts
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.di.featurespec.RuntimeFeatureSpecProvides
 import skillbill.di.featuretask.RuntimeAgentBuildProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskProvides
+import skillbill.di.featuretask.RuntimeFeatureTaskRecoveryProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskSlotProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskValidatorProvides
 import skillbill.di.featuretask.RuntimeQaProvides
@@ -166,6 +168,7 @@ abstract class RuntimeComponent(
     RuntimeAgentBuildProvides,
     RuntimeFeatureTaskProvides,
     RuntimeFeatureTaskSlotProvides,
+    RuntimeFeatureTaskRecoveryProvides,
     RuntimeStandaloneMonitorProvides,
     RuntimeQaProvides,
     RuntimeOperationProvides,
@@ -351,6 +354,7 @@ abstract class RuntimeComponent(
   abstract val featureTaskRuntimeRunEntry: FeatureTaskRuntimeRunEntry
 
   abstract val featureTaskRuntimeCrashReconciler: FeatureTaskRuntimeCrashReconciler
+  abstract val blockedPhaseRetryArtifacts: BlockedPhaseRetryArtifacts
   abstract val featureTaskRuntimeExecutionPlanResolver: FeatureTaskRuntimeExecutionPlanResolver
   abstract val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService
   abstract val featureTaskRuntimeWorkerCoordinator: FeatureTaskRuntimeWorkerCoordinator
