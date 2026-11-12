@@ -1,8 +1,11 @@
 package skillbill.infrastructure.skills.scaffold
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.infrastructure.skills.scaffold.authoring.AuthoringOperations
 import skillbill.infrastructure.skills.scaffold.authoring.renderAuthoringTarget
 import skillbill.infrastructure.skills.scaffold.authoring.renderWrapper
 import skillbill.infrastructure.skills.scaffold.authoring.resolveTarget
+import skillbill.infrastructure.skills.scaffold.authoring.selectedTargets
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.infrastructure.skills.scaffold.pointer.renderPointer
 import skillbill.testsupport.SnapshotAssertions
@@ -12,6 +15,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 
 class AuthoringRenderOutputTest {
@@ -91,6 +95,48 @@ class AuthoringRenderOutputTest {
   }
 
   @Test
+  fun `sona and source names resolve to one canonical dispatcher with the launch warning ceremony`() {
+    val repoRoot = tempRoot.resolve("dispatcher-name-repo")
+    val skillDir = repoRoot.resolve("skills/skill-bill")
+    val classesDir = repoRoot.resolve("orchestration/skill-classes")
+    Files.createDirectories(skillDir)
+    Files.createDirectories(classesDir)
+    Files.writeString(
+      skillDir.resolve("content.md"),
+      "---\nname: sona\ndescription: Public dispatcher.\n---\n\n# Sona Dispatcher\n",
+    )
+    Files.writeString(
+      classesDir.resolve("feature-launch-warning.yaml"),
+      """
+      class: feature-launch-warning
+      contract_version: "1.8"
+      matchers:
+        - exact: skill-bill
+      pointers:
+        - peak-hours-warner
+        - shell-ceremony
+        - telemetry-contract
+      ceremony_lines:
+        - "Before launch, follow [peak-hours-warner.md](peak-hours-warner.md)."
+      """.trimIndent() + "\n",
+    )
+
+    val aliasTarget = resolveTarget(repoRoot, "sona")
+    val sourceTarget = resolveTarget(repoRoot, "skill-bill")
+    val rendered = renderWrapper(aliasTarget)
+
+    assertEquals("skill-bill", aliasTarget.skillName)
+    assertEquals(sourceTarget.contentFile, aliasTarget.contentFile)
+    assertEquals(1, selectedTargets(repoRoot, listOf("sona", "skill-bill")).size)
+    assertEquals("sona", AuthoringOperations.list(repoRoot, listOf("sona")).skills.single().skillName)
+    val error = assertFailsWith<SkillBillRuntimeException> { resolveTarget(repoRoot, "unknown-skill") }
+    assertContains(error.message.orEmpty(), "unknown-skill")
+    assertContains(rendered, "name: sona")
+    assertContains(rendered, "Governed skill: `sona`")
+    assertContains(rendered, "peak-hours-warner.md")
+  }
+
+  @Test
   fun `legacy bill-feature consumer delivers no pointer to a skill named bill-feature`() {
     val repoRoot = tempRoot.resolve("agent-addon-render-repo")
     val featureDir = repoRoot.resolve("skills/bill-feature")
@@ -132,7 +178,7 @@ class AuthoringRenderOutputTest {
     Files.createDirectories(sidecarDir)
     Files.writeString(
       parentDir.resolve("content.md"),
-      "---\nname: skill-bill\ndescription: Skill Bill router.\n---\n\nRoute governed work.\n",
+      "---\nname: sona\ndescription: Sona dispatcher.\n---\n\nRoute governed work.\n",
     )
     Files.writeString(
       sidecarDir.resolve("content.md"),

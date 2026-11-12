@@ -21,6 +21,7 @@ import skillbill.cli.scaffold.payload.readCliTextFile
 import skillbill.cli.scaffold.payload.retiredEditorModeMessage
 import skillbill.cli.scaffold.payload.retiredInteractiveModeMessage
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.install.model.ListedSkillNames
 import skillbill.ports.scaffold.ScaffoldGateway
 
 @Inject
@@ -200,7 +201,10 @@ class EditSkillCommand(
     when {
       editor ->
         state.completeUnsupportedScaffold(
-          retiredEditorModeMessage("edit --editor", "skill-bill fill $skillName --body-file <file>"),
+          retiredEditorModeMessage(
+            "edit --editor",
+            "sona fill ${ListedSkillNames.publicName(skillName)} --body-file <file>",
+          ),
           format,
         )
       editBodyFile != null ->
@@ -209,7 +213,10 @@ class EditSkillCommand(
         }
       else ->
         state.completeUnsupportedScaffold(
-          retiredInteractiveModeMessage("edit", "skill-bill fill $skillName --body-file <file>"),
+          retiredInteractiveModeMessage(
+            "edit",
+            "sona fill ${ListedSkillNames.publicName(skillName)} --body-file <file>",
+          ),
           format,
         )
     }

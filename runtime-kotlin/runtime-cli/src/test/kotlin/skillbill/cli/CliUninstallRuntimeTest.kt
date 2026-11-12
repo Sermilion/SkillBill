@@ -23,7 +23,7 @@ class CliUninstallRuntimeTest {
       "uninstall_status: dry_run\n" +
         "state_root: ${fixture.stateRoot}\n" +
         "agent_targets: 7\n" +
-        "skill_names: 1\n",
+        "skill_names: 3\n",
       result.stdout,
     )
     assertTrue(Files.exists(fixture.stateRoot))
@@ -139,14 +139,15 @@ class CliUninstallRuntimeTest {
   }
 
   @Test
-  fun `uninstall removes the skill-bill and bill-feature links and keeps an unrelated user skill`() {
+  fun `uninstall removes public and old dispatcher links and keeps an unrelated user skill`() {
     val fixture = uninstallFixture()
     val codexSkills = fixture.home.resolve(".codex/skills")
     val installedSkills = fixture.stateRoot.resolve("installed-skills")
     val dispatcherLink = codexSkills.resolve("skill-bill")
+    val publicDispatcherLink = codexSkills.resolve("sona")
     val featureLink = codexSkills.resolve("bill-feature")
     val mySkill = codexSkills.resolve("my-skill")
-    listOf("skill-bill", "bill-feature").forEach { name ->
+    listOf("skill-bill", "sona", "bill-feature").forEach { name ->
       val staged = Files.createDirectories(installedSkills.resolve("$name-2222222222222222"))
       Files.writeString(staged.resolve("SKILL.md"), "# $name\n")
       Files.createSymbolicLink(codexSkills.resolve(name), staged)
@@ -158,8 +159,21 @@ class CliUninstallRuntimeTest {
 
     assertEquals(0, result.exitCode, result.stdout)
     assertFalse(Files.exists(dispatcherLink, LinkOption.NOFOLLOW_LINKS))
+    assertFalse(Files.exists(publicDispatcherLink, LinkOption.NOFOLLOW_LINKS))
     assertFalse(Files.exists(featureLink, LinkOption.NOFOLLOW_LINKS))
     assertTrue(Files.isRegularFile(mySkill.resolve("SKILL.md")))
+  }
+
+  @Test
+  fun `uninstall preserves an unrelated regular file at the public dispatcher name`() {
+    val fixture = uninstallFixture()
+    val publicTarget = Files.createDirectories(fixture.home.resolve(".codex/skills")).resolve("sona")
+    Files.writeString(publicTarget, "user-owned")
+
+    val result = runUninstall(fixture.home, "--yes")
+
+    assertEquals(0, result.exitCode, result.stdout)
+    assertEquals("user-owned", Files.readString(publicTarget))
   }
 
   private fun runUninstall(

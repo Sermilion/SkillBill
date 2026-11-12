@@ -31,6 +31,7 @@ import skillbill.install.model.InstallTelemetryApplyOutcome
 import skillbill.install.model.InstallTelemetryApplyStatus
 import skillbill.install.model.InstallTelemetryLevel
 import skillbill.install.model.InstallationTargetPaths
+import skillbill.install.model.ListedSkillNames
 import skillbill.install.model.McpRegistrationChoice
 import skillbill.install.model.McpRegistrationIntent
 import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
@@ -190,7 +191,7 @@ class CliInstallPlanApplyRuntimeTest {
       assertEquals(skills.size, agentLinks.size)
       assertTrue(agentLinks.all { link -> link["target_dir"] == targetDir })
       assertEquals(
-        skills.map { skill -> "$targetDir/${skill["name"]}" }.toSet(),
+        skills.map { skill -> "$targetDir/${ListedSkillNames.publicName(skill["name"] as String)}" }.toSet(),
         agentLinks.map { link -> link["link_path"] }.toSet(),
       )
     }
@@ -503,7 +504,10 @@ class CliInstallPlanApplyRuntimeTest {
     assertTrue(links.all { link -> link["agent"] == "codex" })
     assertTrue(links.all { link -> link["target_dir"] == targetDir.toString() })
     assertEquals(
-      expectedSkillNames.map { skillName -> targetDir.resolve(skillName).toString() }.toSet(),
+      expectedSkillNames.map {
+          skillName ->
+        targetDir.resolve(ListedSkillNames.publicName(skillName)).toString()
+      }.toSet(),
       links.map { link -> link["link_path"] }.toSet(),
     )
     assertTrue(links.all { link -> link["status"] == "created" })

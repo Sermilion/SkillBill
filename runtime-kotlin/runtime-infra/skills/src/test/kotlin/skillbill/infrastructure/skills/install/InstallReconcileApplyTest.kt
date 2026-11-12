@@ -46,7 +46,7 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
   private fun reviewContent(repoRoot: Path): Path = repoRoot.resolve("skills/bill-code-review/content.md")
 
   @Test
-  fun `upstream bytes overwrite the live skill even when the user edited it`() {
+  fun `upgrade preserves an edited skill and updates an unedited skill`() {
     val upstream = seedRepo("apply-upstream")
     val local = seedRepo("apply-local")
     val home = home()
@@ -54,21 +54,24 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
 
     val upstreamReviewBytes = content("bill-code-review") + "\nUPSTREAM REVIEW\n"
     Files.writeString(reviewContent(upstream), upstreamReviewBytes)
-    Files.writeString(reviewContent(local), content("bill-code-review") + "\nLOCAL REVIEW\n")
+    val localReviewBytes = content("bill-code-review") + "\nLOCAL REVIEW\n"
+    Files.writeString(reviewContent(local), localReviewBytes)
+    val upstreamCheckBytes = content("bill-code-check") + "\nUPSTREAM CHECK\n"
     Files.writeString(
-      local.resolve("skills/bill-code-check/content.md"),
-      content("bill-code-check") + "\nLOCAL CHECK EDIT\n",
+      upstream.resolve("skills/bill-code-check/content.md"),
+      upstreamCheckBytes,
     )
 
     val output = applyReconciliation(roots(upstream), roots(local), home, baseline)
 
-    assertEquals(upstreamReviewBytes, Files.readString(reviewContent(local)))
-    assertEquals(content("bill-code-check"), Files.readString(local.resolve("skills/bill-code-check/content.md")))
-    assertTrue(output.installedPaths.contains("skills/bill-code-review"))
+    assertEquals(localReviewBytes, Files.readString(reviewContent(local)))
+    assertEquals(upstreamCheckBytes, Files.readString(local.resolve("skills/bill-code-check/content.md")))
+    assertFalse(output.installedPaths.contains("skills/bill-code-review"))
     assertTrue(output.installedPaths.contains("skills/bill-code-check"))
+    assertFalse(output.plan.baselineOverlay.containsKey("skills/bill-code-review"))
     assertEquals(
-      baselineFromUpstream(upstream, home).entries,
-      baseline.withEntries(output.plan.baselineOverlay).entries,
+      baselineFromUpstream(upstream, home).hashFor("skills/bill-code-check"),
+      baseline.withEntries(output.plan.baselineOverlay).hashFor("skills/bill-code-check"),
     )
   }
 
@@ -77,8 +80,12 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
     val upstream = seedRepo("apply-upstream")
     val local = seedRepo("apply-local")
     val home = home()
-    val baseline = baselineFromUpstream(upstream, home)
+    seedBaseSkill(upstream, "bill-local-only")
     seedBaseSkill(local, "bill-local-only")
+    val baseline = baselineFromUpstream(upstream, home)
+    Files.walk(upstream.resolve("skills/bill-local-only")).use { stream ->
+      stream.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
+    }
 
     val output = applyReconciliation(roots(upstream), roots(local), home, baseline)
 
@@ -105,7 +112,7 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
   }
 
   @Test
-  fun `edited agent addon is replaced from upstream while a locally-authored one survives`() {
+  fun `reconciliation preserves edited and locally authored agent addons`() {
     val upstream = seedRepo("apply-upstream")
     val local = seedRepo("apply-local")
     seedAgentAddon(upstream, "review-helper", "UPSTREAM\n")
@@ -117,9 +124,9 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
 
     val output = applyReconciliation(roots(upstream), roots(local), home, baseline)
 
-    assertEquals("UPSTREAM\n", Files.readString(local.resolve("agent-addons/review-helper/content.md")))
+    assertEquals("LOCAL EDIT\n", Files.readString(local.resolve("agent-addons/review-helper/content.md")))
     assertEquals("LOCAL ONLY\n", Files.readString(local.resolve("agent-addons/local-helper/content.md")))
-    assertTrue(output.installedPaths.contains("agent-addons/review-helper"))
+    assertFalse(output.installedPaths.contains("agent-addons/review-helper"))
     assertFalse(output.installedPaths.contains("agent-addons/local-helper"))
     assertFalse(output.prunedPaths.contains("agent-addons/local-helper"))
   }
@@ -179,7 +186,7 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
   }
 
   @Test
-  fun `edited platform-pack skill is replaced and pack-level metadata is adopted`() {
+  fun `edited platform skill survives while shipped pack metadata is updated`() {
     val upstream = seedRepo("apply-upstream")
     val local = seedRepo("apply-local")
     seedPlatformPack(upstream, "kotlin")
@@ -190,12 +197,13 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
     val packSkill = local.resolve("platform-packs/kotlin/code-review/bill-kotlin-code-review/content.md")
     val upstreamBytes = Files.readString(packSkill)
     Files.writeString(packSkill, upstreamBytes + "\nUSER PACK EDIT\n")
+    Files.writeString(local.resolve("platform-packs/kotlin/ADDON.md"), "# old addon\n")
     Files.writeString(upstream.resolve("platform-packs/kotlin/ADDON.md"), "# upstream addon\n")
 
     val output = applyReconciliation(roots(upstream), roots(local), home, baseline)
 
-    assertEquals(upstreamBytes, Files.readString(packSkill), "an edited pack skill must be replaced from upstream")
-    assertTrue(output.installedPaths.contains("platform-packs/kotlin/code-review/bill-kotlin-code-review"))
+    assertEquals(upstreamBytes + "\nUSER PACK EDIT\n", Files.readString(packSkill))
+    assertFalse(output.installedPaths.contains("platform-packs/kotlin/code-review/bill-kotlin-code-review"))
     assertContains(Files.readString(local.resolve("platform-packs/kotlin/ADDON.md")), "upstream addon")
   }
 

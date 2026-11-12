@@ -24,7 +24,7 @@ internal fun applyReconciliation(
   val upstreamSkills = enumerateSkills(upstream, home, ReconcileSourceSide.UPSTREAM, environment)
   val localSkills = enumerateSkills(local, home, ReconcileSourceSide.LOCAL, environment)
   val plan = classifyReconciliation(upstreamSkills, localSkills, baseline)
-  guardPruneAgainstEmptyUpstream(plan, upstreamSkills)
+  guardReconciliationAgainstEmptyUpstream(plan, upstreamSkills)
 
   val installedPaths = mutableListOf<String>()
   plan.outcomes.forEach { outcome ->
@@ -50,23 +50,23 @@ internal fun applyReconciliation(
         deleteTreeRecursively(liveSkillDir(local, outcome.skillRelativePath))
         outcome.skillRelativePath
       }
-  adoptPlatformPackNonSkillFiles(upstream, local, upstreamSkills, home, environment)
+  adoptPlatformPackNonSkillFiles(upstream, local, localSkills + upstreamSkills, home, environment)
   return ReconcileApplyOutput(plan = plan, installedPaths = installedPaths, prunedPaths = prunedPaths)
 }
 
-private fun guardPruneAgainstEmptyUpstream(
+private fun guardReconciliationAgainstEmptyUpstream(
   plan: ReconciliationPlan,
   upstreamSkills: Map<String, ReconcileSkillEntry>,
 ) {
   if (upstreamSkills.isNotEmpty()) {
     return
   }
-  val pruned = plan.prunedPaths
-  if (pruned.isNotEmpty()) {
+  val existingSkills = plan.outcomes.filterNot { it.skillRelativePath.startsWith(AGENT_ADDONS_PREFIX) }
+  if (existingSkills.isNotEmpty()) {
     throw reconciliationConflictError(
-      skillRelativePath = pruned.first(),
+      skillRelativePath = existingSkills.first().skillRelativePath,
       reason =
-        "refusing to prune ${pruned.size} installed path(s) because the upstream source " +
+        "refusing to reconcile ${existingSkills.size} installed path(s) because the upstream source " +
           "tree enumerated no skills at all; the candidate source is missing or incomplete.",
     )
   }
@@ -75,7 +75,7 @@ private fun guardPruneAgainstEmptyUpstream(
 private fun adoptPlatformPackNonSkillFiles(
   upstream: ReconcileSourceRoots,
   local: ReconcileSourceRoots,
-  upstreamSkills: Map<String, ReconcileSkillEntry>,
+  knownSkills: Map<String, ReconcileSkillEntry>,
   home: Path,
   environment: Map<String, String>,
 ) {
@@ -84,7 +84,7 @@ private fun adoptPlatformPackNonSkillFiles(
     return
   }
   val packSkillDirs =
-    upstreamSkills.values
+    knownSkills.values
       .map { it.sourceDir }
       .toSet()
   val livePacks = local.platformPacksRoot.toAbsolutePath().normalize()
@@ -115,20 +115,20 @@ private fun adoptPlatformPackNonSkillFiles(
       }
     }
   }
-  deleteLivePackFilesAbsentUpstream(livePacks, local, upstreamSkills, desiredFiles)
+  deleteLivePackFilesAbsentUpstream(livePacks, local, knownSkills, desiredFiles)
 }
 
 private fun deleteLivePackFilesAbsentUpstream(
   livePacks: Path,
   local: ReconcileSourceRoots,
-  upstreamSkills: Map<String, ReconcileSkillEntry>,
+  knownSkills: Map<String, ReconcileSkillEntry>,
   desiredFiles: Set<String>,
 ) {
   if (!Files.isDirectory(livePacks)) {
     return
   }
   val liveSkillDirs =
-    upstreamSkills.keys
+    knownSkills.keys
       .filter { it.startsWith(PLATFORM_PACKS_PREFIX) }
       .map { liveSkillDir(local, it) }
   Files.walk(livePacks).use { stream ->

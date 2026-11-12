@@ -1,7 +1,6 @@
 package skillbill.infrastructure.skills.install.staging
 
 import skillbill.infrastructure.skills.install.identity.installedSkillNameSlug
-import skillbill.infrastructure.skills.install.identity.installedSkillSlug
 import java.io.IOException
 import java.io.UncheckedIOException
 import java.nio.file.Files
@@ -11,22 +10,6 @@ import java.util.logging.Level
 import java.util.logging.Logger
 
 private val pruneLog: Logger = Logger.getLogger("skillbill.install.InstallStaging")
-
-internal fun pruneStaleStagingDirs(
-  home: Path,
-  resolvedSource: Path,
-  currentHash: String,
-) {
-  val slug = installedSkillSlug(resolvedSource)
-  if (slug.isEmpty()) {
-    return
-  }
-  val currentLeaf = "$slug-$currentHash"
-  val hashRegex = slugHashRegex(slug)
-  pruneCacheDirs(installedSkillsCacheRoot(home), "pruneStaleStagingDirs") { name ->
-    name.matches(hashRegex) && name != currentLeaf
-  }
-}
 
 internal fun pruneLegacySkillCacheDirs(
   home: Path,

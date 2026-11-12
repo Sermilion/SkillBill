@@ -202,6 +202,10 @@ class InstallStagingTest {
 
     val rendered = stageInstalledSkill(repoRoot, skillDir, home)
 
+    assertTrue(Files.readString(rendered.renderedSkillFile.toPath()).contains("name: sona"))
+    assertTrue(rendered.stagingDir.fileName.startsWith("skill-bill-"))
+    assertFalse(Files.exists(rendered.stagingDir.resolve("content.md").toPath(), LinkOption.NOFOLLOW_LINKS))
+
     requiredSupportingFilesForSkill("skill-bill", repoRoot).forEach { fileName ->
       val sourceSidecar = skillDir.resolve(fileName)
       assertFalse(Files.exists(sourceSidecar, LinkOption.NOFOLLOW_LINKS), "source must not contain $fileName")
@@ -357,10 +361,13 @@ class InstallStagingTest {
   }
 
   @Test
-  fun `prune does not delete unrelated skills whose slug shares the current slug as a prefix`() {
+  fun `fresh staging preserves the prior linked payload and unrelated skills with the same slug prefix`() {
     val fixture = setupFixture()
 
     val first = stageInstalledSkill(fixture.repoRoot, fixture.skillDir, fixture.home)
+    val activeLink = fixture.home.resolve("active-skill")
+    Files.createSymbolicLink(activeLink, first.stagingDir.toPath())
+    val firstWrapper = Files.readString(activeLink.resolve("SKILL.md"))
     val cacheRoot = installedSkillsCacheRoot(fixture.home)
 
     val firstSlug = first.stagingDir.fileName.substringBeforeLast('-')
@@ -382,10 +389,11 @@ class InstallStagingTest {
       "prune mutated an unrelated skill's staging dir contents",
     )
 
-    assertFalse(
+    assertTrue(
       Files.isDirectory(first.stagingDir.toPath(), LinkOption.NOFOLLOW_LINKS),
-      "expected prior same-slug staging dir ${first.stagingDir} to be pruned by ${second.stagingDir}",
+      "staging ${second.stagingDir} must retain the prior usable payload ${first.stagingDir}",
     )
+    assertEquals(firstWrapper, Files.readString(activeLink.resolve("SKILL.md")))
   }
 
   @Test
@@ -440,7 +448,7 @@ class InstallStagingTest {
     Files.createDirectories(unrelated)
     Files.writeString(
       feature.resolve("content.md"),
-      "---\nname: skill-bill\ndescription: Skill Bill router.\n---\n\nBody.\n",
+      "---\nname: sona\ndescription: Sona dispatcher.\n---\n\nBody.\n",
     )
     Files.writeString(unrelated.resolve("content.md"), "---\nname: bill-unrelated\ndescription: Other.\n---\n\nBody.\n")
     Files.createDirectories(feature.resolve("references"))
@@ -652,7 +660,7 @@ class InstallStagingTest {
     val frontmatter =
       """
       |---
-      |name: skill-bill
+      |name: sona
       |description: Run governed work.
       |---
       """.trimMargin() + "\n\nAuthored review guidance.\n"

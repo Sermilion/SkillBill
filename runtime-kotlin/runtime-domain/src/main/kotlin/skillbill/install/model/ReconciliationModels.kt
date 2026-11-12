@@ -47,6 +47,12 @@ data class ReconciliationPlan(
     get() = outcomes.filterIsInstance<SkillReconciliationOutcome.Prune>().map { it.skillRelativePath }
 }
 
+fun preserveLocallyAuthoredSource(
+  localHash: String?,
+  upstreamHash: String?,
+  baselineHash: String?,
+): Boolean = localHash != null && localHash != baselineHash && (upstreamHash == null || localHash != upstreamHash)
+
 data class InstallReconcileApplyOutcome(
   val plan: ReconciliationPlan,
   val installedPaths: List<String>,

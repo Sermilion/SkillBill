@@ -723,6 +723,8 @@ build_legacy_skill_names() {
 
   LEGACY_SKILL_NAMES=()
   add_legacy_name ".bill-shared"
+  add_legacy_name "skill-bill"
+  add_legacy_name "sona"
 
   if [[ ${#SKILL_NAMES[@]} -gt 0 ]]; then
     for skill in "${SKILL_NAMES[@]}"; do

@@ -19,6 +19,7 @@ import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.InstallPlanRequest
 import skillbill.install.model.InstallTelemetryLevel
 import skillbill.install.model.InstallationTargetPaths
+import skillbill.install.model.ListedSkillNames
 import skillbill.install.model.McpRegistrationChoice
 import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.model.PlatformPackSelection
@@ -146,7 +147,7 @@ class FileSystemReviewNativeAgentPreflightTest {
     assertEquals(InstallApplyStatus.SUCCESS, install(fixture, SupportedAgent.CODEX).status)
 
     val skillTargets = fixture.home.resolve("agent-skill-targets/codex")
-    val installedParent = skillTargets.resolve(PACK_SIDECAR_PARENT_SKILL)
+    val installedParent = skillTargets.resolve(ListedSkillNames.publicName(PACK_SIDECAR_PARENT_SKILL))
     val sidecars =
       listOf("$INLINE_WORKER.md", "bill-kotlin-code-review.md", "bill-kotlin-code-review-architecture.md")
     sidecars.forEach { sidecar ->

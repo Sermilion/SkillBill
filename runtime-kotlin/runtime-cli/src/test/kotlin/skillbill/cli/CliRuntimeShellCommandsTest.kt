@@ -303,6 +303,39 @@ class CliRuntimeShellCommandsTest {
   }
 
   @Test
+  fun `link-skill reports and preserves an unrelated sona target`() {
+    val tempDir = Files.createTempDirectory("skillbill-cli-install-sona-conflict")
+    val context =
+      CliRuntimeContext(
+        userHome = tempDir.resolve("home"),
+        environment = isolatedCliEnvironment(tempDir.resolve("home")),
+      )
+    val repoRoot = tempDir.resolve("repo")
+    val sourceSkill = repoRoot.resolve("skills/skill-bill")
+    Files.createDirectories(sourceSkill)
+    Files.writeString(
+      sourceSkill.resolve("content.md"),
+      "---\nname: sona\ndescription: Public dispatcher.\n---\n\n# Sona Dispatcher\n",
+    )
+    val targetDir = Files.createDirectories(tempDir.resolve("agents"))
+    val publicTarget = targetDir.resolve("sona")
+    Files.writeString(publicTarget, "user-owned")
+
+    val result =
+      CliRuntime.run(
+        listOf(
+          "install", "link-skill", "--source", sourceSkill.toString(), "--target-dir", targetDir.toString(),
+          "--agent", "codex", "--repo-root", repoRoot.toString(),
+        ),
+        context,
+      )
+
+    assertEquals(1, result.exitCode)
+    assertContains(result.stdout, "Existing non-link target was preserved.")
+    assertEquals("user-owned", Files.readString(publicTarget))
+  }
+
+  @Test
   fun `doctor skill subject is retired with stable replacement`() {
     val result =
       CliRuntime.run(

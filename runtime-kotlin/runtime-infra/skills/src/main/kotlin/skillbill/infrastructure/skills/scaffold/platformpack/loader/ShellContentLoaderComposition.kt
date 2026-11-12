@@ -2,10 +2,10 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.loader
 
 import skillbill.model.toPath
+import skillbill.review.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewCompositionMode
 import skillbill.review.plan.ReviewFallbackResolver
 import skillbill.review.plan.ReviewLaunchPlanPolicy
-import skillbill.scaffold.model.CodeReviewBaselineLayer
-import skillbill.scaffold.model.CodeReviewCompositionMode
 import skillbill.scaffold.model.PlatformManifest
 import java.nio.file.Files
 

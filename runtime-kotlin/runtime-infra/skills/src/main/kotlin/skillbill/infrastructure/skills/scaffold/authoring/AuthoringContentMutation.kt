@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.scaffold.authoring
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.REQUIRED_GOVERNED_SECTIONS
+import skillbill.install.model.ListedSkillNames
 import java.nio.file.Files
 
 internal fun replaceSectionBody(
@@ -46,9 +47,9 @@ internal fun coerceFullContentText(
     suppliedFrontmatter ?: existingFrontmatter
       ?: throw SkillBillRuntimeException(
         "${target.contentFile}: content.md must already carry a YAML frontmatter block before " +
-          "fill/edit (and the supplied body does not provide one). Run `skill-bill render " +
-          "--skill-name ${target.skillName}` to regenerate the canonical frontmatter, or restore " +
-          "the file from version control before retrying.",
+          "fill/edit (and the supplied body does not provide one). Run `sona render " +
+          "--skill-name ${ListedSkillNames.publicName(target.skillName)}` to regenerate the canonical frontmatter, " +
+          "or restore the file from version control before retrying.",
       )
   val body = if (suppliedBody.startsWith("# ")) suppliedBody else "${fullContentTitle(target)}\n\n$suppliedBody"
   val trimmedBody = body.trimEnd()

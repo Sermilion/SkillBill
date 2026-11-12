@@ -222,14 +222,10 @@ class FileSystemInstallApplyExecution(
 class FileSystemInstallSkillLink(
   private val hostPlatform: HostPlatformPort,
 ) : InstallSkillLinkPort {
-  override fun linkSkill(request: InstallSkillLinkRequest): InstallSkillLinkResult =
-    InstallSkillLinkResult(
-      linkedPaths =
-        linkInstalledSkill(
-          request,
-          hostPlatform,
-        ),
-    )
+  override fun linkSkill(request: InstallSkillLinkRequest): InstallSkillLinkResult {
+    val outcome = linkInstalledSkill(request, hostPlatform)
+    return InstallSkillLinkResult(linkedPaths = outcome.linkPaths, issues = outcome.issues)
+  }
 }
 
 @Inject
@@ -285,8 +281,7 @@ class FileSystemInstallAgentTargets(
     val (removed, skipped) =
       InstallCleanupOperations.cleanupAgentTarget(
         targetDir = request.targetDir,
-        skillNames = request.skillNames,
-        legacyNames = request.legacyNames,
+        skillNames = request.skillNames + request.legacyNames,
         managedInstallMarker = request.managedInstallMarker,
         installedSkillsRoot = request.home?.let { installedSkillsCacheRoot(it) },
       )

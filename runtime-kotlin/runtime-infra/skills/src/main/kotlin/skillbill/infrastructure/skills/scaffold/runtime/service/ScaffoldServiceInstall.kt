@@ -7,4 +7,4 @@ internal fun performInstall(
   plan: ScaffoldPlan,
   repoRoot: Path,
   adapters: ScaffoldAdapterSeams,
-): Pair<List<Path>, List<String>> = adapters.performInstall(txn, plan, repoRoot)
+): ScaffoldInstallOutcome = adapters.performInstall(txn, plan, repoRoot)

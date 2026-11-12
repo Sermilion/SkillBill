@@ -35,6 +35,7 @@ import skillbill.install.model.SkillReconciliationOutcome
 import skillbill.install.model.WindowsSymlinkDecision
 import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
+import skillbill.install.model.preserveLocallyAuthoredSource
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
 import skillbill.scaffold.model.PlatformManifest
@@ -108,39 +109,42 @@ private fun classifySkill(
   baselineHash: String?,
 ): SkillReconciliationOutcome =
   when {
-    upstreamHash == null && localHash == null -> throw reconciliationConflictError(
-      skillRelativePath = skillRelativePath,
-      reason = "skill is present in neither the upstream nor the local source tree.",
-    )
-    upstreamHash == null && localHash != null && skillRelativePath.startsWith(AGENT_ADDONS_PREFIX) ->
-      SkillReconciliationOutcome.LocallyAuthored(
-        skillRelativePath = skillRelativePath,
-        localHash = localHash,
-        baselineHash = baselineHash,
-      )
-    upstreamHash == null && localHash != null ->
-      SkillReconciliationOutcome.Prune(
-        skillRelativePath = skillRelativePath,
-        localHash = localHash,
-        baselineHash = baselineHash,
-      )
-    upstreamHash != null && localHash == upstreamHash ->
+    upstreamHash == null -> classifyRemovedSkill(skillRelativePath, localHash, baselineHash)
+    localHash == upstreamHash ->
       SkillReconciliationOutcome.Unchanged(
         skillRelativePath = skillRelativePath,
         upstreamHash = upstreamHash,
         baselineHash = baselineHash,
       )
-    upstreamHash != null ->
+    localHash != null &&
+      preserveLocallyAuthoredSource(localHash, upstreamHash, baselineHash) ->
+      SkillReconciliationOutcome.LocallyAuthored(
+        skillRelativePath = skillRelativePath,
+        localHash = localHash,
+        baselineHash = baselineHash,
+      )
+    else ->
       SkillReconciliationOutcome.Adopt(
         skillRelativePath = skillRelativePath,
         upstreamHash = upstreamHash,
         localHash = localHash,
         baselineHash = baselineHash,
       )
-    else -> throw reconciliationConflictError(
+  }
+
+private fun classifyRemovedSkill(
+  skillRelativePath: String,
+  localHash: String?,
+  baselineHash: String?,
+): SkillReconciliationOutcome =
+  when {
+    localHash == null -> throw reconciliationConflictError(
       skillRelativePath = skillRelativePath,
-      reason = "skill reconciliation reached an unreachable state.",
+      reason = "skill is present in neither the upstream nor the local source tree.",
     )
+    skillRelativePath.startsWith(AGENT_ADDONS_PREFIX) || preserveLocallyAuthoredSource(localHash, null, baselineHash) ->
+      SkillReconciliationOutcome.LocallyAuthored(skillRelativePath, localHash, baselineHash)
+    else -> SkillReconciliationOutcome.Prune(skillRelativePath, localHash, baselineHash)
   }
 
 internal fun enumerateSkills(

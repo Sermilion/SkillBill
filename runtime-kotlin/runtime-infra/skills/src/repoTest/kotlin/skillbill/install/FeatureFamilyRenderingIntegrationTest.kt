@@ -46,7 +46,7 @@ class FeatureFamilyRenderingIntegrationTest {
 
     val feature = staged.renderedSkillFile.toPath().readText()
 
-    assertContains(feature, "skill-bill <intake> --agent <currently-executing-agent> --no-live-output")
+    assertContains(feature, "sona <intake> --agent <currently-executing-agent> --no-live-output")
     assertContains(feature, "The runtime creates missing specs and the parent workflow before")
     assertContains(feature, "Linear, Jira, and any other connected tracker")
     assertContains(feature, "allocate the next local key")
@@ -55,7 +55,7 @@ class FeatureFamilyRenderingIntegrationTest {
     assertContains(feature, "rg --files --hidden --no-ignore <directory>")
     assertContains(feature, "local bundles through `NEWS-151` select `NEWS-152`")
     assertFalse(feature.contains("ask for the tracker issue key"))
-    assertFalse(feature.contains("skill-bill goal preflight <issue-key>"))
+    assertFalse(feature.contains("sona goal preflight <issue-key>"))
     assertFalse(feature.contains("Do not launch while unconfirmed"))
     assertContains(feature, "For each entry in `rehydrate_targets`")
     assertContains(feature, "Fetch nothing when the list is empty")

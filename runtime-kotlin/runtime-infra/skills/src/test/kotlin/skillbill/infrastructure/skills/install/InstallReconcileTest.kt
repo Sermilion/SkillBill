@@ -21,7 +21,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 private const val STALE_CONTRACT_VERSION: String = "0.9"
@@ -68,7 +67,7 @@ class InstallReconcileTest : InstallApplyTestSupport() {
     )
 
   @Test
-  fun `upstream overwrites a local edit whether or not a baseline exists`() {
+  fun `reconciliation preserves local edits with and without a baseline`() {
     val upstream = seedRepo("reconcile-upstream")
     val local = seedRepo("reconcile-local")
     val home = home()
@@ -87,9 +86,8 @@ class InstallReconcileTest : InstallApplyTestSupport() {
 
     listOf(withBaseline, withoutBaseline).forEach { plan ->
       listOf("skills/bill-code-review", "skills/bill-code-check").forEach { path ->
-        val adopt = assertIs<SkillReconciliationOutcome.Adopt>(outcomeFor(plan, path))
-        assertTrue(adopt.localHash != adopt.upstreamHash)
-        assertEquals(adopt.upstreamHash, plan.baselineOverlay[path])
+        assertIs<SkillReconciliationOutcome.LocallyAuthored>(outcomeFor(plan, path))
+        assertFalse(path in plan.baselineOverlay)
       }
     }
   }
@@ -117,9 +115,12 @@ class InstallReconcileTest : InstallApplyTestSupport() {
     val upstream = seedRepo("reconcile-upstream")
     val local = seedRepo("reconcile-local")
     val home = home()
-    val baseline = baselineFromUpstream(upstream, local, home)
-
+    seedBaseSkill(upstream, "bill-local-only")
     seedBaseSkill(local, "bill-local-only")
+    val baseline = baselineFromUpstream(upstream, local, home)
+    Files.walk(upstream.resolve("skills/bill-local-only")).use { stream ->
+      stream.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
+    }
     seedAgentAddon(local, "local-helper", "LOCAL ONLY\n")
 
     val plan = planWith(upstream, local, home, baseline)
@@ -198,7 +199,7 @@ class InstallReconcileTest : InstallApplyTestSupport() {
   }
 
   @Test
-  fun `stale local platform pack contract version reconciles from upstream and records the tolerated version`() {
+  fun `stale local platform pack stays enumerable and preserves source edits`() {
     val upstream = seedRepo("reconcile-upstream-stale-local")
     val local = seedRepo("reconcile-local-stale")
     val home = home()
@@ -222,9 +223,9 @@ class InstallReconcileTest : InstallApplyTestSupport() {
     assertTrue(degradation.contains("expected=$SHELL_CONTRACT_VERSION"), degradation)
 
     val path = "platform-packs/generic/code-review/bill-generic-code-review"
-    val adopt = assertIs<SkillReconciliationOutcome.Adopt>(outcomeFor(plan, path))
-    assertNotNull(adopt.localHash, "the stale local pack must stay enumerable, not drop out of the plan")
-    assertEquals(adopt.upstreamHash, plan.baselineOverlay[path])
+    val authored = assertIs<SkillReconciliationOutcome.LocallyAuthored>(outcomeFor(plan, path))
+    assertTrue(authored.localHash.isNotBlank(), "the stale local pack must stay enumerable")
+    assertFalse(path in plan.baselineOverlay)
   }
 
   @Test

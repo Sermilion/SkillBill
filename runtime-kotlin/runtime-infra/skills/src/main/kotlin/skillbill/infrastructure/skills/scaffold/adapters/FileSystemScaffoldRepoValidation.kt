@@ -16,7 +16,7 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.contract.display
 import skillbill.model.EnvironmentContext
 import skillbill.ports.scaffold.repo.model.ScaffoldAuthoringValidationRequest
 import skillbill.ports.scaffold.repo.model.ScaffoldAuthoringValidationResult
-import skillbill.scaffold.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewBaselineLayer
 import skillbill.scaffold.policy.SKILL_KIND_AGENT_ADDON
 import skillbill.scaffold.policy.SKILL_KIND_HORIZONTAL
 import java.nio.file.Files

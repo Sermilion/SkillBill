@@ -9,6 +9,7 @@ import skillbill.application.uninstall.model.OwnedFileRemoval
 import skillbill.application.uninstall.model.UninstallPlan
 import skillbill.application.uninstall.model.UninstallRequest
 import skillbill.application.uninstall.model.UninstallResult
+import skillbill.install.model.ListedSkillNames
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
@@ -28,7 +29,11 @@ class SkillBillUninstallService(
   fun plan(request: UninstallRequest): UninstallPlan {
     val home = request.home
     val stateRoot = request.stateRoot
-    val skillNames = installedSkillNames(uninstallFileSystem, stateRoot.resolve("installed-skills"))
+    val skillNames =
+      (
+        installedSkillNames(uninstallFileSystem, stateRoot.resolve("installed-skills")) +
+          ListedSkillNames.DISPATCHER + ListedSkillNames.PUBLIC_DISPATCHER
+      ).distinct()
     val legacyNames = legacySkillNames(skillNames)
     val claudeTargets =
       installAgentService.claudeRoots(home, request.environment).flatMap { root ->
@@ -145,6 +150,7 @@ private fun installedSkillNames(
 
 private fun legacySkillNames(skillNames: List<String>): List<String> {
   val names = mutableSetOf(".bill-shared")
+  names += ListedSkillNames.DISPATCHER
   skillNames.filter { it.startsWith("bill-") }.forEach { skill ->
     names += "mdp-${skill.removePrefix("bill-")}"
   }

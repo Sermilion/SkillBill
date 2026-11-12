@@ -26,11 +26,14 @@ internal fun selectedTargets(
   if (skillNames.isEmpty()) {
     return targets.values.sortedBy { target -> target.skillName }
   }
-  val missing = skillNames.toSet() - targets.keys
+  val canonicalNames = skillNames.map(ListedSkillNames::sourceName).distinct()
+  val missing = skillNames.filter { skillName -> ListedSkillNames.sourceName(skillName) !in targets }
   if (missing.isNotEmpty()) {
-    throw SkillBillRuntimeException("Unknown content-managed skill(s): ${missing.sorted().joinToString(", ")}.")
+    throw SkillBillRuntimeException(
+      "Unknown content-managed skill(s): ${missing.distinct().sorted().joinToString(", ")}.",
+    )
   }
-  return skillNames.map { skillName -> targets.getValue(skillName) }
+  return canonicalNames.map { skillName -> targets.getValue(skillName) }
 }
 
 internal fun <T> runWithUpgradeRollback(
@@ -61,7 +64,7 @@ internal fun resolveTarget(
   skillName: String,
   externalDiscovery: PlatformPackDiscoveryContext? = null,
 ): AuthoringTarget =
-  discoverTargets(repoRoot, externalDiscovery = externalDiscovery)[skillName]
+  discoverTargets(repoRoot, externalDiscovery = externalDiscovery)[ListedSkillNames.sourceName(skillName)]
     ?: throw SkillBillRuntimeException(
       "Skill '$skillName' is not a content-managed skill with a sibling content.md file.",
     )

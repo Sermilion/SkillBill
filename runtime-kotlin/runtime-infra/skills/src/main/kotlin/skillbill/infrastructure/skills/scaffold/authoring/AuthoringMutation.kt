@@ -8,6 +8,7 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.contract.support
 import skillbill.infrastructure.skills.scaffold.runtime.service.support.requiredSupportingFilesForSkill
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateAuthoredContent
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateSkillMdShape
+import skillbill.install.model.ListedSkillNames
 import java.io.Closeable
 import java.io.IOException
 import java.nio.file.Files
@@ -65,7 +66,7 @@ private fun collectTargetIssues(
   issues: MutableList<String>,
 ) {
   val contentText = Files.readString(target.contentFile)
-  if (!contentText.contains("name: ${target.skillName}\n")) {
+  if (!contentText.contains("name: ${ListedSkillNames.publicName(target.skillName)}\n")) {
     issues += "${target.contentFile}: frontmatter name does not match directory '${target.skillName}'"
   }
   if (repoRoot != null && isSourceOwnedSkillTarget(repoRoot, target)) {

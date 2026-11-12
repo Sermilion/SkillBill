@@ -87,7 +87,7 @@ try:
     responses = {response["id"]: response for response in map(json.loads, completed.stdout.splitlines())}
     checks = []
     checks.append(("process_exit_0", completed.returncode == 0))
-    checks.append(("initialize", responses["initialize"]["result"]["serverInfo"]["name"] == "skill-bill"))
+    checks.append(("initialize", responses["initialize"]["result"]["serverInfo"]["name"] == "sona"))
     names = [tool["name"] for tool in responses["list"]["result"]["tools"]]
     prose_tools = [
         n for n in names

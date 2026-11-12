@@ -10,6 +10,7 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.support.required
 import skillbill.infrastructure.skills.scaffold.validation.review.contentFiles
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateAuthoredContent
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateSkillMdShape
+import skillbill.install.model.ListedSkillNames
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -41,7 +42,7 @@ internal data class ValidateInstallableSkillArgs(
 internal fun validateInstallableSkill(args: ValidateInstallableSkillArgs) {
   val text = Files.readString(args.contentFile)
   val frontmatter = parseFrontmatter(text)
-  if (frontmatter["name"] != args.skillName) {
+  if (frontmatter["name"] != ListedSkillNames.publicName(args.skillName)) {
     args.issues += "${args.contentFile}: frontmatter name '${frontmatter["name"].orEmpty()}' does not match " +
       "directory '${args.skillName}'"
   }
