@@ -517,9 +517,10 @@ properties:
           type: string
           minLength: 1
         description: >
-          Argv for the terminal verifying full gate run. Must bypass the
-          build cache and up-to-date short-circuiting using pack-declared
-          flags, never a runtime-hardcoded stack flag.
+          Argv for the terminal verifying full gate run. The pack owns the
+          cache policy and may reuse the cache-eligible command. The legacy
+          field name does not require cache bypass. The runtime never adds
+          stack-specific cache flags.
       collect_all_full_gate_command:
         type: array
         minItems: 1
@@ -537,9 +538,10 @@ properties:
           type: string
           minLength: 1
         description: >
-          Argv for the cache-bypassing collect-all full validation gate.
-          Pack-owned complete argv including that pack's cache-bypass
-          tokens; the runtime never appends stack flags.
+          Argv for the terminal verifying collect-all full validation gate.
+          The pack owns the cache policy and may reuse the cache-eligible
+          command. The legacy field name does not require cache bypass.
+          The runtime never appends stack flags.
       build_command:
         type: array
         minItems: 1
@@ -561,9 +563,9 @@ properties:
         x-runtime-anchored: true
         description: >
           Optional argv for the terminal verifying build gate run after agent
-          repair. Must bypass build cache using pack-declared flags only.
-          Must not be byte-identical to
-          cache_bypassing_collect_all_full_gate_command.
+          repair. The pack owns the cache policy and may reuse build_command.
+          The legacy field name does not require cache bypass. Must not be
+          byte-identical to cache_bypassing_collect_all_full_gate_command.
       findings:
         type: object
         additionalProperties: false
