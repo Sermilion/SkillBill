@@ -1,24 +1,34 @@
 ## [2026-11-12] Use acknowledged ACP for OpenCode runtime execution
 Context: OpenCode needs headless runtime execution with actual model and effort consumption, approvals and complete capture.
-Decision: Reuse ACP session, approval and process owners, acknowledge advertised configuration before prompting, and retain the runtime continuation wrapper. Require matching durable settlement when the launched prompt requests it.
-Reason: A registered command or transport completion cannot establish that the selected configuration reached the provider or grant workflow authority. Prompt-derived settlement preserves repair turns that do not settle.
+Decision: Reuse ACP session, approval and process owners, acknowledge advertised configuration before prompting, and retain the runtime continuation wrapper.
+Reason: A registered command cannot establish that the selected configuration reached the provider. Acknowledged ACP setup avoids CLI output scraping and another execution loop.
 Revisit when: Live provider QA establishes sustained execution and cancellation or OpenCode changes ACP configuration.
 Scope: This replaces only the OpenCode product-exclusion conclusion in the 2026-08-09 runtime-only engine decision. Its rejected-driver rationale, zcode removal and legacy-data quarantine remain relevant.
+
+## [2026-11-12] Require durable settlement according to the launched prompt
+Context: Provider exit zero or end_turn can arrive without phase settlement; runtime-owned build repair turns can explicitly omit settlement.
+Decision: Carry the launched prompt's settlement target through PreparedLaunch and require matching durable workflow, phase and attempt evidence when present. Preserve unreadable records and report typed failures; permit captured prose only for non-settling turns.
+Reason: Transport completion cannot grant workflow authority. Prompt-derived requirements preserve repair turns that never received a settlement request and retain the PhaseOutput ownership recorded in SKILL-387.
 
 ## [2026-11-12] Operator retry opens a fresh feasibility cycle from a blocked one
 Context: A feasibility safety block (for example, repository paths changed outside the admitted authority because the operator edited the same checkout) settles the launch and sets feasibility mode to `blocked`. `retry-blocked --phase plan_subtasks` reopened only the phase record, so the next attempt read the blocked state and blocked again with the same reason. The workflow could not recover.
 Decision: `retry-blocked` passes a phase-owned artifact hook into the retry transaction. For `plan_subtasks` with a blocked feasibility state and no active launch, the engine archives the current cycle into `cycleHistory`, resets the launch counters, and opens cycle `<workflow>:plan_subtasks:retry-<ledger sequence>` in review mode with an `operator-blocked-retry` reopening. A blocked state that still has an active launch refuses the retry, because launch recovery must settle that launch first. Other phases and non-blocked states are unchanged.
 Reason: The retry is the operator's explicit decision that the block is resolved. The new cycle captures a fresh repository baseline at its next admission instead of comparing against the blocked launch's baseline. Incremental review scope reads the archived cycle's evidence, and the blocked launch stays in history. The feasibility codec lives in runtime-engine, so the application layer takes the reopen as a hook and applies it in the same transaction as the phase reopen.
 
+## [2026-11-12] Retain OpenCode identity without persisting inline configuration
+Context: Resumed work must retain its admitted profile and model assignment even when environment or defaults change.
+Decision: Persist optional identity facts and the presence and fingerprint of inline configuration, keeping its contents ephemeral. Require matching caller content on resume and retain admitted assignments, including an absent model directive.
+Reason: Persisting inline content could copy credentials. Reselecting defaults could redirect admitted work. Optional storage preserves older records through the launch-identity migration.
+
+## [2026-11-12] Acquire OpenCode choices through a temporary ACP setup session
+Context: OpenCode advertises models and model-specific effort through ACP; acknowledging a model refreshes its options.
+Decision: Acquire choices through initialize, session/new and acknowledged session/set_config_option, then close the owned connection without prompting or app-chat persistence. Omit runtime settlement credentials.
+Reason: The editor needs current provider choices before saving explicit directives. Catalog acquisition does not prove inference authentication; absent effort after valid model acknowledgement permits a no-effort selection.
+
 ## [2026-11-10] Store pattern rules with an empty action fingerprint
 Context: approval_rules.action_fingerprint is NOT NULL and exact rules still key on fingerprint equality.
 Decision: Pattern rules write pattern plus actionFingerprint ""; scopes() skips fingerprint compare when pattern is non-null.
 Reason: Avoids a table rebuild to relax NOT NULL while keeping exact-rule behavior unchanged.
-
-## [2026-11-12] Retain OpenCode identity without persisting inline configuration
-Context: Resumed work must retain its admitted profile and model assignment even when environment or defaults change.
-Decision: Persist optional identity facts and the presence and fingerprint of inline configuration, keeping its contents ephemeral. Acquire advertised choices through a temporary ACP setup session without prompting.
-Reason: Persisting inline content could copy credentials. Reselecting defaults could redirect admitted work, and the editor needs current provider choices before saving directives.
 
 ## [2026-11-09] Map Cursor CLI model slugs to the advertised ACP variant
 Context: Cursor `--list-models` and `execution_matrix` use slugs such as `composer-2.5` and `cursor-grok-4.6-high`. ACP `session/new` advertises one parameterized value per base (`composer-2.5[fast=true]`) and accepts only those exact strings. Exact-match selection stopped the session before the prompt.
@@ -2120,6 +2130,8 @@ or `~/.zcode`.
 
 Revisit when: a working headless OpenCode/zcode driver can sustain the runtime
 child model, or prose-quarantine loud-fails keep firing long after the cut.
+
+Superseded by: Use acknowledged ACP for OpenCode runtime execution (2026-11-12)
 
 ## [2026-08-08] link and compile toolchain pin is JDK 21 (SKILL-166)
 
