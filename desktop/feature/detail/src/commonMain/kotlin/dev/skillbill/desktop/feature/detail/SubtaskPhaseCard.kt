@@ -126,7 +126,7 @@ private fun produced(
         PeekPart("Produced") { card.files.forEach { PeekOutput(LucideIcons.file, it, tooltip = it) } }
       } else EditRecordedOutput(null, card.output)
     }
-    "build" -> BuildRecordedOutput(card.output?.buildReceipt)
+    "build" -> BuildRecordedOutput(card.output?.buildReceipt, card.state)
     "audit" -> if (subtask != null && resultState is SubtaskResultsState.Shown) {
       SubtaskAuditSection(results, subtaskStatusKind(subtask.status), subtask.id, card.round)
     }
@@ -141,7 +141,7 @@ private fun produced(
         }
       }
     }
-    "validate" -> ValidateRecordedOutput(card.output, subtask?.id, detail, checksExpanded, onToggleChecks)
+    "validate" -> ValidateRecordedOutput(card.output, card.state, subtask?.id, detail, checksExpanded, onToggleChecks)
     "write_history" -> {
       val receipt = card.output?.historyReceipt
       if (receipt == null) PeekPart("History") {

@@ -17,6 +17,7 @@ import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.PhaseCardEdit
 import dev.skillbill.desktop.core.domain.model.PhaseCardHistoryReceipt
 import dev.skillbill.desktop.core.domain.model.PhaseCardOutput
+import dev.skillbill.desktop.core.domain.model.PhaseCardState
 import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
 import dev.skillbill.desktop.core.domain.model.ValidationResult
 import dev.skillbill.desktop.core.domain.model.WorkItem
@@ -49,9 +50,9 @@ internal fun EditRecordedOutput(edit: PhaseCardEdit?, output: PhaseCardOutput? =
 }
 
 @Composable
-internal fun BuildRecordedOutput(receipt: ValidationResult?) {
+internal fun BuildRecordedOutput(receipt: ValidationResult?, state: PhaseCardState) {
   if (receipt == null) {
-    PeekPart("Build") { BasicText("The build receipt was not retained for this run.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted)) }
+    MissingGateReceipt("Build", state)
     return
   }
   PeekPart("Build", end = receipt.status) {
@@ -69,6 +70,7 @@ internal fun BuildRecordedOutput(receipt: ValidationResult?) {
 @Composable
 internal fun ValidateRecordedOutput(
   output: PhaseCardOutput?,
+  state: PhaseCardState,
   subtaskId: Int?,
   detail: Detail,
   checksExpanded: Boolean,
@@ -76,7 +78,7 @@ internal fun ValidateRecordedOutput(
 ) {
   val receipt = output?.validationReceipt
   if (receipt == null) {
-    PeekPart("Validation") { BasicText("The validation receipt was not retained for this run.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted)) }
+    MissingGateReceipt("Validation", state)
     return
   }
   val verdict = output.verdict ?: receipt.status
@@ -95,6 +97,20 @@ internal fun ValidateRecordedOutput(
         }
       }
     }
+  }
+}
+
+@Composable
+private fun MissingGateReceipt(label: String, state: PhaseCardState) {
+  val message = when (state) {
+    PhaseCardState.Running -> "$label is running. Results will appear when it finishes."
+    PhaseCardState.Paused, PhaseCardState.Blocked -> "$label has not produced a result yet."
+    PhaseCardState.Skipped -> "$label was skipped."
+    PhaseCardState.Failed -> "$label ended without a recorded result."
+    PhaseCardState.Done -> "The ${label.lowercase()} receipt was not retained for this run."
+  }
+  PeekPart(label) {
+    BasicText(message, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
   }
 }
 
