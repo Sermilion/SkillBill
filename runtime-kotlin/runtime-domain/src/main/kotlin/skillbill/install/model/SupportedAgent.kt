@@ -61,11 +61,12 @@ enum class SupportedAgent(
   val id: String get() = wireValue
 
   companion object {
-    val supportedIds: List<String> = entries.map(SupportedAgent::wireValue)
+    val supportedEntries: List<SupportedAgent> = entries.filterNot { it == DEVIN }
+    val supportedIds: List<String> = supportedEntries.map(SupportedAgent::wireValue)
 
     fun fromWireOrNull(id: String): SupportedAgent? {
       val normalized = id.trim().lowercase()
-      return entries.firstOrNull { agent -> agent.wireValue == normalized }
+      return supportedEntries.firstOrNull { agent -> agent.wireValue == normalized }
     }
 
     fun fromWire(id: String): SupportedAgent =

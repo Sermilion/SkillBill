@@ -33,11 +33,6 @@ val AGENT_LAUNCHER_CLIS: Map<SupportedAgent, AgentLauncherCli> =
         executables = listOf("agent", "${SupportedAgent.CURSOR.wireValue}-agent"),
         installHint = "install the Cursor Agent CLI (curl https://cursor.com/install -fsS | bash)",
       ),
-    SupportedAgent.DEVIN to
-      AgentLauncherCli(
-        executables = listOf(SupportedAgent.DEVIN.wireValue),
-        installHint = "install the Devin CLI (https://docs.devin.ai/cli)",
-      ),
   )
 
 fun unavailableAgentLauncherReason(
@@ -65,7 +60,6 @@ val MODEL_DIRECTIVE_CAPABLE_AGENTS: Set<SupportedAgent> =
     SupportedAgent.CLAUDE,
     SupportedAgent.CODEX,
     SupportedAgent.CURSOR,
-    SupportedAgent.DEVIN,
   )
 
 fun supportsModelDirective(agentId: String?): Boolean {
