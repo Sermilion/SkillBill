@@ -462,8 +462,7 @@ input { font: inherit; color: inherit; }
 .sb-sub.is-btn:not(.is-selected) > .sb-sub-row:hover { background: var(--bg-hover); }
 .sb-sub.is-selected { background: var(--bg-active); }
 .sb-sub.is-selected::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--accent); }
-.sb-sublist:focus { outline: none; }
-.sb-sublist:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 1px; }
+.sb-sublist:focus, .sb-sublist:focus-visible { outline: none; }
 
 /* Subtask chip: a dependency edge that selects that subtask */
 .sb-chips { display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }
