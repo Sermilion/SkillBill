@@ -99,7 +99,62 @@ class CursorAcpSessionTest {
   }
 
   @Test
-  fun `devin keeps the exact model identity the provider accepted through session set model`() {
+  fun `devin legacy set model acknowledgement without an echoed model reports no identity`() {
+    val harness = legacyDevin()
+    val selection = harness.frames.last()
+    assertEquals("session/set_model", selection.text(CursorAcpKeys.METHOD))
+    assertEquals("swe-2-high", selection.obj(CursorAcpKeys.PARAMS)?.text(CursorAcpKeys.MODEL_ID))
+    harness.respond("{}")
+    assertTrue(harness.session.ready)
+    harness.respond("""{"stopReason":"end_turn"}""")
+    assertNull(harness.session.outcome()?.model)
+    assertTrue(harness.reportedModels.isEmpty())
+    assertTrue(harness.records.any { it.contains("outcome=model_selected_unconfirmed reported_identity=unavailable") })
+  }
+
+  @Test
+  fun `devin legacy set model reports the model the provider echoes back`() {
+    val harness = legacyDevin()
+    harness.respond("""{"modelId":"swe-2-high"}""")
+    assertTrue(harness.session.ready)
+    harness.respond("""{"stopReason":"end_turn"}""")
+    assertEquals("swe-2-high", harness.session.outcome()?.model)
+    assertEquals(listOf("swe-2-high"), harness.reportedModels)
+  }
+
+  @Test
+  fun `devin reports the model a later config option update names`() {
+    val harness = legacyDevin()
+    harness.respond("""{"modelId":"swe-2-high"}""")
+    harness.session.observe(
+      """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s",""" +
+        """"update":{"sessionUpdate":"config_option_update","configOptions":[""" +
+        """{"id":"model","category":"model","currentValue":"swe-2"}]}}}""",
+    )
+    harness.respond("""{"stopReason":"end_turn"}""")
+    assertEquals("swe-2", harness.session.outcome()?.model)
+    assertTrue(harness.records.any { it.contains("outcome=model_changed_by_provider") })
+  }
+
+  @Test
+  fun `cursor legacy set model still reports the selected model`() {
+    val harness = Harness(model = "gpt-5")
+    harness.session.start()
+    harness.respond("""{"protocolVersion":1,"agentCapabilities":{},"authMethods":[{"id":"cursor_login"}]}""")
+    harness.respond("{}")
+    harness.respond(
+      """{"sessionId":"s","modes":{"availableModes":[{"id":"agent"}]},""" +
+        """"models":{"currentModelId":"auto","availableModels":[{"modelId":"auto"},{"modelId":"gpt-5"}]}}""",
+    )
+    assertEquals("session/set_model", harness.frames.last().text(CursorAcpKeys.METHOD))
+    harness.respond("{}")
+    harness.respond("{}")
+    assertTrue(harness.session.ready)
+    harness.respond("""{"stopReason":"end_turn"}""")
+    assertEquals("gpt-5", harness.session.outcome()?.model)
+  }
+
+  private fun legacyDevin(): Harness {
     val harness = Harness(model = "swe-2-high", provider = AcpProvider.Devin)
     harness.session.start()
     harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
@@ -107,14 +162,7 @@ class CursorAcpSessionTest {
       """{"sessionId":"s","models":{"currentModelId":"swe-2",""" +
         """"availableModels":[{"modelId":"swe-2"},{"modelId":"swe-2-high"}]}}""",
     )
-
-    val selection = harness.frames.last()
-    assertEquals("session/set_model", selection.text(CursorAcpKeys.METHOD))
-    assertEquals("swe-2-high", selection.obj(CursorAcpKeys.PARAMS)?.text(CursorAcpKeys.MODEL_ID))
-    harness.respond("{}")
-    assertTrue(harness.session.ready)
-    harness.respond("""{"stopReason":"end_turn"}""")
-    assertEquals("swe-2-high", harness.session.outcome()?.model)
+    return harness
   }
 
   @Test
@@ -506,6 +554,7 @@ class CursorAcpSessionTest {
     val events = mutableListOf<CursorAcpEvent>()
     val cards = mutableListOf<ApprovalRequestRecord>()
     val reportedModels = mutableListOf<String>()
+    val records = mutableListOf<String>()
     val owner = Owner()
     val session =
       CursorAcpSession(
@@ -529,7 +578,7 @@ class CursorAcpSessionTest {
         { true },
         events::add,
         cards::add,
-        {},
+        records::add,
         onModel = { reportedModels += it },
       )
 

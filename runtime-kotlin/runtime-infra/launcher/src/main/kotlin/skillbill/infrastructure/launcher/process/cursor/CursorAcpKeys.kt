@@ -50,6 +50,7 @@ internal object CursorAcpKeys {
   const val GROUP = "group"
   const val UPDATE = "update"
   const val SESSION_UPDATE = "sessionUpdate"
+  const val CONFIG_OPTION_UPDATE = "config_option_update"
   const val CONTENT = "content"
   const val TOOL_CALL = "toolCall"
   const val TOOL_CALL_ID = "toolCallId"

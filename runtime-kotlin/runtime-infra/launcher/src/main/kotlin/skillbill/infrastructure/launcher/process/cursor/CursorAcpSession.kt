@@ -179,10 +179,7 @@ class CursorAcpSession(
       K.AUTHENTICATE -> acquireSession()
       K.SESSION_NEW, K.SESSION_LOAD -> acquired(body)
       K.SESSION_SET_CONFIG -> acceptConfiguration(body)
-      K.SESSION_SET_MODEL -> {
-        model = selectedModel
-        selectMode()
-      }
+      K.SESSION_SET_MODEL -> acceptLegacyModel(body)
       K.SESSION_SET_MODE -> prompt()
       K.SESSION_PROMPT -> {
         val reason = body.text(K.STOP_REASON)
@@ -207,6 +204,33 @@ class CursorAcpSession(
       model?.let(onModel)
       selectMode()
     }
+  }
+
+  private fun acceptLegacyModel(body: JsonObject) {
+    if (!launch.provider.exactModels) {
+      model = selectedModel
+    } else if (selectedModel != null && body.text(K.MODEL_ID) == selectedModel) {
+      model = selectedModel
+      model?.let(onModel)
+    } else {
+      record("seam=$seam outcome=model_selected_unconfirmed reported_identity=unavailable")
+    }
+    selectMode()
+  }
+
+  private fun configUpdate(update: JsonObject) {
+    val value =
+      (update[K.CONFIG_OPTIONS] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+        .firstOrNull { it.text(K.CATEGORY) == "model" }
+        ?.let { it.text(K.CURRENT_VALUE) ?: "" }
+        ?: return record("seam=$seam outcome=informational_update")
+    model = value.ifEmpty { null }
+    if (model == null) {
+      record("seam=$seam outcome=model_update_malformed reported_identity=unavailable")
+    } else if (model != selectedModel) {
+      record("seam=$seam outcome=model_changed_by_provider selected=$selectedModel reported=$model")
+    }
+    model?.let(onModel)
   }
 
   private fun initialize(body: JsonObject) {
@@ -469,6 +493,8 @@ class CursorAcpSession(
         permissions?.observeTool(update)
         onEvent(CursorAcpEvent.Tool(update))
       }
+      K.CONFIG_OPTION_UPDATE ->
+        if (launch.provider.exactModels) configUpdate(update) else record("seam=$seam outcome=informational_update")
       else -> record("seam=$seam outcome=informational_update")
     }
   }
