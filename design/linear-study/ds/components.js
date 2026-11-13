@@ -1616,48 +1616,11 @@
   }
   /* Text in the accent that acts: Show the criteria, Show the graded criteria. */
   function TextLink(o) { track('TextLink'); return `<button type="button" class="sb-tlink"${act(o.act, o.arg)}>${esc(o.label)}</button>`; }
-  /* The QA report as text: ## headings, paragraphs and "- " lists with `code` and **bold**; a QA evidence path shows as its
-   * file name in code. */
-  function qaReport(text) {
-    const inl = (x) => esc(x).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/~\/\.skill-bill\/qa\/[^\s,<]+/g, (p) => `<code>${p.split('/').pop()}</code>`);
-    const out = [];
-    let list = null;
-    const flush = () => { if (list) { out.push(`<ul>${list.join('')}</ul>`); list = null; } };
-    String(text || '').split('\n').forEach((raw) => {
-      const line = raw.trim();
-      if (!line) return flush();
-      if (line.startsWith('#')) { flush(); out.push(`<h3>${inl(line.replace(/^#+\s*/, ''))}</h3>`); return; }
-      if (line.startsWith('- ')) { (list = list || []).push(`<li>${inl(line.slice(2))}</li>`); return; }
-      flush(); out.push(`<p>${inl(line)}</p>`);
-    });
-    flush();
-    return `<div class="rp">${out.join('')}</div>`;
-  }
-  /* A Verify run's QA step, read top down: the verdict (dot and word in the tone), the sentence from counts, Needs you (`head`
-   * holds Select all; each open finding a glyph, ref and title, Open and a chevron, and what QA observed in two lines; open,
-   * `body`), Not tested (a dashed glyph, the title and detail), one box of folds (Passed lists each check with its evidence
-   * chips; Full report renders `report.text`; each shows a one-line preview that hides while open) and the faint targets
-   * line. Selection adds a checkbox column (`lead`) and a Chat or Goal column (`end`) to each finding. */
+  /* A Verify run's QA step: the QA verdict (QaVerdict) above the shared QA results (QaResults), so it reads as a standalone
+   * QA run does. */
   function VerifyQa(o) {
     track('VerifyQa');
-    const finding = (f) => {
-      const sel = f.lead != null;
-      return `<div class="${cx('it', sel && 'is-sel')}"${f.id ? ` id="${esc(f.id)}"` : ''}>${sel ? `<div class="lead">${f.lead}</div>` : ''}<button type="button" class="ih" aria-expanded="${!!f.open}"${act(f.act, f.arg)}><span class="gl" style="--c:var(--st-failed)">${Icon('alert', 'sm')}</span><span class="ti"><span class="ref">${esc(f.ref)}</span>${esc(f.title)}</span><span class="st">Open${Icon('chevronRight', 'xs')}</span>${f.line ? `<span class="ln">${f.line}</span>` : ''}</button>${sel ? `<div class="end">${f.end || ''}</div>` : ''}${f.open ? `<div class="ib">${f.body || ''}</div>` : ''}</div>`;
-    };
-    const gap = (g) => `<div class="it"><div class="ih"><span class="gl" style="--c:var(--st-blocked)">${Icon('gap', 'sm')}</span><span class="ti">${esc(g.title)}</span><span></span>${g.html ? `<span class="ln is-full">${g.html}</span>` : ''}</div></div>`;
-    const fold = (x, icon, tone, label, preview, body) => `<div class="it"><button type="button" class="qf" aria-expanded="${!!x.open}"${act(x.act, x.arg)}><span style="--c:${tone}">${Icon(icon, 'sm')}</span><span class="lb">${esc(label)}</span><span class="pv">${esc(preview)}</span>${Icon('chevronRight', 'xs')}</button>${x.open ? body() : ''}</div>`;
-    const group = (label, inner, head) => `<div><div class="gh">${esc(label)}<span class="n">${inner.length}</span></div><div class="sb-box">${head || ''}${inner.join('')}</div></div>`;
-    const parts = [`<div class="vd" style="--c:${VTONE[o.tone] || VTONE.faint}"><i></i>${esc(o.word)}</div><p class="sn">${esc(o.sentence)}</p>`];
-    if ((o.needs || []).length) parts.push(group('Needs you', o.needs.map(finding), o.head));
-    if ((o.gaps || []).length) parts.push(group('Not tested', o.gaps.map(gap)));
-    const folds = [
-      o.passed && o.passed.rows.length && fold(o.passed, 'check', 'var(--st-done)', `Passed · ${o.passed.rows.length}`, o.passed.rows.map((r) => r.title).join(', '),
-        () => `<div class="sl">${o.passed.rows.map((r) => `<div class="sub"><b>${esc(r.title)}</b>${r.html || ''}${(r.chips || []).length ? FileChips(r.chips) : ''}</div>`).join('')}</div>`),
-      o.report && fold(o.report, 'fileText', 'var(--fg-faint)', 'Full report', o.report.preview || "Isolation, cleanup and the agent's notes", () => qaReport(o.report.text)),
-    ].filter(Boolean);
-    if (folds.length) parts.push(`<div class="sb-box">${folds.join('')}</div>`);
-    if ((o.targets || []).length) parts.push(`<div class="tg">${o.targets.join('<span>·</span>')}</div>`);
-    return `<div class="sb-vqa">${parts.join('')}</div>`;
+    return `<div class="sb-vqa">${o.verdict}${o.body}</div>`;
   }
 
   /* ---------- QA device: the sidebar footer switcher and its popup ---------- */

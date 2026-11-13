@@ -1259,8 +1259,8 @@
   /* Rows open per run (st.qaOpen keys "qa:<runKey>:<part>"). Evidence opens against the run's invocation directory, so a run
    * without one draws no evidence chips. Returns the verdict for the section's end slot and the body. */
   /* `namesOnly` draws evidence chips that name files and open nothing; `select(findingId)` adds a checkbox, a Chat or Goal
-   * switch and a shared-code hint per open finding, and `selectHead` a Select all row. A Verify run's QA step no longer
-   * uses them: it renders VerifyQa (Verify run design). */
+   * switch and a shared-code hint per open finding, and `selectHead` a Select all row. A Verify run's QA step uses all
+   * three. */
   function qaResults(st, q, o) {
     o = o || {};
     const v = qaView(q, o);
@@ -2175,30 +2175,17 @@
     return warn[s.id] ? 'warn' : 'done';
   }
   const tally = (list, key) => Object.entries(list.reduce((m, x) => { m[x[key]] = (m[x[key]] || 0) + 1; return m; }, {})).map(([k, n]) => ({ text: `${n} ${k.toLowerCase()}` }));
-  const V_QA = { passed: ['Passed', 'done'], findings_open: ['Needs your review', 'failed'], incomplete: ['Incomplete', 'blocked'], skipped: ['Skipped', 'faint'] };
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-  /* The QA step: QA runs inline in Verify, so its directory is not stored and evidence chips only name their files. */
+  /* The QA step: the same QA results as a standalone QA run, the verdict above them. QA runs inline in Verify, so its
+   * directory is not stored and evidence chips only name their files; each open finding takes the fix selection. */
   function verifyQa(st, it, ctx) {
-    const q = ctx.r.qa, as = q.details.assertions, passed = as.filter((a) => a.outcome === 'passed'), gaps = as.filter((a) => a.outcome === 'not_exercised');
-    const open = q.findings.filter((f) => !f.fixed);
-    const [word, tone] = V_QA[ctx.r.qaVerdict] || ['Unknown', 'faint'];
-    const bits = [open.length && `QA found ${plural(open.length, 'problem', 'problems')}`, gaps.length && `could not test ${plural(gaps.length, 'thing', 'things')}`].filter(Boolean);
-    const sentence = (bits.length ? bits.join(' and ') + '. ' : '') + (passed.length === as.length ? `All ${passed.length} checks passed.` : `${passed.length} ${passed.length === 1 ? 'check' : 'checks'} passed.`);
-    const chips = (paths) => (paths || []).map((p) => S.Chip({ mono: true,  icon: /\.(png|jpe?g|webp|mp4)$/i.test(p) ? 'image' : 'file', label: qaFile(p), tip: `${p}. The QA run directory is not stored, so this file does not open.` }));
-    const key = (k) => `${it.id}:q:${k}`;
-    return S.VerifyQa({ word, tone, sentence, head: selAll(it, ctx, 'qa', { boxed: true }),
-      needs: open.map((f) => {
-        const sel = selCtl(it, ctx, 'qa:' + f.id);
-        return { id: `qaf-${f.id}`, ref: f.id, title: f.title, line: f.observed ? md(f.observed) : '', open: st.vOpen.has(key(f.id)), act: 'v-toggle', arg: key(f.id), lead: ctx.pick ? sel.lead || '' : undefined, end: sel.end,
-          body: [f.expected ? S.FieldText({ label: 'Expected', html: md(f.expected) }) : '', f.steps ? S.FieldText({ label: 'Steps', html: md(f.steps) }) : '', (f.evidencePaths || []).length ? S.FileChips(chips(f.evidencePaths)) : ''].join('') };
-      }),
-      gaps: gaps.map((g) => ({ title: g.title, html: md(g.detail) })),
-      passed: { rows: passed.map((p) => ({ title: p.title, html: md(p.detail), chips: chips(p.evidencePaths) })), open: st.vOpen.has(key('passed')), act: 'v-toggle', arg: key('passed') },
-      report: q.reportText ? { text: q.reportText, open: st.vOpen.has(key('report')), act: 'v-toggle', arg: key('report') } : null,
-      targets: q.details.coverage.map((c) => `<span><b>${esc(capFirst(c.kind))}</b> ${c.verdict === 'skipped' ? (c.reason === 'empty_scope' ? 'not in scope' : 'skipped') : 'tested'}</span>`) });
+    const outcome = { findings_open: 'findings' }[ctx.r.qaVerdict] || ctx.r.qaVerdict;
+    const r = qaResults(st, Object.assign({}, ctx.r.qa, { runKey: `verify:${it.id}`, outcome }), {
+      namesOnly: true, select: (id) => selCtl(it, ctx, 'qa:' + id), selectHead: selAll(it, ctx, 'qa') || null });
+    return S.VerifyQa(r);
   }
   /* The Components page shows the QA step of a sample run with QA-1 open and selected. */
-  const verifyQaDemo = (id) => { const it = lookup(id), st = { vOpen: new Set([`${id}:q:QA-1`]), vSel: { [id]: { 'qa:QA-1': 'chat' } }, vMarks: {}, vFilter: {} }; return verifyQa(st, it, verifyCtx(st, it)); };
+  const verifyQaDemo = (id) => { const it = lookup(id), st = { vOpen: new Set(), qaOpen: new Set([`qa:verify:${id}:f:QA-1`]), vSel: { [id]: { 'qa:QA-1': 'chat' } }, vMarks: {}, vFilter: {} }; return verifyQa(st, it, verifyCtx(st, it)); };
   /* Each step's one-line summary and, when it has a receipt, the body it opens to. */
   function stepInfo(st, it, ctx, s) {
     const r = ctx.r, none = { sum: [{ text: 'No receipt recorded' }], body: '' };
