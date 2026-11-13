@@ -251,6 +251,7 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
     val records = allFiles().map { file -> file to readFile(file) }
     val entries = records.mapNotNull { (_, stored) -> stored?.takeIf { it.executionId == executionId && !it.needsRecovery() }?.toEntry() }
     val recoveries = records.mapNotNull { (file, stored) ->
+      if (stored?.isResumeOnly() == true) return@mapNotNull null
       val relevant = when {
         stored == null -> true
         stored.executionId != null -> stored.executionId == executionId
@@ -269,6 +270,7 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
       .sortedByDescending { it.updatedAt ?: Instant.DISTANT_PAST }
     val entries = drafts.filterNot(StoredChat::needsRecovery).mapNotNull(StoredChat::toEntry)
     val recoveries = records.mapNotNull { (file, stored) ->
+      if (stored?.isResumeOnly() == true) return@mapNotNull null
       val relevant = when {
         stored == null -> true
         stored.newTask != null -> stored.needsRecovery() || stored.toEntry() == null
@@ -318,7 +320,7 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
     val cutoff = (clock.now() - ORPHAN_AGE).toEpochMilliseconds()
     allFiles().filter { file ->
       file.lastModified() < cutoff && readFile(file)?.let { stored ->
-        !stored.needsRecovery() && stored.executionId == null && stored.newTask == null
+        !stored.needsRecovery() && !stored.isResumeOnly() && stored.executionId == null && stored.newTask == null
       } == true
     }.forEach { it.delete() }
   }
@@ -394,6 +396,10 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
 private fun StoredChat.needsRecovery(): Boolean = invalidOpenCodeBinding ||
   (agent?.agentId == "opencode" && ((agentSession != null && openCodeBinding == null) ||
     (agentSession.isNullOrBlank() && openCodeBinding != null)))
+
+private fun StoredChat.isResumeOnly(): Boolean =
+  executionId == null && newTask == null && lines.isEmpty() && exchanges.isEmpty() &&
+    !agentSession.isNullOrBlank() && summary == null && !needsRecovery()
 
 private fun StoredChat.toEntry(): ChatHistoryEntry? {
   val operator = lines.firstOrNull { it.role == ChatHistoryRole.Operator }

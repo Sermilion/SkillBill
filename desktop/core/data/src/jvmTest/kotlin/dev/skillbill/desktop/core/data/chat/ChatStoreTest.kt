@@ -30,6 +30,9 @@ import kotlin.time.Instant
 
 class ChatStoreTest {
   private val host = HostEnvironment(emptyMap(), createTempDirectory("chat-home").toString(), "")
+  private val fixedClock = object : Clock {
+    override fun now(): Instant = Instant.parse("2026-11-13T12:00:00Z")
+  }
 
   private fun entry(session: String, at: Long, execution: String = "wf-1", operator: Boolean = true) = ChatHistoryEntry(
     session, execution, ChatAgent("codex", "gpt-5", "high", "/home/operator/.codex-api"), Instant.fromEpochMilliseconds(at), "why blocked?",
@@ -65,6 +68,61 @@ class ChatStoreTest {
     assertEquals(binding, reader.cursorSessionBinding("cursor-chat"))
     assertEquals("legacy-session", reader.agentSession("legacy-chat"))
     assertEquals(null, reader.cursorSessionBinding("legacy-chat"))
+  }
+
+  @Test
+  fun `resume-only records survive restart and listing without false recovery warnings or lost handles`() {
+    val writer = ChatStore(host, RecordingDiagnostics(), fixedClock)
+    assertTrue(writer.saveAgentSession("pending", "provider-thread"))
+    val binding = CursorSessionBinding("/profiles/cursor", "/work/project")
+    assertTrue(writer.saveCursorSession("cursor-pending", "cursor-thread", binding))
+    val files = listOf("pending", "cursor-pending").map { File(host.userHome, "$CHAT_STORE_PATH/$it.json") }
+    val originals = files.map { it.readText() }
+    files.forEach { assertTrue(it.setLastModified(1)) }
+
+    val reader = ChatStore(host, RecordingDiagnostics(), fixedClock)
+    assertTrue(reader.newTaskDrafts().recoveries.isEmpty())
+    val execution = reader.savedChats("wf-1")
+    assertTrue(execution.entries.isEmpty())
+    assertTrue(execution.recoveries.isEmpty())
+    assertEquals(originals, files.map { it.readText() })
+    assertEquals("provider-thread", reader.agentSession("pending"))
+    assertEquals("cursor-thread", reader.agentSession("cursor-pending"))
+    assertEquals(binding, reader.cursorSessionBinding("cursor-pending"))
+
+    assertTrue(reader.saveChat(entry("pending", 2)))
+    assertEquals(listOf(entry("pending", 2)), reader.savedChats("wf-1").entries)
+    assertEquals("provider-thread", reader.agentSession("pending"))
+  }
+
+  @Test
+  fun `unusable conversations and unbound OpenCode handles remain visible beside resume-only records`() {
+    val store = ChatStore(host, RecordingDiagnostics(), fixedClock)
+    assertTrue(store.saveAgentSession("pending", "provider-thread"))
+    val originals = mapOf(
+      "missing-agent" to """{"session_id":"missing-agent","agent_session":"thread","lines":[{"role":"Operator","text":"keep my question"}]}""",
+      "unbound" to """{"session_id":"unbound","agent_id":"opencode","agent_session":"oc-thread","lines":[]}""",
+      "unreadable" to "{",
+    )
+    originals.forEach { (id, raw) -> File(host.userHome, "$CHAT_STORE_PATH/$id.json").writeText(raw) }
+    val draft = entry("empty-draft", 3).copy(executionId = null, lines = emptyList(), newTask = ChatNewTaskContext("/work/app", "main"))
+    val execution = entry("empty-execution", 4).copy(lines = emptyList())
+    assertTrue(store.saveChat(draft))
+    assertTrue(store.saveChat(execution))
+    assertTrue(store.saveAgentSession(draft.sessionId, "draft-thread"))
+    assertTrue(store.saveAgentSession(execution.sessionId, "execution-thread"))
+
+    val reopened = ChatStore(host, RecordingDiagnostics(), fixedClock)
+    val common = mapOf(
+      "missing-agent" to ChatRecoveryReason.MissingResumeMetadata,
+      "unbound" to ChatRecoveryReason.OpenCodeHandleUnbound,
+      "unreadable" to ChatRecoveryReason.UnreadableFile,
+    )
+    assertEquals(common + (draft.sessionId to ChatRecoveryReason.MissingResumeMetadata),
+      reopened.newTaskDrafts().recoveries.associate { it.sessionId to it.reason })
+    assertEquals(common + (execution.sessionId to ChatRecoveryReason.MissingResumeMetadata),
+      reopened.savedChats("wf-1").recoveries.associate { it.sessionId to it.reason })
+    originals.forEach { (id, raw) -> assertEquals(raw, File(host.userHome, "$CHAT_STORE_PATH/$id.json").readText()) }
   }
 
   // A provider handle without its profile and cwd could silently resume a different OpenCode conversation after a restart.
