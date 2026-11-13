@@ -955,6 +955,23 @@ assert_file_exists "fresh-machine defaults install the desktop app" \
   "$(desktop_app_target "$FAKE_HOME")"
 
 echo ""
+echo "--- scenario 8a: unowned desktop target stops before migration ---"
+FAKE_HOME="$(mktemp -d)"
+seed_selection_json "$FAKE_HOME"
+UNOWNED_TARGET="$(desktop_app_target "$FAKE_HOME")"
+UNOWNED_EXECUTABLE="$(desktop_app_executable "$UNOWNED_TARGET")"
+mkdir -p "$(dirname "$UNOWNED_EXECUTABLE")" "$FAKE_HOME/.local/bin"
+printf 'preserve this unrelated app\n' > "$UNOWNED_EXECUTABLE"
+[[ "$TOKEN" == windows-x64 ]] || chmod +x "$UNOWNED_EXECUTABLE"
+printf '#!/usr/bin/env bash\n# skill-bill managed launcher\n' > "$FAKE_HOME/.local/bin/sona"
+UNOWNED_STATUS=0
+UNOWNED_OUTPUT="$(run_install "$FAKE_HOME" "SKILL_BILL_TEST_MIGRATION_MARKER=$FAKE_HOME/migration-ran")" || UNOWNED_STATUS=$?
+[[ "$UNOWNED_STATUS" -ne 0 && "$UNOWNED_OUTPUT" == *"unclassified desktop app target"* ]] || fail "installer did not refuse the unowned desktop app target"
+[[ "$(cat "$UNOWNED_EXECUTABLE")" == 'preserve this unrelated app' ]] || fail "installer changed the unowned desktop app target"
+[[ ! -e "$FAKE_HOME/migration-ran" ]] || fail "installer migrated data before refusing the unowned desktop app target"
+[[ ! -e "$FAKE_HOME/.skill-bill/runtime/runtime-cli/bin/runtime-cli" ]] || fail "installer activated a runtime before refusing the unowned desktop app target"
+pass "unowned desktop target and managed CLI launcher are preserved before migration or runtime activation"
+
 echo "--- scenario 9: replay automatically installs the checksum-verified desktop app ---"
 FAKE_HOME="$(mktemp -d)"
 seed_selection_json "$FAKE_HOME"

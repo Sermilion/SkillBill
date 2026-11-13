@@ -2060,6 +2060,27 @@ is_owned_windows_desktop_launcher() {
     tr -d '\r' < "$path" | grep -Fxq "\"$windows_executable\" %*"
 }
 
+check_desktop_app_target_ownership() {
+  local os="$1" app_target="$2" executable="$3" windows_executable launcher
+  [[ -e "$app_target" || -L "$app_target" ]] || return 0
+  if [[ ! -d "$app_target" || -L "$app_target" || ! -f "$executable" || ( "$os" != windows && ! -x "$executable" ) ]]; then
+    err "Refusing to replace an unclassified desktop app target: $app_target. Choose a different install root."
+    return 1
+  fi
+  if [[ "$os" == windows ]]; then
+    if command -v cygpath >/dev/null 2>&1; then windows_executable="$(cygpath -w "$executable")"; else windows_executable="${executable//\//\\}"; fi
+    for launcher in "$RUNTIME_LAUNCHER_BIN_DIR/sona-app.cmd" "$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"; do
+      if is_owned_windows_desktop_launcher "$launcher" "$windows_executable"; then return 0; fi
+    done
+  else
+    for launcher in "$RUNTIME_LAUNCHER_BIN_DIR/sona-app" "$RUNTIME_LAUNCHER_BIN_DIR/sona"; do
+      if [[ -L "$launcher" && "$(readlink "$launcher")" == "$executable" ]]; then return 0; fi
+    done
+  fi
+  err "Refusing to replace an unclassified desktop app target: $app_target. No Sona desktop launcher points to its executable. Choose a different install root."
+  return 1
+}
+
 check_desktop_app_launcher_ownership() {
   local os="$1" app_target="$2" executable="$3" cli_path gui_path windows_executable candidate name
   local cli_kind=managed gui_kind=link menu_file="${XDG_DATA_HOME:-$HOME/.local/share}/applications/sona.desktop"
@@ -2546,12 +2567,14 @@ stage_selected_desktop_app() {
 # Replace the live desktop app with the one stage_selected_desktop_app staged.
 activate_staged_desktop_app() {
   local os app_source app_target executable install_root staged_app backup_app launcher_path
+  local previous_app_moved=0
   local DESKTOP_TRANSACTION_ID="$$.$RANDOM"
   os="$(host_os)"
   app_source="$STAGED_DESKTOP_APP_SOURCE"
   install_root="$(desktop_app_install_root "$os")" || return 1
   app_target="$(desktop_app_target_path "$os" "$install_root")"
   executable="$(desktop_app_executable_path "$os" "$app_target")"
+  check_desktop_app_target_ownership "$os" "$app_target" "$executable" || { DESKTOP_APP_INSTALL_RESULT="app target refused"; return 1; }
   local expected_gui_stage="$RUNTIME_LAUNCHER_BIN_DIR/sona-app.stage.$DESKTOP_TRANSACTION_ID"
   [[ "$os" != windows ]] || expected_gui_stage="$RUNTIME_LAUNCHER_BIN_DIR/sona-app.cmd.stage.$DESKTOP_TRANSACTION_ID"
   local expected_menu_stage="${XDG_DATA_HOME:-$HOME/.local/share}/applications/sona.desktop.stage.$DESKTOP_TRANSACTION_ID"
@@ -2612,9 +2635,10 @@ activate_staged_desktop_app() {
       DESKTOP_APP_INSTALL_RESULT="install failed"
       return 1
     fi
+    previous_app_moved=1
   fi
   if ! mv "$staged_app" "$app_target"; then
-    if [[ -e "$backup_app" || -L "$backup_app" ]]; then
+    if [[ "$previous_app_moved" -eq 1 && ( -e "$backup_app" || -L "$backup_app" ) ]]; then
       if [[ -e "$app_target" || -L "$app_target" ]] || ! mv "$backup_app" "$app_target"; then
         err "Could not restore the previous desktop app. Recovery copy: $backup_app"
       fi
@@ -2654,7 +2678,7 @@ activate_staged_desktop_app() {
       if [[ -e "$tx_target" || -L "$tx_target" ]] && ! rm -f "$tx_target"; then err "Could not remove launcher stage: $tx_target"; fi
     done
     discard_desktop_app_launcher_stage "$os"
-    if [[ -e "$backup_app" || -L "$backup_app" ]]; then
+    if [[ "$previous_app_moved" -eq 1 && ( -e "$backup_app" || -L "$backup_app" ) ]]; then
       if [[ -e "$app_target" || -L "$app_target" ]]; then
         if [[ -f "$executable" ]] && build_identities_match "$(staged_runtime_build_identity_record)" "$(desktop_app_build_identity_path "$os" "$app_target")"; then
           if ! rm -rf "$app_target"; then err "Could not remove the failed candidate desktop app: $app_target"; fi
@@ -2726,7 +2750,7 @@ activate_staged_desktop_app() {
         err "Preserving an unclassified app entry at $app_target"
       fi
     fi
-    if [[ -e "$backup_app" || -L "$backup_app" ]]; then
+    if [[ "$previous_app_moved" -eq 1 && ( -e "$backup_app" || -L "$backup_app" ) ]]; then
       if [[ -e "$app_target" || -L "$app_target" ]] || ! mv "$backup_app" "$app_target"; then err "Could not restore the previous desktop app. Recovery copy: $backup_app"; fi
     fi
     for tx_target in "$cli_stage" "$compat_stage" "$mcp_stage"; do
@@ -2767,7 +2791,7 @@ activate_staged_desktop_app() {
       return 1
     fi
   fi
-  if [[ -e "$backup_app" || -L "$backup_app" ]]; then
+  if [[ "$previous_app_moved" -eq 1 && ( -e "$backup_app" || -L "$backup_app" ) ]]; then
     if ! rm -rf "$backup_app"; then warn "Retained previous desktop app for recovery: $backup_app"; fi
   fi
   if [[ -n "$RECOVERY_DESKTOP_APP_PATH" ]]; then
@@ -3320,6 +3344,10 @@ run_full_install() {
   preflight_root="$(desktop_app_install_root "$preflight_os")" || { discard_staged_runtime; return 1; }
   preflight_app="$(desktop_app_target_path "$preflight_os" "$preflight_root")"
   preflight_executable="$(desktop_app_executable_path "$preflight_os" "$preflight_app")"
+  check_desktop_app_target_ownership "$preflight_os" "$preflight_app" "$preflight_executable" || {
+    discard_staged_runtime
+    return 1
+  }
   check_desktop_app_launcher_ownership "$preflight_os" "$preflight_app" "$preflight_executable" || {
     discard_staged_runtime
     return 1
