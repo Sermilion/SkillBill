@@ -34,6 +34,8 @@ internal class OperationCardCoordinator(
   private val admissionProblem: (ChatThread, NewTaskStart?, Any?) -> String? = { _, _, _ -> null },
   private val decisionAdmissionProblem: (ChatThread, Any?) -> String? = { _, _ -> null },
 ) {
+  internal enum class AdjustmentSubmission { Accepted, Rejected, NotApplicable }
+
   private data class RememberedRequest(val request: NewTaskStart, val authority: Any?)
   private val requests = ConcurrentHashMap<String, RememberedRequest>()
   private val observations = ConcurrentHashMap<String, Job>()
@@ -302,40 +304,40 @@ internal class OperationCardCoordinator(
     scope.launch { persistOrWarn(thread) }
   }
 
-  fun submitAdjustment(thread: ChatThread, text: String, actionLock: Any = thread): Boolean = synchronized(actionLock) {
+  fun submitAdjustment(thread: ChatThread, text: String, actionLock: Any = thread): AdjustmentSubmission = synchronized(actionLock) {
     submitAdjustmentLocked(thread, text)
   }
 
-  private fun submitAdjustmentLocked(thread: ChatThread, text: String): Boolean {
-    if (text.isBlank()) return false
-    val token = pendingAdjustments.remove(thread) ?: return false
-    val message = thread.operationCard(token) ?: return false
-    val remembered = requests[message.card.launchId] ?: return false
+  private fun submitAdjustmentLocked(thread: ChatThread, text: String): AdjustmentSubmission {
+    if (text.isBlank()) return AdjustmentSubmission.NotApplicable
+    val token = pendingAdjustments[thread] ?: return AdjustmentSubmission.NotApplicable
+    val message = thread.operationCard(token) ?: return AdjustmentSubmission.Rejected
+    val remembered = requests[message.card.launchId] ?: return AdjustmentSubmission.Rejected
     if (hasOutstanding(thread)) {
       thread.operationCardSubmitting(token, false, BUSY_OPERATION_TEXT)
       scope.launch { persistOrWarn(thread) }
-      return true
+      return AdjustmentSubmission.Rejected
     }
     val request = remembered.request
     admissionProblemForDecision(thread, request, remembered.authority, null)?.let { problem ->
       thread.operationCardSubmitting(token, false, problem)
       scope.launch { persistOrWarn(thread) }
-      return true
+      return AdjustmentSubmission.Rejected
     }
+    if (thread.beginOperationDecision(token, OperationCardDecision.Adjust) == null) return AdjustmentSubmission.Rejected
+    if (!pendingAdjustments.remove(thread, token)) {
+      thread.operationCardSubmitting(token, false)
+      return AdjustmentSubmission.Rejected
+    }
+    val decisionClaim = Any()
+    decisionClaims[thread] = decisionClaim
+    val finish = track(thread, decisionClaim)
     thread.append(ChatMessage.Operator(text))
-    if (thread.beginOperationDecision(token, OperationCardDecision.Adjust) == null) {
-      thread.append(ChatMessage.Notice("This proposal is no longer awaiting changes; start a new proposal from chat."))
-      scope.launch { persistOrWarn(thread) }
-      return true
-    }
     val replacement = request.copy(
       confirmation = null,
       proposalChanges = listOfNotNull(request.proposalChanges, text.trim()).joinToString("\n\n"),
     )
     thread.append(ChatMessage.Notice("Updating the ${message.card.operationId} proposal…"))
-    val decisionClaim = Any()
-    decisionClaims[thread] = decisionClaim
-    val finish = track(thread, decisionClaim)
     scope.launch {
       var failure: String? = null
       try {
@@ -358,7 +360,7 @@ internal class OperationCardCoordinator(
         }
       }
     }
-    return true
+    return AdjustmentSubmission.Accepted
   }
 
   /**

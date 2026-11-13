@@ -348,9 +348,15 @@ class NewTaskDraft internal constructor(
   ) {
     val current = chatState.value ?: open(UUID.randomUUID().toString(), workingDirectory, repository?.root, baseBranch.ifBlank { null }, checkNotNull(selectedAgent))
     offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, started = null, selectedKey = null)
-    if (action == null && attachments.isEmpty() && cards.submitAdjustment(current.thread, submitted, current.transitionLock)) {
-      if (text == submitted) text = ""
-      return
+    if (action == null && attachments.isEmpty()) {
+      when (cards.submitAdjustment(current.thread, submitted, current.transitionLock)) {
+        OperationCardCoordinator.AdjustmentSubmission.Accepted -> {
+          if (text == submitted) text = ""
+          return
+        }
+        OperationCardCoordinator.AdjustmentSubmission.Rejected -> return
+        OperationCardCoordinator.AdjustmentSubmission.NotApplicable -> Unit
+      }
     }
     current.send(
       submitted,

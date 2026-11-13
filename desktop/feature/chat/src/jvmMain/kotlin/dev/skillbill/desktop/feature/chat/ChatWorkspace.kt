@@ -810,7 +810,15 @@ class ChatWorkspace(
             checkoutRoot = session.item.workingRoot(),
           )
         }
-      }, { turns.operationCardChanged(session) })
+      }, { turns.operationCardChanged(session) }, admissionProblem = { thread, _, _ ->
+        when {
+          session.thread !== thread -> "This saved proposal has no current chat authority. Start a fresh proposal from this chat."
+          session.busyState.value || session.turnJob != null -> "Finish the current chat activity before starting this operation."
+          session.thread.hasDeliveryClaim() -> "A chat message is still waiting for delivery. Resolve it before starting work."
+          session.hasPendingAcceptedPersistence() -> "A chat message is still being saved. Wait for it to finish, then try again."
+          else -> null
+        }
+      })
     }
 
   private fun enqueue(id: String, message: QueuedChatMessage) {
@@ -831,8 +839,18 @@ class ChatWorkspace(
 
   private fun drainQueue(session: ChatSession) = synchronized(session) {
     if (session.recoveryOnly || !session.job.isActive || session.busyState.value || session.turnJob != null || session.resumeJob != null || session.goneState.value) return@synchronized
-    val message = session.thread.takeQueuedMessage() ?: return@synchronized
-    if (message.action == null && cards(session).submitAdjustment(session.thread, message.text)) return@synchronized
+    val entries = session.thread.takeQueuedEntries()
+    val message = aggregateQueuedMessages(entries) ?: return@synchronized
+    if (message.action == null && message.images.isEmpty()) {
+      when (cards(session).submitAdjustment(session.thread, message.text)) {
+        OperationCardCoordinator.AdjustmentSubmission.Accepted -> return@synchronized
+        OperationCardCoordinator.AdjustmentSubmission.Rejected -> {
+          session.thread.restoreQueuedEntries(entries)
+          return@synchronized
+        }
+        OperationCardCoordinator.AdjustmentSubmission.NotApplicable -> Unit
+      }
+    }
     session.busyState.value = true
     session.append(ChatMessage.Operator(message.text, message.action, message.images))
     if (message.pauseAndAct) pauseAndAct(session, message.text, message.images, message.cursorMcpDependency) else send(session, message.text, message.images, message.cursorMcpDependency)
