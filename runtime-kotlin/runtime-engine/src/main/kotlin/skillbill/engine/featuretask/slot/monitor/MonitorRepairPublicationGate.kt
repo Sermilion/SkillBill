@@ -7,9 +7,11 @@ import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.qualitygate.QualityGateCommandRendering
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateProjectConfig
+import skillbill.engine.featuretask.validation.SavedProjectConfigRun
 import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.validation.ValidationGateRunner
+import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateRunResult
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
@@ -90,7 +92,13 @@ public class RuntimeMonitorRepairPublicationGate(
             ValidationGateCyclePhase.POST_REPAIR_VERIFY,
           )
         }.fold(
-          onSuccess = { result -> aggregateVerdict(result, category.commands) },
+          onSuccess = { result ->
+            when (result) {
+              is SavedProjectConfigRun.Completed -> aggregateVerdict(result.result, category.commands)
+              is SavedProjectConfigRun.LaunchBlocked ->
+                refused(launchBlockedReason(result.failure, result.findings))
+            }
+          },
           onFailure = { error ->
             refused(
               "The runtime could not run the saved validation commands before publishing the monitor repair: " +
@@ -100,6 +108,20 @@ public class RuntimeMonitorRepairPublicationGate(
         )
     }
   }
+
+  private fun launchBlockedReason(
+    failure: Throwable,
+    findings: List<ValidationGateFinding>,
+  ): String =
+    buildString {
+      append("The runtime could not run the saved validation commands before publishing the monitor repair: ")
+      append(failure.message ?: failure.javaClass.simpleName)
+      findings.take(MAX_CORRECTION_FINDINGS).forEach { finding ->
+        val location = finding.location?.let { " ($it)" }.orEmpty()
+        append("\n- ${finding.module}: ${finding.ruleOrTestId}: ${finding.message}$location".take(MAX_FINDING_CHARS))
+      }
+      if (findings.size > MAX_CORRECTION_FINDINGS) append("\n- and ${findings.size - MAX_CORRECTION_FINDINGS} more")
+    }
 
   private fun aggregateVerdict(
     result: ValidationGateRunResult,

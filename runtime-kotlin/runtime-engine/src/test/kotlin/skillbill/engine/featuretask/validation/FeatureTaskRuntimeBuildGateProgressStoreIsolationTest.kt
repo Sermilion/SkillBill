@@ -3,13 +3,18 @@ package skillbill.engine.featuretask.validation
 import skillbill.application.testHarnessClock
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeProjectCheckBuildCommandAttempt
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeProjectCheckBuildCommandAttemptEntry
+import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -40,10 +45,27 @@ class FeatureTaskRuntimeBuildGateProgressStoreIsolationTest {
             gateRunRecord(outcome = "failed"),
           ),
       )
+    val compilerFinding = ValidationGateFinding("compiler", "TypeMismatch", "expected String", "src/Main.kt:12")
     val buildProgress =
       FeatureTaskRuntimeValidationGateProgress(
         gateRunCount = 1,
         gateRuns = listOf(gateRunRecord(outcome = "passed")),
+        completeFindings = ValidationFindingSetProjection(listOf(compilerFinding)).toHandoffMaps(),
+        buildCommandAttempt =
+          FeatureTaskRuntimeProjectCheckBuildCommandAttempt(
+            "saved-build-list",
+            listOf(
+              FeatureTaskRuntimeProjectCheckBuildCommandAttemptEntry(
+                argv = listOf("./gradlew", "compileKotlin"),
+                workingDirectory = ".",
+                command = "./gradlew compileKotlin",
+                exitCode = 1,
+                durationMs = 10,
+                outcome = ValidationGateRunOutcome.FAILED,
+                stdoutExcerpt = "bounded output",
+              ),
+            ),
+          ),
       )
 
     recorder.persistValidationGateProgress(workflowId, validationProgress)
@@ -55,6 +77,8 @@ class FeatureTaskRuntimeBuildGateProgressStoreIsolationTest {
     assertEquals("failed", reloadedValidation.gateRuns.last().outcome.wireValue)
     assertEquals(1, reloadedBuild.gateRunCount)
     assertEquals("passed", reloadedBuild.gateRuns.single().outcome.wireValue)
+    assertEquals(buildProgress.completeFindings, reloadedBuild.completeFindings)
+    assertEquals(buildProgress.buildCommandAttempt, reloadedBuild.buildCommandAttempt)
   }
 
   private fun gateRunRecord(outcome: String): FeatureTaskRuntimeValidationGateRunRecord =

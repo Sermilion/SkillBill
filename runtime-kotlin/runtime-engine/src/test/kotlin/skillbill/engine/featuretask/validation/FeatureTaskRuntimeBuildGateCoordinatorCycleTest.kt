@@ -20,11 +20,15 @@ import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminal
 import skillbill.engine.featuretask.validation.model.ValidationGateTriageResult
 import skillbill.engine.featuretask.validation.model.ValidationGateTriageResult.Empty
 import skillbill.engine.featuretask.validation.projectchecks.parserMetadataFromDeclaration
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateCommandSource
 import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateFindingParseMode
+import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
@@ -37,6 +41,8 @@ import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationFailureSubject
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import java.nio.file.Files
@@ -47,6 +53,150 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
+  @Test
+  fun `a later discovery command launch failure retains parsed findings without recording a gate run`() {
+    val root = Files.createTempDirectory("multi-build-launch-failure")
+    try {
+      val snapshot = orderedBuildSnapshot()
+      val execution =
+        ExecutionPlanAdmissionFixture(
+          SkeletonDefinition.GOAL_CHILD,
+          qualityGate = FeatureTaskRuntimeQualityGateSelection.BUILD,
+        )
+      val declaration = declarationWithBuild()
+      val inputs = orderedBuildInputs(snapshot, declaration)
+      val request = minimalRequest()
+      val admitted =
+        admitSavedBuildGate(
+          phaseRunDatabase(root, testHarnessClock),
+          execution,
+          request,
+          inputs,
+          execution.validator.read(
+            execution.codec.encodeExecution(execution.plan.withProjectCheckCommands(snapshot), inputs),
+            "multi build launch failure",
+          ),
+        )
+      val finding =
+        ValidationGateFinding(
+          "compiler",
+          "TypeMismatch",
+          "expected String",
+          "src/Main.kt:12",
+          FeatureTaskRuntimeValidationFailureSubject.PROJECT_SOURCE,
+        )
+      val runner =
+        object : ValidationGateRunner {
+          var calls = 0
+
+          override fun run(request: ValidationGateRunRequest) =
+            if (++calls == 1) {
+              failedWith(finding).copy(stdout = "bounded excerpt")
+            } else {
+              throw SkillBillRuntimeException(
+                FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION,
+                "second command could not launch",
+              )
+            }
+        }
+      val recorded = mutableListOf<FeatureTaskRuntimeValidationGateProgress>()
+
+      executeOrderedBuild(declaration, runner, request, admitted, recorded)
+
+      val progress = recorded.last()
+      assertEquals(2, runner.calls)
+      assertEquals(0, progress.gateRunCount)
+      assertEquals(1, progress.buildCommandAttempt?.commands?.size)
+      assertEquals(listOf(finding), decodeBuildPersistedFindings(progress.completeFindings))
+      assertEquals("blocked", progress.terminalOutcome)
+      assertEquals(FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION, progress.terminalFailureDisposition)
+      assertEquals(
+        FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION.name,
+        progress.terminalFailureCode?.substringAfterLast('.'),
+      )
+    } finally {
+      root.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `an incomplete post repair command list retains old and new findings without recording completion`() {
+    val root = Files.createTempDirectory("multi-build-post-repair-launch-failure")
+    try {
+      val snapshot = orderedBuildSnapshot()
+      val execution =
+        ExecutionPlanAdmissionFixture(
+          SkeletonDefinition.GOAL_CHILD,
+          qualityGate = FeatureTaskRuntimeQualityGateSelection.BUILD,
+        )
+      val declaration = declarationWithBuild()
+      val inputs = orderedBuildInputs(snapshot, declaration)
+      val request = minimalRequest()
+      val admitted =
+        admitSavedBuildGate(
+          phaseRunDatabase(root, testHarnessClock),
+          execution,
+          request,
+          inputs,
+          execution.validator.read(
+            execution.codec.encodeExecution(execution.plan.withProjectCheckCommands(snapshot), inputs),
+            "multi build post-repair launch failure",
+          ),
+        )
+      val priorFinding =
+        ValidationGateFinding(
+          "compiler",
+          "PriorError",
+          "old issue",
+          "src/Old.kt:4",
+          FeatureTaskRuntimeValidationFailureSubject.PROJECT_SOURCE,
+        )
+      val newFinding = ValidationGateFinding("compiler", "NewError", "new issue", "src/New.kt:8")
+      val runner =
+        object : ValidationGateRunner {
+          var calls = 0
+
+          override fun run(request: ValidationGateRunRequest) =
+            when (++calls) {
+              1 -> failedWith(priorFinding)
+              2 -> passed()
+              3 -> failedWith(newFinding)
+              else -> throw SkillBillRuntimeException(
+                FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION,
+                "verification command could not launch",
+              )
+            }
+        }
+      val recorded = mutableListOf<FeatureTaskRuntimeValidationGateProgress>()
+
+      executeOrderedBuild(
+        declaration,
+        runner,
+        request,
+        admitted,
+        recorded,
+        ValidationGateAgentRepairLauncher { _, _, _ ->
+          ValidationGateAgentRepairResult.Completed(FeatureTaskRuntimePhaseOutput("build", 1, "{}"))
+        },
+      )
+
+      val progress = recorded.last()
+      assertEquals(4, runner.calls)
+      assertEquals(1, progress.gateRunCount)
+      assertEquals(1, progress.repairsUsed)
+      assertEquals(1, progress.acceptedRepairOutputs.size)
+      assertEquals(
+        listOf(priorFinding, newFinding),
+        decodeBuildPersistedFindings(progress.completeFindings),
+      )
+      assertEquals(1, progress.buildCommandAttempt?.commands?.size)
+      assertEquals("blocked", progress.terminalOutcome)
+      assertEquals(FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION, progress.terminalFailureDisposition)
+    } finally {
+      root.toFile().deleteRecursively()
+    }
+  }
+
   @Test
   fun `clean build gate settles after discovery and confirmation increments gate_run_count by two`() {
     val finding = ValidationGateFinding("m", "compile", "broken", "Foo.kt")
@@ -375,10 +525,14 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
 
   private fun executeOrderedBuild(
     declaration: ValidationGateDeclaration,
-    runner: ScriptedGateRunner,
+    runner: ValidationGateRunner,
     request: FeatureTaskRuntimeRunRequest,
     admitted: AdmittedFeatureTaskRuntimeExecution?,
     recorded: MutableList<FeatureTaskRuntimeValidationGateProgress>,
+    repairLauncher: ValidationGateAgentRepairLauncher =
+      ValidationGateAgentRepairLauncher { _, _, _ ->
+        blockedRepair("ordered-build evidence stops before repair redispatch")
+      },
   ) {
     buildFeatureTaskRuntimeBuildGateCoordinator(
       declaredResolver(declaration),
@@ -394,10 +548,7 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
         changedPaths = listOf("src/A.kt"),
         repositoryCheckpoint = "checkpoint",
         progressStore = RecordingProgressStore(recorded, null),
-        agentRepairLauncher =
-          ValidationGateAgentRepairLauncher { _, _, _ ->
-            blockedRepair("ordered-build evidence stops before repair redispatch")
-          },
+        agentRepairLauncher = repairLauncher,
       ),
     )
   }

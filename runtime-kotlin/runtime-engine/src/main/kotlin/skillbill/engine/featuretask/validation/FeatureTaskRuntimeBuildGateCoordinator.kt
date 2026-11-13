@@ -1100,7 +1100,7 @@ private fun buildFindingsForRepairFromResult(result: ValidationGateRunResult): L
     }
   }
 
-private fun decodeBuildPersistedFindings(raw: List<Map<String, String?>>): List<ValidationGateFinding> =
+internal fun decodeBuildPersistedFindings(raw: List<Map<String, String?>>): List<ValidationGateFinding> =
   raw.map { map ->
     val failureSubject =
       if (!map.containsKey(ValidationEvidencePayloadKeys.FAILURE_SUBJECT)) {

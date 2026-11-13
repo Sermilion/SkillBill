@@ -3,8 +3,10 @@ package skillbill.engine.featuretask.validation
 import skillbill.contracts.config.projectchecks.ProjectCheckCommand
 import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
+import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleRequest
 import skillbill.engine.featuretask.validation.projectchecks.ProjectCheckSnapshotParser
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateCommandSource
 import skillbill.ports.validation.model.ValidationGateFinding
@@ -27,6 +29,15 @@ internal data class OrderedProjectConfigRun(
   val snapshot: ProjectCheckCommandSnapshot,
 )
 
+internal sealed interface SavedProjectConfigRun {
+  data class Completed(val result: ValidationGateRunResult) : SavedProjectConfigRun
+
+  data class LaunchBlocked(
+    val findings: List<ValidationGateFinding>,
+    val failure: Throwable,
+  ) : SavedProjectConfigRun
+}
+
 internal object FeatureTaskRuntimeBuildGateProjectConfig {
   fun runSavedCommands(
     runner: ValidationGateRunner,
@@ -34,19 +45,25 @@ internal object FeatureTaskRuntimeBuildGateProjectConfig {
     snapshot: ProjectCheckCommandSnapshot,
     commands: List<ProjectCheckCommand>,
     cyclePhase: ValidationGateCyclePhase,
-  ): ValidationGateRunResult {
+  ): SavedProjectConfigRun {
     val cacheMode = cacheModeFor(cyclePhase)
     val runDeclaration = ProjectCheckSnapshotParser.parserDeclaration(snapshot)
     val listIdentity = FeatureTaskRuntimeBuildGatePolicy.commandListIdentity(commands)
     var merged = emptyMergedResult(cacheMode, listIdentity)
     commands.forEach { command ->
-      val result = runner.run(commandRunRequest(repoRoot, command, cacheMode, runDeclaration, cyclePhase))
+      val result =
+        catchingNonCancellation {
+          runner.run(commandRunRequest(repoRoot, command, cacheMode, runDeclaration, cyclePhase))
+        }.fold(
+          onSuccess = { it },
+          onFailure = { failure -> return SavedProjectConfigRun.LaunchBlocked(merged.findings, failure) },
+        )
       merged = mergeResults(merged, result)
       if (result.outcome == ValidationGateRunOutcome.REJECTED_ZERO_WORK) {
-        return merged
+        return SavedProjectConfigRun.Completed(merged)
       }
     }
-    return merged
+    return SavedProjectConfigRun.Completed(merged)
   }
 
   fun runOrderedCommands(
@@ -59,6 +76,15 @@ internal object FeatureTaskRuntimeBuildGateProjectConfig {
     val listIdentity = FeatureTaskRuntimeBuildGatePolicy.commandListIdentity(request.commands)
     val attemptEntries = mutableListOf<FeatureTaskRuntimeProjectCheckBuildCommandAttemptEntry>()
     var merged = emptyMergedResult(cacheMode, listIdentity)
+    val priorFindings =
+      if (request.cyclePhase == ValidationGateCyclePhase.POST_REPAIR_VERIFY) {
+        request.cycle.progressStore.load(request.cycle.progressKey)?.completeFindings
+          ?.let(::decodeBuildPersistedFindings)
+          .orEmpty()
+      } else {
+        emptyList()
+      }
+    var retainedFindings = priorFindings
     request.commands.forEach { command ->
       val result =
         runner.run(
@@ -71,8 +97,9 @@ internal object FeatureTaskRuntimeBuildGateProjectConfig {
           ),
         )
       attemptEntries += completedEntry(command, result)
-      persistAttempt(request.cycle, listIdentity, attemptEntries)
       merged = mergeResults(merged, result)
+      retainedFindings = (retainedFindings + merged.findings).distinctBy(ValidationGateFinding::identity)
+      persistAttempt(request.cycle, listIdentity, attemptEntries, retainedFindings)
     }
     return merged
   }
@@ -161,6 +188,7 @@ internal object FeatureTaskRuntimeBuildGateProjectConfig {
     cycle: ValidationGateCycleRequest,
     listIdentity: String,
     entries: List<FeatureTaskRuntimeProjectCheckBuildCommandAttemptEntry>,
+    findings: List<ValidationGateFinding>,
   ) {
     if (entries.isEmpty()) return
     val loaded = cycle.progressStore.load(cycle.progressKey) ?: return
@@ -168,6 +196,7 @@ internal object FeatureTaskRuntimeBuildGateProjectConfig {
       cycle.progressKey,
       loaded.copy(
         buildCommandAttempt = FeatureTaskRuntimeProjectCheckBuildCommandAttempt(listIdentity, entries),
+        completeFindings = ValidationFindingSetProjection(findings).toHandoffMaps(),
       ),
     )
   }

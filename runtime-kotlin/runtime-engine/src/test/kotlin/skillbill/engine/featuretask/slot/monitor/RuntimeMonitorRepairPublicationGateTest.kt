@@ -179,6 +179,30 @@ class RuntimeMonitorRepairPublicationGateTest {
   }
 
   @Test
+  fun `a launch refusal after a completed command retains its parsed findings`() {
+    initRepository()
+    val finding = ValidationGateFinding("compiler", "TypeMismatch", "expected String", "src/Main.kt:12")
+    val runner =
+      object : ValidationGateRunner {
+        var calls = 0
+
+        override fun run(request: ValidationGateRunRequest): ValidationGateRunResult {
+          calls++
+          if (calls == 2) error("second command could not launch")
+          return failedEmptyFindings(stdout = "short excerpt").copy(findings = listOf(finding))
+        }
+      }
+    val snapshot = publicationSnapshot(listOf("echo", "first"), listOf("missing-command"))
+
+    val verdict = gate(runner).verify(request(repoRoot, snapshot))
+
+    val refused = assertIs<MonitorRepairPublicationVerdict.Refused>(verdict)
+    assertEquals(2, runner.calls)
+    assertTrue("TypeMismatch: expected String (src/Main.kt:12)" in refused.reason, refused.reason)
+    assertTrue("second command could not launch" in refused.reason, refused.reason)
+  }
+
+  @Test
   fun `rejected zero-work on the first saved command stops remaining dispatch`() {
     initRepository()
     val zeroWork =
