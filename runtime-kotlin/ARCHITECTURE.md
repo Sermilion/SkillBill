@@ -1343,7 +1343,7 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   build strategy. History inspection does not grant durable resume admission.
 - `ReviewTarget` is a per-call fact on `PhaseRun`: `LastCommit` (the full-run
   default), `Uncommitted`, `Commit(revision)` (a sha, branch, or tag), or
-  `Scoped` (the base and head `skill-bill code-review` resolves). It composes
+  `Scoped` (the base and head `sona code-review` resolves). It composes
   the opening lines of the review prompt.
 - `SkeletonDefinition` (`runtime-domain`) lists a run's slots in order.
   `FEATURE_RUN_SLOTS` fixes the nine durable feature-run slots. `GOAL_CHILD`
@@ -1418,7 +1418,7 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   skipped on the current tree. A routed pack without `qa_capability` omits the skeleton
   before phase composition or QA workspace creation. Work detail uses the same capability
   resolution and excludes the QA slot steps from its desktop progress pipeline. `PLAN` (`intake`, `preplan`,
-  `plan`, and `plan_subtasks`) is durable: `skill-bill phase plan` runs it as a standalone workflow
+  `plan`, and `plan_subtasks`) is durable: `sona phase plan` runs it as a standalone workflow
   (`StandalonePlanRun`, below). `standaloneInvocable` marks the definitions the
   `phase` command lists: review, validation, qa, plan, pr and monitor.
   `admittedForRun(goalContinuation)` is the set of definitions a recorded run may
@@ -1428,7 +1428,7 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   Admission and continuation claim check a recorded `standalone` plan first and
   refuse it with `retiredStandaloneWorkflowError`
   (`WorkflowFailureCode.RETIRED_STANDALONE_WORKFLOW`), whose message tells the
-  operator to abandon the workflow and run `skill-bill <KEY>`. Such a row stays
+  operator to abandon the workflow and run `sona <KEY>`. Such a row stays
   decodable, visible in lookup and status, and abandonable; no migration rewrites
   it. The `standalone` route scope stays, because plan workflows carry it.
   Each carries a
@@ -1482,12 +1482,12 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   A phase run adds no telemetry event of its own and runs through
   `FeatureTaskRuntimeRunEventSink.NONE`. It returns an invocation id (the
   review session id when one is given, else `phr-<uuid>`) that the CLI prints.
-  `skill-bill phase <review|validation|plan|pr> [intake] [mode:..] [target:..]` takes
+  `sona phase <review|validation|plan|pr> [intake] [mode:..] [target:..]` takes
   `mode:inline|delegated|auto` (`auto` resolves inline) and
   `target:HEAD|uncommitted|pr|staged|unstaged|<commit-sha|branch|tag>`. An omitted target reviews
   uncommitted changes when the worktree is dirty and `HEAD` when it is clean.
   A target that names no commit is a usage error, and a worktree status that
-  cannot be read blocks the review step. `skill-bill code-review` routes through
+  cannot be read blocks the review step. `sona code-review` routes through
   `PhaseRunEntry` too. Both entry points pin the requested target through the
   accepted review binding and run only `present_findings`. Inline, auto, and
   omitted mode use one reviewer session, then a separate fresh read-only verifier
@@ -1510,7 +1510,7 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   definition id, so a `phase pr` title names the real issue. An issue URL in the
   intake supplies its key from the first path segment that is one. A missing
   issue key raises `PhaseIntakeRequiredError`. The CLI rejects an empty plan intake as a
-  usage error. `skill-bill phase plan <KEY> [description]` is a durable
+  usage error. `sona phase plan <KEY> [description]` is a durable
   standalone run, not a phase run. `StandalonePlanRun`
   (`skillbill.engine.goalrunner.plan`) opens a workflow with the `standalone` route
   scope (the `standalone` skeleton is retired; the scope stays) whose
@@ -1531,17 +1531,17 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   already present refuses the plan. Lookup with `admittedDefinition = PLAN`
   resumes an incomplete plan at `plan`, never relaunching `preplan`; the
   standalone lookup and goal parent discovery never return a plan workflow.
-  `skill-bill goal` (`skill-bill <KEY>`) finishes an incomplete plan first. A
+  `sona goal` (`sona <KEY>`) finishes an incomplete plan first. A
   goal parent imported from a completed plan's manifest records the plan
   workflow id in a `plan_workflow` artifact and on its `preplan` and `plan`
   step records (`WorkflowStepState.planWorkflowId`). Goal purge removes plan
   workflows with the goal and never touches `spec.md`. A plan creates no
   branch, ref, commit, or goal. Implementation and simplification run inside workflows and
-  consume their plan output. `skill-bill phase pr` refuses a detached, protected, or
+  consume their plan output. `sona phase pr` refuses a detached, protected, or
   base branch with `PullRequestBranchRefusedError`, pushes the branch when it
   has unpushed commits. Commit/push and PR publication execute no local checks
   and require no readiness evidence. The preceding quality gate owns validation.
-  The `skill-bill` dispatcher, the only listed skill, translates
+  The `/sona` dispatcher, the only listed skill, translates
   `phase:<name>` into this subcommand.
   `FeatureTaskPhaseRunDefinitionScan` keeps the package off named definitions,
   and the durable-store scan covers it.
@@ -2266,7 +2266,7 @@ install planner/validator policy.
   `skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath`.
 - **Goal-child launch protocol:** the goal runner opens the child row under its
   assigned id before launch, and every goal-child launch, first or later, runs
-  `skill-bill feature-task resume <child workflow id> <KEY> <spec>` with the goal
+  `sona feature-task resume <child workflow id> <KEY> <spec>` with the goal
   flags. Flag, environment, and subcommand spellings live in
   `skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens`.
   Launcher argv/env builders and CLI option readers reference those constants only.
