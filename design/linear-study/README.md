@@ -97,3 +97,7 @@ Verify keeps its outcome card brief. Full findings and the complete work summary
 Non-goals, Technical constraints and Rollout use purpose-specific context panels. Each collapsed panel shows a one-line preview with an exclusion count, requirement count or release label. Expanded panels separate entries with rules and preserve report formatting. Non-goals use a muted cross, constraints a shield, and rollout an arrow. The same hierarchy applies at narrow widths.
 
 Criteria totals and row badges use the same per-criterion audit results. Missing grades display as ungraded, with the original report in Completeness audit. An empty audit never claims that all criteria are met.
+
+## Floating details beside chat
+
+Open [details beside chat](index.html#panes/chat) or [details beside Plans](index.html#panes/plans). Toggle details with the header button or select a subtask. Both examples open with the terminal visible. The floating panel ends at the dock's left edge and extends over the terminal to the bottom of the main area. Resizing the terminal does not shorten it. Close either pane independently, or resize details with its left grip. Drag the chat's left edge to resize it, or focus the edge and use arrow keys. Double-click or Home resets its width. The chat shares New task's tabs and drafts. Narrow windows keep both panes accessible through horizontal scrolling.

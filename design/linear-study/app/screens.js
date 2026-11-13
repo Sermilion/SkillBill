@@ -138,6 +138,7 @@
         })) }),
       ],
       footer: [
+        S.SidebarItem({ icon: 'bot', label: 'Chats', act: 'chat-pane-toggle', on: st.chatOpen, tip: 'Chat pane' }),
         S.SidebarItem({ icon: 'fileText', label: 'Plans', act: 'specs-toggle', on: st.specsOpen, tip: 'Plans pane', kbd: 'G S' }),
         S.SidebarItem({ icon: 'terminal', label: 'Terminal', act: 'term-toggle', on: st.termOpen, tip: 'Terminal', kbd: '⌃ `' }),
         S.SidebarItem({ icon: 'sliders', label: 'Settings', act: 'nav', arg: 'settings', tip: 'Settings', kbd: 'G ,' }),
@@ -218,12 +219,14 @@
   function paneToggles(st) {
     return [
       S.IconButton({ icon: 'refresh', label: 'Refresh', act: 'refresh' }),
+      S.IconButton({ icon: 'bot', label: st.chatOpen ? 'Close chat pane' : 'Open chat pane', act: 'chat-pane-toggle', on: st.chatOpen }),
       S.IconButton({ icon: 'fileText', label: st.specsOpen ? 'Close plans pane' : 'Plans', kbd: 'G S', act: 'specs-toggle', on: st.specsOpen }),
       S.IconButton({ icon: 'terminal', label: st.termOpen ? 'Close terminal' : 'Terminal', kbd: '⌃ `', act: 'term-toggle', on: st.termOpen }),
     ];
   }
   function workArea(st, header, body) {
-    return S.WorkArea({ header, body, terminal: st.termOpen ? terminal(st) : '', side: st.specsOpen ? specsPane(st) : '' });
+    const chat = st.chatOpen && st.view !== 'newtask';
+    return S.WorkArea({ header, body, docked: chat, terminal: st.termOpen ? terminal(st) : '', side: chat ? chatPane(st) : st.specsOpen ? specsPane(st) : '' });
   }
   function shell(st, main) {
     return S.AppShell({ sideOpen: st.sideOpen, side: st.view === 'settings' ? settingsNav(st) : sidebar(st), main });
@@ -2753,6 +2756,17 @@
     /* No view header: the tab strip is the top of the screen, and Discard lives in each tab's right-click menu (chatTabMenu). */
     return workArea(st, '', tabs + (chatEmpty(c) ? ntHome(st, c) : ntTranscript(c)) + ntComposer(st, c));
   }
+  function chatPane(st) {
+    const c = ntChat(st);
+    return S.SidePane({
+      title: 'Chats', docked: true, width: st.chatW,
+      actions: [S.IconButton({ icon: 'x', label: 'Close chat pane', act: 'chat-pane-toggle', size: 'sm' })],
+      body: S.ChatTabs({ count: st.nt.chats.length, tabs: st.nt.chats.map((t) => ({ id: t.id, label: chatLabel(t), status: chatStatus(t), on: t === c })) })
+        + (chatEmpty(c) ? S.EmptyState({ icon: 'bot', title: 'New chat', body: 'Ask your agent about the work.' }) : ntTranscript(c))
+        + ntComposer(st, c),
+    });
+  }
+
   /* A chat tab's right-click menu (NewTaskChatTabMenu). Discard shows once the chat has messages: it closes the chat and removes it
    * from Recent chats, where Close keeps it there. */
   function chatTabMenu(st, id) {

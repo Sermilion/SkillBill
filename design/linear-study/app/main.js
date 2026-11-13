@@ -14,7 +14,7 @@
   const st = {
     mode: modeFromHash(),
     view: 'work', prevView: 'work', section: null, filter: '', focus: 0, detailId: 'INF-7', propsOpen: false, paneW: null,
-    historyTab: 'all', closed: new Set(), sideOpen: false,
+    chatOpen: false, chatW: null, historyTab: 'all', closed: new Set(), sideOpen: false,
     /* Specs pane: project, selected path (a bundle key, 'done/<key>', or a file under it), expanded rows, filter text, status
      * tab and whether the search field is open. */
     specsOpen: false, specProject: 'l-f2ea', specSel: 'SKILL-442', specOpen: new Set(['SKILL-442']), specQuery: '', specStatus: 'all', specSearch: false,
@@ -75,6 +75,7 @@
    * in it (#specs/SKILL-438, #specs/done/SKILL-446, #specs/SKILL-442/spec.md) and #specs/project/<id> picks a project. */
   function routeFromHash() {
     const [page, open, ...rest] = (location.hash || '').replace('#', '').split('/');
+    if (page === 'panes') return { view: 'detail', id: 'SKILL-416', inspector: '1', dock: open || 'chat' };
     /* The old #activity links open the recorded run, whose detail holds Activity. */
     if (page === 'activity') return { view: 'detail', id: 'SKILL-512', open: null };
     if (['changes', 'comments'].includes(page)) return { view: page, surfaceScenario: open || null };
@@ -126,6 +127,7 @@
       if (phase) st.peekSel[`${r.id}|${r.inspector}`] = phase;
       st.propsOpen = true; st.specsOpen = false;
     }
+    if (r.dock) { st.chatOpen = r.dock === 'chat'; st.specsOpen = r.dock === 'plans'; st.termOpen = true; }
     if (r.build) st.build = r.build;
     if (r.runApp) seedRunApp(r.runApp.scenario, r.runApp.id);
     if (r.devices) { st.qaDev.list = r.devices; st.qaDev.selected = 'auto'; }
@@ -245,6 +247,11 @@
       if (el) { el.focus({ preventScroll: true }); if (el.setSelectionRange && el.value != null) el.setSelectionRange(el.value.length, el.value.length); }
     }
     fitChatTabs(tabsLeft);
+    const chatGrip = root.querySelector('[data-chat-grip]');
+    if (chatGrip) {
+      chatGrip.setAttribute('aria-valuenow', Math.round(chatGrip.parentElement.getBoundingClientRect().width));
+      chatGrip.setAttribute('aria-valuemax', Math.max(300, root.querySelector('.sb-work').clientWidth - 300));
+    }
     root.querySelectorAll('[data-inbox]').forEach(fadeInbox);
     fitReasons();
     fitPlanFeeds();
@@ -752,7 +759,7 @@
       clearInterval(t); streamTimers.delete(c.id);
       c.lines.push({ role: 'agent', text: s.full });
       c.stream = null;
-      if (!(st.mode === 'prototype' && st.view === 'newtask' && ntCur() === c)) c.unread = true;
+      if (!(st.mode === 'prototype' && (st.view === 'newtask' || (st.chatOpen && st.view !== 'settings')) && ntCur() === c)) c.unread = true;
       if (c.queue.length) {
         c.lines.push({ role: 'operator', text: c.queue.shift().text });
         if (ntCur() === c) { st.nt.q.kb = Math.max(0, st.nt.q.kb - 1); if (!c.queue.length) closeQueuePop(); }
@@ -822,7 +829,7 @@
   /* Keys for New task, checked before the shell's: the resume palette, the picker and queue popups, chat shortcuts, Enter in
    * the composer, and the home lists. Returns true when it handled the key. */
   function newTaskKeys(e) {
-    if (st.mode !== 'prototype' || st.view !== 'newtask' || st.cmdk) return false;
+    if (st.mode !== 'prototype' || (st.view !== 'newtask' && (!st.chatOpen || st.view === 'settings')) || st.cmdk) return false;
     const key = e.key, p = st.popover, d = st.dialog, mod = e.metaKey || e.ctrlKey;
     const down = key === 'ArrowDown', up = key === 'ArrowUp';
     if (d && d.type === 'resume') {
@@ -1103,7 +1110,8 @@
     'term-here'(id) { st.popover = null; openTerminalFor(item(id)); render(); },
 
     /* specs pane (specs pane design variant A; desktop SpecsPaneModel) */
-    'specs-toggle'() { st.specsOpen = !st.specsOpen; st.popover = null; render(); },
+    'chat-pane-toggle'() { st.chatOpen = !st.chatOpen; st.popover = null; render(); },
+    'specs-toggle'() { st.specsOpen = !st.specsOpen; st.chatOpen = false; st.popover = null; render(); },
     /* A bundle or file row selects; a folder toggles too; a file opens in its default app. */
     'spec-select'(path) {
       st.specSel = path; st.popover = null;
@@ -1701,6 +1709,42 @@
   }, true);
   root.addEventListener('focusout', (e) => { if (e.target.id === 'term-rename-in' && st.termRenaming) commitRename(e.target, true); });
 
+  const clampChat = (width) => Math.round(Math.max(300, Math.min(root.querySelector('.sb-work').clientWidth - 300, width)));
+  const resizeChat = (width) => {
+    st.chatW = width == null ? null : clampChat(width);
+    render();
+    root.querySelector('[data-chat-grip]')?.focus();
+  };
+  root.addEventListener('pointerdown', (e) => {
+    if (!e.target.matches('[data-chat-grip]') || e.button !== 0) return;
+    e.preventDefault();
+    const grip = e.target, pane = grip.parentElement, startX = e.clientX, startWidth = pane.getBoundingClientRect().width;
+    let moved = false;
+    grip.setPointerCapture(e.pointerId);
+    grip.classList.add('is-drag');
+    const move = (ev) => {
+      moved = true;
+      st.chatW = clampChat(startWidth + startX - ev.clientX);
+      pane.style.setProperty('--chat-w', st.chatW + 'px');
+      grip.setAttribute('aria-valuenow', st.chatW);
+    };
+    const end = () => {
+      grip.removeEventListener('pointermove', move);
+      grip.removeEventListener('pointerup', end);
+      grip.removeEventListener('pointercancel', end);
+      grip.classList.remove('is-drag');
+      if (moved) resizeChat(st.chatW);
+    };
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', end);
+    grip.addEventListener('pointercancel', end);
+  });
+  root.addEventListener('dblclick', (e) => { if (e.target.matches('[data-chat-grip]')) resizeChat(null); });
+  root.addEventListener('keydown', (e) => {
+    if (!e.target.matches('[data-chat-grip]') || !['ArrowLeft', 'ArrowRight', 'Home'].includes(e.key)) return;
+    e.preventDefault(); e.stopPropagation();
+    resizeChat(e.key === 'Home' ? null : e.target.parentElement.getBoundingClientRect().width + (e.key === 'ArrowLeft' ? 24 : -24));
+  }, true);
   /* drag the terminal's top edge to resize it */
   root.addEventListener('mousedown', (e) => {
     if (!e.target.matches('[data-grip]')) return;
