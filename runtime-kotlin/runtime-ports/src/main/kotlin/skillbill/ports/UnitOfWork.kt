@@ -23,6 +23,7 @@ import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.idestatus.monitor.MonitorCiCycleRepository
+import skillbill.ports.idestatus.monitor.MonitorRepairValidationSnapshotRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.operation.OperationCardRepository
 import skillbill.ports.operation.OperationProposalRepository
@@ -56,6 +57,7 @@ interface UnitOfWork : GoalRunnerPersistenceSession {
   val worktreeEditJournal: WorktreeEditJournalRepository
   val agentBuildRuns: AgentBuildRunRepository
   val monitorCiCycles: MonitorCiCycleRepository
+  val monitorRepairValidationSnapshots: MonitorRepairValidationSnapshotRepository
   val standalonePhaseStatuses: StandalonePhaseStatusRepository
   val rejectedOutputDiagnostics: RejectedOutputDiagnosticRepository
   val rejectedOutputDiagnosticPermissions: RejectedOutputDiagnosticPermissions

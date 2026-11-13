@@ -17,6 +17,7 @@ internal object PackBuildStepHooks :
   PhaseStepHooks<PhaseQualityGateStepBinding>,
   PhaseRuntimeOwnedStepHooks {
   override val carriesPackBuildCommand: Boolean = true
+  override val carriesValidationCommand: Boolean = false
 
   override fun earlyOutput(
     run: PhaseRun,

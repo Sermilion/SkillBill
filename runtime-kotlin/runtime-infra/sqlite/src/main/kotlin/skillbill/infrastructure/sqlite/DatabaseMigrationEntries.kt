@@ -52,6 +52,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStand
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneReviewRunId
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.recordValidationCheckEvents
 import skillbill.infrastructure.sqlite.core.migration.area.monitor.recordMonitorCiCycles
+import skillbill.infrastructure.sqlite.core.migration.area.monitor.recordMonitorRepairValidationSnapshots
 import skillbill.infrastructure.sqlite.core.migration.area.operation.OperationProposalsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationConfirmationExecutions
 import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationLaunchRetention
@@ -1152,4 +1153,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 127,
       name = "add-project-check-config",
       operation = ::createProjectCheckConfigTable,
+    ) +
+    DatabaseMigration(
+      version = 128,
+      name = "record-monitor-repair-validation-snapshots",
+      operation = ::recordMonitorRepairValidationSnapshots,
     )

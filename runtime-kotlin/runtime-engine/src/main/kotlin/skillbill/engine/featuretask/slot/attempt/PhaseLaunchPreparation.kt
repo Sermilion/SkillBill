@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.attempt
 
 import skillbill.application.decomposition.baseBranch
+import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
@@ -10,6 +11,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseProjectInstructionsRecord
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
+import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionInteractionTraceRound
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeBriefingScope
@@ -48,9 +50,13 @@ import skillbill.engine.featuretask.slot.PhaseLaunchHandoffSelection
 import skillbill.engine.featuretask.slot.PhaseLaunchReviewTier
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
 import skillbill.engine.featuretask.slot.carriesPackBuildCommand
+import skillbill.engine.featuretask.slot.carriesValidationCommand
 import skillbill.engine.featuretask.slot.implementationTurn
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseMonitorStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseQualityGateStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
@@ -311,14 +317,12 @@ internal object PhaseLaunchPreparation {
         )
       recordLaunchBriefing(context, args, briefing, sharedEvidence)?.let { return it }
       PhaseLaunchPreparation.seedStagedPlanBundle(context, run)
+      val (rejectedWrite, launchValidationSnapshot) = freezeLaunchValidationSnapshot(context, args)
+      if (rejectedWrite is RequiredPhaseWrite.Rejected) {
+        return LaunchRequiredWriteRejected(rejectedWrite)
+      }
       val inputs =
-        PhaseLaunchPreparation
-          .run { context.composeLaunchPromptInputs(args, handoff, briefing) }
-          .copy(
-            phaseSettlement = args.iteration?.let(::phaseSettlementTarget),
-            projectInstructions = projectInstructions,
-            goalHistoryWriterInput = run.request.goalHistoryWriterInput,
-          )
+        context.preparedLaunchInputs(args, handoff, briefing, projectInstructions, launchValidationSnapshot)
       return PreparedLaunchReady(
         PreparedLaunch(
           briefing,
@@ -326,6 +330,41 @@ internal object PhaseLaunchPreparation {
         ),
       )
     }
+  }
+
+  private fun freezeLaunchValidationSnapshot(
+    context: PhaseAttemptLaunchPreparationContext,
+    args: DeclaredLaunchArgs,
+  ): Pair<RequiredPhaseWrite?, ProjectCheckCommandSnapshot?> {
+    if (!context.stepHooks(args.run).carriesValidationCommand) {
+      return null to null
+    }
+    val (write, snapshot) =
+      when (val bound = args.boundStep) {
+        is PhaseMonitorStepBinding -> bound.prepareRepairValidationSnapshotForLaunch(args.run)
+        is PhaseStandaloneMonitorStepBinding -> bound.prepareRepairValidationSnapshotForLaunch(args.run)
+        is PhaseQualityGateStepBinding -> bound.prepareValidationSnapshotForLaunch(args.run)
+        else ->
+          context.validationCommandLaunch.prepareValidation(args.run, args.iteration ?: 1)
+      }
+    return if (write is RequiredPhaseWrite.Rejected) write to null else null to snapshot
+  }
+
+  private fun PhaseAttemptLaunchPreparationContext.preparedLaunchInputs(
+    args: DeclaredLaunchArgs,
+    handoff: FeatureTaskRuntimePhaseHandoff,
+    briefing: FeatureTaskRuntimePhaseLaunchBriefing,
+    projectInstructions: List<PhaseProjectInstructionsResolution.Injected>,
+    launchValidationSnapshot: ProjectCheckCommandSnapshot?,
+  ): FeatureTaskRuntimePhasePromptComposeInputs {
+    val composed =
+      composeLaunchPromptInputs(args, handoff, briefing)
+        .copy(
+          phaseSettlement = args.iteration?.let(::phaseSettlementTarget),
+          projectInstructions = projectInstructions,
+          goalHistoryWriterInput = args.run.request.goalHistoryWriterInput,
+        )
+    return launchValidationSnapshot?.let { composed.withAcceptedValidationLaunchSnapshot(it) } ?: composed
   }
 
   private fun PhaseRun.forLaunchHandoff(boundStep: PhaseAcceptedStepExecution): PhaseRun {
@@ -518,6 +557,7 @@ internal object PhaseLaunchPreparation {
       validationGateTriage = run.validationGateTriage,
       agentRunValidateFallback = run.agentRunValidateFallback,
       packBuildCommand = packCommand(run, checkpointResolutionArgs(run), carriesBuild = true),
+      packValidationCommand = validationCommand(run, checkpointResolutionArgs(run)),
       mutating = run.policy.mutating,
       singleAgentSession = run.policy.singleAgentSession,
       repoRoot = run.request.repoRoot,
@@ -607,8 +647,33 @@ internal object PhaseLaunchPreparation {
     }
   }
 
+  private fun PhaseAttemptLaunchPreparationContext.validationCommand(
+    run: PhaseRun,
+    checkpointArgs: RepositoryCheckpointResolutionArgs,
+  ): String? {
+    val hooks = stepHooks(run)
+    return when {
+      hooks.carriesValidationCommand -> FeatureTaskRuntimeRunLoopValidationScope.packValidationCommand(checkpointArgs)
+      else -> null
+    }
+  }
+
   private fun acceptanceCriterionContext(run: PhaseRun): String? =
     (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.currentCriterionContext
+
+  private fun FeatureTaskRuntimePhasePromptComposeInputs.withAcceptedValidationLaunchSnapshot(
+    snapshot: ProjectCheckCommandSnapshot,
+  ): FeatureTaskRuntimePhasePromptComposeInputs {
+    val transport = FeatureTaskRuntimeRunLoopValidationScope.validationLaunchTransport(snapshot)
+    return copy(
+      packValidationCommand =
+        when (transport) {
+          is ValidationCommandLaunchTransport.Commands -> transport.rendered
+          is ValidationCommandLaunchTransport.KnownEmpty -> null
+        },
+      validationLaunchTransport = transport,
+    )
+  }
 
   private val ACCEPTANCE_REPAIR_PROMPT_PHASES =
     setOf(

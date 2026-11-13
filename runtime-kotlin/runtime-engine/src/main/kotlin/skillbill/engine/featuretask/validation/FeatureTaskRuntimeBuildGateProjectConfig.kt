@@ -17,6 +17,7 @@ import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeProject
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import skillbill.workflow.taskruntime.validation.gateStdoutExcerpt
+import java.nio.file.Path
 
 internal data class OrderedProjectConfigRun(
   val cycle: ValidationGateCycleRequest,
@@ -27,6 +28,27 @@ internal data class OrderedProjectConfigRun(
 )
 
 internal object FeatureTaskRuntimeBuildGateProjectConfig {
+  fun runSavedCommands(
+    runner: ValidationGateRunner,
+    repoRoot: Path,
+    snapshot: ProjectCheckCommandSnapshot,
+    commands: List<ProjectCheckCommand>,
+    cyclePhase: ValidationGateCyclePhase,
+  ): ValidationGateRunResult {
+    val cacheMode = cacheModeFor(cyclePhase)
+    val runDeclaration = ProjectCheckSnapshotParser.parserDeclaration(snapshot)
+    val listIdentity = FeatureTaskRuntimeBuildGatePolicy.commandListIdentity(commands)
+    var merged = emptyMergedResult(cacheMode, listIdentity)
+    commands.forEach { command ->
+      val result = runner.run(commandRunRequest(repoRoot, command, cacheMode, runDeclaration, cyclePhase))
+      merged = mergeResults(merged, result)
+      if (result.outcome == ValidationGateRunOutcome.REJECTED_ZERO_WORK) {
+        return merged
+      }
+    }
+    return merged
+  }
+
   fun runOrderedCommands(
     runner: ValidationGateRunner,
     request: OrderedProjectConfigRun,
@@ -39,9 +61,14 @@ internal object FeatureTaskRuntimeBuildGateProjectConfig {
     var merged = emptyMergedResult(cacheMode, listIdentity)
     request.commands.forEach { command ->
       val result =
-        dispatch(
-          runner,
-          ProjectConfigDispatchRequest(request.cycle, command, cacheMode, runDeclaration, request.cyclePhase),
+        runner.run(
+          commandRunRequest(
+            request.cycle.repoRoot,
+            command,
+            cacheMode,
+            runDeclaration,
+            request.cyclePhase,
+          ),
         )
       attemptEntries += completedEntry(command, result)
       persistAttempt(request.cycle, listIdentity, attemptEntries)
@@ -50,29 +77,22 @@ internal object FeatureTaskRuntimeBuildGateProjectConfig {
     return merged
   }
 
-  private data class ProjectConfigDispatchRequest(
-    val cycle: ValidationGateCycleRequest,
-    val command: ProjectCheckCommand,
-    val cacheMode: ValidationGateCacheMode,
-    val declaration: ValidationGateDeclaration?,
-    val cyclePhase: ValidationGateCyclePhase,
-  )
-
-  private fun dispatch(
-    runner: ValidationGateRunner,
-    request: ProjectConfigDispatchRequest,
-  ): ValidationGateRunResult =
-    runner.run(
-      ValidationGateRunRequest(
-        repoRoot = request.cycle.repoRoot,
-        argv = request.command.argv,
-        cacheMode = request.cacheMode,
-        declaration = request.declaration,
-        terminalVerifying = request.cyclePhase == ValidationGateCyclePhase.POST_REPAIR_VERIFY,
-        findingParseMode = ValidationGateFindingParseMode.COLLECT_ALL,
-        commandSource = ValidationGateCommandSource.PROJECT_CONFIG,
-        executionWorkingDirectory = request.command.workingDirectory,
-      ),
+  private fun commandRunRequest(
+    repoRoot: Path,
+    command: ProjectCheckCommand,
+    cacheMode: ValidationGateCacheMode,
+    declaration: ValidationGateDeclaration?,
+    cyclePhase: ValidationGateCyclePhase,
+  ): ValidationGateRunRequest =
+    ValidationGateRunRequest(
+      repoRoot = repoRoot,
+      argv = command.argv,
+      cacheMode = cacheMode,
+      declaration = declaration,
+      terminalVerifying = cyclePhase == ValidationGateCyclePhase.POST_REPAIR_VERIFY,
+      findingParseMode = ValidationGateFindingParseMode.COLLECT_ALL,
+      commandSource = ValidationGateCommandSource.PROJECT_CONFIG,
+      executionWorkingDirectory = command.workingDirectory,
     )
 
   private fun cacheModeFor(cyclePhase: ValidationGateCyclePhase): ValidationGateCacheMode =

@@ -44,6 +44,7 @@ import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.operation.core.OperationRequest
 import skillbill.engine.operation.core.OperationStepRunner
 import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
+import skillbill.infrastructure.contracts.projectchecks.ProjectCheckCommandSnapshotSchemaValidator
 import skillbill.infrastructure.contracts.projectchecks.ProjectCheckConfigSchemaValidator
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
@@ -139,6 +140,7 @@ internal class VerifyOperationHarness : AutoCloseable {
       "test-runtime-version",
       BlockIncidentContractValidator { },
       ProjectCheckConfigSchemaValidator(),
+      ProjectCheckCommandSnapshotSchemaValidator(),
     )
   private val executor: OperationExecutor
   private val workflows: WorkflowService

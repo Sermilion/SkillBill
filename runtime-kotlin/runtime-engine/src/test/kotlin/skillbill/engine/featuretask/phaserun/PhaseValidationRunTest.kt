@@ -72,8 +72,8 @@ class PhaseValidationRunTest {
 
     assertEquals(listOf(PHASE_VALIDATE), result.completedStepIds)
     val prompt = requireNotNull(launcher.requests.single().skillRunRequest.promptOverride)
-    assertContains(prompt, "Discover the validation checks required by this project")
-    assertContains(prompt, "Compilation alone is insufficient")
+    assertContains(prompt, "admitted saved validation")
+    assertContains(prompt, "do not rediscover checks")
     assertContains(prompt, "print a warning")
     assertContains(prompt, "then settle completed and allow the workflow to advance")
     assertEquals(emptyList(), gateRequests)
@@ -130,7 +130,7 @@ class PhaseValidationRunTest {
   }
 
   @Test
-  fun `repeated validation discovers checks afresh even with declared pack commands`() {
+  fun `repeated validation reuses admitted saved commands without rediscovery`() {
     val gateRequests = mutableListOf<ValidationGateRunRequest>()
     val launcher = launcher { validJsonOutput(PHASE_VALIDATE) }
     val entry = entry(launcher, gateRequests, emptyList())

@@ -147,6 +147,7 @@ public class InMemoryPhaseRunState(
           runLoopContext.sharedEvidenceResolver,
           runLoopContext.diffResolver,
           runLoopContext.qualityGateCycles,
+          directValidationCommandLaunch = runLoopContext.validationCommandLaunch,
         ),
       ),
       run,

@@ -181,9 +181,9 @@ class PhaseMonitorRunTest {
       }
     var gateCalls = 0
     val gate =
-      MonitorRepairPublicationGate { gateRoot, _ ->
+      MonitorRepairPublicationGate { request ->
         gateCalls += 1
-        assertEquals(repoRoot, gateRoot)
+        assertEquals(repoRoot, request.repoRoot)
         assertEquals(publishedBefore, git(origin, "rev-parse", FEATURE_BRANCH), "published before the gate passed")
         if (gateCalls == 1) {
           MonitorRepairPublicationVerdict.RepairAgain("Full gate failed: DatabaseMigrationsTest expected 42 tables")
@@ -213,7 +213,7 @@ class PhaseMonitorRunTest {
   fun `a repair the publication gate keeps rejecting blocks without publishing`() {
     initFeatureBranch()
     val observed = mutableListOf<String>()
-    val gate = MonitorRepairPublicationGate { _, _ -> MonitorRepairPublicationVerdict.RepairAgain("markers remain") }
+    val gate = MonitorRepairPublicationGate { MonitorRepairPublicationVerdict.RepairAgain("markers remain") }
 
     val result = entry(checks = failingChecks(observed), gate = gate).runMonitor("SKILL-904")
 
@@ -228,7 +228,7 @@ class PhaseMonitorRunTest {
   fun `a repair the publication gate cannot verify blocks without publishing`() {
     initFeatureBranch()
     val observed = mutableListOf<String>()
-    val gate = MonitorRepairPublicationGate { _, _ -> MonitorRepairPublicationVerdict.Refused("gate runner crashed") }
+    val gate = MonitorRepairPublicationGate { MonitorRepairPublicationVerdict.Refused("gate runner crashed") }
 
     val result = entry(checks = failingChecks(observed), gate = gate).runMonitor("SKILL-904")
 
@@ -486,7 +486,7 @@ class PhaseMonitorRunTest {
     entry(checks = failing).runMonitor("SKILL-904")
 
     val prompt = launcher.requests.first().skillRunRequest.promptOverride.orEmpty()
-    assertTrue("Run the full project validation" in prompt, prompt)
+    assertTrue("admitted saved validation command" in prompt, prompt)
     assertTrue("https://ci.example/run" in prompt, prompt)
     assertTrue("read that failing job's logs or the check's report first" in prompt, prompt)
     assertTrue("--job <job-id> --log-failed" in prompt, prompt)
@@ -499,7 +499,7 @@ class PhaseMonitorRunTest {
     assertTrue("Local validation is not a claim that CI passed" in prompt, prompt)
     assertTrue("The runtime commits and pushes a completed repair" in prompt, prompt)
     assertTrue(
-      prompt.indexOf("Monitor repair completion requires") > prompt.indexOf("Run the full project validation"),
+      prompt.indexOf("Monitor repair completion requires") > prompt.indexOf("admitted saved validation command"),
       prompt,
     )
     assertTrue("block only for an external obstacle" !in prompt, prompt)

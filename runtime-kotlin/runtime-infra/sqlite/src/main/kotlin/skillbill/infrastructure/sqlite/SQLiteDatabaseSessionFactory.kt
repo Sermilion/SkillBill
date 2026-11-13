@@ -22,6 +22,7 @@ import skillbill.infrastructure.sqlite.core.schema.requireResolvedEnvironmentCon
 import skillbill.infrastructure.sqlite.pathlock.DatabasePathFileLock
 import skillbill.model.EnvironmentContext
 import skillbill.ports.blockincident.BlockIncidentContractValidator
+import skillbill.ports.config.projectchecks.ProjectCheckCommandSnapshotValidator
 import skillbill.ports.config.projectchecks.ProjectCheckConfigValidator
 import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.db.DatabaseReadConnections
@@ -51,6 +52,7 @@ class SQLiteDatabaseSessionFactory(
   private val runtimeVersion: String,
   private val blockIncidentContractValidator: BlockIncidentContractValidator,
   private val projectCheckConfigValidator: ProjectCheckConfigValidator,
+  private val projectCheckCommandSnapshotValidator: ProjectCheckCommandSnapshotValidator,
 ) : DatabaseSessionFactory, DatabaseReadConnections, DatabaseCheckpoint {
   private val readConnections = ReadConnectionPool(diagnostics)
   private val activeRead = ThreadLocal<UnitOfWork>()
@@ -408,6 +410,7 @@ class SQLiteDatabaseSessionFactory(
       runtimeVersion,
       blockIncidentContractValidator,
       projectCheckConfigValidator,
+      projectCheckCommandSnapshotValidator,
       transactionActive,
       openDb.fileObservation,
     )

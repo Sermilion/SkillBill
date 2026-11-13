@@ -81,6 +81,8 @@ import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompl
 import skillbill.engine.featuretask.runloop.finalization.NoopCommitPushManifestCompletion
 import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
+import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateLaunch
+import skillbill.engine.featuretask.runloop.settlement.ValidationCommandLaunchPreparer
 import skillbill.engine.featuretask.slot.ApprovingReviewPhaseRunner
 import skillbill.engine.featuretask.slot.OpenPullRequestIdentityLookup
 import skillbill.engine.featuretask.slot.PassingPullRequestChecksLookup
@@ -173,6 +175,7 @@ import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.idestatus.AgentActivityStampRepository
+import skillbill.ports.idestatus.InMemoryMonitorRepairValidationSnapshotRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
@@ -1597,6 +1600,19 @@ private fun defaultQualityGateCycles(): RuntimeQualityGateCycles {
   )
 }
 
+fun validationCommandLaunchPreparerForTests(
+  gitOperations: WorkflowGitOperations,
+  qualityGateCycles: RuntimeQualityGateCycles,
+): ValidationCommandLaunchPreparer =
+  ValidationCommandLaunchPreparer(
+    RuntimeFakeDatabaseSessionFactory(InMemoryRuntimeWorkflowRepository()),
+    projectCheckCommandResolverForTests(),
+    qualityGateCycles,
+    gitOperations,
+    defaultRepoLocalConfigPort(),
+    NoopRuntimeDiagnostics,
+  )
+
 val RUNNER_TEST_STORE_ROOT: Path = Files.createTempDirectory("skillbill-runner-project-store")
 
 val RUNNER_TEST_PROJECT_STORE: ProjectStorePort = FixedProjectStorePort(RUNNER_TEST_STORE_ROOT)
@@ -1642,13 +1658,15 @@ open class TestFeatureTaskRuntimeRunLoopEntry(
   commitPushManifestCompletion: CommitPushManifestCompletion = NoopCommitPushManifestCompletion,
   projectStore: ProjectStorePort = RUNNER_TEST_PROJECT_STORE,
   stepLaunchResolver: FeatureTaskRuntimeStepLaunchResolver = testStepLaunchResolver(),
+  validationCommandLaunch: ValidationCommandLaunchPreparer =
+    validationCommandLaunchPreparerForTests(gitOperations, qualityGateCycles),
 ) : FeatureTaskRuntimeRunLoopEntry(
     gitOperations,
     decompositionPlanner,
     findingVerificationBoundaryMemory,
     specIntentProjectionResolver,
     lifecycleTelemetry,
-    qualityGateCycles,
+    RuntimeQualityGateLaunch(qualityGateCycles, validationCommandLaunch),
     sharedEvidenceResolver,
     diffResolver,
     implementationChecklistStore,
@@ -2281,8 +2299,11 @@ class RuntimeFakeDatabaseSessionFactory(
 
   private val qaOutcomes = InMemoryFeatureTaskQaOutcomeRepository()
 
+  private val monitorRepairValidationSnapshotStore = InMemoryMonitorRepairValidationSnapshotRepository()
+
   private fun unitOfWork(): UnitOfWork =
     object : UnitOfWorkDefaults() {
+      override val monitorRepairValidationSnapshots = monitorRepairValidationSnapshotStore
       override val agentActivityStamps = activityStampRepository
       override val dbPath: Path = this@RuntimeFakeDatabaseSessionFactory.dbPath
       override val reviews: ReviewRepository = this@RuntimeFakeDatabaseSessionFactory.reviewsPort
@@ -2856,7 +2877,7 @@ fun FeatureTaskRuntimeRunLoopContext.withRunState(state: PhaseRunState): Feature
     findingVerificationBoundaryMemory,
     specIntentProjectionResolver,
     lifecycleTelemetry,
-    qualityGateCycles,
+    qualityGateLaunch,
     sharedEvidenceResolver,
     diffResolver,
     phaseRunFactory,

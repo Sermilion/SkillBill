@@ -1,7 +1,9 @@
 package skillbill.engine.featuretask.runloop.settlement
 
 import skillbill.contracts.config.projectchecks.ProjectCheckCommand
+import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
+import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.RepositoryCheckpointResolutionArgs
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
@@ -25,10 +27,30 @@ internal object FeatureTaskRuntimeRunLoopValidationScope {
     return resolvedPackBuildCommand(args)
   }
 
+  internal fun packValidationCommand(args: RepositoryCheckpointResolutionArgs): String? =
+    admittedValidationSnapshot(args.run)?.let(::packValidationCommand)
+
+  internal fun packValidationCommand(snapshot: ProjectCheckCommandSnapshot): String? =
+    snapshot.validationCommandList.takeIf { it.isNotEmpty() }?.let(::renderSavedCommands)
+
+  internal fun validationLaunchTransport(snapshot: ProjectCheckCommandSnapshot): ValidationCommandLaunchTransport {
+    val category = snapshot.validationCommands
+    require(category != null) { "validation launch transport requires a frozen validation category." }
+    return if (category.commands.isEmpty()) {
+      ValidationCommandLaunchTransport.KnownEmpty(snapshot)
+    } else {
+      ValidationCommandLaunchTransport.Commands(snapshot, renderSavedCommands(category.commands))
+    }
+  }
+
+  internal fun admittedValidationSnapshot(run: PhaseRun): ProjectCheckCommandSnapshot? =
+    run.request.acceptedGoalQualityExecutionPlan?.projectCheckCommands?.takeIf { it.validationCommands != null }
+      ?: run.request.admittedExecution?.plan?.projectCheckCommands?.takeIf { it.validationCommands != null }
+
   private fun acceptedBuildCommand(run: PhaseRun): String? {
     val accepted = run.request.acceptedGoalQualityExecutionPlan ?: return null
     accepted.projectCheckCommands?.let { snapshot ->
-      return snapshot.buildCommandList.takeIf { it.isNotEmpty() }?.let(::renderSavedBuildCommands)
+      return snapshot.buildCommandList.takeIf { it.isNotEmpty() }?.let(::renderSavedCommands)
     }
     return run.request.admittedExecution
       ?.effectiveInputs
@@ -39,7 +61,7 @@ internal object FeatureTaskRuntimeRunLoopValidationScope {
   private fun admittedBuildCommand(run: PhaseRun): String? {
     val admitted = run.request.admittedExecution ?: return null
     admitted.plan.projectCheckCommands?.let { snapshot ->
-      return snapshot.buildCommandList.takeIf { it.isNotEmpty() }?.let(::renderSavedBuildCommands)
+      return snapshot.buildCommandList.takeIf { it.isNotEmpty() }?.let(::renderSavedCommands)
     }
     return admitted.effectiveInputs.commandArgv(ValidationGateCyclePhase.INITIAL_DISCOVERY)?.joinToString(" ")
   }
@@ -55,7 +77,7 @@ internal object FeatureTaskRuntimeRunLoopValidationScope {
     }
   }
 
-  private fun renderSavedBuildCommands(commands: List<ProjectCheckCommand>): String =
+  private fun renderSavedCommands(commands: List<ProjectCheckCommand>): String =
     commands.joinToString(" ; ") { command ->
       if (command.workingDirectory == ".") {
         command.argv.joinToString(" ")

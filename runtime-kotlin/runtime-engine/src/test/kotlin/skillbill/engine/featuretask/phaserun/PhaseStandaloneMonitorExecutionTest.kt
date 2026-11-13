@@ -189,9 +189,9 @@ class PhaseStandaloneMonitorExecutionTest {
     failingHeads += headSha
     var gateCalls = 0
     publicationGate =
-      MonitorRepairPublicationGate { gateRoot, _ ->
+      MonitorRepairPublicationGate { request ->
         gateCalls += 1
-        assertEquals(repairCwds.last(), gateRoot, "the gate verifies the owned repair worktree")
+        assertEquals(repairCwds.last(), request.repoRoot, "the gate verifies the owned repair worktree")
         assertEquals(headSha, forkHead(), "nothing is published before the gate passes")
         if (gateCalls == 1) {
           MonitorRepairPublicationVerdict.RepairAgain("Full gate failed: ktlint FeatureTest.kt:3")
@@ -212,7 +212,7 @@ class PhaseStandaloneMonitorExecutionTest {
   @Test
   fun `a fixed repair the publication gate cannot verify blocks and is never published`() {
     failingHeads += headSha
-    publicationGate = MonitorRepairPublicationGate { _, _ -> MonitorRepairPublicationVerdict.Refused("gate crashed") }
+    publicationGate = MonitorRepairPublicationGate { MonitorRepairPublicationVerdict.Refused("gate crashed") }
 
     val result = run()
 

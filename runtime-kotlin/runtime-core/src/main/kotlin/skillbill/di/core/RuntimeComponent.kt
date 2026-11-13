@@ -299,6 +299,7 @@ abstract class RuntimeComponent(
       runtimeVersion().value,
       blockIncidentContractValidator,
       projectCheckConfigValidator(),
+      projectCheckCommandSnapshotValidator(),
     )
 
   @Provides

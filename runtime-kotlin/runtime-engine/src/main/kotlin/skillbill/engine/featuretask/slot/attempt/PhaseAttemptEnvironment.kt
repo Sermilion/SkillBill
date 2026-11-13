@@ -19,6 +19,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompletion
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
+import skillbill.engine.featuretask.runloop.settlement.ValidationCommandLaunchPreparer
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
@@ -265,6 +266,8 @@ internal interface PhaseAttemptLaunchPreparationContext :
   val implementationChecklistStore: FeatureTaskImplementationChecklistStore?
 
   val phaseInstructionSource: PhaseInstructionFileSource
+
+  val validationCommandLaunch: ValidationCommandLaunchPreparer
 }
 
 /** Run-loop and attempt helpers that resolve strategies for arbitrary selected steps. */
@@ -414,9 +417,9 @@ public open class PhaseAttemptSettlementScope internal constructor(
 }
 
 public open class PhaseAttemptLaunchCollaborationScope internal constructor(
-  host: PhaseAttemptRunHost,
-) : PhaseAttemptSettlementScope(host),
-  PhaseQualityGateReporting by host,
+  private val launchHost: PhaseAttemptRunHost,
+) : PhaseAttemptSettlementScope(launchHost),
+  PhaseQualityGateReporting by launchHost,
   PhaseQualityGateCycleContext,
   PhaseAttemptLaunchPreparationContext {
   internal val acceptedLaunchState: PhaseLaunchState
@@ -440,6 +443,9 @@ public open class PhaseAttemptLaunchCollaborationScope internal constructor(
 
   override fun phaseSettlementTarget(iteration: Int): FeatureTaskRuntimePhaseSettlementTarget? =
     resolvePhaseSettlementTarget(iteration)
+
+  override val validationCommandLaunch: ValidationCommandLaunchPreparer
+    get() = launchHost.validationCommandLaunch
 
   internal fun writeRuntimeSubtaskCommit(
     branch: String,

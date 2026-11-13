@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.state
 
 import skillbill.application.telemetry.model.PrDescriptionGeneratedRequest
+import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
@@ -117,6 +118,8 @@ public interface PhaseQualityGateStepBinding : PhaseAcceptedStepExecution {
     run: PhaseRun,
     call: PhaseStepCall,
   ): PhaseOutcome
+
+  public fun prepareValidationSnapshotForLaunch(run: PhaseRun): Pair<RequiredPhaseWrite, ProjectCheckCommandSnapshot?>
 }
 
 public interface PhaseCommitStepBinding : PhaseAcceptedStepExecution {
@@ -126,6 +129,14 @@ public interface PhaseCommitStepBinding : PhaseAcceptedStepExecution {
 public interface PhaseMonitorStepBinding :
   PhaseAcceptedStepExecution,
   PhaseAgentExecution {
+  public fun acceptRepairValidationSnapshot(snapshot: ProjectCheckCommandSnapshot): RequiredPhaseWrite
+
+  public fun repairValidationSnapshot(): ProjectCheckCommandSnapshot?
+
+  public fun prepareRepairValidationSnapshotForLaunch(
+    run: PhaseRun,
+  ): Pair<RequiredPhaseWrite, ProjectCheckCommandSnapshot?>
+
   public fun publishRepair(
     run: PhaseRun,
     pullRequests: PullRequestIdentityLookup,
@@ -164,6 +175,14 @@ public interface PhaseCiObservation {
 public interface PhaseStandaloneMonitorStepBinding :
   PhaseAcceptedStepExecution,
   PhaseAgentExecution {
+  public fun acceptRepairValidationSnapshot(snapshot: ProjectCheckCommandSnapshot): RequiredPhaseWrite
+
+  public fun repairValidationSnapshot(): ProjectCheckCommandSnapshot?
+
+  public fun prepareRepairValidationSnapshotForLaunch(
+    run: PhaseRun,
+  ): Pair<RequiredPhaseWrite, ProjectCheckCommandSnapshot?>
+
   public fun runStandaloneMonitor(
     run: PhaseRun,
     operations: PhaseStandaloneMonitorOperations,

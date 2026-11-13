@@ -149,7 +149,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
       validatePrompt.contains(ownershipTitle),
       "validate must not carry the non-validate forbid; it owns the gate",
     )
-    assertContains(validatePrompt, "Discover the validation checks")
+    assertContains(validatePrompt, "admitted saved validation command")
     assertFalse(validatePrompt.contains("Invoke `bill-code-check` exactly once"))
     assertFalse(validatePrompt.contains("Invoke bill-code-check for collect-all and confirmation"))
 
@@ -265,15 +265,12 @@ class FeatureTaskRuntimePhasePromptComposerTest {
         promptComposerBriefingFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE),
       )
 
-    assertContains(prompt, "Discover the validation checks required by this project")
-    assertContains(prompt, "Run the full project validation")
-    assertContains(prompt, "Compilation alone is insufficient")
+    assertContains(prompt, "admitted saved validation command")
+    assertContains(prompt, "do not rediscover checks from scripts, CI, or packs")
     assertContains(prompt, "Do not recursively invoke `skill-bill phase validation`")
     assertFalse(prompt.contains("Do not run pack validation_gate argv"))
     assertContains(prompt, "Keep repairing in this same session")
-    assertContains(prompt, "Settle completed when every runnable required check passes")
-    assertContains(prompt, "Do not stop after reducing the failure count")
-    assertContains(prompt, "return a partial progress report")
+    assertContains(prompt, "Settle completed when every runnable saved check passes")
     assertContains(
       prompt,
       "Settle blocked only for a concrete external obstacle other than confirmed unavailable tooling",
@@ -293,22 +290,18 @@ class FeatureTaskRuntimePhasePromptComposerTest {
     listOf("validate", "monitor_fix").forEach { phaseId ->
       val prompt = composePromptForPhase(phaseId)
 
-      assertFalse(prompt.contains("## Build ownership"), phaseId)
-      assertContains(prompt, "build failures", false, phaseId)
-      assertContains(prompt, "missing or stale artifacts", false, phaseId)
-      assertContains(prompt, "Rebuild after source repairs", false, phaseId)
-      assertContains(prompt, "Do not return to an earlier phase", false, phaseId)
-      assertContains(prompt, "Settle completed when every runnable required check passes", false, phaseId)
+      assertContains(prompt, "## Build ownership", false, phaseId)
+      assertContains(prompt, "admitted saved validation", false, phaseId)
+      assertContains(prompt, "do not rediscover checks from scripts, CI, or packs", false, phaseId)
+      assertContains(prompt, "Settle completed when every runnable saved check passes", false, phaseId)
       assertContains(
         prompt,
-        "skip only the checks that depend on it and continue all independent checks",
+        "skip only the saved commands that depend on it and continue all independent saved commands",
         false,
         phaseId,
       )
       assertContains(prompt, "Never count a skipped check as passed", false, phaseId)
-      assertContains(prompt, "run its remaining independent tasks separately", false, phaseId)
       assertContains(prompt, "missing prerequisite, and confirming evidence", false, phaseId)
-      assertContains(prompt, "an unexplained command failure is not evidence of unavailable tooling", false, phaseId)
     }
   }
 
@@ -376,7 +369,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
       validatePrompt,
       "Never silence findings with annotations, baselines, disabled rules, weakened configuration, or skipped tests",
     )
-    assertContains(validatePrompt, "Discover the validation checks required by this project")
+    assertContains(validatePrompt, "admitted saved validation command")
     assertFalse(validatePrompt.contains("Invoke `bill-code-check` exactly once"))
     assertFalse(validatePrompt.contains("Invoke bill-kotlin-code-check"))
     assertContains(validatePrompt, "## Required final output")

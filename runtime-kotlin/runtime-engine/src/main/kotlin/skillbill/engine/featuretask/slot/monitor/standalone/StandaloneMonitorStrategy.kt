@@ -6,11 +6,13 @@ import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvarian
 import skillbill.engine.featuretask.phase.core.MonitorRepairStepRoles
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
+import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.MonitorRepairCapability
 import skillbill.engine.featuretask.slot.PhaseBeforeLaunchHooks
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseLaunchPromptHooks
+import skillbill.engine.featuretask.slot.PhaseRuntimeOwnedStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
@@ -20,8 +22,10 @@ import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.monitor.MonitorRepairPublicationGate
+import skillbill.engine.featuretask.slot.monitor.MonitorRepairPublicationGateRequest
 import skillbill.engine.featuretask.slot.monitor.publicationBlockingCheck
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedValidateAgentPhaseTask
+import skillbill.engine.featuretask.slot.qualitygate.savedValidationAgentDirective
 import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorStepBinding
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
@@ -79,7 +83,17 @@ public class StandaloneMonitorStrategy(
     object :
       PhaseStepHooks<PhaseStandaloneMonitorStepBinding>,
       PhaseLaunchPromptHooks<PhaseStandaloneMonitorStepBinding>,
-      PhaseBeforeLaunchHooks<PhaseStandaloneMonitorStepBinding> {
+      PhaseBeforeLaunchHooks<PhaseStandaloneMonitorStepBinding>,
+      PhaseRuntimeOwnedStepHooks {
+      override val carriesPackBuildCommand: Boolean = false
+      override val carriesValidationCommand: Boolean = true
+
+      override fun earlyOutput(
+        run: PhaseRun,
+        iteration: Int,
+        outputText: String,
+      ): PhaseOutcome? = null
+
       override fun launchPromptSupplement(
         run: PhaseRun,
         context: PhaseAttemptLaunchHookContext,
@@ -90,7 +104,13 @@ public class StandaloneMonitorStrategy(
         run: PhaseRun,
         context: PhaseAttemptLaunchHookContext,
         state: PhaseStandaloneMonitorStepBinding,
-      ): String? = state.guardStandaloneRepairLaunch(run, service.operations)
+      ): String? {
+        state.guardStandaloneRepairLaunch(run, service.operations)?.let { return it }
+        if (state.repairValidationSnapshot() == null) {
+          return "Monitor repair launched without the accepted validation command snapshot."
+        }
+        return null
+      }
 
       override fun settleCompletedOutput(
         run: PhaseRun,
@@ -101,7 +121,13 @@ public class StandaloneMonitorStrategy(
         val fixed = reportsFixedRepair(outputMap)
         if (fixed) {
           publicationGate
-            .verify(run.request.repoRoot, state.resolvedBranch()?.baseBranch)
+            .verify(
+              MonitorRepairPublicationGateRequest(
+                run.request.repoRoot,
+                state.resolvedBranch()?.baseBranch,
+                state.repairValidationSnapshot(),
+              ),
+            )
             .publicationBlockingCheck()
             ?.let { return it }
         }
@@ -117,7 +143,7 @@ public class StandaloneMonitorStrategy(
     return if (stepId == entryStep) {
       StandaloneMonitorDirectives.MONITOR
     } else {
-      runtimeOwnedValidateAgentPhaseTask() + " " + StandaloneMonitorDirectives.REPAIR
+      runtimeOwnedValidateAgentPhaseTask(null) + " " + StandaloneMonitorDirectives.REPAIR
     }
   }
 
@@ -129,10 +155,16 @@ public class StandaloneMonitorStrategy(
     return if (stepId == entryStep) {
       PhaseStepPromptSections(taskDirective = directiveFor(stepId), settles = false)
     } else {
+      val (taskDirective, runsBuildGate) =
+        savedValidationAgentDirective(
+          inputs.validationLaunchTransport,
+          inputs.packValidationCommand,
+          inputs.validationGateTriage,
+        )
       PhaseStepPromptSections(
-        taskDirective = directiveFor(stepId),
+        taskDirective = taskDirective + " " + StandaloneMonitorDirectives.REPAIR,
         runsValidationGate = true,
-        runsBuildGate = true,
+        runsBuildGate = runsBuildGate,
         valueContent = StandaloneMonitorDirectives.REPAIR_VALUE_CONTENT,
       )
     }

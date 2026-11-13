@@ -2441,6 +2441,7 @@ private val expectedMigrationDefinitions =
     125 to "track-legacy-plan-bundle-transfer",
     126 to "fence-goal-planning-checkout-recovery",
     127 to "add-project-check-config",
+    128 to "record-monitor-repair-validation-snapshots",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {
