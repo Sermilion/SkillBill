@@ -134,6 +134,12 @@ governedResources {
     "skillbill/contracts",
   )
   copy(
+    "copyProjectCheckDiscoverySchema",
+    "project-check-discovery-schema.yaml",
+    "SONA-17: canonical project-check discovery response schema",
+    "skillbill/contracts",
+  )
+  copy(
     "copyProducerOutputEvidenceSchema",
     "producer-output-evidence-schema.yaml",
     "SKILL-152: canonical producer output evidence schema",

@@ -30,12 +30,10 @@ public class ProjectCheckConfigAccess(
   }
 
   public fun fillMissing(
-    workingDirectory: Path,
+    projectId: String,
     discovery: ProjectCheckConfigDiscovery,
-  ): ProjectCheckConfigAccessSnapshot {
+  ): ProjectCheckConfig {
     databaseSchema.ensureDatabaseReady()
-    val location = projectStore.resolveCurrent(workingDirectory)
-    val config = database.transaction { it.projectCheckConfigs.fillMissing(location.projectId, discovery) }
-    return ProjectCheckConfigAccessSnapshot(location, config)
+    return database.transaction { it.projectCheckConfigs.fillMissing(projectId, discovery) }
   }
 }

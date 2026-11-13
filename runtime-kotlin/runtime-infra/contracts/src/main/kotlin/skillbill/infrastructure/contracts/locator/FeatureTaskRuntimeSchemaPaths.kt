@@ -6,6 +6,12 @@ object ProjectCheckConfigSchemaPaths {
   const val EXPECTED_SCHEMA_ID = "https://skill-bill.dev/contracts/project-check-config-schema.yaml"
 }
 
+object ProjectCheckDiscoverySchemaPaths {
+  const val REPO_RELATIVE_PATH = "orchestration/contracts/project-check-discovery-schema.yaml"
+  const val CLASSPATH_RESOURCE = "skillbill/contracts/project-check-discovery-schema.yaml"
+  const val EXPECTED_SCHEMA_ID = "https://skill-bill.dev/contracts/project-check-discovery-schema.yaml"
+}
+
 object FeatureTaskRuntimeExecutionPlanSchemaPaths {
   const val REPO_RELATIVE_PATH: String =
     "orchestration/contracts/feature-task-runtime-execution-plan.yaml"

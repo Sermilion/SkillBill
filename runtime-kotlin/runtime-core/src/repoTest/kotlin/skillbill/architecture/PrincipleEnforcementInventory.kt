@@ -361,6 +361,22 @@ object PrincipleEnforcementInventory {
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
+          "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
+            "projectchecks/ProjectCheckDiscoverySchemaValidator.kt",
+        functionNames =
+          setOf(
+            "validate",
+            "parsedRoot",
+            "requireSupportedVersion",
+            "requireCanonicalSchema",
+            "parsedCategories",
+            "categoryValue",
+            "validDirectory",
+            "invalid",
+          ),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
           "runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/" +
             "config/projectchecks/SqliteProjectCheckConfigStore.kt",
         functionNames = setOf("load", "categoryNode"),

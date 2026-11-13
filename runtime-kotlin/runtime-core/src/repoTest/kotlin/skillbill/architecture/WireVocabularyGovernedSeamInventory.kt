@@ -20,6 +20,7 @@ import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeReadinessEvi
 import skillbill.infrastructure.contracts.locator.GoalArchiveSchemaPaths
 import skillbill.infrastructure.contracts.locator.GoalQualityExecutionSchemaPaths
 import skillbill.infrastructure.contracts.locator.ProjectCheckConfigSchemaPaths
+import skillbill.infrastructure.contracts.locator.ProjectCheckDiscoverySchemaPaths
 import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.SqliteLifecycleTelemetryMaterializationPayloadKeys
@@ -44,6 +45,16 @@ internal object WireVocabularyGovernedSeamInventory {
             "contracts/config/projectchecks/ProjectCheckConfig.kt",
             "infrastructure/contracts/projectchecks/ProjectCheckConfigSchemaValidator.kt",
             "infrastructure/sqlite/config/projectchecks/SqliteProjectCheckConfigStore.kt",
+          ),
+      ),
+      GovernedPayloadSeam(
+        seamId = "project-check-discovery",
+        schemaRepoRelativePath = ProjectCheckDiscoverySchemaPaths.REPO_RELATIVE_PATH,
+        governedRelativePathMarkers =
+          listOf(
+            "contracts/config/projectchecks/ProjectCheckDiscovery.kt",
+            "infrastructure/contracts/projectchecks/ProjectCheckDiscoverySchemaValidator.kt",
+            "engine/featuretask/validation/projectchecks/ProjectCheckCommandDiscovery.kt",
           ),
       ),
       GovernedPayloadSeam(
@@ -209,7 +220,9 @@ internal object WireVocabularyGovernedSeamInventory {
         recursiveSchemaPropertyKeys(loadRepoSchema(schemaRepoRelativePath))
       FeatureTaskRuntimePlanBundleFeasibilitySchemaPaths.REPO_RELATIVE_PATH ->
         recursiveSchemaPropertyKeys(loadRepoSchema(schemaRepoRelativePath))
-      ProjectCheckConfigSchemaPaths.REPO_RELATIVE_PATH ->
+      ProjectCheckConfigSchemaPaths.REPO_RELATIVE_PATH,
+      ProjectCheckDiscoverySchemaPaths.REPO_RELATIVE_PATH,
+      ->
         recursiveSchemaPropertyKeys(loadRepoSchema(schemaRepoRelativePath))
       GoalArchiveSchemaPaths.REPO_RELATIVE_PATH ->
         propertyNames(loadRepoSchema(schemaRepoRelativePath).path("properties")).toSet()
