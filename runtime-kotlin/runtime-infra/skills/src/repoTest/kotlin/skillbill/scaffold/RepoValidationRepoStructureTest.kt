@@ -269,7 +269,7 @@ class RepoValidationRepoStructureTest {
       "Run `/skill-bill SKILL-1`, or `skill-bill goal SKILL-1` from ~/.local/bin/skill-bill.\n",
     )
     val readme = repoRoot.resolve("README.md")
-    Files.writeString(readme, "| Skill | Use |\n| --- | --- |\n| `/skill-bill` | Dispatcher. |\n")
+    Files.writeString(readme, "| Skill | Use |\n| --- | --- |\n| `/sona` | Dispatcher. |\n")
     val issues = mutableListOf<String>()
 
     validateSkillReferencesInFile(skillFile, repoRoot, setOf("bill-example"), issues)

@@ -7,6 +7,11 @@ import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
 import dev.skillbill.desktop.core.domain.model.OperationCardDetailsView
 import dev.skillbill.desktop.core.domain.model.OperationCardState
 import dev.skillbill.desktop.core.domain.model.OperationCardView
+import dev.skillbill.desktop.core.domain.model.NewTaskStart
+import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
+import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
+import dev.skillbill.desktop.core.domain.model.VerifyRunDetails
+import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
 import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
 import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
 import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
@@ -668,8 +673,17 @@ class ChatWorkspaceTest {
     val request = chat.requests.single()
     assertEquals(ChatPermissionMode.Act, request.mode)
     assertTrue(request.prompt.contains("Do not edit source files"))
-    assertTrue(request.prompt.contains("--db '/selected database.db' prepare-review --invocation-id 'original-review'"))
-    assertTrue(request.prompt.contains("record-feedback"))
+    assertTrue(
+      request.prompt.contains("sona --db '/selected database.db' prepare-review --invocation-id 'original-review'"),
+    )
+    assertTrue(request.prompt.contains("Use the returned review_run_id."))
+    assertTrue(request.prompt.contains("start-review-action --run-id <review_run_id> --action verify --format json"))
+    assertTrue(request.prompt.contains("Retain its action_id."))
+    assertTrue(request.prompt.contains("record-feedback --run-id <review_run_id> --event fix_applied"))
+    assertTrue(
+      request.prompt.contains("finish-review-action --run-id <review_run_id> --action-id <action_id> --format json"),
+    )
+    assertTrue(request.prompt.contains("Pass --failed if you could not finish the requested work."))
     workspace.closeAll()
   }
 
@@ -1070,6 +1084,85 @@ class ChatWorkspaceTest {
     assertEquals("Focus on accessibility", controls.newTaskRequests.last().proposalChanges)
     assertEquals(revised, session.thread.operationCard(revised.token)?.card)
   }
+
+  @Test
+  fun `a parked verify run's chat shows its card and Adjust rebuilds the request from the run`() = runTest {
+    val item = workItem("SKILL-1", lifecycle = Lifecycle.Terminal).copy(running = false)
+    details.details = mapOf(item.id to flowOf(loaded(item, emptyDetail.copy(verifyRun = parkedVerify(item.id)))))
+    val card = parkedVerifyCard(item.id)
+    val revised = card.copy(token = "revised-token", launchId = "revised-launch")
+    controls.operationCards[card.launchId] = card
+    controls.operationCards[revised.launchId] = revised
+    val workspace = workspace()
+
+    workspace.openParkedVerify(item, adjust = true)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    assertEquals(card, session.thread.operationCard(card.token)?.card)
+    assertEquals(0, chat.requests.size)
+
+    controls.newTaskOutcome = NewTaskStartOutcome.AwaitingConfirmation("SKILL-1", NewTaskKind.Verify, revised.launchId)
+    workspace.send(item.id, "Drop the second criterion")
+    runCurrent()
+
+    val sent = controls.newTaskRequests.single()
+    assertEquals("spec:/repo/spec.md", sent.target)
+    assertEquals("feat/skill-1", sent.branch)
+    assertEquals("Drop the second criterion", sent.proposalChanges)
+    assertEquals(VerifyStartChoices(VerifyQaChoice.On, VerifyReviewModeChoice.Delegated), sent.verify)
+    assertNull(sent.confirmation)
+    assertEquals(0, chat.requests.size)
+    assertEquals(revised, session.thread.operationCard(revised.token)?.card)
+  }
+
+  @Test
+  fun `a run chat adjusts a verify card with the request of the New task chat that started it`() = runTest {
+    val item = workItem("SKILL-1", lifecycle = Lifecycle.Terminal).copy(running = false)
+    details.details = mapOf(item.id to flowOf(loaded(item, emptyDetail.copy(verifyRun = parkedVerify(item.id)))))
+    val card = parkedVerifyCard(item.id)
+    controls.operationCards[card.launchId] = card
+    val chats = unconfinedNewTaskChats()
+    val started = NewTaskStart("/repo", "", null, "codex", NewTaskKind.Verify, null, null, target = "WE-1", branch = "feat/we-1")
+    chats.cardRequests.remember(card.launchId, started)
+    val workspace = workspace(chats)
+
+    workspace.openParkedVerify(item, adjust = true)
+    runCurrent()
+    controls.newTaskOutcome = NewTaskStartOutcome.Refused("unused")
+    workspace.send(item.id, "Only the first criterion")
+    runCurrent()
+
+    assertEquals(started.copy(proposalChanges = "Only the first criterion"), controls.newTaskRequests.single())
+  }
+
+  @Test
+  fun `a run chat that is not a parked verify shows no card`() = runTest {
+    val item = workItem("SKILL-1", lifecycle = Lifecycle.Terminal).copy(running = false)
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    controls.operationCards["verify-launch"] = parkedVerifyCard(item.id)
+    val workspace = workspace()
+
+    workspace.open(item)
+    runCurrent()
+
+    assertNull(workspace.session(item.id)!!.thread.operationCard(item.id))
+  }
+
+  private fun parkedVerifyCard(token: String) = OperationCardView(
+    token, "verify-launch", "verify", OperationCardState.AwaitingConfirmation, "Proposal",
+    OperationCardDetailsView.Verify(listOf("1. Works"), "spec:/repo/spec.md", "/repo/spec.md", "feat/skill-1", "delegated", "on"),
+    null, null, canConfirm = true,
+  )
+
+  private fun parkedVerify(workflowId: String) = VerifyRunDetails(
+    workflowId = workflowId, issueKey = "SKILL-1", workflowStatus = "pending", currentStepId = "extract_criteria",
+    startedAt = null, finishedAt = null, intake = "spec:/repo/spec.md", target = "feat/skill-1", repoRoot = "/repo",
+    baseRevision = null, headRevision = null, reviewMode = "delegated", qaSelection = "on", specPath = "/repo/spec.md",
+    steps = emptyList(), criteria = emptyList(), criteriaRaw = null, nonGoals = emptyList(), technicalConstraints = emptyList(),
+    rolloutExpectation = null, completenessAudit = null, reviewFindings = null, flagAudit = null, unitTestValue = null,
+    changedFiles = emptyList(), verdict = null, qa = null, qaVerdict = null, qaOutcome = null, qaFindingLocations = emptyMap(),
+    supersededBy = null, staleReason = null,
+  )
 
   @Test
   fun `an action sends its exact instruction once and an older reply cannot execute it again`() = runTest {

@@ -8,6 +8,8 @@ import skillbill.mcp.shared.McpComponent
 import skillbill.mcp.shared.McpProtocolFramer
 
 internal object McpStdioServer {
+  private const val MCP_SERVER_NAME = "sona"
+
   internal fun run(component: McpComponent) {
     generateSequence(::readlnOrNull).forEach { line ->
       handleLine(line, component)?.let(::println)
@@ -56,9 +58,9 @@ internal object McpStdioServer {
   }
 
   private fun initialize(component: McpComponent): Map<String, Any?> {
-    val invocationId = validationCheckInvocationId(component) ?: return McpProtocolFramer.initialize("skill-bill")
+    val invocationId = validationCheckInvocationId(component) ?: return McpProtocolFramer.initialize(MCP_SERVER_NAME)
     component.validationLiveChecks.markServerStarted(invocationId)
-    return McpProtocolFramer.initialize("skill-bill", VALIDATION_CHECK_PROTOCOL)
+    return McpProtocolFramer.initialize(MCP_SERVER_NAME, VALIDATION_CHECK_PROTOCOL)
   }
 
   private fun JsonObject.arguments(): Map<String, Any?> =

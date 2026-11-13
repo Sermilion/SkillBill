@@ -52,7 +52,7 @@ class CliBillMonitorSkillRuntimeTest {
     assertFalse(result.stdout.contains("active_agent"))
     assertFalse(result.stdout.contains("paused"))
     assertFalse(result.stdout.contains("planning"))
-    assertFalse(result.stdout.contains("skill-bill goal watch"))
+    assertFalse(result.stdout.contains("sona goal watch"))
     assertTrue(launcher.childLaunches.isEmpty())
   }
 

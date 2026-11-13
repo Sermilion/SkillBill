@@ -32,7 +32,7 @@ class OpenCodeAgentRunCommandBuilderTest {
     assertEquals("anthropic/claude-sonnet-4-5", command.sessionModel)
     assertEquals("high", command.sessionEffort)
     val server = command.acpMcpServers.single()
-    assertEquals("skill-bill", server.name)
+    assertEquals("sona", server.name)
     assertEquals("/opt/skill-bill/runtime-mcp", server.command)
     assertTrue(server.args.isEmpty())
     assertEquals(

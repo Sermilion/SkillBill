@@ -1,8 +1,12 @@
 package skillbill.infrastructure.skills.scaffold
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.infrastructure.skills.scaffold.authoring.AuthoringOperations
 import skillbill.infrastructure.skills.scaffold.authoring.renderAuthoringTarget
 import skillbill.infrastructure.skills.scaffold.authoring.renderWrapper
 import skillbill.infrastructure.skills.scaffold.authoring.resolveTarget
+import skillbill.infrastructure.skills.scaffold.authoring.selectedTargets
+import skillbill.infrastructure.skills.scaffold.authoring.validateTarget
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.infrastructure.skills.scaffold.pointer.renderPointer
 import skillbill.testsupport.SnapshotAssertions
@@ -12,7 +16,9 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class AuthoringRenderOutputTest {
   private val tempRoot: Path = Files.createTempDirectory("skillbill-authoring-render-")
@@ -91,6 +97,136 @@ class AuthoringRenderOutputTest {
   }
 
   @Test
+  fun `sona and source names resolve to one canonical dispatcher with the launch warning ceremony`() {
+    val repoRoot = tempRoot.resolve("dispatcher-name-repo")
+    val skillDir = repoRoot.resolve("skills/skill-bill")
+    val classesDir = repoRoot.resolve("orchestration/skill-classes")
+    Files.createDirectories(skillDir)
+    Files.createDirectories(classesDir)
+    Files.writeString(
+      skillDir.resolve("content.md"),
+      "---\nname: sona\ndescription: Public dispatcher.\n---\n\n# Sona Dispatcher\n",
+    )
+    Files.writeString(
+      classesDir.resolve("feature-launch-warning.yaml"),
+      """
+      class: feature-launch-warning
+      contract_version: "1.8"
+      matchers:
+        - exact: skill-bill
+      pointers:
+        - peak-hours-warner
+        - shell-ceremony
+        - telemetry-contract
+      ceremony_lines:
+        - "Before launch, follow [peak-hours-warner.md](peak-hours-warner.md)."
+      """.trimIndent() + "\n",
+    )
+
+    val aliasTarget = resolveTarget(repoRoot, "sona")
+    val sourceTarget = resolveTarget(repoRoot, "skill-bill")
+    val rendered = renderWrapper(aliasTarget)
+
+    assertEquals("skill-bill", aliasTarget.skillName)
+    assertEquals(sourceTarget.contentFile, aliasTarget.contentFile)
+    assertEquals(1, selectedTargets(repoRoot, listOf("sona", "skill-bill")).size)
+    assertEquals("sona", AuthoringOperations.list(repoRoot, listOf("sona")).skills.single().skillName)
+    val error = assertFailsWith<SkillBillRuntimeException> { resolveTarget(repoRoot, "unknown-skill") }
+    assertContains(error.message.orEmpty(), "unknown-skill")
+    assertContains(rendered, "name: sona")
+    assertContains(rendered, "Governed skill: `sona`")
+    assertContains(rendered, "peak-hours-warner.md")
+  }
+
+  @Test
+  fun `dispatcher rendering adapts historical and already renamed command bodies`() {
+    val repoRoot = tempRoot.resolve("dispatcher-compatibility-repo")
+    val dispatcherDir = repoRoot.resolve("skills/skill-bill")
+    val unrelatedDir = repoRoot.resolve("skills/bill-unrelated")
+    Files.createDirectories(dispatcherDir)
+    Files.createDirectories(unrelatedDir)
+    val historicalSource =
+      "---\nname: skill-bill\ndescription: Legacy dispatcher. Run /skill-bill <intake>.\n---\n\n" +
+        "Run `/skill-bill <intake>` or `./skill-bill phase:review <issue>` and retain local notes.\n" +
+        "Call mcp__skill-bill__update_check through the `skill-bill` CLI.\n" +
+        "The skill class (`exact: skill-bill`) matches the source.\n"
+    Files.writeString(dispatcherDir.resolve("content.md"), historicalSource)
+    Files.writeString(
+      unrelatedDir.resolve("content.md"),
+      "---\nname: bill-unrelated\ndescription: Unrelated.\n---\n\nRun `/skill-bill` literally.\n" +
+        "Keep mcp__skill-bill__update_check.\n",
+    )
+    val historicalBytes = Files.readAllBytes(dispatcherDir.resolve("content.md"))
+
+    val legacyTarget = resolveTarget(repoRoot, "skill-bill")
+    val sonaTarget = resolveTarget(repoRoot, "sona")
+    assertTrue(validateTarget(legacyTarget, repoRoot).isEmpty())
+    assertTrue(validateTarget(sonaTarget, repoRoot).isEmpty())
+    assertEquals("sona", AuthoringOperations.list(repoRoot, listOf("sona")).skills.single().skillName)
+    assertEquals("sona", AuthoringOperations.show(repoRoot, "sona", "none").skillName)
+
+    val legacyRendered = renderWrapper(legacyTarget)
+    assertEquals(historicalBytes.toList(), Files.readAllBytes(dispatcherDir.resolve("content.md")).toList())
+    Files.writeString(
+      dispatcherDir.resolve("content.md"),
+      historicalSource.replace("name: skill-bill", "name: sona"),
+    )
+    val renamedRendered = renderWrapper(resolveTarget(repoRoot, "sona"))
+    val unrelatedRendered = renderWrapper(resolveTarget(repoRoot, "bill-unrelated"))
+
+    assertContains(legacyRendered, "name: sona")
+    assertContains(legacyRendered, "Run `/sona <intake>` or `sona phase:review <issue>`")
+    assertContains(legacyRendered, "retain local notes.")
+    assertContains(renamedRendered, "Run `/sona <intake>` or `sona phase:review <issue>`")
+    assertContains(unrelatedRendered, "Run `/skill-bill` literally.")
+    assertContains(legacyRendered, "Legacy dispatcher. Run /sona <intake>.")
+    assertContains(legacyRendered, "Call mcp__sona__update_check through the `sona` CLI.")
+    assertContains(legacyRendered, "(`exact: skill-bill`)")
+    assertContains(unrelatedRendered, "Keep mcp__skill-bill__update_check.")
+    assertEquals(
+      historicalSource.replace("name: skill-bill", "name: sona"),
+      Files.readString(dispatcherDir.resolve("content.md")),
+    )
+  }
+
+  @Test
+  fun `renderAuthoringTarget exposes public dispatcher skill name for render payloads`() {
+    val repoRoot = tempRoot.resolve("dispatcher-render-skill-name-repo")
+    val dispatcherDir = repoRoot.resolve("skills/skill-bill")
+    Files.createDirectories(dispatcherDir)
+    Files.writeString(
+      dispatcherDir.resolve("content.md"),
+      "---\nname: skill-bill\ndescription: Legacy dispatcher.\n---\n\nRun work.\n",
+    )
+
+    assertEquals("sona", renderAuthoringTarget(repoRoot, "sona").skillName)
+    assertEquals("sona", renderAuthoringTarget(repoRoot, "skill-bill").skillName)
+  }
+
+  @Test
+  fun `dispatcher rendering adapts every legacy command token in the last shipped dispatcher`() {
+    val repoRoot = tempRoot.resolve("dispatcher-shipped-repo")
+    val dispatcherDir = repoRoot.resolve("skills/skill-bill")
+    Files.createDirectories(dispatcherDir)
+    val shipped =
+      checkNotNull(javaClass.classLoader.getResourceAsStream("legacy-dispatcher/skill-bill-content.md")) {
+        "missing legacy-dispatcher/skill-bill-content.md test resource"
+      }.use { stream -> stream.readBytes().toString(Charsets.UTF_8) }
+    Files.writeString(dispatcherDir.resolve("content.md"), shipped)
+
+    val rendered = renderWrapper(resolveTarget(repoRoot, "skill-bill"))
+
+    val leftovers =
+      rendered.lines().filter { line ->
+        line.replace("exact: skill-bill", "").replace(".skill-bill/", "").contains("skill-bill")
+      }
+    assertEquals(emptyList(), leftovers)
+    assertFalse(rendered.contains("mcp__skill-bill__"))
+    assertContains(rendered, "exact: skill-bill")
+    assertEquals(shipped, Files.readString(dispatcherDir.resolve("content.md")))
+  }
+
+  @Test
   fun `legacy bill-feature consumer delivers no pointer to a skill named bill-feature`() {
     val repoRoot = tempRoot.resolve("agent-addon-render-repo")
     val featureDir = repoRoot.resolve("skills/bill-feature")
@@ -132,7 +268,7 @@ class AuthoringRenderOutputTest {
     Files.createDirectories(sidecarDir)
     Files.writeString(
       parentDir.resolve("content.md"),
-      "---\nname: skill-bill\ndescription: Skill Bill router.\n---\n\nRoute governed work.\n",
+      "---\nname: sona\ndescription: Sona dispatcher.\n---\n\nRoute governed work.\n",
     )
     Files.writeString(
       sidecarDir.resolve("content.md"),

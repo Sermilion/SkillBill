@@ -55,8 +55,8 @@ class CliGoalSharedPreplanReplanTest {
       )
     val output = replan.stdout + replan.stderr
     assertTrue(replan.exitCode != 0, output)
-    assertContains(output, "skill-bill goal purge SKILL-901")
-    assertContains(output, "skill-bill phase plan SKILL-901")
+    assertContains(output, "sona goal purge SKILL-901")
+    assertContains(output, "sona phase plan SKILL-901")
     val statusAfter = goalStatus(fixture, launcher)
     assertContains(statusAfter.stdout, "shared_preplan=true")
     assertContains(statusAfter.stdout, "complete: 2")

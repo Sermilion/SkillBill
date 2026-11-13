@@ -15,6 +15,21 @@ Reason: Existing populated 0.2 records satisfy the extended contract, so a versi
 
 # Boundary decisions
 
+## [2026-11-13] Require ownership evidence before replacing or retiring skill links
+Context: A user's existing sona target can block installation while an owned skill-bill link still supplies a usable dispatcher.
+Decision: Preserve unowned targets and return typed install issues through every affected caller. Retire owned obsolete dispatcher links only after public linking succeeds, and retain previous link targets for scaffold rollback.
+Reason: A reserved public name does not establish filesystem ownership. Preserving the old payload keeps a refused upgrade usable; reporting failure prevents false success and lets the operator resolve the conflict before retrying. Scaffold must restore pre-existing links when its transaction fails.
+
+## [2026-11-13] Remove MCP configuration by product server ownership
+Context: The namespace migration must replace old and new product registrations without losing unrelated profile settings. Product TOML configuration can include nested tables beside other servers.
+Decision: Registration and removal recognize both product names. TOML removal matches parsed table paths rooted at either product server and tracks multiline values before treating a line as a table header.
+Reason: Exact root-header removal leaves legacy environment or tool tables behind. Removing text through an imprecise boundary can delete neighboring configuration or mistake header-like string content for a section.
+
+## [2026-11-13] Reconciliation hashes and staging reads stay uncommented
+Context: Validation flagged KDoc on ReconcileSkillEntry, baselineSourceHash, installedStagingSourceReader, and computeReconciliationSourceHash, plus line comments on latestPublishedStaging.
+Decision: Keep the names as the documentation. The composite hash covers authored files, pointer targets, internal children and addons. sourceHash covers only authored files. Missing or ambiguous published staging reads as edited. latestPublishedStaging uses the newest staging for that source dir rather than walking agent links.
+Reason: Comment policy allows KDoc only on interfaces and their members. Line comments are forbidden in scoped Kotlin.
+
 ## [2026-11-12] Refuse to guess the Devin root on Windows
 Context: Devin keeps skills, agents and MCP config under one root, `%APPDATA%\devin` on Windows. A missing or relative APPDATA would otherwise resolve under the home directory or the working directory.
 Decision: devinConfigRoot needs a nonblank absolute APPDATA on Windows, or it throws AGENT_DISCOVERY_FAILED with recovery guidance before any write. An explicit environment map that lacks APPDATA fails instead of reading the ambient environment. Only an empty map falls back to the host environment.
@@ -32,7 +47,6 @@ Context: Devin's native agents directory depends on the OS and APPDATA. NativeAg
 Decision: NativeAgentProvider.homeAgentDirs, inventoryHomeAgentDirs, activeHomeAgentDirs and devinConfigRoot take a HostPlatformPort parameter defaulting to JdkHostPlatformPort, following resolveEnvironmentMap. Adapters that already hold an injected port pass it explicitly: planning facts, agent targets and paths, agentDirectory, and MCP registration.
 Reason: Request DTOs stay free of ports, and tests can inject a Windows host where an adapter owns one, without changing any port signature.
 Alternatives considered: Host fields on NativeAgentLinkRequest break the DTO rule. A required parameter at every call site changes unrelated callers that have no injected port.
-
 ## [2026-10-09] Stage optional code-quality idioms only from review baselines
 Context: The Kotlin idioms sidecar must live beside its code-review baseline, whose content stays unchanged, while authored companions normally require an explicit content link.
 Decision: Exempt only code-quality-idioms.md in a code-review baseline directory from the content-link requirement. Preserve path, symlink, count, reserved-name and collision checks for staging.

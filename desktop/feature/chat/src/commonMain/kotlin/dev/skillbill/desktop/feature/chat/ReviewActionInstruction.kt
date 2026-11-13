@@ -7,7 +7,7 @@ internal fun reviewActionInstruction(item: WorkItem, action: ReviewFindingsActio
   if (!item.standaloneExecution || item.control.phaseId != "review") return null
   val invocation = item.control.invocationId ?: return null
   val database = item.control.databaseFile?.path ?: return null
-  val cli = "skill-bill --db ${shellArgument(database)}"
+  val cli = "sona --db ${shellArgument(database)}"
   val task = when (action) {
     ReviewFindingsAction.Fix ->
       "Fix the open findings in this review against the current worktree. Preserve unrelated edits. " +

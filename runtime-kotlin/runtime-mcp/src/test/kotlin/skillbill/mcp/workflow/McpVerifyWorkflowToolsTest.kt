@@ -78,7 +78,7 @@ class McpVerifyWorkflowToolsTest {
     assertEquals("reopened", continued["continue_status"])
     assertEquals("running", continued["workflow_status_before_continue"])
     assertEquals(
-      "skill-bill --db '${tempDir.resolve("metrics.db").toAbsolutePath().normalize()}' verify-workflow show " +
+      "sona --db '${tempDir.resolve("metrics.db").toAbsolutePath().normalize()}' verify-workflow show " +
         "'$workflowId' --format json",
       continued["read_only_full_state_command"],
     )

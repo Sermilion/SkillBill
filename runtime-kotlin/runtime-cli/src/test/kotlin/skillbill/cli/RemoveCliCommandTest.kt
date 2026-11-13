@@ -25,9 +25,9 @@ class RemoveCliCommandTest {
 
     assertEquals(1, result.exitCode)
     assertEquals("error", payload["status"].toString().trim('"'))
-    assertTrue("skill-bill remove skill:bill-my-skill --dry-run" in error)
-    assertTrue("skill-bill remove platform:my-platform --dry-run" in error)
-    assertTrue("skill-bill remove addon:platform-packs/kmp/addons/my-addon.md --dry-run" in error)
+    assertTrue("sona remove skill:bill-my-skill --dry-run" in error)
+    assertTrue("sona remove platform:my-platform --dry-run" in error)
+    assertTrue("sona remove addon:platform-packs/kmp/addons/my-addon.md --dry-run" in error)
   }
 
   @Test
@@ -181,8 +181,8 @@ class RemoveCliCommandTest {
     assertTrue("allowShipped" !in error)
     assertTrue("Why this is protected:" in error)
     assertTrue("bill-* skills are shipped product surfaces" in error)
-    assertTrue("skill-bill remove skill:bill-code-review --dry-run --allow-shipped" in error)
-    assertTrue("skill-bill remove skill:bill-code-review --allow-shipped" in error)
+    assertTrue("sona remove skill:bill-code-review --dry-run --allow-shipped" in error)
+    assertTrue("sona remove skill:bill-code-review --allow-shipped" in error)
   }
 
   @Test

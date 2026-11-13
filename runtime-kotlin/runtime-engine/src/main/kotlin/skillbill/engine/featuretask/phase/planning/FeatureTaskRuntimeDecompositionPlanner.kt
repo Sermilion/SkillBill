@@ -91,7 +91,7 @@ public class FeatureTaskRuntimeDecompositionPlanner(
           fieldPath = "parent_spec",
           reason =
             "plan must author exactly one $issueKey-<slug>/spec.md bundle under " +
-              "${projectStore.resolve(repoRoot).specsRoot} (`skill-bill project path` prints the project store).",
+              "${projectStore.resolve(repoRoot).specsRoot} (`sona project path` prints the project store).",
         )
     preparationRuntime.prepareForFeatureSpec(
       FeatureSpecPreparationIntake(

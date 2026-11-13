@@ -239,7 +239,7 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
 /** "No specs yet" body with the plan command in mono, as screens.js renders it. */
 @Composable
 private fun noSpecsBody(): AnnotatedString {
-  val command = "/skill-bill phase:plan"
+  val command = "/sona phase:plan"
   val start = NO_SPECS_BODY.indexOf(command)
   return buildAnnotatedString {
     append(NO_SPECS_BODY)

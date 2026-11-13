@@ -68,7 +68,7 @@ Optional top-level fields:
 - `display_name` — human-readable label for installers and docs.
 - `notes` — free-form maintainer notes.
 - `validation_gate` — optional command and findings declaration for a pack that
-  can win dominant quality-check routing. `skill-bill phase validation` uses the winning
+  can win dominant quality-check routing. `sona phase validation` uses the winning
   pack's collect-all and cache-bypassing collect-all argv exactly.
 
 ## Required Content Files
@@ -84,7 +84,7 @@ generated wrapper headings:
 - `## Execution`
 - `## Ceremony`
 
-Those sections are generated into the runtime wrapper by `skill-bill render`
+Those sections are generated into the runtime wrapper by `sona render`
 and install staging. Rendered wrappers must include all three H2 sections in a
 deterministic shape around the authored `content.md` body.
 
@@ -226,7 +226,7 @@ Loader precedence is authoritative and must stay stable:
 
 ### Quality-check gate
 
-`skill-bill phase validation` resolves the dominant pack through
+`sona phase validation` resolves the dominant pack through
 manifest-driven routing. The winning pack must declare `validation_gate`; otherwise
 the runtime raises the typed `MissingValidationGateError`. Collect-all and
 confirmation commands come only from that declaration. The shell never reads a
@@ -239,7 +239,7 @@ discovery algorithm:
 
 1. Walk `platform-packs/` for immediate subdirectories, resolving that root
    from the skill-adjacent installed `platform-packs` link (or the
-   skill-bill install root `platform-packs` tree / the install-published review catalog) —
+   sona install root `platform-packs` tree / the install-published review catalog) —
    not from the reviewed repository unless it is the Skill Bill source tree.
 2. For each candidate slug, load `platform-packs/<slug>/platform.yaml` via the
    loader. Loud-fail rules apply; missing content must name the slot key and

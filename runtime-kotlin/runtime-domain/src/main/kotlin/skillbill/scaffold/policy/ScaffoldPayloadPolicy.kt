@@ -1,9 +1,9 @@
 package skillbill.scaffold.policy
 
 import skillbill.error.shellcontent.invalidScaffoldPayloadError
-import skillbill.scaffold.model.CodeReviewBaselineLayer
-import skillbill.scaffold.model.CodeReviewCompositionMode
-import skillbill.scaffold.model.CodeReviewCompositionScope
+import skillbill.review.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewCompositionMode
+import skillbill.review.model.CodeReviewCompositionScope
 
 fun parseBaselineLayerPayload(
   index: Int,

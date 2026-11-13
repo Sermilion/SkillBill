@@ -354,7 +354,7 @@ class DetachedWorkRunLauncher internal constructor(
 
   private companion object {
     val STARTUP_GRACE: Duration = Duration.ofMillis(250)
-    const val RUNTIME_EXECUTABLE = "skill-bill"
+    const val RUNTIME_EXECUTABLE = "sona"
     val SUCCESSFUL_EXITS = setOf(0, OperationCardExitCodes.AWAITING_CONFIRMATION)
   }
 

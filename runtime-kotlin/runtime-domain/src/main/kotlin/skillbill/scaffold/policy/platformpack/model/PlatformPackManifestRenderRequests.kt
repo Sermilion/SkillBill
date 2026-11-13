@@ -1,7 +1,7 @@
 package skillbill.scaffold.policy.platformpack.model
 
 import skillbill.model.FileLocation
-import skillbill.scaffold.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewBaselineLayer
 
 data class PlatformPackManifestRenderRequest(
   val platform: String,

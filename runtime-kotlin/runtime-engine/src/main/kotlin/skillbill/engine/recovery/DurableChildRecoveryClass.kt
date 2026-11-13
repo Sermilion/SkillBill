@@ -24,7 +24,7 @@ public fun classifyDurableChild(progress: WorkflowStatus?): DurableChildRecovery
 internal fun scopedChildRecoveryCommand(
   issueKey: String,
   subtaskId: Int,
-): String = "skill-bill goal reset $issueKey --subtask $subtaskId --delete-child-workflow"
+): String = "sona goal reset $issueKey --subtask $subtaskId --delete-child-workflow"
 
 public fun recommendedDurableChildRecoveryCommand(
   issueKey: String,
@@ -44,6 +44,6 @@ public fun recommendedDurableChildRecoveryCommand(
 public fun staleChildPlanningRecoveryCommand(
   issueKey: String,
   subtaskId: Int,
-): String = "skill-bill goal replan $issueKey --subtask $subtaskId"
+): String = "sona goal replan $issueKey --subtask $subtaskId"
 
-private fun hardResetRecoveryCommand(issueKey: String): String = "skill-bill goal reset $issueKey --hard --yes"
+private fun hardResetRecoveryCommand(issueKey: String): String = "sona goal reset $issueKey --hard --yes"

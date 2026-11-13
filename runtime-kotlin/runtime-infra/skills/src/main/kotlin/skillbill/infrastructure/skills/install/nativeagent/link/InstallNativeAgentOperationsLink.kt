@@ -136,7 +136,7 @@ internal fun deleteRecursively(root: Path) {
 
 internal fun verifyInstalledNativeAgent(entry: NativeAgentLinkInventoryEntry) {
   val installed = entry.installedPath
-  val repair = "skill-bill install apply"
+  val repair = "sona install apply"
 
   fun fail(
     reason: String,

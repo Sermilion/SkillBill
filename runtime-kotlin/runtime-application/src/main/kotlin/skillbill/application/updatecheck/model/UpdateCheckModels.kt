@@ -1,7 +1,7 @@
 package skillbill.application.updatecheck.model
 
 const val RECOMMENDED_INSTALL_COMMAND: String =
-  "skill-bill update"
+  "sona update"
 
 enum class UpdateCheckStatus(val wireName: String) {
   UP_TO_DATE("up_to_date"),

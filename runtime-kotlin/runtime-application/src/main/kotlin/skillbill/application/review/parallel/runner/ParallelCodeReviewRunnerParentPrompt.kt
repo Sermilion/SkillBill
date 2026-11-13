@@ -95,7 +95,7 @@ internal object ParallelCodeReviewRunnerParentPrompt {
         "Review the already resolved assignment in report-only mode. " +
           "Do not edit, stage, commit, amend, or reset files.",
       )
-      appendLine("Do not launch skill-bill phase review or skill-bill code-review recursively.")
+      appendLine("Do not launch sona phase review or sona code-review recursively.")
       appendLine(
         "Return a findings register using '[F-001] Severity | Confidence | path/File.kt:12 | defect description', " +
           "or the exact line NO_FINDINGS when empty.",
@@ -184,7 +184,7 @@ internal object ParallelCodeReviewRunnerParentPrompt {
         appendLine("Resolved execution mode: delegated")
         appendLine("Apply your assigned rubric and return your own report and verdict.")
       } else {
-        appendLine("Run a skill-bill phase review in delegated mode via the routed specialist fan-out.")
+        appendLine("Run a sona phase review in delegated mode via the routed specialist fan-out.")
         appendLine("Resolved execution mode: delegated")
         appendLine(
           "Depth: full. Launch one specialist worker per resolved rubric below. Pass each specialist's " +

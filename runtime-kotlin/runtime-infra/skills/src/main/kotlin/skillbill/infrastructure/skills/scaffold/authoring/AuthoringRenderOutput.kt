@@ -8,6 +8,7 @@ import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPac
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.infrastructure.skills.scaffold.pointer.renderPointer
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
+import skillbill.install.model.ListedSkillNames
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.PointerSpec
@@ -77,7 +78,7 @@ internal fun renderAuthoringTarget(
   val pointerBlocks = renderPointerBlocks(resolvedRoot, target)
   return AuthoringRenderResult(
     repoRoot = resolvedRoot,
-    skillName = target.skillName,
+    skillName = ListedSkillNames.publicName(target.skillName),
     blocks = listOf(wrapperBlock) + pointerBlocks,
   )
 }

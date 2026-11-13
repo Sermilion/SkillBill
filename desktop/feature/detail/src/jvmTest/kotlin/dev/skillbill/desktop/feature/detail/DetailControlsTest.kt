@@ -76,7 +76,7 @@ class DetailControlsTest {
 
     val notice = assertNotNull(runActionsView(loadedState(waiting, incident = null)).decision)
     assertEquals(
-      "skill-bill goal operator-decision SKILL-1 --subtask 8 --decision retry_fix|accept_and_advance|abandon_subtask",
+      "sona goal operator-decision SKILL-1 --subtask 8 --decision retry_fix|accept_and_advance|abandon_subtask",
       notice.command,
     )
     assertTrue(notice.text.startsWith("Subtask 8 "))

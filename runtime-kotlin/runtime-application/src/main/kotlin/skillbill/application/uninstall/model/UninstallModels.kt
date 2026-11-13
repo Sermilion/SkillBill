@@ -11,13 +11,26 @@ data class UninstallRequest(
 
 data class LauncherRemoval(
   val path: Path,
-  val expectedTarget: Path,
+  val expectedTarget: Path? = null,
+  val managedMarker: String? = null,
+  val requiredLines: List<String> = emptyList(),
+)
+
+data class OwnedFileRemoval(
+  val path: Path,
+  val requiredLines: List<String>,
+  val requiredLineGroups: List<List<String>> = emptyList(),
+)
+
+data class OwnedDesktopDirectory(
+  val path: Path,
+  val requiredFiles: List<Path>,
 )
 
 data class DesktopRemoval(
-  val launcher: LauncherRemoval?,
-  val files: List<Path>,
-  val directories: List<Path>,
+  val launchers: List<LauncherRemoval>,
+  val files: List<OwnedFileRemoval>,
+  val directories: List<OwnedDesktopDirectory>,
 )
 
 data class UninstallPlan(

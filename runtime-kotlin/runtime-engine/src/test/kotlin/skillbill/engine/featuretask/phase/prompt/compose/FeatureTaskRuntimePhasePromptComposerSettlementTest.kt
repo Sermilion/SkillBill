@@ -29,8 +29,8 @@ class FeatureTaskRuntimePhasePromptComposerSettlementTest {
         }
 
       assertContains(prompt, "## Required final output (durable settlement)", false, "settlement heading for $phaseId")
-      assertContains(prompt, "mcp__skill-bill__feature_task_phase_complete", false, "complete tool for $phaseId")
-      assertContains(prompt, "mcp__skill-bill__feature_task_phase_block", false, "block tool for $phaseId")
+      assertContains(prompt, "mcp__sona__feature_task_phase_complete", false, "complete tool for $phaseId")
+      assertContains(prompt, "mcp__sona__feature_task_phase_block", false, "block tool for $phaseId")
       assertContains(prompt, "workflow_id \"wftr-20260904-210526-r3x0\"", false, "pinned workflow id for $phaseId")
       assertContains(prompt, "phase_id \"$phaseId\", attempt 2", false, "pinned attempt for $phaseId")
       assertContains(prompt, FALLBACK_HEADING, false, "minimal fallback for $phaseId")

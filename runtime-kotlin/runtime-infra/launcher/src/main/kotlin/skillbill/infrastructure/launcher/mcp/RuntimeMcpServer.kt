@@ -11,7 +11,7 @@ import skillbill.ports.agentrun.model.SkillRunRequest
 import java.nio.file.Files
 import java.nio.file.Path
 
-const val RUNTIME_MCP_SERVER_NAME: String = "skill-bill"
+const val RUNTIME_MCP_SERVER_NAME: String = "sona"
 
 internal fun runtimeMcpBinCandidate(
   environment: Map<String, String>,

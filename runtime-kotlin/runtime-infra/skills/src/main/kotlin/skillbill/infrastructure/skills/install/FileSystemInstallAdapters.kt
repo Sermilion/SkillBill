@@ -11,9 +11,12 @@ import skillbill.infrastructure.skills.install.plan.codexAgentsPath
 import skillbill.infrastructure.skills.install.plan.collectInstallPlanningFacts
 import skillbill.infrastructure.skills.install.plan.materializeSelectedPlatformSkills
 import skillbill.infrastructure.skills.install.plan.resolveInstallEnvironment
+import skillbill.infrastructure.skills.install.reconcile.ReconcileContext
+import skillbill.infrastructure.skills.install.reconcile.ReconcileInvocation
 import skillbill.infrastructure.skills.install.reconcile.ReconcileSourceRoots
 import skillbill.infrastructure.skills.install.reconcile.applyReconciliation
 import skillbill.infrastructure.skills.install.reconcile.computeReconciliationPlan
+import skillbill.infrastructure.skills.install.reconcile.installedStagingSourceReader
 import skillbill.infrastructure.skills.install.runtime.InstallOperations
 import skillbill.infrastructure.skills.install.runtime.linkInstalledSkill
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
@@ -138,23 +141,28 @@ class FileSystemInstallReconcile(
     return InstallReconcileResult(
       plan =
         computeReconciliationPlan(
-          upstream =
-            ReconcileSourceRoots(
-              repoRoot = request.upstreamRepoRoot,
-              skillsRoot = request.upstreamSkillsRoot,
-              platformPacksRoot = request.upstreamPlatformPacksRoot,
-              catalogLoader = catalogLoader,
-            ),
-          local =
-            ReconcileSourceRoots(
-              repoRoot = request.localRepoRoot,
-              skillsRoot = request.localSkillsRoot,
-              platformPacksRoot = request.localPlatformPacksRoot,
-              catalogLoader = catalogLoader,
-            ),
-          home = request.home,
-          baseline = baseline,
-          environment = request.environment,
+          ReconcileInvocation(
+            upstream =
+              ReconcileSourceRoots(
+                repoRoot = request.upstreamRepoRoot,
+                skillsRoot = request.upstreamSkillsRoot,
+                platformPacksRoot = request.upstreamPlatformPacksRoot,
+                catalogLoader = catalogLoader,
+              ),
+            local =
+              ReconcileSourceRoots(
+                repoRoot = request.localRepoRoot,
+                skillsRoot = request.localSkillsRoot,
+                platformPacksRoot = request.localPlatformPacksRoot,
+                catalogLoader = catalogLoader,
+              ),
+            home = request.home,
+          ),
+          ReconcileContext(
+            baseline = baseline,
+            environment = request.environment,
+            publishedSource = installedStagingSourceReader(request.home),
+          ),
         ),
     )
   }
@@ -173,23 +181,28 @@ class FileSystemInstallReconcileApply(
 
     val output =
       applyReconciliation(
-        upstream =
-          ReconcileSourceRoots(
-            repoRoot = request.upstreamRepoRoot,
-            skillsRoot = request.upstreamSkillsRoot,
-            platformPacksRoot = request.upstreamPlatformPacksRoot,
-            catalogLoader = catalogLoader,
-          ),
-        local =
-          ReconcileSourceRoots(
-            repoRoot = request.localRepoRoot,
-            skillsRoot = request.localSkillsRoot,
-            platformPacksRoot = request.localPlatformPacksRoot,
-            catalogLoader = catalogLoader,
-          ),
-        home = request.home,
-        baseline = baseline,
-        environment = request.environment,
+        ReconcileInvocation(
+          upstream =
+            ReconcileSourceRoots(
+              repoRoot = request.upstreamRepoRoot,
+              skillsRoot = request.upstreamSkillsRoot,
+              platformPacksRoot = request.upstreamPlatformPacksRoot,
+              catalogLoader = catalogLoader,
+            ),
+          local =
+            ReconcileSourceRoots(
+              repoRoot = request.localRepoRoot,
+              skillsRoot = request.localSkillsRoot,
+              platformPacksRoot = request.localPlatformPacksRoot,
+              catalogLoader = catalogLoader,
+            ),
+          home = request.home,
+        ),
+        ReconcileContext(
+          baseline = baseline,
+          environment = request.environment,
+          publishedSource = installedStagingSourceReader(request.home),
+        ),
       )
     return InstallReconcileApplyResult(
       plan = output.plan,
@@ -226,14 +239,10 @@ class FileSystemInstallApplyExecution(
 class FileSystemInstallSkillLink(
   private val hostPlatform: HostPlatformPort,
 ) : InstallSkillLinkPort {
-  override fun linkSkill(request: InstallSkillLinkRequest): InstallSkillLinkResult =
-    InstallSkillLinkResult(
-      linkedPaths =
-        linkInstalledSkill(
-          request,
-          hostPlatform,
-        ),
-    )
+  override fun linkSkill(request: InstallSkillLinkRequest): InstallSkillLinkResult {
+    val outcome = linkInstalledSkill(request, hostPlatform)
+    return InstallSkillLinkResult(linkedPaths = outcome.linkPaths, issues = outcome.issues)
+  }
 }
 
 @Inject
@@ -290,8 +299,7 @@ class FileSystemInstallAgentTargets(
     val (removed, skipped) =
       InstallCleanupOperations.cleanupAgentTarget(
         targetDir = request.targetDir,
-        skillNames = request.skillNames,
-        legacyNames = request.legacyNames,
+        skillNames = request.skillNames + request.legacyNames,
         managedInstallMarker = request.managedInstallMarker,
         installedSkillsRoot = request.home?.let { installedSkillsCacheRoot(it) },
       )

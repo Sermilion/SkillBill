@@ -360,7 +360,7 @@ internal fun FeatureTaskRuntimeRemediationBaseReconciler.remediationBaseReconcil
 ): String =
   "Remediation base reconciliation blocked for workflow '$workflowId' on branch " +
     "'${continuation.goalBranch}': ${remediationBlockedDetail(failedRef, storedSha, storedResolves)}. " +
-    "Run `skill-bill goal repair ${continuation.issueKey} --subtask ${continuation.subtaskId} " +
+    "Run `sona goal repair ${continuation.issueKey} --subtask ${continuation.subtaskId} " +
     "--apply` to repoint or clear the unreachable remediation base, then resume the goal child."
 
 private fun remediationBlockedDetail(

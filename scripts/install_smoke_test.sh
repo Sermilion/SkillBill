@@ -122,6 +122,7 @@ case "$cmd" in
   "--check-packaged-contracts") exit 0 ;;
   "install migrate-legacy-config") exit 0 ;;
   "install migrate-data")
+    if [[ -n "${SKILL_BILL_TEST_MIGRATION_MARKER:-}" ]]; then printf 'prepared\n' > "$SKILL_BILL_TEST_MIGRATION_MARKER"; fi
     if [[ "${SKILL_BILL_TEST_MIGRATION_FAILS:-0}" == "1" ]]; then
       echo "Persisted data migration failed; original data retained." >&2
       exit 1
@@ -693,14 +694,64 @@ if [[ "$REPLAY_OUTPUT" == *"removed IntelliJ plugin"* ||
 fi
 pass "clean install reports no retired IDE plugin removal"
 
-LAUNCHER="$FAKE_HOME/.local/bin/skill-bill"
+LAUNCHER="$FAKE_HOME/.local/bin/sona"
 assert_file_exists "launcher exists" "$LAUNCHER"
+assert_file_exists "legacy launcher remains available" "$FAKE_HOME/.local/bin/skill-bill"
+assert_file_exists "Sona MCP launcher is published" "$FAKE_HOME/.local/bin/sona-mcp"
+assert_file_absent "obsolete legacy MCP launcher is removed" "$FAKE_HOME/.local/bin/skill-bill-mcp"
+
+LEGACY_RUNTIME="$FAKE_HOME/.skill-bill/runtime/runtime-cli/bin/runtime-cli"
+LEGACY_RUNTIME_BACKUP="$FAKE_HOME/runtime-cli.backup"
+LEGACY_CALL_LOG="$FAKE_HOME/runtime-calls.log"
+LEGACY_SENTINEL="$FAKE_HOME/legacy-argument-sentinel"
+LEGACY_NOTICE_EXPECTED="$FAKE_HOME/legacy-expected"
+LEGACY_STDOUT="$FAKE_HOME/legacy-stdout"
+LEGACY_STDERR="$FAKE_HOME/legacy-stderr"
+printf '%s\n' 'skill-bill has been renamed to sona. Run sona instead.' > "$LEGACY_NOTICE_EXPECTED"
+mv "$LEGACY_RUNTIME" "$LEGACY_RUNTIME_BACKUP"
+legacy_args_array=()
+for legacy_runtime_mode in absent trap; do
+  if [[ "$legacy_runtime_mode" == trap ]]; then
+    cat > "$LEGACY_RUNTIME" <<'TRAP'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$SKILL_BILL_TEST_LEGACY_CALL_LOG"
+TRAP
+    chmod +x "$LEGACY_RUNTIME"
+  fi
+  for legacy_case in empty help version update goal phase operation arbitrary; do
+    case "$legacy_case" in
+      empty) legacy_args_array=() ;;
+      help) legacy_args_array=(--help) ;;
+      version) legacy_args_array=(--version) ;;
+      update) legacy_args_array=(update --release 'v 1') ;;
+      goal) legacy_args_array=(goal SONA-5) ;;
+      phase) legacy_args_array=(phase implement) ;;
+      operation) legacy_args_array=(operation verify) ;;
+      arbitrary) legacy_args_array=('$(touch "$LEGACY_SENTINEL")' 'two words') ;;
+    esac
+    legacy_status=0
+    SKILL_BILL_TEST_LEGACY_CALL_LOG="$LEGACY_CALL_LOG" LEGACY_SENTINEL="$LEGACY_SENTINEL" \
+      "$FAKE_HOME/.local/bin/skill-bill" "${legacy_args_array[@]+"${legacy_args_array[@]}"}" \
+      >"$LEGACY_STDOUT" 2>"$LEGACY_STDERR" || legacy_status=$?
+    [[ "$legacy_status" -eq 0 ]] || fail "legacy launcher returned $legacy_status for $legacy_case with $legacy_runtime_mode runtime"
+    cmp "$LEGACY_NOTICE_EXPECTED" "$LEGACY_STDOUT" || fail "legacy launcher output changed for $legacy_case with $legacy_runtime_mode runtime"
+    [[ ! -s "$LEGACY_STDERR" ]] || fail "legacy launcher wrote stderr for $legacy_case with $legacy_runtime_mode runtime"
+  done
+  [[ ! -e "$LEGACY_CALL_LOG" ]] || fail "legacy launcher called the runtime"
+  [[ ! -e "$LEGACY_SENTINEL" ]] || fail "legacy launcher evaluated arbitrary arguments"
+  if [[ "$legacy_runtime_mode" == absent ]]; then
+    [[ ! -e "$LEGACY_RUNTIME" ]] || fail "legacy launcher created a runtime"
+  fi
+done
+rm -f "$LEGACY_RUNTIME"
+mv "$LEGACY_RUNTIME_BACKUP" "$LEGACY_RUNTIME"
+pass "legacy launcher prints a fixed notice and exits 0 without runtime calls or argument effects"
 
 LAUNCHER_VERSION="$(HOME="$FAKE_HOME" "$LAUNCHER" --home "$FAKE_HOME" version 2>/dev/null || true)"
 if [[ "$LAUNCHER_VERSION" == *"skill-bill"* ]]; then
-  pass "skill-bill version succeeds"
+  pass "sona version succeeds"
 else
-  fail "skill-bill version output unexpected: '$LAUNCHER_VERSION'"
+  fail "sona version output unexpected: '$LAUNCHER_VERSION'"
 fi
 
 SKILL_FIRST="$(find "$FAKE_HOME/.claude/skills" -mindepth 1 -maxdepth 1 2>/dev/null | head -n1 || true)"
@@ -906,6 +957,23 @@ assert_file_exists "fresh-machine defaults install the desktop app" \
   "$(desktop_app_target "$FAKE_HOME")"
 
 echo ""
+echo "--- scenario 8a: unowned desktop target stops before migration ---"
+FAKE_HOME="$(mktemp -d)"
+seed_selection_json "$FAKE_HOME"
+UNOWNED_TARGET="$(desktop_app_target "$FAKE_HOME")"
+UNOWNED_EXECUTABLE="$(desktop_app_executable "$UNOWNED_TARGET")"
+mkdir -p "$(dirname "$UNOWNED_EXECUTABLE")" "$FAKE_HOME/.local/bin"
+printf 'preserve this unrelated app\n' > "$UNOWNED_EXECUTABLE"
+[[ "$TOKEN" == windows-x64 ]] || chmod +x "$UNOWNED_EXECUTABLE"
+printf '#!/usr/bin/env bash\n# skill-bill managed launcher\n' > "$FAKE_HOME/.local/bin/sona"
+UNOWNED_STATUS=0
+UNOWNED_OUTPUT="$(run_install "$FAKE_HOME" "SKILL_BILL_TEST_MIGRATION_MARKER=$FAKE_HOME/migration-ran")" || UNOWNED_STATUS=$?
+[[ "$UNOWNED_STATUS" -ne 0 && "$UNOWNED_OUTPUT" == *"unclassified desktop app target"* ]] || fail "installer did not refuse the unowned desktop app target"
+[[ "$(cat "$UNOWNED_EXECUTABLE")" == 'preserve this unrelated app' ]] || fail "installer changed the unowned desktop app target"
+[[ ! -e "$FAKE_HOME/migration-ran" ]] || fail "installer migrated data before refusing the unowned desktop app target"
+[[ ! -e "$FAKE_HOME/.skill-bill/runtime/runtime-cli/bin/runtime-cli" ]] || fail "installer activated a runtime before refusing the unowned desktop app target"
+pass "unowned desktop target and managed CLI launcher are preserved before migration or runtime activation"
+
 echo "--- scenario 9: replay automatically installs the checksum-verified desktop app ---"
 FAKE_HOME="$(mktemp -d)"
 seed_selection_json "$FAKE_HOME"
@@ -946,8 +1014,10 @@ for state_file in "${STATE_FILES[@]}"; do
   printf 'retained data for %s\n' "$state_file" > "$STATE_FIXTURE/$state_file"
 done
 cp -R "$STATE_FIXTURE/." "$FAKE_HOME/.skill-bill/"
+ln -s "$FAKE_HOME/.skill-bill/runtime/runtime-mcp/bin/runtime-mcp" "$FAKE_HOME/.local/bin/skill-bill-mcp"
 for install_attempt in 1 2; do
   run_install "$FAKE_HOME"
+  [[ ! -e "$FAKE_HOME/.local/bin/skill-bill-mcp" && ! -L "$FAKE_HOME/.local/bin/skill-bill-mcp" ]] || fail "reinstall $install_attempt retained the owned legacy MCP link"
   for state_file in "${STATE_FILES[@]}"; do
     cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "reinstall $install_attempt changed $state_file"
   done
@@ -971,17 +1041,56 @@ for state_file in "${STATE_FILES[@]}"; do
   cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "migration failure changed $state_file"
 done
 pass "failed migration preserves the existing runtime and all saved user data"
+
+# Fail the coupled launcher publication after upgrade preparation, then retry it.
+PUBLICATION_SHIM="$(mktemp -d)"
+WORK_TMPDIRS+=("$PUBLICATION_SHIM")
+SYSTEM_MV="$(command -v mv)"
+cat > "$PUBLICATION_SHIM/mv" <<'SHIM'
+#!/usr/bin/env bash
+case "${1:-}" in
+  */sona-app.stage.*|*/sona-app.cmd.stage.*) [[ -f "$SKILL_BILL_TEST_MIGRATION_MARKER" ]] || exit 74; exit 73 ;;
+esac
+exec "$SKILL_BILL_TEST_SYSTEM_MV" "$@"
+SHIM
+chmod +x "$PUBLICATION_SHIM/mv"
+printf 'unrelated bytes\n' > "$FAKE_HOME/.local/bin/unrelated-entry"
+ln -s "$FAKE_HOME/.local/bin/unrelated-entry" "$FAKE_HOME/.local/bin/unrelated-link"
+printf 'keep this file\n' > "$FAKE_HOME/.local/bin/skill-bill-mcp"
+PUBLICATION_STATUS=0
+PUBLICATION_OUTPUT="$(run_install "$FAKE_HOME" "PATH=$PUBLICATION_SHIM:$PATH" "SKILL_BILL_TEST_SYSTEM_MV=$SYSTEM_MV" "SKILL_BILL_TEST_MIGRATION_MARKER=$PUBLICATION_SHIM/prepared")" || PUBLICATION_STATUS=$?
+[[ "$PUBLICATION_STATUS" -ne 0 && "$PUBLICATION_OUTPUT" == *"Launcher publication failed"* ]] || fail "publication failure was not reported"
+[[ -f "$PUBLICATION_SHIM/prepared" ]] || fail "migration preparation did not run before publication"
+[[ "$(cat "$FAKE_HOME/.local/bin/unrelated-entry")" == 'unrelated bytes' ]] || fail "publication changed unrelated bytes"
+[[ "$(readlink "$FAKE_HOME/.local/bin/unrelated-link")" == "$FAKE_HOME/.local/bin/unrelated-entry" ]] || fail "publication changed unrelated target"
+"$FAKE_HOME/.local/bin/sona" version >/dev/null || fail "publication failure left no usable CLI"
+for state_file in "${STATE_FILES[@]}"; do
+  cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "publication failure changed $state_file"
+done
+run_install "$FAKE_HOME"
+[[ "$(cat "$FAKE_HOME/.local/bin/unrelated-entry")" == 'unrelated bytes' ]] || fail "retry changed unrelated bytes"
+[[ "$(readlink "$FAKE_HOME/.local/bin/unrelated-link")" == "$FAKE_HOME/.local/bin/unrelated-entry" ]] || fail "retry changed unrelated target"
+[[ -L "$FAKE_HOME/.local/bin/sona-mcp" ]] || fail "retry did not publish MCP entry"
+[[ "$(cat "$FAKE_HOME/.local/bin/skill-bill-mcp")" == 'keep this file' ]] || fail "retry removed an unrelated legacy MCP path"
+"$FAKE_HOME/.local/bin/sona" version >/dev/null || fail "retry did not publish a working CLI"
+for state_file in "${STATE_FILES[@]}"; do
+  cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "retry changed $state_file"
+done
+pass "publication failure preserves data and unrelated entries through retry"
 DESKTOP_APP="$(desktop_app_target "$FAKE_HOME")"
 DESKTOP_EXECUTABLE="$(desktop_app_executable "$DESKTOP_APP")"
 assert_file_exists "desktop app launcher installed" "$DESKTOP_EXECUTABLE"
 if [[ "$TOKEN" == "windows-x64" ]]; then
-  [[ -f "$FAKE_HOME/.local/bin/sona.cmd" ]] && pass "desktop app launcher installed" || fail "desktop app launcher is missing"
+  [[ -f "$FAKE_HOME/.local/bin/sona-app.cmd" ]] && pass "desktop app launcher installed" || fail "desktop app launcher is missing"
+  [[ -f "$FAKE_HOME/.local/bin/sona" ]] && pass "CLI launcher installed" || fail "CLI launcher is missing"
 else
   [[ -x "$DESKTOP_EXECUTABLE" ]] && pass "desktop app launcher is executable" || fail "desktop app launcher is not executable"
-  [[ -L "$FAKE_HOME/.local/bin/sona" ]] && pass "desktop app launcher symlink installed" || fail "desktop app launcher symlink is missing"
+  [[ -L "$FAKE_HOME/.local/bin/sona-app" ]] && pass "desktop app launcher symlink installed" || fail "desktop app launcher symlink is missing"
+  [[ -f "$FAKE_HOME/.local/bin/sona" ]] && pass "CLI launcher installed" || fail "CLI launcher is missing"
 fi
 if [[ "$TOKEN" == "linux-x64" ]]; then
   [[ -f "$FAKE_HOME/.local/share/applications/sona.desktop" ]] && pass "Linux desktop entry installed" || fail "Linux desktop entry is missing"
+  grep -Fxq "Exec=\"$FAKE_HOME/.local/bin/sona-app\"" "$FAKE_HOME/.local/share/applications/sona.desktop" && pass "Linux desktop entry launches the renamed app command" || fail "Linux desktop entry does not launch sona-app"
   grep -Fxq "Icon=$DESKTOP_APP/lib/Sona.png" "$FAKE_HOME/.local/share/applications/sona.desktop" && pass "Linux desktop entry uses the packaged icon" || fail "Linux desktop entry has no packaged icon"
   grep -Fxq 'StartupWMClass=dev-skillbill-desktop-app-DesktopLauncherKt' "$FAKE_HOME/.local/share/applications/sona.desktop" && pass "Linux desktop entry matches the app window" || fail "Linux desktop entry has no matching window identity"
 fi
@@ -1039,10 +1148,12 @@ for install_entry in runtime installed-skills skills platform-packs orchestratio
 done
 assert_file_absent "uninstall removes the desktop app" "$DESKTOP_APP"
 if [[ "$TOKEN" == "windows-x64" ]]; then
-  assert_file_absent "uninstall removes the desktop launcher" "$FAKE_HOME/.local/bin/sona.cmd"
+  assert_file_absent "uninstall removes the desktop launcher" "$FAKE_HOME/.local/bin/sona-app.cmd"
+  assert_file_absent "uninstall removes the CLI launcher" "$FAKE_HOME/.local/bin/sona"
 else
-  assert_file_absent "uninstall removes the desktop launcher" "$FAKE_HOME/.local/bin/sona"
-  [[ ! -L "$FAKE_HOME/.local/bin/sona" ]] || fail "uninstall left a dangling desktop launcher"
+  assert_file_absent "uninstall removes the desktop launcher" "$FAKE_HOME/.local/bin/sona-app"
+  assert_file_absent "uninstall removes the CLI launcher" "$FAKE_HOME/.local/bin/sona"
+  [[ ! -L "$FAKE_HOME/.local/bin/sona-app" ]] || fail "uninstall left a dangling desktop launcher"
 fi
 if [[ "$TOKEN" == "linux-x64" ]]; then
   assert_file_absent "uninstall removes the Linux desktop entry" "$FAKE_HOME/.local/share/applications/sona.desktop"

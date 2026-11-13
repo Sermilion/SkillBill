@@ -7,11 +7,12 @@ import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.scaffold.payload.detectKind
 import skillbill.infrastructure.skills.scaffold.payload.validatePayloadVersion
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
+import skillbill.install.model.InstallApplyIssue
 import skillbill.ports.install.platformpack.ExternalPlatformPackSourceConfigPort
 import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourcesFieldState
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.system.HostPlatformPort
-import skillbill.scaffold.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewBaselineLayer
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.ScaffoldResult
 import java.io.Closeable
@@ -28,6 +29,8 @@ internal data class ScaffoldTransaction(
   val createdSymlinks: MutableList<Path> = mutableListOf(),
   val manifestSnapshots: MutableList<ManifestSnapshot> = mutableListOf(),
   val installTargets: MutableList<Path> = mutableListOf(),
+  val replacedInstallTargets: MutableMap<Path, Path> = mutableMapOf(),
+  val retiredInstallTargets: MutableMap<Path, Path> = mutableMapOf(),
   var registeredExternalPackRoot: Path? = null,
   var externalPackConfigHome: Path? = null,
   var externalPackConfigEnvironment: Map<String, String> = emptyMap(),
@@ -80,6 +83,13 @@ internal data class ScaffoldExecutionResult(
   val symlinks: List<Path>,
   val installTargets: List<Path>,
   val notes: List<String>,
+  val installIssues: List<InstallApplyIssue> = emptyList(),
+)
+
+internal data class ScaffoldInstallOutcome(
+  val targets: List<Path>,
+  val notes: List<String>,
+  val issues: List<InstallApplyIssue> = emptyList(),
 )
 
 internal data class ScaffoldRuntimeContext(
@@ -119,7 +129,7 @@ internal data class ScaffoldAdapterSeams(
     Path,
     PlatformManifest,
   ) -> List<String>,
-  val performInstall: (ScaffoldTransaction, ScaffoldPlan, Path) -> Pair<List<Path>, List<String>>,
+  val performInstall: (ScaffoldTransaction, ScaffoldPlan, Path) -> ScaffoldInstallOutcome,
   val rollbackInstallTargets: (ScaffoldTransaction, MutableList<String>) -> Unit,
 )
 
@@ -147,10 +157,11 @@ internal fun runScaffold(
 ): ScaffoldResult {
   val txn = ScaffoldTransaction()
   var committed = false
+  var installIssues = emptyList<InstallApplyIssue>()
   val execute = {
     Closeable {
       if (!committed) {
-        rollback(txn, adapters)
+        rollback(txn, adapters, installIssues)
       }
     }.use {
       val execution =
@@ -161,7 +172,9 @@ internal fun runScaffold(
           adapters,
           runtime,
         )
-      committed = true
+      installIssues = execution.installIssues
+      committed = installIssues.isEmpty()
+      if (committed) txn.retiredInstallTargets.clear()
       ScaffoldResult(
         kind = plan.kind,
         skillName = plan.skillName,
@@ -171,6 +184,7 @@ internal fun runScaffold(
         symlinks = execution.symlinks.map { entry -> entry.toFileLocation() },
         installTargets = execution.installTargets.map { entry -> entry.toFileLocation() },
         notes = plan.notes + execution.notes,
+        installIssues = execution.installIssues,
       )
     }
   }

@@ -16,6 +16,7 @@ import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.feature.chat.UnavailableApprovalFeed
+import dev.skillbill.desktop.feature.chat.OperationCardRequests
 import dev.skillbill.desktop.feature.chat.RunOpener
 import dev.skillbill.desktop.feature.chat.UnavailableRunOpener
 import kotlinx.coroutines.CoroutineDispatcher
@@ -130,6 +131,7 @@ class NewTaskChats(
   private val savedChats = NewTaskSavedChats(chats, scope, toasts) {
     openState.value.mapNotNull { it.chat.value?.sessionId }.toSet()
   }
+  internal val cardRequests = OperationCardRequests()
 
   internal var chatDispatcher: CoroutineDispatcher = Dispatchers.IO
     set(value) {
@@ -364,7 +366,7 @@ class NewTaskChats(
   }
 
   private fun create(): NewTaskDraft {
-    val draft = NewTaskDraft(chats, workControls, databaseSession, toasts, windowScope, clock, approvals, savedChats, changesRepository, diagnostics, runs)
+    val draft = NewTaskDraft(chats, workControls, databaseSession, toasts, windowScope, clock, approvals, savedChats, changesRepository, diagnostics, runs, cardRequests)
     draft.chatDispatcher = chatDispatcher
     replyWatches[draft] = watchReplies(draft)
     return draft

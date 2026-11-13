@@ -117,7 +117,7 @@ class DevinInstallationBoundaryTest {
     assertEquals(mapOf("command" to "other", "env" to mapOf("TOKEN" to "secret")), servers["other"])
     assertEquals(
       mapOf("command" to "/tmp/runtime-mcp", "args" to emptyList<String>(), "env" to emptyMap<String, String>()),
-      servers["skill-bill"],
+      servers["sona"],
     )
 
     McpRegistrationOperations.unregisterWithProfileEnvironment(

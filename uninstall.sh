@@ -388,26 +388,38 @@ remove_runtime_launcher() {
   local link_path="$RUNTIME_LAUNCHER_BIN_DIR/$name"
   local actual_target=""
 
-  if [[ ! -L "$link_path" ]]; then
+  if [[ ! -e "$link_path" && ! -L "$link_path" ]]; then
     return 0
   fi
-
-  actual_target="$(readlink "$link_path")"
-  if [[ "$actual_target" != "$expected_target" ]]; then
-    warn "  skipped $link_path (points outside this checkout)"
+  if [[ -L "$link_path" ]]; then
+    actual_target="$(readlink "$link_path")"
+    if [[ "$actual_target" != "$expected_target" ]]; then
+      warn "  skipped $link_path (points outside this checkout)"
+      SKIPPED_TARGETS+=("$link_path")
+      return 0
+    fi
+  elif [[ -f "$link_path" ]] && grep -qF '# skill-bill managed launcher' "$link_path"; then
+    :
+  else
+    warn "  skipped $link_path (not an owned runtime launcher)"
     SKIPPED_TARGETS+=("$link_path")
     return 0
   fi
 
-  rm -f "$link_path"
+  if ! rm -f "$link_path"; then
+    err "Could not remove owned launcher: $link_path"
+    return 1
+  fi
   REMOVED_TARGETS+=("$link_path")
   ok "  removed $name"
 }
 
 remove_runtime_launchers() {
   info "Removing runtime launchers from: $RUNTIME_LAUNCHER_BIN_DIR"
-  remove_runtime_launcher "skill-bill" "$RUNTIME_CLI_BIN"
-  remove_runtime_launcher "skill-bill-mcp" "$RUNTIME_MCP_BIN"
+  remove_runtime_launcher "sona" "$RUNTIME_CLI_BIN" || return 1
+  remove_runtime_launcher "sona-mcp" "$RUNTIME_MCP_BIN" || return 1
+  remove_runtime_launcher "skill-bill" "$RUNTIME_CLI_BIN" || return 1
+  remove_runtime_launcher "skill-bill-mcp" "$RUNTIME_MCP_BIN" || return 1
 }
 
 desktop_app_install_path() {
@@ -459,41 +471,36 @@ remove_desktop_launcher() {
   expected_target="$(desktop_app_executable_path "$os" "$app_target")"
   case "$os" in
     windows)
-      link_path="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
-      if [[ -f "$link_path" && ! -L "$link_path" ]]; then
+      local name expected_windows
+      for name in sona.cmd sona-app.cmd; do
+        link_path="$RUNTIME_LAUNCHER_BIN_DIR/$name"
         local expected_windows
         if command -v cygpath >/dev/null 2>&1; then expected_windows="$(cygpath -w "$expected_target")"; else expected_windows="${expected_target//\//\\}"; fi
-        if ! tr -d '\r' < "$link_path" | grep -Fxq "\"$expected_windows\" %*" || ! tr -d '\r' < "$link_path" | grep -Fxq 'REM Managed by Sona install.sh'; then
+        if [[ ! -e "$link_path" && ! -L "$link_path" ]]; then continue; fi
+        if [[ ! -f "$link_path" || -L "$link_path" ]] || ! tr -d '\r' < "$link_path" | grep -Fxq "\"$expected_windows\" %*" || ! tr -d '\r' < "$link_path" | grep -Fxq 'REM Managed by Sona install.sh'; then
           warn "  skipped $link_path (does not target this Sona install)"
           SKIPPED_TARGETS+=("$link_path")
-          return 0
+          continue
         fi
-        rm -f "$link_path"
+        if ! rm -f "$link_path"; then err "Could not remove owned launcher: $link_path"; return 1; fi
         REMOVED_TARGETS+=("$link_path")
-        ok "  removed sona.cmd"
-      elif [[ -e "$link_path" || -L "$link_path" ]]; then
-        warn "  skipped $link_path (not an owned Sona launcher)"
-        SKIPPED_TARGETS+=("$link_path")
-      fi
+        ok "  removed $name"
+      done
       ;;
     *)
-      link_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
-      if [[ ! -L "$link_path" ]]; then
-        if [[ -e "$link_path" ]]; then
-          warn "  skipped $link_path (not a symlink)"
+      local name
+      for name in sona sona-app; do
+        link_path="$RUNTIME_LAUNCHER_BIN_DIR/$name"
+        [[ -e "$link_path" || -L "$link_path" ]] || continue
+        if [[ ! -L "$link_path" ]] || [[ "$(readlink "$link_path")" != "$expected_target" ]]; then
+          warn "  skipped $link_path (not an owned Sona launcher)"
           SKIPPED_TARGETS+=("$link_path")
+          continue
         fi
-        return 0
-      fi
-      actual_target="$(readlink "$link_path")"
-      if [[ "$actual_target" != "$expected_target" ]]; then
-        warn "  skipped $link_path (points outside this desktop install)"
-        SKIPPED_TARGETS+=("$link_path")
-        return 0
-      fi
-      rm -f "$link_path"
-      REMOVED_TARGETS+=("$link_path")
-      ok "  removed sona"
+        if ! rm -f "$link_path"; then err "Could not remove owned launcher: $link_path"; return 1; fi
+        REMOVED_TARGETS+=("$link_path")
+        ok "  removed $name"
+      done
       ;;
   esac
 }
@@ -502,11 +509,14 @@ remove_linux_desktop_entry() {
   local app_target="$1" launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
   local desktop_file="${XDG_DATA_HOME:-$HOME/.local/share}/applications/sona.desktop"
   local quoted_launcher expected_icon
+  local new_launcher="$RUNTIME_LAUNCHER_BIN_DIR/sona-app"
+  local new_quoted_launcher
   quoted_launcher="$(desktop_quoted_exec_path "$launcher_path")"
+  new_quoted_launcher="$(desktop_quoted_exec_path "$new_launcher")"
   expected_icon="$app_target/lib/Sona.png"
   if [[ -e "$desktop_file" || -L "$desktop_file" ]]; then
-    if [[ -f "$desktop_file" && ! -L "$desktop_file" ]] && grep -Fxq "Exec=$quoted_launcher" "$desktop_file" && grep -Fxq "Icon=$expected_icon" "$desktop_file"; then
-      rm -f "$desktop_file"
+    if [[ -f "$desktop_file" && ! -L "$desktop_file" ]] && { grep -Fxq "Exec=$quoted_launcher" "$desktop_file" || grep -Fxq "Exec=$new_quoted_launcher" "$desktop_file"; } && grep -Fxq "Icon=$expected_icon" "$desktop_file"; then
+      if ! rm -f "$desktop_file"; then err "Could not remove owned desktop entry: $desktop_file"; return 1; fi
       REMOVED_TARGETS+=("$desktop_file")
       ok "  removed Linux desktop entry"
     else
@@ -514,6 +524,46 @@ remove_linux_desktop_entry() {
       SKIPPED_TARGETS+=("$desktop_file")
     fi
   fi
+}
+
+remove_legacy_desktop_entries() {
+  local os="$1" app_target="$2" launcher_path expected_executable desktop_file quoted_launcher expected_icon
+  case "$os" in
+    linux)
+      local install_root legacy_app
+      install_root="${DESKTOP_APP_INSTALL_DIR:-$(default_desktop_app_install_dir "$os")}"
+      install_root="$(host_path "$install_root")"
+      legacy_app="$install_root/Skill Bill"
+      launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop"
+      expected_executable="$legacy_app/bin/Skill Bill"
+      if [[ -e "$launcher_path" || -L "$launcher_path" ]]; then
+        if [[ -L "$launcher_path" && "$(readlink "$launcher_path")" == "$expected_executable" ]]; then
+          if [[ -d "$legacy_app" && ! -L "$legacy_app" && -f "$expected_executable" ]]; then
+            if ! rm -rf "$legacy_app"; then err "Could not remove legacy desktop app: $legacy_app"; return 1; fi
+            REMOVED_TARGETS+=("$legacy_app")
+          fi
+          if ! rm -f "$launcher_path"; then err "Could not remove owned launcher: $launcher_path"; return 1; fi
+          REMOVED_TARGETS+=("$launcher_path")
+        else
+          warn "  skipped $launcher_path (not an owned Skill Bill launcher)"
+          SKIPPED_TARGETS+=("$launcher_path")
+        fi
+      fi
+      desktop_file="${XDG_DATA_HOME:-$HOME/.local/share}/applications/skillbill.desktop"
+      quoted_launcher="$(desktop_quoted_exec_path "$launcher_path")"
+      expected_icon="$legacy_app/lib/Skill Bill.png"
+      if [[ -e "$desktop_file" || -L "$desktop_file" ]]; then
+        if [[ -f "$desktop_file" && ! -L "$desktop_file" ]] && grep -Fxq 'Name=Skill Bill' "$desktop_file" && grep -Fxq "Exec=$quoted_launcher" "$desktop_file" && grep -Fxq "Icon=$expected_icon" "$desktop_file"; then
+          if ! rm -f "$desktop_file"; then err "Could not remove owned desktop entry: $desktop_file"; return 1; fi
+          REMOVED_TARGETS+=("$desktop_file")
+        else
+          warn "  skipped $desktop_file (not an owned Skill Bill entry)"
+          SKIPPED_TARGETS+=("$desktop_file")
+        fi
+      fi
+      ;;
+    *) ;;
+  esac
 }
 
 remove_desktop_app() {
@@ -524,17 +574,35 @@ remove_desktop_app() {
   app_target="$(desktop_app_install_path "$os")"
 
   info "Removing desktop app install for $os: $app_target"
-  remove_desktop_launcher "$os" "$app_target"
-  if [[ "$os" == "linux" ]]; then
-    remove_linux_desktop_entry "$app_target"
+  local executable launcher name expected_windows desktop_owned=0
+  executable="$(desktop_app_executable_path "$os" "$app_target")"
+  if [[ "$os" == windows ]]; then
+    if command -v cygpath >/dev/null 2>&1; then expected_windows="$(cygpath -w "$executable")"; else expected_windows="${executable//\//\\}"; fi
+    for name in sona.cmd sona-app.cmd; do
+      launcher="$RUNTIME_LAUNCHER_BIN_DIR/$name"
+      if [[ -f "$launcher" && ! -L "$launcher" ]] && tr -d '\r' < "$launcher" | grep -Fxq 'REM Managed by Sona install.sh' && tr -d '\r' < "$launcher" | grep -Fxq "\"$expected_windows\" %*"; then desktop_owned=1; fi
+    done
+  else
+    for name in sona sona-app; do
+      launcher="$RUNTIME_LAUNCHER_BIN_DIR/$name"
+      if [[ -L "$launcher" && "$(readlink "$launcher")" == "$executable" ]]; then desktop_owned=1; fi
+    done
   fi
-  if [[ -d "$app_target" ]]; then
-    rm -rf "$app_target"
+  if [[ "$desktop_owned" -eq 1 && -d "$app_target" && ! -L "$app_target" && -f "$executable" ]]; then
+    if ! rm -rf "$app_target"; then err "Could not remove desktop app: $app_target"; return 1; fi
     REMOVED_TARGETS+=("$app_target")
     ok "  removed desktop app"
+  elif [[ -e "$app_target" || -L "$app_target" ]]; then
+    warn "  skipped $app_target (desktop ownership was not confirmed)"
+    SKIPPED_TARGETS+=("$app_target")
   else
     info "  no desktop app install found"
   fi
+  remove_desktop_launcher "$os" "$app_target" || return 1
+  if [[ "$os" == "linux" ]]; then
+    remove_linux_desktop_entry "$app_target" || return 1
+  fi
+  remove_legacy_desktop_entries "$os" "$app_target"
 }
 
 # SKILL-14 + SKILL-16: pure relocations whose skill directory name stays the
@@ -655,6 +723,8 @@ build_legacy_skill_names() {
 
   LEGACY_SKILL_NAMES=()
   add_legacy_name ".bill-shared"
+  add_legacy_name "skill-bill"
+  add_legacy_name "sona"
 
   if [[ ${#SKILL_NAMES[@]} -gt 0 ]]; then
     for skill in "${SKILL_NAMES[@]}"; do
@@ -900,23 +970,27 @@ remove_cursor_agent_mds
 info "Removing MCP server registrations."
 for agent in claude codex junie cursor; do
   if mcp_output="$(run_runtime_cli install unregister-mcp "$agent" 2>/dev/null)"; then
-    ok "  removed skill-bill MCP server ($agent)"
+    ok "  removed Sona MCP server ($agent)"
     while IFS= read -r profile_path; do
       [[ -n "$profile_path" ]] || continue
       info "    $profile_path"
     done <<< "$mcp_output"
   elif [[ -n "$mcp_output" ]]; then
-    warn "  partially removed skill-bill MCP server ($agent); manual check may be needed"
+    warn "  partially removed Sona MCP server ($agent); manual check may be needed"
     while IFS= read -r profile_path; do
       [[ -n "$profile_path" ]] || continue
       info "    $profile_path"
     done <<< "$mcp_output"
   else
-    warn "  could not remove skill-bill MCP server ($agent)"
+    warn "  could not remove Sona MCP server ($agent)"
   fi
 done
 
-remove_runtime_launchers
+if [[ "${SKILL_BILL_PRESERVE_LAUNCHERS:-}" == "1" ]]; then
+  info "Preserving runtime launchers for the installer publication transaction."
+else
+  remove_runtime_launchers
+fi
 
 remove_install_state() {
   if [[ ! -d "$SKILL_BILL_STATE_DIR" ]]; then

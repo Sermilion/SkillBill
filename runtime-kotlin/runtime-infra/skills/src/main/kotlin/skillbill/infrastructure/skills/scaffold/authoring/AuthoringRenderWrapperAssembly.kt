@@ -6,6 +6,7 @@ import skillbill.infrastructure.skills.scaffold.rendering.renderCeremonySection
 import skillbill.infrastructure.skills.scaffold.rendering.renderClassSections
 import skillbill.infrastructure.skills.scaffold.rendering.renderDescriptorSection
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.TemplateContext
+import skillbill.install.model.ListedSkillNames
 import skillbill.scaffold.model.SkillClassManifest
 
 internal fun assembleRenderedWrapper(
@@ -58,7 +59,7 @@ internal fun assembleRenderedWrapper(
 
 internal fun renderedWrapperTemplateContext(target: AuthoringTarget): TemplateContext =
   TemplateContext(
-    skillName = target.skillName,
+    skillName = ListedSkillNames.publicName(target.skillName),
     family = target.family,
     platform = target.platform,
     area = target.area,

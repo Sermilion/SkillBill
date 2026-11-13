@@ -492,7 +492,6 @@ class PlanSubtasksReopeningTest {
           feasibilityAdoption = true,
         )
       assertTrue(reopening.reopenWithRebasedBundle(replan))
-
       val reopened = database.read { requireNotNull(it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId)) }
       val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
       val state = codec.decode(family.value(reopened.artifacts), "test")

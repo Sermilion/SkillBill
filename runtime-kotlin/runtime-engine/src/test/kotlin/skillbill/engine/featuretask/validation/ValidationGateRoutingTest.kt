@@ -1,10 +1,10 @@
 package skillbill.engine.featuretask.validation
 
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
-import skillbill.scaffold.model.CodeReviewBaselineLayer
-import skillbill.scaffold.model.CodeReviewComposition
-import skillbill.scaffold.model.CodeReviewCompositionMode
-import skillbill.scaffold.model.CodeReviewCompositionScope
+import skillbill.review.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewComposition
+import skillbill.review.model.CodeReviewCompositionMode
+import skillbill.review.model.CodeReviewCompositionScope
 import skillbill.scaffold.model.RoutingSignals
 import kotlin.test.Test
 import kotlin.test.assertEquals

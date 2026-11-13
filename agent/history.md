@@ -10,6 +10,26 @@ Areas: install.sh, orchestration/contracts, runtime-kotlin install, launcher, wo
 Feature flag: N/A
 Acceptance criteria: 5/5 addressed in source; integrated acceptance remains unconfirmed.
 
+## [2026-11-13] SONA-5 rename public commands to sona
+Areas: install.sh, uninstall.sh, scripts, docs, orchestration, runtime-kotlin, desktop, skills/skill-bill, .codex
+- MEDIUM feature. Public CLI is sona, MCP is sona-mcp with server sona, listed skill is /sona, and the desktop launcher is sona-app with visible name Sona. Canonical skills/skill-bill, internal-for: skill-bill, raw operations, telemetry, state paths and historical records stay unchanged.
+- The owned skill-bill launcher prints only "skill-bill has been renamed to sona. Run sona instead." plus a newline and exits 0 for every argument list, without runtime lookup or dispatch. Publication removes skill-bill-mcp only when it targets this installation; unrelated occupants stay with a warning.
+- ListedSkillNames maps canonical skill-bill to public sona. Authoring accepts either spelling and installs one target. MCP registration and removal recognize both product names; TOML removal matches owned nested tables without deleting neighboring servers or linear-sona.
+- Fresh recovery, planning, continuation, desktop launch, chat, review and operator guidance emit sona or /sona. DetachedWorkRunLauncher resolves only sona so a missing binary cannot fall through to the notice shim. The update-check action hint says Checks for Sona updates.
+- Reusable: ListedSkillNames; McpConfigKeys in registration adapters; existing launcher ownership, staging and rollback. Prefix-dependent consumers such as archive export changed with their command producers.
+- Limits: no persisted-schema migration. Unrelated files, links and dangling targets stay and return typed ownership failures. Native Debian, macOS and Windows installer checks were unavailable here. Validate changed code after QA settled, including this hint, so QA did not re-test the published tree.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
+## [2026-11-10] SKILL-535 — Carry captured roots into desktop work items
+Areas: runtime-infra/sqlite/idestatus; desktop/core/domain and desktop/core/data/runtime
+- MEDIUM feature. Optional `primaryRepositoryRoot` survives SQLite snapshot caching, validation, and decoding; absent and null legacy values remain readable, while malformed values retain the undecodable-row diagnostic path.
+- WorkItem carries the captured root and run-kind label. Shared board/detail mapping transports the root and derives verify from workflow family or the label from the authoritative execution phase, preserving exact checkout identity and control mapping.
+- Reusable: carry captured repository facts through the shared snapshot cache and mapper seams, separate from checkout identity and display-derived labels.
+- Limits: pre-existing records without a captured primary root keep their compatibility fallback.
+Feature flag: N/A
+Acceptance criteria: 1/1 implemented in this boundary
+
 ## [2026-11-07] SKILL-453 operator approval cards and provider refusal boundaries
 Areas: runtime-kotlin, desktop/core/{domain,data}, desktop/feature/chat, orchestration/contracts, docs
 - Added durable, typed operator approval requests and revocable repository-scoped rules, with provider request identity preserved and transactional broker decisions. Runtime and desktop share the persisted approval store and render complete approval cards; rules match the provider profile and exact action input. reusable

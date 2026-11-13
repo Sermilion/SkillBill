@@ -15,6 +15,7 @@ import java.security.MessageDigest
 
 internal const val INSTALL_CACHE_KEY_BYTES = 8
 private const val INSTALL_STAGING_RECIPE_VERSION = "install-staging-v6-source-path"
+internal const val INSTALL_RENDERER_REVISION = "install-renderer-v2"
 
 internal data class InstallContentHashInputs(
   val sourceSkillDir: Path,
@@ -24,6 +25,7 @@ internal data class InstallContentHashInputs(
   val internalChildren: List<InternalSidecarTarget> = emptyList(),
   val agentAddonPointers: List<AgentAddonPointer> = emptyList(),
   val checkoutRepoRoot: Path? = null,
+  val rendererRevision: String = INSTALL_RENDERER_REVISION,
 )
 
 internal fun computeInstallContentHash(
@@ -58,6 +60,8 @@ private fun computeContentHash(
   digest.update(INSTALL_STAGING_RECIPE_VERSION.toByteArray(StandardCharsets.UTF_8))
   digest.update(newline)
   if (includeSourcePath) {
+    digest.update(inputs.rendererRevision.toByteArray(StandardCharsets.UTF_8))
+    digest.update(newline)
     digest.update(inputs.sourceSkillDir.toAbsolutePath().normalize().toString().toByteArray(StandardCharsets.UTF_8))
     digest.update(newline)
   }
@@ -158,3 +162,23 @@ private fun updateAgentAddonHash(
     digest.update(newline)
   }
 }
+
+internal fun computeReconciliationSourceHash(
+  sourceSkillDir: Path,
+  authored: List<Path>,
+): String {
+  val digest = newSha256Digest()
+  val newline = byteArrayOf('\n'.code.toByte())
+  digest.update(RECONCILIATION_SOURCE_HASH_RECIPE.toByteArray(StandardCharsets.UTF_8))
+  digest.update(newline)
+  authored.forEach { file ->
+    val rel = sourceSkillDir.relativize(file).toString().replace(File.separatorChar, '/')
+    digest.update(rel.toByteArray(StandardCharsets.UTF_8))
+    digest.update(newline)
+    digest.update(Files.readAllBytes(file))
+    digest.update(newline)
+  }
+  return digest.digest().take(INSTALL_CACHE_KEY_BYTES).joinToString("") { byte -> "%02x".format(byte) }
+}
+
+private const val RECONCILIATION_SOURCE_HASH_RECIPE = "reconcile-source-v1"

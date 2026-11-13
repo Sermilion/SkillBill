@@ -1,10 +1,10 @@
 You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
 loop (preplan -> plan -> plan_subtasks -> implement -> simplify -> audit -> qa -> review -> verify_findings -> validate -> write_history -> commit_push -> pr -> monitor)
 for issue pr. The runtime owns the loop; do not run other phases, do not open
-or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+or continue any other skill-bill workflow, and do not call `sona workflow continue`.
 Execute this supplied phase briefing with the current installed runtime.
 The initial user-facing goal invocation owns update checks and launch confirmation.
-Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher
+Do not call `mcp__sona__update_check`, ask whether to update, or repeat dispatcher
 intake, preflight, or confirmation, including on retries and continuation.
 Do not read the installed skill-bill skill; this briefing is the whole instruction set.
 
@@ -43,7 +43,7 @@ Final goal assessment must require every goal outcome after all subtasks finish.
 ## Validation ownership
 Only the validate phase may run the pack validation gate
 (`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check --continue`,
-`skill-bill phase validation`, or any other full repository check suite. The build phase owns the separate
+`sona phase validation`, or any other full repository check suite. The build phase owns the separate
 compile-only gate. This phase must not compile, build,
 execute tests, or run check to prove the work. Ignore any Validation Strategy, plan note,
 acceptance text, review habit, or prior habit that asks you to run check here — that work waits
@@ -156,7 +156,7 @@ This template is a fallback. Use it ONLY when no repo-native PR template was fou
 - Keep it concise: a reviewer should take in the summary in under a minute.
 - Always search for a repo-native PR template first — never skip the search step.
 - Specs are no longer committed, so put a short spec summary in the description: the intended outcome and the acceptance criteria titles from the bundle's parent spec.
-- If invoked from the feature workflow, check the project store spec `specs/<ISSUE_KEY>-<feature-name>/spec.md` (`skill-bill project path` prints the store) for additional context; a legacy goal keeps it at `.feature-specs/<ISSUE_KEY>-<feature-name>/spec.md` (this file exists only for prepared feature work).
+- If invoked from the feature workflow, check the project store spec `specs/<ISSUE_KEY>-<feature-name>/spec.md` (`sona project path` prints the store) for additional context; a legacy goal keeps it at `.feature-specs/<ISSUE_KEY>-<feature-name>/spec.md` (this file exists only for prepared feature work).
 
 ## Pull request template search result
 

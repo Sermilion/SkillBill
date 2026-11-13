@@ -632,7 +632,7 @@ public class StandalonePlanRun(
     return refused(
       statusPublisher,
       "A decomposition manifest already exists for $issueKey; the runtime never overwrites a plan. " +
-        "Run `skill-bill $issueKey` to execute it.",
+        "Run `sona $issueKey` to execute it.",
     )
   }
 
@@ -667,7 +667,7 @@ public class StandalonePlanRun(
         statusPublisher,
         "The supplied spec $plannedPath is not the governed spec for $issueKey; settlement guards the spec " +
           "found under ${decompositionPlanner.specsRoot(sourceRoot)}/$issueKey-*/ " +
-          "(`skill-bill project path` prints the project store). Move it there and plan again.",
+          "(`sona project path` prints the project store). Move it there and plan again.",
       )
     }
     val selectedContent = if (existing) fileStore.readText(plannedPath) else null
@@ -798,7 +798,7 @@ public class StandalonePlanRun(
       return refused(
         statusPublisher,
         "Plan workflow '${candidate.workflowId}' for $key predates the `plan_subtasks` step and cannot resume. " +
-          "Run `skill-bill goal purge $key`, then `skill-bill phase plan $key`.",
+          "Run `sona goal purge $key`, then `sona phase plan $key`.",
         candidate.workflowId,
       )
     }

@@ -111,6 +111,6 @@ internal fun continuationEntryCommand(
   workflowId: String,
 ): String =
   when (skillName) {
-    "bill-feature-verify" -> "skill-bill operation verify confirm:$workflowId"
+    "bill-feature-verify" -> "sona operation verify confirm:$workflowId"
     else -> skillName
   }

@@ -85,6 +85,10 @@ import skillbill.review.context.ReviewContextWireMap
 import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.context.model.packet.LANE_EVIDENCE_BYTES_DIMENSION
+import skillbill.review.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewComposition
+import skillbill.review.model.CodeReviewCompositionMode
+import skillbill.review.model.CodeReviewCompositionScope
 import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewParseResult
 import skillbill.review.model.ReviewFindingVerdict
@@ -95,10 +99,6 @@ import skillbill.review.model.ReviewStageBoundary
 import skillbill.review.model.ReviewStageDegradationMeasurement
 import skillbill.review.parallel.ParallelReviewFindingParser
 import skillbill.scaffold.model.BaselineReviewCatalog
-import skillbill.scaffold.model.CodeReviewBaselineLayer
-import skillbill.scaffold.model.CodeReviewComposition
-import skillbill.scaffold.model.CodeReviewCompositionMode
-import skillbill.scaffold.model.CodeReviewCompositionScope
 import skillbill.scaffold.model.DeclaredFiles
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.ReviewLaneCondition

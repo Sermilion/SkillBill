@@ -99,11 +99,11 @@ internal object VerifyPromptSections {
     buildString {
       target.openingLines(baseRevision, headRevision).forEach(::appendLine)
       appendLine(
-        "Do not launch skill-bill phase review, delegated review subagents, or an isolated review process.",
+        "Do not launch sona phase review, delegated review subagents, or an isolated review process.",
       )
       appendLine(READ_ONLY)
       appendLine("Apply the review rubric in the prior values to the change, against the confirmed criteria.")
-      appendLine("Do not run `./gradlew check`, the pack collect-all gate, or `skill-bill phase validation`.")
+      appendLine("Do not run `./gradlew check`, the pack collect-all gate, or `sona phase validation`.")
     }.trimEnd()
 
   fun completenessAuditDirective(comparisonScope: String): String =
