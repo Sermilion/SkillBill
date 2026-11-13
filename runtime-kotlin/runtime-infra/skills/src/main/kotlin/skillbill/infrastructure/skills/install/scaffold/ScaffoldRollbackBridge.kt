@@ -4,6 +4,7 @@ import skillbill.infrastructure.skills.install.plan.uninstallTargets
 import skillbill.infrastructure.skills.scaffold.runtime.service.ScaffoldTransaction
 import java.io.IOException
 import java.io.UncheckedIOException
+import java.nio.file.Files
 
 internal fun rollbackScaffoldInstallTargets(
   txn: ScaffoldTransaction,
@@ -11,6 +12,18 @@ internal fun rollbackScaffoldInstallTargets(
 ) {
   recordRollbackFailure(errors, "install rollback") {
     uninstallTargets(txn.installTargets)
+  }
+  txn.replacedInstallTargets.forEach { (link, previousTarget) ->
+    recordRollbackFailure(errors, "restore replaced install link $link") {
+      Files.deleteIfExists(link)
+      Files.createSymbolicLink(link, previousTarget)
+    }
+  }
+  txn.retiredInstallTargets.forEach { (link, rawTarget) ->
+    recordRollbackFailure(errors, "restore retired install link $link") {
+      Files.deleteIfExists(link)
+      Files.createSymbolicLink(link, rawTarget)
+    }
   }
 }
 

@@ -15,7 +15,6 @@ enum class McpJsonEntryShape {
 
 object McpJsonConfig {
   private const val MCP_SERVERS_KEY: String = "mcpServers"
-  private const val MANAGED_SERVER_NAME: String = "skill-bill"
   private const val TYPE_KEY: String = "type"
   private const val STDIO_TYPE: String = "stdio"
   private const val COMMAND_KEY: String = "command"
@@ -31,7 +30,9 @@ object McpJsonConfig {
     val beforeContent = readMcpConfigText(path)
     val settings = parseMcpSettings(path, beforeContent).toMutableMap()
     val servers = mutableStringAnyMap(settings[MCP_SERVERS_KEY])
-    servers[MANAGED_SERVER_NAME] = managedEntry(command, entryShape)
+    servers.remove(McpConfigKeys.SKILL_BILL_SERVER)
+    servers.remove(McpConfigKeys.SONA_SERVER)
+    servers[McpConfigKeys.SONA_SERVER] = managedEntry(command, entryShape)
     settings[MCP_SERVERS_KEY] = servers
     val afterContent = JsonCodec.mapToJsonString(settings) + "\n"
     val changed = beforeContent != afterContent
@@ -47,7 +48,9 @@ object McpJsonConfig {
   ): McpMutationResult {
     val settings = parseMcpSettings(path, readMcpConfigText(path)).toMutableMap()
     val servers = mutableStringAnyMap(settings[MCP_SERVERS_KEY])
-    val changed = servers.remove(MANAGED_SERVER_NAME) != null
+    val changed =
+      servers.remove(McpConfigKeys.SKILL_BILL_SERVER) != null ||
+        servers.remove(McpConfigKeys.SONA_SERVER) != null
     if (changed) {
       if (servers.isEmpty()) {
         settings.remove(MCP_SERVERS_KEY)
@@ -107,3 +110,13 @@ fun writeJson(
 
 fun mutableStringAnyMap(value: Any?): MutableMap<String, Any?> =
   JsonCodec.anyToStringAnyMap(value)?.toMutableMap() ?: linkedMapOf()
+
+internal object McpConfigKeys {
+  const val MCP_SERVERS = "mcpServers"
+  const val SKILL_BILL_SERVER = "skill-bill"
+  const val SONA_SERVER = "sona"
+  const val TYPE = "type"
+  const val STDIO = "stdio"
+  const val COMMAND = "command"
+  const val ARGS = "args"
+}

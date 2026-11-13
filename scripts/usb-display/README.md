@@ -12,7 +12,7 @@ then failed or idle runs, and paused runs last. Runs with the same priority keep
 their existing order. Goals, phases and operations cycle every eight seconds, with empty groups omitted. The board refreshes every
 ten seconds, with one bounded CLI request sequence in flight.
 
-The companion calls `skill-bill work board --finished-within 24h` and follows all
+The companion calls `sona work board --finished-within 24h` and follows all
 pages. It never opens SQLite or starts a run. Its counts follow the tray's board
 sections, including paused runs under Needs you and canceled work under Finished
 today. Finished today uses the tray's rolling 24-hour window. Historical executions

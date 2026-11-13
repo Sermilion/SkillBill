@@ -31,6 +31,31 @@ import kotlin.test.assertTrue
 
 class InstallApplyTest : InstallApplyTestSupport() {
   @Test
+  fun `selected OpenCode installs native specialists through its configured directory`() {
+    val fixture = setupApplyFixture()
+    val plan =
+      planInstallForTest(
+        fixture.request(selectedPlatforms = setOf("kotlin"), agents = setOf(SupportedAgent.OPENCODE)),
+      )
+
+    val result = applyInstallForTest(plan)
+
+    assertEquals(InstallApplyStatus.SUCCESS, result.status, "unexpected failures: ${result.failures}")
+    assertTrue(
+      result.nativeAgents.any { native ->
+        native.provider == NativeAgentProviderId.OPENCODE && native.status == NativeAgentApplyStatus.LINKED
+      },
+    )
+    assertTrue(
+      result.nativeAgents.none { native ->
+        native.agent == SupportedAgent.OPENCODE && native.status == NativeAgentApplyStatus.FAILED
+      },
+    )
+    assertTrue(Files.isSymbolicLink(fixture.home.resolve(".config/opencode/agents/bill-code-review-worker.md")))
+    assertEquals(listOf(SupportedAgent.OPENCODE), result.mcpRegistrationOutcomes.map { it.agent })
+  }
+
+  @Test
   fun `apply returns structured success for selected skills platforms agents and native agents`() {
     val fixture = setupApplyFixture()
     Files.createDirectories(fixture.home.resolve(".codex"))

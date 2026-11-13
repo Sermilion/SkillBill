@@ -21,7 +21,7 @@ The current workflow contract version is **`0.1`**.
 
 - `0.x` means the shape is piloted and may still tighten before a stable `1.0`.
 - The first pilot scope is the feature-task runtime.
-- The feature-verify workflow (`skill-bill operation verify`) is the next intended adopter.
+- The feature-verify workflow (`sona operation verify`) is the next intended adopter.
 
 ## When To Use A Workflow
 
@@ -184,10 +184,10 @@ read-only `*_workflow_get` MCP tools or CLI `verify-workflow show`, and for
 feature-task / goal runs the corresponding `feature-task status` / `goal status`
 surfaces.
 
-`skill-bill feature-task` and `skill-bill goal` are the activation surfaces for
+`sona feature-task` and `sona goal` are the activation surfaces for
 feature-task and goal runs: they own durable state, continuation lookup, and
 foreground execution in-process. Verify workflows still expose a compact
-continuation payload via `skill-bill verify-workflow continue`, including the
+continuation payload via `sona verify-workflow continue`, including the
 resumed step id, required and available artifact keys, compact current-step
 artifact summaries, reference sections to read, and a paste-ready continuation
 prompt. The compact payload omits the full workflow snapshot and full durable
@@ -196,13 +196,20 @@ full-state inspection path when complete durable verify state is needed.
 
 The CLI exposes the recovery and activation surface through:
 
-- `skill-bill feature-task status|lookup|…`
-- `skill-bill goal status|watch|…`
-- `skill-bill verify-workflow show <workflow-id>`
-- `skill-bill verify-workflow resume <workflow-id>`
-- `skill-bill verify-workflow continue <workflow-id>`
+- `sona feature-task status|lookup|…`
+- `sona goal status|watch|…`
+- `sona verify-workflow show <workflow-id>`
+- `sona verify-workflow resume <workflow-id>`
+- `sona verify-workflow continue <workflow-id>`
+- `sona verify-workflow resolve-criterion <workflow-id> --criterion <n> --evidence <text>`
 
-For decomposed feature parents, `skill-bill goal` is the goal-continuation
+A finished verify run is immutable. Work done after it is recorded beside it and
+shown over its frozen results: `resolve-criterion` marks a PARTIAL or FAIL
+criterion as met, and `record-feedback --event fix_applied` against the run's
+review (the most recent review run imported under the verify session id) marks a
+code-review finding fixed. A new verify run is still the way to re-audit.
+
+For decomposed feature parents, `sona goal` is the goal-continuation
 entry: it starts or resumes only the selected runnable subtask, derives the
 subtask contract from persisted artifacts and the subtask spec, suppresses PR
 creation when continuing a child, and records the machine-readable outcome in
@@ -242,7 +249,7 @@ silently leak back into the default child-session payload.
 
 The goal runner persists an append-only attempt/event ledger as the durable
 `goal_attempt_ledger` artifact on the relevant workflow record. Read it with
-`skill-bill goal status` (or the durable artifacts map on the child workflow
+`sona goal status` (or the durable artifacts map on the child workflow
 record) to answer *why* a subtask behaved the way it did — **without scraping
 any provider JSONL session log.** Each entry carries an `action` plus explanatory
 fields:

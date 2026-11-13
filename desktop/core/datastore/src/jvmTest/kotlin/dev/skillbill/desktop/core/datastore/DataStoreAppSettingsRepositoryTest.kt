@@ -56,6 +56,56 @@ class DataStoreAppSettingsRepositoryTest {
   }
 
   @Test
+  fun `details width writes and clears only its key in a populated preferences store`() = runTest {
+    val store = PreferenceDataStoreFactory.create(scope = backgroundScope) { File(directory, "details-width.preferences_pb") }
+    val repository = DataStoreAppSettingsRepository(store, RecordingDiagnostics())
+    val futureKey = androidx.datastore.preferences.core.stringPreferencesKey("future_setting")
+    val work = FavoriteWorkKey(DatabaseFileIdentity("/db", "identity"), "SONA-16")
+    val spec = FavoriteSpecKey("project", "spec.md")
+    store.edit {
+      it[AppPreferenceKeys.DATABASE_PATH] = "/db/review.db"
+      it[AppPreferenceKeys.CHAT_WIDTH_DP] = 640
+      it[AppPreferenceKeys.FAVORITE_WORK] = setOf(FavoriteWorkKeyEncoding.encode(work))
+      it[AppPreferenceKeys.FAVORITE_SPECS] = setOf(FavoriteSpecKeyEncoding.encode(spec))
+      it[futureKey] = "preserve"
+    }
+
+    assertEquals(null, repository.settings.first().detailsWidthDp)
+    assertEquals(Outcome.Failure(SettingsRejection.InvalidDetailsWidth), repository.setDetailsWidthDp(271))
+    assertEquals(Outcome.Success(Unit), repository.setDetailsWidthDp(272))
+    assertEquals(Outcome.Success(Unit), repository.setDetailsWidthDp(50_000))
+    assertEquals(50_000, store.data.first()[AppPreferenceKeys.DETAILS_WIDTH_DP])
+    assertEquals(Outcome.Success(Unit), repository.setDetailsWidthDp(null))
+
+    val saved = store.data.first()
+    assertEquals(null, saved[AppPreferenceKeys.DETAILS_WIDTH_DP])
+    assertEquals("/db/review.db", saved[AppPreferenceKeys.DATABASE_PATH])
+    assertEquals(640, saved[AppPreferenceKeys.CHAT_WIDTH_DP])
+    assertEquals(setOf(FavoriteWorkKeyEncoding.encode(work)), saved[AppPreferenceKeys.FAVORITE_WORK])
+    assertEquals(setOf(FavoriteSpecKeyEncoding.encode(spec)), saved[AppPreferenceKeys.FAVORITE_SPECS])
+    assertEquals("preserve", saved[futureKey])
+  }
+
+  @Test
+  fun `a stored details width below the minimum is reported and decoded as absent`() = runTest {
+    val reported = mutableListOf<String>()
+    val preferences = mutablePreferencesOf(AppPreferenceKeys.DETAILS_WIDTH_DP to 271)
+
+    val decoded = preferences.toAppSettings { reported += it }
+
+    assertEquals(null, decoded.detailsWidthDp)
+    assertEquals(listOf("details_width_dp=271"), reported)
+
+    val diagnostics = RecordingDiagnostics()
+    val store = object : DataStore<Preferences> {
+      override val data = flowOf(preferences)
+      override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences = error("unexpected write")
+    }
+    assertEquals(null, DataStoreAppSettingsRepository(store, diagnostics).settings.first().detailsWidthDp)
+    assertTrue("desktop_settings_value_unsupported" in diagnostics.categories)
+  }
+
+  @Test
   fun `a stored chat width out of range decodes clamped and is reported, and a missing one decodes to the default`() {
     val reported = mutableListOf<String>()
 

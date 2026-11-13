@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.data.runtime.readOrProblem
 import dev.skillbill.desktop.core.data.session.DatabaseSessionManager
 import dev.skillbill.desktop.core.domain.model.ConfigDocument
+import dev.skillbill.desktop.core.domain.model.AdvertisedAgentChoices
 import dev.skillbill.desktop.core.domain.model.ConfigFingerprint
 import dev.skillbill.desktop.core.domain.model.ConfigWriteOutcome
 import dev.skillbill.desktop.core.domain.model.DetectedAgent
@@ -30,6 +31,8 @@ import dev.skillbill.desktop.core.domain.repository.ClaudeConfigDirectoriesRead
 import dev.skillbill.desktop.core.domain.repository.ConfigRead
 import dev.skillbill.desktop.core.domain.repository.ModelMatrixRead
 import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
+import dev.skillbill.desktop.core.domain.repository.AdvertisedAgentChoicesRequest
+import dev.skillbill.desktop.core.data.chat.ChatModelCatalog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.tatarka.inject.annotations.Inject
@@ -74,6 +77,7 @@ class RuntimeConfigAdapter(
   private val sessions: DatabaseSessionManager,
   private val host: HostEnvironment,
   private val diagnostics: Diagnostics,
+  private val modelCatalog: ChatModelCatalog,
 ) : RuntimeConfigRepository {
   private val defaults by lazy { runtimeConfigDefaults(Path.of(host.userHome), diagnostics) }
 
@@ -90,6 +94,13 @@ class RuntimeConfigAdapter(
       }
       ModelMatrixRead.Success(ModelMatrixView(mapped, agents))
     }
+
+  override suspend fun advertisedAgentChoices(request: AdvertisedAgentChoicesRequest): AdvertisedAgentChoices {
+    val workingDirectory = request.repositoryRoot?.takeIf(String::isNotBlank)
+      ?: host.workingDirectory.takeIf(String::isNotBlank)
+      ?: host.userHome
+    return modelCatalog.openCodeChoices(workingDirectory, request.modelId)
+  }
 
   override suspend fun machineConfig(): ConfigRead<MachineConfig> =
     call("config_machine_read", read = true, { ConfigRead.Failed(it) }) { runtime ->
@@ -415,7 +426,7 @@ private fun telemetryLevelFromSnapshot(
     return TelemetryLevelRead.Failed(
       ReadProblem.Runtime(
         "Telemetry is enabled but no install_id is configured at '$path'. " +
-          "Run 'skill-bill telemetry enable' to create one.",
+          "Run 'sona telemetry enable' to create one.",
       ),
     )
   }

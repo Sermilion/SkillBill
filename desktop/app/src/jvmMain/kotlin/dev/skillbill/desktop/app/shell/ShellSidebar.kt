@@ -76,7 +76,7 @@ fun ShellSidebar(
       }
     },
     footer = {
-      SidebarItem("Specs", onToggleSpecs, icon = LucideIcons.fileText, on = specsOpen, tooltip = "Specs pane", shortcut = "G S")
+      SidebarItem("Plans", onToggleSpecs, icon = LucideIcons.fileText, on = specsOpen, tooltip = "Plans pane", shortcut = "G S")
       SidebarItem("Terminal", onToggleTerminal, icon = LucideIcons.terminal, on = terminalOpen, tooltip = "Terminal", shortcut = "⌃ `")
       SidebarItem("Chats", onToggleChat, icon = LucideIcons.bot, on = chatOpen, tooltip = "Chat pane")
       SidebarItem("Settings", { onNavigate(SettingsRoute(SettingsPageId.App)) }, icon = LucideIcons.sliders, tooltip = "Settings", shortcut = "G ,")

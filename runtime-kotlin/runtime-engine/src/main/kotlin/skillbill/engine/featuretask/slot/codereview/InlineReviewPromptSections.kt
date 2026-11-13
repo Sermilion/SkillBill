@@ -128,10 +128,10 @@ internal object InlineReviewPromptSections {
   const val REVIEW_DIRECTIVE: String =
     "Review the last commit against its first parent in this repository. Fix every finding, including " +
       "Minor and Nit, in this same session before you emit. List every finding with its status and a verdict " +
-      "of approved or changes_requested. Do not run `skill-bill phase review` or launch review subagents. " +
+      "of approved or changes_requested. Do not run `sona phase review` or launch review subagents. " +
       "Criterion-gap " +
       "detection remains exclusive to the audit phase. Do not run `./gradlew check`, the pack collect-all " +
-      "gate, or `skill-bill phase validation`; validate owns those. For correctness, reliability, security, " +
+      "gate, or `sona phase validation`; validate owns those. For correctness, reliability, security, " +
       "and contract findings: $MATERIALITY_RULE Do not fix such cases; list them as refuted."
 
   const val VERIFY_FINDINGS_DIRECTIVE: String =
@@ -251,7 +251,7 @@ internal object InlineReviewPromptSections {
       ## Last-commit review scope
       Review only the last commit `${input.currentHeadSha}` against its first parent.
       Do not use `origin/main...HEAD`, a merge base, the full feature branch, the durable implement base,
-      or the current worktree. Standalone `skill-bill code-review` still reviews the caller target
+      or the current worktree. Standalone `sona code-review` still reviews the caller target
       (pr, commit SHA or last, or uncommitted changes). The phase driver resolves last-commit itself; it does
       not receive a pre-baked diff blob.
       """.trimIndent()

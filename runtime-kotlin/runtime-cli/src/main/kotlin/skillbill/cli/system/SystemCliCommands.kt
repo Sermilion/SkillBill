@@ -29,7 +29,7 @@ import skillbill.engine.operation.updatecheck.updateCheckContract
 class VersionCommand(
   private val service: SystemService,
   private val state: CliRunState,
-) : DocumentedCliCommand("version", "Show the installed skill-bill version.") {
+) : DocumentedCliCommand("version", "Show the installed sona version.") {
   private val format by formatOption()
 
   override fun run() {
@@ -168,8 +168,8 @@ private fun retiredSubjectMessage(
   val replacementSkillName = skillName.ifBlank { "<skill-name>" }
   val replacement =
     when (subject) {
-      "skill" -> "skill-bill show $replacementSkillName --repo-root $repoRoot --content $content"
-      else -> "skill-bill doctor"
+      "skill" -> "sona show $replacementSkillName --repo-root $repoRoot --content $content"
+      else -> "sona doctor"
     }
   return when (subject) {
     "skill" -> "doctor skill was retired in SKILL-32; use `$replacement` instead."

@@ -417,6 +417,8 @@ internal class FakeGoalStatsReviewRepository(
   ReviewRunCompletenessRepository by UnavailableReviewRunCompletenessRepository {
   override fun fetchFindingStatuses(runId: String) = error("Unexpected fetchFindingStatuses")
 
+  override fun latestSessionReviewRunId(sessionId: String) = error("Unexpected latestSessionReviewRunId")
+
   override fun saveImportedReview(
     review: ImportedReview,
     sourcePath: String?,
@@ -576,6 +578,8 @@ internal class FakeReviewRepository(
   override fun fetchNumberedFindings(runId: String): List<NumberedFinding> = numberedFindings
 
   override fun fetchFindingStatuses(runId: String) = emptyMap<String, ReviewFindingStatus>()
+
+  override fun latestSessionReviewRunId(sessionId: String): String? = null
 
   override fun findingExists(
     runId: String,

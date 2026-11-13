@@ -1,10 +1,10 @@
-You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
+You are executing exactly one phase of the EXPERIMENTAL sona feature-task-runtime
 loop (preplan -> plan -> plan_subtasks -> implement -> simplify -> audit -> qa -> review -> verify_findings -> validate -> write_history -> commit_push -> pr -> monitor)
 for issue SKILL-65. The runtime owns the loop; do not run other phases, do not open
-or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+or continue any other sona workflow, and do not call `sona workflow continue`.
 Execute this supplied phase briefing with the current installed runtime.
 The initial user-facing goal invocation owns update checks and launch confirmation.
-Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher
+Do not call `mcp__sona__update_check`, ask whether to update, or repeat dispatcher
 intake, preflight, or confirmation, including on retries and continuation.
 Reading the installed skill-bill skill does not make this phase a new invocation.
 
@@ -67,7 +67,7 @@ your final prose.
 ## Validation ownership
 Only the validate phase may run the pack validation gate
 (`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check --continue`,
-`skill-bill phase validation`, or any other full repository check suite. The build phase owns the separate
+`sona phase validation`, or any other full repository check suite. The build phase owns the separate
 compile-only gate. This phase must not compile, build,
 execute tests, or run check to prove the work. Ignore any Validation Strategy, plan note,
 acceptance text, review habit, or prior habit that asks you to run check here — that work waits
@@ -208,17 +208,17 @@ acceptance_criteria:
 (none)
 
 ## Required final output (durable settlement)
-Finish this phase through the skill-bill MCP settlement tools, not by printing a JSON envelope.
+Finish this phase through the sona MCP settlement tools, not by printing a JSON envelope.
 The tools may be deferred in this session: load them first with ToolSearch
-`select:mcp__skill-bill__feature_task_phase_complete,mcp__skill-bill__feature_task_phase_block`.
-- Finished: call `mcp__skill-bill__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
+`select:mcp__sona__feature_task_phase_complete,mcp__sona__feature_task_phase_block`.
+- Finished: call `mcp__sona__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
   phase_id "implement", attempt 1, and value: one prose string carrying everything
   the next phase needs (what this phase produced, deviations from the briefing, what was
   deliberately left to later phases). When a value content section follows, it defines value and
   overrides this description: carry its content as prose or as JSON text, whichever is clearer, and
   emit any exact literal it names with nothing added. Otherwise the runtime does not validate the
   shape of value. Optional summary: one sentence.
-- Cannot finish because of a concrete obstacle: call `mcp__skill-bill__feature_task_phase_block` with the same
+- Cannot finish because of a concrete obstacle: call `mcp__sona__feature_task_phase_block` with the same
   workflow_id, phase_id, and attempt, a reason string naming the obstacle, and failure_disposition
   one of "retryable",
   "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
@@ -234,13 +234,13 @@ what a value content section defines. The runtime records that prose as the phas
 written. Do not wrap it in a status or JSON envelope. Report an obstacle only when a concrete one
 stopped the phase, and name that obstacle in the prose.
 ---
-You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
+You are executing exactly one phase of the EXPERIMENTAL sona feature-task-runtime
 loop (preplan -> plan -> plan_subtasks -> implement -> simplify -> audit -> qa -> review -> verify_findings -> validate -> write_history -> commit_push -> pr -> monitor)
 for issue SKILL-65. The runtime owns the loop; do not run other phases, do not open
-or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+or continue any other sona workflow, and do not call `sona workflow continue`.
 Execute this supplied phase briefing with the current installed runtime.
 The initial user-facing goal invocation owns update checks and launch confirmation.
-Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher
+Do not call `mcp__sona__update_check`, ask whether to update, or repeat dispatcher
 intake, preflight, or confirmation, including on retries and continuation.
 Reading the installed skill-bill skill does not make this phase a new invocation.
 
@@ -303,7 +303,7 @@ your final prose.
 ## Validation ownership
 Only the validate phase may run the pack validation gate
 (`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check --continue`,
-`skill-bill phase validation`, or any other full repository check suite. The build phase owns the separate
+`sona phase validation`, or any other full repository check suite. The build phase owns the separate
 compile-only gate. This phase must not compile, build,
 execute tests, or run check to prove the work. Ignore any Validation Strategy, plan note,
 acceptance text, review habit, or prior habit that asks you to run check here — that work waits
@@ -389,17 +389,17 @@ acceptance_criteria:
 (none)
 
 ## Required final output (durable settlement)
-Finish this phase through the skill-bill MCP settlement tools, not by printing a JSON envelope.
+Finish this phase through the sona MCP settlement tools, not by printing a JSON envelope.
 The tools may be deferred in this session: load them first with ToolSearch
-`select:mcp__skill-bill__feature_task_phase_complete,mcp__skill-bill__feature_task_phase_block`.
-- Finished: call `mcp__skill-bill__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
+`select:mcp__sona__feature_task_phase_complete,mcp__sona__feature_task_phase_block`.
+- Finished: call `mcp__sona__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
   phase_id "implement", attempt 2, and value: one prose string carrying everything
   the next phase needs (what this phase produced, deviations from the briefing, what was
   deliberately left to later phases). When a value content section follows, it defines value and
   overrides this description: carry its content as prose or as JSON text, whichever is clearer, and
   emit any exact literal it names with nothing added. Otherwise the runtime does not validate the
   shape of value. Optional summary: one sentence.
-- Cannot finish because of a concrete obstacle: call `mcp__skill-bill__feature_task_phase_block` with the same
+- Cannot finish because of a concrete obstacle: call `mcp__sona__feature_task_phase_block` with the same
   workflow_id, phase_id, and attempt, a reason string naming the obstacle, and failure_disposition
   one of "retryable",
   "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
@@ -415,13 +415,13 @@ what a value content section defines. The runtime records that prose as the phas
 written. Do not wrap it in a status or JSON envelope. Report an obstacle only when a concrete one
 stopped the phase, and name that obstacle in the prose.
 ---
-You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
+You are executing exactly one phase of the EXPERIMENTAL sona feature-task-runtime
 loop (preplan -> plan -> plan_subtasks -> implement -> simplify -> audit -> qa -> review -> verify_findings -> validate -> write_history -> commit_push -> pr -> monitor)
 for issue SKILL-65. The runtime owns the loop; do not run other phases, do not open
-or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+or continue any other sona workflow, and do not call `sona workflow continue`.
 Execute this supplied phase briefing with the current installed runtime.
 The initial user-facing goal invocation owns update checks and launch confirmation.
-Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher
+Do not call `mcp__sona__update_check`, ask whether to update, or repeat dispatcher
 intake, preflight, or confirmation, including on retries and continuation.
 Reading the installed skill-bill skill does not make this phase a new invocation.
 
@@ -484,7 +484,7 @@ your final prose.
 ## Validation ownership
 Only the validate phase may run the pack validation gate
 (`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check --continue`,
-`skill-bill phase validation`, or any other full repository check suite. The build phase owns the separate
+`sona phase validation`, or any other full repository check suite. The build phase owns the separate
 compile-only gate. This phase must not compile, build,
 execute tests, or run check to prove the work. Ignore any Validation Strategy, plan note,
 acceptance text, review habit, or prior habit that asks you to run check here — that work waits
@@ -625,17 +625,17 @@ acceptance_criteria:
 (none)
 
 ## Required final output (durable settlement)
-Finish this phase through the skill-bill MCP settlement tools, not by printing a JSON envelope.
+Finish this phase through the sona MCP settlement tools, not by printing a JSON envelope.
 The tools may be deferred in this session: load them first with ToolSearch
-`select:mcp__skill-bill__feature_task_phase_complete,mcp__skill-bill__feature_task_phase_block`.
-- Finished: call `mcp__skill-bill__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
+`select:mcp__sona__feature_task_phase_complete,mcp__sona__feature_task_phase_block`.
+- Finished: call `mcp__sona__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
   phase_id "implement", attempt 3, and value: one prose string carrying everything
   the next phase needs (what this phase produced, deviations from the briefing, what was
   deliberately left to later phases). When a value content section follows, it defines value and
   overrides this description: carry its content as prose or as JSON text, whichever is clearer, and
   emit any exact literal it names with nothing added. Otherwise the runtime does not validate the
   shape of value. Optional summary: one sentence.
-- Cannot finish because of a concrete obstacle: call `mcp__skill-bill__feature_task_phase_block` with the same
+- Cannot finish because of a concrete obstacle: call `mcp__sona__feature_task_phase_block` with the same
   workflow_id, phase_id, and attempt, a reason string naming the obstacle, and failure_disposition
   one of "retryable",
   "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
@@ -651,13 +651,13 @@ what a value content section defines. The runtime records that prose as the phas
 written. Do not wrap it in a status or JSON envelope. Report an obstacle only when a concrete one
 stopped the phase, and name that obstacle in the prose.
 ---
-You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
+You are executing exactly one phase of the EXPERIMENTAL sona feature-task-runtime
 loop (preplan -> plan -> plan_subtasks -> implement -> simplify -> audit -> qa -> review -> verify_findings -> validate -> write_history -> commit_push -> pr -> monitor)
 for issue SKILL-65. The runtime owns the loop; do not run other phases, do not open
-or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+or continue any other sona workflow, and do not call `sona workflow continue`.
 Execute this supplied phase briefing with the current installed runtime.
 The initial user-facing goal invocation owns update checks and launch confirmation.
-Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher
+Do not call `mcp__sona__update_check`, ask whether to update, or repeat dispatcher
 intake, preflight, or confirmation, including on retries and continuation.
 Reading the installed skill-bill skill does not make this phase a new invocation.
 
@@ -720,7 +720,7 @@ your final prose.
 ## Validation ownership
 Only the validate phase may run the pack validation gate
 (`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check --continue`,
-`skill-bill phase validation`, or any other full repository check suite. The build phase owns the separate
+`sona phase validation`, or any other full repository check suite. The build phase owns the separate
 compile-only gate. This phase must not compile, build,
 execute tests, or run check to prove the work. Ignore any Validation Strategy, plan note,
 acceptance text, review habit, or prior habit that asks you to run check here — that work waits
@@ -806,17 +806,17 @@ acceptance_criteria:
 (none)
 
 ## Required final output (durable settlement)
-Finish this phase through the skill-bill MCP settlement tools, not by printing a JSON envelope.
+Finish this phase through the sona MCP settlement tools, not by printing a JSON envelope.
 The tools may be deferred in this session: load them first with ToolSearch
-`select:mcp__skill-bill__feature_task_phase_complete,mcp__skill-bill__feature_task_phase_block`.
-- Finished: call `mcp__skill-bill__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
+`select:mcp__sona__feature_task_phase_complete,mcp__sona__feature_task_phase_block`.
+- Finished: call `mcp__sona__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
   phase_id "implement", attempt 4, and value: one prose string carrying everything
   the next phase needs (what this phase produced, deviations from the briefing, what was
   deliberately left to later phases). When a value content section follows, it defines value and
   overrides this description: carry its content as prose or as JSON text, whichever is clearer, and
   emit any exact literal it names with nothing added. Otherwise the runtime does not validate the
   shape of value. Optional summary: one sentence.
-- Cannot finish because of a concrete obstacle: call `mcp__skill-bill__feature_task_phase_block` with the same
+- Cannot finish because of a concrete obstacle: call `mcp__sona__feature_task_phase_block` with the same
   workflow_id, phase_id, and attempt, a reason string naming the obstacle, and failure_disposition
   one of "retryable",
   "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".

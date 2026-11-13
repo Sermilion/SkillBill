@@ -1,10 +1,10 @@
 ## Purpose
 
-Route dominant-stack quality checks through the winning platform pack `validation_gate`. Standalone and orchestrated invocations share one repair-window contract on `skill-bill phase validation`.
+Route dominant-stack quality checks through the winning platform pack `validation_gate`. Standalone and orchestrated invocations share one repair-window contract on `sona phase validation`.
 
 ## Repair Window
 
-The runtime runs the pack gate once and hands you that output. Fix every finding in the same session. Do not invoke the full gate, collect-all gate, `skill-bill phase validation`, or any targeted compile, test, format, or analysis proof after each individual finding or between findings. When the set looks clean, stop: the runtime reruns the gate. If that fails, its output is the new complete finding set.
+The runtime runs the pack gate once and hands you that output. Fix every finding in the same session. Do not invoke the full gate, collect-all gate, `sona phase validation`, or any targeted compile, test, format, or analysis proof after each individual finding or between findings. When the set looks clean, stop: the runtime reruns the gate. If that fails, its output is the new complete finding set.
 
 ## Pack validation_gate
 

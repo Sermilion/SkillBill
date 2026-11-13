@@ -206,6 +206,37 @@ class GoalRunnerArchiveCoordinatorTest {
   }
 
   @Test
+  fun `sibling worktree refusal turns the purge hint into an export command`() {
+    val store = InMemoryGoalManifestStore(manifest(subtaskCount = 1).copy(issueKey = "SKILL-245"))
+    val guardedStore =
+      object : GoalRunnerManifestStore by store {
+        override fun discoverPurgeOwnership(
+          issueKey: String,
+          repoRoot: Path,
+        ): GoalPurgeOwnership =
+          GoalPurgeOwnership(
+            manifests = emptyList(),
+            parentWorkflowIds = setOf("wf-parent"),
+            siblingWorktreeWorkflows = listOf("sona goal purge SKILL-245 --repo-root /sibling"),
+          )
+      }
+    val output = Files.createTempDirectory("goal-export-sibling").resolve("out.zip")
+    val service =
+      exportService(
+        manifestStore = guardedStore,
+        ports = GoalRunnerStatusTestPorts(gitOperations = BranchHeadGitOperations("feat/SKILL-245-goal", "abc123")),
+      )
+
+    val root = Files.createTempDirectory("goal-export-root")
+    val result = service.export(GoalRunnerExportRequest("SKILL-245", root, output))
+
+    assertIs<GoalRunnerExportResult.Refused>(result)
+    assertContains(result.reason, "sona goal export SKILL-245 --repo-root /sibling")
+    assertFalse(result.reason.contains("sona goal purge"))
+    assertFalse(Files.exists(output))
+  }
+
+  @Test
   fun `exported zip retains plan workflow step and typed plan bundle fields`() {
     val fixture = storeBundleFixture()
     val planWorkflow =

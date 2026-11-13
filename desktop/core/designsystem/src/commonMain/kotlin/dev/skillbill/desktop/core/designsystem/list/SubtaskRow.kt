@@ -8,24 +8,24 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
@@ -37,16 +37,18 @@ import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.IdTag
 import dev.skillbill.desktop.core.designsystem.composite.Edge
-import dev.skillbill.desktop.core.designsystem.composite.expandSemantics
 import dev.skillbill.desktop.core.designsystem.composite.focusBar
 import dev.skillbill.desktop.core.designsystem.composite.hairline
+import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
+import dev.skillbill.desktop.core.designsystem.icon.SbIcon
+import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 
 /**
  * `.sb-sub`: one line of the Subtasks index, min 36 px, 12 px side padding, 10 px gaps. [selected] (the inspector's subject)
  * fills `bg-active` with a 2 px accent bar on the left edge and wins over [current]'s `bg-selected` tint; a selectable row
- * ([onClick]) shows `bg-hover` on its line while not selected. [body] renders under the line: the inline inspector.
+ * ([onClick]) shows `bg-hover` on its line while not selected.
  */
 @Composable
 fun SubtaskRow(
@@ -60,7 +62,6 @@ fun SubtaskRow(
   onClick: (() -> Unit)? = null,
   meta: @Composable RowScope.() -> Unit = {},
   divider: Boolean = true,
-  body: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
   val openRow = LocalSubtaskRowOpen.current
   val colors = SkillBillTheme.colors
@@ -76,7 +77,7 @@ fun SubtaskRow(
   Column(
     modifier.fillMaxWidth().background(fill).focusBar(selected)
       .semantics { this.selected = selected }
-      // `.sb-sub` border-bottom: the rule takes its own 1px below the row and body.
+      // `.sb-sub` border-bottom: the rule takes its own 1px below the row.
       .then(if (divider) Modifier.hairline(Edge.Bottom, colors.borderSubtle).padding(bottom = 1.dp) else Modifier),
   ) {
     Row(
@@ -88,7 +89,6 @@ fun SubtaskRow(
                 if (openRow != null && event.type == KeyEventType.KeyDown && (event.key == Key.Enter || event.key == Key.NumPadEnter)) { openRow(); true } else false
               }.hoverable(interaction).pointerHoverIcon(PointerIcon.Hand)
               .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
-              .expandSemantics(body != null)
           } else {
             Modifier
           },
@@ -106,10 +106,13 @@ fun SubtaskRow(
       )
       // Meta joins the row directly, so an empty meta adds no trailing gap after the title.
       meta()
-    }
-    if (body != null) {
-      // `.sb-sub-body`: padding 4 16 16 62, 8 between blocks.
-      Column(Modifier.fillMaxWidth().padding(start = 62.dp, end = 16.dp, top = 4.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = body)
+      Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) {
+        if (hovered || selected) {
+          androidx.compose.runtime.CompositionLocalProvider(dev.skillbill.desktop.core.designsystem.LocalContentColor provides if (selected) colors.accent else colors.fgFaint) {
+            SbIcon(LucideIcons.chevronRight, SbIconSize.Xs)
+          }
+        }
+      }
     }
   }
 }

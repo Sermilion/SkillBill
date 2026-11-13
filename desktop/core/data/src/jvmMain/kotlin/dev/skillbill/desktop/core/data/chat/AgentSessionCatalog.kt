@@ -7,10 +7,8 @@ import dev.skillbill.desktop.core.data.usage.cursorEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
-import dev.skillbill.desktop.core.domain.model.ChatHistoryRead
-import dev.skillbill.desktop.core.domain.model.ChatStoreRead
-import dev.skillbill.desktop.core.domain.model.ChatStoreReadFailure
 import dev.skillbill.desktop.core.domain.model.SessionMoveResult
+import dev.skillbill.desktop.core.domain.model.SavedChatProjection
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
@@ -50,27 +48,12 @@ class AgentSessionCatalog(
     root: String,
     currentSessionId: String,
     agentFor: suspend (String) -> ChatAgent,
-  ): List<ChatHistoryEntry> = listResult(executionId, root, currentSessionId, agentFor).entries
-
-  internal suspend fun listResult(
-    executionId: String,
-    root: String,
-    currentSessionId: String,
-    agentFor: suspend (String) -> ChatAgent,
-  ): ChatHistoryRead {
-    val failures = mutableListOf<ChatStoreReadFailure>()
-    val currentBinding = store.agentSessionRead(currentSessionId)
-    val excluded = setOfNotNull(currentSessionId, (currentBinding as? ChatStoreRead.Value)?.value)
-    if (currentBinding is ChatStoreRead.Failed) failures += currentBinding.failure
+  ): SavedChatProjection {
+    val excluded = setOfNotNull(currentSessionId, store.agentSession(currentSessionId))
     val sessions = sessionsIn(root).filter { it.id !in excluded }.sortedByDescending { it.updatedAt }.take(LISTED_SESSIONS)
     sessions.forEach { listed[it.id] = it }
     val native = sessions.map { session ->
-      val savedRead = store.savedForRead(session.id)
-      val saved = when (savedRead) {
-        is ChatStoreRead.Failed -> { failures += savedRead.failure; null }
-        ChatStoreRead.Missing -> null
-        is ChatStoreRead.Value -> savedRead.value
-      }
+      val saved = store.savedFor(session.id)
       val agent = (saved?.agent ?: agentFor(session.agentId)).copy(profile = session.profile.path)
       ChatHistoryEntry(
         session.id, saved?.executionId, agent, session.updatedAt,
@@ -80,20 +63,32 @@ class AgentSessionCatalog(
         executionCheckoutRoot = root,
       )
     }
-    val appOnly = store.savedChatsRead(executionId)
-    failures += appOnly.failures
-    return ChatHistoryRead((native + appOnly.entries.filter { it.agent.agentId !in sessionStoreAgents && it.sessionId !in excluded })
-      .sortedByDescending { it.updatedAt }, failures)
+    val appSaved = store.savedChats(executionId)
+    val appOnly = appSaved.entries.filter {
+      it.agent.agentId !in sessionStoreAgents && it.sessionId !in excluded && store.agentSession(it.sessionId) !in excluded
+    }
+    val recoveries = appSaved.recoveries.filterNot { it.sessionId in excluded }
+    return SavedChatProjection((native + appOnly).sortedByDescending { it.updatedAt }, recoveries)
   }
 
   internal fun open(entry: ChatHistoryEntry): List<ChatHistoryLine> {
-    if (entry.agent.agentId == "codex") {
-      val agentSessionRead = store.agentSessionRead(entry.sessionId)
-      if (agentSessionRead is ChatStoreRead.Failed) throw IOException(storeFailureMessage(agentSessionRead.failure))
-      if ((agentSessionRead as? ChatStoreRead.Value)?.value == null) {
-        if (!store.saveChat(entry) || !store.saveAgentSession(entry.sessionId, entry.sessionId)) {
-          throw IOException("Could not save the provider thread for this chat. Try opening it again.")
-        }
+    if (entry.agent.agentId == "opencode") {
+      val saved = store.savedEntry(entry.sessionId)
+      val state = store.openCodeSavedState(entry.sessionId)
+      if (saved == null || state !is OpenCodeSavedState.Readable || state.agentId != "opencode" ||
+        state.handle.isNullOrBlank() || state.binding == null || saved.executionId != entry.executionId ||
+        saved.agent != entry.agent || saved.newTask != entry.newTask) {
+        diagnostics.record("chat.opencode_saved_open_refused")
+        val path = (state as? OpenCodeSavedState.Unusable)?.path
+        throw IOException(
+          "The saved OpenCode chat cannot be resumed safely. ${path?.let { "Original data remains at $it. " }.orEmpty()}Preserve or repair the saved record, or start a separate new chat.",
+        )
+      }
+      return saved.lines
+    }
+    if (entry.agent.agentId == "codex" && store.agentSession(entry.sessionId) == null) {
+      if (!store.saveChat(entry) || !store.saveAgentSession(entry.sessionId, entry.sessionId)) {
+        throw IOException("Could not save the provider thread for this chat. Try opening it again.")
       }
     } else if (entry.agent.agentId == "cursor") {
       val storageId = entry.appSessionId ?: entry.sessionId
@@ -101,9 +96,7 @@ class AgentSessionCatalog(
       val profile = environment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR]
         ?: environment["HOME"]
         ?: host.userHome
-      val bindingRead = store.cursorSessionBindingRead(storageId)
-      if (bindingRead is ChatStoreRead.Failed) throw IOException(storeFailureMessage(bindingRead.failure))
-      val existingBinding = (bindingRead as? ChatStoreRead.Value)?.value
+      val existingBinding = store.cursorSessionBinding(storageId)
       if (existingBinding != null) {
         if (!store.saveAgentSession(storageId, entry.sessionId)) {
           throw IOException("Could not save the provider thread for this chat. Try opening it again.")
@@ -127,9 +120,6 @@ class AgentSessionCatalog(
       }
     }
   }
-
-  private fun storeFailureMessage(failure: ChatStoreReadFailure) =
-    "Saved chat could not be read at ${failure.sourcePath}: ${failure.reason}. ${failure.recovery}"
 
   /**
    * Moves the Claude sessions of [fromRoot] to [toRoot] and rewrites the cwd of its Codex sessions, in every profile; Cursor chats

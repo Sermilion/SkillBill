@@ -58,8 +58,8 @@ class CliAuthoringParityTest {
       )
 
     assertEquals(1, listed["skill_count"])
-    assertEquals("skill-bill", shown["skill_name"])
-    assertEquals("skill-bill", (explained["skill"] as Map<*, *>)["skill_name"])
+    assertEquals("sona", shown["skill_name"])
+    assertEquals("sona", (explained["skill"] as Map<*, *>)["skill_name"])
   }
 
   @Test
@@ -139,6 +139,27 @@ class CliAuthoringParityTest {
   }
 
   @Test
+  fun `render command payload exposes public dispatcher skill name`() {
+    val repoRoot = outerRepoRoot()
+    val tempDir = Files.createTempDirectory("skillbill-cli-render-sona-skill-name")
+    val context = CliRuntimeContext(userHome = tempDir)
+
+    val result =
+      CliRuntime.run(
+        listOf(
+          "render",
+          "sona",
+          "--repo-root",
+          repoRoot.toString(),
+        ),
+        context,
+      )
+
+    assertEquals(0, result.exitCode, result.stdout)
+    assertEquals("sona", result.payload?.get("skill_name"))
+  }
+
+  @Test
   fun `render command emits read-only stdout and dry run matches normal output`() {
     val tempDir = Files.createTempDirectory("skillbill-cli-authoring-render")
     val context = CliRuntimeContext(userHome = tempDir)
@@ -185,13 +206,13 @@ class CliAuthoringParityTest {
     listOf(
       listOf("new-addon", "--interactive", "--format", "json") to
         "new-addon --interactive interactive mode was retired in SKILL-32; " +
-        "use `skill-bill new-addon --platform <platform> --name <name>` instead.",
+        "use `sona new-addon --platform <platform> --name <name>` instead.",
       listOf("create-and-fill", "--interactive", "--format", "json") to
         "create-and-fill interactive mode was retired in SKILL-32; " +
-        "use `skill-bill create-and-fill --payload <file> --body-file <file>` instead.",
+        "use `sona create-and-fill --payload <file> --body-file <file>` instead.",
       listOf("edit", "skill-bill", "--repo-root", outerRepoRoot().toString(), "--format", "json") to
         "edit interactive mode was retired in SKILL-32; " +
-        "use `skill-bill fill skill-bill --body-file <file>` instead.",
+        "use `sona fill sona --body-file <file>` instead.",
       listOf(
         "edit",
         "skill-bill",
@@ -202,7 +223,7 @@ class CliAuthoringParityTest {
         "json",
       ) to
         "edit --editor editor mode was retired in SKILL-32; " +
-        "use `skill-bill fill skill-bill --body-file <file>` instead.",
+        "use `sona fill sona --body-file <file>` instead.",
     ).forEach { (arguments, expectedError) ->
       val result = CliRuntime.run(arguments, context)
       val payload = decodeJsonObject(result.stdout)

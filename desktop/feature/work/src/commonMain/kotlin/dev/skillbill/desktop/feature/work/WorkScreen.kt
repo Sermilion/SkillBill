@@ -108,7 +108,7 @@ internal fun WorkScreen(state: WorkUiState, filterFocus: FocusRequester, host: W
       actions = {
         if ((state.board as? BoardState.Loaded)?.stale == true) StaleIndicator()
         SbIconButton(LucideIcons.refresh, "Refresh", { onAction(WorkAction.Refresh) })
-        SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close specs pane" else "Specs", host.onToggleSpecs, shortcut = "G S", selected = host.specsOpen)
+        SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close plans pane" else "Plans", host.onToggleSpecs, shortcut = "G S", selected = host.specsOpen)
         SbIconButton(LucideIcons.terminal, if (host.terminalOpen) "Close terminal" else "Terminal", host.onToggleTerminal, shortcut = "⌃ `", selected = host.terminalOpen)
         SbButton("Import work…", { onAction(WorkAction.RequestImport) }, size = SbControlSize.Small)
       },

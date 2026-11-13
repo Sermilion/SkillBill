@@ -31,7 +31,7 @@ class ScaffoldCliResultMappersTest {
     family = "code-review",
     area = "architecture",
     contentFile = "skills/bill-kotlin-code-review/content.md",
-    renderCommand = "skill-bill render bill-kotlin-code-review",
+    renderCommand = "sona render bill-kotlin-code-review",
     completionStatus = ScaffoldCompletionStatus.COMPLETE,
     sectionCount = 2,
     sections =
@@ -49,7 +49,7 @@ class ScaffoldCliResultMappersTest {
           preview = "",
         ),
       ),
-    recommendedCommands = listOf("skill-bill fill bill-kotlin-code-review"),
+    recommendedCommands = listOf("sona fill bill-kotlin-code-review"),
     reviewComposition = reviewComposition,
     contentPreview = contentPreview,
     content = content,
@@ -171,7 +171,7 @@ class ScaffoldCliResultMappersTest {
         status = ScaffoldValidationStatus.FAIL,
         issues = listOf("missing frontmatter"),
         skillNames = listOf("bill-kotlin-code-review"),
-        suggestedCommands = listOf("skill-bill fill bill-kotlin-code-review"),
+        suggestedCommands = listOf("sona fill bill-kotlin-code-review"),
       ).toCliMap()
 
     assertEquals(
@@ -180,7 +180,7 @@ class ScaffoldCliResultMappersTest {
     )
     assertEquals(listOf("bill-kotlin-code-review"), map["skill_names"])
     assertEquals(listOf("missing frontmatter"), map["issues"])
-    assertEquals(listOf("skill-bill fill bill-kotlin-code-review"), map["suggested_commands"])
+    assertEquals(listOf("sona fill bill-kotlin-code-review"), map["suggested_commands"])
   }
 
   @Test
@@ -208,8 +208,8 @@ class ScaffoldCliResultMappersTest {
           ScaffoldExplainSkill(
             skillName = "bill-kotlin-code-review",
             contentFile = "skills/bill-kotlin-code-review/content.md",
-            renderCommand = "skill-bill render bill-kotlin-code-review",
-            recommendedCommands = listOf("skill-bill fill bill-kotlin-code-review"),
+            renderCommand = "sona render bill-kotlin-code-review",
+            recommendedCommands = listOf("sona fill bill-kotlin-code-review"),
           ),
       ).toCliMap()
 

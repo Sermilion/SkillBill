@@ -16,6 +16,7 @@ import skillbill.goalrunner.model.GoalRunnerPhaseCardEdit
 import skillbill.goalrunner.model.GoalRunnerPhaseCardOutput
 import skillbill.goalrunner.model.GoalRunnerPhaseCardState
 import skillbill.goalrunner.model.GoalRunnerPhaseConclusion
+import skillbill.goalrunner.model.GoalRunnerPlanRecord
 import skillbill.goalrunner.model.GoalRunnerSubtaskAuditAttempt
 import skillbill.goalrunner.model.GoalRunnerSubtaskAuditCriterion
 import skillbill.goalrunner.model.GoalRunnerSubtaskAuditOutcome
@@ -30,6 +31,7 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateExecutionEvidenceFromArtifact
+import skillbill.workflow.taskruntime.artifact.goalPlanningImport
 import skillbill.workflow.taskruntime.artifact.isPreContractAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.supersededAcceptanceCriterionRepairStateVersion
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
@@ -344,6 +346,8 @@ internal fun phaseCardOutput(
       null
     }
   return GoalRunnerPhaseCardOutput(
+    summary = knownString(envelope[SharedPayloadKeys.SUMMARY]),
+    text = knownString(produced[SharedPayloadKeys.VALUE]),
     verdict = knownString(envelope[SharedPayloadKeys.VERDICT]),
     buildReceipt = gate(ValidationEvidencePayloadKeys.BUILD_RECEIPT),
     validationReceipt = gate(ValidationEvidencePayloadKeys.VALIDATION_RESULT),
@@ -390,6 +394,38 @@ internal fun subtaskPhaseCards(
   }.getOrElse { error ->
     degradation.record(GoalRunnerSubtaskReadSource.PHASE_CARD_OUTPUT, "phase_settlement_envelopes", "omitted", error)
     cards.map { (card, _) -> card }
+  }
+}
+
+internal fun attachPlanningRecord(
+  cards: List<GoalRunnerPhaseCard>,
+  artifacts: DurableWorkflowArtifacts,
+  records: Map<String, FeatureTaskRuntimePhaseRecord>,
+  degradation: SubtaskReadDegradation,
+): List<GoalRunnerPhaseCard> {
+  val imported =
+    catchingNonCancellation { artifacts.goalPlanningImport() }.getOrElse { error ->
+      degradation.record(GoalRunnerSubtaskReadSource.PHASE_CARD_OUTPUT, "planning_import", "omitted", error)
+      null
+    } ?: return cards
+  return cards.map { card ->
+    if (card.phaseId != "plan") {
+      card
+    } else {
+      card.copy(
+        output =
+          (card.output ?: phaseCardOutput(emptyMap(), card.phaseId)).copy(
+            planRecord =
+              GoalRunnerPlanRecord(
+                imported.manifestOrder,
+                imported.governedSubSpecPath,
+                imported.subSpecHash,
+                imported.planPayloadSha256,
+                records[card.phaseId]?.repairEvidence?.let { "${it.format.wireValue} · ${it.operation.wireValue}" },
+              ),
+          ),
+      )
+    }
   }
 }
 

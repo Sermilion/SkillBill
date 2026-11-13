@@ -84,8 +84,10 @@ class NewTaskImagePasteTest {
         assertTrue(draft.images.isEmpty())
         assertEquals(1, draft.chat.value!!.thread.transcript.value.filterIsInstance<ChatMessage.Operator>().single().images.size)
         pasted = null
+        testScheduler.advanceUntilIdle()
       }
       field.performClick()
+      field.assertIsFocused()
       field.performKeyInput { withKeyDown(modifier) { pressKey(Key.V) } }
       runOnIdle { assertEquals("copied text", draft.text) }
     }

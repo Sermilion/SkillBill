@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot
 
 import skillbill.config.model.PhaseCompactionDirective
+import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
@@ -37,6 +38,7 @@ public data class PhaseStepFacts(
   val additionalWritableDirectories: List<Path> = emptyList(),
   val agentWorkingDirectory: Path? = null,
   val liveChecks: PhaseLiveChecksLaunch? = null,
+  val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 )
 
 public data class PhaseLiveChecksLaunch(

@@ -1,5 +1,7 @@
 package skillbill.contracts.operationcard
 
+import skillbill.contracts.system.OpenCodeLaunchIdentity
+
 const val OPERATOR_OPERATION_CARD_CONTRACT_VERSION = "1.0"
 
 object OperationCardEnvironmentKeys {
@@ -105,6 +107,7 @@ data class OperationLaunchContext(
   val selectedProfile: String? = null,
   val holderId: String,
   val retention: OperationLaunchRetention? = null,
+  val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 )
 
 enum class OperationLaunchRetention(val wireValue: String) {

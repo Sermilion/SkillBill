@@ -60,6 +60,7 @@ class ReviewSpecAdjudicationRunner(
         projectStoreRoot = request.launch.projectStoreRoot,
         timeout = request.launch.timeout,
         modelOverride = request.launch.modelOverride,
+        effortOverride = request.launch.effortOverride,
         promptSuffix = request.launch.promptSuffix,
         laneProgressIdleTimeout = request.launch.laneProgressIdleTimeout,
       )
@@ -209,6 +210,7 @@ class ReviewSpecAdjudicationRunner(
     val projectStoreRoot: Path,
     val timeout: Duration?,
     val modelOverride: String?,
+    val effortOverride: String?,
     val promptSuffix: String,
     val laneProgressIdleTimeout: Duration,
   )
@@ -242,6 +244,7 @@ class ReviewSpecAdjudicationRunner(
               timeout = env.timeout,
               promptOverride = prompt,
               modelOverride = env.modelOverride,
+              effortOverride = env.effortOverride,
               approval = AgentRunApprovalRequirement.GovernedReview,
               additionalWritableDirectories = listOf(env.projectStoreRoot),
             ).boundedReviewLane(env.laneProgressIdleTimeout),

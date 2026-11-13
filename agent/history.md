@@ -1,3 +1,26 @@
+## [2026-11-12] SKILL-535 add OpenCode support
+Areas: install.sh, orchestration/contracts, runtime-kotlin install, launcher, workflow and SQLite, desktop configuration and chat
+- MEDIUM feature. OpenCode installation resolves effective roots and edits the managed JSON/JSONC MCP subtree while preserving unrelated content. Native specialists render from neutral sources and use managed link, inventory and digest checks.
+- ACP execution acknowledges advertised model, effort and mode before prompting. Owned runs require complete capture and matching durable settlement when the launched prompt requests it.
+- Reusable: OpenCode launch identity retains profile and configuration fingerprints across resume without persisting inline configuration. A temporary ACP setup session acquires advertised model and effort choices for the editor.
+- Governed review uses private per-lane launch scopes, verified workers and lane-bound evidence authority. Admission is limited to the pinned OpenCode 1.15.3 API-authenticated baseline and supported host permissions.
+- Desktop chat saves provider handles and configuration bindings, resumes with session/load, preserves unsafe records for recovery, and applies chat permission and stop settlement rules.
+- SQLite migration 122 carries optional launch identity; the current desktop read schema is 123. Writable readiness repairs a missing or stale desktop read identity after supported migrations, preserves work data, records a diagnostic, and rejects newer or unrecognized schemas.
+- Limits: live provider execution, review isolation and desktop continuity are not fully established by the supplied evidence. QA finished with findings, and later validation changed the tree QA examined.
+Feature flag: N/A
+Acceptance criteria: 5/5 addressed in source; integrated acceptance remains unconfirmed.
+
+## [2026-11-13] SONA-5 rename public commands to sona
+Areas: install.sh, uninstall.sh, scripts, docs, orchestration, runtime-kotlin, desktop, skills/skill-bill, .codex
+- MEDIUM feature. Public CLI is sona, MCP is sona-mcp with server sona, listed skill is /sona, and the desktop launcher is sona-app with visible name Sona. Canonical skills/skill-bill, internal-for: skill-bill, raw operations, telemetry, state paths and historical records stay unchanged.
+- The owned skill-bill launcher prints only "skill-bill has been renamed to sona. Run sona instead." plus a newline and exits 0 for every argument list, without runtime lookup or dispatch. Publication removes skill-bill-mcp only when it targets this installation; unrelated occupants stay with a warning.
+- ListedSkillNames maps canonical skill-bill to public sona. Authoring accepts either spelling and installs one target. MCP registration and removal recognize both product names; TOML removal matches owned nested tables without deleting neighboring servers or linear-sona.
+- Fresh recovery, planning, continuation, desktop launch, chat, review and operator guidance emit sona or /sona. DetachedWorkRunLauncher resolves only sona so a missing binary cannot fall through to the notice shim. The update-check action hint says Checks for Sona updates.
+- Reusable: ListedSkillNames; McpConfigKeys in registration adapters; existing launcher ownership, staging and rollback. Prefix-dependent consumers such as archive export changed with their command producers.
+- Limits: no persisted-schema migration. Unrelated files, links and dangling targets stay and return typed ownership failures. Native Debian, macOS and Windows installer checks were unavailable here. Validate changed code after QA settled, including this hint, so QA did not re-test the published tree.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-10] SKILL-535 — Carry captured roots into desktop work items
 Areas: runtime-infra/sqlite/idestatus; desktop/core/domain and desktop/core/data/runtime
 - MEDIUM feature. Optional `primaryRepositoryRoot` survives SQLite snapshot caching, validation, and decoding; absent and null legacy values remain readable, while malformed values retain the undecodable-row diagnostic path.
@@ -101,7 +124,7 @@ Acceptance criteria: 11/11 implemented
 
 ## [2026-08-18] Install reconcile: upstream always wins
 Areas: install.sh, runtime-kotlin/runtime-cli (update command)
-- Reconcile no longer preserves local edits. `install.sh` lost `--prefer-upstream`, `PREFER_UPSTREAM`, the y/n conflict prompt, the no-TTY conflict abort, the `SKILL_BILL_RECONCILE_CONFLICT_CHOICE` test seam, `--accept-conflicts`, `RECONCILE_CONFLICT_PATHS` and the summary block that reported overwritten conflicts. `skill-bill update` lost its `--prefer-upstream` passthrough.
+- Reconcile no longer preserves local edits. `install.sh` lost `--prefer-upstream`, `PREFER_UPSTREAM`, the y/n conflict prompt, the no-TTY conflict abort, the `SKILL_BILL_RECONCILE_CONFLICT_CHOICE` test seam, `--accept-conflicts`, `RECONCILE_CONFLICT_PATHS` and the summary block that reported overwritten conflicts. `sona update` lost its `--prefer-upstream` passthrough.
 - `parse_reconcile_report` now only fail-closes on a missing/unparseable `reconcile_summary:` line (it keys off `applied=`); `has_conflicts` / `conflict_count` are gone from the line protocol.
 - The compute-only `install reconcile` pass is retained ON PURPOSE even though it no longer gates a decision: it is the pre-mutation failure detector that sets `RECONCILE_FAILURE_KIND=compute`, which is the only trigger for `reconcile_and_commit_authored_source_with_recovery`'s clean copied-source reset. Deleting the pass would leave a stale copied source (e.g. a pack manifest at an older `contract_version`) failing inside `--apply` instead, after partial mutation and with no recovery. reusable
 - Preserved on purpose: `clean_install_state` still wipes only `skills/`, `platform-packs/`, `orchestration/` and the baseline manifest, so `agent-addons/`, `install-selection.json`, and the durable DBs survive both a `--clean` install and the recovery reset.
@@ -211,9 +234,9 @@ Acceptance criteria: 5/5 implemented (subtask-local ACs; AC-3 reinstall-without-
 
 ## [2026-06-08] SKILL-71.1 prose-goal-orchestrator
 Areas: skills/bill-feature-goal, skills/bill-feature-task-prose, README.md
-- Added `mode:prose` to `bill-feature-goal` (mirrors SKILL-70 `mode:runtime`/`mode:prose` convention): mode:runtime (default) drives the foreground `skill-bill goal` runtime; mode:prose loops decomposed subtasks in-session through the existing continuation seam. reusable
+- Added `mode:prose` to `bill-feature-goal` (mirrors SKILL-70 `mode:runtime`/`mode:prose` convention): mode:runtime (default) drives the foreground `sona goal` runtime; mode:prose loops decomposed subtasks in-session through the existing continuation seam. reusable
 - Structure decision: documented mode:prose INLINE in the single `bill-feature-goal/content.md` (no router file-split, no sibling -prose/-runtime skills) — spec Design Notes mandate one orchestrator file; only the `mode:` argument convention is reused from bill-feature-task. reusable
-- Prose subtask entry is `skill-bill workflow continue <issue_key> --subtask-id <id>` / MCP `feature_implement_workflow_continue` with integer `subtask_id`; durable outcome is written by the existing bill-feature-task-prose goal-continuation worker (no second record-writing path/store). reusable
+- Prose subtask entry is `sona workflow continue <issue_key> --subtask-id <id>` / MCP `feature_implement_workflow_continue` with integer `subtask_id`; durable outcome is written by the existing bill-feature-task-prose goal-continuation worker (no second record-writing path/store). reusable
 - Flag-name pitfall: CLI flag is `--subtask-id`, not `--subtask` — verify continuation flag names against `WorkflowCliCommands.kt`, not spec prose. reusable
 - Load-bearing test: `FeatureSpecSkillWiringContractTest.kt:47-57` asserts exact substrings in bill-feature-goal/content.md AND `Ask one confirmation question` exactly once — both goal modes must share the single confirmation gate; preserve those strings when editing. reusable
 Feature flag: N/A
@@ -223,7 +246,7 @@ Acceptance criteria: 7/7 implemented
 Areas: skills/bill-feature-task, skills/bill-feature-task-prose, skills/bill-feature-task-runtime, skills/bill-feature, skills/bill-code-review, runtime-kotlin/runtime-cli, runtime-kotlin/runtime-domain, runtime-kotlin/runtime-application
 - Split the feature-task skill surface into router/prose/runtime tiers: `bill-feature-task` accepts `mode:prose` (default) or `mode:runtime`, `bill-feature-task-prose` owns the prose orchestrator, `bill-feature-task-runtime` owns the thin runtime-backed skill. reusable
 - Relocation pattern: prose `native-agents/agents.yaml` moved byte-for-byte, legacy source directory removed, install/validation references retargeted; keep historical references only in history entries. reusable
-- Parallel review runtime added: `skill-bill code-review-parallel` runs two agent lanes concurrently on the same diff; `skill-bill code-review-merge` coalesces findings with provenance labels. reusable
+- Parallel review runtime added: `sona code-review-parallel` runs two agent lanes concurrently on the same diff; `sona code-review-merge` coalesces findings with provenance labels. reusable
 - CLI-to-domain boundary rule: CLI commands must route through an application service layer (e.g. `ParallelCodeReviewMergeService`), never import domain types (`skillbill.review.*`) directly — enforced by Detekt architecture rule.
 - Large-diff safety: codex lane uses `codex exec - < file` (stdin pipe) not `$(cat file)` arg expansion to avoid ARG_MAX; SKILL-70.1 specced for full threshold-based CLI delegation.
 Feature flag: N/A
@@ -234,16 +257,16 @@ Areas: skills/bill-feature, README.md, AGENTS.md, runtime-kotlin/ARCHITECTURE.md
 - `bill-feature` now explicitly dispatches single-spec work only to canonical runtime-backed `bill-feature-task`, dispatches decomposed work to `bill-feature-goal`, and names `bill-feature-task-legacy` as non-dispatch fallback. reusable
 - Promote decision source-of-truth stays in SKILL-65 parent spec: the dated 2026-06-05 maintainer decision was recorded under the existing authoritative section; root decisions, README, ARCHITECTURE, and AGENTS remain pointers instead of duplicating the rule. reusable
 - Deprecation window source-of-truth stays in SKILL-67 parent spec as `SKILL-67 One-Release Legacy Compatibility Window`; docs should point there rather than restating window mechanics. reusable
-- Validation/audit pattern for promotion docs: pair `skill-bill validate`, `npx --yes agnix --strict .`, `scripts/validate_agent_configs`, `git diff --check`, and scoped grep audits for legacy dispatch, experimental wording, and single authoritative criterion/window sources.
+- Validation/audit pattern for promotion docs: pair `sona validate`, `npx --yes agnix --strict .`, `scripts/validate_agent_configs`, `git diff --check`, and scoped grep audits for legacy dispatch, experimental wording, and single authoritative criterion/window sources.
 Feature flag: N/A
 Acceptance criteria: 6/6 implemented (subtask scope)
 
 ## [2026-06-05] SKILL-67 subtask 2 skill-promotion-and-legacy-deprecation
 Areas: skills/bill-feature-task, skills/bill-feature-task-legacy, skills/bill-feature-task-runtime (removed), install.sh, uninstall.sh, README.md
-- Promoted `skills/bill-feature-task-runtime/content.md` to canonical `skills/bill-feature-task/content.md` (EXPERIMENTAL framing stripped, commands now `skill-bill feature-task`), git-moved the former prose orchestrator + its `native-agents/agents.yaml` to `skills/bill-feature-task-legacy/` with a loud DEPRECATED banner + canonical pointer + removal-window note, and removed the emptied runtime dir. reusable
+- Promoted `skills/bill-feature-task-runtime/content.md` to canonical `skills/bill-feature-task/content.md` (EXPERIMENTAL framing stripped, commands now `sona feature-task`), git-moved the former prose orchestrator + its `native-agents/agents.yaml` to `skills/bill-feature-task-legacy/` with a loud DEPRECATED banner + canonical pointer + removal-window note, and removed the emptied runtime dir. reusable
 - Skill-relocation pattern: `install.sh` enumerates skills dynamically via `--skills "$SKILLS_DIR"`, so a new skill directory is auto-discovered as a real installed skill with no install.sh edit. Only canonical-NAME changes need the alias arrays (Kotlin `renamedSkillPairs` + bash `RENAMED_SKILL_PAIRS`, kept in sync). README catalog rows must be added/repurposed or `validate_agent_configs` fails. reusable
-- Frontmatter `name` must equal the directory name for both canonical and legacy skills (skill-bill validate enforces parity); legacy skill keeps the prose orchestrator body and `feature_implement_*` dependency intact (not deleted) for the deprecation window.
-- Goal-continuation: install/uninstall self-refuse with exit 64, so the install refresh that would let generated wrappers pick up the new catalog is deferred to after the goal run. Validators (skill-bill validate, validate_agent_configs, agnix --strict, gradle check on touched modules) all passed; install sync intentionally skipped.
+- Frontmatter `name` must equal the directory name for both canonical and legacy skills (sona validate enforces parity); legacy skill keeps the prose orchestrator body and `feature_implement_*` dependency intact (not deleted) for the deprecation window.
+- Goal-continuation: install/uninstall self-refuse with exit 64, so the install refresh that would let generated wrappers pick up the new catalog is deferred to after the goal run. Validators (sona validate, validate_agent_configs, agnix --strict, gradle check on touched modules) all passed; install sync intentionally skipped.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented (subtask scope)
 
@@ -253,7 +276,7 @@ Areas: runtime-kotlin/runtime-cli, runtime-kotlin/runtime-application, runtime-k
 - Goal-continuation now propagates `SKILL_BILL_GOAL_CONTINUATION=1`; `install.sh`, `uninstall.sh`, and mutating install/link/MCP/native-agent CLI paths refuse with exit 64 so active workflow stores are not mutated mid-continuation. reusable
 - Interrupted resume assertions now prove the original child workflow completes and no duplicate running child remains; terminal/stale cleanup remains workflow-store authoritative, not stdout-derived. reusable
 - Docs and governed skill source describe the runtime-owned flat worker model, with nested subagents framed only as optional debug/context convenience.
-- Maintainer validation passed: `skill-bill validate`, `(cd runtime-kotlin && ./gradlew check)`, `npx --yes agnix --strict .`, and `scripts/validate_agent_configs`; install sync intentionally skipped during goal-continuation.
+- Maintainer validation passed: `sona validate`, `(cd runtime-kotlin && ./gradlew check)`, `npx --yes agnix --strict .`, and `scripts/validate_agent_configs`; install sync intentionally skipped during goal-continuation.
 Feature flag: N/A
 Acceptance criteria: 7/7 implemented (subtask scope)
 
@@ -262,16 +285,16 @@ Areas: runtime-kotlin/runtime-application/src/main/kotlin/skillbill/application/
 - Added explicit shared-runtime coverage for `bill-feature-spec` alongside `bill-feature-task` and `bill-goal` so all three wrappers are locked to one preparation core entrypoint with equality assertions. reusable
 - Hardened `single_spec` guardrails in `FeatureSpecPreparationWriter` by rejecting decomposed-only `subtasks` payloads in single-spec mode with a typed loud-fail request error. reusable
 - Expanded decomposition validation coverage to assert runnable subtask specs and goal-runner-compatible manifest intent/projection wiring, not just file existence. reusable
-- Strengthened wiring contract regression checks so `bill-goal` keeps exactly one confirmation gate and the consumer-only `skill-bill goal` boundary remains anchored to shared preparation language.
-- Maintainer validation gate passed in this run: `skill-bill validate`, `(cd runtime-kotlin && ./gradlew check)`, `npx --yes agnix --strict .`, and `scripts/validate_agent_configs`.
+- Strengthened wiring contract regression checks so `bill-goal` keeps exactly one confirmation gate and the consumer-only `sona goal` boundary remains anchored to shared preparation language.
+- Maintainer validation gate passed in this run: `sona validate`, `(cd runtime-kotlin && ./gradlew check)`, `npx --yes agnix --strict .`, and `scripts/validate_agent_configs`.
 Feature flag: N/A
 Acceptance criteria: 6/6 implemented (subtask scope)
 
 ## [2026-05-31] SKILL-59 subtask 3 skill-and-workflow-wiring
 Areas: skills/bill-feature-spec/content.md, skills/bill-feature-task/content.md, skills/bill-goal/content.md, README.md, docs/getting-started.md, docs/getting-started-for-teams.md, FeatureSpecSkillWiringContractTest (since removed)
-- Added new horizontal `bill-feature-spec` governed source as standalone preparation entry point, with explicit intake contract, `single_spec`/`decomposed` mode guidance, and consumer-only `skill-bill goal` boundary language. reusable
+- Added new horizontal `bill-feature-spec` governed source as standalone preparation entry point, with explicit intake contract, `single_spec`/`decomposed` mode guidance, and consumer-only `sona goal` boundary language. reusable
 - Updated `bill-feature-task` decomposition guidance so planning returns a package and orchestrator persistence routes through the shared feature-spec preparation path instead of bespoke decomposition-write prose. reusable
-- Updated `bill-goal` so missing decomposition artifacts are prepared through `bill-feature-spec` before the single confirmation gate, while preserving `skill-bill goal` as consumer-only runner behavior. reusable
+- Updated `bill-goal` so missing decomposition artifacts are prepared through `bill-feature-spec` before the single confirmation gate, while preserving `sona goal` as consumer-only runner behavior. reusable
 - Added workflow-content contract regression test (`FeatureSpecSkillWiringContractTest`) to lock shared preparation wiring language across `bill-feature-spec`, `bill-feature-task`, and `bill-goal`.
 - Updated README and getting-started docs catalogs to include `bill-feature-spec` as standalone preparation.
 Feature flag: N/A
@@ -281,7 +304,7 @@ Acceptance criteria: 9/9 implemented (subtask scope)
 Areas: .feature-specs/SKILL-55-launch-readiness/launch-kit/ (Reddit drafts, subreddit plan, objection FAQ, Product Hunt kit, go/no-go checklist, sequencing note)
 - Capstone of the SKILL-55 launch-readiness decomposition (subtasks 1-6 now complete): assets-and-plan-only, 7 Markdown files, no code/installer change. Kit lives in-repo so it versions with the product and the go/no-go gate stays honest against what actually shipped. reusable
 - Launch/marketing copy MUST be accuracy-gated against shipped reality — treat it like docs, not aspiration. Anchor every kit file to a single ground-truth fact sheet (launch-kit/README.md) and forbid stating unshipped features as shipped. reusable
-- Live accuracy traps for skill-bill launch copy (all enforced here): installers are UNSIGNED v1 so the Gatekeeper/SmartScreen "won't open" FAQ is load-bearing (steps verbatim from runtime-kotlin/agent/decisions.md, Linux has no gate); the demo is a placeholder SVG, the real GIF is not recorded, so any "demo video" is PLANNED/storyboarded only; there is NO `skill-bill desktop install` subcommand (`./install.sh --desktop-app-only`); no public release tag is cut yet and .rpm/.dmg/.msi extraction is CI-unexercised, so the go/no-go checklist keeps those gates OPEN, never pre-checked. reusable
+- Live accuracy traps for skill-bill launch copy (all enforced here): installers are UNSIGNED v1 so the Gatekeeper/SmartScreen "won't open" FAQ is load-bearing (steps verbatim from runtime-kotlin/agent/decisions.md, Linux has no gate); the demo is a placeholder SVG, the real GIF is not recorded, so any "demo video" is PLANNED/storyboarded only; there is NO `sona desktop install` subcommand (`./install.sh --desktop-app-only`); no public release tag is cut yet and .rpm/.dmg/.msi extraction is CI-unexercised, so the go/no-go checklist keeps those gates OPEN, never pre-checked. reusable
 - Sequencing: Reddit first (narrative-led soft launch to sharpen the pitch) once go/no-go open items clear; Product Hunt later as the artifact-gated set-piece (all-OS prebuilt artifacts live + verified clean-machine install + recorded demo). reusable
 - Docs-only validation is repo-native (`npx --yes agnix --strict .` + `scripts/validate_agent_configs`); both passed clean. agnix --strict fails on a referenced-but-missing asset, so the kit links only to on-disk assets (placeholder SVG, storyboard, capture-instructions), never the unrecorded GIF.
 Feature flag: N/A
@@ -292,7 +315,7 @@ Areas: README.md, docs/getting-started.md, docs/assets/ (demo placeholder + stor
 - README front door rebuilt by REORDERING (drop nothing): hero+H1 → one-sentence jargon-free hook → demo asset → ≤60s prebuilt quickstart → split prerequisites → complexity-objection paragraph; the 11-capability deep dive / architecture / reference-pack / validation all moved below the fold. reusable
 - Demo asset convention: binary capture is produced out-of-band, so commit a real on-disk placeholder SVG (agnix --strict fails on a referenced-but-missing asset) plus a storyboard.md and capture-instructions.md that name the canonical swap-in filename (docs/assets/skill-bill-demo.gif). The missing binary is explicitly called out, never silently omitted. reusable
 - Install docs now lead with the prebuilt default; from-source/Gradle (+JDK) is the opt-in path. README and getting-started reconciled so the pinned-install path uses install.sh `--release TAG` / `SKILL_BILL_RELEASE_TAG`, not `git clone --branch`. Prebuilt prereqs documented as curl/tar/unzip/shasum — NO JDK, NO gh.
-- Spec/reality correction carried from subtask 4: there is NO `skill-bill desktop install` subcommand; the documented add-it-later one-liner is `./install.sh --desktop-app-only`. Do not reintroduce the fictional subcommand. reusable
+- Spec/reality correction carried from subtask 4: there is NO `sona desktop install` subcommand; the documented add-it-later one-liner is `./install.sh --desktop-app-only`. Do not reintroduce the fictional subcommand. reusable
 - PRESERVE-EXACTLY landmarks for any README restructure: the 5 "Start here" docs links and the `| Skill | Purpose |` backtick-wrapped alphabetical `/bill-*` catalog table — the scaffold append path (ReadmeCatalogEdits.kt / ReadmeCatalogAppendTest) and scripts/validate_agent_configs depend on that exact shape; never renumber, re-sort, or change backtick style. reusable
 - Docs-only validation is repo-native (`npx --yes agnix --strict .` + `scripts/validate_agent_configs`); bill-quality-check's Kotlin/KMP routing does not cover a Markdown-only diff.
 Feature flag: N/A
@@ -305,7 +328,7 @@ Areas: install.sh (repo-root installer), uninstall.sh, runtime-kotlin/runtime-cl
 - Prebuilt desktop app is EXTRACTED, never system-installed: `.deb`→ar+data.tar, `.rpm`→rpm2cpio|cpio/bsdtar, `.dmg`→hdiutil attach, `.msi`→msiexec /a; the extracted app tree is fed to the EXISTING `install_desktop_app` via `DESKTOP_APP_PREBUILT_SOURCE_PATH`, so per-user install dirs + skillbill-desktop launcher + uninstall.sh stay unchanged (AC8 needed NO uninstall edit). reusable
 - New hard deps detected up front: curl + tar/unzip + shasum|sha256sum (NO gh, NO JDK). Downloads use one top-level `mktemp -d` + a single EXIT-trap cleanup (registered ONCE at top level, NOT in a `$(...)` helper, or the subshell exit wipes the dir mid-install — real bug fixed in impl). reusable
 - Display-gating (AC4): `desktop_session_default_yes` reports PURELY desktop-session presence (Linux DISPLAY/WAYLAND_DISPLAY; macOS/Windows always); BOTH the non-interactive default AND the interactive prompt default gate on it. Pitfall fixed in review: an earlier version `&&`-ed `-t 0` inside the helper but only called it from the non-interactive branch, making the DISPLAY check dead code and defaulting interactive-headless to yes. reusable
-- `--desktop-app-only` is the documented post-install one-liner (chosen over a Kotlin `skill-bill desktop` subcommand to keep one bash implementation): skips clean-slate/runtime/prompts/apply, idempotent. AC6 transparency summary (`print_install_plan`) prints before any mutation incl. the clean-slate reset. Unsigned "open anyway" hint (macOS Gatekeeper / Windows SmartScreen, none on Linux) reused verbatim from runtime-kotlin/agent/decisions.md.
+- `--desktop-app-only` is the documented post-install one-liner (chosen over a Kotlin `sona desktop` subcommand to keep one bash implementation): skips clean-slate/runtime/prompts/apply, idempotent. AC6 transparency summary (`print_install_plan`) prints before any mutation incl. the clean-slate reset. Unsigned "open anyway" hint (macOS Gatekeeper / Windows SmartScreen, none on Linux) reused verbatim from runtime-kotlin/agent/decisions.md.
 - Bash has no shell-lint gate; it is verified ONLY through `InstallerShellDelegationTest` (real install.sh/uninstall.sh via ProcessBuilder + staged-release fixtures over `SKILL_BILL_RELEASE_DIR`, no network). `.rpm/.dmg/.msi` extraction is unexercised by CI (only `.deb` on linux-x64; gated behind `assumeDebHost`) — needs a manual macOS/Windows smoke before a tagged release. Fixtures need `bsdtar`/`ar` (skip-guarded so absent tools skip, not error).
 Feature flag: N/A
 Acceptance criteria: 8/8 implemented (subtask scope)
@@ -314,7 +337,7 @@ Acceptance criteria: 8/8 implemented (subtask scope)
 Areas: runtime-kotlin hexagonal runtime hardening, repo validation, governed source/generated boundaries
 - Final SKILL-52.1 lock ties the runtime architecture tests, golden tests, and repository validation gates to the same governed contracts: typed boundaries, schema parse seams, inert path handling, install-plan dual validation, and runtime-core as composition only. reusable
 - Source/generated boundaries remain part of the release gate: governed `content.md` stays source, while SKILL.md wrappers, support pointers, provider-native outputs, and install staging artifacts must stay uncommitted. reusable
-- Final validation passed with `skill-bill validate`, `scripts/validate_agent_configs`, `npx --yes agnix --strict .`, and `(cd runtime-kotlin && ./gradlew check)`.
+- Final validation passed with `sona validate`, `scripts/validate_agent_configs`, `npx --yes agnix --strict .`, and `(cd runtime-kotlin && ./gradlew check)`.
 Feature flag: N/A
 Acceptance criteria: 9/9 implemented
 
@@ -322,7 +345,7 @@ Acceptance criteria: 9/9 implemented
 Areas: orchestration/shell-content-contract, runtime-kotlin/runtime-core scaffold, runtime-kotlin/runtime-cli, docs
 - SKILL-50 subtask 3 extended platform-pack scaffold payloads with optional `baseline_layers`, validating references before mutation and rendering them as `code_review_composition.baseline_layers`. reusable
 - Dry-run and execute now share the same planned manifest model; dry-run exposes `manifest_edit_previews`, while legacy payloads without `baseline_layers` still omit composition.
-- `skill-bill show` now surfaces manifest-declared review composition with required/optional layer counts, preserving `baseline_layers[].required` semantics. reusable
+- `sona show` now surfaces manifest-declared review composition with required/optional layer counts, preserving `baseline_layers[].required` semantics. reusable
 - Pitfall fixed in review: composition mode support lives behind shared `unsupportedCompositionModeReason` so scaffold payload validation and manifest loading cannot drift.
 - Tests cover valid write, legacy no-composition payloads, structural invalid payloads, invalid-reference rollback, non-platform-pack rejection, dry-run preview, and show visibility.
 Feature flag: N/A
@@ -373,10 +396,10 @@ Acceptance criteria: 6/6 implemented
 
 ## [2026-05-07] native-agent-codegen
 Areas: runtime-kotlin/runtime-core/src/main/kotlin/skillbill/nativeagent/, runtime-kotlin/runtime-core/src/main/kotlin/skillbill/install/, runtime-kotlin/runtime-core/src/main/kotlin/skillbill/scaffold/, runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli/, skills/*/native-agents/, platform-packs/*/**/native-agents/, install.sh, README.md, docs/
-- SKILL-37 moved native subagent authoring to one provider-neutral `native-agents/<name>.md` source per subagent, with deterministic install-time generation for Codex TOML, OpenCode markdown, and Junie markdown. `skill-bill render` validates source renderability; `scripts/validate_agent_configs` fails if generated provider artifacts are checked into the repo. reusable
+- SKILL-37 moved native subagent authoring to one provider-neutral `native-agents/<name>.md` source per subagent, with deterministic install-time generation for Codex TOML, OpenCode markdown, and Junie markdown. `sona render` validates source renderability; `scripts/validate_agent_configs` fails if generated provider artifacts are checked into the repo. reusable
 - Install renders native-agent sources into a persistent per-repo user cache under `~/.skill-bill/native-agents/<repo-key>/<provider>/` and symlinks those generated files into Codex/OpenCode/Junie agent directories. This keeps installed files self-contained without dirtying the repo during normal install. reusable
 - Pitfall found by completeness audit: generated KMP UI agents still referenced repo-local markdown sidecars (`compose-guidelines.md`, add-on review files), which violates the installed-file self-contained contract because install links only the generated agent file. Fixed by inlining the add-on/rubric concerns into the provider-neutral source. Future native-agent sources should avoid instructions that require sibling repo-local markdown files unless the generator inlines that content. reusable
-- Scaffolding now emits only `native-agents/` source stubs for orchestrator subagents. Authors fill source TODOs, run `skill-bill render` to validate, and rely on install to generate provider-specific artifacts.
+- Scaffolding now emits only `native-agents/` source stubs for orchestrator subagents. Authors fill source TODOs, run `sona render` to validate, and rely on install to generate provider-specific artifacts.
 Feature flag: N/A
 Acceptance criteria: 6/6 implemented
 
@@ -594,7 +617,7 @@ Acceptance criteria: 3/3 implemented
 
 ## [2026-04-20] skill-authoring-terminal-loop
 Areas: skill_bill/, README.md, tests/
-- Added a terminal-first authoring loop on top of the existing split-wrapper scaffold: `skill-bill new`, guided `skill-bill edit`, `skill-bill list`, scoped `skill-bill validate`, and `skill-bill render`/`upgrade` now form the concrete single-skill workflow instead of forcing repo navigation. reusable
+- Added a terminal-first authoring loop on top of the existing split-wrapper scaffold: `sona new`, guided `sona edit`, `sona list`, scoped `sona validate`, and `sona render`/`upgrade` now form the concrete single-skill workflow instead of forcing repo navigation. reusable
 - The guided editor treats `content.md` as the only editable surface, preserves authored H2 order, supports replace / append / clear / skip actions per section, and regenerates only the targeted wrapper before re-running validation. reusable
 - Added completion and drift inspection for content-managed skills plus targeted wrapper regeneration/validation helpers so maintainers can audit one skill at a time without running the entire repo workflow. reusable
 - Maintainer-only bulk workflows remain separate: the migration script is still the path for legacy one-shot conversion, while end users stay on the single-skill terminal loop.
@@ -674,7 +697,7 @@ Areas: skill_bill/, skills/base/bill-skill-scaffold/, orchestration/shell-conten
 - Pre-shell families (`constants.py::PRE_SHELL_FAMILIES` + `scaffold.py::FAMILY_REGISTRY`) keep `quality-check`, `feature-task`, `feature-verify` on the `skills/<platform>/bill-<platform>-<capability>/` layout with a "will move when piloted" note. Adding one requires updating both in the same change. reusable
 - Scaffolder-owned sections (`## Execution Mode Reporting`, `## Telemetry Ceremony Hooks`, and `## Project Overrides` for `skills/`-tree kinds) render from templates in `skill_bill/scaffold_template.py`, byte-identical within a family. Author-owned sections (`## Description`, `## Specialist Scope`, `## Inputs`, `## Outputs Contract`) ship as stubs.
 - Shared install primitive `skill_bill/install.py` (`detect_agents`, `install_skill`, `uninstall_skill`, `InstallTransaction`); scaffolder and `install.sh` delegate via `python3 -m skill_bill install agent-path|detect-agents|link-skill`, with an inline shell fallback for bootstrap. Detects Claude Code, Copilot, Codex (with `~/.agents/skills` fallback), and OpenCode. reusable
-- CLI `skill-bill new-skill` (`--payload`, `--interactive` no-LLM fallback, `--dry-run`) maps `ScaffoldError` subclasses to exit codes 2-6. MCP tool `new_skill_scaffold` uses the orchestrated-flag pattern; events `skillbill_new_skill_scaffold_started/_finished`. `bill-skill-scaffold/SKILL.md` is an LLM wrapper: paste → preview → yes/edit/redo → `skill-bill new-skill --payload <tempfile>`.
+- CLI `sona new-skill` (`--payload`, `--interactive` no-LLM fallback, `--dry-run`) maps `ScaffoldError` subclasses to exit codes 2-6. MCP tool `new_skill_scaffold` uses the orchestrated-flag pattern; events `skillbill_new_skill_scaffold_started/_finished`. `bill-skill-scaffold/SKILL.md` is an LLM wrapper: paste → preview → yes/edit/redo → `sona new-skill --payload <tempfile>`.
 - Tests 217 → 236: `tests/test_scaffold.py` covers the four happy paths, payload and version rejection, rollback modes, idempotency, agent detection layouts, template byte-identity, and exit codes.
 Feature flag: N/A
 Acceptance criteria: 19/19 implemented

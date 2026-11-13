@@ -316,7 +316,7 @@ object PhaseInvocationParser {
     val phaseName = name.removePrefix(PHASE_COLON_PREFIX).ifEmpty { name }
     if (phaseName == VERIFY_NAME) {
       throw UsageError(
-        "`$VERIFY_NAME` is an operation, not a phase; use `skill-bill operation $VERIFY_NAME <intake>`.",
+        "`$VERIFY_NAME` is an operation, not a phase; use `sona operation $VERIFY_NAME <intake>`.",
       )
     }
     val names = phaseNames()

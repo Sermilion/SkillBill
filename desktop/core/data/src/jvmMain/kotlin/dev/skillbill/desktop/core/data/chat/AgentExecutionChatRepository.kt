@@ -6,9 +6,9 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
-import dev.skillbill.desktop.core.domain.model.ChatHistoryRead
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
 import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
 import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
 import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
@@ -16,6 +16,7 @@ import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SessionMoveResult
+import dev.skillbill.desktop.core.domain.model.SavedChatProjection
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
@@ -25,10 +26,15 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
+import java.util.concurrent.ConcurrentHashMap
 
 /** Sends each turn to the transport registered for the turn's agent, off the UI thread; saved chats live in [store] and [catalog]. */
 @Inject
@@ -44,6 +50,7 @@ class AgentExecutionChatRepository(
   private val modelCatalog: ChatModelCatalog,
 ) : ExecutionChatRepository {
   private val resolver = ChatAgentResolver(runtimeConfig::machineConfig, diagnostics)
+  private val activeTurns = ConcurrentHashMap<String, ActiveTurn>()
 
   override suspend fun resolveAgent(item: WorkItem, detail: Detail?, runOptions: RunOptions?): ChatAgent? =
     resolver.resolve(item, detail, runOptions)
@@ -93,21 +100,52 @@ class AgentExecutionChatRepository(
       diagnostics.record("chat.agent_unsupported")
       emit(ChatEvent.Failed(ChatFailure.AgentUnsupported, request.agent.agentId))
     } else {
-      emitAll(transport.run(request))
+      val active = ActiveTurn(transport)
+      if (activeTurns.putIfAbsent(request.sessionId, active) != null) {
+        emit(ChatEvent.Failed(ChatFailure.ProcessFailed, "A chat turn is already active for this session."))
+      } else {
+        try {
+          emitAll(transport.run(request))
+        } finally {
+          active.completion.complete(Unit)
+          activeTurns.remove(request.sessionId, active)
+        }
+      }
     }
   }.flowOn(Dispatchers.IO)
 
   override fun unprompted(sessionId: String): Flow<ChatEvent> = transports.map { it.unprompted(sessionId) }.merge().flowOn(Dispatchers.IO)
 
-  override fun end(sessionId: String) = transports.forEach { it.end(sessionId) }
+  override fun end(sessionId: String) {
+    activeTurns[sessionId]?.transport?.end(sessionId) ?: transports.forEach { it.end(sessionId) }
+  }
 
-  override suspend fun awaitEnd(sessionId: String) = transports.forEach { it.awaitEnd(sessionId) }
+  override suspend fun awaitEnd(sessionId: String) {
+    activeTurns[sessionId]?.transport?.awaitEnd(sessionId) ?: transports.forEach { it.awaitEnd(sessionId) }
+  }
 
-  override suspend fun savedChats(executionId: String, repositoryRoot: String, currentSessionId: String): List<ChatHistoryEntry> =
-    savedChatsResult(executionId, repositoryRoot, currentSessionId).entries
+  override suspend fun stopTurn(sessionId: String): ChatStopSettlement {
+    val active = activeTurns[sessionId] ?: return ChatStopSettlement.AlreadyFinished
+    val result = try {
+      active.transport.stopAndAwait(sessionId).also { settled ->
+        if (settled != ChatStopSettlement.CollectorCancellationRequired) active.completion.await()
+      }
+    } catch (cancelled: CancellationException) {
+      withContext(NonCancellable) {
+        withTimeoutOrNull(STOP_SETTLEMENT_TIMEOUT_MS) { active.completion.await() }
+        diagnostics.record("chat.stop_cancelled_nondelivery")
+      }
+      throw cancelled
+    } catch (failure: Exception) {
+      diagnostics.record("chat.stop_settlement_failed")
+      active.transport.end(sessionId)
+      ChatStopSettlement.CollectorCancellationRequired
+    }
+    return result
+  }
 
-  override suspend fun savedChatsResult(executionId: String, repositoryRoot: String, currentSessionId: String): ChatHistoryRead =
-    withContext(Dispatchers.IO) { catalog.listResult(executionId, repositoryRoot, currentSessionId, resolver::forAgent) }
+  override suspend fun savedChats(executionId: String, repositoryRoot: String, currentSessionId: String): SavedChatProjection =
+    withContext(Dispatchers.IO) { catalog.list(executionId, repositoryRoot, currentSessionId, resolver::forAgent) }
 
   override suspend fun openSavedChat(entry: ChatHistoryEntry): List<ChatHistoryLine> = withContext(Dispatchers.IO) { catalog.open(entry) }
 
@@ -120,11 +158,8 @@ class AgentExecutionChatRepository(
 
   override suspend fun saveNewTaskDraft(entry: ChatHistoryEntry): Boolean = withContext(Dispatchers.IO) { store.saveChat(entry) }
 
-  override suspend fun savedNewTaskDrafts(limit: Int?): List<ChatHistoryEntry> =
-    savedNewTaskDraftsResult(limit).entries
-
-  override suspend fun savedNewTaskDraftsResult(limit: Int?): ChatHistoryRead =
-    withContext(Dispatchers.IO) { store.newTaskDraftsRead(limit) }
+  override suspend fun savedNewTaskDrafts(limit: Int?): SavedChatProjection =
+    withContext(Dispatchers.IO) { store.newTaskDrafts(limit) }
 
   override suspend fun deleteSavedChat(sessionId: String) = withContext(Dispatchers.IO) { store.delete(sessionId) }
 
@@ -132,3 +167,9 @@ class AgentExecutionChatRepository(
 
   override val summaryUpdates: Flow<String> get() = summarizer.updates
 }
+
+private class ActiveTurn(val transport: ChatTransport) {
+  val completion = CompletableDeferred<Unit>()
+}
+
+private const val STOP_SETTLEMENT_TIMEOUT_MS = 25_000L

@@ -4,14 +4,14 @@ import skillbill.infrastructure.skills.scaffold.platformpack.loader.discoverPlat
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.unsupportedCompositionModeReason
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.PRE_SHELL_FAMILIES
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELLED_FAMILIES
+import skillbill.review.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewCompositionMode
+import skillbill.review.model.CodeReviewCompositionScope
 import skillbill.scaffold.model.BaselineReviewCatalog
 import skillbill.scaffold.model.BaselineReviewCompositionEdge
 import skillbill.scaffold.model.BaselineReviewLayerSuggestion
 import skillbill.scaffold.model.BaselineReviewPackEntry
 import skillbill.scaffold.model.BaselineReviewSkillEntry
-import skillbill.scaffold.model.CodeReviewBaselineLayer
-import skillbill.scaffold.model.CodeReviewCompositionMode
-import skillbill.scaffold.model.CodeReviewCompositionScope
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
 import skillbill.scaffold.policy.PLATFORM_PACK_PRESETS

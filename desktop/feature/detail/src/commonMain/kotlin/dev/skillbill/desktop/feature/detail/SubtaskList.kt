@@ -34,8 +34,8 @@ import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbClock
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
-import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 import dev.skillbill.desktop.core.designsystem.detail.PhasePipeline
+import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 import dev.skillbill.desktop.core.designsystem.list.SubtaskList
 import dev.skillbill.desktop.core.designsystem.list.SubtaskRow
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
@@ -43,6 +43,8 @@ import dev.skillbill.desktop.core.ui.input.ShellInput
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
+import dev.skillbill.desktop.core.domain.model.PhaseCard
+import dev.skillbill.desktop.core.domain.model.PhaseCardState
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
@@ -95,9 +97,10 @@ internal fun BoxedFindingRow(
   state: String? = null,
   stateColor: Color? = null,
   refContent: (@Composable () -> Unit)? = null,
+  evidence: (@Composable () -> Unit)? = null,
 ) {
   Box(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
-    FindingRow(title, severity, ref, location, meta, state, stateColor, showDivider = index > 0, refContent = refContent)
+    FindingRow(title, severity, ref, location, meta, state, stateColor, showDivider = index > 0, refContent = refContent, evidence = evidence)
   }
 }
 
@@ -121,21 +124,24 @@ internal fun DetailSections.subtaskSection(item: WorkItem, detail: Detail, state
   // screens.js `hasSubtasks`: a goal past planning with no subtasks has no Subtasks section, unless its first page is still to come.
   val loaded = state.sections as? SectionsUi.Loaded
   if (detail.subtasks.isEmpty() && loaded?.moreLists?.contains(DetailList.Subtasks) != true) return
-  val order = assessmentOrder
   val progress = item.progress
   section(
     "subtasks", "Subtasks",
     count = progress?.let { "${it.done}/${it.total}" } ?: detail.subtasks.size.toString(),
     actions = if (progress == null) null else { { ProgressRing(progress.done, progress.total, showText = false) } },
   ) {
-    item(key = "subtask-index") { SubtaskIndex(item, detail, state, order, paneShown, onAction) }
+    item(key = "subtask-index") { SubtaskIndex(item, detail, state, paneShown, onAction) }
   }
 }
 
 @Composable
-private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, assessmentOrder: androidx.compose.runtime.MutableState<AssessmentOrder>, paneShown: Boolean, onAction: (DetailAction) -> Unit) {
+private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, paneShown: Boolean, onAction: (DetailAction) -> Unit) {
   val colors = SkillBillTheme.colors
   val shellInput = LocalShellInput.current
+  DisposableEffect(item.id) {
+    onAction(DetailAction.SubtaskListTargetChanged(true))
+    onDispose { onAction(DetailAction.SubtaskListTargetChanged(false)) }
+  }
   DisposableEffect(shellInput) { onDispose { shellInput.setFocusSource(ShellInput.SUBTASK_LIST_SOURCE, false) } }
   val selected = selectedSubtask(item, detail, state.subtaskChoice.key)
   val current = currentSubtask(item, detail)
@@ -143,7 +149,7 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, a
   var revealed by remember(item.id) { mutableStateOf(state.subtaskChoice) }
   fun selectVisibleRow(key: SubtaskKey) {
     revealed = SubtaskChoice(key)
-    onAction(DetailAction.SelectSubtask(key, inline = !paneShown))
+    onAction(DetailAction.SelectSubtask(key))
   }
   LaunchedEffect(state.subtaskChoice) {
     if (state.subtaskChoice == revealed) return@LaunchedEffect
@@ -152,16 +158,20 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, a
     selectedSubtask(item, detail, state.subtaskChoice.key)?.let { reveal[it] }?.bringIntoView()
   }
   fun revealModifier(key: SubtaskKey) = Modifier.bringIntoViewRequester(reveal.getOrPut(key) { BringIntoViewRequester() })
-  Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+  Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
     SubtaskList(
       label = "Subtasks of ${rowKey(item)}",
       onMove = { onAction(DetailAction.MoveSubtaskSelection(it)) },
       onOpen = { onAction(DetailAction.OpenSelectedSubtaskSpec) },
       onFocusChange = { focused ->
         shellInput.setFocusSource(ShellInput.SUBTASK_LIST_SOURCE, focused)
-        if (focused && state.focusSubtaskList) onAction(DetailAction.SubtaskListFocused)
       },
       requestFocus = state.focusSubtaskList,
+      onFocusRequestComplete = { focused ->
+        if (state.focusSubtaskList) {
+          onAction(if (focused) DetailAction.SubtaskListFocused else DetailAction.SubtaskListFocusUnavailable)
+        }
+      },
     ) {
       detail.subtasks.forEach { subtask ->
         val key = SubtaskKey.Subtask(subtask.id)
@@ -175,7 +185,7 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, a
           progress = null,
           title = subtask.name,
           current = isCurrent,
-          selected = isSelected,
+          selected = paneShown && isSelected,
           onClick = { selectVisibleRow(key) },
           meta = {
             subtask.commitSha?.let { sha -> ShortId(sha, { onAction(DetailAction.Copy(it)) }, label = "commit") }
@@ -187,11 +197,6 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, a
             }
             if (status == StatusKind.CompletedNoChange) SbLabel("no change")
           },
-          body = when {
-            !paneShown && isSelected && state.subtaskChoice.expanded -> ({ SubtaskInspector(item, detail, subtask, state.phaseChoice, state.activity, inline = true, renderedAt = state.renderedAt, onAction) })
-            !isCurrent || detail.stepPipeline.isEmpty() -> null
-            else -> ({ PhasePipeline(subtaskSteps(item, detail, status, isCurrent)) })
-          },
         )
       }
       PageFooter(DetailList.Subtasks, state, onAction, Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.borderSubtle).padding(start = 12.dp, end = 12.dp, bottom = 1.dp))
@@ -201,20 +206,28 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, a
         status = goalFinishStatus(item, detail),
         progress = null,
         title = "Goal finish",
-        selected = selected == SubtaskKey.GoalFinish,
+        selected = paneShown && selected == SubtaskKey.GoalFinish,
         onClick = { selectVisibleRow(SubtaskKey.GoalFinish) },
-        divider = false,
-        body = when {
-          !paneShown && selected == SubtaskKey.GoalFinish && state.subtaskChoice.expanded -> ({
-            GoalFinishPhases(item, detail, state, assessmentOrder, onAction)
-          })
-          finishedAt(item) != null || detail.currentPhase !in detail.goalFinishPipeline -> null
-          else -> ({ PhasePipeline(goalFinishTabs(detail).map { dev.skillbill.desktop.core.designsystem.detail.PipelineStep(it.id, it.state, goal = true) }) })
+        meta = {
+          val recordedCards = detail.goalFinishCards.filter { it.phaseId in GOAL_FINISH_PHASES }.distinctBy { it.phaseId }
+          val recorded = recordedCards.size
+          val phase = recordedGoalFinishPhase(recordedCards, detail.currentPhase)
+          phase?.let { SbLabel(phaseTitle(it.phaseId)) }
+          SbLabel("$recorded/${GOAL_FINISH_PHASES.size}")
         },
+        divider = false,
       )
     }
     BackgroundPages(state, onAction)
   }
+}
+
+private fun recordedGoalFinishPhase(cards: List<PhaseCard>, currentPhase: String?): PhaseCard? {
+  cards.firstOrNull { it.state == PhaseCardState.Running }?.let { return it }
+  val stopped = cards.filter { it.state == PhaseCardState.Blocked || it.state == PhaseCardState.Failed || it.state == PhaseCardState.Paused }
+  stopped.firstOrNull { it.phaseId == currentPhase }?.let { return it }
+  val latestRecorded = cards.mapNotNull { card -> card.startedAt?.let { it to card } }.maxByOrNull { it.first }?.second
+  return latestRecorded ?: cards.firstOrNull { it.phaseId == currentPhase } ?: cards.singleOrNull()
 }
 
 /** The dependency and validation pages the inspector reads load as soon as the index shows; only a failure draws anything. */

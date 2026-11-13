@@ -21,7 +21,7 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CURSOR_BIN="${CURSOR_BIN:-$(command -v cursor || echo "cursor")}"
-BIN="${SKILL_BILL_BIN:-$HOME/.local/bin/skill-bill}"
+BIN="${SKILL_BILL_BIN:-$HOME/.local/bin/sona}"
 RUNTIME_ROOT="${SKILL_BILL_RUNTIME_ROOT:-$HOME/.skill-bill/runtime}"
 MCP_BIN="$RUNTIME_ROOT/runtime-mcp/bin/runtime-mcp"
 
@@ -32,7 +32,7 @@ MCP_BIN="$RUNTIME_ROOT/runtime-mcp/bin/runtime-mcp"
 }
 
 [[ -x "$BIN" ]] || {
-  echo "FATAL: skill-bill not executable at $BIN" >&2
+  echo "FATAL: sona not executable at $BIN" >&2
   echo "  Run ./install.sh first" >&2
   exit 2
 }
@@ -47,7 +47,7 @@ trap 'rm -rf "$TMP"' EXIT
 
 echo "── Cursor live parity test (SKILL-138) ─────────────────────────────"
 printf "  cursor:   %s\n" "$("$CURSOR_BIN" --version 2>/dev/null || echo "unknown")"
-printf "  skill-bill: %s\n" "$("$BIN" version 2>/dev/null || echo "unknown")"
+printf "  sona: %s\n" "$("$BIN" version 2>/dev/null || echo "unknown")"
 printf "  workspace: %s\n" "$REPO_ROOT"
 echo
 
@@ -178,10 +178,10 @@ else
   chk "workflow_resume_infrastructure" "0" "rc=$rc6"
 fi
 
-# Scenario 7: Uninstall preservation (skill-bill remove)
+# Scenario 7: Uninstall preservation (sona remove)
 section "Scenario 7: Uninstall preservation"
 
-echo "  Testing skill-bill remove preserves repo..."
+echo "  Testing sona remove preserves repo..."
 W7="$TMP/scenario7"; mkdir -p "$W7/home/.cursor"
 W7_REPO="$TMP/scenario7/repo"
 

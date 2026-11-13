@@ -14,6 +14,8 @@ internal object ChatModelKeys {
   const val JSONRPC = "jsonrpc"
   const val RESULT = "result"
   const val ERROR = "error"
+  const val ERROR_CODE = "code"
+  const val ERROR_MESSAGE = "message"
   const val TYPE = "type"
   const val REQUEST = "request"
   const val REQUEST_ID = "request_id"
@@ -39,6 +41,19 @@ internal object ChatModelKeys {
   const val CONFIG_OPTIONS = "configOptions"
   const val CATEGORY = "category"
   const val OPTIONS = "options"
+  const val CONFIG_ID = "configId"
+  const val CURRENT_VALUE = "currentValue"
+  const val SESSION_ID = "sessionId"
+  const val EFFORT = "effort"
+  const val INITIALIZE = "initialize"
+  const val SESSION_NEW = "session/new"
+  const val SESSION_SET_CONFIG = "session/set_config_option"
+  const val OPEN_CODE_MODEL_CONFIG = "model"
+  const val SESSION_UPDATE_METHOD = "session/update"
+}
+
+internal object AcpErrorCodes {
+  const val AUTHENTICATION_REQUIRED = -32000
 }
 
 internal fun modelRpc(id: Int, method: String, params: JsonObject) = buildJsonObject {

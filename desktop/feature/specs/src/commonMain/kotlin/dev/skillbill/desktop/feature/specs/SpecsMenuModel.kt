@@ -39,7 +39,7 @@ internal fun specMenuActions(bundle: SpecNode.Bundle, state: SpecsUiState): List
   val runActions = mutableListOf<SpecMenuAction.Item>()
   val destructiveActions = mutableListOf<SpecMenuAction.Item>()
   if (bundle.children.any { it is SpecNode.File && it.kind == dev.skillbill.desktop.core.domain.model.SpecFileKind.ParentSpec }) {
-    actions += item("Open spec", SpecsAction.OpenSelectedSpec, LucideIcons.fileText, shortcut = "↵")
+    actions += item("Open plan", SpecsAction.OpenSelectedSpec, LucideIcons.fileText, shortcut = "↵")
   }
   actions += item("Reveal folder", SpecsAction.RevealBundle, LucideIcons.folder)
   if (key != null) actions += item("Copy key", SpecsAction.CopyBundleKey, LucideIcons.copy)

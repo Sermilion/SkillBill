@@ -142,7 +142,7 @@ def positive(value):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cli", default=str(Path.home() / ".local/bin/skill-bill"))
+    parser.add_argument("--cli", default=str(Path.home() / ".local/bin/sona"))
     parser.add_argument("--device", default=DEFAULT_DEVICE)
     parser.add_argument(
         "--usage-settings",

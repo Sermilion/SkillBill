@@ -127,17 +127,16 @@ internal class BundleFeasibilityStep :
       Every parent outcome needs an owner. Cite conflicting clauses and the responsible future subtask. Cite
       every claim about current repository code with a path and positive source line.
       Completed work is fixed evidence. Never weaken parent requirements.
-      Finish with the ordinary completed phase envelope. Its produced_outputs.value must contain ONLY:
+      Finish with the ordinary completed phase envelope. Its produced_outputs.value holds the receipt:
       bundle-feasibility-v2: approved <Fingerprint>
       criterion <subtask id>.<criterion number>: <available dependencies and passing intermediate state>
-      Use the settled carried criterion lines as context. Emit exactly one criterion or conflict line for each
-      required ref, in supplied order. Each evidence payload
-      needs at least 40 characters. Empty, partial, reordered, duplicated, or uncited conflict evidence is invalid.
+      Use the settled carried criterion lines as context. Give one criterion or conflict line for each
+      required ref, preferably in supplied order.
       If contradictions exist, instead emit:
       bundle-feasibility-v2: changes_requested <Fingerprint>
       conflict <subtask id>.<criterion number>: <source clauses, unavailable prerequisite, owner, proposed repair>
-      Keep passing criteria as criterion lines in that same receipt. Cite each conflict with at least one
-      nonempty path and positive source line.
+      Keep passing criteria as criterion lines in that same receipt. Cite each conflict with a path and source
+      line where you can, so the repair starts from it.
       Use the supplied fingerprint verbatim. Do not claim repaired or approve a contradictory bundle.
       """.trimIndent()
 

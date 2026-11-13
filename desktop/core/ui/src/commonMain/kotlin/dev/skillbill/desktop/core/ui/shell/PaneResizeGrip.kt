@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -25,7 +26,9 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
@@ -39,7 +42,7 @@ private val KeyStep = 32.dp
 /**
  * The start-edge grip of a side pane. It reports deltas and does not own the width: [onDrag] gets the pointer movement, so the
  * caller subtracts it and dragging toward the start grows the pane; [onDragStopped] follows the last drag delta or a cancelled
- * drag; [onStep] gets +32.dp for Left and -32.dp for Right. Disabled, it draws only the hairline, takes no drag or key input, and
+ * drag; [onStep] gets [keyStep] for Left and its negative for Right. Disabled, it draws only the hairline, takes no drag or key input, and
  * tells assistive technology it is disabled.
  */
 @Composable
@@ -50,6 +53,10 @@ fun PaneResizeGrip(
   onStep: (Dp) -> Unit,
   modifier: Modifier = Modifier,
   onDragStopped: () -> Unit = {},
+  gripWidth: Dp = 7.dp,
+  keyStep: Dp = KeyStep,
+  onDoubleClick: (() -> Unit)? = null,
+  additionalSemantics: SemanticsPropertyReceiver.() -> Unit = {},
 ) {
   val colors = SkillBillTheme.colors
   val density = LocalDensity.current
@@ -58,13 +65,17 @@ fun PaneResizeGrip(
   val currentStep by rememberUpdatedState(onStep)
   val active = grip.collectIsHoveredAsState().value || grip.collectIsDraggedAsState().value || grip.collectIsFocusedAsState().value
   Box(
-    modifier.width(7.dp).fillMaxHeight()
+    modifier.width(gripWidth).fillMaxHeight()
       .semantics {
         contentDescription = "Resize ${title.lowercase()} panel"
         if (!enabled) disabled()
+        if (enabled) additionalSemantics()
       }
       .then(if (enabled) Modifier.pointerHoverIcon(horizontalResizePointerIcon) else Modifier)
       .hoverable(grip, enabled = enabled)
+      .pointerInput(enabled, onDoubleClick) {
+        if (enabled && onDoubleClick != null) detectTapGestures(onDoubleTap = { onDoubleClick() })
+      }
       .draggable(
         orientation = Orientation.Horizontal,
         enabled = enabled,
@@ -74,8 +85,8 @@ fun PaneResizeGrip(
       )
       .onKeyEvent { event ->
         if (!enabled || event.type != KeyEventType.KeyDown) false else when (event.key) {
-          Key.DirectionLeft -> { currentStep(KeyStep); true }
-          Key.DirectionRight -> { currentStep(-KeyStep); true }
+          Key.DirectionLeft -> { currentStep(keyStep); true }
+          Key.DirectionRight -> { currentStep(-keyStep); true }
           else -> false
         }
       }.focusable(enabled = enabled, interactionSource = grip),

@@ -280,7 +280,7 @@ Revisit when: an operation should refuse a second launch while one runs. release
 ## [2026-11-02] Keep Verify findings distinct from start verify
 Context: Execution chats already offer Verify findings for review findings, which is a different command from operation verify.
 Decision: Keep the existing Fix findings and Verify findings paragraphs and add a line that those actions must not set start verify.
-Reason: Collapsing them would send review-finding verify down the skill-bill operation path.
+Reason: Collapsing them would send review-finding verify down the sona operation path.
 
 ## [2026-11-02] Decode is the strict target seam; persist stays lenient
 Context: monitor needs a PR URL or issue key and verify needs intake, while chats saved before this field have no target key.

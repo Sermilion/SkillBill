@@ -80,7 +80,7 @@ unzip runtime-cli-<version>-<os>-<arch>.zip -d /tmp/skill-bill-image
 
 ### Verification matrix
 
-The no-JDK run (`skill-bill version` via `bin/runtime-cli`) and the `runtime-mcp`
+The no-JDK run (`sona version` via `bin/runtime-cli`) and the `runtime-mcp`
 stdio smoke are exercised locally on **`linux-x64` only**. `macos-arm64`,
 `macos-x64`, and `windows-x64` are built and verified on their matching CI
 runners (subtask 3); they cannot be reproduced from a Linux host.

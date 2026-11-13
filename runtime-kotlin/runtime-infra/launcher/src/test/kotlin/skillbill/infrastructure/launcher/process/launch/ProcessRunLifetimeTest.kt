@@ -130,6 +130,7 @@ class ProcessRunLifetimeTest {
       drain(AgentRunOutputStream.STDOUT, "Completed work"),
       drain(AgentRunOutputStream.STDERR, "Readian authentication or upstream request failed"),
       degradation,
+      processLifecycle = null,
     )
   }
 

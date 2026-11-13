@@ -5,7 +5,7 @@
                 "aggregate_counters": {
                     "evidence_bytes": 0,
                     "expansions": 0,
-                    "launch_bytes": 2235,
+                    "launch_bytes": 2223,
                     "model_turns": 1,
                     "result_bytes": 193,
                     "tool_calls": 0
@@ -47,7 +47,7 @@
                         "inclusive_counters": {
                             "evidence_bytes": 0,
                             "expansions": 0,
-                            "launch_bytes": 2235,
+                            "launch_bytes": 2223,
                             "model_turns": 1,
                             "result_bytes": 193,
                             "tool_calls": 0
@@ -75,13 +75,13 @@
                         "inclusive_counters": {
                             "evidence_bytes": 0,
                             "expansions": 0,
-                            "launch_bytes": 2235,
+                            "launch_bytes": 2223,
                             "model_turns": 1,
                             "result_bytes": 193,
                             "tool_calls": 0
                         },
                         "lane": "claude",
-                        "launch_bytes": 2235,
+                        "launch_bytes": 2223,
                         "model_turns": 1,
                         "result_bytes": 193,
                         "segment_accounting": [
@@ -104,7 +104,7 @@
                     "inclusive_counters": {
                         "evidence_bytes": 0,
                         "expansions": 0,
-                        "launch_bytes": 2235,
+                        "launch_bytes": 2223,
                         "model_turns": 1,
                         "result_bytes": 193,
                         "tool_calls": 0

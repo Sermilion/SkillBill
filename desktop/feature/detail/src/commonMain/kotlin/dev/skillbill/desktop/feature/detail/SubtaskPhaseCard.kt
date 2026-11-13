@@ -1,44 +1,68 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.detail.PeekCheck
-import dev.skillbill.desktop.core.designsystem.detail.PeekCheckState
-import dev.skillbill.desktop.core.designsystem.detail.PeekFacts
 import dev.skillbill.desktop.core.designsystem.detail.PeekFooter
 import dev.skillbill.desktop.core.designsystem.detail.PeekOutput
 import dev.skillbill.desktop.core.designsystem.detail.PeekPart
 import dev.skillbill.desktop.core.designsystem.detail.PeekSignal
-import dev.skillbill.desktop.core.designsystem.detail.PeekStat
-import dev.skillbill.desktop.core.designsystem.detail.PeekStatTone
-import dev.skillbill.desktop.core.designsystem.detail.PeekStats
 import dev.skillbill.desktop.core.designsystem.detail.PeekState
 import dev.skillbill.desktop.core.designsystem.detail.PeekTimelineRow
 import dev.skillbill.desktop.core.designsystem.detail.PhasePeek
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.ActivityResult
+import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.PhaseCard
 import dev.skillbill.desktop.core.domain.model.PhaseCardState
 import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
+import dev.skillbill.desktop.core.ui.status.subtaskStatusKind
 import kotlin.time.Instant
 
 @Composable
-internal fun SubtaskPhaseCard(item: WorkItem, detail: Detail, subtask: WorkSubtask?, card: PhaseCard, results: SubtaskPhaseResults?, activity: ActivityResult, renderedAt: Instant, onAction: (DetailAction) -> Unit) {
+internal fun SubtaskPhaseCard(
+  item: WorkItem,
+  detail: Detail,
+  subtask: WorkSubtask?,
+  card: PhaseCard,
+  results: SubtaskPhaseResults?,
+  resultState: SubtaskResultsState?,
+  changes: ChangesUi,
+  activity: ActivityResult,
+  renderedAt: Instant,
+  onAction: (DetailAction) -> Unit,
+) {
   val state = card.state.toPeekState()
   val model = listOfNotNull(card.model, card.effort).joinToString(" · ").ifBlank { null }
   val start = card.startedAt?.let { formatInstant(it, "d MMM HH:mm") }
   val duration = card.durationMillis?.let(::activityDuration)
   val path = subtask?.let { subtaskSpecPath(detail, it.id) }
   val phaseActivity = activityRows(activity, subtask?.id, card)
+  var validationExpanded by remember(
+    item.id, subtask?.id, card.phaseId, card.round, card.startedAt, card.output?.validationReceipt,
+  ) {
+    mutableStateOf(false)
+  }
   val footer = when (card.phaseId) {
     "plan" -> path?.let { PeekFooter("Open spec file", false) { onAction(DetailAction.OpenSpecFile(it)) } }
-    "commit_push" -> item.branch?.let { PeekFooter("Open branch", true) { onAction(DetailAction.OpenBranch) } }
+    "implement" ->
+      subtask?.id?.takeIf { implementChangesEligible(changes, it) }?.let { id ->
+        PeekFooter("Open changes", false) {
+          onAction(DetailAction.OpenChangesWindow(ChangeScope.Subtasks(id, id)))
+        }
+      }
+    "commit_push" ->
+      card.output?.pushedBranch?.takeIf { it.isNotBlank() }?.let { branch ->
+        PeekFooter("Open branch", true) { onAction(DetailAction.OpenBranch(branch)) }
+      }
     else -> null
   }
   PhasePeek(
@@ -51,62 +75,91 @@ internal fun SubtaskPhaseCard(item: WorkItem, detail: Detail, subtask: WorkSubta
     val activityLabel = card.activityLabel
     val edit = card.edit
     if (card.state == PhaseCardState.Running || card.state == PhaseCardState.Blocked) {
-      if (!activityLabel.isNullOrBlank() || edit != null || (card.state == PhaseCardState.Blocked && !card.blockedReason.isNullOrBlank())) PeekPart(if (card.state == PhaseCardState.Blocked) "Waiting on" else "Now", live = card.state == PhaseCardState.Running) {
-        if (!activityLabel.isNullOrBlank()) PeekSignal(activityLabel, card.state == PhaseCardState.Running, LucideIcons.zap, ago = card.activityAt?.let { elapsedTextOrNull(it, renderedAt) })
-        else if (card.state == PhaseCardState.Blocked) card.blockedReason?.let { PeekSignal(it, false, LucideIcons.warn) }
-        edit?.let { PeekSignal("edited ${it.samplePaths.firstOrNull()?.let(::fileName) ?: "files"}", false, LucideIcons.pencil, keep = AnnotatedString("+${it.insertions} −${it.deletions}"), ago = elapsedTextOrNull(it.recordedAt, renderedAt)) }
+      if (!activityLabel.isNullOrBlank() || edit != null || (card.state == PhaseCardState.Blocked && !card.blockedReason.isNullOrBlank())) {
+        PeekPart(if (card.state == PhaseCardState.Blocked) "Waiting on" else "Now", live = card.state == PhaseCardState.Running) {
+          if (!activityLabel.isNullOrBlank()) {
+            PeekSignal(activityLabel, card.state == PhaseCardState.Running, LucideIcons.zap, ago = card.activityAt?.let { elapsedTextOrNull(it, renderedAt) })
+          } else if (card.state == PhaseCardState.Blocked) {
+            card.blockedReason?.let { PeekSignal(it, false, LucideIcons.warn) }
+          }
+          edit?.let {
+            PeekSignal(
+              "edited ${it.samplePaths.firstOrNull()?.let(::fileName) ?: "files"}",
+              false,
+              LucideIcons.pencil,
+              keep = AnnotatedString("+${it.insertions} −${it.deletions}"),
+              ago = elapsedTextOrNull(it.recordedAt, renderedAt),
+            )
+          }
+        }
       }
     }
-    produced(card, results, path, onAction)
+    produced(
+      detail, card, subtask, results, resultState, path, validationExpanded,
+      { validationExpanded = !validationExpanded }, item, onAction,
+    )
   }
 }
 
 @Composable
-private fun produced(card: PhaseCard, results: SubtaskPhaseResults?, path: String?, onAction: (DetailAction) -> Unit) {
+private fun produced(
+  detail: Detail,
+  card: PhaseCard,
+  subtask: WorkSubtask?,
+  results: SubtaskPhaseResults?,
+  resultState: SubtaskResultsState?,
+  path: String?,
+  checksExpanded: Boolean,
+  onToggleChecks: () -> Unit,
+  item: WorkItem,
+  onAction: (DetailAction) -> Unit,
+) {
   when (card.phaseId) {
-    "plan" -> path?.let { PeekPart("Produced") { PeekOutput(LucideIcons.fileText, fileName(it), onClick = { onAction(DetailAction.OpenSpecFile(it)) }, tooltip = it) } }
-    "implement", "qa_fix" -> {
+    "preplan" -> PreplanRecordedOutput(detail, card.output, item, onAction)
+    "plan_subtasks" -> PlanningRecordedOutput(card.output, card.files)
+    "plan" -> PlanRecordedOutput(path, card.output, results?.auditResult?.criteria.orEmpty(), onAction)
+    "implement", "simplify" -> EditRecordedOutput(card.edit, card.output, card.phaseId == "simplify")
+    "qa_fix" -> {
       val edit = card.edit
-      if (edit != null) PeekPart("Produced") { PeekStats(listOf(PeekStat(edit.fileCount.toString(), "files"), PeekStat("+${edit.insertions}", "added", PeekStatTone.Good), PeekStat("−${edit.deletions}", "removed", PeekStatTone.Bad))) }
-      else if (card.files.isNotEmpty()) PeekPart("Produced") { card.files.forEach { PeekOutput(LucideIcons.file, it, tooltip = it) } }
+      if (edit != null) EditRecordedOutput(edit, card.output)
+      else if (card.files.isNotEmpty()) {
+        PeekPart("Produced") { card.files.forEach { PeekOutput(LucideIcons.file, it, tooltip = it) } }
+      } else EditRecordedOutput(null, card.output)
     }
-    "audit" -> results?.auditResult?.criteria?.takeIf { it.isNotEmpty() }?.let { criteria -> PeekPart("Criteria", end = "${criteria.count { it.met }} of ${criteria.size}") { criteria.forEach { PeekCheck("${it.ref} · ${it.text}", if (it.met) PeekCheckState.Ok else PeekCheckState.Bad) } } }
-    "review" -> results?.let { PeekPart("Findings") { SubtaskReviewSection(it.reviewPasses, it.runningReviewPass) } }
-    "validate" -> card.output?.let { output ->
-      PeekPart("Validation") {
-        PeekFacts(listOf("Verdict" to output.verdict))
-        output.validationReceipt?.let { ValidationReceipt("Validation", it) }
-        output.buildReceipt?.let { ValidationReceipt("Build", it) }
+    "build" -> BuildRecordedOutput(card.output?.buildReceipt, card.state)
+    "audit" -> if (subtask != null && resultState is SubtaskResultsState.Shown) {
+      SubtaskAuditSection(results, subtaskStatusKind(subtask.status), subtask.id, card.round)
+    }
+    "review" -> if (resultState is SubtaskResultsState.Shown) {
+      when (val review = resultState.review) {
+        is SubtaskReviewState.Passes -> SubtaskReviewSection(review.passes, review.runningReviewPass)
+        SubtaskReviewState.RunsAfterAudit -> PeekPart("Review") {
+          BasicText("Runs after audit", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
+        }
+        SubtaskReviewState.Omitted -> PeekPart("Findings") {
+          BasicText("No review result was retained for this phase.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
+        }
       }
     }
-    "write_history" -> card.output?.historyReceipt?.let { receipt -> PeekPart("History") {
-      PeekFacts(listOf("Changed paths" to receipt.changedPaths?.size?.toString(), "History written" to receipt.historyWritten?.toString(), "Decisions recorded" to receipt.decisionsRecorded?.toString()))
-      receipt.changedPaths?.forEach { PeekOutput(LucideIcons.file, it, tooltip = it) }
-    } }
-    "commit_push" -> card.output?.let { output -> PeekPart("Commit") { PeekFacts(listOf("Commit" to output.commitSha?.take(8), "Branch" to output.pushedBranch)) } }
+    "validate" -> ValidateRecordedOutput(card.output, card.state, subtask?.id, detail, checksExpanded, onToggleChecks)
+    "write_history" -> {
+      val receipt = card.output?.historyReceipt
+      if (receipt == null) PeekPart("History") {
+        BasicText(card.output?.summary ?: "The history receipt was not retained for this run.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
+      } else HistoryRecordedOutput(receipt, detail, item, onAction)
+    }
+    "commit_push" -> card.output?.let { CommitRecordedOutput(it) }
+    else -> RecordedPhaseReport(card)
+  }
+  if (card.phaseId in setOf("implement", "simplify", "qa_fix", "build", "validate", "write_history", "commit_push")) {
+    RecordedPhaseDetails(card.output)
   }
 }
 
-@Composable
-private fun ValidationReceipt(title: String, receipt: dev.skillbill.desktop.core.domain.model.ValidationResult) {
-  PeekPart(title, end = receipt.status) {
-    PeekFacts(listOf("Checks" to receipt.checks.size.toString()))
-    receipt.checks.forEach { PeekOutput(LucideIcons.terminal, it, tooltip = it) }
-    receipt.gateRunCount?.let { PeekFacts(listOf("Gate runs" to it.toString())) }
-    receipt.gates.forEachIndexed { index, gate ->
-      PeekPart("Gate ${index + 1}", end = gate.outcome) {
-        PeekFacts(listOf("Duration" to activityDuration(gate.durationMs), "Cache" to gate.cacheMode, "Work units" to gate.executedWorkUnits.toString(), "Exit code" to gate.exitCode?.toString()))
-        gate.executedChecks.forEach { PeekOutput(LucideIcons.check, it, tooltip = it) }
-        gate.command?.let { dev.skillbill.desktop.core.designsystem.detail.PeekCmd(it) }
-      }
-    }
-  }
-}
-
-private fun activityRows(activity: ActivityResult, subtaskId: Int?, card: PhaseCard): List<PeekTimelineRow> {
-  val listed = activity as? ActivityResult.Listed ?: return emptyList()
-  val group = listed.groups.firstOrNull { it.subtaskId == subtaskId } ?: return emptyList()
-  return group.phaseEvents.filter { it.phaseId == card.phaseId }.takeLast(5).map {
+internal fun activityRows(activity: ActivityResult, subtaskId: Int?, card: PhaseCard): List<PeekTimelineRow> {
+  val listed = activity as? ActivityResult.Listed
+  val group = listed?.groups?.firstOrNull { it.subtaskId == subtaskId }
+  return group?.phaseEvents.orEmpty().filter { it.phaseId == card.phaseId }.takeLast(5).map {
     PeekTimelineRow(formatInstant(it.at, "HH:mm"), it.label, if (it.blocked) PeekState.Wait else null)
-  }
+  }.ifEmpty { phaseCardTimeline(card) }
 }

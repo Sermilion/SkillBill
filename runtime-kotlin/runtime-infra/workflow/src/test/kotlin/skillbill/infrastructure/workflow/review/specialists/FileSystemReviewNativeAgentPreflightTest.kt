@@ -19,6 +19,7 @@ import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.InstallPlanRequest
 import skillbill.install.model.InstallTelemetryLevel
 import skillbill.install.model.InstallationTargetPaths
+import skillbill.install.model.ListedSkillNames
 import skillbill.install.model.McpRegistrationChoice
 import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.model.PlatformPackSelection
@@ -86,7 +87,7 @@ class FileSystemReviewNativeAgentPreflightTest {
       }
 
     assertTrue(error.message.orEmpty().contains("active provider directory is missing"))
-    assertContains(error.message.orEmpty(), "Repair with: skill-bill install apply")
+    assertContains(error.message.orEmpty(), "Repair with: sona install apply")
   }
 
   @Test
@@ -115,7 +116,7 @@ class FileSystemReviewNativeAgentPreflightTest {
         assertEquals(SkillStagingFailureCode.MISSING_INSTALLED_NATIVE_AGENT, failure.code)
       }
 
-    assertContains(failure.message.orEmpty(), "skill-bill install apply")
+    assertContains(failure.message.orEmpty(), "Repair with: sona install apply")
   }
 
   @Test
@@ -146,7 +147,7 @@ class FileSystemReviewNativeAgentPreflightTest {
     assertEquals(InstallApplyStatus.SUCCESS, install(fixture, SupportedAgent.CODEX).status)
 
     val skillTargets = fixture.home.resolve("agent-skill-targets/codex")
-    val installedParent = skillTargets.resolve(PACK_SIDECAR_PARENT_SKILL)
+    val installedParent = skillTargets.resolve(ListedSkillNames.publicName(PACK_SIDECAR_PARENT_SKILL))
     val sidecars =
       listOf("$INLINE_WORKER.md", "bill-kotlin-code-review.md", "bill-kotlin-code-review-architecture.md")
     sidecars.forEach { sidecar ->

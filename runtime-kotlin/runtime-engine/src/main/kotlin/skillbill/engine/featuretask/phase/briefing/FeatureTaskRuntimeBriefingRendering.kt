@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phase.briefing
 
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseHandoffSchema
+import skillbill.ports.taskruntime.model.PreplanEvidenceWriteResult
 import skillbill.workflow.taskruntime.model.audit.acceptanceCriterionIdentity
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseHandoff
@@ -131,6 +132,7 @@ internal fun renderFeatureTaskRuntimePhaseBriefing(
   handoff: FeatureTaskRuntimePhaseHandoff,
   envelope: FeatureTaskRuntimeHandoffEnvelope,
   invariantFields: Set<FeatureTaskRuntimeRunInvariantPromptField>,
+  preplanEvidence: PreplanEvidenceWriteResult.Written? = null,
 ): String =
   buildString {
     appendLine("# Feature-task-runtime phase briefing")
@@ -142,6 +144,7 @@ internal fun renderFeatureTaskRuntimePhaseBriefing(
     appendLine("## Upstream projections (layer 2, declared and validated)")
     appendProjections(envelope)
     appendLine()
+    preplanEvidence?.let { evidence -> appendPreplanEvidence(evidence) }
     appendRepositoryCheckpoint(handoff, envelope)
     appendLine("## Derived context (layer 3, declared)")
     if (handoff.derivedContextKeys.isEmpty()) {
@@ -157,3 +160,22 @@ internal fun renderFeatureTaskRuntimePhaseBriefing(
       )
     }
   }
+
+private fun StringBuilder.appendPreplanEvidence(evidence: PreplanEvidenceWriteResult.Written) {
+  appendLine("## Preplan evidence (layer 2, file)")
+  appendLine("path: ${escapeBriefingLineBreaks(evidence.path.toString())}")
+  appendLine(PREPLAN_EVIDENCE_INSTRUCTION)
+  appendLine("excerpts:")
+  if (evidence.excerpts.isEmpty()) appendLine("  (none)")
+  evidence.excerpts.forEach { excerpt -> appendLine("  - ${escapeBriefingLineBreaks(excerpt.label)}") }
+  if (evidence.skipped.isNotEmpty()) {
+    appendLine("unreadable_references:")
+    evidence.skipped.forEach { reference -> appendLine("  - ${escapeBriefingLineBreaks(reference.label)}") }
+  }
+  appendLine()
+}
+
+private const val PREPLAN_EVIDENCE_INSTRUCTION: String =
+  "The full preplan digest and the checkout source it cites are in this file, not in this briefing. Read the " +
+    "file first; its excerpts are verbatim with each line's own number. Open a source file only for a fact " +
+    "the file lacks."

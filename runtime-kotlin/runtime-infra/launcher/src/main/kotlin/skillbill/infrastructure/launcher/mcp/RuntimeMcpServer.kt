@@ -11,14 +11,13 @@ import skillbill.ports.agentrun.model.SkillRunRequest
 import java.nio.file.Files
 import java.nio.file.Path
 
-internal const val RUNTIME_MCP_SERVER_NAME: String = "skill-bill"
-internal const val RUNTIME_MCP_BIN_ENV: String = "SKILL_BILL_RUNTIME_MCP_BIN"
+const val RUNTIME_MCP_SERVER_NAME: String = "sona"
 
 internal fun runtimeMcpBinCandidate(
   environment: Map<String, String>,
   userHome: Path,
 ): Path {
-  val configured = environment[RUNTIME_MCP_BIN_ENV]?.takeIf(String::isNotBlank)
+  val configured = environment[RuntimeMcpEnvironmentKeys.RUNTIME_MCP_BIN]?.takeIf(String::isNotBlank)
   val home =
     userHome.takeUnless { it.toString().isBlank() || it == EnvironmentContext.UnspecifiedUserHome }
       ?: environment["HOME"]?.takeIf(String::isNotBlank)?.let(Path::of)
@@ -27,7 +26,7 @@ internal fun runtimeMcpBinCandidate(
     ?: home.resolve(".skill-bill").resolve("runtime").resolve("runtime-mcp").resolve("bin").resolve("runtime-mcp")
 }
 
-internal fun resolveRuntimeMcpBin(
+fun resolveRuntimeMcpBin(
   environment: Map<String, String>,
   userHome: Path,
 ): Path? =
@@ -127,7 +126,7 @@ private fun codexRuntimeMcpOverrides(
   }
 }
 
-internal fun runtimeMcpServerEnvironment(
+fun runtimeMcpServerEnvironment(
   databasePath: Path?,
   validationCheckInvocationId: String? = null,
 ): Map<String, String> =

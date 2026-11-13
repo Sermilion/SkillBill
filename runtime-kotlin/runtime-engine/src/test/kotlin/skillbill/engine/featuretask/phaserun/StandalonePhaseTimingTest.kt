@@ -27,7 +27,7 @@ class StandalonePhaseTimingTest {
     try {
       val publisher =
         testStandalonePhasePublisher(database, clock, NoopRuntimeDiagnostics)
-          .forPhase(home, "monitor", "monitor-model", "codex")
+          .forPhase(home, "monitor", "monitor-model", StandalonePhaseLaunch("codex"))
       publisher.publishActivity("monitor", "Waiting for CI")
 
       fun model() = database.read { it.standalonePhaseStatuses.readByInvocation("monitor-model") }?.reportedModel

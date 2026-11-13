@@ -11,6 +11,11 @@ object JdkHostPlatformPort : HostPlatformPort {
 
   override fun resolveUserHome(): Path = Path.of(System.getProperty("user.home"))
 
+  override fun resolveUserName(): String? =
+    ProcessHandle.current().info().user().orElse(
+      null,
+    )?.takeIf(String::isNotBlank)
+
   override fun resolveEnvironment(): Map<String, String> = System.getenv()
 
   override fun resolveJavaHome(): Path = Path.of(System.getProperty("java.home"))

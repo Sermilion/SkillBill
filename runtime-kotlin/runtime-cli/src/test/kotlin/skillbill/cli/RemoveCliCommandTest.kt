@@ -3,6 +3,8 @@ package skillbill.cli
 import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliRuntimeContext
 import skillbill.contracts.JsonCodec
+import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
+import skillbill.infrastructure.skills.nativeagent.composition.renderNativeAgentSource
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import kotlin.test.Test
@@ -23,9 +25,9 @@ class RemoveCliCommandTest {
 
     assertEquals(1, result.exitCode)
     assertEquals("error", payload["status"].toString().trim('"'))
-    assertTrue("skill-bill remove skill:bill-my-skill --dry-run" in error)
-    assertTrue("skill-bill remove platform:my-platform --dry-run" in error)
-    assertTrue("skill-bill remove addon:platform-packs/kmp/addons/my-addon.md --dry-run" in error)
+    assertTrue("sona remove skill:bill-my-skill --dry-run" in error)
+    assertTrue("sona remove platform:my-platform --dry-run" in error)
+    assertTrue("sona remove addon:platform-packs/kmp/addons/my-addon.md --dry-run" in error)
   }
 
   @Test
@@ -75,6 +77,27 @@ class RemoveCliCommandTest {
     Files.createDirectories(skillDir)
     Files.writeString(skillDir.resolve("content.md"), "# bill-foo\n")
     val context = CliRuntimeContext(userHome = contextHome, environment = isolatedCliEnvironment(selectedHome))
+    val sources = Files.createDirectories(skillDir.resolve("native-agents"))
+    Files.writeString(
+      sources.resolve("bill-foo-worker.md"),
+      renderNativeAgentSource(NativeAgentSource("bill-foo-worker", "Test worker.", "# Worker")),
+    )
+    val platformPacks = Files.createDirectories(repoRoot.resolve("platform-packs"))
+    val installation =
+      CliRuntime.run(
+        listOf(
+          "--home",
+          selectedHome.toString(),
+          "install",
+          "link-claude-agents",
+          "--platform-packs",
+          platformPacks.toString(),
+          "--skills",
+          repoRoot.resolve("skills").toString(),
+        ),
+        context,
+      )
+    assertEquals(0, installation.exitCode, installation.stdout + installation.stderr)
 
     val result =
       CliRuntime.run(
@@ -100,7 +123,7 @@ class RemoveCliCommandTest {
         .orEmpty()
         .mapNotNull { entry -> (entry as? Map<*, *>)?.get("path")?.toString() }
 
-    assertTrue(symlinkPaths.isNotEmpty(), "dry-run should preview native-agent symlink paths")
+    assertEquals(listOf(selectedHome.resolve(".claude/agents/bill-foo-worker.md").toString()), symlinkPaths)
     assertTrue(
       symlinkPaths.all { path -> selectedHome.toString() in path },
       "all symlink preview paths should use the selected --home: $symlinkPaths",
@@ -158,8 +181,8 @@ class RemoveCliCommandTest {
     assertTrue("allowShipped" !in error)
     assertTrue("Why this is protected:" in error)
     assertTrue("bill-* skills are shipped product surfaces" in error)
-    assertTrue("skill-bill remove skill:bill-code-review --dry-run --allow-shipped" in error)
-    assertTrue("skill-bill remove skill:bill-code-review --allow-shipped" in error)
+    assertTrue("sona remove skill:bill-code-review --dry-run --allow-shipped" in error)
+    assertTrue("sona remove skill:bill-code-review --allow-shipped" in error)
   }
 
   @Test

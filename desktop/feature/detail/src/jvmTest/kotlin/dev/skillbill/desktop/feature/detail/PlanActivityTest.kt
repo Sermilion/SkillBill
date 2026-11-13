@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
@@ -25,6 +26,8 @@ import dev.skillbill.desktop.core.domain.model.StandalonePlanProgress
 import dev.skillbill.desktop.core.domain.model.StandalonePlanStage
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.testing.workItem
+import dev.skillbill.desktop.core.ui.input.LocalShellInput
+import dev.skillbill.desktop.core.ui.input.ShellInput
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Duration.Companion.seconds
@@ -135,7 +138,9 @@ class PlanActivityTest {
       setContent {
         SkillBillTheme(reducedMotion = true) {
           CompositionLocalProvider(LocalUiTicker provides ticker) {
-            DetailScreen(DetailUiState(liveItem, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {})) {}
+            CompositionLocalProvider(LocalShellInput provides remember { ShellInput() }) {
+              DetailScreen(DetailUiState(liveItem, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}, {})) {}
+            }
           }
         }
       }
@@ -163,7 +168,9 @@ class PlanActivityTest {
     val detail = emptyDetail.copy(standalonePlan = progress)
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {})) {}
+        CompositionLocalProvider(LocalShellInput provides remember { ShellInput() }) {
+          DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}, {})) {}
+        }
       }
     }
 

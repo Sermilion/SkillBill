@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -58,6 +59,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatRecoveryEntry
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlin.time.Instant
 
@@ -96,6 +98,43 @@ internal fun RecentChatsSection(
       nextFocusRequester = nextCardFocusRequester,
     ) { entry, selected, divider ->
       InboxChatRow(entry, selectedRoot, current, divider, entry.sessionId in openSessionIds, selected, onResume, onDiscard)
+    }
+  }
+}
+
+@Composable
+internal fun SavedChatRecoverySection(recoveries: List<ChatRecoveryEntry>, modifier: Modifier = Modifier) {
+  if (recoveries.isEmpty()) return
+  val colors = SkillBillTheme.colors
+  val type = SkillBillTheme.type
+  HomeSection("Chats needing recovery", recoveries.size, action = {}, modifier = modifier) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      recoveries.forEach { recovery ->
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+          BasicText(
+            "${recovery.sessionId}: ${recovery.reason.description} Original data: ${recovery.originalDataPath}. Preserve or repair the file, or start a separate new chat. This record cannot be resumed.",
+            style = type.tXs.copy(color = colors.fgMuted),
+          )
+          recovery.lines.forEach { line ->
+            BasicText("${line.role}: ${line.text}", style = type.t2xs.copy(color = colors.fgFaint))
+            line.actions.forEach { action ->
+              BasicText("Saved action: ${action.label}", style = type.t2xs.copy(color = colors.fgFaint))
+            }
+            line.selectedAction?.let { action ->
+              BasicText("Selected action: ${action.label}", style = type.t2xs.copy(color = colors.fgFaint))
+            }
+            line.approval?.let { card ->
+              BasicText("Saved approval: ${card.title}. ${card.subject}. ${card.inputText}. State: ${card.state}.", style = type.t2xs.copy(color = colors.fgFaint))
+              card.options.forEach { option ->
+                BasicText("Offered option: ${option.label} (${option.optionId})", style = type.t2xs.copy(color = colors.fgFaint))
+              }
+            }
+            line.operationCard?.let { card ->
+              BasicText("Saved operation card: ${card.operationId}. State: ${card.state}. ${card.refusal.orEmpty()}", style = type.t2xs.copy(color = colors.fgFaint))
+            }
+          }
+        }
+      }
     }
   }
 }

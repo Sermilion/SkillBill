@@ -45,6 +45,7 @@ data class ParallelCodeReviewRequest(
   val laneProgressIdleTimeout: Duration = READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes,
   val reportContract: ParallelCodeReviewReportContract = ParallelCodeReviewReportContract.DEFAULT,
   val modelOverride: String? = null,
+  val effortOverride: String? = null,
   val directiveSuffix: String = "",
 ) {
   init {
@@ -58,6 +59,7 @@ data class ParallelCodeReviewRequest(
     }
     specPath?.let { require(it.toString().isNotBlank()) { "specPath must be non-blank when provided." } }
     modelOverride?.let { require(it.isNotBlank()) { "modelOverride must be non-blank when provided." } }
+    effortOverride?.let { require(it.isNotBlank()) { "effortOverride must be non-blank when provided." } }
     baseRevision?.let { require(it.isNotBlank()) { "baseRevision must be non-blank when provided." } }
     headRevision?.let { require(it.isNotBlank()) { "headRevision must be non-blank when provided." } }
     require(ownedPathspec.all(String::isNotBlank)) { "ownedPathspec must not contain blanks." }

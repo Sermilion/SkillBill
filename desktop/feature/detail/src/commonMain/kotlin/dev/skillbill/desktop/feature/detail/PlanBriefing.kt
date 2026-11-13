@@ -37,13 +37,16 @@ internal fun planBriefing(stages: List<StandalonePlanStage>, reachedPhaseIds: Se
     val lines = text?.splitLinesWithEnds().orEmpty()
     val bytes = text?.encodeToByteArray()?.size ?: 0
     val setupBytes = lines.sectionBytes("## Run invariants")
-    val digestBytes = lines.preplanBlock()?.lines?.sumOf { it.encodeToByteArray().size } ?: 0
+    val pastedDigestBytes = lines.preplanBlock()?.lines?.sumOf { it.encodeToByteArray().size } ?: 0
+    val evidenceBytes = lines.sectionBytes(PREPLAN_EVIDENCE_HEADING)
+    val digestBytes = pastedDigestBytes + evidenceBytes
     PlanBriefingStage(
       phaseId, text, bytes, setupBytes, digestBytes,
       text?.let { byteSizeLabel(bytes) },
       when {
         text == null -> if (phaseId in reachedPhaseIds) "the runtime did not save one" else "not started"
-        digestBytes > 0 -> "run setup + preplan digest"
+        evidenceBytes > 0 -> "run setup + preplan evidence file"
+        pastedDigestBytes > 0 -> "run setup + preplan digest"
         else -> "run setup only"
       },
     )
@@ -51,10 +54,23 @@ internal fun planBriefing(stages: List<StandalonePlanStage>, reachedPhaseIds: Se
   val setup = parsedStages.firstNotNullOfOrNull { stage ->
     stage.text?.splitLinesWithEnds()?.let(::parseSetup)
   }
-  val digest = saved["plan"]?.briefingText?.takeIf(String::isNotBlank)?.splitLinesWithEnds()
-    ?.preplanBlock()?.value?.let(::digestSections)
+  val planLines = saved["plan"]?.briefingText?.takeIf(String::isNotBlank)?.splitLinesWithEnds()
+  val digest = planLines?.preplanBlock()?.value?.let(::digestSections) ?: planLines?.preplanEvidenceSections()
   return PlanBriefing(setup, digest, parsedStages)
 }
+
+private fun List<String>.preplanEvidenceSections(): List<PlanDigestSection>? {
+  val start = indexOfFirst { it.trimEnd('\r', '\n').startsWith(PREPLAN_EVIDENCE_HEADING) }
+  if (start < 0) return null
+  val section = (start + 1 until size).takeWhile { !get(it).startsWith("## ") }.map { get(it).trim() }
+  val path = section.firstOrNull { it.startsWith("path:") }?.substringAfter("path:")?.trim() ?: return null
+  val excerpts = section.dropWhile { it != "excerpts:" }.drop(1)
+    .takeWhile { it.startsWith("- ") || it == "(none)" }
+    .map { it.removePrefix("- ") }
+  return listOf(PlanDigestSection("Preplan evidence file", listOf(path) + excerpts))
+}
+
+private const val PREPLAN_EVIDENCE_HEADING = "## Preplan evidence"
 
 private fun byteSizeLabel(bytes: Int): String = if (bytes < 1024) "$bytes B" else {
   val tenths = (bytes * 10 + 512) / 1024
@@ -160,7 +176,7 @@ private fun parseSetup(lines: List<String>): PlanRunSetup? {
   return PlanRunSetup(specPath, featureSize, ceremony, mandates, criteria)
 }
 
-private fun digestSections(value: String): List<PlanDigestSection> {
+internal fun digestSections(value: String): List<PlanDigestSection> {
   val lines = value.lines().filter(String::isNotBlank)
   val sections = mutableListOf<PlanDigestSection>()
   var title: String? = null

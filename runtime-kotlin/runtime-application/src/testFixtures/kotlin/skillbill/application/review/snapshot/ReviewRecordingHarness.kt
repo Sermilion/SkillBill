@@ -29,6 +29,7 @@ import skillbill.infrastructure.workflow.review.broker.FileSystemReviewEvidenceB
 import skillbill.infrastructure.workflow.review.specialists.ClasspathReviewSpecialistContractProvider
 import skillbill.install.model.SupportedAgent
 import skillbill.learnings.model.LearningRecord
+import skillbill.model.EnvironmentContext
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
@@ -84,6 +85,10 @@ import skillbill.review.context.ReviewContextWireMap
 import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.context.model.packet.LANE_EVIDENCE_BYTES_DIMENSION
+import skillbill.review.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewComposition
+import skillbill.review.model.CodeReviewCompositionMode
+import skillbill.review.model.CodeReviewCompositionScope
 import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewParseResult
 import skillbill.review.model.ReviewFindingVerdict
@@ -94,10 +99,6 @@ import skillbill.review.model.ReviewStageBoundary
 import skillbill.review.model.ReviewStageDegradationMeasurement
 import skillbill.review.parallel.ParallelReviewFindingParser
 import skillbill.scaffold.model.BaselineReviewCatalog
-import skillbill.scaffold.model.CodeReviewBaselineLayer
-import skillbill.scaffold.model.CodeReviewComposition
-import skillbill.scaffold.model.CodeReviewCompositionMode
-import skillbill.scaffold.model.CodeReviewCompositionScope
 import skillbill.scaffold.model.DeclaredFiles
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.ReviewLaneCondition
@@ -191,6 +192,7 @@ data class ReviewHarnessConfig(
   val commits: List<RecordedCommit> = emptyList(),
   val learnings: List<LearningRecord> = emptyList(),
   val originScopeKeyPort: RepositoryOriginScopeKeyPort = HARNESS_ORIGIN_UNAVAILABLE,
+  val environment: EnvironmentContext = EnvironmentContext(),
 )
 
 fun ParallelCodeReviewRunner.reviewed(request: ParallelCodeReviewRequest): ParallelCodeReviewResult =
@@ -247,6 +249,7 @@ fun reviewHarness(
     originScopeKeyPort = config.originScopeKeyPort,
     learningsDiagnostics = recordingDiagnostics(recorder),
     routingDiagnostics = recordingDiagnostics(recorder),
+    environment = config.environment,
   )
 }
 
@@ -270,6 +273,7 @@ fun parallelCodeReviewRunnerOf(
   registerParse: (String) -> ParallelReviewParseResult = ParallelReviewFindingParser::parse,
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort = CanonicalRepositoryRoot,
   originScopeKeyPort: RepositoryOriginScopeKeyPort = HARNESS_ORIGIN_UNAVAILABLE,
+  environment: EnvironmentContext = EnvironmentContext(),
   learningsDiagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
   routingDiagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
   clock: Clock = Clock.systemUTC(),
@@ -298,6 +302,7 @@ fun parallelCodeReviewRunnerOf(
   val laneLaunch =
     ParallelCodeReviewRunnerLaneLaunch(
       parentReviewLauncher = parentReviewLauncher,
+      environment = environment,
       reviewEvidenceBrokerFactory = reviewEvidenceBrokerFactory,
       governedEvidenceEndpointBinder = governedEvidenceEndpointBinder,
       reviewLaunchAgentStaging = reviewLaunchAgentStaging,

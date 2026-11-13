@@ -95,6 +95,18 @@ internal object ReviewRuntime {
       }
     }
 
+  fun latestSessionReviewRunId(
+    connection: Connection,
+    sessionId: String,
+  ): String? =
+    connection.prepareStatement(
+      "SELECT review_run_id FROM review_runs WHERE review_session_id = ? " +
+        "ORDER BY imported_at DESC, rowid DESC LIMIT 1",
+    ).use { statement ->
+      statement.bindAll(sessionId)
+      statement.executeQuery().use { rows -> if (rows.next()) rows.getString(1) else null }
+    }
+
   fun reviewExists(
     connection: Connection,
     reviewRunId: String,

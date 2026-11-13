@@ -40,11 +40,12 @@ import kotlin.test.assertTrue
 
 class PlanBundleFeasibilityTest {
   @Test
-  fun `missing partial duplicate or stale approval never releases a bundle`() {
+  fun `missing partial or stale approval never releases a bundle`() {
     val snapshot = snapshot()
     val receipt = approval(snapshot)
     assertNull(PlanBundleFeasibility.approvalRejection(snapshot, receipt))
-    for (invalid in listOf("", "Looks feasible", receipt.lines().first(), receipt + "\n" + receipt.lines().last())) {
+    assertNull(PlanBundleFeasibility.approvalRejection(snapshot, receipt + "\n" + receipt.lines().last()))
+    for (invalid in listOf("", "Looks feasible", receipt.lines().first())) {
       assertNotNull(PlanBundleFeasibility.approvalRejection(snapshot, invalid))
     }
     val edited = snapshot.copy(specTexts = snapshot.specTexts + (1 to spec("Activate strict consumers now")))
@@ -53,7 +54,7 @@ class PlanBundleFeasibilityTest {
   }
 
   @Test
-  fun `review receipt accepts a complete mixed verdict and rejects malformed citations atomically`() {
+  fun `review receipt keeps the verdict and tolerates format slips but rejects missing coverage or stale bundles`() {
     val snapshot =
       snapshot().copy(
         specTexts = mapOf(1 to "## Acceptance Criteria\n\n1. Preserve compatibility.\n2. Repair lifecycle state.\n"),
@@ -62,8 +63,7 @@ class PlanBundleFeasibilityTest {
       "bundle-feasibility-v2: changes_requested ${snapshot.fingerprint}\n" +
         "criterion 1.1: The existing owner keeps the prior compatible behavior during migration.\n" +
         "conflict 1.2: The dependency state cannot be reached from the declared predecessor. src/plan.md:12"
-    val parsed = PlanBundleFeasibility.parseReviewReceipt(snapshot, mixed)
-    val receipt = assertIs<PlanBundleFeasibility.ReviewParseResult.Accepted>(parsed).receipt
+    val receipt = acceptedReceipt(snapshot, mixed)
     assertEquals(mixed, receipt.originalValue)
     assertEquals(
       listOf("criterion 1.1: The existing owner keeps the prior compatible behavior during migration."),
@@ -74,30 +74,45 @@ class PlanBundleFeasibilityTest {
       receipt.conflictLines,
     )
 
-    for (invalid in listOf(
-      mixed.substringBefore("conflict 1.2"),
-      mixed.replace("criterion 1.1", "criterion 1.2"),
-      mixed.replace("1.2", "1.1"),
-      mixed.replace("1.2", "9.1"),
+    for (tolerated in listOf(
       "bundle-feasibility-v2: changes_requested ${snapshot.fingerprint}\n" +
         "conflict 1.2: The dependency state cannot be reached from the declared predecessor. src/plan.md:12\n" +
         "criterion 1.1: The existing owner keeps the prior compatible behavior during migration.",
       mixed.replace("dependency state cannot be reached from the declared predecessor.", "short"),
-      mixed.replace("src/plan.md:12", ":12"),
-      mixed.replace("src/plan.md:12", "src/plan.md:0"),
-      mixed.replace("changes_requested", "approved"),
+      mixed.replace(" src/plan.md:12", ""),
+      "Review notes first.\n$mixed\nextra text",
+      mixed.replace("criterion 1.1", "- criterion 1.1"),
+    )) {
+      val parsed = acceptedReceipt(snapshot, tolerated)
+      assertEquals(listOf("1.1", "1.2"), parsed.lines.map { it.ref })
+      assertFalse(parsed.approved)
+    }
+    assertFalse(acceptedReceipt(snapshot, mixed.replace("changes_requested", "approved")).approved)
+
+    for (invalid in listOf(
+      mixed.substringBefore("conflict 1.2"),
+      mixed.replace("criterion 1.1", "criterion 1.2"),
+      mixed.replace("1.2", "9.1"),
+      mixed.replace("conflict 1.2", "criterion 1.2"),
       mixed.replace("bundle-feasibility-v2", "bundle-feasibility-v1"),
       mixed.replace(snapshot.fingerprint, "0".repeat(64)),
-      "$mixed\nextra text",
     )) {
-      assertTrue(
-        PlanBundleFeasibility.parseReviewReceipt(snapshot, invalid) is PlanBundleFeasibility.ReviewParseResult.Rejected,
+      assertIs<PlanBundleFeasibility.ReviewParseResult.Rejected>(
+        PlanBundleFeasibility.parseReviewReceipt(snapshot, invalid),
       )
     }
   }
 
+  private fun acceptedReceipt(
+    snapshot: PlanBundleFeasibilitySnapshot,
+    value: String,
+  ): PlanBundleFeasibility.ReviewReceipt =
+    assertIs<PlanBundleFeasibility.ReviewParseResult.Accepted>(
+      PlanBundleFeasibility.parseReviewReceipt(snapshot, value),
+    ).receipt
+
   @Test
-  fun `scoped receipt accepts only required refs and rejects carried extras`() {
+  fun `scoped receipt keeps only required refs and ignores carried extras`() {
     val snapshot =
       snapshot().copy(
         specTexts = mapOf(1 to "## Acceptance Criteria\n\n1. Preserve compatibility.\n2. Repair lifecycle state.\n"),
@@ -112,9 +127,11 @@ class PlanBundleFeasibilityTest {
 
     val carriedExtra =
       scoped + "\ncriterion 1.1: The earlier successful line is carried and must not be reviewed again."
-    assertIs<PlanBundleFeasibility.ReviewParseResult.Rejected>(
-      PlanBundleFeasibility.parseReviewReceipt(snapshot, carriedExtra, required),
-    )
+    val receipt =
+      assertIs<PlanBundleFeasibility.ReviewParseResult.Accepted>(
+        PlanBundleFeasibility.parseReviewReceipt(snapshot, carriedExtra, required),
+      ).receipt
+    assertEquals(listOf("1.2"), receipt.lines.map { it.ref })
   }
 
   @Test

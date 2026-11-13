@@ -23,6 +23,7 @@ data class AppSettings(
   val qaDevice: QaDevicePick? = null,
   /** Agent id new chats, goals and phases start with when nothing else names one; null keeps the first detected agent. */
   val defaultAgentId: String? = null,
+  val detailsWidthDp: Int? = null,
 ) {
   companion object {
     const val TERMINAL_HEIGHT_DEFAULT_DP = 200
@@ -31,6 +32,7 @@ data class AppSettings(
     const val CHAT_WIDTH_DEFAULT_DP = 560
     const val CHAT_WIDTH_MIN_DP = 360
     const val CHAT_WIDTH_MAX_DP = 2000
+    const val DETAILS_WIDTH_MIN_DP = 272
 
     val DEFAULT = AppSettings(
       databasePath = null,
@@ -40,6 +42,7 @@ data class AppSettings(
       startAtLogin = false,
       terminalHeightDp = TERMINAL_HEIGHT_DEFAULT_DP,
       chatWidthDp = CHAT_WIDTH_DEFAULT_DP,
+      detailsWidthDp = null,
       trayLastTab = TrayTab.DEFAULT,
       favoriteWork = emptySet(),
       favoriteSpecs = emptySet(),

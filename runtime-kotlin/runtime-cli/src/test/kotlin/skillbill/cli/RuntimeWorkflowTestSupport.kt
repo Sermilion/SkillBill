@@ -15,6 +15,8 @@ import skillbill.contracts.decomposition.DecompositionPlanningResult
 import skillbill.contracts.workflow.payload.WorkflowArtifactKeys
 import skillbill.di.core.RuntimeComponent
 import skillbill.di.core.create
+import skillbill.engine.featuretask.phase.core.settleScriptedEnvelope
+import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import java.nio.file.Files
@@ -31,6 +33,14 @@ internal fun installFakeRuntimeMcpBin(home: Path): Path {
 }
 
 internal object RuntimeWorkflowTestSupport {
+  fun settlePhase(
+    outcome: AgentRunLaunchOutcome,
+    prompt: String?,
+    dbPath: Path,
+    context: CliRuntimeContext,
+  ): AgentRunLaunchOutcome =
+    settleScriptedEnvelope(outcome, prompt, component(context, dbPath).featureTaskPhaseSettlementService)
+
   fun open(
     dbPath: Path,
     context: CliRuntimeContext,

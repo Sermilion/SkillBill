@@ -229,3 +229,95 @@ private fun merge(
     old.orEmpty() +
       update.filterValues { it != JsonNull },
   )
+
+internal class CursorAcpOutsidePermissions(
+  private val write: (JsonObject) -> Boolean,
+  private val stop: (String) -> Unit,
+  private val record: (String) -> Unit,
+  private val provider: AcpProvider,
+) {
+  private val lock = Any()
+  private val consumed = LinkedHashMap<ApprovalProviderRequestId, String>()
+  private var released = false
+
+  fun respond(
+    message: JsonObject,
+    session: String?,
+    authorized: Boolean,
+  ) {
+    val decoded = CursorPermissionRequests.decode(message, session)
+    val id = decoded?.id ?: CursorPermissionRequests.requestId(message)
+    if (id == null) {
+      record("seam=${provider.seam} outcome=invalid_permission_cancelled")
+      return
+    }
+    if (!admit(id, CanonicalJson.encode(message))) return
+
+    val option =
+      decoded?.options?.firstOrNull { it.kind == CursorPermissionKind.ALLOW_ONCE.wireValue }
+        ?.takeIf { authorized }
+    val response =
+      buildJsonObject {
+        put(K.JSONRPC, "2.0")
+        put(K.ID, id.cursorJson())
+        put(
+          K.RESULT,
+          buildJsonObject {
+            put(
+              K.OUTCOME,
+              buildJsonObject {
+                put(K.OUTCOME, if (option == null) K.CANCELLED else K.SELECTED)
+                option?.let { put(K.OPTION_ID, it.id) }
+              },
+            )
+          },
+        )
+      }
+    val delivered = synchronized(lock) { !released } && write(response)
+    record(
+      "seam=${provider.seam} outcome=" +
+        when {
+          !delivered -> "permission_delivery_uncertain"
+          option != null -> "permission_selected"
+          else -> "permission_cancelled"
+        },
+    )
+  }
+
+  fun release() {
+    synchronized(lock) {
+      released = true
+      consumed.clear()
+    }
+  }
+
+  private fun admit(
+    id: ApprovalProviderRequestId,
+    snapshot: String,
+  ): Boolean =
+    synchronized(lock) {
+      val previous = consumed[id]
+      when {
+        previous != null -> {
+          if (previous != snapshot) {
+            stop("${provider.name} reused a permission id with changed content.")
+          } else {
+            record("seam=${provider.seam} outcome=duplicate_permission_suppressed")
+          }
+          false
+        }
+        released || consumed.size >= LIMIT -> {
+          stop("${provider.name} approval capacity or lifetime ended.")
+          false
+        }
+        else -> {
+          consumed[id] = snapshot
+          true
+        }
+      }
+    }
+
+  private companion object {
+    const val LIMIT = 1024
+  }
+}

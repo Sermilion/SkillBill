@@ -30,6 +30,7 @@ sealed interface ChatScope {
     val issueKey: String?,
     val title: String,
     override val repositoryRoot: String,
+    val verifySourceBranch: String? = null,
   ) : ChatScope
 
   data class NewTask(
@@ -91,6 +92,7 @@ data class ChatTurnRequest(
   val prompt: String,
   val images: List<ChatImage> = emptyList(),
   val cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly,
+  val savedHistory: ChatHistoryEntry? = null,
 )
 
 /** The run a new-task action starts when clicked; [wire] is its value in the action block and on the start chips. */
@@ -160,6 +162,8 @@ sealed interface ChatEvent {
 
 /** Why a turn ended without an answer. */
 enum class ChatFailure { AgentUnsupported, ApprovalUnsupported, BinaryMissing, ProcessFailed, StreamMalformed }
+
+enum class ChatStopSettlement { Settled, AlreadyFinished, CollectorCancellationRequired }
 
 enum class ChatHistoryRole { Operator, Agent, Notice, Error, Approval, OperationCard }
 
@@ -250,4 +254,30 @@ data class ChatHistoryEntry(
   val appSessionId: String? = null,
   /** The checkout where this provider conversation was established, when known. */
   val executionCheckoutRoot: String? = null,
+)
+
+/** A saved app-chat file that needs operator recovery instead of provider continuation. */
+enum class ChatRecoveryReason(val description: String) {
+  UnreadableFile("The saved chat file could not be read as valid chat data."),
+  InvalidOpenCodeBinding("The saved OpenCode session binding is incomplete or invalid."),
+  OpenCodeHandleUnbound("The saved OpenCode provider handle has no complete identity binding."),
+  MissingResumeMetadata("The saved chat is missing the operator message or agent details needed to resume safely."),
+}
+
+data class ChatRecoveryEntry(
+  val sessionId: String,
+  val originalDataPath: String,
+  val reason: ChatRecoveryReason,
+  val executionId: String? = null,
+  val repositoryRoot: String? = null,
+  val title: String? = null,
+  val updatedAt: Instant? = null,
+  val agentId: String? = null,
+  val lines: List<ChatHistoryLine> = emptyList(),
+)
+
+/** Readable chats and records that need diagnosis stay distinct in saved-chat listings. */
+data class SavedChatProjection(
+  val entries: List<ChatHistoryEntry> = emptyList(),
+  val recoveries: List<ChatRecoveryEntry> = emptyList(),
 )

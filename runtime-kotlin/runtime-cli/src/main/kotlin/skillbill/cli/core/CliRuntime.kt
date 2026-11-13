@@ -15,6 +15,7 @@ import skillbill.di.core.RuntimeComponent
 import skillbill.di.core.create
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
+import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
 import java.nio.file.AccessDeniedException
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
@@ -38,13 +39,17 @@ object CliRuntime {
       )
     val resolved = runtimeComponent.resolvedEnvironmentContext
     context.onEnvironmentResolved(resolved.environment)
+    val workingDirectory = resolved.workingDirectory
+    val callerEnvironment =
+      resolved.environment + (InstallMcpProfileEnvironment.PWD_ENV to workingDirectory.toString())
     val runState = CliRunState(context.stdinText)
     val runInputs =
       CliRunInputs(
         databasePath = resolved.dbPathOverride,
-        environment = resolved.environment,
+        environment = callerEnvironment,
         userHome = resolved.userHome,
         repositoryRoot = resolved.repositoryRoot,
+        workingDirectory = workingDirectory,
         featureTaskRuntimeRunOverride = context.featureTaskRuntimeRunOverride,
         liveStdout = context.liveStdout,
         liveStderr = context.liveStderr,
@@ -151,7 +156,7 @@ private fun diagnosticWithPrefix(
   diagnostic: String,
 ): String = if (prefix.isBlank()) diagnostic else prefix + diagnostic
 
-private class RootFlagProbeCommand : CliktCommand("skill-bill") {
+private class RootFlagProbeCommand : CliktCommand("sona") {
   val dbOverride by databasePathOption()
   val homeOverride by userHomeOverrideOption()
   val verbose by verboseOption()

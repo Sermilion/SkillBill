@@ -33,11 +33,12 @@ internal class OperationCardCoordinator(
   private val runs: RunOpener = UnavailableRunOpener,
   private val admissionProblem: (ChatThread, NewTaskStart?, Any?) -> String? = { _, _, _ -> null },
   private val decisionAdmissionProblem: (ChatThread, Any?) -> String? = { _, _ -> null },
+  private val requests: OperationCardRequests = OperationCardRequests(),
 ) {
   internal enum class AdjustmentSubmission { Accepted, Rejected, NotApplicable }
 
   private data class RememberedRequest(val request: NewTaskStart, val authority: Any?)
-  private val requests = ConcurrentHashMap<String, RememberedRequest>()
+  private val rememberedRequests = ConcurrentHashMap<String, RememberedRequest>()
   private val observations = ConcurrentHashMap<String, Job>()
   private val pendingAdjustments = ConcurrentHashMap<ChatThread, String>()
   private val outstanding = ConcurrentHashMap<ChatThread, Int>()
@@ -85,6 +86,7 @@ internal class OperationCardCoordinator(
     }
     references.forEach { (token, launchId) ->
       observations.remove(token)?.cancel()
+      rememberedRequests.remove(launchId)
       requests.remove(launchId)
     }
     pendingAdjustments.remove(thread)
@@ -92,9 +94,14 @@ internal class OperationCardCoordinator(
 
   /** Keeps the request that parked [launchId], so Adjust can ask for a replacement with the same target and branch. */
   fun remember(launchId: String, request: NewTaskStart, authority: Any? = null) {
-    val prior = requests[launchId]
-    requests[launchId] = RememberedRequest(request.copy(confirmation = null), authority ?: prior?.authority)
+    val prior = rememberedRequests[launchId]
+    val safeRequest = request.copy(confirmation = null)
+    requests.remember(launchId, safeRequest)
+    rememberedRequests[launchId] = RememberedRequest(safeRequest, authority ?: prior?.authority)
   }
+
+  private fun remembered(launchId: String): RememberedRequest? = rememberedRequests[launchId]
+    ?: requests[launchId]?.let { RememberedRequest(it, null) }
 
   /** Reads and shows the card [launchId] parked; false when the store holds none. */
   suspend fun show(thread: ChatThread, launchId: String): Boolean {
@@ -181,10 +188,11 @@ internal class OperationCardCoordinator(
       onChangeVerify = { token, choices -> synchronized(actionLock) { if (thread !in revokedThreads && thread !in reservedThreads) changeVerify(thread, token, choices) } },
       canAdjust = { token -> synchronized(actionLock) {
         val message = thread.operationCard(token)
-        val remembered = message?.card?.launchId?.let(requests::get)
+        val remembered = message?.card?.launchId?.let(::remembered)
         thread !in revokedThreads && thread !in reservedThreads && !thread.busy.value && remembered != null &&
           admissionProblemForDecision(thread, remembered.request, remembered.authority, null) == null
       } },
+      busy = thread.busy,
       onOpenRun = { token -> synchronized(actionLock) { if (thread !in revokedThreads && thread !in reservedThreads) openRun(thread, token) } },
     )
 
@@ -205,7 +213,7 @@ internal class OperationCardCoordinator(
     if (hasOutstanding(thread)) return thread.operationCardSubmitting(token, false, BUSY_OPERATION_TEXT).also {
       scope.launch { persistOrWarn(thread) }
     }
-    val remembered = requests[card.launchId]
+    val remembered = remembered(card.launchId)
     admissionProblemForDecision(thread, remembered?.request, remembered?.authority, null)?.let { problem ->
       thread.operationCardSubmitting(token, false, problem)
       scope.launch { persistOrWarn(thread) }
@@ -283,7 +291,7 @@ internal class OperationCardCoordinator(
 
   private fun adjust(thread: ChatThread, token: String) {
     val message = thread.operationCard(token) ?: return
-    val remembered = requests[message.card.launchId]
+    val remembered = remembered(message.card.launchId)
     if (hasOutstanding(thread)) return thread.operationCardSubmitting(token, false, BUSY_OPERATION_TEXT).also {
       scope.launch { persistOrWarn(thread) }
     }
@@ -312,7 +320,7 @@ internal class OperationCardCoordinator(
     if (text.isBlank()) return AdjustmentSubmission.NotApplicable
     val token = pendingAdjustments[thread] ?: return AdjustmentSubmission.NotApplicable
     val message = thread.operationCard(token) ?: return AdjustmentSubmission.Rejected
-    val remembered = requests[message.card.launchId] ?: return AdjustmentSubmission.Rejected
+    val remembered = remembered(message.card.launchId) ?: return AdjustmentSubmission.Rejected
     if (hasOutstanding(thread)) {
       thread.operationCardSubmitting(token, false, BUSY_OPERATION_TEXT)
       scope.launch { persistOrWarn(thread) }
@@ -369,7 +377,7 @@ internal class OperationCardCoordinator(
    */
   private fun changeVerify(thread: ChatThread, token: String, choices: VerifyStartChoices) {
     val message = thread.operationCard(token) ?: return
-    val remembered = requests[message.card.launchId]
+    val remembered = remembered(message.card.launchId)
     val request = remembered?.request
     if (hasOutstanding(thread)) return thread.operationCardSubmitting(token, false, BUSY_OPERATION_TEXT).also {
       scope.launch { persistOrWarn(thread) }

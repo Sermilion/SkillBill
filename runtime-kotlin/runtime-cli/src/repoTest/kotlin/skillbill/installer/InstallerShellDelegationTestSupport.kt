@@ -486,7 +486,8 @@ internal object InstallerShellFixtures {
     |    exit 0
     |    ;;
     |  "install cleanup-agent-target"|"install unlink-codex-agents"|"install unlink-claude-agents"|\
-    "install unlink-junie-agents"|"install unlink-cursor-agents"|"install unregister-mcp")
+    "install unlink-junie-agents"|"install unlink-cursor-agents"|"install unlink-opencode-agents"|\
+    "install unlink-devin-agents"|"install unregister-mcp")
     |    exit 0
     |    ;;
     |esac
@@ -503,6 +504,10 @@ internal object InstallerShellFixtures {
     """
     |if [[ "${'$'}{1:-}" == "install" && "${'$'}{2:-}" == "reconcile" ]]; then
     |  fail_once_marker="${'$'}{SKILL_BILL_TEST_RUNTIME_LOG:?}.reconcile-failed-once"
+    |  if [[ "${'$'}{SKILL_BILL_FAKE_RECONCILE_ALWAYS_FAIL:-}" == "1" ]]; then
+    |    printf '%s\n' "synthetic reconcile failure" >&2
+    |    exit 9
+    |  fi
     |  if [[ "${'$'}{SKILL_BILL_FAKE_RECONCILE_FAIL_ONCE:-}" == "1" && ! -e "${'$'}fail_once_marker" ]]; then
     |    printf '%s\n' "synthetic reconcile failure" >&2
     |    touch "${'$'}fail_once_marker"
@@ -582,6 +587,7 @@ internal object InstallerShellFixtures {
     cliBin.toFile().setExecutable(true)
     mcpBin.toFile().setExecutable(true)
     InstallerDesktopFixtures.writeBuildIdentity(cliBin.parent.parent)
+    InstallerDesktopFixtures.writeBuildIdentity(mcpBin.parent.parent)
   }
 
   private val fakeInstallerRuntimeMiddleBlocks: String =
@@ -711,6 +717,7 @@ internal object InstallerShellFixtures {
       |chmod +x "${'$'}cli_bin" "${'$'}mcp_bin"
       |cli_home="${'$'}root/runtime-cli/build/install/runtime-cli"
       |${InstallerDesktopFixtures.buildIdentityPrintf} > "${'$'}cli_home/build-identity.properties"
+      |${InstallerDesktopFixtures.buildIdentityPrintf} > "${'$'}root/runtime-mcp/build/install/runtime-mcp/build-identity.properties"
       """.trimMargin(),
     )
     gradlew.toFile().setExecutable(true)

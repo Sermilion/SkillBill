@@ -3,6 +3,7 @@ package skillbill.ports.agentrun.model
 
 import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.config.model.PhaseCompactionDirective
+import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.goalrunner.model.GoalRunnerLivenessState
 import skillbill.goalrunner.model.GoalRunnerProcessState
 import skillbill.install.model.SupportedAgent
@@ -54,6 +55,7 @@ data class SkillRunRequest(
   val captureDisplayOutput: Boolean = false,
   val buildObserver: AgentRunBuildObserver = AgentRunBuildObserver.NONE,
   val modelObserver: AgentRunModelObserver? = null,
+  val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

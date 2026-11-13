@@ -8,7 +8,7 @@ internal fun nonValidatePhaseValidationOwnershipDirective(runsValidationGate: Bo
     ## Validation ownership
     Only the validate phase may run the pack validation gate
     (`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check ${"--"}continue`,
-    `skill-bill phase validation`, or any other full repository check suite. The build phase owns the separate
+    `sona phase validation`, or any other full repository check suite. The build phase owns the separate
     compile-only gate. This phase must not compile, build,
     execute tests, or run check to prove the work. Ignore any Validation Strategy, plan note,
     acceptance text, review habit, or prior habit that asks you to run check here — that work waits

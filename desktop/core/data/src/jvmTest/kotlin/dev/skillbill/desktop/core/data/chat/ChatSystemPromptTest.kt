@@ -43,6 +43,37 @@ class ChatSystemPromptTest {
   }
 
   @Test
+  fun `configured Linear asks about ticket creation before proposing a local key`() {
+    val prompt = scopeSystemPrompt(ChatScope.NewTask("/work/app", null))
+
+    assertTrue("inspect the selected project's instructions and MCP configuration for a Linear connection" in prompt)
+    assertTrue("ask whether to create a Linear ticket from the agreed scope before suggesting a local key" in prompt)
+    assertTrue("Do not ask again when the operator already authorized ticket creation for this work" in prompt)
+    assertTrue("verify its workspace and team" in prompt)
+    assertTrue("check for an existing matching issue before creating a duplicate" in prompt)
+    assertTrue("Let Linear assign the complete issue key" in prompt)
+    assertTrue("Never predict, mint or reserve a Linear key" in prompt)
+    assertTrue("Show the created ticket's link and returned key" in prompt)
+    assertTrue("Approval to create a ticket is not acceptance of its returned key" in prompt)
+    assertTrue("retain that acceptance" in prompt)
+    assertFalse("Do not allocate or reserve an issue key during preparation; the start card handles identity" in prompt)
+  }
+
+  @Test
+  fun `Linear failure and declined creation do not silently select local keys`() {
+    val prompt = scopeSystemPrompt(ChatScope.NewTask("/work/app", null))
+
+    assertTrue("report the missing tools or returned error" in prompt)
+    assertTrue("Do not silently switch connections, invent ticket content or substitute a local key" in prompt)
+    assertTrue("If the operator declines ticket creation, respect that choice" in prompt)
+    assertTrue("an explicitly chosen local-key route where project instructions allow it" in prompt)
+    assertTrue("When the project has no Linear MCP setup, use the local-key route where project instructions allow it" in prompt)
+    assertFalse("ask whether to create a Linear ticket" in scopeSystemPrompt(
+      ChatScope.Execution("wf-1", WorkKind.Goal, "SKILL-1", "Title", "/work/app"),
+    ))
+  }
+
+  @Test
   fun `the new-task prompt names the checkout and action rules without any execution guidance`() {
     val prompt = scopeSystemPrompt(ChatScope.NewTask("/work/app", "develop"))
 
@@ -107,7 +138,7 @@ class ChatSystemPromptTest {
 
     assertTrue("Route applicable work through Sona by default after preparation" in prompt)
     assertTrue("explicitly asks you to do it yourself" in prompt)
-    assertTrue("installed skill-bill skill's current command instructions" in prompt)
+    assertTrue("installed `/sona` skill's current command instructions" in prompt)
     assertTrue("including one called phase verify, to operation:verify" in prompt)
     assertTrue("unless the operator explicitly requests direct work" in prompt)
     assertTrue("This route excludes \"Verify findings\" and checks of existing review findings" in prompt)
@@ -140,8 +171,8 @@ class ChatSystemPromptTest {
     assertFalse("Withhold the goal card while known blockers or material questions remain unresolved" in prompt)
     assertTrue("It does not start a standalone planning run" in prompt)
     assertTrue("Only the operator clicking the inline UI start card may launch a goal" in prompt)
-    assertTrue("Never launch a goal through shell commands, the skill-bill CLI, MCP tools or another agent" in prompt)
-    assertTrue("Do not allocate or reserve an issue key during preparation" in prompt)
+    assertTrue("Never launch a goal through shell commands, the sona CLI, MCP tools or another agent" in prompt)
+    assertTrue("Do not allocate or reserve a local issue key during preparation" in prompt)
     assertTrue("perform that direct work without starting a goal" in prompt)
     assertFalse("Suggested action buttons are optional conveniences" in prompt)
     assertFalse("workflow gates" in prompt)

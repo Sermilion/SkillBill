@@ -11,6 +11,7 @@ import skillbill.infrastructure.skills.scaffold.authoring.renderAuthoringTarget
 import skillbill.infrastructure.skills.scaffold.catalog.ScaffoldCatalog
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackDiscoveryContext
+import skillbill.install.model.ListedSkillNames
 import skillbill.model.EnvironmentContext
 import skillbill.model.toPath
 import skillbill.ports.scaffold.ScaffoldCatalogGateway
@@ -51,6 +52,7 @@ class FileSystemScaffoldGateway(
     val addonNames = skillNames.filter { it.startsWith(AGENT_ADDON_PREFIX) }
     val governedNames = skillNames.filterNot { it.startsWith(AGENT_ADDON_PREFIX) }
     val result = AuthoringOperations.list(repoRoot, governedNames, discovery(repoRoot))
+    val canonicalGovernedNames = governedNames.map(ListedSkillNames::sourceName).toSet()
     val addonCatalogue =
       if (skillNames.isEmpty()) {
         inspectFsAgentAddons(repoRoot).entries
@@ -65,7 +67,7 @@ class FileSystemScaffoldGateway(
       if (skillNames.isEmpty()) {
         result.skills
       } else {
-        result.skills.filter { it.skillName in governedNames }
+        result.skills.filter { ListedSkillNames.sourceName(it.skillName) in canonicalGovernedNames }
       }
     val skills = governedSkills + addons
     return ScaffoldListResult(
@@ -100,7 +102,7 @@ class FileSystemScaffoldGateway(
         editableSurface = listOf("agent-addon.yaml", "content.md"),
         generatedSurface = listOf("agent-addon-<slug>.md install pointers"),
         governedSidecars = emptyList(),
-        normalWorkflow = listOf("skill-bill show $skillName", "skill-bill validate", "skill-bill render skill-bill"),
+        normalWorkflow = listOf("sona show $skillName", "sona validate", "sona render sona"),
         notes =
           listOf(
             "Supported agents: ${addon.agentIds.joinToString()}",
@@ -110,8 +112,8 @@ class FileSystemScaffoldGateway(
           ScaffoldExplainSkill(
             skillName = addon.identity,
             contentFile = addon.contentPath.toString(),
-            renderCommand = "skill-bill render skill-bill --repo-root ${repoRoot.toAbsolutePath().normalize()}",
-            recommendedCommands = listOf("skill-bill validate", "skill-bill render skill-bill"),
+            renderCommand = "sona render sona --repo-root ${repoRoot.toAbsolutePath().normalize()}",
+            recommendedCommands = listOf("sona validate", "sona render sona"),
           ),
       )
     }
@@ -274,11 +276,11 @@ private fun AgentAddonCatalogueEntry.toSkillStatus(
     family = "agent-addon",
     area = "",
     contentFile = contentPath.toString(),
-    renderCommand = "skill-bill render skill-bill --repo-root ${repoRoot.toAbsolutePath().normalize()}",
+    renderCommand = "sona render sona --repo-root ${repoRoot.toAbsolutePath().normalize()}",
     completionStatus = ScaffoldCompletionStatus.AUTHORED,
     sectionCount = 0,
     sections = emptyList(),
-    recommendedCommands = listOf("skill-bill validate", "skill-bill render skill-bill"),
+    recommendedCommands = listOf("sona validate", "sona render sona"),
     contentPreview = if (contentMode == "preview") contentText.take(CONTENT_PREVIEW_MAX_CHARS) else null,
     content = if (contentMode == "full") contentText else null,
     category = "agent-addon",
@@ -315,6 +317,6 @@ class FileSystemScaffoldCatalogGateway : ScaffoldCatalogGateway {
 private fun AuthoringRenderResult.toPortRenderResult(): ScaffoldRenderResult =
   ScaffoldRenderResult(
     repoRoot = repoRoot,
-    skillName = skillName,
+    skillName = ListedSkillNames.publicName(skillName),
     blocks = blocks.map { block -> ScaffoldRenderBlock(header = block.header, content = block.content) },
   )

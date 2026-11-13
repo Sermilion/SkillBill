@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.SavedChatProjection
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
@@ -63,6 +64,7 @@ class ChatSession internal constructor(
   internal var delivered: ExecutionSnapshot? = null
   internal var started: Boolean = false
   internal var startedRoot: String? = null
+  internal var openCodeCheckoutChangedNoticed: Boolean = false
   internal var worktreeRemovedNoticed: Boolean = false
   internal var worktreeMoveOutcome: WorktreeMoveOutcome? = null
   internal var worktreeRemovalNotice: ChatMessage.Notice? = null
@@ -167,8 +169,8 @@ class ChatSession internal constructor(
   val gone: StateFlow<Boolean> = goneState.asStateFlow()
 
   /** The saved chats `/resume` offers; null while the picker is closed. */
-  internal val resumeChoicesState = MutableStateFlow<List<ChatHistoryEntry>?>(null)
-  val resumeChoices: StateFlow<List<ChatHistoryEntry>?> = resumeChoicesState.asStateFlow()
+  internal val resumeChoicesState = MutableStateFlow<SavedChatProjection?>(null)
+  val resumeChoices: StateFlow<SavedChatProjection?> = resumeChoicesState.asStateFlow()
 
   /** The start waiting for an issue prefix; null when no start needs one. */
   internal val prefixChoiceState = MutableStateFlow<PendingPrefixChoice?>(null)

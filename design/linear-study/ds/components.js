@@ -295,7 +295,7 @@
     track('PropertyList');
     return `<dl class="sb-props">${join(rows.map((r) => r && `<div class="sb-prop"><dt class="${r.mono ? 'mono' : ''}" title="${esc(r.label)}">${esc(r.label)}</dt><dd class="${r.act ? 'is-btn' : ''}"${act(r.act, r.arg)}${tipAttrs(r.tip, r.kbd)}>${r.value}</dd>${r.sub ? `<div class="sb-prop-sub">${r.sub}</div>` : ''}</div>`))}</dl>`;
   }
-  /* A count broken down by key (phase runs per phase, relaunch causes): one 22px row per key, the key in mono 11.5 faint,
+  /* A count broken down by key (phase runs per phase, relaunch causes): one 22px row per key, readable sans labels within 192px,
    * the count right-aligned and tabular, largest first. At most `max` rows (default 4), then a "+N more" ghost toggle. */
   function Breakdown(o) {
     track('Breakdown');
@@ -303,7 +303,7 @@
     const rows = o.rows.filter((r) => r[1] > 0).sort((a, b) => b[1] - a[1]);
     const shown = o.open ? rows : rows.slice(0, max);
     const more = rows.length > max ? `<button type="button" class="sb-bd-more"${act(o.act, o.arg)} aria-expanded="${!!o.open}">${o.open ? 'Show less' : `+${rows.length - max} more`}</button>` : '';
-    return `<div class="sb-bd">${shown.map(([k, n]) => `<div class="sb-bd-row"><span class="mono" title="${esc(k)}">${esc(k)}</span><b>${n}</b></div>`).join('')}${more}</div>`;
+    return `<div class="sb-bd">${shown.map(([k, n]) => `<div class="sb-bd-row"><span title="${esc(k)}">${esc(k)}</span><b>${n}</b></div>`).join('')}${more}</div>`;
   }
 
   /* ---------- Menu ---------- */
@@ -584,6 +584,10 @@
     const foot = o.foot ? `<div class="sb-pk-ft"><button type="button" class="sb-pk-btn"${act(o.foot.act, o.foot.arg)}>${esc(o.foot.label)}${Icon(o.foot.external ? 'external' : 'arrowRight', 'xs')}</button></div>` : '';
     return `<div class="sb-pk" role="tabpanel" aria-label="${esc(o.title)}">${head}${why}${join(o.parts)}${o.activity && o.activity.length ? PeekPart({ title: 'Activity', body: EventLines(o.activity.map(([t, html, tone]) => [t, html, PEEK_TONE[tone] || 'var(--border-strong)'])) }) : ''}${foot}</div>`;
   }
+  function AuditResult(o) {
+    track('AuditResult');
+    return `<div class="sb-audit-result"><div class="sb-audit-verdict">${o.verdict}${o.end ? `<span class="end">${esc(o.end)}</span>` : ''}</div>${join(o.body)}</div>`;
+  }
   /* One part of a PhasePeek: a small caps title with an `end` slot (text or a control), then `body`. `live` tints it for Now. */
   function PeekPart(o) {
     track('PeekPart');
@@ -837,6 +841,17 @@
   /* One transcript entry. role 'operator' is a right-aligned bubble, 'agent' reads under the agent's Avatar and name with its
    * suggested actions, 'notice' is a centered faint line ("Stopped."). `streaming` adds a caret; main.js writes the growing text
    * into [data-stream] without a re-render. */
+  /* A goal or plan the agent proposes (ChatActionButtons): a target tile, the change it names, then kind · issue key ·
+   * repository and base branch, and Start goal or Start plan. An untitled start falls back to "New goal" or "New plan".
+   * `starting` swaps the button for a spinner and "Starting…" while the start is in flight; `tip` is the instruction it sends. */
+  function StartCard(o) {
+    track('StartCard');
+    const goal = o.kind !== 'plan';
+    const end = o.starting
+      ? `<span class="sb-startcard-go"><span class="sb-startcard-spin" aria-hidden="true"></span>Starting…</span>`
+      : Button({ label: goal ? 'Start goal' : 'Start plan', variant: 'primary', size: 'sm', act: o.act, arg: o.arg, disabled: o.disabled });
+    return `<div class="${cx('sb-startcard', o.starting && 'is-starting', o.disabled && !o.starting && 'is-disabled')}"${o.tip ? ` data-tip="${esc(o.tip)}"` : ''}><span class="sb-startcard-ic">${Icon('target')}</span><span class="sb-startcard-tx"><span class="t">${esc(o.title || (goal ? 'New goal' : 'New plan'))}</span><span class="s">${esc(o.sub)}</span></span>${end}</div>`;
+  }
   function ChatMessage(o) {
     track('ChatMessage');
     if (o.role === 'notice') return `<div class="sb-msg-notice">${esc(o.text)}</div>`;
@@ -1543,7 +1558,7 @@
   function Fold(o) {
     track('Fold');
     const body = !o.open ? '' : o.items ? `<ul>${o.items.map((x) => `<li>${x}</li>`).join('')}</ul>` : `<div class="${cx('bd', o.inset && 'is-inset')}">${o.body || ''}</div>`;
-    return `<div class="sb-vfold"${o.id ? ` id="${esc(o.id)}"` : ''}><button type="button" class="hd" aria-expanded="${!!o.open}"${act(o.act, o.arg)}>${Icon('chevronRight', 'xs')}${o.lead || ''}<span class="${cx('lb', o.strong && 'is-strong')}">${esc(o.label)}</span>${o.count != null ? `<span class="n">${esc(o.count)}</span>` : ''}${o.note ? `<span class="n">${esc(o.note)}</span>` : ''}${o.end ? `<span class="end">${o.end}</span>` : ''}</button>${body}</div>`;
+    return `<div class="sb-vfold"${o.id ? ` id="${esc(o.id)}"` : ''}><button type="button" class="hd" aria-expanded="${!!o.open}"${act(o.act, o.arg)}>${Icon('chevronRight', 'xs')}${o.lead || ''}<span class="${cx('lb', o.strong && 'is-strong')}">${esc(o.label)}</span>${o.count != null ? `<span class="n">${esc(o.count)}</span>` : ''}${o.note && !o.open ? `<span class="n">${esc(o.note)}</span>` : ''}${o.end ? `<span class="end">${o.end}</span>` : ''}</button>${body}</div>`;
   }
   /* Text as the agent or the operator wrote it, on an inset with a 2px rule: the free-text intake, or what criteria
    * extraction returned when it found no numbered criteria. Keeps line breaks. */
@@ -1565,7 +1580,7 @@
     track('CriterionRow');
     if (o.empty) return `<div class="sb-crit"><div class="hd is-empty"><span></span><span class="t-muted">${esc(o.empty)}</span></div></div>`;
     const head = `<button type="button" class="hd" aria-expanded="${!!o.open}"${act(o.act, o.arg)}><span class="num">${esc(o.n)}</span><span class="ti">${o.html}</span><span class="sd">${o.badge ? Badge(o.badge) : ''}${o.act ? Icon('chevronRight', 'xs') : ''}</span>${overlap(o.hint)}</button>`;
-    return `<div class="${cx('sb-crit', o.select && 'is-sel')}"${o.id ? ` id="${esc(o.id)}"` : ''}>${o.select ? `<div class="lead">${o.lead || ''}</div>` : ''}${head}${o.select ? `<div class="end">${o.end || ''}</div>` : ''}${o.open ? `<div class="bd">${o.body || ''}</div>` : ''}</div>`;
+    return `<div class="${cx('sb-crit', o.select && 'is-sel', o.audit && 'is-audit')}"${o.id ? ` id="${esc(o.id)}"` : ''}>${o.select ? `<div class="lead">${o.lead || ''}</div>` : ''}${head}${o.select ? `<div class="end">${o.end || ''}</div>` : ''}${o.open && (!o.audit || o.body) ? `<div class="bd">${o.body || ''}</div>` : ''}</div>`;
   }
   /* A faint 11.5px label over its text (`html`) or its FileChips (`chips`): Evidence, What's missing, Not found, Expected,
    * Steps. */
@@ -1616,48 +1631,11 @@
   }
   /* Text in the accent that acts: Show the criteria, Show the graded criteria. */
   function TextLink(o) { track('TextLink'); return `<button type="button" class="sb-tlink"${act(o.act, o.arg)}>${esc(o.label)}</button>`; }
-  /* The QA report as text: ## headings, paragraphs and "- " lists with `code` and **bold**; a QA evidence path shows as its
-   * file name in code. */
-  function qaReport(text) {
-    const inl = (x) => esc(x).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/~\/\.skill-bill\/qa\/[^\s,<]+/g, (p) => `<code>${p.split('/').pop()}</code>`);
-    const out = [];
-    let list = null;
-    const flush = () => { if (list) { out.push(`<ul>${list.join('')}</ul>`); list = null; } };
-    String(text || '').split('\n').forEach((raw) => {
-      const line = raw.trim();
-      if (!line) return flush();
-      if (line.startsWith('#')) { flush(); out.push(`<h3>${inl(line.replace(/^#+\s*/, ''))}</h3>`); return; }
-      if (line.startsWith('- ')) { (list = list || []).push(`<li>${inl(line.slice(2))}</li>`); return; }
-      flush(); out.push(`<p>${inl(line)}</p>`);
-    });
-    flush();
-    return `<div class="rp">${out.join('')}</div>`;
-  }
-  /* A Verify run's QA step, read top down: the verdict (dot and word in the tone), the sentence from counts, Needs you (`head`
-   * holds Select all; each open finding a glyph, ref and title, Open and a chevron, and what QA observed in two lines; open,
-   * `body`), Not tested (a dashed glyph, the title and detail), one box of folds (Passed lists each check with its evidence
-   * chips; Full report renders `report.text`; each shows a one-line preview that hides while open) and the faint targets
-   * line. Selection adds a checkbox column (`lead`) and a Chat or Goal column (`end`) to each finding. */
+  /* A Verify run's QA step: the QA verdict (QaVerdict) above the shared QA results (QaResults), so it reads as a standalone
+   * QA run does. */
   function VerifyQa(o) {
     track('VerifyQa');
-    const finding = (f) => {
-      const sel = f.lead != null;
-      return `<div class="${cx('it', sel && 'is-sel')}"${f.id ? ` id="${esc(f.id)}"` : ''}>${sel ? `<div class="lead">${f.lead}</div>` : ''}<button type="button" class="ih" aria-expanded="${!!f.open}"${act(f.act, f.arg)}><span class="gl" style="--c:var(--st-failed)">${Icon('alert', 'sm')}</span><span class="ti"><span class="ref">${esc(f.ref)}</span>${esc(f.title)}</span><span class="st">Open${Icon('chevronRight', 'xs')}</span>${f.line ? `<span class="ln">${f.line}</span>` : ''}</button>${sel ? `<div class="end">${f.end || ''}</div>` : ''}${f.open ? `<div class="ib">${f.body || ''}</div>` : ''}</div>`;
-    };
-    const gap = (g) => `<div class="it"><div class="ih"><span class="gl" style="--c:var(--st-blocked)">${Icon('gap', 'sm')}</span><span class="ti">${esc(g.title)}</span><span></span>${g.html ? `<span class="ln is-full">${g.html}</span>` : ''}</div></div>`;
-    const fold = (x, icon, tone, label, preview, body) => `<div class="it"><button type="button" class="qf" aria-expanded="${!!x.open}"${act(x.act, x.arg)}><span style="--c:${tone}">${Icon(icon, 'sm')}</span><span class="lb">${esc(label)}</span><span class="pv">${esc(preview)}</span>${Icon('chevronRight', 'xs')}</button>${x.open ? body() : ''}</div>`;
-    const group = (label, inner, head) => `<div><div class="gh">${esc(label)}<span class="n">${inner.length}</span></div><div class="sb-box">${head || ''}${inner.join('')}</div></div>`;
-    const parts = [`<div class="vd" style="--c:${VTONE[o.tone] || VTONE.faint}"><i></i>${esc(o.word)}</div><p class="sn">${esc(o.sentence)}</p>`];
-    if ((o.needs || []).length) parts.push(group('Needs you', o.needs.map(finding), o.head));
-    if ((o.gaps || []).length) parts.push(group('Not tested', o.gaps.map(gap)));
-    const folds = [
-      o.passed && o.passed.rows.length && fold(o.passed, 'check', 'var(--st-done)', `Passed · ${o.passed.rows.length}`, o.passed.rows.map((r) => r.title).join(', '),
-        () => `<div class="sl">${o.passed.rows.map((r) => `<div class="sub"><b>${esc(r.title)}</b>${r.html || ''}${(r.chips || []).length ? FileChips(r.chips) : ''}</div>`).join('')}</div>`),
-      o.report && fold(o.report, 'fileText', 'var(--fg-faint)', 'Full report', o.report.preview || "Isolation, cleanup and the agent's notes", () => qaReport(o.report.text)),
-    ].filter(Boolean);
-    if (folds.length) parts.push(`<div class="sb-box">${folds.join('')}</div>`);
-    if ((o.targets || []).length) parts.push(`<div class="tg">${o.targets.join('<span>·</span>')}</div>`);
-    return `<div class="sb-vqa">${parts.join('')}</div>`;
+    return `<div class="sb-vqa">${o.verdict}${o.body}</div>`;
   }
 
   /* ---------- QA device: the sidebar footer switcher and its popup ---------- */
@@ -1892,10 +1870,10 @@
     Toast, ToastStack, Callout, Hint, EmptyState, SidebarItem, SidebarSection, RepoIcon, Sidebar, WorkspaceSwitcher, UsageWindow, UsageCard, UsagePanel,
     ViewHeader, Pager, GroupHeader, ListRow, SidePane, ReasonBlock, ExpandableText, foldButton, Checklist, FindingRow, EvidenceRow, EvidenceToggle, TerminalPane,
     DocHeader, Section, Box, MetricStrip, SubtaskRow, SubtaskList, SubtaskChip, SubtaskInspector, PhasePipeline,
-    PhasePeek, PeekPart, PeekSignal, PeekCmd, PeekCells, PeekStats, PeekOutput, PeekCheck, PeekFacts,
+    PhasePeek, AuditResult, PeekPart, PeekSignal, PeekCmd, PeekCells, PeekStats, PeekOutput, PeekCheck, PeekFacts,
     PaneSection, DetailsPanel, MenuHead, QaFrame, Counts, LiveText, Dot, Note, InspectorSection, InspectorLine, PhaseBlock, PickerButton, Range, ShellPrompt, AppShell, WorkArea, ScrollArea, DetailSplit, ChangeStrip, ChangesFrame, DiffView, InlineComposer, CommentThread, KeyHints, WindowSheet, Breakdown, TreeRow, SettingsHeader, SettingsGroup, SettingRow, TierBadge,
     ConfigRow, TrayPopover,
-    ChatStatusMark, ChatTabs, SuggestionChip, ChatMessage, ChatTranscript, ChatPill, Composer, StepLine, NewTaskHome,
+    ChatStatusMark, ChatTabs, SuggestionChip, StartCard, ChatMessage, ChatTranscript, ChatPill, Composer, StepLine, NewTaskHome,
     InboxList, InboxRow, FilterBar, TargetPicker, QueuedRow, QueuePanel, ChatChangesPill, ChatChangeRow, ChatChangesPanel, ResumeRow, ResumePalette,
     QaVerdict, QaItem, QaFold, QaResults, QaLive, QaPreview, QaStageList, QaShots, QaRounds, ReportText, DeviceSwitcher, DeviceOption, DevicePanel,
     SegmentBar, CheckTally, RunOutcome, CheckRow, StepTimeline, WorkSummary, VerifyContext, SelectAll, SelectionBar,

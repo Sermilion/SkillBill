@@ -1,9 +1,9 @@
 package skillbill.scaffold.policy.platformpack
 
 import skillbill.model.FileLocation
-import skillbill.scaffold.model.CodeReviewBaselineLayer
-import skillbill.scaffold.model.CodeReviewCompositionMode
-import skillbill.scaffold.model.CodeReviewCompositionScope
+import skillbill.review.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewCompositionMode
+import skillbill.review.model.CodeReviewCompositionScope
 import skillbill.scaffold.policy.platformpack.model.PlatformPackManifestContentRenderRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals

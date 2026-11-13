@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -37,22 +36,21 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.LocalSkillBillColors
 import dev.skillbill.desktop.core.designsystem.LocalSkillBillType
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.ResultRowBadge
+import dev.skillbill.desktop.core.designsystem.component.ResultRowChevron
+import dev.skillbill.desktop.core.designsystem.component.ResultRowFileChip
 import dev.skillbill.desktop.core.designsystem.component.RuntimeTextStyles
-import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.component.runtimeText
-import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
-import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 
 @Composable
 internal fun VerifyBox(modifier: Modifier = Modifier, fill: Color = SkillBillTheme.colors.bgRaised, content: @Composable ColumnScope.() -> Unit) {
@@ -70,18 +68,10 @@ internal fun VerifyPill(text: String, dot: Color? = null) {
 }
 
 @Composable
-internal fun VerifyBadge(text: String, color: Color) {
-  Box(Modifier.height(18.dp).background(color.copy(alpha = .14f), RoundedCornerShape(3.dp)).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
-    BasicText(text.uppercase(), style = SkillBillTheme.type.t2xs.copy(color = color, letterSpacing = .03.em, lineHeight = 1.em))
-  }
-}
+internal fun VerifyBadge(text: String, color: Color) = ResultRowBadge(text, color)
 
 @Composable
-internal fun VerifyChevron(open: Boolean) {
-  CompositionLocalProvider(LocalContentColor provides SkillBillTheme.colors.fgFaint) {
-    SbIcon(if (open) LucideIcons.chevronDown else LucideIcons.chevronRight, 12.dp)
-  }
-}
+internal fun VerifyChevron(open: Boolean) = ResultRowChevron(open)
 
 @Composable
 internal fun VerifyFold(title: String, open: Boolean, onToggle: () -> Unit, count: Int? = null, note: String? = null, strong: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
@@ -90,7 +80,7 @@ internal fun VerifyFold(title: String, open: Boolean, onToggle: () -> Unit, coun
     Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onToggle).semantics { stateDescription = if (open) "Expanded" else "Collapsed" }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       VerifyChevron(open)
       BasicText(title, style = SkillBillTheme.type.tSm.copy(color = if (strong) colors.fg else colors.fgMuted, fontWeight = if (strong) FontWeight.Medium else FontWeight.Normal))
-      (count?.toString() ?: note)?.let { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint)) }
+      (count?.toString() ?: note?.takeUnless { open })?.let { BasicText(it, Modifier.weight(1f, fill = false), style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint), maxLines = 1, overflow = TextOverflow.Ellipsis) }
     }
     if (open) content()
   }
@@ -114,15 +104,7 @@ internal fun VerifyControlStyle(content: @Composable () -> Unit) {
 }
 
 @Composable
-internal fun VerifyFileChip(text: String, tooltip: String = text, icon: ImageVector? = null) {
-  val colors = SkillBillTheme.colors
-  SbTooltip(tooltip) {
-    Row(Modifier.widthIn(max = 260.dp).height(22.dp).background(colors.bgRaised, RoundedCornerShape(6.dp)).border(1.dp, colors.border, RoundedCornerShape(6.dp)).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-      if (icon != null) CompositionLocalProvider(LocalContentColor provides colors.fg2) { SbIcon(icon, 12.dp) }
-      BasicText(text, style = SkillBillTheme.type.t2xs.copy(color = colors.fg2, fontWeight = FontWeight.Normal, lineHeight = 1.em), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-  }
-}
+internal fun VerifyFileChip(text: String, tooltip: String = text, icon: ImageVector? = null) = ResultRowFileChip(text, tooltip, icon)
 
 @Composable
 internal fun <T> VerifyRouteSwitch(options: List<Pair<T, String>>, value: T, large: Boolean = false, onSelect: (T) -> Unit) {

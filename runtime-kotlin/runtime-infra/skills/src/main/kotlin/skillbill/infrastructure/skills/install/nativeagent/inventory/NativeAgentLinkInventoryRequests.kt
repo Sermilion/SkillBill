@@ -11,6 +11,8 @@ internal data class NativeAgentLinkInventoryReconcileRequest(
   val managedRoots: List<Path>,
   val sourceRoot: Path,
   val environment: Map<String, String>,
+  val expectedPrevious: List<NativeAgentLinkInventoryEntry>,
+  val expectedInventoryPresent: Boolean,
   val beforeMutation: (Path) -> Unit = {},
   val afterTemporaryCreation: (Path) -> Unit = {},
 )
@@ -23,6 +25,8 @@ internal data class NativeAgentLinkInventoryLockedReconcileRequest(
   val managedRoots: List<Path>,
   val sourceRoot: Path,
   val environment: Map<String, String>,
+  val expectedPrevious: List<NativeAgentLinkInventoryEntry>,
+  val expectedInventoryPresent: Boolean,
   val mapper: ObjectMapper,
   val schema: JsonSchema,
   val beforeMutation: (Path) -> Unit,

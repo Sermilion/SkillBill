@@ -84,7 +84,7 @@ loop, launches one agent per phase, validates each phase output against its
 schema gate, and persists per-phase state.
 
 ```bash
-skill-bill <issue_key>
+sona <issue_key>
 ```
 
 The full run plans through intake, preplan and plan, then executes the one-subtask
@@ -93,8 +93,8 @@ bundle.
 Read-only status and resume mirror the goal commands:
 
 ```bash
-skill-bill feature-task status <workflow_id> --format json
-skill-bill feature-task resume <workflow_id> <issue_key> <spec_path> --agent <agent>
+sona feature-task status <workflow_id> --format json
+sona feature-task resume <workflow_id> <issue_key> <spec_path> --agent <agent>
 ```
 
 Capture, for each phase, from the **runtime-owned** durable state rather than
@@ -178,7 +178,7 @@ pre-registered method so the comparison is not gamed:
    criteria: for each criterion, mark satisfied / partial / missing for each run.
    This criterion-to-evidence mapping is the primary quality measure.
 3. Run the identical project gate (`(cd runtime-kotlin && ./gradlew check)`,
-   `skill-bill validate`, and the rest of the maintainer set) against each run's
+   `sona phase validation`, and the rest of the maintainer set) against each run's
    result; a run that only passes by weakening a gate is disqualified, not
    credited.
 4. Record reviewer findings (severity-tagged) from an unmodified code review of

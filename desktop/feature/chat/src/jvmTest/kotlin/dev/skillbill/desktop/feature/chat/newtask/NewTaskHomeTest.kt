@@ -484,7 +484,10 @@ class NewTaskHomeTest {
       }
     }
 
-    onNodeWithText("Plan selected change").performClick()
+    // A plan renders as a start card: an untitled action falls back to "New plan" and names the chat's repository.
+    onNodeWithText("New plan").assertExists()
+    onNodeWithText("Plan · app").assertExists()
+    onNodeWithText("Start plan").performClick()
     waitForIdle()
 
     assertEquals("Plan only the selected change.", controls.newTaskRequests.single().requirements)

@@ -62,7 +62,7 @@ Nothing is transmitted while the level is `off`: `TelemetryService.sync` and
 Enabling telemetry later does not discard those rows. `clearsPendingOutbox("off", "anonymous")` is
 `false` — the pending outbox is cleared only on a downgrade or a move to `off` — so rows enqueued
 while `off` remain pending and upload on the next sync after you enable. Clear them by running
-`skill-bill telemetry disable` (or `set-level off`), which clears the pending outbox, before
+`sona telemetry disable` (or `set-level off`), which clears the pending outbox, before
 enabling.
 
 ### Envelope, on every uploaded event
@@ -309,7 +309,7 @@ The pack build strategy emits `_started` after the first gate run and `_finished
 when the gate settles, with `routed_skill: bill-code-check`. Failure counts and
 iterations come from the runtime's command results.
 
-`skill-bill phase validation` uses the same agent validation strategy as goal
+`sona phase validation` uses the same agent validation strategy as goal
 validate. It does not emit these pack-build quality-check events or infer measured
 failure counts from the agent's prose. Its result reports the validate step and
 the checks the agent ran.
@@ -391,8 +391,8 @@ and no outbox payload carries a `repo` property.
 
 Every supported mechanism:
 
-- `skill-bill telemetry disable` — sets the level to `off`.
-- `skill-bill telemetry set-level off` — equivalent to `telemetry disable`; `TelemetrySetLevelCommand`
+- `sona telemetry disable` — sets the level to `off`.
+- `sona telemetry set-level off` — equivalent to `telemetry disable`; `TelemetrySetLevelCommand`
   reaches the same `TelemetryService.setLevel` path.
 - Choose `off` at the telemetry level prompt during `./install.sh`.
 - `SKILL_BILL_TELEMETRY_LEVEL=off`.
@@ -441,10 +441,10 @@ Stated as what is true today:
   whatever settings that backend is configured with.
 - Self-hosters set their own retention. Pointing `SKILL_BILL_TELEMETRY_PROXY_URL` at your own
   relay puts retention entirely under your control.
-- Local queued telemetry is not retained indefinitely: `skill-bill telemetry disable` and any
+- Local queued telemetry is not retained indefinitely: `sona telemetry disable` and any
   level downgrade clear the pending outbox. An upgrade — including `off` to `anonymous` — does not,
   so rows enqueued while `off` survive until the next sync or the next downgrade. Local review snapshots have no expiry and are pruned
-  with `skill-bill prune-snapshots --confirm`.
+  with `sona prune-snapshots --confirm`.
 
 ## Retired event names
 

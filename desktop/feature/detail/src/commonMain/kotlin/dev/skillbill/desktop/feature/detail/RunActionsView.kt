@@ -144,7 +144,7 @@ internal fun operatorDecisionNeeded(issueKey: String?, subtaskId: String?): Oper
   return OperatorDecisionNeeded(
     text = "$subject finished with no code changes and is waiting for your decision. Settle it in chat, or run this " +
       "command and then resume the goal. Pass --instructions with retry_fix.",
-    command = "skill-bill goal operator-decision ${issueKey ?: "<issue-key>"} --subtask ${subtaskId ?: "<subtask>"} " +
+    command = "sona goal operator-decision ${issueKey ?: "<issue-key>"} --subtask ${subtaskId ?: "<subtask>"} " +
       "--decision retry_fix|accept_and_advance|abandon_subtask",
   )
 }

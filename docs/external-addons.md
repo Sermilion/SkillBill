@@ -108,7 +108,7 @@ state), but the config no longer lives there.
 Notes:
 
 - To keep the config somewhere else, export `SKILL_BILL_CONFIG_PATH` from your shell profile so every
-  `install.sh` and `skill-bill` invocation sees it. Without the override, the durable default applies.
+  `install.sh` and `sona` invocation sees it. Without the override, the durable default applies.
   If you exported this in an earlier version solely to relocate the config to `~/.config/skill-bill/`,
   you can remove it now — the durable default is that same path.
 - As a one-off, `SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1 ./install.sh …` skips the wipe entirely
@@ -130,10 +130,10 @@ verbatim into the installed pack's `addons/` directory.
 You can scaffold this source shape directly:
 
 ```bash
-skill-bill new-addon --platform ios --name acme-review --addon-location-path ~/dev/acme-review-addon
+sona new-addon --platform ios --name acme-review --addon-location-path ~/dev/acme-review-addon
 ```
 
-The normal `skill-bill new` add-on wizard also lets you choose `external` as the add-on source.
+The normal `sona new` add-on wizard also lets you choose `external` as the add-on source.
 Both paths create or update `addon-manifest.yaml` in the external directory and write the skeleton
 markdown file there instead of editing the repo's `platform-packs/<platform>/addons/` directory.
 The installer also registers the selected directory in `external_addon_sources` so the add-on
@@ -209,7 +209,7 @@ Overlay a private `acme` review add-on onto the installed `ios` pack.
 3. Preview what will resolve (optional dry run):
 
    ```bash
-   skill-bill config resolve-external-addons
+   sona config resolve-external-addons
    # ios	/home/you/dev/acme-review-addon
    ```
 
@@ -227,9 +227,9 @@ Overlay a private `acme` review add-on onto the installed `ios` pack.
 
 | Command | Purpose |
 |---------|---------|
-| `skill-bill config resolve-external-addons` | Read-only. Lists resolved `platform<TAB>path` entries from the config, or fails loudly on a malformed config. |
-| `skill-bill config resolve-external-agent-addons` | Read-only. Lists resolved external agent add-on roots from the same config, or fails loudly on malformed config. |
-| `skill-bill install apply-external-addons` | Applies the overlay onto installed packs. Runs automatically during `./install.sh`; you rarely invoke it directly. Options: `--repo-root` (default `.`) and `--platform-packs` (default `<repo-root>/platform-packs`). |
+| `sona config resolve-external-addons` | Read-only. Lists resolved `platform<TAB>path` entries from the config, or fails loudly on a malformed config. |
+| `sona config resolve-external-agent-addons` | Read-only. Lists resolved external agent add-on roots from the same config, or fails loudly on malformed config. |
+| `sona install apply-external-addons` | Applies the overlay onto installed packs. Runs automatically during `./install.sh`; you rarely invoke it directly. Options: `--repo-root` (default `.`) and `--platform-packs` (default `<repo-root>/platform-packs`). |
 
 ## Guarantees And Failure Modes
 

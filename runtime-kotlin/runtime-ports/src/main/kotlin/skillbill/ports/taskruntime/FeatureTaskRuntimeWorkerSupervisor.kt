@@ -18,7 +18,7 @@ interface FeatureTaskRuntimeWorkerSupervisor {
 
   /**
    * Block until [ownership] is no longer [FeatureTaskRuntimeProcessInspection.ExactLive], or until
-   * [timeout] elapses. Used by a second foreground `skill-bill goal` that raced the same launch.
+   * [timeout] elapses. Used by a second foreground `sona goal` that raced the same launch.
    * On timeout the peer may still be live — the caller re-inspects and fails closed. A no-op default
    * keeps tests and artifact-only seams from waiting. Must not wait on the current process.
    */

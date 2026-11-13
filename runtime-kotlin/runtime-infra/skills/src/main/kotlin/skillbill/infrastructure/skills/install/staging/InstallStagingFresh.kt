@@ -71,7 +71,6 @@ internal fun finalizeFreshInstallStaging(
     staged.sidecarFilesInTemp.map { path ->
       inputs.finalStagingDir.resolve(tempDir.relativize(path))
     }
-  pruneStaleStagingDirs(inputs.home, inputs.sourceSkillDir, inputs.contentHash)
   return RenderedSkill(
     skillName = inputs.sourceSkillDir.fileName.toString(),
     sourceSkillDir = inputs.sourceSkillDir.toFileLocation(),

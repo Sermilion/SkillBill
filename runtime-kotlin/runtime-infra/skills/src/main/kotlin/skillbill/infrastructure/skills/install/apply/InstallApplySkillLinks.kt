@@ -6,6 +6,7 @@ import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
 import skillbill.infrastructure.skills.install.symlink.InstallSymlinkException
 import skillbill.infrastructure.skills.install.symlink.createNewSymlinkWithGuidance
 import skillbill.infrastructure.skills.install.symlink.createReplacementSymlinkWithGuidance
+import skillbill.infrastructure.skills.install.symlink.retireObsoleteDispatcherLinks
 import skillbill.install.model.InstallAgentLinkStatus
 import skillbill.install.model.InstallAgentSkillLinkOutcome
 import skillbill.install.model.InstallAgentTarget
@@ -13,6 +14,8 @@ import skillbill.install.model.InstallApplyIssue
 import skillbill.install.model.InstallApplyIssueKind
 import skillbill.install.model.InstallPlan
 import skillbill.install.model.InstallPlanSkill
+import skillbill.install.model.ListedSkillNames
+import skillbill.install.model.SupportedAgent
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
 import java.io.IOException
@@ -28,12 +31,31 @@ internal fun linkPlannedSkill(
 ): List<InstallAgentSkillLinkOutcome> =
   plan.agents.map { agentTarget ->
     linkSkillToAgent(
-      skillName = skill.name,
+      skillName = ListedSkillNames.publicName(skill.name),
       stagingDir = stagingDir,
       agentTarget = agentTarget,
       installedSkillsRoot = installedSkillsCacheRoot(plan.request.home.toPath()),
     ).also { outcome ->
       outcome.issue?.let(failures::add)
+      if (outcome.issue != null || outcome.status !in
+        setOf(
+          InstallAgentLinkStatus.CREATED,
+          InstallAgentLinkStatus.SKIPPED,
+        )
+      ) {
+        return@also
+      }
+      if (plan.request.replaceExistingSkillBillLinks && skill.name == ListedSkillNames.DISPATCHER) {
+        val targetDir = agentTarget.path.toPath().toAbsolutePath().normalize()
+        val retired =
+          retireObsoleteDispatcherLinks(
+            targetDir = targetDir,
+            isClaudeSkillsTarget = agentTarget.agent == SupportedAgent.CLAUDE,
+            installedSkillsRoot = installedSkillsCacheRoot(plan.request.home.toPath()),
+            agent = agentTarget.agent,
+          )
+        failures += retired.issues
+      }
     }
   }
 
@@ -54,7 +76,7 @@ private fun linkSkillToAgent(
       installedSkillsRoot = installedSkillsRoot.toAbsolutePath().normalize(),
     )
   return catchingNonCancellation { createOrSkipSkillLink(context) }
-    .getOrElse { error -> failedSkillLinkOutcome(context, error) }
+    .getOrElse { error -> failedSkillLinkOutcome(context, error.message.orEmpty(), error) }
 }
 
 private fun createOrSkipSkillLink(context: SkillLinkContext): InstallAgentSkillLinkOutcome {
@@ -69,11 +91,14 @@ private fun createOrSkipSkillLink(context: SkillLinkContext): InstallAgentSkillL
         message = "already linked to ${context.linkTarget}",
       )
     }
-    require(existingTarget != null && existingTarget.startsWith(context.installedSkillsRoot)) {
-      "Existing symlink at ${context.linkPath} points outside Skill Bill installed-skills cache and was preserved."
+    if (existingTarget == null || !existingTarget.startsWith(context.installedSkillsRoot)) {
+      return failedSkillLinkOutcome(
+        context,
+        "Existing symlink at ${context.linkPath} points outside Skill Bill installed-skills cache and was preserved.",
+      )
     }
   } else if (Files.exists(context.linkPath, LinkOption.NOFOLLOW_LINKS)) {
-    error("Existing non-symlink path at ${context.linkPath} was preserved.")
+    return failedSkillLinkOutcome(context, "Existing non-symlink path at ${context.linkPath} was preserved.")
   }
   if (Files.isSymbolicLink(context.linkPath)) {
     createReplacementSymlinkWithGuidance(context.linkPath, context.linkTarget)
@@ -119,23 +144,24 @@ private fun skillLinkOutcome(
 
 private fun failedSkillLinkOutcome(
   context: SkillLinkContext,
-  error: Throwable,
+  message: String,
+  error: Throwable? = null,
 ): InstallAgentSkillLinkOutcome {
   val symlinkError = error as? InstallSymlinkException
   val issue =
     InstallApplyIssue(
       kind = InstallApplyIssueKind.SKILL_LINK_FAILED,
-      message = error.message.orEmpty(),
+      message = message,
       skillName = context.skillName,
       agent = context.agentTarget.agent,
       path = context.linkPath.toFileLocation(),
       guidance = symlinkError?.guidance,
-      causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
+      causeClass = error?.let { it.failureCodeLabel() ?: it::class.qualifiedName },
     )
   return skillLinkOutcome(
     context = context,
     status = InstallAgentLinkStatus.FAILED,
-    message = error.message.orEmpty(),
+    message = message,
     issue = issue,
   )
 }

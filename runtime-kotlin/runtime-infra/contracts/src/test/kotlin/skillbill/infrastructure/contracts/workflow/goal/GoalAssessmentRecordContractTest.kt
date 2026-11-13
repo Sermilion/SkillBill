@@ -55,6 +55,37 @@ class GoalAssessmentRecordContractTest {
   }
 
   @Test
+  fun `historical test value findings remain readable without changing their evidence or status`() {
+    val original = record()
+    val round = original.rounds.single()
+    val historical =
+      original.copy(
+        rounds =
+          listOf(
+            round.copy(
+              findings =
+                listOf(
+                  round.findings.single().copy(
+                    kind = GoalAssessmentFindingKind.TEST_VALUE,
+                    severity = FeatureTaskRuntimeReviewSeverity.MINOR,
+                    path = "src/MainTest.kt",
+                    guardedRef = "src/Main.kt:12",
+                    failureScenario = "the test still passes when the loader drops an item",
+                    verification = GoalAssessmentVerification.NOT_REQUIRED,
+                  ),
+                ),
+            ),
+          ),
+        exitReason = GoalAssessmentExitReason.CONVERGED,
+      )
+
+    val wire = historical.asGoalAssessmentRecordWireMap()
+
+    assertTrue(violations(wire).isEmpty())
+    assertEquals(historical, wire.toGoalAssessmentRecord("historical"))
+  }
+
+  @Test
   fun `an unavailable reason round trips and is only accepted on an unavailable exit`() {
     val record =
       record().copy(exitReason = GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE, unavailableReason = "no merge base")

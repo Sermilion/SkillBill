@@ -4,8 +4,8 @@ import skillbill.application.scaffold.decodeScaffoldCommandRequest
 import skillbill.contracts.JsonCodec
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ScaffoldFailureCode
-import skillbill.scaffold.model.CodeReviewCompositionMode
-import skillbill.scaffold.model.CodeReviewCompositionScope
+import skillbill.review.model.CodeReviewCompositionMode
+import skillbill.review.model.CodeReviewCompositionScope
 import skillbill.scaffold.model.command.ScaffoldCommandRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals

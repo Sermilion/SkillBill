@@ -402,11 +402,15 @@ class AgentRunCommandBuildersTest {
         ClaudeAgentRunCommandBuilder(),
         CodexAgentRunCommandBuilder(),
         CursorAgentRunCommandBuilder(),
+        OpenCodeAgentRunCommandBuilder(),
         DevinAgentRunCommandBuilder(),
       )
 
     assertEquals(MODEL_DIRECTIVE_CAPABLE_AGENTS, builders.map { it.agent }.toSet())
     assertEquals("model[effort=high]", CursorAgentRunCommandBuilder().build(request("model", "high")).sessionModel)
+    val openCode = OpenCodeAgentRunCommandBuilder().build(request("anthropic/model", "high"))
+    assertEquals("anthropic/model", openCode.sessionModel)
+    assertEquals("high", openCode.sessionEffort)
     builders.filter { it.agent == SupportedAgent.CLAUDE }.forEach { builder ->
       val command = builder.build(request(model = "model", effort = "high")).command
       assertTrue(command.contains("--model"))

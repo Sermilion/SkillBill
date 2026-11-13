@@ -41,6 +41,12 @@ internal data class AgentRunCommand(
   val approvalProtocol: AgentRunApprovalProtocol? = null,
   val sessionModel: String? = null,
   val acpMcpServers: List<AcpStdioMcpServer> = emptyList(),
+  val removedEnvironmentKeys: Set<String> = emptySet(),
+  val preflightFailure: String? = null,
+  val launchScope: AutoCloseable? = null,
+  val explicitEnvironment: Boolean = false,
+  val sessionEffort: String? = null,
+  val sessionMcpServers: List<AcpStdioMcpServer> = emptyList(),
 )
 
 internal enum class AgentRunApprovalProtocol {
@@ -49,6 +55,7 @@ internal enum class AgentRunApprovalProtocol {
   CURSOR_ACP,
   JUNIE_ACP,
   DEVIN_ACP,
+  OPENCODE_ACP,
 }
 
 internal enum class AgentRunCommandKind {

@@ -35,12 +35,16 @@ import skillbill.ports.install.model.InstallCleanupResult
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentLinkOperationRequest
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentLinkOperationResult
+import skillbill.ports.install.nativeagent.model.InstallNativeAgentPreservationRequest
+import skillbill.ports.install.nativeagent.model.InstallNativeAgentPreservationResult
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentUnlinkOperationResult
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.system.HostPlatformPort
 import skillbill.ports.system.UninstallPathsPort
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -118,6 +122,12 @@ private object ThrowingMcpRegistrationPort : InstallMcpRegistrationPort {
 private val ABSENT_PATH: Path = Path.of("/tmp/skillbill-uninstall-policy/absent")
 
 private object AbsentUninstallPathsPort : UninstallPathsPort {
+  override fun isRegularFile(path: Path): Boolean = Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+
+  override fun isDirectory(path: Path): Boolean = Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
+
+  override fun readRegularFile(path: Path): String = Files.readString(path)
+
   override fun <T> withConfigTransaction(
     userHome: Path,
     environment: Map<String, String>,
@@ -174,9 +184,15 @@ private object StubInstallNativeAgentLinkPort : InstallNativeAgentLinkPort {
   override fun unlinkNativeAgents(
     request: InstallNativeAgentLinkOperationRequest,
   ): InstallNativeAgentUnlinkOperationResult = InstallNativeAgentUnlinkOperationResult(emptyList())
+
+  override fun discoverPreservedTargets(
+    request: InstallNativeAgentPreservationRequest,
+  ): InstallNativeAgentPreservationResult = InstallNativeAgentPreservationResult(emptyList())
 }
 
 private object StubUninstallHostPlatformPort : HostPlatformPort {
+  override fun resolveUserName(): String? = "test-user"
+
   override fun resolveUserHome(): Path = Path.of(System.getProperty("user.home"))
 
   override fun resolveEnvironment(): Map<String, String> = System.getenv()

@@ -7,4 +7,4 @@ fun StandalonePhaseRegistrationFactory.workflowRegistrationForTest(
   issueKey: String?,
   workflowId: String,
   workBranch: String? = null,
-) = workflowRegistration(repoRoot, issueKey, workflowId, workBranch)
+) = workflowRegistration(repoRoot, issueKey, workflowId, WorkflowStatusLaunch(workBranch = workBranch))

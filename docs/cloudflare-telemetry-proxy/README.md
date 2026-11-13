@@ -83,8 +83,8 @@ When this variable is set, Skill Bill sends telemetry to your Worker only.
 Then keep using the normal telemetry commands:
 
 ```bash
-skill-bill telemetry status
-skill-bill telemetry sync
+sona telemetry status
+sona telemetry sync
 ```
 
 If you want to query org-wide workflow metrics through the same proxy, also set a stats token on the machine running Skill Bill:
@@ -96,11 +96,11 @@ export SKILL_BILL_TELEMETRY_PROXY_STATS_TOKEN="replace-with-your-worker-token"
 Then query remote aggregate stats through the proxy contract:
 
 ```bash
-skill-bill telemetry capabilities
-skill-bill telemetry stats verify --since 30d
-skill-bill telemetry stats verify --date-from 2026-04-01 --date-to 2026-04-22
-skill-bill telemetry stats verify --since 30d --group-by day
-skill-bill telemetry stats verify --since 30d --group-by week
+sona telemetry capabilities
+sona telemetry stats verify --since 30d
+sona telemetry stats verify --date-from 2026-04-01 --date-to 2026-04-22
+sona telemetry stats verify --since 30d --group-by day
+sona telemetry stats verify --since 30d --group-by week
 ```
 
 ## Event deduplication and delivery acknowledgement
@@ -110,7 +110,7 @@ Every outbox row carries a durable, opaque identity minted in the same write tha
 The Worker forwards event properties verbatim: `isValidEvent` only inspects them, and `transformBatch` spreads them into both the pass-through branch and the `$exception` rewrite branch. Consequently:
 
 - **Rollout order is producer-first.** A client may start sending `$insert_id` before any relay is redeployed; today's relay already forwards it. No coordinated deploy is required.
-- **A fork that rewrites or drops properties must report `supports_event_deduplication: false`** from `GET /capabilities`. Every client path that reads capabilities — `skill-bill telemetry capabilities`, `telemetry stats`, and the `telemetry_proxy_capabilities` MCP tool — then fails loudly instead of reporting a relay that cannot deduplicate as usable. The ingest drain does not fetch capabilities per batch, so this is a configuration-time check, not a per-send guard. Omitting the field means "supported", which keeps older relays working.
+- **A fork that rewrites or drops properties must report `supports_event_deduplication: false`** from `GET /capabilities`. Every client path that reads capabilities — `sona telemetry capabilities`, `telemetry stats`, and the `telemetry_proxy_capabilities` MCP tool — then fails loudly instead of reporting a relay that cannot deduplicate as usable. The ingest drain does not fetch capabilities per batch, so this is a configuration-time check, not a per-send guard. Omitting the field means "supported", which keeps older relays working.
 
 Deduplication retention is bounded by the receiver, not by this relay. PostHog's `$insert_id` deduplication is a finite ingestion-window mechanism keyed on the event name, `distinct_id`, timestamp, and `$insert_id` together. A retry that arrives after that window has passed is ingested as a separate event. This is best-effort duplicate suppression for retries that happen within normal delivery latency; it is **not** indefinite exactly-once ingestion, and no part of this design should be described as such. Verify the current window against PostHog's supported API documentation for your deployment rather than assuming a fixed value.
 

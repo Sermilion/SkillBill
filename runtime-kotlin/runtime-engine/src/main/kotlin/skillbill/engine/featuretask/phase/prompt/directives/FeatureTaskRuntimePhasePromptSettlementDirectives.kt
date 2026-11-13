@@ -2,8 +2,8 @@ package skillbill.engine.featuretask.phase.prompt.directives
 
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 
-internal const val PHASE_COMPLETE_SETTLEMENT_TOOL: String = "mcp__skill-bill__feature_task_phase_complete"
-internal const val PHASE_BLOCK_SETTLEMENT_TOOL: String = "mcp__skill-bill__feature_task_phase_block"
+internal const val PHASE_COMPLETE_SETTLEMENT_TOOL: String = "mcp__sona__feature_task_phase_complete"
+internal const val PHASE_BLOCK_SETTLEMENT_TOOL: String = "mcp__sona__feature_task_phase_block"
 
 internal fun settlementDirective(
   stepName: String,
@@ -12,7 +12,7 @@ internal fun settlementDirective(
   if (target == null) return ""
   return """
     ## Required final output (durable settlement)
-    Finish this phase through the skill-bill MCP settlement tools, not by printing a JSON envelope.
+    Finish this phase through the sona MCP settlement tools, not by printing a JSON envelope.
     The tools may be deferred in this session: load them first with ToolSearch
     `select:$PHASE_COMPLETE_SETTLEMENT_TOOL,$PHASE_BLOCK_SETTLEMENT_TOOL`.
     - Finished: call `$PHASE_COMPLETE_SETTLEMENT_TOOL` with workflow_id "${target.workflowId}",
