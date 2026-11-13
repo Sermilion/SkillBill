@@ -3,15 +3,6 @@ package skillbill.engine.featuretask.slot.qualitygate
 import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 
-private const val VALIDATE_PHASE_FORBIDDEN_EXTRAS: String =
-  "Do not run `skill-bill validate`, `npx agnix`, `scripts/validate_agent_configs`, or any other " +
-    "repo-root checklist. Those commands are not this phase. "
-
-private const val VALIDATE_TRIAGE_FORBIDDEN_PACK_GATE: String =
-  "Do not run `skill-bill phase validation`, the pack validation_gate collect_all_full_gate_command, " +
-    "cache_bypassing_collect_all_full_gate_command, or any other pack-declared full-suite argv " +
-    "during this triage turn. "
-
 private const val MACHINE_BUILD_SETTINGS_DIRECTIVE: String =
   "Run build tools with the machine's own settings and shared caches. Do not point a build tool at a " +
     "private home or cache: for Gradle, never set GRADLE_USER_HOME, GRADLE_OPTS, or JAVA_TOOL_OPTIONS, " +
@@ -60,7 +51,7 @@ internal fun savedValidationAgentDirective(
 internal fun runtimeOwnedValidateAgentKnownEmptyPhaseTask(): String =
   "You are the validation agent for this step — do not spawn delegated subagents. " +
     "The admitted validation command list is explicitly empty after completed discovery. " +
-    VALIDATE_PHASE_FORBIDDEN_EXTRAS +
+    "Do not run any validation commands or invent checks. " +
     MACHINE_BUILD_SETTINGS_DIRECTIVE +
     "Print a warning that no validation commands were found, then settle completed " +
     "and allow the workflow to advance. " +
@@ -71,7 +62,7 @@ internal fun validateGateTriageKnownEmptyPhaseTask(): String =
   "You are triaging an unparseable validation gate failure blob before the first repair turn — do not spawn " +
     "delegated subagents. The admitted validation command list is explicitly empty after completed discovery; " +
     "there is no saved command boundary to triage beyond confirming the known-empty outcome. " +
-    "$VALIDATE_PHASE_FORBIDDEN_EXTRAS$VALIDATE_TRIAGE_FORBIDDEN_PACK_GATE" +
+    "Do not execute checks during triage. " +
     "Reply with a short prose repair plan only if the gate blob still implies actionable failures; " +
     "otherwise return prose that the validation boundary is empty."
 
@@ -89,7 +80,8 @@ internal fun runtimeOwnedValidateAgentPhaseTask(packValidationCommand: String?):
           rediscoveryPolicy
     }
   return "You are the validation agent for this step — do not spawn delegated subagents. $gateLine " +
-    VALIDATE_PHASE_FORBIDDEN_EXTRAS +
+    "Do not run commands outside the admitted saved validation command list. Every runnable command in that list " +
+    "is allowed, regardless of executable. " +
     MACHINE_BUILD_SETTINGS_DIRECTIVE +
     "Never reuse another worktree's mutable state; the machine's shared tool caches are not worktree state. " +
     "Do not install packages automatically, stop a shared daemon, or change unrelated jobs. " +
@@ -127,7 +119,7 @@ internal fun validateGateTriagePhaseTask(packValidationCommand: String? = null):
   return "You are triaging an unparseable validation gate failure blob before the first repair turn — do not spawn " +
     "delegated subagents. Read the gate stdout blob and repository files as needed to understand failures; " +
     "prefer read-only inspection. $savedCommandsDirective " +
-    "$VALIDATE_PHASE_FORBIDDEN_EXTRAS$VALIDATE_TRIAGE_FORBIDDEN_PACK_GATE" +
+    "Do not execute checks during triage. " +
     "Do not mutate the tree unless strictly needed to understand failures. Reply with a short prose " +
     "repair plan naming where each failure lives and how you would fix it. Return prose guidance only; " +
     "do not fix code or report validation results or gate evidence."
