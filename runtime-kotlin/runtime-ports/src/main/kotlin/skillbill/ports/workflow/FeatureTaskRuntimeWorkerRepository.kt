@@ -80,9 +80,11 @@ interface FeatureTaskRuntimeCrashReconciliation {
   /**
    * Atomic fenced reconcile write: transition the still-`running` row to the resumable `pending`
    * state at its existing current_step_id, keep blocked rows blocked, record [interruptionReason],
-   * and release the lease under the existing owner_token/generation fencing, all only while the
-   * lease is still expired as of [nowInstant]. Returns false on a lost fencing race (another pass
-   * reconciled first) so the caller can skip rather than fail; the write never partially applies.
+   * and release the lease under the existing owner_token/generation fencing. The caller must have
+   * confirmed the recorded process is dead; expiry of [nowInstant] is not required, because
+   * standalone-phase leases can outlive a stopped worker. Returns false on a lost fencing race
+   * (another pass reconciled first) so the caller can skip rather than fail; the write never
+   * partially applies.
    */
   fun reconcileFeatureTaskRuntimeCrashedWorker(
     workflowId: String,

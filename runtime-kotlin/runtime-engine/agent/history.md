@@ -1,3 +1,11 @@
+## [2026-11-13] Resume a dead worker before its lease expires
+Areas: runtime-engine featuretask crash reconcile
+- Targeted `reconcile(workflowId)` no longer requires lease expiry once inspect confirms NotRunning. Global `reconcile()` still scans expired leases only.
+- Interruption copy is `lease_expired: worker process confirmed dead`.
+- Tests cover unexpired dead targeted recovery, unexpired live no-op, and a startup scan that still skips unexpired dead workers.
+Feature flag: N/A
+Acceptance criteria: n/a (direct main fix)
+
 ## [2026-11-10] SKILL-535 — Capture the primary checkout at registration
 Areas: runtime-engine featuretask/work projection; runtime-ports IDE status; runtime-infra SQLite and contracts; runtime-contracts; orchestration IDE status schema
 - MEDIUM feature. Capture the primary repository root while linked-checkout metadata exists, persist it separately from execution identity, and project it through normal, incompatible, and blocked IDE status snapshots.

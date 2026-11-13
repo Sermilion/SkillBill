@@ -756,6 +756,7 @@ class PlanSubtasksReopeningTest {
       ),
       database,
       PlanBundleFeasibilityStateCodec(featureTaskRuntimeWireArtifactValidatorForTest()),
+      NoopRuntimeDiagnostics,
     )
 
   private fun acceptedRecords(): Map<String, FeatureTaskRuntimePhaseRecord> =

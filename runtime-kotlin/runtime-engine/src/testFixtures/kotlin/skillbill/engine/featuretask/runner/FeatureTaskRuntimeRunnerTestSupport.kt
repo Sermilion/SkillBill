@@ -2600,7 +2600,6 @@ class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaults() {
       if (current.workflowId != workflowId || current.ownerToken != ownerToken || current.generation != generation) {
         return@synchronized false
       }
-      if (!leaseExpiredBefore(current.expiresAt, nowInstant)) return@synchronized false
       val row = taskRuntimeRows[workflowId] ?: return@synchronized false
       if (row.workflowStatus !in setOf("running", "blocked")) return@synchronized false
       workerOwnership.remove(workflowId)
