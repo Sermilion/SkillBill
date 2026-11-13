@@ -276,19 +276,7 @@ public class WorkBoardItemProjection(
     work: List<ResolvedWorkItem>,
   ): WorkBoardItem {
     val projection = projector.project(candidate, context.copy(branchCorrelation = candidate.branchCorrelation))
-    val snapshot =
-      if (projection.snapshot.problem?.code == IdeStatusProblemCode.INCOMPATIBLE_RECORD) {
-        projection.snapshot.copy(
-          lifecycleState = IdeStatusLifecycleState.BLOCKED,
-          issueKey = candidate.issueKey,
-          workflowFamily = candidate.workflowFamily,
-          execution = candidate.execution,
-          summary =
-            "Saved data needs migration. Install a compatible runtime and retry; existing progress is retained.",
-        )
-      } else {
-        projection.snapshot
-      }
+    val snapshot = boardSnapshot(projection.snapshot, candidate)
     ideStatusValidator.validate(snapshot, "work-board:${candidate.workflowId}")
     val completion =
       if (isFinished(snapshot)) {
@@ -300,9 +288,19 @@ public class WorkBoardItemProjection(
       } else {
         null to null
       }
-    val superseded = supersededPhase(candidate.standaloneStatus, context.unitOfWork, context.observedAt)
-    val finishedAt = completion.first ?: candidate.standaloneStatus?.updatedAt?.takeIf { superseded }
     val operatorFinalizedAt = operatorFinalizationEvidence(candidate, context.unitOfWork)
+    val needsSettlement =
+      snapshot.lifecycleState == IdeStatusLifecycleState.BLOCKED ||
+        snapshot.lifecycleState == IdeStatusLifecycleState.FAILED ||
+        (snapshot.lifecycleState == IdeStatusLifecycleState.TERMINAL && operatorFinalizedAt == null)
+    val superseded =
+      !needsSettlement &&
+        supersededPhase(
+          candidate.standaloneStatus,
+          context.unitOfWork,
+          context.observedAt,
+        )
+    val finishedAt = completion.first ?: candidate.standaloneStatus?.updatedAt?.takeIf { superseded }
     val windowed =
       workPolicy(
         snapshot,
@@ -338,6 +336,22 @@ public class WorkBoardItemProjection(
           ?.let { goalWorktreeView(candidate.workflowId, context.unitOfWork) },
     )
   }
+
+  private fun boardSnapshot(
+    snapshot: IdeStatusSnapshot,
+    candidate: IdeStatusCandidate,
+  ): IdeStatusSnapshot =
+    if (snapshot.problem?.code == IdeStatusProblemCode.INCOMPATIBLE_RECORD) {
+      snapshot.copy(
+        lifecycleState = IdeStatusLifecycleState.BLOCKED,
+        issueKey = candidate.issueKey,
+        workflowFamily = candidate.workflowFamily,
+        execution = candidate.execution,
+        summary = "Saved data needs migration. Install a compatible runtime and retry; existing progress is retained.",
+      )
+    } else {
+      snapshot
+    }
 
   internal fun goalWorktreeView(
     workflowId: String,

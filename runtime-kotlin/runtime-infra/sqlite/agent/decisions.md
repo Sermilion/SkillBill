@@ -1,3 +1,14 @@
+## [2026-11-13] Separate operator finalization from execution completion
+Context: Execution finishedAt moved completed standalone and verify rows off the live board before the operator dismissed their remaining work.
+Decision: Persist nullable operatorFinalizedAt separately. Backfill successful historical completions from finished_at, leave new Complete writes null, and retain unfinalized successful candidates without the settled cutoff.
+Reason: Execution end and operator dismissal are different events. Backfill preserves historical Finished today membership; retaining candidates lets Finalize remain the exit from Needs you even after the old retention window.
+Alternatives considered: Reusing finishedAt would either hide new completions or rewrite their execution history. Goal and feature-task workflow storage retain their existing completion rules.
+
+## [2026-11-13] Finalize terminal rows through a dedicated write
+Context: Standalone status update is idempotent once terminal, and ordinary verify saves refuse terminal snapshot changes.
+Decision: Use dedicated finalize writes restricted to successful unfinalized rows. Preserve finishedAt and store sibling Kept path and detail in dedicated columns.
+Reason: Finalize must change an already-terminal row without reopening ordinary terminal writes. Sibling worktree retention is separate from monitor cleanup and must not borrow its reason vocabulary.
+
 ## [2026-11-13] Crash-reconcile write fences owner identity, not lease expiry
 Context: Targeted resume recovery must release a confirmed-dead worker whose standalone lease has not expired.
 Decision: reconcileFeatureTaskRuntimeCrashedWorker matches owner_token, generation, and ACTIVE lease_state. It still parses nowInstant and fences heartbeat_at and expires_at values on DELETE, but it no longer requires expires_at <= now.

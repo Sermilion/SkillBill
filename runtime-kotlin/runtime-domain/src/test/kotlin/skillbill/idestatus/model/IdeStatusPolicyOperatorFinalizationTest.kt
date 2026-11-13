@@ -33,6 +33,28 @@ class IdeStatusPolicyOperatorFinalizationTest {
   }
 
   @Test
+  fun `failed standalone with finishedAt stays in needs you`() {
+    val policy =
+      IdeStatusPolicy.work(
+        IdeStatusWorkPolicyFacts(
+          lifecycle = IdeStatusLifecycleState.FAILED,
+          family = IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
+          scope = IdeStatusExecutionScope.STANDALONE_PHASE,
+          freshness = IdeStatusFreshness.STALE,
+          finishedAt = observedAt.minusSeconds(90),
+          operatorFinalizedAt = null,
+          awaitingOperatorDecision = false,
+          planningPrepared = false,
+          controlTargetPresent = true,
+          observedAt = observedAt,
+        ),
+      )
+
+    assertEquals(IdeStatusLiveSection.NEEDS_YOU, policy.liveSection)
+    assertTrue(policy.requiresAttention)
+  }
+
+  @Test
   fun `goal finished today still follows execution completion not operator finalization`() {
     val finishedAt = observedAt.minusSeconds(120)
     val policy =
