@@ -20,6 +20,9 @@ import java.time.format.DateTimeParseException
 import skillbill.infrastructure.workflow.monitor.StandaloneMonitorOwnershipKeys as Keys
 
 private const val MIN_OWNER_TOKEN_LENGTH = 16
+private const val LEGACY_OWNERSHIP_CONTRACT_VERSION = "1.0"
+private val SUPPORTED_OWNERSHIP_CONTRACT_VERSIONS =
+  setOf(LEGACY_OWNERSHIP_CONTRACT_VERSION, STANDALONE_MONITOR_OWNERSHIP_CONTRACT_VERSION)
 private val OBJECT_ID = Regex("^[0-9a-f]{40,64}$")
 
 internal data class MonitorRetentionRecord(
@@ -264,11 +267,11 @@ internal object StandaloneMonitorOwnershipCodec {
     label: String,
   ) {
     val version = root.path(Keys.CONTRACT_VERSION).takeIf(JsonNode::isTextual)?.asText().orEmpty()
-    if (version != STANDALONE_MONITOR_OWNERSHIP_CONTRACT_VERSION) {
+    if (version !in SUPPORTED_OWNERSHIP_CONTRACT_VERSIONS) {
       throw SkillBillRuntimeException(
         StandaloneMonitorFailureCode.UNSUPPORTED_OWNERSHIP_VERSION,
         "Standalone monitor ownership '$label' uses contract version '${version.ifBlank { "<absent>" }}'; " +
-          "this runtime reads '$STANDALONE_MONITOR_OWNERSHIP_CONTRACT_VERSION'.",
+          "this runtime reads $SUPPORTED_OWNERSHIP_CONTRACT_VERSIONS.",
       )
     }
   }

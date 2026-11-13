@@ -112,6 +112,43 @@ class GitMonitorResourcesLifecycleTest {
   }
 
   @Test
+  fun `completed defer keeps the worktree and reclaim does not force-remove it`() {
+    val fixture = fixture("awaiting-finalize")
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val worktree = prepare(fixture, fence)
+    val deferred =
+      assertIs<MonitorSettlement.Retained>(
+        resources.deferUntilFinalize(
+          MonitorSettleRequest(fence, MonitorPrimaryOutcome(MonitorOutcomeKind.COMPLETED, "completed")),
+        ),
+      )
+
+    assertEquals(MonitorRetentionReason.AWAITING_FINALIZE, deferred.reason)
+    assertTrue(Files.exists(worktree.path))
+    val blocked = assertIs<MonitorAcquisition.Blocked>(acquireFor(resources, fixture))
+    assertEquals(MonitorAdmissionBlock.RETAINED_WORK, blocked.reason)
+    assertTrue(Files.exists(worktree.path), "reclaim must not force-remove an awaiting-finalize worktree")
+    assertEquals(MonitorSettlement.Released, resources.finalizeDeferredRemoval(fence.directory))
+    assertFalse(Files.exists(worktree.path))
+  }
+
+  @Test
+  fun `finalize of a dirty deferred worktree keeps the tree without force`() {
+    val fixture = fixture("dirty-finalize")
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val worktree = prepare(fixture, fence)
+    resources.deferUntilFinalize(
+      MonitorSettleRequest(fence, MonitorPrimaryOutcome(MonitorOutcomeKind.COMPLETED, "completed")),
+    )
+    Files.writeString(worktree.path.resolve("scratch.txt"), "x")
+
+    val kept = assertIs<MonitorSettlement.Retained>(resources.finalizeDeferredRemoval(fence.directory))
+
+    assertEquals(MonitorRetentionReason.UNTRACKED_FILES, kept.reason)
+    assertTrue(Files.exists(worktree.path))
+  }
+
+  @Test
   fun `pinned https endpoints are fetched through the caller's ssh remote for the same repository`() {
     val fixture = fixture()
     fixture.routeOriginOverSsh()

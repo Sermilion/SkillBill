@@ -34,6 +34,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.addReviewFindingActio
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.PrimaryRepositoryRootMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.branchWorktreeRetainedMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.buildrun.recordAgentBuildRuns
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.operatorFinalizedAtMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.pruneWorktreeEditJournalToLatestTick
@@ -83,7 +84,6 @@ import skillbill.infrastructure.sqlite.core.schema.saveStandalonePhaseLaunch
 import skillbill.infrastructure.sqlite.core.schema.separateAgentActivityRevisions
 import skillbill.infrastructure.sqlite.core.schema.separateDesktopChangeSignals
 import skillbill.infrastructure.sqlite.review.stats.migrateLegacyTelemetryOutboxLedger
-import skillbill.infrastructure.sqlite.workflow.goalrunner.addGoalPlanningCheckoutRecovery
 import skillbill.infrastructure.sqlite.workflow.goalrunner.addGoalPlanningOwnership
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.applyLegacyGoalRunnerControlLedgerMigration
 
@@ -1191,9 +1191,4 @@ internal val databaseMigrations: List<DatabaseMigration> =
           }
         }
       },
-    ) +
-    DatabaseMigration(
-      version = 126,
-      name = "fence-goal-planning-checkout-recovery",
-      operation = ::addGoalPlanningCheckoutRecovery,
-    ) + operatorFinalizedAtMigrations
+    ) + operatorFinalizedAtMigrations + branchWorktreeRetainedMigrations

@@ -23,7 +23,7 @@ public data class WorkControlTarget(
   val databaseFileObservation: DatabaseFileObservation? = null,
 )
 
-public enum class WorkControlAction { PAUSE, STOP, CANCEL, LAUNCH, RECOVER }
+public enum class WorkControlAction { PAUSE, STOP, CANCEL, LAUNCH, RECOVER, FINALIZE }
 
 public enum class WorkControlRejection {
   UNKNOWN_TARGET,

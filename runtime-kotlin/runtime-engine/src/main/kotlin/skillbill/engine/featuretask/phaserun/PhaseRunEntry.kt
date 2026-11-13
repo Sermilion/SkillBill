@@ -21,10 +21,6 @@ import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.monitor.model.MonitorExpectedOwnerToken
 import skillbill.ports.monitor.model.MonitorOutcomeKind
 import skillbill.ports.monitor.model.MonitorPrimaryOutcome
-import skillbill.ports.workflow.branchworktree.BranchWorktreeResources
-import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
-import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolderKind
-import skillbill.ports.workflow.branchworktree.model.BranchWorktreeRelease
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
@@ -49,18 +45,8 @@ public class PhaseRunEntry(
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val standaloneRunners: StandalonePhaseRunners,
   private val plans: PhaseRunPlanResolver,
-  private val branchWorktrees: BranchWorktreeResources,
 ) {
-  public fun runInvocation(request: PhaseRunRequest): PhaseRunResult {
-    val result = run(request)
-    if (result !is PhaseRunResult.Completed) return result
-    val holder = BranchWorktreeHolder(BranchWorktreeHolderKind.PHASE, request.definitionId)
-    return when (val released = branchWorktrees.release(request.repoRoot, holder)) {
-      is BranchWorktreeRelease.Kept ->
-        result.copy(targetReport = result.targetReport + "Kept worktree ${released.path}: ${released.detail}.")
-      else -> result
-    }
-  }
+  public fun runInvocation(request: PhaseRunRequest): PhaseRunResult = run(request)
 
   public fun run(request: PhaseRunRequest): PhaseRunResult {
     if (SkeletonDefinition.preparedExecutionFor(request.definitionId) != null) return runStandaloneMonitor(request)
@@ -446,14 +432,23 @@ public class PhaseRunEntry(
         definitionId = definition.id,
         repoRoot = prepared.context.worktree.path,
       )
+    var completedWithRepairWorktree = false
     try {
-      return withStatus(ownedRequest, invocationId, request.definitionId, prepared) { statusRequest ->
-        runInternal(statusRequest, invocationId, standalone = prepared)
-      }
+      val result =
+        withStatus(ownedRequest, invocationId, request.definitionId, prepared) { statusRequest ->
+          runInternal(statusRequest, invocationId, standalone = prepared)
+        }
+      completedWithRepairWorktree = result is PhaseRunResult.Completed
+      return result
     } finally {
-      prepared.cleanup.settle(
-        MonitorPrimaryOutcome(MonitorOutcomeKind.RUN_FAILED, "The monitor run ended before its outcome was recorded."),
-      )
+      if (!completedWithRepairWorktree) {
+        prepared.cleanup.settle(
+          MonitorPrimaryOutcome(
+            MonitorOutcomeKind.RUN_FAILED,
+            "The monitor run ended before its outcome was recorded.",
+          ),
+        )
+      }
     }
   }
 
@@ -517,7 +512,7 @@ public class PhaseRunEntry(
       } catch (interrupted: InterruptedException) {
         Result.failure(interrupted)
       }
-    val settlement = monitor?.cleanup?.settle(primaryOutcomeOf(outcome))
+    val settlement = monitor?.cleanup?.let { settleMonitorCleanup(it, outcome) }
     return outcome
       .map { result ->
         monitor?.let { result.withTargetReport(it.context, settlement, it.ledger.followedHeadShas) } ?: result

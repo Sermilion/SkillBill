@@ -15,6 +15,17 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import java.time.Instant
+
+interface WorkflowOperatorFinalizeRepository {
+  fun finalizeOperatorCompletion(
+    family: WorkflowFamily,
+    workflowId: String,
+    operatorFinalizedAt: Instant,
+    branchWorktreeRetainedPath: String? = null,
+    branchWorktreeRetainedDetail: String? = null,
+  ): Boolean
+}
 
 /**
  * Durable workflow-state persistence. Snapshot reads and writes are keyed by
@@ -24,7 +35,8 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode
 interface WorkflowStateRepository :
   FeatureTaskWorkflowStateRepository,
   GoalChildWorkflowStateRepository,
-  FeatureTaskRuntimeWorkerRepository {
+  FeatureTaskRuntimeWorkerRepository,
+  WorkflowOperatorFinalizeRepository {
   fun migrateFeatureTaskArtifacts(
     source: WorkflowStateRecord,
     targetArtifacts: DurableWorkflowArtifacts,

@@ -7,12 +7,15 @@ import skillbill.ports.agentrun.activity.model.AgentRunActivity
 import skillbill.ports.agentrun.activity.model.AgentRunActivityKind
 import skillbill.ports.agentrun.activity.model.AgentRunActivityState
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.StandaloneEligiblePage
 import skillbill.ports.idestatus.model.StandaloneEligibleSlice
 import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
 import skillbill.ports.idestatus.model.StandaloneMonitorTarget
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
+import skillbill.ports.idestatus.model.StandalonePhaseFinalizeRequest
+import skillbill.ports.idestatus.model.StandalonePhaseFinalizeResult
 import skillbill.ports.idestatus.model.StandalonePhaseOutputLine
 import skillbill.ports.idestatus.model.StandalonePhaseOutputSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
@@ -772,6 +775,84 @@ class StandalonePhaseStatusStoreTest {
   )
 
   @Test
+  fun `finalize writes operator finalization and kept branch worktree without changing finishedAt`() {
+    val directory = Files.createTempDirectory("standalone-finalize")
+    val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+    val started = Instant.parse("2026-10-20T16:58:18Z")
+    database.transaction { completePhase(it.standalonePhaseStatuses, "validate", started) }
+    val finalizedAt = started.plusSeconds(60)
+    val result =
+      database.transaction {
+        it.standalonePhaseStatuses.finalize(
+          StandalonePhaseFinalizeRequest(
+            executionId = "execution-validate",
+            operatorFinalizedAt = finalizedAt,
+            branchWorktreeRetainedPath = "/wt/validation",
+            branchWorktreeRetainedDetail = "dirty tree",
+            terminalResultAppendix = "Kept worktree /wt/validation: dirty tree.",
+          ),
+        )
+      }
+    assertEquals(StandalonePhaseFinalizeResult.ACCEPTED, result)
+    val record = database.read { it.standalonePhaseStatuses.readByInvocation("run-validate") }
+    assertEquals(started, record?.finishedAt)
+    assertEquals(finalizedAt, record?.operatorFinalizedAt)
+    assertEquals("/wt/validation", record?.branchWorktreeRetainedPath)
+    assertEquals("dirty tree", record?.branchWorktreeRetainedDetail)
+    assertEquals("done\n\nKept worktree /wt/validation: dirty tree.", record?.terminalResult)
+  }
+
+  @Test
+  fun `finalize of an already finalized row is idempotent`() {
+    val directory = Files.createTempDirectory("standalone-finalize-again")
+    val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+    val started = Instant.parse("2026-10-20T16:58:18Z")
+    database.transaction { completePhase(it.standalonePhaseStatuses, "validate", started) }
+    val finalizedAt = started.plusSeconds(60)
+    val request =
+      StandalonePhaseFinalizeRequest(executionId = "execution-validate", operatorFinalizedAt = finalizedAt)
+    assertEquals(
+      StandalonePhaseFinalizeResult.ACCEPTED,
+      database.transaction { it.standalonePhaseStatuses.finalize(request) },
+    )
+    assertEquals(
+      StandalonePhaseFinalizeResult.ALREADY_FINALIZED,
+      database.transaction { it.standalonePhaseStatuses.finalize(request) },
+    )
+    val record = database.read { it.standalonePhaseStatuses.readByInvocation("run-validate") }
+    assertEquals(started, record?.finishedAt)
+    assertEquals(finalizedAt, record?.operatorFinalizedAt)
+  }
+
+  @Test
+  fun `finalize rejects a failed or missing row without writing operator finalization`() {
+    val directory = Files.createTempDirectory("standalone-finalize-reject")
+    val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+    val started = Instant.parse("2026-10-20T16:58:18Z")
+    database.transaction {
+      completePhase(it.standalonePhaseStatuses, "failed", started, "failed", "failed")
+    }
+    val finalizedAt = started.plusSeconds(60)
+    assertEquals(
+      StandalonePhaseFinalizeResult.INELIGIBLE,
+      database.transaction {
+        it.standalonePhaseStatuses.finalize(
+          StandalonePhaseFinalizeRequest(executionId = "execution-failed", operatorFinalizedAt = finalizedAt),
+        )
+      },
+    )
+    assertNull(database.read { it.standalonePhaseStatuses.readByInvocation("run-failed") }?.operatorFinalizedAt)
+    assertEquals(
+      StandalonePhaseFinalizeResult.MISSING,
+      database.transaction {
+        it.standalonePhaseStatuses.finalize(
+          StandalonePhaseFinalizeRequest(executionId = "execution-absent", operatorFinalizedAt = finalizedAt),
+        )
+      },
+    )
+  }
+
+  @Test
   fun `terminal complete leaves operator finalization unset`() {
     val directory = Files.createTempDirectory("standalone-operator-finalized")
     val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
@@ -889,6 +970,32 @@ class StandalonePhaseStatusStoreTest {
     lifecycleState = "terminal", currentStep = "monitor", currentActivity = null, updatedAt = at,
     finishedAt = at, terminalResult = "done", monitorCleanup = cleanup,
   )
+
+  private fun completePhase(
+    statuses: StandalonePhaseStatusRepository,
+    suffix: String,
+    started: Instant,
+    lifecycleState: String = "terminal",
+    terminalResult: String = "done",
+  ) {
+    statuses.register(
+      monitorRegistration(suffix, started, started.plusSeconds(3600)).copy(phaseId = "validation"),
+    )
+    statuses.update(
+      StandalonePhaseStatusUpdate(
+        executionId = "execution-$suffix",
+        expectedRevision = "1",
+        leaseOwner = "owner",
+        leaseGeneration = 1,
+        lifecycleState = lifecycleState,
+        currentStep = "validation",
+        currentActivity = null,
+        updatedAt = started,
+        finishedAt = started,
+        terminalResult = terminalResult,
+      ),
+    )
+  }
 
   private fun monitorRegistration(
     suffix: String,

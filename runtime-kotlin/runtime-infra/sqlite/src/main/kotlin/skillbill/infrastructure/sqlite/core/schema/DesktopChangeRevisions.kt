@@ -391,6 +391,15 @@ internal fun reinstallStandalonePhaseStatusChangeTriggers(connection: Connection
   }
 }
 
+internal fun reinstallFeatureVerifyWorkflowChangeTriggers(connection: Connection) {
+  connection.createStatement().use { statement ->
+    listOf("insert", "update", "delete").forEach { suffix ->
+      statement.execute("DROP TRIGGER IF EXISTS desktop_change_feature_verify_workflows_$suffix")
+    }
+    installTableTriggers(statement, "feature_verify_workflows")
+  }
+}
+
 private fun installTableTriggers(
   statement: Statement,
   table: String,

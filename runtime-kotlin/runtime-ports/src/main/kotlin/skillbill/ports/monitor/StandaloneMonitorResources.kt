@@ -73,5 +73,17 @@ interface StandaloneMonitorResources {
    */
   fun settle(request: MonitorSettleRequest): MonitorSettlement
 
+  /**
+   * Defers removal of a prepared repair worktree until operator Finalize. Persists
+   * [MonitorRetentionReason.AWAITING_FINALIZE] without deleting the worktree and releases the in-process fence.
+   */
+  fun deferUntilFinalize(request: MonitorSettleRequest): MonitorSettlement
+
+  /**
+   * Removes a worktree whose ownership was deferred for Finalize. Does not require the in-process fence and never
+   * force-removes the worktree.
+   */
+  fun finalizeDeferredRemoval(admissionDirectory: Path): MonitorSettlement
+
   fun recoverStale(request: MonitorStaleRecoveryRequest): MonitorStaleRecovery
 }

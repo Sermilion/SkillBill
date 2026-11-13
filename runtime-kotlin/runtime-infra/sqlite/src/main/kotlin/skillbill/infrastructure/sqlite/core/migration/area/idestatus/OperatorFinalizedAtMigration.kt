@@ -5,11 +5,19 @@ import skillbill.infrastructure.sqlite.core.migration.DatabaseMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelRebuildMigration
 import skillbill.infrastructure.sqlite.core.schema.OPERATOR_FINALIZED_AT_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.STANDALONE_SUCCESSFUL_COMPLETION_LIFECYCLES_SQL
+import skillbill.infrastructure.sqlite.core.schema.reinstallFeatureVerifyWorkflowChangeTriggers
+import skillbill.infrastructure.sqlite.core.schema.reinstallStandalonePhaseStatusChangeTriggers
+import skillbill.infrastructure.sqlite.workflow.goalrunner.addGoalPlanningCheckoutRecovery
 import skillbill.workflow.model.WorkflowStatus
 import java.sql.Connection
 
 internal val operatorFinalizedAtMigrations: List<DatabaseMigration> =
   listOf(
+    DatabaseMigration(
+      version = 126,
+      name = "fence-goal-planning-checkout-recovery",
+      operation = ::addGoalPlanningCheckoutRecovery,
+    ),
     DatabaseMigration(
       version = 127,
       name = "add-operator-finalized-at",
@@ -41,5 +49,7 @@ internal fun addOperatorFinalizedAt(connection: Connection) {
       """.trimIndent(),
     )
   }
+  reinstallStandalonePhaseStatusChangeTriggers(connection)
+  reinstallFeatureVerifyWorkflowChangeTriggers(connection)
   WorkBoardReadModelRebuildMigration.apply(connection)
 }

@@ -335,6 +335,10 @@ class DatabaseMigrationsTest {
           )
           """.trimIndent(),
         )
+        listOf("insert", "update", "delete", "update_activity").forEach { suffix ->
+          statement.execute("DROP TRIGGER IF EXISTS desktop_change_standalone_phase_status_$suffix")
+          statement.execute("DROP TRIGGER IF EXISTS desktop_change_ide_status_workflow_execution_$suffix")
+        }
         statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN primary_repository_root")
         statement.execute("ALTER TABLE ide_status_workflow_execution DROP COLUMN primary_repository_root")
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version = 122")
@@ -2441,6 +2445,8 @@ private val expectedMigrationDefinitions =
     125 to "track-legacy-plan-bundle-transfer",
     126 to "fence-goal-planning-checkout-recovery",
     127 to "add-operator-finalized-at",
+    128 to "add-branch-worktree-retained",
+    129 to "add-feature-verify-branch-worktree-retained",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

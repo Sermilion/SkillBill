@@ -24,6 +24,7 @@ import skillbill.workflow.taskruntime.artifact.phaseLedger
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
+import java.time.Instant
 
 abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
   open override fun hasActiveFeatureTaskRuntimeWorkerLeases(): Boolean = false
@@ -282,4 +283,12 @@ abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
     family: WorkflowFamily,
     sessionId: String,
   ): WorkflowContinueSessionSummary = WorkflowContinueSessionSummary.EMPTY
+
+  open override fun finalizeOperatorCompletion(
+    family: WorkflowFamily,
+    workflowId: String,
+    operatorFinalizedAt: Instant,
+    branchWorktreeRetainedPath: String?,
+    branchWorktreeRetainedDetail: String?,
+  ): Boolean = false
 }

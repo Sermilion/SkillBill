@@ -23,6 +23,8 @@ object UnavailableOperationCardRepository : OperationCardRepository {
 
   override fun findByLaunch(launchId: String): OperationCardProjection? = error(UNAVAILABLE)
 
+  override fun findLaunchContextByInvocation(invocationId: String): OperationLaunchContext? = error(UNAVAILABLE)
+
   override fun admitConfirmation(
     token: String,
     selection: String?,

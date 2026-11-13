@@ -60,6 +60,23 @@ internal class SqliteOperationCardStore(
     }
   }
 
+  override fun findLaunchContextByInvocation(invocationId: String): OperationLaunchContext? =
+    guarded {
+      connection.prepareStatement(
+        """
+        SELECT launch_id FROM operation_confirmation_executions
+        WHERE invocation_id = ? AND launch_id IS NOT NULL
+        ORDER BY execution_id DESC LIMIT 1
+        """.trimIndent(),
+      ).use { statement ->
+        statement.bindAll(invocationId)
+        statement.executeQuery().use { rows ->
+          if (!rows.next()) return@use null
+          findLaunchContext(rows.getString("launch_id"))
+        }
+      }
+    }
+
   override fun findLaunchContext(launchId: String): OperationLaunchContext? =
     guarded {
       connection.prepareStatement(
