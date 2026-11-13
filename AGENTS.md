@@ -20,11 +20,11 @@ Required contracts:
 
 Every `orchestration/contracts/` YAML is a runtime contract. New contracts need Draft 2020-12 YAML, Kotlin `*_CONTRACT_VERSION`, a parity test, an owner `RuntimeFailureCode` thrown as `SkillBillRuntimeException`, and loud failure at every parse seam. See `runtime-kotlin/ARCHITECTURE.md`.
 
-Every schema change needs a persisted-data migration path. Prove compatible changes remain readable; give explicit steps for version bumps or incompatible changes. Validate source and migrated records. Apply coupled updates atomically and repeatably. Preserve run identity, completed work, commits, checkpoints, and history. Test the previous supported version and retain migration steps for older supported records.
+Every schema change needs a persisted-data migration path. Prove compatible changes remain readable; document version bumps and incompatible changes. Validate source and migrated records. Apply coupled updates atomically and repeatably. Preserve run identity, completed work, commits, checkpoints, and history. Test the previous supported version; retain steps for older supported records.
 
-Installations and upgrades must preserve all runs and persisted user and runtime data. Migrate before reading or resuming data. On failure, keep the original data and a usable recovery path. Never reset or replace data with defaults. Verify upgrades on populated previous-version stores, including interrupted migrations and repeated installs.
+Installations and upgrades preserve runs and persisted user/runtime data. Migrate before reading or resuming. On failure, keep original data and a recovery path. Never reset or replace data with defaults. Test populated previous-version stores, interrupted migrations, and repeated installs.
 
-Run migrations before strict current-version validation or board/status projection. Keep unsupported or corrupt records visible with original data, a typed error, and recovery guidance. A schema mismatch must not hide runs, reset completed work, or replace migration with regenerated evidence. Rebuild derived caches only from preserved source records. Quarantine or regeneration keeps original data and emits a diagnostic.
+Run migrations before strict version checks or board/status projection. Keep unsupported or corrupt records visible with original data, a typed error, and recovery guidance. Schema mismatches must not hide runs, reset work, or replace migration with regenerated evidence. Rebuild caches only from preserved source records. Quarantine and regeneration keep originals and emit a diagnostic.
 
 Producer-side gate: feature-task phases owning a bounded planning projection (`preplan`, `plan`, `implement`) re-enter their own fix loop when completed output fails the projection contract.
 
@@ -42,11 +42,11 @@ Read [Runtime command guidance](docs/runtime-command-guidance.md) before runtime
 
 ## Linear work tracking
 
-Track work items for this repository in Linear, except tasks the operator explicitly asks to perform directly on `main`. Do not create Linear issues for those direct tasks. Use the `SONA` team prefix for new issues. Linear assigns the complete issue key. Never mint or reserve local keys as a substitute for a Linear issue.
+Track repository work in Linear unless the operator directs work on `main`; do not create issues for those tasks. New issues use the `SONA` prefix, and Linear assigns the key. Never mint or reserve local keys.
 
-Use this repository's `linear-sona` MCP from `.codex/config.toml`; verify workspace and team. Switch connections only if instructed.
+Use the `linear-sona` MCP in `.codex/config.toml`; verify its workspace and team. Switch connections only when instructed.
 
-Before each goal, verify the connection and linked issue exists in the intended Sona team and workspace. Do not start until verified. Resolve auth, access, or team failures first. Chat prep does not start goals or reserve keys.
+Before each goal, verify its linked issue in the intended Sona workspace. Resolve auth, access, or team failures first. Chat prep starts no goals and reserves no keys.
 
 Preserve existing identities, issue keys, specs, and history; `SONA` is for new issues only.
 

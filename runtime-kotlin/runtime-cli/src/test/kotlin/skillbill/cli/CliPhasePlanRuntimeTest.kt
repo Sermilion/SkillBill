@@ -315,6 +315,8 @@ class CliPhasePlanRuntimeTest {
       "user.name=Goal Fixture",
       "-c",
       "user.email=goal-fixture@example.invalid",
+      "-c",
+      "commit.gpgsign=false",
       "commit",
       "--quiet",
       "-m",
@@ -482,7 +484,10 @@ class CliPhasePlanRuntimeTest {
     installGoalBuildPack(tempDir)
     Files.writeString(tempDir.resolve("tracked-legacy.txt"), "base")
     git("add", "tracked-legacy.txt")
-    git("-c", "user.name=Goal Fixture", "-c", "user.email=goal-fixture@example.invalid", "commit", "-m", "legacy base")
+    git(
+      "-c", "user.name=Goal Fixture", "-c", "user.email=goal-fixture@example.invalid",
+      "-c", "commit.gpgsign=false", "commit", "-m", "legacy base",
+    )
     val planner = PhasePlanLauncher(tempDir, authorNothingFirst = true)
     val context = fixture.context(launcher = planner).copy(repositoryRoot = tempDir)
     val first =
