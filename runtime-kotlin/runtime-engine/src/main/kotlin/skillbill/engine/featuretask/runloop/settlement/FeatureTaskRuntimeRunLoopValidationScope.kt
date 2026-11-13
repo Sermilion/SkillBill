@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
 import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.RepositoryCheckpointResolutionArgs
+import skillbill.engine.featuretask.slot.qualitygate.QualityGateCommandRendering
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
 import skillbill.error.featuretask.PhaseValidationScopeError
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
@@ -55,7 +56,7 @@ internal object FeatureTaskRuntimeRunLoopValidationScope {
     return run.request.admittedExecution
       ?.effectiveInputs
       ?.commandArgv(ValidationGateCyclePhase.INITIAL_DISCOVERY)
-      ?.joinToString(" ")
+      ?.let { QualityGateCommandRendering.renderCommandRecord(1, ".", it) }
   }
 
   private fun admittedBuildCommand(run: PhaseRun): String? {
@@ -63,7 +64,8 @@ internal object FeatureTaskRuntimeRunLoopValidationScope {
     admitted.plan.projectCheckCommands?.let { snapshot ->
       return snapshot.buildCommandList.takeIf { it.isNotEmpty() }?.let(::renderSavedCommands)
     }
-    return admitted.effectiveInputs.commandArgv(ValidationGateCyclePhase.INITIAL_DISCOVERY)?.joinToString(" ")
+    return admitted.effectiveInputs.commandArgv(ValidationGateCyclePhase.INITIAL_DISCOVERY)
+      ?.let { QualityGateCommandRendering.renderCommandRecord(1, ".", it) }
   }
 
   private fun resolvedPackBuildCommand(args: RepositoryCheckpointResolutionArgs): String? {
@@ -71,18 +73,13 @@ internal object FeatureTaskRuntimeRunLoopValidationScope {
     return when (
       val resolution = args.qualityGateCycles.resolve(args.run.request, validationBranchPaths.orEmpty())
     ) {
-      is ValidationGateResolution.Declared -> resolution.declaration.buildCommand?.joinToString(" ")
+      is ValidationGateResolution.Declared ->
+        resolution.declaration.buildCommand?.let { QualityGateCommandRendering.renderCommandRecord(1, ".", it) }
       is ValidationGateResolution.Absent -> null
       is ValidationGateResolution.Incompatible -> null
     }
   }
 
   private fun renderSavedCommands(commands: List<ProjectCheckCommand>): String =
-    commands.joinToString(" ; ") { command ->
-      if (command.workingDirectory == ".") {
-        command.argv.joinToString(" ")
-      } else {
-        "${command.workingDirectory}: ${command.argv.joinToString(" ")}"
-      }
-    }
+    QualityGateCommandRendering.renderCommands(commands)
 }

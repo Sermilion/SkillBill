@@ -5,6 +5,7 @@ import skillbill.contracts.config.projectchecks.ProjectCheckCommand
 import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
+import skillbill.engine.featuretask.slot.qualitygate.QualityGateCommandRendering
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateProjectConfig
 import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -245,13 +246,8 @@ private fun gateCorrection(
     append("The runtime ran the admitted saved validation commands before publishing this monitor repair and ")
     append("at least one failed with exit code ${result.exitCode}. Fix every failure below, including failures ")
     append("unrelated to the original CI check, and rerun the saved list until they all pass.")
-    commands.forEach { command ->
-      append("\n- ")
-      append(command.argv.joinToString(" "))
-      if (command.workingDirectory != ".") {
-        append(" (working directory ${command.workingDirectory})")
-      }
-    }
+    append("\nRerun these saved command records in listed order, using each working directory:\n")
+    append(QualityGateCommandRendering.markdownCodeBlock(QualityGateCommandRendering.renderCommands(commands)))
     val findings = result.findings
     findings.take(MAX_CORRECTION_FINDINGS).forEach { finding ->
       val location = finding.location?.let { " ($it)" }.orEmpty()

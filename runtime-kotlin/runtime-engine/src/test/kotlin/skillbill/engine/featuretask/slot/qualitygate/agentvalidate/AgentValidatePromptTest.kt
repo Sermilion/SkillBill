@@ -61,7 +61,7 @@ class AgentValidatePromptTest {
       emptyValidationSnapshot(
         ProjectCheckCommand(listOf("./gradlew", "check"), "."),
       )
-    val rendered = "./gradlew check"
+    val rendered = "command 1\nworking directory: '.'\nargv: './gradlew' 'check'"
     val sections =
       AgentValidateStrategy().promptSections(
         PHASE_VALIDATE,
@@ -71,7 +71,9 @@ class AgentValidatePromptTest {
           validationLaunchTransport = ValidationCommandLaunchTransport.Commands(snapshot, rendered),
         ),
       )
-    assertTrue("`$rendered`" in sections.taskDirective)
+    assertTrue(rendered in sections.taskDirective)
+    assertTrue("listed order" in sections.taskDirective)
+    assertTrue("working directory" in sections.taskDirective)
     assertFalse("Discover the validation checks" in sections.taskDirective)
     assertFalse(sections.runsBuildGate)
   }

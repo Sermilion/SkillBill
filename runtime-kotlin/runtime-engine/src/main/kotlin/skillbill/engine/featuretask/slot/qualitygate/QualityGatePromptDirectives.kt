@@ -83,11 +83,9 @@ internal fun runtimeOwnedValidateAgentPhaseTask(packValidationCommand: String?):
       packValidationCommand.isNullOrBlank() ->
         "Run only the admitted saved validation command list and its project-relative working directories. " +
           rediscoveryPolicy
-      packValidationCommand.contains(" ; ") ->
-        "Run only these admitted saved validation commands (with their directories) in order: " +
-          "`$packValidationCommand`. $rediscoveryPolicy"
       else ->
-        "Run only this admitted saved validation command and its directory: `$packValidationCommand`. " +
+        "Run only the admitted saved validation command records below, in listed order and from each " +
+          "project-relative working directory:\n${QualityGateCommandRendering.markdownCodeBlock(packValidationCommand)} " +
           rediscoveryPolicy
     }
   return "You are the validation agent for this step — do not spawn delegated subagents. $gateLine " +
@@ -123,7 +121,8 @@ internal fun validateGateTriagePhaseTask(packValidationCommand: String? = null):
     if (packValidationCommand.isNullOrBlank()) {
       "The admitted saved validation command list is the complete ordinary validation boundary for this launch."
     } else {
-      "The admitted saved validation commands are `$packValidationCommand` — run that list alone in order."
+      "The admitted saved validation command records are below. Do not run them during triage:\n" +
+        QualityGateCommandRendering.markdownCodeBlock(packValidationCommand)
     }
   return "You are triaging an unparseable validation gate failure blob before the first repair turn — do not spawn " +
     "delegated subagents. Read the gate stdout blob and repository files as needed to understand failures; " +
@@ -139,11 +138,10 @@ internal fun runtimeOwnedBuildPhaseTask(packBuildCommand: String?): String {
     when {
       packBuildCommand.isNullOrBlank() ->
         "Run only the admitted saved build command(s) frozen at admission and read that command output."
-      packBuildCommand.contains(" ; ") ->
-        "Run only these admitted saved build commands (with their directories) and read their output: " +
-          "`$packBuildCommand`."
       else ->
-        "Run only this admitted saved build command and read that command's output: `$packBuildCommand`."
+        "Run only the admitted saved build command records below, in listed order and from each " +
+          "project-relative working directory, then read their output:\n" +
+          QualityGateCommandRendering.markdownCodeBlock(packBuildCommand)
     }
   return "You are the only build agent for this step — do not spawn delegated subagents. The runtime may " +
     "give you up to three repair turns against the remaining findings; each turn is another session of " +
@@ -162,10 +160,9 @@ internal fun buildGateTriagePhaseTask(packBuildCommand: String?): String {
     when {
       packBuildCommand.isNullOrBlank() ->
         "The admitted saved build command list provides build proof for this run."
-      packBuildCommand.contains(" ; ") ->
-        "The admitted saved build commands are `$packBuildCommand` — do not run them during triage."
       else ->
-        "The admitted saved build command is `$packBuildCommand` — do not run it during triage."
+        "The admitted saved build command records are below. Do not run them during triage:\n" +
+          QualityGateCommandRendering.markdownCodeBlock(packBuildCommand)
     }
   return "You are triaging an unparseable build gate failure blob before the first repair turn — do not spawn " +
     "delegated subagents. Read the gate stdout blob and repository files as needed; prefer read-only " +
