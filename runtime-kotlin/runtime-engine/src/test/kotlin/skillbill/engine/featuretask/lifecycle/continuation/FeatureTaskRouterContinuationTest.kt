@@ -59,9 +59,9 @@ class FeatureTaskRouterContinuationTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            database,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val lookup =

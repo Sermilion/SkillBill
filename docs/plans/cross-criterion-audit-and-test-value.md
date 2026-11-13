@@ -27,7 +27,7 @@ Audit judges how criteria behave together on real entry points, not just whether
 - Checking that implementation structure matches ownership directives in spec prose, such as "RunController owns settlement".
 - Review learnings and triage.
 - Changing review depth, review areas, or the severity vocabulary.
-- Mutation-testing frameworks. The probe in criterion 4 is agent-applied and bounded, with no new tool dependency.
+- Automatic mutation testing and mutation probes.
 
 ## Acceptance criteria
 
@@ -61,17 +61,10 @@ Audit judges how criteria behave together on real entry points, not just whether
    This criterion does not re-check criteria whose cited files no repair touched.
    Audit confirms this criterion by reading the path extraction, the set computation over repair commit diffs, and the batching into the interaction invocation.
 
-4. Validation proves that the tests it relies on can fail.
-   After every required check passes in a goal-subtask validate step, the validator probes tests that the subtask added or changed.
-   It selects at most six tests. Priority goes first to tests covering a scenario that criterion 2 marked broken and then repaired, then to one test per criterion whose `validation_obligation` is `required`, then to the remaining changed tests in diff order.
-   For each selected test, the validator names the production line or branch the test guards. In the validator's isolated copy only, never in the workflow checkout, it applies the smallest change that removes that behavior, runs only that test, and restores the copy.
-   Each probe records `killed` when the test failed, `survived` when it passed, or `not_run` with a reason.
-   A `survived` probe means the test cannot catch the regression it claims to catch. The validator strengthens the test inside its existing repair loop, for example by asserting the specific outcome rather than only success, by driving the named entry point instead of an internal helper, or by keeping its setup in place through the assertion. It then re-probes once. It never changes production code to make a probe pass and never weakens an assertion.
-   For every scenario that criterion 2 marked broken and then repaired, at least one probed test must drive that scenario's entry point. When no such test exists, the validator writes one.
-   When no isolated copy or targeted test command is available, every probe records `not_run`, the validator emits a warning, and validation completes on its normal checks.
-   `qualitygate/opus-5-5-agent-validate.md` and `QualityGatePromptDirectives` carry the probe instructions. The validate phase output adds a `test_probes` list of `{test_ref, guarded_ref, result, reason}`, with a contract version bump and parity test. Telemetry records killed, survived, repaired, and not_run counts.
-   Standalone `phase:validation` does not run probes.
-   Audit confirms this criterion by reading the prompt text, the output contract, the isolated-copy requirement, and the telemetry fields.
+4. Retired. Validation runs the required project checks and repairs their failures.
+   Mutation probes and test rewrites based on deliberately broken production copies
+   were removed at the operator's request on 2026-11-12. Historical probe records
+   remain readable and supply no instructions to new runs.
 
 5. A goal assessment phase reviews the whole goal after every subtask is done and loops assess, fix, reassess until it converges.
    The goal runner adds a `goal_assessment` stage after the last subtask commits and before goal QA. It runs once per goal, in a multi-subtask or single-subtask goal alike, against the feature branch head.
@@ -97,25 +90,25 @@ Audit judges how criteria behave together on real entry points, not just whether
 - Tests: one regression test per criterion, naming the realistic bug it would catch. Fixtures are synthetic and stack-neutral. Suggested anchors follow.
   - Criterion 2: a two-criterion fixture where each criterion passes alone and their interaction scenario is broken. The trace must reopen the owner criterion.
   - Criterion 3: a repair that edits a file cited by an accepted criterion must put that criterion in the re-check set.
-  - Criterion 4: a test that passes with its guarded line removed must be recorded as `survived`.
+  - Criterion 4 is retired. Validation requires no mutation-probe evidence.
   - Criterion 5: assessor input must not contain audit or review output. A refuted Major must not reach the fix step. A finding that survives two fix rounds must end the loop and appear in the PR description.
 
 ## Measuring it
 
-The feature earns its place if broken scenarios found by `interaction_trace` and probes found `survived` are non-zero on real goals, and if outside reviews like the GV-1 one stop finding cross-criterion defects. Compare goal-stats totals for the first ten goals after rollout with the GV-1 baseline: four post-audit Major or Blocker defects across five subtasks, three of them cross-criterion.
+The feature earns its place if broken scenarios found by `interaction_trace` are non-zero on real goals, and if outside reviews like the GV-1 one stop finding cross-criterion defects. Compare goal-stats totals for the first ten goals after rollout with the GV-1 baseline: four post-audit Major or Blocker defects across five subtasks, three of them cross-criterion.
 
 ## Sizing note
 
-Criteria 2 and 3 share the new audit mode and admission change, so they belong in one subtask. Criterion 4 is its own subtask. Criterion 5 is the largest and probably splits into the stage with its assessors and verifier, then the fix loop with exit rules, then the desktop and telemetry surfaces. Criterion 1 lands first, because 2 and 5 consume its catalog. Criterion 5 works without 1 through 4, so if it ships early it gives the earliest return: GV-1's defects were found by exactly this procedure.
+Criteria 2 and 3 share the new audit mode and admission change, so they belong in one subtask. Criterion 4 is retired. Criterion 5 is the largest and probably splits into the stage with its assessors and verifier, then the fix loop with exit rules, then the desktop and telemetry surfaces. Criterion 1 lands first, because 2 and 5 consume its catalog. Criterion 5 works without 1 through 4, so if it ships early it gives the earliest return: GV-1's defects were found by exactly this procedure.
 
 ## Why both per-subtask audit and goal assessment
 
-Per-subtask audit is cheap, focused, and repairs while context is fresh. Goal assessment is expensive but sees what audit cannot: the final tree, every subtask together, and fresh eyes that never read the pipeline's own verdicts. Criteria 1 through 4 shrink what goal assessment finds. Criterion 5 catches what remains. If goal assessment keeps finding cross-criterion defects after 1 through 3 ship, that is the signal those criteria need work.
+Per-subtask audit is cheap, focused, and repairs while context is fresh. Goal assessment is expensive but sees what audit cannot: the final tree, every subtask together, and fresh eyes that never read the pipeline's own verdicts. Criteria 1 through 3 shrink what goal assessment finds. Criterion 5 catches what remains. If goal assessment keeps finding cross-criterion defects after 1 through 3 ship, that is the signal those criteria need work.
 
 ## Open questions
 
 - Should criterion 2's runtime-computed same-file pairs also be offered to review as hunks to read together, or only to audit?
-- Is six the right probe cap for large subtasks, or should it scale with the number of required criteria?
+
 - Should a scenario that stays `unknown` across two goals in the same repository become a planning hint for the next goal's spec?
 - Should goal assessment use a different agent than the one that implemented the goal, when more than one is configured, for extra independence?
 - Is three rounds right, or should the cap depend on how many confirmed findings the first round produces?

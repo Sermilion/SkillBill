@@ -119,9 +119,7 @@ internal class InlineReviewPass(
         agentAddonsSection = AgentAddonPromptFormatter.format(run.request.agentAddonSelection),
         laneRubrics = lanePlan?.rubrics,
       )
-    val supplement = state.modelDirectiveSupplements.directiveFor(run, state.acceptedOwner)
-    val directive = if (supplement == null) composed else "$composed\n\n$supplement"
-    val output = runner.run(reviewStepInput(run, directive), state.launchState)
+    val output = runner.run(reviewStepInput(run, composed), state.launchState)
     val result =
       InlineReviewResultDecoder.decode(run.resolvedAgent.resolvedAgentId, output)
         .copy(reviewSessionId = run.request.reviewInvocation?.reviewSessionId)

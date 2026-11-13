@@ -45,6 +45,12 @@ class SourceRunStagingTest {
   @Test
   fun `runFromSource overrides an exported database and leaves the operator file untouched`() {
     val desktop = File(System.getProperty("skillbill.desktop.catalog")).parentFile.parentFile
+    val databaseKeys = desktop.parentFile.resolve(
+      "runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/persistence/RuntimeDatabaseEnvironmentKeys.kt",
+    ).readText()
+    val databaseEnvironmentKey = requireNotNull(
+      Regex("const val DATABASE_PATH: String = \"([^\"]+)\"").find(databaseKeys),
+    ).groupValues[1]
     val fixture = directory.resolve("desktop").apply { mkdirs() }
     val operatorDatabase = directory.resolve("operator.db").apply { writeText("operator data") }
     val report = directory.resolve("launch.txt")
@@ -54,7 +60,7 @@ class SourceRunStagingTest {
       import java.nio.file.*;
       public class DatabaseProbe {
         public static void main(String[] args) throws Exception {
-          Path database = Path.of(System.getenv("SKILL_BILL_DB"));
+          Path database = Path.of(System.getenv("$databaseEnvironmentKey"));
           if (!Files.readString(database).equals("fixture data")) throw new IllegalStateException("Fixture was not seeded");
           Files.writeString(database, "scratch data");
           Files.writeString(Path.of(args[0]), String.join("\n",
@@ -110,6 +116,7 @@ class SourceRunStagingTest {
       "runFromSource", "--no-build-cache", "--no-configuration-cache", "--console=plain",
     ).redirectErrorStream(true).redirectOutput(log).apply {
       environment()["SKILL_BILL_DB"] = operatorDatabase.absolutePath
+      environment()[databaseEnvironmentKey] = operatorDatabase.absolutePath
       environment()["TERM"] = ""
       environment()["SKIKO_RENDER_API"] = "SOFTWARE_FAST"
     }.start()

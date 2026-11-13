@@ -1,10 +1,16 @@
 package skillbill.engine.goalrunner
 
+import skillbill.application.FakeDatabaseSessionFactory
+import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goalrunner.execution.core.DIRECT_GOAL_RUNNER_EXECUTION_COORDINATOR
+import skillbill.engine.goalrunner.execution.core.GoalRunnerExecutionCoordinator
+import skillbill.engine.goalrunner.execution.core.GoalRunnerOwnedRun
 import skillbill.engine.goalrunner.execution.core.goalRunnerDeps
 import skillbill.engine.goalrunner.execution.core.testGoalRunner
 import skillbill.engine.goalrunner.launch.GoalBranchCheckouts
+import skillbill.engine.goalrunner.model.GoalRunnerLeasePurpose
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.monitoring.GoalWorktreeCompletionSettlement
 import skillbill.goalrunner.model.GoalRunnerControlState
@@ -12,6 +18,7 @@ import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.goalrunner.model.GoalPlanningOwnership
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -78,6 +85,50 @@ class GoalRunnerExecutionRootTest {
   }
 
   @Test
+  fun `a linked child missing checkout refusal is settled without requesting child execution admission`() {
+    val store =
+      InMemoryGoalManifestStore(
+        manifest(subtaskCount = 1).withWorkflowId(1, "existing-child"),
+        initialControlState =
+          GoalRunnerControlState(
+            executionWorktreePath =
+              Files.createTempDirectory(
+                "linked-child-checkout-refusal",
+              ).resolve("missing").toString(),
+          ),
+      )
+    var settlements = 0
+    val coordinator =
+      object : GoalRunnerExecutionCoordinator by DIRECT_GOAL_RUNNER_EXECUTION_COORDINATOR {
+        override fun <T> runOwnedWithLease(
+          parentWorkflowId: String,
+          purpose: GoalRunnerLeasePurpose,
+          block: (Long, String?) -> T,
+        ): GoalRunnerOwnedRun<T> {
+          assertEquals(GoalRunnerLeasePurpose.BLOCK_SETTLEMENT, purpose)
+          settlements += 1
+          return GoalRunnerOwnedRun.Completed(block(1, null))
+        }
+      }
+    val launcher = RecordingSubtaskLauncher { error("A refused checkout must not launch a child") }
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(store, launcher, RecordingOutcomeStore(), RecordingPullRequestPort()).copy(
+          executionCoordinator = coordinator,
+        ),
+      )
+    val report = assertIs<GoalRunnerRunReport.Stopped>(runner.run(request()))
+    assertEquals(GoalRunnerStopReason.BLOCKED, report.stop.reason)
+    assertTrue(
+      report.stop.blockedReason.orEmpty().contains("recorded execution checkout"),
+      report.stop.blockedReason,
+    )
+    assertEquals(1, settlements)
+    assertTrue(launcher.requests.isEmpty())
+    assertEquals("existing-child", store.manifest.subtasks.single().workflowId)
+  }
+
+  @Test
   fun `a new goal runs every branch checkout and child in the created worktree`() {
     val worktree = Files.createTempDirectory("goal-settlement-failure").toRealPath()
     val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
@@ -89,6 +140,7 @@ class GoalRunnerExecutionRootTest {
         launchFacts()
       }
     val git = BranchRootRecordingGit()
+    val diagnostics = WarningRecordingDiagnostics()
     val worktrees =
       RecordingGoalWorktrees(
         GoalWorktreeResult.Created(worktree),
@@ -97,10 +149,11 @@ class GoalRunnerExecutionRootTest {
     val runner =
       testGoalRunner(
         goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort())
-          .copy(gitOperations = git, goalWorktrees = worktrees),
+          .copy(gitOperations = git, goalWorktrees = worktrees, diagnostics = diagnostics),
       )
 
-    val report = assertIs<GoalRunnerRunReport.Completed>(runner.run(request()))
+    val result = runner.run(request())
+    val report = assertIs<GoalRunnerRunReport.Completed>(result, "$result ${diagnostics.warnings}")
 
     assertEquals("SKILL-56", report.issueKey)
     assertEquals(worktree, launcher.requests.single().skillRunRequest.repoRoot)
@@ -209,6 +262,7 @@ class GoalRunnerExecutionRootTest {
         TestRepositoryEnclosingRoot,
         NoopRuntimeDiagnostics,
         Clock.systemUTC(),
+        FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
       )
 
     settlement.settle(state)
@@ -298,6 +352,14 @@ private class RecordingGoalWorktrees(
   var settlements = 0
   val checkoutBranches = mutableListOf<String>()
 
+  override fun plannedPath(
+    repoRoot: Path,
+    issueKey: String,
+    reservationId: String?,
+  ): Path = repoRoot
+
+  override fun gitWorktreeIdentity(path: Path): String? = null
+
   override fun checkoutGoalBranch(
     primaryRoot: Path,
     branch: String,
@@ -312,6 +374,7 @@ private class RecordingGoalWorktrees(
     issueKey: String,
     recordedPath: Path?,
     revision: String,
+    ownership: GoalPlanningOwnership?,
   ): GoalWorktreeResult {
     creations += 1
     return result

@@ -43,6 +43,15 @@ public class LegacySpecIntake(
   private val diagnostics: RuntimeDiagnostics,
   private val specPathResolver: FeatureSpecPathResolverPort,
 ) {
+  public fun recordStoreResolution(
+    issueKey: String,
+    resolvedPath: Path,
+  ) {
+    diagnostics.warning(
+      "seam=legacy_spec_resolution issue=$issueKey value_expected=legacy_spec value_used=$resolvedPath",
+    )
+  }
+
   public fun routeIssueKey(
     issueKey: String,
     repoRoot: Path,

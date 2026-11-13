@@ -50,7 +50,7 @@ public class FeatureTaskRuntimeCrashReconciler(
             if (workflowId == null) {
               unit.workflowStates.findFeatureTaskRuntimeCrashReconciliationCandidates(now.toString())
             } else {
-              listOfNotNull(recoveryCandidate(unit.workflowStates, workflowId, now))
+              listOfNotNull(recoveryCandidate(unit.workflowStates, workflowId))
             }
           }
         }.getOrElse { error ->
@@ -81,13 +81,11 @@ public class FeatureTaskRuntimeCrashReconciler(
   private fun recoveryCandidate(
     states: WorkflowStateRepository,
     workflowId: String,
-    now: Instant,
   ): FeatureTaskRuntimeCrashReconciliationCandidate? {
     val ownership = states.getFeatureTaskRuntimeWorkerOwnership(workflowId) ?: return null
     val row = states.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME) ?: return null
     if (row.workflowStatus.workflowStatus() !in setOf(WorkflowStatus.RUNNING, WorkflowStatus.BLOCKED) ||
-      ownership.leaseState !in RECONCILABLE_LEASE_STATES ||
-      ownership.expiresAtInstant > now
+      ownership.leaseState !in RECONCILABLE_LEASE_STATES
     ) {
       return null
     }
@@ -185,7 +183,7 @@ public class FeatureTaskRuntimeCrashReconciler(
       val currentOwnership =
         states.getFeatureTaskRuntimeWorkerOwnership(candidate.ownership.workflowId)
           ?: return@transaction false
-      if (!ownsExpiredLease(currentOwnership, candidate, now)) {
+      if (!ownsMatchingLease(currentOwnership, candidate)) {
         return@transaction false
       }
       val identity =
@@ -218,21 +216,19 @@ public class FeatureTaskRuntimeCrashReconciler(
         workflowId = candidate.ownership.workflowId,
         ownerToken = candidate.ownership.ownerToken,
         generation = candidate.ownership.generation,
-        interruptionReason = "${reason.wireValue}: worker lease expired and process confirmed dead",
+        interruptionReason = "${reason.wireValue}: worker process confirmed dead",
         nowInstant = now.toString(),
       )
     }
 
-  private fun ownsExpiredLease(
+  private fun ownsMatchingLease(
     current: FeatureTaskRuntimeWorkerOwnership,
     candidate: FeatureTaskRuntimeCrashReconciliationCandidate,
-    now: Instant,
   ): Boolean =
     current.ownerToken == candidate.ownership.ownerToken &&
       current.generation == candidate.ownership.generation &&
       current.leaseState == candidate.ownership.leaseState &&
-      current.leaseState in RECONCILABLE_LEASE_STATES &&
-      current.expiresAtInstant <= now
+      current.leaseState in RECONCILABLE_LEASE_STATES
 
   private companion object {
     const val FAULT_REASON_CLASS = "reconcile_fault"

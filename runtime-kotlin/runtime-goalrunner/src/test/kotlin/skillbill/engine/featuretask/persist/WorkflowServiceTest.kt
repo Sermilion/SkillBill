@@ -221,9 +221,9 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -277,9 +277,9 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val opened =
@@ -333,9 +333,9 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val historyArtifact = """{"plan":{"mode":"decompose"},"history_note":"retain-me"}"""
@@ -396,9 +396,9 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val opened =
@@ -446,9 +446,9 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val opened =
@@ -513,9 +513,9 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val opened =
@@ -724,9 +724,9 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     assertFailsWith<SkillBillRuntimeException> {
@@ -771,9 +771,9 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -821,9 +821,9 @@ class WorkflowServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     val opened = assertIs<WorkflowOpenResult.Ok>(service.openTestRuntime("ftr-001"))
@@ -954,9 +954,9 @@ class WorkflowServiceTest {
       projectCheckout =
         ProjectCheckout(
           TestRepositoryEnclosingRoot,
+          FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
           testProjectStore,
           InPlaceGoalWorktreeResources,
-          NoopWorkflowGitOperations,
         ),
     )
 }
@@ -2467,9 +2467,9 @@ class WorkflowUpdateAcknowledgementBudgetTest {
       projectCheckout =
         ProjectCheckout(
           TestRepositoryEnclosingRoot,
+          FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
           testProjectStore,
           InPlaceGoalWorktreeResources,
-          NoopWorkflowGitOperations,
         ),
     )
 }
@@ -4366,9 +4366,9 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 

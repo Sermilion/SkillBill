@@ -340,6 +340,7 @@ private fun StandaloneQaStepStatus.toDomain(): QaStepState = when (this) {
   StandaloneQaStepStatus.RUNNING -> QaStepState.Running
   StandaloneQaStepStatus.PASSED -> QaStepState.Passed
   StandaloneQaStepStatus.FAILED -> QaStepState.Failed
+  StandaloneQaStepStatus.SKIPPED -> QaStepState.Skipped
 }
 
 private fun StandaloneQaTargetState.toDomain(): QaTargetState = when (this) {

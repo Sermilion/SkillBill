@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.planning.source
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.workflow.decomposition.isPlanWorkflow
 import skillbill.application.workflow.model.FeatureTaskGovernedSpecPathResult
 import skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath
 import skillbill.config.model.CompactionSettings
@@ -16,7 +17,6 @@ import skillbill.engine.featuretask.phase.planning.PlanBundleSnapshots
 import skillbill.engine.featuretask.phase.planning.planBundleImmutableManifestHash
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goal.goalRepositoryIdentity
-import skillbill.engine.goal.goalRepositoryIdentityCandidates
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.plan.PlanSubtasksReplan
@@ -24,12 +24,12 @@ import skillbill.engine.goalrunner.plan.StandalonePlanLaunch
 import skillbill.engine.goalrunner.plan.StandalonePlanResult
 import skillbill.engine.goalrunner.plan.StandalonePlanRun
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
-import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
 import skillbill.engine.goalrunner.planning.outcome.canonicalStore
 import skillbill.engine.goalrunner.planning.outcome.resolvedGovernedPath
 import skillbill.engine.goalrunner.planning.outcome.resolvedSubSpecPath
 import skillbill.engine.goalrunner.telemetry.GoalPlanningProgressRecorder
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.db.DatabaseSessionFactory
@@ -42,12 +42,14 @@ import skillbill.ports.projectstore.model.ProjectStoreLocation
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.ports.workflow.toRecord
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.artifact.decodePlanBundleFromArtifact
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
@@ -55,6 +57,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.planning.FeatureTaskRuntimePlanBundleFeasibilityState
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.io.IOException
 import java.nio.file.Path
 
 public fun interface GoalPlanningSource {
@@ -87,6 +90,8 @@ public class PlanWorkflowGoalPlanningSource(
     return if (scope.planned.isEmpty()) {
       GoalPlanningSweepOutcome.PreparedAll()
     } else {
+      selectedPlanProblem(scope)?.let { return scope.stopped(it) }
+      selectedFeasibilityProblem(scope)?.let { return scope.stopped(it) }
       fromPlanWorkflow(scope) ?: runPlanSkeleton(scope)
     }
   }
@@ -97,15 +102,18 @@ public class PlanWorkflowGoalPlanningSource(
   ) = PlanningScope(
     state = state,
     request = request,
+    sourceRepository = request.repoRoot,
     identity =
       GoalPlanningIdentity(
         state.parentWorkflowId,
         FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(state.manifest.issueKey),
-        state.controlState.repositoryIdentity ?: goalRepositoryIdentity(request.repoRoot, repositories),
+        state.controlState.repositoryIdentity ?: goalRepositoryIdentity(request.sourceRepoRoot, repositories),
       ),
-    fallbackPlanIdentities = goalRepositoryIdentityCandidates(request.repoRoot, repositories),
-    canonicalRepository = canonicalRepository(request.repoRoot, repositories),
-    store = canonicalStore(projectStore.resolve(request.repoRoot), repositories),
+    store = canonicalStore(projectStore.resolve(request.sourceRepoRoot), repositories),
+    selectedPlanId =
+      database.read { unit ->
+        unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, state.parentWorkflowId)?.step(PLAN_STEP_ID)?.planWorkflowId
+      },
   )
 
   private fun fromPlanWorkflow(scope: PlanningScope): GoalPlanningSweepOutcome.PreparedAll? =
@@ -115,12 +123,18 @@ public class PlanWorkflowGoalPlanningSource(
     scope: PlanningScope,
     plan: LinkedPlan,
   ): GoalPlanningSweepOutcome.PreparedAll? {
-    if (scope.pending.any { !plan.unitComplete(scope, it) } || plan.feasibilityState == null) return null
+    val bundle = plan.bundle
+    if (bundle == null || scope.pending.any { !plan.unitComplete(scope, it) } ||
+      plan.feasibilityState == null
+    ) {
+      return null
+    }
     val snapshot =
       PlanBundleFeasibility.capture(
         planner,
-        scope.canonicalRepository,
+        scope.sourceRepository,
         scope.state.manifest.issueKey,
+        { scope.checkoutPath(it) },
       )
     val feasibilityState = requireNotNull(plan.feasibilityState)
     if (!PlanBundleFeasibility.approved(
@@ -135,7 +149,7 @@ public class PlanWorkflowGoalPlanningSource(
     val descriptors = scope.descriptors(recordedHash = { null }) ?: return null
     val provenance =
       GoalPlanningContractProvenance(
-        parentSpecHash = plan.bundle.parentSpecSha256,
+        parentSpecHash = bundle.parentSpecSha256,
         decompositionManifestHash = planBundleImmutableManifestHash(scope.state.manifest),
         planningContractId = GOAL_PLANNING_PREPARATION_SCHEMA_ID,
       )
@@ -146,9 +160,13 @@ public class PlanWorkflowGoalPlanningSource(
     scope: PlanningScope,
     subtask: DecompositionSubtask,
   ): Boolean {
-    val unit = bundle.subtask(subtask.id) ?: return false
+    val unit = bundle?.subtask(subtask.id) ?: return false
     val unitRecord = records[FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitRecordId(subtask.id)]
-    return snapshots.unitComplete(scope.canonicalRepository, unit, unitRecord)
+    return snapshots.unitComplete(
+      scope.sourceRepository,
+      unit.copy(specPath = scope.checkoutPath(unit.specPath)),
+      unitRecord,
+    )
   }
 
   private fun runPlanSkeleton(scope: PlanningScope): GoalPlanningSweepOutcome {
@@ -163,17 +181,6 @@ public class PlanWorkflowGoalPlanningSource(
       )
     }
     val linked = linkedPlan(scope)
-    val feasibilityNeedsReview =
-      linked?.let { plan ->
-        val state = plan.feasibilityState ?: return@let true
-        val snapshot = PlanBundleFeasibility.capture(planner, scope.canonicalRepository, scope.state.manifest.issueKey)
-        !PlanBundleFeasibility.approved(
-          state,
-          snapshot,
-          plan.records[PLAN_SUBTASKS_STEP_ID],
-          PLAN_SUBTASKS_STEP_ID,
-        )
-      } ?: false
     val replanned =
       if (linked == null) {
         legacyDriftedIds(scope)
@@ -185,8 +192,8 @@ public class PlanWorkflowGoalPlanningSource(
         planRun.run(
           issueKey,
           null,
-          request.repoRoot,
-          StandalonePlanLaunch(agentId, IdeStatusLaunchScope.GOAL),
+          request.sourceRepoRoot,
+          StandalonePlanLaunch(agentId, IdeStatusLaunchScope.GOAL, executionRoot = request.repoRoot),
           inputFor,
         )
           .forceReplanOf(replanned, scope, agentId, inputFor)
@@ -196,10 +203,14 @@ public class PlanWorkflowGoalPlanningSource(
             issueKey = issueKey,
             planWorkflowId = linked.workflowId,
             repoRoot = request.repoRoot,
+            sourceRoot = request.sourceRepoRoot,
+            bundleRoot = request.repoRoot,
             settledSubtaskIds = scope.settledIds,
             agentId = agentId,
+            parentWorkflowId = scope.state.parentWorkflowId,
             feasibilityAdoption =
-              feasibilityNeedsReview || linked.feasibilityState?.mode == PlanBundleFeasibilityMode.APPROVED,
+              feasibilityNeedsReview(scope, linked) ||
+                linked.feasibilityState?.mode == PlanBundleFeasibilityMode.APPROVED,
           ),
           inputFor,
         )
@@ -215,6 +226,28 @@ public class PlanWorkflowGoalPlanningSource(
       is StandalonePlanResult.Blocked ->
         scope.stopped("Planning blocked in plan workflow '${result.workflowId}': ${result.reason}")
       is StandalonePlanResult.Refused -> scope.stopped(result.reason)
+    }
+  }
+
+  private fun feasibilityNeedsReview(
+    scope: PlanningScope,
+    linked: LinkedPlan,
+  ): Boolean {
+    return linked.let { plan ->
+      val state = plan.feasibilityState ?: return@let true
+      val snapshot =
+        PlanBundleFeasibility.capture(
+          planner,
+          scope.sourceRepository,
+          scope.state.manifest.issueKey,
+          { scope.checkoutPath(it) },
+        )
+      !PlanBundleFeasibility.approved(
+        state,
+        snapshot,
+        plan.records[PLAN_SUBTASKS_STEP_ID],
+        PLAN_SUBTASKS_STEP_ID,
+      )
     }
   }
 
@@ -252,6 +285,7 @@ public class PlanWorkflowGoalPlanningSource(
           issueKey = scope.state.manifest.issueKey,
           planWorkflowId = workflowId,
           repoRoot = scope.request.repoRoot,
+          sourceRoot = scope.request.sourceRepoRoot,
           settledSubtaskIds = scope.settledIds,
           agentId = agentId,
           forcedSubtaskIds = forcedSubtaskIds,
@@ -296,22 +330,85 @@ public class PlanWorkflowGoalPlanningSource(
   private fun linkedPlan(scope: PlanningScope): LinkedPlan? =
     database.read { unitOfWork ->
       val states = unitOfWork.workflowStates
-      states.findLinkedSubtaskPlanWorkflowId(
-        scope.identity,
-        scope.pending,
-        scope.fallbackPlanIdentities,
-      ) { workflowId ->
-        states.getFeatureTaskExecutionIdentity(
-          workflowId,
-        )?.governedSpecPath?.let { scope.governsParentSpec(it) } ?: true
-      }?.let { workflowId ->
+      scope.selectedPlanId?.let { workflowId ->
         linkedPlanOf(workflowId, states.get(WorkflowFamily.TASK_RUNTIME, workflowId))
+          ?: throw SkillBillRuntimeException(
+            WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA,
+            "Selected plan '$workflowId' is unavailable at ${scope.sourceRepository}. Preserve it and retry recovery.",
+          )
+      }
+    }
+
+  private fun selectedPlanProblem(scope: PlanningScope): String? =
+    database.read { unit ->
+      val states = unit.workflowStates
+      val selected = scope.selectedPlanId ?: return@read null
+      val snapshot = states.get(WorkflowFamily.TASK_RUNTIME, selected)
+      val identity = states.getFeatureTaskExecutionIdentity(selected)
+      val plan = linkedPlanOf(selected, snapshot)
+      val identityMatches =
+        identity?.repositoryIdentity == scope.identity.repositoryIdentity &&
+          identity.normalizedIssueKey == scope.identity.normalizedIssueKey &&
+          scope.governsParentSpec(identity.governedSpecPath)
+      val workflowMatches = snapshot != null && snapshot.toRecord().isPlanWorkflow()
+      val unoccupied = states.getFeatureTaskRuntimeWorkerOwnership(selected) == null
+      val selectionMatches = workflowMatches && identityMatches
+      if (!selectionMatches || !unoccupied || plan == null) {
+        "Selected plan '$selected' or its evidence at ${scope.sourceRepository} " +
+          "is missing, mismatched or occupied. " +
+          "Preserve the checkout and reconcile the plan identity, evidence and worker before retrying."
+      } else if (scope.pending.any { subtask ->
+          plan.records[FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitRecordId(subtask.id)]?.status ==
+            WorkflowStepStatus.COMPLETED && scope.diskHashOf(subtask) == null
+        }
+      ) {
+        "Selected plan '$selected' has changed or missing subtask evidence at ${scope.sourceRepository}. " +
+          "Preserve the checkout and restore its accepted evidence before retrying."
+      } else {
+        null
       }
     }
 
   private fun PlanningScope.governsParentSpec(governedSpecPath: String): Boolean =
-    resolvedGovernedPath(canonicalRepository, store, governedSpecPath, repositories) ==
-      resolvedGovernedPath(canonicalRepository, store, state.manifest.parentSpecPath, repositories)
+    resolvedGovernedPath(sourceRepository, store, checkoutPath(governedSpecPath), repositories) ==
+      resolvedGovernedPath(sourceRepository, store, checkoutPath(state.manifest.parentSpecPath), repositories)
+
+  private fun selectedFeasibilityProblem(scope: PlanningScope): String? {
+    val plan = scope.selectedPlanId?.let { linkedPlan(scope) } ?: return null
+    val feasibility = plan.feasibilityState ?: return null
+    if (feasibility.mode != PlanBundleFeasibilityMode.APPROVED ||
+      scope.pending.any { scope.diskHashOf(it) != null && !plan.unitComplete(scope, it) }
+    ) {
+      return null
+    }
+    val approved =
+      try {
+        val snapshot =
+          PlanBundleFeasibility.capture(
+            planner,
+            scope.sourceRepository,
+            scope.state.manifest.issueKey,
+            { scope.checkoutPath(it) },
+          )
+        PlanBundleFeasibility.approved(
+          feasibility,
+          snapshot,
+          plan.records[PLAN_SUBTASKS_STEP_ID],
+          PLAN_SUBTASKS_STEP_ID,
+        )
+      } catch (_: IOException) {
+        false
+      } catch (_: SkillBillRuntimeException) {
+        false
+      }
+    return if (approved) {
+      null
+    } else {
+      "Selected plan '${plan.workflowId}' has missing or changed feasibility evidence " +
+        "at ${scope.sourceRepository}. " +
+        "Preserve the checkout and restore the accepted bundle before retrying."
+    }
+  }
 
   private fun loadPlan(workflowId: String): LinkedPlan? =
     database.read { unitOfWork ->
@@ -334,7 +431,6 @@ public class PlanWorkflowGoalPlanningSource(
     val bundle =
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.value(snapshot.artifacts)
         ?.let(::decodePlanBundleFromArtifact)
-        ?: return null
     return LinkedPlan(workflowId, bundle, decodePhaseRecords(snapshot.artifacts), feasibilityState)
   }
 
@@ -351,16 +447,32 @@ public class PlanWorkflowGoalPlanningSource(
   private fun PlanningScope.governedPathOf(subtask: DecompositionSubtask): String? =
     subtask.specPath.takeIf(String::isNotBlank)?.let { specPath ->
       val governed =
-        resolveFeatureTaskGovernedSpecPath(repositories, projectStore, request.repoRoot, Path.of(specPath))
+        resolveFeatureTaskGovernedSpecPath(
+          repositories,
+          projectStore,
+          sourceRepository,
+          Path.of(checkoutPath(specPath)),
+        )
       (governed as? FeatureTaskGovernedSpecPathResult.Ok)?.relativePath
     }
 
   private fun PlanningScope.diskHashOf(subtask: DecompositionSubtask): String? {
-    val path: Path = resolvedSubSpecPath(canonicalRepository, store, subtask.specPath, repositories) ?: return null
+    val path: Path =
+      resolvedSubSpecPath(sourceRepository, store, checkoutPath(subtask.specPath), repositories) ?: return null
     return if (fileStore.isRegularFile(path)) sha256HexUtf8(fileStore.readText(path)) else null
   }
 
   private fun PlanningScope.orderOf(subtask: DecompositionSubtask): Int = planned.indexOfFirst { it.id == subtask.id }
+
+  private fun PlanningScope.checkoutPath(value: String): String {
+    val path = Path.of(value).normalize()
+    val originalRoot = request.sourceRepoRoot.toAbsolutePath().normalize()
+    return if (path.isAbsolute && path.startsWith(originalRoot) && !path.startsWith(store.specsRoot)) {
+      sourceRepository.resolve(originalRoot.relativize(path)).toString()
+    } else {
+      value
+    }
+  }
 
   private fun PlanningScope.stopped(reason: String): GoalPlanningSweepOutcome.Stopped =
     GoalPlanningSweepOutcome.Stopped(
@@ -373,7 +485,7 @@ public class PlanWorkflowGoalPlanningSource(
 
   private data class LinkedPlan(
     val workflowId: String,
-    val bundle: FeatureTaskRuntimePlanBundle,
+    val bundle: FeatureTaskRuntimePlanBundle?,
     val records: Map<String, FeatureTaskRuntimePhaseRecord>,
     val feasibilityState: FeatureTaskRuntimePlanBundleFeasibilityState?,
   )
@@ -382,9 +494,9 @@ public class PlanWorkflowGoalPlanningSource(
     val state: GoalRunnerManifestState,
     val request: GoalRunnerRunRequest,
     val identity: GoalPlanningIdentity,
-    val fallbackPlanIdentities: List<String>,
-    val canonicalRepository: Path,
+    val sourceRepository: Path,
     val store: ProjectStoreLocation,
+    val selectedPlanId: String?,
   ) {
     val planned: List<DecompositionSubtask> =
       state.manifest.subtasks.filter { it.status.decompositionStatus() != DecompositionStatus.SKIPPED }

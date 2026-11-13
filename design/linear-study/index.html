@@ -88,6 +88,16 @@
 .doc-state-table a { color: var(--accent-text); text-decoration: none; }
 .doc-state-table a:hover { text-decoration: underline; }
 .doc-state-table a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* Component catalog framing: demo widths and bordered frames (documentation only). */
+.doc-w-220 { width: 220px; max-width: 100%; } .doc-w-232 { width: 232px; max-width: 100%; } .doc-w-280 { width: 280px; max-width: 100%; } .doc-w-340 { width: 340px; max-width: 100%; } .doc-w-348 { width: 348px; max-width: 100%; } .doc-w-400 { width: 400px; max-width: 100%; } .doc-w-420 { width: 420px; max-width: 100%; }
+.doc-mw-320 { max-width: 320px; } .doc-mw-360 { max-width: 360px; } .doc-mw-420 { max-width: 420px; } .doc-mw-520 { max-width: 520px; } .doc-mw-566 { max-width: 566px; } .doc-mw-606 { max-width: 606px; } .doc-mw-620 { max-width: 620px; } .doc-mw-640 { max-width: 640px; } .doc-mw-700 { max-width: 700px; }
+.doc-frame { display: flex; border: 1px solid var(--border-subtle); border-radius: var(--r-md); overflow: hidden; background: var(--bg-panel); }
+.doc-frame.doc-col { flex-direction: column; } .doc-frame.doc-rel { position: relative; display: block; }
+.doc-status.doc-status-wide { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+.doc-h-160 { height: 160px; } .doc-h-220 { height: 220px; } .doc-h-240 { height: 240px; } .doc-h-260 { height: 260px; } .doc-h-300 { height: 300px; } .doc-h-360 { height: 360px; }
+.doc-panel { width: var(--props-w-wide); max-width: 100%; padding: 16px 20px 24px; border: 1px solid var(--border-subtle); border-radius: var(--r-md); }
+.doc-pad { padding: 4px; } .doc-w-300 { width: 300px; max-width: 100%; } .doc-mw-340 { max-width: 340px; } .doc-wrap { white-space: normal; }
 </style>
 </head>
 <body>
@@ -99,11 +109,8 @@
 <script src="app/screens.js"></script>
 <script src="app/library.js"></script>
 <script src="app/states.js"></script>
-<script src="app/surfaces.js"></script>
-<script src="app/activity.js"></script>
-<script src="app/changes.js"></script>
-<script src="app/comments.js"></script>
 <script src="app/flow.js"></script>
+<script src="app/review.js"></script>
 <script src="app/main.js"></script>
 </body>
 </html>

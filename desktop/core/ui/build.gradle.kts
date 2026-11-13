@@ -5,6 +5,7 @@ plugins {
 }
 
 kotlin {
+  sourceSets.jvmTest.dependencies { implementation(libs.compose.ui.test) }
   sourceSets.commonMain.dependencies {
     api(projects.core.designsystem)
     api(projects.core.domain)

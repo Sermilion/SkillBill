@@ -7,6 +7,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
 import skillbill.engine.goalrunner.model.GoalRunnerLaunchAuthorization
+import skillbill.engine.goalrunner.model.GoalRunnerLeasePurpose
 import skillbill.engine.goalrunner.model.GoalRunnerPausePersistenceResult
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
@@ -111,6 +112,7 @@ public interface GoalRunnerManifestLeaseCommands {
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
     expectedOwner: GoalRunnerExecutionLease?,
+    purpose: GoalRunnerLeasePurpose = GoalRunnerLeasePurpose.EXECUTION,
   ): Boolean
 
   public fun acquireExecutionLeaseWithChildAdmission(

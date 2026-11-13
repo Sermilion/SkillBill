@@ -62,7 +62,7 @@ And these environment variables, which replace any value exported in your shell:
 
 - `SKILL_BILL_RUNTIME_DIR=desktop/app/build/source-run/runtime`
 - `SKILL_BILL_STATE_DIR=desktop/app/build/source-run/home/.skill-bill`
-- `SKILL_BILL_DB=desktop/app/build/source-run/home/.skill-bill/review-metrics.db`
+- `SKILL_BILL_REVIEW_DB=desktop/app/build/source-run/home/.skill-bill/review-metrics.db`
 - `HOME` and `USERPROFILE` point at the scratch `home/` for child processes.
 - `APPDATA` and `LOCALAPPDATA` point at `home/AppData/Roaming/` and `home/AppData/Local/`.
 - `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, `XDG_DATA_HOME` and `XDG_STATE_HOME` point at `home/.config/`, `home/.cache/`, `home/.local/share/` and `home/.local/state/`.

@@ -3,6 +3,32 @@ Context: SONA-5 stages the public command rename across dependent subtasks. Runt
 Decision: Change newly constructed guidance and its prefix-dependent consumers together. Retain stored prose, identities, checkpoints and storage paths.
 Reason: Preserving saved records keeps existing runs and their completed work available during the rename. Prefix-dependent consumers such as archive export must change with the producers they parse.
 
+## [2026-11-12] Reserve planning ownership before creating a Git worktree
+Context: SQLite and Git cannot share an atomic transaction, and a launch can stop between recording ownership and creating its checkout.
+Decision: Persist the reservation, selected workflow, intended path and initial revision before Git creation. Reconcile interruptions against recorded ownership and Git identity; transfer ownership and the execution path to goal control in one conditional SQLite transaction.
+Reason: A durable reservation gives recovery evidence without treating an issue key or a Git-listed directory as ownership proof. Refusing ambiguous paths preserves work whose ownership cannot be established.
+
+## [2026-11-12] Keep plan identity separate from its execution checkout
+Context: Standalone planning must leave caller edits untouched while a later goal continues the selected plan and its accepted evidence.
+Decision: Select plans by repository identity and workflow, resolve intake against its caller context, and execute planning in the acquired owned checkout. Preserve project-store paths, copy repository-local inputs and legacy bundles when needed, and transfer the same checkout to the goal. Refuse a standalone launch that resolves to the caller checkout.
+Reason: The execution path says where agents run, not which plan they selected. Separating those identities preserves retry and handoff continuity without making caller edits part of the planning launch gate.
+
+## [2026-11-12] Fence planning checkout recovery in durable storage
+Context: A reusable filesystem receipt and a short file lock could not prevent a later runtime writer from invalidating cleanup proof. Recreating a checkout can also change its Git identity.
+Decision: Migration 126 adds an initially empty recovery journal. Existing ownership rows and filesystem receipts remain intact and supply no new proof. Shared settlement commits a writer fence before inspecting dirty, untracked, ignored and publication state; only the original commit permits recovery proof. Worker admission, goal execution leases, transfer and checkout writers consult the fence transactionally.
+Direct control mutations hold their writer transaction across checkout access; recovery commits before that transaction starts, and nested access refuses pending recovery. Goal preparation fences branch alignment before lease admission. Cleanup retains checkouts while any parent execution lease remains, including an expired lease.
+Recovery holds a per-path operating system lock and its own database transaction. It verifies the durable generation, available original commit and matching owner, updates replacement Git identity and consumes proof before admitting writers. Consumed generations remain stored and cannot authorize another reconstruction.
+Completed standalone plans settle through this shared resource after report publication; interrupted and goal-scoped planning retain their checkout. Goal intake resolves recovery before requiring the checkout for projection and transfer.
+Reason: The persisted fence survives process exit, and writer admission checks it in the same transaction as admission. A file lock alone protects only the current resource operation. Uncertain interruptions retain the checkout and journal with recovery guidance.
+## [2026-11-12] Gate-less execution plans tolerate changed pack gate commands
+Context: A plan workflow records a `gate-commands` policy digest even though the `plan` definition has no quality-gate slot. After a platform pack changed its `validation_gate` argv, resuming a blocked plan, including a goal's `plan_subtasks` re-plan, refused with an undetailed `incompatible_descriptor`, and the goal could not continue.
+Decision: Policy comparison ignores `gate-commands` only for plans without a `QUALITY_GATE` slot. When no declared candidate reproduces the recorded digest, such a plan resumes on the current repository gate and emits a `seam=execution_plan_gate_commands` warning. The recorded descriptor is unchanged. Plans with a quality gate still refuse changed commands, and the refusal now names the gate drift.
+Reason: A gate-less run never executes gate commands, so their drift cannot change its behavior. Gated runs keep the strict durable-semantics check.
+
+## [2026-11-12] Resume reopens settled feasibility blocks through the shared planning path
+Context: Blocked feasibility recovery ran only in the existing-manifest branch. An interrupted compatibility adoption could also leave a pending phase with a blocked feasibility cycle, which the adoption replay check treated as already recovered.
+Decision: The shared planning resume path reopens blocked feasibility when its launch has settled. A blocked cycle cannot satisfy the pending-adoption replay check. Reopening archives the rejected cycle and preserves accepted unit plans. Repeated resume of the recovered cycle remains idempotent.
+Reason: Resume must admit a fresh review against the current repository baseline without requiring the operator to reset the run or undo unrelated commits. Worker ownership and active-launch recovery still guard the transition.
 ## [2026-11-12] Operator retry opens a fresh feasibility cycle from a blocked one
 Context: A feasibility safety block (for example, repository paths changed outside the admitted authority because the operator edited the same checkout) settles the launch and sets feasibility mode to `blocked`. `retry-blocked --phase plan_subtasks` reopened only the phase record, so the next attempt read the blocked state and blocked again with the same reason. The workflow could not recover.
 Decision: `retry-blocked` passes a phase-owned artifact hook into the retry transaction. For `plan_subtasks` with a blocked feasibility state and no active launch, the engine archives the current cycle into `cycleHistory`, resets the launch counters, and opens cycle `<workflow>:plan_subtasks:retry-<ledger sequence>` in review mode with an `operator-blocked-retry` reopening. A blocked state that still has an active launch refuses the retry, because launch recovery must settle that launch first. Other phases and non-blocked states are unchanged.
@@ -3783,3 +3809,23 @@ The optional `total_elapsed_ms` and `total_elapsed_as_of` fields extend the boar
 and detail build payloads without changing their required fields or versions.
 Older payloads remain valid and default to an absent total. Repeated reads derive
 the total without mutating stored runs, identities or timestamps.
+
+## [2026-11-12] Completed standalone plans produce their own recovery evidence
+Context: Safe-removal receipts originally came only from transferred goal checkouts. A test that changed transferred ownership to initialized ownership did not exercise a reachable standalone recovery path.
+Decision: After publishing its completed report, a standalone plan settles its initialized checkout through the shared resource policy. The ownership coordinator checks completion and worker absence in the same SQLite write transaction as settlement, so worker admission and goal transfer cannot commit during cleanup. The resource checks the selected standalone workflow, repository, issue, path and Git ownership marker, retains dirty or publication-unknown work, and retains any revision beyond the original commit. Successful removal writes the existing recovery receipt without changing ownership, workflow evidence or revision. Goal-scoped planning and interrupted standalone planning keep their checkout. Goal intake consults recovery evidence before requiring the initialized checkout directory for projection and transfer.
+Reason: A completed standalone plan now supplies actual recovery evidence. CLI regression tests cover completion followed by standalone resume and goal handoff, preserve accepted plan evidence and caller edits, and refuse recovery after proof is removed. Recovery uses the existing receipt format and database schema.
+Superseded by: Fence planning checkout recovery in durable storage (2026-11-12)
+
+## [2026-11-13] Separate blocked-start settlement from child admission
+
+A goal can fail checkout verification before it can admit its existing child. Saving
+that refusal still needs a fenced parent lease. `BLOCK_SETTLEMENT` permits that
+parent-only claim without checking a child descriptor. Only blocked-start settlement
+selects it. Execution keeps the existing descriptor and linkage checks. Lease owner,
+generation, process-liveness and checkout-recovery fences still apply.
+
+Checkout adoption also accepts a mount device change when the recorded reservation,
+repository, path, initial commit, inode, creation time and Git registration match.
+Device numbers differ across mount namespaces. This compatibility read preserves the
+original ownership marker and emits a warning. Destructive cleanup still requires
+exact ownership identity. No persisted schema or marker format changes.

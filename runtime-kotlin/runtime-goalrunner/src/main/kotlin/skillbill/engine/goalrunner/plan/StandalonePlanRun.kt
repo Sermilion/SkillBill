@@ -15,22 +15,32 @@ import skillbill.engine.featuretask.phaserun.StandalonePhaseLaunch
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusEventSink
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunEntry
-import skillbill.engine.featuretask.slot.intake.FeatureTaskRuntimePlanSeedRecorder
+import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.goal.goalRepositoryIdentityCandidates
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
 import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
+import skillbill.ports.workflow.decomposition.model.DecompositionManifestBundleProjection
+import skillbill.ports.workflow.decomposition.model.DecompositionManifestFileIdentity
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.ports.workflow.model.toSnapshot
 import skillbill.text.sha256HexUtf8
+import skillbill.workflow.decomposition.runtime.decompositionRuntime
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
 import skillbill.workflow.taskruntime.model.planning.PlanBundleFeasibilityMode
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.io.IOException
+import java.io.UncheckedIOException
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 
 /** How a standalone plan run ended. */
@@ -59,6 +69,8 @@ public sealed interface StandalonePlanResult {
 public data class StandalonePlanLaunch(
   public val agentId: String? = null,
   public val scope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
+  public val executionRoot: Path? = null,
+  public val workflowIdForCreation: String? = null,
 ) {
   public fun forPhase(target: String): StandalonePhaseLaunch =
     StandalonePhaseLaunch(
@@ -80,15 +92,106 @@ public class StandalonePlanRun(
   private val planLookup: PlanWorkflowLookup,
   private val entry: FeatureTaskRuntimeRunEntry,
   private val database: DatabaseSessionFactory,
+  private val projectStore: ProjectStorePort,
   private val repositories: RepositoryEnclosingRootPort,
   private val fileStore: DecompositionManifestStore,
   private val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
-  private val seedRecorder: FeatureTaskRuntimePlanSeedRecorder,
-  private val reopening: PlanSubtasksReopening,
-  private val planReports: StandalonePlanReportBuilder,
+  private val bundleServices: PlanBundleServices,
+  private val planningOwnership: GoalPlanningCheckoutOwnership,
 ) {
   public fun issueKeyOf(intake: String): String = intakePreparation.issueKeyOf(intake)
+
+  public fun prepareGoalCheckout(
+    issueKey: String,
+    intake: String?,
+    repoRoot: Path,
+    selectedWorkflowId: String? = null,
+  ): StandalonePlanResult.Refused? {
+    val establishedGoal =
+      selectedWorkflowId == null &&
+        database.read { unit ->
+          goalRepositoryIdentityCandidates(repoRoot, repositories).any { identity ->
+            val parent =
+              unit.workflowStates.findOccupyingDecomposedParentWorkflow(issueKey, repositoryIdentity = identity)
+            parent != null &&
+              (
+                unit.goalRunnerControls.controlState(parent.workflowId).executionWorktreePath != null ||
+                  parent.toSnapshot().decompositionRuntime()?.subtasks?.any { !it.workflowId.isNullOrBlank() } == true
+              )
+          }
+        }
+    if (establishedGoal) return null
+    val launch = StandalonePlanLaunch(scope = IdeStatusLaunchScope.GOAL)
+    val completedPlan =
+      if (selectedWorkflowId == null) {
+        eligibleCompletedPlan(issueKey, intake, repoRoot)
+      } else {
+        planLookup.selection(selectedWorkflowId)?.takeIf { it.terminal != null }
+      }
+    val prepared =
+      prepareGoalPlanningOwnership(
+        issueKey,
+        intake,
+        repoRoot,
+        launch,
+        PlanningSelection(completedPlan, selectedWorkflowId),
+      )
+    return when (prepared) {
+      is GoalPlanningLaunch.Ready -> preserveGoalPlanBundle(issueKey, intake, repoRoot, prepared, completedPlan)
+      is GoalPlanningLaunch.Refused -> StandalonePlanResult.Refused(prepared.reason, prepared.workflowId)
+    }
+  }
+
+  private fun preserveGoalPlanBundle(
+    issueKey: String,
+    intake: String?,
+    repoRoot: Path,
+    prepared: GoalPlanningLaunch.Ready,
+    completedPlan: PlanWorkflowSelection?,
+  ): StandalonePlanResult.Refused? {
+    if (prepared.preserveLegacyBundle) {
+      val sourceSpec =
+        selectedPlanSpecPath(
+          issueKey,
+          intake,
+          repoRoot,
+          prepared.launch.workflowIdForCreation,
+          completedPlan,
+        )
+      if (sourceSpec == null) {
+        return StandalonePlanResult.Refused(
+          "Could not locate the selected legacy plan bundle for workflow " +
+            "'${prepared.launch.workflowIdForCreation}'. Preserve the source and owned checkout, then inspect " +
+            "the selected plan spec before retrying.",
+          prepared.launch.workflowIdForCreation,
+        )
+      }
+      if (prepared.launch.executionRoot != null) {
+        val sourceBundle = sourceSpec.parent
+        val targetSpec = executionPath(sourceSpec, repoRoot, prepared.launch.executionRoot)
+        if (sourceSpec != targetSpec) {
+          preserveLegacyBundle(
+            issueKey,
+            repoRoot,
+            prepared.launch.executionRoot,
+            sourceBundle,
+            targetSpec.parent,
+          )?.let { reason ->
+            return StandalonePlanResult.Refused(reason, prepared.launch.workflowIdForCreation)
+          }
+        }
+        if (!markLegacyBundlePreserved(prepared.launch.workflowIdForCreation, prepared.launch.executionRoot)) {
+          return StandalonePlanResult.Refused(
+            "Could not record legacy plan evidence transfer for ${prepared.launch.executionRoot}. Preserve " +
+              "both locations and inspect the ownership record before retrying.",
+            prepared.launch.workflowIdForCreation,
+          )
+        }
+      }
+    }
+    return null
+  }
 
   internal fun replanSubtasks(
     replan: PlanSubtasksReplan,
@@ -106,10 +209,12 @@ public class StandalonePlanRun(
       )
     return try {
       catchingNonCancellation {
-        if (!reopening.reopenWithRebasedBundle(replan)) {
+        if (!bundleServices.reopening.reopenWithRebasedBundle(replan)) {
           return@catchingNonCancellation refused(
             publisher,
-            "Plan workflow '$planWorkflowId' for $issueKey has no `plan_subtasks` step to re-plan.",
+            "Plan workflow '$planWorkflowId' for $issueKey cannot reopen `plan_subtasks` in $repoRoot. " +
+              "Preserve the checkout and plan evidence, then reconcile the selected workflow, required step, " +
+              "ownership and worker before retrying.",
             planWorkflowId,
           )
         }
@@ -129,7 +234,7 @@ public class StandalonePlanRun(
         resume(
           found.candidate,
           null,
-          repoRoot,
+          ResumeLocation(repoRoot, replan.sourceRoot),
           { specPath -> withPublisher(inputFor(specPath).copy(inheritRecordedPlanningTimeout = true), publisher) },
           publisher,
         )
@@ -148,7 +253,7 @@ public class StandalonePlanRun(
     FeatureTaskRuntimeRunEventSink { event ->
       sink.emit(event)
       if (event is FeatureTaskRuntimeRunEvent.PhaseCompleted && event.phaseId in LIVE_PLAN_REPORT_PHASES) {
-        publisher.publishPlanReport { planReports.build(issueKey, repoRoot) }
+        publisher.publishPlanReport { bundleServices.reports.build(issueKey, repoRoot) }
       }
     }
 
@@ -165,22 +270,46 @@ public class StandalonePlanRun(
     launch: StandalonePlanLaunch = StandalonePlanLaunch(),
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
   ): StandalonePlanResult {
+    val completedPlan = eligibleCompletedPlan(issueKey, suppliedIntake, repoRoot)
+    val prepared =
+      prepareGoalPlanningOwnership(issueKey, suppliedIntake, repoRoot, launch, PlanningSelection(completedPlan))
+    val effectiveLaunch =
+      when (prepared) {
+        is GoalPlanningLaunch.Ready -> prepared.launch
+        is GoalPlanningLaunch.Refused -> launch
+      }
+    val executionRoot = effectiveLaunch.executionRoot ?: repoRoot
+    val executionCompletedPlan =
+      eligibleCompletedPlan(issueKey, suppliedIntake, executionRoot, sourceRoot = repoRoot) ?: completedPlan
     val publisher =
       statusPublisherFactory.forPlan(
-        repoRoot = repoRoot,
+        repoRoot = executionRoot,
         issueKey = issueKey,
         phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
         launch = launch.forPhase(suppliedIntake ?: issueKey),
       )
     return try {
+      if (prepared is GoalPlanningLaunch.Refused) {
+        return refused(publisher, prepared.reason, prepared.workflowId)
+      }
       catchingNonCancellation {
         runInternal(
           issueKey,
           suppliedIntake,
-          repoRoot,
-          publisher,
+          ResumeLocation(executionRoot, repoRoot),
+          PlanRunSelection(
+            publisher,
+            executionCompletedPlan,
+            preserveLegacyBundle = (prepared as? GoalPlanningLaunch.Ready)?.preserveLegacyBundle == true,
+          ),
         ) { specPath ->
-          val input = inputFor(specPath)
+          val original = inputFor(specPath)
+          val input =
+            original.copy(
+              repoRoot = effectiveLaunch.executionRoot ?: original.repoRoot,
+              planIntakeRoot = effectiveLaunch.executionRoot ?: original.repoRoot,
+              workflowIdForCreation = effectiveLaunch.workflowIdForCreation,
+            )
           withPublisher(
             input.copy(
               inheritRecordedPlanningTimeout = launch.scope == IdeStatusLaunchScope.GOAL || input.timeout == null,
@@ -188,19 +317,137 @@ public class StandalonePlanRun(
             publisher,
           )
         }
-      }.onFailure(publisher::settleFailure).getOrThrow()
+      }.onFailure(publisher::settleFailure).getOrThrow().also { result ->
+        settleCompletedStandalone(result, effectiveLaunch, issueKey, repoRoot)
+      }
     } finally {
       publisher.closeOutputCapture()
     }
   }
 
-  private fun runInternal(
+  private fun settleCompletedStandalone(
+    result: StandalonePlanResult,
+    launch: StandalonePlanLaunch,
+    issueKey: String,
+    sourceRoot: Path,
+  ) {
+    if (launch.scope != IdeStatusLaunchScope.STANDALONE || result !is StandalonePlanResult.Completed) return
+    val executionRoot = launch.executionRoot ?: return
+    planningOwnership.settleCompletedStandalone(issueKey, sourceRoot, executionRoot, result.workflowId)
+  }
+
+  private data class PlanningSelection(
+    val completedPlan: PlanWorkflowSelection?,
+    val boundWorkflowId: String? = null,
+  )
+
+  private fun prepareGoalPlanningOwnership(
     issueKey: String,
     suppliedIntake: String?,
     repoRoot: Path,
-    statusPublisher: StandalonePhaseStatusEventSink,
+    launch: StandalonePlanLaunch,
+    selection: PlanningSelection,
+  ): GoalPlanningLaunch {
+    val (completedPlan, boundWorkflowId) = selection
+    val discoveredPlan = discoverGoalPlan(issueKey, repoRoot, boundWorkflowId)
+    if (discoveredPlan is FeatureTaskContinuationLookupResult.AlreadyRunning) {
+      val workflowId = discoveredPlan.candidate.workflowId
+      val ownedPath =
+        database.read { unit -> unit.goalPlanningOwnership.findByWorkflow(workflowId)?.ownedPath }
+      val path = ownedPath?.toString() ?: "the unresolved owned checkout for repository $repoRoot"
+      return GoalPlanningLaunch.Refused(
+        "Plan workflow '$workflowId' for $issueKey still has a live worker using $path. " +
+          "Stop that worker or let crash recovery reconcile it before retrying goal adoption.",
+        workflowId,
+      )
+    }
+    val selectedWorkflowId =
+      boundWorkflowId ?: completedPlan?.workflowId
+        ?: discoveredPlan?.forLaunchedSpec(issueKey, suppliedIntake, repoRoot)?.selectedWorkflowId()
+    val hadOwnership =
+      database.read { unit ->
+        selectedWorkflowId?.let(unit.goalPlanningOwnership::findByWorkflow)
+          ?: unit.goalPlanningOwnership.findByIssue(
+            goalRepositoryIdentity(repoRoot, repositories),
+            FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey),
+          )
+      } != null
+    val supersedableWorkflowId =
+      if (completedPlan == null) {
+        planningOwnership.supersedablePlan(
+          issueKey,
+          repoRoot,
+          (discoveredPlan as? FeatureTaskContinuationLookupResult.Resumable)?.candidate?.workflowId,
+          hasDistinctIntake(suppliedIntake, issueKey),
+        ) { spec -> isLaunchedSpec(spec, issueKey, suppliedIntake, repoRoot) }
+      } else {
+        null
+      }
+    val hasNewIntake = hasDistinctIntake(suppliedIntake, issueKey)
+    val existingManifest = bundleServices.reports.manifestExists(issueKey, repoRoot)
+    val reusableGoal = hasReusableDecomposedParent(issueKey, repoRoot)
+    val existingPlan = selectedWorkflowId != null || existingManifest && !hasNewIntake || reusableGoal
+    val prepared =
+      planningOwnership.prepare(
+        issueKey,
+        repoRoot,
+        launch,
+        GoalPlanningSelection(
+          existingPlan,
+          selectedWorkflowId,
+          supersedableWorkflowId,
+          preserveLegacyBundle = selectedWorkflowId != null && !hadOwnership,
+        ),
+      )
+    return if (prepared is GoalPlanningLaunch.Ready) {
+      prepared.copy(preserveLegacyBundle = prepared.preserveLegacyBundle || selectedWorkflowId != null && !hadOwnership)
+    } else {
+      prepared
+    }
+  }
+
+  private fun discoverGoalPlan(
+    issueKey: String,
+    repoRoot: Path,
+    boundWorkflowId: String?,
+  ): FeatureTaskContinuationLookupResult? =
+    boundWorkflowId?.let {
+      planLookup.lookupSelected(issueKey, goalRepositoryIdentityCandidates(repoRoot, repositories), it)
+    }
+      ?: goalRepositoryIdentityCandidates(repoRoot, repositories).firstNotNullOfOrNull { identity ->
+        planLookup.lookupAfterCrashRecovery(issueKey, identity)
+          .takeIf { it != FeatureTaskContinuationLookupResult.NoMatch }
+      }
+
+  private fun FeatureTaskContinuationLookupResult.selectedWorkflowId(): String? =
+    when (this) {
+      is FeatureTaskContinuationLookupResult.Resumable -> candidate.workflowId
+      is FeatureTaskContinuationLookupResult.AlreadyRunning -> candidate.workflowId
+      is FeatureTaskContinuationLookupResult.NeedsIdentityRepair -> workflowId
+      else -> null
+    }
+
+  private data class PlanRunSelection(
+    val publisher: StandalonePhaseStatusEventSink,
+    val completedPlan: PlanWorkflowSelection?,
+    val preserveLegacyBundle: Boolean = false,
+  )
+
+  private data class ResumeLocation(
+    val repoRoot: Path,
+    val sourceRoot: Path = repoRoot,
+    val preserveLegacyBundle: Boolean = false,
+  )
+
+  private fun runInternal(
+    issueKey: String,
+    suppliedIntake: String?,
+    location: ResumeLocation,
+    selection: PlanRunSelection,
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
   ): StandalonePlanResult {
+    val (repoRoot, sourceRoot) = location
+    val (statusPublisher, completedPlan) = selection
     val intake =
       suppliedIntake?.takeIf { supplied ->
         val normalized = supplied.trim()
@@ -208,30 +455,41 @@ public class StandalonePlanRun(
       }
     val found =
       (
-        goalRepositoryIdentityCandidates(repoRoot, repositories).firstNotNullOfOrNull { identity ->
+        goalRepositoryIdentityCandidates(sourceRoot, repositories).firstNotNullOfOrNull { identity ->
           planLookup.lookupAfterCrashRecovery(issueKey, identity)
             .takeIf { it != FeatureTaskContinuationLookupResult.NoMatch }
         } ?: FeatureTaskContinuationLookupResult.NoMatch
-      ).forLaunchedSpec(issueKey, intake, repoRoot)
-    if (hasReusableDecomposedParent(issueKey, repoRoot)) {
-      return open(issueKey, intake, repoRoot, inputFor, statusPublisher)
-    }
-    if (planReports.manifestExists(issueKey, repoRoot)) {
-      if (found is FeatureTaskContinuationLookupResult.Resumable) {
-        return reopenBlockedFeasibility(issueKey, found.candidate.workflowId, repoRoot, inputFor)
-          ?: resume(found.candidate, intake, repoRoot, inputFor, statusPublisher)
+      ).forLaunchedSpec(issueKey, intake, sourceRoot)
+    val activeSelection =
+      when (val legacy = prepareLegacySelection(issueKey, location, selection, found)) {
+        is LegacySelection.Ready -> legacy.selection
+        is LegacySelection.Refused -> return legacy.result
       }
-      return settleExistingManifest(
-        issueKey,
-        intake,
-        repoRoot,
-        statusPublisher,
-        inputFor,
-      )
+    if (hasReusableDecomposedParent(issueKey, repoRoot)) {
+      return open(issueKey, intake, location, inputFor, statusPublisher)
+    }
+    if (bundleServices.reports.manifestExists(issueKey, repoRoot)) {
+      return when (found) {
+        is FeatureTaskContinuationLookupResult.Resumable ->
+          resume(
+            found.candidate,
+            intake,
+            ResumeLocation(repoRoot, sourceRoot, activeSelection.preserveLegacyBundle),
+            inputFor,
+            statusPublisher,
+          )
+        else -> settleExistingManifest(issueKey, intake, location, activeSelection, inputFor)
+      }
     }
     return when (found) {
       is FeatureTaskContinuationLookupResult.Resumable ->
-        resume(found.candidate, intake, repoRoot, inputFor, statusPublisher)
+        resume(
+          found.candidate,
+          intake,
+          ResumeLocation(repoRoot, sourceRoot, activeSelection.preserveLegacyBundle),
+          inputFor,
+          statusPublisher,
+        )
       is FeatureTaskContinuationLookupResult.AlreadyRunning ->
         refused(
           statusPublisher,
@@ -243,7 +501,64 @@ public class StandalonePlanRun(
       is FeatureTaskContinuationLookupResult.TerminalOnly,
       is FeatureTaskContinuationLookupResult.GoalContinuation,
       FeatureTaskContinuationLookupResult.NoMatch,
-      -> open(issueKey, intake, repoRoot, inputFor, statusPublisher)
+      -> open(issueKey, intake, location, inputFor, statusPublisher)
+    }
+  }
+
+  private sealed interface LegacySelection {
+    data class Ready(val selection: PlanRunSelection) : LegacySelection
+
+    data class Refused(val result: StandalonePlanResult) : LegacySelection
+  }
+
+  private fun prepareLegacySelection(
+    issueKey: String,
+    location: ResumeLocation,
+    selection: PlanRunSelection,
+    found: FeatureTaskContinuationLookupResult,
+  ): LegacySelection {
+    val (repoRoot, sourceRoot) = location
+    val (statusPublisher, completedPlan) = selection
+    return if (selection.preserveLegacyBundle) {
+      val candidate =
+        when (found) {
+          is FeatureTaskContinuationLookupResult.Resumable -> found.candidate
+          is FeatureTaskContinuationLookupResult.AlreadyRunning -> found.candidate
+          else -> null
+        }
+      val workflowId = completedPlan?.workflowId ?: candidate?.workflowId
+      val sourceSpec =
+        completedPlan?.terminal?.parentSpecPath?.let { decompositionPlanner.bundlePath(sourceRoot, it) }
+          ?: candidate?.let { decompositionPlanner.bundlePath(sourceRoot, it.governedSpecPath) }
+      if (workflowId == null || sourceSpec == null) {
+        return LegacySelection.Refused(
+          refused(
+            statusPublisher,
+            "Could not locate the selected legacy plan bundle for $issueKey. Preserve the source and owned " +
+              "checkout, then inspect the selected plan evidence before retrying.",
+            workflowId,
+          ),
+        )
+      }
+      val targetSpec = executionPath(sourceSpec, sourceRoot, repoRoot)
+      if (sourceSpec != targetSpec) {
+        preserveLegacyBundle(issueKey, sourceRoot, repoRoot, sourceSpec.parent, targetSpec.parent)?.let { reason ->
+          return LegacySelection.Refused(refused(statusPublisher, reason, workflowId))
+        }
+      }
+      if (!markLegacyBundlePreserved(workflowId, repoRoot)) {
+        return LegacySelection.Refused(
+          refused(
+            statusPublisher,
+            "Could not record legacy plan evidence transfer for $repoRoot. Preserve both locations and inspect " +
+              "the ownership record before retrying.",
+            workflowId,
+          ),
+        )
+      }
+      LegacySelection.Ready(selection.copy(preserveLegacyBundle = false))
+    } else {
+      LegacySelection.Ready(selection)
     }
   }
 
@@ -262,20 +577,18 @@ public class StandalonePlanRun(
   private fun settleExistingManifest(
     issueKey: String,
     intake: String?,
-    repoRoot: Path,
-    statusPublisher: StandalonePhaseStatusEventSink,
+    location: ResumeLocation,
+    selection: PlanRunSelection,
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
   ): StandalonePlanResult {
-    val completed =
-      planLookup.completedSelection(issueKey, goalRepositoryIdentityCandidates(repoRoot, repositories))
-        ?.takeIf { selected ->
-          selected.terminal == null || isLaunchedSpec(selected.terminal.parentSpecPath, issueKey, intake, repoRoot)
-        }
+    val (repoRoot, sourceRoot) = location
+    val (statusPublisher, completedPlan) = selection
+    val completed = completedPlan
     if (completed == null) {
       return open(
         issueKey,
         intake,
-        repoRoot,
+        location,
         inputFor,
         statusPublisher,
       )
@@ -294,7 +607,15 @@ public class StandalonePlanRun(
       ) {
         val settledIds = feasibility.settledSubtaskIds
         return replanSubtasks(
-          PlanSubtasksReplan(issueKey, id, repoRoot, settledIds, feasibilityAdoption = true),
+          PlanSubtasksReplan(
+            issueKey,
+            id,
+            repoRoot,
+            sourceRoot,
+            settledIds,
+            feasibilityAdoption = true,
+            bundleRoot = repoRoot,
+          ),
           inputFor,
         )
       }
@@ -305,7 +626,7 @@ public class StandalonePlanRun(
           terminal.decompositionManifestPath,
           terminal.subtaskSpecPaths,
         )
-      statusPublisher.settlePlan("completed", result.workflowId, planReports.build(issueKey, repoRoot))
+      statusPublisher.settlePlan("completed", result.workflowId, bundleServices.reports.build(issueKey, repoRoot))
       return result
     }
     return refused(
@@ -315,36 +636,60 @@ public class StandalonePlanRun(
     )
   }
 
-  private fun open(
+  private fun eligibleCompletedPlan(
     issueKey: String,
     intake: String?,
     repoRoot: Path,
+    sourceRoot: Path = repoRoot,
+  ): PlanWorkflowSelection? =
+    if (!bundleServices.reports.manifestExists(issueKey, repoRoot)) {
+      null
+    } else {
+      planLookup.completedSelection(issueKey, goalRepositoryIdentityCandidates(repoRoot, repositories))
+        ?.takeIf { selected ->
+          selected.terminal == null || isLaunchedSpec(selected.terminal.parentSpecPath, issueKey, intake, sourceRoot)
+        }
+    }
+
+  private fun open(
+    issueKey: String,
+    intake: String?,
+    location: ResumeLocation,
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
     statusPublisher: StandalonePhaseStatusEventSink?,
   ): StandalonePlanResult {
-    val resolution = intakePreparation.resolvePlanSpec(issueKey, intake, repoRoot)
+    val (repoRoot, sourceRoot) = location
+    val resolution = intakePreparation.resolvePlanSpec(issueKey, intake, sourceRoot)
     val plannedPath = resolution.specPath
     val existing = fileStore.isRegularFile(plannedPath)
-    if (existing && !isKeyResolvedSpec(issueKey, plannedPath, repoRoot)) {
+    if (existing && !isKeyResolvedSpec(issueKey, plannedPath, sourceRoot)) {
       return refused(
         statusPublisher,
         "The supplied spec $plannedPath is not the governed spec for $issueKey; settlement guards the spec " +
-          "found under ${decompositionPlanner.specsRoot(repoRoot)}/$issueKey-*/ " +
+          "found under ${decompositionPlanner.specsRoot(sourceRoot)}/$issueKey-*/ " +
           "(`sona project path` prints the project store). Move it there and plan again.",
       )
     }
-    val specPath =
-      if (existing || !plannedPath.startsWith(repoRoot)) {
-        plannedPath
-      } else {
-        repositories.canonicalPath(repoRoot).resolve(repoRoot.relativize(plannedPath))
-      }
+    val selectedContent = if (existing) fileStore.readText(plannedPath) else null
+    val specPath = executionPath(plannedPath, sourceRoot, repoRoot)
+    if (selectedContent != null && specPath != plannedPath) {
+      planningOwnership.prepareCheckoutWrite(issueKey, sourceRoot, repoRoot) {
+        fileStore.writeTextAtomically(specPath, selectedContent)
+        null
+      }?.let { return refused(statusPublisher, it) }
+    }
     val input =
       inputFor(specPath.toString()).copy(
         definition = SkeletonDefinition.PLAN,
         planIntake = intake,
+        planIntakeRoot = repoRoot,
+        planSpecResolution = resolution.copy(specPath = specPath),
         protectedSpecSha256 =
-          if (resolution.specOrigin == FeatureTaskRuntimePlanSpecOrigin.OPERATOR) specHash(plannedPath) else null,
+          if (resolution.specOrigin == FeatureTaskRuntimePlanSpecOrigin.OPERATOR) {
+            selectedContent?.let(::sha256HexUtf8)
+          } else {
+            null
+          },
       )
     return runEntry(input, repoRoot, statusPublisher)
   }
@@ -352,6 +697,7 @@ public class StandalonePlanRun(
   private fun adoptFeasibilityForResume(
     candidate: FeatureTaskContinuationCandidate,
     repoRoot: Path,
+    sourceRoot: Path = repoRoot,
   ): Boolean {
     val selected = planLookup.selection(candidate.workflowId)
     val selectedPhase = selected?.phaseRecord
@@ -374,57 +720,38 @@ public class StandalonePlanRun(
         } == true
       val needsFullReview =
         selectedFeasibility == null ||
+          selectedFeasibility.mode == PlanBundleFeasibilityMode.BLOCKED && selectedFeasibility.activeLaunch == null ||
           selectedFeasibility.mode == PlanBundleFeasibilityMode.APPROVED && !completedApproval ||
           selectedPhase.status == WorkflowStepStatus.COMPLETED &&
           selectedFeasibility.mode != PlanBundleFeasibilityMode.BLOCKED && !completedApproval
       return !needsFullReview ||
-        reopening.reopenWithRebasedBundle(
+        bundleServices.reopening.reopenWithRebasedBundle(
           PlanSubtasksReplan(
             candidate.executionIdentity.normalizedIssueKey,
             candidate.workflowId,
             repoRoot,
-            current.settledSubtaskIds,
+            sourceRoot = sourceRoot,
+            settledSubtaskIds = current.settledSubtaskIds,
             feasibilityAdoption = true,
+            bundleRoot = repoRoot,
           ),
         )
     }
     return true
   }
 
-  private fun reopenBlockedFeasibility(
-    issueKey: String,
-    workflowId: String,
-    repoRoot: Path,
-    inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
-  ): StandalonePlanResult? {
-    if (!reopening.hasReopenableBlockedFeasibility(workflowId)) return null
-    val settledIds = PlanBundleFeasibility.capture(decompositionPlanner, repoRoot, issueKey).settledSubtaskIds
-    return replanSubtasks(
-      PlanSubtasksReplan(issueKey, workflowId, repoRoot, settledIds, feasibilityAdoption = true),
-      inputFor,
-    )
-  }
-
   private fun resume(
     candidate: FeatureTaskContinuationCandidate,
     intake: String?,
-    repoRoot: Path,
+    location: ResumeLocation,
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
     statusPublisher: StandalonePhaseStatusEventSink?,
   ): StandalonePlanResult {
-    if (database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, candidate.workflowId) }
-        ?.hasPlanSubtasksStep() == false
-    ) {
-      val key = candidate.executionIdentity.normalizedIssueKey
-      return refused(
-        statusPublisher,
-        "Plan workflow '${candidate.workflowId}' for $key predates the `plan_subtasks` step and cannot resume. " +
-          "Run `sona goal purge $key`, then `sona phase plan $key`.",
-        candidate.workflowId,
-      )
-    }
-    val specPath = decompositionPlanner.bundlePath(repositories.canonicalPath(repoRoot), candidate.governedSpecPath)
-    if (!adoptFeasibilityForResume(candidate, repoRoot)) {
+    val (repoRoot, sourceRoot) = location
+    val sourceSpecPath = decompositionPlanner.bundlePath(sourceRoot, candidate.governedSpecPath)
+    val specPath = executionPath(sourceSpecPath, sourceRoot, repoRoot)
+    resumeAdmissionProblem(candidate, location, sourceSpecPath, specPath, statusPublisher)?.let { return it }
+    if (!adoptFeasibilityForResume(candidate, repoRoot, sourceRoot)) {
       return refused(
         statusPublisher,
         "Plan workflow '${candidate.workflowId}' could not adopt its retained plan_subtasks output " +
@@ -432,7 +759,7 @@ public class StandalonePlanRun(
         candidate.workflowId,
       )
     }
-    val seed = seedRecorder.read(candidate.workflowId)
+    val seed = bundleServices.seedRecorder.read(candidate.workflowId)
     if (seed != null && intake != null && sha256HexUtf8(intake) != seed.intakeSha256) {
       return refused(
         statusPublisher,
@@ -444,16 +771,76 @@ public class StandalonePlanRun(
       if (seed != null) {
         seed.specSha256.takeIf { seed.specOrigin == FeatureTaskRuntimePlanSpecOrigin.OPERATOR }
       } else {
-        if (intakePreparation.keepsOperatorSpec(specPath)) specHash(specPath) else null
+        if (intakePreparation.keepsOperatorSpec(sourceSpecPath)) specHash(sourceSpecPath) else null
       }
     val input =
       inputFor(specPath.toString()).copy(
         explicitWorkflowId = candidate.workflowId,
         definition = SkeletonDefinition.PLAN,
         planIntake = intake,
+        planIntakeRoot = repoRoot,
         protectedSpecSha256 = protectedSpecSha256,
       )
     return runEntry(input, repoRoot, statusPublisher)
+  }
+
+  private fun resumeAdmissionProblem(
+    candidate: FeatureTaskContinuationCandidate,
+    location: ResumeLocation,
+    sourceSpecPath: Path,
+    specPath: Path,
+    statusPublisher: StandalonePhaseStatusEventSink?,
+  ): StandalonePlanResult? {
+    if (database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, candidate.workflowId) }
+        ?.hasPlanSubtasksStep() == false
+    ) {
+      val key = candidate.executionIdentity.normalizedIssueKey
+      return refused(
+        statusPublisher,
+        "Plan workflow '${candidate.workflowId}' for $key predates the `plan_subtasks` step and cannot resume. " +
+          "Run `sona goal purge $key`, then `sona phase plan $key`.",
+        candidate.workflowId,
+      )
+    }
+    return resumeSpecProblem(candidate, location, sourceSpecPath, specPath, statusPublisher)
+  }
+
+  private fun resumeSpecProblem(
+    candidate: FeatureTaskContinuationCandidate,
+    location: ResumeLocation,
+    sourceSpecPath: Path,
+    specPath: Path,
+    statusPublisher: StandalonePhaseStatusEventSink?,
+  ): StandalonePlanResult? {
+    val (repoRoot, sourceRoot) = location
+    if (location.preserveLegacyBundle && specPath != sourceSpecPath) {
+      preserveLegacyBundle(
+        candidate.executionIdentity.normalizedIssueKey,
+        sourceRoot,
+        repoRoot,
+        sourceSpecPath.parent,
+        specPath.parent,
+      )?.let { reason ->
+        return refused(statusPublisher, reason, candidate.workflowId)
+      }
+    }
+    if (location.preserveLegacyBundle && !markLegacyBundlePreserved(candidate.workflowId, repoRoot)) {
+      return refused(
+        statusPublisher,
+        "Could not record legacy plan evidence transfer for $repoRoot. Preserve both locations and inspect " +
+          "the ownership record before retrying.",
+        candidate.workflowId,
+      )
+    }
+    if (specPath != sourceSpecPath && !fileStore.isRegularFile(specPath)) {
+      return refused(
+        statusPublisher,
+        "Owned planning spec $specPath is missing for workflow '${candidate.workflowId}'. Preserve the " +
+          "caller spec $sourceSpecPath and restore or inspect the owned checkout before retrying.",
+        candidate.workflowId,
+      )
+    }
+    return null
   }
 
   private fun runEntry(
@@ -512,7 +899,7 @@ public class StandalonePlanRun(
       }
     when (result) {
       is StandalonePlanResult.Completed ->
-        statusSink?.settlePlan("completed", result.workflowId, planReports.build(report.issueKey, repoRoot))
+        statusSink?.settlePlan("completed", result.workflowId, bundleServices.reports.build(report.issueKey, repoRoot))
       is StandalonePlanResult.Blocked -> statusSink?.settleBlocked(result.reason, result.workflowId)
       is StandalonePlanResult.Refused -> statusSink?.settleBlocked(result.reason, result.workflowId)
     }
@@ -561,11 +948,183 @@ public class StandalonePlanRun(
     specPath: Path,
   ): Path = decompositionPlanner.bundlePath(repoRoot, specPath.toString())
 
+  private fun executionPath(
+    sourcePath: Path,
+    sourceRoot: Path,
+    executionRoot: Path,
+  ): Path {
+    val canonicalSourceRoot = repositories.canonicalPath(sourceRoot)
+    val canonicalSourcePath = repositories.canonicalPath(sourcePath)
+    val projectSpecsRoot = repositories.canonicalPath(projectStore.resolve(sourceRoot).specsRoot)
+    if (canonicalSourcePath.startsWith(projectSpecsRoot) || !canonicalSourcePath.startsWith(canonicalSourceRoot)) {
+      return sourcePath
+    }
+    val target = repositories.canonicalPath(executionRoot).resolve(canonicalSourceRoot.relativize(canonicalSourcePath))
+    return target
+  }
+
+  private fun selectedPlanSpecPath(
+    issueKey: String,
+    intake: String?,
+    sourceRoot: Path,
+    workflowId: String?,
+    completedPlan: PlanWorkflowSelection?,
+  ): Path? {
+    completedPlan?.terminal?.parentSpecPath?.let { return decompositionPlanner.bundlePath(sourceRoot, it) }
+    val identities = goalRepositoryIdentityCandidates(sourceRoot, repositories)
+    val found =
+      workflowId?.let { planLookup.lookupSelected(issueKey, identities, it) }
+        ?: identities.firstNotNullOfOrNull { identity -> planLookup.lookupAfterCrashRecovery(issueKey, identity) }
+    val candidate =
+      (found as? FeatureTaskContinuationLookupResult.Resumable)?.candidate
+        ?.takeIf { isLaunchedSpec(it.governedSpecPath, issueKey, intake, sourceRoot) }
+    return candidate?.let { decompositionPlanner.bundlePath(sourceRoot, it.governedSpecPath) }
+  }
+
+  private fun markLegacyBundlePreserved(
+    workflowId: String?,
+    executionRoot: Path,
+  ): Boolean {
+    if (workflowId == null) return false
+    return database.transaction { unit ->
+      val ownership = unit.goalPlanningOwnership.findByWorkflow(workflowId) ?: return@transaction false
+      if (ownership.legacyBundlePending == false) return@transaction true
+      unit.goalPlanningOwnership.markLegacyBundlePreserved(workflowId, executionRoot)
+    }
+  }
+
+  private fun preserveLegacyBundle(
+    issueKey: String,
+    sourceRepository: Path,
+    executionRoot: Path,
+    sourceBundle: Path,
+    targetBundle: Path,
+  ): String? =
+    planningOwnership.prepareCheckoutWrite(issueKey, sourceRepository, executionRoot) {
+      preserveLegacyBundleFiles(sourceRepository, sourceBundle, targetBundle)
+    }
+
+  private fun preserveLegacyBundleFiles(
+    sourceRepository: Path,
+    sourceBundle: Path,
+    targetBundle: Path,
+  ): String? {
+    val sourceRoot = repositories.canonicalPath(sourceBundle).normalize()
+    val targetRoot = repositories.canonicalPath(targetBundle).normalize()
+    val specsRoot = repositories.canonicalPath(decompositionPlanner.specsRoot(sourceRepository)).normalize()
+    if (!sourceRoot.startsWith(specsRoot) || sourceRoot == specsRoot || Files.isSymbolicLink(sourceBundle)) {
+      return "Legacy plan bundle $sourceBundle is outside the governed specs directory or linked. Preserve both " +
+        "locations and inspect the selected spec path before retrying."
+    }
+    val paths =
+      legacyTransferAttempt { fileStore.listTree(sourceRoot) }.getOrElse {
+        return legacyBundleTransferFailure(sourceRoot, targetRoot, it.message)
+      }
+    val transfer = LegacyBundleTransfer(sourceRoot, targetRoot)
+    collectLegacyBundleWrites(paths, transfer)?.let { return it }
+    return writeLegacyBundle(transfer)
+  }
+
+  private fun writeLegacyBundle(transfer: LegacyBundleTransfer): String? {
+    val sourceRoot = transfer.sourceRoot
+    val targetRoot = transfer.targetRoot
+    val writes = transfer.writes
+    val protectedSources = transfer.protectedSources
+    for ((_, parentWrites) in writes.groupBy { it.first.parent }) {
+      legacyTransferAttempt {
+        val identities = parentWrites.map { (path, _) -> DecompositionManifestFileIdentity(path, null) }
+        fileStore.writeBundleAtomically(
+          parentWrites,
+          DecompositionManifestBundleProjection(identities, protectedSources),
+        ) { true }
+      }.exceptionOrNull()?.let { return legacyBundleTransferFailure(sourceRoot, targetRoot, it.message) }
+    }
+    return null
+  }
+
+  private data class LegacyBundleTransfer(
+    val sourceRoot: Path,
+    val targetRoot: Path,
+    val writes: MutableList<Pair<Path, String>> = mutableListOf(),
+    val protectedSources: MutableList<DecompositionManifestFileIdentity> = mutableListOf(),
+  )
+
+  private fun collectLegacyBundleWrites(
+    paths: List<Path>,
+    transfer: LegacyBundleTransfer,
+  ): String? {
+    val sourceRoot = transfer.sourceRoot
+    val targetRoot = transfer.targetRoot
+    val writes = transfer.writes
+    val protectedSources = transfer.protectedSources
+    for (path in paths) {
+      val source = repositories.canonicalPath(path).normalize()
+      if (!source.startsWith(sourceRoot) || Files.isSymbolicLink(path)) {
+        return "Legacy plan bundle contains an unresolved or linked path $path. Preserve both $sourceRoot and " +
+          "$targetRoot, then resolve that path before retrying."
+      }
+      if (!fileStore.isRegularFile(path)) continue
+      val destination = targetRoot.resolve(sourceRoot.relativize(source)).normalize()
+      legacyDestinationProblem(path, targetRoot, destination)?.let { return it }
+      if (fileStore.isRegularFile(destination)) {
+        if (Files.isSymbolicLink(destination) || fileStore.readText(path) != fileStore.readText(destination)) {
+          return "Legacy plan evidence differs between $path and $destination. Preserve both files and reconcile " +
+            "the conflict before retrying."
+        }
+      } else {
+        val content = fileStore.readText(path)
+        writes += destination to content
+        protectedSources += DecompositionManifestFileIdentity(path, sha256HexUtf8(content))
+      }
+    }
+    return null
+  }
+
+  private fun legacyDestinationProblem(
+    path: Path,
+    targetRoot: Path,
+    destination: Path,
+  ): String? {
+    if (!destination.startsWith(targetRoot)) {
+      return "Legacy plan bundle path $path escapes its selected bundle. Preserve both locations and inspect " +
+        "it before retrying."
+    }
+    if (Files.exists(destination, LinkOption.NOFOLLOW_LINKS) && !fileStore.isRegularFile(destination)) {
+      return "Legacy plan evidence destination $destination is occupied by a non-file. Preserve both locations " +
+        "and resolve the conflict before retrying."
+    }
+    return null
+  }
+
+  private fun legacyBundleTransferFailure(
+    sourceRoot: Path,
+    targetRoot: Path,
+    detail: String?,
+  ): String =
+    "Could not transfer legacy plan evidence from $sourceRoot to $targetRoot${detail?.let { ": $it"}.orEmpty()}. " +
+      "Preserve both locations and inspect the transfer before retrying."
+
   private fun specHash(specPath: Path): String = sha256HexUtf8(fileStore.readText(specPath))
 }
+
+private fun <T> legacyTransferAttempt(block: () -> T): Result<T> =
+  try {
+    Result.success(block())
+  } catch (failure: IOException) {
+    Result.failure(failure)
+  } catch (failure: UncheckedIOException) {
+    Result.failure(failure)
+  } catch (failure: SecurityException) {
+    Result.failure(failure)
+  }
 
 private val LIVE_PLAN_REPORT_PHASES =
   setOf(
     FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
     FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
   )
+
+private fun hasDistinctIntake(
+  suppliedIntake: String?,
+  issueKey: String,
+): Boolean = suppliedIntake?.trim()?.takeIf { it.isNotEmpty() && !it.equals(issueKey, ignoreCase = true) } != null

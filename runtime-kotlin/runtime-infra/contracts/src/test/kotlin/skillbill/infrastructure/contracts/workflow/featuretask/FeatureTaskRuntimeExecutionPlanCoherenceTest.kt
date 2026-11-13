@@ -6,9 +6,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
-import skillbill.error.core.SkillBillRuntimeException
+import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
-import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import java.math.BigInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -95,7 +94,7 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
   }
 
   @Test
-  fun `coherence refuses a profile that contradicts the classifier or an opus strategy without an opus step`() {
+  fun `historical model profiles remain readable without classifying configured models`() {
     val contradicting = descriptor()
     contradicting.putArray(Keys.STEP_LAUNCH_ASSIGNMENTS).addObject().apply {
       put(Keys.STEP_ID, "implement")
@@ -105,9 +104,16 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
       put(Keys.PROVENANCE, "requested_exact")
       put(Keys.PROFILE, "opus-5-5")
     }
-    val profileError =
-      assertFailsWith<SkillBillRuntimeException> { validate(contradicting) }
-    assertEquals(FeatureTaskRuntimeFailureCode.INCOHERENT_STEP_LAUNCH_ASSIGNMENTS, profileError.code)
+    validate(contradicting)
+
+    val previous = contradicting.deepCopy()
+    previous.put(Keys.CONTRACT_VERSION, FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION)
+    previous.remove(Keys.QA_SELECTION)
+    previous.traversal().rows(Keys.BACKWARD_EDGES).forEach { edge ->
+      (edge as ObjectNode).remove(Keys.CROSS_SLOT_ALLOWANCE)
+    }
+    previous.rows(Keys.STEP_LAUNCH_ASSIGNMENTS).objectAt(0).put(Keys.EFFECTIVE_MODEL, "claude-opus-5-5")
+    validate(previous)
 
     val unmatched = descriptor()
     unmatched.rows(Keys.SELECTED_STRATEGIES).objectAt(0).put(Keys.STRATEGY_ID, "implementation-opus-5-5")
@@ -125,9 +131,7 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
       put(Keys.PROVENANCE, "requested_exact")
       put(Keys.PROFILE, "canonical")
     }
-    val unmatchedError =
-      assertFailsWith<SkillBillRuntimeException> { validate(unmatched) }
-    assertEquals(FeatureTaskRuntimeFailureCode.INCOHERENT_STEP_LAUNCH_ASSIGNMENTS, unmatchedError.code)
+    validate(unmatched)
   }
 
   @Test

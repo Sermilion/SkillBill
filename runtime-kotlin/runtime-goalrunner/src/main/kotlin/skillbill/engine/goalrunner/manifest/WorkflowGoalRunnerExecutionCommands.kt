@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.execution.core.workflowIdFor
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
+import skillbill.engine.goalrunner.model.GoalRunnerLeasePurpose
 import skillbill.engine.goalrunner.model.GoalRunnerPausePersistenceResult
 import skillbill.engine.goalrunner.status.GoalRunnerControlCoordinator
 import skillbill.engine.goalrunner.status.requestPause
@@ -56,13 +57,18 @@ internal class WorkflowGoalRunnerExecutionCommands(
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
     expectedOwner: GoalRunnerExecutionLease?,
+    purpose: GoalRunnerLeasePurpose,
   ): Boolean =
     controls.acquireExecutionLease(
       parentWorkflowId,
       lease,
       expectedOwner?.ownerToken,
       expectedOwner?.generation,
-    ) { unitOfWork -> requireCompatibleChildPlan(unitOfWork, parentWorkflowId, null, executionAdmission) }
+    ) { unitOfWork ->
+      if (purpose == GoalRunnerLeasePurpose.EXECUTION) {
+        requireCompatibleChildPlan(unitOfWork, parentWorkflowId, null, executionAdmission)
+      }
+    }
 
   override fun acquireExecutionLeaseWithChildAdmission(
     parentWorkflowId: String,

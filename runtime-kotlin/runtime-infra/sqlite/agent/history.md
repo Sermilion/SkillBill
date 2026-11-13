@@ -1,3 +1,10 @@
+## [2026-11-13] Crash-reconcile write without lease expiry
+Areas: runtime-infra/sqlite feature-task worker store
+- `reconcileFeatureTaskRuntimeCrashedWorker` fences owner_token, generation, and ACTIVE state. It still parses nowInstant and matches heartbeat_at and expires_at on DELETE, but no longer requires the lease to have expired.
+- The startup candidate scan stays expiry-gated. A store test writes an unexpired matching lease to pending and releases it.
+Feature flag: N/A
+Acceptance criteria: n/a (direct main fix)
+
 ## [2026-11-08] SKILL-522 per-repository build history store
 Areas: runtime-infra/sqlite migration, schema and idestatus; runtime-ports idestatus and UnitOfWork; runtime-contracts persistence
 - MEDIUM feature. Migration 108 adds agent_build_runs, indexed lookups and desktop change triggers attributed to parent run when present. DesktopReadSchema.VERSION is 108.

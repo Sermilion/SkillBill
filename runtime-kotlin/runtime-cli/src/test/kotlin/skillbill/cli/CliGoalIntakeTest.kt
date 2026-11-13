@@ -25,6 +25,7 @@ class CliGoalIntakeTest {
   @Test
   fun `failed progress output does not hide goal planning from the desktop`() {
     val root = Files.createTempDirectory("goal-intake-broken-output")
+    initGoalFixtureRepository(root)
     val db = root.resolve("metrics.db")
     val fixture = GoalCliFixture(root, db, root.resolve("unused.md"), emptyList())
     val launcher = StoppedPlanningLauncher(db)
@@ -144,8 +145,10 @@ class CliGoalIntakeTest {
       val command =
         listOf("--db", fixture.dbPath.toString(), reference, "--agent", "codex", "--repo-root", root.toString())
       try {
+        var output = ""
         repeat(2) {
           val result = CliRuntime.run(command, context)
+          output += result.stdout + result.stderr
           assertEquals(1, result.exitCode, result.stderr + result.stdout)
           assertEquals(original, Files.readString(parent))
           assertEquals("<html>Existing design</html>", Files.readString(design))
@@ -155,7 +158,7 @@ class CliGoalIntakeTest {
           assertEquals(0, parentCount(fixture.dbPath))
           assertEquals("contract_version: '0.4'\n", Files.readString(unrelated))
         }
-        assertTrue(launcher.prompts.isNotEmpty())
+        assertTrue(launcher.prompts.isNotEmpty(), output)
       } finally {
         root.toFile().deleteRecursively()
       }
@@ -200,6 +203,7 @@ class CliGoalIntakeTest {
     expectedFeature: String,
   ) {
     val root = Files.createTempDirectory("goal-intake")
+    initGoalFixtureRepository(root)
     val db = root.resolve("metrics.db")
     val fixture = GoalCliFixture(root, db, root.resolve("unused.md"), emptyList())
     val launcher = StoppedPlanningLauncher(db)
@@ -237,6 +241,7 @@ class CliGoalIntakeTest {
     message: String,
   ) {
     val root = Files.createTempDirectory("goal-intake")
+    initGoalFixtureRepository(root)
     val db = root.resolve("metrics.db")
     val fixture = GoalCliFixture(root, db, root.resolve("unused.md"), emptyList())
     val launcher = StoppedPlanningLauncher(db)

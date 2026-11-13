@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.runloop.durable
 
 import skillbill.application.review.model.ParallelCodeReviewResult
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupOutcome
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
@@ -28,7 +29,6 @@ import skillbill.engine.featuretask.runloop.planning.PromotionRequest
 import skillbill.engine.featuretask.runloop.planning.StagedUnit
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
-import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseBindingFactory
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStrategy
@@ -44,14 +44,17 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
+import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.isCooperativeCancellation
+import skillbill.error.core.rethrowIfDatabaseFailure
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleOrigin
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
@@ -74,11 +77,10 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
 
   override fun pendingUnits(): PhaseFanOutUnits {
     val wave = parent.stepBinding.requireAuthorizedFanOutWave()
-    val feasibility = parent.records.loadPlanBundleFeasibility(facts.workflowId)
-    if (feasibility?.activeLaunch != null || feasibility?.settledLaunches?.any {
-        it.cycleId == feasibility.currentCycleId
-      } == true
-    ) {
+    initializeMissingBundle()?.let { reason ->
+      return PhaseFanOutUnits.Stopped(PhaseOutcome.blocked(reason))
+    }
+    if (hasFeasibilityLaunch()) {
       staging = null
       return PhaseFanOutUnits.Pending(emptyList())
     }
@@ -89,6 +91,10 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
     val bundle =
       parent.records.loadPlanBundle(facts.workflowId)
         ?: return PhaseFanOutUnits.Stopped(PhaseOutcome.blocked(MISSING_BUNDLE_REASON))
+    return pendingBundleUnits(bundle)
+  }
+
+  private fun pendingBundleUnits(bundle: FeatureTaskRuntimePlanBundle): PhaseFanOutUnits {
     snapshots.parentAndManifestDrift(facts.repoRoot, facts.issueKey, bundle)?.let { reason ->
       return PhaseFanOutUnits.Stopped(PhaseOutcome.blocked(reason))
     }
@@ -98,6 +104,54 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
         .filterNot { snapshots.unitComplete(facts.repoRoot, it, unitRecords[unitRecordId(it.id)]) }
         .map { it.id },
     )
+  }
+
+  private fun hasFeasibilityLaunch(): Boolean {
+    val feasibility = parent.records.loadPlanBundleFeasibility(facts.workflowId)
+    return feasibility?.activeLaunch != null || feasibility?.settledLaunches?.any {
+      it.cycleId == feasibility.currentCycleId
+    } == true
+  }
+
+  private fun initializeMissingBundle(): String? {
+    if (parent.records.loadPlanBundle(facts.workflowId) != null) return null
+    val records = parent.records.loadPhaseRecords(facts.workflowId).orEmpty()
+    if (records.any { (phaseId, record) ->
+        FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitIdOf(phaseId) != null &&
+          record.status == WorkflowStepStatus.COMPLETED
+      }
+    ) {
+      return "$MISSING_BUNDLE_REASON Preserve the checkout and restore its accepted unit evidence before retrying."
+    }
+    return try {
+      val written =
+        planner.verifyAuthoredBundle(
+          facts.repoRoot,
+          facts.issueKey,
+          facts.runInvariants,
+          facts.protectedSpecSha256 == null,
+          parent.diagnostics,
+        )
+      val bundle = snapshots.capture(facts.repoRoot, written, FeatureTaskRuntimePlanBundleOrigin.AUTHORED)
+      if (parent.records.recordPlanBundle(facts.workflowId, bundle)) {
+        RuntimeDiagnosticsBestEffortWarning.record(
+          parent.diagnostics,
+          "Initialized the missing plan bundle for workflow '${facts.workflowId}' from ${facts.repoRoot}; " +
+            "existing phase records and checkpoints remain retained.",
+        )
+        null
+      } else {
+        "The plan bundle could not be initialized. Preserve ${facts.repoRoot} and reconcile the selected " +
+          "workflow, accepted evidence and worker before retrying."
+      }
+    } catch (error: InvalidFeatureSpecPreparationRequestError) {
+      PlanDecompositionStop.notReadyReason(error.message)
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowIfDatabaseFailure()
+      PlanDecompositionStop.notReadyReason(error.message)
+    } catch (error: IOException) {
+      PlanDecompositionStop.notReadyReason(error.message)
+    }
   }
 
   override fun recordWave(
@@ -413,8 +467,6 @@ private class FeatureTaskRuntimeRunLoopPlanUnitState(
   override fun runnerFor(stepId: String) = parent.runnerFor(stepId)
 
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = parent.selectedOwnerOf(stepId)
-
-  override val modelDirectiveSupplements: ModelDirectiveSupplements get() = parent.modelDirectiveSupplements
 
   override val phaseInstructionSource: PhaseInstructionFileSource get() = parent.phaseInstructionSource
 

@@ -1,3 +1,8 @@
+## [2026-11-12] Read the live queue in the composer preview
+Context: Queue entries can be claimed, restored, or removed while the preview is open. The existing tooltip clears popup semantics and has no bounded scrolling.
+Decision: Pass the collected session queue to a local, window-aware composer popup with readable semantics and keyboard scrolling. Leave queue mutation and delivery in ChatThread.
+Reason: A snapshot can show stale entries, and the tooltip alone cannot make a long queue readable and accessible.
+
 ## [2026-11-11] Keep live-policy Send now separate from Stop
 Context: Both chat consumers previously interrupted a reply for Send now. SKILL-530 requires Claude and Codex follow-ups to preserve ongoing work and its context.
 Decision: Read transport-owned policy separately from availability. Claude and Codex use live delivery with non-stopping queued fallback; Cursor and Junie retain interruption. Explicit Stop keeps cancellation authority.

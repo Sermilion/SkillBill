@@ -4,6 +4,8 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
 import skillbill.contracts.persistence.RuntimeMcpEnvironmentKeys
 import skillbill.infrastructure.host.jvm.resolveUserHome
+import skillbill.infrastructure.launcher.process.cursor.AcpEnvVariable
+import skillbill.infrastructure.launcher.process.cursor.AcpStdioMcpServer
 import skillbill.model.EnvironmentContext
 import skillbill.ports.agentrun.model.SkillRunRequest
 import java.nio.file.Files
@@ -71,7 +73,22 @@ internal fun codexRuntimeMcpArguments(
     ?.flatMap { override -> listOf("--config", override) }
     .orEmpty()
 
-private fun attachesRuntimeMcp(request: SkillRunRequest): Boolean =
+internal fun acpRuntimeMcpServer(
+  runtimeMcpBin: Path,
+  databasePath: Path,
+  validationCheckInvocationId: String?,
+): AcpStdioMcpServer =
+  AcpStdioMcpServer(
+    name = RUNTIME_MCP_SERVER_NAME,
+    command = runtimeMcpBin.toAbsolutePath().normalize().toString(),
+    args = emptyList(),
+    env =
+      runtimeMcpServerEnvironment(databasePath, validationCheckInvocationId).map { (name, value) ->
+        AcpEnvVariable(name, value)
+      },
+  )
+
+internal fun attachesRuntimeMcp(request: SkillRunRequest): Boolean =
   request.reviewEvidenceBroker == null && request.reviewEvidenceEndpoint == null
 
 private fun claudeRuntimeMcpConfig(

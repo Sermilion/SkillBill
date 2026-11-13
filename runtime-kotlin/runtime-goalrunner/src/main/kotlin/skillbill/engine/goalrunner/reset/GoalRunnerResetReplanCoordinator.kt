@@ -30,6 +30,7 @@ import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerAcceptedSubtask
 import skillbill.model.RepositoryRoot
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -45,6 +46,7 @@ import java.nio.file.Path
 @Inject
 public class GoalRunnerResetReplanCoordinator(
   private val manifestStore: GoalRunnerManifestStore,
+  private val database: DatabaseSessionFactory,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val gitOperations: WorkflowGitOperations,
   private val diagnostics: RuntimeDiagnostics,
@@ -54,6 +56,11 @@ public class GoalRunnerResetReplanCoordinator(
   private val executionRoots: GoalExecutionRootResolver,
 ) {
   public fun reset(request: GoalRunnerResetRequest): GoalRunnerResetResult? {
+    executionRoots.prepareControlCheckout(request.issueKey, request.repoRoot ?: repositoryRoot.path)
+    return database.transaction { resetWithCheckoutFence(request) }
+  }
+
+  private fun resetWithCheckoutFence(request: GoalRunnerResetRequest): GoalRunnerResetResult? {
     val loaded = loadResetState(request) ?: return null
     if (request.deleteChildWorkflow) return deleteIncompatibleChildWorkflow(request, loaded)
     reconcileResetState(loaded)
@@ -190,6 +197,11 @@ public class GoalRunnerResetReplanCoordinator(
   }
 
   public fun replan(request: GoalRunnerReplanRequest): GoalRunnerReplanResult? {
+    executionRoots.prepareControlCheckout(request.issueKey, request.repoRoot ?: repositoryRoot.path)
+    return database.transaction { replanWithCheckoutFence(request) }
+  }
+
+  private fun replanWithCheckoutFence(request: GoalRunnerReplanRequest): GoalRunnerReplanResult? {
     val loaded =
       manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)
         ?: return null

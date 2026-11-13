@@ -16,6 +16,7 @@ import skillbill.ports.approval.ApprovalOwnerAuthority
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
+import skillbill.workflow.taskruntime.model.skeleton.passThroughLaunchModel
 import java.nio.file.Path
 import java.time.Clock
 
@@ -61,7 +62,7 @@ class FileSystemAgentRunLauncher internal constructor(
     )
 
   override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
-    resolveAgentRunLaunchModel(request, providerEnvironment)
+    passThroughLaunchModel(request.requestedModel, request.requestedEffort)
 
   override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome {
     val agent = SupportedAgent.fromNormalizedId(request.agentId)

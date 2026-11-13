@@ -31,6 +31,7 @@ import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -51,6 +52,7 @@ public class GoalRunnerRunPreparation(
   private val repairCoordinator: GoalRunnerRepairCoordinator,
   private val blockIncidents: BlockIncidentEntryReconciler,
   private val executionRoots: GoalExecutionRootResolver,
+  private val database: DatabaseSessionFactory,
 ) {
   internal fun resolveExecutionRoot(
     state: GoalRunnerManifestState,
@@ -76,8 +78,30 @@ public class GoalRunnerRunPreparation(
       } else {
         state
       }
-    return alignGoalBranch(startState, request)?.let(GoalRunPreparation::PreparationBlocked)
-      ?: GoalRunPreparation.Prepared(startState, request)
+    executionRoots.prepareControlCheckout(request.issueKey, request.sourceRepoRoot)
+    return database.transaction {
+      val root = executionRoots.ensureForControlVerb(startState, request.repoRoot)
+      if (root?.toAbsolutePath()?.normalize() != request.repoRoot.toAbsolutePath().normalize()) {
+        GoalRunPreparation.PreparationBlocked(
+          stopped(
+            StoppedReportArgs(
+              issueKey = request.issueKey,
+              attempted = emptyList(),
+              subtaskId = 0,
+              reason = GoalRunnerStopReason.BLOCKED,
+              blockedReason =
+                "Checkout ${request.repoRoot} changed before goal preparation. Preserve its recovery " +
+                  "journal and retry after checkout recovery finishes.",
+              workflowId = state.parentWorkflowId,
+              lastResumableStep = "plan",
+            ),
+          ),
+        )
+      } else {
+        alignGoalBranch(startState, request)?.let(GoalRunPreparation::PreparationBlocked)
+          ?: GoalRunPreparation.Prepared(startState, request)
+      }
+    }
   }
 
   private fun repairBeforeResume(

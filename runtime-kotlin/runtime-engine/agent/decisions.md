@@ -1,3 +1,9 @@
+## [2026-11-13] Targeted crash recovery inspects process liveness without waiting for lease expiry
+Context: A provider-limit pause left a standalone plan RUNNING with a day-long worker lease after the process had already exited. Resume classified it as AlreadyRunning because targeted crash recovery skipped unexpired leases.
+Decision: FeatureTaskRuntimeCrashReconciler.reconcile(workflowId) admits a running or blocked worker with a matching active or takeover-reserved lease regardless of expiresAt. Reconciliation still requires inspect() to confirm the process is dead. The global startup scan stays expiry-gated so live workers are not inspected at boot.
+Reason: Standalone-phase leases last about a day, so expiry is a poor proxy for liveness. Process inspection already distinguishes ExactLive from NotRunning. Inspecting every live worker on startup would be the cost of dropping the scan gate.
+Alternatives considered: Shortening standalone leases, rejected because heartbeats and takeover fencing still need a long lease. Inspecting every unexpired lease at startup, rejected because that would probe every live worker on every boot.
+
 ## [2026-11-10] Keep primary checkout as optional registration provenance
 Context: Linked-checkout metadata may disappear before a finished run's chat resumes.
 Decision: Capture the primary root at registration and carry it as nullable metadata separate from execution identity; do not reconstruct or backfill historical values.

@@ -90,6 +90,7 @@ class FileSystemInstallPlanningFacts(
             environment = resolveInstallEnvironment(request.installRequest.environment, hostPlatform),
           ),
           catalogLoader,
+          hostPlatform,
         ),
     )
 }
@@ -285,6 +286,7 @@ class FileSystemInstallAgentTargets(
         SupportedAgent.CLAUDE.wireValue -> InstallOperations.claudeAgentsPath(request.home, environment, hostPlatform)
         SupportedAgent.JUNIE.wireValue -> InstallOperations.junieAgentsPath(request.home, hostPlatform)
         SupportedAgent.CURSOR.wireValue -> InstallOperations.cursorAgentsPath(request.home, hostPlatform)
+        SupportedAgent.DEVIN.wireValue -> InstallOperations.devinAgentsPath(request.home, environment, hostPlatform)
         else -> InstallOperations.agentPath(request.agent, request.home, environment, hostPlatform)
       },
     )
@@ -318,6 +320,7 @@ class FileSystemInstallNativeAgentLinks(
         NativeAgentLinkProvider.CODEX -> InstallNativeAgentOperations.linkCodexAgents(fsRequest)
         NativeAgentLinkProvider.JUNIE -> InstallNativeAgentOperations.linkJunieAgents(fsRequest)
         NativeAgentLinkProvider.CURSOR -> InstallNativeAgentOperations.linkCursorAgents(fsRequest)
+        NativeAgentLinkProvider.DEVIN -> InstallNativeAgentOperations.linkDevinAgents(fsRequest)
       }
     return InstallNativeAgentLinkOperationResult(
       outcome =
@@ -339,6 +342,7 @@ class FileSystemInstallNativeAgentLinks(
           NativeAgentLinkProvider.CODEX -> InstallNativeAgentOperations.unlinkCodexAgents(fsRequest)
           NativeAgentLinkProvider.JUNIE -> InstallNativeAgentOperations.unlinkJunieAgents(fsRequest)
           NativeAgentLinkProvider.CURSOR -> InstallNativeAgentOperations.unlinkCursorAgents(fsRequest)
+          NativeAgentLinkProvider.DEVIN -> InstallNativeAgentOperations.unlinkDevinAgents(fsRequest)
         },
     )
   }
@@ -358,6 +362,7 @@ class FileSystemInstallMcpRegistration(
           request.profileEnvironment
             ?: InstallMcpProfileEnvironment.from(resolveInstallEnvironment(emptyMap(), hostPlatform))
             ?: InstallMcpProfileEnvironment(),
+          hostPlatform,
         ),
     )
 
@@ -370,6 +375,7 @@ class FileSystemInstallMcpRegistration(
           request.profileEnvironment
             ?: InstallMcpProfileEnvironment.from(resolveInstallEnvironment(emptyMap(), hostPlatform))
             ?: InstallMcpProfileEnvironment(),
+          hostPlatform,
         ),
     )
 }

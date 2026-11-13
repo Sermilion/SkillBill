@@ -252,7 +252,8 @@ internal object QaPromptSections {
     |  Under it write the labelled lines `Steps:`, `Expected:`, `Observed:` and `Evidence:`. Use `#` or `##` for
     |  every other heading so a finding section ends where the next heading starts. The `####` entry headings
     |  inside `## Unblock` are the only exception.
-    |- Under a `## Coverage` heading, write one bullet per target kind listed in the QA run section, in the form
+    |- Always include a `## Coverage` heading; the runtime warns when a declared target has no line under it. Write
+    |  one bullet per target kind listed in the QA run section, in the form
     |  `- <kind>: <passed|findings_open|skipped|incomplete> [reason: <token>] [backend: real|mocked|none]`. The
     |  `backend:` field is required on a `web` line.
     |- Under a `## Assertions` heading, write one bullet per assertion, including those you did not exercise, in the
@@ -298,6 +299,11 @@ internal object QaPromptSections {
     |  [--note <text>] [--finding <finding id> [--finding-title <title>]] [--evidence <path>]...`. Steps count
     |  from 1 within their case. Pass the finding id you use in the report, and evidence paths that start with
     |  `${qa.expected.evidencePrefix}`.
+    |- Mark a step you did not run `skipped`, with a `--note` that says why, such as a missing tool, no web session,
+    |  or the flow being out of scope. Before you write the report, give every plan step `passed`, `failed` or
+    |  `skipped`: work through the plan and do not stop early while steps you can still run remain. The runtime
+    |  warns about every step left without one of those statuses, and the report's passes and untested flows
+    |  should match the step statuses.
     |- Report each step when it happens, not in a batch at the end: the runtime rejects progress once the QA run
     |  has finished, and steps never reported stay pending. Send one command per step with every value written
     |  out, without shell variables, loops or functions, because the permission policy can deny those. If the

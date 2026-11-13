@@ -22,7 +22,6 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepB
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runloop.state.PhaseAttemptHistory
-import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseBindingFactory
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
@@ -118,8 +117,6 @@ public class InMemoryPhaseRunState(
   override fun runnerFor(stepId: String): PhaseRunner = strategies.runnerFor(stepId, executionPlan)
 
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = strategies.selectedOwnerOf(stepId, executionPlan)
-
-  override val modelDirectiveSupplements: ModelDirectiveSupplements get() = strategies.modelDirectiveSupplements
 
   override val phaseInstructionSource: PhaseInstructionFileSource get() = strategies.phaseInstructionSource
 

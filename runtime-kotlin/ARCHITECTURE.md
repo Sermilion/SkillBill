@@ -394,7 +394,7 @@ Runtime worker ownership is mutable state kept separately from immutable executi
 
 The worker release is the idle checkpoint boundary: after the fenced release commits, it checkpoints only when no active or takeover-reserved lease remains.
 
-A non-terminal row orphaned by a killed child process self-heals: when its worker lease has expired and the injected supervisor confirms the process dead (only `NotRunning`; a live process, an active lease, or ambiguous evidence is left untouched), the row transitions to the resumable `pending` state at its existing step and the lease is released under owner-token/generation fencing. The pass runs unconditionally at runner startup and in the goal parent's child-supervision seam, before the resume point is resolved, and is idempotent and concurrent-safe through the lease machinery. Manual lease clearing and out-of-band row deletion remain the corruption fallback only.
+A non-terminal row orphaned by a killed child process self-heals when the injected supervisor confirms the process dead (only `NotRunning`; a live process or ambiguous evidence is left untouched): the row transitions to the resumable `pending` state at its existing step and the lease is released under owner-token/generation fencing. The startup scan considers only expired leases so live workers are not inspected at boot. Resume and child-supervision target a specific workflow and recover a confirmed-dead worker even when its lease has not expired. The pass is idempotent and concurrent-safe through the lease machinery. Standalone plan resume also repairs a running row after a released provider-limit pause when a prior worker generation exists, no worker lease remains, no phase record is running, and a planning unit retains a classified provider-limit pause. It changes only the parent status to pending in the same transaction as those checks, retains all accepted unit records and history, and emits a diagnostic. Missing ownership without that evidence still blocks. Manual lease clearing and out-of-band row deletion remain the corruption fallback only.
 
 The runtime uses a hexagonal JVM graph with entry adapters at the outside,
 application use cases in the orchestration layer, ports as the dependency
@@ -1275,14 +1275,10 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   selected strategy rules for execution and the explicit revision-one history
   policy for unselected records. A model never selects a strategy: selection
   through `SkeletonStrategyBindings` is canonical and depends only on the
-  definition and selection facts. Model behaviour is a prompt supplement that
-  `ModelDirectiveSupplements` appends when a step is composed, keyed by the step's
-  recorded `PhaseModelProfile` and the canonical `(slot, strategy id)`. Alias
-  identity alone never enables one. `SKILL_BILL_MODEL_DIRECTIVE_SUPPLEMENTS`
-  (on when omitted, `false` disables) enters through `RuntimeFeatureTaskSlotProvides`
-  as injected immutable settings, reaches durable, in-memory and direct-review
-  launches through the step binding, and is not persisted. See
-  [Authoring model-specific phase strategies](../docs/model-specific-phase-strategies.md).
+  definition and selection facts. Model names never select prompt instructions.
+  Sona passes configured model and effort values to the harness unchanged.
+  Historical profiles remain stored metadata and never affect prompt composition.
+  See [Model-independent phase execution](../docs/model-specific-phase-strategies.md).
 - `FeatureTaskRuntimeExecutionPlanCodec` maps resolved plans to the bounded
   artifact through `FeatureTaskRuntimeExecutionPlanValidator`. Decoding restores
   immutable domain data and checks policy digests. It does not select strategies
@@ -1709,8 +1705,8 @@ Composition:
   `FeatureTaskRuntimeExecutionPlanCodec`, its digests, recorded launch
   assignments, `FeatureTaskRuntimeExecutionAdmission` and the accepted-step
   authority of the attempt host still own those facts, and strategies only
-  declare. Contract `0.2` stays unchanged because supplements and aliases add no
-  durable field.
+  declare. Stored profiles and historical aliases stay readable without changing
+  durable assignments or execution identity.
 
 - Each strategy supplies its steps' prompt sections through
   `PhaseStrategy.promptSections` (`PhaseStepPromptSections`: task directive,
@@ -1788,8 +1784,8 @@ Adding a phase strategy:
 3. Name it in `SkeletonStrategyBindings` for the definitions and selection facts
    that pick it.
 
-A model is not a strategy: add model-specific prompt text through a classifier
-case and a `ModelDirectiveSupplements` mapping instead.
+A model is not a strategy. Pass configured model and effort values to the harness
+without classifying model names or adding model-dependent instructions.
 
 ## Runtime Contract And Schema Seams
 

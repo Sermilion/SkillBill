@@ -445,3 +445,8 @@ Areas: runtime-application/goalrunner, .feature-specs/SKILL-181-preplan-provenan
 - Limitation: StaleValid does not yet re-run preplan, cascade, CLI replan, exit codes, or `planning_reason`
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented
+
+## [2026-11-13] Resume plans after provider-paused workers release their leases
+- PlanWorkflowLookup repairs a running parent with retained provider-paused units after ownership release. Both discovered and explicitly selected plans use recovery.
+- The transaction requires a prior worker generation, absent ownership and no running phase records. Accepted plans, phase records, execution identity and history remain unchanged.
+- PlanWorkflowLookupTest covers selection, repeat recovery and continuation admission, plus retained leases and missing or ambiguous settlement evidence.

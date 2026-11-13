@@ -91,7 +91,7 @@ fun UsageSidebar(model: UsageSidebarModel, modifier: Modifier = Modifier) {
   UsageCard(ui, onOpen = {
     openedForToken = state.popupDismissalToken
     expanded = true
-  }, modifier = modifier.padding(bottom = 10.dp).focusRequester(focusRequester).semantics { contentDescription = "${ui.provider} usage limits. View details" },
+  }, modifier = modifier.padding(top = 8.dp).focusRequester(focusRequester).semantics { contentDescription = "${ui.provider} usage limits. View details" },
     onRefresh = refreshAction.takeIf { state.nameOnlyAgent == null && state.provider != null },
     refreshEnabled = refreshAllowed,
     refreshLabel = if (refreshAvailability == UsageRefreshAvailability.Checking) "Checking" else "Refresh",

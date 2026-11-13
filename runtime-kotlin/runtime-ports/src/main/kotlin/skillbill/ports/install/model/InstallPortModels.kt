@@ -12,6 +12,7 @@ enum class NativeAgentLinkProvider {
   CODEX,
   JUNIE,
   CURSOR,
+  DEVIN,
 }
 
 data class NativeAgentLinkOverrides(
