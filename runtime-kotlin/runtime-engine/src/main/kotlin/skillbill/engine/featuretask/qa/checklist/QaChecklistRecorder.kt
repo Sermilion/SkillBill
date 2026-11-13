@@ -95,6 +95,21 @@ public class QaChecklistRecorder(
   public fun recordStep(report: QaStepReport): QaChecklistOutcome =
     record(report.invocationId) { current, now -> QaChecklistMerge.withStep(current, report, now) }
 
+  internal fun unsettledSteps(invocationId: String): List<String> =
+    catchingNonCancellation {
+      database.read { unit -> unit.standalonePhaseStatuses.readByInvocation(invocationId)?.qaChecklist }
+    }.getOrElse { failure ->
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "seam=qa_progress kind=checklist_unreadable invocation=${bounded(invocationId)} " +
+          "failure=${failure.failureCodeLabel() ?: failure::class.simpleName}",
+      )
+      null
+    }?.cases.orEmpty()
+      .flatMap { case ->
+        case.steps.mapIndexedNotNull { index, step -> "${case.id}.${index + 1}".takeUnless { step.status.isSettled } }
+      }
+
   public fun recordTarget(report: QaTargetReport): QaChecklistOutcome =
     record(report.invocationId) { current, now -> QaChecklistMerge.withTarget(current, report, now) }
 

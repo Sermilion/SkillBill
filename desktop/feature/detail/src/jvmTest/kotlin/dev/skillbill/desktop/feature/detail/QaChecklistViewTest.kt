@@ -87,6 +87,27 @@ class QaChecklistViewTest {
   }
 
   @Test
+  fun `a finished run tells skipped steps apart from steps never reported`() {
+    val checklist = QaChecklist(null, null, null, null, emptyList(), null, listOf(
+      QaChecklistCase("S1", "Partly skipped", listOf(
+        QaChecklistStep("ran", QaStepState.Passed, null, null, emptyList(), instant(2)),
+        QaChecklistStep("no web", QaStepState.Skipped, "no web session", null, emptyList(), instant(3)),
+      )),
+      QaChecklistCase("S5", "Skipped", listOf(QaChecklistStep("cache", QaStepState.Skipped, "out of scope", null, emptyList(), instant(4)))),
+      QaChecklistCase("S6", "Never reported", listOf(QaChecklistStep("airplane", QaStepState.Pending, null, null, emptyList(), null))),
+    ), emptyList(), null)
+    val item = workItem("QA", kind = WorkKind.Phase).copy(running = false, lifecycle = dev.skillbill.desktop.core.domain.model.Lifecycle.Terminal)
+
+    val view = qaChecklistView(item, emptyDetail.copy(executionHistory = listOf(run("done", 1, checklist, 5, "completed"))), null, emptyMap())
+
+    assertEquals(listOf("Partly skipped", "Skipped", "Not run"), view.cases.map { it.status.label })
+    assertEquals(QaStepDisplay.Skipped, view.cases[0].steps[1].display)
+    assertEquals(QaStepDisplay.NotRun, view.cases[2].steps.single().display)
+    assertEquals("3 of 4 steps done: 1 passed, 0 failed, 2 skipped", view.progress?.description)
+    assertEquals(1, view.progress?.remaining)
+  }
+
+  @Test
   fun `selected QA execution supplies checklist and case state outside history page`() {
     val checklist = QaChecklist(null, null, null, null, emptyList(), null, listOf(
       QaChecklistCase("C1", "Selected case", listOf(QaChecklistStep("stopped", QaStepState.Running, null, null, emptyList(), instant(2)))),

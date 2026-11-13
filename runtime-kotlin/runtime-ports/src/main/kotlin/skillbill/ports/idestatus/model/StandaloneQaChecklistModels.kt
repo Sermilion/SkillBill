@@ -7,7 +7,10 @@ enum class StandaloneQaStepStatus(val wireValue: String) {
   RUNNING("running"),
   PASSED("passed"),
   FAILED("failed"),
+  SKIPPED("skipped"),
   ;
+
+  val isSettled: Boolean get() = this == PASSED || this == FAILED || this == SKIPPED
 
   companion object {
     fun fromWire(value: String?): StandaloneQaStepStatus? = entries.firstOrNull { it.wireValue == value }
