@@ -34,7 +34,7 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
   lateinit var legacySpecRepo: Path
 
   @Test
-  fun `duplicate malformed or missing probe lines never block completed validation prose`() {
+  fun `legacy probe text is ignored and completed validation needs no probe artifact`() {
     val reports =
       listOf(
         "Required checks passed.",
@@ -56,7 +56,7 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
           ?.let(JsonCodec::jsonElementToValue)
           ?.let(JsonCodec::anyToStringAnyMap)
       val produced = JsonCodec.anyToStringAnyMap(envelope?.get(SharedPayloadKeys.PRODUCED_OUTPUTS))
-      assertEquals(emptyList<Any?>(), produced?.get(ValidationTestProbePayloadKeys.TEST_PROBES))
+      assertNull(produced?.get(ValidationTestProbePayloadKeys.TEST_PROBES))
     }
   }
 

@@ -1272,14 +1272,10 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   selected strategy rules for execution and the explicit revision-one history
   policy for unselected records. A model never selects a strategy: selection
   through `SkeletonStrategyBindings` is canonical and depends only on the
-  definition and selection facts. Model behaviour is a prompt supplement that
-  `ModelDirectiveSupplements` appends when a step is composed, keyed by the step's
-  recorded `PhaseModelProfile` and the canonical `(slot, strategy id)`. Alias
-  identity alone never enables one. `SKILL_BILL_MODEL_DIRECTIVE_SUPPLEMENTS`
-  (on when omitted, `false` disables) enters through `RuntimeFeatureTaskSlotProvides`
-  as injected immutable settings, reaches durable, in-memory and direct-review
-  launches through the step binding, and is not persisted. See
-  [Authoring model-specific phase strategies](../docs/model-specific-phase-strategies.md).
+  definition and selection facts. Model names never select prompt instructions.
+  Sona passes configured model and effort values to the harness unchanged.
+  Historical profiles remain stored metadata and never affect prompt composition.
+  See [Model-independent phase execution](../docs/model-specific-phase-strategies.md).
 - `FeatureTaskRuntimeExecutionPlanCodec` maps resolved plans to the bounded
   artifact through `FeatureTaskRuntimeExecutionPlanValidator`. Decoding restores
   immutable domain data and checks policy digests. It does not select strategies
@@ -1706,8 +1702,8 @@ Composition:
   `FeatureTaskRuntimeExecutionPlanCodec`, its digests, recorded launch
   assignments, `FeatureTaskRuntimeExecutionAdmission` and the accepted-step
   authority of the attempt host still own those facts, and strategies only
-  declare. Contract `0.2` stays unchanged because supplements and aliases add no
-  durable field.
+  declare. Stored profiles and historical aliases stay readable without changing
+  durable assignments or execution identity.
 
 - Each strategy supplies its steps' prompt sections through
   `PhaseStrategy.promptSections` (`PhaseStepPromptSections`: task directive,
@@ -1786,8 +1782,8 @@ Adding a phase strategy:
 3. Name it in `SkeletonStrategyBindings` for the definitions and selection facts
    that pick it.
 
-A model is not a strategy: add model-specific prompt text through a classifier
-case and a `ModelDirectiveSupplements` mapping instead.
+A model is not a strategy. Pass configured model and effort values to the harness
+without classifying model names or adding model-dependent instructions.
 
 ## Runtime Contract And Schema Seams
 

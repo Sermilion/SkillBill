@@ -688,7 +688,7 @@ class GitGoalWorktreeResources(
         "could not establish ownership of $target after creation. Preserve the path and inspect its registration.",
       )
     }
-    val identity = verifiedIdentity(target, ownership)
+    val identity = verifiedCheckoutIdentity(target, ownership, diagnostics)
     if (identity == null ||
       (ownership.state != GoalPlanningOwnership.State.RESERVED && identity != ownership.gitWorktreeIdentity)
     ) {

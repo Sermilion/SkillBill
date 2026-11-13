@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.phase.prompt.compose
 import skillbill.engine.featuretask.model.audit.AcceptanceAuditInteractionTraceScope
 import skillbill.engine.featuretask.model.audit.AcceptanceRepairPromptFocus
 import skillbill.engine.featuretask.model.audit.UnknownInteractionScenarioContext
-import skillbill.engine.featuretask.model.audit.ValidateProbeScope
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationTurn
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
@@ -18,7 +17,6 @@ import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedger
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGap
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionLateFinding
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
-import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import java.nio.file.Path
 
 public data class FeatureTaskRuntimePhasePromptComposeInputs(
@@ -56,7 +54,6 @@ public data class FeatureTaskRuntimePhasePromptComposeInputs(
   internal val validationGateTriagePlan: String? = null,
   public val validationGateRepair: Boolean = false,
   public val validationGateTriage: Boolean = false,
-  public val validateProbeScopeSource: () -> ValidateProbeScope? = { null },
   internal val agentRunValidateFallback: Boolean = false,
   public val packConfirmationGateCommand: String? = null,
   public val packBuildCommand: String? = null,
@@ -66,12 +63,8 @@ public data class FeatureTaskRuntimePhasePromptComposeInputs(
   public val mutating: Boolean = false,
   public val singleAgentSession: Boolean = false,
   public val repoRoot: Path? = null,
-  public val stepProfile: PhaseModelProfile = PhaseModelProfile.CANONICAL,
   internal val implementationChecklistAddress: String? = null,
   public val projectInstructions: List<PhaseProjectInstructionsResolution.Injected> = emptyList(),
   public val goalHistoryWriterInput: GoalHistoryWriterInput? = null,
   public val workflowId: String? = null,
-) {
-  internal val validateProbeScope: ValidateProbeScope? get() = validateProbeScopeSource()
-  internal val validateProbesActive: Boolean get() = validateProbeScope != null
-}
+)

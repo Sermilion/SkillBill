@@ -1,3 +1,8 @@
+## [2026-11-12] Let normal desktop launches choose the Skiko renderer
+Context: The Changes panel was slow even for small diffs. DesktopLauncher forced CPU rendering on Linux when no renderer override was supplied.
+Decision: Leave renderer selection to Skiko during normal launches and keep compose.interop.blending enabled for terminal overlays. Keep the explicit SOFTWARE_COMPAT renderer in runFromSource for the recorded source-run X11 visual crash.
+Reason: A normal installation should use the renderer Skiko selects for its platform. Explicit SKIKO_RENDER_API and skiko.renderApi overrides remain available. Source-run QA has a separate compatibility requirement and does not prove hardware presentation performance.
+
 ## [2026-11-11] Keep runtime identities and persistent paths during the Sona rename
 Context: SKILL-538 renames desktop presentation while existing callers, login registration and saved data must remain usable.
 Decision: Use Sona in displayed copy, artwork and desktop package names. Retain runtime CLI/MCP identities, /skill-bill, skillbill-actions, SKILL_BILL_* names, dev.skillbill packages, saved-state paths, bundle ID, upgrade UUID and the Linux autostart filename.

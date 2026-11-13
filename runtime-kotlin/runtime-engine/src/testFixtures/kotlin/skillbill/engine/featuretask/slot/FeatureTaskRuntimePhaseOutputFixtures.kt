@@ -206,7 +206,7 @@ const val VALIDATE_PROBE_LINE =
   "Test probe FooTest.guards: killed guards src/Foo.kt:1 repaired no reason removing the guard failed the test"
 
 private const val VALIDATE_PRODUCED_OUTPUTS =
-  """{"value":"Project checks passed.\n$VALIDATE_PROBE_LINE","validation_passed":true}"""
+  """{"value":"Project checks passed.","validation_passed":true}"""
 
 private const val WRITE_HISTORY_PRODUCED_OUTPUTS =
   """{"value":"Recorded the boundary history entry."}"""

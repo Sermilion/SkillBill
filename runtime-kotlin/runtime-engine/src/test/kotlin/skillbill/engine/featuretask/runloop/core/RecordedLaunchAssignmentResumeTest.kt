@@ -29,7 +29,6 @@ import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import skillbill.workflow.taskruntime.model.skeleton.LaunchModelProvenance
 import skillbill.workflow.taskruntime.model.skeleton.LaunchProviderNamespace
 import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
-import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfileClassifier
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
@@ -55,7 +54,7 @@ class RecordedLaunchAssignmentResumeTest {
       val claudeLaunched = FeatureTaskRuntimeRunLoopLaunch.launchedModelDirective(claudeRun)
       assertEquals(SupportedAgent.CLAUDE.id, claudeRun.resolvedAgent.resolvedAgentId)
       assertEquals(recorded.agentId, claudeRun.launchAssignment?.agentId)
-      assertEquals(PhaseModelProfileClassifier.ANTHROPIC_OPUS_55, claudeLaunched.modelOverride)
+      assertEquals("claude-opus-5-5", claudeLaunched.modelOverride)
       assertEquals("high", claudeLaunched.effortOverride)
 
       val cursorResume =
@@ -130,9 +129,9 @@ private fun claudeOpusAssignment(): StepLaunchAssignment =
     PHASE_VALIDATE,
     SupportedAgent.CLAUDE.id,
     EffectiveLaunchModel(
-      requestedModel = PhaseModelProfileClassifier.ANTHROPIC_OPUS_55,
+      requestedModel = "claude-opus-5-5",
       requestedEffort = "high",
-      effectiveModel = PhaseModelProfileClassifier.ANTHROPIC_OPUS_55,
+      effectiveModel = "claude-opus-5-5",
       namespace = LaunchProviderNamespace.ANTHROPIC_API,
       provenance = LaunchModelProvenance.REQUESTED_EXACT,
       unknownReason = null,

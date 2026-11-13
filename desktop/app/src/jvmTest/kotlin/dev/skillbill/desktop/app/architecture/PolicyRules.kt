@@ -25,6 +25,8 @@ internal object PolicyRules {
 
   /** Sort calls a file may make, each with a written reason; deadline patterns still run on every file. */
   private val allowedSorts = mapOf(
+    "core/ui/src/commonMain/kotlin/dev/skillbill/desktop/core/ui/diff/DiffLines.kt" to
+      ("sortedBy" to "Places sparse comment slots in source-line order within a diff hunk; no work items."),
     "app/src/jvmMain/kotlin/dev/skillbill/desktop/app/DesktopLauncher.kt" to ("sorted" to "Orders the image's jar files for a stable classpath; no work items."),
     "feature/detail/src/commonMain/kotlin/dev/skillbill/desktop/feature/detail/AssessmentOrder.kt" to
       ("sortedWith" to "Orders one goal's assessment findings by severity or status when the reader asks; no work items."),

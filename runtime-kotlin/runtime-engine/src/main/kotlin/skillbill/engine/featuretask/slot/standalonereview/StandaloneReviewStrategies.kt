@@ -194,7 +194,7 @@ public abstract class StandaloneReviewStrategy(
           is ParallelCodeReviewPlanned.Ready -> resolved.value?.let(::delegatedQualityRubricSection)
         }
       }
-    val directive = standaloneDirective(run, binding, target, headSha, rubricSection)
+    val directive = standaloneDirective(run, target, headSha, rubricSection)
     return runPreparedReview(
       run,
       binding,
@@ -688,7 +688,6 @@ public abstract class StandaloneReviewStrategy(
 
   private fun standaloneDirective(
     run: PhaseRun,
-    binding: PhaseReviewStepBinding,
     target: ReviewTarget,
     head: String,
     rubricSection: String?,
@@ -713,16 +712,7 @@ public abstract class StandaloneReviewStrategy(
         appendLine()
         append(it)
       }
-      supplement(run, binding)?.let {
-        appendLine()
-        append(it)
-      }
     }
-
-  private fun supplement(
-    run: PhaseRun,
-    binding: PhaseReviewStepBinding,
-  ): String? = binding.modelDirectiveSupplements.directiveFor(run, binding.acceptedOwner)
 
   private fun delegatedQualityRubricSection(rubric: String): String =
     buildString {
@@ -828,9 +818,8 @@ public abstract class StandaloneReviewStrategy(
             laneProgressIdleTimeout =
               launch.skillRunRequest.progressIdleTimeout
                 ?: READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes,
-            modelOverride = launch.skillRunRequest.modelOverride,
+            modelOverride = run.launchAssignment?.launch?.effectiveModel,
             effortOverride = launch.skillRunRequest.effortOverride,
-            directiveSuffix = supplement(run, binding).orEmpty(),
           )
         when (val outcome = delegatedRunner.run(request)) {
           is ParallelCodeReviewRunOutcome.PlanningFailed -> {

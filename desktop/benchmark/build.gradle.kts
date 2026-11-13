@@ -1,6 +1,16 @@
 plugins {
   id("skillbill.desktop.kmp.library")
+  id("skillbill.desktop.compose")
   id("skillbill.desktop.kotlin.inject")
+}
+
+tasks.register<JavaExec>("diffRenderProbe") {
+  group = "application"
+  description = "Measures synthetic diff scrolling on an offscreen CPU canvas; never reads user data."
+  mainClass = "dev.skillbill.desktop.benchmark.DiffRenderProbeKt"
+  classpath = kotlin.targets.getByName("jvm").compilations.getByName("main").output.allOutputs +
+    configurations.getByName("jvmRuntimeClasspath")
+  maxHeapSize = "2g"
 }
 
 kotlin {

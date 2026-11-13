@@ -10,6 +10,8 @@ import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 
+public enum class GoalRunnerLeasePurpose { EXECUTION, BLOCK_SETTLEMENT }
+
 public data class GoalRunnerChildExecutionPlanAdmission(
   public val workflowId: String,
   public val expected: ValidatedFeatureTaskRuntimeExecutionPlan,

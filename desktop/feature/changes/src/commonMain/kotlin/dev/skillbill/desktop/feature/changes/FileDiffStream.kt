@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -35,11 +34,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -100,9 +97,9 @@ internal fun FileDiffStream(
   modifier: Modifier = Modifier,
 ) {
   val listState = rememberLazyListState()
-  val usable = files.map { file -> loaded[file.path]?.takeIf { it.file == file } }
+  val usable = remember(files, loaded) { files.map { file -> loaded[file.path]?.takeIf { it.file == file } } }
   val placement = remember(files, usable, threads) { placeThreads(files, usable, threads) }
-  val starts = fileStartIndexes(usable, placement, composer, files)
+  val starts = remember(usable, placement, composer?.path, files) { fileStartIndexes(usable, placement, composer, files) }
   val currentFiles by rememberUpdatedState(files)
   val currentStarts by rememberUpdatedState(starts)
   val currentAction by rememberUpdatedState(onAction)
@@ -172,13 +169,13 @@ internal fun FileDiffStream(
           item(key = "general:header", contentType = "general-header") {
             BasicText(
               "General · ${placement.general.size}",
-              threadItemModifier(threadWidth, horizontalScroll).semantics { heading() },
+              threadItemModifier(threadWidth).semantics { heading() },
               style = changesMono(12f, FontWeight.SemiBold, SkillBillTheme.colors.fg2),
             )
           }
           placement.general.forEach { thread ->
             item(key = "thread:${thread.id}", contentType = "thread") {
-              ThreadAppearing(threadWidth, horizontalScroll) {
+              ThreadAppearing(threadWidth) {
                 Column {
                   thread.path?.let { path -> BasicText(if (thread.line == null) path else "$path:${thread.line}", style = changesMono(11f, FontWeight.Medium, SkillBillTheme.colors.fgFaint)) }
                   threadContent(thread.id)
@@ -202,11 +199,11 @@ internal fun FileDiffStream(
           }
           placement.files[index].fileSlot.forEach { thread ->
             item(key = "thread:${thread.id}", contentType = "thread") {
-              ThreadAppearing(threadWidth, horizontalScroll) { threadContent(thread.id) }
+              ThreadAppearing(threadWidth) { threadContent(thread.id) }
             }
           }
           if (fileComposer != null) item(key = "composer:${file.path}", contentType = "composer") {
-            ThreadAppearing(threadWidth, horizontalScroll) { CommentComposer(fileComposer.text, fileComposer.problem, fileComposer.saving, "Leave a comment", "Stays pending until you add the review", "Add to review", { onAction(ChangesWindowAction.ComposerText(it)) }, { onAction(ChangesWindowAction.SavePending) }, { onAction(ChangesWindowAction.CancelComposer) }, onCommentFocusChanged) }
+            ThreadAppearing(threadWidth) { CommentComposer(fileComposer.text, fileComposer.problem, fileComposer.saving, "Leave a comment", "Stays pending until you add the review", "Add to review", { onAction(ChangesWindowAction.ComposerText(it)) }, { onAction(ChangesWindowAction.SavePending) }, { onAction(ChangesWindowAction.CancelComposer) }, onCommentFocusChanged) }
           }
           val diff = usable[index]
           val state = diff?.state
@@ -222,8 +219,8 @@ internal fun FileDiffStream(
               ) { slotId ->
                 if (slotId.startsWith("composer:")) {
                   val draft = composer ?: return@DiffLineSlots
-                  ThreadAppearing(threadWidth, horizontalScroll) { CommentComposer(draft.text, draft.problem, draft.saving, "Leave a comment", "Stays pending until you add the review", "Add to review", { onAction(ChangesWindowAction.ComposerText(it)) }, { onAction(ChangesWindowAction.SavePending) }, { onAction(ChangesWindowAction.CancelComposer) }, onCommentFocusChanged) }
-                } else ThreadAppearing(threadWidth, horizontalScroll) { threadContent(slotId) }
+                  ThreadAppearing(threadWidth) { CommentComposer(draft.text, draft.problem, draft.saving, "Leave a comment", "Stays pending until you add the review", "Add to review", { onAction(ChangesWindowAction.ComposerText(it)) }, { onAction(ChangesWindowAction.SavePending) }, { onAction(ChangesWindowAction.CancelComposer) }, onCommentFocusChanged) }
+                } else ThreadAppearing(threadWidth) { threadContent(slotId) }
               }
               val affordance = if (canAuthor) DiffLineAffordance(
                 onAdd = { line -> commentAnchorFor(line)?.let { onAction(ChangesWindowAction.OpenComposer(file.path, it.side, it.line)) } },
@@ -243,7 +240,7 @@ internal fun FileDiffStream(
 }
 
 @Composable
-private fun ThreadAppearing(width: Dp, scroll: ScrollState, content: @Composable () -> Unit) {
+private fun ThreadAppearing(width: Dp, content: @Composable () -> Unit) {
   val reduced = LocalReducedMotion.current
   val appear = remember(reduced) { MutableTransitionState(reduced).apply { if (!reduced) targetState = true } }
   AnimatedVisibility(
@@ -251,12 +248,12 @@ private fun ThreadAppearing(width: Dp, scroll: ScrollState, content: @Composable
     enter = if (reduced) EnterTransition.None else fadeIn() + expandVertically(),
     exit = if (reduced) ExitTransition.None else fadeOut() + shrinkVertically(),
   ) {
-    Box(threadItemModifier(width, scroll)) { content() }
+    Box(threadItemModifier(width)) { content() }
   }
 }
 
-private fun threadItemModifier(width: Dp, scroll: ScrollState): Modifier =
-  Modifier.width(width).offset { IntOffset(scroll.value, 0) }.padding(start = 48.dp, end = 12.dp, bottom = 8.dp)
+private fun threadItemModifier(width: Dp): Modifier =
+  Modifier.width(width).padding(start = 48.dp, end = 12.dp, bottom = 8.dp)
 
 /** The list index of each file's separator row; a file with no read yet has one placeholder row after it. */
 internal fun fileStartIndexes(loaded: List<LoadedDiff?>, placement: ThreadPlacement = ThreadPlacement(emptyList(), loaded.map { FileThreads() }), composer: CommentComposerUi? = null, files: List<ChangedFile>? = null): IntArray {
@@ -273,7 +270,7 @@ internal fun fileStartIndexes(loaded: List<LoadedDiff?>, placement: ThreadPlacem
 
 /** The file whose rows hold list index [item], given [starts] from [fileStartIndexes]. */
 internal fun fileAt(starts: IntArray, item: Int): Int {
-  val found = starts.toList().binarySearch(item)
+  val found = starts.binarySearch(item)
   return if (found >= 0) found else (-found - 2).coerceAtLeast(0)
 }
 

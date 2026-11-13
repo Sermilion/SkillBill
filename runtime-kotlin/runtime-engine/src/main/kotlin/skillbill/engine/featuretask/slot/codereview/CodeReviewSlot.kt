@@ -78,7 +78,7 @@ internal class CodeReviewSlot(
         run,
         state.reviewExecutionContext(),
         state,
-        state.acceptedOwner.promptSource(run.phaseId, state.modelDirectiveSupplements),
+        state.acceptedOwner.promptSource(run.phaseId),
       )
     }
   private val verifyFindingsDescriptor =

@@ -25,8 +25,6 @@ import skillbill.engine.featuretask.slot.reviewStrategyRunners
 import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.model.EnvironmentContext
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
@@ -41,10 +39,8 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertSame
-import kotlin.test.assertTrue
 
 class RuntimeFeatureTaskSlotProvidesTest {
   private val strategies =
@@ -60,41 +56,6 @@ class RuntimeFeatureTaskSlotProvidesTest {
         callbacks = OptionalCallbacks(),
       ),
     ).strategies
-
-  private fun strategiesWith(environment: Map<String, String>): PhaseStrategyLookup =
-    RuntimeFeatureTaskSlotTestComponent::class.create(
-      RuntimeContext(
-        environment =
-          EnvironmentContext(
-            environment = environment,
-            userHome = Files.createTempDirectory("skillbill-slot-provides"),
-          ),
-        transport = TransportContext(),
-        workflowOps = WorkflowOpsContext(),
-        callbacks = OptionalCallbacks(),
-      ),
-    ).strategies
-
-  @Test
-  fun `model directive supplements default on and follow the setting`() {
-    val unrelated = mapOf("SKILL_BILL_UNRELATED" to "x")
-
-    assertTrue(strategiesWith(unrelated).modelDirectiveSupplements.enabled)
-    assertTrue(strategiesWith(mapOf(ModelDirectiveSupplementsSetting.KEY to "true")).modelDirectiveSupplements.enabled)
-    assertFalse(
-      strategiesWith(mapOf(ModelDirectiveSupplementsSetting.KEY to "false")).modelDirectiveSupplements.enabled,
-    )
-  }
-
-  @Test
-  fun `an unrecognized supplements setting is refused with its typed code`() {
-    val failure =
-      assertFailsWith<SkillBillRuntimeException> {
-        strategiesWith(mapOf(ModelDirectiveSupplementsSetting.KEY to "off"))
-      }
-
-    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_MODEL_DIRECTIVE_SUPPLEMENTS_SETTING, failure.code)
-  }
 
   @Test
   fun `production registry lists all quality_gate strategies`() {

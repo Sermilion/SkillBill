@@ -1,11 +1,13 @@
 package skillbill.engine.goalrunner.execution.core
 
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
+import skillbill.engine.goalrunner.model.GoalRunnerLeasePurpose
 
 val DIRECT_GOAL_RUNNER_EXECUTION_COORDINATOR: GoalRunnerExecutionCoordinator =
   object : GoalRunnerExecutionCoordinator {
     override fun <T> runOwnedWithLease(
       parentWorkflowId: String,
+      purpose: GoalRunnerLeasePurpose,
       block: (Long, String?) -> T,
     ): GoalRunnerOwnedRun<T> = GoalRunnerOwnedRun.Completed(block(1, null))
 

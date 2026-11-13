@@ -37,6 +37,7 @@ import dev.skillbill.desktop.core.domain.repository.WorkChangeScopesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import dev.skillbill.desktop.core.domain.repository.DiffCommentRepository
+import dev.skillbill.desktop.core.common.AppDispatchers
 import dev.skillbill.desktop.core.common.Outcome
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import dev.skillbill.desktop.core.ui.diff.diffLongestChars
@@ -55,6 +56,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.tatarka.inject.annotations.Assisted
 import me.tatarka.inject.annotations.Inject
 
@@ -68,6 +70,7 @@ class ChangesWindowViewModel(
   private val scopes: WorkChangeScopesRepository,
   private val changes: WorkChangesRepository,
   private val comments: DiffCommentRepository,
+  private val dispatchers: AppDispatchers,
 ) : ViewModel() {
   private val requestedScope = MutableStateFlow(initialScope)
   private val mutableState = MutableStateFlow(
@@ -478,10 +481,16 @@ class ChangesWindowViewModel(
         val target = current.target ?: return@launch
         val file = nextWantedFile(current) ?: return@launch
         val scope = current.scope
-        val result = scopes.fileDiff(target, scope, file)
-        mutableState.update { old -> if (old.target == target && old.scope == scope) old.withLoadedDiff(file, result) else old }
+        val loaded = readDiff(target, scope, file)
+        mutableState.update { old -> if (old.target == target && old.scope == scope) old.withLoadedDiff(loaded) else old }
       }
     }
+  }
+
+  private suspend fun readDiff(target: ChangeScopeTarget, scope: ChangeScope, file: ChangedFile): LoadedDiff = withContext(dispatchers.io) {
+    val result = scopes.fileDiff(target, scope, file)
+    val diff = (result as? FileDiffState.Shown)?.diff
+    LoadedDiff(file, result, diff?.takeIf { it.hunks.isNotEmpty() }?.let(::diffRowCount) ?: 1, diff?.let(::diffLongestChars) ?: 0)
   }
 
   private fun nextWantedFile(current: ChangesWindowUiState): ChangedFile? {
@@ -530,7 +539,7 @@ class ChangesWindowViewModel(
     val previous = current.diff
     if ((previous as? DiffPaneUi.Shown)?.file?.path != file.path) mutableState.update { it.copy(diff = DiffPaneUi.Loading(file)) }
     diffRead = viewModelScope.launch {
-      val result = scopes.fileDiff(target, scope, file)
+      val loaded = readDiff(target, scope, file)
       val latest = state.value
       if (diffReadVersion != version || latest.content != WindowContent.Ready(target) ||
         latest.scope != scope || latest.selectedPath != file.path
@@ -538,7 +547,7 @@ class ChangesWindowViewModel(
       val chips = projectChips(file, (latest.content as? WindowContent.Ready)?.target, latest.scope, latest.stats)
       mutableState.update { old ->
         if (diffReadVersion == version && old.content == WindowContent.Ready(target) && old.scope == scope && old.selectedPath == file.path) {
-          old.copy(diff = DiffPaneUi.Shown(file, result, chips)).withLoadedDiff(file, result)
+          old.copy(diff = DiffPaneUi.Shown(file, loaded.state, chips)).withLoadedDiff(loaded)
         } else old
       }
     }
@@ -808,11 +817,8 @@ class ChangesWindowViewModel(
   }
 }
 
-private fun ChangesWindowUiState.withLoadedDiff(file: ChangedFile, result: FileDiffState): ChangesWindowUiState {
-  val diff = (result as? FileDiffState.Shown)?.diff
-  val loaded = LoadedDiff(file, result, diff?.takeIf { it.hunks.isNotEmpty() }?.let(::diffRowCount) ?: 1, diff?.let(::diffLongestChars) ?: 0)
-  return copy(fileDiffs = fileDiffs + (file.path to loaded))
-}
+private fun ChangesWindowUiState.withLoadedDiff(loaded: LoadedDiff): ChangesWindowUiState =
+  copy(fileDiffs = fileDiffs + (loaded.file.path to loaded))
 
 private fun DiffCommentsState.thread(id: String) = (this as? DiffCommentsState.Available)?.threads?.firstOrNull { it.id == id }
 

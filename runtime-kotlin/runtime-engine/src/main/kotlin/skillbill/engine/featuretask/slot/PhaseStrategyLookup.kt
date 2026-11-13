@@ -1,24 +1,10 @@
 package skillbill.engine.featuretask.slot
 
-import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.phase.prompt.compose.AbsentPhaseInstructionFileSource
-import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
-import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
-import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
-import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
-import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
-import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
-import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
-import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
-import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
-import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.PhaseInstructionFileSource
@@ -26,7 +12,6 @@ import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
-import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStepRecords
@@ -41,7 +26,6 @@ import java.util.concurrent.ConcurrentHashMap
 public class PhaseStrategyLookup(
   public val registry: PhaseStrategyRegistry,
   private val selection: PhaseStrategySelection,
-  public val modelDirectiveSupplements: ModelDirectiveSupplements,
   internal val phaseInstructionSource: PhaseInstructionFileSource = AbsentPhaseInstructionFileSource,
 ) {
   private val plans = ConcurrentHashMap<PlanKey, ResolvedPhaseExecutionPlan>()
@@ -485,77 +469,4 @@ internal object GoalPlanningImportSteps {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
     )
-}
-
-public class ModelDirectiveSupplements(public val enabled: Boolean) {
-  private val loaded = ConcurrentHashMap<String, String>()
-
-  internal fun directiveFor(
-    owner: PhaseStrategy,
-    stepId: String,
-    profile: PhaseModelProfile,
-  ): String? {
-    if (!enabled || profile != PhaseModelProfile.OPUS_5_5) return null
-    val path =
-      if (owner.slot == PhaseSlot.PLAN &&
-        owner.strategyId == PlanFanOutStrategy.ID &&
-        stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS
-      ) {
-        PLAN_FAN_OUT_SUBTASKS_RESOURCE
-      } else {
-        RESOURCES[owner.slot to owner.strategyId]
-      }
-    return path?.let { resource -> loaded.computeIfAbsent(resource) { directiveResource(it).trimEnd() } }
-      ?.takeIf(String::isNotBlank)
-  }
-
-  internal fun directiveFor(
-    run: PhaseRun,
-    owner: PhaseStrategy,
-  ): String? = directiveFor(owner, run.phaseId, run.launchAssignment?.profile ?: PhaseModelProfile.CANONICAL)
-
-  internal fun supplement(
-    sections: PhaseStepPromptSections,
-    owner: PhaseStrategy,
-    stepId: String,
-    profile: PhaseModelProfile,
-    probes: () -> Boolean = { false },
-  ): PhaseStepPromptSections {
-    val block =
-      directiveFor(owner, stepId, profile)
-        ?.let {
-          if (PROBE_SECTION_MARKER in it && !probes()) it.substringBefore(PROBE_SECTION_MARKER).trimEnd() else it
-        }
-        ?.takeIf(String::isNotBlank)
-        ?: return sections
-    return sections.copy(
-      taskDirective = "${sections.taskDirective}\n\n$block",
-      retryFocus = if (sections.retryFocus.isBlank()) sections.retryFocus else "${sections.retryFocus}\n\n$block",
-      outputContract = sections.outputContract?.let { "$it\n\n$block" },
-    )
-  }
-
-  private companion object {
-    const val BASE = "/skillbill/engine/featuretask/slot"
-    const val PLAN_FAN_OUT_SUBTASKS_RESOURCE = "$BASE/plan/opus-5-5-goal-plan-fan-out.md"
-    const val PROBE_SECTION_MARKER = "\n## Test probes"
-
-    val RESOURCES: Map<Pair<PhaseSlot, String>, String> =
-      mapOf(
-        (PhaseSlot.PREPLAN to AgentPreplanStrategy.ID) to "$BASE/preplan/opus-5-5-agent-preplan.md",
-        (PhaseSlot.PLAN to PlanFanOutStrategy.ID) to "$BASE/plan/opus-5-5-agent-plan.md",
-        (PhaseSlot.IMPLEMENTATION to ImplementThenSimplifyStrategy.ID) to
-          "$BASE/implementation/opus-5-5-implement-then-simplify.md",
-        (PhaseSlot.AUDIT to AcceptanceAuditStrategy.ID) to "$BASE/audit/opus-5-5-acceptance-audit.md",
-        (PhaseSlot.CODE_REVIEW to InlineReviewStrategy.ID) to "$BASE/codereview/opus-5-5-inline.md",
-        (PhaseSlot.STANDALONE_REVIEW to InlineStandaloneReviewStrategy.ID) to
-          "$BASE/standalonereview/opus-5-5-inline.md",
-        (PhaseSlot.STANDALONE_REVIEW to DelegatedStandaloneReviewStrategy.ID) to
-          "$BASE/standalonereview/opus-5-5-delegated.md",
-        (PhaseSlot.QUALITY_GATE to PackBuildStrategy.ID) to "$BASE/qualitygate/opus-5-5-pack-build.md",
-        (PhaseSlot.QUALITY_GATE to AgentValidateStrategy.ID) to "$BASE/qualitygate/opus-5-5-agent-validate.md",
-        (PhaseSlot.WRITE_HISTORY to BoundaryHistoryStrategy.ID) to "$BASE/writehistory/opus-5-5-boundary-history.md",
-        (PhaseSlot.PULL_REQUEST to PrDescriptionStrategy.ID) to "$BASE/pullrequest/opus-5-5-pr-description.md",
-      )
-  }
 }

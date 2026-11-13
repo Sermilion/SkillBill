@@ -330,6 +330,7 @@ input { font: inherit; color: inherit; }
 /* Usage allowance */
 .sb-usage-card { display: flex; flex-direction: column; gap: 8px; box-sizing: border-box; width: 100%; height: 110px; padding: 12px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-panel); color: var(--fg-2); text-align: left; cursor: pointer; font-size: var(--t-xs); line-height: 1.4; }
 .sb-usage-card:hover { background: var(--bg-raised); border-color: var(--border-strong); }
+.sb-side-foot > .sb-usage-card { flex-shrink: 0; margin: var(--sp-2) 0 0; }
 .sb-usage-provider { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 18px; flex: none; }
 .sb-usage-provider > b { font-weight: 500; color: var(--c); font-size: var(--t-sm); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-usage-provider > .sb-icon { color: var(--fg-faint); }
