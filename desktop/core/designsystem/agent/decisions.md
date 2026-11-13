@@ -67,3 +67,8 @@ Context: Common composites need a resize cursor and focus restoration after popu
 Decision: Declare expect members in common code and implement them with AWT and Swing in jvmMain.
 Reason: The shared components avoid JVM-only imports and another target can supply its own bridge.
 
+
+## [2026-11-13] Match phase card chrome to the linear-study reference
+Context: Phase cards used title-case section headings, monospace metadata and right-aligned activity times. The reference uses small uppercase section labels, proportional metadata and a time column before the activity dots.
+Decision: Apply the reference's header and section spacing, text styles and activity-column order in PhasePeek and PeekPart.
+Reason: Shared phase chrome must stay consistent when the operator switches phases.

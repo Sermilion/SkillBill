@@ -122,6 +122,7 @@ internal data class GoalFinishCardSources(
   val quality: GoalQualityExecutionRead?,
   val cycles: List<MonitorCiCycleRecord>?,
   val goalPullRequestUrl: String?,
+  val goalCompleted: Boolean = false,
 )
 
 internal data class GoalFinishCardReadRequest(
@@ -131,6 +132,7 @@ internal data class GoalFinishCardReadRequest(
   val currentStep: String?,
   val workflowStatus: WorkflowStatus?,
   val childWorkflowId: String?,
+  val goalCompleted: Boolean = false,
 )
 
 internal fun readGoalFinishCards(
@@ -152,7 +154,7 @@ internal fun readGoalFinishCards(
       null
     }
   return goalFinishCards(
-    GoalFinishCardSources(request.assessment, quality, cycles, request.goalPullRequestUrl),
+    GoalFinishCardSources(request.assessment, quality, cycles, request.goalPullRequestUrl, request.goalCompleted),
     request.currentStep,
     request.workflowStatus,
     request.childWorkflowId,
@@ -182,7 +184,15 @@ internal fun goalFinishCards(
       )
   }
   if (cycles.isNotEmpty()) {
-    cards += monitorCard(cycles)
+    val completedWithoutFinalCycle = sources.goalCompleted && cycles.last().finishedAt == null
+    if (completedWithoutFinalCycle) {
+      durableRead.recordDegradedRead(
+        "goal-status.monitor_ci_terminal_result",
+        "finished_monitor_ci_cycle",
+        "goal_completed_with_last_observation",
+      )
+    }
+    cards += monitorCard(cycles, completedWithoutFinalCycle)
     monitorFixCard(cycles, currentStep, workflowStatus, childWorkflowId)?.let(cards::add)
   }
   return cards
@@ -235,11 +245,14 @@ private fun qualityCards(
     }
 }
 
-private fun monitorCard(cycles: List<MonitorCiCycleRecord>): GoalRunnerPhaseCard {
+private fun monitorCard(
+  cycles: List<MonitorCiCycleRecord>,
+  goalCompleted: Boolean,
+): GoalRunnerPhaseCard {
   val latest = cycles.last()
   val state =
     if (latest.finishedAt == null) {
-      GoalRunnerPhaseCardState.RUNNING
+      if (goalCompleted) GoalRunnerPhaseCardState.COMPLETED else GoalRunnerPhaseCardState.RUNNING
     } else {
       when (latest.outcome) {
         MonitorCiCycleOutcome.BLOCKED, MonitorCiCycleOutcome.UNAVAILABLE -> GoalRunnerPhaseCardState.BLOCKED

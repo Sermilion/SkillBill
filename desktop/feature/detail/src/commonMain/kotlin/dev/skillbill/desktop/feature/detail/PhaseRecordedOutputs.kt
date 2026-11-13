@@ -62,7 +62,7 @@ internal fun BuildRecordedOutput(receipt: ValidationResult?) {
         receipt.gateRunCount?.let { "Gate runs" to it.toString() },
       ),
     )
-    PlanningFold("Gate details", "${receipt.gates.size} recorded") { ValidationGateRuns(receipt) }
+    PlanningFold("Gate details") { ValidationGateRuns(receipt) }
   }
 }
 

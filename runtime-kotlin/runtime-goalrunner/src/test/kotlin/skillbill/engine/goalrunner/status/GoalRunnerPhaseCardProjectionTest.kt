@@ -23,8 +23,27 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class GoalRunnerPhaseCardProjectionTest {
+  @Test
+  fun `completed goal stops an unfinished monitor projection without inventing a CI result`() {
+    val at = Instant.parse("2026-11-13T15:44:00Z")
+    val cycle = MonitorCiCycleRecord(2, "monitor", at, at)
+    val sources = GoalFinishCardSources(null, null, listOf(cycle), null)
+    val activeRead = GoalRunnerStatusDurableReadTracker(NoopRuntimeDiagnostics)
+    val active = goalFinishCards(sources, "monitor", WorkflowStatus.COMPLETED, "child", activeRead)
+    assertEquals(GoalRunnerPhaseCardState.RUNNING, active.single().state)
+
+    val completedRead = GoalRunnerStatusDurableReadTracker(NoopRuntimeDiagnostics)
+    val completed = goalFinishCards(sources.copy(goalCompleted = true), null, null, null, completedRead)
+    assertEquals(GoalRunnerPhaseCardState.COMPLETED, completed.single().state)
+    assertNull(completed.single().ciCycles.single().finishedAt)
+    assertNull(completed.single().ciCycles.single().outcome)
+    assertEquals(cycle.observedAt, completed.single().ciCycles.single().observedAt)
+    assertTrue(completedRead.degraded)
+  }
+
   @Test
   fun `plan provenance remains visible when the older phase envelope was not retained`() {
     val imported =

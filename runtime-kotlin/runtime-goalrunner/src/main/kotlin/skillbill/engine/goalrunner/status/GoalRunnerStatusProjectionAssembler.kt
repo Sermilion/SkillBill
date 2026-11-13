@@ -453,6 +453,7 @@ public class GoalRunnerStatusProjectionAssembler(
           currentStep,
           assembly.progress?.workflowStatus,
           assembly.childWorkflowId,
+          assembly.loadedState.controlState.goalCompletedAt != null,
         ),
         outcomeStore,
         database,

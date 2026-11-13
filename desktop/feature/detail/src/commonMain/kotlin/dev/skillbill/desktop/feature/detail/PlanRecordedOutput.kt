@@ -32,18 +32,18 @@ internal fun PlanRecordedOutput(specPath: String?, output: PhaseCardOutput?, cri
     val text = output?.text?.takeIf(String::isNotBlank)
     val sections = text?.let(::digestSections).orEmpty()
     if (sections.isEmpty()) {
-      PlanningFold("Steps", "Not retained") { ReportText("The ordered plan was not retained for this run.") }
+      PlanningFold("Steps") { ReportText("The ordered plan was not retained for this run.") }
     } else sections.forEach { section ->
       key(section.title, section.items) {
         val steps = if (section.title.contains("steps", ignoreCase = true)) recordedPlanSteps(section.items) else emptyList()
-        PlanningFold(if (section.title == "Preplan digest") "Steps" else section.title, if (steps.isEmpty()) section.items.firstOrNull().orEmpty() else "${steps.size} in order") {
+        PlanningFold(if (section.title == "Preplan digest") "Steps" else section.title) {
           if (steps.isEmpty()) ReportText(section.items.joinToString("\n\n"))
           else steps.forEachIndexed { index, step -> RecordedPlanStep(index + 1, step) }
         }
       }
     }
     if (sections.none { it.title.contains("coverage", ignoreCase = true) }) {
-      PlanningFold("Criteria coverage", "Not retained") {
+      PlanningFold("Criteria coverage") {
         ReportText("The criteria coverage map was not retained for this run.")
         criteria.forEach { criterion ->
           ReportText("${criterion.ref} · ${criterion.text}")
@@ -51,7 +51,7 @@ internal fun PlanRecordedOutput(specPath: String?, output: PhaseCardOutput?, cri
       }
     }
     val record = output?.planRecord
-    PlanningFold("Plan record", record?.let { "order ${it.manifestOrder}" } ?: "Not retained") {
+    PlanningFold("Plan record") {
       if (record == null) ReportText("The plan provenance was not retained for this run.")
       else PeekFacts(listOfNotNull(
         "Sub-spec" to record.specPath,
@@ -95,7 +95,7 @@ internal fun RecordedPhaseDetails(output: PhaseCardOutput?) {
   PeekPart("Details") {
     digestSections(text).forEach { section ->
       key(section.title, section.items) {
-        PlanningFold(if (section.title == "Preplan digest") "Report" else section.title, section.items.firstOrNull().orEmpty()) {
+        PlanningFold(if (section.title == "Preplan digest") "Report" else section.title) {
           ReportText(section.items.joinToString("\n\n"))
         }
       }

@@ -38,12 +38,29 @@ class PlanningRecordedOutputTest {
       }
     }
 
-    onNodeWithText("Digest").assertExists()
+    onNodeWithText("DIGEST").assertExists()
     onNode(hasText("History and decisions") and hasClickAction()).performClick()
     onNode(hasText("Keep previous migration steps for supported records.") and !hasClickAction()).assertExists()
     onNode(hasText("Validation strategy") and hasClickAction()).performClick()
     onNode(hasText("Run the populated-store migration tests.") and !hasClickAction()).assertExists()
     onNodeWithText("Shared by every subtask in this goal.").assertExists()
+  }
+
+  @Test
+  fun `legacy report stays folded behind canonical digest rows`() = runComposeUiTest {
+    val output = PhaseCardOutput(null, null, null, null, null, null, null, null, null,
+      text = "SCRIPTS / CONTRACTS / CONFIG:\ninstall.sh:80 and :2888.")
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        Box(Modifier.width(360.dp)) { PreplanRecordedOutput(emptyDetail, output) {} }
+      }
+    }
+
+    onNodeWithText("install.sh:80 and :2888.").assertDoesNotExist()
+    onNode(hasText("History and decisions") and hasClickAction()).performClick()
+    onNodeWithText("This evidence was not retained for this run.").assertExists()
+    onNode(hasText("Recorded report") and hasClickAction()).performClick()
+    onNodeWithText("install.sh:80 and :2888.").assertExists()
   }
 
   @Test

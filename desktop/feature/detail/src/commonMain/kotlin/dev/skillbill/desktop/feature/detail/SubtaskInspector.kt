@@ -33,6 +33,7 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.designsystem.list.SubtaskChip
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.domain.model.ActivityResult
+import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.WorkDependency
 import dev.skillbill.desktop.core.domain.model.WorkItem
@@ -56,6 +57,7 @@ internal fun statusWord(kind: StatusKind): String = when (kind) {
 internal fun goalFinishStatus(item: WorkItem, detail: Detail): StatusKind {
   val states = detail.goalFinishCards.map { it.state }
   return when {
+    item.lifecycle == Lifecycle.Terminal && finishedAt(item) != null -> StatusKind.Completed
     dev.skillbill.desktop.core.domain.model.PhaseCardState.Running in states -> StatusKind.Active
     states.any { it == dev.skillbill.desktop.core.domain.model.PhaseCardState.Blocked || it == dev.skillbill.desktop.core.domain.model.PhaseCardState.Paused } -> StatusKind.Blocked
     dev.skillbill.desktop.core.domain.model.PhaseCardState.Failed in states -> StatusKind.Failed

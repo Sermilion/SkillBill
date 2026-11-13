@@ -26,43 +26,60 @@ import dev.skillbill.desktop.core.designsystem.detail.PeekOutput
 import dev.skillbill.desktop.core.designsystem.detail.PeekPart
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
+import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.PhaseCardOutput
 import dev.skillbill.desktop.core.domain.model.StandalonePlanStage
 
 @Composable
-internal fun PreplanRecordedOutput(detail: Detail, output: PhaseCardOutput?, onAction: (DetailAction) -> Unit) {
+internal fun PreplanRecordedOutput(detail: Detail, output: PhaseCardOutput?, item: WorkItem? = null, onAction: (DetailAction) -> Unit) {
   val stages = detail.phases.map { StandalonePlanStage(it.id, null, null, it.briefingText) }
   val sections = output?.text?.takeIf(String::isNotBlank)?.let(::digestSections)
     ?: planBriefing(stages, detail.phases.filter { it.finished }.map { it.id }.toSet()).digest
+    ?: output?.summary?.takeIf(String::isNotBlank)?.let { listOf(PlanDigestSection("Preplan report", listOf(it))) }
   PeekPart("Digest") {
-    if (sections.isNullOrEmpty()) {
-      BasicText(
-        output?.summary ?: "The preplan digest was not retained for this run.",
-        style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted),
-      )
-    } else {
-      sections.forEach { section ->
-        key(section.title, section.items) {
-          PlanningFold(section.title, section.items.firstOrNull().orEmpty()) {
-            ReportText(section.items.joinToString("\n\n"))
+    Column(Modifier.fillMaxWidth()) {
+      preplanDigestRows(sections.orEmpty()).forEach { row ->
+        key(row.title, row.items) {
+          PreplanFold(row.title, row.preview) {
+            if (row.items.isEmpty()) {
+              ReportText("This evidence was not retained for this run.")
+            } else if (row.title == "Add-ons" && row.addons.isNotEmpty()) {
+              PreplanAddonLabels(row.addons)
+              row.items.filterNot { it.trim('`', ' ') in row.addons }.forEach { ReportText(it) }
+            } else if (row.title == "History and decisions") {
+              row.items.forEach { PreplanHistoryEvidence(it, detail, item, onAction) }
+            } else {
+              row.items.forEach { ReportText(it) }
+            }
           }
         }
       }
-    }
-    val files = goalSpecFiles(detail)
-    if (files.isNotEmpty()) {
-      key(files) {
-        PlanningFold("Goal spec", files.joinToString(", ", transform = ::fileName)) {
-          files.forEach { file ->
-            PeekOutput(LucideIcons.fileText, fileName(file), onClick = { onAction(DetailAction.OpenSpecFile(file)) }, tooltip = file)
+      val extra = sections.orEmpty().filter { preplanDigestTitle(it.title) == null }
+      if (extra.isNotEmpty()) {
+        key(extra) {
+          PreplanFold("Recorded report", "Additional evidence") {
+            extra.forEach { section ->
+              ReportText(section.title)
+              ReportText(section.items.joinToString("\n\n"))
+            }
+          }
+        }
+      }
+      val files = goalSpecFiles(detail)
+      if (files.isNotEmpty()) {
+        key(files) {
+          PreplanFold("Goal spec", files.joinToString(", ", transform = ::fileName)) {
+            files.forEach { file ->
+              PeekOutput(LucideIcons.fileText, fileName(file), onClick = { onAction(DetailAction.OpenSpecFile(file)) }, tooltip = file)
+            }
           }
         }
       }
     }
     BasicText(
       "Shared by every subtask in this goal.",
-      style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted),
+      style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint),
     )
   }
 }
@@ -77,7 +94,7 @@ internal fun PlanningRecordedOutput(output: PhaseCardOutput?, files: List<String
     if (text != null) {
       digestSections(text).forEach { section ->
         key(section.title, section.items) {
-          PlanningFold(section.title, section.items.firstOrNull().orEmpty()) {
+          PlanningFold(section.title) {
             ReportText(section.items.joinToString("\n\n"))
           }
         }
@@ -90,7 +107,7 @@ internal fun PlanningRecordedOutput(output: PhaseCardOutput?, files: List<String
 }
 
 @Composable
-internal fun PlanningFold(title: String, preview: String, body: @Composable () -> Unit) {
+internal fun PlanningFold(title: String, body: @Composable () -> Unit) {
   var open by rememberSaveable { mutableStateOf(false) }
   Column(Modifier.fillMaxWidth()) {
     Row(
@@ -102,7 +119,6 @@ internal fun PlanningFold(title: String, preview: String, body: @Composable () -
     ) {
       SbIcon(if (open) LucideIcons.chevronDown else LucideIcons.chevronRight, 12.dp, modifier = Modifier.padding(top = 3.dp))
       BasicText(title, Modifier.widthIn(max = 180.dp), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2), maxLines = 2, overflow = TextOverflow.Ellipsis)
-      BasicText(preview, Modifier.weight(1f), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     if (open) {
       Column(Modifier.fillMaxWidth().padding(start = 20.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { body() }

@@ -115,7 +115,7 @@ private fun produced(
   onAction: (DetailAction) -> Unit,
 ) {
   when (card.phaseId) {
-    "preplan" -> PreplanRecordedOutput(detail, card.output, onAction)
+    "preplan" -> PreplanRecordedOutput(detail, card.output, item, onAction)
     "plan_subtasks" -> PlanningRecordedOutput(card.output, card.files)
     "plan" -> PlanRecordedOutput(path, card.output, results?.auditResult?.criteria.orEmpty(), onAction)
     "implement", "simplify" -> EditRecordedOutput(card.edit, card.output, card.phaseId == "simplify")

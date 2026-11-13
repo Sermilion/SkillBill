@@ -523,7 +523,7 @@ class DetailPeekTest {
     onNodeWithText("check-7").assertDoesNotExist()
     onNodeWithText("Show 1 more checks").performClick()
     onNodeWithText("check-7").assertExists()
-    onNodeWithText("Gate 1").assertExists()
+    onNodeWithText("GATE 1").assertExists()
     onNodeWithText("Duration").assertExists()
     onNodeWithText("Show fewer").performClick()
     onNodeWithText("check-7").assertDoesNotExist()
@@ -554,7 +554,7 @@ class DetailPeekTest {
     onNodeWithText("later-1").assertExists()
     onNodeWithText("later-6").assertExists()
     onNodeWithText("Duration").assertExists()
-    onNodeWithText("Gate 1").assertExists()
+    onNodeWithText("GATE 1").assertExists()
   }
 
   @Test

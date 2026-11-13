@@ -5,6 +5,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.detail.PeekCheckState
+import dev.skillbill.desktop.core.testing.workItem
+import dev.skillbill.desktop.core.domain.model.Lifecycle
+import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.domain.model.CiCheck
 import dev.skillbill.desktop.core.domain.model.CiCycle
 import dev.skillbill.desktop.core.domain.model.PhaseCardState
@@ -14,6 +17,26 @@ import kotlin.time.Instant
 
 @OptIn(ExperimentalTestApi::class)
 class MonitorCardTest {
+  @Test
+  fun `completed goal with unfinished monitor evidence never appears live`() = runComposeUiTest {
+    val at = Instant.parse("2026-11-13T15:44:00Z")
+    val cycle = CiCycle(2, at, at, null, null, null, listOf(CiCheck("CI build", "pending", null, null, null, null)))
+    val stale = finishCard("monitor", PhaseCardState.Running).copy(ciCycles = listOf(cycle))
+    val item = workItem("completed").copy(
+      lifecycle = Lifecycle.Terminal, finishedAt = at,
+    )
+    assertEquals(StatusKind.Completed,
+      goalFinishStatus(item, emptyDetail.copy(goalFinishCards = listOf(stale))))
+    assertEquals(PeekCheckState.Waiting, checkState("pending", watching = false))
+
+    setContent { SkillBillTheme(reducedMotion = true) { MonitorCard(stale.copy(state = PhaseCardState.Done), null, at) } }
+    onNodeWithText("CI build").assertExists()
+    onNodeWithText("last poll 0s ago").assertDoesNotExist()
+    onNodeWithText("Cycle 2 · Running").assertDoesNotExist()
+    onNodeWithText("Cycle 2 · Final outcome not retained").assertExists()
+    onNodeWithText("Final CI outcome was not retained. Checks show the last recorded observation.").assertExists()
+  }
+
   @Test
   fun `restarted cycle supplies current checks and poll age while prior cycle stays in history`() = runComposeUiTest {
     val oldTime = Instant.parse("2026-11-08T08:00:00Z")

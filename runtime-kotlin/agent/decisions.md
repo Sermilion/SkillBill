@@ -3885,3 +3885,8 @@ first conflict line, else its first criterion line. An `approved` header with a 
 line settles as changes requested. Parsed lines keep their raw text and are returned in
 required-ref order, so persisted accepted lines still match a re-parse of the same
 receipt. The review prompt still asks for citations, so repair starts from them.
+
+## [2026-11-13] Reconcile unfinished monitor observations with recorded goal completion
+Context: A completed goal can retain a monitor cycle without its final timestamp or CI outcome. The finish projection treated that observation as a live monitor indefinitely.
+Decision: Pass recorded goal completion into the finish projection. Stop the monitor card when that goal is complete, preserve every cycle field, and emit a degraded-read diagnostic for the missing terminal CI record. Child workflow completion alone does not end the goal's monitor.
+Reason: A historical observation cannot override durable goal completion or prove that CI passed. This changes only read projection and does not migrate or rewrite persisted cycles.

@@ -1558,7 +1558,7 @@
   function Fold(o) {
     track('Fold');
     const body = !o.open ? '' : o.items ? `<ul>${o.items.map((x) => `<li>${x}</li>`).join('')}</ul>` : `<div class="${cx('bd', o.inset && 'is-inset')}">${o.body || ''}</div>`;
-    return `<div class="sb-vfold"${o.id ? ` id="${esc(o.id)}"` : ''}><button type="button" class="hd" aria-expanded="${!!o.open}"${act(o.act, o.arg)}>${Icon('chevronRight', 'xs')}${o.lead || ''}<span class="${cx('lb', o.strong && 'is-strong')}">${esc(o.label)}</span>${o.count != null ? `<span class="n">${esc(o.count)}</span>` : ''}${o.note ? `<span class="n">${esc(o.note)}</span>` : ''}${o.end ? `<span class="end">${o.end}</span>` : ''}</button>${body}</div>`;
+    return `<div class="sb-vfold"${o.id ? ` id="${esc(o.id)}"` : ''}><button type="button" class="hd" aria-expanded="${!!o.open}"${act(o.act, o.arg)}>${Icon('chevronRight', 'xs')}${o.lead || ''}<span class="${cx('lb', o.strong && 'is-strong')}">${esc(o.label)}</span>${o.count != null ? `<span class="n">${esc(o.count)}</span>` : ''}${o.note && !o.open ? `<span class="n">${esc(o.note)}</span>` : ''}${o.end ? `<span class="end">${o.end}</span>` : ''}</button>${body}</div>`;
   }
   /* Text as the agent or the operator wrote it, on an inset with a 2px rule: the free-text intake, or what criteria
    * extraction returned when it found no numbered criteria. Keeps line breaks. */

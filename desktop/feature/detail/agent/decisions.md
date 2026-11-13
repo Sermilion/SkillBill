@@ -299,3 +299,13 @@ Reason: Recovery eligibility can forbid retry without indicating that an operato
 Context: Opening a branch page needs the origin URL, but the desktop process allowlist forbids launching git.
 Decision: Resolve the git directory and origin from configuration and open the resulting URL with the desktop browser API.
 Reason: This keeps branch navigation within the process allowlist. URL insteadOf rewrites are not supported.
+
+## [2026-11-13] Keep preplan digest categories independent of report headings
+Context: The preplan card rendered arbitrary report headings and long excerpts as its collapsed rows, unlike the linear-study reference.
+Decision: Use the Verify disclosure for four fixed digest categories and Goal spec. Fold unclassified report sections separately. Keep missing evidence explicit and label retained history entries as recorded, since text does not prove a selected-heading count. Render recognized add-ons as labels and resolve recorded history links through the existing worktree path policy.
+Reason: Historical reports must remain readable without inventing structured evidence or copying the prototype's sample facts.
+
+## [2026-11-13] Show unfinished historical CI observations without live indicators
+Context: A completed goal's unfinished retained monitor cycle showed Running, pending spinners and a poll-age label. Its running card also overrode the Goal finish header's completed state.
+Decision: Give a terminal goal's completion precedence in the header. Animate pending CI checks and show poll age only while monitoring runs. For a stopped card without a terminal cycle record, retain its checks and name the missing final outcome in the card and activity.
+Reason: Goal completion does not supply missing CI results. Historical checks must remain visible without claiming the monitor is still polling.
