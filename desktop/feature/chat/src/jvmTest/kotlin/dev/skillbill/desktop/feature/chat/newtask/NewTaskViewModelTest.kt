@@ -260,7 +260,7 @@ class NewTaskViewModelTest {
   }
 
   @Test
-  fun `quick operation asks for branch choice only when started and respects the explicit current base`() = runTest {
+  fun `goal asks for branch choice only when started and respects the explicit current base`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val controls = FakeWorkControlRepository()
     val chats = testNewTaskChats(controls = controls)
@@ -275,7 +275,7 @@ class NewTaskViewModelTest {
     model.onAction(NewTaskAction.Send)
     runCurrent()
 
-    model.start(NewTaskStartOrigin(draft, draft.chat.value, draft.contextRevision, draft.repository?.root), NewTaskKind.Verify, "Check sharing", null)
+    model.start(NewTaskStartOrigin(draft, draft.chat.value, draft.contextRevision, draft.repository?.root, draft.openDatabaseSessionId), NewTaskKind.GoalRun, null, null)
     runCurrent()
     assertEquals(true, draft.branchChoiceRequested)
     assertTrue(controls.newTaskRequests.isEmpty())
@@ -283,12 +283,43 @@ class NewTaskViewModelTest {
     model.onAction(NewTaskAction.RunSuggestedAction(ChatSuggestedAction("Explain", "Explain the flow", ChatPermissionMode.ReadOnly)))
     runCurrent()
     assertEquals(false, draft.branchChoiceRequested)
-    model.start(NewTaskStartOrigin(draft, draft.chat.value, draft.contextRevision, draft.repository?.root), NewTaskKind.Verify, "Check sharing", null)
+    model.start(NewTaskStartOrigin(draft, draft.chat.value, draft.contextRevision, draft.repository?.root, draft.openDatabaseSessionId), NewTaskKind.GoalRun, null, null)
     model.onAction(NewTaskAction.UseCurrentBranchAsBase)
     runCurrent()
-    model.start(NewTaskStartOrigin(draft, draft.chat.value, draft.contextRevision, draft.repository?.root), NewTaskKind.Verify, "Check sharing", null)
+    model.start(NewTaskStartOrigin(draft, draft.chat.value, draft.contextRevision, draft.repository?.root, draft.openDatabaseSessionId), NewTaskKind.GoalRun, null, null)
     runCurrent()
     assertEquals("feature/current", controls.newTaskRequests.single().baseBranch)
+    model.viewModelScope.cancel()
+  }
+
+  @Test
+  fun `standalone starts use the current repository without a goal branch choice`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val controls = FakeWorkControlRepository()
+    val chats = testNewTaskChats(controls = controls)
+    val draft = chats.selected.value.apply { repository = NewTaskRepository("/repo", "repo") }
+    val branches = FakeBranches { path -> RepositoryBranchesRead.Listed(
+      RepositoryBranches(path, "main", emptyList(), emptyList(), "feature/current"),
+    ) }
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), chats, branches = branches)
+    runCurrent()
+    draft.text = "Explain sharing"
+    model.onAction(NewTaskAction.Send)
+    runCurrent()
+
+    listOf(NewTaskKind.Review, NewTaskKind.Verify).forEach { kind ->
+      model.start(
+        NewTaskStartOrigin(draft, draft.chat.value, draft.contextRevision, draft.repository?.root, draft.openDatabaseSessionId),
+        kind,
+        if (kind == NewTaskKind.Verify) "Check sharing" else null,
+        null,
+      )
+      runCurrent()
+    }
+
+    assertEquals(false, draft.branchChoiceRequested)
+    assertEquals(listOf(NewTaskKind.Review, NewTaskKind.Verify), controls.newTaskRequests.map { it.kind })
+    assertTrue(controls.newTaskRequests.all { it.repoRoot == "/repo" && it.baseBranch == null })
     model.viewModelScope.cancel()
   }
 

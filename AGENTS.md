@@ -38,7 +38,7 @@ Goals use runtime-owned `<state>/goals/<repo>/<goal>/checkout` worktrees, remove
 
 ## Product Intent
 
-Read [Runtime command guidance](docs/runtime-command-guidance.md) before runtime command or workflow work. It defines phases, operations, retired names, agent strategies, build gates, one-commit-per-subtask, and checkpoints.
+Before runtime command or workflow work, read [Runtime command guidance](docs/runtime-command-guidance.md).
 
 ## Linear work tracking
 
@@ -46,7 +46,7 @@ Track repository work in Linear under `SONA`, except direct tasks explicitly req
 
 Use `.codex/config.toml`'s `linear-sona` connection. Verify its workspace and team. Switch connections only on operator instruction.
 
-When the project has a connected Linear workspace, issue-key suggestions must come from that workspace and the project's team. Never suggest the next key from local specs or by incrementing a Linear issue number. For new work, let Linear create the issue and assign its key before proposing that key for operator acceptance. If Linear is unavailable, report the access problem instead of falling back to a local key.
+Suggest issue keys only from the connected Linear workspace and project team. Never infer keys from local specs or increment issue numbers. Let Linear create new issues and assign keys before proposing them for operator acceptance. If Linear is unavailable, report the access problem; never fall back to local keys.
 
 Before each goal, verify its issue in that workspace/team. Resolve access problems before launch. Chat prep does not launch goals or reserve keys.
 
@@ -92,7 +92,7 @@ Code review needs a pack root, manifest and `content.md`, pointers, README entry
 
 ## Writing And Comments
 
-Write direct, active prose. Cut filler, stale wording, praise, and repetition. Preserve names, numbers, and qualifications. Lead commits, PRs, and docs with outcomes and reasons. Avoid unsupported "successfully", "perfect", "comprehensive", and "robust". Use clear names and small functions. Follow Comments for scoped Kotlin.
+Write direct, active prose. Cut filler, stale wording, praise, and repetition. Preserve names, numbers, and qualifications. Lead commits, PRs, and docs with outcomes and reasons. Avoid unsupported praise. Use clear names and small functions. Follow Comments for scoped Kotlin.
 
 For UI work, keep overview cards brief, evidence in expandable Steps, and matching design HTML current across layout, hierarchy, interactions, and narrow layouts.
 
@@ -114,9 +114,9 @@ Under `runtime-kotlin`, including `build-logic`, ban `//` and non-KDoc `/* */` c
 
 For `runtime-kotlin` planning, design, changes, or review, read [Runtime Architecture Guidelines](docs/architecture-guidelines.md) and apply A1–A12, G1–G7, and P1–P8. Reviews use its section 5 checklist and cite rule IDs.
 
-For `runtime-kotlin` design, changes, or review, apply [Design Principles](runtime-kotlin/ARCHITECTURE.md#design-principles) for dependencies, ownership, persistence, contracts, simplicity, and test value. `PrincipleEnforcementInventory.enforceableRules` pairs rules with tests; review the rest. Existing violations never authorize new ones.
+For `runtime-kotlin` design, changes, or review, apply [Design Principles](runtime-kotlin/ARCHITECTURE.md#design-principles). `PrincipleEnforcementInventory.enforceableRules` pairs rules with tests; review the rest. Existing violations never authorize new ones.
 
-Follow [Code Principles](docs/code-principles.md) for Kotlin patterns, packages, imports, file-size limits, and architecture guards under `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/`.
+Follow [Code Principles](docs/code-principles.md) for Kotlin patterns, packages, imports, file-size limits, and architecture guards.
 
 **Wire and payload keys.** At governed seams, declare each key once in its owner's `*Keys` or `*PayloadKeys`; never inline keys in `get`, `put`, `mapOf`, or bracket access. See `runtime-kotlin/ARCHITECTURE.md`. `runtime-contracts` holds only keys read by two or more production modules or exposed by `runtime-ports` signatures. Shared owners:
 

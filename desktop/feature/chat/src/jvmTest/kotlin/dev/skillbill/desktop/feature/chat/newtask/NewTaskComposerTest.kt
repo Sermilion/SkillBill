@@ -344,7 +344,7 @@ class NewTaskComposerTest {
   }
 
   @Test
-  fun `the repository pill is static with a chat and disabled while starting and the agent chip stays off`() = runTest {
+  fun `pickers block busy replies and starts but allow missing repository recovery`() = runTest {
     val repository = NewTaskRepository(
       createTempDirectory("new-task-repo").also { it.toFile().deleteOnExit() }.toString(),
       "repo",
@@ -444,10 +444,11 @@ class NewTaskComposerTest {
 
       compose(missingDraft)
       waitForIdle()
-      onNode(hasClickLabel("Change repository or base branch")).assertDoesNotExist()
-      val missingWhy = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "This draft's repository is missing")
-      onAllNodes(missingWhy).assertCountEquals(2)
-      onNode(missingWhy and hasText("removed")).assertExists()
+      onNode(hasClickLabel("Change repository or base branch")).assertIsEnabled()
+      onNodeWithText("This draft's repository is missing. Select an available repository to continue; its conversation and files remain here.", useUnmergedTree = true).assertExists()
+      onNode(hasClickLabel("Change repository or base branch") and hasText("removed")).assertExists()
+      onNode(hasClickLabel("Change agent or model")).assertIsNotEnabled()
+        .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, PICKERS_DISABLED_MISSING_REPO))
     }
   }
 

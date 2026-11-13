@@ -31,15 +31,31 @@ internal class OperationCardCoordinator(
   private val historyChanged: suspend (ChatThread) -> Boolean = { true },
   private val pollMillis: Long = RESTORED_CONFIRMING_POLL_MILLIS,
   private val runs: RunOpener = UnavailableRunOpener,
+  private val admissionProblem: (ChatThread, NewTaskStart?, Any?) -> String? = { _, _, _ -> null },
+  private val decisionAdmissionProblem: (ChatThread, Any?) -> String? = { _, _ -> null },
 ) {
-  private val requests = ConcurrentHashMap<String, NewTaskStart>()
+  private data class RememberedRequest(val request: NewTaskStart, val authority: Any?)
+  private val requests = ConcurrentHashMap<String, RememberedRequest>()
   private val observations = ConcurrentHashMap<String, Job>()
   private val pendingAdjustments = ConcurrentHashMap<ChatThread, String>()
   private val outstanding = ConcurrentHashMap<ChatThread, Int>()
+  private val decisionClaims = ConcurrentHashMap<ChatThread, Any>()
   private val revokedThreads = ConcurrentHashMap.newKeySet<ChatThread>()
   private val reservedThreads = ConcurrentHashMap.newKeySet<ChatThread>()
 
   fun hasOutstanding(thread: ChatThread): Boolean = outstanding.containsKey(thread)
+
+  fun hasDecisionOutstanding(thread: ChatThread, except: Any? = null): Boolean =
+    decisionClaims[thread]?.let { it !== except } == true
+
+  fun hasOtherOutstanding(thread: ChatThread, decisionClaim: Any? = null): Boolean {
+    val count = outstanding[thread] ?: return false
+    val ownsDecision = decisionClaim != null && decisionClaims[thread] === decisionClaim
+    return count > (if (ownsDecision) 1 else 0)
+  }
+
+  private fun admissionProblemForDecision(thread: ChatThread, request: NewTaskStart?, authority: Any?, claim: Any?): String? =
+    admissionProblem(thread, request, authority) ?: decisionAdmissionProblem(thread, claim)
 
   fun reserveContextTransition(thread: ChatThread): Boolean {
     if (thread in revokedThreads || hasOutstanding(thread)) return false
@@ -73,8 +89,9 @@ internal class OperationCardCoordinator(
   }
 
   /** Keeps the request that parked [launchId], so Adjust can ask for a replacement with the same target and branch. */
-  fun remember(launchId: String, request: NewTaskStart) {
-    requests[launchId] = request.copy(confirmation = null)
+  fun remember(launchId: String, request: NewTaskStart, authority: Any? = null) {
+    val prior = requests[launchId]
+    requests[launchId] = RememberedRequest(request.copy(confirmation = null), authority ?: prior?.authority)
   }
 
   /** Reads and shows the card [launchId] parked; false when the store holds none. */
@@ -160,7 +177,12 @@ internal class OperationCardCoordinator(
       onDismiss = { token -> synchronized(actionLock) { if (thread !in revokedThreads && thread !in reservedThreads) dismiss(thread, token) } },
       onAdjust = { token -> synchronized(actionLock) { if (thread !in revokedThreads && thread !in reservedThreads) adjust(thread, token) } },
       onChangeVerify = { token, choices -> synchronized(actionLock) { if (thread !in revokedThreads && thread !in reservedThreads) changeVerify(thread, token, choices) } },
-      canAdjust = { token -> synchronized(actionLock) { thread !in revokedThreads && thread !in reservedThreads && !thread.busy.value && thread.operationCard(token)?.card?.launchId?.let(requests::containsKey) == true } },
+      canAdjust = { token -> synchronized(actionLock) {
+        val message = thread.operationCard(token)
+        val remembered = message?.card?.launchId?.let(requests::get)
+        thread !in revokedThreads && thread !in reservedThreads && !thread.busy.value && remembered != null &&
+          admissionProblemForDecision(thread, remembered.request, remembered.authority, null) == null
+      } },
       onOpenRun = { token -> synchronized(actionLock) { if (thread !in revokedThreads && thread !in reservedThreads) openRun(thread, token) } },
     )
 
@@ -176,27 +198,45 @@ internal class OperationCardCoordinator(
 
   private fun confirm(thread: ChatThread, token: String) {
     val message = thread.operationCard(token) ?: return
+    val card = message.card
+    val kind = card.operationId.toKind() ?: return
+    if (hasOutstanding(thread)) return thread.operationCardSubmitting(token, false, BUSY_OPERATION_TEXT).also {
+      scope.launch { persistOrWarn(thread) }
+    }
+    val remembered = requests[card.launchId]
+    admissionProblemForDecision(thread, remembered?.request, remembered?.authority, null)?.let { problem ->
+      thread.operationCardSubmitting(token, false, problem)
+      scope.launch { persistOrWarn(thread) }
+      return
+    }
     message.missingChoiceText()?.let {
       thread.operationCardSubmitting(token, false, it)
       scope.launch { persistOrWarn(thread) }
       return
     }
-    val card = message.card
-    val kind = card.operationId.toKind() ?: return
     val start = base(kind) ?: return thread.operationCardSubmitting(token, false, NO_SESSION_TEXT).also {
       scope.launch { persistOrWarn(thread) }
+    }
+    admissionProblemForDecision(thread, start, remembered?.authority, null)?.let { problem ->
+      thread.operationCardSubmitting(token, false, problem)
+      scope.launch { persistOrWarn(thread) }
+      return
     }
     val selection = message.selectionWire()
     thread.beginOperationDecision(token, OperationCardDecision.Confirm) ?: return
     pendingAdjustments.remove(thread)
-    val finish = track(thread)
+    val decisionClaim = Any()
+    decisionClaims[thread] = decisionClaim
+    val finish = track(thread, decisionClaim)
     scope.launch {
       var refusal: String? = null
       try {
+        admissionProblemForDecision(thread, start, remembered?.authority, decisionClaim)?.let { refusal = it; return@launch }
         if (!historyChanged(thread)) {
           refusal = HISTORY_SAVE_FAILED_TEXT
           return@launch
         }
+        admissionProblemForDecision(thread, start, remembered?.authority, decisionClaim)?.let { refusal = it; return@launch }
         val outcome = controls.startNewTask(start.copy(confirmation = OperationCardConfirmation(token, selection)))
         refusal = follow(thread, outcome, token, null)
       } finally {
@@ -241,8 +281,13 @@ internal class OperationCardCoordinator(
 
   private fun adjust(thread: ChatThread, token: String) {
     val message = thread.operationCard(token) ?: return
-    if (!requests.containsKey(message.card.launchId)) {
-      thread.operationCardSubmitting(token, false, ADJUST_UNAVAILABLE_TEXT)
+    val remembered = requests[message.card.launchId]
+    if (hasOutstanding(thread)) return thread.operationCardSubmitting(token, false, BUSY_OPERATION_TEXT).also {
+      scope.launch { persistOrWarn(thread) }
+    }
+    val admissionFailure = remembered?.let { admissionProblemForDecision(thread, it.request, it.authority, null) }
+    if (remembered == null || admissionFailure != null) {
+      thread.operationCardSubmitting(token, false, admissionFailure ?: ADJUST_UNAVAILABLE_TEXT)
       scope.launch { persistOrWarn(thread) }
       return
     }
@@ -257,11 +302,26 @@ internal class OperationCardCoordinator(
     scope.launch { persistOrWarn(thread) }
   }
 
-  fun submitAdjustment(thread: ChatThread, text: String): Boolean {
+  fun submitAdjustment(thread: ChatThread, text: String, actionLock: Any = thread): Boolean = synchronized(actionLock) {
+    submitAdjustmentLocked(thread, text)
+  }
+
+  private fun submitAdjustmentLocked(thread: ChatThread, text: String): Boolean {
     if (text.isBlank()) return false
     val token = pendingAdjustments.remove(thread) ?: return false
     val message = thread.operationCard(token) ?: return false
-    val request = requests[message.card.launchId] ?: return false
+    val remembered = requests[message.card.launchId] ?: return false
+    if (hasOutstanding(thread)) {
+      thread.operationCardSubmitting(token, false, BUSY_OPERATION_TEXT)
+      scope.launch { persistOrWarn(thread) }
+      return true
+    }
+    val request = remembered.request
+    admissionProblemForDecision(thread, request, remembered.authority, null)?.let { problem ->
+      thread.operationCardSubmitting(token, false, problem)
+      scope.launch { persistOrWarn(thread) }
+      return true
+    }
     thread.append(ChatMessage.Operator(text))
     if (thread.beginOperationDecision(token, OperationCardDecision.Adjust) == null) {
       thread.append(ChatMessage.Notice("This proposal is no longer awaiting changes; start a new proposal from chat."))
@@ -273,15 +333,19 @@ internal class OperationCardCoordinator(
       proposalChanges = listOfNotNull(request.proposalChanges, text.trim()).joinToString("\n\n"),
     )
     thread.append(ChatMessage.Notice("Updating the ${message.card.operationId} proposal…"))
-    val finish = track(thread)
+    val decisionClaim = Any()
+    decisionClaims[thread] = decisionClaim
+    val finish = track(thread, decisionClaim)
     scope.launch {
       var failure: String? = null
       try {
+        admissionProblemForDecision(thread, request, remembered.authority, decisionClaim)?.let { failure = it; return@launch }
         if (!historyChanged(thread)) {
           failure = HISTORY_SAVE_FAILED_TEXT
           return@launch
         }
-        failure = follow(thread, controls.startNewTask(replacement), null, replacement)
+        admissionProblemForDecision(thread, request, remembered.authority, decisionClaim)?.let { failure = it; return@launch }
+        failure = follow(thread, controls.startNewTask(replacement), null, replacement, remembered.authority)
       } finally {
         withContext(NonCancellable) {
           try {
@@ -303,9 +367,14 @@ internal class OperationCardCoordinator(
    */
   private fun changeVerify(thread: ChatThread, token: String, choices: VerifyStartChoices) {
     val message = thread.operationCard(token) ?: return
-    val request = requests[message.card.launchId]
-    if (request == null || request.kind != NewTaskKind.Verify) {
-      thread.operationCardSubmitting(token, false, ADJUST_UNAVAILABLE_TEXT)
+    val remembered = requests[message.card.launchId]
+    val request = remembered?.request
+    if (hasOutstanding(thread)) return thread.operationCardSubmitting(token, false, BUSY_OPERATION_TEXT).also {
+      scope.launch { persistOrWarn(thread) }
+    }
+    val admissionFailure = if (request == null || remembered == null) null else admissionProblemForDecision(thread, request, remembered.authority, null)
+    if (request == null || request.kind != NewTaskKind.Verify || admissionFailure != null) {
+      thread.operationCardSubmitting(token, false, admissionFailure ?: ADJUST_UNAVAILABLE_TEXT)
       scope.launch { persistOrWarn(thread) }
       return
     }
@@ -313,15 +382,19 @@ internal class OperationCardCoordinator(
     pendingAdjustments.remove(thread, token)
     val replacement = request.copy(confirmation = null, verify = choices)
     thread.append(ChatMessage.Notice("Updating the verify proposal…"))
-    val finish = track(thread)
+    val decisionClaim = Any()
+    decisionClaims[thread] = decisionClaim
+    val finish = track(thread, decisionClaim)
     scope.launch {
       var failure: String? = null
       try {
+        admissionProblemForDecision(thread, request, remembered.authority, decisionClaim)?.let { failure = it; return@launch }
         if (!historyChanged(thread)) {
           failure = HISTORY_SAVE_FAILED_TEXT
           return@launch
         }
-        failure = follow(thread, controls.startNewTask(replacement), null, replacement)
+        admissionProblemForDecision(thread, request, remembered.authority, decisionClaim)?.let { failure = it; return@launch }
+        failure = follow(thread, controls.startNewTask(replacement), null, replacement, remembered.authority)
         if (failure == null) {
           failure = (controls.dismissOperationCard(token) as? OperationCardDismissOutcome.Stale)?.reason
         }
@@ -343,14 +416,14 @@ internal class OperationCardCoordinator(
    * Follows a continuation of the card [token], or a [replacement] start, to its end and returns why it failed. A
    * continuation refreshes its own card while it runs; a replacement shows the card it parks.
    */
-  private suspend fun follow(thread: ChatThread, outcome: NewTaskStartOutcome, token: String?, replacement: NewTaskStart?): String? =
+  private suspend fun follow(thread: ChatThread, outcome: NewTaskStartOutcome, token: String?, replacement: NewTaskStart?, authority: Any? = null): String? =
     when (outcome) {
       is NewTaskStartOutcome.Started -> {
         token?.let { id -> controls.operationCard(id)?.let { thread.showOperationCard(it) } }
         val failure = outcome.awaitFailure?.invoke()
         val launchId = outcome.launchId
         if (replacement != null && launchId != null) {
-          remember(launchId, replacement)
+          remember(launchId, replacement, authority)
           if (failure == null && !show(thread, launchId)) {
             thread.append(ChatMessage.Notice("The operation finished without a replacement proposal."))
           }
@@ -358,7 +431,7 @@ internal class OperationCardCoordinator(
         failure
       }
       is NewTaskStartOutcome.AwaitingConfirmation -> {
-        replacement?.let { remember(outcome.launchId, it) }
+        replacement?.let { remember(outcome.launchId, it, authority) }
         if (show(thread, outcome.launchId)) null else CARD_UNREADABLE_TEXT
       }
       is NewTaskStartOutcome.Refused -> outcome.message
@@ -366,9 +439,10 @@ internal class OperationCardCoordinator(
       is NewTaskStartOutcome.NeedsKey -> "This operation does not take an issue key."
     }
 
-  private fun track(thread: ChatThread): () -> Unit {
+  private fun track(thread: ChatThread, decisionClaim: Any? = null): () -> Unit {
     outstanding.compute(thread) { _, count -> (count ?: 0) + 1 }
     return {
+      if (decisionClaim != null) decisionClaims.remove(thread, decisionClaim)
       outstanding.computeIfPresent(thread) { _, count -> if (count == 1) null else count - 1 }
     }
   }
@@ -386,3 +460,4 @@ private const val NO_SESSION_TEXT = "The database session is not open, so nothin
 private const val ADJUST_UNAVAILABLE_TEXT = "Adjust is unavailable for this card; start the operation again from the chat."
 private const val CARD_UNREADABLE_TEXT = "The operation is waiting for confirmation, but its card could not be read."
 private const val HISTORY_SAVE_FAILED_TEXT = "The card choice could not be saved, so confirmation was not sent."
+private const val BUSY_OPERATION_TEXT = "Another chat operation is still being saved or submitted. Wait for it to finish, then try again."

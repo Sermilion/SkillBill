@@ -198,7 +198,7 @@ class NewTaskViewModel(
         readAgent(target, action.agentId) { owner -> resolveAgent(target, action.agentId, owner) }
       }
       NewTaskAction.OpenRepositoryPicker -> {
-        if (!canChangeContext(target)) return
+        if (!canSelectRepository(target)) return
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = true) }
         readBranches(target)
       }
@@ -241,10 +241,18 @@ class NewTaskViewModel(
     val current = origin.draft
     if (current !in chats.open.value || chats.selected.value !== current || current.chat.value !== origin.chat ||
       current.contextRevision != origin.contextRevision || current.repository?.root != origin.selectedRoot ||
-      current.contextTransitioning || current.resuming
-    ) return
-    if (action?.branch.isNullOrBlank() && requestBranchChoice(current)) return
-    current.start(kind, target = target, action = action)
+      current.contextTransitioning || current.resuming || origin.expectedDatabaseSessionId == null ||
+      current.openDatabaseSessionId != origin.expectedDatabaseSessionId || origin.chat?.databaseSessionId?.let { it != origin.expectedDatabaseSessionId } == true
+    ) {
+      current.reportStartRefusal(origin.chat, kind, "This start belongs to an earlier repository context. Select the intended repository and make a fresh start request.")
+      return
+    }
+    current.startAdmissionProblem()?.let { problem ->
+      current.reportStartRefusal(origin.chat, kind, problem)
+      return
+    }
+    if ((kind == NewTaskKind.GoalRun || kind == NewTaskKind.PlanOnly) && action?.branch.isNullOrBlank() && requestBranchChoice(current)) return
+    current.start(kind, target = target, action = action, origin = origin)
   }
 
   private fun requestBranchChoice(target: NewTaskDraft): Boolean {
@@ -387,12 +395,12 @@ class NewTaskViewModel(
   }
 
   private fun selectRepository(target: NewTaskDraft, repository: NewTaskRepository) {
-    if (!canChangeContext(target)) return
+    if (!canSelectRepository(target)) return
     submitPath(target, repository.root)
   }
 
   private fun addRepository(target: NewTaskDraft) {
-    if (!canChangeContext(target) || mutableState.value.choosingFolder) return
+    if (!canSelectRepository(target) || mutableState.value.choosingFolder) return
     pathCheck?.cancel()
     val generation = ++pathCheckGeneration
     val revision = target.contextRevision
@@ -406,7 +414,7 @@ class NewTaskViewModel(
         mutableState.update { it.copy(choosingFolder = false) }
       }
       if (!isSelected(target) || generation != pathCheckGeneration || target.contextRevision != revision ||
-        target.repositoryRequestGeneration != request || !canChangeContext(target)
+        target.repositoryRequestGeneration != request || !canSelectRepository(target)
       ) return@launch
       when (choice) {
         FolderChoice.Cancelled -> Unit
@@ -417,7 +425,7 @@ class NewTaskViewModel(
   }
 
   private fun submitPath(target: NewTaskDraft, path: String) {
-    if (!canChangeContext(target) || path.isBlank()) return
+    if (!canSelectRepository(target) || path.isBlank()) return
     pathCheck?.cancel()
     val generation = ++pathCheckGeneration
     val revision = target.contextRevision
@@ -432,10 +440,10 @@ class NewTaskViewModel(
     revision: Long,
     request: Long,
   ) {
-    if (!canChangeContext(target)) return
+    if (!canSelectRepository(target)) return
     val validation = validateRepository(path) {
       isSelected(target) && generation == pathCheckGeneration && target.contextRevision == revision &&
-        target.repositoryRequestGeneration == request && canChangeContext(target)
+        target.repositoryRequestGeneration == request && canSelectRepository(target)
     }
     when (validation) {
       RepositoryValidation.Stale -> Unit
@@ -476,7 +484,7 @@ class NewTaskViewModel(
 
   private fun addListedRepository(target: NewTaskDraft, validation: RepositoryValidation.Listed, generation: Long, revision: Long, request: Long) {
     if (!isSelected(target) || generation != pathCheckGeneration || target.contextRevision != revision ||
-      target.repositoryRequestGeneration != request || !canChangeContext(target)
+      target.repositoryRequestGeneration != request || !canSelectRepository(target)
     ) return
     val repository = validation.repository
     val root = repository.root
@@ -549,10 +557,15 @@ class NewTaskViewModel(
   }
 
   private fun canChangeContext(target: NewTaskDraft): Boolean {
+    val current = target.chat.value
+    return canSelectRepository(target) && current?.repositoryMissing != true
+  }
+
+  private fun canSelectRepository(target: NewTaskDraft): Boolean {
     if (target.resuming || target.contextTransitioning) return false
     if (target.chat.value?.thread?.deferDestructiveAction("change the draft context") == true) return false
     val current = target.chat.value
-    return current?.repositoryMissing != true && current?.thread?.busy?.value != true && !target.offer.value.starting
+    return current?.thread?.busy?.value != true && !target.offer.value.starting
   }
 
   private fun observeContextCommit(target: NewTaskDraft) {

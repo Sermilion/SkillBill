@@ -16,8 +16,14 @@ class ChatSystemPromptTest {
 
     assertTrue("User home: /home/operator" in prompt)
     assertTrue("Selected repository root: none" in prompt)
-    assertTrue("file edits and saves are allowed" in prompt)
+    assertTrue("requested file creation and edits, saving and resuming chats are allowed" in prompt)
     assertTrue("Effective working directory: /home/operator" in prompt)
+    assertTrue("Do not inspect repository branches, default branches or issue-key inventories" in prompt)
+    assertTrue("manual repository picker remains available after chat starts" in prompt)
+    assertTrue("Do not emit an executable start card or invoke a skill-bill CLI or MCP run command" in prompt)
+    assertTrue("Git metadata in home" in prompt)
+    assertFalse("\"start\":\"goal\"" in prompt)
+    assertFalse("Inspect the repository and connected context" in prompt)
     assertTrue("skillbill-repository" in prompt)
     assertTrue("contract_version\":\"1\"" in prompt)
     assertFalse("Base branch:" in prompt)
@@ -112,7 +118,7 @@ class ChatSystemPromptTest {
     assertTrue("never invent issue content" in prompt)
     assertTrue("instead of guessing or quietly doing the work yourself" in prompt)
     assertTrue("invoke it through the installed dispatcher" in prompt)
-    assertTrue("invoke the dispatcher only when its instruction requests such an operation or phase" in prompt)
+    assertTrue("Without a selected repository, do not invoke any run through the installed dispatcher" in prompt)
   }
 
   @Test

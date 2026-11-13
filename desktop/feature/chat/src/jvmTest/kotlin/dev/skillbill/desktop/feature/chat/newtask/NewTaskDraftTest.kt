@@ -598,6 +598,11 @@ class NewTaskDraftTest {
     assertEquals(ChatPermissionMode.Act, chat.requests.single().mode)
     assertTrue(changes.captureCalls.isEmpty())
     assertTrue(changes.currentReadCalls.isEmpty())
+    draft.say("edit the note")
+    runCurrent()
+    assertEquals(2, chat.requests.size)
+    assertTrue(changes.captureCalls.isEmpty())
+    assertTrue(changes.currentReadCalls.isEmpty())
     draft.close()
   }
 

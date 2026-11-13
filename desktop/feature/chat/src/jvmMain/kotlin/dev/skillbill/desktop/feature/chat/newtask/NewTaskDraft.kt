@@ -63,6 +63,15 @@ internal data class NewTaskStartOrigin(
   val chat: NewTaskChat?,
   val contextRevision: Long,
   val selectedRoot: String?,
+  val expectedDatabaseSessionId: Long? = null,
+)
+
+private data class OperationCardOrigin(
+  val draft: NewTaskDraft,
+  val chat: NewTaskChat,
+  val contextRevision: Long,
+  val selectedRoot: String,
+  val databaseSessionId: Long,
 )
 
 data class NewTaskOffer(
@@ -100,7 +109,7 @@ class NewTaskDraft internal constructor(
   private val retainedThreads = ConcurrentHashMap<String, ChatThread>()
   private val saveLocks = ConcurrentHashMap<String, Mutex>()
   private val invalidDrafts = ConcurrentHashMap.newKeySet<String>()
-  private val cards = OperationCardCoordinator(workControls, scope, { kind ->
+  private val cards: OperationCardCoordinator = OperationCardCoordinator(workControls, scope, { kind ->
     val agent = selectedAgent
     val repo = repository
     val open = databaseSession.state.value as? DatabaseSessionState.Open
@@ -120,7 +129,27 @@ class NewTaskDraft internal constructor(
     }
   }, { thread ->
     synchronized(cardOwners) { cardOwners[thread] }?.persist()?.also { if (it) refreshSaved() } ?: false
-  }, runs = runs)
+  }, runs = runs, admissionProblem = { thread, request, authority ->
+    val origin = authority as? OperationCardOrigin
+    val current = chatState.value
+    when {
+      repository == null -> SELECT_REPOSITORY_START_TEXT
+      origin == null -> "This saved proposal has no current repository authority. Start a fresh proposal from this chat."
+      contextTransitionOwner != null || contextTransitioning -> "Repository selection is changing. Select the repository again, then start a fresh action."
+      current == null || current.thread !== thread -> "This saved proposal has no current chat authority. Start a fresh proposal from this chat."
+      openDatabaseSessionId != current.databaseSessionId -> "The database changed. Reopen this chat before continuing the operation."
+      origin != null && (origin.draft !== this || origin.chat !== current || origin.contextRevision != contextRevision ||
+        origin.selectedRoot != repository?.root || origin.databaseSessionId != current.databaseSessionId) -> STALE_START_TEXT
+      request != null && (request.repoRoot != repository?.root || request.expectedDatabaseSessionId != current.databaseSessionId) -> STALE_START_TEXT
+      closing || startClaim != null || resumeTransition != null || offerState.value.starting -> "Finish the current operation before starting another."
+      current.transitionBlocked || current.thread.busy.value -> "Finish the current chat activity before starting this operation."
+      current.thread.hasDeliveryClaim() -> "A chat message is still waiting for delivery. Resolve it before starting work."
+      current.hasAcceptedSaves() -> "A chat message is still being saved. Wait for it to finish, then start again."
+      else -> null
+    }
+  }, decisionAdmissionProblem = { thread, decisionClaim ->
+    if (cards.hasOtherOutstanding(thread, decisionClaim)) "Another operation is being submitted. Wait for it to finish, then try again." else null
+  })
   private val chatState = MutableStateFlow<NewTaskChat?>(null)
   private val resumeSourceSessionsState = MutableStateFlow<Set<String>>(emptySet())
   internal val resumeSourceSessions: StateFlow<Set<String>> = resumeSourceSessionsState.asStateFlow()
@@ -129,6 +158,7 @@ class NewTaskDraft internal constructor(
   private val offerState = MutableStateFlow(NewTaskOffer())
   private var previewTracker: Pair<String, NewTaskChatChanges>? = null
   private var closing = false
+  @Volatile private var startClaim: Any? = null
   @Volatile private var contextTransitionOwner: Any? = null
   @Volatile private var contextTransitionJob: Job? = null
   internal var contextTransitioning: Boolean by mutableStateOf(false)
@@ -188,6 +218,7 @@ class NewTaskDraft internal constructor(
 
   internal val chat: StateFlow<NewTaskChat?> = chatState.asStateFlow()
   internal val resuming: Boolean get() = resumeTransition != null
+  internal val openDatabaseSessionId: Long? get() = (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
 
   /** The Confirm, Dismiss, Adjust and option callbacks of the operation cards in [current]'s transcript. */
   internal fun operationCardActions(current: NewTaskChat): ChatOperationCardActions = cards.actions(current.thread, current.transitionLock)
@@ -208,7 +239,7 @@ class NewTaskDraft internal constructor(
   internal val offer: StateFlow<NewTaskOffer> = offerState.asStateFlow()
 
   internal val acceptedIssueKey: String?
-    get() = acceptedKeyState.takeIf { chatState.value?.repositoryRoot == repository?.root }
+    get() = acceptedKeyState.takeIf { repository != null && chatState.value?.selectedRepositoryRoot == repository?.root }
   internal var cursorMcpDependency by mutableStateOf(CursorMcpDependency.ProjectUserOnly)
 
   /** Every repository's saved drafts, newest first, as of the latest [refreshSaved]. */
@@ -230,7 +261,7 @@ class NewTaskDraft internal constructor(
     val current = chatState.value
     val openSession = databaseSession.state.value as? DatabaseSessionState.Open
     val databaseMatches = openSession != null && (current == null || current.databaseSessionId == openSession.sessionId)
-    return !closing && contextTransitionOwner == null && resumeTransition == null && databaseMatches && (message.isNotBlank() || attachments.isNotEmpty()) && workingDirectory.isNotBlank() && selectedAgent != null && selectedAgent?.agentId == agentId &&
+    return !closing && startClaim == null && contextTransitionOwner == null && resumeTransition == null && databaseMatches && (message.isNotBlank() || attachments.isNotEmpty()) && workingDirectory.isNotBlank() && selectedAgent != null && selectedAgent?.agentId == agentId &&
       current?.repositoryMissing != true && !offerState.value.starting && current?.transitionBlocked != true
   }
 
@@ -246,12 +277,18 @@ class NewTaskDraft internal constructor(
     return true
   }
 
-  internal fun sendSuggestedActionForContext(revision: Long, root: String?, action: ChatSuggestedAction): Boolean =
-    if (contextRevision == revision && repository?.root == root) sendSuggestedAction(action) else false
+  internal fun sendSuggestedActionForContext(revision: Long, root: String?, sessionId: Long?, action: ChatSuggestedAction): Boolean =
+    if (contextFenceMatches(revision, root, sessionId)) sendSuggestedAction(action) else false
 
-  internal fun selectIssueKeyForContext(revision: Long, root: String?, key: String) {
-    if (contextRevision == revision && repository?.root == root) selectIssueKey(key)
+  internal fun selectIssueKeyForContext(revision: Long, root: String?, sessionId: Long?, key: String) {
+    if (repository == null || root == null) reportStartRefusal(chatState.value, offerState.value.prefixKind ?: NewTaskKind.GoalRun, SELECT_REPOSITORY_START_TEXT)
+    else if (contextFenceMatches(revision, root, sessionId)) selectIssueKey(key)
+    else reportStartRefusal(chatState.value, offerState.value.prefixKind ?: NewTaskKind.GoalRun, STALE_START_TEXT)
   }
+
+  private fun contextFenceMatches(revision: Long, root: String?, sessionId: Long?): Boolean =
+    sessionId != null && contextRevision == revision && repository?.root == root && openDatabaseSessionId == sessionId &&
+      (chatState.value == null || chatState.value?.databaseSessionId == sessionId)
 
   internal fun startForContext(
     revision: Long,
@@ -261,9 +298,30 @@ class NewTaskDraft internal constructor(
     keyChoice: String?,
     action: ChatSuggestedAction?,
     target: String?,
+    expectedSessionId: Long? = openDatabaseSessionId,
   ) {
-    if (chatState.value === expectedChat && contextRevision == revision && repository?.root == root) {
-      start(kind, keyChoice = keyChoice, target = target, action = action)
+    if (repository == null) {
+      scope.launch { showStartProblem(expectedChat, kind, SELECT_REPOSITORY_START_TEXT) }
+    } else if (root == null) {
+      scope.launch { showStartProblem(expectedChat, kind, STALE_START_TEXT) }
+    } else if (chatState.value === expectedChat && contextFenceMatches(revision, root, expectedSessionId)) {
+      start(kind, keyChoice = keyChoice, target = target, action = action, origin = NewTaskStartOrigin(this, expectedChat, revision, root, expectedSessionId))
+    } else {
+      scope.launch { showStartProblem(expectedChat, kind, STALE_START_TEXT) }
+    }
+  }
+
+  internal fun startAdmissionProblem(): String? {
+    val current = chatState.value
+    return when {
+      repository == null -> SELECT_REPOSITORY_START_TEXT
+      closing || startClaim != null || contextTransitionOwner != null || resumeTransition != null || offerState.value.starting -> "Finish the current chat activity before starting work."
+      current != null && (current.transitionBlocked || current.thread.busy.value) -> "Finish the current chat activity before starting work."
+      current?.thread?.hasDeliveryClaim() == true -> "A chat message is still waiting for delivery. Resolve it before starting work."
+      current?.hasAcceptedSaves() == true -> "A chat message is still being saved. Wait for it to finish, then start again."
+      current != null && cards.hasOutstanding(current.thread) -> "Another chat operation is still being saved or submitted. Wait for it to finish, then try again."
+      selectedAgent == null -> "Choose an agent before starting work."
+      else -> null
     }
   }
 
@@ -290,7 +348,7 @@ class NewTaskDraft internal constructor(
   ) {
     val current = chatState.value ?: open(UUID.randomUUID().toString(), workingDirectory, repository?.root, baseBranch.ifBlank { null }, checkNotNull(selectedAgent))
     offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, started = null, selectedKey = null)
-    if (action == null && attachments.isEmpty() && cards.submitAdjustment(current.thread, submitted)) {
+    if (action == null && attachments.isEmpty() && cards.submitAdjustment(current.thread, submitted, current.transitionLock)) {
       if (text == submitted) text = ""
       return
     }
@@ -352,16 +410,76 @@ class NewTaskDraft internal constructor(
     target: String? = null,
     action: ChatSuggestedAction? = null,
     offerFieldValue: String? = null,
+    origin: NewTaskStartOrigin? = null,
   ) {
     val current = chatState.value
-    if (closing || contextTransitionOwner != null || resumeTransition != null || offerState.value.starting || current?.thread?.busy?.value == true) return
-    if (current == null && kind in RUN_KINDS) return
+    if (repository == null) {
+      scope.launch { showStartProblem(current, kind, SELECT_REPOSITORY_START_TEXT) }
+      return
+    }
+    if (origin?.selectedRoot == null && origin != null) {
+      scope.launch { showStartProblem(current, kind, STALE_START_TEXT) }
+      return
+    }
+    if (current != null && current.databaseSessionId != openDatabaseSessionId) {
+      scope.launch { showStartProblem(current, kind, "The database changed. Reopen this chat before starting work.") }
+      return
+    }
+    val captured = origin ?: NewTaskStartOrigin(this, current, contextRevision, repository?.root, openDatabaseSessionId)
+    if (captured.draft !== this || captured.chat !== current || captured.contextRevision != contextRevision ||
+      captured.selectedRoot != repository?.root || captured.expectedDatabaseSessionId == null ||
+      captured.expectedDatabaseSessionId != openDatabaseSessionId ||
+      (current != null && (current.selectedRepositoryRoot != captured.selectedRoot || current.databaseSessionId != captured.expectedDatabaseSessionId))
+    ) {
+      scope.launch { showStartProblem(current, kind, STALE_START_TEXT) }
+      return
+    }
+    if (closing || contextTransitionOwner != null || resumeTransition != null || offerState.value.starting ||
+      current?.transitionBlocked == true || current?.thread?.busy?.value == true || current?.thread?.hasDeliveryClaim() == true ||
+      current?.hasAcceptedSaves() == true || current?.let { cards.hasOutstanding(it.thread) } == true
+    ) {
+      val reason = when {
+        current?.thread?.hasDeliveryClaim() == true -> "A chat message is still waiting for delivery. Resolve it before starting work."
+        current?.hasAcceptedSaves() == true -> "A chat message is still being saved. Wait for it to finish, then start again."
+        else -> "Finish the current chat activity before starting work."
+      }
+      scope.launch { showStartProblem(current, kind, reason) }
+      return
+    }
+    if (current == null && kind in RUN_KINDS) {
+      scope.launch { showStartProblem(null, kind, "Ask for a goal or plan start in the chat so its requirements are included.") }
+      return
+    }
     if (kind in RUN_KINDS && offerState.value.started != null) return
-    if (selectedAgent == null || repository == null) return
+    if (selectedAgent == null) {
+      scope.launch { showStartProblem(current, kind, "Choose an agent before starting work.") }
+      return
+    }
+    val revision = captured.contextRevision
+    val root = captured.selectedRoot ?: return
+    val expectedSessionId = captured.expectedDatabaseSessionId
+    if (expectedSessionId == null) {
+      scope.launch { showStartProblem(current, kind, "The database session is not open. Reopen it before starting work.") }
+      return
+    }
+    val claim = Any()
+    val claimed = synchronized(current?.transitionLock ?: this) {
+      if (startClaim != null || offerState.value.starting || current?.thread?.hasDeliveryClaim() == true ||
+        current?.hasAcceptedSaves() == true || current?.transitionBlocked == true || current?.let { cards.hasOutstanding(it.thread) } == true
+      ) false
+      else {
+        startClaim = claim
+        true
+      }
+    }
+    if (!claimed) {
+      scope.launch { showStartProblem(current, kind, "A start is already being submitted. Wait for it to finish, then start again.") }
+      return
+    }
     val pending = offerState.value
     val selectedAction = action ?: pending.action?.takeIf { pending.prefixKind == kind }
     offerState.value = NewTaskOffer(starting = true, started = pending.started)
-    startRequest(kind, keyChoice, target, selectedAction, offerFieldValue, current)
+    startRequest(kind, keyChoice, target, selectedAction, offerFieldValue, current, revision, root, expectedSessionId, claim)
   }
 
   internal fun selectIssueKey(keyChoice: String) {
@@ -369,9 +487,26 @@ class NewTaskDraft internal constructor(
     val kind = pending.prefixKind ?: return
     if (newTaskStartArgumentIdentity(keyChoice)?.let(NEW_TASK_COMPLETE_KEY::matches) != true) return
     val current = chatState.value
-    if (kind !in GOAL_KINDS || closing || contextTransitionOwner != null || resumeTransition != null || pending.starting || current?.thread?.busy?.value == true) return
+    if (kind !in GOAL_KINDS) return
+    val fenceProblem = when {
+      repository == null -> SELECT_REPOSITORY_START_TEXT
+      current?.thread?.hasDeliveryClaim() == true -> "A chat message is still waiting for delivery. Resolve it before choosing an issue key."
+      current?.hasAcceptedSaves() == true -> "A chat message is still being saved. Wait for it to finish, then choose the issue key again."
+      closing || contextTransitionOwner != null || resumeTransition != null || pending.starting || startClaim != null ||
+        current?.transitionBlocked == true || current?.thread?.busy?.value == true || current?.let { cards.hasOutstanding(it.thread) } == true ->
+        "Finish the current chat activity before choosing an issue key."
+      else -> null
+    }
+    if (fenceProblem != null) {
+      scope.launch { showStartProblem(current, kind, fenceProblem) }
+      return
+    }
     if (current == null || pending.started != null) return
-    if (selectedAgent == null || repository == null) return
+    if (repository == null) {
+      scope.launch { showStartProblem(current, kind, SELECT_REPOSITORY_START_TEXT) }
+      return
+    }
+    if (selectedAgent == null) return
     acceptedKeyState = keyChoice.trim().uppercase()
     offerState.value = pending.copy(selectedKey = acceptedKeyState)
   }
@@ -383,11 +518,20 @@ class NewTaskDraft internal constructor(
     action: ChatSuggestedAction?,
     offerFieldValue: String?,
     current: NewTaskChat?,
+    revision: Long,
+    root: String,
+    expectedSessionId: Long,
+    claim: Any,
   ) {
     val agent = checkNotNull(selectedAgent)
-    val root = checkNotNull(repository).root
-    if (current != null && current.repositoryRoot != root) {
-      scope.launch { showStartProblem(current, kind, "The repository changed. Open a chat for the selected repository and choose its issue key.") }
+    if (startClaim !== claim || repository?.root != root || contextRevision != revision ||
+      (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId != expectedSessionId ||
+      (current != null && (current.selectedRepositoryRoot != root || current.databaseSessionId != expectedSessionId)) ||
+      current?.transitionBlocked == true || current?.thread?.busy?.value == true || current?.thread?.hasDeliveryClaim() == true ||
+      current?.hasAcceptedSaves() == true || current?.let { cards.hasOutstanding(it.thread) } == true
+    ) {
+      scope.launch { showStartProblem(current, kind, STALE_START_TEXT) }
+      if (startClaim === claim) startClaim = null
       offerState.value = NewTaskOffer()
       return
     }
@@ -402,9 +546,6 @@ class NewTaskDraft internal constructor(
     val resolvedKey = if (kind in GOAL_KINDS && keyChoice == null) acceptedIssueKey else argumentIdentity ?: keyChoice
     val reuseRequested = kind in GOAL_KINDS && resolvedKey != null &&
       newTaskReuseRequested(transcript, resolvedKey, offerFieldValue, offerKeyEdit, current, root)
-    val expectedSessionId = current?.databaseSessionId ?: if (current == null) {
-      (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
-    } else null
     val startRequest = NewTaskStart(
       root,
       requirements,
@@ -421,6 +562,15 @@ class NewTaskDraft internal constructor(
     )
     scope.launch {
       try {
+        if (startClaim !== claim || contextRevision != revision || repository?.root != root || chatState.value !== current ||
+          (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId != expectedSessionId ||
+          closing || contextTransitionOwner != null || resumeTransition != null ||
+          current?.transitionBlocked == true || current?.thread?.busy?.value == true || current?.thread?.hasDeliveryClaim() == true ||
+          current?.hasAcceptedSaves() == true || current?.let { cards.hasOutstanding(it.thread) } == true
+        ) {
+          showStartProblem(current, kind, STALE_START_TEXT)
+          return@launch
+        }
         val outcome = workControls.startNewTask(startRequest)
         when (outcome) {
           is NewTaskStartOutcome.Started -> {
@@ -439,11 +589,11 @@ class NewTaskDraft internal constructor(
               }
               observeRunFailure(current, kind, outcome)
             } else {
-              reportStandalone(current, kind, outcome, startRequest)
+              reportStandalone(current, kind, outcome, startRequest, current?.let { OperationCardOrigin(this@NewTaskDraft, it, revision, root, expectedSessionId) })
             }
           }
           is NewTaskStartOutcome.AwaitingConfirmation -> {
-            cards.remember(outcome.launchId, startRequest)
+            cards.remember(outcome.launchId, startRequest, current?.let { OperationCardOrigin(this@NewTaskDraft, it, revision, root, expectedSessionId) })
             showParkedCard(current, kind, outcome.launchId)
           }
           is NewTaskStartOutcome.NeedsKey -> {
@@ -454,39 +604,50 @@ class NewTaskDraft internal constructor(
             }
           }
           is NewTaskStartOutcome.Refused -> {
-            if (outcome.message == "The database changed. Try again." && current != null && ownsChat(current)) {
-              current.databaseSessionId = (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
-            }
             showStartProblem(current, kind, outcome.message)
           }
           is NewTaskStartOutcome.Failed -> showStartProblem(current, kind, readProblemText(outcome.problem))
         }
       } finally {
-        offerState.value = offerState.value.copy(starting = false)
+        if (startClaim === claim) {
+          startClaim = null
+          offerState.value = offerState.value.copy(starting = false)
+        }
       }
     }
   }
 
   /** Ends the chat and deletes its saved draft; the selections and any typed text stay. False when there was no chat to discard. */
   internal suspend fun discard(): Boolean {
-    if (closing || contextTransitionOwner != null || resumeTransition != null) return false
     val current = chatState.value ?: return false
-    if (current.transitionBlocked) return false
+    synchronized(current.transitionLock) {
+      if (closing || startClaim != null || contextTransitionOwner != null || resumeTransition != null ||
+        offerState.value.starting || cards.hasDecisionOutstanding(current.thread) || current.transitionBlocked
+      ) return false
+      closing = true
+    }
     val saveLock = saveLocks[current.sessionId]
-    if (current.thread.deferDestructiveAction("discard this draft")) return false
-    return leave(current, beforeLeave = {
-      invalidDrafts += current.sessionId
-      retainedThreads.remove(current.sessionId)
-      saveLocks.remove(current.sessionId)
-      synchronized(cardOwners) { cardOwners.remove(current.thread) }
-    }) {
-      saveLock?.withLock { chats.deleteSavedChat(current.sessionId) } ?: chats.deleteSavedChat(current.sessionId)
+    try {
+      if (current.thread.deferDestructiveAction("discard this draft")) return false
+      return leave(current, beforeLeave = {
+        invalidDrafts += current.sessionId
+        retainedThreads.remove(current.sessionId)
+        saveLocks.remove(current.sessionId)
+        synchronized(cardOwners) { cardOwners.remove(current.thread) }
+      }) {
+        saveLock?.withLock { chats.deleteSavedChat(current.sessionId) } ?: chats.deleteSavedChat(current.sessionId)
+      }
+    } finally {
+      closing = false
     }
   }
 
   /** Discards [entry], allowing undo unless it is the open chat. */
   internal fun discardSaved(entry: ChatHistoryEntry) {
-    if (closing || contextTransitionOwner != null || resumeTransition != null) return
+    val current = chatState.value
+    if (closing || startClaim != null || contextTransitionOwner != null || resumeTransition != null || offerState.value.starting ||
+      current?.let { cards.hasDecisionOutstanding(it.thread) } == true
+    ) return
     if (chatState.value?.sessionId == entry.sessionId) {
       scope.launch { discard() }
       return
@@ -496,12 +657,15 @@ class NewTaskDraft internal constructor(
 
   /** Writes any running reply, then ends the chat's agent process and keeps its saved draft, for "New chat" and a window close. */
   internal suspend fun close(): Boolean {
-    if (closing || contextTransitionOwner != null || resumeTransition != null) return false
-    val current = chatState.value ?: return true
-    if (current.transitionBlocked) return false
-    closing = true
+    val current = chatState.value
+    synchronized(current?.transitionLock ?: this) {
+      if (closing || startClaim != null || contextTransitionOwner != null || resumeTransition != null ||
+        offerState.value.starting || current?.let { cards.hasDecisionOutstanding(it.thread) || it.transitionBlocked } == true
+      ) return false
+      closing = true
+    }
     return try {
-      if (!current.flush()) false else leave(current) {}
+      if (current == null) true else if (!current.flush()) false else leave(current) {}
     } finally {
       closing = false
     }
@@ -526,6 +690,7 @@ class NewTaskDraft internal constructor(
     requestedBranch: String = baseBranch,
     requestedAgent: ChatAgent? = selectedAgent,
   ): Boolean {
+    if (startClaim != null) return false
     val agent = requestedAgent ?: return false
     val current = chatState.value
     if (current == null) {
@@ -546,7 +711,7 @@ class NewTaskDraft internal constructor(
     val databaseId = current.databaseSessionId ?: return false
     var queuedEntries: List<dev.skillbill.desktop.feature.chat.QueuedChatMessage> = emptyList()
     synchronized(current.transitionLock) {
-      if (contextTransitionOwner != null || closing || resumeTransition != null || current.repositoryMissing || current.thread.busy.value ||
+      if (contextTransitionOwner != null || closing || startClaim != null || resumeTransition != null || current.thread.busy.value ||
         (current.thread.queued.value.isNotEmpty() && !current.repositoryCandidateSettling) || offerState.value.starting ||
         cards.hasOutstanding(current.thread) ||
         current.thread.deferDestructiveAction("change the draft context") ||
@@ -721,44 +886,50 @@ class NewTaskDraft internal constructor(
     synchronized(cardOwners) { cardOwners[recovered.thread] = recovered }
   }
 
-  /** Opens [entry] in this empty draft on its agent session, or with only Discard offered when its repository no longer exists. */
+  /** Opens [entry] in this empty draft on its agent session; a missing repository requires selection before chat can continue. */
   internal fun resume(entry: ChatHistoryEntry): Boolean {
     val context = entry.newTask ?: return false
-    if (entry.sessionId in invalidDrafts || chatState.value != null || contextTransitionOwner != null || resumeTransition != null) return false
-    val selectedRepositoryRoot = context.selectedRepositoryRoot
-    val workingDirectory = selectedRepositoryRoot ?: userHome
-    val homeChanged = selectedRepositoryRoot == null && context.workingDirectory != workingDirectory
-    val missing = selectedRepositoryRoot != null && !File(selectedRepositoryRoot).isDirectory
-    if (homeChanged) return stageChangedHomeResume(entry, context, workingDirectory)
-    repository = selectedRepositoryRoot?.let { NewTaskRepository(it, File(it).name) }
-    baseBranch = context.baseBranch.orEmpty()
-    agentId = entry.agent.agentId
-    selectedAgent = entry.agent
-    val retained = retainedThreads[entry.sessionId]
-    val sessionId = entry.sessionId
-    val replay = if (!context.sessionEstablished) NewTaskReplay(entry.agent.agentId, context.workingDirectory, context.baseBranch, entry.lines.map(::restored), selectedRepositoryRoot) else null
-    val resumed = open(
-      sessionId,
-      workingDirectory,
-      selectedRepositoryRoot,
-      context.baseBranch,
-      entry.agent,
-      context.sessionEstablished,
-      context.pendingTurnLineIndex,
-      missing,
-      replay = replay,
-      changesBaseline = context.changesBaseline,
-      resumedChanges = context.changesBaseline != null,
-      changesCaptureAttempted = context.changesCaptureAttempted || context.sessionEstablished || context.changesBaseline != null,
-      changesAttributedPaths = context.changesAttributedPaths,
-    )
-    val lines = if (retained == null) entry.lines.map(::restored) else emptyList()
-    val notice = ChatMessage.Notice("This draft's repository no longer exists: ${selectedRepositoryRoot ?: context.repositoryRoot}. Discard it to continue.")
-    if (retained == null) resumed.thread.replaceTranscript(if (missing) lines + notice else lines)
-    resumed.thread.showCapability(entry.agent)
-    synchronized(cardOwners) { cardOwners[resumed.thread] = resumed }
-    if (!missing) cards.revalidate(resumed.thread, resumed.thread.transcript.value.mapNotNull { (it as? ChatMessage.Notice)?.operationCard?.token })
-    return true
+    return synchronized(chatState.value?.transitionLock ?: this) {
+      val current = chatState.value
+      if (entry.sessionId in invalidDrafts || current != null || contextTransitionOwner != null || resumeTransition != null ||
+        closing || startClaim != null || offerState.value.starting || current?.let { cards.hasDecisionOutstanding(it.thread) } == true
+      ) return@synchronized false
+
+      val selectedRepositoryRoot = context.selectedRepositoryRoot
+      val workingDirectory = selectedRepositoryRoot ?: userHome
+      val homeChanged = selectedRepositoryRoot == null && context.workingDirectory != workingDirectory
+      val missing = selectedRepositoryRoot != null && !File(selectedRepositoryRoot).isDirectory
+      if (homeChanged) return@synchronized stageChangedHomeResume(entry, context, workingDirectory)
+      repository = selectedRepositoryRoot?.let { NewTaskRepository(it, File(it).name) }
+      baseBranch = context.baseBranch.orEmpty()
+      agentId = entry.agent.agentId
+      selectedAgent = entry.agent
+      val retained = retainedThreads[entry.sessionId]
+      val sessionId = entry.sessionId
+      val replay = if (!context.sessionEstablished) NewTaskReplay(entry.agent.agentId, context.workingDirectory, context.baseBranch, entry.lines.map(::restored), selectedRepositoryRoot) else null
+      val resumed = open(
+        sessionId,
+        workingDirectory,
+        selectedRepositoryRoot,
+        context.baseBranch,
+        entry.agent,
+        context.sessionEstablished,
+        context.pendingTurnLineIndex,
+        missing,
+        replay = replay,
+        changesBaseline = context.changesBaseline,
+        resumedChanges = context.changesBaseline != null,
+        changesCaptureAttempted = context.changesCaptureAttempted || context.sessionEstablished || context.changesBaseline != null,
+        changesAttributedPaths = context.changesAttributedPaths,
+      )
+      val lines = if (retained == null) entry.lines.map(::restored) else emptyList()
+      val notice = ChatMessage.Notice("This draft's repository no longer exists: ${selectedRepositoryRoot ?: context.repositoryRoot}. Select an available repository to continue.")
+      if (retained == null) resumed.thread.replaceTranscript(if (missing) lines + notice else lines)
+      resumed.thread.showCapability(entry.agent)
+      synchronized(cardOwners) { cardOwners[resumed.thread] = resumed }
+      if (!missing) cards.revalidate(resumed.thread, resumed.thread.transcript.value.mapNotNull { (it as? ChatMessage.Notice)?.operationCard?.token })
+      true
+    }
   }
 
   private fun stageChangedHomeResume(
@@ -947,8 +1118,12 @@ class NewTaskDraft internal constructor(
     when {
       !ownsChat(current) -> toasts.show(ToastMessage(ToastTone.Problem, message))
       kind in GOAL_KINDS -> record(checkNotNull(current), ChatMessage.Error(null, message))
-      else -> checkNotNull(current).thread.append(ChatMessage.Notice(message))
+      else -> record(checkNotNull(current), ChatMessage.Notice(message))
     }
+  }
+
+  internal fun reportStartRefusal(current: NewTaskChat?, kind: NewTaskKind, message: String) {
+    scope.launch { showStartProblem(current, kind, message) }
   }
 
   private suspend fun record(current: NewTaskChat, message: ChatMessage) {
@@ -974,7 +1149,7 @@ class NewTaskDraft internal constructor(
     }
   }
 
-  private fun reportStandalone(current: NewTaskChat?, kind: NewTaskKind, outcome: NewTaskStartOutcome.Started, request: NewTaskStart) {
+  private fun reportStandalone(current: NewTaskChat?, kind: NewTaskKind, outcome: NewTaskStartOutcome.Started, request: NewTaskStart, authority: OperationCardOrigin?) {
     val name = kind.startName()
     if (ownsChat(current)) {
       checkNotNull(current).thread.append(ChatMessage.Notice("Started $name. Follow it in Work."))
@@ -982,7 +1157,7 @@ class NewTaskDraft internal constructor(
       toasts.show(ToastMessage(ToastTone.Confirmation, "Started $name"))
     }
     val launchId = outcome.launchId
-    launchId?.let { cards.remember(it, request) }
+    launchId?.let { cards.remember(it, request, authority) }
     observeRunFailure(current, kind, outcome) {
       if (launchId != null) showParkedCard(current, kind, launchId, silentWhenAbsent = true)
     }
@@ -1017,3 +1192,5 @@ class NewTaskDraft internal constructor(
 }
 
 private val RUN_KINDS = setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)
+private const val SELECT_REPOSITORY_START_TEXT = "Identify or select a repository before starting a goal, phase or operation. Ordinary chat can continue in your home directory."
+private const val STALE_START_TEXT = "This start belongs to an earlier repository context. Select the intended repository and make a fresh start request."

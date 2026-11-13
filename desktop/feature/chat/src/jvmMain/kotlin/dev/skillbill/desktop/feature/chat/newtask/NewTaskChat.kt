@@ -126,6 +126,7 @@ internal class NewTaskChat(
   val sessionId: String get() = sessionIdState.value
   internal val transitionBlocked: Boolean get() = rotationInProgress || repositorySettlement || transitionReserved()
   internal val repositoryCandidateSettling: Boolean get() = repositorySettlement
+  internal fun hasAcceptedSaves(): Boolean = synchronized(transitionLock) { acceptedSaves.any { !it.isCompleted } }
 
   val thread = retainedThread
   val job: Job = SupervisorJob(scope.coroutineContext[Job])

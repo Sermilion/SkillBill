@@ -130,7 +130,8 @@ private fun ColumnScope.NewTaskChatContent(
   val chatBusy = chat?.thread?.busy?.collectAsState()?.value ?: false
   val contextRevision = draft.contextRevision
   val selectedRoot = draft.repository?.root
-  val startOrigin = NewTaskStartOrigin(draft, chat, contextRevision, selectedRoot)
+  val expectedSessionId: Long? = chat?.databaseSessionId ?: draft.openDatabaseSessionId
+  val startOrigin = NewTaskStartOrigin(draft, chat, contextRevision, selectedRoot, expectedSessionId)
   val focusManager = LocalFocusManager.current
   val focus = remember { FocusRequester() }
   if (chat == null) {
@@ -152,7 +153,7 @@ private fun ColumnScope.NewTaskChatContent(
               selectedKey = offer.selectedKey,
               linkedKeys = draft.issueKeyProposals,
               enabled = !chatBusy && !offer.starting && offer.started == null,
-              onChoose = { draft.selectIssueKeyForContext(contextRevision, selectedRoot, it) },
+              onChoose = { draft.selectIssueKeyForContext(contextRevision, selectedRoot, expectedSessionId, it) },
               onStart = {
                 draft.startForContext(
                   contextRevision,
@@ -162,6 +163,7 @@ private fun ColumnScope.NewTaskChatContent(
                   offer.selectedKey,
                   offer.action,
                   offer.action?.target,
+                  expectedSessionId,
                 )
               },
             )
@@ -178,16 +180,14 @@ private fun ColumnScope.NewTaskChatContent(
       ) { _, action ->
         val start = action.start
         if (start == null) {
-          if (draft.sendSuggestedActionForContext(contextRevision, selectedRoot, action)) {
+          if (draft.sendSuggestedActionForContext(contextRevision, selectedRoot, expectedSessionId, action)) {
             focusManager.clearFocus()
           }
         } else if (host.onStart != null) {
           val monitorTarget =
             action.target?.trim()?.takeIf(String::isNotBlank)
               ?: action.instruction.trim().takeIf { start == NewTaskActionKind.Monitor }
-          if (draft.contextRevision == contextRevision && draft.repository?.root == selectedRoot) {
-            host.onStart?.invoke(startOrigin, start.wire, monitorTarget, action)
-          }
+          host.onStart?.invoke(startOrigin, start.wire, monitorTarget, action)
         }
       }
     }
@@ -199,6 +199,13 @@ private fun ColumnScope.NewTaskChatContent(
   ) {
     if (chat == null && state.home is NewTaskHome.Returning) {
       val startable = draft.repository != null && draft.agentId != null
+      if (state.home is NewTaskHome.Returning && draft.repository == null) {
+        Callout(
+          tone = FeedbackTone.Info,
+          body = "Identify or select a repository before starting a goal, phase, or operation. Ordinary chat is available at home.",
+          modifier = Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth(),
+        )
+      }
       NewTaskChips(
         host.onStart?.takeIf { startable }?.let { onStart -> { wire, target -> onStart(startOrigin, wire, target, null) } },
         Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth(),

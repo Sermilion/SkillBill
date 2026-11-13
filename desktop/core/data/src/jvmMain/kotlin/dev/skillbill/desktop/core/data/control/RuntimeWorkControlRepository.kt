@@ -59,6 +59,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.contracts.operationcard.OperationCardProjection
@@ -103,6 +105,10 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryP
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.nio.file.Path
+import java.nio.file.Files
+import java.nio.file.InvalidPathException
+import java.nio.file.NoSuchFileException
+import java.io.IOException
 import kotlin.time.toJavaInstant
 import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
 import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
@@ -269,27 +275,61 @@ class RuntimeWorkControlRepository(
     }
     if (readiness is Outcome.Failure) return if (!sessionIsCurrent(session)) NewTaskStartOutcome.Refused("The database changed. Try again.")
       else NewTaskStartOutcome.Failed(readiness.error)
-    when (request.kind) {
-      NewTaskKind.Review, NewTaskKind.Validation, NewTaskKind.Qa, NewTaskKind.Pr, NewTaskKind.Monitor ->
-        return startStandaloneTask(request, session, qaDevice)
-      NewTaskKind.Verify, NewTaskKind.PrReviewFix ->
-        return startOperationTask(request, session, qaDevice)
-      NewTaskKind.GoalRun, NewTaskKind.PlanOnly -> Unit
+    if (request.repoRoot.isBlank()) return NewTaskStartOutcome.Refused("Select a repository before starting work.")
+    val branchRead = branches.branches(request.repoRoot)
+    if (!sessionIsCurrent(session)) return NewTaskStartOutcome.Refused("The database changed. Try again.")
+    val listed = when (val read = branchRead) {
+      is RepositoryBranchesRead.Listed -> read
+      is RepositoryBranchesRead.NotARepository -> return NewTaskStartOutcome.Refused("${read.path} is not a git repository.")
+      is RepositoryBranchesRead.Unavailable -> return NewTaskStartOutcome.Failed(read.problem)
     }
-    when (val read = branches.branches(request.repoRoot)) {
-      is RepositoryBranchesRead.Listed -> read.branches.newWorkBranchProblem(request.baseBranch)?.let {
+    val canonicalRoot = withContext(Dispatchers.IO) {
+      try {
+        val selected = Path.of(request.repoRoot).toRealPath()
+        val validated = Path.of(listed.branches.repositoryRoot).toRealPath()
+        when {
+          !Files.isDirectory(selected) || !Files.isDirectory(validated) -> Outcome.Failure(
+            NewTaskStartOutcome.Refused("The selected repository is unavailable. Select an existing repository."),
+          )
+          selected != validated -> Outcome.Failure(
+            NewTaskStartOutcome.Refused("The selected path does not match the selected repository root. Choose the repository root itself."),
+          )
+          else -> Outcome.Success(validated.toString())
+        }
+      } catch (failure: NoSuchFileException) {
+        Outcome.Failure(NewTaskStartOutcome.Refused("The selected repository no longer exists. Select an existing repository."))
+      } catch (failure: IOException) {
+        Outcome.Failure(NewTaskStartOutcome.Failed(ReadProblem.Runtime("Could not read the selected repository: ${failure.message ?: "filesystem access failed"}")))
+      } catch (failure: InvalidPathException) {
+        Outcome.Failure(NewTaskStartOutcome.Refused("The selected repository path is invalid. Select an existing repository."))
+      } catch (failure: SecurityException) {
+        Outcome.Failure(NewTaskStartOutcome.Failed(ReadProblem.Runtime("Could not read the selected repository: ${failure.message ?: "access denied"}")))
+      }
+    }
+    if (!sessionIsCurrent(session)) return NewTaskStartOutcome.Refused("The database changed. Try again.")
+    val admittedRequest = when (canonicalRoot) {
+      is Outcome.Failure -> return canonicalRoot.error
+      is Outcome.Success -> request.copy(repoRoot = canonicalRoot.value)
+    }
+    if (request.kind == NewTaskKind.GoalRun || request.kind == NewTaskKind.PlanOnly) {
+      listed.branches.newWorkBranchProblem(request.baseBranch)?.let {
         diagnostics.record("desktop_new_work_branch_choice_required")
         return NewTaskStartOutcome.Refused(it)
       }
-      is RepositoryBranchesRead.NotARepository -> return NewTaskStartOutcome.Refused("${read.path} is not a git repository.")
-      is RepositoryBranchesRead.Unavailable -> return NewTaskStartOutcome.Failed(read.problem)
+    }
+    when (admittedRequest.kind) {
+      NewTaskKind.Review, NewTaskKind.Validation, NewTaskKind.Qa, NewTaskKind.Pr, NewTaskKind.Monitor ->
+        return startStandaloneTask(admittedRequest, session, qaDevice)
+      NewTaskKind.Verify, NewTaskKind.PrReviewFix ->
+        return startOperationTask(admittedRequest, session, qaDevice)
+      NewTaskKind.GoalRun, NewTaskKind.PlanOnly -> Unit
     }
     val identity = callInSession(
       session,
       "control_new_task_identity",
       { Outcome.Failure(it) },
       stale = { Outcome.Failure(NO_SESSION) },
-    ) { runtime -> Outcome.Success(runtime.repositoryEnclosingRootPort.repositoryIdentity(Path.of(request.repoRoot))) }
+    ) { runtime -> Outcome.Success(runtime.repositoryEnclosingRootPort.repositoryIdentity(Path.of(admittedRequest.repoRoot))) }
     val repositoryIdentity = when (identity) {
       is Outcome.Failure -> return if (!sessionIsCurrent(session)) NewTaskStartOutcome.Refused("The database changed. Try again.")
         else NewTaskStartOutcome.Failed(identity.error)
@@ -301,20 +341,20 @@ class RuntimeWorkControlRepository(
       is Outcome.Success -> result.value
     }
     if (!sessionIsCurrent(session)) return NewTaskStartOutcome.Refused("The database changed. Try again.")
-    val kind = if (request.kind == NewTaskKind.GoalRun) NewTaskRunKind.GOAL else NewTaskRunKind.PLAN
+    val kind = if (admittedRequest.kind == NewTaskKind.GoalRun) NewTaskRunKind.GOAL else NewTaskRunKind.PLAN
     val triedKeys = mutableSetOf<String>()
     repeat(3) { attempt ->
       val preparedResult = callInSession(session, "control_prepare_new_task", { Outcome.Failure(it) }, stale = { Outcome.Failure(NO_SESSION) }) { runtime ->
         Outcome.Success(
           runtime.workControlService.prepareNewTask(
-            Path.of(request.repoRoot),
+            Path.of(admittedRequest.repoRoot),
             NewTaskIntakeRequest(
-              request.requirements,
-              request.title,
-              request.baseBranch,
-              request.keyChoice,
+              admittedRequest.requirements,
+              admittedRequest.title,
+              admittedRequest.baseBranch,
+              admittedRequest.keyChoice,
               launches.keys.value + triedKeys,
-              request.reuseRequested,
+              admittedRequest.reuseRequested,
               NewTaskIdentityPolicy.RESOLVED_DESKTOP_IDENTITY,
             ),
           ),
@@ -354,7 +394,7 @@ class RuntimeWorkControlRepository(
                 ?: return@callInSession NewTaskStartOutcome.Refused("The database changed. Try again.")
               when (val result = runtime.databaseSession.transactionFenced(observation) {
                 if (!sessionIsCurrent(session)) null
-                else runtime.workControlService.startNewTask(Path.of(request.repoRoot), prepared, kind, request.agentId, qaDevice)
+                else runtime.workControlService.startNewTask(Path.of(admittedRequest.repoRoot), prepared, kind, admittedRequest.agentId, qaDevice)
               }) {
                 FencedTransactionResult.ChangedTarget -> NewTaskStartOutcome.Refused("The database changed. Try again.")
                 is FencedTransactionResult.Committed -> when (val started = result.value) {
@@ -366,9 +406,9 @@ class RuntimeWorkControlRepository(
                   is NewTaskStartResult.Refused -> NewTaskStartOutcome.Refused(started.reason)
                   is NewTaskStartResult.Running -> {
                     launches.releaseOnExit(handle, started.failure)
-                    NewTaskStartOutcome.Started(prepared.key, request.kind, awaitFailure = { started.failure.await() })
+                    NewTaskStartOutcome.Started(prepared.key, admittedRequest.kind, awaitFailure = { started.failure.await() })
                   }
-                  NewTaskStartResult.Started -> NewTaskStartOutcome.Started(prepared.key, request.kind)
+                  NewTaskStartResult.Started -> NewTaskStartOutcome.Started(prepared.key, admittedRequest.kind)
                   is NewTaskStartResult.AwaitingConfirmation -> NewTaskStartOutcome.Refused("A goal run cannot wait for a confirmation.")
                 }
               }

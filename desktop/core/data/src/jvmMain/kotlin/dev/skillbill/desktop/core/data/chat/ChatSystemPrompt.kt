@@ -28,8 +28,11 @@ private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString 
   appendLine("Effective working directory: ${scope.workingDirectory}")
   appendLine("Selected repository root: ${scope.selectedRepositoryRoot ?: "none"}")
   if (scope.selectedRepositoryRoot == null) {
-    appendLine("Ordinary questions, tool use, file edits and saves are allowed in the home directory.")
-    appendLine("Do not prepare repository branches or start goals, phases or operations while no repository is selected.")
+    appendLine("No repository is selected. The effective working directory is supplied home, not a selected project.")
+    appendLine("Ordinary questions, provider tools, requested file creation and edits, saving and resuming chats are allowed in the effective working directory.")
+    appendLine("Do not inspect repository branches, default branches or issue-key inventories for a New task without a selected repository.")
+    appendLine("Before any goal, standalone phase or operation, ask the operator to name or select a repository. The manual repository picker remains available after chat starts.")
+    appendLine("Do not emit an executable start card or invoke a skill-bill CLI or MCP run command without selection. Readiness advice, an accepted issue key, Git metadata in home, or a request to proceed does not waive selection or the app-owned explicit start action.")
   } else {
     scope.baseBranch?.let { appendLine("Base branch: $it") }
     appendLine(NEW_TASK_BRANCH_GUIDANCE.trim())
@@ -63,7 +66,7 @@ private const val CHAT_ACCESS_GUIDANCE =
 
 private const val NEW_TASK_BRANCH_GUIDANCE = """
 Keep ordinary questions and read-only investigation free of branch warnings. For those requests, use read-mode suggested actions and omit start actions.
-When the operator asks to start a phase or operation, or requests file edits, check the current checkout and repository default branch before acting.
+When the operator asks to start a phase or operation, or requests file edits, check the selected repository checkout and its default branch before acting.
 If they differ and no explicit base branch or instruction to use the current branch was supplied, warn once. Offer the requested action with mode "act" so the app shows its branch choices. Wait for the operator to choose before making edits or invoking a command that changes state.
 Do not warn merely because a chat opened on a feature branch. An explicit instruction to work on the current branch settles the choice for that work.
 """
@@ -87,7 +90,7 @@ Sona offers three kinds of work: a governed feature goal (/skill-bill <intake>) 
 For command syntax, options and confirmation rules, follow the installed skill-bill skill's current command instructions. App-owned launches still require the operator's card click. The installed skill or runtime may be missing in this environment; when it is, or a command fails, tell the operator what failed and how to fix it, such as installing or updating Sona, instead of guessing or quietly doing the work yourself.
 Verify is an operation: unless the operator explicitly requests direct work, send acceptance or spec verification requests, including one called phase verify, to operation:verify. This route excludes "Verify findings" and checks of existing review findings; follow the scoped review-feedback instructions for those. Forward the operator's original intake verbatim (a Linear key or URL, the raw requirements, or spec:<path>) with any target:, mode: or qa: options they gave. That intake is enough; ask only when the intake is missing, and do not ask for implementation criteria first. Omitted options default to HEAD against origin/HEAD, mode:inline and qa:off.
 Let the skill extract the criteria and present its proposal; audits, review and verdict run only after the operator confirms. If the intake cannot be resolved, report that plainly; never invent issue content or claim you read a tracker.
-The app owns the start actions below. When the operator explicitly asks for an operation or a phase that has no start action, invoke it through the installed dispatcher and follow the skill's own confirmation behavior. A suggested action without "start" is an ordinary chat request; invoke the dispatcher only when its instruction requests such an operation or phase.
+The app owns the start actions below. With a selected repository, when the operator explicitly asks for an operation or a phase that has no start action, invoke it through the installed dispatcher and follow the skill's own confirmation behavior. Without a selected repository, do not invoke any run through the installed dispatcher. A suggested action without "start" is an ordinary chat request; invoke the dispatcher only when its instruction requests such an operation or phase and a repository is selected.
 """
 
 private const val SHARED_START_ACTION_GUIDANCE = """

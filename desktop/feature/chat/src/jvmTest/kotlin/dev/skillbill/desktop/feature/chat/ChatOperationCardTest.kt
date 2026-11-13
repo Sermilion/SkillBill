@@ -21,6 +21,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Clock
 
 class ChatOperationCardTest {
@@ -138,6 +139,30 @@ class ChatOperationCardTest {
     runCurrent()
 
     assertEquals("T1=2", controls.newTaskRequests.single().confirmation?.selection)
+  }
+
+  @Test
+  fun `confirm rechecks remembered authority after the transcript save`() = runTest {
+    val card = verify()
+    val controls = FakeWorkControlRepository().apply { operationCards[card.launchId] = card }
+    val request = NewTaskStart("/repo", "", null, "agent", NewTaskKind.Verify, null, 1L)
+    var contextChanged = false
+    val coordinator = OperationCardCoordinator(
+      controls,
+      backgroundScope,
+      { request },
+      historyChanged = { contextChanged = true; true },
+      admissionProblem = { _, _, _ -> if (contextChanged) "The selected repository changed." else null },
+    )
+    coordinator.remember(card.launchId, request, Any())
+    val thread = ChatThread(Clock.System)
+    thread.showOperationCard(card)
+
+    coordinator.actions(thread).onConfirm(card.token)
+    runCurrent()
+
+    assertTrue(controls.newTaskRequests.isEmpty())
+    assertEquals("The selected repository changed.", thread.operationCard(card.token)?.refusal)
   }
 
   @Test
