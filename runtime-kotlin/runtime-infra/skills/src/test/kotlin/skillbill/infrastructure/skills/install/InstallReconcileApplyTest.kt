@@ -76,6 +76,22 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
   }
 
   @Test
+  fun `upgrade preserves local dispatcher guidance for compatibility rendering`() {
+    val upstream = seedRepo("apply-upstream")
+    val local = seedRepo("apply-local")
+    val home = home()
+    val baseline = baselineFromUpstream(upstream, home)
+    val dispatcher = local.resolve("skills/skill-bill/content.md")
+    val locallyAuthored = Files.readString(dispatcher) + "\nUse the team's local launch checklist.\n"
+    Files.writeString(dispatcher, locallyAuthored)
+
+    val output = applyReconciliation(roots(upstream), roots(local), home, baseline)
+
+    assertEquals(locallyAuthored, Files.readString(dispatcher))
+    assertFalse(output.installedPaths.contains("skills/skill-bill"))
+  }
+
+  @Test
   fun `a skill upstream no longer ships is deleted from the live tree`() {
     val upstream = seedRepo("apply-upstream")
     val local = seedRepo("apply-local")

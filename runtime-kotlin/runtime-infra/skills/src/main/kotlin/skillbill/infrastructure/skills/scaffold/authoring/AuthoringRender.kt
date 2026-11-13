@@ -5,6 +5,7 @@ import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentS
 import skillbill.infrastructure.skills.scaffold.rendering.renderFrontmatter
 import skillbill.infrastructure.skills.scaffold.rendering.renderSubagentSpawnRuntimeNotes
 import skillbill.infrastructure.skills.scaffold.validation.shape.parseSkillFrontmatter
+import skillbill.install.model.ListedSkillNames
 import skillbill.review.model.CodeReviewBaselineLayer
 import skillbill.scaffold.model.GovernedAddonSelection
 import java.nio.file.Files
@@ -17,10 +18,16 @@ internal fun renderWrapper(target: AuthoringTarget): String {
   val sourceFrontmatter = parseSkillFrontmatter(contentText)
   val frontmatter =
     renderFrontmatter(
-      skillName = sourceFrontmatter["name"].orEmpty(),
+      skillName = ListedSkillNames.publicName(sourceFrontmatter["name"].orEmpty()),
       description = sourceFrontmatter["description"].orEmpty(),
     )
-  val executionBody = renderedAuthoredExecutionBody(contentText, target.contentFile, target.skillName)
+  val authoredExecutionBody = renderedAuthoredExecutionBody(contentText, target.contentFile, target.skillName)
+  val executionBody =
+    if (target.skillName == ListedSkillNames.DISPATCHER) {
+      adaptLegacyDispatcherExecutionBody(authoredExecutionBody)
+    } else {
+      authoredExecutionBody
+    }
   return assembleRenderedWrapper(
     target = target,
     frontmatter = frontmatter,

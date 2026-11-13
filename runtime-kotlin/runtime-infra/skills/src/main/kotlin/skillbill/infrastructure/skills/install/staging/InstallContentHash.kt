@@ -15,6 +15,7 @@ import java.security.MessageDigest
 
 internal const val INSTALL_CACHE_KEY_BYTES = 8
 private const val INSTALL_STAGING_RECIPE_VERSION = "install-staging-v6-source-path"
+private const val INSTALL_RENDERER_REVISION = "install-renderer-v1"
 
 internal data class InstallContentHashInputs(
   val sourceSkillDir: Path,
@@ -58,6 +59,8 @@ private fun computeContentHash(
   digest.update(INSTALL_STAGING_RECIPE_VERSION.toByteArray(StandardCharsets.UTF_8))
   digest.update(newline)
   if (includeSourcePath) {
+    digest.update(INSTALL_RENDERER_REVISION.toByteArray(StandardCharsets.UTF_8))
+    digest.update(newline)
     digest.update(inputs.sourceSkillDir.toAbsolutePath().normalize().toString().toByteArray(StandardCharsets.UTF_8))
     digest.update(newline)
   }

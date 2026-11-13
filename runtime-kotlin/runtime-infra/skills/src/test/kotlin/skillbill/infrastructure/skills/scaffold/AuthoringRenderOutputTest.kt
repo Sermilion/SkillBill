@@ -137,6 +137,40 @@ class AuthoringRenderOutputTest {
   }
 
   @Test
+  fun `dispatcher rendering adapts historical and already renamed command bodies`() {
+    val repoRoot = tempRoot.resolve("dispatcher-compatibility-repo")
+    val dispatcherDir = repoRoot.resolve("skills/skill-bill")
+    val unrelatedDir = repoRoot.resolve("skills/bill-unrelated")
+    Files.createDirectories(dispatcherDir)
+    Files.createDirectories(unrelatedDir)
+    val historicalSource =
+      "---\nname: skill-bill\ndescription: Legacy dispatcher.\n---\n\n" +
+        "Run `/skill-bill <intake>` or `./skill-bill phase:review <issue>` and retain local notes.\n"
+    Files.writeString(dispatcherDir.resolve("content.md"), historicalSource)
+    Files.writeString(
+      unrelatedDir.resolve("content.md"),
+      "---\nname: bill-unrelated\ndescription: Unrelated.\n---\n\nRun `/skill-bill` literally.\n",
+    )
+    val historicalBytes = Files.readAllBytes(dispatcherDir.resolve("content.md"))
+
+    val legacyRendered = renderWrapper(resolveTarget(repoRoot, "skill-bill"))
+    assertEquals(historicalBytes.toList(), Files.readAllBytes(dispatcherDir.resolve("content.md")).toList())
+    Files.writeString(
+      dispatcherDir.resolve("content.md"),
+      historicalSource.replace("name: skill-bill", "name: sona"),
+    )
+    val renamedRendered = renderWrapper(resolveTarget(repoRoot, "sona"))
+    val unrelatedRendered = renderWrapper(resolveTarget(repoRoot, "bill-unrelated"))
+
+    assertContains(legacyRendered, "name: sona")
+    assertContains(legacyRendered, "Run `/sona <intake>` or `sona phase:review <issue>`")
+    assertContains(legacyRendered, "retain local notes.")
+    assertContains(renamedRendered, "Run `/sona <intake>` or `sona phase:review <issue>`")
+    assertContains(unrelatedRendered, "Run `/skill-bill` literally.")
+    assertEquals(historicalSource.replace("name: skill-bill", "name: sona"), Files.readString(dispatcherDir.resolve("content.md")))
+  }
+
+  @Test
   fun `legacy bill-feature consumer delivers no pointer to a skill named bill-feature`() {
     val repoRoot = tempRoot.resolve("agent-addon-render-repo")
     val featureDir = repoRoot.resolve("skills/bill-feature")

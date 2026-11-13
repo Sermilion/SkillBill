@@ -21,6 +21,17 @@ The repository should be easy to review and hard to drift:
 - installed agents see complete `SKILL.md` wrappers and support files without
   source directories carrying generated files
 
+The canonical `skill-bill` dispatcher keeps its authored source when an
+installation contains local guidance. `renderWrapper` maps its public
+frontmatter name to `sona` and adapts legacy `/skill-bill` and executable
+`skill-bill` command references in the rendered execution body. It preserves
+arguments and other authored guidance, and logs when it changes a body. The
+same renderer serves authoring previews and installation, so both paths show
+the compatible command. Installation hashes include a renderer revision to
+replace wrappers cached before this adaptation; reconciliation hashes do not
+include that revision, so a generated renderer change cannot make an untouched
+authored source look locally edited.
+
 This is also a product UX rule, not just repository hygiene. Authors should see
 and edit only the material they own. Wrapper ceremony, runtime wiring, pointer
 files, and provider-specific agent artifacts are the system's responsibility.

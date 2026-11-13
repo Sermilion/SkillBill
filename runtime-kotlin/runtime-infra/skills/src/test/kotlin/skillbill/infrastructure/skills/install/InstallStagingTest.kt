@@ -148,6 +148,31 @@ class InstallStagingTest {
   }
 
   @Test
+  fun `dispatcher staging adapts legacy commands without changing source and is stable on reuse`() {
+    val repoRoot = Files.createTempDirectory("skillbill-dispatcher-staging-repo").also(tempDirs::add)
+    val home = Files.createTempDirectory("skillbill-dispatcher-staging-home").also(tempDirs::add)
+    val skillDir = repoRoot.resolve("skills/skill-bill")
+    Files.createDirectories(skillDir)
+    SkillClassFixtures.seedShippedSkillClasses(repoRoot)
+    val authored =
+      "---\nname: skill-bill\ndescription: Legacy dispatcher.\n---\n\n" +
+        "Use `skill-bill phase review SONA-5` and keep local guidance.\n"
+    Files.writeString(skillDir.resolve("content.md"), authored)
+    val sourceBytes = Files.readAllBytes(skillDir.resolve("content.md"))
+
+    val first = stageInstalledSkill(repoRoot, skillDir, home)
+    val firstBytes = Files.readAllBytes(first.renderedSkillFile.toPath())
+    val second = stageInstalledSkill(repoRoot, skillDir, home)
+
+    assertTrue(String(firstBytes, StandardCharsets.UTF_8).contains("name: sona"))
+    assertTrue(String(firstBytes, StandardCharsets.UTF_8).contains("Use `sona phase review SONA-5`"))
+    assertTrue(String(firstBytes, StandardCharsets.UTF_8).contains("keep local guidance."))
+    assertContentEquals(firstBytes, Files.readAllBytes(second.renderedSkillFile.toPath()))
+    assertContentEquals(sourceBytes, Files.readAllBytes(skillDir.resolve("content.md")))
+    assertEquals(first.contentHash, second.contentHash)
+  }
+
+  @Test
   fun `platform pointer files are materialized as installed sidecar content`() {
     val fixture = setupFixture()
 
