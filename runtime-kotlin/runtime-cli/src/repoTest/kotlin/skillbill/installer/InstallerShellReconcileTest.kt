@@ -106,20 +106,40 @@ class InstallerShellReconcileTest {
   }
 
   @Test
-  fun `reconcile failure retries once with clean copied source reset`() {
-    val run =
-      runInstallerShellRaw(
-        input = "1\nclaude\noff\nskip\n",
-        scenario = ReconcileScenario(reconcileFailOnce = true),
-      )
+  fun `reconcile compute failures preserve edited source and baseline across repeated attempts`() {
+    val first = runInstallerShellRaw(input = "1\nclaude\noff\nskip\n")
+    assertEquals(0, first.exitCode, first.output)
+    val stateDir = first.home.resolve(".skill-bill")
+    val editedSkill = stateDir.resolve("skills/bill-sample/content.md")
+    val editedPack = stateDir.resolve("platform-packs/kotlin/code-review/bill-kotlin-code-review/content.md")
+    val editedAddon = stateDir.resolve("agent-addons/review-helper/content.md")
+    val baseline = stateDir.resolve("baseline-manifest.json")
+    Files.writeString(editedSkill, "USER SKILL EDIT\n")
+    Files.writeString(editedPack, "USER PACK EDIT\n")
+    Files.writeString(editedAddon, "USER ADDON EDIT\n")
+    val sourceBytes = listOf(editedSkill, editedPack, editedAddon).map(Files::readAllBytes)
+    val baselineBytes = Files.readAllBytes(baseline)
+    var previous = first
 
-    assertEquals(0, run.exitCode, run.output)
-    assertContains(run.output, "retrying once with a clean copied-source reset")
-    assertLiveSourcePopulated(run.home)
-    assertFalse(
-      Files.exists(run.home.resolve(".skill-bill/.candidate-source")),
-      "the retry must still reap the staged candidate source after apply",
-    )
+    repeat(2) {
+      val failed =
+        runInstallerShellRaw(
+          input = "1\nclaude\noff\nskip\n",
+          reuse = previous,
+          scenario = ReconcileScenario(reconcileAlwaysFail = true),
+        )
+      assertTrue(failed.exitCode != 0, failed.output)
+      assertContains(failed.output, "copied source and baseline were preserved")
+      assertFalse(failed.output.contains("retrying once"))
+      assertTrue(sourceBytes.indices.all { sourceBytes[it].contentEquals(Files.readAllBytes(listOf(editedSkill, editedPack, editedAddon)[it])) })
+      assertTrue(baselineBytes.contentEquals(Files.readAllBytes(baseline)))
+      assertFalse(Files.exists(stateDir.resolve(".candidate-source")))
+      assertTrue(
+        parseRuntimeCalls(failed.runtimeLog).none { args -> args.drop(2).take(2) == listOf("install", "reconcile") && "--apply" in args },
+        "compute failure must not apply a reconciliation plan",
+      )
+      previous = failed
+    }
   }
 
   private fun assertLiveSourcePopulated(home: Path) {
@@ -145,11 +165,13 @@ class InstallerShellReconcileTest {
     val binDir: Path,
     val exitCode: Int,
     val output: String,
+    val runtimeLog: Path,
   )
 
   private data class ReconcileScenario(
     val mutateUpstream: ((Path) -> Unit)? = null,
     val reconcileFailOnce: Boolean = false,
+    val reconcileAlwaysFail: Boolean = false,
   )
 
   private fun runInstallerShellRaw(
@@ -190,11 +212,14 @@ class InstallerShellReconcileTest {
           if (scenario.reconcileFailOnce) {
             environment()["SKILL_BILL_FAKE_RECONCILE_FAIL_ONCE"] = "1"
           }
+          if (scenario.reconcileAlwaysFail) {
+            environment()["SKILL_BILL_FAKE_RECONCILE_ALWAYS_FAIL"] = "1"
+          }
         }
         .start()
     process.outputStream.bufferedWriter().use { writer -> writer.write(input) }
     val output = process.inputStream.bufferedReader().readText()
     val exitCode = process.waitFor()
-    return InstallerShellRawRun(repoRoot, home, binDir, exitCode, output)
+    return InstallerShellRawRun(repoRoot, home, binDir, exitCode, output, logPath)
   }
 }

@@ -503,6 +503,10 @@ internal object InstallerShellFixtures {
     """
     |if [[ "${'$'}{1:-}" == "install" && "${'$'}{2:-}" == "reconcile" ]]; then
     |  fail_once_marker="${'$'}{SKILL_BILL_TEST_RUNTIME_LOG:?}.reconcile-failed-once"
+    |  if [[ "${'$'}{SKILL_BILL_FAKE_RECONCILE_ALWAYS_FAIL:-}" == "1" ]]; then
+    |    printf '%s\n' "synthetic reconcile failure" >&2
+    |    exit 9
+    |  fi
     |  if [[ "${'$'}{SKILL_BILL_FAKE_RECONCILE_FAIL_ONCE:-}" == "1" && ! -e "${'$'}fail_once_marker" ]]; then
     |    printf '%s\n' "synthetic reconcile failure" >&2
     |    touch "${'$'}fail_once_marker"

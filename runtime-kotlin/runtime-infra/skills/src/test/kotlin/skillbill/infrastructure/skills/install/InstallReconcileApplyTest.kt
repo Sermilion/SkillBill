@@ -6,8 +6,10 @@ import skillbill.infrastructure.skills.install.reconcile.ReconcileSourceRoots
 import skillbill.infrastructure.skills.install.reconcile.applyReconciliation
 import skillbill.infrastructure.skills.install.reconcile.computeReconciliationPlan
 import skillbill.install.model.BaselineManifest
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -73,6 +75,42 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
       baselineFromUpstream(upstream, home).hashFor("skills/bill-code-check"),
       baseline.withEntries(output.plan.baselineOverlay).hashFor("skills/bill-code-check"),
     )
+  }
+
+  @Test
+  fun `failed publication and restoration retain and report the previous skill backup`() {
+    val upstream = seedRepo("apply-upstream")
+    val local = seedRepo("apply-local")
+    val home = home()
+    val baseline = baselineFromUpstream(upstream, home)
+    val oldBytes = Files.readString(reviewContent(local))
+
+    val failure = assertFailsWith<SkillBillRuntimeException> {
+      applyReconciliation(
+        roots(upstream),
+        roots(local),
+        home,
+        baseline,
+        moveDirectory = { source, target ->
+          if (source.parent.fileName.toString().startsWith(".reconcile-stage-") ||
+            source.fileName.toString().startsWith(".reconcile-backup-")
+          ) {
+            throw IOException("synthetic move failure")
+          }
+          Files.move(source, target, StandardCopyOption.REPLACE_EXISTING)
+        },
+      )
+    }
+
+    assertEquals(InstallFailureCode.RECONCILIATION_CONFLICT, failure.code)
+    assertContains(failure.message.orEmpty(), "publication and restoration failed")
+    val backupPath = failure.message.orEmpty().substringAfter("previous source remains at '").substringBefore("'.")
+    val backup = Path.of(backupPath)
+    assertTrue(Files.isRegularFile(backup.resolve("bill-code-review/content.md")))
+    assertEquals(oldBytes, Files.readString(backup.resolve("bill-code-review/content.md")))
+    assertEquals(1, failure.suppressed.size)
+    assertContains(failure.cause?.message.orEmpty(), "synthetic move failure")
+    assertContains(failure.suppressed.single().message.orEmpty(), "synthetic move failure")
   }
 
   @Test

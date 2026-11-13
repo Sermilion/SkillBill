@@ -144,12 +144,15 @@ class AuthoringRenderOutputTest {
     Files.createDirectories(dispatcherDir)
     Files.createDirectories(unrelatedDir)
     val historicalSource =
-      "---\nname: skill-bill\ndescription: Legacy dispatcher.\n---\n\n" +
-        "Run `/skill-bill <intake>` or `./skill-bill phase:review <issue>` and retain local notes.\n"
+      "---\nname: skill-bill\ndescription: Legacy dispatcher. Run /skill-bill <intake>.\n---\n\n" +
+        "Run `/skill-bill <intake>` or `./skill-bill phase:review <issue>` and retain local notes.\n" +
+        "Call mcp__skill-bill__update_check through the `skill-bill` CLI.\n" +
+        "The skill class (`exact: skill-bill`) matches the source.\n"
     Files.writeString(dispatcherDir.resolve("content.md"), historicalSource)
     Files.writeString(
       unrelatedDir.resolve("content.md"),
-      "---\nname: bill-unrelated\ndescription: Unrelated.\n---\n\nRun `/skill-bill` literally.\n",
+      "---\nname: bill-unrelated\ndescription: Unrelated.\n---\n\nRun `/skill-bill` literally.\n" +
+        "Keep mcp__skill-bill__update_check.\n",
     )
     val historicalBytes = Files.readAllBytes(dispatcherDir.resolve("content.md"))
 
@@ -167,7 +170,34 @@ class AuthoringRenderOutputTest {
     assertContains(legacyRendered, "retain local notes.")
     assertContains(renamedRendered, "Run `/sona <intake>` or `sona phase:review <issue>`")
     assertContains(unrelatedRendered, "Run `/skill-bill` literally.")
+    assertContains(legacyRendered, "Legacy dispatcher. Run /sona <intake>.")
+    assertContains(legacyRendered, "Call mcp__sona__update_check through the `sona` CLI.")
+    assertContains(legacyRendered, "(`exact: skill-bill`)")
+    assertContains(unrelatedRendered, "Keep mcp__skill-bill__update_check.")
     assertEquals(historicalSource.replace("name: skill-bill", "name: sona"), Files.readString(dispatcherDir.resolve("content.md")))
+  }
+
+  @Test
+  fun `dispatcher rendering adapts every legacy command token in the last shipped dispatcher`() {
+    val repoRoot = tempRoot.resolve("dispatcher-shipped-repo")
+    val dispatcherDir = repoRoot.resolve("skills/skill-bill")
+    Files.createDirectories(dispatcherDir)
+    val shipped =
+      checkNotNull(javaClass.classLoader.getResourceAsStream("legacy-dispatcher/skill-bill-content.md")) {
+        "missing legacy-dispatcher/skill-bill-content.md test resource"
+      }.use { stream -> stream.readBytes().toString(Charsets.UTF_8) }
+    Files.writeString(dispatcherDir.resolve("content.md"), shipped)
+
+    val rendered = renderWrapper(resolveTarget(repoRoot, "skill-bill"))
+
+    val leftovers =
+      rendered.lines().filter { line ->
+        line.replace("exact: skill-bill", "").replace(".skill-bill/", "").contains("skill-bill")
+      }
+    assertEquals(emptyList(), leftovers)
+    assertFalse(rendered.contains("mcp__skill-bill__"))
+    assertContains(rendered, "exact: skill-bill")
+    assertEquals(shipped, Files.readString(dispatcherDir.resolve("content.md")))
   }
 
   @Test

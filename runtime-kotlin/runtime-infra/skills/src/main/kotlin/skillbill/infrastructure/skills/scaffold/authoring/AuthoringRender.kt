@@ -16,18 +16,16 @@ internal fun renderWrapper(target: AuthoringTarget): String {
   val contentText = Files.readString(target.contentFile)
   authoredContentFrontmatterBlock(contentText, target.contentFile, target.skillName)
   val sourceFrontmatter = parseSkillFrontmatter(contentText)
+  val isDispatcher = target.skillName == ListedSkillNames.DISPATCHER
+  val sourceDescription = sourceFrontmatter["description"].orEmpty()
   val frontmatter =
     renderFrontmatter(
       skillName = ListedSkillNames.publicName(sourceFrontmatter["name"].orEmpty()),
-      description = sourceFrontmatter["description"].orEmpty(),
+      description = if (isDispatcher) adaptLegacyDispatcherText(sourceDescription) else sourceDescription,
     )
   val authoredExecutionBody = renderedAuthoredExecutionBody(contentText, target.contentFile, target.skillName)
   val executionBody =
-    if (target.skillName == ListedSkillNames.DISPATCHER) {
-      adaptLegacyDispatcherExecutionBody(authoredExecutionBody)
-    } else {
-      authoredExecutionBody
-    }
+    if (isDispatcher) adaptLegacyDispatcherText(authoredExecutionBody) else authoredExecutionBody
   return assembleRenderedWrapper(
     target = target,
     frontmatter = frontmatter,

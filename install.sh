@@ -661,6 +661,10 @@ clean_install_state_if_requested() {
 }
 
 clean_install_state() {
+  if [[ "$CLEAN_INSTALL" -ne 1 ]]; then
+    err "Refusing to wipe prior skill state without the explicit --clean choice."
+    return 1
+  fi
   if [[ -z "$SKILL_BILL_STATE_DIR" ]]; then
     err "--clean: SKILL_BILL_STATE_DIR is empty; refusing to wipe."
     return 1
@@ -1290,7 +1294,6 @@ adopt_non_skill_source_trees() {
 # Parse the line-oriented machine report (mirrors the SKILL-74 line protocol). FAIL-CLOSED:
 # if the `reconcile_summary:` line is absent or unparseable the caller MUST abort rather
 # than treat an empty report as a clean run.
-RECONCILE_FAILURE_KIND=""
 parse_reconcile_report() {
   local report="$1"
   local summary_line applied
@@ -1318,15 +1321,14 @@ parse_reconcile_report() {
 # - locally-authored: a user-owned agent-addons/ entry is NEVER written or deleted.
 #
 # The compute pass runs first purely as a pre-mutation failure detector: enumeration
-# errors in the upstream candidate (contract drift, malformed manifests) surface as
-# RECONCILE_FAILURE_KIND=compute BEFORE any live tree is touched. Stale contract
-# versions in the preserved local copy are tolerated because upstream always wins.
+# errors in the upstream candidate (contract drift, malformed manifests) surface before
+# any live tree is touched. Stale contract versions in the preserved local copy are
+# tolerated because upstream always wins.
 #
 # The shell performs NO whole-tree rm/mv swap of skills/ — the runtime per-skill apply
 # is the sole writer of the live skill dirs.
 reconcile_and_commit_authored_source() {
   local report status
-  RECONCILE_FAILURE_KIND=""
   info "Reconciling staged source against existing copy and baseline manifest..."
   # Compute the per-skill plan against UPSTREAM=candidate, LOCAL=existing copy. The
   # upstream repo root, skills, and platform-packs all come from the one staged
@@ -1339,8 +1341,7 @@ reconcile_and_commit_authored_source() {
     --upstream-skills "$SKILL_BILL_CANDIDATE_SKILLS" \
     --upstream-platform-packs "$SKILL_BILL_CANDIDATE_PLATFORM_PACKS")" || status=$?
   if [[ -n "${status:-}" ]]; then
-    RECONCILE_FAILURE_KIND="compute"
-    err "Reconciliation failed; leaving the existing install untouched."
+    err "Reconciliation failed; copied source and baseline were preserved. Runtime data may already have been migrated."
     discard_authored_candidates
     return 1
   fi
@@ -1348,8 +1349,7 @@ reconcile_and_commit_authored_source() {
   # FAIL-CLOSED: a missing/unparseable summary line aborts the install rather than
   # treating an empty report as a clean run.
   if ! parse_reconcile_report "$report"; then
-    RECONCILE_FAILURE_KIND="parse"
-    err "Could not parse the reconcile machine report; aborting the install. Nothing was changed."
+    err "Could not parse the reconcile machine report; copied source and baseline were preserved. Runtime data may already have been migrated."
     discard_authored_candidates
     return 1
   fi
@@ -1368,7 +1368,6 @@ reconcile_and_commit_authored_source() {
     --upstream-platform-packs "$SKILL_BILL_CANDIDATE_PLATFORM_PACKS"
   )
   if ! run_runtime_cli "${apply_args[@]}" >/dev/null; then
-    RECONCILE_FAILURE_KIND="apply"
     err "Runtime reconcile apply failed; some skills may not have been updated."
     discard_authored_candidates
     return 1
@@ -1379,20 +1378,6 @@ reconcile_and_commit_authored_source() {
   # set (uninstall.sh preserve-mode). The runtime apply already refreshed it.
   discard_authored_candidates
   ok "Authored source reconciled and committed into $SKILL_BILL_STATE_DIR"
-}
-
-reconcile_and_commit_authored_source_with_recovery() {
-  if reconcile_and_commit_authored_source; then
-    return 0
-  fi
-  if [[ "$RECONCILE_FAILURE_KIND" != "compute" ]]; then
-    return 1
-  fi
-  warn "Reconciliation failed against the preserved copied source; retrying once with a clean copied-source reset."
-  warn "Durable workflow and review state DBs are preserved."
-  clean_install_state
-  copy_in_authored_source
-  reconcile_and_commit_authored_source
 }
 
 install_packaged_runtime_distributions() {
@@ -3386,7 +3371,7 @@ run_full_install() {
     ok "Kotlin runtime installed$STAGED_RUNTIME_ORIGIN"
   fi
   copy_in_authored_source
-  reconcile_and_commit_authored_source_with_recovery
+  reconcile_and_commit_authored_source
 
   echo ""
   printf "${CYAN}━━━ Skill Bill Installer ━━━${NC}\n"

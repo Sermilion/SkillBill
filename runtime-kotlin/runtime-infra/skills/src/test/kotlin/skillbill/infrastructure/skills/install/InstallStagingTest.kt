@@ -5,6 +5,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.skills.install.identity.isContentManagedSkill
 import skillbill.infrastructure.skills.install.plan.InstallContext
 import skillbill.infrastructure.skills.install.plan.installSkill
+import skillbill.infrastructure.skills.install.staging.InstallContentHashInputs
 import skillbill.infrastructure.skills.install.staging.StagedSymlinkTargetInput
 import skillbill.infrastructure.skills.install.staging.applicablePointers
 import skillbill.infrastructure.skills.install.staging.authoredFilesFor
@@ -156,7 +157,8 @@ class InstallStagingTest {
     SkillClassFixtures.seedShippedSkillClasses(repoRoot)
     val authored =
       "---\nname: skill-bill\ndescription: Legacy dispatcher.\n---\n\n" +
-        "Use `skill-bill phase review SONA-5` and keep local guidance.\n"
+        "Use `skill-bill phase review SONA-5` and keep local guidance.\n" +
+        "Call mcp__skill-bill__update_check first.\n"
     Files.writeString(skillDir.resolve("content.md"), authored)
     val sourceBytes = Files.readAllBytes(skillDir.resolve("content.md"))
 
@@ -167,6 +169,7 @@ class InstallStagingTest {
     assertTrue(String(firstBytes, StandardCharsets.UTF_8).contains("name: sona"))
     assertTrue(String(firstBytes, StandardCharsets.UTF_8).contains("Use `sona phase review SONA-5`"))
     assertTrue(String(firstBytes, StandardCharsets.UTF_8).contains("keep local guidance."))
+    assertTrue(String(firstBytes, StandardCharsets.UTF_8).contains("Call mcp__sona__update_check first."))
     assertContentEquals(firstBytes, Files.readAllBytes(second.renderedSkillFile.toPath()))
     assertContentEquals(sourceBytes, Files.readAllBytes(skillDir.resolve("content.md")))
     assertEquals(first.contentHash, second.contentHash)
@@ -324,6 +327,34 @@ class InstallStagingTest {
     assertTrue(Files.isSymbolicLink(link))
     val readTarget = Files.readSymbolicLink(link)
     assertEquals(expectedTarget.toRealPath(), readTarget.toRealPath())
+  }
+
+  @Test
+  fun `staging re-renders instead of reusing a cache entry hashed by the previous renderer revision`() {
+    val fixture = setupFixture()
+    val pointers = applicablePointers(fixture.repoRoot, fixture.skillDir)
+    val authored = authoredFilesFor(fixture.skillDir, pointers)
+    val previousHash =
+      computeInstallContentHash(
+        InstallContentHashInputs(
+          sourceSkillDir = fixture.skillDir,
+          authored = authored,
+          applicablePointers = pointers,
+          rendererRevision = "install-renderer-v1",
+        ),
+      )
+    val staleDir = installedSkillStagingDir(fixture.home, fixture.skillDir, previousHash)
+    Files.createDirectories(staleDir)
+    Files.writeString(staleDir.resolve("SKILL.md"), "stale render\n")
+    Files.writeString(staleDir.resolve(".content-hash"), previousHash)
+
+    val rendered = stageInstalledSkill(fixture.repoRoot, fixture.skillDir, fixture.home)
+
+    assertEquals(computeInstallContentHash(fixture.skillDir, authored, pointers), rendered.contentHash)
+    assertTrue(rendered.contentHash != previousHash)
+    assertTrue(rendered.stagingDir.toPath().toAbsolutePath().normalize() != staleDir.toAbsolutePath().normalize())
+    assertTrue(Files.readString(rendered.renderedSkillFile.toPath()) != "stale render\n")
+    assertEquals("stale render\n", Files.readString(staleDir.resolve("SKILL.md")))
   }
 
   @Test

@@ -20,6 +20,7 @@ internal fun applyReconciliation(
   home: Path,
   baseline: BaselineManifest,
   environment: Map<String, String> = emptyMap(),
+  moveDirectory: (Path, Path) -> Unit = ::moveDir,
 ): ReconcileApplyOutput {
   val upstreamSkills = enumerateSkills(upstream, home, ReconcileSourceSide.UPSTREAM, environment)
   val localSkills = enumerateSkills(local, home, ReconcileSourceSide.LOCAL, environment)
@@ -39,7 +40,7 @@ internal fun applyReconciliation(
           reason = "apply requires the upstream skill dir but it was not enumerated.",
         )
     val liveDir = liveSkillDir(local, skillPath)
-    reconcileSkillDirectory(upstreamDir, liveDir)
+    reconcileSkillDirectory(upstreamDir, liveDir, moveDirectory)
     installedPaths.add(skillPath)
   }
 
@@ -217,6 +218,7 @@ private fun liveSkillDir(
 private fun reconcileSkillDirectory(
   upstreamDir: Path,
   liveDir: Path,
+  moveDirectory: (Path, Path) -> Unit,
 ) {
   val parent =
     liveDir.toAbsolutePath().normalize().parent
@@ -230,25 +232,37 @@ private fun reconcileSkillDirectory(
   copyTreeDeep(upstreamDir, stagedSkill)
   val hasLive = Files.exists(liveDir, LinkOption.NOFOLLOW_LINKS)
   val backup = if (hasLive) Files.createTempDirectory(parent, ".reconcile-backup-") else null
+  var retainBackup = false
 
   backup?.let(Files::deleteIfExists)
   try {
     if (hasLive && backup != null) {
-      moveDir(liveDir, backup)
+      moveDirectory(liveDir, backup)
     }
     try {
-      moveDir(stagedSkill, liveDir)
+      moveDirectory(stagedSkill, liveDir)
     } catch (error: IOException) {
       if (backup != null && Files.exists(backup, LinkOption.NOFOLLOW_LINKS) &&
         !Files.exists(liveDir, LinkOption.NOFOLLOW_LINKS)
       ) {
-        catchingNonCancellation { moveDir(backup, liveDir) }.onFailure(error::addSuppressed)
+        catchingNonCancellation { moveDirectory(backup, liveDir) }.onFailure { restoreError ->
+          retainBackup = true
+          val failure = reconciliationConflictError(
+            skillRelativePath = liveDir.toString(),
+            reason = "publication and restoration failed; previous source remains at '$backup'.",
+            cause = error,
+          )
+          failure.addSuppressed(restoreError)
+          throw failure
+        }
       }
       throw error
     }
   } finally {
     deleteTreeRecursively(staged)
-    backup?.let(::deleteTreeRecursively)
+    if (!retainBackup) {
+      backup?.let(::deleteTreeRecursively)
+    }
   }
 }
 
