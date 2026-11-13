@@ -29,6 +29,7 @@ sealed interface ChatScope {
     val issueKey: String?,
     val title: String,
     override val repositoryRoot: String,
+    val verifySourceBranch: String? = null,
   ) : ChatScope
 
   data class NewTask(override val repositoryRoot: String, val baseBranch: String?) : ChatScope

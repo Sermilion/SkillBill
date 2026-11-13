@@ -141,6 +141,13 @@ iteration cannot race a completion notification that still holds the launch lock
 
 ## Standalone review finding actions
 
+All run chat fixes use the run's original source checkout and branch. QA checkouts
+are throwaway and never receive these fixes. Chat passes the verify source branch
+to the agent so it can locate the original checkout even when chat starts in a fallback
+directory. If that checkout is unavailable or its branch has changed, the agent asks
+the operator to resolve it before editing. Feedback checks use the same checkout as
+the fixes.
+
 The desktop review detail has an Actions section with "Fix findings" and "Verify
 findings". Both open a scoped agent chat turn for the selected invocation. Fix
 findings repairs open findings. Verify findings checks the current code without
