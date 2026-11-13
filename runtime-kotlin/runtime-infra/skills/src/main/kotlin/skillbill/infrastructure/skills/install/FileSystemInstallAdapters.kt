@@ -13,6 +13,7 @@ import skillbill.infrastructure.skills.install.plan.resolveInstallEnvironment
 import skillbill.infrastructure.skills.install.reconcile.ReconcileSourceRoots
 import skillbill.infrastructure.skills.install.reconcile.applyReconciliation
 import skillbill.infrastructure.skills.install.reconcile.computeReconciliationPlan
+import skillbill.infrastructure.skills.install.reconcile.installedStagingSourceReader
 import skillbill.infrastructure.skills.install.runtime.InstallOperations
 import skillbill.infrastructure.skills.install.runtime.linkInstalledSkill
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
@@ -151,6 +152,7 @@ class FileSystemInstallReconcile(
           home = request.home,
           baseline = baseline,
           environment = request.environment,
+          publishedSource = installedStagingSourceReader(request.home),
         ),
     )
   }
@@ -186,6 +188,7 @@ class FileSystemInstallReconcileApply(
         home = request.home,
         baseline = baseline,
         environment = request.environment,
+        publishedSource = installedStagingSourceReader(request.home),
       )
     return InstallReconcileApplyResult(
       plan = output.plan,

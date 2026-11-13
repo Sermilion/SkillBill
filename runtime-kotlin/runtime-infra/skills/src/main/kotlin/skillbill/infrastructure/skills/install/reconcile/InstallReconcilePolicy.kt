@@ -14,6 +14,7 @@ import skillbill.infrastructure.skills.install.staging.InternalStagingPreparatio
 import skillbill.infrastructure.skills.install.staging.applicablePointers
 import skillbill.infrastructure.skills.install.staging.authoredFilesFor
 import skillbill.infrastructure.skills.install.staging.computeReconciliationContentHash
+import skillbill.infrastructure.skills.install.staging.computeReconciliationSourceHash
 import skillbill.infrastructure.skills.install.staging.generatedSupportPointersFor
 import skillbill.infrastructure.skills.install.staging.prepareInternalStaging
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
@@ -61,10 +62,32 @@ internal enum class ReconcileSourceSide {
 
 private fun ReconcileSourceSide.enforcesPlatformPackContractVersion(): Boolean = this == ReconcileSourceSide.UPSTREAM
 
+/**
+ * [hash] is the composite hash (authored files, pointer targets, internal children, addons) and
+ * drives Unchanged detection and the composite baseline entry. [sourceHash] covers only
+ * [authoredFiles], the files reconciliation replaces, and decides whether a local edit is preserved.
+ */
 internal data class ReconcileSkillEntry(
   val hash: String,
   val sourceDir: Path,
+  val sourceHash: String = hash,
+  val authoredFiles: List<Path> = emptyList(),
 )
+
+/**
+ * Answers whether a local skill's authored files still match the copy the last install published.
+ * Consulted only for baselines written before source hashes existed.
+ */
+internal fun interface PublishedSourceReader {
+  fun matchesPublishedSource(
+    sourceDir: Path,
+    authoredFiles: List<Path>,
+  ): Boolean
+
+  companion object {
+    val NONE: PublishedSourceReader = PublishedSourceReader { _, _ -> false }
+  }
+}
 
 internal data class ReconcileApplyOutput(
   val plan: ReconciliationPlan,
@@ -78,73 +101,105 @@ internal fun computeReconciliationPlan(
   home: Path,
   baseline: BaselineManifest,
   environment: Map<String, String> = emptyMap(),
+  publishedSource: PublishedSourceReader = PublishedSourceReader.NONE,
 ): ReconciliationPlan {
   val upstreamSkills = enumerateSkills(upstream, home, ReconcileSourceSide.UPSTREAM, environment)
   val localSkills = enumerateSkills(local, home, ReconcileSourceSide.LOCAL, environment)
-  return classifyReconciliation(upstreamSkills, localSkills, baseline)
+  return classifyReconciliation(upstreamSkills, localSkills, baseline, publishedSource)
 }
 
 internal fun classifyReconciliation(
   upstreamSkills: Map<String, ReconcileSkillEntry>,
   localSkills: Map<String, ReconcileSkillEntry>,
   baseline: BaselineManifest,
+  publishedSource: PublishedSourceReader = PublishedSourceReader.NONE,
 ): ReconciliationPlan {
   val skillPaths = (upstreamSkills.keys + localSkills.keys).toSortedSet()
   val outcomes =
     skillPaths.map { skillRelativePath ->
+      val local = localSkills[skillRelativePath]
       classifySkill(
         skillRelativePath = skillRelativePath,
-        upstreamHash = upstreamSkills[skillRelativePath]?.hash,
-        localHash = localSkills[skillRelativePath]?.hash,
+        upstream = upstreamSkills[skillRelativePath],
+        local = local,
         baselineHash = baseline.hashFor(skillRelativePath),
+        baselineSourceHash =
+          local?.let { baselineSourceHash(skillRelativePath, it, baseline, publishedSource) },
       )
     }
   return ReconciliationPlan(outcomes = outcomes)
 }
 
+/**
+ * The source hash the last install recorded for this skill. Baselines written before source
+ * hashes existed fall back to the composite entry, then to the published staging copy. With no
+ * evidence the local copy is unedited this returns null, so the copy is preserved.
+ */
+private fun baselineSourceHash(
+  skillRelativePath: String,
+  local: ReconcileSkillEntry,
+  baseline: BaselineManifest,
+  publishedSource: PublishedSourceReader,
+): String? {
+  baseline.sourceHashFor(skillRelativePath)?.let { return it }
+  val baselineHash = baseline.hashFor(skillRelativePath)
+  val unedited =
+    (baselineHash != null && local.hash == baselineHash) ||
+      (
+        local.authoredFiles.isNotEmpty() &&
+          publishedSource.matchesPublishedSource(local.sourceDir, local.authoredFiles)
+      )
+  return if (unedited) local.sourceHash else null
+}
+
 private fun classifySkill(
   skillRelativePath: String,
-  upstreamHash: String?,
-  localHash: String?,
+  upstream: ReconcileSkillEntry?,
+  local: ReconcileSkillEntry?,
   baselineHash: String?,
+  baselineSourceHash: String?,
 ): SkillReconciliationOutcome =
   when {
-    upstreamHash == null -> classifyRemovedSkill(skillRelativePath, localHash, baselineHash)
-    localHash == upstreamHash ->
+    upstream == null -> classifyRemovedSkill(skillRelativePath, local, baselineHash, baselineSourceHash)
+    local?.hash == upstream.hash ->
       SkillReconciliationOutcome.Unchanged(
         skillRelativePath = skillRelativePath,
-        upstreamHash = upstreamHash,
+        upstreamHash = upstream.hash,
         baselineHash = baselineHash,
+        upstreamSourceHash = upstream.sourceHash,
       )
-    localHash != null &&
-      preserveLocallyAuthoredSource(localHash, upstreamHash, baselineHash) ->
+    local != null &&
+      preserveLocallyAuthoredSource(local.sourceHash, upstream.sourceHash, baselineSourceHash) ->
       SkillReconciliationOutcome.LocallyAuthored(
         skillRelativePath = skillRelativePath,
-        localHash = localHash,
+        localHash = local.hash,
         baselineHash = baselineHash,
       )
     else ->
       SkillReconciliationOutcome.Adopt(
         skillRelativePath = skillRelativePath,
-        upstreamHash = upstreamHash,
-        localHash = localHash,
+        upstreamHash = upstream.hash,
+        localHash = local?.hash,
         baselineHash = baselineHash,
+        upstreamSourceHash = upstream.sourceHash,
       )
   }
 
 private fun classifyRemovedSkill(
   skillRelativePath: String,
-  localHash: String?,
+  local: ReconcileSkillEntry?,
   baselineHash: String?,
+  baselineSourceHash: String?,
 ): SkillReconciliationOutcome =
   when {
-    localHash == null -> throw reconciliationConflictError(
+    local == null -> throw reconciliationConflictError(
       skillRelativePath = skillRelativePath,
       reason = "skill is present in neither the upstream nor the local source tree.",
     )
-    skillRelativePath.startsWith(AGENT_ADDONS_PREFIX) || preserveLocallyAuthoredSource(localHash, null, baselineHash) ->
-      SkillReconciliationOutcome.LocallyAuthored(skillRelativePath, localHash, baselineHash)
-    else -> SkillReconciliationOutcome.Prune(skillRelativePath, localHash, baselineHash)
+    skillRelativePath.startsWith(AGENT_ADDONS_PREFIX) ||
+      preserveLocallyAuthoredSource(local.sourceHash, null, baselineSourceHash) ->
+      SkillReconciliationOutcome.LocallyAuthored(skillRelativePath, local.hash, baselineHash)
+    else -> SkillReconciliationOutcome.Prune(skillRelativePath, local.hash, baselineHash)
   }
 
 internal fun enumerateSkills(
@@ -179,20 +234,16 @@ internal fun enumerateSkills(
         }
       skills.associate { skill ->
         skillRelativePath(roots, skill) to
-          ReconcileSkillEntry(
-            hash =
-              reconcileSkillHash(
-                roots,
-                skill,
-                ReconcileHashRequest(
-                  platformManifests = platformManifests,
-                  selectedPackSkills = selectedPackSkills,
-                  enforceContractVersion = enforceContractVersion,
-                  home = home,
-                  environment = environment,
-                ),
-              ),
-            sourceDir = skill.sourceDir.toPath().toAbsolutePath().normalize(),
+          reconcileSkillEntry(
+            roots,
+            skill,
+            ReconcileHashRequest(
+              platformManifests = platformManifests,
+              selectedPackSkills = selectedPackSkills,
+              enforceContractVersion = enforceContractVersion,
+              home = home,
+              environment = environment,
+            ),
           )
       }
     } else {
@@ -234,11 +285,11 @@ private data class ReconcileHashRequest(
   val environment: Map<String, String>,
 )
 
-private fun reconcileSkillHash(
+private fun reconcileSkillEntry(
   roots: ReconcileSourceRoots,
   skill: InstallPlanSkill,
   request: ReconcileHashRequest,
-): String {
+): ReconcileSkillEntry {
   val platformManifests = request.platformManifests
   val applicablePointers = applicablePointers(roots.repoRoot, skill.sourceDir.toPath(), platformManifests)
   val supportPointers =
@@ -281,16 +332,23 @@ private fun reconcileSkillHash(
       listOf("SKILL.md", ".content-hash"),
     agentAddonPointers,
   )
-  return computeReconciliationContentHash(
-    InstallContentHashInputs(
-      sourceSkillDir = skill.sourceDir.toPath(),
-      authored = authored,
-      applicablePointers = applicablePointers,
-      generatedSupportPointers = internal.supportPointers,
-      internalChildren = internal.children,
-      agentAddonPointers = agentAddonPointers,
-      checkoutRepoRoot = roots.repoRoot,
-    ),
+  val hash =
+    computeReconciliationContentHash(
+      InstallContentHashInputs(
+        sourceSkillDir = skill.sourceDir.toPath(),
+        authored = authored,
+        applicablePointers = applicablePointers,
+        generatedSupportPointers = internal.supportPointers,
+        internalChildren = internal.children,
+        agentAddonPointers = agentAddonPointers,
+        checkoutRepoRoot = roots.repoRoot,
+      ),
+    )
+  return ReconcileSkillEntry(
+    hash = hash,
+    sourceDir = skill.sourceDir.toPath().toAbsolutePath().normalize(),
+    sourceHash = computeReconciliationSourceHash(skill.sourceDir.toPath(), authored),
+    authoredFiles = authored,
   )
 }
 

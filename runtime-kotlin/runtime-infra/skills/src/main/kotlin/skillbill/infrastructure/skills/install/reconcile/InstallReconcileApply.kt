@@ -21,10 +21,11 @@ internal fun applyReconciliation(
   baseline: BaselineManifest,
   environment: Map<String, String> = emptyMap(),
   moveDirectory: (Path, Path) -> Unit = ::moveDir,
+  publishedSource: PublishedSourceReader = PublishedSourceReader.NONE,
 ): ReconcileApplyOutput {
   val upstreamSkills = enumerateSkills(upstream, home, ReconcileSourceSide.UPSTREAM, environment)
   val localSkills = enumerateSkills(local, home, ReconcileSourceSide.LOCAL, environment)
-  val plan = classifyReconciliation(upstreamSkills, localSkills, baseline)
+  val plan = classifyReconciliation(upstreamSkills, localSkills, baseline, publishedSource)
   guardReconciliationAgainstEmptyUpstream(plan, upstreamSkills)
 
   val installedPaths = mutableListOf<String>()

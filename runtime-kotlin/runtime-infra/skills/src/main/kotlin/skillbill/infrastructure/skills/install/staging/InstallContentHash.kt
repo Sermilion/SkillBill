@@ -162,3 +162,27 @@ private fun updateAgentAddonHash(
     digest.update(newline)
   }
 }
+
+/**
+ * Hashes only the authored files reconciliation replaces in a skill directory: no pointer targets,
+ * internal children, agent addons, or renderer revision.
+ */
+internal fun computeReconciliationSourceHash(
+  sourceSkillDir: Path,
+  authored: List<Path>,
+): String {
+  val digest = newSha256Digest()
+  val newline = byteArrayOf('\n'.code.toByte())
+  digest.update(RECONCILIATION_SOURCE_HASH_RECIPE.toByteArray(StandardCharsets.UTF_8))
+  digest.update(newline)
+  authored.forEach { file ->
+    val rel = sourceSkillDir.relativize(file).toString().replace(File.separatorChar, '/')
+    digest.update(rel.toByteArray(StandardCharsets.UTF_8))
+    digest.update(newline)
+    digest.update(Files.readAllBytes(file))
+    digest.update(newline)
+  }
+  return digest.digest().take(INSTALL_CACHE_KEY_BYTES).joinToString("") { byte -> "%02x".format(byte) }
+}
+
+private const val RECONCILIATION_SOURCE_HASH_RECIPE = "reconcile-source-v1"

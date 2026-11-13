@@ -129,7 +129,7 @@ class InstallService(
       baselineManifestPersistencePort
         .readBaseline(ReadBaselineManifestRequest(installHome = home))
         .manifest
-    val updated = current.withEntries(plan.baselineOverlay).withoutEntries(plan.prunedPaths)
+    val updated = current.withEntries(plan.baselineOverlay).withoutEntries(plan.prunedBaselineKeys)
     if (updated != current) {
       baselineManifestPersistencePort.writeBaseline(
         WriteBaselineManifestRequest(installHome = home, manifest = updated),

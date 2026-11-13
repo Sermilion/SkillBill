@@ -18,12 +18,16 @@ import skillbill.install.model.SupportedAgent
 import skillbill.install.model.WindowsSymlinkDecision
 import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
+import skillbill.infrastructure.skills.install.identity.SKILL_CONTENT_IDENTITY_FILENAME
+import skillbill.infrastructure.skills.install.identity.SkillContentIdentity
+import skillbill.infrastructure.skills.install.identity.installedSkillSlug
 import skillbill.ports.repository.toFileLocation
 import skillbill.testing.seedConformingPlatformPack
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.PosixFilePermission
 import kotlin.test.AfterTest
 import kotlin.test.assertEquals
@@ -158,6 +162,24 @@ open class InstallApplyTestSupport {
       |
       """.trimMargin(),
     )
+  }
+
+  protected fun seedPublishedSkillStaging(
+    home: Path,
+    sourceDir: Path,
+    authoredFiles: List<Path>,
+  ) {
+    val cacheRoot = home.resolve(".skill-bill/installed-skills")
+    Files.createDirectories(cacheRoot)
+    val staging = cacheRoot.resolve("${installedSkillSlug(sourceDir)}-deadbeefdeadbeef")
+    Files.createDirectories(staging)
+    Files.writeString(staging.resolve(SKILL_CONTENT_IDENTITY_FILENAME), SkillContentIdentity.fromSource(sourceDir).compact())
+    authoredFiles.forEach { file ->
+      val rel = sourceDir.relativize(file)
+      val dest = staging.resolve(rel.toString())
+      dest.parent?.let(Files::createDirectories)
+      Files.copy(file, dest, StandardCopyOption.REPLACE_EXISTING)
+    }
   }
 
   protected fun content(

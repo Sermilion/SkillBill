@@ -5,7 +5,11 @@ import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.skills.install.reconcile.ReconcileSourceRoots
 import skillbill.infrastructure.skills.install.reconcile.applyReconciliation
 import skillbill.infrastructure.skills.install.reconcile.computeReconciliationPlan
+import skillbill.infrastructure.skills.install.reconcile.installedStagingSourceReader
+import skillbill.install.model.BaselineManifest.Companion.sourceKeyFor
+import skillbill.install.model.SkillReconciliationOutcome
 import skillbill.install.model.BaselineManifest
+import skillbill.testing.seedConformingPlatformPack
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -15,6 +19,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class InstallReconcileApplyTest : InstallApplyTestSupport() {
@@ -111,6 +116,43 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
     assertEquals(1, failure.suppressed.size)
     assertContains(failure.cause?.message.orEmpty(), "synthetic move failure")
     assertContains(failure.suppressed.single().message.orEmpty(), "synthetic move failure")
+  }
+
+  @Test
+  fun `upgrade adopts dispatcher rename when only pack specialists were edited`() {
+    val upstream = seedRepo("apply-dispatcher-adopt-upstream")
+    val local = seedRepo("apply-dispatcher-adopt-local")
+    seedConformingPlatformPack(upstream, "generic", areaNames = listOf("architecture", "security"))
+    seedConformingPlatformPack(local, "generic", areaNames = listOf("architecture", "security"))
+    val home = home()
+    val legacyBaseline =
+      BaselineManifest.of(
+        BaselineManifest.CONTRACT_VERSION,
+        computeReconciliationPlan(roots(upstream), roots(upstream), home, BaselineManifest.empty()).baselineOverlay
+          .filterKeys { key -> !key.endsWith("#source") },
+      )
+    val specialist = local.resolve("platform-packs/generic/code-review/bill-generic-code-review-security/content.md")
+    Files.writeString(specialist, Files.readString(specialist) + "\nLOCAL SECURITY EDIT\n")
+    val upstreamSona = content("sona")
+    Files.writeString(upstream.resolve("skills/skill-bill/content.md"), upstreamSona)
+    val dispatcherDir = local.resolve("skills/skill-bill")
+    seedPublishedSkillStaging(home, dispatcherDir, listOf(dispatcherDir.resolve("content.md")))
+
+    val output =
+      applyReconciliation(
+        roots(upstream),
+        roots(local),
+        home,
+        legacyBaseline,
+        publishedSource = installedStagingSourceReader(home),
+      )
+
+    assertTrue(output.installedPaths.contains("skills/skill-bill"))
+    assertEquals(upstreamSona, Files.readString(dispatcherDir.resolve("content.md")))
+    assertIs<SkillReconciliationOutcome.LocallyAuthored>(
+      output.plan.outcomes.single { it.skillRelativePath.contains("bill-generic-code-review-security") },
+    )
+    assertTrue(output.plan.baselineOverlay.containsKey(sourceKeyFor("skills/skill-bill")))
   }
 
   @Test
