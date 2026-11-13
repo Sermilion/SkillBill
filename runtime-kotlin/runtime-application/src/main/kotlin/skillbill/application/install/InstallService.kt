@@ -3,7 +3,6 @@ package skillbill.application.install
 import me.tatarka.inject.annotations.Inject
 import skillbill.install.model.BaselineManifest
 import skillbill.install.model.InstallApplyResult
-import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.InstallPlan
 import skillbill.install.model.InstallPlanRequest
 import skillbill.install.model.InstallPlatformPackDiscoverySnapshot
@@ -186,7 +185,7 @@ class InstallService(
     plan: InstallPlan,
     result: InstallApplyResult,
   ) {
-    if (result.status == InstallApplyStatus.FAILURE) {
+    if (!result.canPersistSuccessfulSelection) {
       return
     }
     installSelectionPersistencePort.writeLatestSuccessfulSelection(

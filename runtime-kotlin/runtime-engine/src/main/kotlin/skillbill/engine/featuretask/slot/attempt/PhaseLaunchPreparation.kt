@@ -23,6 +23,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseProjectInstructions
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseProjectInstructionsResolution
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
+import skillbill.engine.featuretask.phase.prompt.compose.settlementTarget
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
 import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.launchHookContext
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
@@ -324,16 +325,13 @@ internal object PhaseLaunchPreparation {
         PhaseLaunchPreparation
           .run { context.composeLaunchPromptInputs(args, handoff, briefing) }
           .copy(
-            phaseSettlement = args.iteration?.let(::phaseSettlementTarget),
+            phaseSettlement =
+              context.phaseSettlementTarget(args.iteration ?: args.state.phase(run.phaseId).nextIteration),
             projectInstructions = projectInstructions,
             goalHistoryWriterInput = run.request.goalHistoryWriterInput,
           )
-      return PreparedLaunchReady(
-        PreparedLaunch(
-          briefing,
-          PhaseLaunchPreparation.composeLaunchPrompt(context, run, inputs, prompt, args.boundStep),
-        ),
-      )
+      val prepared = PhaseLaunchPreparation.composeLaunchPrompt(context, run, inputs, prompt, args.boundStep)
+      return PreparedLaunchReady(prepared)
     }
   }
 
@@ -454,15 +452,18 @@ internal object PhaseLaunchPreparation {
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
     prompt: PhaseStepPromptSource,
     boundStep: PhaseAcceptedStepExecution,
-  ): String {
+  ): PreparedLaunch {
+    val sections = prompt.sections(inputs)
     val launchContext = context.launchHookContext(run, context.stepHooks(run))
-    return if (boundStep.boundHooks.launchHandoffSelection == PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY) {
-      val supplement = boundStep.boundHooks.launchPromptSupplement(run, launchContext)
-      FeatureTaskRuntimePhasePromptComposer.compose(inputs, prompt) + supplement
-    } else {
-      FeatureTaskRuntimePhasePromptComposer.compose(inputs, prompt) +
-        boundStep.boundHooks.launchPromptSupplement(run, launchContext)
-    }
+    val promptText =
+      if (boundStep.boundHooks.launchHandoffSelection == PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY) {
+        val supplement = boundStep.boundHooks.launchPromptSupplement(run, launchContext)
+        FeatureTaskRuntimePhasePromptComposer.compose(inputs, prompt) + supplement
+      } else {
+        FeatureTaskRuntimePhasePromptComposer.compose(inputs, prompt) +
+          boundStep.boundHooks.launchPromptSupplement(run, launchContext)
+      }
+    return PreparedLaunch(inputs.briefing, promptText, settlementTarget(inputs, sections))
   }
 
   private fun PhaseAttemptLaunchPreparationContext.planBundleTargetFor(run: PhaseRun): PlanBundleTarget? {

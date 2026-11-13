@@ -13,6 +13,7 @@ import skillbill.install.model.ListedSkillNames
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
+import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.system.HostPlatformPort
 import skillbill.ports.system.UninstallPathsPort
@@ -30,6 +31,13 @@ class SkillBillUninstallService(
   fun plan(request: UninstallRequest): UninstallPlan {
     val home = request.home
     val stateRoot = request.stateRoot
+    val environment =
+      if (InstallMcpProfileEnvironment.PWD_ENV in request.environment) {
+        request.environment
+      } else {
+        request.environment +
+          (InstallMcpProfileEnvironment.PWD_ENV to hostPlatform.resolveWorkingDirectory().toString())
+      }
     val skillNames =
       (
         installedSkillNames(uninstallFileSystem, stateRoot.resolve("installed-skills")) +
@@ -50,8 +58,10 @@ class SkillBillUninstallService(
         home.resolve(".agents/skills"),
         home.resolve(".junie/skills"),
         home.resolve(".cursor/skills"),
-      ) + claudeTargets + codexTargets + devinTargets
+      ) + claudeTargets + codexTargets + devinTargets +
+        listOf(installAgentService.agentPath(SupportedAgent.OPENCODE.id, home, environment))
     val stateRuntimeRoot = stateRoot.resolve("runtime")
+    val runtimeMcpBin = stateRuntimeRoot.resolve("runtime-mcp/bin/runtime-mcp")
     val binDir = request.environment["SKILL_BILL_BIN_DIR"]?.let(Path::of) ?: home.resolve(".local/bin")
     return UninstallPlan(
       home = home,
@@ -70,7 +80,8 @@ class SkillBillUninstallService(
           environment = request.environment,
           os = currentOs(hostPlatform.osName),
         ),
-      environment = request.environment,
+      environment = environment,
+      runtimeMcpBinIdentity = runtimeMcpBin,
     )
   }
 
@@ -80,21 +91,26 @@ class SkillBillUninstallService(
     val recorder = UninstallMutationRecorder(diagnostics)
 
     cleanupAgentInstallTargets(plan, installAgentService, removed, skipped, recorder)
-    cleanupNativeAgentInstallLinks(plan, installNativeAgentLinkPort, uninstallFileSystem, removed, recorder)
+    val nativeCleanup =
+      cleanupNativeAgentInstallLinks(plan, installNativeAgentLinkPort, removed, recorder)
     cleanupMcpRegistrations(plan, installMcpRegistrationPort, removed, recorder)
 
     plan.launchers.forEach { launcher ->
       removeLauncher(uninstallFileSystem, launcher, removed, skipped, recorder)
     }
     removeDesktop(uninstallFileSystem, plan.desktop, removed, skipped, recorder)
-    uninstallFileSystem.withConfigTransaction(plan.home, plan.environment) {
-      removeInstallState(
-        uninstallFileSystem,
-        plan.stateRoot,
-        removed,
-        recorder,
-        InstallStateRemovalOptions(uninstallFileSystem.configLockFilePaths(plan.home, plan.environment)),
-      )
+    if (nativeCleanup.complete) {
+      uninstallFileSystem.withConfigTransaction(plan.home, plan.environment) {
+        removeInstallState(
+          uninstallFileSystem,
+          plan.stateRoot,
+          removed,
+          recorder,
+          InstallStateRemovalOptions(
+            uninstallFileSystem.configLockFilePaths(plan.home, plan.environment) + nativeCleanup.retainedPaths,
+          ),
+        )
+      }
     }
 
     return UninstallResult(
@@ -115,13 +131,26 @@ class SkillBillUninstallService(
     val recorder = UninstallMutationRecorder(diagnostics)
     if (uninstallFileSystem.exists(stateRoot)) {
       uninstallFileSystem.withConfigTransaction(home, environment) {
-        removeInstallState(
-          uninstallFileSystem,
-          stateRoot,
-          removed,
-          recorder,
-          InstallStateRemovalOptions(uninstallFileSystem.configLockFilePaths(home, environment), preserveGeneratedOnly),
-        )
+        val preservation =
+          discoverNativeAgentPreservationTargets(
+            stateRoot,
+            home,
+            environment,
+            installNativeAgentLinkPort,
+            recorder,
+          )
+        if (preservation.complete) {
+          removeInstallState(
+            uninstallFileSystem,
+            stateRoot,
+            removed,
+            recorder,
+            InstallStateRemovalOptions(
+              uninstallFileSystem.configLockFilePaths(home, environment) + preservation.retainedPaths,
+              preserveGeneratedOnly,
+            ),
+          )
+        }
       }
     }
     return UninstallResult(recorder.failed(), removed, emptyList(), recorder.failureMessages())

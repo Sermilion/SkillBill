@@ -164,11 +164,16 @@ class DetachedWorkRunLauncherTest {
   fun `a recorded agent home applies when the host chose none`() {
     val home = Files.createTempDirectory("recorded-agent-home")
     executable(home, RECORD_AGENT_HOME, "sona")
-    val recorded = mapOf(AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR to "/recorded/claude")
+    val recorded =
+      mapOf(
+        AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR to "/recorded/claude",
+        AgentHomeEnvironmentKeys.OPENCODE_CONFIG_DIR to "/recorded/opencode",
+      )
     val request = runtimeRequest(home).copy(agentEnvironment = recorded)
     val started = assertIs<WorkRunLaunchResult.Started>(launcherWithoutStartupGrace(home).start(request))
     assertEquals(WorkRunExit(0, emptyList()), assertNotNull(started.exit).toCompletableFuture().get())
     assertEquals("/recorded/claude", recordedAgentHome(home))
+    assertEquals("/recorded/opencode", Files.readString(home.resolve("opencode-home")))
   }
 
   @Test
@@ -232,6 +237,7 @@ class DetachedWorkRunLauncherTest {
       "#!/bin/sh\nprintf '\\377\\n'\necho \"Phase 'monitor' blocked at 'monitor': no origin.\"\n" +
         "until [ -e release ]; do :; done\nexit 3"
     const val RECORD_AGENT_HOME =
-      "#!/bin/sh\nprintf '%s' \"\$CLAUDE_CONFIG_DIR\" > agent-home.tmp && mv agent-home.tmp agent-home"
+      "#!/bin/sh\nprintf '%s' \"\$CLAUDE_CONFIG_DIR\" > agent-home.tmp && mv agent-home.tmp agent-home\n" +
+        "printf '%s' \"\$OPENCODE_CONFIG_DIR\" > opencode-home.tmp && mv opencode-home.tmp opencode-home"
   }
 }

@@ -44,6 +44,8 @@ class AgentChatTransportsTest {
   fun `ACP and app-server agents without an operator channel launch nothing and retain the saved conversation`() = runTest {
     val launcher = NoLaunch()
     val request = chatRequest(agent = ChatAgent("codex", null, null), firstTurn = false)
+    val history = listOf(ChatExchange("earlier question", "earlier answer"))
+    store.saveExchanges(request.sessionId, history)
     store.saveAgentSession(request.sessionId, "saved-provider-thread")
     val transports = listOf(
       CodexChatTransport(host, launcher, store, RecordingDiagnostics()),
@@ -60,6 +62,7 @@ class AgentChatTransportsTest {
       assertContains(failure.detail.orEmpty(), "operator approval channel")
       assertTrue(launcher.commands.isEmpty())
       assertEquals("saved-provider-thread", store.agentSession(request.sessionId))
+      assertEquals(history, store.exchanges(request.sessionId))
     }
   }
 

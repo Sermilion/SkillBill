@@ -32,6 +32,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
+import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.featuretask.PhaseInstructionFileSource
@@ -178,7 +179,10 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
         ?.let { PhaseSettledEnvelopeRead.Found(it.envelope) }
         ?: PhaseSettledEnvelopeRead.None
     } catch (error: SkillBillRuntimeException) {
-      error.rethrowUnless(error.code == FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_EVIDENCE_SCHEMA)
+      error.rethrowUnless(
+        error.code == FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_EVIDENCE_SCHEMA ||
+          error.code is FeatureTaskRuntimePhaseOutputFailureCode,
+      )
       PhaseSettledEnvelopeRead.Failed(error)
     }
 }

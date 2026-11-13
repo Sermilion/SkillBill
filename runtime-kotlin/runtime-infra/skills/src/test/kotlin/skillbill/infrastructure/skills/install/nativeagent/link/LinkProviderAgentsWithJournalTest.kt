@@ -21,7 +21,7 @@ class LinkProviderAgentsWithJournalTest {
 
     val propagated =
       assertFailsWith<InterruptedException> {
-        linkProviderAgentsWithJournal(journal) {
+        withNativeAgentMutationJournal(journal) {
           Files.writeString(file, "mutated")
           throw interrupted
         }

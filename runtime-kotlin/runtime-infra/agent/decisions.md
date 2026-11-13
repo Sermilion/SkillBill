@@ -3,6 +3,12 @@ Context: SONA-5 retires skill-bill as a notice-only command after caller convers
 Decision: DetachedWorkRunLauncher resolves only sona. A missing sona retains the existing launch failure even when skill-bill is discoverable.
 Reason: Falling back to the legacy command could report a successful process exit without starting runtime work. The replacement executable must own the existing arguments, database binding and process lifecycle.
 
+
+## [2026-11-12] Admit OpenCode review isolation per launch
+Context: OpenCode 1.15.3 can inherit configuration that private cwd or pure mode alone does not exclude.
+Decision: Require a private scope, selected API credential and verified worker. Refuse unsupported versions, managed policy and uninspectable sources; constrain the process environment and permissions to lane evidence tools.
+Reason: Inherited environment and worker permission composition can reopen authority after configuration. Managed policy belongs to its external owner and must not be bypassed.
+Revisit when: Another version, host permission model or authentication method demonstrates source exclusion and effective tool filtering.
 ## [2026-11-12] Builder launch refusal is a required member, not a defaulted hook
 Context: Devin must refuse a separate effort, or missing runtime MCP context, before any command is built or spawned.
 Decision: AgentRunCommandBuilder.launchRefusal has no default body. Every builder implements it, and the Claude, Codex, Cursor and Junie builders return null explicitly.
@@ -22,10 +28,10 @@ Context: Codex command approvals sometimes wrap the operator command in bash, zs
 Decision: Unwrap when the outer form matches optional /bin or /usr/bin, shell name, -c or -lc, and a single-quoted inner segment with no embedded quote; otherwise return null when the first token is a shell.
 Reason: Exposes the intended inner command for pattern rules while failing closed on double quotes, extra flags and script-path forms the spec does not attest.
 
-## [2026-11-10] Centralize match-fact filesystem access in one launcher normalizer
-Context: Wildcard allow rules need comparable command and path facts from three provider adapters without inconsistent containment.
-Decision: Only ApprovalMatchFactsNormalizer uses Path, Files and relativize; Claude, Codex and Cursor adapters call commandFacts, pathFacts or withinCheckout.
-Reason: A single real-path and ancestor-walk policy prevents adapters from diverging on symlink or not-yet-existing Write targets.
+## [2026-11-12] Retain private review files until process exit is confirmed
+Context: Probe or ACP launch failure and cancellation can leave an owned process running.
+Decision: Delete the private scope only after confirmed exit or when no process started. Otherwise retain restricted files, report recovery evidence and fail settlement.
+Reason: Deleting material before confirmed exit or reporting clean completion would conceal incomplete cleanup. Preserve the initiating failure or cancellation.
 
 ## [2026-11-05] Pass temp-root inputs through the host port
 Context: Runtime temp resolution needs the configured JVM directory, environment and user home, while ambient property reads are governed at the host boundary.
@@ -113,8 +119,8 @@ Reason: The prefix is part of emitted diagnostic bytes. Replacing exception-base
 
 ## [2026-10-14] Validate and settle an existing store before desktop connection
 Context: Installation migrates the default runtime store, but desktop selection can reach an older restored or separately selected store. A cached current user_version can also hide a missing migration ledger entry.
-Decision: The existing schema port checks the ledger, user_version, and any installed Room identity through a read-only connection. It rejects newer or unrecognized stores. When supported migrations are pending, it establishes schema readiness directly rather than trusting the routine-write cache. The desktop consumes this same port through the pinned composition API; installation remains its other consumer.
-Reason: An explicit upgrade must settle the observed pending ledger before a read-only consumer connects. Routine reads keep their schema checks and never perform this upgrade themselves.
+Decision: The existing schema port checks the ledger, user_version, and installed Room identity through a read-only connection. It rejects newer or unrecognized stores. A complete supported ledger and current user_version allow schema readiness to repair a missing or stale Room identity without replacing stored rows. When supported migrations are pending, it establishes schema readiness directly rather than trusting the routine-write cache. The desktop consumes this same port through the pinned composition API; installation remains its other consumer.
+Reason: An explicit upgrade must settle the observed pending ledger before a read-only consumer connects. The ledger and user_version establish that the runtime schema is current, so a stale desktop read marker can be repaired safely. Routine reads keep their schema checks and never perform this upgrade themselves.
 
 ## [2026-11-06] Defer install migration while a worker lease is live
 Context: An install applied migrations 103 and 104 while a goal worker started on the previous runtime was still running. The worker then refused the newer schema on its next read and recorded the plan invocation as failed.

@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phase.core
 
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementBlockRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementCompleteRequest
 import skillbill.engine.featuretask.runner.facts
@@ -95,3 +96,16 @@ private fun settleRecord(
     )
   }
 }
+
+fun scriptedPhaseValueRecord(
+  phaseId: String,
+  value: String,
+): String =
+  JsonCodec.mapToJsonString(
+    mapOf(
+      "contract_version" to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+      "phase_id" to phaseId,
+      "status" to "completed",
+      "produced_outputs" to mapOf("value" to value),
+    ),
+  )

@@ -62,6 +62,7 @@ data class AgentRunProcessResult(
   val sessionOutcome: AgentRunSessionOutcome? = null,
   val sessionCapture: AgentRunSessionCapture? = null,
   val sessionFailureEvidence: AgentRunSessionFailureEvidence? = null,
+  val processExitObservation: AgentRunProcessExitObservation? = null,
 )
 
 interface AgentRunProcessRunner {

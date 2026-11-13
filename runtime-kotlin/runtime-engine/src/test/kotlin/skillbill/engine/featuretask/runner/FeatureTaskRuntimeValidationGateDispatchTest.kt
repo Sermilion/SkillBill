@@ -7,6 +7,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.contracts.workflow.featuretask.ValidationTestProbePayloadKeys
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import skillbill.engine.featuretask.phase.core.scriptedPhaseValueRecord
 import skillbill.engine.featuretask.runloop.qualitygate.MAX_VALIDATE_ATTEMPTS
 import skillbill.engine.featuretask.slot.VALIDATE_PROBE_LINE
 import skillbill.engine.featuretask.slot.validJsonOutput
@@ -41,7 +42,7 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
         "Required checks passed.\n$VALIDATE_PROBE_LINE\n$VALIDATE_PROBE_LINE",
       )
     reports.forEach { prose ->
-      val harness = validationHarness(prose)
+      val harness = validationHarness(scriptedPhaseValueRecord("validate", prose))
 
       val report = harness.runner.run(harness.request())
 
@@ -104,7 +105,7 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
     val warning =
       "Warning: No applicable validation commands were found after inspecting project configuration.\n" +
         VALIDATE_PROBE_LINE
-    val harness = validationHarness(false) { facts(warning) }
+    val harness = validationHarness(false) { facts(scriptedPhaseValueRecord("validate", warning)) }
 
     val report = harness.runner.run(harness.request())
 
@@ -207,10 +208,10 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
   }
 
   @Test
-  fun `a stdout object with only status summary and value is admitted verbatim without a correction launch`() {
+  fun `a settled value containing status summary and value is admitted verbatim without a correction launch`() {
     val stdout =
       """{"status":"completed","summary":"Project checks passed.","value":""" + "\n\"$VALIDATE_PROBE_LINE\"}"
-    val harness = validationHarness(stdout)
+    val harness = validationHarness(scriptedPhaseValueRecord("validate", stdout))
 
     val report = harness.runner.run(harness.request())
 
@@ -225,7 +226,7 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
   }
 
   @Test
-  fun `plain prose stdout is admitted as the phase value and advances the run`() {
+  fun `settled plain prose is admitted as the phase value and advances the run`() {
     listOf("implement", "simplify", "validate").forEach { phaseId ->
       val probes = if (phaseId == "validate") "\n$VALIDATE_PROBE_LINE" else ""
       val prose = "I finished $phaseId. Nothing was deferred, and no structured receipt is attached.$probes"
@@ -237,6 +238,19 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
       assertEquals(prose, admittedValue(harness, phaseId), phaseId)
       assertEquals(1, harness.launchedPromptPhaseOrder().count { it == phaseId }, phaseId)
     }
+  }
+
+  @Test
+  fun `zero exit validation prose without matching durable settlement cannot complete the phase`() {
+    val harness = validationHarness { facts("Project checks passed without a settlement.") }
+
+    val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
+
+    assertContains(report.blockedReason, "no matching durable settlement")
+    assertEquals("validate", report.lastIncompletePhase)
+    assertEquals(MAX_VALIDATE_ATTEMPTS, harness.launchedPromptPhaseOrder().count { it == "validate" })
+    assertFalse("write_history" in harness.launchedPromptPhaseOrder())
+    assertFalse(harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("validate")?.status == WorkflowStepStatus.COMPLETED)
   }
 
   @Test
@@ -312,7 +326,7 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
       launcher =
         RuntimeRecordingLauncher { request ->
           when (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
-            phaseId -> facts(prose)
+            phaseId -> facts(scriptedPhaseValueRecord(phaseId, prose))
             "audit" -> facts(auditSatisfiedOutput())
             else -> facts(defaultPhaseOutput(request))
           }

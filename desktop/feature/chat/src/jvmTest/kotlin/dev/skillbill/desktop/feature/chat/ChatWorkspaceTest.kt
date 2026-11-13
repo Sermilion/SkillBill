@@ -1497,7 +1497,7 @@ class ChatWorkspaceTest {
     val session = second.session(item.id)!!
     second.showResumable(item.id)
     runCurrent()
-    assertEquals(listOf(saved), session.resumeChoices.value)
+    assertEquals(listOf(saved), session.resumeChoices.value?.entries)
 
     second.resume(item.id, saved)
     runCurrent()

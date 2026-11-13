@@ -18,8 +18,8 @@ import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
-import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
 /** Accepted-step launch surface exposed to one prepared step call; not a full step binding. */
@@ -76,7 +76,7 @@ internal class GateOutput(
   val outputGateFailuresBefore: Int? = null,
   val progress: FeatureTaskRuntimeProgressSnapshotAccess,
   val recorder: PhaseRunRecords,
-  val phaseSettlementService: PhaseRunSettlements,
+  val diagnostics: RuntimeDiagnostics,
   val observability: FeatureTaskRuntimeRunObservability,
   val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner,
   val settleAcceptedOutput:

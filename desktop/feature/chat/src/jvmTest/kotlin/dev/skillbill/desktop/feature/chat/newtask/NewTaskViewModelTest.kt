@@ -410,7 +410,7 @@ class NewTaskViewModelTest {
     draft.refreshSaved()
     runCurrent()
 
-    assertEquals(listOf(entry), draft.saved.value)
+    assertEquals(listOf(entry), draft.saved.value.entries)
 
     model.onAction(NewTaskAction.DiscardDraft(entry))
     runCurrent()
@@ -418,7 +418,7 @@ class NewTaskViewModelTest {
     advanceTimeBy(5_000)
     runCurrent()
     assertTrue(entry.sessionId !in chatRepo.saved)
-    assertTrue(draft.saved.value.isEmpty())
+    assertTrue(draft.saved.value.entries.isEmpty())
 
     draft.text = "keep this text"
     model.onAction(NewTaskAction.ShowAllDrafts)

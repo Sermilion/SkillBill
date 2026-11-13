@@ -3,6 +3,7 @@ package skillbill.infrastructure.skills.install.plan
 import skillbill.error.shellcontent.invalidInternalSkillClassification
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.jvm.rollbackDeleteIfExists
+import skillbill.infrastructure.skills.install.opencode.opencodeConfigRoots
 import skillbill.infrastructure.skills.install.staging.StagedSymlinkTargetInput
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
 import skillbill.infrastructure.skills.install.staging.resolveStagedSymlinkTarget
@@ -52,6 +53,7 @@ internal data class InstallConfigRoots(
   val claude: Path,
   val codex: Path,
   val devin: Path,
+  val opencodeSkills: Path,
 )
 
 internal fun installConfigRoots(
@@ -63,6 +65,7 @@ internal fun installConfigRoots(
     claude = claudeConfigRoot(home, environment),
     codex = codexConfigRoot(home, environment),
     devin = devinConfigRoot(home, environment, hostPlatform),
+    opencodeSkills = opencodeConfigRoots(home, environment).skillDirectory,
   )
 
 internal fun agentPaths(
@@ -75,6 +78,7 @@ internal fun agentPaths(
     SupportedAgent.CURSOR to home.resolve(SupportedAgent.CURSOR.simpleHomeDirectory!!).resolve("skills"),
     SupportedAgent.CODEX to configRoots.codex.resolve("skills"),
     SupportedAgent.DEVIN to devinSkillsDirectory(configRoots.devin),
+    SupportedAgent.OPENCODE to configRoots.opencodeSkills,
   )
 
 internal fun codexAgentsPath(
@@ -116,6 +120,14 @@ internal fun detectAgents(
           emptyList()
         } else {
           listOf(AgentTarget(agent.wireValue, installPath.toFileLocation()))
+        }
+      }
+      SupportedAgent.OPENCODE -> {
+        val roots = opencodeConfigRoots(home, environment)
+        if (!anyAgentPathExists(listOf(roots.skillDirectory, roots.configDirectory), "inspect OpenCode installation")) {
+          emptyList()
+        } else {
+          listOf(AgentTarget(agent.wireValue, roots.skillDirectory.toFileLocation()))
         }
       }
       SupportedAgent.DEVIN -> {

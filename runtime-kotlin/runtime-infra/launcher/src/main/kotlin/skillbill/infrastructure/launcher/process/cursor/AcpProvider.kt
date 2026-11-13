@@ -35,6 +35,15 @@ data class AcpProvider(
         lacksTeamDashboardMcp = false,
       )
 
+    val OpenCode =
+      AcpProvider(
+        SupportedAgent.OPENCODE.wireValue,
+        "OpenCode",
+        listOf("acp"),
+        authMethodId = null,
+        lacksTeamDashboardMcp = false,
+      )
+
     val Devin =
       AcpProvider(
         SupportedAgent.DEVIN.wireValue,

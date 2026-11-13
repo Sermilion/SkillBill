@@ -1,6 +1,7 @@
 package skillbill.infrastructure.launcher.process.launch
 
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
+import skillbill.contracts.system.OpenCodeEnvironmentKeys
 import skillbill.infrastructure.host.jvm.GateJvmResolver
 import skillbill.infrastructure.host.jvm.applyTo
 
@@ -11,18 +12,23 @@ internal fun configureLaunchEnvironment(
 ) {
   if (!request.environmentFields.inheritEnvironment) {
     val isolated =
-      isolatedLaunchEnvironment(
-        builder.environment(),
-        request.environmentFields.environment,
-        request.environmentFields.environmentPassthroughKeys,
-      )
+      if (request.environmentFields.explicitEnvironment) {
+        request.environmentFields.environment
+      } else {
+        isolatedLaunchEnvironment(
+          builder.environment(),
+          request.environmentFields.environment,
+          request.environmentFields.environmentPassthroughKeys,
+        )
+      }
     builder.environment().clear()
     builder.environment().putAll(isolated)
   } else {
     builder.environment().putAll(request.environmentFields.environment)
   }
   val environment = builder.environment()
-  gateJvmResolver.resolve(environment).applyTo(environment)
+  if (!request.environmentFields.explicitEnvironment) gateJvmResolver.resolve(environment).applyTo(environment)
+  request.environmentFields.removedEnvironmentKeys.forEach(environment::remove)
 }
 
 internal fun isolatedLaunchEnvironment(
@@ -47,4 +53,4 @@ internal val ISOLATED_LAUNCH_PASSTHROUGH_KEYS: Set<String> =
     "XDG_CONFIG_HOME",
     "XDG_DATA_HOME",
     "XDG_CACHE_HOME",
-  ) + AgentHomeEnvironmentKeys.ALL
+  ) + AgentHomeEnvironmentKeys.ALL + OpenCodeEnvironmentKeys.ALL

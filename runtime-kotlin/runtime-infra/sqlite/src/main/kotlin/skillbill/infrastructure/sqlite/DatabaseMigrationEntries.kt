@@ -1195,4 +1195,5 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 126,
       name = "fence-goal-planning-checkout-recovery",
       operation = ::addGoalPlanningCheckoutRecovery,
-    )
+    ) +
+    skillbill.infrastructure.sqlite.core.migration.area.operation.openCodeLaunchIdentityMigration()

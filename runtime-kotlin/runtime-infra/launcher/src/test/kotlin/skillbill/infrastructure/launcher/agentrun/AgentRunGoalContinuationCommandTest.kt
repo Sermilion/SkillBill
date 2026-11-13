@@ -140,11 +140,17 @@ class AgentRunGoalContinuationCommandTest {
   fun `every agent goal-continuation child spawns skill-bill feature-task and never the skill`() {
     val runner = RecordingAgentRunProcessRunner()
 
-    listOf(SupportedAgent.CLAUDE, SupportedAgent.CODEX, SupportedAgent.JUNIE, SupportedAgent.CURSOR).forEach { agent ->
+    listOf(
+      SupportedAgent.CLAUDE,
+      SupportedAgent.CODEX,
+      SupportedAgent.JUNIE,
+      SupportedAgent.CURSOR,
+      SupportedAgent.OPENCODE,
+    ).forEach { agent ->
       requireNotNull(adapters(runner)[agent]).launch(skillRunRequest())
     }
 
-    assertEquals(4, runner.requests.size)
+    assertEquals(5, runner.requests.size)
     runner.requests.forEach { request ->
       assertEquals(
         listOf("skill-bill", "--db", "/tmp/skillbill-agent-run/metrics.db", "feature-task"),
@@ -162,7 +168,7 @@ class AgentRunGoalContinuationCommandTest {
         },
       )
     }
-    val perAgent = listOf("claude", "codex", "junie", "cursor")
+    val perAgent = listOf("claude", "codex", "junie", "cursor", "opencode")
     runner.requests.forEachIndexed { index, request ->
       assertEquals(perAgent[index], request.launch.command.last())
       assertEquals("--agent", request.launch.command[request.launch.command.size - 2])

@@ -83,10 +83,10 @@ import skillbill.engine.featuretask.slot.fingerprintsCompletedRepository
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
-import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
+import skillbill.error.core.failureCodeLabel
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -140,28 +140,69 @@ internal object PhaseOutputGate {
 
   internal fun gateOutput(args: GateOutput): AttemptResult {
     gateOutputEarlyExit(args)?.let { return it }
-    val normalized =
-      settledRecord(args)
-        ?: proseOutput(args)
-        ?: return blankOutputProcessFailure(args)
-    return args.settleAcceptedOutput(normalized, args.observability)
+    return when (val settled = args.settledEnvelope) {
+      is PhaseSettledEnvelopeRead.Found ->
+        args.settleAcceptedOutput(
+          NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(settled.envelope),
+          args.observability,
+        )
+      PhaseSettledEnvelopeRead.NotRequired ->
+        args.settleAcceptedOutput(
+          proseOutput(args) ?: return blankOutputProcessFailure(args),
+          args.observability,
+        )
+      PhaseSettledEnvelopeRead.None -> {
+        val auditClarification =
+          proseOutput(args)?.takeIf {
+            args.run.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
+          }
+        if (auditClarification != null) {
+          args.settleAcceptedOutput(auditClarification, args.observability)
+        } else {
+          unadmittableOutputProcessFailure(
+            args,
+            "Phase '${args.run.phaseId}' attempt ${args.iteration} has no matching durable settlement for workflow " +
+              "'${args.run.request.workflowId}'; captured prose cannot complete a settlement-required phase.",
+          )
+        }
+      }
+      is PhaseSettledEnvelopeRead.Failed -> failedSettlement(args, settled.error)
+    }
   }
 
-  private fun settledRecord(args: GateOutput): NormalizedFeatureTaskRuntimePhaseOutput? =
-    when (val settled = args.settledEnvelope) {
-      PhaseSettledEnvelopeRead.None -> null
-      is PhaseSettledEnvelopeRead.Found -> NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(settled.envelope)
-      is PhaseSettledEnvelopeRead.Failed -> {
-        clearAndRecordPersistedEvidenceFailure(
-          args.progress,
-          args.recorder,
-          args.phaseSettlementService,
-          args,
-          settled.error,
-        )
-        null
-      }
+  private fun failedSettlement(
+    args: GateOutput,
+    error: SkillBillRuntimeException,
+  ): AttemptResult {
+    val code = error.failureCodeLabel() ?: error.code.toString()
+    val diagnosis =
+      "Durable settlement for workflow '${args.run.request.workflowId}', phase '${args.run.phaseId}', " +
+        "attempt ${args.iteration} could not be read ($code): ${error.message.orEmpty()}"
+    val boundedDiagnosis = boundedSchemaGateDetail(diagnosis)
+    catchingNonCancellation {
+      recordRejectedOutput(
+        args.progress,
+        args.recorder,
+        RecordRejectedOutputArgs(
+          run = args.run,
+          iteration = args.iteration,
+          rule = "phase-settlement-read-failure",
+          reason = boundedDiagnosis,
+          captured = args.captured,
+          targeting = rejectedOutputTargeting(defaultRejectedOutputTargetingArgs(args.run)),
+          exhaustedFixLoop = args.rejectionExhaustsFixLoop,
+        ),
+      )
+    }.onFailure { diagnosticError ->
+      RuntimeDiagnosticsBestEffortWarning.record(
+        args.diagnostics,
+        "Could not record the rejected-output diagnosis for the unreadable durable settlement of " +
+          "workflow '${args.run.request.workflowId}', phase '${args.run.phaseId}', attempt ${args.iteration}.",
+        diagnosticError,
+      )
     }
+    return unadmittableOutputProcessFailure(args, boundedDiagnosis)
+  }
 
   private fun proseOutput(args: GateOutput): NormalizedFeatureTaskRuntimePhaseOutput? {
     val text = args.captured.text
@@ -359,37 +400,6 @@ internal object PhaseOutputGate {
         ),
       )
     }
-  }
-
-  private fun clearAndRecordPersistedEvidenceFailure(
-    state: FeatureTaskRuntimeProgressSnapshotAccess,
-    recorder: PhaseRunRecords,
-    phaseSettlementService: PhaseRunSettlements,
-    args: GateOutput,
-    error: SkillBillRuntimeException,
-  ) {
-    val run = args.run
-    phaseSettlementService.clear(
-      workflowId = run.request.workflowId,
-      phaseId = run.phaseId,
-      attempt = args.iteration,
-    )
-    PhaseOutputGate.recordRejectedOutput(
-      state,
-      recorder,
-      RecordRejectedOutputArgs(
-        run = run,
-        iteration = args.iteration,
-        rule = "phase-settlement-validation-evidence",
-        reason = error.message.orEmpty(),
-        captured = args.captured,
-        targeting =
-          PhaseOutputGate.rejectedOutputTargeting(
-            defaultRejectedOutputTargetingArgs(run),
-          ),
-        exhaustedFixLoop = args.rejectionExhaustsFixLoop,
-      ),
-    )
   }
 
   internal fun gateOutputEarlyExit(args: GateOutput): AttemptResult? =

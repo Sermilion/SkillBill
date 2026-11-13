@@ -10,6 +10,9 @@ import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.operationcard.OperationCardFailureCode
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.core.schema.OPEN_CODE_IDENTITY_COLUMN
+import skillbill.infrastructure.sqlite.core.schema.decodeOpenCodeIdentity
+import skillbill.infrastructure.sqlite.core.schema.openCodeIdentityJson
 import skillbill.ports.operation.OperationCardRepository
 import skillbill.ports.operation.model.ConfirmationExecution
 import skillbill.ports.operation.model.OperationProposal
@@ -38,8 +41,8 @@ internal class SqliteOperationCardStore(
         """
         INSERT INTO operation_launch_contexts (
           launch_id, operation_id, repository_identity, database_identity, checkout_root, branch,
-          original_arguments_json, selected_agent, selected_profile, holder_id, retention
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          original_arguments_json, selected_agent, selected_profile, holder_id, retention, $OPEN_CODE_IDENTITY_COLUMN
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """.trimIndent(),
       ).use { statement ->
         statement.bindAll(
@@ -54,6 +57,7 @@ internal class SqliteOperationCardStore(
           context.selectedProfile,
           context.holderId,
           context.retention?.wireValue,
+          openCodeIdentityJson(context.openCodeIdentity),
         )
         statement.executeUpdate()
       }
@@ -65,7 +69,7 @@ internal class SqliteOperationCardStore(
       connection.prepareStatement(
         """
         SELECT launch_id, operation_id, repository_identity, database_identity, checkout_root, branch,
-          original_arguments_json, selected_agent, selected_profile, holder_id, retention
+          original_arguments_json, selected_agent, selected_profile, holder_id, retention, $OPEN_CODE_IDENTITY_COLUMN
         FROM operation_launch_contexts WHERE launch_id = ?
         """.trimIndent(),
       ).use { statement ->
@@ -87,6 +91,10 @@ internal class SqliteOperationCardStore(
               rows.getString("retention")?.let { value ->
                 OperationLaunchRetention.fromWire(value)
                   ?: throw SQLException("Unknown operation launch retention '$value'.")
+              },
+            openCodeIdentity =
+              rows.getString(OPEN_CODE_IDENTITY_COLUMN)?.let { raw ->
+                decodeOpenCodeIdentity(raw, OperationCardFailureCode.INVALID_OPERATION_CARD_CONTRACT)
               },
           )
         }

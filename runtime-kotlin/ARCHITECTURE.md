@@ -1721,12 +1721,13 @@ Composition:
   summary, prose value, and optional prompt; a failure disposition accompanies
   a non-completed status. The runtime stamps the phase id, and the durable
   settlement directive is added whenever the step has a settlement target.
-  `PhaseOutputGate` takes the terminal outcome first, then the settlement
-  record, then non-blank stdout prose as the value for any step name, including
-  a step outside the domain graph. There is no response envelope to parse and
-  no format relaunch. A step whose prompt sections set `settles = false` (the
-  runtime-owned build and commit_push turns) does not settle with the uniform
-  output.
+  `PhaseOutputGate` takes the terminal outcome first. A step with a settlement
+  target then requires the matching durable workflow, phase, and attempt record.
+  A missing or unreadable record blocks the phase and cannot fall back to captured
+  prose. Only a step without a settlement target may use non-blank stdout prose
+  as its value. There is no response envelope to parse and no format relaunch.
+  A step whose prompt sections set `settles = false` (the runtime-owned build and
+  commit_push turns) does not settle with the uniform output.
 
 Dispatch and policy:
 

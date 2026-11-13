@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.phaserun
 
+import skillbill.contracts.system.AgentHomeEnvironmentKeys
+import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.engine.featuretask.incident.BlockIncidentCapture
 import skillbill.ports.blockincident.InMemoryBlockIncidentSpool
 import skillbill.ports.db.DatabaseSessionFactory
@@ -52,6 +54,36 @@ class StandaloneValidationOutcomeSettlementTest {
     )
     assertNull(settledOutcome("inv-skipped", LiveChecksWriteMode.AVAILABLE, skippedAndUnfinished))
     assertNull(settledOutcome("inv-unavailable", LiveChecksWriteMode.UNAVAILABLE, retriedThenPassed))
+  }
+
+  @Test
+  fun `resumed quality status preserves the accepted OpenCode identity instead of capturing current defaults`() {
+    val accepted =
+      OpenCodeLaunchIdentity.capture(
+        mapOf(AgentHomeEnvironmentKeys.OPENCODE_CONFIG_DIR to home.resolve("accepted-profile").toString()),
+        home,
+        home,
+      )
+    val capture = BlockIncidentCapture(database, clock, InMemoryBlockIncidentSpool(), NoopRuntimeDiagnostics)
+    val registrations = testStandalonePhaseRegistration(clock, NoopRuntimeDiagnostics)
+    val publisher =
+      StandalonePhaseStatusPublisherFactory(database, registrations, clock, NoopRuntimeDiagnostics, capture, null)
+        .forPhase(
+          home,
+          SkeletonDefinition.VALIDATION.id,
+          "resumed-quality",
+          StandalonePhaseLaunch("opencode", acceptedIdentity = accepted),
+        )
+
+    publisher.publishActivity(SkeletonDefinition.VALIDATION.id, "Resuming quality")
+
+    assertEquals(accepted, publisher.openCodeIdentity)
+    assertEquals(
+      accepted,
+      database.read {
+        it.standalonePhaseStatuses.readByInvocation("resumed-quality")
+      }?.openCodeIdentity,
+    )
   }
 
   private fun settledOutcome(

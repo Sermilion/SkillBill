@@ -11,6 +11,8 @@ import skillbill.install.model.McpRegistrationOutcome
 import skillbill.install.model.SupportedAgent
 import skillbill.model.toPath
 import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
+import skillbill.ports.install.mcp.model.InstallMcpRegistrationRequest
+import skillbill.ports.install.mcp.model.InstallMcpUnregistrationRequest
 import skillbill.ports.system.HostPlatformPort
 import java.nio.file.Files
 import java.nio.file.Path
@@ -103,9 +105,10 @@ class DevinInstallationBoundaryTest {
     val runtimeMcpBin = Path.of("/tmp/runtime-mcp")
     val profile = InstallMcpProfileEnvironment()
 
-    val first = McpRegistrationOperations.registerWithProfileEnvironment("devin", runtimeMcpBin, home, profile)
+    val registration = InstallMcpRegistrationRequest("devin", runtimeMcpBin, home, profile)
+    val first = McpRegistrationOperations.registerWithProfileEnvironment(registration)
     assertTrue(assertIs<McpRegistrationOutcome.Applied>(first).mutation.changed)
-    val second = McpRegistrationOperations.registerWithProfileEnvironment("devin", runtimeMcpBin, home, profile)
+    val second = McpRegistrationOperations.registerWithProfileEnvironment(registration)
     assertEquals(false, assertIs<McpRegistrationOutcome.Applied>(second).mutation.changed)
 
     val registered = decode(configPath)
@@ -117,7 +120,9 @@ class DevinInstallationBoundaryTest {
       servers["sona"],
     )
 
-    McpRegistrationOperations.unregisterWithProfileEnvironment("devin", home, profile)
+    McpRegistrationOperations.unregisterWithProfileEnvironment(
+      InstallMcpUnregistrationRequest("devin", home, profile),
+    )
     val removed = decode(configPath)
     assertEquals("dark", removed["theme"])
     assertEquals(setOf("other"), (removed["mcpServers"] as Map<*, *>).keys)
@@ -126,7 +131,7 @@ class DevinInstallationBoundaryTest {
     Files.writeString(configPath, malformed)
     val error =
       assertFailsWith<SkillBillRuntimeException> {
-        McpRegistrationOperations.registerWithProfileEnvironment("devin", runtimeMcpBin, home, profile)
+        McpRegistrationOperations.registerWithProfileEnvironment(registration)
       }
     assertEquals(InstallFailureCode.MALFORMED_MCP_CONFIG, error.code)
     assertEquals(malformed, Files.readString(configPath))

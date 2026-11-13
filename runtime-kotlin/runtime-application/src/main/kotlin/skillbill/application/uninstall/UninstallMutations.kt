@@ -7,6 +7,7 @@ import skillbill.application.uninstall.model.OwnedFileRemoval
 import skillbill.application.uninstall.model.UninstallPlan
 import skillbill.error.core.catchingNonCancellation
 import skillbill.install.model.McpRegistrationOutcome
+import skillbill.install.model.SupportedAgent
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
 import skillbill.ports.install.mcp.model.InstallMcpUnregistrationRequest
@@ -14,6 +15,7 @@ import skillbill.ports.install.model.NativeAgentLinkProvider
 import skillbill.ports.install.model.NativeAgentLinkRequest
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentLinkOperationRequest
+import skillbill.ports.install.nativeagent.model.InstallNativeAgentPreservationRequest
 import skillbill.ports.system.UninstallPathsPort
 import java.nio.file.Path
 
@@ -47,33 +49,68 @@ internal fun cleanupAgentInstallTargets(
 internal fun cleanupNativeAgentInstallLinks(
   plan: UninstallPlan,
   installNativeAgentLinkPort: InstallNativeAgentLinkPort,
-  uninstallFileSystem: UninstallPathsPort,
   removed: MutableList<String>,
   recorder: UninstallMutationRecorder,
-) {
-  if (!plan.nativeSourceRoots.any(uninstallFileSystem::exists)) {
-    return
-  }
+): NativeAgentCleanupResult {
   val request =
     NativeAgentLinkRequest(
       platformPacksRoot = plan.stateRoot.resolve("platform-packs"),
       skillsRoot = plan.stateRoot.resolve("skills"),
       home = plan.home,
+      environment = plan.environment,
     )
+  val retainedPaths = mutableSetOf<Path>()
+  var complete = true
   NativeAgentLinkProvider.entries.forEach { provider ->
     catchingNonCancellation {
       installNativeAgentLinkPort.unlinkNativeAgents(
         InstallNativeAgentLinkOperationRequest(
           provider = provider,
           linkRequest = request,
+          includeAllSourceRoots = true,
         ),
       )
-    }.onSuccess { result -> removed += result.unlinked.map(Path::toString) }
+    }.onSuccess { result ->
+      removed += result.unlinked.map(Path::toString)
+      retainedPaths += result.retainedPaths
+    }
       .onFailure { error ->
+        complete = false
         recorder.recordFailure("native agent cleanup failed for ${provider.name.lowercase()}", error)
       }
   }
+  val preservation =
+    discoverNativeAgentPreservationTargets(
+      plan.stateRoot,
+      plan.home,
+      plan.environment,
+      installNativeAgentLinkPort,
+      recorder,
+    )
+  retainedPaths += preservation.retainedPaths
+  return NativeAgentCleanupResult(complete && preservation.complete, retainedPaths.toList())
 }
+
+internal fun discoverNativeAgentPreservationTargets(
+  stateRoot: Path,
+  home: Path,
+  environment: Map<String, String>,
+  installNativeAgentLinkPort: InstallNativeAgentLinkPort,
+  recorder: UninstallMutationRecorder,
+): NativeAgentCleanupResult =
+  catchingNonCancellation {
+    installNativeAgentLinkPort.discoverPreservedTargets(
+      InstallNativeAgentPreservationRequest(stateRoot, home, environment),
+    )
+  }.fold(
+    onSuccess = { result -> NativeAgentCleanupResult(true, result.retainedPaths) },
+    onFailure = { error ->
+      recorder.recordFailure("native agent preservation discovery failed", error)
+      NativeAgentCleanupResult(false, emptyList())
+    },
+  )
+
+internal data class NativeAgentCleanupResult(val complete: Boolean, val retainedPaths: List<Path>)
 
 internal fun cleanupMcpRegistrations(
   plan: UninstallPlan,
@@ -88,6 +125,7 @@ internal fun cleanupMcpRegistrations(
           agent = agent,
           home = plan.home,
           profileEnvironment = InstallMcpProfileEnvironment.from(plan.environment),
+          expectedRuntimeMcpBin = if (agent == SupportedAgent.OPENCODE.id) plan.runtimeMcpBinIdentity else null,
         ),
       ).outcome
     }.onSuccess { outcome ->

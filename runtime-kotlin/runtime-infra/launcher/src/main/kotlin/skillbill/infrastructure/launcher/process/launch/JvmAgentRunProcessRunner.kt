@@ -52,6 +52,7 @@ class JvmAgentRunProcessRunner(
 
   private fun AgentRunProcessRequest.withScratchDirectory(directory: Path?): AgentRunProcessRequest =
     run {
+      if (environmentFields.explicitEnvironment) return this
       val machine = JdkHostPlatformPort.resolveEnvironment()
       val requested = environmentFields.environment
       val inherited = if (environmentFields.inheritEnvironment) machine + requested else requested
@@ -160,6 +161,7 @@ class JvmAgentRunProcessRunner(
       timedOut = false,
       interrupted = false,
       spawnFailed = true,
+      processExitObservation = request.processLifecycle?.observation(),
     )
   }
 
@@ -178,19 +180,22 @@ class JvmAgentRunProcessRunner(
         ).also { settled = true }
       } finally {
         if (!settled) {
-          cleanupProcessStart(startedProcess)
+          cleanupProcessStart(startedProcess, request.processLifecycle)
         }
       }
     return when (authorized) {
       is AgentRunSpawnAuthorizationResult.Denied -> {
-        cleanupProcessStart(startedProcess)
-        spawnDenied(authorized)
+        cleanupProcessStart(startedProcess, request.processLifecycle)
+        spawnDenied(authorized, request)
       }
       is AgentRunSpawnAuthorizationResult.Authorized -> settleProcessStart(authorized.value, request, approval)
     }
   }
 
-  private fun spawnDenied(denied: AgentRunSpawnAuthorizationResult.Denied): AgentRunProcessResult =
+  private fun spawnDenied(
+    denied: AgentRunSpawnAuthorizationResult.Denied,
+    request: AgentRunProcessRequest,
+  ): AgentRunProcessResult =
     AgentRunProcessResult(
       exitStatus = null,
       stdout = "",
@@ -199,6 +204,7 @@ class JvmAgentRunProcessRunner(
       interrupted = false,
       spawnFailed = false,
       spawnDenied = denied,
+      processExitObservation = request.processLifecycle?.observation(),
     )
 
   private fun settleProcessStart(
@@ -207,15 +213,24 @@ class JvmAgentRunProcessRunner(
     approval: AgentRunApprovalChannel?,
   ): AgentRunProcessResult =
     when (processStart) {
-      is ProcessStart.Failed -> spawnFailure(processStart.error)
+      is ProcessStart.Failed -> spawnFailure(processStart.error, request)
       is ProcessStart.Started ->
-        runStartedProcess(
-          tree = processStart.tree,
-          stdoutStream = processStart.tree.process.inputStream,
-          stderrStream = processStart.tree.process.errorStream,
-          request = request,
-          approval = approval,
-        )
+        captureLaunchResourceOutcome {
+          runStartedProcess(
+            tree = processStart.tree,
+            stdoutStream = processStart.tree.process.inputStream,
+            stderrStream = processStart.tree.process.errorStream,
+            request = request,
+            approval = approval,
+          )
+        }.getOrElse { failure ->
+          captureLaunchResourceOutcome {
+            cleanupProcessStart(processStart, request.processLifecycle)
+          }.getOrElse { cleanupFailure ->
+            failure.addSuppressed(cleanupFailure)
+          }
+          throw failure
+        }
     }
 
   companion object {
@@ -524,7 +539,15 @@ class JvmAgentRunProcessRunner(
     return ProcessResources(
       stdout = stdout,
       stderr = stderr,
-      lifetime = ProcessRunLifetime(args.tree, liveProcesses, stdout, stderr, args.degradation),
+      lifetime =
+        ProcessRunLifetime(
+          args.tree,
+          liveProcesses,
+          stdout,
+          stderr,
+          args.degradation,
+          args.request.processLifecycle,
+        ),
     )
   }
 
@@ -577,7 +600,7 @@ class JvmAgentRunProcessRunner(
         mcpStartupObserved = mcpStartupObserved,
         degradation = input.degradation,
         session = session,
-      )
+      ).copy(processExitObservation = input.request.processLifecycle?.observation())
     }
     val stdout = release.stdoutCapture
     val stderr = release.stderrCapture
@@ -608,6 +631,7 @@ class JvmAgentRunProcessRunner(
       sessionOutcome = sessionOutcome,
       sessionCapture = sessionCapture,
       sessionFailureEvidence = session.failureEvidence,
+      processExitObservation = input.request.processLifecycle?.observation(),
     )
   }
 
@@ -673,7 +697,10 @@ class JvmAgentRunProcessRunner(
     )
   }
 
-  private fun spawnFailure(error: Exception): AgentRunProcessResult =
+  private fun spawnFailure(
+    error: Exception,
+    request: AgentRunProcessRequest,
+  ): AgentRunProcessResult =
     AgentRunProcessResult(
       exitStatus = null,
       stdout = "",
@@ -681,20 +708,33 @@ class JvmAgentRunProcessRunner(
       timedOut = false,
       interrupted = false,
       spawnFailed = true,
+      processExitObservation = request.processLifecycle?.observation(),
     )
 
   private fun startProcess(request: AgentRunProcessRequest): ProcessStart {
     val process =
       try {
-        buildProcess(request).start()
+        val builder = buildProcess(request)
+        request.launch.beforeStart?.invoke()
+        builder.start()
       } catch (error: IOException) {
         return ProcessStart.Failed(error)
       } catch (error: SecurityException) {
         return ProcessStart.Failed(error)
       }
     val tree = AgentRunProcessTree(process)
+    request.processLifecycle?.started(process.pid())
     liveProcesses.add(tree)
-    treeResult("initial_discovery") { tree.refresh() }
+    captureLaunchResourceOutcome {
+      treeResult("initial_discovery") { tree.refresh() }
+    }.getOrElse { failure ->
+      captureLaunchResourceOutcome {
+        cleanupProcessStart(ProcessStart.Started(tree), request.processLifecycle)
+      }.getOrElse { cleanupFailure ->
+        failure.addSuppressed(cleanupFailure)
+      }
+      throw failure
+    }
     return ProcessStart.Started(tree)
   }
 
@@ -703,9 +743,15 @@ class JvmAgentRunProcessRunner(
       .directory(request.launch.workingDirectory.toFile())
       .also { configureLaunchEnvironment(it, request, gateJvmResolver) }
 
-  private fun cleanupProcessStart(start: ProcessStart?) {
+  private fun cleanupProcessStart(
+    start: ProcessStart?,
+    processLifecycle: AgentRunProcessLifecycle?,
+  ) {
     when (start) {
-      is ProcessStart.Started -> reapLiveProcesses(listOf(start.tree))
+      is ProcessStart.Started -> {
+        reapLiveProcesses(listOf(start.tree))
+        processLifecycle?.exited(start.tree.process.pid(), start.tree.confirmedExited())
+      }
       is ProcessStart.Failed, null -> Unit
     }
   }

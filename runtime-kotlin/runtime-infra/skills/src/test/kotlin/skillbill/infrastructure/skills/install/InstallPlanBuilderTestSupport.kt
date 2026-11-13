@@ -39,6 +39,7 @@ open class InstallPlanBuilderTestSupport {
 
   protected fun setupPlanFixture(): PlanFixture {
     val repoRoot = Files.createTempDirectory("skillbill-install-plan-repo").also(tempDirs::add)
+    Files.createDirectories(repoRoot.resolve(".git"))
     val home = Files.createTempDirectory("skillbill-install-plan-home").also(tempDirs::add)
     seedBaseSkill(repoRoot, PACK_SIDECAR_PARENT_SKILL)
     seedBaseSkill(repoRoot, "bill-code-review")

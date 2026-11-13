@@ -29,6 +29,7 @@ import skillbill.infrastructure.workflow.review.broker.FileSystemReviewEvidenceB
 import skillbill.infrastructure.workflow.review.specialists.ClasspathReviewSpecialistContractProvider
 import skillbill.install.model.SupportedAgent
 import skillbill.learnings.model.LearningRecord
+import skillbill.model.EnvironmentContext
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
@@ -191,6 +192,7 @@ data class ReviewHarnessConfig(
   val commits: List<RecordedCommit> = emptyList(),
   val learnings: List<LearningRecord> = emptyList(),
   val originScopeKeyPort: RepositoryOriginScopeKeyPort = HARNESS_ORIGIN_UNAVAILABLE,
+  val environment: EnvironmentContext = EnvironmentContext(),
 )
 
 fun ParallelCodeReviewRunner.reviewed(request: ParallelCodeReviewRequest): ParallelCodeReviewResult =
@@ -247,6 +249,7 @@ fun reviewHarness(
     originScopeKeyPort = config.originScopeKeyPort,
     learningsDiagnostics = recordingDiagnostics(recorder),
     routingDiagnostics = recordingDiagnostics(recorder),
+    environment = config.environment,
   )
 }
 
@@ -270,6 +273,7 @@ fun parallelCodeReviewRunnerOf(
   registerParse: (String) -> ParallelReviewParseResult = ParallelReviewFindingParser::parse,
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort = CanonicalRepositoryRoot,
   originScopeKeyPort: RepositoryOriginScopeKeyPort = HARNESS_ORIGIN_UNAVAILABLE,
+  environment: EnvironmentContext = EnvironmentContext(),
   learningsDiagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
   routingDiagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
   clock: Clock = Clock.systemUTC(),
@@ -298,6 +302,7 @@ fun parallelCodeReviewRunnerOf(
   val laneLaunch =
     ParallelCodeReviewRunnerLaneLaunch(
       parentReviewLauncher = parentReviewLauncher,
+      environment = environment,
       reviewEvidenceBrokerFactory = reviewEvidenceBrokerFactory,
       governedEvidenceEndpointBinder = governedEvidenceEndpointBinder,
       reviewLaunchAgentStaging = reviewLaunchAgentStaging,

@@ -1,3 +1,15 @@
+## [2026-11-12] SKILL-535 add OpenCode support
+Areas: install.sh, orchestration/contracts, runtime-kotlin install, launcher, workflow and SQLite, desktop configuration and chat
+- MEDIUM feature. OpenCode installation resolves effective roots and edits the managed JSON/JSONC MCP subtree while preserving unrelated content. Native specialists render from neutral sources and use managed link, inventory and digest checks.
+- ACP execution acknowledges advertised model, effort and mode before prompting. Owned runs require complete capture and matching durable settlement when the launched prompt requests it.
+- Reusable: OpenCode launch identity retains profile and configuration fingerprints across resume without persisting inline configuration. A temporary ACP setup session acquires advertised model and effort choices for the editor.
+- Governed review uses private per-lane launch scopes, verified workers and lane-bound evidence authority. Admission is limited to the pinned OpenCode 1.15.3 API-authenticated baseline and supported host permissions.
+- Desktop chat saves provider handles and configuration bindings, resumes with session/load, preserves unsafe records for recovery, and applies chat permission and stop settlement rules.
+- SQLite migration 122 carries optional launch identity; the current desktop read schema is 123. Writable readiness repairs a missing or stale desktop read identity after supported migrations, preserves work data, records a diagnostic, and rejects newer or unrecognized schemas.
+- Limits: live provider execution, review isolation and desktop continuity are not fully established by the supplied evidence. QA finished with findings, and later validation changed the tree QA examined.
+Feature flag: N/A
+Acceptance criteria: 5/5 addressed in source; integrated acceptance remains unconfirmed.
+
 ## [2026-11-13] SONA-5 rename public commands to sona
 Areas: install.sh, uninstall.sh, scripts, docs, orchestration, runtime-kotlin, desktop, skills/skill-bill, .codex
 - MEDIUM feature. Public CLI is sona, MCP is sona-mcp with server sona, listed skill is /sona, and the desktop launcher is sona-app with visible name Sona. Canonical skills/skill-bill, internal-for: skill-bill, raw operations, telemetry, state paths and historical records stay unchanged.

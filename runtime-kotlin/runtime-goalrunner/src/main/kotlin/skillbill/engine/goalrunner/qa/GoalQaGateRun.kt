@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.qa
 
+import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.phaserun.PhaseRunPlanResolver
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
@@ -29,6 +30,7 @@ import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import java.nio.file.Path
 import java.time.Clock
 
 internal sealed class ValidationAfterQaStep {
@@ -77,6 +79,7 @@ internal fun admitPreparedQuality(
   gitOperations: WorkflowGitOperations,
   state: GoalRunnerManifestState,
   request: GoalRunnerRunRequest,
+  captureOpenCodeIdentity: (Path, String) -> OpenCodeLaunchIdentity?,
 ): Pair<GoalQualityExecutionRecord, FeatureTaskRuntimeRunInvariantsRead> {
   val baseline = requireQualityBaseline(gitOperations, state, request)
   val retainedRead = context.outcomeStore.retainedGoalQualityExecution(state.parentWorkflowId)
@@ -85,7 +88,16 @@ internal fun admitPreparedQuality(
   val retention = preparedRetention(retainedRead, retainedRecord)
   recordHistoricalAdoption(context.diagnostics, retention.historical)
   val parentInvariants = parentInvariantsFor(context, state, request, retention)
-  val inputs = qualityInputsFor(state, request, parentInvariants, retention)
+  val inputs =
+    qualityInputsFor(state, request, parentInvariants, retention).let { accepted ->
+      if (retention.retainedExecution != null || retention.historical != null) {
+        accepted
+      } else {
+        accepted.copy(
+          openCodeIdentity = captureOpenCodeIdentity(Path.of(accepted.repoRoot), accepted.effectiveAgentId),
+        )
+      }
+    }
   val plans = resolveAdmittedPlans(context, state, request, inputs, retention)
   val validationSourceProof = validationSourceProof(context, state, baseline, retention, plans)
   val quality =

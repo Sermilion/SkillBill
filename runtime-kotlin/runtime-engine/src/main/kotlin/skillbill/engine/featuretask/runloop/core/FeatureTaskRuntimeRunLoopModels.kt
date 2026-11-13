@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeResolvedPhaseAg
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
+import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
@@ -325,6 +326,7 @@ internal data class PreLaunchBlock(
 internal data class PreparedLaunch(
   val briefing: FeatureTaskRuntimePhaseLaunchBriefing,
   val prompt: String,
+  val settlementTarget: FeatureTaskRuntimePhaseSettlementTarget?,
 )
 
 internal data class RecordRejection(

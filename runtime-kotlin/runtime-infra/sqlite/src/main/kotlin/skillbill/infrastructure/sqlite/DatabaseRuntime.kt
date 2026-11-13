@@ -8,11 +8,15 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.databaseAccessFailure
 import skillbill.error.core.databaseIncompatible
 import skillbill.infrastructure.sqlite.core.migration.MigrationLedger
+import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionBeginMode
+import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionSpec
+import skillbill.infrastructure.sqlite.core.ops.inDatabaseTransaction
 import skillbill.infrastructure.sqlite.core.schema.DatabasePaths
 import skillbill.infrastructure.sqlite.core.schema.DatabaseSchema
 import skillbill.infrastructure.sqlite.core.schema.OpenDatabase
 import skillbill.infrastructure.sqlite.core.schema.databaseAccessError
 import skillbill.infrastructure.sqlite.core.schema.databaseFileIdentity
+import skillbill.infrastructure.sqlite.core.schema.databasePath
 import skillbill.infrastructure.sqlite.core.schema.fileObservation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.filesystem.model.DatabaseFileObservation
@@ -84,6 +88,7 @@ internal object DatabaseRuntime {
             configureConnection(connection, enableWal = true)
             DatabaseSchema.createBaseSchema(connection)
             DatabaseMigrations.apply(connection, diagnostics)
+            repairDesktopReadIdentity(connection, diagnostics)
           }
         }
       }
@@ -220,16 +225,11 @@ internal object DatabaseRuntime {
               rows.getInt(1)
             }
           }
-        val desktopIdentityInstalled =
-          connection.createStatement().use { statement ->
-            statement.executeQuery(
-              "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'room_master_table'",
-            ).use { it.next() }
-          }
-        if (ledgerVersion > latestVersion || desktopIdentityInstalled && !hasDesktopReadIdentity(connection)) {
+        if (ledgerVersion > latestVersion) {
           throw databaseIncompatible(path.toString(), DatabaseAccessOperation.OPEN)
         }
-        ledger.hasPendingWork(migrations) || version != latestVersion
+        ledger.hasPendingWork(migrations) || version != latestVersion ||
+          !hasDesktopReadIdentity(connection)
       }
     }
 
@@ -325,6 +325,34 @@ private fun hasDesktopReadIdentity(connection: Connection): Boolean {
     connection.prepareStatement("SELECT identity_hash FROM room_master_table WHERE id = 42").use { statement ->
       statement.executeQuery().use { rows -> rows.next() && rows.getString(1) == DesktopReadSchema.ROOM_IDENTITY_HASH }
     }
+}
+
+private fun repairDesktopReadIdentity(
+  connection: Connection,
+  diagnostics: RuntimeDiagnostics,
+) {
+  if (hasDesktopReadIdentity(connection)) return
+  connection.inDatabaseTransaction(
+    DatabaseTransactionSpec(
+      dbPath = connection.databasePath(),
+      beginMode = DatabaseTransactionBeginMode.IMMEDIATE,
+      operation = DatabaseAccessOperation.OPEN,
+      diagnostics = diagnostics,
+    ),
+  ) {
+    createStatement().use { statement ->
+      statement.execute("CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY, identity_hash TEXT)")
+    }
+    prepareStatement("INSERT OR REPLACE INTO room_master_table (id, identity_hash) VALUES (42, ?)")
+      .use { statement ->
+        statement.setString(1, DesktopReadSchema.ROOM_IDENTITY_HASH)
+        statement.executeUpdate()
+      }
+  }
+  diagnostics.warning(
+    "seam=desktop_read_identity_repair record_kind=migration value_expected=${DesktopReadSchema.ROOM_IDENTITY_HASH} " +
+      "value_used=${DesktopReadSchema.ROOM_IDENTITY_HASH} cause=missing_or_stale_identity",
+  )
 }
 
 internal data class DatabaseIdentity(

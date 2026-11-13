@@ -15,6 +15,7 @@ import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
@@ -33,6 +34,7 @@ import dev.skillbill.desktop.feature.chat.savedText
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -266,31 +268,26 @@ internal class NewTaskChat(
   private var turnJob: Job? = null
 
   private suspend fun finishTurn(turn: Job) {
-    val ownsCompletion = synchronized(transitionLock) {
-      turnJob === turn && finishingTurns.add(turn)
-    }
-    if (!ownsCompletion) return
-    val hadNormalReply = normalReplyActive
-    normalReplyActive = false
-    thread.stoppableState.value = unpromptedReplyActive
+    if (turnJob !== turn) return
+    thread.stoppableState.value = false
+    thread.endStreaming()
     pendingTurnLineIndex = null
-    val stopped = turn === stoppedTurn && turn.isCancelled
+    val stopped = turn === stoppedTurn
     if (stopped) thread.append(ChatMessage.Notice(STOPPED_NOTICE))
     try {
       withContext(NonCancellable) {
-        if (hadNormalReply && !unpromptedReplyActive) thread.endStreaming()
-        if (stopped && !started) rotateSession()
+        if (stopped && !started && agent.agentId != "opencode") rotateSession()
+        changesTracker.endTurn()
         if (!save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
         changesTracker.refresh()
       }
     } finally {
-      synchronized(transitionLock) {
-        turnRunning = false
-        thread.stoppableState.value = unpromptedReplyActive
-        thread.busyState.value = unpromptedReplyActive
-        turnJob = null
-        finishingTurns.remove(turn)
-      }
+      turnRunning = false
+      normalReplyActive = false
+      thread.stoppableState.value = false
+      thread.busyState.value = false
+      turnJob = null
+      stoppedTurn = null
     }
   }
 
@@ -316,7 +313,12 @@ internal class NewTaskChat(
     thread.busyState.value = turnRunning
     turnJob?.let {
       stoppedTurn = it
-      it.cancel()
+      val running = it
+      val oldSessionId = sessionId
+      scope.launch(dispatcher, start = CoroutineStart.UNDISPATCHED) {
+        if (requestStop(oldSessionId) != ChatStopSettlement.Settled) running.cancel()
+        running.join()
+      }
     } ?: stopUnprompted()
   }
 
@@ -356,7 +358,8 @@ internal class NewTaskChat(
     if (observer != null) observer.cancelAndJoin()
     val activeTurn = turnJob
     if (activeTurn != null) {
-      activeTurn.cancel()
+      val activeSessionId = sessionId
+      if (requestStop(activeSessionId) != ChatStopSettlement.Settled) activeTurn.cancel()
       activeTurn.join()
     }
     turnJob = null
@@ -375,72 +378,31 @@ internal class NewTaskChat(
   }
 
   suspend fun end(): Boolean {
-    val hasClaim = synchronized(transitionLock) {
-      unpromptedReplyActive = false
-      changesTracker.end()
-      if (thread.hasDeliveryClaim()) {
-        recoveryOnly = true
-        thread.deferDestructiveAction("dispose of this draft")
-        true
-      } else false
+    val hadDeliveryClaim = thread.hasDeliveryClaim()
+    if (hadDeliveryClaim) {
+      steering.detach { chat.end(sessionId) }
+      if (thread.hasDeliveryClaim()) return false
+      if (thread.queued.value.isNotEmpty()) return false
     }
-    if (hasClaim) steering.detach { chat.end(sessionId) }
-    synchronized(transitionLock) {
-      if (hasClaim && thread.hasDeliveryClaim()) {
-        job.children.forEach { it.cancel() }
-        thread.endStreaming()
-        thread.stoppableState.value = false
-        thread.busyState.value = false
-        return false
-      }
-      if (hasClaim && thread.queued.value.isNotEmpty()) {
-        recoveryOnly = false
-        thread.stoppableState.value = false
-        thread.busyState.value = false
-        return false
-      }
-      thread.clearQueuedEntries()
-      thread.stoppableState.value = false
-      job.cancel()
-      if (!hasClaim) chat.end(sessionId)
-      return true
-    }
+    changesTracker.end()
+    thread.queuedState.value = emptyList()
+    thread.stoppableState.value = false
+    chat.end(sessionId)
+    job.cancel()
+    awaitAcceptedSaves()
+    return !thread.hasDeliveryClaim()
   }
 
-  fun retryDelivery(deliveryId: String) {
-    scope.launch(job + transitionDispatcher) {
-      synchronized(transitionLock) {
-        if (!canRecover()) {
-          thread.append(ChatMessage.Notice("The database session changed. Keep this follow-up for reference or discard it, then open a new chat."))
-          return@launch
-        }
-        if (steering.recover(deliveryId, retry = true)) {
-          if (recoveryOnly) {
-            changesTracker.resume()
-            observeUnprompted()
-            followApprovals()
-          }
-          recoveryOnly = false
-          drainQueue()
-        }
-      }
-    }
-  }
+  internal fun retryDelivery(deliveryId: String): Boolean = steering.recover(deliveryId, retry = true)
 
-  fun discardDelivery(deliveryId: String) {
-    scope.launch(job + transitionDispatcher) {
-      synchronized(transitionLock) {
-        if (steering.recover(deliveryId, retry = false)) {
-          if (recoveryOnly && canRecover()) {
-            changesTracker.resume()
-            observeUnprompted()
-            followApprovals()
-            recoveryOnly = false
-          }
-          drainQueue()
-        }
-      }
-    }
+  internal fun discardDelivery(deliveryId: String): Boolean = steering.recover(deliveryId, retry = false)
+
+  private suspend fun requestStop(sessionId: String): ChatStopSettlement = try {
+    chat.stopTurn(sessionId)
+  } catch (cancelled: CancellationException) {
+    throw cancelled
+  } catch (_: Exception) {
+    ChatStopSettlement.CollectorCancellationRequired
   }
 
   internal suspend fun persist(): Boolean = save()
@@ -475,7 +437,8 @@ internal class NewTaskChat(
     withContext(scope.coroutineContext.minusKey(Job)) { acceptPendingMessage() }
     var opened = false
     var seenEvent = false
-    val preamble = pendingReplay?.takeIf { !started }?.let { newTaskReplayPreamble(it, repositoryRoot, baseBranch) }
+    val preamble = pendingReplay?.takeIf { !started && agent.agentId != "opencode" }
+      ?.let { newTaskReplayPreamble(it, repositoryRoot, baseBranch) }
     val prompt = if (preamble == null) text else "$preamble\n\n$text"
     try {
       chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, prompt, images, cursorMcpDependency)).collect { event ->
@@ -491,6 +454,7 @@ internal class NewTaskChat(
           pendingReplay = null
         }
         if (event is ChatEvent.ToolUse) changesTracker.recordTool(event.call)
+        if (event is ChatEvent.ToolResult) changesTracker.refresh()
         thread.show(agent, event)
         if (opening && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
       }
@@ -523,6 +487,7 @@ internal class NewTaskChat(
       thread.busyState.value = true
       thread.stoppableState.value = true
     }
+    if (event is ChatEvent.ToolResult) changesTracker.refresh()
     if (event is ChatEvent.ToolUse) changesTracker.recordTool(event.call)
     thread.show(thread.agentState.value, event)
     if (event !is ChatEvent.Completed && event !is ChatEvent.Failed) return

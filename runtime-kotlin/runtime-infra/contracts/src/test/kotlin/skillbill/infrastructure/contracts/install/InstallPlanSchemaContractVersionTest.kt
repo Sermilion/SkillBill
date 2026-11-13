@@ -49,6 +49,7 @@ class InstallPlanSchemaContractVersionTest {
       "Schema `\$defs.agentId.enum` must list exactly the SupportedAgent ids, in the same order.",
     )
     assertContains(agentIds, "cursor")
+    assertContains(agentIds, "opencode")
   }
 
   @Test

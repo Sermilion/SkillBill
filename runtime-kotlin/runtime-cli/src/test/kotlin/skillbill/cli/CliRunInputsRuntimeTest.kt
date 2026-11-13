@@ -243,6 +243,8 @@ class CliRunInputsRuntimeTest {
 }
 
 private class StubHostPlatformPort(override val osName: String) : HostPlatformPort {
+  override fun resolveUserName(): String? = "test-user"
+
   override fun resolveUserHome(): Path = Path.of("/tmp")
 
   override fun resolveEnvironment(): Map<String, String> = emptyMap()

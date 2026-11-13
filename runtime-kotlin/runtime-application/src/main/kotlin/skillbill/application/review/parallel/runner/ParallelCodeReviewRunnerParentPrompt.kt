@@ -34,7 +34,7 @@ internal object ParallelCodeReviewRunnerParentPrompt {
     agentId: String,
   ): String =
     buildString {
-      append(modeFraming())
+      append(modeFraming(agentId))
       appendCursorDelegatedFanOut(selected, agentId)
       appendLine("Detected stack: ${routedManifests.joinToString("+") { it.slug }.ifBlank { "generic" }}")
       val rubricLabel =
@@ -59,7 +59,7 @@ internal object ParallelCodeReviewRunnerParentPrompt {
           "'Owned paths'. The evidence_locator store_path and payload_file identify a hunk inside " +
           "the broker's own store; they are not read_evidence arguments and passing one is refused.",
       )
-      appendLine(PARALLEL_REVIEW_DELEGATED_DEPTH_DIRECTIVE)
+      if (agentId != "opencode") appendLine(PARALLEL_REVIEW_DELEGATED_DEPTH_DIRECTIVE)
       appendLine(
         "Return free-form review prose and end with an explicit verdict line: " +
           "`verdict: approved` or `verdict: changes_requested` (needs_fix is accepted as changes_requested). " +
@@ -101,6 +101,9 @@ internal object ParallelCodeReviewRunnerParentPrompt {
           "or the exact line NO_FINDINGS when empty.",
       )
       appendLine("End with exactly one canonical verdict line: verdict: approved or verdict: changes_requested.")
+      if (agentId == "opencode") {
+        appendLine("Execute this assigned specialist review directly. Do not launch another worker.")
+      }
       appendCursorDelegatedFanOut(selected, agentId)
       appendLine("Detected stack: ${routedManifests.joinToString("+") { it.slug }.ifBlank { "generic" }}")
       appendLine(
@@ -125,7 +128,7 @@ internal object ParallelCodeReviewRunnerParentPrompt {
           "'Owned paths'. The evidence_locator store_path and payload_file identify a hunk inside " +
           "the broker's own store; they are not read_evidence arguments and passing one is refused.",
       )
-      appendLine(PARALLEL_REVIEW_DELEGATED_DEPTH_DIRECTIVE)
+      if (agentId != "opencode") appendLine(PARALLEL_REVIEW_DELEGATED_DEPTH_DIRECTIVE)
       appendReviewLearnings(selected)
       selected.forEach { launch ->
         appendLine()
@@ -174,15 +177,21 @@ internal object ParallelCodeReviewRunnerParentPrompt {
     nativeLanes.forEach { logicalName -> appendLine("/$logicalName") }
   }
 
-  private fun modeFraming(): String =
+  private fun modeFraming(agentId: String): String =
     buildString {
-      appendLine("Run a sona phase review in delegated mode via the routed specialist fan-out.")
-      appendLine("Resolved execution mode: delegated")
-      appendLine(
-        "Depth: full. Launch one specialist worker per resolved rubric below. Pass each specialist's " +
-          "raw return through unchanged — do not require a register shape from them. You alone author " +
-          "the final review prose and verdict from whatever they returned.",
-      )
+      if (agentId == "opencode") {
+        appendLine("Run the assigned specialist review directly. Do not launch or delegate to another worker.")
+        appendLine("Resolved execution mode: delegated")
+        appendLine("Apply your assigned rubric and return your own report and verdict.")
+      } else {
+        appendLine("Run a sona phase review in delegated mode via the routed specialist fan-out.")
+        appendLine("Resolved execution mode: delegated")
+        appendLine(
+          "Depth: full. Launch one specialist worker per resolved rubric below. Pass each specialist's " +
+            "raw return through unchanged — do not require a register shape from them. You alone author " +
+            "the final review prose and verdict from whatever they returned.",
+        )
+      }
     }
 
   private fun StringBuilder.appendAssignedBundleEvidence(launch: ReviewSpecialistLaunchRequest) {

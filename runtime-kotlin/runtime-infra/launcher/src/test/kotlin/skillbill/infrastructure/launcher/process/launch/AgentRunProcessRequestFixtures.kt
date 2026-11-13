@@ -40,6 +40,7 @@ internal class TestAgentRunProcessRequestBuilder {
   var idlePolicy: AgentRunIdlePolicy = AgentRunIdlePolicy.DB_PROGRESS_ONLY
   var environment: Map<String, String> = emptyMap()
   var inheritEnvironment: Boolean = true
+  var explicitEnvironment: Boolean = false
   var environmentPassthroughKeys: Set<String> = emptySet()
   var conversationIsolation: ReviewConversationIsolation? = null
   var reviewEvidenceBroker: ReviewEvidenceBroker? = null
@@ -82,6 +83,7 @@ internal class TestAgentRunProcessRequestBuilder {
         AgentRunProcessEnvironmentFields(
           environment = environment,
           inheritEnvironment = inheritEnvironment,
+          explicitEnvironment = explicitEnvironment,
           environmentPassthroughKeys = environmentPassthroughKeys,
         ),
       review =

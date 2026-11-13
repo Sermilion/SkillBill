@@ -539,6 +539,29 @@ class JvmAgentRunProcessRunnerTest {
   }
 
   @Test
+  fun `explicit launch environment strips every inherited value and keeps only owned settings`() {
+    val builder = ProcessBuilder("echo", "test")
+    builder.environment().clear()
+    builder.environment()["HOME"] = "/home/operator"
+    builder.environment()["OPENCODE_DB"] = "/home/operator/.local/share/opencode/opencode.db"
+    builder.environment()["NODE_OPTIONS"] = "--require=/tmp/injected.js"
+    builder.environment()["PATH"] = "/ambient/bin"
+
+    configureLaunchEnvironment(
+      builder,
+      testAgentRunProcessRequest(listOf("echo"), Path.of(".")) {
+        environment = mapOf("HOME" to "/private/home", "PATH" to "/trusted/bin")
+        inheritEnvironment = false
+        explicitEnvironment = true
+        environmentPassthroughKeys = setOf("OPENCODE_DB")
+      },
+      testGateJvmResolver(),
+    )
+
+    assertEquals(mapOf("HOME" to "/private/home", "PATH" to "/trusted/bin"), builder.environment())
+  }
+
+  @Test
   fun `an inherited JAVA_HOME inside the runtime image never reaches the child environment`() {
     val leaked = Path.of(System.getProperty("java.home")).resolve("lib").toString()
     val builder = ProcessBuilder("echo", "test")
