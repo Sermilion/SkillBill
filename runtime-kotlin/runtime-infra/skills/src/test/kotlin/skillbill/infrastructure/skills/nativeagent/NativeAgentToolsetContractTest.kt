@@ -65,43 +65,6 @@ class NativeAgentToolsetContractTest {
   }
 
   @Test
-  fun `Devin render maps neutral tools and keeps exact MCP names while rejecting unmappable restrictions`() {
-    val evidenceTools =
-      listOf(
-        "mcp__skill-bill-review-evidence__read_evidence",
-        "mcp__skill-bill-review-evidence__request_expansion",
-      )
-    val agent =
-      NativeAgentSource(
-        name = "fixture-reviewer",
-        description = "Fixture reviewer.",
-        body = "# Worker\n\nReview it.",
-        tools = listOf("Read", "Grep", "Glob", "Bash") + evidenceTools,
-      )
-
-    val rendered = NativeAgentProvider.Devin.render(agent)
-    val expectedTools = listOf("read", "grep", "glob", "exec") + evidenceTools
-    assertTrue(
-      rendered.contains("allowed-tools:\n" + expectedTools.joinToString("") { tool -> "  - $tool\n" }),
-      "Devin render must emit the mapped allowlist: $rendered",
-    )
-    assertTrue(rendered.endsWith("# Worker\n\nReview it.\n"))
-    assertEquals("fixture-reviewer.md", NativeAgentProvider.Devin.fileName(agent.name))
-    assertFalse(
-      NativeAgentProvider.Devin.render(agent.copy(tools = emptyList())).contains("allowed-tools"),
-      "An omitted toolset must keep the host default",
-    )
-
-    val rejected =
-      listOf("Write", "mcp__skill-bill-review-evidence__*").map { tool ->
-        assertFailsWith<SkillBillRuntimeException> {
-          NativeAgentProvider.Devin.render(agent.copy(tools = listOf(tool)))
-        }
-      }
-    assertTrue(rejected.all { error -> error.code == InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA })
-  }
-
-  @Test
   fun `an empty or repeated toolset fails loudly rather than silently widening access`() {
     val errors =
       listOf(

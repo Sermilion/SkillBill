@@ -1,3 +1,13 @@
+## [2026-11-13] Preserve historical entries during retired-agent cleanup
+Context: SONA-19 requires every tracked record to omit the retired fourth agent's name, and the operator authorized historical cleanup.
+Decision: Reword references in place while preserving entries, dates, issue keys and order. Change heading text only through the four substitutions authorized by the cleanup subtask.
+Reason: Historical facts and surviving provider decisions must remain available while tracked records obey the removal requirement. Search exclusions would leave that requirement unmet.
+
+## [2026-11-13] Leave retired-agent installations untouched
+Context: SONA-19 removes the retired fourth agent's installer and uninstaller integration.
+Decision: Drop its cleanup steps and leave existing skill links, subagent links and MCP registrations on older installations.
+Reason: The operator explicitly accepted leftover files on old installs. Removing support does not require a destructive cleanup pass.
+
 ## [2026-11-07] Default all provider launches to native permission bypass
 Context: The operator explicitly restored the previous global bypass behavior after testing SKILL-453, and requested it as the default for every agent and launch surface.
 Decision: Claude skips permission checks; Codex requests never approvals and full access on thread start, resume and turns; Cursor uses force, trust, MCP approval and a disabled sandbox; the retired fourth agent's ACP transport enables Brave mode before prompting. Its existing headless review execution remains autonomous.

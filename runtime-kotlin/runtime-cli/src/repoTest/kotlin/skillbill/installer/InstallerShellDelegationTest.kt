@@ -45,10 +45,6 @@ class InstallerShellDelegationTest {
           "cursor",
           "--agent-target",
           "cursor=${run.home.resolve("agent-targets/cursor")}",
-          "--agent",
-          "devin",
-          "--agent-target",
-          "devin=${run.home.resolve("agent-targets/devin")}",
         ),
       run.applyArgs,
     )

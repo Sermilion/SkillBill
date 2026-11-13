@@ -30,6 +30,17 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CursorAcpSessionTest {
+  private val exactProvider =
+    AcpProvider(
+      "fixture",
+      "Fixture",
+      listOf("acp"),
+      null,
+      false,
+      exactModels = true,
+      loginCommand = "fixture auth login",
+    )
+
   private val runtimeMcp =
     AcpStdioMcpServer(
       "skill-bill",
@@ -42,7 +53,7 @@ class CursorAcpSessionTest {
   fun `session new and load repeat the complete MCP list and additional roots in ACP shape`() {
     listOf(null, "saved-1").forEach { saved ->
       val harness =
-        Harness(saved = saved, provider = AcpProvider.Devin, mcpServers = listOf(runtimeMcp), roots = listOf("/state"))
+        Harness(saved = saved, provider = exactProvider, mcpServers = listOf(runtimeMcp), roots = listOf("/state"))
       harness.session.start()
       harness.respond(
         """{"protocolVersion":1,"agentCapabilities":{"loadSession":true,""" +
@@ -64,7 +75,7 @@ class CursorAcpSessionTest {
 
   @Test
   fun `required roots without the advertised capability stop setup before any session or prompt`() {
-    val harness = Harness(provider = AcpProvider.Devin, mcpServers = listOf(runtimeMcp), roots = listOf("/state"))
+    val harness = Harness(provider = exactProvider, mcpServers = listOf(runtimeMcp), roots = listOf("/state"))
     harness.session.start()
     harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
 
@@ -73,22 +84,22 @@ class CursorAcpSessionTest {
   }
 
   @Test
-  fun `devin selects only the exact advertised model and never aliases a variant`() {
-    val exact = Harness(model = "swe-2-high", provider = AcpProvider.Devin)
+  fun `exact provider selects only the exact advertised model and never aliases a variant`() {
+    val exact = Harness(model = "swe-2-high", provider = exactProvider)
     exact.session.start()
     exact.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
     exact.respond("""{"sessionId":"s","models":{"currentModelId":"swe-2","availableModels":[{"modelId":"swe-2"}]}}""")
     assertContains(requireNotNull(exact.session.outcome()?.failure), "swe-2-high")
     assertTrue(exact.frames.none { it.text(CursorAcpKeys.METHOD) == "session/prompt" })
 
-    val unconfirmed = Harness(model = "swe-2-high", provider = AcpProvider.Devin)
+    val unconfirmed = Harness(model = "swe-2-high", provider = exactProvider)
     unconfirmed.session.start()
     unconfirmed.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
     unconfirmed.respond("""{"sessionId":"s"}""")
     assertContains(requireNotNull(unconfirmed.session.outcome()?.failure), "swe-2-high")
     assertTrue(unconfirmed.frames.none { it.text(CursorAcpKeys.METHOD) == "session/prompt" })
 
-    val absent = Harness(model = "swe-2-high", provider = AcpProvider.Devin, modelOnCommandLine = true)
+    val absent = Harness(model = "swe-2-high", provider = exactProvider, modelOnCommandLine = true)
     absent.session.start()
     absent.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
     absent.respond("""{"sessionId":"s"}""")
@@ -99,8 +110,8 @@ class CursorAcpSessionTest {
   }
 
   @Test
-  fun `devin legacy set model acknowledgement without an echoed model reports no identity`() {
-    val harness = legacyDevin()
+  fun `exact provider legacy set model acknowledgement without an echoed model reports no identity`() {
+    val harness = legacyExactProvider()
     val selection = harness.frames.last()
     assertEquals("session/set_model", selection.text(CursorAcpKeys.METHOD))
     assertEquals("swe-2-high", selection.obj(CursorAcpKeys.PARAMS)?.text(CursorAcpKeys.MODEL_ID))
@@ -113,8 +124,8 @@ class CursorAcpSessionTest {
   }
 
   @Test
-  fun `devin legacy set model reports the model the provider echoes back`() {
-    val harness = legacyDevin()
+  fun `exact provider legacy set model reports the model the provider echoes back`() {
+    val harness = legacyExactProvider()
     harness.respond("""{"modelId":"swe-2-high"}""")
     assertTrue(harness.session.ready)
     harness.respond("""{"stopReason":"end_turn"}""")
@@ -123,8 +134,8 @@ class CursorAcpSessionTest {
   }
 
   @Test
-  fun `devin reports the model a later config option update names`() {
-    val harness = legacyDevin()
+  fun `exact provider reports the model a later config option update names`() {
+    val harness = legacyExactProvider()
     harness.respond("""{"modelId":"swe-2-high"}""")
     harness.session.observe(
       """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s",""" +
@@ -154,8 +165,8 @@ class CursorAcpSessionTest {
     assertEquals("gpt-5", harness.session.outcome()?.model)
   }
 
-  private fun legacyDevin(): Harness {
-    val harness = Harness(model = "swe-2-high", provider = AcpProvider.Devin)
+  private fun legacyExactProvider(): Harness {
+    val harness = Harness(model = "swe-2-high", provider = exactProvider)
     harness.session.start()
     harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
     harness.respond(
@@ -167,7 +178,7 @@ class CursorAcpSessionTest {
 
   @Test
   fun `an unparseable session path is refused before any session or prompt`() {
-    val harness = Harness(provider = AcpProvider.Devin, roots = listOf("/state\u0000bad"))
+    val harness = Harness(provider = exactProvider, roots = listOf("/state\u0000bad"))
     harness.session.start()
     harness.respond(
       """{"protocolVersion":1,"agentCapabilities":{"sessionCapabilities":{"additionalDirectories":{}}}}""",
@@ -178,13 +189,13 @@ class CursorAcpSessionTest {
   }
 
   @Test
-  fun `devin auth required names the CLI login recovery and sends no prompt`() {
-    val harness = Harness(provider = AcpProvider.Devin)
+  fun `exact provider auth required names the CLI login recovery and sends no prompt`() {
+    val harness = Harness(provider = exactProvider)
     harness.session.start()
     harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
     harness.reject(-32000)
 
-    assertContains(requireNotNull(harness.session.outcome()?.failure), "devin auth login")
+    assertContains(requireNotNull(harness.session.outcome()?.failure), "fixture auth login")
     assertFalse(harness.session.ready)
   }
 

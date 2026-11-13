@@ -86,7 +86,7 @@ class DatabaseMigrationsTest {
     val previousProvider = charArrayOf('j', 'u', 'n', 'i', 'e').concatToString()
     val originalAgents =
       mapOf(
-        "supported" to "devin",
+        "supported" to "codex",
         "missing" to null,
         "previous" to previousProvider,
         "synthetic" to "retired-agent",

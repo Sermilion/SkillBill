@@ -310,7 +310,7 @@ class PlanActionsTest {
     assertEquals("Agent: Codex", runActionsView(current).agent?.label)
     assertTrue(controls.onAction(ControlsAction.Launch))
     runCurrent()
-    assertEquals(listOf("codex"), requestedAgents)
+    assertEquals(listOf<String?>("codex"), requestedAgents)
   }
 
   @Test
@@ -333,7 +333,7 @@ class PlanActionsTest {
     assertEquals("claude", runActionsView(finished).implementationAgentId)
     assertTrue(controls.onAction(ControlsAction.ImplementPlan))
     runCurrent()
-    assertEquals(listOf("claude"), agents)
+    assertEquals(listOf<String?>("claude"), agents)
   }
 
   @Test

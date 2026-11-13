@@ -1,3 +1,15 @@
+## [2026-11-13] SONA-19 unavailable-agent compatibility
+Areas: core/domain, core/data/chat, core/designsystem, feature/chat, feature/detail, feature/specs, app/usage, build-logic
+- MEDIUM feature retains saved chats with unsupported non-null agent ids as unavailable, preserving transcript, model, effort, profile, summary and session data. Ordinary saves persist the sentinel; normalization diagnostics omit raw ids and chat content.
+- reusable: agentDisplayName and neutral avatar presentation cover chips, transcripts, resume lists, run details, specs and usage. Claude, Codex and Cursor are the only registered chat transports and supported choices.
+- Restored execution and New Task chats keep their saved lines and show one pick-an-agent notice. Support checks gate Send, Send now, admission and queue drain until the operator chooses a supported agent.
+- Removed retired transport and discovery paths, including Devin in final repairs. Legacy exchanges arrays are ignored on read and omitted by the next atomic save; remaining chat data stays intact.
+- reusable: compactLauncherClasspath moves the Linux packaged launcher's ordered dependencies into launcher-classpath.jar's manifest while preserving main class, JVM options and bundled jars.
+- Accepted QA repair gives both expected agent lists in PlanActionsTest an explicit nullable element type, matching the captured lists.
+- Limits: no startup bulk rewrite or retired-provider file cleanup. Validation changed code after QA settled, so QA does not cover the final tree. Native Debian/RPM packaging tools and macOS/Windows hosts were unavailable.
+Feature flag: N/A
+Acceptance criteria: 5/5 parent criteria implemented across the affected boundaries
+
 ## [2026-11-11] SKILL-538 rename desktop app to Sona
 Areas: desktop/app copy, tray and packaging; desktop/core/data and designsystem; desktop/feature/chat, config, settings, specs and tray; desktop/build-logic; docs/assets; root installer/uninstaller; scripts smoke and USB display; runtime-cli installer fixtures
 - MEDIUM feature. Desktop windows, menus, tray labels, settings, chat guidance, data messages and readable build diagnostics now call the app Sona.

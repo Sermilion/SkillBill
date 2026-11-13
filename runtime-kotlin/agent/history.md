@@ -1,3 +1,14 @@
+## [2026-11-13] SONA-19 saved-data compatibility and agent removal
+Areas: runtime-domain, runtime-contracts, runtime-ports, runtime-application, runtime-cli, runtime-goalrunner, runtime-infra/sqlite, launcher and skills, orchestration/contracts
+- MEDIUM feature narrows agent vocabulary, launch adapters, install and uninstall targets, MCP registration, native-agent rendering and schemas to Claude, Codex and Cursor. Final repairs remove Devin alongside the retired fourth agent.
+- Migrations 127 and 128 normalize unsupported non-null standalone launch ids to unavailable. Migration 128 covers populated stores that already applied 127 before vocabulary narrowing; DesktopReadSchema advances to 128.
+- reusable: GoalQualityRetainedMatrix preserves textual matrix keys for persistence and fingerprints while execution uses a supported-only projection. Projection mismatches fail integrity checks; current and historical reads emit bounded normalization diagnostics.
+- Native-agent inventories prune unsupported textual providers before schema validation. Malformed providers still fail; reads preserve inventory bytes and linked files until an ordinary inventory write.
+- Compatibility preserves run identity, completed work, commits, history, migration records and original quality proof. Strict agent parsers and user execution_matrix configuration validation remain strict.
+- Limits: operation launch context, diagnostics, telemetry and other evidence retain original ids. The unavailable sentinel never becomes a supported execution agent; existing retired-provider files remain on disk.
+Feature flag: N/A
+Acceptance criteria: 5/5 parent criteria implemented across the affected boundaries
+
 ## [2026-11-12] SONA-8 isolate planning worktrees
 Areas: runtime-cli, runtime-application, runtime-core, runtime-engine, runtime-goalrunner, runtime-domain, runtime-ports, runtime-infra/sqlite, runtime-infra/workflow, runtime-contracts
 - MEDIUM feature. Goal and standalone planning reserve a uniquely owned checkout before agent launch. Goal planning, resume, replan and later execution keep the selected workflow and owned execution root without changing caller edits.

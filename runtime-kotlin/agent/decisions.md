@@ -1,3 +1,20 @@
+## [2026-11-13] Retain quality fingerprint inputs separately from executable agents
+Context: Saved quality fingerprints cover canonical matrices whose agent ids may outlive runtime support.
+Decision: Retain original textual matrix keys for persistence and fingerprint checks, derive a supported-only execution projection, and reject disagreement between the projection and retained inputs.
+Reason: Dropping keys before verification or later writes would alter governing proof. Equal executable projections do not establish equal original inputs, and compatibility does not authorize unsupported-agent dispatch.
+Alternatives considered: Decoder-only filtering loses original inputs and cannot preserve historical admission proof.
+
+## [2026-11-13] Append launch normalization after vocabulary narrowing
+Context: A populated version-127 store may already have applied migration 127 while the wider agent vocabulary was supported.
+Decision: Append migration 128 using the existing normalization operation and advance desktop read readiness to 128. Preserve earlier migrations; normalize only unsupported non-null standalone launch ids.
+Reason: The ledger skips completed migrations, so vocabulary narrowing cannot rerun 127. A new transactional entry handles already-upgraded stores before projection while preserving identity, completed work and evidence. Operation launch context retains its original value because card identity depends on it.
+Alternatives considered: Editing 127 alone misses already-upgraded stores. Resetting stores or rewriting quality proof loses persisted work or evidence.
+
+## [2026-11-13] Prune unsupported inventory providers before schema validation
+Context: Saved native-agent inventories can contain textual provider ids outside the current supported set.
+Decision: Prune only those parsed entries before schema validation. Reject missing or non-text providers, preserve files during reads, and persist the pruned list through the next ordinary inventory write.
+Reason: Validation first would reject upgraded inventories before compatibility handling. Deleting links during decode would turn a saved-data read into destructive reconciliation, contrary to the accepted leftover-file policy.
+
 ## [2026-11-12] Reserve planning ownership before creating a Git worktree
 Context: SQLite and Git cannot share an atomic transaction, and a launch can stop between recording ownership and creating its checkout.
 Decision: Persist the reservation, selected workflow, intended path and initial revision before Git creation. Reconcile interruptions against recorded ownership and Git identity; transfer ownership and the execution path to goal control in one conditional SQLite transaction.

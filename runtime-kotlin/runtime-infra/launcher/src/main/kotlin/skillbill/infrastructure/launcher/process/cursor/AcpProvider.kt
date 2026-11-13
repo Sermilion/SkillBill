@@ -25,16 +25,5 @@ data class AcpProvider(
         CursorAcpKeys.CURSOR_LOGIN,
         lacksTeamDashboardMcp = true,
       )
-
-    val Devin =
-      AcpProvider(
-        SupportedAgent.DEVIN.wireValue,
-        "Devin",
-        listOf("acp"),
-        authMethodId = null,
-        lacksTeamDashboardMcp = false,
-        exactModels = true,
-        loginCommand = "devin auth login",
-      )
   }
 }

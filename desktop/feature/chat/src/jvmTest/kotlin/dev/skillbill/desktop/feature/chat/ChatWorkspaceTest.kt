@@ -1051,7 +1051,7 @@ class ChatWorkspaceTest {
 
   @Test
   fun `chat turns use Act and fresh provider sessions retain execution context across follow-ups`() = runTest {
-    val agents = setOf("claude", "codex", "cursor", "devin")
+    val agents = setOf("claude", "codex", "cursor")
     for (agent in agents) {
       for (lifecycle in Lifecycle.entries) {
         val item = workItem("SKILL-1", lifecycle = lifecycle).copy(running = lifecycle == Lifecycle.Active, agentId = agent)
@@ -1071,12 +1071,7 @@ class ChatWorkspaceTest {
         }
         val followUp = repository.requests.last()
         assertFalse(followUp.firstTurn, "$agent / $lifecycle")
-        if (agent == "devin") {
-          assertTrue(followUp.prompt.startsWith("Execution context:"), followUp.prompt)
-          assertTrue(followUp.prompt.contains("execution.lifecycle: ${lifecycle.name}"), followUp.prompt)
-        } else {
-          assertTrue(followUp.prompt.startsWith("No execution changes since your last turn."), followUp.prompt)
-        }
+        assertTrue(followUp.prompt.startsWith("No execution changes since your last turn."), followUp.prompt)
         assertTrue(controls.calls.isEmpty())
         workspace.close(item.id)
         runCurrent()

@@ -36,13 +36,12 @@ class SkillBillUninstallService(
     val codexTargets =
       installAgentService.codexRoots(home, request.environment)
         .map { root -> root.resolve("skills") }
-    val devinTargets = listOf(installAgentService.agentPath(SupportedAgent.DEVIN.wireValue, home, request.environment))
     val agentTargets =
       listOf(
         home.resolve(".copilot/skills"),
         home.resolve(".agents/skills"),
         home.resolve(".cursor/skills"),
-      ) + claudeTargets + codexTargets + devinTargets
+      ) + claudeTargets + codexTargets
     val stateRuntimeRoot = stateRoot.resolve("runtime")
     val binDir = request.environment["SKILL_BILL_BIN_DIR"]?.let(Path::of) ?: home.resolve(".local/bin")
     return UninstallPlan(

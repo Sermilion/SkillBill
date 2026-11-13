@@ -7,9 +7,9 @@ import kotlin.test.assertTrue
 
 class ModelDirectiveCapabilityTest {
   @Test
-  fun `cursor and devin join claude and codex as model-directive capable agents`() {
+  fun `cursor joins claude and codex as model-directive capable agents`() {
     assertEquals(
-      setOf(SupportedAgent.CLAUDE, SupportedAgent.CODEX, SupportedAgent.CURSOR, SupportedAgent.DEVIN),
+      setOf(SupportedAgent.CLAUDE, SupportedAgent.CODEX, SupportedAgent.CURSOR),
       MODEL_DIRECTIVE_CAPABLE_AGENTS,
     )
   }

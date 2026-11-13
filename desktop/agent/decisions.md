@@ -1,3 +1,19 @@
+## [2026-11-13] Preserve saved chats when their agent becomes unavailable
+Context: A saved chat can outlive its agent's support. Dropping its ChatAgent would hide it from history, while automatically selecting another agent would change who handles the conversation.
+Decision: Normalize unsupported non-null stored agent ids to unavailable during decode, retain other chat data, and persist the sentinel on the next ordinary save. Restore the transcript with one pick-an-agent notice and gate sending until the operator chooses a supported agent.
+Reason: The operator must retain the conversation and its metadata and choose the replacement agent. Read-time normalization avoids a startup bulk rewrite and follows the runtime's supported vocabulary.
+
+## [2026-11-13] Ignore legacy replay arrays during compatible chat reads
+Context: Earlier chat files contain exchanges arrays alongside transcripts and session metadata, but the removed transports no longer consume those arrays.
+Decision: Stop decoding and encoding exchanges. Let the next ordinary atomic save omit the array while preserving all remaining chat fields.
+Reason: Named-field decoding already accepts these files. A separate migration or deletion pass adds no required conversion and risks changing unrelated saved data.
+
+## [2026-11-13] Keep the Linux packaged launcher classpath in a manifest jar
+Context: Validation observed a native launcher crash before JVM startup. The environment-pointer failure matched the JDK partial pipe-read defect on a host with an 8192-byte pipe capacity.
+Decision: After Linux createDistributable, replace launcher classpath entries with one manifest jar that retains dependency order. Preserve the main class, JVM options and bundled jars.
+Reason: The manifest shortens the native launcher classpath while Java resolves dependencies in their original order. Clearing inherited LD_LIBRARY_PATH did not resolve the crash.
+Revisit when: The bundled JDK launcher handles long classpaths without the partial pipe-read defect.
+
 ## [2026-11-12] Let normal desktop launches choose the Skiko renderer
 Context: The Changes panel was slow even for small diffs. DesktopLauncher forced CPU rendering on Linux when no renderer override was supplied.
 Decision: Leave renderer selection to Skiko during normal launches and keep compose.interop.blending enabled for terminal overlays. Keep the explicit SOFTWARE_COMPAT renderer in runFromSource for the recorded source-run X11 visual crash.
@@ -342,6 +358,7 @@ Reason: 5s is longer than SIGTERM plus force-kill. A stuck job must not block ch
 Context: The retired fourth agent's chat transport saved exchanges only on Completed, so a cancelled turn vanished from the next prompt.
 Decision: onCompletion saves history plus the prompt and trimmed reply when the cause is CancellationException, the reply is not blank, and scope is not NewTask.
 Reason: The next execution turn reads store.exchanges. New-task chats for the retired fourth agent build history from saved draft lines, which subtask 3 keeps current, so this path must not write them.
+Superseded by: Ignore legacy replay arrays during compatible chat reads (2026-11-13)
 
 ## [2026-11-03] Scope and resolve favorites by database file identity
 Context: Run IDs can occur in different databases, files can be replaced at the same path, and saved runs can fall outside the Day board window.

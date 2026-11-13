@@ -46,22 +46,12 @@ enum class SupportedAgent(
     honorsAdditionalWritableDirectories = false,
     loadsRuntimeMcpHeadless = false,
   ),
-  DEVIN(
-    "devin",
-    "devin-agents",
-    "md",
-    null,
-    ".config/devin/mcp_config.json",
-    false,
-    honorsAdditionalWritableDirectories = true,
-    loadsRuntimeMcpHeadless = true,
-  ),
   ;
 
   val id: String get() = wireValue
 
   companion object {
-    val supportedEntries: List<SupportedAgent> = entries.filterNot { it == DEVIN }
+    val supportedEntries: List<SupportedAgent> = entries
     val supportedIds: List<String> = supportedEntries.map(SupportedAgent::wireValue)
 
     fun fromWireOrNull(id: String): SupportedAgent? {

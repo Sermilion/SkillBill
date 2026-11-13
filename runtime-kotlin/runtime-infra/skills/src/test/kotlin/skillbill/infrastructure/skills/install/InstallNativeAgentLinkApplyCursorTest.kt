@@ -63,7 +63,6 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
     Files.createDirectories(fixture.home.resolve(".claude"))
     Files.createDirectories(fixture.home.resolve(".codex"))
     Files.createDirectories(fixture.home.resolve(".cursor"))
-    Files.createDirectories(fixture.home.resolve(".config/devin"))
     val result =
       applyInstallForTest(
         planInstallForTest(

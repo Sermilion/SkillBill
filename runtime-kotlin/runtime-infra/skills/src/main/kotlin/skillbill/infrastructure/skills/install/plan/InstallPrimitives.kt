@@ -1,15 +1,12 @@
 package skillbill.infrastructure.skills.install.plan
 
 import skillbill.error.shellcontent.invalidInternalSkillClassification
-import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.jvm.rollbackDeleteIfExists
 import skillbill.infrastructure.skills.install.staging.StagedSymlinkTargetInput
 import skillbill.infrastructure.skills.install.staging.resolveStagedSymlinkTarget
 import skillbill.infrastructure.skills.nativeagent.support.agentPathExists
 import skillbill.infrastructure.skills.nativeagent.support.agentPathsHavePresence
 import skillbill.infrastructure.skills.nativeagent.support.codexAgentIsPresent
-import skillbill.infrastructure.skills.nativeagent.support.devinConfigRoot
-import skillbill.infrastructure.skills.nativeagent.support.devinSkillsDirectory
 import skillbill.infrastructure.skills.scaffold.authoring.parseInternalForFrontmatter
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.install.model.AgentTarget
@@ -18,7 +15,6 @@ import skillbill.install.model.InstallTransaction
 import skillbill.install.model.SupportedAgent
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
-import skillbill.ports.system.HostPlatformPort
 import skillbill.scaffold.model.PlatformManifest
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -35,23 +31,19 @@ internal val SUPPORTED_AGENTS: List<SupportedAgent> = SupportedAgent.entries
 internal val CODEX_AGENTS_KIND: String = SupportedAgent.CODEX.nativeAgentsKind
 internal val CLAUDE_AGENTS_KIND: String = SupportedAgent.CLAUDE.nativeAgentsKind
 internal val CURSOR_AGENTS_KIND: String = SupportedAgent.CURSOR.nativeAgentsKind
-internal val DEVIN_AGENTS_KIND: String = SupportedAgent.DEVIN.nativeAgentsKind
 
 internal data class InstallConfigRoots(
   val claude: Path,
   val codex: Path,
-  val devin: Path,
 )
 
 internal fun installConfigRoots(
   home: Path,
   environment: Map<String, String>,
-  hostPlatform: HostPlatformPort = JdkHostPlatformPort,
 ): InstallConfigRoots =
   InstallConfigRoots(
     claude = claudeConfigRoot(home, environment),
     codex = codexConfigRoot(home, environment),
-    devin = devinConfigRoot(home, environment, hostPlatform),
   )
 
 internal fun agentPaths(
@@ -62,7 +54,6 @@ internal fun agentPaths(
     SupportedAgent.CLAUDE to configRoots.claude.resolve("skills"),
     SupportedAgent.CURSOR to home.resolve(SupportedAgent.CURSOR.simpleHomeDirectory!!).resolve("skills"),
     SupportedAgent.CODEX to configRoots.codex.resolve("skills"),
-    SupportedAgent.DEVIN to devinSkillsDirectory(configRoots.devin),
   )
 
 internal fun codexAgentsPath(
@@ -73,7 +64,6 @@ internal fun codexAgentsPath(
 internal fun detectAgents(
   home: Path,
   environment: Map<String, String>,
-  hostPlatform: HostPlatformPort = JdkHostPlatformPort,
 ): List<AgentTarget> {
   return SUPPORTED_AGENTS.flatMap { agent ->
     when (agent) {
@@ -98,15 +88,6 @@ internal fun detectAgents(
       SupportedAgent.CURSOR -> {
         val root = home.resolve(requireNotNull(agent.simpleHomeDirectory))
         val installPath = root.resolve("skills")
-        if (!anyAgentPathExists(listOf(installPath, root), "inspect ${agent.wireValue} installation")) {
-          emptyList()
-        } else {
-          listOf(AgentTarget(agent.wireValue, installPath.toFileLocation()))
-        }
-      }
-      SupportedAgent.DEVIN -> {
-        val root = devinConfigRoot(home, environment, hostPlatform)
-        val installPath = devinSkillsDirectory(root)
         if (!anyAgentPathExists(listOf(installPath, root), "inspect ${agent.wireValue} installation")) {
           emptyList()
         } else {

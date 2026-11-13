@@ -1,20 +1,16 @@
 package skillbill.infrastructure.skills.install.mcp
 
 import skillbill.error.core.catchingNonCancellation
-import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.install.plan.codexConfigRoots
 import skillbill.infrastructure.skills.nativeagent.support.claudeConfigRoots
-import skillbill.infrastructure.skills.nativeagent.support.devinConfigRoot
-import skillbill.infrastructure.skills.nativeagent.support.devinMcpConfigPath
 import skillbill.install.model.McpMutationResult
 import skillbill.install.model.McpProfileOutcome
 import skillbill.install.model.McpRegistrationOutcome
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
 import skillbill.ports.repository.toFileLocation
-import skillbill.ports.system.HostPlatformPort
 import java.io.InterruptedIOException
 import java.nio.channels.ClosedByInterruptException
 import java.nio.file.Path
@@ -38,7 +34,6 @@ object McpRegistrationOperations {
     runtimeMcpBin: Path,
     home: Path?,
     profileEnvironment: InstallMcpProfileEnvironment,
-    hostPlatform: HostPlatformPort = JdkHostPlatformPort,
   ): McpRegistrationOutcome {
     val resolvedHome = home ?: resolveUserHome(null)
     val command = runtimeMcpBin.toAbsolutePath().normalize().toString()
@@ -55,15 +50,6 @@ object McpRegistrationOperations {
         McpRegistrationOutcome.Applied(
           McpJsonConfig.register(agent, configPathFor(installAgent, resolvedHome), command),
         )
-      SupportedAgent.DEVIN ->
-        McpRegistrationOutcome.Applied(
-          McpJsonConfig.register(
-            agent,
-            configPathFor(installAgent, resolvedHome, profileEnvironment.asEnvironmentMap(), hostPlatform),
-            command,
-            McpJsonEntryShape.PLAIN_STDIO,
-          ),
-        )
     }
   }
 
@@ -77,7 +63,6 @@ object McpRegistrationOperations {
     agent: String,
     home: Path?,
     profileEnvironment: InstallMcpProfileEnvironment,
-    hostPlatform: HostPlatformPort = JdkHostPlatformPort,
   ): McpRegistrationOutcome {
     val resolvedHome = home ?: resolveUserHome(null)
     return when (val installAgent = SupportedAgent.fromId(agent)) {
@@ -91,13 +76,6 @@ object McpRegistrationOperations {
         }
       SupportedAgent.CURSOR ->
         McpRegistrationOutcome.Applied(McpJsonConfig.unregister(agent, configPathFor(installAgent, resolvedHome)))
-      SupportedAgent.DEVIN ->
-        McpRegistrationOutcome.Applied(
-          McpJsonConfig.unregister(
-            agent,
-            configPathFor(installAgent, resolvedHome, profileEnvironment.asEnvironmentMap(), hostPlatform),
-          ),
-        )
     }
   }
 
@@ -107,16 +85,7 @@ object McpRegistrationOperations {
   fun configPathFor(
     agent: SupportedAgent,
     home: Path,
-    environment: Map<String, String> = emptyMap(),
-    hostPlatform: HostPlatformPort = JdkHostPlatformPort,
-  ): Path =
-    when (agent) {
-      SupportedAgent.DEVIN -> devinMcpConfigPath(devinConfigRoot(home, environment, hostPlatform))
-      SupportedAgent.CLAUDE,
-      SupportedAgent.CODEX,
-      SupportedAgent.CURSOR,
-      -> home.resolve(agent.mcpConfigRelativePath)
-    }
+  ): Path = home.resolve(agent.mcpConfigRelativePath)
 
   private fun claudeProfileConfigPaths(
     home: Path,

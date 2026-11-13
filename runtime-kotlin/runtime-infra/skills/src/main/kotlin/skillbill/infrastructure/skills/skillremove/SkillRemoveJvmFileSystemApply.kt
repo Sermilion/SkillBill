@@ -74,7 +74,6 @@ internal class SkillRemoveJvmFileSystemApply(
       SupportedAgent.CLAUDE -> InstallNativeAgentOperations::unlinkClaudeAgents
       SupportedAgent.CODEX -> InstallNativeAgentOperations::unlinkCodexAgents
       SupportedAgent.CURSOR -> InstallNativeAgentOperations::unlinkCursorAgents
-      SupportedAgent.DEVIN -> InstallNativeAgentOperations::unlinkDevinAgents
     }
 
   fun unlinkProviderAgents(request: SkillRemovalRequest): List<Path> {

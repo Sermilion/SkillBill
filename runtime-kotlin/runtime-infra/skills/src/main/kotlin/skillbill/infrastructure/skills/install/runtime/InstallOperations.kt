@@ -42,7 +42,7 @@ object InstallOperations {
   ): List<AgentTarget> {
     val resolvedHome = resolveInstallHome(home, hostPlatform)
     val resolvedEnvironment = resolveInstallEnvironment(environment, hostPlatform)
-    return detectAgents(resolvedHome, resolvedEnvironment, hostPlatform)
+    return detectAgents(resolvedHome, resolvedEnvironment)
   }
 
   fun claudeRoots(
@@ -76,10 +76,4 @@ object InstallOperations {
     home: Path?,
     hostPlatform: HostPlatformPort = JdkHostPlatformPort,
   ): Path = InstallOperationsPaths.cursorAgentsPath(home, hostPlatform)
-
-  fun devinAgentsPath(
-    home: Path?,
-    environment: Map<String, String>,
-    hostPlatform: HostPlatformPort = JdkHostPlatformPort,
-  ): Path = InstallOperationsPaths.devinAgentsPath(home, environment, hostPlatform)
 }

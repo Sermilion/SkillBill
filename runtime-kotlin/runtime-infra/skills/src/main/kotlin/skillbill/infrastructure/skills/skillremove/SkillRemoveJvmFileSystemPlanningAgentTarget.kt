@@ -3,8 +3,6 @@ package skillbill.infrastructure.skills.skillremove
 import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.skills.nativeagent.support.claudeConfigRoots
 import skillbill.infrastructure.skills.nativeagent.support.codexAgentsTargets
-import skillbill.infrastructure.skills.nativeagent.support.devinAgentsDirectory
-import skillbill.infrastructure.skills.nativeagent.support.devinConfigRoot
 import skillbill.install.model.SupportedAgent
 import skillbill.skillremove.model.AgentSymlinkUnlink
 import skillbill.skillremove.model.SkillRemovalRequest
@@ -56,5 +54,4 @@ internal fun SkillRemoveJvmFileSystemPlanning.agentHomeDirs(
     SupportedAgent.CLAUDE -> claudeConfigRoots(home, environment).map { it.resolve("agents") }
     SupportedAgent.CODEX -> codexAgentsTargets(home, environment)
     SupportedAgent.CURSOR -> listOf(home.resolve(requireNotNull(provider.simpleHomeDirectory)).resolve("agents"))
-    SupportedAgent.DEVIN -> listOf(devinAgentsDirectory(devinConfigRoot(home, environment)))
   }

@@ -2470,7 +2470,9 @@ apply_detected_agent_selection() {
     fi
   done <<< "$detected_output"
 
-  AGENT_SELECTION_MODE="manual"
+  if [[ "$fallback_to_all" -eq 1 ]]; then
+    AGENT_SELECTION_MODE="manual"
+  fi
   AGENT_TARGETS_EXPLICIT=1
   if [[ ${#AGENT_NAMES[@]} -eq 0 && "$fallback_to_all" -eq 1 ]]; then
     info "No supported agents detected; defaulting to every supported agent."

@@ -283,7 +283,7 @@ internal class ChatTurns(
     }
     val current = snapshot(read.header, read.detail)
     val delivered = session.delivered
-    val context = if (session.started && delivered != null && agent.agentId != "devin") {
+    val context = if (session.started && delivered != null) {
       diff(delivered, current).render()
     } else {
       current.render()

@@ -50,7 +50,6 @@ class AgentChatTransportsTest {
     val transports = listOf(
       CodexChatTransport(host, launcher, store, RecordingDiagnostics()),
       CursorChatTransport(host, store, RecordingDiagnostics(), liveLauncher = launcher),
-      DevinChatTransport(host, store, RecordingDiagnostics(), liveLauncher = launcher),
     )
     for (transport in transports) {
       val failure = assertIs<ChatEvent.Failed>(transport.run(request.copy(
@@ -62,41 +61,6 @@ class AgentChatTransportsTest {
       assertTrue(launcher.commands.isEmpty())
       assertEquals("saved-provider-thread", store.agentSession(request.sessionId))
     }
-  }
-
-  @Test
-  fun `devin turns launch devin acp and replay earlier chat lines with the new message`() {
-    assertEquals(listOf("devin", "acp"), acpCommand(AcpProvider.Devin, null, null))
-    assertEquals(listOf("devin", "acp", "--model", "swe-2-high"), acpCommand(AcpProvider.Devin, null, "swe-2-high"))
-    assertEquals(AcpProvider.Devin.id, DevinChatTransport(host, store, RecordingDiagnostics(), liveLauncher = NoLaunch()).agentId)
-    val prompt = replayPrompt("", listOf(ChatHistoryLine(ChatHistoryRole.Operator, "first question"), ChatHistoryLine(ChatHistoryRole.Agent, "first answer")), "next question")
-    assertTrue(prompt.indexOf("first answer") in 0 until prompt.indexOf("next question"))
-  }
-
-  @Test
-  fun `devin turn launch puts the picked model on argv so a session without model metadata still prompts`() {
-    val request = chatRequest(agent = ChatAgent(AcpProvider.Devin.id, "swe-2-high", null))
-    val (command, launch) = acpTurnLaunch(
-      AcpProvider.Devin, null, emptyMap(), request, null, "operator prompt", CursorAcpMcpDependency.ProjectUserOnly,
-    )
-    assertTrue(command.argv.windowed(2).contains(listOf("--model", "swe-2-high")))
-    assertEquals("swe-2-high", launch.model)
-    assertTrue(launch.modelOnCommandLine)
-
-    val frames = mutableListOf<String>()
-    val session = CursorAcpSession(launch, java.time.Clock.systemUTC(), { frames += it; true }, { true }, {}, {}, {})
-    fun respond(result: String) {
-      val id = Json.parseToJsonElement(frames.last()).jsonObject.getValue("id")
-      session.observe("""{"jsonrpc":"2.0","id":$id,"result":$result}""")
-    }
-    session.start()
-    respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
-    respond("""{"sessionId":"s"}""")
-    assertTrue(session.ready, session.outcome()?.failure)
-    val methods = frames.map { Json.parseToJsonElement(it).jsonObject["method"]?.jsonPrimitive?.content }
-    assertContains(methods, "session/prompt")
-    respond("""{"stopReason":"end_turn"}""")
-    assertEquals(null, session.outcome()?.failure)
   }
 
   @Test

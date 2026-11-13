@@ -1,3 +1,14 @@
+## [2026-11-13] SONA-19 remove retired-agent support
+Areas: runtime-kotlin, desktop, install.sh, uninstall.sh, scripts, orchestration/contracts, docs, agent records, design/linear-study
+- MEDIUM feature removes the retired fourth agent's transports, launchers, model discovery, install commands, native-agent rendering and schema values. Supported choices are exactly Claude, Codex and Cursor; final repairs also remove Devin support to meet that requirement.
+- Saved runs, goals and chats retain their records. Unsupported agent ids display as Unavailable agent, and continuation requires the operator to choose a supported agent. Runtime and desktop compatibility details live in their boundary histories.
+- Installer and uninstaller omit retired-agent steps and leave existing retired-agent files and registrations untouched.
+- Guides, scaffold and delegation prose, design samples and generated-output ignore patterns follow the three-agent vocabulary. Historical cleanup preserves entries, dates, issue keys and order, with only the four authorized heading substitutions.
+- reusable: retained quality matrices preserve fingerprint inputs separately from executable choices; shared desktop labels give unsupported ids neutral presentation.
+- Limits: strict execution_matrix configuration validation remains unchanged. Evidence and telemetry retain original values. Existing retired-agent installations receive no cleanup pass.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-10] SKILL-535 — Carry captured roots into desktop work items
 Areas: runtime-infra/sqlite/idestatus; desktop/core/domain and desktop/core/data/runtime
 - MEDIUM feature. Optional `primaryRepositoryRoot` survives SQLite snapshot caching, validation, and decoding; absent and null legacy values remain readable, while malformed values retain the undecodable-row diagnostic path.

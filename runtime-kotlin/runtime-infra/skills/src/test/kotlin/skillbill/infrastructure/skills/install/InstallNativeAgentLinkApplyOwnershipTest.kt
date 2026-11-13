@@ -73,7 +73,7 @@ class InstallNativeAgentLinkApplyOwnershipTest : InstallNativeAgentLinkApplyTest
   @Test
   fun `missing inventory removes canonical dangling links across provider layouts`() {
     val fixture = setupApplyFixture()
-    listOf(".claude", ".codex", ".cursor", ".config/devin")
+    listOf(".claude", ".codex", ".cursor")
       .forEach { Files.createDirectories(fixture.home.resolve(it)) }
     val cacheRoot =
       fixture.home.resolve(
@@ -180,7 +180,6 @@ class InstallNativeAgentLinkApplyOwnershipTest : InstallNativeAgentLinkApplyTest
     val fixture = setupApplyFixture()
     Files.createDirectories(fixture.home.resolve(".claude"))
     Files.createDirectories(fixture.home.resolve(".codex"))
-    Files.createDirectories(fixture.home.resolve(".config/devin"))
     Files.createDirectories(fixture.home.resolve(".cursor"))
     val sourceBefore = snapshotSource(fixture.repoRoot)
     val plan =
@@ -222,7 +221,6 @@ class InstallNativeAgentLinkApplyOwnershipTest : InstallNativeAgentLinkApplyTest
         NativeAgentProviderId.CLAUDE,
         NativeAgentProviderId.CODEX,
         NativeAgentProviderId.CURSOR,
-        NativeAgentProviderId.DEVIN,
       ),
       result.nativeAgents
         .filter { native -> native.status == NativeAgentApplyStatus.LINKED }

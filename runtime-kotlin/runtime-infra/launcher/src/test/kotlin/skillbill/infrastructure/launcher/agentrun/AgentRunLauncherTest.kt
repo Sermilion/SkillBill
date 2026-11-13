@@ -79,7 +79,6 @@ class HeadlessAgentRunAdapterTest {
         SupportedAgent.CLAUDE,
         SupportedAgent.CODEX,
         SupportedAgent.CURSOR,
-        SupportedAgent.DEVIN,
       ),
       adapters.keys,
     )

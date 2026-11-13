@@ -51,7 +51,6 @@ internal fun assertGovernedReviewLaunch(
     SupportedAgent.CLAUDE -> assertClaudeGovernedLaunch(built.command)
     SupportedAgent.CODEX -> assertCodexGovernedLaunch(built.command)
     SupportedAgent.CURSOR -> assertCursorGovernedLaunch(built, governed, rawFilesystemTools)
-    else -> error("unexpected provider ${builder.agent.id}")
   }
 }
 

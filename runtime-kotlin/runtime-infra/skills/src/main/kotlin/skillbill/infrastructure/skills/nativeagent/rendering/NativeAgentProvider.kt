@@ -9,8 +9,6 @@ import skillbill.infrastructure.skills.nativeagent.support.agentPathExists
 import skillbill.infrastructure.skills.nativeagent.support.claudeConfigRoots
 import skillbill.infrastructure.skills.nativeagent.support.codexAgentsTargets
 import skillbill.infrastructure.skills.nativeagent.support.detectCodexAgentsTargets
-import skillbill.infrastructure.skills.nativeagent.support.devinAgentsDirectory
-import skillbill.infrastructure.skills.nativeagent.support.devinConfigRoot
 import skillbill.infrastructure.skills.nativeagent.support.discoverClaudeConfigRoots
 import skillbill.infrastructure.skills.nativeagent.support.discoverCodexConfigRoots
 import skillbill.install.model.SupportedAgent
@@ -57,18 +55,6 @@ enum class NativeAgentProvider {
       hostPlatform: HostPlatformPort,
     ): List<Path> = listOf(home.resolve(requireNotNull(supportedAgent.simpleHomeDirectory)).resolve("agents"))
   },
-  Devin {
-    override val supportedAgent = SupportedAgent.DEVIN
-
-    override fun render(source: NativeAgentSource): String =
-      renderFrontmatterAgent(source, devinCapabilityFields(source))
-
-    override fun homeAgentDirs(
-      home: Path,
-      environment: Map<String, String>,
-      hostPlatform: HostPlatformPort,
-    ): List<Path> = listOf(devinAgentsDirectory(devinConfigRoot(home, environment, hostPlatform)))
-  },
   ;
 
   abstract val supportedAgent: SupportedAgent
@@ -106,7 +92,6 @@ enum class NativeAgentProvider {
           .distinctBy { directory -> directory.path.toAbsolutePath().normalize() }
       }
       Cursor,
-      Devin,
       -> homeAgentDirs(home, environment).map { path -> NativeAgentInventoryAgentDirectory(path, null) }
     }
 
@@ -125,10 +110,6 @@ enum class NativeAgentProvider {
           homeAgentDirs(home, environment, hostPlatform),
           home.resolve(requireNotNull(supportedAgent.simpleHomeDirectory)),
         )
-      Devin -> {
-        val root = devinConfigRoot(home, environment, hostPlatform)
-        presentAgentDirs(listOf(devinAgentsDirectory(root)), root)
-      }
     }.map { it.toAbsolutePath().normalize() }
 
   private fun presentAgentDirs(

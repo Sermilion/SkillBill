@@ -47,7 +47,6 @@ internal enum class AgentRunApprovalProtocol {
   CLAUDE_HOST,
   CODEX_APP_SERVER,
   CURSOR_ACP,
-  DEVIN_ACP,
 }
 
 internal enum class AgentRunCommandKind {
