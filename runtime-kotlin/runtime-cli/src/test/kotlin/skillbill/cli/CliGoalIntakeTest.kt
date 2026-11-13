@@ -269,6 +269,7 @@ class CliGoalIntakeTest {
       passThroughResolvedLaunchModel(request)
 
     override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome {
+      projectCheckDiscoveryLaunchOutcome(request.skillRunRequest.promptOverride)?.let { return it }
       assertEquals(0, parentCount(db))
       if (!request.skillRunRequest.issueKey.startsWith("bi_")) {
         prompts += request.skillRunRequest.promptOverride.orEmpty()

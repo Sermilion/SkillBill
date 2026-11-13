@@ -19,7 +19,7 @@ properties:
     additionalProperties: false
     required: [contract_version, phase_output_contract_version]
     properties:
-      contract_version: { enum: ['0.1', '0.2'] }
+      contract_version: { enum: ['0.1', '0.2', '0.3', '0.4'] }
       phase_output_contract_version: { enum: ['0.6', '0.7'] }
   catalog_id: { type: string, minLength: 1, maxLength: 256 }
   spec_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }

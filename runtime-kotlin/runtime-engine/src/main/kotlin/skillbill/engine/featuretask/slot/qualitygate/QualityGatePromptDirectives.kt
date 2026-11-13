@@ -96,29 +96,36 @@ internal fun validateGateTriagePhaseTask(): String =
 
 internal fun runtimeOwnedBuildPhaseTask(packBuildCommand: String?): String {
   val gateLine =
-    if (packBuildCommand.isNullOrBlank()) {
-      "Run only the pack-declared validation_gate build_command and read that command's output."
-    } else {
-      "Run only this pack-declared build command and read that command's output: `$packBuildCommand`."
+    when {
+      packBuildCommand.isNullOrBlank() ->
+        "Run only the admitted saved build command(s) frozen at admission and read that command output."
+      packBuildCommand.contains(" ; ") ->
+        "Run only these admitted saved build commands (with their directories) and read their output: " +
+          "`$packBuildCommand`."
+      else ->
+        "Run only this admitted saved build command and read that command's output: `$packBuildCommand`."
     }
   return "You are the only build agent for this step — do not spawn delegated subagents. The runtime may " +
     "give you up to three repair turns against the remaining findings; each turn is another session of " +
     "this same agent. $gateLine $BUILD_PHASE_FORBIDDEN_EXTRAS$MACHINE_BUILD_SETTINGS_DIRECTIVE" +
     "This phase is compile/buildability proof only: no suite tests, no full check, no substitute " +
-    "agent-run gate. Address every open finding in the same turn. Do not rerun the pack build command " +
+    "agent-run gate. Address every open finding in the same turn. Do not rerun the admitted build commands " +
     "after each individual fix; targeted compile tasks are allowed while repairing when they are " +
-    "part of that same pack gate. When the set looks clean, you may run that same build command once to " +
+    "part of the same admitted list. When the set looks clean, you may run one saved command once to " +
     "sanity-check. Never silence findings with @Suppress, @file:Suppress, baselines, disabled rules, " +
     "weakened configuration, or skipped tests — fix root causes instead. After you stop, the runtime " +
-    "re-runs the pack build command and mints the receipt; report nothing but prose."
+    "re-runs the full admitted build command list and mints the receipt; report nothing but prose."
 }
 
 internal fun buildGateTriagePhaseTask(packBuildCommand: String?): String {
   val gateLine =
-    if (packBuildCommand.isNullOrBlank()) {
-      "The dominant pack declares validation_gate.build_command for build proof."
-    } else {
-      "The pack build command is `$packBuildCommand` — do not run it during triage."
+    when {
+      packBuildCommand.isNullOrBlank() ->
+        "The admitted saved build command list provides build proof for this run."
+      packBuildCommand.contains(" ; ") ->
+        "The admitted saved build commands are `$packBuildCommand` — do not run them during triage."
+      else ->
+        "The admitted saved build command is `$packBuildCommand` — do not run it during triage."
     }
   return "You are triaging an unparseable build gate failure blob before the first repair turn — do not spawn " +
     "delegated subagents. Read the gate stdout blob and repository files as needed; prefer read-only " +
@@ -211,5 +218,6 @@ internal const val VALIDATE_VALUE_CONTENT: String =
     "Never introduce suppressions, baselines, disabled rules, or skipped tests to silence findings."
 
 internal const val BUILD_VALUE_CONTENT: String =
-  "Run only the pack build_command. Do not run collect_all_full_gate_command, check " + "--" + "continue,\n" +
+  "Run only the admitted saved build command list. Do not run collect_all_full_gate_command, check " +
+    "--" + "continue,\n" +
     "skill-bill validate, or skill-bill phase validation. Gate runs and their evidence are runtime-measured."

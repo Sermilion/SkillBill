@@ -440,7 +440,7 @@ public class FeatureTaskRuntimeRunEntry(
         definition,
         setOfNotNull(
           reviewMode,
-          executionPlans.creationQualityGate(input.repoRoot, goalContinuation?.qualityGateSelection),
+          executionPlans.creationQualityGate(goalContinuation?.qualityGateSelection),
           qaSelection,
         ),
       )
@@ -466,6 +466,9 @@ public class FeatureTaskRuntimeRunEntry(
                 qaSelection = qaSelection,
                 validationDepth = goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
                 timeout = input.timeout,
+                issueKey = input.issueKey,
+                invokedAgentId = input.invokedAgentId,
+                discoveryInvocationId = input.workflowIdForCreation ?: input.explicitWorkflowId,
                 stepLaunchAssignments =
                   stepLaunches.resolve(
                     facts = facts,

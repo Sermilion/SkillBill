@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
 import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
+import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.qualitygate.goalBuildDefinitionId
@@ -22,6 +23,7 @@ import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
@@ -53,14 +55,8 @@ public class PhaseRunPlanResolver(
     workflowId: String,
   ): String =
     try {
-      val plan = resolveExecutionPlan(request, workflowId)
-      val inputs =
-        requireNotNull(executionPlanResolver).resolveInputs(
-          request.repoRoot,
-          plan.qualityGateSelection,
-          ValidationDepth.DEFAULT,
-          request.timeout,
-        )
+      val plan = freezeAdmissionExecutionPlan(request, workflowId)
+      val inputs = requireNotNull(executionPlanResolver).resolveRecordedInputs(request.repoRoot, plan)
       requireNotNull(executionPlanCodec).encodeExecution(plan, inputs).decodeToString()
     } catch (cancelled: CancellationException) {
       throw cancelled
@@ -359,6 +355,47 @@ public class PhaseRunPlanResolver(
       WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
       "The admitted goal-quality execution plan is unsupported or corrupt." + (detail?.let { " $it" } ?: ""),
     )
+
+  internal fun freezeAdmissionExecutionPlan(
+    request: PhaseRunRequest,
+    workflowId: String,
+    branch: FeatureTaskRuntimeResolvedBranch? = null,
+    preparedFacts: InMemoryPhaseRunFacts? = null,
+  ): ResolvedPhaseExecutionPlan {
+    val plan = resolveExecutionPlan(request, workflowId, branch, preparedFacts)
+    val facts =
+      preparedFacts
+        ?: InMemoryPhaseRunFacts(
+          request,
+          SkeletonDefinition.byId(request.definitionId),
+          intakeResolver.resolve(SkeletonDefinition.byId(request.definitionId), request, branch?.branch),
+          workflowId,
+          null,
+          "",
+          null,
+        )
+    val reviewMode =
+      plan.reviewSelection?.let { CodeReviewExecutionMode.valueOf(it.name) }
+        ?: request.codeReviewMode
+        ?: CodeReviewExecutionMode.DEFAULT
+    val validated =
+      executionPlanResolver.resolveCreation(
+        FeatureTaskRuntimeExecutionPlanCreationRequest(
+          repoRoot = request.repoRoot,
+          definition = SkeletonDefinition.byId(request.definitionId),
+          reviewMode = reviewMode,
+          qualityGate = plan.qualityGateSelection,
+          qaSelection = request.qaSelection,
+          validationDepth = ValidationDepth.DEFAULT,
+          timeout = request.timeout,
+          issueKey = facts.issueKey,
+          invokedAgentId = request.invokedAgentId,
+          discoveryInvocationId = workflowId,
+          stepLaunchAssignments = plan.stepLaunchAssignments,
+        ),
+      )
+    return executionPlanCompatibility.requireSupportedComposition(validated.encoded())
+  }
 
   internal fun resolveExecutionPlan(
     request: PhaseRunRequest,

@@ -36,8 +36,9 @@ class AuditPlanningExecutionPlanMappingTest {
     )
     val before = repository.getFeatureTaskWorkflow("assigned-audit-resume")
 
-    val supported = fixture.compatibility.requireSupportedExecution(encoded, fixture.inputs)
-    val admitted = fixture.admission.admit(repository, "assigned-audit-resume", fixture.inputs)
+    val historicalInputs = fixture.inputs.copy(projectCheckSnapshot = null)
+    val supported = fixture.compatibility.requireSupportedExecution(encoded, historicalInputs)
+    val admitted = fixture.admission.admit(repository, "assigned-audit-resume", historicalInputs)
     admitted.requireCurrent(repository, "assigned-audit-resume")
 
     assertEquals(assignments, supported.stepLaunchAssignments)
@@ -65,24 +66,25 @@ class AuditPlanningExecutionPlanMappingTest {
     val fixture = ExecutionPlanAdmissionFixture(definition = SkeletonDefinition.GOAL_CHILD_REVISION_2)
     val repository = InMemoryRuntimeWorkflowRepository()
     val old = fixture.codec.decode(ArchivedAuditExecutionPlanFixture.archive(fixture, "goal-child-validate"))
+    val historicalInputs = fixture.inputs.copy(projectCheckSnapshot = null)
     val encoded =
       fixture.codec.encode(
-        old.withEffectivePolicies(FeatureTaskRuntimeEffectivePolicies.resolve(old, fixture.inputs)),
+        old.withEffectivePolicies(FeatureTaskRuntimeEffectivePolicies.resolve(old, historicalInputs)),
       )
     val descriptor = fixture.validator.read(encoded, "legacy fixture")
     fixture.seed(repository, "mapping", descriptor = descriptor)
     val before = repository.getFeatureTaskWorkflow("mapping")
 
-    val admitted = fixture.admission.admit(repository, "mapping", fixture.inputs)
+    val admitted = fixture.admission.admit(repository, "mapping", fixture.inputs.copy(projectCheckSnapshot = null))
     admitted.requireCurrent(repository, "mapping")
 
     assertEquals(before, repository.getFeatureTaskWorkflow("mapping"))
     assertTrue("audit_plan_fix" in admitted.plan.selectedStepIds)
-    val expected = fixture.compatibility.requireSupportedComposition(fixture.encoded)
+    val expected = fixture.compatibility.requireSupportedComposition(encoded)
     assertContentEquals(fixture.codec.encode(expected), fixture.codec.encode(admitted.plan))
     fixture.compatibility.requireCompatibleExecution(
-      fixture.codec.encode(old.withEffectivePolicies(FeatureTaskRuntimeEffectivePolicies.resolve(old, fixture.inputs))),
-      ValidatedFeatureTaskRuntimeExecutionPlan.read(fixture.encoded, fixture.validator),
+      encoded,
+      ValidatedFeatureTaskRuntimeExecutionPlan.read(encoded, fixture.validator),
     )
   }
 
@@ -151,7 +153,10 @@ class AuditPlanningExecutionPlanMappingTest {
         },
       )
     assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
-      fixture.compatibility.requireSupportedExecution(fixture.codec.encode(changedFinalization), fixture.inputs)
+      fixture.compatibility.requireSupportedExecution(
+        fixture.codec.encode(changedFinalization),
+        fixture.inputs.copy(projectCheckSnapshot = null),
+      )
     }
   }
 }

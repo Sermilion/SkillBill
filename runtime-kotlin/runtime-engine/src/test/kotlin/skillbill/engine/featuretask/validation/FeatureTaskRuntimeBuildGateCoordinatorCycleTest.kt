@@ -1,5 +1,16 @@
 package skillbill.engine.featuretask.validation
 
+import skillbill.application.testHarnessClock
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.config.projectchecks.ProjectCheckCategoryConfig
+import skillbill.contracts.config.projectchecks.ProjectCheckCommand
+import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
+import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLauncher
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentTriageLauncher
@@ -8,12 +19,27 @@ import skillbill.engine.featuretask.validation.model.ValidationGateCycleResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminalOutcome
 import skillbill.engine.featuretask.validation.model.ValidationGateTriageResult
 import skillbill.engine.featuretask.validation.model.ValidationGateTriageResult.Empty
+import skillbill.engine.featuretask.validation.projectchecks.parserMetadataFromDeclaration
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.validation.model.ValidationGateCommandSource
 import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateFindingParseMode
+import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.ports.workflow.model.toSnapshot
+import skillbill.ports.workflow.toRecord
+import skillbill.scaffold.model.ValidationGateDeclaration
+import skillbill.workflow.engine.WorkflowEngine
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.model.FeatureTaskRouteScope
+import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
+import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
+import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -90,7 +116,7 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
   @Test
   fun `absent required validation gate blocks without launching a repair agent`() {
     val cycle =
-      FeatureTaskRuntimeBuildGateCoordinator(
+      buildFeatureTaskRuntimeBuildGateCoordinator(
         ValidationGateResolver { emptyList() },
         ScriptedGateRunner(emptyList()),
         repoLocalConfig(),
@@ -273,10 +299,153 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
     resolver: ValidationGateResolver,
     runner: ScriptedGateRunner,
   ): FeatureTaskRuntimeBuildGateCoordinator =
-    FeatureTaskRuntimeBuildGateCoordinator(
+    buildFeatureTaskRuntimeBuildGateCoordinator(
       resolver,
       runner,
       repoLocalConfig(),
       NoopRuntimeDiagnostics,
     )
+
+  @Test
+  fun `ordered saved build commands combine mixed results and retain each invocation identity`() {
+    val root = Files.createTempDirectory("multi-build")
+    try {
+      val snapshot = orderedBuildSnapshot()
+      val execution =
+        ExecutionPlanAdmissionFixture(
+          SkeletonDefinition.GOAL_CHILD,
+          qualityGate = FeatureTaskRuntimeQualityGateSelection.BUILD,
+        )
+      val declaration = declarationWithBuild()
+      val inputs = orderedBuildInputs(snapshot, declaration)
+      val request = minimalRequest()
+      val admitted =
+        admitSavedBuildGate(
+          phaseRunDatabase(root, testHarnessClock),
+          execution,
+          request,
+          inputs,
+          execution.validator.read(
+            execution.codec.encodeExecution(execution.plan.withProjectCheckCommands(snapshot), inputs),
+            "multi build",
+          ),
+        )
+      val runner =
+        ScriptedGateRunner(
+          listOf(
+            failedWith(ValidationGateFinding("m", "first", "broken", "A.kt")),
+            passed(),
+          ),
+        )
+      val recorded = mutableListOf<FeatureTaskRuntimeValidationGateProgress>()
+      executeOrderedBuild(declaration, runner, request, admitted, recorded)
+      assertOrderedBuildDispatch(runner, recorded)
+    } finally {
+      root.toFile().deleteRecursively()
+    }
+  }
+
+  private fun orderedBuildSnapshot(): ProjectCheckCommandSnapshot =
+    ProjectCheckCommandSnapshot(
+      projectId = "proj-admission",
+      buildCommands =
+        ProjectCheckCategoryConfig(
+          listOf(
+            ProjectCheckCommand(listOf("echo", "first-build"), "."),
+            ProjectCheckCommand(listOf("echo", "second-build"), "nested"),
+          ),
+        ),
+      validationCommands = null,
+      parserMetadata = parserMetadataFromDeclaration("kotlin", validationGateTestDeclaration),
+      gradleWrapper = null,
+    ).frozen()
+
+  private fun orderedBuildInputs(
+    snapshot: ProjectCheckCommandSnapshot,
+    declaration: ValidationGateDeclaration,
+  ) = EffectiveGatePolicyInputs(
+    ValidationGateCommandFamily.BUILD,
+    "kotlin",
+    declaration,
+    null,
+    ValidationDepth.FULL,
+    null,
+    projectCheckSnapshot = snapshot,
+  ).frozen()
+
+  private fun executeOrderedBuild(
+    declaration: ValidationGateDeclaration,
+    runner: ScriptedGateRunner,
+    request: FeatureTaskRuntimeRunRequest,
+    admitted: AdmittedFeatureTaskRuntimeExecution?,
+    recorded: MutableList<FeatureTaskRuntimeValidationGateProgress>,
+  ) {
+    buildFeatureTaskRuntimeBuildGateCoordinator(
+      declaredResolver(declaration),
+      runner,
+      repoLocalConfig(),
+      NoopRuntimeDiagnostics,
+    ).execute(
+      ValidationGateCycleRequest(
+        phaseId = "build",
+        repoRoot = validationGateTestRepoRoot,
+        request = request.copy(admittedExecution = admitted),
+        validationDepth = ValidationDepth.DEFAULT,
+        changedPaths = listOf("src/A.kt"),
+        repositoryCheckpoint = "checkpoint",
+        progressStore = RecordingProgressStore(recorded, null),
+        agentRepairLauncher =
+          ValidationGateAgentRepairLauncher { _, _, _ ->
+            blockedRepair("ordered-build evidence stops before repair redispatch")
+          },
+      ),
+    )
+  }
+
+  private fun assertOrderedBuildDispatch(
+    runner: ScriptedGateRunner,
+    recorded: List<FeatureTaskRuntimeValidationGateProgress>,
+  ) {
+    assertEquals(2, runner.calls)
+    assertEquals(ValidationGateCommandSource.PROJECT_CONFIG, runner.requests[0].commandSource)
+    assertEquals(ValidationGateCommandSource.PROJECT_CONFIG, runner.requests[1].commandSource)
+    assertEquals(listOf("echo", "first-build"), runner.requests[0].argv)
+    assertEquals(listOf("echo", "second-build"), runner.requests[1].argv)
+    assertEquals("nested", runner.requests[1].executionWorkingDirectory)
+    val attempt = recorded.mapNotNull { it.buildCommandAttempt }.lastOrNull()
+    assertEquals(2, attempt?.commands?.size)
+    assertEquals(ValidationGateRunOutcome.FAILED, attempt?.commands?.first()?.outcome)
+    assertEquals(ValidationGateRunOutcome.PASSED, attempt?.commands?.last()?.outcome)
+  }
+
+  private fun admitSavedBuildGate(
+    database: DatabaseSessionFactory,
+    execution: ExecutionPlanAdmissionFixture,
+    request: FeatureTaskRuntimeRunRequest,
+    inputs: EffectiveGatePolicyInputs,
+    descriptor: Map<String, Any?>,
+  ) = database.transaction { unit ->
+    val row =
+      WorkflowEngine().openRecord(
+        WorkflowFamily.TASK_RUNTIME.definition,
+        request.workflowId,
+        "session",
+        "build",
+      ).toRecord().copy(issueKey = request.issueKey)
+    unit.workflowStates.saveFeatureTaskWorkflow(
+      row.copy(
+        artifactsJson =
+          JsonCodec.mapToJsonString(
+            row.toSnapshot().artifacts +
+              DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(descriptor),
+          ),
+      ),
+      FeatureTaskWorkflowMode.RUNTIME,
+    )
+    unit.workflowStates.saveFeatureTaskExecutionIdentity(
+      execution.identity(request.workflowId, request.issueKey)
+        .copy(routeScope = FeatureTaskRouteScope.GOAL_CHILD),
+    )
+    execution.admission.admit(unit.workflowStates, request.workflowId, inputs)
+  }
 }

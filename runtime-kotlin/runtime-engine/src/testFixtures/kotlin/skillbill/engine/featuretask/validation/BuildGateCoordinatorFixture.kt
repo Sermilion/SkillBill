@@ -2,10 +2,11 @@ package skillbill.engine.featuretask.validation
 
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
-import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.featureTaskRuntimeExecutionPlanCodecForTest
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
+import skillbill.engine.featuretask.validation.projectchecks.projectCheckCommandResolverForTests
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -14,7 +15,7 @@ import skillbill.ports.process.ShutdownHookRegistration
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 
-fun FeatureTaskRuntimeBuildGateCoordinator(
+fun buildFeatureTaskRuntimeBuildGateCoordinator(
   resolver: ValidationGateResolver,
   runner: ValidationGateRunner,
   repoLocalConfig: RepoLocalConfigPort,
@@ -23,12 +24,14 @@ fun FeatureTaskRuntimeBuildGateCoordinator(
 ): FeatureTaskRuntimeBuildGateCoordinator {
   val strategies = statusProjectionPhaseStrategies()
   val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
-  val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
+  val codec = featureTaskRuntimeExecutionPlanCodecForTest(validator)
   val plans =
     FeatureTaskRuntimeExecutionPlanResolver(
       strategies, codec, validator, resolver, NoopWorkflowGitOperations, repoLocalConfig,
       FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
-      FeatureTaskRuntimeExecutionPlanCompatibility(codec, strategies), diagnostics,
+      FeatureTaskRuntimeExecutionPlanCompatibility(codec, strategies),
+      projectCheckCommandResolverForTests(),
+      diagnostics,
     )
   return FeatureTaskRuntimeBuildGateCoordinator(resolver, runner, repoLocalConfig, diagnostics, plans, shutdownHooks)
 }

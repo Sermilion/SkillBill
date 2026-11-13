@@ -7,11 +7,12 @@ import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliRuntimeContext
 import skillbill.di.core.RuntimeComponent
 import skillbill.di.core.create
-import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
+import skillbill.engine.featuretask.lifecycle.execution.featureTaskRuntimeExecutionPlanCodecForTest
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
+import skillbill.engine.featuretask.slot.withTestProjectCheckSnapshot
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.ports.system.HostPlatformPort
@@ -136,9 +137,9 @@ class CliRunInputsRuntimeTest {
     val plan =
       statusProjectionPhaseStrategies().executionPlan(
         PhaseStrategySelectionFacts(SkeletonDefinition.STANDALONE, setOf(CodeReviewExecutionMode.DEFAULT)),
-      )
+      ).withTestProjectCheckSnapshot()
     val descriptor =
-      FeatureTaskRuntimeExecutionPlanCodec(validator).encodeExecution(
+      featureTaskRuntimeExecutionPlanCodecForTest(validator).encodeExecution(
         plan,
         EffectiveGatePolicyInputs(
           ValidationGateCommandFamily.VALIDATION,

@@ -5,6 +5,8 @@ import skillbill.config.model.RepoLocalConfigFileKeys
 import skillbill.config.model.applyValidationGateGradleWrapper
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.config.projectchecks.ProjectCheckCommand
+import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_BUILD_RECEIPT_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
@@ -24,6 +26,7 @@ import skillbill.engine.featuretask.validation.model.ValidationGateProgressWrite
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
 import skillbill.engine.featuretask.validation.model.ValidationGateTriageResult
 import skillbill.engine.featuretask.validation.model.requiresUnparseableGateTriage
+import skillbill.engine.featuretask.validation.projectchecks.ProjectCheckSnapshotParser
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
@@ -86,14 +89,8 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
     cycle: ValidationGateCycleRequest,
     onGateRunCount: (Int) -> Unit = {},
   ): ValidationGateCycleResult {
-    val resolution =
-      recordedResolution(cycle) ?: cycle.request.admittedExecution?.effectiveInputs?.let { inputs ->
-        check(inputs.commandFamily == cycle.commandFamily) { "Gate command family differs from admission." }
-        inputs.declaration?.let { ValidationGateResolution.Declared(requireNotNull(inputs.packSlug), it) }
-          ?: ValidationGateResolution.Absent(inputs.packSlug)
-      } ?: resolver.resolve(cycle.changedPaths)
-
-    return when (resolution) {
+    executeAdmittedProjectBuild(cycle, onGateRunCount)?.let { return it }
+    return when (val resolution = resolveDeclaredGate(cycle)) {
       is ValidationGateResolution.Absent ->
         retainKnownPreExecutionRefusal(
           cycle,
@@ -130,6 +127,36 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
         }
       }
     }
+  }
+
+  private fun resolveDeclaredGate(cycle: ValidationGateCycleRequest): ValidationGateResolution =
+    recordedResolution(cycle) ?: cycle.request.admittedExecution?.effectiveInputs?.let { inputs ->
+      check(inputs.commandFamily == cycle.commandFamily) { "Gate command family differs from admission." }
+      inputs.declaration?.let { ValidationGateResolution.Declared(requireNotNull(inputs.packSlug), it) }
+        ?: ValidationGateResolution.Absent(inputs.packSlug)
+    } ?: resolver.resolve(cycle.changedPaths)
+
+  private fun executeAdmittedProjectBuild(
+    cycle: ValidationGateCycleRequest,
+    onGateRunCount: (Int) -> Unit,
+  ): ValidationGateCycleResult? {
+    if (cycle.commandFamily != ValidationGateCommandFamily.BUILD) return null
+    val snapshot = admittedSnapshot(cycle) ?: return null
+    FeatureTaskRuntimeBuildGatePolicy.missingAdmittedBuildDetail(snapshot)?.let { detail ->
+      return retainKnownPreExecutionRefusal(
+        cycle,
+        terminalBlockedResult(
+          detail,
+          failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
+          failureCode = failureLabel(FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION),
+        ),
+      )
+    }
+    return checkAndRepair(
+      cycle,
+      ProjectCheckSnapshotParser.parserDeclaration(snapshot),
+      onGateRunCount,
+    )
   }
 
   private fun retainKnownPreExecutionRefusal(
@@ -217,7 +244,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
 
   private fun checkAndRepair(
     cycle: ValidationGateCycleRequest,
-    declaration: ValidationGateDeclaration,
+    declaration: ValidationGateDeclaration?,
     onGateRunCount: (Int) -> Unit,
   ): ValidationGateCycleResult {
     val loaded = cycle.progressStore.load(cycle.progressKey)?.let { replayInterruptedDiscovery(cycle, declaration, it) }
@@ -314,7 +341,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
 
   private fun resumeFindingsOrCompletion(
     state: BuildGateCycleState,
-    declaration: ValidationGateDeclaration,
+    declaration: ValidationGateDeclaration?,
     loaded: FeatureTaskRuntimeValidationGateProgress?,
   ): ValidationGateCycleResult? {
     val cycle = state.cycle
@@ -360,7 +387,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
 
   private fun discoverFindings(
     state: BuildGateCycleState,
-    declaration: ValidationGateDeclaration,
+    declaration: ValidationGateDeclaration?,
   ): ValidationGateCycleResult {
     val cycle = state.cycle
     val measurements = state.measurements
@@ -519,7 +546,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
 
   private fun repairLoop(
     state: BuildGateCycleState,
-    declaration: ValidationGateDeclaration,
+    declaration: ValidationGateDeclaration?,
     openFindings: List<ValidationGateFinding>,
     initialRepairsUsed: Int,
     triagePlan: String?,
@@ -645,7 +672,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
 
   private fun verifyAfterRepair(
     state: BuildGateCycleState,
-    declaration: ValidationGateDeclaration,
+    declaration: ValidationGateDeclaration?,
     repairsUsed: Int,
     triagePlan: String?,
     repairCheckpoint: String,
@@ -707,10 +734,25 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
 
   private fun runGate(
     cycle: ValidationGateCycleRequest,
-    declaration: ValidationGateDeclaration,
+    declaration: ValidationGateDeclaration?,
     cyclePhase: ValidationGateCyclePhase,
   ): ValidationGateRunResult {
-    val packArgv = gateArgv(declaration, cycle.commandFamily, cyclePhase)
+    val saved =
+      selectedBuildCommands(cycle, declaration, cyclePhase)
+        ?.takeIf { usesProjectConfigBuild(cycle) && it.isNotEmpty() }
+    if (saved != null) {
+      return FeatureTaskRuntimeBuildGateProjectConfig.runOrderedCommands(
+        runner,
+        OrderedProjectConfigRun(
+          cycle,
+          declaration,
+          saved,
+          cyclePhase,
+          requireNotNull(admittedSnapshot(cycle)),
+        ),
+      )
+    }
+    val packArgv = gateArgv(requireNotNull(declaration), cycle.commandFamily, cyclePhase)
     val cacheMode =
       when (cyclePhase) {
         ValidationGateCyclePhase.INITIAL_DISCOVERY -> ValidationGateCacheMode.CACHE_ELIGIBLE
@@ -729,9 +771,39 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
     )
   }
 
+  private fun admittedSnapshot(cycle: ValidationGateCycleRequest): ProjectCheckCommandSnapshot? {
+    cycle.request.acceptedGoalQualityExecutionPlan?.let { accepted ->
+      return accepted.projectCheckCommands
+    }
+    return cycle.request.admittedExecution?.plan?.projectCheckCommands
+  }
+
+  private fun usesProjectConfigBuild(cycle: ValidationGateCycleRequest): Boolean =
+    cycle.commandFamily == ValidationGateCommandFamily.BUILD && admittedSnapshot(cycle)?.buildCommands != null
+
+  private fun selectedBuildCommands(
+    cycle: ValidationGateCycleRequest,
+    declaration: ValidationGateDeclaration?,
+    cyclePhase: ValidationGateCyclePhase,
+  ): List<ProjectCheckCommand>? {
+    val snapshot = admittedSnapshot(cycle)
+    val admitted = cycle.request.admittedExecution
+    val recorded =
+      cycle.request.acceptedGoalQualityExecutionPlan?.let { plan ->
+        executionPlanResolver.resolveRecordedInputs(cycle.repoRoot, plan)
+      }
+    return FeatureTaskRuntimeBuildGatePolicy.selectedBuildCommands(
+      snapshot,
+      admitted?.effectiveInputs,
+      recorded,
+      declaration,
+      cyclePhase,
+    )
+  }
+
   private fun completedResult(
     cycle: ValidationGateCycleRequest,
-    declaration: ValidationGateDeclaration,
+    declaration: ValidationGateDeclaration?,
     measurements: List<FeatureTaskRuntimeValidationGateRunRecord>,
   ): ValidationGateCycleResult {
     val terminal =
@@ -743,38 +815,62 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
     if (checkpoint != cycle.repositoryCheckpointProvider()) {
       return terminalBlockedResult("Repository checkpoint changed after the required gate command.")
     }
+    val requiredCommand = requiredTerminalCommand(cycle, declaration, terminal)
+    return completedTerminalResult(cycle, terminal, checkpoint, requiredCommand, measurements)
+  }
+
+  private fun requiredTerminalCommand(
+    cycle: ValidationGateCycleRequest,
+    declaration: ValidationGateDeclaration?,
+    terminal: FeatureTaskRuntimeValidationGateRunRecord,
+  ): String? {
     val terminalPhase =
       if (terminal.cacheMode == ValidationGateCacheMode.FORCED_FULL) {
         ValidationGateCyclePhase.POST_REPAIR_VERIFY
       } else {
         ValidationGateCyclePhase.INITIAL_DISCOVERY
       }
-    val wrapper = wrapperFor(cycle)
-    val requiredCommand =
-      applyValidationGateGradleWrapper(
-        gateArgv(declaration, cycle.commandFamily, terminalPhase),
-        wrapper,
-      ).joinToString(" ")
-    return if (terminal.command != requiredCommand || terminal.exitCode != 0 ||
+    return savedBuildCommandIdentity(cycle, declaration, terminalPhase)
+      ?: if (usesProjectConfigBuild(cycle)) {
+        null
+      } else {
+        applyValidationGateGradleWrapper(
+          gateArgv(requireNotNull(declaration), cycle.commandFamily, terminalPhase),
+          wrapperFor(cycle),
+        ).joinToString(" ")
+      }
+  }
+
+  private fun completedTerminalResult(
+    cycle: ValidationGateCycleRequest,
+    terminal: FeatureTaskRuntimeValidationGateRunRecord,
+    checkpoint: String,
+    requiredCommand: String?,
+    measurements: List<FeatureTaskRuntimeValidationGateRunRecord>,
+  ): ValidationGateCycleResult {
+    if (requiredCommand == null) {
+      return terminalBlockedResult("Admitted build commands have no recorded command identity.")
+    }
+    if (terminal.command != requiredCommand || terminal.exitCode != 0 ||
       terminal.outcome != ValidationGateRunOutcome.PASSED
     ) {
-      terminalBlockedResult("Terminal required gate command evidence does not match its configured invocation.")
-    } else {
-      val output =
-        when (cycle.commandFamily) {
-          ValidationGateCommandFamily.BUILD ->
-            runtimeOwnedBuildOutput(cycle.phaseId, checkpoint, measurements)
-          ValidationGateCommandFamily.VALIDATION -> {
-            FeatureTaskRuntimeValidationGateCoordinator.runtimeOwnedValidationOutput(
-              phaseId = cycle.phaseId,
-              repositoryCheckpoint = checkpoint,
-              measurements = measurements,
-              requiredCommand = requiredCommand,
-            )
-          }
-        }
-      ValidationGateCycleResult.Terminal(ValidationGateCycleTerminalOutcome.Completed(output))
+      return terminalBlockedResult(
+        "Terminal required gate command evidence does not match its configured invocation.",
+      )
     }
+    val output =
+      when (cycle.commandFamily) {
+        ValidationGateCommandFamily.BUILD ->
+          runtimeOwnedBuildOutput(cycle.phaseId, checkpoint, measurements)
+        ValidationGateCommandFamily.VALIDATION ->
+          FeatureTaskRuntimeValidationGateCoordinator.runtimeOwnedValidationOutput(
+            phaseId = cycle.phaseId,
+            repositoryCheckpoint = checkpoint,
+            measurements = measurements,
+            requiredCommand = requiredCommand,
+          )
+      }
+    return ValidationGateCycleResult.Terminal(ValidationGateCycleTerminalOutcome.Completed(output))
   }
 
   private fun recordGateProgress(
@@ -805,6 +901,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
     pendingExternalOperation: String? = null,
     pendingExternalCheckpoint: String? = null,
   ) {
+    val priorAttempt = state.cycle.progressStore.load(state.cycle.progressKey)?.buildCommandAttempt
     val progress =
       FeatureTaskRuntimeValidationGateProgress(
         gateRunCount = state.measurements.size,
@@ -823,6 +920,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
         terminalReason = state.terminalReason,
         terminalFailureDisposition = state.terminalFailureDisposition,
         terminalFailureCode = state.terminalFailureCode,
+        buildCommandAttempt = priorAttempt,
       )
     state.cycle.progressStore.persist(state.cycle.progressKey, progress)
     state.triageDisposition = progress.triageDisposition
@@ -890,7 +988,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
 
   private fun replayInterruptedDiscovery(
     cycle: ValidationGateCycleRequest,
-    declaration: ValidationGateDeclaration,
+    declaration: ValidationGateDeclaration?,
     loaded: FeatureTaskRuntimeValidationGateProgress,
   ): FeatureTaskRuntimeValidationGateProgress {
     val discovery = commandIdentity(cycle, declaration, ValidationGateCyclePhase.INITIAL_DISCOVERY)
@@ -906,11 +1004,25 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
 
   private fun commandIdentity(
     cycle: ValidationGateCycleRequest,
-    declaration: ValidationGateDeclaration,
+    declaration: ValidationGateDeclaration?,
     phase: ValidationGateCyclePhase,
   ): String =
     gateCommandIdentityPrefix(cycle.commandFamily, phase) +
-      gateArgv(declaration, cycle.commandFamily, phase).joinToString(" ")
+      (
+        savedBuildCommandIdentity(cycle, declaration, phase)
+          ?: gateArgv(requireNotNull(declaration), cycle.commandFamily, phase).joinToString(" ")
+      )
+
+  private fun savedBuildCommandIdentity(
+    cycle: ValidationGateCycleRequest,
+    declaration: ValidationGateDeclaration?,
+    phase: ValidationGateCyclePhase,
+  ): String? {
+    if (!usesProjectConfigBuild(cycle)) return null
+    return selectedBuildCommands(cycle, declaration, phase)
+      ?.takeIf { it.isNotEmpty() }
+      ?.let(FeatureTaskRuntimeBuildGatePolicy::commandListIdentity)
+  }
 
   private fun invalidRetainedTriage(reason: String): Nothing =
     throw SkillBillRuntimeException(

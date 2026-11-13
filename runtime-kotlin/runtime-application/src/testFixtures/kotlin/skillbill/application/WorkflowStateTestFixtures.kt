@@ -2,6 +2,7 @@ package skillbill.application
 
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.ports.config.projectchecks.InMemoryProjectCheckConfigRepository
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
@@ -68,6 +69,7 @@ class FakeDatabaseSessionFactory(
   private val workList: WorkListRepository = EmptyWorkListRepository,
   private val archiveSnapshotReader: ((GoalPurgeTarget) -> GoalArchiveOwnedSnapshot)? = null,
   private val archiveOwnedRestorer: ((GoalArchiveOwnedTables) -> Unit)? = null,
+  val projectCheckConfigs: InMemoryProjectCheckConfigRepository = InMemoryProjectCheckConfigRepository(),
 ) : DatabaseSessionFactory {
   override fun acquireDatabasePathProtection(): DatabasePathProtectionResult =
     DatabasePathProtectionResult.Acquired(AutoCloseable { })
@@ -102,6 +104,7 @@ class FakeDatabaseSessionFactory(
       override val workList = this@FakeDatabaseSessionFactory.workList
       override val goalPlanningPreparations = planningPreparations
       override val goalRunnerControls = this@FakeDatabaseSessionFactory.goalRunnerControls
+      override val projectCheckConfigs = this@FakeDatabaseSessionFactory.projectCheckConfigs
 
       override fun restoreGoalArchiveOwnedTables(ownedTables: GoalArchiveOwnedTables) {
         archiveOwnedRestorer?.invoke(ownedTables)

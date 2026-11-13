@@ -19,6 +19,7 @@ import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimePlanBundleFe
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeReadinessEvidenceSchemaPaths
 import skillbill.infrastructure.contracts.locator.GoalArchiveSchemaPaths
 import skillbill.infrastructure.contracts.locator.GoalQualityExecutionSchemaPaths
+import skillbill.infrastructure.contracts.locator.ProjectCheckCommandSnapshotSchemaPaths
 import skillbill.infrastructure.contracts.locator.ProjectCheckConfigSchemaPaths
 import skillbill.infrastructure.contracts.locator.ProjectCheckDiscoverySchemaPaths
 import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
@@ -45,6 +46,16 @@ internal object WireVocabularyGovernedSeamInventory {
             "contracts/config/projectchecks/ProjectCheckConfig.kt",
             "infrastructure/contracts/projectchecks/ProjectCheckConfigSchemaValidator.kt",
             "infrastructure/sqlite/config/projectchecks/SqliteProjectCheckConfigStore.kt",
+          ),
+      ),
+      GovernedPayloadSeam(
+        seamId = "project-check-command-snapshot",
+        schemaRepoRelativePath = ProjectCheckCommandSnapshotSchemaPaths.REPO_RELATIVE_PATH,
+        governedRelativePathMarkers =
+          listOf(
+            "contracts/config/projectchecks/ProjectCheckCommandSnapshot.kt",
+            "infrastructure/contracts/projectchecks/ProjectCheckCommandSnapshotSchemaValidator.kt",
+            "engine/featuretask/lifecycle/execution/ProjectCheckCommandSnapshotWire.kt",
           ),
       ),
       GovernedPayloadSeam(
@@ -222,6 +233,7 @@ internal object WireVocabularyGovernedSeamInventory {
         recursiveSchemaPropertyKeys(loadRepoSchema(schemaRepoRelativePath))
       ProjectCheckConfigSchemaPaths.REPO_RELATIVE_PATH,
       ProjectCheckDiscoverySchemaPaths.REPO_RELATIVE_PATH,
+      ProjectCheckCommandSnapshotSchemaPaths.REPO_RELATIVE_PATH,
       ->
         recursiveSchemaPropertyKeys(loadRepoSchema(schemaRepoRelativePath))
       GoalArchiveSchemaPaths.REPO_RELATIVE_PATH ->

@@ -12,6 +12,7 @@ type: object
 additionalProperties: false
 required:
   - contract_version
+  - project_check_commands
   - definition
   - selected_strategies
   - review_selection
@@ -24,7 +25,14 @@ required:
   - effective_policies
 properties:
   contract_version:
-    const: "0.3"
+    const: "0.4"
+  project_check_commands:
+    description: >-
+      Frozen project check commands admitted with this descriptor, or null when
+      the definition executes no build or validation checks.
+    oneOf:
+      - type: 'null'
+      - $ref: "https://skill-bill.dev/contracts/project-check-command-snapshot-schema.yaml"
   definition:
     $ref: "#/$defs/definition"
   selected_strategies:

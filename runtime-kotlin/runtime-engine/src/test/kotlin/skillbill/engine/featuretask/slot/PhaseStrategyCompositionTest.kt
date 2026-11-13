@@ -2,9 +2,9 @@ package skillbill.engine.featuretask.slot
 
 import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
-import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.lifecycle.execution.executionPolicyDigest
+import skillbill.engine.featuretask.lifecycle.execution.featureTaskRuntimeExecutionPlanCodecForTest
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
@@ -414,7 +414,7 @@ class PhaseStrategyCompositionTest {
   fun `resolved compositions round trip through the production codec without losing traversal or policy semantics`() {
     val registry = productionRegistry()
     val lookup = testLookup(registry)
-    val codec = FeatureTaskRuntimeExecutionPlanCodec(FeatureTaskRuntimeExecutionPlanSchemaValidator())
+    val codec = featureTaskRuntimeExecutionPlanCodecForTest()
     val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)
     SkeletonDefinition.entries.forEach { definition ->
       val gates =
@@ -478,7 +478,7 @@ class PhaseStrategyCompositionTest {
     val registry = productionRegistry()
     val lookup = testLookup(registry)
     val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
-    val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
+    val codec = featureTaskRuntimeExecutionPlanCodecForTest(validator)
     val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)
     val plan = lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet()))
     val encoded =
@@ -536,7 +536,7 @@ class PhaseStrategyCompositionTest {
     val registry = productionRegistry()
     val lookup = testLookup(registry)
     val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
-    val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
+    val codec = featureTaskRuntimeExecutionPlanCodecForTest(validator)
     val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)
     val plan =
       lookup.executionPlan(
@@ -570,7 +570,7 @@ class PhaseStrategyCompositionTest {
     val registry = productionRegistry()
     val lookup = testLookup(registry)
     val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
-    val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
+    val codec = featureTaskRuntimeExecutionPlanCodecForTest(validator)
     val original = lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet()))
     val encoded =
       codec.encodeExecution(

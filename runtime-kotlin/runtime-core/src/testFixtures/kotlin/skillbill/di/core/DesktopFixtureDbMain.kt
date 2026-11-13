@@ -1,10 +1,15 @@
 package skillbill.di.core
 
+import skillbill.application.DesktopFixtureCatalog
 import skillbill.application.DesktopFixtureDatabaseWriter
 import skillbill.application.DesktopFixtureWriteResult
+import skillbill.contracts.config.projectchecks.ProjectCheckCategoryConfig
+import skillbill.contracts.config.projectchecks.ProjectCheckCommand
+import skillbill.contracts.config.projectchecks.ProjectCheckConfigDiscovery
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
+import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -54,15 +59,29 @@ fun writeDesktopFixture(
       ),
     )
   return try {
+    val repoRoot = CanonicalRepositoryRoot.canonicalPath(checkoutRoot)
+    val projectId = runtime.projectStorePort.resolveCurrent(repoRoot).projectId
+    runtime.projectCheckConfigAccess.fillMissing(
+      projectId,
+      ProjectCheckConfigDiscovery(
+        buildCommands = desktopFixtureCommands("build"),
+        lintCommands = null,
+        testCommands = null,
+        formattingCommands = null,
+        validationCommands = desktopFixtureCommands("check"),
+      ),
+    )
     val descriptor =
       runtime.featureTaskRuntimeExecutionPlanResolver.resolveCreation(
         FeatureTaskRuntimeExecutionPlanCreationRequest(
-          repoRoot = CanonicalRepositoryRoot.canonicalPath(checkoutRoot),
+          repoRoot = repoRoot,
           definition = SkeletonDefinition.GOAL_CHILD_REVISION_5,
           reviewMode = CodeReviewExecutionMode.INLINE,
           qualityGate = FeatureTaskRuntimeQualityGateSelection.VALIDATE,
           validationDepth = ValidationDepth.FULL,
           timeout = null,
+          issueKey = "${DesktopFixtureCatalog.ISSUE_PREFIX}-FIXTURE",
+          invokedAgentId = SupportedAgent.CODEX.wireValue,
         ),
       )
     val commitSha =
@@ -95,3 +114,6 @@ fun main(args: Array<String>) {
   println("Desktop fixture database: $databasePath")
   println("Desktop fixture specs: ${result.specsRoot}")
 }
+
+private fun desktopFixtureCommands(task: String): ProjectCheckCategoryConfig =
+  ProjectCheckCategoryConfig(listOf(ProjectCheckCommand(listOf("echo", task), ".")))

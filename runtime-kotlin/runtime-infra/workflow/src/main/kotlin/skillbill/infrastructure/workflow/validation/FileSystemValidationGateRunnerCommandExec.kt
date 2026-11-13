@@ -28,7 +28,7 @@ internal fun FileSystemValidationGateRunner.deriveExecutedWorkUnits(
   stdout: String,
 ): Int {
   val signal =
-    request.declaration.findings.executedWork
+    request.declaration?.findings?.executedWork
       ?: return FileSystemValidationGateRunner.DEFAULT_EXECUTED_WORK_WHEN_UNDECLARED
   return when (signal.format) {
     ValidationGateExecutedWorkFormat.GRADLE_ACTIONABLE_SUMMARY ->
@@ -40,7 +40,7 @@ internal fun FileSystemValidationGateRunner.deriveExecutedCheckIdentities(
   request: ValidationGateRunRequest,
   stdout: String,
 ): List<String> =
-  when (request.declaration.findings.executedWork?.format) {
+  when (request.declaration?.findings?.executedWork?.format) {
     ValidationGateExecutedWorkFormat.GRADLE_ACTIONABLE_SUMMARY ->
       FileSystemValidationGateGradleStdoutParsers.parseGradleExecutedTaskIdentities(stdout)
     null -> emptyList()
@@ -51,6 +51,9 @@ internal fun FileSystemValidationGateRunner.parseFindings(
   stdout: String,
   artifactFloor: Instant,
 ): List<ValidationGateFinding> {
+  if (request.declaration == null) {
+    return emptyList()
+  }
   val artifacts = parseArtifactFindings(request, artifactFloor)
   if (request.findingParseMode != ValidationGateFindingParseMode.COLLECT_ALL) {
     return artifacts
@@ -107,15 +110,24 @@ internal fun FileSystemValidationGateRunner.finalizeFindings(
 internal fun FileSystemValidationGateRunner.parseArtifactFindings(
   request: ValidationGateRunRequest,
   artifactFloor: Instant,
-): List<ValidationGateFinding> =
-  when (request.declaration.findings.format) {
-    ValidationGateFindingsFormat.JUNIT_XML ->
-      request.declaration.findings.artifactGlobs
-        .flatMap { glob -> fileSystemValidationGateExpandGlob(request.repoRoot, glob) }
+): List<ValidationGateFinding> {
+  val findings = request.declaration?.findings ?: return emptyList()
+  return when (findings.format) {
+    ValidationGateFindingsFormat.JUNIT_XML -> {
+      val searchRoot =
+        if (request.usesProjectConfig()) {
+          resolveProjectConfigWorkingDirectory(request)
+        } else {
+          request.repoRoot
+        }
+      findings.artifactGlobs
+        .flatMap { glob -> fileSystemValidationGateExpandGlob(searchRoot, glob) }
         .filter { FileSystemValidationGateRunner.producedByThisRun(it, artifactFloor) }
         .flatMap { path -> parseArtifactFile(request.repoRoot, path) }
         .distinctBy { FileSystemValidationGateRunner.findingIdentity(it) to it.failureSubject }
+    }
   }
+}
 
 internal fun FileSystemValidationGateRunner.parseArtifactFile(
   repoRoot: Path,
@@ -130,8 +142,9 @@ internal fun FileSystemValidationGateRunner.parseArtifactFile(
 internal fun FileSystemValidationGateRunner.parseCompilerDiagnostics(
   request: ValidationGateRunRequest,
   stdout: String,
-): List<ValidationGateFinding> =
-  when (request.declaration.findings.compilerDiagnostics.format) {
+): List<ValidationGateFinding> {
+  val compiler = request.declaration?.findings?.compilerDiagnostics ?: return emptyList()
+  return when (compiler.format) {
     ValidationGateCompilerDiagnosticsFormat.GRADLE_KOTLIN_COMPILER_STDOUT ->
       FileSystemValidationGateGradleStdoutParsers.parseGradleKotlinCompilerStdout(
         request.repoRoot,
@@ -142,6 +155,7 @@ internal fun FileSystemValidationGateRunner.parseCompilerDiagnostics(
           stdout,
         )
   }
+}
 
 internal fun FileSystemValidationGateRunner.parseDetektXmlFile(
   repoRoot: Path,

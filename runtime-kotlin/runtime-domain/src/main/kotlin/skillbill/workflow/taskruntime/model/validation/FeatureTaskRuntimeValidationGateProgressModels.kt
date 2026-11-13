@@ -192,6 +192,7 @@ data class FeatureTaskRuntimeValidationGateProgress(
   val terminalFailureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
   val terminalFailureCode: String? = null,
   val pendingExternalInterrupted: Boolean = false,
+  val buildCommandAttempt: FeatureTaskRuntimeProjectCheckBuildCommandAttempt? = null,
 ) {
   init {
     val reason =
@@ -266,6 +267,9 @@ data class FeatureTaskRuntimeValidationGateProgress(
       ValidationEvidencePayloadKeys.TERMINAL_FAILURE_CODE to terminalFailureCode,
     ).apply {
       if (pendingExternalInterrupted) put(ValidationEvidencePayloadKeys.PENDING_EXTERNAL_INTERRUPTED, true)
+      buildCommandAttempt?.let {
+        put(ValidationEvidencePayloadKeys.BUILD_COMMAND_ATTEMPT, it.toArtifactMap())
+      }
     }
 
   companion object {
@@ -289,7 +293,8 @@ data class FeatureTaskRuntimeValidationGateProgress(
       val contractVersion = raw[SharedPayloadKeys.CONTRACT_VERSION]
       if (
         contractVersion != FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION &&
-        contractVersion != FEATURE_TASK_RUNTIME_VALIDATION_GATE_PROGRESS_CONTRACT_VERSION
+        contractVersion != FEATURE_TASK_RUNTIME_VALIDATION_GATE_PROGRESS_CONTRACT_VERSION &&
+        contractVersion != "0.3"
       ) {
         throw invalidWorkflowStateSchemaError("Unsupported validation gate progress contract_version.")
       }
@@ -327,6 +332,7 @@ data class FeatureTaskRuntimeValidationGateProgress(
       val terminalFailureCode = raw.optionalGateProgressString(ValidationEvidencePayloadKeys.TERMINAL_FAILURE_CODE)
       val pendingExternalInterrupted =
         raw.optionalGateProgressFlag(ValidationEvidencePayloadKeys.PENDING_EXTERNAL_INTERRUPTED)
+      val buildCommandAttempt = decodeBuildCommandAttempt(raw[ValidationEvidencePayloadKeys.BUILD_COMMAND_ATTEMPT])
       violation(gateRunCount, gateRuns, repairsUsed)?.let { reason ->
         throw invalidWorkflowStateSchemaError("FeatureTaskRuntimeValidationGateProgress is incoherent: $reason")
       }
@@ -348,7 +354,23 @@ data class FeatureTaskRuntimeValidationGateProgress(
         terminalFailureDisposition,
         terminalFailureCode,
         pendingExternalInterrupted,
+        buildCommandAttempt,
       )
+    }
+
+    private fun decodeBuildCommandAttempt(raw: Any?): FeatureTaskRuntimeProjectCheckBuildCommandAttempt? {
+      if (raw == null) return null
+      val map =
+        raw as? Map<*, *>
+          ?: throw invalidWorkflowStateSchemaError("Project check build command attempt must be a mapping.")
+      val typed = linkedMapOf<String, Any?>()
+      map.forEach { (key, value) ->
+        val name =
+          key as? String
+            ?: throw invalidWorkflowStateSchemaError("Project check build command attempt keys must be strings.")
+        typed[name] = value
+      }
+      return FeatureTaskRuntimeProjectCheckBuildCommandAttempt.fromArtifactMap(typed)
     }
 
     private fun decodeTriageDisposition(
@@ -360,7 +382,9 @@ data class FeatureTaskRuntimeValidationGateProgress(
         FeatureTaskRuntimeValidationGateTriageDisposition.fromWire(
           raw[ValidationEvidencePayloadKeys.TRIAGE_DISPOSITION] as? String,
         )
-      } else if (contractVersion == FEATURE_TASK_RUNTIME_VALIDATION_GATE_PROGRESS_CONTRACT_VERSION) {
+      } else if (
+        contractVersion == FEATURE_TASK_RUNTIME_VALIDATION_GATE_PROGRESS_CONTRACT_VERSION || contractVersion == "0.3"
+      ) {
         throw invalidWorkflowStateSchemaError("Validation gate progress is missing triage_disposition.")
       } else if (capturedTriagePlan != null) {
         FeatureTaskRuntimeValidationGateTriageDisposition.CAPTURED

@@ -8,6 +8,7 @@ import skillbill.contracts.config.projectchecks.ProjectCheckDiscoveryResponse
 import skillbill.contracts.config.projectchecks.wireValue
 import skillbill.ports.config.projectchecks.ProjectCheckDiscoveryLock
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import java.nio.file.Path
 
 @Inject
 public class ProjectCheckCommandResolver(
@@ -45,6 +46,9 @@ public class ProjectCheckCommandResolver(
     )
     return configAccess.load(request.workingDirectory)
   }
+
+  public fun loadCommitted(workingDirectory: Path): ProjectCheckConfigAccessSnapshot =
+    configAccess.load(workingDirectory)
 
   private fun refreshAndDiscover(
     request: ProjectCheckCommandResolverRequest,

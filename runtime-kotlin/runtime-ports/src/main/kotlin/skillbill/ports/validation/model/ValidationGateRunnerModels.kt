@@ -25,9 +25,11 @@ data class ValidationGateRunRequest(
   val repoRoot: Path,
   val argv: List<String>,
   val cacheMode: ValidationGateCacheMode,
-  val declaration: ValidationGateDeclaration,
+  val declaration: ValidationGateDeclaration? = null,
   val terminalVerifying: Boolean,
   val findingParseMode: ValidationGateFindingParseMode = ValidationGateFindingParseMode.ARTIFACTS_ONLY,
+  val commandSource: ValidationGateCommandSource = ValidationGateCommandSource.LEGACY_PACK,
+  val executionWorkingDirectory: String? = null,
 )
 
 data class ValidationGateRunResult(

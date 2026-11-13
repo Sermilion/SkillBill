@@ -166,7 +166,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
         promptComposerBriefingFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD),
       )
     assertFalse(buildPrompt.contains(ownershipTitle), "build owns compile proof, not validate gate ownership")
-    assertContains(buildPrompt, "pack build_command")
+    assertContains(buildPrompt, "admitted saved build command")
   }
 
   @Test
@@ -313,7 +313,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
   }
 
   @Test
-  fun `build prompt names pack build_command and forbids collect-all and validate checklists`() {
+  fun `build prompt names admitted saved build commands and forbids collect-all and validate checklists`() {
     val prompt =
       composePhasePrompt(
         PROMPT_COMPOSER_ISSUE_KEY,

@@ -11,6 +11,7 @@ import skillbill.infrastructure.host.jvm.applyTo
 import skillbill.infrastructure.host.jvm.hostPath
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
 import skillbill.infrastructure.host.scratch.testAgentRunScratchRoot
+import skillbill.ports.validation.model.ValidationGateCommandSource
 import skillbill.ports.validation.model.ValidationGateFindingParseMode
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.scaffold.model.ValidationGateCompilerDiagnosticsFormat
@@ -35,6 +36,133 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class FileSystemValidationGateRunnerTest {
+  @Test
+  fun `project_config runs the saved argv once in the declared directory without nested wrapper expansion`() {
+    val repo = Files.createTempDirectory("gate-project-config")
+    try {
+      val nested = repo.resolve("nested")
+      Files.createDirectories(nested)
+      val script = repo.resolve("record.sh")
+      Files.writeString(
+        script,
+        """
+        #!/bin/sh
+        printf 'cwd=%s\n' "${'$'}(pwd)" > invocation.txt
+        printf 'argv0=%s\n' "${'$'}0" >> invocation.txt
+        printf 'args=%s\n' "${'$'}*" >> invocation.txt
+        exit 0
+        """.trimIndent(),
+      )
+      script.toFile().setExecutable(true)
+      val runner = FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot())
+      val result =
+        runner.run(
+          ValidationGateRunRequest(
+            repoRoot = repo,
+            argv = listOf("sh", script.toString(), "saved-arg"),
+            cacheMode = ValidationGateCacheMode.CACHE_ELIGIBLE,
+            declaration = null,
+            terminalVerifying = false,
+            commandSource = ValidationGateCommandSource.PROJECT_CONFIG,
+            executionWorkingDirectory = "nested",
+          ),
+        )
+      assertEquals(0, result.exitCode)
+      assertEquals(ValidationGateRunOutcome.PASSED, result.outcome)
+      val recorded = Files.readString(nested.resolve("invocation.txt"))
+      val recordedCwd =
+        recorded.lineSequence().first { line -> line.startsWith("cwd=") }.removePrefix("cwd=")
+      assertEquals(nested.toRealPath(), Path.of(recordedCwd).toRealPath())
+      assertTrue(recorded.contains(script.toString()))
+      assertTrue(recorded.contains("saved-arg"))
+      assertFalse(Files.exists(nested.resolve("gradlew")))
+    } finally {
+      repo.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `project_config refuses a working directory that escapes the checkout`() {
+    val repo = Files.createTempDirectory("gate-project-config-escape")
+    try {
+      val runner = FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot())
+      val failure =
+        assertFailsWith<SkillBillRuntimeException> {
+          runner.run(
+            ValidationGateRunRequest(
+              repoRoot = repo,
+              argv = listOf("true"),
+              cacheMode = ValidationGateCacheMode.CACHE_ELIGIBLE,
+              declaration = null,
+              terminalVerifying = false,
+              commandSource = ValidationGateCommandSource.PROJECT_CONFIG,
+              executionWorkingDirectory = "..",
+            ),
+          )
+        }
+      assertEquals(FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION, failure.code)
+      assertTrue(failure.message.orEmpty().contains("escapes the active checkout"))
+    } finally {
+      repo.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `project_config artifact globs search the execution directory not sibling modules`() {
+    val repo = Files.createTempDirectory("gate-project-config-artifacts")
+    try {
+      val nested = repo.resolve("nested")
+      val sibling = repo.resolve("sibling")
+      Files.createDirectories(nested.resolve("build/test-results/test"))
+      Files.createDirectories(sibling.resolve("build/test-results/test"))
+      Files.writeString(
+        sibling.resolve("build/test-results/test/TEST-sibling.xml"),
+        """
+        <?xml version="1.0"?>
+        <testsuite>
+          <testcase classname="sibling.Test" name="fails">
+            <failure message="sibling"/>
+          </testcase>
+        </testsuite>
+        """.trimIndent(),
+      )
+      val script = repo.resolve("fail.sh")
+      Files.writeString(
+        script,
+        """
+        #!/bin/sh
+        cat > build/test-results/test/TEST-nested.xml << 'EOF'
+        <?xml version="1.0"?>
+        <testsuite>
+          <testcase classname="nested.Test" name="fails">
+            <failure message="nested"/>
+          </testcase>
+        </testsuite>
+        EOF
+        exit 1
+        """.trimIndent(),
+      )
+      script.toFile().setExecutable(true)
+      val runner = FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot())
+      val result =
+        runner.run(
+          request(
+            repo,
+            listOf("sh", script.toString()),
+            GateParseOptions(parseMode = ValidationGateFindingParseMode.ARTIFACTS_ONLY),
+          ).copy(
+            commandSource = ValidationGateCommandSource.PROJECT_CONFIG,
+            executionWorkingDirectory = "nested",
+          ),
+        )
+      assertEquals(1, result.findings.size)
+      assertTrue(result.findings.single().message.contains("nested"))
+      assertTrue(result.findings.none { it.module.contains("sibling") || it.message.contains("sibling") })
+    } finally {
+      repo.toFile().deleteRecursively()
+    }
+  }
+
   @Test
   fun `COLLECT_ALL unions compiler findings from module A with JUnit from compiling module B`() {
     val repo = Files.createTempDirectory("gate-collect-all")

@@ -18,6 +18,7 @@ import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testHarnessClock
 import skillbill.config.model.RepoLocalConfig
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.contracts.time.JvmSystemClock
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
@@ -101,14 +102,16 @@ import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorSer
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
+import skillbill.engine.featuretask.slot.testAdmittedProjectCheckSnapshot
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.featuretask.slot.unavailableQaReportSettlement
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.slot.verifyFindingsOutput
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
-import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
 import skillbill.engine.featuretask.validation.ValidationGateResolver
+import skillbill.engine.featuretask.validation.buildFeatureTaskRuntimeBuildGateCoordinator
+import skillbill.engine.featuretask.validation.projectchecks.projectCheckCommandResolverForTests
 import skillbill.error.core.RejectedOutputDiagnosticFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rejectedOutputDiagnosticConflictMessage
@@ -759,6 +762,7 @@ data class RuntimeHarnessConfig(
   val qaExecution: QaExecutionLifecycle = testQaExecutionLifecycle(),
   val qaReports: QaReportSettlement = unavailableQaReportSettlement(),
   val phaseInstructionSource: PhaseInstructionFileSource? = null,
+  val admittedProjectCheckSnapshot: ProjectCheckCommandSnapshot? = null,
 ) {
   val harnessGitOperations: WorkflowGitOperations get() = gitOperationsOverride ?: branchSetup.gitOperations
 }
@@ -810,7 +814,7 @@ private fun testRunLoopEntry(deps: RuntimePhaseGatesDeps): TestFeatureTaskRuntim
     lifecycleTelemetry = deps.lifecycleTelemetry,
     qualityGateCycles =
       RuntimeQualityGateCycles(
-        FeatureTaskRuntimeBuildGateCoordinator(
+        buildFeatureTaskRuntimeBuildGateCoordinator(
           validationGateResolver,
           validationGateRunner,
           deps.gateRepoLocalConfig,
@@ -1514,6 +1518,7 @@ private fun runnerExecutionEntry(
       config.gateRepoLocalConfig,
       database,
       fixture.compatibility,
+      projectCheckCommandResolverForTests(),
       diagnostics = NoopRuntimeDiagnostics,
     )
   if (!config.seedDurableWorkflow) {
@@ -1533,9 +1538,17 @@ private fun runnerExecutionEntry(
       config.goalContinuation.validationDepth,
       null,
     )
+  val seeded = fixture.strategies.executionPlan(facts)
+  val plan =
+    seeded.withProjectCheckCommands(
+      config.admittedProjectCheckSnapshot ?: testAdmittedProjectCheckSnapshot(seeded.qualityGateSelection),
+    )
   val descriptor =
     fixture.validator.read(
-      fixture.codec.encodeExecution(fixture.strategies.executionPlan(facts), inputs),
+      fixture.codec.encodeExecution(
+        plan,
+        inputs.copy(projectCheckSnapshot = plan.projectCheckCommands),
+      ),
       "runner fixture",
     )
   database.transaction { unit ->
@@ -1572,7 +1585,7 @@ private fun runnerSelectionFacts(config: RuntimeHarnessConfig): PhaseStrategySel
 private fun defaultQualityGateCycles(): RuntimeQualityGateCycles {
   val resolver = ValidationGateResolver { listOf(kotlinPackWithValidationGate()) }
   return RuntimeQualityGateCycles(
-    FeatureTaskRuntimeBuildGateCoordinator(
+    buildFeatureTaskRuntimeBuildGateCoordinator(
       resolver,
       passingValidationGateRunner(),
       defaultRepoLocalConfigPort(),

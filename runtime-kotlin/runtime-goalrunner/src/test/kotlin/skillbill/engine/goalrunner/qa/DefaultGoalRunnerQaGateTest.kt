@@ -64,7 +64,6 @@ import java.util.concurrent.CancellationException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -200,12 +199,11 @@ class DefaultGoalRunnerQaGateTest {
     val result =
       gate(git, outcomes, listOf(kotlinPackWithoutGate())).run(state(), request())
 
-    val warning = assertIs<GoalQaGateResult.Warned>(result)
-    assertEquals("Required build gate declaration is absent from dominant pack 'kotlin'.", warning.reason)
+    assertEquals(GoalQaGateResult.Skipped(GoalQaSkipReason.UNSUPPORTED_TARGET), result)
     assertNull(phaseRunDatabase(home, clock).read { it.featureTaskQaOutcomes.find("goal-parent:test-quality") })
     val execution = assertNotNull(outcomes.goalQualityExecution("goal-parent")?.execution)
-    assertEquals(GoalQualityPreQaBuildState.WARNED, execution.preQaBuild)
-    assertEquals(GoalQualityExecutionStatus.SETTLED_WARNED, execution.status)
+    assertEquals(GoalQualityPreQaBuildState.PASSED, execution.preQaBuild)
+    assertEquals(GoalQualityExecutionStatus.SETTLED_SKIPPED, execution.status)
     assertEquals(GoalQualityValidationDisposition.COMPLETED, execution.validation)
     assertNotNull(execution.finalValidationContentFingerprint)
   }

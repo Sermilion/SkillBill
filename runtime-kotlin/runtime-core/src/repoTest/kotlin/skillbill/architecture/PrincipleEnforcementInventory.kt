@@ -587,6 +587,12 @@ object PrincipleEnforcementInventory {
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
+          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/validation/" +
+            "FeatureTaskRuntimeProjectCheckBuildCommandAttempt.kt",
+        functionNames = setOf("fromArtifactMap", "commandEntry", "invalid"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/phase/" +
             "FeatureTaskRuntimePhaseRecord.kt",
         functionNames = setOf("fromArtifactMap"),

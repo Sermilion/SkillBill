@@ -15,6 +15,7 @@ import skillbill.infrastructure.host.process.BoundedExternalProcessRunner
 import skillbill.infrastructure.host.scratch.AgentRunScratchRoot
 import skillbill.infrastructure.host.scratch.AgentRunScratchSpace
 import skillbill.ports.validation.ValidationGateRunner
+import skillbill.ports.validation.model.ValidationGateCommandSource
 import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
@@ -48,7 +49,18 @@ class FileSystemValidationGateRunner(
     baselineEnvironment: MutableMap<String, String>,
     gateJvm: GateJvmDisposition,
   ): ValidationGateRunResult {
-    val projectRequests = nestedProjectRequests(request)
+    if (request.commandSource == ValidationGateCommandSource.LEGACY_PACK && request.declaration == null) {
+      throw SkillBillRuntimeException(
+        FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION,
+        "Legacy validation gate execution requires a pack declaration.",
+      )
+    }
+    val projectRequests =
+      if (request.usesProjectConfig()) {
+        emptyList()
+      } else {
+        nestedProjectRequests(request)
+      }
     if (projectRequests.isEmpty()) return runCommand(request, baselineEnvironment, gateJvm)
     val runs = projectRequests.map { projectRequest -> runCommand(projectRequest, baselineEnvironment, gateJvm) }
     return mergeNestedProjectRuns(request, runs)
@@ -59,6 +71,12 @@ class FileSystemValidationGateRunner(
     baselineEnvironment: MutableMap<String, String>,
     gateJvm: GateJvmDisposition,
   ): ValidationGateRunResult {
+    val workingDirectory =
+      if (request.usesProjectConfig()) {
+        resolveProjectConfigWorkingDirectory(request)
+      } else {
+        request.repoRoot
+      }
     val started = System.nanoTime()
     val artifactFloor = clock.instant().truncatedTo(ChronoUnit.SECONDS)
     val outputFile =
@@ -69,7 +87,7 @@ class FileSystemValidationGateRunner(
         BoundedExternalProcessRunner.run(
           BoundedExternalProcessRequest(
             argv = request.argv,
-            workingDirectory = request.repoRoot,
+            workingDirectory = workingDirectory,
             environment = baselineEnvironment,
             clearEnvironment = true,
             deadlineSeconds = GATE_TIMEOUT_MINUTES * 60L,

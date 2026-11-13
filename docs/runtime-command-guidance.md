@@ -497,7 +497,12 @@ session, including build failures. It may run repository build and packaging com
 including the pack build command, to prepare missing or stale validation artifacts.
 After source repairs it rebuilds the affected artifacts and reruns all runnable required checks
 against the current candidate. The separate compile-only build gate does not reserve
-these commands away from validation. A rebuild does not complete validation, and
+these commands away from validation. Fresh feature and goal-quality admission
+freezes the project's saved build commands into the execution descriptor;
+restart, build repair, and receipts reuse that admitted list verbatim (including
+per-command working directories) instead of pack routing or rediscovery. Legacy
+descriptors without a snapshot still use pack-declared build argv until a new
+admission is created. A rebuild does not complete validation, and
 artifact identity and integrity checks remain mandatory. Monitor repair uses the same
 validation responsibility before publishing its fix, and the runtime then verifies it
 itself: see the monitor repair publication gate below.

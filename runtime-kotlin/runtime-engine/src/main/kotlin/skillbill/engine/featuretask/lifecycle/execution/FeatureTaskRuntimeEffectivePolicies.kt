@@ -24,7 +24,7 @@ public object FeatureTaskRuntimeEffectivePolicies {
     gate: EffectiveGatePolicyInputs,
   ): List<ResolvedExecutionPolicy> =
     listOf(
-      policy(GATE_COMMANDS_POLICY_ID, gate.canonicalInputs()),
+      policy(GATE_COMMANDS_POLICY_ID, gate.canonicalInputs(), gate.gateCommandsPolicyRevision()),
       policy(
         "receipt-interpretation",
         listOf(
@@ -110,7 +110,8 @@ public object FeatureTaskRuntimeEffectivePolicies {
   public fun policy(
     id: String,
     inputs: Any?,
-  ): ResolvedExecutionPolicy = ResolvedExecutionPolicy(id, 1, effectivePolicyDigest(inputs))
+    semanticRevision: Int = 1,
+  ): ResolvedExecutionPolicy = ResolvedExecutionPolicy(id, semanticRevision, effectivePolicyDigest(inputs))
 }
 
 public fun effectivePolicyDigest(inputs: Any?): String {

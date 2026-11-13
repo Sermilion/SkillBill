@@ -298,7 +298,7 @@ class WorkerTakeoverFencingTest {
       withOwnedWorkflow { database, original ->
         val changed =
           execution.validator.read(
-            execution.codec.encodeExecution(execution.plan, execution.inputs.copy(packSlug = "different-pack")),
+            execution.codec.encodeExecution(execution.plan, execution.inputs.copy(phaseTimeoutMillis = 1)),
             "changed pack",
           )
         val mutate = { replaceWorkerDescriptor(database, original.workflowId, changed) }

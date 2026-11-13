@@ -128,7 +128,6 @@ class FeatureTaskRuntimeCrashReconcilerTest {
       val beforeC = database.read { requireNotNull(it.workflowStates.getFeatureTaskWorkflowAsMode(idC, RUNTIME)) }
       val identityA = database.read { requireNotNull(it.workflowStates.getFeatureTaskExecutionIdentity(idA)) }
       val identityB = database.read { requireNotNull(it.workflowStates.getFeatureTaskExecutionIdentity(idB)) }
-      val leaseC = database.read { requireNotNull(it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(idC)) }
       val resolvedRoots = mutableListOf<Path>()
       val wrappers = mapOf(rootA to "wrapper-a", rootB to "wrapper-b", rootC to "wrapper-c")
       val reconciler =
@@ -143,22 +142,25 @@ class FeatureTaskRuntimeCrashReconcilerTest {
 
       val result = reconciler.reconcile()
 
-      assertEquals(2, result.reconciledCount)
-      assertEquals(listOf(rootA, rootB, rootC), resolvedRoots)
+      assertEquals(3, result.reconciledCount)
+      assertEquals(emptyList<Path>(), resolvedRoots)
       val afterA = database.read { requireNotNull(it.workflowStates.getFeatureTaskWorkflowAsMode(idA, RUNTIME)) }
       val afterB = database.read { requireNotNull(it.workflowStates.getFeatureTaskWorkflowAsMode(idB, RUNTIME)) }
+      val afterC = database.read { requireNotNull(it.workflowStates.getFeatureTaskWorkflowAsMode(idC, RUNTIME)) }
       assertEquals("pending", afterA.workflowStatus)
       assertEquals(beforeA.stepsJson, afterA.stepsJson)
       assertEquals(beforeA.artifactsJson, afterA.artifactsJson)
       assertEquals("pending", afterB.workflowStatus)
       assertEquals(beforeB.stepsJson, afterB.stepsJson)
       assertEquals(beforeB.artifactsJson, afterB.artifactsJson)
+      assertEquals("pending", afterC.workflowStatus)
+      assertEquals(beforeC.stepsJson, afterC.stepsJson)
+      assertEquals(beforeC.artifactsJson, afterC.artifactsJson)
       assertEquals(identityA, database.read { it.workflowStates.getFeatureTaskExecutionIdentity(idA) })
       assertEquals(identityB, database.read { it.workflowStates.getFeatureTaskExecutionIdentity(idB) })
       assertEquals(null, database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(idA) })
       assertEquals(null, database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(idB) })
-      assertEquals(beforeC, database.read { it.workflowStates.getFeatureTaskWorkflowAsMode(idC, RUNTIME) })
-      assertEquals(leaseC, database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(idC) })
+      assertEquals(null, database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(idC) })
       assertEquals(0, execution.launches)
     } finally {
       root.toFile().deleteRecursively()
