@@ -1,3 +1,38 @@
+## [2026-11-13] Separate the working directory from repository selection
+Context: New task used one root for provider execution and repository authority. Home can contain Git metadata, and a restored explicit null must remain unselected.
+Decision: Carry workingDirectory and selectedRepositoryRoot independently, using window-supplied home without selection. Keep repositoryRoot as the non-null directory compatibility accessor; Git behavior requires actual selection.
+Reason: Tools and approval ownership need a directory. A directory alone does not identify the operator's intended repository or change the meaning of saved absence.
+
+## [2026-11-13] Version saved draft context before projection
+Context: The legacy repository-root field also marked saved records as New task drafts. Removing it could misclassify a conversation without repository selection.
+Decision: Persist context version 1 with explicit directory and selection facts. Migrate legacy bound drafts atomically before projection, preserve source fields, and return typed failures with recovery guidance while retaining invalid originals.
+Reason: Versioning distinguishes intentional absence from legacy selection and execution records. Failed reads must not become defaults, destructive rewrites or orphan deletion.
+
+## [2026-11-13] Keep repository switching available through durable replacement
+Context: SONA-21 requires manual selection after chat starts. Directory and agent changes can require a fresh provider session while the saved conversation is the only durable copy.
+Decision: Keep the picker available and stage a replacement after accepted saves and provider shutdown. Persist before publishing the chat, selection and picker; retire the prior save only when ownership allows. Failed transitions recover the old context; changed-home resume retains its source.
+Reason: A provider binding cannot silently move directories. A failed save must leave a recoverable conversation, so changing visible selection before durable replacement is unsafe.
+
+## [2026-11-13] Validate exact roots for selection and every New task dispatch
+Context: Git discovery can resolve a candidate or deleted selected child to an enclosing repository. Standalone and operation routes previously dispatched before goal/plan repository admission.
+Decision: Manual and chat picks use branch authority plus canonical exact-root equality; project metadata is display-only. Validate again before every NewTaskKind dispatch, reservation or proposal, recheck database identity after suspension, and apply new-work branch policy only to GoalRun and PlanOnly.
+Reason: A successful Git read does not prove the requested directory is the intended root. Every run kind needs a valid selected repository, while standalone and operation branch policy must remain unchanged and database changes must retain refusal precedence.
+
+## [2026-11-13] Settle repository candidates before draining queued messages
+Context: A candidate can arrive before its producing reply and saves finish, while later messages wait in the queue.
+Decision: Settle the successful turn and accepted saves before validating and replacing from the window-owned draft. Hold queue draining and carry ordinary text and images through replacement or recovery; unresolved delivery claims retain their owner.
+Reason: Rebinding inside the producing collector can cancel its accepted reply. Draining earlier can send queued messages into the wrong directory, and dropping them would lose operator input.
+
+## [2026-11-13] Retain conversation text without old launch authority
+Context: A repository switch keeps the conversation, including start suggestions and parked operation cards created for the old repository.
+Decision: Persist replacement history with inactive controls, then revoke the old thread's requests, observations and callbacks after the save succeeds. Clear accepted keys and repository-dependent launch state; bind start and key callbacks to their originating context.
+Reason: Hiding a button does not revoke retained callbacks or saved card references. Preserved conversation text must not authorize work in the replacement repository.
+
+## [2026-11-13] Require current selection and originating authority for New task runs
+Context: SONA-21 permits ordinary home chat without repository selection. Callbacks and parked requests can outlive their repository context or database session.
+Decision: Require actual selection and originating draft, chat, root, context revision and database session for starts and operation decisions, including checks after saves. Selection never retries work; a database-change refusal retains the original session fence and asks the operator to reopen the chat.
+Reason: Home Git metadata, issue keys and readiness advice do not identify the intended repository or authorize a run. An earlier action must not acquire authority in a replacement context. Ordinary tools and execution-chat scope retain their existing rules.
+
 ## [2026-11-12] Let normal desktop launches choose the Skiko renderer
 Context: The Changes panel was slow even for small diffs. DesktopLauncher forced CPU rendering on Linux when no renderer override was supplied.
 Decision: Leave renderer selection to Skiko during normal launches and keep compose.interop.blending enabled for terminal overlays. Keep the explicit SOFTWARE_COMPAT renderer in runFromSource for the recorded source-run X11 visual crash.
@@ -281,6 +316,7 @@ Reason: The runtime owns liveness and restore rules. The fingerprint prevents co
 Context: SKILL-467 allowed repository and agent changes after the first message. SKILL-482 requires a static repository pill once a chat starts.
 Decision: The repository pill has no click or chevron and its popup does not compose after chat starts. The agent chip retains its rebind behavior.
 Reason: The new requirement applies only to the repository chip. With its popup unavailable, repository and base-branch changes have no remaining trigger in the chat.
+Superseded by: Keep repository switching available through durable replacement (2026-11-13)
 
 ## [2026-11-05] Read New Task branches through a runtime port
 Context: The picker needs local and remote refs and the default branch for the selected repository.
@@ -369,6 +405,7 @@ Superseded by: Desktop treats a missing worktree directory as Removed, whatever 
 Context: Execution chat queues Send while a reply streams. New task disabled Send because canAdmitTurn required the thread not to be busy, so follow-up messages were dropped until the turn ended.
 Decision: NewTaskChat enqueues on ChatThread.queuedState and drains like ChatWorkspace. The composer labels the button Queue, keeps the input focused, and shows the queued count. Discard, close and rebind drop the queue. Start goal run still waits until the chat is idle.
 Reason: The thread already had a queue. Disabling Send was a fork of ChatComposer, not a New task requirement.
+Superseded by: Settle repository candidates before draining queued messages (2026-11-13), for candidate-driven replacement queue handling only. Ordinary turn queueing remains applicable.
 
 ## [2026-11-02] Keep New task repository and agent chips usable after the first message
 Context: After Send, the repository and agent chips still showed a hand cursor but ignored clicks, so the operator could not swap project or change the displayed model without Discard or New chat.
@@ -602,6 +639,7 @@ Reason: The application toast stack has a fixed 5-second lifetime and appears ou
 Context: Chat prompt rules made ordinary requests wait for action buttons, issue-key acceptance or a pause even though the chat transports expose the execution agent's tools.
 Decision: New-task and execution chat prompts carry repository or execution context and optional action-button formatting. They permit direct shell, CLI, MCP, Git, gh and file-edit requests without adding chat-specific approval steps, key-confirmation gates, execution-only scope limits or mode-dependent instructions. ReadOnly and Act remain UI coordination metadata for optional pause-and-act actions; transports no longer inject them into prompts or operator messages. Provider launch permissions and runtime command contracts retain their own owners.
 Reason: Conversation context and button formatting must not reduce what the operator can ask the chat agent to do. This supersedes earlier decisions that used chat mode to select prompt guidance or required button-only launches.
+Superseded by: Require current selection and originating authority for New task runs (2026-11-13), for New task run-launch authority only. Ordinary-tool and execution-chat reasoning remains applicable.
 
 ## [2026-11-07] Route interactive Codex approvals to operator cards
 Context: Act chat explicitly selected `auto_review`, so commands could be approved without a card or denied for lacking specific authorization before the operator could review their payload.

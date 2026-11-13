@@ -207,7 +207,7 @@ class ChatOperationCardTest {
     runCurrent()
     assertEquals(emptyList(), controls.newTaskRequests)
     assertEquals(true, thread.transcript.value.filterIsInstance<ChatMessage.Agent>().last().text.contains("How would you like"))
-    assertEquals(true, coordinator.submitAdjustment(thread, "Only review the first thread"))
+    assertEquals(OperationCardCoordinator.AdjustmentSubmission.Accepted, coordinator.submitAdjustment(thread, "Only review the first thread"))
     runCurrent()
 
     val sent = controls.newTaskRequests.single()
