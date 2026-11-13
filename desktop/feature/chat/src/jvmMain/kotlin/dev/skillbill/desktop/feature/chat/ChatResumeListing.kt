@@ -13,13 +13,16 @@ internal const val RESUME_LIMIT = 30
 private val LEADING_IMAGE = Regex("""^\s*(/\S+\.(png|jpe?g|gif|webp))\s*""", RegexOption.IGNORE_CASE)
 private val WHITESPACE = Regex("\\s+")
 
-/** The saved New Task drafts of the repository at [repositoryRoot], in input order; none when no repository is picked. */
+/** The saved New Task drafts for [repositoryRoot], including repository-free drafts, in input order. */
 internal fun resumableDrafts(saved: List<ChatHistoryEntry>, repositoryRoot: String?): List<ChatHistoryEntry> {
-  if (repositoryRoot == null) return emptyList()
   val canonicalRoots = mutableMapOf<String, String>()
   fun resolved(root: String): String = canonicalRoots.getOrPut(root) { canonicalRepositoryRoot(root) }
-  val selectedRoot = resolved(repositoryRoot)
-  return saved.filter { entry -> entry.newTask?.selectedRepositoryRoot?.let { resolved(it) == selectedRoot } == true }
+  val selectedRoot = repositoryRoot?.let(::resolved)
+  return saved.filter { entry ->
+    val newTask = entry.newTask ?: return@filter false
+    val entryRoot = newTask.selectedRepositoryRoot ?: return@filter true
+    selectedRoot != null && resolved(entryRoot) == selectedRoot
+  }
 }
 
 private fun canonicalRepositoryRoot(root: String): String = try {
