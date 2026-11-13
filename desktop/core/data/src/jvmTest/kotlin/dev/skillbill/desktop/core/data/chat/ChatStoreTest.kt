@@ -175,6 +175,35 @@ class ChatStoreTest {
   }
 
   @Test
+  fun `unsupported saved agent is normalized without losing its chat or metadata`() {
+    val diagnostics = RecordingDiagnostics()
+    val clock = object : Clock {
+      override fun now() = Instant.fromEpochMilliseconds(10_000)
+    }
+    val file = File(host.userHome, "$CHAT_STORE_PATH/retired.json")
+    file.parentFile.mkdirs()
+    file.writeText(
+      """{"session_id":"retired","execution_id":"wf-1","agent_id":"retired-agent","model":"kept-model","effort":"high","profile":"/profiles/kept","updated_at_ms":1,"summary":"kept summary","agent_session":"kept-session","lines":[{"role":"Operator","text":"keep these lines"},{"role":"Agent","text":"reply"}]}""",
+    )
+    assertTrue(file.setLastModified(clock.now().toEpochMilliseconds()))
+
+    val store = ChatStore(host, diagnostics, clock)
+    val restored = store.savedChats("wf-1").single()
+
+    assertEquals("unavailable", restored.agent.agentId)
+    assertEquals("kept-model", restored.agent.model)
+    assertEquals("high", restored.agent.effort)
+    assertEquals("/profiles/kept", restored.agent.profile)
+    assertEquals("kept summary", restored.summary)
+    assertEquals(listOf("keep these lines", "reply"), restored.lines.map { it.text })
+    assertEquals(listOf("chat.store_unsupported_agent_normalized"), diagnostics.categories)
+    assertTrue(store.saveSummary("retired", "updated summary", Instant.fromEpochMilliseconds(2)))
+    assertEquals("unavailable", Json.parseToJsonElement(file.readText()).jsonObject.getValue("agent_id").jsonPrimitive.content)
+    assertEquals("unavailable", store.savedChats("wf-1").single().agent.agentId)
+    assertEquals(listOf("chat.store_unsupported_agent_normalized", "chat.store_unsupported_agent_normalized"), diagnostics.categories)
+  }
+
+  @Test
   fun `old chat lines without actions restore empty action metadata and malformed actions are recorded`() {
     val diagnostics = RecordingDiagnostics()
     val file = File(host.userHome, "$CHAT_STORE_PATH/legacy.json")

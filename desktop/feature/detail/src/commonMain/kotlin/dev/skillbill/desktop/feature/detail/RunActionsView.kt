@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.feature.detail
 
 import dev.skillbill.desktop.core.designsystem.component.ChecklistItem
+import dev.skillbill.desktop.core.designsystem.component.agentDisplayName
 import dev.skillbill.desktop.core.domain.model.Incident
 import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
 import dev.skillbill.desktop.core.domain.model.IncidentProgress
@@ -73,7 +74,7 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
     ready && !goalStarted && loaded != null && planImplementationEnabled(item, loaded.detail) && item.issueKey !in controls.reservations,
     tooltip = GOAL_STARTED.takeIf { goalStarted },
   ).takeIf { item.offersPlanImplementation() }
-  val agentLabel = agentId?.let { "Agent: $it" } ?: "Choose agent"
+  val agentLabel = agentId?.let { "Agent: ${agentDisplayName(it)}" } ?: "Choose agent"
   val agent = when {
     resumable -> ControlButton(agentLabel, launchable)
     implement != null -> ControlButton(agentLabel, implement.enabled)

@@ -276,6 +276,7 @@ class UsageSidebarModelTest {
     fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(3, ChatAgent("junie", null, null), null, false)
     runCurrent()
     assertEquals("junie", fixture.model.view.value.nameOnlyAgent)
+    assertEquals("Unavailable agent", fixture.model.view.value.toUsageUiState(Instant.fromEpochSeconds(0)).provider)
 
     fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(4, ChatAgent("codex", "actual-model", null), "chat-session", false)
     runCurrent()

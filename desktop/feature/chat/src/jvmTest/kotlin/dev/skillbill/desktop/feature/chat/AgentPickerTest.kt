@@ -22,6 +22,11 @@ import kotlin.test.assertNull
 @OptIn(ExperimentalTestApi::class)
 class AgentPickerTest {
   @Test
+  fun `unsupported profiled agent uses unavailable chip label and keeps model`() {
+    assertEquals("Unavailable agent · retained-model", chipText(ChatAgent("retired-agent", "retained-model", null, "/profiles/retired")))
+  }
+
+  @Test
   fun `one chip lists agents and the current agent's models`() = runComposeUiTest {
     var agentChoice: String? = null
     picker(ChatAgent("codex", null, null), onChoose = { agentChoice = it }) {

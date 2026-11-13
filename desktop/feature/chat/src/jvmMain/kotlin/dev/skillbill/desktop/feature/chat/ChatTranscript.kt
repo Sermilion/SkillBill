@@ -41,6 +41,7 @@ import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.Avatar
+import dev.skillbill.desktop.core.designsystem.component.agentDisplayName
 import dev.skillbill.desktop.core.designsystem.component.Callout
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
@@ -244,7 +245,7 @@ private fun AgentTurn(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
       val agentId = agent?.agentId ?: "agent"
       Avatar(agentId, small = true)
-      BasicText(agentId.replaceFirstChar { it.uppercase() }, style = type.tBaseMedium.copy(color = colors.fg))
+      BasicText(agent?.let { agentDisplayName(it.agentId) } ?: "Agent", style = type.tBaseMedium.copy(color = colors.fg))
       val start = message.startedAt
       val end = message.finishedAt
       val timing = when {

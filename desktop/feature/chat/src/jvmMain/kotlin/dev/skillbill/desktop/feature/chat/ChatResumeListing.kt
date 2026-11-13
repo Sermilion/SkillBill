@@ -53,7 +53,7 @@ internal fun resumeTitle(entry: ChatHistoryEntry): ResumeTitle {
   val (paths, rest) = splitLeadingImages(entry.title)
   val images = paths.map { it.substringAfterLast('/') }
   val text = rest.replace(WHITESPACE, " ").trim()
-    .ifEmpty { images.firstOrNull() ?: "${entry.agent.agentId} session" }
+    .ifEmpty { images.firstOrNull() ?: "${agentName(entry.agent)} session" }
   return ResumeTitle(text, images)
 }
 

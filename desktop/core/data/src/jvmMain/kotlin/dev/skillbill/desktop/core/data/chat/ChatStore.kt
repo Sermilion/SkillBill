@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.UNAVAILABLE_AGENT_ID
 import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
@@ -39,6 +40,7 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
 import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
 import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
+import skillbill.install.model.SupportedAgent
 
 /** Relative to the user's home, beside the settings file. */
 internal const val CHAT_STORE_PATH = ".skill-bill/desktop/chats"
@@ -376,7 +378,12 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
 }
 
 private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Diagnostics): StoredChat {
-  val agentId = root.string(ChatStoreKeys.AGENT_ID)
+  val agentId = root.string(ChatStoreKeys.AGENT_ID)?.let { id ->
+    if (id in SupportedAgent.supportedIds || id == UNAVAILABLE_AGENT_ID) id else {
+      diagnostics.record("chat.store_unsupported_agent_normalized")
+      UNAVAILABLE_AGENT_ID
+    }
+  }
   return StoredChat(
     sessionId = root.string(ChatStoreKeys.SESSION_ID) ?: fallbackSessionId,
     executionId = root.string(ChatStoreKeys.EXECUTION_ID),

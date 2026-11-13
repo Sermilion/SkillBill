@@ -89,6 +89,30 @@ class ChatThreadTest {
   }
 
   @Test
+  fun `unsupported agent failure labels ids and preserves provider explanations`() {
+    val thread = ChatThread(Clock.System)
+    val agent = ChatAgent("retired-agent", null, null)
+
+    thread.show(agent, ChatEvent.Failed(ChatFailure.AgentUnsupported, agent.agentId))
+    assertEquals("Chat is not available for agent Unavailable agent yet.", thread.transcript.value.last().let { (it as ChatMessage.Notice).text })
+    thread.show(agent, ChatEvent.Failed(ChatFailure.AgentUnsupported, null))
+    assertEquals("Chat is not available for agent Unavailable agent yet.", thread.transcript.value.last().let { (it as ChatMessage.Notice).text })
+    thread.show(agent, ChatEvent.Failed(ChatFailure.AgentUnsupported, "Provider requires a signed-in account."))
+    assertEquals("Chat is not available for agent Provider requires a signed-in account. yet.", thread.transcript.value.last().let { (it as ChatMessage.Notice).text })
+  }
+
+  @Test
+  fun `unavailable agent notice is added once after a restored trailing copy`() {
+    val thread = ChatThread(Clock.System)
+    thread.agentSupportedState.value = false
+    thread.replaceTranscript(listOf(ChatMessage.Notice(UNAVAILABLE_AGENT_NOTICE)))
+
+    thread.showUnavailableAgentNotice()
+
+    assertEquals(1, thread.transcript.value.filterIsInstance<ChatMessage.Notice>().count { it.text == UNAVAILABLE_AGENT_NOTICE })
+  }
+
+  @Test
   fun `tool-only messages share one tool group until a message with text closes the entry`() {
     val thread = ChatThread(Clock.System)
     val calls = (1..3).map { ChatToolCall("t$it", "Bash", "{}", null) }

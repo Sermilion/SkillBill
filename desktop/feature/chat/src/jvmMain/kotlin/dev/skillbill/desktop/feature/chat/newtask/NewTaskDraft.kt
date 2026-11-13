@@ -172,6 +172,8 @@ class NewTaskDraft internal constructor(
   private fun canAdmitTurn(message: String, attachments: List<ChatImage> = emptyList()): Boolean {
     val current = chatState.value
     return !closing && (message.isNotBlank() || attachments.isNotEmpty()) && repository != null && selectedAgent != null && selectedAgent?.agentId == agentId &&
+      current?.thread?.agentSupported?.value != false &&
+      selectedAgent?.agentId?.let(chats::supports) == true &&
       current?.repositoryMissing != true && !offerState.value.starting
   }
 
@@ -532,6 +534,7 @@ class NewTaskDraft internal constructor(
     val notice = ChatMessage.Notice("This draft's repository no longer exists: ${context.repositoryRoot}. Discard it to continue.")
     if (retained == null) resumed.thread.replaceTranscript(if (missing) lines + notice else lines)
     resumed.thread.showCapability(entry.agent)
+    resumed.thread.showUnavailableAgentNotice()
     synchronized(cardOwners) { cardOwners[resumed.thread] = resumed }
     if (!missing) cards.revalidate(resumed.thread, resumed.thread.transcript.value.mapNotNull { (it as? ChatMessage.Notice)?.operationCard?.token })
     return true

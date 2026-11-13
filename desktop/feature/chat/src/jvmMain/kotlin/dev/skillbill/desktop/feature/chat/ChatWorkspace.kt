@@ -778,6 +778,7 @@ class ChatWorkspace(
       )
       session.replaceTranscript(listOf(stateCard(session.item), notice) + lines.map(::restored))
       session.thread.showCapability(entry.agent)
+      session.thread.showUnavailableAgentNotice()
       cards(session).revalidate(session.thread, lines.mapNotNull { it.operationCard?.token })
     }
   }

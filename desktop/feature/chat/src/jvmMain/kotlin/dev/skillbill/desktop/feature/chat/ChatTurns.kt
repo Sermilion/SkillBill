@@ -294,6 +294,7 @@ internal class ChatTurns(
       session.agentState.value = it
       session.agentSupportedState.value = chat.supports(it.agentId)
       session.thread.showCapability(it)
+      session.thread.showUnavailableAgentNotice()
     }
 
   // A provider session and snapshot count as delivered only after a non-failure update. Refused setup leaves saved history intact.

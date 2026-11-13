@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.component.Avatar
+import dev.skillbill.desktop.core.designsystem.component.agentDisplayName
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
@@ -181,7 +182,7 @@ private fun DefaultAgentSelector(agents: List<String>, selected: String?, onTogg
   }
 }
 
-private fun String.agentLabel() = replaceFirstChar { it.uppercase() }
+private fun String.agentLabel() = agentDisplayName(this)
 
 @Composable
 private fun UsageProviderSelector(selected: UsageProvider?, onSelect: (UsageProvider) -> Unit) {

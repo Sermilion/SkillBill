@@ -107,6 +107,46 @@ class ChatWorkspaceTest {
   private fun worktreeDir(): String = Files.createTempDirectory("chat-worktree").toRealPath().also(tempDirs::add).toString()
 
   @Test
+  fun `resuming an unsupported saved chat keeps history and gives recovery guidance`() = runTest {
+    val item = workItem("SKILL-19")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    chat.events = { flowOf(ChatEvent.Completed) }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    val saved = ChatHistoryEntry(
+      sessionId = "retired-session",
+      executionId = item.id,
+      agent = ChatAgent("retired-agent", "kept-model", "high"),
+      updatedAt = clock.now(),
+      title = "Saved work",
+      lines = listOf(ChatHistoryLine(ChatHistoryRole.Operator, "keep this"), ChatHistoryLine(ChatHistoryRole.Agent, "earlier reply")),
+    )
+
+    workspace.resume(item.id, saved)
+    runCurrent()
+
+    assertFalse(session.agentSupported.value)
+    assertEquals(listOf("keep this", "earlier reply"), session.transcript.value.mapNotNull {
+      (it as? ChatMessage.Operator)?.text ?: (it as? ChatMessage.Agent)?.text
+    })
+    assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Notice>().count { it.text == UNAVAILABLE_AGENT_NOTICE })
+
+    workspace.resume(item.id, saved.copy(lines = saved.lines + ChatHistoryLine(ChatHistoryRole.Notice, UNAVAILABLE_AGENT_NOTICE)))
+    runCurrent()
+    assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Notice>().count { it.text == UNAVAILABLE_AGENT_NOTICE })
+
+    workspace.switchAgent(item.id, "codex")
+    runCurrent()
+    assertTrue(session.agentSupported.value)
+    workspace.send(item.id, "continue")
+    runCurrent()
+    assertEquals("codex", chat.requests.last().agent.agentId)
+    assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Notice>().count { it.text == UNAVAILABLE_AGENT_NOTICE })
+  }
+
+  @Test
   fun `an immediately replayed reply has its observer identity before collection starts`() = runTest {
     val item = workItem("SKILL-530")
     details.details = mapOf(item.id to flowOf(loaded(item)))
@@ -1363,7 +1403,7 @@ class ChatWorkspaceTest {
     assertTrue(next.firstTurn)
     assertTrue(next.sessionId != opening.sessionId && next.sessionId == session.sessionId)
     assertEquals(opening.prompt.removeSuffix(openingInstruction(classify(item))) + "what failed?", next.prompt)
-    assertTrue(session.transcript.value.any { it is ChatMessage.Notice && "codex · gpt-5 · high" in it.text })
+    assertTrue(session.transcript.value.any { it is ChatMessage.Notice && "Codex · gpt-5 · high" in it.text })
   }
 
   // A chat that is not saved, or a resume that starts a new agent session, loses what the operator was doing; a resume that

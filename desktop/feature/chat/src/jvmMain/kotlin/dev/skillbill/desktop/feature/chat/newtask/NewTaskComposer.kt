@@ -84,6 +84,7 @@ internal fun NewTaskComposer(
   val chat by draft.chat.collectAsState()
   val busy = chat?.let { key(it) { it.thread.busy.collectAsState().value } } ?: false
   val stoppable = chat?.let { key(it) { it.thread.stoppable.collectAsState().value } } ?: false
+  val agentSupported = chat?.let { key(it) { it.thread.agentSupported.collectAsState().value } } ?: true
   val delivery = chat?.let { key(it) { it.thread.delivery.collectAsState().value } }
   val queued = chat?.let { key(it) { it.thread.queued.collectAsState().value } }.orEmpty()
   val changesRoot = chat?.repositoryRoot ?: draft.repository?.root
@@ -95,7 +96,7 @@ internal fun NewTaskComposer(
   val cursorMcpDependency = draft.cursorMcpDependency
   val offer by draft.offer.collectAsState()
   val ready = !offer.starting && !draft.branchSwitching && draft.canSend()
-  val sendNow = delivery == null && stoppable && queued.isNotEmpty() && draft.text.isBlank() && draft.images.isEmpty() && !offer.starting
+  val sendNow = agentSupported && delivery == null && stoppable && queued.isNotEmpty() && draft.text.isBlank() && draft.images.isEmpty() && !offer.starting
   val pickersDisabledWhy = when {
     delivery != null -> "Resolve the pending follow-up first"
     busy -> PICKERS_DISABLED_BUSY

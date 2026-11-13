@@ -13,6 +13,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.Avatar
+import dev.skillbill.desktop.core.designsystem.component.agentDisplayName
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.IdTag
@@ -59,7 +60,7 @@ internal fun SpecSelectionBar(state: SpecsUiState, onAction: (SpecsAction) -> Un
       if (control == null && toolbar.control is SpecControlState.Unavailable) RunState(SpecRunState.Unavailable)
       when {
         canStart -> AgentControl(toolbar, control?.agentChoices.orEmpty(), onAction)
-        toolbar.chosenAgent != null -> SbLabel("Agent: ${toolbar.chosenAgent}")
+        toolbar.chosenAgent != null -> SbLabel("Agent: ${agentDisplayName(toolbar.chosenAgent)}")
       }
       androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
       Box {
@@ -96,7 +97,7 @@ internal fun SpecSelectionBar(state: SpecsUiState, onAction: (SpecsAction) -> Un
 @Composable
 private fun AgentControl(toolbar: SpecToolbarState, choices: List<String>, onAction: (SpecsAction) -> Unit) {
   Box {
-    SbButton(toolbar.chosenAgent?.let { "Agent: $it" } ?: "Choose agent", { onAction(SpecsAction.OpenAgentMenu) }, size = SbControlSize.Small, icon = LucideIcons.bot, enabled = !toolbar.inFlight && !toolbar.reserved)
+    SbButton(toolbar.chosenAgent?.let { "Agent: ${agentDisplayName(it)}" } ?: "Choose agent", { onAction(SpecsAction.OpenAgentMenu) }, size = SbControlSize.Small, icon = LucideIcons.bot, enabled = !toolbar.inFlight && !toolbar.reserved)
     if (toolbar.agentMenuOpen) {
       val dismiss = { onAction(SpecsAction.DismissAgentMenu) }
       ShellLayer(dismiss)

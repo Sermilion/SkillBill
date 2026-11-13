@@ -162,6 +162,7 @@ internal class NewTaskChat(
     thread.agentState.value = agent
     thread.agentSupportedState.value = chat.supports(agent.agentId)
     thread.showCapability(agent)
+    thread.showUnavailableAgentNotice()
     observeUnprompted()
     followApprovals()
   }
@@ -195,7 +196,7 @@ internal class NewTaskChat(
     cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly,
     onRejected: (() -> Unit)? = null,
   ) = synchronized(transitionLock) {
-    if ((text.isBlank() && images.isEmpty()) || repositoryMissing || closing) return@synchronized
+    if ((text.isBlank() && images.isEmpty()) || !thread.agentSupported.value || repositoryMissing || closing) return@synchronized
     thread.enqueue(QueuedChatMessage(text, action, pauseAndAct = false, images = images, cursorMcpDependency = cursorMcpDependency, onRejected = onRejected))
     onAccepted()
     drainQueue()
@@ -212,7 +213,7 @@ internal class NewTaskChat(
   }
 
   fun sendNow() = synchronized(transitionLock) {
-    if (recoveryOnly || !thread.stoppable.value || thread.queued.value.isEmpty() || closing) return@synchronized
+    if (recoveryOnly || !thread.agentSupported.value || !thread.stoppable.value || thread.queued.value.isEmpty() || closing) return@synchronized
     if (chat.steeringPolicy(agent.agentId) == ChatSteeringPolicy.LegacySendNow) {
       interrupt()
     } else {
@@ -225,7 +226,7 @@ internal class NewTaskChat(
   }
 
   private fun drainQueue() = synchronized(transitionLock) {
-    if (recoveryOnly || closing || repositoryMissing || thread.busyState.value || turnJob != null || turnRunning) return
+    if (recoveryOnly || !thread.agentSupported.value || closing || repositoryMissing || thread.busyState.value || turnJob != null || turnRunning) return
     val next = thread.takeQueuedMessage() ?: return
     startTurn(next.text, next.action, next.images, next.cursorMcpDependency, next.onRejected)
   }

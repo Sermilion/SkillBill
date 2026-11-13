@@ -261,7 +261,7 @@ class PlanActionsTest {
     }
 
     onNodeWithText("Implement").assertIsNotEnabled()
-    onNodeWithText("Agent: claude").assertIsNotEnabled()
+    onNodeWithText("Agent: Claude").assertIsNotEnabled()
     onNodeWithText("$GOAL_STARTED. Open the goal to follow or resume it.").assertExists()
     onNodeWithText("Implement turns on when every spec is saved").assertDoesNotExist()
   }
@@ -272,9 +272,9 @@ class PlanActionsTest {
     val state = finishedPlanState(unrecorded)
 
     assertEquals("Choose agent", runActionsView(state).agent?.label)
-    assertEquals("Agent: codex", runActionsView(state.copy(defaultAgentId = "codex")).agent?.label)
+    assertEquals("Agent: Codex", runActionsView(state.copy(defaultAgentId = "codex")).agent?.label)
     assertEquals("Choose agent", runActionsView(state.copy(defaultAgentId = "junie")).agent?.label)
-    assertEquals("Agent: claude", runActionsView(finishedPlanState(planOptions(goalStarted = false)).copy(defaultAgentId = "codex")).agent?.label)
+    assertEquals("Agent: Claude", runActionsView(finishedPlanState(planOptions(goalStarted = false)).copy(defaultAgentId = "codex")).agent?.label)
   }
 
   @Test
@@ -289,14 +289,14 @@ class PlanActionsTest {
     }
     val controls = DetailControls(backgroundScope, repository, ToastQueue(), {}, {}) { current }
     val view = runActionsView(current)
-    assertEquals(ControlButton("Agent: claude", true), view.agent)
+    assertEquals(ControlButton("Agent: Claude", true), view.agent)
     assertTrue(view.implement!!.enabled)
 
     assertTrue(controls.onAction(ControlsAction.OpenAgentMenu))
     assertTrue(controls.state.value.agentMenuOpen)
     assertTrue(controls.onAction(ControlsAction.ChooseAgent("codex")))
     current = current.copy(controls = controls.state.value)
-    assertEquals("Agent: codex", runActionsView(current).agent?.label)
+    assertEquals("Agent: Codex", runActionsView(current).agent?.label)
     assertTrue(controls.onAction(ControlsAction.ImplementPlan))
     runCurrent()
 
