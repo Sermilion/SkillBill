@@ -59,6 +59,7 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateWriteResult
 import skillbill.ports.workflow.model.toSnapshot
@@ -117,7 +118,7 @@ class WorkflowService(
     incompleteFeatureTaskIdentityError(args)?.let { return it }
     val family = args.kind.workflowFamily()
     val stepId = args.currentStepId ?: family.definition.defaultInitialStepId
-    val workflowId = generateWorkflowId(family.definition.workflowIdPrefix, clock, workflowIdRandom)
+    val workflowId = args.workflowId ?: generateWorkflowId(family.definition.workflowIdPrefix, clock, workflowIdRandom)
     val effectiveSessionId =
       resolveEffectiveSessionId(
         args.kind,
@@ -470,6 +471,12 @@ class WorkflowService(
     workflowId: String,
     subtaskId: Int? = null,
   ): WorkflowContinueResult {
+    if (kind.workflowFamily() == WorkflowFamily.TASK_RUNTIME) {
+      val recovery = projectCheckout.recoverGoalCheckout(workflowId, repositoryRoot.path)
+      if (recovery is GoalWorktreeResult.Failed) {
+        runtimeDiagnostics.warning("goal checkout recovery refused: seam=workflow_continue reason=${recovery.reason}")
+      }
+    }
     var pendingProjection: PendingDecompositionProjection? = null
     val result =
       database.transaction { unitOfWork ->
@@ -668,6 +675,7 @@ fun WorkflowService.openFeatureTask(args: WorkflowServiceOpenFeatureTaskArgs): W
       routeScope = args.routeScope,
       executionPlan = args.executionPlan,
       initialArtifacts = args.initialArtifacts,
+      workflowId = args.workflowId,
     ),
   )
 }

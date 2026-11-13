@@ -380,9 +380,9 @@ class FeatureTaskStepIdentityArchitectureTest {
 
       import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
       import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds.*
-      import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-      import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
-      import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition as Steps
+      import FeatureTaskRuntimePhaseWorkflowDefinition
+      import FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
+      import FeatureTaskRuntimePhaseWorkflowDefinition as Steps
 
       internal object Synthetic {
         fun ids(step: String) = step == FeatureTaskRuntimePhaseIds.REVIEW
@@ -536,7 +536,7 @@ class FeatureTaskStepIdentityArchitectureTest {
       """
       package skillbill.engine.featuretask.slot
 
-      import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+      import FeatureTaskRuntimePhaseWorkflowDefinition
 
       internal enum class SyntheticStepRole(val stepId: String) {
         REVIEW_PASS(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW),
@@ -606,7 +606,7 @@ class FeatureTaskStepIdentityArchitectureTest {
       """
       package skillbill.engine.featuretask.slot.audit
 
-      import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+      import FeatureTaskRuntimePhaseWorkflowDefinition
 
       internal class SyntheticStrategy(
         private val label: String = "audit",

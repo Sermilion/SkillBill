@@ -360,11 +360,10 @@ Resume uses the recorded per-step assignment. A later alias, remap, or default
 does not reselect an accepted attempt. Final quality resumes with its admitted
 inputs and plans, including when the caller changes the launch agent or uses a
 different intake reference for the same goal. Child selection checks still apply.
-Alias `opus` qualifies only when the
-inherited process environment pins `ANTHROPIC_DEFAULT_OPUS_MODEL` to
-`claude-opus-5-5` or `anthropic.claude-opus-5-5`. `commit_push` stays the
-runtime commit strategy and launches no agent. Details:
-[Authoring model-specific phase strategies](model-specific-phase-strategies.md).
+Model and effort values pass through to the selected harness. Model names never
+select prompts or execution behavior. `commit_push` stays the runtime commit
+strategy and launches no agent. Details:
+[Model-independent phase execution](model-specific-phase-strategies.md).
 
 
 ## Desktop new-task start
@@ -816,8 +815,7 @@ Preplan checks prerequisite capabilities against authoritative contracts and own
 source. Bundle planning reconciles requirements across subtasks, and each subtask
 planner checks its final tasks against that evidence before declaring them ready.
 The shared runtime instruction is `slot/plan/planning-feasibility.md` in the engine
-resources; preplan, bundle planning and subtask planning all receive its body,
-including the model-specific strategy variants.
+resources; preplan, bundle planning and subtask planning all receive its body.
 
 Planning keeps a concise component inventory in its existing digest and implementation
 plan. It distinguishes existing behavior, authorized local components to build or extend,

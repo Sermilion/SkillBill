@@ -224,7 +224,6 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
             ),
         ),
       ),
-      ModelDirectiveSupplements(enabled = true),
     )
   private val plan = lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet()))
   private val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)

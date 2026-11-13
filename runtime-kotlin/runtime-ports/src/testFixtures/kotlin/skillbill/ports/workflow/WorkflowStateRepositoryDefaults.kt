@@ -183,6 +183,12 @@ abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
     expectedUpdatedAt: String?,
   ): Boolean = false
 
+  open override fun acquireFeatureTaskRuntimeWorkerForGoal(
+    ownership: FeatureTaskRuntimeWorkerOwnership,
+    expectedUpdatedAt: String?,
+    parentWorkflowId: String,
+  ): Boolean = false
+
   open override fun reserveFeatureTaskRuntimeWorkerTakeover(
     workflowId: String,
     expectedOwnerToken: String,

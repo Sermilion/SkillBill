@@ -2483,6 +2483,12 @@ class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaults() {
       true
     }
 
+  override fun acquireFeatureTaskRuntimeWorkerForGoal(
+    ownership: FeatureTaskRuntimeWorkerOwnership,
+    expectedUpdatedAt: String?,
+    parentWorkflowId: String,
+  ): Boolean = acquireFeatureTaskRuntimeWorker(ownership, expectedUpdatedAt)
+
   var beforeReserveTakeover: ((String) -> Unit)? = null
 
   override fun reserveFeatureTaskRuntimeWorkerTakeover(

@@ -22,6 +22,7 @@ import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestLoader
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestProjectionPersistence
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestStore
 import skillbill.engine.goalrunner.persist.quality.WorkflowGoalRunnerQualityExecutionStore
+import skillbill.engine.goalrunner.plan.GoalPlanningCheckoutOwnership
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairOperations
 import skillbill.engine.goalrunner.repair.WorkflowGoalRunnerChildRepairStore
@@ -49,6 +50,7 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import java.time.Clock
@@ -144,6 +146,8 @@ fun engineWorkflowGoalRunnerManifestStore(
         Random.Default,
         projectStore,
         parentProjection,
+        InPlaceGoalWorktreeResources,
+        testGoalPlanningCheckoutOwnership(database, repositoryEnclosingRootPort),
       ),
     repositoryEnclosingRootPort = repositoryEnclosingRootPort,
     executionAdmission = executionAdmission,
@@ -163,6 +167,18 @@ fun engineWorkflowGoalRunnerManifestStore(
     parentProjection = parentProjection,
   )
 }
+
+fun testGoalPlanningCheckoutOwnership(
+  database: DatabaseSessionFactory,
+  repositories: RepositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+): GoalPlanningCheckoutOwnership =
+  GoalPlanningCheckoutOwnership(
+    database,
+    repositories,
+    InPlaceGoalWorktreeResources,
+    NoopWorkflowGitOperations,
+    NoopRuntimeDiagnostics,
+  )
 
 private fun testFeatureTaskRuntimeCrashReconciler(
   database: DatabaseSessionFactory,

@@ -12,7 +12,6 @@ import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.stepCall
 import skillbill.engine.featuretask.slot.qualitygate.QUALITY_GATE_STEP_POLICY
-import skillbill.engine.featuretask.slot.qualitygate.VALIDATE_PROBE_VALUE_CONTENT
 import skillbill.engine.featuretask.slot.qualitygate.VALIDATE_VALUE_CONTENT
 import skillbill.engine.featuretask.slot.qualitygate.gateCurrentExecution
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedValidateAgentPhaseTask
@@ -46,17 +45,16 @@ public class AgentValidateStrategy :
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
   ): PhaseStepPromptSections {
     policies.policyOf(stepId)
-    val probeScope = inputs.validateProbeScope
     return PhaseStepPromptSections(
       taskDirective =
         if (inputs.validationGateTriage) {
           validateGateTriagePhaseTask()
         } else {
-          runtimeOwnedValidateAgentPhaseTask(probeScope)
+          runtimeOwnedValidateAgentPhaseTask()
         },
       runsValidationGate = true,
       runsBuildGate = true,
-      valueContent = if (probeScope == null) VALIDATE_VALUE_CONTENT else VALIDATE_PROBE_VALUE_CONTENT,
+      valueContent = VALIDATE_VALUE_CONTENT,
     )
   }
 

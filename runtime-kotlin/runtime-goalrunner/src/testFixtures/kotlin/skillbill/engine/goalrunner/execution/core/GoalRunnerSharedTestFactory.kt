@@ -156,7 +156,8 @@ fun testGoalRunnerStatusService(
       runtimeStatusService = ports.runtimeStatusService,
       clock = clock,
     )
-  val repairCoordinator = testGoalRunnerRepairCoordinator(manifestStore, outcomeStore, phaseRecorder, clock, ports)
+  val repairCoordinator =
+    testGoalRunnerRepairCoordinator(manifestStore, outcomeStore, phaseRecorder, clock, ports, database)
   return GoalRunnerStatusService(
     manifestStore = manifestStore,
     controlVerbs =
@@ -174,6 +175,7 @@ fun testGoalRunnerStatusService(
     acceptanceCoordinator =
       GoalRunnerAcceptanceCoordinator(
         manifestStore,
+        database,
         ports.gitOperations,
         clock,
         GoalExecutionRootResolver(
@@ -182,7 +184,9 @@ fun testGoalRunnerStatusService(
           ports.gitOperations,
           TestRepositoryEnclosingRoot,
           ports.diagnostics,
-          ProjectCheckout(TestRepositoryEnclosingRoot, ports.projectStore, ports.goalWorktrees, ports.gitOperations),
+          ProjectCheckout(TestRepositoryEnclosingRoot, database, ports.projectStore, ports.goalWorktrees),
+          database,
+          { _, _, _, _ -> error("Unexpected plan checkout preparation") },
         ),
         GoalWorktreeCompletionSettlement(
           manifestStore,
@@ -190,6 +194,7 @@ fun testGoalRunnerStatusService(
           TestRepositoryEnclosingRoot,
           ports.diagnostics,
           clock,
+          database,
         ),
       ),
     repositoryRoot = testRepositoryRoot,
@@ -197,6 +202,7 @@ fun testGoalRunnerStatusService(
     resetReplanCoordinator =
       GoalRunnerResetReplanCoordinator(
         manifestStore = manifestStore,
+        database = database,
         outcomeStore = outcomeStore,
         gitOperations = ports.gitOperations,
         diagnostics = ports.diagnostics,
@@ -210,7 +216,9 @@ fun testGoalRunnerStatusService(
             ports.gitOperations,
             TestRepositoryEnclosingRoot,
             ports.diagnostics,
-            ProjectCheckout(TestRepositoryEnclosingRoot, ports.projectStore, ports.goalWorktrees, ports.gitOperations),
+            ProjectCheckout(TestRepositoryEnclosingRoot, database, ports.projectStore, ports.goalWorktrees),
+            database,
+            { _, _, _, _ -> error("Unexpected plan checkout preparation") },
           ),
       ),
     purgeCoordinator =
@@ -276,9 +284,10 @@ fun testGoalRunnerRepairCoordinator(
   phaseRecorder: FeatureTaskRuntimePhaseRecorder = goalRunnerDefaultPhaseRecorder(),
   clock: Clock = testHarnessClock,
   ports: GoalRunnerStatusTestPorts = GoalRunnerStatusTestPorts(),
+  database: DatabaseSessionFactory = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
 ): GoalRunnerRepairCoordinator =
   GoalRunnerRepairCoordinator(
-    manifestStore, phaseRecorder.phaseQuery, ports.workerSupervisor,
+    manifestStore, database, phaseRecorder.phaseQuery, ports.workerSupervisor,
     ports.childRepairStore,
     outcomeStore,
     testRepositoryRoot,
@@ -291,7 +300,9 @@ fun testGoalRunnerRepairCoordinator(
       ports.gitOperations,
       TestRepositoryEnclosingRoot,
       ports.diagnostics,
-      ProjectCheckout(TestRepositoryEnclosingRoot, ports.projectStore, ports.goalWorktrees, ports.gitOperations),
+      ProjectCheckout(TestRepositoryEnclosingRoot, database, ports.projectStore, ports.goalWorktrees),
+      database,
+      { _, _, _, _ -> error("Unexpected plan checkout preparation") },
     ),
   )
 

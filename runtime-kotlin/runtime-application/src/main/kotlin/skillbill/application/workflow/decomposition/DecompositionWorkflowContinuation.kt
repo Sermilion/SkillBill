@@ -21,6 +21,7 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.goalrunner.commitPushResultArtifact
 import skillbill.goalrunner.model.GoalRunnerControlState
+import skillbill.ports.goalrunner.model.GoalPlanningOwnership
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
@@ -48,6 +49,7 @@ import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Clock
 import kotlin.random.Random
@@ -178,6 +180,7 @@ class DecompositionWorkflowContinuation(
   ): ContinuationStepResult {
     val reconciledManifest = reconcileCompletedSubtasks(manifest, unitOfWork)
     val controlState = unitOfWork.goalRunnerControls.controlState(parentRecord.workflowId)
+    val ownershipOptions = ownershipOptions(parentRecord, manifest, unitOfWork, controlState)
     val executionRoot =
       when (
         val access =
@@ -189,6 +192,9 @@ class DecompositionWorkflowContinuation(
               GoalExecutionRootOptions(
                 recreateCompleted = true,
                 revisionSubtaskId = requestedSubtaskId ?: reconciledManifest.executionRootSubtaskId(),
+                ownership = ownershipOptions.first,
+                parentWorkflowId = parentRecord.workflowId,
+                allowLegacyRecordedPath = ownershipOptions.second,
               ),
           )
       ) {
@@ -235,13 +241,46 @@ class DecompositionWorkflowContinuation(
       if (advancedManifest != manifest) decompositionRuntimeArtifacts(advancedManifest, validator) else null
     return selectedContinuation(parentRecord, advancedManifest, unitOfWork, requestedSubtaskId, executionRoot)
       .withProjectionArtifactsIfMissing(projectionArtifacts)
-      .let { step ->
-        if (step.projectionOwnerWorkflowId == null && step.projectionArtifacts != null) {
-          step.copy(projectionOwnerWorkflowId = parentRecord.workflowId)
-        } else {
-          step
+      .withProjectionOwnerIfMissing(parentRecord.workflowId)
+  }
+
+  private fun ContinuationStepResult.withProjectionOwnerIfMissing(workflowId: String): ContinuationStepResult =
+    if (projectionOwnerWorkflowId == null && projectionArtifacts != null) {
+      copy(projectionOwnerWorkflowId = workflowId)
+    } else {
+      this
+    }
+
+  private fun ownershipOptions(
+    parentRecord: WorkflowStateSnapshot,
+    manifest: DecompositionManifest,
+    unitOfWork: UnitOfWork,
+    controlState: GoalRunnerControlState,
+  ): Pair<GoalPlanningOwnership?, Boolean> {
+    val recordedPath = controlState.executionWorktreePath?.let(Path::of)
+    val selectedPlanWorkflowId =
+      unitOfWork.workflowStates
+        .getFeatureTaskWorkflow(parentRecord.workflowId)
+        ?.toSnapshot()
+        ?.step(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN)
+        ?.planWorkflowId
+    val rawOwnership =
+      selectedPlanWorkflowId?.let(unitOfWork.goalPlanningOwnership::findByWorkflow)
+        ?: checkout.repositoryIdentityCandidates(repoRoot).firstNotNullOfOrNull { identity ->
+          unitOfWork.goalPlanningOwnership.findByIssue(
+            identity,
+            normalizeRequiredIssueKey(manifest.issueKey),
+          )
         }
+    val ownership =
+      rawOwnership?.takeIf { owner ->
+        owner.state == GoalPlanningOwnership.State.TRANSFERRED &&
+          owner.workflowId == selectedPlanWorkflowId &&
+          owner.parentWorkflowId == parentRecord.workflowId &&
+          owner.repositoryIdentity == controlState.repositoryIdentity &&
+          owner.ownedPath.toAbsolutePath().normalize() == recordedPath?.toAbsolutePath()?.normalize()
       }
+    return ownership to (recordedPath != null && rawOwnership == null)
   }
 
   private fun persistRecreatedWorktree(

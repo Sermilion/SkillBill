@@ -440,9 +440,9 @@ class FeatureTaskContinuationLookupServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            database,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     return Fixture(

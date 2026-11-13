@@ -23,6 +23,12 @@ class StandalonePlanLauncher(
 ) {
   fun issueKeyOf(intake: String): String = planRun.issueKeyOf(intake)
 
+  fun prepareGoalCheckout(
+    issueKey: String,
+    intake: String?,
+    repoRoot: Path,
+  ): StandalonePlanResult.Refused? = planRun.prepareGoalCheckout(issueKey, intake, repoRoot)
+
   fun run(
     issueKey: String,
     intake: String?,

@@ -45,7 +45,7 @@ import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
-import dev.skillbill.desktop.core.designsystem.layeredShadow
+import dev.skillbill.desktop.core.designsystem.ShadowBackdrop
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.ui.changes.SubtaskStrip
 import dev.skillbill.desktop.core.ui.changes.CommitStrip
@@ -219,31 +219,33 @@ fun ChangesWindowFrame(title: String, closeAtStart: Boolean, onClose: () -> Unit
       if (shown) SbIconButton(LucideIcons.x, "Close changes", onClose, size = SbControlSize.Small)
     }
   }
-  Column(
-    Modifier.fillMaxSize()
-      .layeredShadow(SkillBillTheme.shadows.modal, shape)
-      .clip(shape)
-      .background(colors.bgWindow, shape)
-      .border(1.dp, colors.border, shape)
-      .padding(1.dp)
-      .semantics { paneTitle = title },
-  ) {
-    Row(
-      Modifier.fillMaxWidth().height(38.dp).background(colors.bgInset).hairline(Edge.Bottom, colors.border).padding(horizontal = 8.dp),
-      horizontalArrangement = Arrangement.spacedBy(10.dp),
-      verticalAlignment = Alignment.CenterVertically,
+  Box(Modifier.fillMaxSize()) {
+    ShadowBackdrop(SkillBillTheme.shadows.modal, shape, Modifier.matchParentSize())
+    Column(
+      Modifier.fillMaxSize()
+        .clip(shape)
+        .background(colors.bgWindow, shape)
+        .border(1.dp, colors.border, shape)
+        .padding(1.dp)
+        .semantics { paneTitle = title },
     ) {
-      closeSlot(closeAtStart)
-      BasicText(
-        title,
-        Modifier.weight(1f),
-        style = changesSans(12f, FontWeight.SemiBold, colors.fgMuted).copy(textAlign = TextAlign.Center),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
-      closeSlot(!closeAtStart)
+      Row(
+        Modifier.fillMaxWidth().height(38.dp).background(colors.bgInset).hairline(Edge.Bottom, colors.border).padding(horizontal = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        closeSlot(closeAtStart)
+        BasicText(
+          title,
+          Modifier.weight(1f),
+          style = changesSans(12f, FontWeight.SemiBold, colors.fgMuted).copy(textAlign = TextAlign.Center),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
+        closeSlot(!closeAtStart)
+      }
+      content()
     }
-    content()
   }
 }
 

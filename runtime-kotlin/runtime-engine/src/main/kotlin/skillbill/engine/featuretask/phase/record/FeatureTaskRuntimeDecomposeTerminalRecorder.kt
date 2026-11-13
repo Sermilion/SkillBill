@@ -102,7 +102,24 @@ public class FeatureTaskRuntimeDecomposeTerminalRecorder(
   public fun recordPlanBundle(
     workflowId: String,
     bundle: FeatureTaskRuntimePlanBundle,
-  ): Boolean = recordPlanBundleWithUnits(workflowId, bundle, emptyMap())
+    admitted: AdmittedFeatureTaskRuntimeExecution? = null,
+  ): Boolean =
+    database.transaction { unit ->
+      if (admitted != null) {
+        if (!requireCurrentWorker(admitted, unit.workflowStates, workflowId)) return@transaction false
+        val snapshot = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@transaction false
+        val existing = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.value(snapshot.artifacts)
+        if (existing != null) return@transaction decodePlanBundleFromArtifact(existing) == bundle
+        if (decodePhaseRecords(snapshot.artifacts).any { (phaseId, record) ->
+            FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitIdOf(phaseId) != null &&
+              record.status == WorkflowStepStatus.COMPLETED
+          }
+        ) {
+          return@transaction false
+        }
+      }
+      recordPlanBundleWithUnits(workflowId, bundle, emptyMap())
+    }
 
   public fun replacePlanBundle(
     workflowId: String,

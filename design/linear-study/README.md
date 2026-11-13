@@ -66,7 +66,7 @@ Activity is part of `app/screens.js`; the Changes window and Diff comments are `
 
 [USAGE-LIMITS.md](USAGE-LIMITS.md) records the original proposal, provider data sources and refresh policy.
 
-The shared sidebar has a usage card above its bottom shortcuts. It is always 110px tall, so the sidebar never shifts. It shows the agent name in its avatar color and two window slots, shortest window first. Each slot reads like `Weekly · 4d 6h` with the used percentage on the right. The track and the percentage run green while most of the window is left, yellow around half and red as it runs out. With no windows, one short line fills the first slot. Only a provider that reports a sign-in failure says "Not signed in"; anything else without numbers says "No usage data".
+The shared sidebar has a usage card below its bottom shortcuts, directly above the QA device selector. It is always 110px tall, so the sidebar never shifts. It shows the agent name in its avatar color and two window slots, shortest window first. Each slot reads like `Weekly · 4d 6h` with the used percentage on the right. The track and the percentage run green while most of the window is left, yellow around half and red as it runs out. With no windows, one short line fills the first slot. Only a provider that reports a sign-in failure says "Not signed in"; anything else without numbers says "No usage data".
 
 Click the card for the details popup. It has provider tabs, every window with its reset as a countdown and a clock time (`Resets in 2h 14m · 16:30`), a Default agent row, and Refresh and Dashboard in the footer. There is no account, source or status text. Escape or Close returns focus to the card.
 

@@ -108,7 +108,6 @@ class PhaseStrategyCompositionTest {
     PhaseStrategyLookup(
       registry,
       PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings),
-      ModelDirectiveSupplements(enabled = true),
     )
 
   private fun productionStrategies(): List<PhaseStrategy> {
@@ -312,7 +311,7 @@ class PhaseStrategyCompositionTest {
               ),
           ),
         )
-      val lookup = PhaseStrategyLookup(registry, selection, ModelDirectiveSupplements(enabled = true))
+      val lookup = PhaseStrategyLookup(registry, selection)
       val orders =
         listOf(
           linkedSetOf(FeatureTaskRuntimeQualityGateSelection.BUILD, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
@@ -338,7 +337,7 @@ class PhaseStrategyCompositionTest {
         registry,
         mapOf(definition to mapOf(PhaseSlot.CODE_REVIEW to PhaseStrategyBinding.Fixed("review-only"))),
       )
-    val lookup = PhaseStrategyLookup(registry, selection, ModelDirectiveSupplements(enabled = true))
+    val lookup = PhaseStrategyLookup(registry, selection)
     val plan = lookup.executionPlan(PhaseStrategySelectionFacts(definition, emptySet()))
 
     assertFailsWith<InvalidPhaseStrategyCompositionError> {
@@ -350,7 +349,7 @@ class PhaseStrategyCompositionTest {
   fun `production resolver accepts every shipped definition and supported typed selection`() {
     val registry = productionRegistry()
     val selection = PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings)
-    val lookup = PhaseStrategyLookup(registry, selection, ModelDirectiveSupplements(enabled = true))
+    val lookup = PhaseStrategyLookup(registry, selection)
 
     SkeletonDefinition.entries.forEach { definition ->
       val reviewModes: List<CodeReviewExecutionMode?> =
@@ -593,7 +592,6 @@ class PhaseStrategyCompositionTest {
               ),
           ),
         ),
-        ModelDirectiveSupplements(enabled = true),
       )
     val restored =
       FeatureTaskRuntimeExecutionPlanCompatibility(codec, freshLookup).requireSupportedComposition(

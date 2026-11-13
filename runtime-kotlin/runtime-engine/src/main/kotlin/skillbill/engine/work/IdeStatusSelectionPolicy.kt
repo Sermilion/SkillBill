@@ -174,7 +174,7 @@ internal object IdeStatusSelectionPolicy {
     if (family == IdeStatusWorkflowFamily.FEATURE_VERIFY &&
       currentState == IdeStatusDurableWorkflowState.PENDING.wireValue
     ) {
-      IdeStatusLifecycleState.TERMINAL
+      IdeStatusLifecycleState.PAUSED
     } else {
       lifecycleFromDurableStateWire(currentState)
     }

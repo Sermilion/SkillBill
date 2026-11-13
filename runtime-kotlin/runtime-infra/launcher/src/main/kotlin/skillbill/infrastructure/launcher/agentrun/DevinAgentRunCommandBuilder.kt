@@ -75,3 +75,9 @@ internal class DevinAgentRunCommandBuilder(
     )
   }
 }
+
+internal fun devinLaunchModelRefusal(request: SkillRunRequest): String? =
+  request.effortOverride?.takeIf(String::isNotBlank)?.let { effort ->
+    "Devin does not accept a separate effort assignment ('$effort'); select the full Devin model UID " +
+      "(for example swe-2-high) as the model and remove the effort. The phase was not started."
+  }

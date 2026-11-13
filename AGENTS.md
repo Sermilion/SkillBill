@@ -14,17 +14,17 @@ Required contracts:
 - Keep generated support pointers, provider-specific native-agent outputs, and staging artifacts uncommitted.
 - Discovery, install, routing, and validation stay dynamic and manifest-driven.
 - Missing manifests, content or required sections, and wrong contract versions fail loudly with typed errors.
-- Every fallback, degradation, or swallowed failure emits a record; see `docs/observability-policy.md`.
+- Fallbacks, degradations, and swallowed failures emit records; see `docs/observability-policy.md`.
 
 ## Runtime Contract Schemas
 
-Every `orchestration/contracts/` YAML is a runtime contract. New contracts need Draft 2020-12 YAML, Kotlin `*_CONTRACT_VERSION`, a parity test, an owner `RuntimeFailureCode` entry thrown as `SkillBillRuntimeException`, and loud failure at every parse seam. See `runtime-kotlin/ARCHITECTURE.md`.
+Every `orchestration/contracts/` YAML is a runtime contract. New contracts require Draft 2020-12 YAML, Kotlin `*_CONTRACT_VERSION`, a parity test, and an owner `RuntimeFailureCode` thrown as `SkillBillRuntimeException`. Every parse seam fails loudly. See `runtime-kotlin/ARCHITECTURE.md`.
 
-Ship a persisted-data migration path with every schema change. Prove readability for compatible changes; provide explicit steps for version bumps or incompatible changes. Validate source and migrated records. Apply coupled updates atomically and make migration repeatable. Preserve run identity, completed work, commits, checkpoints, and history. Test the previous supported version; retain earlier migration steps for older supported records.
+Every schema change needs a persisted-data migration. Prove compatible reads; document version bumps and incompatible migrations. Validate source and migrated records, apply coupled updates atomically, and make migration repeatable. Preserve run identity, completed work, commits, checkpoints, and history. Test the previous supported version and retain earlier migration steps for older supported records.
 
-Preserve all existing runs and persisted user and runtime data during installation and upgrades. Migrate automatically before the new installation reads or resumes data. On migration failure, preserve original data and a usable recovery path. Installation must not reset, discard, or replace data with defaults. Verify upgrade behavior against populated previous-version stores, including interrupted migration and repeated installation.
+Install and upgrade without losing runs or persisted data. Migrate automatically before reading or resuming data. On failure, preserve original data and a recovery path. Never reset, discard, or replace data with defaults. Test populated previous-version stores, interrupted migrations, and repeated installation.
 
-Run migrations before strict current-version validation and board or status projection. Keep unsupported or corrupt records visible with original data, a typed error, and recovery guidance. A schema mismatch must not hide an existing run, reset completed work, or regenerate durable evidence as a substitute for migration. Rebuild derived caches only from preserved source records after migration. Quarantine or regeneration retains original data and emits a diagnostic.
+Migrate before strict version validation or board/status projection. Keep unsupported or corrupt records visible with original data, a typed error, and recovery guidance. Schema mismatches must not hide runs, reset work, or replace migration with regenerated evidence. Rebuild caches only from preserved source records. Quarantine or regeneration retains originals and emits a diagnostic.
 
 Producer-side gate: feature-task phases owning a bounded planning projection (`preplan`, `plan`, `implement`) re-enter their own fix loop when completed output fails the projection contract.
 
@@ -34,7 +34,7 @@ Producer-side gate: feature-task phases owning a bounded planning projection (`p
 
 ## Worktree ownership
 
-Goals use runtime-owned `<state>/goals/<repo>/<goal>/checkout` worktrees, removed after recorded completion unless they hold unpublished work. Standalone phases use the caller's checkout. Desktop branch starts use its checkout or a runtime-created sibling worktree, removed after its last run.
+Goals use runtime-owned `<state>/goals/<repo>/<goal>/checkout` worktrees, removed after completion unless they hold unpublished work. Standalone phases use the caller's checkout. Desktop branches use it or a runtime-created sibling worktree, removed after the last run.
 
 ## Product Intent
 
@@ -42,19 +42,19 @@ Read [Runtime command guidance](docs/runtime-command-guidance.md) before runtime
 
 ## Linear work tracking
 
-Track work items for this repository in Linear, except tasks the operator explicitly asks to perform directly on `main`. Do not create Linear issues for those direct tasks. Use the `SONA` team prefix for new issues. Linear assigns the complete issue key. Never mint or reserve local keys as a substitute for a Linear issue.
+Track repository work in Linear under `SONA`, except direct tasks explicitly requested on `main`; do not create issues for those. Let Linear assign complete keys. Never mint or reserve local keys.
 
-Use the project-scoped `linear-sona` MCP connection declared in `.codex/config.toml` for this repository. Verify its workspace and `SONA` team before using it. Do not substitute another Linear connection without the operator's instruction.
+Use `.codex/config.toml`'s `linear-sona` connection. Verify its workspace and team. Switch connections only on operator instruction.
 
-Before starting any goal, verify the Linear connection and read the linked issue. The issue must exist and belong to the intended Sona team and workspace. Do not start a goal without a verified Linear issue. If authentication fails, the issue is inaccessible, or the `SONA` team is unavailable, report the problem and resolve it before launch. Chat preparation does not start a goal or reserve an issue key.
+Before each goal, verify its issue in that workspace/team. Resolve access problems before launch. Chat prep does not launch goals or reserve keys.
 
-Preserve existing run identities, issue keys, specs, and history. The `SONA` prefix applies to new work and does not rename historical records.
+Use `SONA` only for new work; preserve historical run identities, keys, specs, and history.
 
 ## Taxonomy
 
-- `skills/` — canonical user-facing skill source; `skills/skill-bill/` is the only listed skill
+- `skills/` — canonical user-facing sources; `skills/skill-bill/` is the only listed skill
 - `platform-packs/<platform>/` — code review pack roots and `validation_gate` argv; `addons/` holds flat pack-owned add-ons. Goal-planning discovery excludes packs. Eligible `agent/history.md` and `agent/decisions.md` supply heading catalogs; bodies arrive only for headings selected by preplanning.
-- `orchestration/contracts/` — runtime contract schemas
+- `orchestration/contracts/` — runtime schemas
 
 Naming (pack skills and sidecars): `bill-<capability>`; overrides `bill-<platform>-<base-capability>`; review areas `bill-<platform>-code-review-<area>`. Approved areas: `architecture`, `performance`, `platform-correctness`, `security`, `testing`, `api-contracts`, `persistence`, `reliability`, `ui`, `ux-accessibility`.
 
@@ -62,7 +62,7 @@ Naming (pack skills and sidecars): `bill-<capability>`; overrides `bill-<platfor
 
 Read `docs/skill-source-generation.md` before changing skills, scaffolding, rendering, install staging, native-agent generation, or support pointers.
 
-Forbidden in source: governed `SKILL.md` wrappers; generated support pointers (`shell-ceremony.md`, `telemetry-contract.md`, `stack-routing.md`, review/delegation/add-on pointers); provider-specific `*-agents/` outputs (`claude-agents/`, `codex-agents/`, `junie-agents/`, `cursor-agents/`).
+Source forbids governed `SKILL.md` wrappers, generated support pointers (`shell-ceremony.md`, `telemetry-contract.md`, `stack-routing.md`, review/delegation/add-on pointers), and provider outputs (`claude-agents/`, `codex-agents/`, `junie-agents/`, `cursor-agents/`).
 
 Native-agent source is provider-neutral at `native-agents/agents.yaml` or `native-agents/<name>.md`. New/rendered sources require `contract_version`; older sources parse for fixture migration. Extra guidance belongs in `content.md` H2 sections; sibling files such as `skills/<skill>/patterns.md` are prohibited.
 
@@ -70,7 +70,7 @@ Run `./install.sh` after changing source skills, renderer behavior, or support p
 
 ## Platform Packs
 
-Packs extend routing and install through manifests. Hard-coded platform lists are prohibited. Change `orchestration/contracts/platform-pack-schema.yaml` first. `ShellContentLoader.buildPack` throws `InvalidManifestSchemaError` for malformed manifests. Kotlin enforces `x-coherence-checks` cross-field rules beyond JSON Schema.
+Packs extend routing and install through manifests; hard-coded platform lists are prohibited. Update `orchestration/contracts/platform-pack-schema.yaml` first. `ShellContentLoader.buildPack` throws `InvalidManifestSchemaError` for malformed manifests. Kotlin enforces `x-coherence-checks` beyond JSON Schema.
 
 Repo customization allows top-level custom fields. Runtime-consumed fields use `x-runtime-anchored: true`; other fields flow to `PlatformManifest.customFields`. Product vs extension: horizontal `skills/skill-bill/` and `.bill-shared` are protected; `platform-packs/<slug>/` (including shipped `kotlin`/`kmp`) are removable — no paired `skills/<platform>/` trees.
 
@@ -78,7 +78,7 @@ Repo customization allows top-level custom fields. Runtime-consumed fields use `
 
 ## Add-ons
 
-Pack-owned add-on files live flat under `platform-packs/<slug>/addons/`, use lowercase kebab-case, and resolve only after dominant-stack routing. Declare consumers through manifest `addon_usage` / `feature_addon_usage`. Selection tables in `content.md` are prohibited. Changes need validator and routing-contract coverage.
+Keep pack add-ons flat under `platform-packs/<slug>/addons/` with lowercase kebab-case names. Resolve them after dominant-stack routing; declare consumers with manifest `addon_usage` / `feature_addon_usage`. No selection tables in `content.md`. Add validator and routing-contract coverage.
 
 ## Skill Authoring
 
@@ -86,11 +86,11 @@ Scaffold with `skill-bill new`, optionally `--payload <file>`. Author with `show
 
 ## Adding Platforms
 
-Code review needs a pack root, conforming manifest/`content.md`, registered pointers, README catalog, pack tests, and validation. Routing contenders declare `validation_gate`; goal build runs the dominant pack's gate. Standalone and goal validation check the full project. Legacy packs may parse `declared_quality_check_file`; routing, install, and scaffold ignore it. Feature-task/verify use horizontal and manifest surfaces; legacy `skills/<platform>/` overrides are prohibited.
+Code review needs a pack root, manifest and `content.md`, pointers, README entry, tests, and validation. Routing packs declare `validation_gate`; goals run the dominant pack's gate. Standalone and goal validation cover the project. Legacy packs may parse `declared_quality_check_file`, ignored by routing, install, and scaffold. Feature-task/verify use horizontal and manifest surfaces; no `skills/<platform>/` overrides.
 
 ## Writing And Comments
 
-Write direct, active prose. Cut filler, stale wording, praise and repetition. Preserve names, numbers and qualifications. Commits/PRs/docs lead with the outcome and explain changes and reasons. Avoid unsupported "successfully", "perfect", "comprehensive", and "robust". Prefer clear names and small functions. Follow Comments for scoped Kotlin.
+Write direct, active prose. Cut filler, stale wording, praise, and repetition. Preserve names, numbers, and qualifications. Lead commits, PRs, and docs with outcomes and reasons. Avoid unsupported "successfully", "perfect", "comprehensive", and "robust". Use clear names and small functions. Follow Comments for scoped Kotlin.
 
 For UI work, keep overview cards brief, evidence in expandable Steps, and matching design HTML current across layout, hierarchy, interactions, and narrow layouts.
 
@@ -110,13 +110,13 @@ Under `runtime-kotlin`, including `build-logic`, ban `//` and non-KDoc `/* */` c
 
 ## Coding Conventions
 
-For `runtime-kotlin` planning, design, changes, or review, read [Runtime Architecture Guidelines](docs/architecture-guidelines.md). Apply A1–A12, G1–G7, and P1–P8. Runtime-kotlin reviews run its section 5 checklist and cite rule IDs.
+For `runtime-kotlin` planning, design, changes, or review, read [Runtime Architecture Guidelines](docs/architecture-guidelines.md) and apply A1–A12, G1–G7, and P1–P8. Reviews use its section 5 checklist and cite rule IDs.
 
-For `runtime-kotlin` design, changes, or review, apply [Design Principles](runtime-kotlin/ARCHITECTURE.md#design-principles) for dependencies, state/resource ownership, persistence, contracts, simplicity, and test value. `PrincipleEnforcementInventory.enforceableRules` pairs rules with tests; others need review. Existing violations never authorize new ones.
+For `runtime-kotlin` design, changes, or review, apply [Design Principles](runtime-kotlin/ARCHITECTURE.md#design-principles) for dependencies, ownership, persistence, contracts, simplicity, and test value. `PrincipleEnforcementInventory.enforceableRules` pairs rules with tests; review the rest. Existing violations never authorize new ones.
 
-Follow [Code Principles](docs/code-principles.md) for Kotlin patterns, package clustering, imports, file-size limits, and architecture guards. Guards live under `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/`.
+Follow [Code Principles](docs/code-principles.md) for Kotlin patterns, packages, imports, file-size limits, and architecture guards under `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/`.
 
-**Wire and payload keys.** At governed seams, never inline contract/wire keys in `get`, `put`, `mapOf`, or bracket access. Declare each once in its owner's `*Keys` or `*PayloadKeys`. See Wire vocabulary in `runtime-kotlin/ARCHITECTURE.md`. `runtime-contracts` holds only keys read by at least two production modules or exposed by `runtime-ports` signatures. Shared owners:
+**Wire and payload keys.** At governed seams, declare each key once in its owner's `*Keys` or `*PayloadKeys`; never inline keys in `get`, `put`, `mapOf`, or bracket access. See `runtime-kotlin/ARCHITECTURE.md`. `runtime-contracts` holds only keys read by two or more production modules or exposed by `runtime-ports` signatures. Shared owners:
 
 - `SharedPayloadKeys`: workflow phase-output envelopes
 - `DecompositionManifestPayloadKeys` and `DecompositionPlanningPayloadKeys`: decomposition manifests
@@ -124,8 +124,8 @@ Follow [Code Principles](docs/code-principles.md) for Kotlin patterns, package c
 - `TelemetryProxyPayloadKeys`: telemetry proxy wire vocabulary
 - `LifecycleTelemetryPayloadKeys`: telemetry envelopes
 
-Single-owner keys stay local, such as `SqliteReviewTelemetryPayloadKeys` in `runtime-infra/sqlite` and `GoalRunnerResetPayloadKeys` in `runtime-cli`. Never redeclare shared values. Use constants, never wire strings. Enum tokens use their owner's `wireValue`, never local `setOf`/`mapOf` copies. `WireVocabularyArchitectureTest` enforces seams through `WireVocabularyGovernedSeamInventory`.
+Keep single-owner keys local, such as `SqliteReviewTelemetryPayloadKeys` in `runtime-infra/sqlite` and `GoalRunnerResetPayloadKeys` in `runtime-cli`. Never redeclare shared values or inline wire strings. Enum tokens use their owner's `wireValue`, never local `setOf`/`mapOf` copies. `WireVocabularyArchitectureTest` checks governed seams in `WireVocabularyGovernedSeamInventory`.
 
 ## Quality Checks
 
-Prefer `/skill-bill phase:validation`, CLI `skill-bill phase validation`. Like goal validate, it discovers and runs repository, build, script, and CI checks, then repairs failures. Compilation alone is insufficient. Use stable base commands, platform routers, explicit gate argv, validator-backed rules, and acceptance/rejection tests.
+Prefer `/skill-bill phase:validation` or `skill-bill phase validation`. It discovers repository, build, script, and CI checks and repairs failures; compilation alone is insufficient. Use stable base commands, platform routers, explicit gate argv, validator-backed rules, and acceptance/rejection tests.

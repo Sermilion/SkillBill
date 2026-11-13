@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.intake
 
+import skillbill.engine.featuretask.model.core.PlanSpecSeed
 import java.nio.file.Path
 
 /** What the plan intake needs from whoever resolves and writes the parent spec; the goal runner implements it. */

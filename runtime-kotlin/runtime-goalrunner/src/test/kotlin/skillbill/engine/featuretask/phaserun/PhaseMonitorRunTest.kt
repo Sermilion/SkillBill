@@ -36,7 +36,6 @@ import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import skillbill.workflow.taskruntime.model.skeleton.LaunchModelProvenance
 import skillbill.workflow.taskruntime.model.skeleton.LaunchProviderNamespace
 import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
-import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfileClassifier
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
@@ -608,14 +607,14 @@ class PhaseMonitorRunTest {
       ).runMonitor(
         "SKILL-904",
         FeatureTaskRuntimeModelAssignment(
-          perPhaseDirectives = mapOf(MONITOR_FIX to PhaseModelDirective(PhaseModelProfileClassifier.ANTHROPIC_OPUS_55)),
+          perPhaseDirectives = mapOf(MONITOR_FIX to PhaseModelDirective("claude-opus-5-5")),
         ),
       )
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
     assertEquals(listOf(PhaseModelProfile.OPUS_5_5), resolvedProfiles.filter { it != PhaseModelProfile.CANONICAL })
     assertEquals(
-      PhaseModelProfileClassifier.ANTHROPIC_OPUS_55,
+      "claude-opus-5-5",
       repairLauncher.requests.single().skillRunRequest.modelOverride,
     )
     assertEquals(listOf(MONITOR_FIX), launchedPhaseIds(repairLauncher))
@@ -768,7 +767,7 @@ class PhaseMonitorRunTest {
   ): PhaseRunResult = runForGoal(monitorRequest(intake, modelAssignment), GOAL_WORKFLOW_ID, FEATURE_BRANCH)
 
   private fun opusLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
-    if (request.requestedModel == PhaseModelProfileClassifier.ANTHROPIC_OPUS_55) {
+    if (request.requestedModel == "claude-opus-5-5") {
       EffectiveLaunchModel(
         requestedModel = request.requestedModel,
         requestedEffort = request.requestedEffort,

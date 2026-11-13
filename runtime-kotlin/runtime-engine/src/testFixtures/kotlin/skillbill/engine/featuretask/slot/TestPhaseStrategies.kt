@@ -152,9 +152,8 @@ fun testPhaseStrategies(
       if (delegatedReviewRunner == null) InlineStandaloneReviewStrategy.ID else DelegatedStandaloneReviewStrategy.ID,
     )
   val selection = PhaseStrategySelection(registry, bindings)
-  val supplements = ModelDirectiveSupplements(enabled = true)
-  return phaseInstructionSource?.let { PhaseStrategyLookup(registry, selection, supplements, it) }
-    ?: PhaseStrategyLookup(registry, selection, supplements)
+  return phaseInstructionSource?.let { PhaseStrategyLookup(registry, selection, it) }
+    ?: PhaseStrategyLookup(registry, selection)
 }
 
 fun unavailableQaReportSettlement(): QaReportSettlement =
