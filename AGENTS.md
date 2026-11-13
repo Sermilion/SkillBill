@@ -46,6 +46,8 @@ Track repository work in Linear under `SONA`, except direct tasks explicitly req
 
 Use `.codex/config.toml`'s `linear-sona` connection. Verify its workspace and team. Switch connections only on operator instruction.
 
+When the project has a connected Linear workspace, issue-key suggestions must come from that workspace and the project's team. Never suggest the next key from local specs or by incrementing a Linear issue number. For new work, let Linear create the issue and assign its key before proposing that key for operator acceptance. If Linear is unavailable, report the access problem instead of falling back to a local key.
+
 Before each goal, verify its issue in that workspace/team. Resolve access problems before launch. Chat prep does not launch goals or reserve keys.
 
 Use `SONA` only for new work; preserve historical run identities, keys, specs, and history.
