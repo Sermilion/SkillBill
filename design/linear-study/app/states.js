@@ -37,14 +37,21 @@
       title: `${type.label} on design/state-examples`, goalMs: 246000, started: '09:00', updated: '09:04', startedAgo: 240,
       steps: [],
     };
+    const unfinalizedTerminal = state === 'terminal' && type.kind !== 'goal' && type.id !== 'verify';
     Object.assign(item, {
       id: `state-${type.id}-${state}`, kind: type.kind, lifecycle: state,
-      section: ['terminal', 'canceled'].includes(state) ? 'history' : ['paused', 'blocked', 'failed'].includes(state) || state === 'idle' && type.kind === 'goal' ? 'needs' : type.kind === 'goal' ? 'goals' : type.kind === 'phase' ? 'phases' : 'operations',
+      section: state === 'canceled' || (state === 'terminal' && !unfinalizedTerminal) ? 'history' : unfinalizedTerminal ? 'needs' : ['paused', 'blocked', 'failed'].includes(state) || state === 'idle' && type.kind === 'goal' ? 'needs' : type.kind === 'goal' ? 'goals' : type.kind === 'phase' ? 'phases' : 'operations',
       live: state === 'active', fresh: true, stalled: false, pauseRequested: false, refreshFailed: false,
       planning: false, goalLaunched: true, summary: `${type.label} · ${words[state]}`, reason: reason[state] || null,
       finishedAt: ['terminal', 'canceled'].includes(state) ? '09:04' : null,
       finishedAgo: ['terminal', 'canceled'].includes(state) ? 0 : null,
-      runOptions: { canLaunch: ['paused', 'blocked', 'failed', 'idle', 'canceled'].includes(state), canCancel: ['active', 'paused', 'blocked', 'failed'].includes(state), launchLabel: type.id === 'goal' || type.id === 'plan' ? 'Resume' : 'Run again', agentId: 'claude' },
+      runOptions: {
+        canLaunch: unfinalizedTerminal || ['paused', 'blocked', 'failed', 'idle', 'canceled'].includes(state),
+        canFinalize: unfinalizedTerminal,
+        canCancel: ['active', 'paused', 'blocked', 'failed'].includes(state),
+        launchLabel: type.id === 'goal' || type.id === 'plan' ? 'Resume' : 'Run again',
+        agentId: 'claude',
+      },
     });
     if (type.kind === 'phase') item.phase = type.id;
     if (type.kind === 'operation') item.op = type.id;

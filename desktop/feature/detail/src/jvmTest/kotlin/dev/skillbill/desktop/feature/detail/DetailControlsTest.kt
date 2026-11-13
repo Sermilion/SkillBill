@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.domain.model.IncidentProgress
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.testing.workItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -35,7 +36,46 @@ class DetailControlsTest {
     assertTrue(assertNotNull(runActionsView(loaded).launch).enabled)
     assertFalse(assertNotNull(runActionsView(loaded.copy(stale = true)).launch).enabled)
     assertNull(runActionsView(loaded.copy(header = loaded.header.copy(lifecycle = Lifecycle.Active))).launch)
-    assertNull(runActionsView(loaded.copy(header = loaded.header.copy(lifecycle = Lifecycle.Terminal))).launch)
+    assertNull(
+      runActionsView(
+        loaded.copy(
+          header = loaded.header.copy(lifecycle = Lifecycle.Terminal),
+          sections = sections.copy(runOptions = RunOptions(false, false, "Resume", "codex", listOf("codex"), null)),
+        ),
+      ).launch,
+    )
+  }
+
+  @Test
+  fun `terminal run controls follow runtime options not lifecycle`() {
+    fun state(item: WorkItem, options: RunOptions) = loadedState(item, null).let { base ->
+      val sections = base.sections as SectionsUi.Loaded
+      base.copy(header = item, sections = sections.copy(runOptions = options))
+    }
+    val review = workItem("rev", kind = WorkKind.Phase, issueKey = null, lifecycle = Lifecycle.Terminal)
+    val unfinalized = RunOptions(false, true, "Run again", "claude", listOf("claude"), null, canFinalize = true)
+    val unfinalizedView = runActionsView(state(review, unfinalized))
+    assertNotNull(unfinalizedView.launch)
+    assertNotNull(unfinalizedView.finalize)
+
+    val failed = runActionsView(state(review, RunOptions(false, false, "Run again", "claude", listOf("claude"), null)))
+    assertNull(failed.launch)
+    assertNull(failed.finalize)
+
+    val finalizedReview = runActionsView(state(review, RunOptions(false, false, "Run again", "claude", listOf("claude"), null)))
+    assertNull(finalizedReview.launch)
+    assertNull(finalizedReview.finalize)
+
+    val validation = workItem("val", kind = WorkKind.Phase, issueKey = null, lifecycle = Lifecycle.Terminal)
+      .copy(control = workItem("val").control.copy(phaseId = "validation"))
+    val finalizedValidation = runActionsView(state(validation, RunOptions(false, true, "Run again", "claude", listOf("claude"), null)))
+    assertNotNull(finalizedValidation.launch)
+    assertNull(finalizedValidation.finalize)
+
+    val verify = workItem("verify", kind = WorkKind.Operation, issueKey = "SKILL-1", lifecycle = Lifecycle.Terminal)
+    val verifyView = runActionsView(state(verify, RunOptions(false, false, "Run again", null, emptyList(), null)))
+    assertNull(verifyView.launch)
+    assertNull(verifyView.finalize)
   }
 
   @Test

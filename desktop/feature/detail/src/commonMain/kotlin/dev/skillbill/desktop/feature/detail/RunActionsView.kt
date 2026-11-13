@@ -40,6 +40,7 @@ internal data class RunActionsView(
   val implement: ControlButton? = null,
   val implementationNote: Boolean = false,
   val goalStartedNote: Boolean = false,
+  val finalize: ControlButton? = null,
 )
 
 /** HANDOFF 9.2 items 4, 5 and 7 as rules D-A to D-F: presence, labels and enablement only; nothing is sorted or timed. */
@@ -61,11 +62,15 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
   ).takeIf { goal }
   val pauseNow = ControlButton(label(InFlightControl.PauseNow, "Pause"), ready && item.controlEligible, "Stops the goal runner now").takeIf { goal }
 
-  val resumable = item.lifecycle != Lifecycle.Active &&
-    (item.lifecycle != Lifecycle.Terminal || isStandaloneValidation(item))
-  val launchable = ready && options?.canLaunch == true && (item.issueKey ?: item.id) !in controls.reservations
+  val controlEnabled = ready && (item.issueKey ?: item.id) !in controls.reservations
   val agentId = controls.chosenAgent ?: options?.agentId ?: state.defaultAgentId?.takeIf { options != null && it in options.agentChoices }
-  val launch = ControlButton(label(InFlightControl.Launch, options?.launchLabel?.ifBlank { null } ?: "Resume"), launchable).takeIf { resumable }
+  val showLaunch = item.lifecycle != Lifecycle.Active &&
+    (options?.canLaunch == true || (options == null && item.lifecycle != Lifecycle.Terminal))
+  val launch = ControlButton(
+    label(InFlightControl.Launch, options?.launchLabel?.ifBlank { null } ?: "Resume"),
+    controlEnabled && options?.canLaunch == true,
+  ).takeIf { showLaunch }
+  val finalize = ControlButton(label(InFlightControl.Finalize, "Finalize"), controlEnabled).takeIf { options?.canFinalize == true }
 
   val goalStarted = controls.implementationStarted || options?.goalStarted == true
   val implement = ControlButton(
@@ -75,7 +80,7 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
   ).takeIf { item.offersPlanImplementation() }
   val agentLabel = agentId?.let { "Agent: $it" } ?: "Choose agent"
   val agent = when {
-    resumable -> ControlButton(agentLabel, launchable)
+    launch != null -> ControlButton(agentLabel, launch.enabled)
     implement != null -> ControlButton(agentLabel, implement.enabled)
     else -> null
   }
@@ -120,6 +125,7 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
     implement = implement,
     implementationNote = implement != null && !goalStarted && !planFinished(item, loaded?.detail),
     goalStartedNote = implement != null && goalStarted,
+    finalize = finalize,
   )
 }
 

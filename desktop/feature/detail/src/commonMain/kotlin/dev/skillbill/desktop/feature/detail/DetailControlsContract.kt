@@ -4,7 +4,7 @@ import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
 import dev.skillbill.desktop.core.domain.model.RecoveryPreview
 
 /** The one control, preview or recovery call running; the others wait until its outcome returns. */
-enum class InFlightControl { PauseAfterSubtask, PauseNow, Launch, Cancel, RecoveryPreview, Recover }
+enum class InFlightControl { PauseAfterSubtask, PauseNow, Launch, Finalize, Cancel, RecoveryPreview, Recover }
 
 /** The prerequisites the user confirmed for one incident; it applies only while the item, token and listed kinds still match. */
 data class PrerequisiteConfirmation(
@@ -30,6 +30,7 @@ sealed interface ControlsAction : DetailAction {
   data object PauseAfterSubtask : ControlsAction
   data object PauseNow : ControlsAction
   data object Launch : ControlsAction
+  data object Finalize : ControlsAction
   data object OpenAgentMenu : ControlsAction
   data object CloseAgentMenu : ControlsAction
   data class ChooseAgent(val agentId: String) : ControlsAction

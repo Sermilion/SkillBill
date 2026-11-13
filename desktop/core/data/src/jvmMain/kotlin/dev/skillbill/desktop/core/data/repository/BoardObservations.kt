@@ -234,14 +234,14 @@ private fun nextDeadline(page: BoardPage): Instant? =
   page.items.flatMap { listOfNotNull(it.membershipDeadline, it.freshnessDeadline) }.filter { it > page.observedAt }.minOrNull()
 
 /** Keeps runtime section membership. Goal runs use their fixed start time for order; finished work goes under Finished. */
-private fun sectionsOf(items: List<WorkItem>): List<BoardSection> {
+internal fun sectionsOf(items: List<WorkItem>): List<BoardSection> {
   val byKind = items.groupBy { item ->
     when (item.liveSection) {
       WorkLiveSection.NeedsYou -> BoardSectionKind.NeedsYou
       WorkLiveSection.Goals -> BoardSectionKind.Goals
       WorkLiveSection.Phases -> BoardSectionKind.Phases
       WorkLiveSection.Operations -> BoardSectionKind.Operations
-      null -> if (item.finishedAt != null) BoardSectionKind.Finished else null
+      null -> BoardSectionKind.Finished
     }
   }
   return BoardSectionKind.entries.map { kind ->

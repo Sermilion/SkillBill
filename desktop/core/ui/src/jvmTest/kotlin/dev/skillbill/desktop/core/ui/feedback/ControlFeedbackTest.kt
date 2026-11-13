@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.core.ui.feedback
 
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
+import dev.skillbill.desktop.core.domain.model.ControlRejection
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -23,5 +24,15 @@ class ControlFeedbackTest {
     cases.forEach { (action, outcome, expected) ->
       assertEquals(expected, controlFeedback(action, outcome, subject).text, "$action + $outcome")
     }
+  }
+
+  @Test
+  fun `finalize feedback uses run refusal wording`() {
+    val subject = FeedbackSubject("SKILL-1", launchLabel = null, agentId = null)
+    assertEquals("Finalize recorded.", controlFeedback(ControlAction.Finalize, ControlOutcome.RequestAccepted, subject).text)
+    assertEquals(
+      "This run changed or cannot accept this action. Refresh before retrying.",
+      controlFeedback(ControlAction.Finalize, ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null), subject).text,
+    )
   }
 }

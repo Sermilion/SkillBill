@@ -17,6 +17,7 @@ data class RunOptions(
   val agentChoices: List<String>,
   val unavailableReason: String?,
   val goalStarted: Boolean = false,
+  val canFinalize: Boolean = false,
 )
 
 /** An open detail: [header] paints at once from the row, [sections] arrive from the first read. */
