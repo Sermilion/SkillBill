@@ -58,6 +58,13 @@ import kotlin.time.Clock
 
 data class NewTaskRepository(val root: String, val name: String)
 
+internal data class NewTaskStartOrigin(
+  val draft: NewTaskDraft,
+  val chat: NewTaskChat?,
+  val contextRevision: Long,
+  val selectedRoot: String?,
+)
+
 data class NewTaskOffer(
   val starting: Boolean = false,
   val prefixKind: NewTaskKind? = null,
@@ -127,6 +134,11 @@ class NewTaskDraft internal constructor(
   internal var contextTransitioning: Boolean by mutableStateOf(false)
     private set
   internal var onContextCommitted: ((NewTaskDraft) -> Unit)? = null
+  internal var onRepositoryCandidate: suspend (NewTaskDraft, NewTaskChat, String, String, Long, Long) -> Unit = { _, _, _, _, _, _ -> }
+  internal var contextRevision: Long = 0
+    private set
+  internal var repositoryRequestGeneration: Long = 0
+    private set
   private var offerKeyEdit: NewTaskOfferKeyEdit? = null
   private var lastOfferFieldValue: String? = null
   internal var chatDispatcher = Dispatchers.IO
@@ -145,12 +157,16 @@ class NewTaskDraft internal constructor(
     set(value) {
       initialRepositoryDefaultPending = false
       if (repositoryState?.root != value?.root) {
+        contextRevision += 1
         previewTracker?.second?.end()
         previewTracker = null
         branchChoiceRequested = false
         acceptedKeyState = null
         issueKeyProposals = emptyList()
         offerState.value = NewTaskOffer()
+        offerKeyEdit = null
+        lastOfferFieldValue = null
+        cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
       }
       repositoryState = value
     }
@@ -174,7 +190,20 @@ class NewTaskDraft internal constructor(
   internal val resuming: Boolean get() = resumeTransition != null
 
   /** The Confirm, Dismiss, Adjust and option callbacks of the operation cards in [current]'s transcript. */
-  internal fun operationCardActions(current: NewTaskChat): ChatOperationCardActions = cards.actions(current.thread)
+  internal fun operationCardActions(current: NewTaskChat): ChatOperationCardActions = cards.actions(current.thread, current.transitionLock)
+
+  internal suspend fun awaitContextTransition(): Boolean {
+    val pending = contextTransitionJob ?: return !contextTransitioning
+    pending.join()
+    return !contextTransitioning
+  }
+
+  internal fun beginRepositorySelectionRequest(): Long = ++repositoryRequestGeneration
+
+  internal fun ownsCandidateOrigin(current: NewTaskChat, sessionId: String, revision: Long, requestGeneration: Long): Boolean =
+    chatState.value === current && current.sessionId == sessionId && current.databaseSessionId != null &&
+      contextRevision == revision && repositoryRequestGeneration == requestGeneration &&
+      (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId == current.databaseSessionId
 
   internal val offer: StateFlow<NewTaskOffer> = offerState.asStateFlow()
 
@@ -215,6 +244,27 @@ class NewTaskDraft internal constructor(
     if (!canAdmitTurn(action.instruction) || chatState.value == null) return false
     sendTurn(action.instruction, action)
     return true
+  }
+
+  internal fun sendSuggestedActionForContext(revision: Long, root: String?, action: ChatSuggestedAction): Boolean =
+    if (contextRevision == revision && repository?.root == root) sendSuggestedAction(action) else false
+
+  internal fun selectIssueKeyForContext(revision: Long, root: String?, key: String) {
+    if (contextRevision == revision && repository?.root == root) selectIssueKey(key)
+  }
+
+  internal fun startForContext(
+    revision: Long,
+    expectedChat: NewTaskChat?,
+    root: String?,
+    kind: NewTaskKind,
+    keyChoice: String?,
+    action: ChatSuggestedAction?,
+    target: String?,
+  ) {
+    if (chatState.value === expectedChat && contextRevision == revision && repository?.root == root) {
+      start(kind, keyChoice = keyChoice, target = target, action = action)
+    }
   }
 
   internal fun stop() {
@@ -479,10 +529,13 @@ class NewTaskDraft internal constructor(
     val agent = requestedAgent ?: return false
     val current = chatState.value
     if (current == null) {
+      if (repository?.root == requestedRepository?.root && baseBranch == requestedBranch && selectedAgent == agent) return true
+      val revision = contextRevision
       repository = requestedRepository
       baseBranch = requestedBranch
       agentId = agent.agentId
       selectedAgent = agent
+      if (contextRevision == revision) contextRevision += 1
       onContextCommitted?.invoke(this)
       return true
     }
@@ -491,16 +544,28 @@ class NewTaskDraft internal constructor(
     val directory = requestedRoot ?: userHome
     val branch = requestedBranch.ifBlank { null }
     val databaseId = current.databaseSessionId ?: return false
+    var queuedEntries: List<dev.skillbill.desktop.feature.chat.QueuedChatMessage> = emptyList()
     synchronized(current.transitionLock) {
-      if (contextTransitionOwner != null || closing || resumeTransition != null || current.repositoryMissing || current.thread.busy.value || current.thread.queued.value.isNotEmpty() || offerState.value.starting ||
+      if (contextTransitionOwner != null || closing || resumeTransition != null || current.repositoryMissing || current.thread.busy.value ||
+        (current.thread.queued.value.isNotEmpty() && !current.repositoryCandidateSettling) || offerState.value.starting ||
+        cards.hasOutstanding(current.thread) ||
         current.thread.deferDestructiveAction("change the draft context") ||
         (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId != databaseId
       ) return false
       if (current.selectedRepositoryRoot == requestedRoot && current.repositoryRoot == directory && current.baseBranch == branch && current.agent == agent) return true
+      if (!cards.reserveContextTransition(current.thread)) return false
+      if (current.repositoryCandidateSettling) {
+        val detached = current.takeRepositoryTransitionQueue()
+        if (detached == null) {
+          cards.releaseContextTransition(current.thread)
+          return false
+        }
+        queuedEntries = detached.map { it.copy(action = null, pauseAndAct = false, cursorMcpDependency = CursorMcpDependency.ProjectUserOnly) }
+      }
       contextTransitionOwner = owner
       contextTransitioning = true
     }
-    contextTransitionJob = scope.launch { rebindChat(current, owner, requestedRepository, requestedRoot, directory, branch, agent, databaseId) }
+    contextTransitionJob = scope.launch { rebindChat(current, owner, requestedRepository, requestedRoot, directory, branch, agent, databaseId, queuedEntries) }
     return true
   }
 
@@ -513,9 +578,13 @@ class NewTaskDraft internal constructor(
     branch: String?,
     agent: ChatAgent,
     databaseId: Long,
+    queuedEntries: List<dev.skillbill.desktop.feature.chat.QueuedChatMessage>,
   ) {
     var staged: NewTaskChat? = null
     var oldEnded = false
+    var cardsRevoked = false
+    var committed = false
+    var carriedQueue = queuedEntries
     try {
       if (directory.isBlank()) return
       current.awaitAcceptedSaves()
@@ -529,20 +598,34 @@ class NewTaskDraft internal constructor(
         }
         agentId = agent.agentId
         selectedAgent = agent
+        contextRevision += 1
         onContextCommitted?.invoke(this)
         refreshSaved()
         return
       }
+      if (current.repositoryCandidateSettling) {
+        val additional = current.takeRepositoryTransitionQueue() ?: run {
+          contextProblem("This draft has a follow-up that must settle before its repository can change.")
+          return
+        }
+        carriedQueue = carriedQueue + additional.map { it.copy(action = null, pauseAndAct = false, cursorMcpDependency = CursorMcpDependency.ProjectUserOnly) }
+      }
       if (!current.end()) {
         contextProblem("This draft context could not be changed. The previous conversation is still available.")
         return
+      }
+      if (current.repositoryCandidateSettling) {
+        val remaining = current.takeRepositoryTransitionQueue()
+        if (remaining != null) carriedQueue = carriedQueue + remaining.map {
+          it.copy(action = null, pauseAndAct = false, cursorMcpDependency = CursorMcpDependency.ProjectUserOnly)
+        }
       }
       oldEnded = true
       current.job.join()
       chats.awaitEnd(current.sessionId)
       val oldRoot = current.selectedRepositoryRoot
       val sameRepository = oldRoot != null && oldRoot == selectedRoot
-      val lines = current.thread.transcript.value.toList()
+      val lines = current.thread.repositorySwitchTranscript()
       val replay = (current.pendingReplay?.takeIf { !current.started }
         ?: NewTaskReplay(current.agent.agentId, current.repositoryRoot, current.baseBranch, lines, oldRoot))
         .takeIf { newTaskReplayPreamble(it, directory, branch, selectedRoot) != null }
@@ -559,16 +642,22 @@ class NewTaskDraft internal constructor(
       val notice = if (replay != null) "$switched It gets the earlier conversation with your next message." else switched
       staged!!.thread.showCapability(agent)
       staged!!.thread.replaceTranscript(lines + ChatMessage.Notice(notice))
+      staged!!.thread.replaceQueuedEntries(carriedQueue)
       val saved = staged!!.persist(refresh = false)
       if (!saved || contextTransitionOwner !== owner || chatState.value !== current || !ownsDatabase(databaseId)) {
         contextProblem("This draft context could not be saved. The previous conversation is still available.")
         return
       }
+      cards.revoke(current.thread)
+      cardsRevoked = true
+      val priorRevision = contextRevision
       repository = requestedRepository
+      if (contextRevision == priorRevision) contextRevision += 1
       baseBranch = branch.orEmpty()
       agentId = agent.agentId
       selectedAgent = agent
       chatState.value = staged
+      committed = true
       clearChatFeedback()
       synchronized(cardOwners) { cardOwners[staged!!.thread] = staged!! }
       staged!!.activate()
@@ -597,11 +686,16 @@ class NewTaskDraft internal constructor(
           staged?.end()
           if (oldEnded && chatState.value === current && contextTransitionOwner === owner) recoverEndedContext(current)
         } finally {
+          chatState.value?.let { destination ->
+            current.finishRepositoryTransitionQueue(destination, if (committed) emptyList() else carriedQueue)
+          }
           if (contextTransitionOwner === owner) {
             contextTransitionOwner = null
             contextTransitioning = false
           }
+          if (!cardsRevoked) cards.releaseContextTransition(current.thread)
           if (contextTransitionOwner == null) contextTransitionJob = null
+          chatState.value?.resumeQueuedMessages()
         }
       }
     }
@@ -816,6 +910,10 @@ class NewTaskDraft internal constructor(
           ownedSessionId = newId
         }
       },
+      userHome,
+      { contextRevision },
+      { repositoryRequestGeneration },
+      { current, path, session, revision, request -> onRepositoryCandidate(this, current, path, session, revision, request) },
     ).also {
       if (publish) {
         clearChatFeedback()

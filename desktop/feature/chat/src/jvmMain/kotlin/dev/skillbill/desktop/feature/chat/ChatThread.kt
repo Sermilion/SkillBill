@@ -198,6 +198,16 @@ internal class ChatThread(private val clock: Clock) {
     messages.value = transcript
   }
 
+  fun repositorySwitchTranscript(): List<ChatMessage> = messages.value.map { message ->
+    when (message) {
+      is ChatMessage.Operator -> message.copy(action = null)
+      is ChatMessage.Agent -> message.copy(actions = emptyList())
+      is ChatMessage.Notice -> message.copy(confirmation = false, operationCard = null)
+      is ChatMessage.OperationCard -> ChatMessage.Notice("Earlier operation card: ${message.card.summary}")
+      else -> message
+    }
+  }
+
   /**
    * The latest [limit] operator messages and finished agent replies, as a resumed chat shows them again. Images are never
    * saved; an image-only message keeps its `[Image #N]` labels as text so it neither restores as an empty bubble nor
@@ -436,6 +446,7 @@ internal fun ChatThread.show(agent: ChatAgent?, event: ChatEvent) {
     is ChatEvent.ToolUse -> appendTool(event.call)
     is ChatEvent.ToolResult -> recordToolResult(event)
     is ChatEvent.SuggestedActions -> suggestActions(event.actions)
+    is ChatEvent.RepositoryCandidate -> Unit
     is ChatEvent.ApprovalRequested -> showApproval(event.card)
     is ChatEvent.BackgroundTaskStarted -> backgroundTaskStarted(event.taskId, event.callId)
     is ChatEvent.BackgroundTaskEnded -> backgroundTaskEnded(event.taskId)

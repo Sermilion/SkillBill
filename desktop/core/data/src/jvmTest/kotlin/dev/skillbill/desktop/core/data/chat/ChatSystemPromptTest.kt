@@ -14,13 +14,15 @@ class ChatSystemPromptTest {
   fun `repository-free prompt allows ordinary work and requires selection before runs`() {
     val prompt = scopeSystemPrompt(ChatScope.NewTask("/home/operator", null, null))
 
-    assertTrue("Home directory: /home/operator" in prompt)
-    assertTrue("Selected repository: none." in prompt)
+    assertTrue("User home: /home/operator" in prompt)
+    assertTrue("Selected repository root: none" in prompt)
     assertTrue("file edits and saves are allowed" in prompt)
-    assertTrue("Before any goal, phase or operation" in prompt)
+    assertTrue("Effective working directory: /home/operator" in prompt)
+    assertTrue("skillbill-repository" in prompt)
+    assertTrue("contract_version\":\"1\"" in prompt)
     assertFalse("Base branch:" in prompt)
     assertFalse("Default branch" in prompt)
-    assertFalse("skillbill-actions" in prompt)
+    assertTrue("skillbill-actions" in prompt)
   }
 
   // An agent told to act on "this execution" hunts for one.
@@ -64,6 +66,22 @@ class ChatSystemPromptTest {
     assertFalse("this execution" in prompt)
     assertFalse("Do not edit files" in prompt)
     assertFalse("Base branch" in scopeSystemPrompt(ChatScope.NewTask("/work/app", null)))
+  }
+
+  @Test
+  fun `repository selection guidance uses distinct supplied context and the parser wire format`() {
+    val prompt = scopeSystemPrompt(ChatScope.NewTask("/work/repo", "/work/repo", "main", "/home/operator"))
+
+    assertTrue("User home: /home/operator" in prompt)
+    assertTrue("Effective working directory: /work/repo" in prompt)
+    assertTrue("Selected repository root: /work/repo" in prompt)
+    assertTrue("userHome/StudioProjects" in prompt)
+    assertTrue("If more than one repository could match, ask which one and emit no selection block." in prompt)
+    assertTrue("app validates a candidate and may reject it" in prompt)
+    assertTrue("Selection retains this conversation and never launches or retries work" in prompt)
+    assertTrue("```skillbill-repository" in prompt)
+    assertTrue("\"contract_version\":\"1\",\"path\":\"/absolute/repository/root\"" in prompt)
+    assertTrue("Do not combine this block with a skillbill-actions block" in prompt)
   }
 
   @Test

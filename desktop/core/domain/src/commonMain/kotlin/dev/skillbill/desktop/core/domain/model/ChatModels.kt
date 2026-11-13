@@ -36,6 +36,7 @@ sealed interface ChatScope {
     val workingDirectory: String,
     val selectedRepositoryRoot: String?,
     val baseBranch: String?,
+    val userHome: String = workingDirectory,
   ) : ChatScope {
     override val repositoryRoot: String get() = workingDirectory
 
@@ -136,6 +137,9 @@ sealed interface ChatEvent {
   data class ToolResult(val callId: String, val output: String, val isError: Boolean) : ChatEvent
 
   data class SuggestedActions(val actions: List<ChatSuggestedAction>) : ChatEvent
+
+  /** A repository path proposed by a completed New task reply; callers must validate it before selection. */
+  data class RepositoryCandidate(val path: String) : ChatEvent
 
   /** A permission request of this chat's process, or its settled outcome; the same card may arrive again as it changes. */
   data class ApprovalRequested(val card: ApprovalCard) : ChatEvent

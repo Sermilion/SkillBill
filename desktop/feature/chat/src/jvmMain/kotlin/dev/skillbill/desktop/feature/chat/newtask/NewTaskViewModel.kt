@@ -27,8 +27,10 @@ import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.core.ui.board.ShellBoard
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
+import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.RESUME_COMMAND
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,6 +45,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.nio.file.Path
 import me.tatarka.inject.annotations.Inject
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -108,15 +113,22 @@ class NewTaskViewModel(
   private val settings: AppSettingsRepository,
   private val diagnostics: Diagnostics,
 ) : ViewModel() {
-  private val mutableState = MutableStateFlow(NewTaskUiState(agents = chat.agents()))
+  private val mutableState = MutableStateFlow(NewTaskUiState(agents = chat.agents(), agent = chats.selected.value.selectedAgent))
   val state: StateFlow<NewTaskUiState> = mutableState.asStateFlow()
 
   /** The selected chat; every action acts on it. */
   val draft: NewTaskDraft get() = chats.selected.value
 
   private var pathCheck: Job? = null
+  internal var repositoryDispatcher: CoroutineDispatcher = Dispatchers.IO
+  private var pathCheckGeneration = 0L
   private val agentReads = mutableMapOf<NewTaskDraft, Job>()
   private class AgentReadOwner(val requestedAgentId: String?)
+  private sealed interface RepositoryValidation {
+    data object Stale : RepositoryValidation
+    data class Rejected(val message: String) : RepositoryValidation
+    data class Listed(val repository: NewTaskRepository, val branches: RepositoryBranches) : RepositoryValidation
+  }
 
   private val agentReadOwners = mutableMapOf<NewTaskDraft, AgentReadOwner>()
   private val pendingRepositorySelection = mutableMapOf<NewTaskDraft, Pair<String, RepositoryBranches?>>()
@@ -142,6 +154,7 @@ class NewTaskViewModel(
     viewModelScope.launch { observeBoard(loadRepositories()) }
     readAgent(first) { owner -> resolveAgent(first, first.agentId ?: defaultAgentId(), owner) }
     viewModelScope.launch { chats.selected.drop(1).collect(::showSelected) }
+    viewModelScope.launch { chats.open.collect { drafts -> drafts.forEach(::observeContextCommit) } }
     viewModelScope.launch { chats.resumed.collect { if (isSelected(it)) showResumed(it) } }
   }
 
@@ -224,8 +237,12 @@ class NewTaskViewModel(
     }
   }
 
-  fun start(kind: NewTaskKind, target: String?, action: ChatSuggestedAction?) {
-    val current = draft
+  internal fun start(origin: NewTaskStartOrigin, kind: NewTaskKind, target: String?, action: ChatSuggestedAction?) {
+    val current = origin.draft
+    if (current !in chats.open.value || chats.selected.value !== current || current.chat.value !== origin.chat ||
+      current.contextRevision != origin.contextRevision || current.repository?.root != origin.selectedRoot ||
+      current.contextTransitioning || current.resuming
+    ) return
     if (action?.branch.isNullOrBlank() && requestBranchChoice(current)) return
     current.start(kind, target = target, action = action)
   }
@@ -369,20 +386,17 @@ class NewTaskViewModel(
     }
   }
 
-  private fun selectRepository(target: NewTaskDraft, repository: NewTaskRepository, listed: RepositoryBranches? = null) {
+  private fun selectRepository(target: NewTaskDraft, repository: NewTaskRepository) {
     if (!canChangeContext(target)) return
-    pathCheck?.cancel()
-    target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
-    val branch = if (repository.root != target.repository?.root) "" else target.baseBranch
-    pendingRepositorySelection[target] = repository.root to listed
-    if (!target.rebindChat(requestedRepository = repository, requestedBranch = branch)) {
-      pendingRepositorySelection.remove(target)
-    }
+    submitPath(target, repository.root)
   }
 
   private fun addRepository(target: NewTaskDraft) {
     if (!canChangeContext(target) || mutableState.value.choosingFolder) return
     pathCheck?.cancel()
+    val generation = ++pathCheckGeneration
+    val revision = target.contextRevision
+    val request = target.beginRepositorySelectionRequest()
     mutableState.update { it.copy(choosingFolder = true) }
     // UNDISPATCHED enters the try at once, so a cancel before the first dispatch cannot leave the flag set.
     pathCheck = viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -391,10 +405,13 @@ class NewTaskViewModel(
       } finally {
         mutableState.update { it.copy(choosingFolder = false) }
       }
+      if (!isSelected(target) || generation != pathCheckGeneration || target.contextRevision != revision ||
+        target.repositoryRequestGeneration != request || !canChangeContext(target)
+      ) return@launch
       when (choice) {
         FolderChoice.Cancelled -> Unit
         is FolderChoice.Failed -> showRepositoryError(target, "Could not open the folder chooser: ${choice.message}")
-        is FolderChoice.Chosen -> checkPath(target, choice.path)
+        is FolderChoice.Chosen -> checkPath(target, choice.path, generation, revision, request)
       }
     }
   }
@@ -402,30 +419,78 @@ class NewTaskViewModel(
   private fun submitPath(target: NewTaskDraft, path: String) {
     if (!canChangeContext(target) || path.isBlank()) return
     pathCheck?.cancel()
-    pathCheck = viewModelScope.launch { checkPath(target, path) }
+    val generation = ++pathCheckGeneration
+    val revision = target.contextRevision
+    val request = target.beginRepositorySelectionRequest()
+    pathCheck = viewModelScope.launch { checkPath(target, path, generation, revision, request) }
   }
 
-  private suspend fun checkPath(target: NewTaskDraft, path: String) {
+  private suspend fun checkPath(
+    target: NewTaskDraft,
+    path: String,
+    generation: Long,
+    revision: Long,
+    request: Long,
+  ) {
     if (!canChangeContext(target)) return
-    val read = branches.branches(path)
-    if (!isSelected(target) || !canChangeContext(target)) return
-    when (read) {
-      is RepositoryBranchesRead.NotARepository -> showRepositoryError(target, "$path is not a git repository.")
-      is RepositoryBranchesRead.Unavailable -> showRepositoryError(target, "Could not read $path: ${readProblemText(read.problem)}")
-      is RepositoryBranchesRead.Listed -> addListedRepository(target, read.branches)
+    val validation = validateRepository(path) {
+      isSelected(target) && generation == pathCheckGeneration && target.contextRevision == revision &&
+        target.repositoryRequestGeneration == request && canChangeContext(target)
+    }
+    when (validation) {
+      RepositoryValidation.Stale -> Unit
+      is RepositoryValidation.Rejected -> showRepositoryError(target, validation.message)
+      is RepositoryValidation.Listed -> addListedRepository(target, validation, generation, revision, request)
     }
   }
 
-  private suspend fun addListedRepository(target: NewTaskDraft, listed: RepositoryBranches) {
-    if (!canChangeContext(target)) return
-    when (val project = specs.projectFor(listed.repositoryRoot)) {
-      is Outcome.Failure -> showRepositoryError(target, readProblemText(project.error))
-      is Outcome.Success -> {
-        if (!canChangeContext(target)) return
-        val repository = NewTaskRepository(project.value.repoRoot ?: listed.repositoryRoot, project.value.displayName)
-        val known = mutableState.value.repositories + target.addedRepositories
-        if (known.none { it.root == repository.root }) target.addedRepositories += repository
-        selectRepository(target, repository, listed)
+  private suspend fun validateRepository(path: String, stillCurrent: () -> Boolean): RepositoryValidation {
+    val canonical = try { withContext(repositoryDispatcher) { Path.of(path).toRealPath().toString() } }
+    catch (cancelled: CancellationException) { throw cancelled }
+    catch (_: Exception) { return if (stillCurrent()) RepositoryValidation.Rejected("Could not access $path.") else RepositoryValidation.Stale }
+    if (!stillCurrent()) return RepositoryValidation.Stale
+    when (val read = branches.branches(canonical)) {
+      is RepositoryBranchesRead.NotARepository -> return if (stillCurrent()) {
+        RepositoryValidation.Rejected("$canonical is not a git repository.")
+      } else RepositoryValidation.Stale
+      is RepositoryBranchesRead.Unavailable -> return if (stillCurrent()) {
+        RepositoryValidation.Rejected("Could not read $canonical: ${readProblemText(read.problem)}")
+      } else RepositoryValidation.Stale
+      is RepositoryBranchesRead.Listed -> {
+        val root = try { withContext(repositoryDispatcher) { Path.of(read.branches.repositoryRoot).toRealPath().toString() } }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) {
+          return if (stillCurrent()) RepositoryValidation.Rejected("Could not resolve the repository root for $canonical.") else RepositoryValidation.Stale
+        }
+        if (!stillCurrent()) return RepositoryValidation.Stale
+        if (root != canonical) return RepositoryValidation.Rejected("Choose the repository root itself. $canonical is inside $root.")
+        return when (val project = specs.projectFor(root)) {
+          is Outcome.Failure -> if (stillCurrent()) RepositoryValidation.Rejected(readProblemText(project.error)) else RepositoryValidation.Stale
+          is Outcome.Success -> if (stillCurrent()) {
+            RepositoryValidation.Listed(NewTaskRepository(root, project.value.displayName), read.branches.copy(repositoryRoot = root))
+          } else RepositoryValidation.Stale
+        }
+      }
+    }
+  }
+
+  private fun addListedRepository(target: NewTaskDraft, validation: RepositoryValidation.Listed, generation: Long, revision: Long, request: Long) {
+    if (!isSelected(target) || generation != pathCheckGeneration || target.contextRevision != revision ||
+      target.repositoryRequestGeneration != request || !canChangeContext(target)
+    ) return
+    val repository = validation.repository
+    val root = repository.root
+    if (target.repository?.root == root) return
+    pendingRepositorySelection[target] = repository.root to validation.branches
+    if (!target.rebindChat(requestedRepository = repository, requestedBranch = "")) {
+      pendingRepositorySelection.remove(target)
+      showRepositoryError(target, "Finish the current chat or operation decision before changing repositories.")
+    } else {
+      viewModelScope.launch {
+        target.awaitContextTransition()
+        if (target.repository?.root != root && pendingRepositorySelection.remove(target) != null) {
+          showRepositoryError(target, "The repository could not be saved. The previous selection remains active.")
+        }
       }
     }
   }
@@ -443,7 +508,6 @@ class NewTaskViewModel(
     val loaded = (mutableState.value.branchRead as? BranchReadState.Loaded)?.takeIf { it.root == root }?.branches
     val checkout = branch.ifBlank { loaded?.defaultBranch.orEmpty() }
     if (loaded == null || checkout.isBlank() || checkout == loaded.currentBranch) {
-      target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
       target.rebindChat(requestedBranch = branch)
       return
     }
@@ -473,7 +537,6 @@ class NewTaskViewModel(
             if ((mutableState.value.repositories + target.addedRepositories).none { it.root == repository.root }) {
               target.addedRepositories += repository
             }
-            target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
             target.rebindChat(requestedRepository = repository, requestedBranch = baseBranch)
             if (isSelected(target)) mutableState.update { it.copy(repositoryError = null) }
           }
@@ -493,10 +556,18 @@ class NewTaskViewModel(
   }
 
   private fun observeContextCommit(target: NewTaskDraft) {
+    target.onRepositoryCandidate = { owner, current, path, sessionId, revision, request ->
+      selectRepositoryCandidate(owner, current, path, sessionId, revision, request)
+    }
     target.onContextCommitted = { committed ->
       if (isSelected(committed)) {
         val selectedRoot = committed.repository?.root
         val pending = pendingRepositorySelection.remove(committed)
+        committed.repository?.takeIf { it.root == pending?.first }?.let { selected ->
+          if ((mutableState.value.repositories + committed.addedRepositories).none { it.root == selected.root }) {
+            committed.addedRepositories = committed.addedRepositories + selected
+          }
+        }
         val requestedRoot = pending?.first
         mutableState.update { state ->
           state.copy(agent = committed.selectedAgent, repositoryError = null,
@@ -517,5 +588,59 @@ class NewTaskViewModel(
         }
       }
     }
+  }
+
+  private suspend fun selectRepositoryCandidate(target: NewTaskDraft, current: NewTaskChat, path: String, sessionId: String, revision: Long, request: Long) {
+    if (!target.ownsCandidateOrigin(current, sessionId, revision, request)) return
+    if (!current.awaitRepositoryContextReady()) {
+      if (target.ownsCandidateOrigin(current, sessionId, revision, request)) {
+        showCandidateProblem(target, current, "A background reply could not be saved. The current repository remains selected.")
+      }
+      return
+    }
+    if (!target.ownsCandidateOrigin(current, sessionId, revision, request)) return
+    if (current.thread.hasDeliveryClaim()) {
+      showCandidateProblem(target, current, "Finish the current follow-up before changing repositories.")
+      return
+    }
+    val validation = validateRepository(path) { target.ownsCandidateOrigin(current, sessionId, revision, request) }
+    when (validation) {
+      RepositoryValidation.Stale -> Unit
+      is RepositoryValidation.Rejected -> showCandidateProblem(target, current, validation.message)
+      is RepositoryValidation.Listed -> {
+        if (!current.awaitRepositoryContextReady()) {
+          if (target.ownsCandidateOrigin(current, sessionId, revision, request)) {
+            showCandidateProblem(target, current, "A background reply could not be saved. The current repository remains selected.")
+          }
+          return
+        }
+        if (!target.ownsCandidateOrigin(current, sessionId, revision, request)) return
+        if (current.thread.hasDeliveryClaim()) {
+          showCandidateProblem(target, current, "Finish the current follow-up before changing repositories.")
+          return
+        }
+        val repository = validation.repository
+        if (target.repository?.root == repository.root) return
+        pendingRepositorySelection[target] = repository.root to validation.branches
+        if (!target.rebindChat(requestedRepository = repository, requestedBranch = "")) {
+          pendingRepositorySelection.remove(target)
+          showCandidateProblem(target, current, "The repository could not be selected while this draft was busy.")
+          return
+        }
+        target.awaitContextTransition()
+        if (target.repository?.root != repository.root) {
+          showCandidateProblem(target, current, "The repository could not be saved. The previous selection remains active.")
+        } else {
+          val known = mutableState.value.repositories + target.addedRepositories
+          if (known.none { it.root == repository.root }) target.addedRepositories += repository
+        }
+      }
+    }
+  }
+
+  private fun showCandidateProblem(target: NewTaskDraft, current: NewTaskChat, message: String) {
+    showRepositoryError(target, message)
+    current.thread.append(ChatMessage.Notice("Repository selection was not applied: $message"))
+    target.launch { current.persist() }
   }
 }

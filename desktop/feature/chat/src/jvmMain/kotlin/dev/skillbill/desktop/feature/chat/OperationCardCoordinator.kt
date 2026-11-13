@@ -36,8 +36,41 @@ internal class OperationCardCoordinator(
   private val observations = ConcurrentHashMap<String, Job>()
   private val pendingAdjustments = ConcurrentHashMap<ChatThread, String>()
   private val outstanding = ConcurrentHashMap<ChatThread, Int>()
+  private val revokedThreads = ConcurrentHashMap.newKeySet<ChatThread>()
+  private val reservedThreads = ConcurrentHashMap.newKeySet<ChatThread>()
 
   fun hasOutstanding(thread: ChatThread): Boolean = outstanding.containsKey(thread)
+
+  fun reserveContextTransition(thread: ChatThread): Boolean {
+    if (thread in revokedThreads || hasOutstanding(thread)) return false
+    reservedThreads += thread
+    if (hasOutstanding(thread)) {
+      reservedThreads.remove(thread)
+      return false
+    }
+    return true
+  }
+
+  fun releaseContextTransition(thread: ChatThread) {
+    reservedThreads.remove(thread)
+  }
+
+  fun revoke(thread: ChatThread) {
+    revokedThreads += thread
+    reservedThreads.remove(thread)
+    val references = thread.transcript.value.flatMap { message ->
+      when (message) {
+        is ChatMessage.OperationCard -> listOf(message.card.token to message.card.launchId)
+        is ChatMessage.Notice -> message.operationCard?.let { listOf(it.token to it.launchId) }.orEmpty()
+        else -> emptyList()
+      }
+    }
+    references.forEach { (token, launchId) ->
+      observations.remove(token)?.cancel()
+      requests.remove(launchId)
+    }
+    pendingAdjustments.remove(thread)
+  }
 
   /** Keeps the request that parked [launchId], so Adjust can ask for a replacement with the same target and branch. */
   fun remember(launchId: String, request: NewTaskStart) {
@@ -56,6 +89,7 @@ internal class OperationCardCoordinator(
    * changes or this surface's [scope] ends; the observation never submits a continuation.
    */
   fun revalidate(thread: ChatThread, tokens: List<String>) {
+    if (thread in revokedThreads) return
     tokens.forEach { token ->
       observations.remove(token)?.cancel()
       val job = scope.launch {
@@ -85,7 +119,7 @@ internal class OperationCardCoordinator(
     apply(thread, token, controls.revalidateOperationCard(token))
 
   private suspend fun apply(thread: ChatThread, token: String, lookup: OperationCardLookup): Boolean =
-    when (val result = lookup) {
+    if (thread in revokedThreads) false else when (val result = lookup) {
       OperationCardLookup.Missing -> {
         thread.append(ChatMessage.Notice("The saved operation card is missing; start a new proposal from chat."))
         historyChanged(thread)
@@ -104,22 +138,30 @@ internal class OperationCardCoordinator(
       }
     }
 
-  fun actions(thread: ChatThread): ChatOperationCardActions =
+  fun actions(thread: ChatThread, actionLock: Any = thread): ChatOperationCardActions =
     ChatOperationCardActions(
       onChooseOption = { token, ordinal, optionId ->
-        thread.chooseOperationOption(token, ordinal, optionId)
-        scope.launch { persistOrWarn(thread) }
+        synchronized(actionLock) {
+          if (thread !in revokedThreads && thread !in reservedThreads) {
+            thread.chooseOperationOption(token, ordinal, optionId)
+            scope.launch { persistOrWarn(thread) }
+          }
+        }
       },
       onChooseRecommended = { token ->
-        thread.chooseRecommendedOptions(token)
-        scope.launch { persistOrWarn(thread) }
+        synchronized(actionLock) {
+          if (thread !in revokedThreads && thread !in reservedThreads) {
+            thread.chooseRecommendedOptions(token)
+            scope.launch { persistOrWarn(thread) }
+          }
+        }
       },
-      onConfirm = { token -> confirm(thread, token) },
-      onDismiss = { token -> dismiss(thread, token) },
-      onAdjust = { token -> adjust(thread, token) },
-      onChangeVerify = { token, choices -> changeVerify(thread, token, choices) },
-      canAdjust = { token -> !thread.busy.value && thread.operationCard(token)?.card?.launchId?.let(requests::containsKey) == true },
-      onOpenRun = { token -> openRun(thread, token) },
+      onConfirm = { token -> synchronized(actionLock) { if (thread !in revokedThreads && thread !in reservedThreads) confirm(thread, token) } },
+      onDismiss = { token -> synchronized(actionLock) { if (thread !in revokedThreads && thread !in reservedThreads) dismiss(thread, token) } },
+      onAdjust = { token -> synchronized(actionLock) { if (thread !in revokedThreads && thread !in reservedThreads) adjust(thread, token) } },
+      onChangeVerify = { token, choices -> synchronized(actionLock) { if (thread !in revokedThreads && thread !in reservedThreads) changeVerify(thread, token, choices) } },
+      canAdjust = { token -> synchronized(actionLock) { thread !in revokedThreads && thread !in reservedThreads && !thread.busy.value && thread.operationCard(token)?.card?.launchId?.let(requests::containsKey) == true } },
+      onOpenRun = { token -> synchronized(actionLock) { if (thread !in revokedThreads && thread !in reservedThreads) openRun(thread, token) } },
     )
 
   private fun openRun(thread: ChatThread, token: String) {

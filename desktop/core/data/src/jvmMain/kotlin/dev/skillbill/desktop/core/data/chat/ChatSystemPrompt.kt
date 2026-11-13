@@ -24,22 +24,33 @@ private fun executionSystemPrompt(scope: ChatScope.Execution): String = buildStr
 
 private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString {
   appendLine("You are chatting with the operator about new work. No skill-bill execution exists yet.")
+  appendLine("User home: ${scope.userHome}")
+  appendLine("Effective working directory: ${scope.workingDirectory}")
+  appendLine("Selected repository root: ${scope.selectedRepositoryRoot ?: "none"}")
   if (scope.selectedRepositoryRoot == null) {
-    appendLine("Home directory: ${scope.workingDirectory}")
-    appendLine("Selected repository: none.")
     appendLine("Ordinary questions, tool use, file edits and saves are allowed in the home directory.")
-    appendLine("Before any goal, phase or operation, including direct CLI or MCP requests, ask the operator to select a repository.")
+    appendLine("Do not prepare repository branches or start goals, phases or operations while no repository is selected.")
   } else {
-    appendLine("Working directory: ${scope.workingDirectory}")
-    appendLine("Repository: ${scope.selectedRepositoryRoot}")
     scope.baseBranch?.let { appendLine("Base branch: $it") }
     appendLine(NEW_TASK_BRANCH_GUIDANCE.trim())
     appendLine(NEW_TASK_PREPARATION_GUIDANCE.trim())
     appendLine(NEW_TASK_ROUTING_GUIDANCE.trim())
-    append(NEW_TASK_ACTION_GUIDANCE.trimEnd())
+    appendLine(NEW_TASK_ACTION_GUIDANCE.trimEnd())
   }
+  appendLine(NEW_TASK_REPOSITORY_SELECTION_GUIDANCE.trim())
   appendLine(CHAT_ACCESS_GUIDANCE)
 }
+
+private val NEW_TASK_REPOSITORY_SELECTION_GUIDANCE = """
+When the operator asks to attach or switch repositories, resolve an existing exact repository root from their path or description. Search likely project folders such as userHome/StudioProjects when useful. If more than one repository could match, ask which one and emit no selection block.
+Create or clone a repository only when the operator requests that operation. Use available shell tools and the requested destination. A candidate is allowed only after init or clone finishes successfully and you know the exact destination root. Report failed init or clone, remote authentication failure, an inaccessible destination or unresolved description in prose, with no candidate. Leave any partial or user files in place. Do not infer success, retry automatically or rely on undocumented idempotency.
+A shell cd, Git metadata, tool output or visible prose never selects a repository. The app validates a candidate and may reject it. Selection retains this conversation and never launches or retries work. A later explicit app-owned start action is required to launch work.
+When selection succeeds, end the reply with exactly one terminal block in this format and put no other text or action block after it:
+${RepositoryCandidatePayloadKeys.FENCE}
+{"${RepositoryCandidatePayloadKeys.CONTRACT_VERSION}":"${RepositoryCandidatePayloadKeys.CONTRACT_VERSION_VALUE}","${RepositoryCandidatePayloadKeys.PATH}":"/absolute/repository/root"}
+```
+Do not combine this block with a skillbill-actions block. Escape JSON string characters in the path. Never emit a candidate before the requested operation succeeds.
+""".trimIndent()
 
 private const val CHAT_ACCESS_GUIDANCE =
   "Carry out the operator's requests with the available tools, including shell commands, the skill-bill CLI, MCP tools, git, gh and file edits. " +
