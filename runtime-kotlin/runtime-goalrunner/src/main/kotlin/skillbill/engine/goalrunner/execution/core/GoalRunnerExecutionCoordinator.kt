@@ -5,6 +5,7 @@ import skillbill.application.telemetry.lifecycle.asWorkerOwnership
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
+import skillbill.engine.goalrunner.model.GoalRunnerLeasePurpose
 import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
@@ -38,6 +39,7 @@ public interface GoalRunnerExecutionCoordinator {
 
   public fun <T> runOwnedWithLease(
     parentWorkflowId: String,
+    purpose: GoalRunnerLeasePurpose = GoalRunnerLeasePurpose.EXECUTION,
     block: (Long, String?) -> T,
   ): GoalRunnerOwnedRun<T>
 
@@ -94,21 +96,23 @@ public class DefaultGoalRunnerExecutionCoordinator(
 
   override fun <T> runOwnedWithLease(
     parentWorkflowId: String,
+    purpose: GoalRunnerLeasePurpose,
     block: (Long, String?) -> T,
-  ): GoalRunnerOwnedRun<T> = runOwned(parentWorkflowId, null, block)
+  ): GoalRunnerOwnedRun<T> = runOwned(parentWorkflowId, null, purpose, block)
 
   override fun <T> runOwnedWithChildAdmissionLease(
     parentWorkflowId: String,
     childAdmission: GoalRunnerChildExecutionPlanAdmission,
     block: (Long, String?) -> T,
-  ): GoalRunnerOwnedRun<T> = runOwned(parentWorkflowId, childAdmission, block)
+  ): GoalRunnerOwnedRun<T> = runOwned(parentWorkflowId, childAdmission, block = block)
 
   private fun <T> runOwned(
     parentWorkflowId: String,
     childAdmission: GoalRunnerChildExecutionPlanAdmission?,
+    purpose: GoalRunnerLeasePurpose = GoalRunnerLeasePurpose.EXECUTION,
     block: (Long, String?) -> T,
   ): GoalRunnerOwnedRun<T> =
-    when (val acquisition = acquireLease(parentWorkflowId, childAdmission)) {
+    when (val acquisition = acquireLease(parentWorkflowId, childAdmission, purpose)) {
       is LeaseAcquisition.AlreadyRunning -> GoalRunnerOwnedRun.AlreadyRunning(acquisition.reason)
       is LeaseAcquisition.Acquired -> runWithLease(parentWorkflowId, acquisition.lease, block)
     }
@@ -116,6 +120,7 @@ public class DefaultGoalRunnerExecutionCoordinator(
   private fun acquireLease(
     parentWorkflowId: String,
     childAdmission: GoalRunnerChildExecutionPlanAdmission?,
+    purpose: GoalRunnerLeasePurpose,
   ): LeaseAcquisition {
     val existing = manifestStore.executionLease(parentWorkflowId)
     val expectedOwner =
@@ -128,7 +133,7 @@ public class DefaultGoalRunnerExecutionCoordinator(
     val lease = newLease(existing, supervisor.currentProcess())
     val acquired =
       if (childAdmission == null) {
-        manifestStore.acquireExecutionLeaseFenced(parentWorkflowId, lease, expectedOwner)
+        manifestStore.acquireExecutionLeaseFenced(parentWorkflowId, lease, expectedOwner, purpose)
       } else {
         manifestStore.acquireExecutionLeaseWithChildAdmissionFenced(
           parentWorkflowId,

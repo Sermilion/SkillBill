@@ -3811,3 +3811,17 @@ Context: Safe-removal receipts originally came only from transferred goal checko
 Decision: After publishing its completed report, a standalone plan settles its initialized checkout through the shared resource policy. The ownership coordinator checks completion and worker absence in the same SQLite write transaction as settlement, so worker admission and goal transfer cannot commit during cleanup. The resource checks the selected standalone workflow, repository, issue, path and Git ownership marker, retains dirty or publication-unknown work, and retains any revision beyond the original commit. Successful removal writes the existing recovery receipt without changing ownership, workflow evidence or revision. Goal-scoped planning and interrupted standalone planning keep their checkout. Goal intake consults recovery evidence before requiring the initialized checkout directory for projection and transfer.
 Reason: A completed standalone plan now supplies actual recovery evidence. CLI regression tests cover completion followed by standalone resume and goal handoff, preserve accepted plan evidence and caller edits, and refuse recovery after proof is removed. Recovery uses the existing receipt format and database schema.
 Superseded by: Fence planning checkout recovery in durable storage (2026-11-12)
+
+## [2026-11-13] Separate blocked-start settlement from child admission
+
+A goal can fail checkout verification before it can admit its existing child. Saving
+that refusal still needs a fenced parent lease. `BLOCK_SETTLEMENT` permits that
+parent-only claim without checking a child descriptor. Only blocked-start settlement
+selects it. Execution keeps the existing descriptor and linkage checks. Lease owner,
+generation, process-liveness and checkout-recovery fences still apply.
+
+Checkout adoption also accepts a mount device change when the recorded reservation,
+repository, path, initial commit, inode, creation time and Git registration match.
+Device numbers differ across mount namespaces. This compatibility read preserves the
+original ownership marker and emits a warning. Destructive cleanup still requires
+exact ownership identity. No persisted schema or marker format changes.

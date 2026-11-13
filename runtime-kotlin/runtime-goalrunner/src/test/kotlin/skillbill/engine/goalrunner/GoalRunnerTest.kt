@@ -65,6 +65,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
 import skillbill.engine.goalrunner.model.GoalRunnerEventSink
 import skillbill.engine.goalrunner.model.GoalRunnerLaunchAuthorization
+import skillbill.engine.goalrunner.model.GoalRunnerLeasePurpose
 import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
@@ -2808,6 +2809,7 @@ class GoalRunnerPauseLaunchBoundaryTest {
       object : GoalRunnerExecutionCoordinator {
         override fun <T> runOwnedWithLease(
           parentWorkflowId: String,
+          purpose: GoalRunnerLeasePurpose,
           block: (Long, String?) -> T,
         ): GoalRunnerOwnedRun<T> = runOwned(parentWorkflowId) { block(1, null) }
 

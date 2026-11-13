@@ -21,6 +21,7 @@ import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
 import skillbill.engine.goalrunner.model.GoalIntakeAdmission
 import skillbill.engine.goalrunner.model.GoalRunPreparation
 import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
+import skillbill.engine.goalrunner.model.GoalRunnerLeasePurpose
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.monitoring.GoalCompletionRecorder
@@ -106,7 +107,10 @@ public class GoalRunner(
   ): GoalRunnerRunReport =
     when (
       val ownedStart =
-        executionCoordinator.runOwnedWithLease(state.parentWorkflowId) { generation, ownerToken ->
+        executionCoordinator.runOwnedWithLease(
+          state.parentWorkflowId,
+          GoalRunnerLeasePurpose.BLOCK_SETTLEMENT,
+        ) { generation, ownerToken ->
           settleAcceptedGoalBlock(state, report, generation, ownerToken)
         }
     ) {
@@ -137,7 +141,7 @@ public class GoalRunner(
     }
     val owned =
       if (childAdmission == null) {
-        executionCoordinator.runOwnedWithLease(loadedState.parentWorkflowId, execute)
+        executionCoordinator.runOwnedWithLease(loadedState.parentWorkflowId, block = execute)
       } else {
         executionCoordinator.runOwnedWithChildAdmissionLease(loadedState.parentWorkflowId, childAdmission, execute)
       }
