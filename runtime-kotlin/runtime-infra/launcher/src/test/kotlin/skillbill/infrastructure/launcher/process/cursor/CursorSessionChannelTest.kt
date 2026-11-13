@@ -43,19 +43,15 @@ class CursorSessionChannelTest {
           """"category":"mode","currentValue":"primary","options":[{"value":"primary"}]}]}}""" + "\n",
       )
       channel.observe(
-        """{"jsonrpc":"2.0","id":4,"result":{"configOptions":[{"id":"mode",""" +
-          """"currentValue":"primary"}]}}""" + "\n",
-      )
-      channel.observe(
         """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s",""" +
           """"update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text",""" +
           """"text":"answer"}}}}""" + "\n",
       )
-      channel.observe("""{"jsonrpc":"2.0","id":5,"result":{"stopReason":"end_turn"}}""" + "\n")
+      channel.observe("""{"jsonrpc":"2.0","id":4,"result":{"stopReason":"end_turn"}}""" + "\n")
 
       val captured = assertNotNull(captureAtRelease)
       assertTrue(captured.complete)
-      assertEquals("answer", captured.text)
+      assertEquals("answer", captured.text, "session outcome: ${channel.outcome()}")
       assertTrue(assertNotNull(channel.outcome()).completed)
     } finally {
       channel.finish()

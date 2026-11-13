@@ -9,7 +9,7 @@ import dev.skillbill.desktop.core.domain.model.QaStepState
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlin.time.Instant
 
-internal enum class QaStepDisplay { Pending, Running, Passed, Failed, Stopped, NotRun }
+internal enum class QaStepDisplay { Pending, Running, Passed, Failed, Skipped, Stopped, NotRun }
 internal data class QaCaseStatus(val label: String)
 internal data class QaStepView(
   val number: Int,
@@ -35,6 +35,7 @@ internal data class QaProgressView(
   val total: Int,
   val passed: Int,
   val failed: Int,
+  val skipped: Int,
   val running: Int,
   val stopped: Int,
   val remaining: Int,
@@ -90,7 +91,7 @@ internal fun qaChecklistView(
     val open = overrides[key] ?: (status.label == "Running" || status.label == "Failed")
     QaCaseView(
       key, qaCase.id, qaCase.title, status,
-      qaCase.steps.count { it.state == QaStepState.Passed || it.state == QaStepState.Failed }, qaCase.steps.size, open, steps,
+      qaCase.steps.count { it.state.isSettled }, qaCase.steps.size, open, steps,
     )
   }
   val allSteps = checklist?.cases.orEmpty().flatMap { qaCase ->
@@ -100,12 +101,15 @@ internal fun qaChecklistView(
   val progress = if (!hasCases) null else {
     val passed = allSteps.count { it.third.state == QaStepState.Passed }
     val failed = allSteps.count { it.third.state == QaStepState.Failed }
+    val skipped = allSteps.count { it.third.state == QaStepState.Skipped }
     val running = allSteps.count { it.third.display(live) == QaStepDisplay.Running }
     val stopped = allSteps.count { it.third.state == QaStepState.Running && !live }
     val total = allSteps.size
     val groups = listOf(
       "failed" to cases.count { it.status.label == "Failed" },
       "passed" to cases.count { it.status.label == "Passed" },
+      "partly skipped" to cases.count { it.status.label == "Partly skipped" },
+      "skipped" to cases.count { it.status.label == "Skipped" },
       "running" to cases.count { it.status.label == "Running" },
       "queued" to cases.count { it.status.label == "Queued" },
       "stopped" to cases.count { it.status.label == "Stopped" },
@@ -116,9 +120,11 @@ internal fun qaChecklistView(
     val summary = groups.mapIndexed { index, (label, count) ->
       "${if (index == 0) "$count $caseWord" else count} $label"
     }.joinToString(", ")
+    val done = passed + failed + skipped
     QaProgressView(
-      passed + failed, total, passed, failed, running, stopped, total - passed - failed - running,
-      "${passed + failed} of $total steps done: $passed passed, $failed failed", summary,
+      done, total, passed, failed, skipped, running, stopped, total - done - running,
+      "$done of $total steps done: $passed passed, $failed failed" + if (skipped > 0) ", $skipped skipped" else "",
+      summary,
     )
   }
   val now = if (live) {
@@ -149,6 +155,7 @@ private fun QaChecklistStep.display(live: Boolean): QaStepDisplay = when (state)
   QaStepState.Running -> if (live) QaStepDisplay.Running else QaStepDisplay.Stopped
   QaStepState.Passed -> QaStepDisplay.Passed
   QaStepState.Failed -> QaStepDisplay.Failed
+  QaStepState.Skipped -> QaStepDisplay.Skipped
 }
 
 private fun caseStatus(steps: List<QaChecklistStep>, live: Boolean): QaCaseStatus {
@@ -156,13 +163,20 @@ private fun caseStatus(steps: List<QaChecklistStep>, live: Boolean): QaCaseStatu
     steps.any { it.state == QaStepState.Running } -> "Running"
     steps.any { it.state == QaStepState.Failed } -> "Failed"
     steps.isNotEmpty() && steps.all { it.state == QaStepState.Passed } -> "Passed"
-    steps.any { it.state == QaStepState.Passed || it.state == QaStepState.Failed } -> "Running"
+    steps.isNotEmpty() && steps.all { it.state == QaStepState.Skipped } -> "Skipped"
+    steps.isNotEmpty() && steps.all { it.state.isSettled } -> "Partly skipped"
+    steps.any { it.state.isSettled } -> "Running"
     else -> "Queued"
   } else when {
     steps.any { it.state == QaStepState.Failed } -> "Failed"
     steps.isNotEmpty() && steps.all { it.state == QaStepState.Passed } -> "Passed"
-    steps.any { it.state == QaStepState.Passed || it.state == QaStepState.Running } -> "Stopped"
+    steps.isNotEmpty() && steps.all { it.state == QaStepState.Skipped } -> "Skipped"
+    steps.isNotEmpty() && steps.all { it.state.isSettled } -> "Partly skipped"
+    steps.any { it.state == QaStepState.Passed || it.state == QaStepState.Skipped || it.state == QaStepState.Running } -> "Stopped"
     else -> "Not run"
   }
   return QaCaseStatus(status)
 }
+
+private val QaStepState.isSettled: Boolean
+  get() = this == QaStepState.Passed || this == QaStepState.Failed || this == QaStepState.Skipped

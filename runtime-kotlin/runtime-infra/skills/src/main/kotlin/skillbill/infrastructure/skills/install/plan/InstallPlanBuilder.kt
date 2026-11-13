@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.plan
 
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.infrastructure.skills.scaffold.platformpack.packRootsBySlug
 import skillbill.install.model.InstallAgentDefaultTarget
@@ -17,9 +18,9 @@ import skillbill.install.model.buildInstallPlanWireMap
 import skillbill.install.policy.InstallPlanPolicy
 import skillbill.model.toPath
 import skillbill.ports.install.InstallPlanWireValidator
-import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
 import skillbill.ports.install.plan.model.InstallPlanningFacts
 import skillbill.ports.repository.toFileLocation
+import skillbill.ports.system.HostPlatformPort
 import skillbill.review.plan.ReviewFallbackResolver
 import skillbill.scaffold.model.PlatformManifest
 import java.nio.file.Path
@@ -28,13 +29,12 @@ internal fun buildInstallPlan(
   request: InstallPlanRequest,
   wireValidator: InstallPlanWireValidator,
 ): InstallPlan {
-  val scopedRequest = request.withCallingDirectory()
   requireSupportedAgentContract()
-  val platformManifests = discoverPlatformManifests(scopedRequest)
-  val policyInput = buildInstallPolicyInput(scopedRequest, platformManifests, enforceContractVersion = true)
+  val platformManifests = discoverPlatformManifests(request)
+  val policyInput = buildInstallPolicyInput(request, platformManifests, enforceContractVersion = true)
   val draft = InstallPlanPolicy.buildPlanDraft(policyInput)
   validateInstallPlanInternalSkills(draft.skills)
-  val staging = buildInstallStagingIntent(scopedRequest, draft.skills, platformManifests)
+  val staging = buildInstallStagingIntent(request, draft.skills, platformManifests)
   val plan = draft.toInstallPlan(staging)
 
   wireValidator.validate(buildInstallPlanWireMap(plan))
@@ -52,6 +52,7 @@ private fun buildInstallPolicyInput(
   platformManifests: List<PlatformManifest>,
   enforceContractVersion: Boolean,
   enforceGovernedReviewStructure: Boolean = true,
+  hostPlatform: HostPlatformPort = JdkHostPlatformPort,
 ): InstallPolicyInput {
   val baseSkills = discoverBaseSkills(request.targetPaths.skillsRoot.toPath())
   val resolvedReviewFallback =
@@ -95,14 +96,15 @@ private fun buildInstallPolicyInput(
         )
       },
     detectedAgentTargets =
-      detectAgents(request.home.toPath(), installPlanEnvironment(request)).map { target ->
+      detectAgents(request.home.toPath(), installPlanEnvironment(request), hostPlatform).map { target ->
         InstallAgentTarget(
           agent = SupportedAgent.fromId(target.name),
           path = target.path,
           source = InstallAgentTargetSource.DETECTED,
         )
       },
-    defaultAgentTargets = multiRootDefaultTargets(request.home.toPath(), installPlanEnvironment(request)),
+    defaultAgentTargets =
+      multiRootDefaultTargets(request.home.toPath(), installPlanEnvironment(request), hostPlatform),
   )
 }
 
@@ -112,11 +114,10 @@ internal fun enumerateInstallPlanSkills(
   catalogLoader: PlatformPackCatalogLoader? = null,
   enforceGovernedReviewStructure: Boolean = true,
 ): List<InstallPlanSkill> {
-  val scopedRequest = request.withCallingDirectory()
   requireSupportedAgentContract()
   val platformManifests =
     discoverPlatformManifests(
-      scopedRequest,
+      request,
       enforceContractVersion,
       catalogLoader,
       enforceGovernedReviewStructure,
@@ -124,7 +125,7 @@ internal fun enumerateInstallPlanSkills(
   val skills =
     InstallPlanPolicy.buildPlanDraft(
       buildInstallPolicyInput(
-        scopedRequest,
+        request,
         platformManifests,
         enforceContractVersion,
         enforceGovernedReviewStructure,
@@ -137,22 +138,23 @@ internal fun enumerateInstallPlanSkills(
 internal fun collectInstallPlanningFacts(
   request: InstallPlanRequest,
   catalogLoader: PlatformPackCatalogLoader? = null,
+  hostPlatform: HostPlatformPort = JdkHostPlatformPort,
 ): InstallPlanningFacts {
-  val scopedRequest = request.withCallingDirectory()
   requireSupportedAgentContract()
-  val platformManifests = discoverPlatformManifests(scopedRequest, catalogLoader = catalogLoader)
+  val platformManifests = discoverPlatformManifests(request, catalogLoader = catalogLoader)
   return InstallPlanningFacts(
-    baseSkills = discoverBaseSkills(scopedRequest.targetPaths.skillsRoot.toPath()),
+    baseSkills = discoverBaseSkills(request.targetPaths.skillsRoot.toPath()),
     platformManifests = platformManifests,
     detectedAgentTargets =
-      detectAgents(scopedRequest.home.toPath(), installPlanEnvironment(scopedRequest)).map { target ->
+      detectAgents(request.home.toPath(), installPlanEnvironment(request), hostPlatform).map { target ->
         InstallAgentTarget(
           agent = SupportedAgent.fromId(target.name),
           path = target.path,
           source = InstallAgentTargetSource.DETECTED,
         )
       },
-    defaultAgentTargets = multiRootDefaultTargets(scopedRequest.home.toPath(), installPlanEnvironment(scopedRequest)),
+    defaultAgentTargets =
+      multiRootDefaultTargets(request.home.toPath(), installPlanEnvironment(request), hostPlatform),
   )
 }
 
@@ -176,19 +178,14 @@ internal fun materializeSelectedPlatformSkills(
   }
 }
 
-private fun InstallPlanRequest.withCallingDirectory(): InstallPlanRequest {
-  if (environment[InstallMcpProfileEnvironment.PWD_ENV] != null) return this
-  val callingDirectory = repoRoot.toPath().toAbsolutePath().normalize().toString()
-  return copy(environment = environment + (InstallMcpProfileEnvironment.PWD_ENV to callingDirectory))
-}
-
 private fun installPlanEnvironment(request: InstallPlanRequest): Map<String, String> = request.environment
 
 private fun multiRootDefaultTargets(
   home: Path,
   environment: Map<String, String>,
+  hostPlatform: HostPlatformPort,
 ): List<InstallAgentDefaultTarget> =
-  agentPaths(home, installConfigRoots(home, environment)).flatMap { (agent, path) ->
+  agentPaths(home, installConfigRoots(home, environment, hostPlatform)).flatMap { (agent, path) ->
     if (agent == SupportedAgent.CLAUDE) {
       claudeSkillTargets(home, environment).map { skillPath ->
         InstallAgentDefaultTarget(agent = agent, path = skillPath.toFileLocation())

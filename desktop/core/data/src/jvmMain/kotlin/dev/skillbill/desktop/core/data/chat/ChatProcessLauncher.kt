@@ -27,9 +27,13 @@ import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.util.concurrent.TimeUnit
+import java.io.BufferedReader
 import java.io.File
+import java.io.FilterInputStream
 import java.io.IOException
 import java.io.InputStream
+import java.io.InputStreamReader
+import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 import java.util.LinkedHashSet
 import java.util.concurrent.ConcurrentHashMap
@@ -51,6 +55,7 @@ data class ChatCommand(
   val workingDirectory: String,
   val environment: Map<String, String>,
   val stdin: String,
+  val stdoutLimitBytes: Long? = null,
 )
 
 /** What a chat process produces: stdout [Line]s, a possible [StdoutEnded], then [Exited] or [StartFailed]. */
@@ -239,11 +244,11 @@ class ProcessLiveChatLauncher(private val diagnostics: Diagnostics) : LiveChatPr
   }
 }
 
-private fun stdoutLines(process: Process): Pair<ReceiveChannel<String>, Thread> {
+private fun stdoutLines(process: Process, limitBytes: Long?): Pair<ReceiveChannel<String>, Thread> {
   val lines = Channel<String>(Channel.BUFFERED)
   val reader = thread(isDaemon = true, name = "chat-stdout") {
     try {
-      process.inputStream.bufferedReader(Charsets.UTF_8).useLines { source ->
+      stdoutReader(process.inputStream, limitBytes).useLines { source ->
         for (line in source) if (lines.trySendBlocking(line).isFailure) break
       }
     } catch (failure: IOException) {
@@ -253,6 +258,29 @@ private fun stdoutLines(process: Process): Pair<ReceiveChannel<String>, Thread> 
     }
   }
   return lines to reader
+}
+
+/** Unlimited stdout decodes leniently; a [limitBytes] budget also rejects invalid UTF-8 and fails once exceeded. */
+internal fun stdoutReader(stdout: InputStream, limitBytes: Long?): BufferedReader {
+  if (limitBytes == null) return stdout.bufferedReader(Charsets.UTF_8)
+  val decoder = Charsets.UTF_8.newDecoder()
+    .onMalformedInput(CodingErrorAction.REPORT)
+    .onUnmappableCharacter(CodingErrorAction.REPORT)
+  return InputStreamReader(LimitedStdout(stdout, limitBytes), decoder).buffered()
+}
+
+private class LimitedStdout(source: InputStream, private val limit: Long) : FilterInputStream(source) {
+  private var count = 0L
+
+  override fun read(): Int = super.read().also { if (it >= 0) counted(1) }
+
+  override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
+    super.read(buffer, offset, length).also { if (it > 0) counted(it) }
+
+  private fun counted(bytes: Int) {
+    count += bytes
+    if (count > limit) throw IOException("stdout exceeded $limit bytes")
+  }
 }
 
 // Starts [command], runs [feed] to supply stdin, and streams stdout until the process exits.
@@ -316,7 +344,7 @@ private fun runProcess(
         }
         readers += drain
         val feeding = launch { feed(process) }
-        val (lines, stdoutReader) = stdoutLines(process)
+        val (lines, stdoutReader) = stdoutLines(process, command.stdoutLimitBytes)
         readers += stdoutReader
         var stdoutFailure: IOException? = null
         try {

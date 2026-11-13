@@ -398,8 +398,8 @@ internal class FeatureTaskRuntimeWorkerStore(
         """.trimIndent(),
       ).use { statement ->
         val current = connection.featureTaskRuntimeWorkerOwnership(workflowId, diagnostics) ?: return false
-        val now = parseFeatureTaskRuntimeWorkerLeaseInstant(workflowId, "now", nowInstant)
-        if (!current.matchesExpiredActiveOwner(ownerToken, generation, now)) {
+        parseFeatureTaskRuntimeWorkerLeaseInstant(workflowId, "now", nowInstant)
+        if (!current.matchesActiveOwner(ownerToken, generation)) {
           return false
         }
         statement.bindAll(
@@ -472,12 +472,6 @@ private fun Connection.updateWorkerGenerationCoordinates(
     check(statement.executeUpdate() == 1)
   }
 }
-
-private fun FeatureTaskRuntimeWorkerOwnership.matchesExpiredActiveOwner(
-  ownerToken: String,
-  generation: Long,
-  now: Instant,
-): Boolean = matchesActiveOwner(ownerToken, generation) && !expiresAtInstant.isAfter(now)
 
 private fun FeatureTaskRuntimeWorkerOwnership.matchesActiveOwner(
   ownerToken: String,

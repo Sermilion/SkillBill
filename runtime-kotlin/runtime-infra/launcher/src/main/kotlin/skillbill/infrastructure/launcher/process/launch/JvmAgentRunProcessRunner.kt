@@ -642,7 +642,7 @@ class JvmAgentRunProcessRunner(
   ): Int? =
     when {
       input.sessionExpected && !wait.finished -> null
-      input.sessionExpected -> if (session.failed) 1 else 0
+      input.sessionExpected -> wait.naturalExitStatus?.takeIf { it != 0 } ?: if (session.failed) 1 else 0
       wait.sessionSettled -> 0
       wait.finished -> input.process.exitValue()
       else -> null

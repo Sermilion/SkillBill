@@ -17,6 +17,7 @@ data class InstallMcpProfileEnvironment(
   val disableProjectConfig: String? = null,
   val databasePath: String? = null,
   val programData: String? = null,
+  val appData: String? = null,
 ) {
   fun asEnvironmentMap(): Map<String, String> =
     buildMap {
@@ -30,6 +31,7 @@ data class InstallMcpProfileEnvironment(
       disableProjectConfig?.let { put(OPENCODE_DISABLE_PROJECT_CONFIG_ENV, it) }
       databasePath?.let { put(RuntimeDatabaseEnvironmentKeys.DATABASE_PATH, it) }
       programData?.let { put(PROGRAM_DATA_ENV, it) }
+      appData?.let { put(APPDATA_ENV, it) }
     }
 
   companion object {
@@ -42,6 +44,7 @@ data class InstallMcpProfileEnvironment(
     const val PWD_ENV: String = "PWD"
     const val OPENCODE_DISABLE_PROJECT_CONFIG_ENV: String = OpenCodeEnvironmentKeys.DISABLE_PROJECT_CONFIG
     const val PROGRAM_DATA_ENV: String = "ProgramData"
+    const val APPDATA_ENV: String = "APPDATA"
 
     fun from(environment: Map<String, String>): InstallMcpProfileEnvironment? {
       val claudeConfigDir = environment[CLAUDE_CONFIG_DIR_ENV]
@@ -68,6 +71,12 @@ data class InstallMcpProfileEnvironment(
           programData,
         )
       return profile.takeIf { it.asEnvironmentMap().isNotEmpty() }
+      val appData = environment[APPDATA_ENV]
+      return if (claudeConfigDir == null && codexHome == null && appData == null) {
+        null
+      } else {
+        InstallMcpProfileEnvironment(claudeConfigDir, codexHome, appData)
+      }
     }
   }
 }

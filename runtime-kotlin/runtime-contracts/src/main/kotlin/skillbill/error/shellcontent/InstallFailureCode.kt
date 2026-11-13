@@ -23,6 +23,7 @@ enum class InstallFailureCode : RuntimeFailureCode {
   GOAL_PLANNING_PREPARATION_CONFLICT,
   GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE,
   AGENT_DISCOVERY_FAILED,
+  MALFORMED_MCP_CONFIG,
 }
 
 fun agentDiscoveryFailed(
@@ -34,6 +35,15 @@ fun agentDiscoveryFailed(
     InstallFailureCode.AGENT_DISCOVERY_FAILED,
     "Agent discovery could not $operation at '$path': ${cause.message.orEmpty()}",
     cause,
+  )
+
+fun malformedMcpConfig(
+  path: String,
+  reason: String,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    InstallFailureCode.MALFORMED_MCP_CONFIG,
+    "MCP config at '$path' cannot be updated: $reason. The file was left unchanged; repair it and retry.",
   )
 
 fun invalidInstallPlanSchemaError(

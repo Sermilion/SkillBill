@@ -10,11 +10,13 @@ import dev.skillbill.desktop.core.domain.model.AdvertisedEffortSupport
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -153,10 +155,55 @@ class ChatModelCatalogTest {
     assertTrue(connection.closed)
   }
 
-  private fun catalog(connection: ModelConnection, diagnostics: RecordingDiagnostics = RecordingDiagnostics(), onStart: (ChatCommand) -> Unit = {}): ChatModelCatalog {
+  @Test
+  fun `devin lists exact variant uids from its finite model command without a prompt`() = runTest {
+    val json = """{"families":[{"slug":"swe-2","family_uid":"fam-swe","variants":[{"model_uid":"swe-2-high","label":"SWE-2 High"}]}]}"""
+    var command: ChatCommand? = null
+    val read = catalog(ModelConnection(emptyList()), devin = { command = it; flowOf(ChatProcessOutput.Line(json), ChatProcessOutput.Exited(0, "")) })
+      .read(ChatAgent("devin", null, null), "/repo")
+    assertEquals(listOf(ChatModel("swe-2-high", "SWE-2 High")), assertIs<ChatModelsRead.Loaded>(read).models)
+    val launched = checkNotNull(command)
+    assertEquals(listOf("devin", "models", "list", "--format", "json"), launched.argv)
+    assertEquals("", launched.stdin)
+    assertEquals("/repo", launched.workingDirectory)
+    assertTrue(launched.stdoutLimitBytes != null)
+  }
+
+  @Test
+  fun `devin discovery failures stay visible instead of inventing models`() = runTest {
+    val valid = """{"families":[{"variants":[{"model_uid":"swe-2-high","label":"SWE-2 High"}]}]}"""
+    val cases = listOf(
+      listOf(ChatProcessOutput.Line("not json"), ChatProcessOutput.Exited(0, "")),
+      listOf(ChatProcessOutput.Line("""{"families":[]}"""), ChatProcessOutput.Exited(0, "")),
+      listOf(ChatProcessOutput.Line("""{"families":[{"variants":[{"label":"No uid"}]}]}"""), ChatProcessOutput.Exited(0, "")),
+      listOf(ChatProcessOutput.Line(valid), ChatProcessOutput.Exited(1, "not authenticated")),
+      listOf(ChatProcessOutput.StdoutEnded("stdout exceeded limit", ""), ChatProcessOutput.Exited(0, "")),
+      listOf(ChatProcessOutput.StartFailed("missing")),
+    )
+    for (events in cases) {
+      val diagnostics = RecordingDiagnostics()
+      val read = catalog(ModelConnection(emptyList()), diagnostics, devin = { flowOf(*events.toTypedArray()) })
+        .read(ChatAgent("devin", null, null), "/repo")
+      assertIs<ChatModelsRead.Failed>(read, events.toString())
+      assertEquals(listOf("chat.model_discovery_failed"), diagnostics.categories)
+    }
+  }
+
+  @Test
+  fun `cancelling devin discovery propagates cancellation`() = runTest {
+    val models = catalog(ModelConnection(emptyList()), devin = { flow { throw CancellationException("picker dismissed") } })
+    assertFailsWith<CancellationException> { models.read(ChatAgent("devin", null, null), "/repo") }
+  }
+
+  private fun catalog(
+    connection: ModelConnection,
+    diagnostics: RecordingDiagnostics = RecordingDiagnostics(),
+    onStart: (ChatCommand) -> Unit = {},
+    devin: (ChatCommand) -> kotlinx.coroutines.flow.Flow<ChatProcessOutput> = { flowOf(ChatProcessOutput.Exited(1, "")) },
+  ): ChatModelCatalog {
     val host = HostEnvironment(emptyMap(), "/home/test", "")
     return ChatModelCatalog(host, { command -> onStart(command); BoundedProcessStart.Started(connection) },
-      { flowOf(ChatProcessOutput.Exited(1, "")) }, UsageProfileResolver(host), FakeAppSettingsRepository(), diagnostics)
+      { devin(it) }, UsageProfileResolver(host), FakeAppSettingsRepository(), diagnostics)
   }
 
   private class ModelConnection(lines: List<String>, private val cancel: Boolean = false) : BoundedProtocolConnection {

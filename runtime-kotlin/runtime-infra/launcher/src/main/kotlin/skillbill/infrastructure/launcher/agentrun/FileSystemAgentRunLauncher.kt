@@ -57,14 +57,13 @@ class FileSystemAgentRunLauncher internal constructor(
   )
 
   private val adapters: Map<SupportedAgent, ProcessAgentRunAdapter> =
-    HeadlessAgentRunAdapterFactory(
+    headlessAgentRunAdapters(
       processRunner,
       executableLookup,
       AgentRunWorkerBinding(databasePath, runtimeMcpBin, approvals, userHome, providerEnvironment),
       diagnostics,
       clock,
-      hostPlatform,
-    ).createAll()
+    )
 
   override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
     passThroughLaunchModel(request.requestedModel, request.requestedEffort)

@@ -44,13 +44,14 @@ class SkillBillUninstallService(
     val codexTargets =
       installAgentService.codexRoots(home, request.environment)
         .map { root -> root.resolve("skills") }
+    val devinTargets = listOf(installAgentService.agentPath(SupportedAgent.DEVIN.wireValue, home, request.environment))
     val agentTargets =
       listOf(
         home.resolve(".copilot/skills"),
         home.resolve(".agents/skills"),
         home.resolve(".junie/skills"),
         home.resolve(".cursor/skills"),
-      ) + claudeTargets + codexTargets +
+      ) + claudeTargets + codexTargets + devinTargets +
         listOf(installAgentService.agentPath(SupportedAgent.OPENCODE.id, home, environment))
     val stateRuntimeRoot = stateRoot.resolve("runtime")
     val runtimeMcpBin = stateRuntimeRoot.resolve("runtime-mcp/bin/runtime-mcp")
@@ -62,7 +63,7 @@ class SkillBillUninstallService(
       legacyNames = legacyNames,
       agentTargets = agentTargets.distinct(),
       nativeSourceRoots = listOf(stateRoot.resolve("platform-packs"), stateRoot.resolve("skills")),
-      mcpAgents = SupportedAgent.entries.map(SupportedAgent::id),
+      mcpAgents = SupportedAgent.supportedIds,
       launchers =
         listOf(
           LauncherRemoval(binDir.resolve("skill-bill"), stateRuntimeRoot.resolve("runtime-cli/bin/runtime-cli")),

@@ -12,6 +12,11 @@ import skillbill.contracts.time.JvmSystemClock
 import skillbill.infrastructure.host.jvm.hostPath
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
 import skillbill.infrastructure.host.scratch.testAgentRunScratchRoot
+import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalChannelOpening
+import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalOpenResult
+import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionCapture
+import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionChannel
+import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionOutcome
 import skillbill.ports.agentrun.model.AgentRunBuildObserver
 import skillbill.ports.agentrun.model.AgentRunCommandEvent
 import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
@@ -21,6 +26,7 @@ import skillbill.ports.agentrun.model.AgentRunProcessSample
 import skillbill.ports.agentrun.model.AgentRunProgressProbe
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
+import skillbill.ports.approval.model.ApprovalPendingWait
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointHandle
 import skillbill.ports.review.evidence.ReviewEvidenceBroker
 import skillbill.ports.review.model.GovernedReviewEvidenceEndpointDescriptor
@@ -308,6 +314,42 @@ class JvmAgentRunProcessRunnerTest {
     assertFalse(result.timedOut)
     assertFalse(result.spawnFailed)
     assertTrue(result.stderr.contains("failure"))
+  }
+
+  @Test
+  fun `a session worker that exits nonzero before settling keeps its native exit code`() {
+    val session =
+      object : AgentRunSessionChannel {
+        override fun attach(process: Process): Boolean = true
+
+        override fun observe(chunk: String) = Unit
+
+        override fun pendingWait(): ApprovalPendingWait? = null
+
+        override fun enforceOpening() = Unit
+
+        override fun finish() = Unit
+
+        override fun outcome(): AgentRunSessionOutcome? = null
+
+        override fun capture(): AgentRunSessionCapture =
+          AgentRunSessionCapture(text = "", complete = false, truncated = false, deliveryFailed = false)
+      }
+    val request =
+      testAgentRunProcessRequest(listOf("sh", "-c", "exit 17"), Path.of(".")).let { base ->
+        base.copy(
+          launch =
+            base.launch.copy(
+              session = AgentRunApprovalChannelOpening { AgentRunApprovalOpenResult.Opened(session) },
+            ),
+        )
+      }
+
+    val result = JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(request)
+
+    assertEquals(17, result.exitStatus)
+    assertFalse(result.timedOut)
+    assertTrue(result.processStarted)
   }
 
   @Test

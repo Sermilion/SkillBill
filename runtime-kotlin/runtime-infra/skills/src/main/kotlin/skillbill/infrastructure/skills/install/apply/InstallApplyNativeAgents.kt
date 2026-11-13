@@ -28,22 +28,10 @@ import java.nio.file.Path
 
 internal fun applyNativeAgents(
   plan: InstallPlan,
-  warnings: MutableList<InstallApplyIssue>,
   failures: MutableList<InstallApplyIssue>,
   catalogLoader: PlatformPackCatalogLoader? = null,
 ): List<NativeAgentApplyOutcome> {
   val selectedAgents = plan.agents.map { target -> target.agent }.toSet()
-  val availableAgents = nativeAgentInstallers.mapTo(mutableSetOf()) { it.agent }
-  (selectedAgents - availableAgents).forEach { agent ->
-    warnings.add(
-      InstallApplyIssue(
-        kind = InstallApplyIssueKind.NATIVE_AGENT_SUPPORT_DEFERRED,
-        message = "Native-agent installation for ${agent.wireValue} is unavailable until its provider is implemented.",
-        agent = agent,
-        guidance = "Skill links and MCP registration may proceed; native-agent support is deferred.",
-      ),
-    )
-  }
   val context =
     NativeAgentApplyContext(
       plan = plan,
@@ -277,6 +265,13 @@ private val nativeAgentInstallers: List<NativeAgentInstaller> =
           provider = NativeAgentProviderId.OPENCODE,
           link = InstallNativeAgentOperations::linkOpenCodeAgents,
           unlink = InstallNativeAgentOperations::unlinkOpenCodeAgents,
+        )
+      NativeAgentProvider.Devin ->
+        NativeAgentInstaller(
+          agent = SupportedAgent.DEVIN,
+          provider = NativeAgentProviderId.DEVIN,
+          link = InstallNativeAgentOperations::linkDevinAgents,
+          unlink = InstallNativeAgentOperations::unlinkDevinAgents,
         )
     }
   }

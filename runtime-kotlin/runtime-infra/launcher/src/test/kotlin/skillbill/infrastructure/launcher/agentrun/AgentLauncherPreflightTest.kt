@@ -1,6 +1,7 @@
 package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.install.model.SupportedAgent
+import skillbill.install.model.unavailableAgentLauncherReason
 import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunTermination
@@ -110,6 +111,20 @@ class AgentLauncherPreflightTest {
     adapter.launch(request())
 
     assertEquals("agent", runner.requests.last().launch.command.first())
+  }
+}
+
+class DevinLauncherAvailabilityTest {
+  @Test
+  fun `a missing devin CLI is unavailable with vendor guidance and resolves once on PATH`() {
+    val reason = unavailableAgentLauncherReason(SupportedAgent.DEVIN.wireValue) { false }
+
+    assertContains(requireNotNull(reason), "'devin' is not on PATH")
+    assertContains(reason, "https://docs.devin.ai/cli")
+    assertEquals(
+      null,
+      unavailableAgentLauncherReason(SupportedAgent.DEVIN.wireValue) { executable -> executable == "devin" },
+    )
   }
 }
 

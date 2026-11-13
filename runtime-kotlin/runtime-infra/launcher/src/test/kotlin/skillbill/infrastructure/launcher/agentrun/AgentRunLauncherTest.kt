@@ -68,11 +68,11 @@ class HeadlessAgentRunAdapterTest {
   @Test
   fun `headless runtime adapters cover exactly the runtime-capable install agents`() {
     val adapters =
-      HeadlessAgentRunAdapterFactory(
+      headlessAgentRunAdapters(
         RecordingAgentRunProcessRunner(),
         diagnostics = NoopRuntimeDiagnostics,
         clock = LAUNCH_TEST_CLOCK,
-      ).createAll()
+      )
 
     assertEquals(
       setOf(
@@ -81,6 +81,7 @@ class HeadlessAgentRunAdapterTest {
         SupportedAgent.JUNIE,
         SupportedAgent.CURSOR,
         SupportedAgent.OPENCODE,
+        SupportedAgent.DEVIN,
       ),
       adapters.keys,
     )
@@ -109,12 +110,12 @@ class HeadlessAgentRunAdapterTest {
   fun `cursor is registered as a headless adapter with correct builder and decoder`() {
     val runner = RecordingAgentRunProcessRunner()
     val adapters =
-      HeadlessAgentRunAdapterFactory(
+      headlessAgentRunAdapters(
         runner,
         ALL_EXECUTABLES_AVAILABLE,
         diagnostics = NoopRuntimeDiagnostics,
         clock = LAUNCH_TEST_CLOCK,
-      ).createAll()
+      )
 
     val cursorAdapter = adapters[SupportedAgent.CURSOR]
     assertNotNull(cursorAdapter, "cursor must be registered as a headless adapter")
@@ -226,12 +227,12 @@ class HeadlessAgentRunAdapterTest {
           ),
       )
     val adapters =
-      HeadlessAgentRunAdapterFactory(
+      headlessAgentRunAdapters(
         runner,
         ALL_EXECUTABLES_AVAILABLE,
         diagnostics = NoopRuntimeDiagnostics,
         clock = LAUNCH_TEST_CLOCK,
-      ).createAll()
+      )
     val request =
       skillRunRequest().copy(
         promptOverride = "Run timeout test",
@@ -261,12 +262,12 @@ class HeadlessAgentRunAdapterTest {
           ),
       )
     val adapters =
-      HeadlessAgentRunAdapterFactory(
+      headlessAgentRunAdapters(
         runner,
         ALL_EXECUTABLES_AVAILABLE,
         diagnostics = NoopRuntimeDiagnostics,
         clock = LAUNCH_TEST_CLOCK,
-      ).createAll()
+      )
 
     val outcome = requireNotNull(adapters[SupportedAgent.CURSOR]).launchFacts(skillRunRequest())
 
@@ -278,12 +279,12 @@ class HeadlessAgentRunAdapterTest {
   fun `cursor durable-progress policies remain in force with streamed output`() {
     val runner = RecordingAgentRunProcessRunner()
     val adapters =
-      HeadlessAgentRunAdapterFactory(
+      headlessAgentRunAdapters(
         runner,
         ALL_EXECUTABLES_AVAILABLE,
         diagnostics = NoopRuntimeDiagnostics,
         clock = LAUNCH_TEST_CLOCK,
-      ).createAll()
+      )
     val request =
       skillRunRequest().copy(
         promptOverride = "Test progress policies",

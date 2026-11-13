@@ -6,13 +6,11 @@ import skillbill.infrastructure.skills.install.apply.InstallCleanupOperations
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
 import skillbill.infrastructure.skills.install.nativeagent.link.InstallNativeAgentOperations
 import skillbill.infrastructure.skills.install.nativeagent.link.discoverNativeAgentPreservationTargets
-import skillbill.infrastructure.skills.install.opencode.opencodeConfigRoots
 import skillbill.infrastructure.skills.install.plan.buildInstallStagingIntent
 import skillbill.infrastructure.skills.install.plan.codexAgentsPath
 import skillbill.infrastructure.skills.install.plan.collectInstallPlanningFacts
 import skillbill.infrastructure.skills.install.plan.materializeSelectedPlatformSkills
 import skillbill.infrastructure.skills.install.plan.resolveInstallEnvironment
-import skillbill.infrastructure.skills.install.plan.resolveInstallHome
 import skillbill.infrastructure.skills.install.reconcile.ReconcileSourceRoots
 import skillbill.infrastructure.skills.install.reconcile.applyReconciliation
 import skillbill.infrastructure.skills.install.reconcile.computeReconciliationPlan
@@ -21,7 +19,6 @@ import skillbill.infrastructure.skills.install.runtime.linkInstalledSkill
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.install.model.SupportedAgent
-import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.install.agent.InstallAgentTargetPort
 import skillbill.ports.install.agent.model.ClaudeConfigRootsRequest
 import skillbill.ports.install.agent.model.ClaudeConfigRootsResult
@@ -93,6 +90,7 @@ class FileSystemInstallPlanningFacts(
             environment = resolveInstallEnvironment(request.installRequest.environment, hostPlatform),
           ),
           catalogLoader,
+          hostPlatform,
         ),
     )
 }
@@ -282,10 +280,7 @@ class FileSystemInstallAgentTargets(
         SupportedAgent.CLAUDE.wireValue -> InstallOperations.claudeAgentsPath(request.home, environment, hostPlatform)
         SupportedAgent.JUNIE.wireValue -> InstallOperations.junieAgentsPath(request.home, hostPlatform)
         SupportedAgent.CURSOR.wireValue -> InstallOperations.cursorAgentsPath(request.home, hostPlatform)
-        SupportedAgent.OPENCODE.wireValue ->
-          opencodeConfigRoots(resolveInstallHome(request.home, hostPlatform), environment).let { roots ->
-            (roots.additionalDirectory ?: roots.globalDirectory).resolve("agents")
-          }
+        SupportedAgent.DEVIN.wireValue -> InstallOperations.devinAgentsPath(request.home, environment, hostPlatform)
         else -> InstallOperations.agentPath(request.agent, request.home, environment, hostPlatform)
       },
     )
@@ -321,6 +316,7 @@ class FileSystemInstallNativeAgentLinks(
         NativeAgentLinkProvider.JUNIE -> InstallNativeAgentOperations.linkJunieAgents(fsRequest)
         NativeAgentLinkProvider.CURSOR -> InstallNativeAgentOperations.linkCursorAgents(fsRequest)
         NativeAgentLinkProvider.OPENCODE -> InstallNativeAgentOperations.linkOpenCodeAgents(fsRequest)
+        NativeAgentLinkProvider.DEVIN -> InstallNativeAgentOperations.linkDevinAgents(fsRequest)
       }
     return InstallNativeAgentLinkOperationResult(
       outcome =
@@ -331,45 +327,51 @@ class FileSystemInstallNativeAgentLinks(
     )
   }
 
-  override fun unlinkNativeAgents(
-    request: InstallNativeAgentLinkOperationRequest,
-  ): InstallNativeAgentUnlinkOperationResult {
-    val fsRequest =
-      request.linkRequest.toFsRequest(catalogLoader).copy(
-        includeAllSourceRoots = request.includeAllSourceRoots,
-      )
-    val provider =
-      when (request.provider) {
-        NativeAgentLinkProvider.CLAUDE -> SupportedAgent.CLAUDE
-        NativeAgentLinkProvider.CODEX -> SupportedAgent.CODEX
-        NativeAgentLinkProvider.JUNIE -> SupportedAgent.JUNIE
-        NativeAgentLinkProvider.CURSOR -> SupportedAgent.CURSOR
-        NativeAgentLinkProvider.OPENCODE -> SupportedAgent.OPENCODE
-      }
-    val outcome = InstallNativeAgentOperations.unlinkAgentsResult(provider, fsRequest)
-    return InstallNativeAgentUnlinkOperationResult(outcome.removed, outcome.retainedPaths)
-  }
-
   override fun discoverPreservedTargets(
     request: InstallNativeAgentPreservationRequest,
   ): InstallNativeAgentPreservationResult =
     InstallNativeAgentPreservationResult(
       discoverNativeAgentPreservationTargets(request.stateRoot, request.home, request.environment),
     )
+
+  override fun unlinkNativeAgents(
+    request: InstallNativeAgentLinkOperationRequest,
+  ): InstallNativeAgentUnlinkOperationResult {
+    val fsRequest = request.linkRequest.toFsRequest(catalogLoader)
+    val outcome =
+      InstallNativeAgentOperations.unlinkAgentsResult(
+        when (request.provider) {
+          NativeAgentLinkProvider.CLAUDE -> SupportedAgent.CLAUDE
+          NativeAgentLinkProvider.CODEX -> SupportedAgent.CODEX
+          NativeAgentLinkProvider.JUNIE -> SupportedAgent.JUNIE
+          NativeAgentLinkProvider.CURSOR -> SupportedAgent.CURSOR
+          NativeAgentLinkProvider.OPENCODE -> SupportedAgent.OPENCODE
+          NativeAgentLinkProvider.DEVIN -> SupportedAgent.DEVIN
+        },
+        fsRequest,
+      )
+    return InstallNativeAgentUnlinkOperationResult(
+      unlinked = outcome.removed,
+      retainedPaths = outcome.retainedPaths,
+    )
+  }
 }
 
 @Inject
 class FileSystemInstallMcpRegistration(
   private val hostPlatform: HostPlatformPort,
-  private val diagnostics: RuntimeDiagnostics,
 ) : InstallMcpRegistrationPort {
   override fun registerMcp(request: InstallMcpRegistrationRequest): InstallMcpRegistrationResult =
     InstallMcpRegistrationResult(
       outcome =
         McpRegistrationOperations.registerWithProfileEnvironment(
-          request.copy(profileEnvironment = request.profileEnvironment ?: hostProfileEnvironment()),
+          request.copy(
+            profileEnvironment =
+              request.profileEnvironment
+                ?: InstallMcpProfileEnvironment.from(resolveInstallEnvironment(emptyMap(), hostPlatform))
+                ?: InstallMcpProfileEnvironment(),
+          ),
           hostPlatform,
-          diagnostics,
         ),
     )
 
@@ -377,15 +379,15 @@ class FileSystemInstallMcpRegistration(
     InstallMcpRegistrationResult(
       outcome =
         McpRegistrationOperations.unregisterWithProfileEnvironment(
-          request.copy(profileEnvironment = request.profileEnvironment ?: hostProfileEnvironment()),
+          request.copy(
+            profileEnvironment =
+              request.profileEnvironment
+                ?: InstallMcpProfileEnvironment.from(resolveInstallEnvironment(emptyMap(), hostPlatform))
+                ?: InstallMcpProfileEnvironment(),
+          ),
           hostPlatform,
-          diagnostics,
         ),
     )
-
-  private fun hostProfileEnvironment(): InstallMcpProfileEnvironment =
-    InstallMcpProfileEnvironment.from(resolveInstallEnvironment(emptyMap(), hostPlatform))
-      ?: InstallMcpProfileEnvironment(workingDirectory = hostPlatform.resolveWorkingDirectory().toString())
 }
 
 private fun NativeAgentLinkRequest.toFsRequest(catalogLoader: PlatformPackCatalogLoader): FsNativeAgentLinkRequest =
@@ -395,7 +397,6 @@ private fun NativeAgentLinkRequest.toFsRequest(catalogLoader: PlatformPackCatalo
     home = home,
     selectedPlatforms = selectedPlatforms,
     environment = environment,
-    nativeAgentLogicalNames = nativeAgentLogicalNames,
     catalogLoader = catalogLoader,
     overrides =
       FsNativeAgentLinkOverrides(

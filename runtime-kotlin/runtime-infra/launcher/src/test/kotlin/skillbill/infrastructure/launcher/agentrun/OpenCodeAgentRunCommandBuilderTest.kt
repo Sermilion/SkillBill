@@ -1,6 +1,7 @@
 package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.contracts.system.OpenCodeLaunchIdentity
+import skillbill.infrastructure.launcher.process.cursor.AcpEnvVariable
 import skillbill.ports.review.model.ReviewLaunchIsolationStrategy
 import java.nio.file.Path
 import kotlin.test.Test
@@ -30,16 +31,16 @@ class OpenCodeAgentRunCommandBuilderTest {
     assertEquals(Path.of("/tmp/skillbill-agent-run"), command.workingDirectory)
     assertEquals("anthropic/claude-sonnet-4-5", command.sessionModel)
     assertEquals("high", command.sessionEffort)
-    val server = command.sessionMcpServers.single()
+    val server = command.acpMcpServers.single()
     assertEquals("skill-bill", server.name)
     assertEquals("/opt/skill-bill/runtime-mcp", server.command)
     assertTrue(server.args.isEmpty())
     assertEquals(
-      mapOf(
-        "SKILL_BILL_REVIEW_DB" to "/tmp/runtime/skill-bill.db",
-        "SKILL_BILL_VALIDATION_INVOCATION_ID" to "validation-17",
+      listOf(
+        AcpEnvVariable("SKILL_BILL_REVIEW_DB", "/tmp/runtime/skill-bill.db"),
+        AcpEnvVariable("SKILL_BILL_VALIDATION_INVOCATION_ID", "validation-17"),
       ),
-      server.environment,
+      server.env,
     )
     assertEquals("/operator/opencode", command.environment["OPENCODE_CONFIG_DIR"])
     assertNull(command.preflightFailure)

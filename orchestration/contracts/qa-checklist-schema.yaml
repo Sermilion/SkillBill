@@ -109,7 +109,7 @@ $defs:
         $ref: "#/$defs/label"
       status:
         type: string
-        enum: [pending, running, passed, failed]
+        enum: [pending, running, passed, failed, skipped]
       note:
         $ref: "#/$defs/detail"
       finding_id:

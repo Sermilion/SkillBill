@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.nativeagent.rendering
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.skills.install.opencode.opencodeConfigRoots
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
@@ -12,9 +13,12 @@ import skillbill.infrastructure.skills.nativeagent.support.agentPathExists
 import skillbill.infrastructure.skills.nativeagent.support.claudeConfigRoots
 import skillbill.infrastructure.skills.nativeagent.support.codexAgentsTargets
 import skillbill.infrastructure.skills.nativeagent.support.detectCodexAgentsTargets
+import skillbill.infrastructure.skills.nativeagent.support.devinAgentsDirectory
+import skillbill.infrastructure.skills.nativeagent.support.devinConfigRoot
 import skillbill.infrastructure.skills.nativeagent.support.discoverClaudeConfigRoots
 import skillbill.infrastructure.skills.nativeagent.support.discoverCodexConfigRoots
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.system.HostPlatformPort
 import java.nio.file.Path
 
 internal data class NativeAgentInventoryAgentDirectory(
@@ -31,6 +35,7 @@ enum class NativeAgentProvider {
     override fun homeAgentDirs(
       home: Path,
       environment: Map<String, String>,
+      hostPlatform: HostPlatformPort,
     ): List<Path> = claudeConfigRoots(home, resolveEnvironmentMap(environment)).map { it.resolve("agents") }
   },
   Codex {
@@ -41,6 +46,7 @@ enum class NativeAgentProvider {
     override fun homeAgentDirs(
       home: Path,
       environment: Map<String, String>,
+      hostPlatform: HostPlatformPort,
     ): List<Path> = codexAgentsTargets(home, resolveEnvironmentMap(environment))
   },
   Junie {
@@ -51,6 +57,7 @@ enum class NativeAgentProvider {
     override fun homeAgentDirs(
       home: Path,
       environment: Map<String, String>,
+      hostPlatform: HostPlatformPort,
     ): List<Path> = listOf(home.resolve(requireNotNull(supportedAgent.simpleHomeDirectory)).resolve("agents"))
   },
   Cursor {
@@ -62,6 +69,7 @@ enum class NativeAgentProvider {
     override fun homeAgentDirs(
       home: Path,
       environment: Map<String, String>,
+      hostPlatform: HostPlatformPort,
     ): List<Path> = listOf(home.resolve(requireNotNull(supportedAgent.simpleHomeDirectory)).resolve("agents"))
   },
   OpenCode {
@@ -73,7 +81,20 @@ enum class NativeAgentProvider {
     override fun homeAgentDirs(
       home: Path,
       environment: Map<String, String>,
+      hostPlatform: HostPlatformPort,
     ): List<Path> = listOf(opencodeConfigRoots(home, environment).configDirectory.resolve("agents"))
+  },
+  Devin {
+    override val supportedAgent = SupportedAgent.DEVIN
+
+    override fun render(source: NativeAgentSource): String =
+      renderFrontmatterAgent(source, devinCapabilityFields(source))
+
+    override fun homeAgentDirs(
+      home: Path,
+      environment: Map<String, String>,
+      hostPlatform: HostPlatformPort,
+    ): List<Path> = listOf(devinAgentsDirectory(devinConfigRoot(home, environment, hostPlatform)))
   },
   ;
 
@@ -88,6 +109,7 @@ enum class NativeAgentProvider {
   abstract fun homeAgentDirs(
     home: Path,
     environment: Map<String, String> = emptyMap(),
+    hostPlatform: HostPlatformPort = JdkHostPlatformPort,
   ): List<Path>
 
   internal fun inventoryHomeAgentDirs(
@@ -113,6 +135,7 @@ enum class NativeAgentProvider {
       Junie,
       Cursor,
       OpenCode,
+      Devin,
       -> homeAgentDirs(home, environment).map { path -> NativeAgentInventoryAgentDirectory(path, null) }
     }
 
@@ -121,6 +144,7 @@ enum class NativeAgentProvider {
   fun activeHomeAgentDirs(
     home: Path,
     environment: Map<String, String> = emptyMap(),
+    hostPlatform: HostPlatformPort = JdkHostPlatformPort,
   ): List<Path> =
     when (this) {
       Claude -> homeAgentDirs(home, environment)
@@ -143,6 +167,12 @@ enum class NativeAgentProvider {
         } else {
           emptyList()
         }
+      }
+      Devin -> {
+        val root = devinConfigRoot(home, environment, hostPlatform)
+        val target = devinAgentsDirectory(root)
+        val present = listOf(target, root).any { path -> agentPathExists(path, "inspect Devin native-agent directory") }
+        if (present) listOf(target) else emptyList()
       }
     }.map { it.toAbsolutePath().normalize() }
 

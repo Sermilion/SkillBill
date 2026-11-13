@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.install.plan
 
-import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.invalidInternalSkillClassification
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.jvm.rollbackDeleteIfExists
 import skillbill.infrastructure.skills.install.opencode.opencodeConfigRoots
 import skillbill.infrastructure.skills.install.staging.StagedSymlinkTargetInput
@@ -9,15 +9,17 @@ import skillbill.infrastructure.skills.install.staging.resolveStagedSymlinkTarge
 import skillbill.infrastructure.skills.nativeagent.support.agentPathExists
 import skillbill.infrastructure.skills.nativeagent.support.agentPathsHavePresence
 import skillbill.infrastructure.skills.nativeagent.support.codexAgentIsPresent
+import skillbill.infrastructure.skills.nativeagent.support.devinConfigRoot
+import skillbill.infrastructure.skills.nativeagent.support.devinSkillsDirectory
 import skillbill.infrastructure.skills.scaffold.authoring.parseInternalForFrontmatter
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.install.model.AgentTarget
 import skillbill.install.model.InstallPlanSkill
 import skillbill.install.model.InstallTransaction
-import skillbill.install.model.McpRegistrationFailureCode
 import skillbill.install.model.SupportedAgent
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
+import skillbill.ports.system.HostPlatformPort
 import skillbill.scaffold.model.PlatformManifest
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -35,20 +37,24 @@ internal val CODEX_AGENTS_KIND: String = SupportedAgent.CODEX.nativeAgentsKind
 internal val CLAUDE_AGENTS_KIND: String = SupportedAgent.CLAUDE.nativeAgentsKind
 internal val JUNIE_AGENTS_KIND: String = SupportedAgent.JUNIE.nativeAgentsKind
 internal val CURSOR_AGENTS_KIND: String = SupportedAgent.CURSOR.nativeAgentsKind
+internal val DEVIN_AGENTS_KIND: String = SupportedAgent.DEVIN.nativeAgentsKind
 
 internal data class InstallConfigRoots(
   val claude: Path,
   val codex: Path,
+  val devin: Path,
   val opencodeSkills: Path,
 )
 
 internal fun installConfigRoots(
   home: Path,
   environment: Map<String, String>,
+  hostPlatform: HostPlatformPort = JdkHostPlatformPort,
 ): InstallConfigRoots =
   InstallConfigRoots(
     claude = claudeConfigRoot(home, environment),
     codex = codexConfigRoot(home, environment),
+    devin = devinConfigRoot(home, environment, hostPlatform),
     opencodeSkills = opencodeConfigRoots(home, environment).skillDirectory,
   )
 
@@ -61,6 +67,7 @@ internal fun agentPaths(
     SupportedAgent.JUNIE to home.resolve(SupportedAgent.JUNIE.simpleHomeDirectory!!).resolve("skills"),
     SupportedAgent.CURSOR to home.resolve(SupportedAgent.CURSOR.simpleHomeDirectory!!).resolve("skills"),
     SupportedAgent.CODEX to configRoots.codex.resolve("skills"),
+    SupportedAgent.DEVIN to devinSkillsDirectory(configRoots.devin),
     SupportedAgent.OPENCODE to configRoots.opencodeSkills,
   )
 
@@ -72,6 +79,7 @@ internal fun codexAgentsPath(
 internal fun detectAgents(
   home: Path,
   environment: Map<String, String>,
+  hostPlatform: HostPlatformPort = JdkHostPlatformPort,
 ): List<AgentTarget> {
   return SUPPORTED_AGENTS.flatMap { agent ->
     when (agent) {
@@ -93,37 +101,28 @@ internal fun detectAgents(
           targets.map { path -> AgentTarget(agent.wireValue, path.toFileLocation()) }
         }
       }
-      SupportedAgent.OPENCODE -> {
-        val roots = opencodeConfigRoots(home, environment)
-        val skillRoot = roots.skillDirectory
-        val evidence =
-          listOf(
-            roots.globalDirectory,
-            roots.globalDirectory.resolve("skills"),
-            roots.configDirectory,
-            skillRoot,
-            home.resolve(".opencode"),
-          ) + roots.knownConfigDirectories + listOfNotNull(roots.additionalDirectory?.resolve("skills")) +
-            listOfNotNull(roots.additionalDirectory, roots.explicitConfigFile) + roots.knownConfigSources
-        val pathPresent = anyAgentPathExists(evidence.distinct(), "inspect OpenCode installation")
-        val inlinePresent = roots.inlineContent?.isNotBlank() == true
-        if (!pathPresent && !inlinePresent) {
-          emptyList()
-        } else {
-          if (roots.projectConfigEnabled && roots.workingDirectory == null) {
-            throw SkillBillRuntimeException(
-              McpRegistrationFailureCode.OPENCODE_CONFIG_INVALID,
-              "OpenCode detection requires the caller working directory while project configuration is enabled.",
-            )
-          }
-          listOf(AgentTarget(agent.wireValue, skillRoot.toFileLocation()))
-        }
-      }
       SupportedAgent.JUNIE,
       SupportedAgent.CURSOR,
       -> {
         val root = home.resolve(requireNotNull(agent.simpleHomeDirectory))
         val installPath = root.resolve("skills")
+        if (!anyAgentPathExists(listOf(installPath, root), "inspect ${agent.wireValue} installation")) {
+          emptyList()
+        } else {
+          listOf(AgentTarget(agent.wireValue, installPath.toFileLocation()))
+        }
+      }
+      SupportedAgent.OPENCODE -> {
+        val roots = opencodeConfigRoots(home, environment)
+        if (!anyAgentPathExists(listOf(roots.skillDirectory, roots.configDirectory), "inspect OpenCode installation")) {
+          emptyList()
+        } else {
+          listOf(AgentTarget(agent.wireValue, roots.skillDirectory.toFileLocation()))
+        }
+      }
+      SupportedAgent.DEVIN -> {
+        val root = devinConfigRoot(home, environment, hostPlatform)
+        val installPath = devinSkillsDirectory(root)
         if (!anyAgentPathExists(listOf(installPath, root), "inspect ${agent.wireValue} installation")) {
           emptyList()
         } else {

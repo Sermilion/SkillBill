@@ -3834,3 +3834,40 @@ repository, path, initial commit, inode, creation time and Git registration matc
 Device numbers differ across mount namespaces. This compatibility read preserves the
 original ownership marker and emits a warning. Destructive cleanup still requires
 exact ownership identity. No persisted schema or marker format changes.
+
+## [2026-11-13] Plan reads preplan evidence from a file
+
+Plan workers re-read source files preplan had already read, because the digest pasted
+into their briefing summarized code without carrying it. Preplan now ends its digest with
+an `EVIDENCE` list of `path:A-B` references. When plan or a plan_subtasks unit launches,
+the runtime copies those checkout ranges verbatim, with line numbers, into
+`<store>/run-evidence/<workflowId>/preplan-evidence.md` together with the full digest. The
+briefing then drops the pasted `preplan_prose` projection and names the file instead.
+Preplan is read-only, so the checkout at plan launch is the one preplan read.
+
+The runtime parses references, not tool activity. Decoded activity reaches the engine only
+through the desktop status sink, which keeps 128 rows per phase and drops `Read` offsets.
+
+Nothing in this path blocks. An unreadable reference is listed as unreadable, a missing
+`EVIDENCE` section writes a digest-only file, and an unwritable store keeps the pasted
+digest with a `preplan_evidence` diagnostic. Runs whose preplan completed earlier work the
+same way, so no persisted schema or migration changes. Implement still gets no preplan
+input; that waits for evidence that plan stops re-reading.
+
+## [2026-11-13] Bundle-feasibility receipts reject only missing coverage or a stale bundle
+
+A rejected receipt discards the review and reruns the whole read-only review session.
+The parser rejected receipts for form alone: header not on line 1, lines out of manifest
+order, duplicate or extra lines, evidence under 40 characters, uncited conflicts, a
+verdict that disagreed with the conflict lines, or any line it could not parse. None of
+those made the verdict wrong.
+
+The receipt is now rejected only when its v2 header is missing, its fingerprint names a
+different bundle, a required criterion has no criterion or conflict line, or it requests
+changes without a conflict line. Treating that last case as approval could release a
+bundle whose conflict line was malformed. The header may sit on any line. Unparsable
+lines and lines for refs outside `required_refs` are ignored. A duplicated ref keeps its
+first conflict line, else its first criterion line. An `approved` header with a conflict
+line settles as changes requested. Parsed lines keep their raw text and are returned in
+required-ref order, so persisted accepted lines still match a re-parse of the same
+receipt. The review prompt still asks for citations, so repair starts from them.

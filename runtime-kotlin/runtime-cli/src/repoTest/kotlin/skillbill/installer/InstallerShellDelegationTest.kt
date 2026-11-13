@@ -53,6 +53,10 @@ class InstallerShellDelegationTest {
           "opencode",
           "--agent-target",
           "opencode=${run.home.resolve("agent-targets/opencode")}",
+          "--agent",
+          "devin",
+          "--agent-target",
+          "devin=${run.home.resolve("agent-targets/devin")}",
         ),
       run.applyArgs,
     )

@@ -330,6 +330,34 @@ class WorkflowStateStoreTest {
   }
 
   @Test
+  fun `crash reconcile releases an unexpired matching lease`() {
+    val dbPath = Files.createTempDirectory("crash-reconcile-unexpired").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator)
+      seedRunningRowWithLease(
+        store,
+        "wftr-unexpired",
+        "owner-token-unexpired1",
+        expiresAt = "2999-01-01T00:00:00Z",
+      )
+
+      val reconciled =
+        store.reconcileFeatureTaskRuntimeCrashedWorker(
+          workflowId = "wftr-unexpired",
+          ownerToken = "owner-token-unexpired1",
+          generation = 1,
+          interruptionReason = "lease_expired: worker process confirmed dead",
+          nowInstant = "2026-07-14T10:06:00Z",
+        )
+
+      assertTrue(reconciled)
+      val after = assertNotNull(store.getFeatureTaskWorkflowAsMode("wftr-unexpired", RUNTIME))
+      assertEquals("pending", after.workflowStatus)
+      assertEquals(null, store.getFeatureTaskRuntimeWorkerOwnership("wftr-unexpired"))
+    }
+  }
+
+  @Test
   fun `crash reconcile is rejected when owner_token or generation fencing no longer matches`() {
     val dbPath = Files.createTempDirectory("crash-reconcile-fencing").resolve("metrics.db")
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->

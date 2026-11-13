@@ -5,6 +5,8 @@ import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
+import skillbill.engine.featuretask.qa.checklist.QaChecklistRecorder
+import skillbill.engine.featuretask.qa.checklist.QaStepReport
 import skillbill.engine.featuretask.qa.report.QA_TEST_HEAD
 import skillbill.engine.featuretask.qa.report.QA_TEST_TREE
 import skillbill.engine.featuretask.qa.report.QaVerdict
@@ -12,9 +14,11 @@ import skillbill.engine.featuretask.qa.report.qaTestExpected
 import skillbill.engine.featuretask.qa.report.qaTestReport
 import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.idestatus.model.StandaloneQaStepStatus
 import skillbill.ports.idestatus.model.StandaloneQaTargetState
 import skillbill.ports.qa.model.QaLeaseReleaseOutcome
 import skillbill.scaffold.model.PlatformManifest
@@ -26,6 +30,7 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
+import java.time.Clock
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -231,6 +236,45 @@ class QaStandalonePhaseRunTest {
     assertEquals("SKILL-457", seeded.criteriaSource)
     assertEquals(listOf("android"), seeded.targets.map { it.name })
     assertEquals(listOf(StandaloneQaTargetState.PENDING), seeded.targets.map { it.state })
+  }
+
+  @Test
+  fun `plan steps left pending or running are named in a warning while skipped steps count as settled`() {
+    val database = sqliteDatabaseSessionFactory(createTempDirectory("qa-steps"), environment = mapOf("TEST" to "1"))
+    database.transaction {
+      it.standalonePhaseStatuses.register(
+        StandalonePhaseStatusRegistration(
+          repositoryIdentity = "repo", branchCorrelation = "main", issueKey = null, workflowId = null,
+          invocationId = INVOCATION, phaseId = SkeletonDefinition.QA.id, executionId = "execution",
+          lifecycleState = "active", currentStep = "qa", startedAt = Instant.EPOCH, leaseOwner = "owner",
+          leaseGeneration = 1, leaseExpiresAt = Instant.EPOCH.plusSeconds(3600),
+        ),
+      )
+    }
+    val agentProgress = QaChecklistRecorder(database, Clock.systemUTC(), NoopRuntimeDiagnostics, workspaces)
+
+    val result =
+      qaStandalonePhaseRun(git, listOf(androidPack), workspaces, leases, database).run(
+        PhaseRunRequest(SkeletonDefinition.QA.id, Path.of("/tmp/qa-repo"), "claude"),
+        INVOCATION,
+      ) {
+        agentProgress.registerPlan(
+          INVOCATION,
+          """{"contract_version":"0.1","cases":[{"id":"S1","title":"Sync","steps":""" +
+            """[{"text":"a"},{"text":"b"},{"text":"c"},{"text":"d"}]}]}""",
+        )
+        agentProgress.recordStep(QaStepReport(INVOCATION, "S1", 1, StandaloneQaStepStatus.PASSED))
+        agentProgress.recordStep(QaStepReport(INVOCATION, "S1", 2, StandaloneQaStepStatus.SKIPPED, note = "no web"))
+        agentProgress.recordStep(QaStepReport(INVOCATION, "S1", 3, StandaloneQaStepStatus.RUNNING))
+        workspaces.report = androidReport(QaVerdict.PASSED)
+        PhaseRunResult.Completed(INVOCATION, listOf(SkeletonDefinition.QA.id), null, value = "done")
+      }
+
+    val completed = assertIs<PhaseRunResult.Completed>(result)
+    assertContains(
+      completed.targetReport,
+      "Warning: QA left 2 plan steps without a passed, failed or skipped status: S1.3, S1.4",
+    )
   }
 
   @Test

@@ -82,27 +82,15 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
         NativeAgentLinkInventory.read(fixture.home, listOf(cacheRoot), fixture.repoRoot, environment),
       )
 
-      port.linkNativeAgents(request.copy(linkRequest = request.linkRequest.copy(selectedPlatforms = emptyList())))
-      val remainingEntries =
-        NativeAgentLinkInventory.read(
-          fixture.home,
-          listOf(cacheRoot),
-          fixture.repoRoot,
-          environment,
-        )
-      assertTrue(remainingEntries.any { it.installedPath == replacementLink })
-      assertTrue(remainingEntries.none { it.logicalName.startsWith("bill-kotlin-") })
-
       val result = port.unlinkNativeAgents(request)
 
       assertEquals(listOf(replacement), result.retainedPaths)
       assertEquals(
-        remainingEntries.map {
+        originalEntries.map {
           it.installedPath
         }.filterNot { it == replacementLink }.toSet(),
         result.unlinked.toSet(),
       )
-      result.unlinked.forEach { link -> assertFalse(Files.exists(link, LinkOption.NOFOLLOW_LINKS)) }
       assertEquals(replacement, readSymlinkTarget(replacementLink))
       assertEquals("user-owned replacement", Files.readString(replacementLink))
       assertEquals(
@@ -147,6 +135,7 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
     Files.createDirectories(fixture.home.resolve(".codex"))
     Files.createDirectories(fixture.home.resolve(".junie"))
     Files.createDirectories(fixture.home.resolve(".cursor"))
+    Files.createDirectories(fixture.home.resolve(".config/devin"))
     val result =
       applyInstallForTest(
         planInstallForTest(

@@ -40,7 +40,7 @@ class InstallApplyTest : InstallApplyTestSupport() {
 
     val result = applyInstallForTest(plan)
 
-    assertEquals(InstallApplyStatus.SUCCESS, result.status)
+    assertEquals(InstallApplyStatus.SUCCESS, result.status, "unexpected failures: ${result.failures}")
     assertTrue(
       result.nativeAgents.any { native ->
         native.provider == NativeAgentProviderId.OPENCODE && native.status == NativeAgentApplyStatus.LINKED

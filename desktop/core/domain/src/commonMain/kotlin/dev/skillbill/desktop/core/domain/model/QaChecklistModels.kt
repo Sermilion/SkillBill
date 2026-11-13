@@ -2,7 +2,7 @@ package dev.skillbill.desktop.core.domain.model
 
 import kotlin.time.Instant
 
-enum class QaStepState { Pending, Running, Passed, Failed }
+enum class QaStepState { Pending, Running, Passed, Failed, Skipped }
 enum class QaTargetState { Pending, Running, Ready, Skipped }
 
 data class QaChecklist(

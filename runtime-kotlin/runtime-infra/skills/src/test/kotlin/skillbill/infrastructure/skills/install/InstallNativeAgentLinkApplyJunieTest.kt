@@ -65,7 +65,7 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
 
     val result = applyInstallForTest(plan)
 
-    assertEquals(InstallApplyStatus.SUCCESS, result.status)
+    assertEquals(InstallApplyStatus.SUCCESS, result.status, "unexpected failures: ${result.failures}")
     assertFalse(Files.exists(kotlinLink, LinkOption.NOFOLLOW_LINKS))
     assertFalse(Files.exists(kmpLink, LinkOption.NOFOLLOW_LINKS))
   }
@@ -95,7 +95,7 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
 
     val result = applyInstallForTest(plan)
 
-    assertEquals(InstallApplyStatus.SUCCESS, result.status)
+    assertEquals(InstallApplyStatus.SUCCESS, result.status, "unexpected failures: ${result.failures}")
     danglingLinks.forEach { link ->
       if (link.parent == NativeAgentProvider.Codex.homeAgentDirs(fixture.home).first()) {
         assertFalse(Files.exists(link, LinkOption.NOFOLLOW_LINKS), "selected provider dangling link survived: $link")
@@ -198,7 +198,7 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
 
     val result = applyInstallForTest(plan)
 
-    assertEquals(InstallApplyStatus.SUCCESS, result.status)
+    assertEquals(InstallApplyStatus.SUCCESS, result.status, "unexpected failures: ${result.failures}")
     assertTrue(result.failures.isEmpty())
     assertEquals(SupportedAgent.entries.sortedBy(SupportedAgent::id), result.mcpRegistrationIntent.agents)
     assertEquals(

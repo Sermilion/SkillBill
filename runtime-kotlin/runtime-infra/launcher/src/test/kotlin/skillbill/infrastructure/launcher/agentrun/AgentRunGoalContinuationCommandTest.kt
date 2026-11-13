@@ -210,13 +210,13 @@ class AgentRunGoalContinuationCommandTest {
     )
 
   private fun adapters(runner: RecordingAgentRunProcessRunner) =
-    HeadlessAgentRunAdapterFactory(
+    headlessAgentRunAdapters(
       runner,
       ALL_EXECUTABLES_AVAILABLE,
       AgentRunWorkerBinding(databasePath = Path.of("/tmp/skillbill-agent-run/metrics.db")),
       diagnostics = NoopRuntimeDiagnostics,
       clock = LAUNCH_TEST_CLOCK,
-    ).createAll()
+    )
 
   private fun goalContinuationContext(
     childWorkflowId: String? = null,

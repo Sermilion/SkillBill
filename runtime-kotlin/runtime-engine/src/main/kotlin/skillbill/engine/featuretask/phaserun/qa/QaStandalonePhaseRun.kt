@@ -71,7 +71,7 @@ public class QaStandalonePhaseRun(
     return when (val outcome = settled.value) {
       is QaStandaloneSettlement.ProviderLimitPause -> outcome.blocked
       is QaStandaloneSettlement.Recorded -> {
-        val attempt = outcome.attempt
+        val attempt = outcome.attempt.withUnsettledStepWarning(invocationId)
         settlement.recordDiagnostics(attempt.report)
         val report =
           QaReports.withRetainedResources(attempt.report, settled.retainedResources, RETAINED_GUIDANCE)
@@ -111,6 +111,14 @@ public class QaStandalonePhaseRun(
         criteriaSource = IntakeIssueKeys.ofLeadingToken(request.intake),
       ),
     )
+  }
+
+  private fun QaAttempt.withUnsettledStepWarning(invocationId: String): QaAttempt {
+    val unsettled = checklist.unsettledSteps(invocationId)
+    if (unsettled.isEmpty()) return this
+    val warning =
+      "QA left ${unsettled.size} plan steps without a passed, failed or skipped status: ${unsettled.joinToString()}"
+    return copy(report = report.copy(warnings = report.warnings + warning))
   }
 
   private fun stopped(reason: String): QaReport =

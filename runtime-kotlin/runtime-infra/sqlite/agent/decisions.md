@@ -1,3 +1,8 @@
+## [2026-11-13] Crash-reconcile write fences owner identity, not lease expiry
+Context: Targeted resume recovery must release a confirmed-dead worker whose standalone lease has not expired.
+Decision: reconcileFeatureTaskRuntimeCrashedWorker matches owner_token, generation, and ACTIVE lease_state. It still parses nowInstant and fences heartbeat_at and expires_at values on DELETE, but it no longer requires expires_at <= now.
+Reason: Expiry belongs to candidate discovery for the startup scan. The write is called only after the engine confirmed the recorded process is dead.
+
 ## [2026-11-08] Average build durations across the retained history
 Context: The operator requested an average build-duration estimate for every platform pack.
 Decision: Use the arithmetic mean of the newest 20 settled builds per primary repository identity and command, rounded down to milliseconds. Reuse the existing retained rows without changing their schema or deleting history. The shared store and build strip apply this policy to every manifest-declared build tool.

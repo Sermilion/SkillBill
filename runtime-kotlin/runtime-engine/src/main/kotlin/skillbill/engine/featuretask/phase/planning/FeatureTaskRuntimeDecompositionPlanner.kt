@@ -19,6 +19,9 @@ import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.projectstore.model.SpecPathLocation
 import skillbill.ports.projectstore.model.classifySpecPath
+import skillbill.ports.taskruntime.FeatureTaskRuntimePreplanEvidenceStore
+import skillbill.ports.taskruntime.model.PreplanEvidenceWriteRequest
+import skillbill.ports.taskruntime.model.PreplanEvidenceWriteResult
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.model.DecompositionManifestBundleProjection
 import skillbill.ports.workflow.decomposition.model.DecompositionManifestFileIdentity
@@ -39,7 +42,19 @@ public class FeatureTaskRuntimeDecompositionPlanner(
   private val specPathResolver: FeatureSpecPathResolverPort,
   private val projectStore: ProjectStorePort,
   private val fileStore: DecompositionManifestStore,
+  private val preplanEvidenceStore: FeatureTaskRuntimePreplanEvidenceStore,
 ) {
+  internal fun writePreplanEvidence(
+    repoRoot: Path,
+    workflowId: String,
+    checkoutHead: String?,
+    digest: String,
+  ): PreplanEvidenceWriteResult.Written? {
+    val request =
+      PreplanEvidenceWriteRequest(repoRoot, workflowId, checkoutHead, digest, PreplanEvidence.references(digest))
+    return preplanEvidenceStore.write(request) as? PreplanEvidenceWriteResult.Written
+  }
+
   public fun bundlePath(
     repoRoot: Path,
     value: String,

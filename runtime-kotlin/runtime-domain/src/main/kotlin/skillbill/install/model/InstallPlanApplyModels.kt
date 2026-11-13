@@ -220,6 +220,7 @@ enum class NativeAgentProviderId(
   JUNIE(SupportedAgent.JUNIE),
   CURSOR(SupportedAgent.CURSOR),
   OPENCODE(SupportedAgent.OPENCODE),
+  DEVIN(SupportedAgent.DEVIN),
   ;
 
   val id: String get() = agent.wireValue

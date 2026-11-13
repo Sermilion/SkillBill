@@ -178,7 +178,7 @@ object IdeStatusPolicy {
     updatedAt: Instant,
     observedAt: Instant,
   ): IdeStatusLifecycleState =
-    if (durable == IdeStatusLifecycleState.ACTIVE && Duration.between(updatedAt, observedAt) > VERIFY_ABANDONED_AFTER) {
+    if (durable in VERIFY_OPEN_LIFECYCLES && Duration.between(updatedAt, observedAt) > VERIFY_ABANDONED_AFTER) {
       IdeStatusLifecycleState.IDLE
     } else {
       durable
@@ -307,6 +307,8 @@ object IdeStatusPolicy {
 
   private const val VERIFY_ABANDONED_AFTER_HOURS = 24L
   val VERIFY_ABANDONED_AFTER: Duration = Duration.ofHours(VERIFY_ABANDONED_AFTER_HOURS)
+  val VERIFY_OPEN_LIFECYCLES: Set<IdeStatusLifecycleState> =
+    setOf(IdeStatusLifecycleState.ACTIVE, IdeStatusLifecycleState.PAUSED)
   private const val RECENT_PHASE_HOURS = 1L
   private const val DONE_HOURS = 24L
   val RECENT_PHASE_WINDOW: Duration = Duration.ofHours(RECENT_PHASE_HOURS)

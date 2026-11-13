@@ -2,6 +2,20 @@
 Context: An app chat ID differs from its OpenCode handle, and saved records can have missing or unsafe bindings.
 Decision: Save the handle and effective configuration and checkout binding before prompting. Resume only through session/load; expose unsafe records for recovery and require a separate new chat after refusal.
 Reason: A replacement session or transcript replay would disguise lost provider continuity. Optional binding fields keep older records readable.
+## [2026-11-13] Run Devin chat as a fresh ACP session per turn with bounded replay
+Context: Devin chat needed conversation continuity. Junie already started a fresh ACP session each turn and replayed earlier exchanges within a 120,000-character budget.
+Decision: Move Junie's transport body into FreshAcpChatTransport, parameterized by AcpProvider, with Junie and Devin as thin subclasses. Add no persisted Devin session field and no latest-session continuation.
+Reason: Persistent session reuse would need a new saved field and a migration path, and the spec lists it as a non-goal. One shared body keeps the replay budget and partial-save behavior identical across both providers.
+
+## [2026-11-13] Refuse a separate effort for exact-model ACP providers
+Context: Devin selects reasoning level through exact variant UIDs such as swe-2-high, and other providers can leave an effort value on the request.
+Decision: When a provider declares exactModels and the request carries an effort, cursorAcpTurn fails the turn with AgentUnsupported before admission or launch. The model UID passes through unchanged.
+Reason: Encoding or dropping effort silently could send the wrong variant or carry another provider's effort into a Devin turn. A visible refusal tells the user to pick a variant instead.
+
+## [2026-11-11] Keep Codex steering within the normal turn's RPC and image lifetime
+Context: Normal output, approval requests and steering replies share one authenticated App Server process. Local image paths can remain in provider use after steering rejection.
+Decision: Route steering replies through the existing RPC drain and retain initial and steering images in a unique turn-owned directory until teardown. Completion closes admission while cleanup handles buffered replies and unresolved requests.
+Reason: Competing readers can take another request's response or approval. Batch rejection does not prove that image use has ended, and an unresolved acknowledgement does not justify extending a completed process's lifetime.
 
 ## [2026-11-12] Constrain OpenCode permissions before chat prompts
 Context: ReadOnly must deny mutations and Act requires operator decisions, while ordinary runtime launches permit native bypass.

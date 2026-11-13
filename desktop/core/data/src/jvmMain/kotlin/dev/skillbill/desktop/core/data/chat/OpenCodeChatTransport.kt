@@ -30,7 +30,8 @@ import skillbill.infrastructure.launcher.mcp.RUNTIME_MCP_SERVER_NAME
 import skillbill.infrastructure.launcher.mcp.resolveRuntimeMcpBin
 import skillbill.infrastructure.launcher.mcp.runtimeMcpServerEnvironment
 import skillbill.infrastructure.launcher.process.cursor.AcpProvider
-import skillbill.infrastructure.launcher.process.cursor.CursorAcpMcpServer
+import skillbill.infrastructure.launcher.process.cursor.AcpEnvVariable
+import skillbill.infrastructure.launcher.process.cursor.AcpStdioMcpServer
 import skillbill.infrastructure.launcher.process.cursor.OpenCodeChatPermissionPolicy
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.nio.file.Path
@@ -146,11 +147,11 @@ class OpenCodeChatTransport(
         emit(failure)
         return@flow
       }
-      val mcpServers = listOf(CursorAcpMcpServer(
+      val mcpServers = listOf(AcpStdioMcpServer(
         RUNTIME_MCP_SERVER_NAME,
         runtimeMcp.toString(),
         emptyList(),
-        runtimeMcpServerEnvironment(databasePath),
+        runtimeMcpServerEnvironment(databasePath).map { (name, value) -> AcpEnvVariable(name, value) },
       ))
       val policyEnvironment = preparePermissionPolicy(
         environment,

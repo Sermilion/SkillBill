@@ -50,7 +50,7 @@ class CodexPhaseSessionTest {
         }
       val adapter =
         requireNotNull(
-          HeadlessAgentRunAdapterFactory(
+          headlessAgentRunAdapters(
             runner,
             ALL_EXECUTABLES_AVAILABLE,
             workerBinding =
@@ -68,7 +68,7 @@ class CodexPhaseSessionTest {
               ),
             diagnostics = NoopRuntimeDiagnostics,
             clock = LAUNCH_TEST_CLOCK,
-          ).createAll()[SupportedAgent.CODEX],
+          )[SupportedAgent.CODEX],
         )
       val result =
         adapter.launchFacts(

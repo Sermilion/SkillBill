@@ -107,16 +107,15 @@ class BlockedWorkerCrashRecoveryTest {
     }
 
   @Test
-  fun `blocked child recovery preserves live unexpired reserved or unconfirmed workers`() =
+  fun `blocked child recovery preserves live reserved or unconfirmed workers`() =
     withDatabase { database ->
       listOf(
         FeatureTaskRuntimeProcessInspection.ExactLive,
         FeatureTaskRuntimeProcessInspection.PidReused,
         FeatureTaskRuntimeProcessInspection.Unsupported("process probe unavailable"),
-        FeatureTaskRuntimeProcessInspection.NotRunning,
       ).forEachIndexed { index, inspection ->
         val workflowId = "$WORKFLOW_ID-$index"
-        seedBlockedChild(database, workflowId, expired = index != 3)
+        seedBlockedChild(database, workflowId, expired = false)
         val before = database.read { requireNotNull(it.workflowStates.getFeatureTaskWorkflow(workflowId)) }
         val lease = database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId) }
 
@@ -133,6 +132,26 @@ class BlockedWorkerCrashRecoveryTest {
         reconciler(database, FeatureTaskRuntimeProcessInspection.NotRunning).reconcile(WORKFLOW_ID).reconciledCount,
       )
       assertEquals(reserved, database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID) })
+    }
+
+  @Test
+  fun `targeted recovery releases a dead unexpired blocked worker without dropping evidence`() =
+    withDatabase { database ->
+      seedBlockedChild(database, WORKFLOW_ID, expired = false)
+      val before = database.read { requireNotNull(it.workflowStates.getFeatureTaskWorkflow(WORKFLOW_ID)) }
+
+      assertEquals(
+        1,
+        reconciler(database, FeatureTaskRuntimeProcessInspection.NotRunning).reconcile(WORKFLOW_ID).reconciledCount,
+      )
+      database.read { unit ->
+        val after = requireNotNull(unit.workflowStates.getFeatureTaskWorkflow(WORKFLOW_ID))
+        assertEquals(WorkflowStatus.BLOCKED.wireValue, after.workflowStatus)
+        assertEquals(before.currentStepId, after.currentStepId)
+        assertEquals(before.stepsJson, after.stepsJson)
+        assertEquals(before.artifactsJson, after.artifactsJson)
+        assertNull(unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID))
+      }
     }
 
   private fun runPreparation(

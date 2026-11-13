@@ -43,6 +43,11 @@ val AGENT_LAUNCHER_CLIS: Map<SupportedAgent, AgentLauncherCli> =
         executables = listOf(SupportedAgent.OPENCODE.wireValue),
         installHint = "install the OpenCode CLI (https://opencode.ai/docs/)",
       ),
+    SupportedAgent.DEVIN to
+      AgentLauncherCli(
+        executables = listOf(SupportedAgent.DEVIN.wireValue),
+        installHint = "install the Devin CLI (https://docs.devin.ai/cli)",
+      ),
   )
 
 fun unavailableAgentLauncherReason(
@@ -73,6 +78,7 @@ val MODEL_DIRECTIVE_CAPABLE_AGENTS: Set<SupportedAgent> =
     SupportedAgent.CODEX,
     SupportedAgent.CURSOR,
     SupportedAgent.OPENCODE,
+    SupportedAgent.DEVIN,
   )
 
 fun supportsModelDirective(agentId: String?): Boolean {

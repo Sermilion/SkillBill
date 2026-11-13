@@ -12,7 +12,7 @@ class NativeAgentVocabularyContractTest {
     val agents = NativeAgentProvider.entries.map(NativeAgentProvider::supportedAgent)
 
     assertEquals(
-      listOf("claude", "codex", "junie", "cursor", "opencode"),
+      listOf("claude", "codex", "junie", "cursor", "opencode", "devin"),
       agents.map(SupportedAgent::wireValue),
     )
     agents.forEach { agent ->

@@ -17,6 +17,7 @@ import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
+import skillbill.ports.idestatus.model.IdeStatusPauseReasonCode
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.StandaloneEligiblePage
@@ -668,7 +669,7 @@ class IdeStatusServiceBranchScopingTest {
   }
 
   @Test
-  fun `verify parked after presenting its criteria is reported as finished`() {
+  fun `verify parked after presenting its criteria waits for an operator decision`() {
     val fixture = gitRepoFixture("ide-status-verify-parked", branch = "chore/cleanup")
     val database =
       registeredVerifyDatabase(
@@ -683,7 +684,8 @@ class IdeStatusServiceBranchScopingTest {
       )
 
     assertEquals("w-verify", result.snapshot.workflowId)
-    assertEquals(IdeStatusLifecycleState.TERMINAL, result.snapshot.lifecycleState)
+    assertEquals(IdeStatusLifecycleState.PAUSED, result.snapshot.lifecycleState)
+    assertEquals(IdeStatusPauseReasonCode.AWAITING_OPERATOR_DECISION, result.snapshot.pauseReason?.code)
   }
 
   @Test

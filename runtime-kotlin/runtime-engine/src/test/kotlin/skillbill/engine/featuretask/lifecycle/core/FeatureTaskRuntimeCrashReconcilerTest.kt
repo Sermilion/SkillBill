@@ -43,6 +43,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
+private const val UNEXPIRED_LEASE = "2999-01-01T00:00:00Z"
+
 class FeatureTaskRuntimeCrashReconcilerTest {
   private val execution = ExecutionPlanAdmissionFixture()
 
@@ -163,6 +165,73 @@ class FeatureTaskRuntimeCrashReconcilerTest {
     } finally {
       root.toFile().deleteRecursively()
     }
+  }
+
+  @Test
+  fun `targeted recovery releases a dead worker whose lease has not expired`() {
+    val repository = crashCandidateRepository(execution, expiresAt = UNEXPIRED_LEASE)
+    val reconciler =
+      FeatureTaskRuntimeCrashReconciler(
+        RuntimeFakeDatabaseSessionFactory(repository),
+        inspectionSupervisor(FeatureTaskRuntimeProcessInspection.NotRunning),
+        NoopRuntimeDiagnostics,
+        testHarnessClock,
+        execution.compatibility,
+        execution.recoveryResolver(),
+      )
+
+    val first = reconciler.reconcile(WORKFLOW_ID)
+    val after = requireNotNull(repository.getFeatureTaskWorkflow(WORKFLOW_ID))
+    val startupScan = reconciler.reconcile()
+
+    assertEquals(1, first.reconciledCount)
+    assertEquals(mapOf("lease_expired" to 1), first.reasonClassCounts)
+    assertEquals("pending", after.workflowStatus)
+    assertEquals(null, repository.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID))
+    assertEquals(0, startupScan.reconciledCount)
+  }
+
+  @Test
+  fun `targeted recovery leaves a live unexpired worker in place`() {
+    val repository = crashCandidateRepository(execution, expiresAt = UNEXPIRED_LEASE)
+    val reconciler =
+      FeatureTaskRuntimeCrashReconciler(
+        RuntimeFakeDatabaseSessionFactory(repository),
+        inspectionSupervisor(FeatureTaskRuntimeProcessInspection.ExactLive),
+        NoopRuntimeDiagnostics,
+        testHarnessClock,
+        execution.compatibility,
+        execution.recoveryResolver(),
+      )
+
+    val result = reconciler.reconcile(WORKFLOW_ID)
+
+    assertEquals(0, result.reconciledCount)
+    assertEquals("running", repository.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME)?.workflowStatus)
+    assertEquals(
+      UNEXPIRED_LEASE,
+      repository.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID)?.expiresAt,
+    )
+  }
+
+  @Test
+  fun `startup scan still ignores an unexpired dead worker`() {
+    val repository = crashCandidateRepository(execution, expiresAt = UNEXPIRED_LEASE)
+    val reconciler =
+      FeatureTaskRuntimeCrashReconciler(
+        RuntimeFakeDatabaseSessionFactory(repository),
+        inspectionSupervisor(FeatureTaskRuntimeProcessInspection.NotRunning),
+        NoopRuntimeDiagnostics,
+        testHarnessClock,
+        execution.compatibility,
+        execution.recoveryResolver(),
+      )
+
+    val result = reconciler.reconcile()
+
+    assertEquals(0, result.reconciledCount)
+    assertEquals("running", repository.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME)?.workflowStatus)
+    assertEquals(UNEXPIRED_LEASE, repository.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID)?.expiresAt)
   }
 
   @Test
@@ -417,7 +486,10 @@ class FeatureTaskRuntimeCrashReconcilerTest {
     assertEquals("running", repository.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME)?.workflowStatus)
   }
 
-  private fun crashCandidateRepository(execution: ExecutionPlanAdmissionFixture): InMemoryRuntimeWorkflowRepository =
+  private fun crashCandidateRepository(
+    execution: ExecutionPlanAdmissionFixture,
+    expiresAt: String = "2000-01-01T00:00:30Z",
+  ): InMemoryRuntimeWorkflowRepository =
     InMemoryRuntimeWorkflowRepository().apply {
       execution.seed(this, WORKFLOW_ID, descriptor = execution.descriptor(execution.inputsFor(null, null)))
       val row = requireNotNull(getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME))
@@ -436,7 +508,7 @@ class FeatureTaskRuntimeCrashReconcilerTest {
           processBirthToken = "birth-4242",
           leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE,
           heartbeatAt = "2000-01-01T00:00:00Z",
-          expiresAt = "2000-01-01T00:00:30Z",
+          expiresAt = expiresAt,
           phaseId = "implement",
           phaseAttempt = 1,
         ),

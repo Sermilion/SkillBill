@@ -13,6 +13,7 @@ enum class NativeAgentLinkProvider {
   JUNIE,
   CURSOR,
   OPENCODE,
+  DEVIN,
 }
 
 data class NativeAgentLinkOverrides(

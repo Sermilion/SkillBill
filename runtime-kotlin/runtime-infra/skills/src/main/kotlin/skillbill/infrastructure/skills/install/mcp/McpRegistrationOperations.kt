@@ -9,6 +9,8 @@ import skillbill.infrastructure.skills.install.opencode.OpenCodeRoots
 import skillbill.infrastructure.skills.install.opencode.opencodeConfigRoots
 import skillbill.infrastructure.skills.install.plan.codexConfigRoots
 import skillbill.infrastructure.skills.nativeagent.support.claudeConfigRoots
+import skillbill.infrastructure.skills.nativeagent.support.devinConfigRoot
+import skillbill.infrastructure.skills.nativeagent.support.devinMcpConfigPath
 import skillbill.install.model.McpMutationResult
 import skillbill.install.model.McpProfileOutcome
 import skillbill.install.model.McpRegistrationOutcome
@@ -96,6 +98,15 @@ object McpRegistrationOperations {
               .register(openCodeTargetPath(roots), command)
           }
         }
+      SupportedAgent.DEVIN ->
+        McpRegistrationOutcome.Applied(
+          McpJsonConfig.register(
+            agent,
+            configPathFor(installAgent, resolvedHome, profileEnvironment.asEnvironmentMap(), hostPlatform),
+            command,
+            McpJsonEntryShape.PLAIN_STDIO,
+          ),
+        )
     }
   }
 
@@ -148,6 +159,13 @@ object McpRegistrationOperations {
               .unregister(openCodeTargetPath(roots), expectedRuntimeMcpBin)
           }
         }
+      SupportedAgent.DEVIN ->
+        McpRegistrationOutcome.Applied(
+          McpJsonConfig.unregister(
+            agent,
+            configPathFor(installAgent, resolvedHome, profileEnvironment.asEnvironmentMap(), hostPlatform),
+          ),
+        )
     }
   }
 
@@ -157,7 +175,18 @@ object McpRegistrationOperations {
   fun configPathFor(
     agent: SupportedAgent,
     home: Path,
-  ): Path = home.resolve(agent.mcpConfigRelativePath)
+    environment: Map<String, String> = emptyMap(),
+    hostPlatform: HostPlatformPort = JdkHostPlatformPort,
+  ): Path =
+    when (agent) {
+      SupportedAgent.DEVIN -> devinMcpConfigPath(devinConfigRoot(home, environment, hostPlatform))
+      SupportedAgent.CLAUDE,
+      SupportedAgent.CODEX,
+      SupportedAgent.JUNIE,
+      SupportedAgent.CURSOR,
+      SupportedAgent.OPENCODE,
+      -> home.resolve(agent.mcpConfigRelativePath)
+    }
 
   private fun claudeProfileConfigPaths(
     home: Path,

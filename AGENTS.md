@@ -46,7 +46,7 @@ Track repository work in Linear unless the operator directs work on `main`; do n
 
 Use the `linear-sona` MCP in `.codex/config.toml`; verify its workspace and team. Switch connections only when instructed.
 
-Before each goal, verify its linked issue in the intended Sona workspace. Resolve auth, access, or team failures first. Chat prep starts no goals and reserves no keys.
+Let Linear assign new keys. Never infer them from local specs or issue numbers. If unavailable, report it. Before each goal, verify its issue in the configured workspace/team. Chat prep does not launch goals or reserve keys.
 
 Preserve existing identities, issue keys, specs, and history; `SONA` is for new issues only.
 

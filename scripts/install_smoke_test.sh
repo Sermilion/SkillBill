@@ -217,6 +217,7 @@ PY
       junie)    echo "$effective_home/.junie/skills" ;;
       cursor)   echo "$effective_home/.cursor/skills" ;;
       opencode) echo "$effective_home/.config/opencode/skills" ;;
+      devin)    echo "$effective_home/.config/devin/skills" ;;
       *) echo "unknown agent: $agent" >&2; exit 1 ;;
     esac
     ;;
@@ -624,7 +625,7 @@ FAKE_HOME="$(mktemp -d)"
 INTERACTIVE_OUTPUT="$(run_interactive_install_with_blank_defaults "$FAKE_HOME")"
 pass "interactive install with blank defaults exited 0"
 
-if [[ "$INTERACTIVE_OUTPUT" == *"Agents:         claude, codex, junie, cursor, opencode"* ]]; then
+if [[ "$INTERACTIVE_OUTPUT" == *"Agents:         claude, codex, junie, cursor, opencode, devin"* ]]; then
   pass "blank agent selection defaults to all when none detected"
 else
   fail "blank agent selection summary unexpected"
@@ -655,7 +656,7 @@ FAKE_HOME="$(mktemp -d)"
 PIPED_OUTPUT="$(run_piped_install_with_eof_defaults "$FAKE_HOME")"
 pass "piped install with EOF defaults exited 0"
 
-if [[ "$PIPED_OUTPUT" == *"Agents:         claude, codex, junie, cursor, opencode"* ]]; then
+if [[ "$PIPED_OUTPUT" == *"Agents:         claude, codex, junie, cursor, opencode, devin"* ]]; then
   pass "piped EOF agent selection defaults to all when none detected"
 else
   fail "piped EOF agent selection summary unexpected"

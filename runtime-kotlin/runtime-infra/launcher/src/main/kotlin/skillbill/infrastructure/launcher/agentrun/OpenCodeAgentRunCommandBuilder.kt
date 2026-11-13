@@ -11,8 +11,9 @@ import skillbill.infrastructure.launcher.mcp.OpenCodeReviewLaunchScope
 import skillbill.infrastructure.launcher.mcp.OpenCodeReviewPreparation
 import skillbill.infrastructure.launcher.mcp.RUNTIME_MCP_SERVER_NAME
 import skillbill.infrastructure.launcher.mcp.runtimeMcpServerEnvironment
+import skillbill.infrastructure.launcher.process.cursor.AcpEnvVariable
 import skillbill.infrastructure.launcher.process.cursor.AcpProvider
-import skillbill.infrastructure.launcher.process.cursor.CursorAcpMcpServer
+import skillbill.infrastructure.launcher.process.cursor.AcpStdioMcpServer
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
 import skillbill.infrastructure.launcher.process.launch.captureLaunchResourceOutcome
@@ -49,6 +50,9 @@ internal class OpenCodeAgentRunCommandBuilder(
       configFormat = McpRegistrationOperations.configFormatFor(SupportedAgent.OPENCODE),
     )
   override val approvalProtocol: AgentRunApprovalProtocol = AgentRunApprovalProtocol.OPENCODE_ACP
+
+  override fun launchRefusal(request: SkillRunRequest): String? = null
+
   override val reviewIsolation: ReviewLaunchIsolationStrategy = ReviewLaunchIsolationStrategy.UNSUPPORTED
 
   override fun continuation(
@@ -92,14 +96,16 @@ internal class OpenCodeAgentRunCommandBuilder(
       approvalProtocol = approvalProtocol,
       sessionModel = request.modelOverride,
       sessionEffort = request.effortOverride,
-      sessionMcpServers =
+      acpMcpServers =
         binary?.let {
           listOf(
-            CursorAcpMcpServer(
+            AcpStdioMcpServer(
               name = RUNTIME_MCP_SERVER_NAME,
               command = it.toString(),
               args = emptyList(),
-              environment = runtimeMcpServerEnvironment(databasePath, request.validationCheckInvocationId),
+              env =
+                runtimeMcpServerEnvironment(databasePath, request.validationCheckInvocationId)
+                  .map { (name, value) -> AcpEnvVariable(name, value) },
             ),
           )
         }.orEmpty(),

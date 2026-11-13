@@ -22,7 +22,7 @@ class CliUninstallRuntimeTest {
     assertEquals(
       "uninstall_status: dry_run\n" +
         "state_root: ${fixture.stateRoot}\n" +
-        "agent_targets: 8\n" +
+        "agent_targets: 9\n" +
         "skill_names: 1\n",
       result.stdout,
     )

@@ -9,7 +9,13 @@ class ModelDirectiveCapabilityTest {
   @Test
   fun `opencode joins the model-directive capable agents`() {
     assertEquals(
-      setOf(SupportedAgent.CLAUDE, SupportedAgent.CODEX, SupportedAgent.CURSOR, SupportedAgent.OPENCODE),
+      setOf(
+        SupportedAgent.CLAUDE,
+        SupportedAgent.CODEX,
+        SupportedAgent.CURSOR,
+        SupportedAgent.OPENCODE,
+        SupportedAgent.DEVIN,
+      ),
       MODEL_DIRECTIVE_CAPABLE_AGENTS,
     )
   }

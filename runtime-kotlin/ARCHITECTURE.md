@@ -394,7 +394,7 @@ Runtime worker ownership is mutable state kept separately from immutable executi
 
 The worker release is the idle checkpoint boundary: after the fenced release commits, it checkpoints only when no active or takeover-reserved lease remains.
 
-A non-terminal row orphaned by a killed child process self-heals: when its worker lease has expired and the injected supervisor confirms the process dead (only `NotRunning`; a live process, an active lease, or ambiguous evidence is left untouched), the row transitions to the resumable `pending` state at its existing step and the lease is released under owner-token/generation fencing. The pass runs unconditionally at runner startup and in the goal parent's child-supervision seam, before the resume point is resolved, and is idempotent and concurrent-safe through the lease machinery. Manual lease clearing and out-of-band row deletion remain the corruption fallback only.
+A non-terminal row orphaned by a killed child process self-heals when the injected supervisor confirms the process dead (only `NotRunning`; a live process or ambiguous evidence is left untouched): the row transitions to the resumable `pending` state at its existing step and the lease is released under owner-token/generation fencing. The startup scan considers only expired leases so live workers are not inspected at boot. Resume and child-supervision target a specific workflow and recover a confirmed-dead worker even when its lease has not expired. The pass is idempotent and concurrent-safe through the lease machinery. Standalone plan resume also repairs a running row after a released provider-limit pause when a prior worker generation exists, no worker lease remains, no phase record is running, and a planning unit retains a classified provider-limit pause. It changes only the parent status to pending in the same transaction as those checks, retains all accepted unit records and history, and emits a diagnostic. Missing ownership without that evidence still blocks. Manual lease clearing and out-of-band row deletion remain the corruption fallback only.
 
 The runtime uses a hexagonal JVM graph with entry adapters at the outside,
 application use cases in the orchestration layer, ports as the dependency
@@ -2035,6 +2035,12 @@ the store adapter and the engine read. `reconcileCheckpointPathInventory` applie
 the same ownership test, so the run's own evidence never enters the durable
 `workflow_owned_paths` inventory the goal review pathspec and the checkpoint
 fingerprint are built from, whichever producer writes that inventory.
+
+**Preplan evidence.** The same `run-evidence/<workflowId>/` directory holds
+`preplan-evidence.md`, which `FeatureTaskRuntimePreplanEvidenceStore` writes when plan
+or a plan_subtasks unit launches: the preplan digest plus the checkout ranges its
+`EVIDENCE` references name. The briefing carries the file path in place of the
+`preplan_prose` projection. Every failure degrades to the pasted digest; none blocks.
 
 Finalization path inventories come from the checkpoint's runtime-resolved
 base/head and scoped owned-path comparison. Implementation receipt paths are

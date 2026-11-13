@@ -24,6 +24,7 @@ import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.runner.RUNNER_TEST_PROJECT_STORE
+import skillbill.engine.featuretask.runner.testPreplanEvidenceStore
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.planning.outcome.proseRecordPayload
 import skillbill.engine.goalrunner.planning.source.findImportedSubtaskPlanWorkflowIds
@@ -756,6 +757,7 @@ class PlanSubtasksReopeningTest {
       ),
       database,
       PlanBundleFeasibilityStateCodec(featureTaskRuntimeWireArtifactValidatorForTest()),
+      NoopRuntimeDiagnostics,
     )
 
   private fun acceptedRecords(): Map<String, FeatureTaskRuntimePhaseRecord> =
@@ -826,6 +828,7 @@ class PlanSubtasksReopeningTest {
       FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE),
       RUNNER_TEST_PROJECT_STORE,
       TestDecompositionManifestStore,
+      testPreplanEvidenceStore(),
     )
 
   private fun reopening(database: DatabaseSessionFactory): PlanSubtasksReopening =
