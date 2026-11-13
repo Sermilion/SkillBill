@@ -1,29 +1,22 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.composite.Edge
-import dev.skillbill.desktop.core.designsystem.composite.hairline
+import dev.skillbill.desktop.core.designsystem.component.ExpandableResultRow
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 import dev.skillbill.desktop.core.domain.model.VerifyCriterionGrade
 import dev.skillbill.desktop.core.domain.model.VerifyRunDetails
@@ -104,32 +97,61 @@ internal fun VerifyCriterionRow(
     "FAIL" -> colors.stFailed
     else -> colors.fgFaint
   }
-  Column(modifier.fillMaxWidth().then(if (row.number > 1) Modifier.hairline(Edge.Top, colors.borderSubtle) else Modifier)) {
-    Row {
-      if (selectable) Column(Modifier.width(30.dp).padding(start = 12.dp, top = 11.dp)) { leading() }
-      Row(Modifier.weight(1f).clickable(role = Role.Button, onClickLabel = "Toggle criterion ${row.number}", onClick = onToggle).semantics { stateDescription = if (open) "Expanded" else "Collapsed" }.padding(start = if (selectable) 2.dp else 12.dp, end = 12.dp, top = 9.dp, bottom = 9.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        BasicText(row.number.toString(), Modifier.width(22.dp).padding(top = 2.dp), style = SkillBillTheme.type.monoSm.copy(fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.fgFaint))
-        BasicText(verifyText(row.text), Modifier.weight(1f), style = SkillBillTheme.type.tBase.copy(color = colors.fg, lineHeight = 1.45.em), maxLines = if (open) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis)
-        Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-          VerifyBadge(when (mark) { CriterionMark.NotInRepo -> "Not in this repo"; CriterionMark.SpecQuestion -> "Spec question"; null -> grade?.status ?: pendingLabel }, gradeColor)
-          VerifyChevron(open)
-        }
+  val stateLabel = when (mark) {
+    CriterionMark.NotInRepo -> "Not in this repo"
+    CriterionMark.SpecQuestion -> "Spec question"
+    null -> grade?.status ?: pendingLabel
+  }
+  ExpandableResultRow(
+    modifier = modifier,
+    topDivider = row.number > 1,
+    open = open,
+    onToggle = onToggle,
+    toggleLabel = "Toggle criterion ${row.number}",
+    leadingOutside = if (selectable) leading else null,
+    endOutside = if (selectable) end else null,
+    ref = {
+      BasicText(
+        row.number.toString(),
+        Modifier.width(22.dp).padding(top = 2.dp),
+        style = SkillBillTheme.type.monoSm.copy(fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.fgFaint),
+      )
+    },
+    title = {
+      BasicText(
+        verifyText(row.text),
+        style = SkillBillTheme.type.tBase.copy(color = colors.fg, lineHeight = 1.45.em),
+        maxLines = if (open) Int.MAX_VALUE else 2,
+        overflow = TextOverflow.Ellipsis,
+      )
+    },
+    stateBadge = { VerifyBadge(stateLabel, gradeColor) },
+    disclosure = {
+      if (grade == null) {
+        BasicText(
+          when (pendingLabel) {
+            "To confirm" -> "The audit runs after you confirm."
+            "No grade" -> "No grade was recorded for this criterion. See Completeness audit in Steps."
+            else -> "The completeness audit has not run yet."
+          },
+          style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted),
+        )
       }
-      if (selectable) Column(Modifier.width(104.dp).padding(top = 8.dp, end = 10.dp), horizontalAlignment = Alignment.End) { end() }
-    }
-    if (open) Column(Modifier.padding(start = if (selectable) 62.dp else 44.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      if (grade == null) BasicText(when (pendingLabel) { "To confirm" -> "The audit runs after you confirm."; "No grade" -> "No grade was recorded for this criterion. See Completeness audit in Steps."; else -> "The completeness audit has not run yet." }, style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
       grade?.evidence?.takeIf { it.isNotEmpty() }?.let { evidence ->
         BasicText("Evidence", style = SkillBillTheme.type.tXs.copy(color = colors.fgFaint))
         val (prose, locations) = evidence.partition { it.any(Char::isWhitespace) }
-        if (locations.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { locations.forEach { VerifyFileChip(it) } }
+        if (locations.isNotEmpty()) {
+          FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            locations.forEach { VerifyFileChip(it) }
+          }
+        }
         prose.forEach { VerifyReportText(it) }
       }
       grade?.missing?.let { VerifyCriterionField("What's missing", it) }
       grade?.notFound?.let { VerifyCriterionField("Not found", it) }
       extra()
-    }
-  }
+    },
+  )
 }
 
 @Composable

@@ -29,4 +29,19 @@ class ReviewFindingsTest {
 
     assertEquals("Changes requested · 1 finding · 1 accepted", reviewReportCaption(report))
   }
+
+  @Test
+  fun `findings without a specialist do not complete lane attribution`() {
+    val sparse = listOf(finding(ReviewFindingStatus.Open))
+    val mixed = listOf(
+      finding(ReviewFindingStatus.Open).copy(specialist = "bill-kotlin-code-review-testing"),
+      finding(ReviewFindingStatus.Open),
+    )
+
+    assertEquals(true, reviewFindingsAttributionComplete(emptyList()))
+    assertEquals(false, reviewFindingsAttributionComplete(sparse))
+    assertEquals(false, reviewFindingsAttributionComplete(mixed))
+    assertEquals(emptyMap(), reviewAttributedFindingsPerLane(sparse))
+    assertEquals(mapOf("bill-kotlin-code-review-testing" to 1), reviewAttributedFindingsPerLane(mixed))
+  }
 }

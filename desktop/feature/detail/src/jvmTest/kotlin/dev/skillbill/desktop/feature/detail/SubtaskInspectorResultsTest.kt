@@ -95,8 +95,8 @@ class SubtaskInspectorResultsTest {
     phaseCards = if (passes.isEmpty()) emptyList() else listOf(phaseCard("review")),
   )
 
-  private fun phaseCard(id: String, state: PhaseCardState = PhaseCardState.Done) = PhaseCard(
-    id, state, null, null, null, null, null, null, null, null, emptyList(), null, null, null, null, null, null, emptyList(), emptyList(), null, null,
+  private fun phaseCard(id: String, state: PhaseCardState = PhaseCardState.Done, round: Int? = null) = PhaseCard(
+    id, state, round, null, null, null, null, null, null, null, emptyList(), null, null, null, null, null, null, emptyList(), emptyList(), null, null,
   )
 
   @Test
@@ -110,6 +110,7 @@ class SubtaskInspectorResultsTest {
     onNodeWithText("· no findings").assertExists()
     onNodeWithText("Lanes").assertExists()
     onNodeWithText("F-001").assertExists()
+    onNodeWithText("Finding F-001", substring = true).performClick()
     onNodeWithText("File.kt:84").assertExists()
     onNodeWithText("persistence · high confidence").assertExists()
   }
@@ -284,10 +285,10 @@ class SubtaskInspectorResultsTest {
     show("complete", emptyDetail.copy(phaseResults = listOf(results)))
 
     onNodeWithText("Passed · 1 of 1 criteria met").assertExists()
-    onNodeWithText("AC-001").assertExists()
+    onNodeWithText("AC-001").performClick()
     onNodeWithText("fixed in attempt 2").assertExists()
     onNodeWithText("Attempt 1 · Gaps found · 1 criterion uncovered → audit_plan_fix").assertExists()
-    onNodeWithText("Attempt 2 · Passed").assertDoesNotExist()
+    onNodeWithText("Attempt 2 · Passed").assertExists()
   }
 
   @Test
@@ -313,12 +314,37 @@ class SubtaskInspectorResultsTest {
 
     onNodeWithText("Failed · 1 of 2 criteria met").assertExists()
     onNodeWithText("AC-002").assertExists()
-    onNodeWithText("not met").assertExists()
+    onNodeWithText("MISSING").assertExists()
     onNodeWithText("1 criterion met").assertExists()
     onNodeWithText("Retains the saved state").assertDoesNotExist()
     onNodeWithText("Show").performClick()
     onNodeWithText("Retains the saved state").assertExists()
     onNodeWithText("Hide").assertExists()
+  }
+
+  @Test
+  fun `a running audit uses the selected card round rather than history size`() = runComposeUiTest {
+    val results = SubtaskPhaseResults(
+      1,
+      emptyList(),
+      null,
+      null,
+      auditResult = SubtaskAuditResult(
+        AuditOutcome.Running,
+        1,
+        2,
+        listOf(AuditCriterion("AC-001", "Retains the saved state", false, null)),
+        listOf(AuditAttempt(1, false, 1, "audit_plan_fix"), AuditAttempt(3, false, 1, null)),
+        2,
+      ),
+      phaseCards = listOf(phaseCard("audit", PhaseCardState.Running, round = 5)),
+    )
+    show("in_progress", emptyDetail.copy(phaseResults = listOf(results)))
+
+    onNodeWithText("Attempt 5 · Auditing").assertExists()
+    onNodeWithText("attempt 5 running").assertExists()
+    onNodeWithText("Attempt 3 · Gaps found · 1 criterion uncovered").assertExists()
+    onNodeWithText("Attempt 3 · Auditing").assertDoesNotExist()
   }
 
   @Test

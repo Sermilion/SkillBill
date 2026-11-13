@@ -15,16 +15,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.ResultRowFileChip
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -58,22 +62,55 @@ internal fun VerifyReviewReceipt(receipt: VerifyReviewSection, selectable: Boole
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun VerifyFindingRow(finding: dev.skillbill.desktop.core.domain.model.VerifyReviewFinding, selectable: Boolean = false, trailing: @Composable () -> Unit = {}, extra: @Composable () -> Unit = {}, leading: @Composable () -> Unit = {}) {
+internal fun VerifyFindingRow(
+  finding: dev.skillbill.desktop.core.domain.model.VerifyReviewFinding,
+  selectable: Boolean = false,
+  trailing: @Composable () -> Unit = {},
+  extra: @Composable () -> Unit = {},
+  leading: @Composable () -> Unit = {},
+) {
   var open by rememberSaveable(finding.ref, finding.location) { mutableStateOf(false) }
+  val onToggle = remember { { open = !open } }
   val colors = SkillBillTheme.colors
   Row(Modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
     if (selectable) Column(Modifier.width(22.dp)) { leading() }
-    Column { VerifyBadge(finding.severity, when (finding.severity.lowercase()) { "blocker", "major" -> colors.stFailed; "minor" -> colors.stBlocked; else -> colors.fgFaint }) }
+    VerifyBadge(
+      finding.severity,
+      when (finding.severity.lowercase()) {
+        "blocker", "major" -> colors.stFailed
+        "minor" -> colors.stBlocked
+        else -> colors.fgFaint
+      },
+    )
     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-      FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+      FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+      ) {
         BasicText(finding.ref, style = SkillBillTheme.type.t2xs.copy(color = colors.fg2))
-        VerifyFileChip(finding.location.substringAfterLast('/'), finding.location)
-        (finding.specialists + "${finding.confidence} confidence").forEach { BasicText(it, style = SkillBillTheme.type.t2xs.copy(color = colors.fgMuted, fontWeight = FontWeight.Normal)) }
+        ResultRowFileChip(finding.location.substringAfterLast('/'), finding.location)
+        (finding.specialists + listOfNotNull(finding.confidence?.let { "$it confidence" })).forEach {
+          BasicText(it, style = SkillBillTheme.type.t2xs.copy(color = colors.fgMuted, fontWeight = FontWeight.Normal))
+        }
         trailing()
       }
-      Column(Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = "Toggle ${finding.ref}", onClick = { open = !open })) {
+      Column(
+        Modifier
+          .fillMaxWidth()
+          .clickable(role = Role.Button, onClickLabel = "Toggle ${finding.ref}", onClick = onToggle)
+          .semantics { stateDescription = if (open) "Expanded" else "Collapsed" },
+      ) {
         if (open) VerifyReportText(finding.description)
-        else BasicText(verifyText(finding.description), style = SkillBillTheme.type.tSm.copy(color = colors.fg2), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        else {
+          BasicText(
+            verifyText(finding.description),
+            style = SkillBillTheme.type.tSm.copy(color = colors.fg2),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+          )
+        }
+        VerifyChevron(open)
       }
       extra()
     }

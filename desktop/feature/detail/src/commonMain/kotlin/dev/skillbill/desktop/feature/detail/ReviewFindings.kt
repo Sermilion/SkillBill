@@ -18,6 +18,9 @@ import dev.skillbill.desktop.core.domain.model.ReviewReportFinding
 
 // The review finding table shared by a standalone review, a goal subtask's review passes and a standalone run's phase results.
 
+/** `bill-kotlin-code-review-testing` reads `testing`; a name without the marker stays whole. */
+internal fun laneAreaLabel(lane: String): String = lane.substringAfter("-code-review-", lane)
+
 internal fun ReviewFindingStatus.label(): String = when (this) {
   ReviewFindingStatus.Open -> "Open"
   ReviewFindingStatus.Fixed -> "Fixed"
@@ -69,7 +72,10 @@ internal fun ReviewFindingRow(index: Int, count: Int, finding: ReviewReportFindi
     severity = finding.severity,
     ref = finding.ref.takeIf { it.isNotBlank() },
     location = finding.location,
-    meta = listOfNotNull(finding.specialist, finding.confidence?.let { "$it confidence" }).joinToString(" · ").ifBlank { null },
+    meta = listOfNotNull(
+      finding.specialist?.takeIf { it.isNotBlank() }?.let(::laneAreaLabel),
+      finding.confidence?.takeIf { it.isNotBlank() }?.let { "$it confidence" },
+    ).joinToString(" · ").ifBlank { null },
     state = finding.status.label(),
     stateColor = finding.status.color(),
   )
@@ -81,15 +87,26 @@ internal fun ReviewFindingsBox(findings: List<ReviewReportFinding>) {
   Column { findings.forEachIndexed { index, finding -> ReviewFindingRow(index, findings.size, finding) } }
 }
 
+/** Empty pass or every finding has a specialist — enough attribution to claim per-lane zero. */
+internal fun reviewFindingsAttributionComplete(findings: List<ReviewReportFinding>): Boolean =
+  findings.isEmpty() || findings.all { !it.specialist.isNullOrBlank() }
+
+internal fun reviewAttributedFindingsPerLane(findings: List<ReviewReportFinding>): Map<String, Int> =
+  findings
+    .mapNotNull { it.specialist?.takeIf(String::isNotBlank) }
+    .groupingBy { it }
+    .eachCount()
+
 /**
- * The lanes the review applied, one chip each: a green dot for a lane that came back clean, an amber dot and its finding count
- * for one that raised findings. The tooltip carries the full rubric name.
+ * Recorded review lanes, one chip each: amber and a count when attributed findings target the lane; green only when
+ * attribution is complete and that lane has zero attributed findings; otherwise a neutral dot (no false clean).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ReviewLanes(lanes: List<String>, findings: List<ReviewReportFinding>) {
   val colors = SkillBillTheme.colors
-  val counts = remember(findings) { findings.groupingBy { it.specialist }.eachCount() }
+  val attributionComplete = remember(findings) { reviewFindingsAttributionComplete(findings) }
+  val counts = remember(findings) { reviewAttributedFindingsPerLane(findings) }
   FlowRow(
     horizontalArrangement = Arrangement.spacedBy(6.dp),
     verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -99,11 +116,19 @@ internal fun ReviewLanes(lanes: List<String>, findings: List<ReviewReportFinding
     lanes.forEach { lane ->
       val count = counts[lane] ?: 0
       val label = laneChipLabel(lane)
-      SbLabel(
-        if (count > 0) "$label · $count" else label,
-        SbLabelStyle.Dot(if (count > 0) colors.stBlocked else colors.stDone),
-        tooltip = if (count > 0) "$lane · $count ${if (count == 1) "finding" else "findings"}" else "$lane · clean",
-      )
+      when {
+        count > 0 -> SbLabel(
+          "$label · $count",
+          SbLabelStyle.Dot(colors.stBlocked),
+          tooltip = "$lane · $count ${if (count == 1) "finding" else "findings"}",
+        )
+        attributionComplete -> SbLabel(
+          label,
+          SbLabelStyle.Dot(colors.stDone),
+          tooltip = "$lane · clean",
+        )
+        else -> SbLabel(label, SbLabelStyle.Dot(null), tooltip = lane)
+      }
     }
   }
 }

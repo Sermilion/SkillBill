@@ -84,7 +84,9 @@ private fun produced(detail: Detail, card: PhaseCard, subtask: WorkSubtask?, res
       if (edit != null) PeekPart("Produced") { PeekStats(listOf(PeekStat(edit.fileCount.toString(), "files"), PeekStat("+${edit.insertions}", "added", PeekStatTone.Good), PeekStat("−${edit.deletions}", "removed", PeekStatTone.Bad))) }
       else if (card.files.isNotEmpty()) PeekPart("Produced") { card.files.forEach { PeekOutput(LucideIcons.file, it, tooltip = it) } }
     }
-    "audit" -> if (subtask != null && resultState is SubtaskResultsState.Shown) SubtaskAuditSection(results, subtaskStatusKind(subtask.status), subtask.id)
+    "audit" -> if (subtask != null && resultState is SubtaskResultsState.Shown) {
+      SubtaskAuditSection(results, subtaskStatusKind(subtask.status), subtask.id, card.round)
+    }
     "review" -> if (resultState is SubtaskResultsState.Shown) when (val review = resultState.review) {
       is SubtaskReviewState.Passes -> SubtaskReviewSection(review.passes, review.runningReviewPass)
       SubtaskReviewState.RunsAfterAudit -> PeekPart("Review") {
