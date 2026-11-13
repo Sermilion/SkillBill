@@ -27,7 +27,7 @@ Areas: docs/delegated-review, docs, scripts, platform-packs/typescript/addons, r
 - Reverses the [2026-08-11] SKILL-182 subtask 3 preface-over-delete decision: a historical-record preface still reads as a current capability body, so removal beats annotation once the subsystem is gone. reusable
 - `docs/team-control-plane-roadmap.md` now carries positioning and open discovery questions only; the staged bundle-sync, admin-editing, and hosted-controls phases are gone.
 - Pattern: when trimming a roadmap to unshipped status, sweep every surface that summarises it in the same change — here README.md and `docs/getting-started-for-teams.md`. reusable
-- `uninstall.sh` retained the Copilot historical sweep and the claude/codex/junie/cursor sweeps; only the obfuscated `printf 'g%s' 'lm'` target past its 2026-08-02 window went.
+- `uninstall.sh` retained the Copilot historical sweep and sweeps for Claude, Codex, Cursor, and the retired fourth agent; only the obfuscated `printf 'g%s' 'lm'` target past its 2026-08-02 window went.
 - Dropped the doc-shape test asserting row numbering 1..47 over the deleted `failure-matrix.md`; a test that asserts over a frozen Markdown archive dies with the archive and guards no code path. reusable
 - Limitation: dated prose in this file and in the review-orchestrator and review-delegation histories still names `docs/delegated-review/`; those record past decisions rather than resolve a live path, so they stand.
 Feature flag: N/A

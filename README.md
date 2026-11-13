@@ -153,9 +153,6 @@ See the [getting started guide](docs/getting-started.md) for configuration paths
 | Claude Code | ✓ | ✓ | ✓ |
 | Codex | ✓ | ✓ | ✓ |
 | Cursor | ✓ | ✓ | ✓ |
-| JetBrains Junie | ✓ | | |
-
-Junie's adapter rejects governed review launches that need tool and MCP isolation.
 
 ## Telemetry
 

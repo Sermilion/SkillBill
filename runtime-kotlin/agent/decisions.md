@@ -58,7 +58,7 @@ Revisit when: ACP advertises multiple variants per base, or `--list-models` IDs 
 
 ## [2026-11-09] Hosts never stop a worker for a tool or extension request
 Context: SKILL-453 required Cursor ACP unknown blocking extensions to cancel and stop the process so a plan was never auto-approved. Cursor still sends `cursor/update_todos` as a JSON-RPC request with an id, so SKILL-529 `audit_plan_fix` exited. Codex unsupported families declined or stopped, and Claude denied `AskUserQuestion` / `ExitPlanMode` and denied when no operator channel existed.
-Decision: Runtime bypass launches use native headless CLIs, not the app-server or ACP approval hosts. Codex uses `exec` with `--dangerously-bypass-approvals-and-sandbox`, Cursor uses print mode with force, trust, MCP approval and disabled sandbox flags, Junie uses its headless text CLI, and Claude keeps its native print transport. Skill-bill does not answer, skip, cancel or reject tool requests on these paths. The native harness controls tool execution and may apply its own restrictions.
+Decision: Runtime bypass launches use native headless CLIs, not the app-server or ACP approval hosts. Codex uses `exec` with `--dangerously-bypass-approvals-and-sandbox`, Cursor uses print mode with force, trust, MCP approval and disabled sandbox flags, the retired fourth agent uses its headless text CLI, and Claude keeps its native print transport. Skill-bill does not answer, skip, cancel or reject tool requests on these paths. The native harness controls tool execution and may apply its own restrictions.
 
 With an operator owner, supported permission cards wait for the operator. Unsupported Codex interactions settle as unsupported and send their method-specific non-authorizing response once. Failed response delivery remains uncertain and is never replayed. Claude approval registration failures deny the action, and malformed or stale owned ACP permission requests are cancelled. These paths never fall back to granting an owned action. Native bypass runs open no host session or operator owner, so neither card persistence nor these host response adapters can gate their calls. Parked verify and pr-review-fix confirmation stay separate.
 
@@ -2333,7 +2333,7 @@ spawner chokepoint. Standalone `code-review` preflights the resolved parent
 agent instead of degrading to a silent one-lane review.
 
 Non-goals: no change to opencode install/scaffold/MCP, prose orchestration,
-telemetry, or runtime support for claude, codex, junie; no migration or flag.
+telemetry, or runtime support for claude, codex, the retired fourth agent; no migration or flag.
 
 Revisit when: opencode gains a non-TTY harvestable headless mode and a
 foreground budget over 120s.

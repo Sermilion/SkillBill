@@ -1,6 +1,6 @@
 ## [2026-11-07] Default all provider launches to native permission bypass
 Context: The operator explicitly restored the previous global bypass behavior after testing SKILL-453, and requested it as the default for every agent and launch surface.
-Decision: Claude skips permission checks; Codex requests never approvals and full access on thread start, resume and turns; Cursor uses force, trust, MCP approval and a disabled sandbox; Junie ACP enables Brave mode before prompting. Existing headless Junie review execution remains autonomous.
+Decision: Claude skips permission checks; Codex requests never approvals and full access on thread start, resume and turns; Cursor uses force, trust, MCP approval and a disabled sandbox; the retired fourth agent's ACP transport enables Brave mode before prompting. Its existing headless review execution remains autonomous.
 Reason: Operators want agents to act by default without adding sandbox approval steps. Keep the broker and cards for genuine residual harness permission requests, and keep operation proposal confirmation separate from tool permissions.
 Revisit when: The operator requests a selectable restrictive launch policy.
 
@@ -21,7 +21,7 @@ Revisit when: Terminal and desktop allocation can share one runtime-owned implem
 Context: Each Claude chat turn ran as its own `claude -p` process. When the reply ended, the process exited and Claude Code killed the background commands it had started, so a promise like "I'll push once the checks pass" could never be kept, and the operator blamed hiding the chat pane.
 Decision: ClaudeChatTransport keeps one `claude -p --input-format stream-json --replay-user-messages` process per chat session and writes each turn to its stdin. Output after the replay of a turn's uuid, up to its `result`, belongs to that turn; output with no turn pending is a reply the agent started on its own and reaches the chat through `ExecutionChatRepository.unprompted`. Hiding the pane leaves the process alone. Closing the tab, `/clear`, `/resume`, an agent switch, closing the window, or cancelling a turn before its reply stops it with its descendants. The read-only mode note moved from the system prompt into each message because the process outlives a mode change.
 Reason: Background commands only survive while the process that started them lives, and Claude reports their completion by starting a turn on its own, which needs a reader that outlives the turn.
-Alternatives considered: Telling the agent to run every command in the foreground was rejected as the only fix because it holds the composer for a whole build. Codex, Cursor and Junie still run one process per turn until their CLIs offer an equivalent input stream.
+Alternatives considered: Telling the agent to run every command in the foreground was rejected as the only fix because it holds the composer for a whole build. Codex, Cursor and the retired fourth agent still run one process per turn until their CLIs offer an equivalent input stream.
 
 ## [2026-10-30] Bind config edits to locked document identities
 Context: A config file can move between legacy and current paths with identical bytes, or change while a desktop draft is open.

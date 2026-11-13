@@ -4,7 +4,7 @@ Drafted 2026-11-07. This is a technical proposal for the existing sidebar protot
 
 ## Outcome and scope
 
-Show current account allowances for the provider used by the open run or New task chat. Support Codex, Claude and Cursor. Leave Junie out. Keep the card in the existing sidebar and the details in its popup.
+Show current account allowances for the provider used by the open run or New task chat. Support Codex, Claude and Cursor. Keep the card in the existing sidebar and the details in its popup.
 
 The card reports account usage now, including usage from other applications when the source exposes it. Opening a completed run does not turn it into a historical usage report. It does not pause runs, switch providers, buy credits, redeem resets, or change provider authentication.
 
@@ -57,7 +57,7 @@ Keep the last good observation and its age when refresh fails. Track request gen
 - An open run follows its current executing agent. Resolve `Detail.activeAgent` before the recorded work-item agent and launch defaults. A goal can change providers between phases.
 - New task follows the selected chat's agent and resolved profile. Switching chats changes the subject immediately.
 - Work and History remember the manual provider selection. Keyboard focus on a board row does not silently change it.
-- Junie and an unknown run provider hide the card. A supported provider with an unavailable data source shows a reason instead of disappearing.
+- An unknown run provider hides the card. A supported provider with an unavailable data source shows a reason instead of disappearing.
 - A known provider does not establish the run's account. Existing run projections do not reliably identify every historical account or profile. If that identity is missing, label the reading as the current local account. Do not claim it belongs to the run.
 
 Use the same profile resolution as execution, including `CODEX_HOME`, Claude's selected configuration home and `CURSOR_CONFIG_DIR` where applicable. A profile path alone is not a permanent account identity. Revalidate identity after sign-in or account changes and isolate cached results across accounts and organizations. If identity cannot be established, do not reuse an account-bound cached reading.

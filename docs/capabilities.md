@@ -5,7 +5,7 @@ Under one `curl` command is a full system. Each capability below is doing real w
 <details>
 <summary><b>1. One-shot multi-agent install via symlinks</b></summary>
 
-`install.sh` symlinks every skill into each detected agent's directory (Claude Code, Codex, Cursor, Junie). A single source-of-truth `skills/` tree powers all of them, so an edit in one place reaches every agent immediately. The same mechanism handles uninstall and the runtime launcher binaries.
+`install.sh` symlinks every skill into each detected agent's directory (Claude Code, Codex, Cursor). A single source-of-truth `skills/` tree powers all of them, so an edit in one place reaches every agent immediately. The same mechanism handles uninstall and the runtime launcher binaries.
 
 </details>
 
@@ -106,7 +106,7 @@ A skill author usually touches exactly one file. Free-form markdown, frontmatter
 
 Generated from it (and you never hand-edit):
 
-- Per-agent skill files in each agent's native format (Claude, Codex, Cursor, Junie), installed as symlinks back to the one source `content.md` so any edit lands everywhere instantly.
+- Per-agent skill files in each agent's native format (Claude, Codex, Cursor), installed as symlinks back to the one source `content.md` so any edit lands everywhere instantly.
 - Native subagent files in each agent's required format, registered by name and briefed by the orchestrator at runtime.
 - Pointer files inside platform packs — single-line markdown files regenerated from `platform.yaml` by the renderer (you are literally not supposed to commit them).
 - Slash-command registration in each agent.

@@ -5,7 +5,7 @@ Reason: A snapshot can show stale entries, and the tooltip alone cannot make a l
 
 ## [2026-11-11] Keep live-policy Send now separate from Stop
 Context: Both chat consumers previously interrupted a reply for Send now. SKILL-530 requires Claude and Codex follow-ups to preserve ongoing work and its context.
-Decision: Read transport-owned policy separately from availability. Claude and Codex use live delivery with non-stopping queued fallback; Cursor and Junie retain interruption. Explicit Stop keeps cancellation authority.
+Decision: Read transport-owned policy separately from availability. Claude and Codex use live delivery with non-stopping queued fallback; Cursor and the retired fourth agent retain interruption. Explicit Stop keeps cancellation authority.
 Reason: An unavailable live handle must not turn guidance into cancellation or create a replacement process.
 
 ## [2026-11-11] Keep uncertain delivery out of automatic replay

@@ -1,6 +1,6 @@
 ## [2026-11-12] Builder launch refusal is a required member, not a defaulted hook
 Context: Devin must refuse a separate effort, or missing runtime MCP context, before any command is built or spawned.
-Decision: AgentRunCommandBuilder.launchRefusal has no default body. Every builder implements it, and the Claude, Codex, Cursor and Junie builders return null explicitly.
+Decision: AgentRunCommandBuilder.launchRefusal has no default body. Every builder implements it, and the Claude, Codex, Cursor and the retired fourth agent builders return null explicitly.
 Reason: PortNullObjectAbsenceArchitectureTest rejects an interface member whose default body returns null. Explicit overrides also keep each builder's pre-spawn refusal policy visible.
 
 ## [2026-11-12] Exact-model ACP providers never resolve or backfill the reported model

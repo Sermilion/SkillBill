@@ -46,6 +46,9 @@ class DesktopApplicationConventionPlugin : Plugin<Project> {
     registerSharedRuntimeVersionCheck()
     tasks.withType(AbstractJPackageTask::class.java).configureEach {
       inputs.dir(appResourcesDir).withPropertyName("applicationResources").optional().withPathSensitivity(PathSensitivity.RELATIVE)
+      if (name == "createDistributable" && System.getProperty("os.name").contains("linux", true)) {
+        doLast { compactLauncherClasspath(destinationDir.get().asFile) }
+      }
     }
     pluginManager.withPlugin("skillbill.build-identity") { packageBuildIdentity() }
   }

@@ -9,7 +9,7 @@ Alternatives considered: Falling back to home/AppData/Roaming guesses a layout. 
 ## [2026-11-12] Fail typed on malformed MCP JSON for every JSON provider
 Context: McpJsonConfig read configs through readJsonObject, which threw IllegalArgumentException for malformed documents and replaced an `mcpServers` member that was not an object. Devin's dedicated config holds operator settings that must survive.
 Decision: register and unregister parse through a private reader that throws MALFORMED_MCP_CONFIG before any write when the document is not a JSON object or a present `mcpServers` is not an object. The shared readJsonObject used by GovernedReviewMcpConfigWriter is unchanged.
-Reason: One code path keeps Claude, Junie, Cursor and Devin consistent, and the original bytes stay put while the user gets a handled diagnostic.
+Reason: One code path keeps Claude, the retired fourth agent, Cursor and Devin consistent, and the original bytes stay put while the user gets a handled diagnostic.
 Alternatives considered: A Devin-only reader would leave other providers silently replacing operator settings. Changing readJsonObject would widen scope to the launcher's review MCP writer.
 
 ## [2026-11-12] Pass host facts as function parameters, not on link requests

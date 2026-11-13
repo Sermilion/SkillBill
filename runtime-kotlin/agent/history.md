@@ -73,7 +73,7 @@ Areas: runtime-contracts, runtime-domain, runtime-ports, runtime-engine, runtime
 - ValidationCheckRecorder stamps and validates bounded event sequences, updates current activity, and signals phase readers. Its narrow status writes preserve revision, timestamps and leases. reusable
 - Capable standalone validation launches pass the invocation identity to the runtime MCP server; server initialization marks availability and supplies the tool protocol. Settlement derives an outcome from finished, non-skipped checks.
 - Work detail projects checks for the current invocation and up to 50 validation runs on the same repository and branch. Desktop renders report parts, branch runs and available checks.
-- Limits: goal validation has no live checks; Junie and Cursor use the report-only layout. A run without a counted finished check has no derived outcome. Desktop builds must match schema 105.
+- Limits: goal validation has no live checks; the retired fourth agent and Cursor use the report-only layout. A run without a counted finished check has no derived outcome. Desktop builds must match schema 105.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented
 
@@ -367,7 +367,7 @@ Areas: runtime-domain launch facts; runtime-engine featuretask slots, execution 
 - Existing model configuration selects Opus 5.5. Fourteen slot variants compose the canonical strategies and append a directive resource only on steps whose recorded profile is opus-5-5. Runtime commit stays canonical and launches no agent.
 - The classifier accepts only claude-opus-5-5 for anthropic_api, google, and claude_platform_aws, and anthropic.claude-opus-5-5 for bedrock. Unpinned aliases, older models, substrings, and remapped models stay canonical.
 - Contract 0.2 stores immutable step_launch_assignments. A 0.1 reader keeps admitted canonical behavior and leaves those plans unchanged. Plan cache identity copies the assignments.
-- Launch uses the recorded effective model, or the request model when a step has no assignment. The adapter owns remap, environment-pinned opus, and flag-free unknown. Claude modelUsage keys are bounded reported identities and do not reselect the strategy. Codex, Cursor, and Junie report unsupported_agent.
+- Launch uses the recorded effective model, or the request model when a step has no assignment. The adapter owns remap, environment-pinned opus, and flag-free unknown. Claude modelUsage keys are bounded reported identities and do not reselect the strategy. Codex, Cursor, and the retired fourth agent report unsupported_agent.
 - Implement and simplify prepare a private checklist at .skill-bill/feature-task-tracking/<path segment>/checklist.md. Ticks are not completion. Goal intake resolves the execution matrix for child plans under governed-child environment.
 - reusable: canonical strategy composition, per-step directive resources, the checklist store, the 0.1 historical reader, and docs/model-specific-phase-strategies.md.
 - Limits: reported identity cannot see a provider-hidden model change. Governed children do not inherit an opus alias pin. Audit and review variants sit in an opus subpackage so package sibling ceilings hold.
@@ -1450,10 +1450,10 @@ Acceptance criteria: 10/10 implemented
 ## [2026-08-18] SKILL-195 subtask 5 — Provider parity, contract bump, and stopgap removal
 Areas: orchestration/contracts, runtime-contracts/review, runtime-contracts/error, runtime-infra-fs/launcher/{agentrun,mcp,review}, runtime-infra-sqlite/review, runtime-domain/review/model
 - Codex and Cursor governed review launches now take the same governed-only tool list and per-launch MCP isolation as Claude: Codex via `--ignore-user-config` plus TOML `--config` overrides; Cursor via per-launch `.cursor/mcp.json` and `cli.json` allow/deny plus retained `--workspace`.
-- `GovernedReviewLaunchCapability` is the launch gate: missing governed-only tooling or MCP isolation throws `GovernedReviewLaunchCapabilityError` naming provider and capability; Junie is incapable today and fails there instead of launching ungoverned. reusable
+- `GovernedReviewLaunchCapability` is the launch gate: missing governed-only tooling or MCP isolation throws `GovernedReviewLaunchCapabilityError` naming provider and capability; the retired fourth agent is incapable today and fails there instead of launching ungoverned. reusable
 - `REVIEW_INLINE_TOOLS` and raw `Read`/`Grep`/`Glob`/`Bash` grants are gone from every governed launch path.
 - Review-context contract `2.0` → `2.1` (schema first, then `REVIEW_CONTEXT_CONTRACT_VERSION` plus parity test) because accounting `evidence_bytes`/`expansions`/`tool_calls` are now boundary-fed. A pre-bump row quarantines with `accounting_contract_quarantined` and regenerates in-band.
-- Limitation: Junie remains a loud-fail provider, not a verified governed-MCP peer. Claude and Codex stay the e2e-verified tiers; Cursor is code parity.
+- Limitation: the retired fourth agent remains a loud-fail provider, not a verified governed-MCP peer. Claude and Codex stay the e2e-verified tiers; Cursor is code parity.
 Feature flag: N/A
 Acceptance criteria: 7/7 implemented
 
@@ -1462,7 +1462,7 @@ Areas: runtime-ports/review, runtime-mcp/review, runtime-infra-fs/{launcher/revi
 - Per-launch Unix-domain-socket endpoint binds `NativeReviewOperationProtocol` before the worker starts and tears down on completion, timeout, or crash; loopback plus a per-launch token; the endpoint does not outlive its launch.
 - MCP adapter is codec and forward only: `read_evidence` and `request_expansion` map onto existing broker models. Reachability, byte budget, expansion ledger, and lane termination stay in the protocol — `forbidden`/`budgetExceeded` return as tool responses and do not execute. reusable
 - Claude governed launch writes a per-launch `--mcp-config` and `--strict-mcp-config`; `--tools` names only the two MCP operations (fan-out keeps `Agent`,`Task`). Native-agent sources drop `Read`/`Grep`/`Glob`/`Bash`. Locators stay in the packet; bodies pull on demand.
-- Limitation: Codex, Cursor, and Junie parity is subtask 5. No `agent/` under `platform-packs/`.
+- Limitation: Codex, Cursor, and retired-fourth-agent parity is subtask 5. No `agent/` under `platform-packs/`.
 Feature flag: N/A
 Acceptance criteria: 9/9 implemented
 
@@ -1835,7 +1835,7 @@ Acceptance criteria: 7/7 implemented
 
 ## [2026-08-03] SKILL-145 delegated code-review provider liveness, capacity, and aggregation (subtask 2)
 Areas: runtime-kotlin/{runtime-application,runtime-domain,runtime-ports,runtime-infra-fs,runtime-infra-sqlite,runtime-contracts}, orchestration/{contracts,review-delegation,review-orchestrator}, .feature-specs/SKILL-145-delegated-code-review-reliability
-- Provider capability records cover the eight delegated dimensions with explicit supported/unsupported dispositions for Codex, Claude, Cursor, Junie, and unregistered providers; provider command/process strategies remain isolated. reusable
+- Provider capability records cover the eight delegated dimensions with explicit supported/unsupported dispositions for Codex, Claude, Cursor, the retired fourth agent, and unregistered providers; provider command/process strategies remain isolated. reusable
 - Capacity planning reserves coordinator slots, partitions selected workers into deterministic waves, and lifecycle transitions cover selected/queued/launched/running/completed/failed/timed-out/cancelled/aggregated without silent drops. reusable
 - Explicit provider lifecycle envelopes are the only authoritative progress and MCP-startup signals; ordinary model output, process heartbeats, and completion usage remain non-authoritative.
 - Startup, progress-idle, per-worker, aggregation, and whole-review deadlines plus interruption boundaries produce predictable durable terminal blocks with bounded diagnostics.
@@ -2356,7 +2356,7 @@ Areas: runtime-kotlin/runtime-domain config/install, runtime-application feature
 - Machine-global `execution_matrix` in `~/.config/skill-bill/config.json` maps per-agent reasoning/implementation tiers to model and optional effort, with default phase tiers, per-phase overrides, typed dotted-path validation failures, and unchanged behavior when absent. reusable
 - Runtime resolves each phase as CLI directive > matrix directive for its resolved agent > none, carries the directive into launch and phase-start telemetry, and preserves goal-continuation wrapper commands without model flags.
 - Pattern: declare CLI capability beside agent support in the domain, reject incompatible resolved phase/directive pairs before workflow or branch work, then retain a command-builder `require` as a defensive backstop. reusable
-- Claude and Codex render effort through their native command forms; Junie deliberately refuses directives, while parallel code-review `--model` behavior remains independent.
+- Claude and Codex render effort through their native command forms; the retired fourth agent deliberately refuses directives, while parallel code-review `--model` behavior remains independent.
 Feature flag: N/A
 Acceptance criteria: 11/11 implemented
 
@@ -2680,7 +2680,7 @@ Areas: runtime-kotlin/runtime-domain, skills/bill-code-review
 - `ParallelReviewMerger` now coalesces findings by same file path (from location, `substringBeforeLast(':')`) AND Jaccard token-overlap of descriptions, replacing the exact `location|description` key. reusable
 - Fuzzy threshold is the named constant `FUZZY_DEDUP_THRESHOLD = 0.6` (strict `>`); helpers `tokens`/`jaccard` document both-empty=>1.0 and union-empty=>0.0; clustering is insertion-order greedy so output is map-iteration-order independent. reusable
 - Severity resolution, sort, `F-NNN` renumber, and formatting are untouched, so higher-severity-wins and all prior exact-match behavior are preserved.
-- `bill-code-review` skill content adds a routing capability table (per-agent stdin-pipe flag + `LANE2_DIFF_BYTE_THRESHOLD = 200 KB`) and a size guard: over-threshold or non-stdin agents (opencode/copilot/junie) delegate to `skill-bill code-review-parallel`; within-threshold stdin agents (claude/codex) keep the stdin-pipe path. reusable
+- `bill-code-review` skill content adds a routing capability table (per-agent stdin-pipe flag + `LANE2_DIFF_BYTE_THRESHOLD = 200 KB`) and a size guard: over-threshold or non-stdin agents, including OpenCode, Copilot, and the retired fourth agent delegate to `skill-bill code-review-parallel`; within-threshold stdin agents (claude/codex) keep the stdin-pipe path. reusable
 - Threshold and stdin flags live in skill content as single source of truth, updatable without touching routing logic.
 - Known limitation (carried from SKILL-70, still open): merger ignores `findings` field / re-parses `rawOutput`; `FileSystemDiffResolver` subprocess has no timeout.
 Feature flag: N/A
@@ -3132,7 +3132,7 @@ Areas: runtime-kotlin/runtime-ports, runtime-kotlin/runtime-application, runtime
 - Added `AgentRunLauncher` as a technology-neutral port with typed launch request/outcome models; launcher outcomes are process facts only and never infer subtask success from stdout. reusable
 - Added `AgentRunService` to resolve configured override before invoked `bill-goal` agent via `InstallAgent`; unknown agents fail before launch and supported agents without headless paths return explicit unsupported outcomes.
 - Infra-fs owns fresh-process spawning, command construction, environment inheritance, bounded UTF-8 stdout/stderr capture, timeout destroy+wait, and spawn-failure mapping; keep all process/env work out of application/domain/ports. reusable
-- Headless adapters currently cover Claude, Codex, and OpenCode; Copilot and Junie are deliberately unsupported until a proven headless skill-run path exists.
+- Headless adapters currently cover Claude, Codex, and OpenCode; Copilot and the retired fourth agent are deliberately unsupported until a proven headless skill-run path exists.
 - RuntimeComponent exposes the service and architecture/surface tests lock the composition-only binding plus launcher operation surface.
 Feature flag: N/A
 Acceptance criteria: 7/7 implemented (subtask scope)
@@ -3625,7 +3625,7 @@ Acceptance criteria: 6/6 implemented
 ## [2026-05-17] runtime-cli-install-plan-apply
 Areas: runtime-kotlin/runtime-cli install commands, runtime-kotlin/runtime-core install plan/apply contract
 - Added stable `skill-bill install plan` and `skill-bill install apply` entrypoints that build `InstallPlanRequest`, call `InstallOperations.planInstall` / `applyInstall`, and keep CLI handlers as thin parse/render adapters. reusable
-- CLI inputs now cover detected/manual `copilot`, `claude`, `codex`, `opencode`, `junie`, platform pack none/selected/all, telemetry anonymous/full/off, MCP registration choices, and Windows symlink preflight state.
+- CLI inputs now cover detected/manual Copilot, Claude, Codex, OpenCode, and the retired fourth agent, platform pack none/selected/all, telemetry anonymous/full/off, MCP registration choices, and Windows symlink preflight state.
 - Plan/apply JSON/text payloads are rendered from structured runtime outcomes, including base-skill inclusion, dynamic platform discovery, MCP/telemetry intent, warnings/failures, and Windows symlink guidance.
 Feature flag: N/A
 Acceptance criteria: 6/6 implemented
@@ -3634,7 +3634,7 @@ Acceptance criteria: 6/6 implemented
 Areas: runtime-kotlin/runtime-core install plan/apply tests, runtime-kotlin/runtime-cli install tests, runtime-domain install model
 - Added final regression coverage for shared install plan/apply contracts: plan inputs/outputs, dynamic platform discovery, base-skill inclusion, staging-cache/source immutability, telemetry levels, MCP intent/outcomes, and Windows symlink guidance.
 - New focused `InstallPlanContractCoverageTest` keeps plan assertions at the typed contract boundary without applying side effects; future install changes should extend this instead of parsing CLI text. reusable
-- Apply coverage now asserts telemetry/MCP no-side-effect behavior on preflight failure and selected all-agent behavior distinguishes Copilot skill links from Claude/Codex/OpenCode/Junie native-agent providers.
+- Apply coverage now asserts telemetry/MCP no-side-effect behavior on preflight failure and selected all-agent behavior distinguishes Copilot skill links from the Claude, Codex, OpenCode, and retired fourth-agent native-agent providers.
 - Validation loop fixed Spotless formatting after review/audit and confirmed the Kotlin Gradle gate passes; remaining known limitation is Minor follow-up to strengthen all-agent MCP config-file assertions.
 Feature flag: N/A
 Acceptance criteria: 9/9 implemented
@@ -3660,7 +3660,7 @@ Acceptance criteria: 7/7 implemented
 ## [2026-05-16] shared-install-plan-contract-builder
 Areas: runtime-core install plan/build, runtime-domain install model, runtime-core contract/tests
 - SKILL-45 subtask 1 added a pure typed install-plan API (`InstallPlanRequest` -> `InstallPlan`) plus `InstallOperations.planInstall`; it models agent/platform/telemetry/MCP/runtime/target/staging/Windows-preflight intent without applying symlinks, rendering staging output, or registering MCP. reusable
-- Supported install agents are locked to `copilot`, `claude`, `codex`, `opencode`, `junie`; the plan builder asserts runtime primitive drift so a legacy model-only target cannot re-enter through install planning. reusable
+- Supported install agents were locked to Copilot, Claude, Codex, OpenCode, and the retired fourth agent; the plan builder asserts runtime primitive drift so a legacy model-only target cannot re-enter through install planning. reusable
 - Platform packs are discovered through governed `discoverPlatformPacks`, not raw manifest loading; bad contract versions, missing declared content, duplicate skill names/manifest slots, escaped declared content paths, and pointer targets escaping through symlinked parents must loud-fail during planning. reusable
 - Base skills must be represented and must fail if the skills root is missing, empty, or contains `bill-*` directories without `content.md`; future apply/staging work must preserve content-hash parity with the plan, especially for custom `skillsRoot` support pointers.
 - Test coverage lives in `InstallPlanBuilderTest` for selected/all/unknown packs, multi-area packs, manual and supplied/detected targets, no home/source mutation, staging root under `~/.skill-bill/installed-skills`, Windows decision/message, pointer target escapes, and base-skill loud-fails.
@@ -3747,7 +3747,7 @@ Acceptance criteria: 4/4 implemented
 
 ## [2026-05-09] native-agent-composition-rendering
 Areas: runtime-core nativeagent rendering/validation, scaffold authored-content rendering, Kotlin/KMP specialist native-agent sources
-- Composed native agents now expand `compose: governed-content` before provider rendering/install; `NativeAgentProvider` still owns Claude/Codex/Opencode/Junie shapes while render inputs are self-contained. reusable
+- Composed native agents now expand `compose: governed-content` before provider rendering/install; `NativeAgentProvider` still owns Claude, Codex, OpenCode, and retired-fourth-agent shapes while render inputs are self-contained. reusable
 - `AuthoredContentRendering` centralizes frontmatter stripping, title stripping, heading demotion, and LF normalization so wrapper rendering and native-agent composition share the authored `content.md` body contract. reusable
 - `NativeAgentSidecarInlining` rewrites local markdown links to plain labels and appends referenced sibling or manifest-pointer sidecars recursively; unresolved local links fail validation instead of leaking repo-local runtime dependencies.
 - Direct Kotlin/KMP specialist native-agent source files remain under `native-agents/*.md` but now declare `compose: governed-content` and drop duplicated long specialist prose.

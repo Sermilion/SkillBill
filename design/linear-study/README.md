@@ -74,9 +74,9 @@ The card follows context. Opening a run shows its agent's usage, and New task fo
 
 Default agent sets the agent new chats, goals and phases start with. Clicking the active chip clears it. In this prototype a new chat in New task starts on the default.
 
-The tabs cover Codex, Claude, Cursor and Junie. Windows come from the provider's live reading, never a fixed list. Codex and Claude usually report a 5-hour and a weekly window; an account that reports only a weekly window shows just that, with the second slot empty. A model-specific window names its model, as in Weekly (Opus). Cursor and Junie have no readable usage source, so they show "No usage data", and Junie has no Dashboard button.
+The tabs cover Codex, Claude and Cursor. Windows come from the provider's live reading, never a fixed list. Codex and Claude usually report a 5-hour and a weekly window; an account that reports only a weekly window shows just that, with the second slot empty. A model-specific window names its model, as in Weekly (Opus). Cursor has no readable usage source, so it shows "No usage data".
 
-Context examples use the existing run screens: [Codex](index.html#detail/INF-7), [Claude](index.html#detail/DSN-31), [Cursor](index.html#detail/ATL-402), and [Junie](index.html#detail/ph-rk-validation). [New task](index.html#new-task) follows its selected chat.
+Context examples use the existing run screens: [Codex](index.html#detail/INF-7), [Claude](index.html#detail/DSN-31), [Cursor](index.html#detail/ATL-402). [New task](index.html#new-task) follows its selected chat.
 
 Review the card in the app layout with these links. Each opens the details popup. Close it to inspect the card alone.
 
