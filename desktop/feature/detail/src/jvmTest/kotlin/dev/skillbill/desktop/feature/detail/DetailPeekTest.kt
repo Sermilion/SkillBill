@@ -14,8 +14,10 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.onRoot
@@ -45,6 +47,8 @@ import dev.skillbill.desktop.core.domain.model.QaPreviewFrame
 import dev.skillbill.desktop.core.domain.model.GoalQaFinding
 import dev.skillbill.desktop.core.domain.model.GoalQaResult
 import dev.skillbill.desktop.core.domain.model.ExecutionInstance
+import dev.skillbill.desktop.core.domain.model.PlanRunReport
+import dev.skillbill.desktop.core.domain.model.PlannedSubtask
 import dev.skillbill.desktop.core.domain.model.QaAssertionOutcome
 import dev.skillbill.desktop.core.domain.model.QaChecklist
 import dev.skillbill.desktop.core.domain.model.QaChecklistCase
@@ -53,6 +57,7 @@ import dev.skillbill.desktop.core.domain.model.QaChecklistStep
 import dev.skillbill.desktop.core.domain.model.QaRunAssertion
 import dev.skillbill.desktop.core.domain.model.QaRunDetails
 import dev.skillbill.desktop.core.domain.model.QaStepState
+import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
 import dev.skillbill.desktop.core.testing.workItem
@@ -203,6 +208,7 @@ class DetailPeekTest {
         WorkSubtask(2, "Second subtask", "completed", null, null, emptyList()),
         WorkSubtask(3, "Current subtask", "in_progress", null, null, emptyList()),
       ),
+      phaseResults = listOf(SubtaskPhaseResults(3, emptyList(), null, null)),
     )
     val state = DetailUiState(
       workItem("goal").copy(currentSubtaskId = "3"),
@@ -233,6 +239,50 @@ class DetailPeekTest {
   }
 
   @Test
+  fun `goal spec files stay in the document until a preplan card can carry them`() = runComposeUiTest {
+    val bundle = PlanRunReport(
+      featureName = "GOAL-1",
+      parentSpecPath = "/specs/GOAL-1/spec.md",
+      subtasks = listOf(PlannedSubtask(1, "Build", "/specs/GOAL-1/spec_subtask_1.md", emptyList())),
+      bundleFiles = listOf("/specs/GOAL-1/decomposition-manifest.yaml", "/specs/GOAL-1/spec.md", "/specs/GOAL-1/spec_subtask_1.md"),
+    )
+    val subtask = WorkSubtask(1, "Build", "completed", null, null, emptyList())
+    val withoutCard = emptyDetail.copy(subtasks = listOf(subtask), goalSpecBundle = bundle)
+    val withCard = withoutCard.copy(
+      phaseResults = listOf(SubtaskPhaseResults(1, emptyList(), null, null, phaseCards = listOf(finishCard("preplan")))),
+    )
+    val state = mutableStateOf(DetailUiState(
+      workItem("goal"), SectionsUi.Loaded(withoutCard, null, emptyMap(), emptySet()), false, epoch,
+      subtaskChoice = SubtaskChoice(SubtaskKey.Subtask(1)),
+    ))
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        DetailsPane(state.value, remember { mutableStateOf(AssessmentOrder.Default) }, {}, { action ->
+          if (action is DetailAction.SelectPhase) {
+            state.value = state.value.copy(
+              phaseChoice = state.value.phaseChoice + (PhaseChoiceKey(action.itemId, action.key) to PhaseDisclosure.Open(action.phaseId)),
+            )
+          }
+        })
+      }
+    }
+    onNodeWithText("Spec files").assertExists()
+    onNodeWithText("spec.md").assertExists()
+    onNode(hasText("spec_subtask_1.md") and hasAnyAncestor(hasText("Spec files"))).assertDoesNotExist()
+    onNodeWithText("spec_subtask_1.md").assertExists()
+    runOnIdle {
+      state.value = state.value.copy(
+        sections = SectionsUi.Loaded(withCard, null, emptyMap(), emptySet()),
+        phaseChoice = mapOf(PhaseChoiceKey("goal", SubtaskKey.Subtask(1)) to PhaseDisclosure.Open("preplan")),
+      )
+    }
+    onAllNodesWithText("Spec files").assertCountEquals(1)
+    onNodeWithText("spec.md").assertExists()
+    onNode(hasText("spec_subtask_1.md") and hasAnyAncestor(hasText("Spec files"))).assertDoesNotExist()
+    onNodeWithText("spec_subtask_1.md").assertExists()
+  }
+
+  @Test
   fun `goal finish findings open in the peek and keep their ordering when reopened`() = runComposeUiTest {
     val detail = emptyDetail.copy(
       subtasks = (1..12).map { WorkSubtask(it, "Build the view $it", "completed", null, null, emptyList()) },
@@ -260,7 +310,7 @@ class DetailPeekTest {
         CompositionLocalProvider(LocalShellInput provides input) {
           DetailScreen(state.value, DetailScreenHost(open.value, "Ctrl I", { open.value = !open.value }, { open.value = true })) { action ->
             if (action is DetailAction.SelectPhase) {
-              state.value = state.value.copy(phaseChoice = state.value.phaseChoice + (PhaseChoiceKey(action.itemId, action.key) to action.phaseId))
+              state.value = state.value.copy(phaseChoice = state.value.phaseChoice + (PhaseChoiceKey(action.itemId, action.key) to PhaseDisclosure.Open(action.phaseId)))
             }
             if (action is DetailAction.SelectSubtask) {
               state.value = state.value.copy(subtaskChoice = SubtaskChoice(action.key))
@@ -346,13 +396,16 @@ class DetailPeekTest {
     setContent {
       SkillBillTheme(reducedMotion = true) {
         DetailsPane(
-          DetailUiState(workItem("goal", finishedAt = epoch), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch, subtaskChoice = SubtaskChoice(SubtaskKey.GoalFinish)),
+          DetailUiState(
+            workItem("goal", finishedAt = epoch), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch,
+            subtaskChoice = SubtaskChoice(SubtaskKey.GoalFinish),
+            phaseChoice = mapOf(PhaseChoiceKey("goal", SubtaskKey.GoalFinish) to PhaseDisclosure.Open("qa")),
+          ),
           remember { mutableStateOf(AssessmentOrder.Default) },
           {},
         ) { actions += it }
       }
     }
-    onNode(hasText("QA") and isSelectable()).performClick()
     onNodeWithText("Needs your review").assertIsDisplayed()
     onNodeWithText("QA-1").assertIsDisplayed()
     onNodeWithText("Live app").assertIsDisplayed()
@@ -390,13 +443,16 @@ class DetailPeekTest {
     setContent {
       SkillBillTheme(reducedMotion = true) {
         DetailsPane(
-          DetailUiState(workItem("goal", finishedAt = epoch), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch, subtaskChoice = SubtaskChoice(SubtaskKey.GoalFinish)),
+          DetailUiState(
+            workItem("goal", finishedAt = epoch), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch,
+            subtaskChoice = SubtaskChoice(SubtaskKey.GoalFinish),
+            phaseChoice = mapOf(PhaseChoiceKey("goal", SubtaskKey.GoalFinish) to PhaseDisclosure.Open("qa")),
+          ),
           remember { mutableStateOf(AssessmentOrder.Default) },
           {},
         ) { actions += it }
       }
     }
-    onNode(hasText("QA") and isSelectable()).performClick()
     onNodeWithText("Carried problem").performClick()
     onNodeWithContentDescription("Open evidence carried.log").performClick()
     runOnIdle { assertTrue(DetailAction.OpenQaEvidence("$qaA/carried.log", qaA) in actions) }

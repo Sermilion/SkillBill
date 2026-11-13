@@ -8,6 +8,8 @@ import dev.skillbill.desktop.core.domain.model.ChangeSet
 import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.ChangesState
 import dev.skillbill.desktop.core.domain.model.DetailList
+import dev.skillbill.desktop.core.domain.model.PhaseCardState
+import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
 import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.domain.model.DetailListOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
@@ -132,6 +134,7 @@ class DetailViewModelTest {
     val detail = emptyDetail.copy(
       currentPhase = "qa",
       subtasks = listOf(WorkSubtask(1, "Build", "in_progress", null, null, emptyList())),
+      goalFinishCards = listOf(finishCard("qa", PhaseCardState.Running)),
       goalQaPreview = preview,
     )
     runCurrent()
@@ -145,10 +148,19 @@ class DetailViewModelTest {
     assertEquals("qa-goal", requests.single().invocationId)
     assertEquals(frame, viewModel.state.value.qaPreview)
 
-    viewModel.onAction(DetailAction.SelectSubtask(SubtaskKey.Subtask(1)))
+    // Folding the open QA card hides the only surface the goal preview renders in, so the stream closes until it reopens.
+    viewModel.onAction(DetailAction.SelectPhase(source.id, SubtaskKey.GoalFinish, "qa"))
     assertEquals(QaPreviewState.Ended, viewModel.state.value.qaPreview)
     runCurrent()
     assertEquals(listOf("qa-goal"), closed)
+    viewModel.onAction(DetailAction.SelectPhase(source.id, SubtaskKey.GoalFinish, "qa"))
+    runCurrent()
+    assertEquals(listOf("qa-goal", "qa-goal"), requests.map { it.invocationId })
+
+    viewModel.onAction(DetailAction.SelectSubtask(SubtaskKey.Subtask(1)))
+    assertEquals(QaPreviewState.Ended, viewModel.state.value.qaPreview)
+    runCurrent()
+    assertEquals(listOf("qa-goal", "qa-goal"), closed)
 
     val subtaskDetail = detail.copy(goalQaPreview = preview.copy(invocationId = "qa-subtask", subtaskId = 1))
     details.flow.emit(DetailState(source, DetailSections.Loaded(subtaskDetail, null, emptyMap(), emptySet(), stale = false)))
@@ -157,7 +169,7 @@ class DetailViewModelTest {
     viewModel.onAction(DetailAction.SetQaPreviewVisible(false))
     assertEquals(QaPreviewState.Ended, viewModel.state.value.qaPreview)
     runCurrent()
-    assertEquals(listOf("qa-goal", "qa-subtask"), closed)
+    assertEquals(listOf("qa-goal", "qa-goal", "qa-subtask"), closed)
 
     viewModel.onAction(DetailAction.SetQaPreviewVisible(true))
     runCurrent()
@@ -165,7 +177,7 @@ class DetailViewModelTest {
     details.flow.emit(DetailState(source, DetailSections.Loaded(ended, null, emptyMap(), emptySet(), stale = false)))
     runCurrent()
     assertEquals(QaPreviewState.Ended, viewModel.state.value.qaPreview)
-    assertEquals(3, closed.size)
+    assertEquals(4, closed.size)
   }
 
   @Test
@@ -177,29 +189,55 @@ class DetailViewModelTest {
     val first = viewModel(source = goalA, selections = selections)
     val second = viewModel(source = goalB, selections = selections)
     runCurrent()
-    val detail = emptyDetail.copy(subtasks = listOf(WorkSubtask(1, "Build", "in_progress", null, null, emptyList())))
+    val detail = emptyDetail.copy(
+      subtasks = listOf(WorkSubtask(1, "Build", "in_progress", null, null, emptyList())),
+      phaseResults = listOf(SubtaskPhaseResults(1, emptyList(), null, null, phaseCards = listOf(finishCard("review")))),
+    )
     details.flow.emit(DetailState(goalA, DetailSections.Loaded(detail, null, emptyMap(), emptySet(), stale = false)))
     runCurrent()
 
     first.onAction(DetailAction.SelectPhase(goalA.id, SubtaskKey.Subtask(1), "review"))
-    assertEquals("review", first.state.value.phaseChoice[PhaseChoiceKey(goalA.id, SubtaskKey.Subtask(1))])
+    assertEquals(PhaseDisclosure.Open("review"), first.state.value.phaseChoice[PhaseChoiceKey(goalA.id, SubtaskKey.Subtask(1))])
     assertTrue(second.state.value.phaseChoice.isEmpty())
     val returned = viewModel(source = goalA, selections = selections)
-    assertEquals("review", returned.state.value.phaseChoice[PhaseChoiceKey(goalA.id, SubtaskKey.Subtask(1))])
+    assertEquals(PhaseDisclosure.Open("review"), returned.state.value.phaseChoice[PhaseChoiceKey(goalA.id, SubtaskKey.Subtask(1))])
+  }
+
+  @Test
+  fun `activating the open pill folds it and keyboard navigation opens the same pill`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val viewModel = viewModel()
+    val key = PhaseChoiceKey(item.id, SubtaskKey.Subtask(1))
+    val detail = emptyDetail.copy(
+      subtasks = listOf(WorkSubtask(1, "Build", "completed", null, null, emptyList())),
+      phaseResults = listOf(SubtaskPhaseResults(1, emptyList(), null, null, phaseCards = listOf(finishCard("review")))),
+    )
+    runCurrent()
+    details.flow.emit(DetailState(item, DetailSections.Loaded(detail, null, emptyMap(), emptySet(), stale = false)))
+    runCurrent()
+
+    viewModel.onAction(DetailAction.SelectPhase(item.id, SubtaskKey.Subtask(1), "review"))
+    assertEquals(PhaseDisclosure.Open("review"), viewModel.state.value.phaseChoice[key])
+    viewModel.onAction(DetailAction.SelectPhase(item.id, SubtaskKey.Subtask(1), "review"))
+    assertEquals(PhaseDisclosure.Folded, viewModel.state.value.phaseChoice[key])
+    viewModel.onAction(DetailAction.SelectPhase(item.id, SubtaskKey.Subtask(1), "review", PhaseSelectionIntent.Navigate))
+    assertEquals(PhaseDisclosure.Open("review"), viewModel.state.value.phaseChoice[key])
+    viewModel.onAction(DetailAction.SelectPhase(item.id, SubtaskKey.Subtask(1), "review", PhaseSelectionIntent.Navigate))
+    assertEquals(PhaseDisclosure.Open("review"), viewModel.state.value.phaseChoice[key])
   }
 
   @Test
   fun `a later subtask selection replaces the phase return row without losing its phase`() {
     val selections = SubtaskSelections(session)
     val phaseKey = PhaseChoiceKey(item.id, SubtaskKey.Subtask(1))
-    selections.setPhase(phaseKey, "review")
+    selections.setPhase(phaseKey, PhaseDisclosure.Open("review"))
     assertEquals(phaseKey.subtask, selections.get(item.id).key)
 
     val laterChoice = SubtaskChoice(SubtaskKey.Subtask(2))
     selections.set(item.id, laterChoice)
 
     assertEquals(laterChoice, selections.get(item.id))
-    assertEquals("review", selections.phases(item.id)[phaseKey])
+    assertEquals(PhaseDisclosure.Open("review"), selections.phases(item.id)[phaseKey])
   }
 
   @Test

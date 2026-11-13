@@ -14,20 +14,25 @@ class SubtaskPhasesTest {
   )
 
   @Test
-  fun `selection prefers active failure or waiting then the last done and ignores stale choices`() {
-    val tabs = phaseTabs(listOf("preplan", "plan", "implement", "validate", "review"), listOf(
-      card("preplan", PhaseCardState.Done), card("plan", PhaseCardState.Done), card("implement", PhaseCardState.Skipped), card("validate", PhaseCardState.Blocked),
-    ))
-    assertEquals("validate", selectedPhase(tabs, null))
-    assertEquals("validate", selectedPhase(tabs, "review"))
-    assertEquals("implement", selectedPhase(tabs, "implement"))
+  fun `auto opens only running blocked or failed in priority and preserves recorded order`() {
+    val cards = listOf(
+      card("plan", PhaseCardState.Failed), card("preplan", PhaseCardState.Blocked),
+      card("implement", PhaseCardState.Running), card("validate", PhaseCardState.Paused),
+    )
+    val tabs = phaseTabs(listOf("preplan", "plan", "implement", "validate", "review"), cards)
+    assertEquals("implement", selectedPhase(tabs, cards, null))
+    assertEquals("preplan", selectedPhase(tabs, cards, PhaseDisclosure.Open("preplan")))
+    assertEquals(null, selectedPhase(tabs, cards, PhaseDisclosure.Folded))
     assertEquals("4 of 5", phasesNote(tabs, running = true))
   }
 
   @Test
-  fun `completed phases open on the last done tab`() {
-    val tabs = phaseTabs(listOf("preplan", "plan", "implement"), listOf(card("preplan", PhaseCardState.Done), card("plan", PhaseCardState.Done)))
-    assertEquals("plan", selectedPhase(tabs, null))
+  fun `done skipped and paused cards stay folded and unlisted cards remain reachable`() {
+    val cards = listOf(card("old_phase", PhaseCardState.Done), card("implement", PhaseCardState.Paused))
+    val tabs = phaseTabs(listOf("preplan", "implement"), cards)
+    assertEquals(listOf("preplan", "implement", "old_phase"), tabs.map { it.id })
+    assertEquals(null, selectedPhase(tabs, cards, PhaseDisclosure.Auto))
+    assertEquals("old_phase", selectedPhase(tabs, cards, PhaseDisclosure.Open("old_phase")))
     assertEquals("2", phasesNote(tabs, running = false))
   }
 }

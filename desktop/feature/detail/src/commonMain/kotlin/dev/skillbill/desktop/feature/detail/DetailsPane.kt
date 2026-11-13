@@ -39,16 +39,18 @@ import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
-import dev.skillbill.desktop.core.designsystem.status.StatusIcon
 import dev.skillbill.desktop.core.designsystem.list.TreeRow
+import dev.skillbill.desktop.core.designsystem.status.StatusIcon
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailAttempts
+import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.ui.status.statusKind
 
 /**
- * The side peek shows the selected row's results first, followed by execution facts and spec files.
+ * The side peek shows the selected row's results first, followed by execution facts. Goal spec files open from the preplan card;
+ * they follow the runs only while no loaded subtask has recorded a preplan card to carry them.
  */
 @Composable
 internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<AssessmentOrder>, onClose: () -> Unit, onAction: (DetailAction) -> Unit) {
@@ -83,7 +85,9 @@ internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<Ass
                   DetailAttempts(counts, emptyMap(), emptyMap(), null, 0)
                 } ?: detail.attempts
               RunsSection(item.id, attempts)
-              if (item.kind == WorkKind.Goal) SpecFilesSection(detail, onAction)
+              if (item.kind == WorkKind.Goal && detail.phaseResults.none { results -> results.phaseCards.any { it.phaseId == "preplan" } }) {
+                SpecFilesSection(detail, onAction)
+              }
             }
           }
         }
@@ -237,27 +241,6 @@ private fun RunsSection(itemId: String, attempts: DetailAttempts) {
   }
 }
 
-/** The selected subtask, or the Goal finish steps; goals with a subtask index only. */
-@Composable
-private fun InspectorSection(state: DetailUiState, item: WorkItem, detail: Detail, chosen: SubtaskKey?, assessmentOrder: MutableState<AssessmentOrder>, onAction: (DetailAction) -> Unit) {
-  val key = chosen ?: return
-  when (key) {
-    SubtaskKey.GoalFinish -> GoalFinishPhases(item, detail, state, assessmentOrder, onAction)
-    is SubtaskKey.Subtask -> {
-      val subtask = detail.subtasks.firstOrNull { it.id == key.id } ?: return
-      SubtaskInspector(
-          item = item,
-          detail = detail,
-          subtask = subtask,
-          phaseChoice = state.phaseChoice,
-          activity = state.activity,
-          renderedAt = state.renderedAt,
-          onAction = onAction,
-        )
-    }
-  }
-}
-
 /** The goal-level spec files (manifest, spec.md, then by name) as 28 px file rows; subtask specs open from the inspector. */
 @Composable
 private fun SpecFilesSection(detail: Detail, onAction: (DetailAction) -> Unit) {
@@ -276,3 +259,27 @@ private fun SpecFilesSection(detail: Detail, onAction: (DetailAction) -> Unit) {
     }
   }
 }
+
+/** The selected subtask, or the Goal finish steps; goals with a subtask index only. */
+@Composable
+private fun InspectorSection(state: DetailUiState, item: WorkItem, detail: Detail, chosen: SubtaskKey?, assessmentOrder: MutableState<AssessmentOrder>, onAction: (DetailAction) -> Unit) {
+  val key = chosen ?: return
+  when (key) {
+    SubtaskKey.GoalFinish -> GoalFinishPhases(item, detail, state, assessmentOrder, onAction)
+    is SubtaskKey.Subtask -> {
+      val subtask = detail.subtasks.firstOrNull { it.id == key.id } ?: return
+      SubtaskInspector(
+          item = item,
+          detail = detail,
+          subtask = subtask,
+          phaseChoice = state.phaseChoice,
+          activity = state.activity,
+          renderedAt = state.renderedAt,
+          phaseResultsPagePending = (DetailList.Phases in (state.sections as? SectionsUi.Loaded)?.moreLists.orEmpty() ||
+            state.listLoads[DetailList.Phases] is ListLoad.Loading) && detail.phaseResults.none { it.subtaskId == subtask.id },
+          onAction = onAction,
+        )
+    }
+  }
+}
+

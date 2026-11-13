@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -15,9 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -25,11 +21,8 @@ import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.tabular
 import dev.skillbill.desktop.core.designsystem.status.StatusDot
-import dev.skillbill.desktop.core.designsystem.component.Callout
-import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.ExpandableText
 import dev.skillbill.desktop.core.designsystem.component.ShortId
-import dev.skillbill.desktop.core.designsystem.detail.PaneSection
 import dev.skillbill.desktop.core.designsystem.detail.PaneStatus
 import dev.skillbill.desktop.core.designsystem.detail.PropertyList
 import dev.skillbill.desktop.core.designsystem.detail.PropertyRow
@@ -81,15 +74,23 @@ internal fun inspectorStatus(item: WorkItem, detail: Detail, key: SubtaskKey): P
 }
 
 @Composable
-internal fun SubtaskInspector(item: WorkItem, detail: Detail, subtask: WorkSubtask, phaseChoice: Map<PhaseChoiceKey, String>, activity: ActivityResult, renderedAt: kotlin.time.Instant, onAction: (DetailAction) -> Unit) {
+internal fun SubtaskInspector(
+  item: WorkItem,
+  detail: Detail,
+  subtask: WorkSubtask,
+  phaseChoice: Map<PhaseChoiceKey, PhaseDisclosure>,
+  activity: ActivityResult,
+  renderedAt: kotlin.time.Instant,
+  phaseResultsPagePending: Boolean,
+  onAction: (DetailAction) -> Unit,
+) {
   Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
     BasicText(subtask.name, style = SkillBillTheme.type.tBaseMedium.copy(color = SkillBillTheme.colors.fg, lineHeight = 1.4.em))
     subtask.blockedReason?.takeIf { it.isNotBlank() }?.let {
       ExpandableText(it, SkillBillTheme.type.tBase.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 3)
     }
     SubtaskProperties(detail, subtask, onAction)
-    SubtaskPhasesSection(item, detail, subtask, phaseChoice, activity, renderedAt, onAction)
-    SubtaskResults(detail, subtask)
+    SubtaskPhasesSection(item, detail, subtask, phaseChoice, activity, renderedAt, phaseResultsPagePending, onAction)
   }
 }
 
@@ -156,56 +157,6 @@ private fun ChipItems(detail: Detail, edges: List<WorkDependency>, onAction: (De
     val tooltip = listOfNotNull("Subtask $number", target?.name).joinToString(": ") + if (edge.optional) " (optional)" else ""
     SubtaskChip(number, subtaskStatusKind(target?.status.orEmpty()), edge.optional, tooltip) {
       onAction(DetailAction.SelectSubtask(SubtaskKey.Subtask(edge.subtaskId)))
-    }
-  }
-}
-
-/** `.sb-insp-sec`: what [subtaskResultsState] decided for the Review and Audit area. */
-@Composable
-private fun SubtaskResults(detail: Detail, subtask: WorkSubtask) {
-  val results = detail.phaseResults.firstOrNull { it.subtaskId == subtask.id }
-  val reviewInCard = results?.phaseCards?.any { it.phaseId == "review" } == true
-  val state = subtaskResultsState(subtaskStatusKind(subtask.status), results, detail.degradedGoalStatusSource)
-  Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    when (state) {
-      is SubtaskResultsState.Unreadable -> UnreadableResults(state.source)
-      SubtaskResultsState.Loading -> {
-        PaneSection(title = "Review") {}
-        PaneSection(title = "Audit") {}
-      }
-      is SubtaskResultsState.Shown -> {
-        if (!reviewInCard) when (val review = state.review) {
-          is SubtaskReviewState.Passes -> SubtaskReviewSection(review.passes, review.runningReviewPass)
-          SubtaskReviewState.RunsAfterAudit -> ResultsPlaceholder("Review", "Runs after audit")
-          SubtaskReviewState.Omitted -> Unit
-        }
-        SubtaskAuditSection(results, subtaskStatusKind(subtask.status), subtask.id)
-      }
-    }
-  }
-}
-
-@Composable
-private fun UnreadableResults(source: String) {
-  val mono = SkillBillTheme.type.monoSm.fontFamily
-  PaneSection(title = "Review") {
-    Callout(
-      FeedbackTone.Warn,
-      body = buildAnnotatedString {
-        append("Review and audit ran, but their results could not be read. The status read was degraded at ")
-        withStyle(SpanStyle(fontFamily = mono)) { append(source) }
-        append(".")
-      },
-      modifier = Modifier.fillMaxWidth(),
-    )
-  }
-}
-
-@Composable
-private fun ResultsPlaceholder(caption: String, line: String) {
-  PaneSection(title = caption) {
-    Row(Modifier.height(24.dp), verticalAlignment = Alignment.CenterVertically) {
-      BasicText(line, style = SkillBillTheme.type.tBase.copy(color = SkillBillTheme.colors.fgMuted))
     }
   }
 }

@@ -23,10 +23,7 @@ class SubtaskResultsStateTest {
   @Test
   fun `a missing goal status is unreadable except while pending`() {
     assertEquals(SubtaskResultsState.Unreadable("goal_status"), subtaskResultsState(StatusKind.Skipped, null, "goal_status"))
-    assertEquals(
-      SubtaskResultsState.Shown(SubtaskReviewState.RunsAfterAudit),
-      subtaskResultsState(StatusKind.Pending, null, "goal_status"),
-    )
+    assertEquals(SubtaskResultsState.Upcoming, subtaskResultsState(StatusKind.Pending, null, "goal_status"))
   }
 
   @Test
@@ -59,6 +56,11 @@ class SubtaskResultsStateTest {
     listOf(StatusKind.Completed, StatusKind.Active, StatusKind.Blocked, StatusKind.CompletedNoChange).forEach { kind ->
       assertEquals(SubtaskResultsState.Loading, subtaskResultsState(kind, null, null), kind.name)
     }
+  }
+
+  @Test
+  fun `an unpaged skipped subtask is loading, not an empty read`() {
+    assertEquals(SubtaskResultsState.Loading, subtaskResultsState(StatusKind.Skipped, null, null, pagePending = true))
   }
 
   @Test

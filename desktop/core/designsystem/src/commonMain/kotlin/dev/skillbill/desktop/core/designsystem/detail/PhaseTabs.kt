@@ -44,6 +44,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -62,14 +63,21 @@ class PhaseTab(val id: String, val label: String, val state: PipelineStepState, 
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun PhaseTabs(tabs: List<PhaseTab>, selectedId: String?, onSelect: (String) -> Unit, modifier: Modifier = Modifier, label: String = "Phases") {
-  val first = tabs.firstOrNull { it.openable }?.id
-  val tabStop = selectedId?.takeIf { selected -> tabs.any { it.id == selected && it.openable } } ?: first
+fun PhaseTabs(
+  tabs: List<PhaseTab>,
+  selectedId: String?,
+  onActivate: (String) -> Unit,
+  modifier: Modifier = Modifier,
+  label: String = "Phases",
+  onNavigate: (String) -> Unit = onActivate,
+) {
+  var focusedId by remember(tabs.map { it.id }) { mutableStateOf<String?>(null) }
+  val tabStop = phaseTabStop(tabs, focusedId, selectedId)
   val requesters = remember(tabs.map { it.id }) { tabs.associate { it.id to FocusRequester() } }
   var pendingFocusId by remember { mutableStateOf<String?>(null) }
-  LaunchedEffect(selectedId, pendingFocusId) {
+  LaunchedEffect(pendingFocusId) {
     val target = pendingFocusId
-    if (target != null && target == selectedId) {
+    if (target != null) {
       requesters[target]?.requestFocus()
       pendingFocusId = null
     }
@@ -96,7 +104,8 @@ fun PhaseTabs(tabs: List<PhaseTab>, selectedId: String?, onSelect: (String) -> U
           val target = phaseTabMove(tabs, tab.id, key)
           if (target == null) false else {
             pendingFocusId = target
-            onSelect(target)
+            focusedId = target
+            onNavigate(target)
             true
           }
         }
@@ -127,8 +136,14 @@ fun PhaseTabs(tabs: List<PhaseTab>, selectedId: String?, onSelect: (String) -> U
             } else Modifier)
             .focusRequester(interaction)
             .focusProperties { canFocus = tab.openable && tab.id == tabStop }
-            .selectable(selected = selected, interactionSource = interactions, indication = null, enabled = tab.openable, role = Role.Tab) { onSelect(tab.id) }
-            .semantics { if (!tab.openable) disabled() }
+            .selectable(selected = selected, interactionSource = interactions, indication = null, enabled = tab.openable, role = Role.Tab) {
+              focusedId = tab.id
+              onActivate(tab.id)
+            }
+            .semantics {
+              if (!tab.openable) disabled()
+              else stateDescription = if (selected) "Expanded" else "Collapsed"
+            }
             .onKeyEvent { event -> event.type == KeyEventType.KeyDown && move(event.key) }
             .hoverable(interactions, enabled = tab.openable)
             .sbFocusRing(interactions, shape)
@@ -147,6 +162,15 @@ fun PhaseTabs(tabs: List<PhaseTab>, selectedId: String?, onSelect: (String) -> U
       }
     }
   }
+}
+
+/**
+ * The one pill reachable by Tab: the last pill the user focused, else the open pill, else the first openable pill. Derived on every
+ * composition, so a pill that becomes openable under an unchanged id list still receives the tab stop.
+ */
+internal fun phaseTabStop(tabs: List<PhaseTab>, focusedId: String?, selectedId: String?): String? {
+  fun openable(id: String?) = id?.takeIf { wanted -> tabs.any { it.id == wanted && it.openable } }
+  return openable(focusedId) ?: openable(selectedId) ?: tabs.firstOrNull { it.openable }?.id
 }
 
 internal fun phaseTabMove(tabs: List<PhaseTab>, fromId: String, key: Key): String? {

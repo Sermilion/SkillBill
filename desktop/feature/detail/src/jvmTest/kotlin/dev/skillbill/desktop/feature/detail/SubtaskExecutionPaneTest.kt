@@ -20,6 +20,7 @@ import dev.skillbill.desktop.core.domain.model.AuditAttempt
 import dev.skillbill.desktop.core.domain.model.AuditCriterion
 import dev.skillbill.desktop.core.domain.model.AuditOutcome
 import dev.skillbill.desktop.core.domain.model.DetailAttempts
+import dev.skillbill.desktop.core.domain.model.PhaseCardState
 import dev.skillbill.desktop.core.domain.model.SubtaskAuditResult
 import dev.skillbill.desktop.core.domain.model.SubtaskExecution
 import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
@@ -117,6 +118,7 @@ class SubtaskExecutionPaneTest {
             listOf(AuditAttempt(1, false, 1, null)),
             1,
           ),
+          phaseCards = listOf(finishCard("audit", PhaseCardState.Failed)),
         ),
       ),
     )

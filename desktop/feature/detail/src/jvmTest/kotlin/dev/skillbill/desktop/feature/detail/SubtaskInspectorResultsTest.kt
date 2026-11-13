@@ -6,6 +6,7 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.ComposeUiTest
@@ -56,17 +57,47 @@ class SubtaskInspectorResultsTest {
   private fun finding(ref: String, status: ReviewFindingStatus) =
     ReviewReportFinding(ref, "major", "high", "bill-kotlin-code-review-persistence", "src/a/File.kt:84", "Finding $ref", status)
 
-  private fun ComposeUiTest.show(status: String, detail: Detail) {
+  /**
+   * Renders subtask 1 with [open] chosen; results live only in their owning card, so a fixture without that card gains a recorded
+   * one. Pill clicks store an explicit Open choice, as the view model does for a pill that is not already open.
+   */
+  private fun ComposeUiTest.show(status: String, detail: Detail, open: String? = defaultOpen(detail)) {
+    val shown = detail.copy(
+      subtasks = listOf(subtask(status)),
+      phaseResults = detail.phaseResults.map { results ->
+        if (results.subtaskId != 1 || open == null || results.phaseCards.any { it.phaseId == open }) results
+        else results.copy(phaseCards = results.phaseCards + phaseCard(open))
+      },
+    )
+    val choices = mutableStateOf(open?.let { mapOf(PhaseChoiceKey(item.id, SubtaskKey.Subtask(1)) to PhaseDisclosure.Open(it)) }.orEmpty())
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-          SubtaskInspector(item, detail.copy(subtasks = listOf(subtask(status))), subtask(status), emptyMap(), dev.skillbill.desktop.core.domain.model.ActivityResult.Loading, renderedAt = epoch) {}
+          SubtaskInspector(item, shown, subtask(status), choices.value, dev.skillbill.desktop.core.domain.model.ActivityResult.Loading, renderedAt = epoch, phaseResultsPagePending = false) { action ->
+            if (action is DetailAction.SelectPhase) choices.value = choices.value + (PhaseChoiceKey(action.itemId, action.key) to PhaseDisclosure.Open(action.phaseId))
+          }
         }
       }
     }
   }
 
-  private fun results(vararg passes: ReviewPass) = SubtaskPhaseResults(1, passes.toList(), null, null)
+  private fun defaultOpen(detail: Detail): String? {
+    val results = detail.phaseResults.firstOrNull { it.subtaskId == 1 }
+    return when {
+      results?.auditResult != null -> "audit"
+      results?.reviewPasses?.isNotEmpty() == true || results?.runningReviewPass != null -> "review"
+      else -> null
+    }
+  }
+
+  private fun results(vararg passes: ReviewPass) = SubtaskPhaseResults(
+    1, passes.toList(), null, null,
+    phaseCards = if (passes.isEmpty()) emptyList() else listOf(phaseCard("review")),
+  )
+
+  private fun phaseCard(id: String, state: PhaseCardState = PhaseCardState.Done) = PhaseCard(
+    id, state, null, null, null, null, null, null, null, null, emptyList(), null, null, null, null, null, null, emptyList(), emptyList(), null, null,
+  )
 
   @Test
   fun `completed passes show the count, a clean pass line, its lane and a finding's meta`() = runComposeUiTest {
@@ -84,22 +115,23 @@ class SubtaskInspectorResultsTest {
   }
 
   @Test
-  fun `review card contains review passes once and audit remains below it`() = runComposeUiTest {
+  fun `review passes render once in their card and an audit without a card stays a notice`() = runComposeUiTest {
     val pass = ReviewPass(1, "approved", 0, emptyList(), emptyList())
-    val card = PhaseCard("review", PhaseCardState.Done, null, null, null, null, null, null, null, null, emptyList(), null, null, null, null, null, null, emptyList(), emptyList(), null, null)
-    val phaseResults = results(pass).copy(phaseCards = listOf(card), auditResult = SubtaskAuditResult(AuditOutcome.Passed, 1, 1, listOf(AuditCriterion("AC-1", "Works", true, null)), emptyList(), 1))
-    show("complete", emptyDetail.copy(stepPipeline = listOf("review"), phaseResults = listOf(phaseResults)))
+    val phaseResults = results(pass).copy(auditResult = SubtaskAuditResult(AuditOutcome.Passed, 1, 1, listOf(AuditCriterion("AC-1", "Works", true, null)), emptyList(), 1))
+    show("complete", emptyDetail.copy(stepPipeline = listOf("review"), phaseResults = listOf(phaseResults)), open = "review")
 
     onAllNodesWithText("Pass 1").assertCountEquals(1)
     onNodeWithText("Phases").assertExists()
-    onNodeWithText("Audit").assertExists()
+    onNodeWithText("Audit").assertDoesNotExist()
+    onNodeWithText("Works").assertDoesNotExist()
+    onNodeWithText("Audit results are available, but no audit phase card was recorded.").assertExists()
   }
 
   @Test
   fun `IS-003 review stays in its card while switching subtasks and returning to the goal`() = runComposeUiTest {
     val selectedSubtask = mutableStateOf(1)
     val goalId = mutableStateOf(item.id)
-    val choices = mutableStateOf<Map<PhaseChoiceKey, String>>(emptyMap())
+    val choices = mutableStateOf<Map<PhaseChoiceKey, PhaseDisclosure>>(emptyMap())
     val first = subtask("complete")
     val second = first.copy(id = 2, status = "in_progress")
     val review = PhaseCard("review", PhaseCardState.Done, null, null, null, null, null, null, null, null, emptyList(), null, null, null, null, null, null, emptyList(), emptyList(), null, null)
@@ -114,8 +146,8 @@ class SubtaskInspectorResultsTest {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) {
           key(goalId.value, selectedSubtask.value) {
-            SubtaskInspector(item.copy(id = goalId.value), detail, if (selectedSubtask.value == 1) first else second, choices.value, dev.skillbill.desktop.core.domain.model.ActivityResult.Loading, epoch) { action ->
-              if (action is DetailAction.SelectPhase) choices.value = choices.value + (PhaseChoiceKey(action.itemId, action.key) to action.phaseId)
+            SubtaskInspector(item.copy(id = goalId.value), detail, if (selectedSubtask.value == 1) first else second, choices.value, dev.skillbill.desktop.core.domain.model.ActivityResult.Loading, epoch, phaseResultsPagePending = false) { action ->
+              if (action is DetailAction.SelectPhase) choices.value = choices.value + (PhaseChoiceKey(action.itemId, action.key) to PhaseDisclosure.Open(action.phaseId))
             }
           }
         }
@@ -151,20 +183,48 @@ class SubtaskInspectorResultsTest {
 
   @Test
   fun `a pending subtask says when review and audit run`() = runComposeUiTest {
-    show("pending", emptyDetail)
+    show("pending", emptyDetail.copy(stepPipeline = listOf("implement", "review")))
 
-    onNodeWithText("Runs after audit").assertExists()
     onNodeWithText("Runs after implementation").assertExists()
+    onNodeWithText("No phase has run yet.").assertDoesNotExist()
+    onNodeWithText("Implement").assertIsNotEnabled()
+    onNodeWithText("Review").assertIsNotEnabled()
+  }
+
+  @Test
+  fun `a reliable empty read with no cards says no phase has run`() = runComposeUiTest {
+    show("complete", emptyDetail.copy(phaseResults = listOf(SubtaskPhaseResults(1, emptyList(), null, null))), open = null)
+
+    onNodeWithText("No phase has run yet.").assertExists()
+    onNodeWithText("Select a phase to see what it did.").assertDoesNotExist()
+    onNodeWithText("Runs after implementation").assertDoesNotExist()
+  }
+
+  @Test
+  fun `folded cards keep a degraded callout and never claim no phase ran`() = runComposeUiTest {
+    val cards = listOf(phaseCard("audit"), phaseCard("review"))
+    val entry = SubtaskPhaseResults(1, emptyList(), null, null, "subtask_review_findings", phaseCards = cards)
+    show("complete", emptyDetail.copy(phaseResults = listOf(entry)), open = null)
+
+    onNodeWithText("degraded at subtask_review_findings", substring = true).assertExists()
+    onNodeWithText("Refresh").assertExists()
+    onNodeWithText("Select a phase to see what it did.").assertExists()
+    onNodeWithText("No phase has run yet.").assertDoesNotExist()
+    onNodeWithText("Passed").assertDoesNotExist()
   }
 
   @Test
   fun `an unreadable read names its source and shows no verdict`() = runComposeUiTest {
     val audit = PhaseConclusion("audit_verdict", null, null, 1)
     val entry = SubtaskPhaseResults(1, emptyList(), audit, null, "subtask_review_findings")
-    show("complete", emptyDetail.copy(phaseResults = listOf(entry)))
+    show("complete", emptyDetail.copy(stepPipeline = listOf("implement", "review"), phaseResults = listOf(entry)), open = null)
 
     onNodeWithText("degraded at subtask_review_findings", substring = true).assertExists()
+    onNodeWithText("Refresh").assertExists()
     onNodeWithText("· audit_verdict").assertDoesNotExist()
+    onNodeWithText("No phase has run yet.").assertDoesNotExist()
+    onNodeWithText("Implement").assertIsNotEnabled()
+    onNodeWithText("Review").assertIsNotEnabled()
     onNodeWithText("Audit").assertDoesNotExist()
   }
 
@@ -172,13 +232,14 @@ class SubtaskInspectorResultsTest {
   fun `a loading subtask shows captions and no pending copy`() = runComposeUiTest {
     show("complete", emptyDetail)
 
-    onNodeWithText("Review").assertExists()
-    onNodeWithText("Audit").assertExists()
+    onNodeWithText("Loading phase results.").assertExists()
+    onNodeWithText("Refresh").assertExists()
     onNodeWithText("Runs after", substring = true).assertDoesNotExist()
+    onNodeWithText("No phase has run yet.").assertDoesNotExist()
   }
 
   @Test
-  fun `missing historical discovery scope keeps current audit criteria and review results visible`() = runComposeUiTest {
+  fun `missing historical discovery scope keeps current audit criteria and review results reachable`() = runComposeUiTest {
     val audit = SubtaskAuditResult(
       AuditOutcome.Passed, 1, 1,
       listOf(AuditCriterion("AC-001", "Retains the saved state", true, null)),
@@ -194,12 +255,14 @@ class SubtaskInspectorResultsTest {
     )
     show("complete", emptyDetail.copy(phaseResults = listOf(retained)))
 
-    onNodeWithText("Pass 1").assertExists()
     onNodeWithText("Passed · 1 of 1 criteria met").assertExists()
     onNodeWithText("Retains the saved state").assertExists()
     onNodeWithText("Attempt 1 · Historical result unavailable").assertExists()
     onNodeWithText("Some historical audit results are unavailable because their discovery scope was not retained.").assertExists()
     onNodeWithText("Review and audit ran, but their results could not be read.", substring = true).assertDoesNotExist()
+    onNode(hasText("Review") and hasClickAction()).performClick()
+    onNodeWithText("Pass 1").assertExists()
+    onNodeWithText("Retains the saved state").assertDoesNotExist()
   }
 
   @Test
@@ -269,7 +332,7 @@ class SubtaskInspectorResultsTest {
       runningReviewPass = RunningReviewPass(2, emptyList()),
       auditResult = passed,
     )
-    show("active", emptyDetail.copy(phaseResults = listOf(running)))
+    show("in_progress", emptyDetail.copy(phaseResults = listOf(running)))
     onNodeWithText("Passed · 1 of 1 criteria met").assertExists()
     onNodeWithText("1 attempt").assertExists()
     onNodeWithText("Runs after", substring = true).assertDoesNotExist()
@@ -278,7 +341,7 @@ class SubtaskInspectorResultsTest {
   @Test
   fun `a started review with no audit record omits the audit section`() = runComposeUiTest {
     val running = SubtaskPhaseResults(1, emptyList(), null, null, runningReviewPass = RunningReviewPass(1, emptyList()))
-    show("active", emptyDetail.copy(phaseResults = listOf(running)))
+    show("in_progress", emptyDetail.copy(phaseResults = listOf(running)))
     onNodeWithText("Audit").assertDoesNotExist()
     onNodeWithText("Runs after", substring = true).assertDoesNotExist()
   }

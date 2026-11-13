@@ -35,7 +35,7 @@ data class DetailUiState(
   val boardPosition: BoardPosition? = null,
   val controls: ControlsUiState = ControlsUiState(),
   val subtaskChoice: SubtaskChoice = SubtaskChoice(),
-  val phaseChoice: Map<PhaseChoiceKey, String> = emptyMap(),
+  val phaseChoice: Map<PhaseChoiceKey, PhaseDisclosure> = emptyMap(),
   /** A return to the Subtasks list is pending, including a request carried by J or K. */
   val focusSubtaskList: Boolean = false,
   val subtaskListTargetAvailable: Boolean = false,
@@ -81,6 +81,14 @@ sealed interface SubtaskKey {
 data class SubtaskChoice(val key: SubtaskKey? = null)
 
 data class PhaseChoiceKey(val itemId: String, val subtask: SubtaskKey)
+
+sealed interface PhaseDisclosure {
+  data object Auto : PhaseDisclosure
+  data object Folded : PhaseDisclosure
+  data class Open(val phaseId: String) : PhaseDisclosure
+}
+
+enum class PhaseSelectionIntent { Activate, Navigate }
 
 sealed interface SectionsUi {
   data object Pending : SectionsUi
@@ -151,7 +159,7 @@ sealed interface DetailAction {
   data class SelectSubtask(val key: SubtaskKey) : DetailAction
 
   /** Selects a phase for one subtask of the named item. */
-  data class SelectPhase(val itemId: String, val key: SubtaskKey, val phaseId: String) : DetailAction
+  data class SelectPhase(val itemId: String, val key: SubtaskKey, val phaseId: String, val intent: PhaseSelectionIntent = PhaseSelectionIntent.Activate) : DetailAction
 
   /** ↑ or ↓ in the focused Subtasks index. */
   data class MoveSubtaskSelection(val delta: Int) : DetailAction

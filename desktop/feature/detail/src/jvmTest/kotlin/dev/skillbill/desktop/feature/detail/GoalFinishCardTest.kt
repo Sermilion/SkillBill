@@ -85,7 +85,7 @@ class GoalFinishCardTest {
     val state = mutableStateOf(DetailUiState(
       workItem("goal"), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch,
       subtaskChoice = SubtaskChoice(SubtaskKey.GoalFinish),
-      phaseChoice = mapOf(PhaseChoiceKey("goal", SubtaskKey.GoalFinish) to "goal_assessment"),
+      phaseChoice = mapOf(PhaseChoiceKey("goal", SubtaskKey.GoalFinish) to PhaseDisclosure.Open("goal_assessment")),
     ))
     setContent {
       SkillBillTheme(reducedMotion = true) {

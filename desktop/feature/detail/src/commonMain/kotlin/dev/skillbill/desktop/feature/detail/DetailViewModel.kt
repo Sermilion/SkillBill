@@ -324,6 +324,9 @@ class DetailViewModel(
       detailState.header.control.sessionId != openSessionId
     ) return null
     val preview = selectedQaPreview(detailState.header, detail, detailState.selectedQaRun, detailState.subtaskChoice.key) ?: return null
+    val goalFinishOwned = detailState.header.kind == WorkKind.Goal && !isStandaloneQa(detailState.header) && detail.goalQaPreview?.subtaskId == null
+    val finishChoice = detailState.phaseChoice[PhaseChoiceKey(detailState.header.id, SubtaskKey.GoalFinish)]
+    if (goalFinishOwned && selectedPhase(goalFinishTabs(detail), detail.goalFinishCards, finishChoice) != "qa") return null
     return QaPreviewRequest(
       sessionId = openSessionId,
       workId = detailState.header.id,
@@ -378,8 +381,14 @@ class DetailViewModel(
   private fun selectPhase(action: DetailAction.SelectPhase) {
     if (action.itemId != item.id) return
     val key = PhaseChoiceKey(action.itemId, action.key)
-    subtaskSelections.setPhase(key, action.phaseId)
-    mutableState.update { it.copy(phaseChoice = it.phaseChoice + (key to action.phaseId)) }
+    val detail = loadedDetail() ?: return
+    val cards = subjectPhaseCards(detail, action.key)
+    val tabs = subjectPhaseTabs(detail, action.key)
+    if (tabs.none { it.id == action.phaseId && it.openable }) return
+    val open = selectedPhase(tabs, cards, state.value.phaseChoice[key])
+    val choice = if (action.intent == PhaseSelectionIntent.Activate && open == action.phaseId) PhaseDisclosure.Folded else PhaseDisclosure.Open(action.phaseId)
+    subtaskSelections.setPhase(key, choice)
+    updatePreviewInputs { it.copy(phaseChoice = it.phaseChoice + (key to choice)) }
   }
 
   private fun moveSubtaskSelection(delta: Int) {
