@@ -386,14 +386,9 @@ class InMemoryWorkflowStates : WorkflowStateRepositoryDefaults() {
   ): Boolean {
     val current = workerOwnershipById[workflowId] ?: return false
     val row = taskRuntime[workflowId]
-    val leaseStillExpired =
-      runCatching {
-        Instant.parse(current.expiresAt).isBefore(Instant.parse(nowInstant))
-      }.getOrDefault(false)
     val eligible =
       current.ownerToken == ownerToken &&
         current.generation == generation &&
-        leaseStillExpired &&
         row != null &&
         row.workflowStatus == "running"
     if (!eligible) return false

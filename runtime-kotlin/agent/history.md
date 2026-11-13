@@ -164,7 +164,7 @@ Acceptance criteria: 3/3 implemented (validate passed)
 ## [2026-10-23] SKILL-441 subtask 6: project-store discoverability, CLI, skill text and repo hygiene
 Areas: runtime-ports (idestatus model, editor); runtime-engine (goalrunner plan); runtime-infra (sqlite idestatus migration, host system); runtime-cli (project, config); runtime-core (RuntimeComponent, PrincipleEnforcementInventory); skills/skill-bill; PR description directive; .gitignore
 - MEDIUM feature. `StandalonePlanReport` gains `bundleFiles`: absolute, sorted paths of every regular file under the parent spec's directory, built by the new `StandalonePlanReportBuilder` (reusable) for both standalone and goal plan phases, since both settle through `StandalonePlanRun`. A missing or unreadable directory yields an empty list plus one best-effort warning. Stored rows without `bundle_files` decode to empty, so no migration was needed.
-- New `skill-bill project path [ISSUE]` prints the store root or the matched bundle directory (exit 1 on no match or ambiguity). New `skill-bill config edit` runs the legacy-copy read first, seeds `{}` when the store config is absent, then opens it in the editor.
+- New `sona project path [ISSUE]` prints the store root or the matched bundle directory (exit 1 on no match or ambiguity). New `sona config edit` runs the legacy-copy read first, seeds `{}` when the store config is absent, then opens it in the editor.
 - New `FileEditorLauncherPort` and `ProcessFileEditorLauncher` (reusable): `$VISUAL`, then `$EDITOR`, then the OS opener, with inherited IO. runtime-cli reaches it and `FileSystemProjectConfigFile` through `RuntimeComponent` accessors, listed in the pinned inbound-API inventory.
 - `skills/skill-bill` content resolves issues and allocates keys across the store `specs/` tree and the legacy `.feature-specs/`; the PR directive asks for a short spec summary in the description.
 - `.gitignore` ignores `/.skill-bill/` and `/.feature-specs/`; about 1522 tracked paths are staged as index deletions with the working tree untouched.
@@ -328,7 +328,7 @@ Areas: runtime-cli cli/core, cli/phase, cli/review and cli/system; runtime-contr
 - README gains a Glossary (goal, workflow, subtask, phase, slot, step, operation, pack, lane, add-on) taken from PhaseSlot and SkeletonDefinition: 11 slot ids, standalone phases review/validation/plan/pr/monitor, and verify as an operation. phase:review runs standalone_review, and write_history is a slot.
 - Reusable: looksLikeGoalIntakeToken in runtime-contracts issuekey (tracker key prefix, URL marker, .feature-specs/ marker, private .md suffix). GoalIntake reuses the two public marker constants, and its acceptance is unchanged.
 - routeIntakeTokens keeps the root-option skip list (--db, --home, --verbose), splits phase:/operation: tokens into two, and prepends goal only when the predicate matches. Any other token passes through to Clikt 5.1.0, which reports an unknown command with Jaro-Winkler suggestions, so `phse review` no longer becomes a goal intake.
-- PhaseInvocationParser rejects verify with a UsageError that names `skill-bill operation verify <intake>`. The top-level update-check stays registered but hidden from help; `skill-bill operation update-check` is canonical.
+- PhaseInvocationParser rejects verify with a UsageError that names `sona operation verify <intake>`. The top-level update-check stays registered but hidden from help; `sona operation update-check` is canonical.
 - Dispatcher content.md: one Review arguments section (target:<value>, last maps to HEAD), mode:inline|delegated with omission meaning inline, no Invoke the driver section, a connected-tracker Rehydrate, Pack routing heading, and the full feature-launch-warning.yaml skill-class path. Docs no longer describe verify as a phase or code-review as the phase review driver.
 - Limits: the parser still accepts mode:auto as inline. A first token such as notes.md routes to goal and fails there. Retired names stay on purpose in the retired-name lists, review-telemetry ids, and InlineReviewDirectiveTest's review-directive.md pin (census_subtask_3.md). Stale workflow-help assertions were deleted from CliRuntimeShellCommandsTest.
 Feature flag: N/A
@@ -442,7 +442,7 @@ Areas: runtime-kotlin/runtime-{domain,ports,application,cli,core}, runtime-infra
 - Validate repairs: database access failure keeps its SQLite cause for typed BUSY detection; shared-preplan Stopped outcomes stay PAUSED not BLOCKED; throwable-baseline scanner treats interfaces as nesting parents; two shell-content error files renamed for detekt.
 - Limits: remaining IAE/ISE catch sites (scaffold payload run, wizard, install, agent addon parsing) belong to SKILL-401.
 Feature flag: N/A
-Acceptance criteria: implemented per spec; validate passed (check --continue, skill-bill validate)
+Acceptance criteria: implemented per spec; validate passed (check --continue, sona validate)
 
 ## [2026-10-02] SKILL-398 subtask 5 — persistence and transport failures collapse to coded failures
 Areas: runtime-kotlin/runtime-{contracts,application,engine,cli,mcp,core}, runtime-infra/{sqlite,http}, ARCHITECTURE.md
@@ -557,7 +557,7 @@ Acceptance criteria: 11/11 implemented
 
 ## [2026-09-28] SKILL-383 subtask 2 — single-skill catalog
 Areas: runtime-kotlin/{engine,application,cli,contracts,core,domain,infra}, skills, orchestration, platform-packs, docs, scripts
-- `/skill-bill` is now the only listed skill. Legacy `bill-*` trees, including `bill-monitor`, are removed; phases and operations use dispatcher routes.
+- `/sona` is now the only listed skill. Legacy `bill-*` trees, including `bill-monitor`, are removed; phases and operations use dispatcher routes.
 - Deleted skill bodies moved verbatim into owner directive resources or `skills/skill-bill`, with census-backed mechanical drops and prompt re-baselines. reusable
 - Install reconciliation removes legacy links/copies and migrates persisted `bill-feature` add-on consumers to `skill-bill`; pack specialists remain unlisted sidecars.
 - Stable telemetry and workflow labels retain retired wire values; standalone review/validation/update-check routing uses dispatcher-owned phase/operation commands.
@@ -567,7 +567,7 @@ Acceptance criteria: 10/10 implemented
 
 ## [2026-09-28] SKILL-382 subtask 4 — verify operation
 Areas: runtime-kotlin/runtime-engine/operation/{core,verify (new)} (main, test), runtime-kotlin/runtime-contracts/error/operation, runtime-kotlin/runtime-core/di/operation, runtime-kotlin/runtime-cli/operation, runtime-kotlin/runtime-infra/skills (repoTest), runtime-kotlin/{ARCHITECTURE.md,agent/decisions.md}, skills/skill-bill, AGENTS.md
-- New `verify` operation: `skill-bill operation verify spec:<path> target:<ref> [mode:delegated]`. It runs on the feature-verify workflow family (`wfv-` ids), not `feature_task_workflows` or `operation_proposals`. It keeps the nine step ids, the eight artifact names, and workflow contract 0.3. An unknown contract version still loud-fails with `InvalidWorkflowStateSchemaError`.
+- New `verify` operation: `sona operation verify spec:<path> target:<ref> [mode:delegated]`. It runs on the feature-verify workflow family (`wfv-` ids), not `feature_task_workflows` or `operation_proposals`. It keeps the nine step ids, the eight artifact names, and workflow contract 0.3. An unknown contract version still loud-fails with `InvalidWorkflowStateSchemaError`.
 - `SelfConfirmingOperation` is a new core marker. The executor hands `confirm:` to the operation's own `run`, and the gate stores nothing. Verify parks after `extract_criteria` and returns its workflow id as the token. An adjusted re-invocation abandons the older parked rows for the same repo root, and confirming an abandoned row is Blocked with a message naming the newer token. reusable
 - Report-only: `run()` checks worktree status and HEAD before and after, covering both propose and confirm. `code_review` is a read-only step, single-agent by default and multi-agent with `mode:delegated`. `unit_test_value_check` reuses the subtask 2 rules and step. Each evaluator sees only its declared projection keys, and the verdict sees the receipts plus `diff_projection`. There is no fix offer and no PR comment.
 - Resume: an interrupted RUNNING row continues at the first step with no receipt. A stale `diff_projection` checkpoint is refreshed first. A failed step marks the workflow failed, which is terminal.
@@ -610,7 +610,7 @@ Areas: runtime-kotlin/runtime-engine/operation/{core,release,updatecheck} (new; 
 - `OperationProposalRepository` is a `UnitOfWork` member, so it shares the session transaction. Test fixtures default it to `UnavailableOperationProposalRepository`.
 - The `release` operation computes the version itself (`ReleaseVersion`, from `git tag --merged HEAD`), and the agent writes only the changelog. Confirm tags and pushes through the new `WorkflowGitReleaseTagOperations` port, using the stored changelog verbatim as the annotated tag message (not the legacy "Release vX.Y.Z"). It refuses a dirty worktree or a branch behind its remote. A failed remote refresh is tolerated.
 - The `update-check` operation needs no agent (`invokedAgentId` is nullable) and writes no workflow rows. `UpdateCheckText` moved to runtime-application, so the CLI command and the operation render the same text. reusable
-- CLI: `skill-bill operation <name> [key:value…] [--agent]`. The dispatcher routes `operation:update-check` and `operation:release` and states the relay rule. `skills/bill-release` and `skills/bill-update-check` are unchanged.
+- CLI: `sona operation <name> [key:value…] [--agent]`. The dispatcher routes `operation:update-check` and `operation:release` and states the relay rule. `skills/bill-release` and `skills/bill-update-check` are unchanged.
 - Limitations: no operation telemetry event yet (it needs a contract change). The up_to_date parity case is untested while the version is a SNAPSHOT. An operation step cannot yet run a skeleton definition through `PhaseRunEntry`.
 Feature flag: N/A
 Acceptance criteria: 8/8 implemented (validate confirms fixtures and the test suite)
@@ -629,9 +629,9 @@ Acceptance criteria: 10/10 tasks implemented (validate confirms the test suite)
 
 ## [2026-09-27] SKILL-380 subtask 9 — The plan, implement, and pr definitions
 Areas: runtime-kotlin/runtime-domain/taskruntime/phase/task, runtime-kotlin/runtime-engine/featuretask/{phaserun, slot, slot/{attempt,plan,pullrequest}, model/core, phase/prompt/compose} (main, test, testFixtures), runtime-kotlin/runtime-cli/phase, runtime-kotlin/runtime-core/{di/featuretask,repoTest architecture}, runtime-kotlin/runtime-contracts/error/featuretask, runtime-kotlin/{ARCHITECTURE.md,agent/decisions.md}, AGENTS.md
-- `skill-bill phase` now also runs `plan` (preplan + plan), `implement` (the implementation slot), and `pr` (the pull_request slot). All three are in-memory `SkeletonDefinition`s driven by the same `PhaseRunEntry` and run loop. Only definition data and selection entries were added, with no new executor.
+- `sona phase` now also runs `plan` (preplan + plan), `implement` (the implementation slot), and `pr` (the pull_request slot). All three are in-memory `SkeletonDefinition`s driven by the same `PhaseRunEntry` and run loop. Only definition data and selection entries were added, with no new executor.
 - Each definition carries a `PhaseIntakeRequirement` (`optional`, `issue_key`, `spec`). One `PhaseRunIntakeResolver` turns any intake into the issue key and run invariants, and raises `PhaseIntakeRequiredError` or `PhaseSpecRequiredError`. Pattern: an intake shape is definition data, not per-definition CLI parsing. reusable
-- A run whose last slot is `plan` sets `specBundleRequired`. The planning stopper writes the parent spec, subtask specs, and manifest through `FeatureSpecPreparationWriter`, a direct plan blocks, and the result's `PhaseRunSpecBundle` paths are printed so that `skill-bill goal` can run them.
+- A run whose last slot is `plan` sets `specBundleRequired`. The planning stopper writes the parent spec, subtask specs, and manifest through `FeatureSpecPreparationWriter`, a direct plan blocks, and the result's `PhaseRunSpecBundle` paths are printed so that `sona goal` can run them.
 - `PrDescriptionStrategy` reads the branch from `PhaseRunState` records. It refuses a detached, protected, or base branch (`PullRequestBranchRefusedError`), pushes unpushed commits (and blocks if the unpushed check itself fails), and runs the readiness gate only when `commit_push` is a forward step. `InMemoryPhaseRunRecords` answers with the checkout's current branch.
 - `PhaseStrategyLookup.unselectedStepIds` now counts every canonical step, so a short definition drops projections from producers it never runs. The CLI reads the spec type only for spec-backed phases.
 - Test seam: `RuntimeHarnessConfig.gitOperationsOverride` gives real git to `PhasePullRequestRunTest`. The testFixtures `testPhaseStrategyBindings` mirrors the three new production bindings.
@@ -643,8 +643,8 @@ Acceptance criteria: 10/10 tasks implemented (validate confirms fixtures and the
 Areas: runtime-kotlin/runtime-domain/taskruntime/phase/task, runtime-kotlin/runtime-engine/featuretask/{phaserun (new), slot, slot/{attempt,codereview,qualitygate/packbuild,runner}, runloop/{core,durable,state}, runner, lifecycle/branch, model/{core,review}} (main, test, testFixtures), runtime-kotlin/runtime-cli/{phase (new),codereview,core}, runtime-kotlin/runtime-core/{di,repoTest architecture}, runtime-kotlin/runtime-contracts/error/featuretask, runtime-kotlin/{ARCHITECTURE.md,agent/decisions.md}, docs/telemetry-privacy.md, skills/bill-code-review
 - A phase run is a short skeleton definition (`review` = the whole code_review slot, `validation` = quality_gate) driven by the same run loop, strategies, and `PhaseRunner` as a full run. Only the `PhaseRunState` differs: `InMemoryPhaseRunState` keeps outputs, verdicts, loop counters, and checkpoints in memory, writes no workflow/ledger/checkpoint-ref rows, supports no resume, and records a review run through the existing review persistence. reusable
 - `PhaseRunEntry` (with `PhaseRunRequest`/`PhaseRunResult`) resolves the definition, builds the in-memory state and facts, and calls the run-loop entry. It has no step, launch, or definition-specific code. It is reached through a `RuntimeComponent` accessor and pinned in `RuntimeEngineInboundApiTest`. Pattern: a new phase run is a new skeleton definition plus selection entries, not a new executor. reusable
-- CLI: `skill-bill phase <name> [<intake>] [mode:… target:…]`. `commit_push` and unknown definitions are usage errors. The review target defaults to `uncommitted` when the worktree is dirty, else `HEAD`. A commit that does not resolve raises `UnknownPhaseReviewTargetError` and launches no agent. `mode:auto` resolves to `inline`.
-- Behaviour change: `skill-bill code-review` now builds a `PhaseRunRequest` for the `review` definition and keeps its flags. The direct review-service call is deleted, so there is one review path, and both modes now run verify_findings/implement_fix and edit the worktree. The review telemetry flag moved into `CodeReviewPass`. A phase run adds no telemetry events and no `workflow_id`.
+- CLI: `sona phase <name> [<intake>] [mode:… target:…]`. `commit_push` and unknown definitions are usage errors. The review target defaults to `uncommitted` when the worktree is dirty, else `HEAD`. A commit that does not resolve raises `UnknownPhaseReviewTargetError` and launches no agent. `mode:auto` resolves to `inline`.
+- Behaviour change: `sona code-review` now builds a `PhaseRunRequest` for the `review` definition and keeps its flags. The direct review-service call is deleted, so there is one review path, and both modes now run verify_findings/implement_fix and edit the worktree. The review telemetry flag moved into `CodeReviewPass`. A phase run adds no telemetry events and no `workflow_id`.
 - `phase validation` reports the last gate run's distinct sorted `failing_check_names` and its finding count when the gate still fails after the repair cap. The quality-check finish is now measured.
 - Slot-baseline capture routes through `PhaseRunEntry` via a shared `SlotBaselinePhaseRunHarness`. The code-review fixture shape changes, a new `phase/` bundle is added, and `phr-<uuid>` is normalised.
 - Limitations: the phase run cannot resume, and its checkpoints are lost when the invocation ends. F-007 was left open on purpose. Validate re-captures the fixtures and confirms the delegated stage-degradation count and outbox event set.
@@ -1556,7 +1556,7 @@ Acceptance criteria: 8/8 implemented
 
 ## [2026-08-14] SKILL-191 subtask 8 — Runtime-driven standalone review entry
 Areas: runtime-kotlin/{runtime-application/review, runtime-cli/codereview, runtime-ports/review, runtime-core/di}, skills/bill-code-review, orchestration/skill-classes
-- `skill-bill code-review` is a standalone entry over `ParallelCodeReviewRunner`; omitted `--agent2` is a single parent lane that still returns the register with stage verdicts.
+- `sona code-review` is a standalone entry over `ParallelCodeReviewRunner`; omitted `--agent2` is a single parent lane that still returns the register with stage verdicts.
 - `code-review-parallel` still requires `--agent2`; `parallel:` and `code_review_parallel_agent` keep `arg > config > none` and add the second lane on the same driver.
 - Native-worker preflight is driver-owned via `ReviewNativeAgentPreflightPort`: missing, dangling, stale, unreadable, or undeclared workers fail with the governed repair command and never substitute a general-purpose worker. reusable
 - `bill-code-review` content and `code-review-shell.yaml` are an entry contract (recognize args, invoke the driver, present the register); scope, routing, merge, budget, and `mktemp`/`claude -p` lane-2 prose live only in the runtime.
@@ -1733,7 +1733,7 @@ Acceptance criteria: 6/6 implemented
 Areas: runtime-kotlin/{runtime-domain,runtime-ports,runtime-application,runtime-infra-sqlite,runtime-cli}, .feature-specs/SKILL-168-ide-status-goal-controls
 - `GoalRunnerControlState` gained a nullable pause timestamp with a construction invariant mirroring `pauseReason`: `paused = true` without a timestamp is rejected. Legacy rows without the column decode through the store, so the invariant is enforced at construction, not at read. reusable
 - Every write path that sets `paused = true` — graceful boundary pause, the new stop verb, and the SIGTERM shutdown hook — stamps the timestamp from the injected clock; tests pin it with a fixed clock rather than asserting wall-clock proximity. reusable
-- New `skill-bill goal stop <ISSUE_KEY> [--repo-root]` returns typed outcomes (stopped / already stopped / no live lease / identity mismatch / goal not found) mapped to distinct CLI exit codes; it is idempotent across repeat invocations and no-lease goals.
+- New `sona goal stop <ISSUE_KEY> [--repo-root]` returns typed outcomes (stopped / already stopped / no live lease / identity mismatch / goal not found) mapped to distinct CLI exit codes; it is idempotent across repeat invocations and no-lease goals.
 - Write-before-terminate is the ordering contract: durable operator intent lands before any termination attempt and stays observable when the supervisor's termination throws or returns false. Termination is graceful-then-forcible over the process tree so the child agent is not orphaned.
 - Identity refusal: the verb declines to terminate when the lease host/boot identity mismatches the current process or the supervisor reports the owner unsupported/ambiguous — it reports the refusal instead of killing by pid.
 - Shutdown hook does at most one bounded durable write on an already-dying JVM, never overwrites a more specific `pauseReason` already written by the stop verb (reason precedence: operator stop > interruption > inferred), and does not block shutdown. SIGKILL stays uninterceptable; lease-expiry inference remains the backstop.
@@ -1754,7 +1754,7 @@ Acceptance criteria: 7/7 implemented
 ## [2026-08-06] SKILL-148 IDE status contract and read-only work status CLI (subtask 1)
 Areas: runtime-kotlin/{runtime-contracts,runtime-domain,runtime-application,runtime-infra-fs,runtime-cli,runtime-core}, orchestration/contracts, .feature-specs/SKILL-148-intellij-progress-status-bar
 - Schema-first `ide-status-schema.yaml` (pinned version, strict nested shapes, lifecycle/freshness/family/error enums) with Kotlin constant, parity test, typed `InvalidIdeStatusSchemaError`, classpath copy, and loud-fail validation before CLI emit. reusable
-- Read-only `skill-bill work status --repo-root <path> --format json` emits one schema-valid snapshot for IDE polling; no workflow transition, lease, telemetry write, or DB mutation.
+- Read-only `sona work status --repo-root <path> --format json` emits one schema-valid snapshot for IDE polling; no workflow transition, lease, telemetry write, or DB mutation.
 - Selection and projection live in application (`IdeStatusService` + `IdeStatusSelectionPolicy` + `IdeStatusProjector`): deterministic repo match and multi-work precedence; prose FT, runtime FT, verify, and goals project through existing authorities into one wire model — never SQLite row shapes. reusable
 - Goal/work and current-subtask `started_at` come only from durable runtime state and stay stable across polls/restarts; never synthesized from `updated_at`. Freshness is classified for consumers; idle/unavailable stay typed problems without stack traces on stdout.
 - Pattern for external IDE consumers: contract owns the wire shape, application owns selection/projection, infra validates schema, CLI is a thin read-only emit seam. reusable
@@ -1919,7 +1919,7 @@ Areas: runtime-kotlin/runtime-{mcp,cli,core,domain}, orchestration/{contracts,te
 - Compatibility decisions use one evidence ledger spanning governed and installed skills, scripts, docs, desktop wiring, telemetry, and release policy; each retained alias records its consumer or removal condition. reusable
 - Published CLI-duplicated MCP tools, ten hidden `feature_implement_*` aliases, and deprecated CLI aliases remain until a documented deprecation window and migration path permit removal.
 - Runtime lifecycle behavioral coverage moved to the direct service seam where the removed MCP tests had duplicated it. reusable
-- Breaking change: removed MCP names are no longer advertised or dispatched; migration guidance points runtime callers to `skill-bill feature-task` and `skill-bill feature-task-stats`.
+- Breaking change: removed MCP names are no longer advertised or dispatched; migration guidance points runtime callers to `sona feature-task` and `skill-bill feature-task-stats`.
 - Known limitation: compatibility-retained aliases still require a future versioned deprecation window before deletion.
 Feature flag: N/A
 Acceptance criteria: subtask 4: 7/7 implemented
@@ -2181,7 +2181,7 @@ Areas: runtime-kotlin/runtime-{application,cli,domain,infra-sqlite,ports}, skill
 - Ledger writes are pass-aware: `replaceLedgerForPass` deletes only the current pass plus carried blockers, so earlier non-blocker rows survive later passes instead of being wiped workflow-wide. reusable
 - Goal existence and the accepted category vocabulary come from durable authorities (`feature_task_workflows`, `ReviewIssueCategory.entries`) rather than telemetry tables or a hand-copied constant list.
 - Pattern: absent, empty, and malformed ledger states are distinguished by typed errors at the retrieval surface; the goal terminal summary resolves the ledger before opening the PR and degrades an absent ledger to empty. reusable
-- Location-bearing detail is retrieval-only (`skill-bill goal findings`); goal, status, watch, telemetry, and PR surfaces carry compact counts or sanitized summaries only.
+- Location-bearing detail is retrieval-only (`sona goal findings`); goal, status, watch, telemetry, and PR surfaces carry compact counts or sanitized summaries only.
 - Governed guidance across the four feature surfaces now states one audit-first order (audit → review → validate) and the delegated-then-inline pass sequence with blocker/non-blocker disposition; generated wrappers stay uncommitted and no install flow was run.
 Feature flag: N/A
 Acceptance criteria: subtask 3: 8/8 implemented
@@ -2551,7 +2551,7 @@ Areas: runtime-kotlin/runtime-mcp, runtime-kotlin/runtime-application, runtime-k
 - PITFALL: the dispatcher validates the raw `workflow` arg against the telemetry schema enum BEFORE `mapRemoteStatsWorkflow` runs, so dropping a legacy id (`bill-feature-task`) from the schema enum silently rejects it at the seam even though the `when` still accepted it. Read-aliasing legacy ids (AC7) means keeping them in ALL input sources of truth (schema enum + `McpInputSchemas.remoteStatsWorkflowSchema` + mapper `when`/error), NOT in `remoteStatsWorkflows` which is the POST-map allowlist keyed on the mapped value.
 - Emitted prose events `skillbill_feature_implement_*` -> `skillbill_feature_task_prose_*` (single source: `LifecycleTelemetryEmitSupport`); `TELEMETRY_EVENT_CONTRACT_VERSION` bumped 1.0.0->1.1.0 in lockstep (schema YAML const + `TelemetryEventSchemaPaths.kt`, enforced by `TelemetryEventSchemaContractVersionTest` + bidirectional `TelemetryEventInputSchemaParityTest`). The Cloudflare proxy (`docs/cloudflare-telemetry-proxy/worker.js`) now read-unions old+new event names — REDEPLOY required for remote stats continuity.
 Feature flag: N/A
-Acceptance criteria: 9/9 implemented per audit; full maintainer gate (skill-bill validate, ./gradlew check, agnix --strict, validate_agent_configs) GREEN.
+Acceptance criteria: 9/9 implemented per audit; full maintainer gate (sona validate, ./gradlew check, agnix --strict, validate_agent_configs) GREEN.
 
 ## [2026-06-19] SKILL-85.5 M2 audit-gap re-plan/re-implement loopback
 Areas: runtime-kotlin/runtime-domain, runtime-kotlin/runtime-application, runtime-kotlin/runtime-infra-sqlite, runtime-kotlin/runtime-mcp, orchestration/contracts, skills/bill-feature-task-runtime
@@ -2560,7 +2560,7 @@ Areas: runtime-kotlin/runtime-domain, runtime-kotlin/runtime-application, runtim
 - PITFALL fixed in review (Major): that nested-loop reset was in-memory only. The loop-only `implement_fix`/`review` records keep a frozen `loopId=review_fix,edgeIteration=N` watermark, so on crash/resume mid-audit-gap `RunState` re-seeded `edgeIterationByLoop` from the stale record and the resumed re-review immediately re-blocked on the review_fix cap instead of getting a fresh per-iteration budget. Fix = make the reset DURABLE: new `FeatureTaskRuntimePhaseRecorder.clearBackwardEdgeContext(phaseIds)` strips `loop_id`/`edge_iteration` from the nested loop's reopened-span records at the same point as the in-memory reset, so resume reconstruction no longer re-imports the pre-reset count. Same lesson as SKILL-85.4: any in-memory loop-position state MUST be reconstructed from — and reset on — durable records. Because review_fix resets to 1 per audit_gap iteration, `loadReviewFixIterationCount` (maxOrNull over the append-only LOOP_EDGE ledger) is exactly the largest single-iteration fix count, not a cross-iteration sum. reusable
 - Gap-scoped handoff (AC3, decision: re-enter FULL `plan`, not a new `replan` phase): the failing criteria are threaded into the re-entered plan/implement briefing additively — `PendingReentry.reentryGapCriteria` -> `assembleHandoff` -> briefing `audit_gaps:` block (only rendered when non-empty, so forward + review_fix launches are byte-identical). Since `plan`/`implement` do not consume the audit output as an upstream, the forward-reached `implement` scopes its gaps via `auditGapCriteriaFor` gated on the durable `edgeIterationCount(audit_gap)>0` (resume-safe). AC7 telemetry: `audit_gap_iteration_count` is runtime-owned (LOOP_EDGE ledger via `loadAuditGapIterationCount`) threaded into the finished event/request/record + a new self-healed DB column, mirroring review_fix.
 Feature flag: N/A
-Acceptance criteria: 11/11 implemented per audit; full maintainer gate (skill-bill validate, ./gradlew check, agnix --strict, validate_agent_configs) GREEN. Terminal subtask — SKILL-85 (M1+M2) complete.
+Acceptance criteria: 11/11 implemented per audit; full maintainer gate (sona validate, ./gradlew check, agnix --strict, validate_agent_configs) GREEN. Terminal subtask — SKILL-85 (M1+M2) complete.
 
 ## [2026-06-19] SKILL-85.4 M1 review-driven implement-fix loop
 Areas: runtime-kotlin/runtime-domain, runtime-kotlin/runtime-application, runtime-kotlin/runtime-infra-sqlite, runtime-kotlin/runtime-mcp, orchestration/contracts, skills/bill-feature-task-runtime
@@ -2580,7 +2580,7 @@ Areas: runtime-kotlin/runtime-domain, runtime-kotlin/runtime-application, runtim
 - PITFALL fixed in review (Blocker): the checkpoint committed via `WorkflowGitOperations.createCommit`, which is a bare `git commit -m` with NO staging, but implement agents never `git add`, so a real dirty tree is unstaged and the commit would hit an empty index and block the run. Fix: added `WorkflowGitOperations.stageAll` (default no-op-success body; real adapter = `git add -A`, includes untracked) and stage before the checkpoint commit, block loudly on staging failure. Any future git/tree op MUST go through this port — no direct fs/process in application/domain. reusable
 - Production `transitions.backwardEdges` is still EMPTY (loops are subtasks 4/5), so the checkpoint + implement-fix-loop topology is reachable today only via the test-only `transitionsOverride` seam; tests drive it through `RecordingWorkflowGitOperations` (now records `stageAllCalls`/`createCommitMessages` + configurable `worktreeStatus`).
 Feature flag: N/A
-Acceptance criteria: 8/8 implemented per audit; full maintainer gate (skill-bill validate, ./gradlew check, agnix --strict, validate_agent_configs) GREEN
+Acceptance criteria: 8/8 implemented per audit; full maintainer gate (sona validate, ./gradlew check, agnix --strict, validate_agent_configs) GREEN
 
 ## [2026-06-19] SKILL-85.2 bounded-cyclic-phase-executor
 Areas: runtime-kotlin/runtime-domain, runtime-kotlin/runtime-application
@@ -2590,7 +2590,7 @@ Areas: runtime-kotlin/runtime-domain, runtime-kotlin/runtime-application
 - Resume reconstructs loop position from the durable per-phase records (`RunState.edgeIterationByLoop` = max watermark per loop); `capExhaustedOnResume` re-blocks a cap-reached edge before relaunching, guarded by `liveClaimedLoops` so the resume-entry check does not re-fire once the live machine owns the loop. PITFALL fixed in review: every in-phase block on a re-entered phase MUST forward `run.reentry` loop context to `blockAndPersist`, else the terminal blocked record overwrites the running record's stamp with null and the cap counter resets to 0 across the crash (AC4/AC8 violation). reusable
 - Cap exhaustion blocks loudly via `blockOnCapExhaustion` reusing `blockAndPersist`: durable terminal blocked record + observability ledger event carrying loop id, iteration count, and the unresolved verdict. Handoff threads the driving verdict into the re-entered phase (`FeatureTaskRuntimeHandoffContract.assembleHandoff` + briefing `driving_verdict:` line) while still resolving latest-iteration upstreams — the re-entered agent never selects its own inputs.
 Feature flag: N/A
-Acceptance criteria: 10/10 implemented per audit; full maintainer gate (skill-bill validate, ./gradlew check, agnix --strict, validate_agent_configs) GREEN
+Acceptance criteria: 10/10 implemented per audit; full maintainer gate (sona validate, ./gradlew check, agnix --strict, validate_agent_configs) GREEN
 
 ## [2026-06-19] SKILL-85.1 runtime-resume-and-state-model-integrity
 Areas: runtime-kotlin/runtime-domain, runtime-kotlin/runtime-application, .feature-specs/SKILL-85-runtime-remediation-loops
@@ -2603,7 +2603,7 @@ Acceptance criteria: 9/9 implemented per audit; full `./gradlew check` BUILD SUC
 
 ## [2026-06-15] SKILL-84 update-check-slash-command
 Areas: runtime-kotlin/runtime-application, runtime-kotlin/runtime-cli, runtime-kotlin/runtime-infra-fs, runtime-kotlin/runtime-core, skills/bill-update-check, skills/bill-feature*
-- Added `skill-bill update-check` backed by the installed runtime version source and GitHub Releases lookup; JSON/text output maps up_to_date, update_available, ahead_of_release, and soft unknown states.
+- Added `sona update-check` backed by the installed runtime version source and GitHub Releases lookup; JSON/text output maps up_to_date, update_available, ahead_of_release, and soft unknown states.
 - `UpdateCheckService`, semver/model types, and HTTP requester seam keep release selection testable; default stable-only selection can opt into prereleases. reusable
 - New governed `skills/bill-update-check/content.md` delegates to the runtime CLI and install planning links `/bill-update-check` through the existing command catalog, with no generated wrappers in source.
 - Feature workflow entry skills and runtime command resolution now support issue-key-only lookup via the single `.feature-specs/<KEY>-*/spec.md` match; ambiguous or missing matches still fail loudly.
@@ -2696,7 +2696,7 @@ Areas: runtime-kotlin/runtime-domain, skills/bill-code-review
 - `ParallelReviewMerger` now coalesces findings by same file path (from location, `substringBeforeLast(':')`) AND Jaccard token-overlap of descriptions, replacing the exact `location|description` key. reusable
 - Fuzzy threshold is the named constant `FUZZY_DEDUP_THRESHOLD = 0.6` (strict `>`); helpers `tokens`/`jaccard` document both-empty=>1.0 and union-empty=>0.0; clustering is insertion-order greedy so output is map-iteration-order independent. reusable
 - Severity resolution, sort, `F-NNN` renumber, and formatting are untouched, so higher-severity-wins and all prior exact-match behavior are preserved.
-- `bill-code-review` skill content adds a routing capability table (per-agent stdin-pipe flag + `LANE2_DIFF_BYTE_THRESHOLD = 200 KB`) and a size guard: over-threshold or non-stdin agents (opencode/copilot/junie) delegate to `skill-bill code-review-parallel`; within-threshold stdin agents (claude/codex) keep the stdin-pipe path. reusable
+- `bill-code-review` skill content adds a routing capability table (per-agent stdin-pipe flag + `LANE2_DIFF_BYTE_THRESHOLD = 200 KB`) and a size guard: over-threshold or non-stdin agents (opencode/copilot/junie) delegate to `sona code-review-parallel`; within-threshold stdin agents (claude/codex) keep the stdin-pipe path. reusable
 - Threshold and stdin flags live in skill content as single source of truth, updatable without touching routing logic.
 - Known limitation (carried from SKILL-70, still open): merger ignores `findings` field / re-parses `rawOutput`; `FileSystemDiffResolver` subprocess has no timeout.
 Feature flag: N/A
@@ -2754,7 +2754,7 @@ Areas: runtime-kotlin/runtime-mcp, runtime-kotlin/runtime-domain, runtime-kotlin
 - Open question RESOLVED: `telemetry_proxy_capabilities` is generic — `validateRemoteStatsCapabilities` is driven entirely by the proxy HTTP response (`supportedWorkflows` from wire); no local family enumeration. No code change needed.
 - AC4 confirmed no-op: `TelemetrySyncRuntime.syncTelemetry`/`syncEnabledTelemetry` have no family-specific branching; goal events flow through the same outbox path as all lifecycle events.
 - Spec open questions marked RESOLVED in `.feature-specs/SKILL-66-feature-goal-telemetry/spec.md`.
-- Full validation gate: `skill-bill validate` pass, `./gradlew check` pass, `npx agnix --strict .` pass, `scripts/validate_agent_configs` pass.
+- Full validation gate: `sona validate` pass, `./gradlew check` pass, `npx agnix --strict .` pass, `scripts/validate_agent_configs` pass.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented
 
@@ -2790,7 +2790,7 @@ Acceptance criteria: 5/5 implemented
 
 ## [2026-06-05] SKILL-67.3 goal-runner-direct-runtime-coupling
 Areas: runtime-kotlin/runtime-application, runtime-kotlin/runtime-infra-fs, runtime-kotlin/runtime-ports
-- Goal child launches now bypass prose skill prompts and spawn `skill-bill feature-task run|resume <issue_key> <spec_path>` directly, always carrying `--goal-parent-issue-key`, `--goal-subtask-id`, `--goal-branch`, `--suppress-pr`, and the resolved `--agent`. reusable
+- Goal child launches now bypass prose skill prompts and spawn `sona feature-task run|resume <issue_key> <spec_path>` directly, always carrying `--goal-parent-issue-key`, `--goal-subtask-id`, `--goal-branch`, `--suppress-pr`, and the resolved `--agent`. reusable
 - `SkillRunGoalContinuationContext` now carries `specPath` and optional `childWorkflowId`; presence of the child workflow id selects runtime `resume`, so completed runtime phases are skipped by the runtime instead of re-entering `workflow continue`.
 - Goal outcome/progress/history seams resolve the owning workflow family (`IMPLEMENT` or `TASK_RUNTIME`) before reads/writes, so task-runtime child rows support terminal gating, worker-request audit artifacts, stale reconciliation, and status/watch projections. reusable
 - Prompt overrides remain the phase-agent path; only default goal-continuation child launches are converted to direct runtime commands.
@@ -2930,7 +2930,7 @@ Areas: runtime-kotlin/runtime-cli, runtime-kotlin/runtime-mcp, runtime-kotlin/ru
 - New `feature-task-runtime` CLI group (run/status/resume) wired via `UtilityCliCommandGroup`→`TopLevelCliCommands`, mirroring the goal commands. CLI delegates only to application services (`FeatureTaskRuntimeRunner`/`FeatureTaskRuntimeStatusService`/`WorkflowService`) — spec read goes through a NEW injected port `FeatureTaskRuntimeRunInvariantsSource` (+ `FileSystemFeatureTaskRuntimeRunInvariantsSource` adapter, DI in RuntimeComponent), never raw `Files.`/infra in CLI, so `RuntimeArchitectureTest` stays green. reusable
 - 7 task-runtime MCP tools registered in `McpToolRegistry` + dispatched in `McpToolDispatcher` following the `feature_implement_workflow_*` pattern; golden `mcp-feature-task-runtime-workflow.json` + tool-name locks in `McpStdioServerTest`. Gotcha (review F-002): the `_continue` tool's content.md path must be DEFINITION-DRIVEN (TASK_RUNTIME→skills/bill-feature-task-runtime/content.md), not reuse verify prose, since TASK_RUNTIME has no continuationReferenceSections. reusable
 - Gotcha (review F-001): runtime status `blocked` must be DERIVED from the append-only phase ledger via a `loadPhaseLedger` read seam, not inferred from records — symmetric with subtask-2/3 strict ledger reads. `_latest` intentionally omitted from priorityStrictToolNames; `_latest` strict-schema parity test added (F-004). reusable
-- Thin experimental skill `skills/bill-feature-task-runtime/content.md` mirrors the `bill-feature-goal` thin-skill pattern: gather/confirm spec → single confirmation gate → launch `skill-bill feature-task-runtime`. Explicitly marked experimental + "not a default path"; does NOT re-implement phase orchestration in prose and does NOT reference/alter `bill-feature-task`. reusable
+- Thin experimental skill `skills/bill-feature-task-runtime/content.md` mirrors the `bill-feature-goal` thin-skill pattern: gather/confirm spec → single confirmation gate → launch `sona feature-task-runtime`. Explicitly marked experimental + "not a default path"; does NOT re-implement phase orchestration in prose and does NOT reference/alter `bill-feature-task`. reusable
 - Per-phase agent assignment + optional `timeout:Duration?` threaded CLI→`FeatureTaskRuntimeRunRequest`→runner; timeout validated at clikt boundary (`restrictTo min=1`). Per-phase timeout semantics are intended/documented. Deferred follow-up: run-ownership/concurrency guard (F-003, Major, stated subtask-4 non-goal). Install sync skipped (goal-continuation) despite skills/ source edit — refresh out-of-band after the goal run.
 Feature flag: N/A
 Acceptance criteria: 7/7 implemented
@@ -3125,7 +3125,7 @@ Acceptance criteria: 3/3 implemented (subtask continuation fix scope)
 
 ## [2026-05-30] SKILL-56 subtask 4 cli-and-bill-goal-skill
 Areas: runtime-kotlin/runtime-cli, runtime-kotlin/runtime-application, runtime-kotlin/runtime-ports, runtime-kotlin/runtime-infra-fs, runtime-kotlin/runtime-core, skills/bill-goal
-- Added the foreground `skill-bill goal` command and read-only `goal status` surface over the subtask-3 `GoalRunner`/status projection; CLI remains a thin adapter with text/payload mapping only. reusable
+- Added the foreground `sona goal` command and read-only `goal status` surface over the subtask-3 `GoalRunner`/status projection; CLI remains a thin adapter with text/payload mapping only. reusable
 - Live child stdout/stderr teeing is a narrow `AgentRunOutputSink` carried through request models into infra-fs `JvmAgentRunProcessRunner`; captured bounded output remains intact and process IO stays outside application/domain. reusable
 - `GoalRunnerRunEvent` gives the CLI readable per-subtask progress without parsing workflow internals or changing loop semantics; stop reports still use workflow-store outcomes as authority.
 - Added canonical `skills/bill-goal/content.md` plus README catalog row; source remains content.md-only and install/render sync produced agent links without committing generated wrappers.
@@ -3331,7 +3331,7 @@ Acceptance criteria: 5/5 implemented
 Areas: runtime-kotlin/ARCHITECTURE.md, runtime-kotlin/runtime-core architecture tests, runtime-kotlin/runtime-domain, runtime-kotlin/runtime-application, runtime-kotlin/runtime-ports, runtime-kotlin/runtime-infra-fs, runtime-kotlin/runtime-cli, runtime-kotlin/runtime-mcp, runtime-kotlin/runtime-desktop/core/data
 - SKILL-52.1 closes with architecture documentation and tests aligned on raw-map open-boundary parity, inert `Path` handling outside adapters/composition, install-policy ownership with dual install-plan validation, and the narrowed runtime-core public ABI edge. reusable
 - The runtime-core shrink rule is now explicit: generated Kotlin-Inject ABI edges are the only retained public runtime-core surface, and architecture tests must reject growth into infrastructure or entrypoint modules. reusable
-- Final validation passed with `skill-bill validate`, `scripts/validate_agent_configs`, `npx --yes agnix --strict .`, and `(cd runtime-kotlin && ./gradlew check)`.
+- Final validation passed with `sona validate`, `scripts/validate_agent_configs`, `npx --yes agnix --strict .`, and `(cd runtime-kotlin && ./gradlew check)`.
 Feature flag: N/A
 Acceptance criteria: 9/9 implemented
 
@@ -3410,7 +3410,7 @@ Areas: runtime-kotlin/ARCHITECTURE.md, runtime-kotlin/runtime-core/architecture 
 - `ARCHITECTURE.md`, `RuntimeModule`, Gradle settings, and architecture tests now pin the final hexagonal graph with runtime-core as composition only and runtime-contracts owning schema validators at parse seams. reusable
 - Decomposition manifest file writes and review input loading moved behind explicit ports, with filesystem adapters in infra-fs; SQLite review runtime no longer owns file input helpers. reusable
 - Architecture coverage now rejects non-composition runtime-core packages, forbidden layer imports, adapter bypasses, public app/domain/port models outside `model`, and direct file IO in app/domain/ports. reusable
-- Full validation passed after clearing generated Gradle configuration cache: `./gradlew check`, `skill-bill validate`, `scripts/validate_agent_configs`, and `npx --yes agnix --strict .`.
+- Full validation passed after clearing generated Gradle configuration cache: `./gradlew check`, `sona validate`, `scripts/validate_agent_configs`, and `npx --yes agnix --strict .`.
 Feature flag: N/A
 Acceptance criteria: 6/6 implemented
 
@@ -3640,7 +3640,7 @@ Acceptance criteria: 6/6 implemented
 
 ## [2026-05-17] runtime-cli-install-plan-apply
 Areas: runtime-kotlin/runtime-cli install commands, runtime-kotlin/runtime-core install plan/apply contract
-- Added stable `skill-bill install plan` and `skill-bill install apply` entrypoints that build `InstallPlanRequest`, call `InstallOperations.planInstall` / `applyInstall`, and keep CLI handlers as thin parse/render adapters. reusable
+- Added stable `sona install plan` and `sona install apply` entrypoints that build `InstallPlanRequest`, call `InstallOperations.planInstall` / `applyInstall`, and keep CLI handlers as thin parse/render adapters. reusable
 - CLI inputs now cover detected/manual `copilot`, `claude`, `codex`, `opencode`, `junie`, platform pack none/selected/all, telemetry anonymous/full/off, MCP registration choices, and Windows symlink preflight state.
 - Plan/apply JSON/text payloads are rendered from structured runtime outcomes, including base-skill inclusion, dynamic platform discovery, MCP/telemetry intent, warnings/failures, and Windows symlink guidance.
 Feature flag: N/A
@@ -3819,7 +3819,7 @@ Acceptance criteria: 8/8 implemented
 
 ## [2026-05-09] render-cli-output
 Areas: runtime-cli scaffold commands, runtime-core scaffold rendering, runtime CLI/core tests
-- `skill-bill render <skill-id>` is now a read-only stdout surface, separate from `upgrade`; `--dry-run` is accepted as the same no-write preview path.
+- `sona render <skill-id>` is now a read-only stdout surface, separate from `upgrade`; `--dry-run` is accepted as the same no-write preview path.
 - Runtime-core owns `renderAuthoringTarget`, which emits `SKILL.md` from `renderWrapper` plus pointer blocks from `renderPointer`; platform-pack pointer blocks preserve `platform.yaml` declaration order instead of `PointerOperations.regenerate` write-path sorting. reusable
 - Separator headers are deterministic LF text (`SKILL.md` first, then pointer files), while source `SKILL.md` and pointer files remain untouched.
 - Known test limit: CLI coverage proves no-write/dry-run equivalence on a horizontal fixture; platform pointer order is pinned at the core renderer boundary.
@@ -3864,7 +3864,7 @@ Acceptance criteria: 5/5 implemented
 
 ## [2026-05-03] installer-runtime-cutover
 Areas: install.sh, uninstall.sh, runtime-cli install commands, runtime-core install primitives, runtime-core launcher MCP config mutation, pyproject.toml, installer tests
-- Moved installer/uninstaller runtime ownership off Python: shell scripts now build/use packaged Kotlin `installDist` bin shims and call `skill-bill install ...` commands for agent paths, link/unlink, cleanup, MCP registration/removal, and telemetry level mutation. reusable
+- Moved installer/uninstaller runtime ownership off Python: shell scripts now build/use packaged Kotlin `installDist` bin shims and call `sona install ...` commands for agent paths, link/unlink, cleanup, MCP registration/removal, and telemetry level mutation. reusable
 - Added Kotlin install parity for Codex/OpenCode native agent path/link/unlink, selected-platform discovery (base skills plus selected pack roots), user-file-preserving target handling, symlinked-source rejection, and cleanup operations that propagate filesystem delete failures. reusable
 - Added Kotlin MCP config mutation for Claude/Copilot JSON, Codex TOML, and OpenCode JSONC using packaged `runtime-mcp` commands and atomic writes; invalid OpenCode JSONC now loud-fails without overwriting user config. reusable
 - Pitfall: Bash `${array[@]:-}` under `set -u` can inject an empty platform slug; use explicit length guards before iterating selected/required platform arrays.
@@ -3947,7 +3947,7 @@ Acceptance criteria: 7/7 implemented
 ## [2026-04-30] packaging-schema-integration-validation
 Areas: skill_bill.launcher, install.sh, runtime-mcp schemas, repository validation gate
 - Confirmed the packaged Kotlin CLI/MCP installDist launch path and strict MCP schema boundary coexist through the full repository gate plus installer/stdio smoke checks. reusable
-- Reusable validation pattern: run the four-command repo gate, force `McpStdioServerTest` when schema behavior matters, then smoke `skill-bill doctor` and MCP `initialize`/`tools/list` with Kotlin runtime overrides unset.
+- Reusable validation pattern: run the four-command repo gate, force `McpStdioServerTest` when schema behavior matters, then smoke `sona doctor` and MCP `initialize`/`tools/list` with Kotlin runtime overrides unset.
 - Known limitation: `install.sh` is interactive and resets `~/.skill-bill` during reinstall, so workflow telemetry/state opened before an installer rehearsal is intentionally discarded.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented (Python rollback criterion superseded by Kotlin-only runtime direction)

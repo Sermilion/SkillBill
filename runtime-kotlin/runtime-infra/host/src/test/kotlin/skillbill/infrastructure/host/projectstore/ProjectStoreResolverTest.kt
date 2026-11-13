@@ -90,6 +90,26 @@ class ProjectStoreResolverTest {
   }
 
   @Test
+  fun `ambiguous lineage diagnostics retain candidate ids and a sona link hint`() {
+    val original = gitCheckout("original").also { lineages.set(it, LINEAGE_A) }
+    val fork = gitCheckout("fork").also { lineages.set(it, LINEAGE_A_FORK) }
+    val first = resolver().resolve(original)
+    val second = resolver().resolve(fork)
+    val ambiguous = gitCheckout("ambiguous").also { lineages.set(it, LINEAGE_A.copy(remoteUrl = null)) }
+
+    val resolved = resolver().resolve(ambiguous)
+
+    assertEquals("${first.projectId}-3", resolved.projectId)
+    assertEquals(listOf(first.projectId, second.projectId, resolved.projectId), storeNames())
+    assertTrue(
+      warnings.any {
+        "multiple_candidates candidates=${first.projectId},${second.projectId}" in it &&
+          "hint='run sona project link <id> to attach this checkout'" in it
+      },
+    )
+  }
+
+  @Test
   fun `a clone whose remote is the same repository in another URL form shares the original store`() {
     val original = gitCheckout("original").also { lineages.set(it, LINEAGE_A) }
     val https = gitCheckout("https")

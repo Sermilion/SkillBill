@@ -30,8 +30,8 @@ $id: "https://skill-bill.dev/contracts/install-plan-schema.yaml"
 title: "Install plan wire payload"
 description: >
   Schema for the install-plan payload that the Skill Bill runtime emits
-  on `skill-bill install plan` and as the planning prefix of
-  `skill-bill install apply`. Describes SHAPE only and never hard-codes
+  on `sona install plan` and as the planning prefix of
+  `sona install apply`. Describes SHAPE only and never hard-codes
   caller-specific identifiers (concrete agent paths, host directories,
   etc.). New install fields ship as long as the wire payload matches
   this schema and the coherence checks below.
@@ -56,6 +56,8 @@ $defs:
       - codex
       - junie
       - cursor
+      - opencode
+      - devin
   # Shared enum: agent-target source. Mirrors `InstallAgentTargetSource`
   # — wire form is `name.lowercase()`.
   agentSource:

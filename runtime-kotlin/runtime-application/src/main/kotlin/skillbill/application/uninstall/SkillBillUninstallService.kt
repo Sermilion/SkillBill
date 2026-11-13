@@ -4,11 +4,16 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.scaffold.InstallAgentService
 import skillbill.application.uninstall.model.DesktopRemoval
 import skillbill.application.uninstall.model.LauncherRemoval
+import skillbill.application.uninstall.model.OwnedDesktopDirectory
+import skillbill.application.uninstall.model.OwnedFileRemoval
 import skillbill.application.uninstall.model.UninstallPlan
 import skillbill.application.uninstall.model.UninstallRequest
 import skillbill.application.uninstall.model.UninstallResult
+import skillbill.install.model.ListedSkillNames
+import skillbill.install.model.SupportedAgent
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
+import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.system.HostPlatformPort
 import skillbill.ports.system.UninstallPathsPort
@@ -26,7 +31,18 @@ class SkillBillUninstallService(
   fun plan(request: UninstallRequest): UninstallPlan {
     val home = request.home
     val stateRoot = request.stateRoot
-    val skillNames = installedSkillNames(uninstallFileSystem, stateRoot.resolve("installed-skills"))
+    val environment =
+      if (InstallMcpProfileEnvironment.PWD_ENV in request.environment) {
+        request.environment
+      } else {
+        request.environment +
+          (InstallMcpProfileEnvironment.PWD_ENV to hostPlatform.resolveWorkingDirectory().toString())
+      }
+    val skillNames =
+      (
+        installedSkillNames(uninstallFileSystem, stateRoot.resolve("installed-skills")) +
+          ListedSkillNames.DISPATCHER + ListedSkillNames.PUBLIC_DISPATCHER
+      ).distinct()
     val legacyNames = legacySkillNames(skillNames)
     val claudeTargets =
       installAgentService.claudeRoots(home, request.environment).flatMap { root ->
@@ -35,13 +51,15 @@ class SkillBillUninstallService(
     val codexTargets =
       installAgentService.codexRoots(home, request.environment)
         .map { root -> root.resolve("skills") }
+    val devinTargets = listOf(installAgentService.agentPath(SupportedAgent.DEVIN.wireValue, home, request.environment))
     val agentTargets =
       listOf(
         home.resolve(".copilot/skills"),
         home.resolve(".agents/skills"),
         home.resolve(".junie/skills"),
         home.resolve(".cursor/skills"),
-      ) + claudeTargets + codexTargets
+      ) + claudeTargets + codexTargets + devinTargets +
+        listOf(installAgentService.agentPath(SupportedAgent.OPENCODE.id, home, environment))
     val stateRuntimeRoot = stateRoot.resolve("runtime")
     val binDir = request.environment["SKILL_BILL_BIN_DIR"]?.let(Path::of) ?: home.resolve(".local/bin")
     return UninstallPlan(
@@ -51,12 +69,8 @@ class SkillBillUninstallService(
       legacyNames = legacyNames,
       agentTargets = agentTargets.distinct(),
       nativeSourceRoots = listOf(stateRoot.resolve("platform-packs"), stateRoot.resolve("skills")),
-      mcpAgents = listOf("claude", "codex", "junie", "cursor"),
-      launchers =
-        listOf(
-          LauncherRemoval(binDir.resolve("skill-bill"), stateRuntimeRoot.resolve("runtime-cli/bin/runtime-cli")),
-          LauncherRemoval(binDir.resolve("skill-bill-mcp"), stateRuntimeRoot.resolve("runtime-mcp/bin/runtime-mcp")),
-        ),
+      mcpAgents = SupportedAgent.supportedIds,
+      launchers = runtimeLaunchers(binDir, stateRuntimeRoot),
       desktop =
         desktopPlan(
           home = home,
@@ -65,7 +79,7 @@ class SkillBillUninstallService(
           environment = request.environment,
           os = currentOs(hostPlatform.osName),
         ),
-      environment = request.environment,
+      environment = environment,
     )
   }
 
@@ -75,21 +89,26 @@ class SkillBillUninstallService(
     val recorder = UninstallMutationRecorder(diagnostics)
 
     cleanupAgentInstallTargets(plan, installAgentService, removed, skipped, recorder)
-    cleanupNativeAgentInstallLinks(plan, installNativeAgentLinkPort, uninstallFileSystem, removed, recorder)
+    val nativeCleanup =
+      cleanupNativeAgentInstallLinks(plan, installNativeAgentLinkPort, removed, recorder)
     cleanupMcpRegistrations(plan, installMcpRegistrationPort, removed, recorder)
 
     plan.launchers.forEach { launcher ->
       removeLauncher(uninstallFileSystem, launcher, removed, skipped, recorder)
     }
     removeDesktop(uninstallFileSystem, plan.desktop, removed, skipped, recorder)
-    uninstallFileSystem.withConfigTransaction(plan.home, plan.environment) {
-      removeInstallState(
-        uninstallFileSystem,
-        plan.stateRoot,
-        removed,
-        recorder,
-        InstallStateRemovalOptions(uninstallFileSystem.configLockFilePaths(plan.home, plan.environment)),
-      )
+    if (nativeCleanup.complete) {
+      uninstallFileSystem.withConfigTransaction(plan.home, plan.environment) {
+        removeInstallState(
+          uninstallFileSystem,
+          plan.stateRoot,
+          removed,
+          recorder,
+          InstallStateRemovalOptions(
+            uninstallFileSystem.configLockFilePaths(plan.home, plan.environment) + nativeCleanup.retainedPaths,
+          ),
+        )
+      }
     }
 
     return UninstallResult(
@@ -110,13 +129,26 @@ class SkillBillUninstallService(
     val recorder = UninstallMutationRecorder(diagnostics)
     if (uninstallFileSystem.exists(stateRoot)) {
       uninstallFileSystem.withConfigTransaction(home, environment) {
-        removeInstallState(
-          uninstallFileSystem,
-          stateRoot,
-          removed,
-          recorder,
-          InstallStateRemovalOptions(uninstallFileSystem.configLockFilePaths(home, environment), preserveGeneratedOnly),
-        )
+        val preservation =
+          discoverNativeAgentPreservationTargets(
+            stateRoot,
+            home,
+            environment,
+            installNativeAgentLinkPort,
+            recorder,
+          )
+        if (preservation.complete) {
+          removeInstallState(
+            uninstallFileSystem,
+            stateRoot,
+            removed,
+            recorder,
+            InstallStateRemovalOptions(
+              uninstallFileSystem.configLockFilePaths(home, environment) + preservation.retainedPaths,
+              preserveGeneratedOnly,
+            ),
+          )
+        }
       }
     }
     return UninstallResult(recorder.failed(), removed, emptyList(), recorder.failureMessages())
@@ -147,6 +179,7 @@ private fun installedSkillNames(
 
 private fun legacySkillNames(skillNames: List<String>): List<String> {
   val names = mutableSetOf(".bill-shared")
+  names += ListedSkillNames.DISPATCHER
   skillNames.filter { it.startsWith("bill-") }.forEach { skill ->
     names += "mdp-${skill.removePrefix("bill-")}"
   }
@@ -165,41 +198,166 @@ private fun desktopPlan(
   environment: Map<String, String>,
   os: DesktopOs,
 ): DesktopRemoval {
-  val appDir = desktopAppDir?.let(Path::of) ?: defaultDesktopAppDir(home, environment, os)
-  val executable =
+  val installRoot =
+    configuredPath(desktopAppDir)
+      ?: configuredPath(environment["SKILL_BILL_DESKTOP_APP_DIR"])
+      ?: defaultDesktopInstallRoot(home, environment, os)
+  val appDir =
     when (os) {
-      DesktopOs.WINDOWS -> appDir.resolve("SkillBill.exe")
+      DesktopOs.MAC -> installRoot.resolve("Sona.app")
+      else -> installRoot.resolve("Sona")
+    }
+  val executable = sonaExecutable(os, appDir)
+  val oldAppDir = legacyDesktopAppDir(home, environment, os)
+  val oldExecutable =
+    when (os) {
+      DesktopOs.WINDOWS -> oldAppDir.resolve("SkillBill.exe")
       DesktopOs.MAC,
       DesktopOs.LINUX,
-      -> appDir.resolve("bin/skillbill-desktop")
+      -> oldAppDir.resolve("bin/skillbill-desktop")
     }
-  val launcher =
-    when (os) {
-      DesktopOs.WINDOWS -> null
-      DesktopOs.MAC,
-      DesktopOs.LINUX,
-      -> LauncherRemoval(binDir.resolve("skillbill-desktop"), executable)
-    }
+  val shellLegacyAppDir = installRoot.resolve("Skill Bill")
+  val shellLegacyExecutable = shellLegacyAppDir.resolve("bin/Skill Bill")
+  val launchers = desktopLaunchers(os, binDir, executable, oldExecutable, shellLegacyExecutable)
   val dataHome = environment["XDG_DATA_HOME"]?.let(Path::of) ?: home.resolve(".local/share")
-  val linuxFiles =
-    if (os == DesktopOs.LINUX) {
+  val files =
+    if (os == DesktopOs.LINUX) desktopFiles(dataHome, binDir, appDir, oldAppDir, shellLegacyAppDir) else emptyList()
+  return DesktopRemoval(
+    launchers = launchers,
+    files = files,
+    directories =
       listOf(
-        dataHome.resolve("applications/skillbill.desktop"),
-        dataHome.resolve("icons/hicolor/256x256/apps/skillbill.png"),
-      )
-    } else {
-      emptyList()
-    }
-  val windowsLauncher =
-    if (os == DesktopOs.WINDOWS) {
-      listOf(binDir.resolve("skillbill-desktop.cmd"))
-    } else {
-      emptyList()
-    }
-  return DesktopRemoval(launcher = launcher, files = linuxFiles + windowsLauncher, directories = listOf(appDir))
+        OwnedDesktopDirectory(appDir, listOf(executable)),
+        OwnedDesktopDirectory(oldAppDir, listOf(oldExecutable)),
+      ) +
+        if (os == DesktopOs.LINUX) {
+          listOf(OwnedDesktopDirectory(shellLegacyAppDir, listOf(shellLegacyExecutable)))
+        } else {
+          emptyList()
+        },
+  )
 }
 
-private fun defaultDesktopAppDir(
+private fun desktopLaunchers(
+  os: DesktopOs,
+  binDir: Path,
+  executable: Path,
+  oldExecutable: Path,
+  shellLegacyExecutable: Path,
+): List<LauncherRemoval> {
+  return when (os) {
+    DesktopOs.WINDOWS ->
+      listOf(
+        windowsDesktopLauncher(binDir.resolve("sona.cmd"), executable),
+        windowsDesktopLauncher(binDir.resolve("sona-app.cmd"), executable),
+        windowsDesktopLauncher(binDir.resolve("skillbill-desktop.cmd"), oldExecutable),
+      )
+    DesktopOs.MAC ->
+      listOf(
+        LauncherRemoval(binDir.resolve("sona"), executable),
+        LauncherRemoval(binDir.resolve("sona-app"), executable),
+        LauncherRemoval(binDir.resolve("skillbill-desktop"), oldExecutable),
+      )
+    DesktopOs.LINUX ->
+      listOf(
+        LauncherRemoval(binDir.resolve("sona"), executable),
+        LauncherRemoval(binDir.resolve("sona-app"), executable),
+        LauncherRemoval(binDir.resolve("skillbill-desktop"), oldExecutable),
+        LauncherRemoval(binDir.resolve("skillbill-desktop"), shellLegacyExecutable),
+      )
+  }
+}
+
+private fun desktopFiles(
+  dataHome: Path,
+  binDir: Path,
+  appDir: Path,
+  oldAppDir: Path,
+  shellLegacyAppDir: Path,
+): List<OwnedFileRemoval> {
+  return listOf(
+    OwnedFileRemoval(
+      dataHome.resolve("applications/sona.desktop"),
+      listOf(
+        "Name=Sona",
+        "Icon=$appDir/lib/Sona.png",
+        "StartupWMClass=dev-skillbill-desktop-app-DesktopLauncherKt",
+      ),
+      listOf(listOf("Exec=${quoted(binDir.resolve("sona-app"))}", "Exec=${quoted(binDir.resolve("sona"))}")),
+    ),
+    OwnedFileRemoval(
+      dataHome.resolve("applications/skillbill.desktop"),
+      listOf("Name=Skill Bill"),
+      listOf(
+        listOf(
+          "Icon=${oldAppDir.resolve("lib/Skill Bill.png")}",
+          "Icon=${shellLegacyAppDir.resolve("lib/Skill Bill.png")}",
+        ),
+        listOf("Exec=${quoted(binDir.resolve("skillbill-desktop"))}"),
+      ),
+    ),
+  )
+}
+
+private fun runtimeLaunchers(
+  binDir: Path,
+  stateRuntimeRoot: Path,
+): List<LauncherRemoval> {
+  val cli = stateRuntimeRoot.resolve("runtime-cli/bin/runtime-cli")
+  val mcp = stateRuntimeRoot.resolve("runtime-mcp/bin/runtime-mcp")
+  return listOf(
+    LauncherRemoval(binDir.resolve("sona"), cli),
+    LauncherRemoval(binDir.resolve("sona"), managedMarker = "# skill-bill managed launcher"),
+    LauncherRemoval(binDir.resolve("skill-bill"), managedMarker = "# skill-bill managed launcher"),
+    LauncherRemoval(binDir.resolve("skill-bill"), cli),
+    LauncherRemoval(binDir.resolve("sona-mcp"), mcp),
+    LauncherRemoval(binDir.resolve("skill-bill-mcp"), mcp),
+  )
+}
+
+private fun windowsDesktopLauncher(
+  path: Path,
+  executable: Path,
+): LauncherRemoval {
+  val windowsExecutable = executable.toString().replace("/", "\\")
+  return LauncherRemoval(
+    path = path,
+    managedMarker = "REM Managed by Sona install.sh",
+    requiredLines = listOf("\"$windowsExecutable\" %*"),
+  )
+}
+
+private fun quoted(path: Path): String = "\"${path.toString().replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
+private fun configuredPath(value: String?): Path? = value?.takeIf(String::isNotEmpty)?.let(Path::of)
+
+private fun sonaExecutable(
+  os: DesktopOs,
+  appDir: Path,
+): Path =
+  when (os) {
+    DesktopOs.MAC -> appDir.resolve("Contents/MacOS/Sona")
+    DesktopOs.WINDOWS -> appDir.resolve("Sona.exe")
+    DesktopOs.LINUX -> appDir.resolve("bin/Sona")
+  }
+
+private fun defaultDesktopInstallRoot(
+  home: Path,
+  environment: Map<String, String>,
+  os: DesktopOs,
+): Path =
+  when (os) {
+    DesktopOs.MAC -> home.resolve("Applications")
+    DesktopOs.WINDOWS ->
+      environment["LOCALAPPDATA"]?.let(Path::of)
+        ?.resolve("SkillBill/Desktop")
+        ?: home.resolve("AppData/Local/SkillBill/Desktop")
+    DesktopOs.LINUX ->
+      (environment["XDG_DATA_HOME"]?.let(Path::of) ?: home.resolve(".local/share"))
+        .resolve("skillbill/desktop")
+  }
+
+private fun legacyDesktopAppDir(
   home: Path,
   environment: Map<String, String>,
   os: DesktopOs,
@@ -207,8 +365,7 @@ private fun defaultDesktopAppDir(
   when (os) {
     DesktopOs.MAC -> Path.of("/Applications/SkillBill.app")
     DesktopOs.WINDOWS ->
-      environment["LOCALAPPDATA"]?.let(Path::of)
-        ?.resolve("SkillBill/Desktop/SkillBill")
+      environment["LOCALAPPDATA"]?.let(Path::of)?.resolve("SkillBill/Desktop/SkillBill")
         ?: home.resolve("AppData/Local/SkillBill/Desktop/SkillBill")
     DesktopOs.LINUX ->
       (environment["XDG_DATA_HOME"]?.let(Path::of) ?: home.resolve(".local/share"))

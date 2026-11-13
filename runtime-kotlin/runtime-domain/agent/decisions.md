@@ -1,3 +1,8 @@
+## [2026-11-13] Reconciliation baseline keys stay uncommented
+Context: Validation flagged KDoc on ReconciliationPlan.prunedBaselineKeys and BaselineManifest.sourceHashFor.
+Decision: Keep the names as the documentation. prunedBaselineKeys drops both the composite hash and the `#source` companion. sourceHashFor reads that companion and is absent on older baselines.
+Reason: Comment policy allows KDoc only on interfaces and their members.
+
 ## [2026-11-08] Build paths cross runtime-domain as strings
 Context: Build matching needs repository and Xcode metadata paths, while runtime-domain forbids java.nio imports.
 Decision: BuildMatchContext and BuildRepositoryFiles carry absolute host path strings. The runtime-infra adapter converts them with Path.of.

@@ -97,7 +97,7 @@ internal fun HistoryScreen(state: HistoryUiState, filterFocus: FocusRequester, h
       actions = {
         if ((state.board as? BoardState.Loaded)?.stale == true) StaleIndicator()
         SbIconButton(LucideIcons.refresh, "Refresh", { onAction(HistoryAction.Refresh) })
-        SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close specs pane" else "Specs", host.onToggleSpecs, shortcut = "G S", selected = host.specsOpen)
+        SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close plans pane" else "Plans", host.onToggleSpecs, shortcut = "G S", selected = host.specsOpen)
         SbIconButton(LucideIcons.terminal, if (host.terminalOpen) "Close terminal" else "Terminal", host.onToggleTerminal, shortcut = "⌃ `", selected = host.terminalOpen)
       },
     )

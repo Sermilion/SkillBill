@@ -1,19 +1,19 @@
 ---
-name: skill-bill
-description: "Run governed feature work with /skill-bill <intake>, or explicitly requested standalone tasks. Phases: /skill-bill phase:plan <intake> prepares a spec bundle; /skill-bill phase:review reports code findings; /skill-bill phase:validation runs and repairs project checks, lint, and formatting; /skill-bill phase:qa reports QA findings for the repository's declared QA targets (backend endpoints, web journeys, a desktop app, or a device or simulator); /skill-bill phase:pr commits, pushes, opens or updates a PR, and monitors CI; /skill-bill phase:monitor watches CI on an exact open PR or a `branch:<name>` target from an owned temporary worktree and repairs failed checks or PR merge conflicts. Operations: /skill-bill operation:update-check checks for updates; /skill-bill operation:release bump:<patch|minor|major> proposes and publishes a release; /skill-bill operation:unit-test-value-check reviews test value; /skill-bill operation:feature-guard <intake> adds a feature flag; /skill-bill operation:feature-guard-cleanup <intake> removes a stabilized flag; /skill-bill operation:pr-review-fix proposes and applies selected PR feedback fixes; /skill-bill operation:verify <intake> audits confirmed acceptance criteria."
+name: sona
+description: "Run governed feature work with /sona <intake>, or explicitly requested standalone tasks. Phases: /sona phase:plan <intake> prepares a spec bundle; /sona phase:review reports code findings; /sona phase:validation runs and repairs project checks, lint, and formatting; /sona phase:qa reports QA findings for the repository's declared QA targets (backend endpoints, web journeys, a desktop app, or a device or simulator); /sona phase:pr commits, pushes, opens or updates a PR, and monitors CI; /sona phase:monitor watches CI on an exact open PR or a `branch:<name>` target from an owned temporary worktree and repairs failed checks or PR merge conflicts. Operations: /sona operation:update-check checks for updates; /sona operation:release bump:<patch|minor|major> proposes and publishes a release; /sona operation:unit-test-value-check reviews test value; /sona operation:feature-guard <intake> adds a feature flag; /sona operation:feature-guard-cleanup <intake> removes a stabilized flag; /sona operation:pr-review-fix proposes and applies selected PR feedback fixes; /sona operation:verify <intake> audits confirmed acceptance criteria."
 ---
 
-# Skill Bill Dispatcher
+# Sona Dispatcher
 
-`skill-bill` routes a full feature run, one phase over the working tree, or one
-runtime operation to the `skill-bill` CLI. The full run is the only feature entry
+`sona` routes a full feature run, one phase over the working tree, or one
+runtime operation to the `sona` CLI. The full run is the only feature entry
 point. The runtime owns preparation, planning, execution, and durable state.
 Phase and operation forms run one command and relay its output.
 
 ## Operator-only commands
 
 Standalone phases and operations are operator tools. An agent may run
-`skill-bill phase` or `skill-bill operation` only when the operator explicitly
+`sona phase` or `sona operation` only when the operator explicitly
 requests that standalone phase or operation, through a named form or an
 unambiguous standalone task such as running validation. A full feature request,
 an issue URL, a workflow briefing, or a missing spec does not authorize either
@@ -27,11 +27,11 @@ must not start standalone phase or operation commands.
 ## Update Check
 
 Only the initial, user-facing full-run invocation performs this automatic check.
-Call `mcp__skill-bill__update_check` once before full-run intake.
+Call `mcp__sona__update_check` once before full-run intake.
 Keep the selected runtime for the whole run, including every subtask and retry.
 
 Runtime-launched phase workers, goal children, retries, and continuations execute
-their supplied briefing. They must not call `mcp__skill-bill__update_check`, ask
+their supplied briefing. They must not call `mcp__sona__update_check`, ask
 whether to update, or repeat this dispatcher's intake or confirmation
 gate. Reading this skill during an active phase does not start a new invocation.
 Phase and operation forms skip the automatic check. An explicit
@@ -61,27 +61,27 @@ operator's current request selects a standalone phase or operation.
 
 | Invocation | Route | Intake |
 | --- | --- | --- |
-| `/skill-bill <intake>` | full run: Intake, Issue resolution, Launch, Relay | required |
-| `/skill-bill <intake> phase:plan` | `skill-bill phase plan <intake> --agent <currently-executing-agent>` | required |
-| `/skill-bill [<intake>] phase:review` | `skill-bill phase review [<intake>] [mode:<value>] [target:<value>] --agent <currently-executing-agent>` | optional |
-| `/skill-bill [<intake>] phase:validation` | `skill-bill phase validation [<intake>] --agent <currently-executing-agent>` | optional |
-| `/skill-bill <standalone quality check: run checks, lint, format, or quality validation>` | `skill-bill phase validation [<intake>] --agent <currently-executing-agent>` | optional |
-| `/skill-bill [<instructions>] phase:qa` | `skill-bill phase qa [<instructions>] --agent <currently-executing-agent>` | optional |
-| `/skill-bill [<intake>] phase:pr` | `skill-bill phase pr [<intake>] --agent <currently-executing-agent>` | optional |
-| `/skill-bill [<issue-key\|pr-url\|branch:<name>] phase:monitor` | `skill-bill phase monitor [<intake>] --agent <currently-executing-agent>` | optional |
-| `/skill-bill operation:update-check [--include-prereleases] [--format json]` | `skill-bill operation update-check [--include-prereleases] [--format json]` | none |
-| `/skill-bill [<instructions>] operation:release bump:<patch\|minor\|major>` | `skill-bill operation release bump:<value> [<instructions>] --agent <currently-executing-agent>` | optional |
-| `/skill-bill [<scope>] operation:unit-test-value-check` | `skill-bill operation unit-test-value-check [scope:<value>] --agent <currently-executing-agent>` | optional |
-| `/skill-bill <intake> operation:feature-guard` | `skill-bill operation feature-guard <intake> --agent <currently-executing-agent>` | required |
-| `/skill-bill <intake> operation:feature-guard-cleanup` | `skill-bill operation feature-guard-cleanup <intake> --agent <currently-executing-agent>` | required |
-| `/skill-bill [<pr>] operation:pr-review-fix [mode:local\|remote] [scope:analyze-only] [push:on] [replies:draft]` | `skill-bill operation pr-review-fix [<pr>] [<tokens>] --agent <currently-executing-agent>` | optional |
-| `/skill-bill operation:verify <intake> [target:<pr\|branch\|base..head>] [mode:inline\|delegated] [qa:on\|off]` | `skill-bill operation verify <intake> [spec:<value>] [target:<value>] [mode:inline\|delegated] [qa:on\|off] [--qa-device <serial:...\|avd:...>] --agent <currently-executing-agent>` | required |
+| `/sona <intake>` | full run: Intake, Issue resolution, Launch, Relay | required |
+| `/sona <intake> phase:plan` | `sona phase plan <intake> --agent <currently-executing-agent>` | required |
+| `/sona [<intake>] phase:review` | `sona phase review [<intake>] [mode:<value>] [target:<value>] --agent <currently-executing-agent>` | optional |
+| `/sona [<intake>] phase:validation` | `sona phase validation [<intake>] --agent <currently-executing-agent>` | optional |
+| `/sona <standalone quality check: run checks, lint, format, or quality validation>` | `sona phase validation [<intake>] --agent <currently-executing-agent>` | optional |
+| `/sona [<instructions>] phase:qa` | `sona phase qa [<instructions>] --agent <currently-executing-agent>` | optional |
+| `/sona [<intake>] phase:pr` | `sona phase pr [<intake>] --agent <currently-executing-agent>` | optional |
+| `/sona [<issue-key\|pr-url\|branch:<name>] phase:monitor` | `sona phase monitor [<intake>] --agent <currently-executing-agent>` | optional |
+| `/sona operation:update-check [--include-prereleases] [--format json]` | `sona operation update-check [--include-prereleases] [--format json]` | none |
+| `/sona [<instructions>] operation:release bump:<patch\|minor\|major>` | `sona operation release bump:<value> [<instructions>] --agent <currently-executing-agent>` | optional |
+| `/sona [<scope>] operation:unit-test-value-check` | `sona operation unit-test-value-check [scope:<value>] --agent <currently-executing-agent>` | optional |
+| `/sona <intake> operation:feature-guard` | `sona operation feature-guard <intake> --agent <currently-executing-agent>` | required |
+| `/sona <intake> operation:feature-guard-cleanup` | `sona operation feature-guard-cleanup <intake> --agent <currently-executing-agent>` | required |
+| `/sona [<pr>] operation:pr-review-fix [mode:local\|remote] [scope:analyze-only] [push:on] [replies:draft]` | `sona operation pr-review-fix [<pr>] [<tokens>] --agent <currently-executing-agent>` | optional |
+| `/sona operation:verify <intake> [target:<pr\|branch\|base..head>] [mode:inline\|delegated] [qa:on\|off]` | `sona operation verify <intake> [spec:<value>] [target:<value>] [mode:inline\|delegated] [qa:on\|off] [--qa-device <serial:...\|avd:...>] --agent <currently-executing-agent>` | required |
 
 For `operation:pr-review-fix`, local mode is the default; `push:` and `replies:` require `mode:remote`.
 
 `phase:plan` is a durable, resumable plan: it seeds the parent spec, opens a
 plan workflow, stops after the verified spec bundle, and prints the bundle
-paths, the plan workflow id, and `skill-bill <KEY>`. Running the full run for
+paths, the plan workflow id, and `sona <KEY>`. Running the full run for
 that key later finishes an incomplete plan and then executes the goal. The full
 run plans new work through the same plan skeleton (intake, preplan, plan), so a
 single feature is a one-subtask bundle and there is no separate single-feature
@@ -101,7 +101,7 @@ comments. With `mode:remote`, forward a PR first as `#<number>` or its URL;
 without one, the runtime uses the current branch's PR. For `operation:update-check`, forward `--include-prereleases` and
 `--format json` verbatim when the caller gives them; without them, omit them.
 
-`operation:<name>` translates to `skill-bill operation <name>`, forwarding
+`operation:<name>` translates to `sona operation <name>`, forwarding
 `bump:`, `confirm:`, `select:`, `mode:`, `scope:`, `push:`, `replies:`, `spec:`,
 `target:`, and `qa:` tokens verbatim and any other text as operator
 instructions. The runtime rejects an unknown operation name, a missing bump, a
@@ -165,7 +165,7 @@ Stop without running any CLI command when:
 ## Issue resolution
 
 For a tracker link or issue key, check local specs and persisted workflow state
-before contacting the tracker. Get the project store with `skill-bill project path`
+before contacting the tracker. Get the project store with `sona project path`
 and search bundles directly under `<store>/specs/`. The store is flat: finished
 bundles stay beside the others and their manifests mark them complete. Then
 search active bundles directly under the legacy `./.feature-specs/` in the
@@ -174,7 +174,7 @@ goals, and exclude `./.feature-specs/done/`, which holds un-imported archived
 bundles that never supply intake or resume work. Use
 `rg --files --hidden --no-ignore <directory>` for the store,
 `rg --files --hidden --no-ignore -g '!done/**' <directory>` for the legacy
-directory, or inspect each directory directly. `skill-bill project path <issue-key>` prints the matching
+directory, or inspect each directory directly. `sona project path <issue-key>` prints the matching
 bundle directory when one exists. Match the issue key and read the matching
 `spec.md`. A filename search that honors ignore rules does not prove that a spec
 is absent. If several bundles match, ask for the intended spec path.
@@ -186,7 +186,7 @@ start new work. Unrelated workflows and their contract versions cannot block
 this lookup.
 
 When no readable local spec exists, inspect only the requested goal with
-`skill-bill goal status <issue-key> --repo-root <repo-root>`. This targeted
+`sona goal status <issue-key> --repo-root <repo-root>`. This targeted
 intake lookup is permitted before launch. A matching persisted goal takes
 precedence over tracker lookup. Report a lookup error for the requested goal;
 never replace it with a global workflow scan or treat it as absent work.
@@ -201,7 +201,7 @@ resume a goal or inspect workflow state.
 
 A decomposition manifest already present is executable intake. Launch the full
 runtime directly, without checking it through `phase plan` or asking the operator
-to run `skill-bill <KEY>`. If this full-run request was mistakenly sent to
+to run `sona <KEY>`. If this full-run request was mistakenly sent to
 `phase plan` and it refused because the manifest exists, correct the dispatch by
 launching the full runtime with the same intake and forwarded flags. That
 correction needs no new permission and does not apply to an explicit planning-only
@@ -253,7 +253,7 @@ full runtime once with the resolved intake.
 ## Local key allocation
 
 For new requirements without a key, inspect `<store>/specs/` (the project store
-from `skill-bill project path`) and the legacy `./.feature-specs/` in the current
+from `sona project path`) and the legacy `./.feature-specs/` in the current
 repository, including ignored and untracked files and the legacy archive
 `./.feature-specs/done/`. Use `rg --files --hidden --no-ignore <directory>` or inspect
 each directory directly. Read bundle directory names, parent `spec.md` identities,
@@ -290,11 +290,11 @@ write the returned spec content to the target path. Fetch nothing when the list 
 Run the full-workflow intake form:
 
 ```text
-skill-bill <intake> --agent <currently-executing-agent> --no-live-output
+sona <intake> --agent <currently-executing-agent> --no-live-output
 ```
 
 Pass the intake as one shell-quoted argument with real newlines preserved. The
-CLI routes it to the goal runtime. `skill-bill goal <intake>` is the explicit
+CLI routes it to the goal runtime. `sona goal <intake>` is the explicit
 equivalent. The runtime creates missing specs and the parent workflow before
 planning; existing specs resume through the same entry point.
 
@@ -389,7 +389,7 @@ reported as out of scope. An in-scope flow is untested when its required tools
 are unavailable. Forward the
 intake verbatim; the dispatcher does not fetch the issue for this phase. The QA agent drives the app, service, browser,
 device, or simulator the guidance names and writes a prose `report.md` and its evidence under
-`qa/<repo-key>/<invocation>/` in the skill-bill state directory
+`qa/<repo-key>/<invocation>/` in the sona state directory
 (`SKILL_BILL_STATE_DIR` when set), never in the working tree or `.git/`. It runs on a
 test account, so every in-app action is allowed, and it picks a Local or staging
 environment, never production; a production-only app settles `skipped` and
@@ -400,8 +400,8 @@ the environment does not produce on its own, QA forces it, for example with an
 injected fault or a network cut, and leaves a flow unexercised only after a
 forced attempt failed. The runtime
 deletes that worktree afterwards; QA never edits the working tree, commits,
-pushes, or opens a PR. A standalone QA agent reports live progress with `skill-bill qa plan`,
-`skill-bill qa step`, and `skill-bill qa target`. These commands exit 0 for `recorded`, `rejected`,
+pushes, or opens a PR. A standalone QA agent reports live progress with `sona qa plan`,
+`sona qa step`, and `sona qa target`. These commands exit 0 for `recorded`, `rejected`,
 and `failed`, and they cannot change the verdict. A usage error exits non-zero, and QA continues.
 QA never blocks and always exits 0. The runtime reads the report with
 no schema check: the first line naming `passed`, `findings_open`, `incomplete`, or
@@ -526,10 +526,10 @@ attempt count.
 
 ## Phase Validation
 
-`phase:validation` runs `skill-bill phase validation` from Forms and Routing. A
+`phase:validation` runs `sona phase validation` from Forms and Routing. A
 standalone quality check (a request to run checks, lint, format, or quality
 validation) routes to `phase:validation`: run
-`skill-bill phase validation [<intake>] --agent <currently-executing-agent>`
+`sona phase validation [<intake>] --agent <currently-executing-agent>`
 once and relay its output as a phase form.
 
 ## Pack routing
@@ -595,19 +595,19 @@ operation once more.
 For `operation:update-check`, run the runtime command:
 
 ```bash
-skill-bill operation update-check
+sona operation update-check
 ```
 
 Use JSON output when the caller needs machine-readable output:
 
 ```bash
-skill-bill operation update-check --format json
+sona operation update-check --format json
 ```
 
 To compare against prerelease tags as well as stable releases, pass:
 
 ```bash
-skill-bill operation update-check --include-prereleases
+sona operation update-check --include-prereleases
 ```
 
 Do not inspect GitHub releases directly in this skill content, run `install.sh`,

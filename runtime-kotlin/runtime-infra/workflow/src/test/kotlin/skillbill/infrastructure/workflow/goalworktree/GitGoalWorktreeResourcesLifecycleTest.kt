@@ -1,9 +1,11 @@
 package skillbill.infrastructure.workflow.goalworktree
 
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.io.TempDir
 import skillbill.infrastructure.workflow.git.runGit
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningOwnership
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.time.NoopRuntimeTimingPort
@@ -42,13 +44,16 @@ class GitGoalWorktreeResourcesLifecycleTest {
   private val database = WorktreeTestDatabase()
   private val resources: GitGoalWorktreeResources by lazy { resourcesWith(NoopRuntimeTimingPort) }
 
-  private fun resourcesWith(timing: RuntimeTimingPort): GitGoalWorktreeResources =
+  private fun resourcesWith(
+    timing: RuntimeTimingPort,
+    diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
+  ): GitGoalWorktreeResources =
     GitGoalWorktreeResources(
       EnvironmentContext(
         environment = mapOf(STATE_DIR_ENVIRONMENT_KEY to temp.resolve("state").toString()),
         userHome = temp.resolve("home"),
       ),
-      NoopRuntimeDiagnostics,
+      diagnostics,
       timing,
       database,
     )
@@ -102,6 +107,50 @@ class GitGoalWorktreeResourcesLifecycleTest {
       worktree.resolveSibling("checkout.removing"),
       "${attributes.fileKey()}\n${attributes.creationTime()}",
     )
+  }
+
+  @Test
+  fun `resume accepts a changed mount device only when the remaining ownership evidence matches`() {
+    val path = created()
+    val owner = owners.getValue(path)
+    val marker = Path.of(requireNotNull(owner.gitWorktreeIdentity)).resolve(OWNERSHIP_MARKER)
+    val original = Files.readString(marker)
+    val lines = original.lines()
+    val key = Regex("\\(dev=([0-9a-fA-F]+),ino=([0-9]+)\\)").matchEntire(lines[4])
+    assumeTrue(key != null, "requires a Unix file key")
+    val device = requireNotNull(key).groupValues[1]
+    val changedDevice = if (device == "0") "1" else "0"
+    val alternate =
+      lines.toMutableList().also {
+        it[4] = "(dev=$changedDevice,ino=${key.groupValues[2]})"
+      }
+    val warnings = mutableListOf<String>()
+    val diagnostics =
+      object : RuntimeDiagnostics by NoopRuntimeDiagnostics {
+        override fun warning(
+          message: String,
+          error: Throwable?,
+        ) {
+          warnings += message
+        }
+      }
+    val checking = resourcesWith(NoopRuntimeTimingPort, diagnostics)
+    Files.writeString(marker, alternate.joinToString("\n"))
+    assertIs<GoalWorktreeResult.Adopted>(checking.createOrAdopt(repo, "SKILL-1", path, owner.initialCommit, owner))
+    assertTrue(warnings.any { "outcome=adopted_matching_inode_birth_and_registration" in it })
+    assertEquals(alternate.joinToString("\n"), Files.readString(marker))
+    assertIs<GoalWorktreeSettlement.Retained>(checking.settle(settlementRequest(path)))
+    assertTrue(Files.exists(path))
+    lines.indices.forEach { index ->
+      val invalid = alternate.toMutableList()
+      invalid[index] = if (index == 4) "(dev=$changedDevice,ino=0)" else "mismatched-evidence"
+      Files.writeString(marker, invalid.joinToString("\n"))
+      assertIs<GoalWorktreeResult.Failed>(checking.createOrAdopt(repo, "SKILL-1", path, owner.initialCommit, owner))
+      assertEquals(invalid.joinToString("\n"), Files.readString(marker))
+      assertTrue(Files.exists(path))
+    }
+    Files.writeString(marker, original)
+    assertIs<GoalWorktreeResult.Adopted>(checking.createOrAdopt(repo, "SKILL-1", path, owner.initialCommit, owner))
   }
 
   @Test

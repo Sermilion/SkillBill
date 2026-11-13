@@ -482,7 +482,7 @@ class ProjectStoreResolver(
     const val SHARED_CLONE_OUTCOME = "lineage_shared"
     const val MULTIPLE_CANDIDATES_OUTCOME = "multiple_candidates"
     const val GIT_UNAVAILABLE_OUTCOME = "git_unavailable"
-    const val LINK_HINT = "'run skill-bill project link <id> to attach this checkout'"
+    const val LINK_HINT = "'run sona project link <id> to attach this checkout'"
     val STORE_ID_PATTERN = Regex("""[A-Za-z0-9_-][A-Za-z0-9._-]*""")
     val CATALOG_ORDER: Comparator<ProjectCatalogEntry> =
       compareByDescending<ProjectCatalogEntry, Instant?>(nullsFirst()) { it.lastSeen }.thenBy { it.projectId }

@@ -32,6 +32,7 @@ import skillbill.engine.goalrunner.manifest.GoalParentProjectionWriter
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
+import skillbill.engine.goalrunner.model.GoalRunnerLeasePurpose
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
 import skillbill.engine.goalrunner.persist.engineWorkflowGoalRunnerManifestStore
 import skillbill.engine.goalrunner.persist.testWorkflowGoalRunnerQualityExecutionStore
@@ -390,6 +391,30 @@ class FeatureTaskExecutionPlanCreationTest {
       assertEquals(next, store.executionLease(PARENT))
       assertEquals(1, store.controlState(PARENT).currentSubtaskId)
       assertEquals(childBefore, database.read { it.workflowStates.getFeatureTaskWorkflow(CHILD) })
+    }
+
+  @Test
+  fun `blocked start settlement can claim a fenced lease without admitting or changing its linked child`() =
+    withDatabase { database ->
+      val fixture = ChildCreation(database)
+      fixture.seed()
+      fixture.save(database)
+      val store = fixture.store()
+      store.persistControlState(PARENT, GoalRunnerControlState(executionLease = parentLease))
+      val childBefore = database.read { it.workflowStates.getFeatureTaskWorkflow(CHILD) }
+      val next = parentLease.copy(ownerToken = "settlement-owner", generation = 2)
+      assertFalse(
+        store.acquireExecutionLeaseFenced(
+          PARENT,
+          next,
+          parentLease.copy(generation = 99),
+          GoalRunnerLeasePurpose.BLOCK_SETTLEMENT,
+        ),
+      )
+      assertTrue(store.acquireExecutionLeaseFenced(PARENT, next, parentLease, GoalRunnerLeasePurpose.BLOCK_SETTLEMENT))
+      assertEquals(next, store.executionLease(PARENT))
+      assertEquals(childBefore, database.read { it.workflowStates.getFeatureTaskWorkflow(CHILD) })
+      assertEquals(0, fixture.execution.launches)
     }
 
   @Test

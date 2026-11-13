@@ -102,14 +102,14 @@ public fun RepositoryEnclosingRootPort.governedFeatureTaskSpecPath(
       throw invalidFeatureTaskExecutionIdentitySchema(
         workflowId,
         "spec is outside the project store specs root ${projectStore.resolve(repoRoot).specsRoot} " +
-          "(`skill-bill project path` prints the project store) and outside a " +
+          "(`sona project path` prints the project store) and outside a " +
           "${LegacyProjectStatePaths.FEATURE_SPECS_PREFIX} in the checkout",
       )
     FeatureTaskGovernedSpecPathResult.InvalidGovernedPath ->
       throw invalidFeatureTaskExecutionIdentitySchema(
         workflowId,
         "spec is not Markdown beneath the project store specs root ${projectStore.resolve(repoRoot).specsRoot} " +
-          "(`skill-bill project path` prints the project store); a ${LegacyProjectStatePaths.FEATURE_SPECS_PREFIX} " +
+          "(`sona project path` prints the project store); a ${LegacyProjectStatePaths.FEATURE_SPECS_PREFIX} " +
           "spec is accepted only as a legacy in-place spec",
       )
   }

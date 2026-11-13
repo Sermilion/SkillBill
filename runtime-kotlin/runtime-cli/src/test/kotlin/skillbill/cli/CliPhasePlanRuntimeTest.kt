@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import skillbill.cli.core.CliRuntime
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.DECOMPOSITION_MANIFEST_CONTRACT_VERSION
+import skillbill.engine.featuretask.phase.core.scriptedPhaseValueRecord
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.agentRunLaunchFacts
@@ -314,6 +315,8 @@ class CliPhasePlanRuntimeTest {
       "user.name=Goal Fixture",
       "-c",
       "user.email=goal-fixture@example.invalid",
+      "-c",
+      "commit.gpgsign=false",
       "commit",
       "--quiet",
       "-m",
@@ -481,7 +484,10 @@ class CliPhasePlanRuntimeTest {
     installGoalBuildPack(tempDir)
     Files.writeString(tempDir.resolve("tracked-legacy.txt"), "base")
     git("add", "tracked-legacy.txt")
-    git("-c", "user.name=Goal Fixture", "-c", "user.email=goal-fixture@example.invalid", "commit", "-m", "legacy base")
+    git(
+      "-c", "user.name=Goal Fixture", "-c", "user.email=goal-fixture@example.invalid",
+      "-c", "commit.gpgsign=false", "commit", "-m", "legacy base",
+    )
     val planner = PhasePlanLauncher(tempDir, authorNothingFirst = true)
     val context = fixture.context(launcher = planner).copy(repositoryRoot = tempDir)
     val first =
@@ -851,7 +857,7 @@ class CliPhasePlanRuntimeTest {
     }
   }
 
-  private class PhasePlanLauncher(
+  private inner class PhasePlanLauncher(
     private val repoRoot: Path,
     private val dirtyOutsideBundle: Boolean = false,
     private val incompleteFirstBundle: Boolean = false,
@@ -888,7 +894,7 @@ class CliPhasePlanRuntimeTest {
       }
       val stdout =
         if (phaseId == "plan") {
-          authorBundle()
+          scriptedPhaseValueRecord(phaseId, authorBundle())
         } else {
           phasePlanningPayload(
             phaseId,
@@ -898,7 +904,12 @@ class CliPhasePlanRuntimeTest {
       if (dirtyOutsideBundle && phaseIds.count { it == "plan" } == 1 && phaseId == "plan") {
         Files.writeString(repoRoot.resolve("outside-plan.txt"), "Concurrent edit")
       }
-      return agentRunLaunchFacts(agent = SupportedAgent.CODEX, stdout = stdout, stderr = "")
+      return RuntimeWorkflowTestSupport.settlePhase(
+        agentRunLaunchFacts(agent = SupportedAgent.CODEX, stdout = stdout, stderr = ""),
+        request.skillRunRequest.promptOverride,
+        fixture.dbPath,
+        fixture.context(launcher = this),
+      )
     }
 
     fun authorBundle(): String {

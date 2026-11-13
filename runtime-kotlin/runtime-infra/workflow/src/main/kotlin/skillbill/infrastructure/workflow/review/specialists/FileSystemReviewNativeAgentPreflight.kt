@@ -26,12 +26,12 @@ class FileSystemReviewNativeAgentPreflight(
     val home = environment.userHome
     val environmentValues = resolveEnvironmentMap(environment.environment)
 
-    val inventory = NativeAgentLinkInventory.read(home, emptyList(), environment = environmentValues)
-    request.assignments.distinct().forEach { assignment ->
+    val assignments = request.assignments.distinct()
+    assignments.forEach { assignment ->
       val agentId = assignment.agentId
       val logicalName = assignment.logicalName
-      val provider =
-        provider(agentId) ?: throw missingInstalledNativeAgent(
+      if (provider(agentId) == null) {
+        throw missingInstalledNativeAgent(
           MissingInstalledNativeAgentContext(
             logicalName,
             agentId,
@@ -40,6 +40,13 @@ class FileSystemReviewNativeAgentPreflight(
             REPAIR_COMMAND,
           ),
         )
+      }
+    }
+    val inventory = NativeAgentLinkInventory.read(home, emptyList(), environment = environmentValues)
+    assignments.forEach { assignment ->
+      val agentId = assignment.agentId
+      val logicalName = assignment.logicalName
+      val provider = requireNotNull(provider(agentId))
       val entries = inventory.filter { it.provider == provider.name.lowercase() && it.logicalName == logicalName }
       if (entries.isEmpty()) {
         fail(
@@ -138,6 +145,6 @@ class FileSystemReviewNativeAgentPreflight(
     )
 
   private companion object {
-    const val REPAIR_COMMAND = "skill-bill install apply"
+    const val REPAIR_COMMAND = "sona install apply"
   }
 }

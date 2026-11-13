@@ -122,6 +122,7 @@ internal data class GoalFinishCardSources(
   val quality: GoalQualityExecutionRead?,
   val cycles: List<MonitorCiCycleRecord>?,
   val goalPullRequestUrl: String?,
+  val goalCompleted: Boolean = false,
 )
 
 internal data class GoalFinishCardReadRequest(
@@ -131,6 +132,7 @@ internal data class GoalFinishCardReadRequest(
   val currentStep: String?,
   val workflowStatus: WorkflowStatus?,
   val childWorkflowId: String?,
+  val goalCompleted: Boolean = false,
 )
 
 internal fun readGoalFinishCards(
@@ -152,7 +154,7 @@ internal fun readGoalFinishCards(
       null
     }
   return goalFinishCards(
-    GoalFinishCardSources(request.assessment, quality, cycles, request.goalPullRequestUrl),
+    GoalFinishCardSources(request.assessment, quality, cycles, request.goalPullRequestUrl, request.goalCompleted),
     request.currentStep,
     request.workflowStatus,
     request.childWorkflowId,
@@ -172,20 +174,50 @@ internal fun goalFinishCards(
   cards += qualityCards(sources.quality, durableRead)
   val cycles = sources.cycles.orEmpty()
   val latestCycleUrl = cycles.lastOrNull { it.pullRequestUrl != null }?.pullRequestUrl
-  if (sources.goalPullRequestUrl != null || latestCycleUrl != null) {
+  val currentPrState = currentPullRequestState(currentStep, workflowStatus, childWorkflowId, sources.goalCompleted)
+  if (currentPrState != null || sources.goalPullRequestUrl != null || latestCycleUrl != null) {
     cards +=
       GoalRunnerPhaseCard(
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR,
-        GoalRunnerPhaseCardState.COMPLETED,
+        currentPrState ?: GoalRunnerPhaseCardState.COMPLETED,
         pullRequestUrl = sources.goalPullRequestUrl ?: latestCycleUrl,
         pullRequestNumber = cycles.lastOrNull { it.pullRequestNumber != null }?.pullRequestNumber,
       )
   }
   if (cycles.isNotEmpty()) {
-    cards += monitorCard(cycles)
+    val completedWithoutFinalCycle = sources.goalCompleted && cycles.last().finishedAt == null
+    if (completedWithoutFinalCycle) {
+      durableRead.recordDegradedRead(
+        "goal-status.monitor_ci_terminal_result",
+        "finished_monitor_ci_cycle",
+        "goal_completed_with_last_observation",
+      )
+    }
+    cards += monitorCard(cycles, completedWithoutFinalCycle)
     monitorFixCard(cycles, currentStep, workflowStatus, childWorkflowId)?.let(cards::add)
   }
   return cards
+}
+
+private fun currentPullRequestState(
+  currentStep: String?,
+  workflowStatus: WorkflowStatus?,
+  childWorkflowId: String?,
+  goalCompleted: Boolean,
+): GoalRunnerPhaseCardState? {
+  if (
+    goalCompleted || childWorkflowId != null ||
+    currentStep != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR
+  ) {
+    return null
+  }
+  return when (workflowStatus) {
+    WorkflowStatus.RUNNING -> GoalRunnerPhaseCardState.RUNNING
+    WorkflowStatus.BLOCKED -> GoalRunnerPhaseCardState.BLOCKED
+    WorkflowStatus.PAUSED -> GoalRunnerPhaseCardState.PAUSED
+    WorkflowStatus.FAILED, WorkflowStatus.TIMED_OUT -> GoalRunnerPhaseCardState.FAILED
+    WorkflowStatus.PENDING, WorkflowStatus.COMPLETED, WorkflowStatus.ABANDONED, null -> null
+  }
 }
 
 private fun GoalRunnerAssessmentResult.toAssessmentCard(): GoalRunnerPhaseCard? {
@@ -235,11 +267,14 @@ private fun qualityCards(
     }
 }
 
-private fun monitorCard(cycles: List<MonitorCiCycleRecord>): GoalRunnerPhaseCard {
+private fun monitorCard(
+  cycles: List<MonitorCiCycleRecord>,
+  goalCompleted: Boolean,
+): GoalRunnerPhaseCard {
   val latest = cycles.last()
   val state =
     if (latest.finishedAt == null) {
-      GoalRunnerPhaseCardState.RUNNING
+      if (goalCompleted) GoalRunnerPhaseCardState.COMPLETED else GoalRunnerPhaseCardState.RUNNING
     } else {
       when (latest.outcome) {
         MonitorCiCycleOutcome.BLOCKED, MonitorCiCycleOutcome.UNAVAILABLE -> GoalRunnerPhaseCardState.BLOCKED

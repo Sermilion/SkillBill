@@ -1,5 +1,19 @@
 # Boundary History — runtime-kotlin/runtime-infra
 
+## [2026-11-12] SONA-12 subtask 2: Devin runtime phase workers
+Areas: runtime-infra/launcher (agentrun, process/cursor, process/launch, mcp); runtime-domain install model
+- DevinAgentRunCommandBuilder launches `devin acp [--model <UID>]` through the shared CursorAcpSession transport, using AcpProvider.Devin (no authMethod, exact models, login hint `devin auth login`) and AgentRunApprovalProtocol.DEVIN_ACP. It is registered in headlessAgentRunAdapters. SupportedAgent.DEVIN honours additional writable directories and loads runtime MCP headless.
+- reusable: CursorAcpLaunch gains optional mcpServers (AcpStdioMcpServer with list-shaped AcpEnvVariable env) and additionalDirectories, sent on session/new and session/load. Before any session request, sessionContextRefusal (AcpSessionContext) refuses a non-absolute command or root, and roots the agent has not advertised in sessionCapabilities.additionalDirectories. Cursor and Junie still send empty context.
+- reusable: acpRuntimeMcpServer (mcp/RuntimeMcpServer) builds the skill-bill stdio server from the binding's database, runtime MCP executable and validation invocation.
+- reusable: AgentRunCommandBuilder.launchRefusal runs after approvalRefusal and before build or spawn, returning UnsupportedAgentRunLaunch with outcome launch_assignment_unsupported. Every builder implements it. Devin refuses a separate effort or a missing runtime MCP executable or database.
+- Exact-model ACP providers skip resolveAcpModel, accept only an exactly advertised ID, and never copy the reported model from the set_model acknowledgement. Absent model metadata keeps the CLI assignment and records a model_metadata_absent diagnostic.
+- acpRejection classifies JSON-RPC errors by code and pending operation (auth -32000, model selection, session context, generic). It truncates provider detail to 500 characters and does not parse message text.
+- A session worker that exits nonzero on its own keeps its native exit code (ProcessWait.naturalExitStatus) instead of being normalized to 0 or 1.
+- Lifecycle, approval cards, cancellation and resume reuse the existing ACP and launch-assignment owners. A governed specialist request gets the typed LAUNCH_CAPABILITY refusal.
+- Limits: no Devin cases yet in AgentRunLauncherProcessTest, RecordedLaunchAssignmentResumeTest or PhaseRunCancellationTest. Desktop chat sends empty ACP session context. Authenticated Devin runs, live MCP and approval round trips were left to goal QA.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-10] SKILL-529 provider approval match facts
 Areas: runtime-infra/launcher interaction, codex and cursor permission requests; desktop chat JVM adapter tests
 - Claude, Codex and Cursor approval registration fills matchFacts with trimmed command text or checkout-relative paths; fingerprints, classification and options stay unchanged.
@@ -47,7 +61,7 @@ Acceptance criteria: 3/3 implemented
 Areas: runtime-infra/host (projectstore), runtime-infra/workflow (git lineage), runtime-ports, runtime-contracts, runtime-core DI, runtime-cli, runtime-application uninstall, uninstall.sh, orchestration/contracts
 - ProjectStoreResolver (host/projectstore) maps a checkout to a store under the state dir's projects/ directory. Linked worktrees of one repo share a store through the real path of the primary git common dir; a moved checkout is adopted by root-commit lineage; a second clone gets a suffixed id (superseded below: a clone with the same remote now shares the store); a repo with no commits is re-keyed to lineage once it has one; a non-git directory uses a path-hash key.
 - Any resolve failure falls back to a working-directory store with a git_unavailable warning. Malformed records are warned about, skipped and never rewritten. The resolver keeps a per-common-dir cache and touches last_seen atomically.
-- `skill-bill project link <id>` rebinds the current repo to an existing store and sets linked_to on the old one. An unknown id fails loudly with PROJECT_STORE_TARGET_UNKNOWN.
+- `sona project link <id>` rebinds the current repo to an existing store and sets linked_to on the old one. An unknown id fails loudly with PROJECT_STORE_TARGET_UNKNOWN.
 - Record schema orchestration/contracts/project-store-record-schema.yaml (contract_version 0.1, additionalProperties false). A repoTest pins its property keys to ProjectStoreRecordKeys.
 - Uninstall now preserves projects/ in both the shell and the Kotlin path, with test coverage.
 - Pattern: ProjectStorePort and RepositoryLineagePort in runtime-ports; git lineage adapter in the workflow module so host stays free of a workflow dependency. Reusable: ProjectStoreRecordCodec parse seam and l-/p-/d- id helpers.
@@ -500,7 +514,7 @@ Areas: platform-packs/{ios,kotlin,kmp,python}/code-review (34 content.md), orche
 - Inventory sweep by skill NAME (not phrasing — SKILL-102's post-merge miss lesson): source dirs + a from-source staging install (all packs). Native-agent spawn references (`subagent_type`, `@name`) are PD6 identity strings, left untouched; specialist-selection tables, `routed_skill` contract, telemetry values byte-unchanged (PD4). Copilot delegation line 32 left unchanged (refers to parent-forwarded rendered runtime instructions, not standalone resolution). reusable
 - KMP baseline composition renderer text UNCHANGED: `renderBaselineLayerLabel` emits `kotlin/bill-kotlin-code-review` as an identity string (`platform/skill`), not a path or Skill-tool call — Step 2.4 criterion 5 says leave identity-only text alone; `PlatformPackCompositionTest` already covers it.
 - Rendered-output sweep confirmed all 34 sidecars co-located in `bill-code-review`'s staged directory alongside `SKILL.md`; no Skill-tool/slash-command/standalone-skills-dir resolution of the 34 in staged wrappers or support pointers.
-- Validation: `skill-bill validate` PASS (0 issues, via rebuilt runtime-cli with subtask-1 mechanism); `agnix --strict` PASS; `scripts/validate_agent_configs` PASS (57 skills, 38 native agents); `./gradlew check` — only the pre-existing `CliFeatureTaskRuntimeRuntimeTest > feature-task-runtime run requires issue key and spec path` failure (environmental zcode prose-only refusal; markdown-only change cannot affect it).
+- Validation: `sona validate` PASS (0 issues, via rebuilt runtime-cli with subtask-1 mechanism); `agnix --strict` PASS; `scripts/validate_agent_configs` PASS (57 skills, 38 native agents); `./gradlew check` — only the pre-existing `CliFeatureTaskRuntimeRuntimeTest > feature-task-runtime run requires issue key and spec path` failure (environmental zcode prose-only refusal; markdown-only change cannot affect it).
 Feature flag: N/A
 Acceptance criteria: subtask-2 7/7 implemented
 
@@ -508,7 +522,7 @@ Acceptance criteria: subtask-2 7/7 implemented
 Areas: runtime-infra-fs/scaffold/authoring, runtime-infra-fs/install/plan, runtime-infra-fs/install/staging, runtime-infra-fs/install/apply, runtime-infra-fs/scaffold/runtime, runtime-domain/install/policy, runtime-domain/install/model, runtime-contracts/error
 - `InternalSkillClassification.kt` base-skill-only violation removed (PD1); the `isBaseSkill` flag now feeds only the parent-side rule. Every preserved rule keeps its exact message; tests add pack-skill variants for blank/self/unknown/pack-parent/chained.
 - `discoverInternalSidecarTargets` gains a `selectedPackSkills` param (PD3): union of skills-root scan + selected pack skills declaring `internal-for == parent`. Renders through the SAME `discoverTargets`+`renderWrapper` path (full governed wrapper, SKILL-102 PD6 parity). Three callers thread it: `InstallPlanBuilder.buildStagingIntent`, `InstallApplyStaging.materializeValidatedPlannedStaging`, `InstallStaging.stageInstalledSkill`. reusable
-- Inertness: with no opted-in pack skill the new arg is empty and behavior is byte-identical (test + real-repo `skill-bill validate` 0 issues).
+- Inertness: with no opted-in pack skill the new arg is empty and behavior is byte-identical (test + real-repo `sona validate` 0 issues).
 - PD8: new `MissingBaselinePlatformSelectionError` (carries selecting/required slugs + manifest path) + plan-time guard in `InstallPlanPolicy.buildPlanDraft`. ALL selection is trivially safe; packs without baseline layers unaffected.
 - Validate-seam parity: `validateInternalSidecarReferences` and `internalSkillNames` (README exclusion) now scan the union of base+pack skill files; `validateInternalSidecarCollisions` already unioned both.
 - detekt: `InstallPlanPolicy` and `stageInstalledSkill` crossed thresholds (TooManyFunctions / LongParameterList+LongMethod) — a `@Suppress` with one-line rationale was applied for the threshold breach; that records what landed, not a preferred pattern over root-cause fixes.
@@ -620,5 +634,5 @@ Acceptance criteria: 8/8 implemented
 ## [2026-10-24] SKILL-441 follow-up: shared clone stores and legacy spec import
 Areas: runtime-infra/host (projectstore), runtime-contracts, runtime-engine (goalrunner/intake), runtime-cli (project), orchestration/contracts
 - A clone with the same root commits and remote URL as a store whose checkout still exists now shares that store instead of getting a suffixed one, warning with value_used=lineage_shared. Extra checkouts are recorded in the optional shared_common_dirs record field; exact matching checks common_dir and every shared entry. A clone with a different remote (a fork) still gets its own suffixed store. Adoption by a moved checkout happens only once every recorded checkout is gone.
-- `skill-bill project link <id>` now adds the checkout to the target's shared_common_dirs instead of repointing the target's common_dir, so the original checkout keeps resolving to the target.
-- `skill-bill project import-specs [--from <dir>]` (LegacySpecImport) copies legacy .feature-specs/ bundles, active and done/, into the store's specs/. It never modifies the source, skips bundles already present in the store, and leaves an active bundle in place while its issue has a non-terminal workflow. Copied decomposition manifests have their .feature-specs/ paths rewritten to specs/.
+- `sona project link <id>` now adds the checkout to the target's shared_common_dirs instead of repointing the target's common_dir, so the original checkout keeps resolving to the target.
+- `sona project import-specs [--from <dir>]` (LegacySpecImport) copies legacy .feature-specs/ bundles, active and done/, into the store's specs/. It never modifies the source, skips bundles already present in the store, and leaves an active bundle in place while its issue has a non-terminal workflow. Copied decomposition manifests have their .feature-specs/ paths rewritten to specs/.

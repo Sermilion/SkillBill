@@ -4,9 +4,13 @@ import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goalrunner.execution.core.DIRECT_GOAL_RUNNER_EXECUTION_COORDINATOR
+import skillbill.engine.goalrunner.execution.core.GoalRunnerExecutionCoordinator
+import skillbill.engine.goalrunner.execution.core.GoalRunnerOwnedRun
 import skillbill.engine.goalrunner.execution.core.goalRunnerDeps
 import skillbill.engine.goalrunner.execution.core.testGoalRunner
 import skillbill.engine.goalrunner.launch.GoalBranchCheckouts
+import skillbill.engine.goalrunner.model.GoalRunnerLeasePurpose
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.monitoring.GoalWorktreeCompletionSettlement
 import skillbill.goalrunner.model.GoalRunnerControlState
@@ -78,6 +82,50 @@ class GoalRunnerExecutionRootTest {
     assertEquals(GoalRunnerStopReason.BLOCKED, report.stop.reason)
     assertTrue(runner.requiresPlanning(request()))
     assertEquals(0, worktrees.settlements)
+  }
+
+  @Test
+  fun `a linked child missing checkout refusal is settled without requesting child execution admission`() {
+    val store =
+      InMemoryGoalManifestStore(
+        manifest(subtaskCount = 1).withWorkflowId(1, "existing-child"),
+        initialControlState =
+          GoalRunnerControlState(
+            executionWorktreePath =
+              Files.createTempDirectory(
+                "linked-child-checkout-refusal",
+              ).resolve("missing").toString(),
+          ),
+      )
+    var settlements = 0
+    val coordinator =
+      object : GoalRunnerExecutionCoordinator by DIRECT_GOAL_RUNNER_EXECUTION_COORDINATOR {
+        override fun <T> runOwnedWithLease(
+          parentWorkflowId: String,
+          purpose: GoalRunnerLeasePurpose,
+          block: (Long, String?) -> T,
+        ): GoalRunnerOwnedRun<T> {
+          assertEquals(GoalRunnerLeasePurpose.BLOCK_SETTLEMENT, purpose)
+          settlements += 1
+          return GoalRunnerOwnedRun.Completed(block(1, null))
+        }
+      }
+    val launcher = RecordingSubtaskLauncher { error("A refused checkout must not launch a child") }
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(store, launcher, RecordingOutcomeStore(), RecordingPullRequestPort()).copy(
+          executionCoordinator = coordinator,
+        ),
+      )
+    val report = assertIs<GoalRunnerRunReport.Stopped>(runner.run(request()))
+    assertEquals(GoalRunnerStopReason.BLOCKED, report.stop.reason)
+    assertTrue(
+      report.stop.blockedReason.orEmpty().contains("recorded execution checkout"),
+      report.stop.blockedReason,
+    )
+    assertEquals(1, settlements)
+    assertTrue(launcher.requests.isEmpty())
+    assertEquals("existing-child", store.manifest.subtasks.single().workflowId)
   }
 
   @Test
@@ -270,7 +318,7 @@ class GoalRunnerExecutionRootTest {
     assertEquals(GoalRunnerStopReason.BLOCKED, stopped.stop.reason)
     assertEquals(
       "Goal 'SKILL-56' needs branch 'feat/SKILL-56-goal', which is checked out at $holder. " +
-        "Switch that checkout to another branch, then run skill-bill goal SKILL-56 again.",
+        "Switch that checkout to another branch, then run sona goal SKILL-56 again.",
       stopped.stop.blockedReason,
     )
     assertTrue(launcher.requests.isEmpty())

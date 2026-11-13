@@ -32,6 +32,32 @@ Reason: Each consumer executes its own category without concatenating overlappin
 Context: Promoting a repository's first commit previously moved its no-commit store to a lineage ID, which would detach saved project commands from the assigned projectId.
 Decision: Record lineage, root commits, remote and lineage key kind in the existing directory while retaining the assigned projectId. Historically rekeyed IDs stay unchanged; explicit linking selects the target row without merging commands.
 Reason: Command rows key on ProjectStoreLocation.projectId. Moving the directory or replacing that ID would orphan populated configuration or require another association field and a transfer protocol.
+## [2026-11-13] Exclude test value from goal assessment
+Context: Goal assessment produced test-value findings that remained open as report-only notes. The operator chose to remove this assessment scope.
+Decision: Remove test-value instructions and candidate parsing from new goal assessments. Keep the stored finding kind, schema and codecs so historical findings retain their evidence and status. Diagnose obsolete test-value output through the existing rejected-line warnings.
+Reason: Goal assessment checks production defects and declared outcomes. Test quality and coverage remain outside its scope. This supersedes the test-value scope in the goalrunner decision dated 2026-11-04, "Verify test-value findings before focused repair".
+
+## [2026-11-13] Record work done after a finished verify run beside the run
+Context: A completed verify workflow refuses every write, so its frozen grades and review register stayed FAIL or open after the operator fixed the gaps, and nothing recorded the follow-up.
+Decision: Migration 128 adds `verify_criterion_resolutions`, written by `verify-workflow resolve-criterion` for a criterion the run graded PARTIAL or FAIL. The verify detail overlays those resolutions and the stored status of each finding in the review run imported under the verify session id. Feedback and finding-action triggers also signal that verify workflow.
+Reason: The audit stays an immutable record of what the run saw, and later evidence sits beside it the way review feedback sits beside an imported review. A new verify run remains the way to re-audit.
+
+## [2026-11-13] Convert fresh runtime commands while preserving stored records
+Context: SONA-5 stages the public command rename across dependent subtasks. Runtime command producers convert after public executables, namespace and skill alias exist.
+Decision: Change newly constructed guidance and its prefix-dependent consumers together. Retain stored prose, identities, checkpoints and storage paths.
+Reason: Preserving saved records keeps existing runs and their completed work available during the rename. Prefix-dependent consumers such as archive export must change with the producers they parse.
+
+## [2026-11-12] Use acknowledged ACP for OpenCode runtime execution
+Context: OpenCode needs headless runtime execution with actual model and effort consumption, approvals and complete capture.
+Decision: Reuse ACP session, approval and process owners, acknowledge advertised configuration before prompting, and retain the runtime continuation wrapper.
+Reason: A registered command cannot establish that the selected configuration reached the provider. Acknowledged ACP setup avoids CLI output scraping and another execution loop.
+Revisit when: Live provider QA establishes sustained execution and cancellation or OpenCode changes ACP configuration.
+Scope: This replaces only the OpenCode product-exclusion conclusion in the 2026-08-09 runtime-only engine decision. Its rejected-driver rationale, zcode removal and legacy-data quarantine remain relevant.
+
+## [2026-11-12] Require durable settlement according to the launched prompt
+Context: Provider exit zero or end_turn can arrive without phase settlement; runtime-owned build repair turns can explicitly omit settlement.
+Decision: Carry the launched prompt's settlement target through PreparedLaunch and require matching durable workflow, phase and attempt evidence when present. Preserve unreadable records and report typed failures; permit captured prose only for non-settling turns.
+Reason: Transport completion cannot grant workflow authority. Prompt-derived requirements preserve repair turns that never received a settlement request and retain the PhaseOutput ownership recorded in SKILL-387.
 
 ## [2026-11-12] Reserve planning ownership before creating a Git worktree
 Context: SQLite and Git cannot share an atomic transaction, and a launch can stop between recording ownership and creating its checkout.
@@ -59,31 +85,25 @@ Reason: A gate-less run never executes gate commands, so their drift cannot chan
 Context: Blocked feasibility recovery ran only in the existing-manifest branch. An interrupted compatibility adoption could also leave a pending phase with a blocked feasibility cycle, which the adoption replay check treated as already recovered.
 Decision: The shared planning resume path reopens blocked feasibility when its launch has settled. A blocked cycle cannot satisfy the pending-adoption replay check. Reopening archives the rejected cycle and preserves accepted unit plans. Repeated resume of the recovered cycle remains idempotent.
 Reason: Resume must admit a fresh review against the current repository baseline without requiring the operator to reset the run or undo unrelated commits. Worker ownership and active-launch recovery still guard the transition.
-
 ## [2026-11-12] Operator retry opens a fresh feasibility cycle from a blocked one
 Context: A feasibility safety block (for example, repository paths changed outside the admitted authority because the operator edited the same checkout) settles the launch and sets feasibility mode to `blocked`. `retry-blocked --phase plan_subtasks` reopened only the phase record, so the next attempt read the blocked state and blocked again with the same reason. The workflow could not recover.
 Decision: `retry-blocked` passes a phase-owned artifact hook into the retry transaction. For `plan_subtasks` with a blocked feasibility state and no active launch, the engine archives the current cycle into `cycleHistory`, resets the launch counters, and opens cycle `<workflow>:plan_subtasks:retry-<ledger sequence>` in review mode with an `operator-blocked-retry` reopening. A blocked state that still has an active launch refuses the retry, because launch recovery must settle that launch first. Other phases and non-blocked states are unchanged.
 Reason: The retry is the operator's explicit decision that the block is resolved. The new cycle captures a fresh repository baseline at its next admission instead of comparing against the blocked launch's baseline. Incremental review scope reads the archived cycle's evidence, and the blocked launch stays in history. The feasibility codec lives in runtime-engine, so the application layer takes the reopen as a hook and applies it in the same transaction as the phase reopen.
 
+## [2026-11-12] Retain OpenCode identity without persisting inline configuration
+Context: Resumed work must retain its admitted profile and model assignment even when environment or defaults change.
+Decision: Persist optional identity facts and the presence and fingerprint of inline configuration, keeping its contents ephemeral. Require matching caller content on resume and retain admitted assignments, including an absent model directive.
+Reason: Persisting inline content could copy credentials. Reselecting defaults could redirect admitted work. Optional storage preserves older records through the launch-identity migration.
+
+## [2026-11-12] Acquire OpenCode choices through a temporary ACP setup session
+Context: OpenCode advertises models and model-specific effort through ACP; acknowledging a model refreshes its options.
+Decision: Acquire choices through initialize, session/new and acknowledged session/set_config_option, then close the owned connection without prompting or app-chat persistence. Omit runtime settlement credentials.
+Reason: The editor needs current provider choices before saving explicit directives. Catalog acquisition does not prove inference authentication; absent effort after valid model acknowledgement permits a no-effort selection.
+
 ## [2026-11-10] Store pattern rules with an empty action fingerprint
 Context: approval_rules.action_fingerprint is NOT NULL and exact rules still key on fingerprint equality.
 Decision: Pattern rules write pattern plus actionFingerprint ""; scopes() skips fingerprint compare when pattern is non-null.
 Reason: Avoids a table rebuild to relax NOT NULL while keeping exact-rule behavior unchanged.
-
-## [2026-11-10] Refuse bare-wildcard patterns at match time for stored rules
-Context: Operators might persist overly broad patterns; tampered rows could bypass decide-time validation.
-Decision: ApprovalMatchFacts.matches runs patternShapeRefusal before glob matching so all-wildcard stored patterns never auto-allow.
-Reason: Defense in depth after decide; bare patterns stay inert even if validation was bypassed.
-
-## [2026-11-10] Judge approval paths lexically in the domain matcher
-Context: Wildcard approval must match checkout-relative path strings before provider adapters normalize absolute paths.
-Decision: Keep ApprovalMatchFacts path rules lexical only; no java.nio or filesystem resolution in runtime-domain.
-Reason: Adapters own absolute path normalization; the matcher must stay pure and testable without I/O.
-
-## [2026-11-10] Charge acceptance repairs by verified gap progress
-Context: SKILL-533 replaces unfinished-report charging after partial repairs consumed the budget even when they closed production gaps.
-Decision: Charge an unsuccessful outcome only when open gaps do not decrease. Gate and reset the current criterion's count independently; retain gaps, outcomes, plan generation and sticky escalation on operator retry. Replays reuse stored charge facts.
-Reason: Independent verification measures partial progress without requiring the whole criterion to pass. A worker block has no verification result and leaves the gap count unchanged, so it charges once. Retained evidence prevents retry from erasing earlier work. Existing work-detail projection rules remain unchanged.
 
 ## [2026-11-09] Map Cursor CLI model slugs to the advertised ACP variant
 Context: Cursor `--list-models` and `execution_matrix` use slugs such as `composer-2.5` and `cursor-grok-4.6-high`. ACP `session/new` advertises one parameterized value per base (`composer-2.5[fast=true]`) and accepts only those exact strings. Exact-match selection stopped the session before the prompt.
@@ -361,7 +381,7 @@ Reason: The owner wants plan runs to show what the plan is, the same way review,
 Revisit when: the plan should also surface per-subtask acceptance criteria, which live only in the subtask spec files.
 
 ## [2026-10-20] Goal QA records which findings it fixed and which it left open
-Context: When goal QA gave up after three qa_fix attempts, only the outcome reason named the open finding ids. The desktop goal activity panel, `skill-bill goal status`, and the PR body could not show what QA caught, what qa_fix repaired, or what the operator still has to look at.
+Context: When goal QA gave up after three qa_fix attempts, only the outcome reason named the open finding ids. The desktop goal activity panel, `sona goal status`, and the PR body could not show what QA caught, what qa_fix repaired, or what the operator still has to look at.
 Decision: feature_task_qa_outcomes gains a nullable `findings_summary` JSON column (migration 62; DesktopReadSchema.VERSION 62). Each settled goal QA round merges its receipt into the stored list through FeatureTaskQaOutcomeRecords.mergedFindings: a finding in the receipt is `not_fixed` with its first observed line as the title, its evidence paths and the receipt path; a stored finding absent from a `passed` or `findings_open` receipt becomes `fixed`; an `incomplete` or `skipped` receipt keeps stored statuses because QA did not re-test. recordAttempted keeps the stored list, like qa_fix_attempts, because every QA round re-enters through it. The goal status projection carries the list as GoalRunnerQaResult.findings, which the desktop maps in process; the CLI work-detail JSON is unchanged, and `goal status` text adds a `qa_findings:` line. The PR body appends the fixed ids and the not-fixed ids with titles to the goal QA line.
 Reason: The owner wants the operator told which QA findings remain after the qa_fix cap while the run moves on. Status is decided by receipt presence, not QaRepairState closure, because the owner defines fixed as "QA re-tested and it no longer appears".
 Revisit when: QA receipts gain a stable finding title, or findings need to be tracked across separate goal QA runs on different trees.
@@ -504,7 +524,7 @@ Revisit when: no `standalone` workflow row remains, so the decode-only binding c
 
 ## [2026-10-14] SKILL-425: one plan strategy, durable plan records, no goal planning sweep
 Context: Goal planning ran its own definition (`GOAL_PLANNING`), run state, sweep, and `goal_*` checkpoint tables beside the standalone plan skeleton, so planning had two strategies, two storages, and a goal-continuation constraint in the plan prompt.
-Decision: `PhaseSlot.PLAN` owns `plan` and `plan_subtasks`, and every skeleton binds `PlanFanOutStrategy` (persisted id `goal-plan-fan-out`; `AgentPlanStrategy` stays registered and is composed, not bound). `plan` authors the bundle and may split; `plan_subtasks` fans `agent-plan` out per subtask through `DurablePlanSubtasksFanOut`, and each unit writes only `## Implementation Details`. Unit, preplan, and bundle records live in the plan workflow (`plan_bundle` artifact); a unit is complete when its record exists and both its scope and details hashes match the spec on disk. A goal obtains planning through `GoalPlanningSource`: the linked plan workflow, then the legacy `goal_*` tables read-only, then a `StandalonePlanRun` of the plan skeleton. Goal children hydrate `preplan`, `plan`, and `plan_subtasks` and record the source in the import provenance. `SkeletonDefinition.GOAL_PLANNING`, `GoalPlanningPhaseRunState`, `DefaultGoalPlanningSweep`, `GoalPlanningMigration`, `GoalPlanningPreparationSourceValidator`, the legacy checkpoint writers, and the goal-continuation constraint are removed. The legacy tables are read-only: only the reset and purge deletes remain, tests seed legacy rows with raw SQL, and admission no longer migrates a goal import, so a legacy goal falls through to running the plan skeleton. A plan workflow that predates `plan_subtasks` is refused on resume with `skill-bill goal purge <KEY>` then `skill-bill phase plan <KEY>`.
+Decision: `PhaseSlot.PLAN` owns `plan` and `plan_subtasks`, and every skeleton binds `PlanFanOutStrategy` (persisted id `goal-plan-fan-out`; `AgentPlanStrategy` stays registered and is composed, not bound). `plan` authors the bundle and may split; `plan_subtasks` fans `agent-plan` out per subtask through `DurablePlanSubtasksFanOut`, and each unit writes only `## Implementation Details`. Unit, preplan, and bundle records live in the plan workflow (`plan_bundle` artifact); a unit is complete when its record exists and both its scope and details hashes match the spec on disk. A goal obtains planning through `GoalPlanningSource`: the linked plan workflow, then the legacy `goal_*` tables read-only, then a `StandalonePlanRun` of the plan skeleton. Goal children hydrate `preplan`, `plan`, and `plan_subtasks` and record the source in the import provenance. `SkeletonDefinition.GOAL_PLANNING`, `GoalPlanningPhaseRunState`, `DefaultGoalPlanningSweep`, `GoalPlanningMigration`, `GoalPlanningPreparationSourceValidator`, the legacy checkpoint writers, and the goal-continuation constraint are removed. The legacy tables are read-only: only the reset and purge deletes remain, tests seed legacy rows with raw SQL, and admission no longer migrates a goal import, so a legacy goal falls through to running the plan skeleton. A plan workflow that predates `plan_subtasks` is refused on resume with `sona goal purge <KEY>` then `sona phase plan <KEY>`.
 Reason: One strategy over one durable record gives resume, status, and hydration a single source, and the spec bundle on disk stays the only planning artifact.
 Supersedes: SKILL-387 "make the governed spec artifact the planning handoff" (2026-10-01), where goal planning wrote and checkpointed its own subtask spec into the legacy tables; SKILL-410 "Run standalone plan through the durable run loop" (2026-10-09), where a goal parent linked a completed plan and still ran a sweep at plan time.
 Alternatives considered: A second plan strategy for goal runs (rejected: it keeps two prompts and two storages) and migrating legacy rows into plan workflows (rejected: it invents authority for plans no plan workflow produced).
@@ -920,11 +940,11 @@ Decision: Retain and forward complete agent stdout and stderr through process co
 Reason: Discarding output can remove the completion marker and turn completed work into a blocked review. Complete capture preserves that evidence, including multibyte UTF-8 text.
 
 ## [2026-09-28] SKILL-383: skill-bill is the only listed skill; retired names stay on the wire
-Context: After SKILL-380 and SKILL-382, every capability of the other listed skills already existed as a phase, a strategy, an operation, or the `/skill-bill` dispatcher. The other listed skills duplicated those routes, and pack specialists installed as sidecars of `bill-code-review`.
-Decision: (1) `skill-bill` is the only listed skill. The `bill-feature`, `bill-feature-spec`, `bill-code-review`, `bill-code-review-inline`, `bill-code-check`, `bill-pr-description`, `bill-boundary-history`, `bill-boundary-decisions`, `bill-pr-review-fix`, `bill-unit-test-value-check`, `bill-update-check`, `bill-release`, `bill-feature-verify`, `bill-feature-guard`, `bill-feature-guard-cleanup`, and `bill-monitor` trees are deleted. Phases are reached as `phase:<name>` and operations as `operation:<name>` through `/skill-bill`. (2) Each deleted `content.md` body moved verbatim into `skills/skill-bill/content.md` or a directive resource its owner loads; Kotlin constants keep only output-contract text. (3) `bill-monitor` moved nowhere; `skill-bill goal status` stays CLI-only. (4) The `ParallelCodeReviewRunner` inline lane shape and `PARALLEL_REVIEW_INLINE_NATIVE_WORKER` are deleted: the SKILL-380 subtask 8 census found no production caller, and `DelegatedReviewStrategy` is the only request builder. An inline request now fails with `InlineParallelReviewUnsupportedError`. `attributeInlineFindings` runs on every lane, so it is renamed `attributeLaneFindings`, not deleted. (5) Pack specialists install as `internal-for: skill-bill` sidecars. Every deleted name is in `InstallLegacySkillNames`, so an install over an old home removes the stale links and copies. (6) These wire labels keep their retired values: telemetry `skill` values (`LifecycleTelemetryPayloads`, `TelemetrySettingsLoading`, `ReviewStatsContractWorkflowPayloadMappers`, `McpAdapterContracts`), the feature-verify `workflow_name` default `bill-feature-verify` and its migration, the workflow skill label `WorkflowStateWrites` writes, and the quality-check `routed_skill` `bill-code-check`.
+Context: After SKILL-380 and SKILL-382, every capability of the other listed skills already existed as a phase, a strategy, an operation, or the `/sona` dispatcher. The other listed skills duplicated those routes, and pack specialists installed as sidecars of `bill-code-review`.
+Decision: (1) `skill-bill` is the only listed skill. The `bill-feature`, `bill-feature-spec`, `bill-code-review`, `bill-code-review-inline`, `bill-code-check`, `bill-pr-description`, `bill-boundary-history`, `bill-boundary-decisions`, `bill-pr-review-fix`, `bill-unit-test-value-check`, `bill-update-check`, `bill-release`, `bill-feature-verify`, `bill-feature-guard`, `bill-feature-guard-cleanup`, and `bill-monitor` trees are deleted. Phases are reached as `phase:<name>` and operations as `operation:<name>` through `/sona`. (2) Each deleted `content.md` body moved verbatim into `skills/skill-bill/content.md` or a directive resource its owner loads; Kotlin constants keep only output-contract text. (3) `bill-monitor` moved nowhere; `sona goal status` stays CLI-only. (4) The `ParallelCodeReviewRunner` inline lane shape and `PARALLEL_REVIEW_INLINE_NATIVE_WORKER` are deleted: the SKILL-380 subtask 8 census found no production caller, and `DelegatedReviewStrategy` is the only request builder. An inline request now fails with `InlineParallelReviewUnsupportedError`. `attributeInlineFindings` runs on every lane, so it is renamed `attributeLaneFindings`, not deleted. (5) Pack specialists install as `internal-for: skill-bill` sidecars. Every deleted name is in `InstallLegacySkillNames`, so an install over an old home removes the stale links and copies. (6) These wire labels keep their retired values: telemetry `skill` values (`LifecycleTelemetryPayloads`, `TelemetrySettingsLoading`, `ReviewStatsContractWorkflowPayloadMappers`, `McpAdapterContracts`), the feature-verify `workflow_name` default `bill-feature-verify` and its migration, the workflow skill label `WorkflowStateWrites` writes, and the quality-check `routed_skill` `bill-code-check`.
 Reason: one entry point matches the product surface and removes duplicate routes that could drift from the runtime. The labels in (6) stay because remote telemetry aggregates and stored workflow rows key on them; renaming them would split history and orphan stored rows.
 Alternatives considered: keep the old skills as thin aliases of the dispatcher (rejected: two names per route, and aliases still name retired skills in prompts); rename the wire labels with a migration (rejected: remote telemetry cannot be migrated, and the rename buys nothing an operator sees); keep `bill-code-review-inline` as an unlisted sidecar (rejected: it had no caller).
-Consequence: prompts and docs name `skill-bill phase review` or `skill-bill phase validation` instead of retired skills; a docs grep in the install-catalog test rejects `/bill-monitor` and `/bill-feature` as a listed skill. Telemetry and stored rows still show retired skill names, by design.
+Consequence: prompts and docs name `sona phase review` or `sona phase validation` instead of retired skills; a docs grep in the install-catalog test rejects `/bill-monitor` and `/bill-feature` as a listed skill. Telemetry and stored rows still show retired skill names, by design.
 Revisit when: remote telemetry gains a label alias or re-key path, or a capability needs a listed entry the dispatcher cannot route.
 
 ## [2026-09-27] SKILL-380 subtask 6: delegated review returns with bounded lanes
@@ -1330,7 +1350,7 @@ by every area (rejected: skills areas share the scaffold/install lifecycle and
 the measured graph does not justify additional projects).
 
 ## [2026-09-17] SKILL-353 subtask 3: platform-pack substance report Gradle task removed
-Context: SKILL-353 subtask 3 census. `platformPackSubstanceReport` and `PlatformPackSubstanceReportMain` were referenced only from `runtime-infra/fs/build.gradle.kts` and feature-spec investigation prose. No CI workflow, script, or operator doc invoked the task. `RepoValidationCollected` already calls `PlatformPackSubstanceAudit.audit` on the `skill-bill validate` path.
+Context: SKILL-353 subtask 3 census. `platformPackSubstanceReport` and `PlatformPackSubstanceReportMain` were referenced only from `runtime-infra/fs/build.gradle.kts` and feature-spec investigation prose. No CI workflow, script, or operator doc invoked the task. `RepoValidationCollected` already calls `PlatformPackSubstanceAudit.audit` on the `sona validate` path.
 Decision: Delete the Gradle `platformPackSubstanceReport` task and `PlatformPackSubstanceReportMain.kt`. Relocate the audit implementation from `scaffold/substance/` to `scaffold/platformpack/substanceaudit/` with the same `PlatformPackSubstanceAudit` entry point. Do not add a CLI report command — no measured operator caller.
 Reason: The report task duplicated audit logic without a consumer; validate already enforces substance for well-formed repos.
 Alternatives considered: `skill-bill` CLI subcommand via `ScaffoldCatalogGateway` (rejected: census found no operator use). Delete `scaffold/substance/**` wholesale without relocating audit types (rejected: would break repo validation until types moved).
@@ -1922,7 +1942,7 @@ Alternatives considered: Keep rejecting outside closers so agents learn to omit 
 
 ## [2026-08-20] Validate uses only the pack-declared collect-all command
 
-Context: The validate agent ran AGENTS.md extras (`npx agnix --strict`, `skill-bill validate`) after Gradle was already green, then blocked on those results.
+Context: The validate agent ran AGENTS.md extras (`npx agnix --strict`, `sona validate`) after Gradle was already green, then blocked on those results.
 
 Decision: Validate may run only the pack `validation_gate.collect_all_full_gate_command` for collect-all and confirmation. The prompt names that argv and forbids repo-root checklists. `npx agnix --strict` is no longer in AGENTS.md. Mid-repair targeted Gradle proof is forbidden; see 2026-08-29.
 
@@ -1972,7 +1992,7 @@ HEAD-rewrite reconciliation path contradicted amend-owned history and reintroduc
 diffs when checkpoint commits were orphaned.
 
 Decision: `reconcileRemediationBaseCoherence` resolves the latest `review_fix` base through checkpoint
-refs, not branch ancestry; unresolvable bases return a typed blocked outcome with `skill-bill goal repair`
+refs, not branch ancestry; unresolvable bases return a typed blocked outcome with `sona goal repair`
 guidance instead of rewriting to HEAD. `rollbackRemediationCheckpointCommit` restores the prior checkpoint
 ref (or removes the first subtask commit) and is idempotent when HEAD already moved.
 
@@ -2031,7 +2051,7 @@ Blocker and Major both reopen `implement_fix` and hard-block advance.
 
 Decision: Governed content, playbook/code-review remediation-delta prose, and
 parity locks describe the Blocker-or-Major rule; Minor and Nit stay ledger-only
-with retrieval only via `skill-bill goal findings --issue-key <KEY>`. Durable
+with retrieval only via `sona goal findings --issue-key <KEY>`. Durable
 wire key `blocker_dispositions` stays named as-is.
 
 Reason: Content must agree with the runtime predicates already shipped; renaming
@@ -2133,7 +2153,7 @@ Decision:
 1. Runtime is the sole feature engine; no `mode:prose`/`mode:runtime` selector.
 2. The prose surface is deleted, not renamed: prose runners,
    `feature_task_prose_*` / legacy `feature_implement_*` / `goal_prose_*` MCP
-   tools, `skill-bill workflow` (`TASK_PROSE`), `implement-stats`,
+   tools, `sona workflow` (`TASK_PROSE`), `implement-stats`,
    `FeatureImplement*`, `WorkflowFamily.IMPLEMENT`, IDE `feature-task-prose`.
 3. OpenCode and zcode leave the product entirely, explicitly with no refuse tier
    or "unsupported agents" list. `RUNTIME_REFUSED_AGENTS`, its message,
@@ -2146,7 +2166,7 @@ Decision:
 In-flight prose rows (binding on subtask 6): quarantine + loud-fail resume,
 never reinterpretation or a rewriting migration.
 - `feature_task_workflows` `mode = 'prose'` rows stay readable; resume paths
-  raise a typed error naming `skill-bill goal <KEY>`. Both `'prose'` CHECKs stay
+  raise a typed error naming `sona goal <KEY>`. Both `'prose'` CHECKs stay
   (`DatabaseSchema.kt`, avoiding a table rebuild; `DatabaseMigrations.kt` for
   `feature_task_execution_identities`). Writes refuse `'prose'`.
 - `feature_implement_sessions`: read-only, no writer, stats removed,
@@ -2185,6 +2205,8 @@ or `~/.zcode`.
 
 Revisit when: a working headless OpenCode/zcode driver can sustain the runtime
 child model, or prose-quarantine loud-fails keep firing long after the cut.
+
+Superseded by: Use acknowledged ACP for OpenCode runtime execution (2026-11-12)
 
 ## [2026-08-08] link and compile toolchain pin is JDK 21 (SKILL-166)
 
@@ -3216,8 +3238,8 @@ Revisit when: a concrete experiment with a named consumer of its outcome exists;
 
 ## [2026-09-27] Phase runs share the run loop over an in-memory run state (SKILL-380)
 
-Context: `skill-bill code-review` drove `ParallelCodeReviewRunner` directly, so a standalone review never verified or fixed findings, and no other phase could run outside a durable feature-task workflow.
-Decision: `PhaseRunEntry` (`skillbill.engine.featuretask.phaserun`) drives an `IN_MEMORY` skeleton definition (`review`, `validation`) through the same `FeatureTaskRuntimeRunLoopEntry` as a full run, over `InMemoryPhaseRunState`. It keeps no workflow row, resolves no branch, and loud-fails a checkpoint commit with `InMemoryPhaseRunUnsupportedError`. `PhaseRunState` gains three default no-op capabilities (`recordReviewRun`, `qualityCheckStarted`, `qualityCheckFinished`) that only the in-memory state implements, so full-run records and telemetry are unchanged. `skill-bill phase` and `skill-bill code-review` both route through it; `RuntimeComponent.phaseRunEntry` replaces `parallelCodeReviewRunner`.
+Context: `sona code-review` drove `ParallelCodeReviewRunner` directly, so a standalone review never verified or fixed findings, and no other phase could run outside a durable feature-task workflow.
+Decision: `PhaseRunEntry` (`skillbill.engine.featuretask.phaserun`) drives an `IN_MEMORY` skeleton definition (`review`, `validation`) through the same `FeatureTaskRuntimeRunLoopEntry` as a full run, over `InMemoryPhaseRunState`. It keeps no workflow row, resolves no branch, and loud-fails a checkpoint commit with `InMemoryPhaseRunUnsupportedError`. `PhaseRunState` gains three default no-op capabilities (`recordReviewRun`, `qualityCheckStarted`, `qualityCheckFinished`) that only the in-memory state implements, so full-run records and telemetry are unchanged. `sona phase` and `sona code-review` both route through it; `RuntimeComponent.phaseRunEntry` replaces `parallelCodeReviewRunner`.
 Reason: One loop and one strategy set means a phase run cannot drift from the full run. A second, review-only driver would duplicate the review, verify, and fix edges.
 Alternatives considered: Run a phase over a throwaway durable workflow row (rejected: leaves rows and branches behind and needs cleanup). A dedicated review driver (rejected: duplicates the slot strategies).
 Revisit when: a phase run needs resume, or phase-run lifecycle events are wanted (they wait for a telemetry contract-version bump, which would also carry a phase invocation id).
@@ -3225,15 +3247,15 @@ Superseded by: Separate standalone reporting from full-run repair, SKILL-402 (20
 
 ## [2026-09-27] Phase validation keeps pack-build's triage and repair cap (SKILL-380)
 
-Context: `skill-bill phase validation` reports the same quality_check events as `bill-code-check`. The skill runs the pack gate and opens one repair session. The `pack-build` strategy triages each failing gate run and repairs for up to `MAX_REPAIR_TURNS` (3) turns.
+Context: `sona phase validation` reports the same quality_check events as `bill-code-check`. The skill runs the pack gate and opens one repair session. The `pack-build` strategy triages each failing gate run and repairs for up to `MAX_REPAIR_TURNS` (3) turns.
 Decision: The `VALIDATION` definition selects `pack-build` unchanged, so a phase run inherits its triage and repair-turn cap. quality_check_finished reports the last gate run's failure count and its distinct sorted rule or test ids. A phase run reports `scope_type` `working_tree`, since it validates the working tree rather than a branch diff.
 Reason: One quality-gate strategy for full runs and phase runs. A phase-only single-repair variant would be a second strategy that drifts.
 Alternatives considered: A phase-run strategy with one repair session, matching `bill-code-check` (rejected: duplicates `pack-build`). Report `branch_diff` like the skill (rejected: a phase run has no branch).
-Revisit when: `bill-code-check` routes through `skill-bill phase validation`, so the two paths must agree on the repair budget.
+Revisit when: `bill-code-check` routes through `sona phase validation`, so the two paths must agree on the repair budget.
 
 ## [2026-09-27] Census of the inline review lane shape for SKILL-383 (SKILL-380)
 
-Context: Both review modes now run the whole `code_review` slot. Inline reviews through `InlineReviewStrategy`, so `ParallelCodeReviewRunner` no longer runs an inline lane for `skill-bill code-review`.
+Context: Both review modes now run the whole `code_review` slot. Inline reviews through `InlineReviewStrategy`, so `ParallelCodeReviewRunner` no longer runs an inline lane for `sona code-review`.
 Decision: Record a grep census over production sources (`src/main`, `skills/`, `platform-packs/`) for SKILL-383. `ParallelCodeReviewRunner` has one production caller, `DelegatedReviewStrategy`, bound in `RuntimeFeatureTaskSlotProvides`, and it always passes `CodeReviewExecutionMode.DELEGATED`. The inline lane shape is still in runtime-application but no production request reaches it: `PARALLEL_REVIEW_INLINE_NATIVE_WORKER` (`ParallelCodeReviewRunner`, `ParallelCodeReviewRunnerLaneLaunch`, `ParallelCodeReviewInlineCoverageContinuation`), `PARALLEL_REVIEW_INLINE_DEPTH_DIRECTIVE` (`ParallelCodeReviewRunnerParentPrompt`), and `attributeInlineFindings` (`ParallelCodeReviewRunnerFailureAdmission`). `bill-code-review-inline` appears in `skills/bill-code-review-inline/` (its content and native agent) and in `skills/bill-code-review/content.md`.
 Reason: SKILL-383 decides whether to delete the inline lane shape and the `bill-code-review-inline` agent. The census saves it from re-deriving the caller set.
 Alternatives considered: Delete the inline lane shape in SKILL-380 (rejected: out of scope, and the listed skill stays installed).
@@ -3241,10 +3263,10 @@ Revisit when: SKILL-383 starts; re-run the census first, since callers may have 
 
 ## [2026-09-27] Phase plan, implement, and pr runs (SKILL-380)
 
-Context: `skill-bill phase` ran only `review` and `validation`. Planning, implementing, and opening a pull request needed a durable feature-task workflow. `plan` needs an issue key to name a spec bundle, `implement` needs a governed spec, and the pull-request step assumed `commit_push` had run earlier in the same run.
+Context: `sona phase` ran only `review` and `validation`. Planning, implementing, and opening a pull request needed a durable feature-task workflow. `plan` needs an issue key to name a spec bundle, `implement` needs a governed spec, and the pull-request step assumed `commit_push` had run earlier in the same run.
 Decision: Each `SkeletonDefinition` carries a `PhaseIntakeRequirement` (`optional`, `issue_key`, `spec`). One `PhaseRunIntakeResolver` turns any intake into the run's issue key and invariants by that requirement, and raises `PhaseIntakeRequiredError` or `PhaseSpecRequiredError` when the intake falls short. A run whose last slot is `plan` sets `specBundleRequired`. Its plan must return a decomposition package, which the planning stopper writes as a parent spec, subtask specs, and a manifest. A direct plan blocks. `PrDescriptionStrategy` refuses a detached, protected, or base branch, pushes a branch that has unpushed commits, and runs the readiness gate only when `commit_push` is one of the run's forward steps. The strategy reads the branch from `PhaseRunState` records. `InMemoryPhaseRunRecords` answers with the checkout's current branch, and durable records answer with the workflow's resolved branch.
 Reason: Intake shape is definition data. A per-definition resolver or parser would fork as definitions are added. The readiness gate checks that `commit_push` settled the tree. Without `commit_push` in the run there is nothing for it to check, so a phase pr only needs a pushed branch. Reading the branch through the state port keeps one PR strategy for full runs and phase runs.
-Alternatives considered: Parse the intake per definition in the CLI (rejected: the engine is the one caller that knows the requirement, and MCP would need the same logic). Let a direct plan complete without a spec (rejected: `skill-bill goal` cannot run it). Run the readiness gate unconditionally (rejected: it blocks every phase pr on a tree that no `commit_push` settled). Resolve the branch inside the PR strategy with git (rejected: the full run already records it, and two sources could disagree).
+Alternatives considered: Parse the intake per definition in the CLI (rejected: the engine is the one caller that knows the requirement, and MCP would need the same logic). Let a direct plan complete without a spec (rejected: `sona goal` cannot run it). Run the readiness gate unconditionally (rejected: it blocks every phase pr on a tree that no `commit_push` settled). Resolve the branch inside the PR strategy with git (rejected: the full run already records it, and two sources could disagree).
 Revisit when: a definition needs an intake shape beyond an issue key or a spec, or a phase run must create its own branch.
 
 ## [2026-09-27] Runtime operations and the two-invocation confirmation gate (SKILL-382)
@@ -3666,7 +3688,7 @@ A resumed goal clears its retained blocked reason only after it owns execution a
 
 ## [2026-10-23] Interactive editor launches are a third process lifetime owned by `ProcessFileEditorLauncher`
 
-`skill-bill config edit` hands the terminal to the user's `$VISUAL`, `$EDITOR`, or the OS default application. `ProcessFileEditorLauncher` in `runtime-infra/host` starts that process with inherited IO and waits for it without a deadline. It is not a one-shot command, so `BoundedExternalProcessRunner` does not fit: its capture and deadline would cut a live editing session. It is not a supervised agent run, so `runtime-infra/launcher` does not fit either. Interactive, inherited-IO launches of user-chosen programs stay in this one adapter. The configured editor runs through `sh -c` so quoted paths and arguments survive, and `sh` exit codes 126 and 127 fall through to the OS default opener.
+`sona config edit` hands the terminal to the user's `$VISUAL`, `$EDITOR`, or the OS default application. `ProcessFileEditorLauncher` in `runtime-infra/host` starts that process with inherited IO and waits for it without a deadline. It is not a one-shot command, so `BoundedExternalProcessRunner` does not fit: its capture and deadline would cut a live editing session. It is not a supervised agent run, so `runtime-infra/launcher` does not fit either. Interactive, inherited-IO launches of user-chosen programs stay in this one adapter. The configured editor runs through `sh -c` so quoted paths and arguments survive, and `sh` exit codes 126 and 127 fall through to the OS default opener.
 
 ## [2026-10-30] Preplan retries blocks that rest on missing tracker data
 
@@ -3847,3 +3869,64 @@ Context: Safe-removal receipts originally came only from transferred goal checko
 Decision: After publishing its completed report, a standalone plan settles its initialized checkout through the shared resource policy. The ownership coordinator checks completion and worker absence in the same SQLite write transaction as settlement, so worker admission and goal transfer cannot commit during cleanup. The resource checks the selected standalone workflow, repository, issue, path and Git ownership marker, retains dirty or publication-unknown work, and retains any revision beyond the original commit. Successful removal writes the existing recovery receipt without changing ownership, workflow evidence or revision. Goal-scoped planning and interrupted standalone planning keep their checkout. Goal intake consults recovery evidence before requiring the initialized checkout directory for projection and transfer.
 Reason: A completed standalone plan now supplies actual recovery evidence. CLI regression tests cover completion followed by standalone resume and goal handoff, preserve accepted plan evidence and caller edits, and refuse recovery after proof is removed. Recovery uses the existing receipt format and database schema.
 Superseded by: Fence planning checkout recovery in durable storage (2026-11-12)
+
+## [2026-11-13] Separate blocked-start settlement from child admission
+
+A goal can fail checkout verification before it can admit its existing child. Saving
+that refusal still needs a fenced parent lease. `BLOCK_SETTLEMENT` permits that
+parent-only claim without checking a child descriptor. Only blocked-start settlement
+selects it. Execution keeps the existing descriptor and linkage checks. Lease owner,
+generation, process-liveness and checkout-recovery fences still apply.
+
+Checkout adoption also accepts a mount device change when the recorded reservation,
+repository, path, initial commit, inode, creation time and Git registration match.
+Device numbers differ across mount namespaces. This compatibility read preserves the
+original ownership marker and emits a warning. Destructive cleanup still requires
+exact ownership identity. No persisted schema or marker format changes.
+
+## [2026-11-13] Plan reads preplan evidence from a file
+
+Plan workers re-read source files preplan had already read, because the digest pasted
+into their briefing summarized code without carrying it. Preplan now ends its digest with
+an `EVIDENCE` list of `path:A-B` references. When plan or a plan_subtasks unit launches,
+the runtime copies those checkout ranges verbatim, with line numbers, into
+`<store>/run-evidence/<workflowId>/preplan-evidence.md` together with the full digest. The
+briefing then drops the pasted `preplan_prose` projection and names the file instead.
+Preplan is read-only, so the checkout at plan launch is the one preplan read.
+
+The runtime parses references, not tool activity. Decoded activity reaches the engine only
+through the desktop status sink, which keeps 128 rows per phase and drops `Read` offsets.
+
+Nothing in this path blocks. An unreadable reference is listed as unreadable, a missing
+`EVIDENCE` section writes a digest-only file, and an unwritable store keeps the pasted
+digest with a `preplan_evidence` diagnostic. Runs whose preplan completed earlier work the
+same way, so no persisted schema or migration changes. Implement still gets no preplan
+input; that waits for evidence that plan stops re-reading.
+
+## [2026-11-13] Bundle-feasibility receipts reject only missing coverage or a stale bundle
+
+A rejected receipt discards the review and reruns the whole read-only review session.
+The parser rejected receipts for form alone: header not on line 1, lines out of manifest
+order, duplicate or extra lines, evidence under 40 characters, uncited conflicts, a
+verdict that disagreed with the conflict lines, or any line it could not parse. None of
+those made the verdict wrong.
+
+The receipt is now rejected only when its v2 header is missing, its fingerprint names a
+different bundle, a required criterion has no criterion or conflict line, or it requests
+changes without a conflict line. Treating that last case as approval could release a
+bundle whose conflict line was malformed. The header may sit on any line. Unparsable
+lines and lines for refs outside `required_refs` are ignored. A duplicated ref keeps its
+first conflict line, else its first criterion line. An `approved` header with a conflict
+line settles as changes requested. Parsed lines keep their raw text and are returned in
+required-ref order, so persisted accepted lines still match a re-parse of the same
+receipt. The review prompt still asks for citations, so repair starts from them.
+
+## [2026-11-13] Reconcile unfinished monitor observations with recorded goal completion
+Context: A completed goal can retain a monitor cycle without its final timestamp or CI outcome. The finish projection treated that observation as a live monitor indefinitely.
+Decision: Pass recorded goal completion into the finish projection. Stop the monitor card when that goal is complete, preserve every cycle field, and emit a degraded-read diagnostic for the missing terminal CI record. Child workflow completion alone does not end the goal's monitor.
+Reason: A historical observation cannot override durable goal completion or prove that CI passed. This changes only read projection and does not migrate or rewrite persisted cycles.
+
+## [2026-11-13] Project the current PR phase before its URL exists
+Context: Goal finish omitted the PR card until a pull request URL was recorded. While PR creation ran, the desktop could neither select that phase nor show Goal finish as active.
+Decision: Use the parent workflow's current PR step and status to project its running, blocked, paused or failed card before a URL exists. Preserve a recorded URL during retries. A child's PR step and a completed goal do not reactivate the goal's PR card.
+Reason: Current execution state establishes phase availability independently of the output it has yet to produce. The existing automatic phase selection can then open it without overriding an explicit fold or selection.

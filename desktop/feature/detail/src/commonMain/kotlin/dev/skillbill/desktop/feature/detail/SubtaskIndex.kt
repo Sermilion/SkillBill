@@ -25,7 +25,7 @@ private const val SUBTASK_SPEC_PREFIX = "spec_subtask_"
 @SingleIn(WindowScope::class)
 class SubtaskSelections(private val session: DatabaseSessionController) {
   private val choices = mutableMapOf<String, SubtaskChoice>()
-  private val phaseChoices = mutableMapOf<PhaseChoiceKey, String>()
+  private val phaseChoices = mutableMapOf<PhaseChoiceKey, PhaseDisclosure>()
   private val phaseReturnRows = mutableMapOf<String, SubtaskKey>()
   private var sessionId: Long? = null
   private var carryListFocus = false
@@ -34,7 +34,7 @@ class SubtaskSelections(private val session: DatabaseSessionController) {
     val rows = current()
     val ordinary = rows[itemId] ?: SubtaskChoice()
     val returnRow = phaseReturnRows[itemId] ?: return ordinary
-    return SubtaskChoice(returnRow, expanded = if (ordinary.key == returnRow) ordinary.expanded else true)
+    return SubtaskChoice(returnRow)
   }
 
   fun set(itemId: String, choice: SubtaskChoice) {
@@ -42,14 +42,14 @@ class SubtaskSelections(private val session: DatabaseSessionController) {
     phaseReturnRows.remove(itemId)
   }
 
-  fun phases(itemId: String): Map<PhaseChoiceKey, String> {
+  fun phases(itemId: String): Map<PhaseChoiceKey, PhaseDisclosure> {
     current()
     return phaseChoices.filterKeys { it.itemId == itemId }
   }
 
-  fun setPhase(key: PhaseChoiceKey, phaseId: String) {
+  fun setPhase(key: PhaseChoiceKey, choice: PhaseDisclosure) {
     current()
-    phaseChoices[key] = phaseId
+    phaseChoices[key] = choice
     phaseReturnRows[key.itemId] = key.subtask
   }
 

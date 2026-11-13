@@ -38,8 +38,7 @@ class InstallRegisterMcpCommand(
           agent = agent,
           runtimeMcpBin = Path.of(runtimeMcpBin),
           home = inputs.userHome,
-          profileEnvironment =
-            InstallMcpProfileEnvironment.from(inputs.environment) ?: InstallMcpProfileEnvironment(),
+          profileEnvironment = inputs.mcpProfileEnvironment(),
         ),
       ).outcome
     val result =
@@ -68,8 +67,7 @@ class InstallUnregisterMcpCommand(
         InstallMcpUnregistrationRequest(
           agent = agent,
           home = inputs.userHome,
-          profileEnvironment =
-            InstallMcpProfileEnvironment.from(inputs.environment) ?: InstallMcpProfileEnvironment(),
+          profileEnvironment = inputs.mcpProfileEnvironment(),
         ),
       ).outcome
     val result =
@@ -91,11 +89,13 @@ private fun profilesFailure(failure: McpRegistrationOutcome.ProfilesFailed): Ski
   SkillBillRuntimeException(McpRegistrationFailureCode.PROFILE_UPDATE_FAILED, failure.message)
 
 private fun mcpProfilePathsText(result: McpMutationResult): String =
-  if (result.profiles.isEmpty()) {
-    result.configPath.toString()
-  } else {
-    changedProfilePathsText(result.profiles)
-  }
+  (
+    if (result.profiles.isEmpty()) {
+      result.configPath.toString()
+    } else {
+      changedProfilePathsText(result.profiles)
+    }
+  ) + result.coverage?.let { "\n$it" }.orEmpty()
 
 private fun changedProfilePathsText(profiles: List<McpProfileOutcome>): String =
   profiles
@@ -114,3 +114,11 @@ private fun mcpProfilesMap(
         mapOf("config_path" to profile.configPath.toString(), "changed" to profile.changed)
       },
   )
+
+private fun CliRunInputs.mcpProfileEnvironment(): InstallMcpProfileEnvironment {
+  val profile = InstallMcpProfileEnvironment.from(environment) ?: InstallMcpProfileEnvironment()
+  return profile.copy(
+    databasePath = databasePath ?: profile.databasePath,
+    workingDirectory = workingDirectory.toString(),
+  )
+}

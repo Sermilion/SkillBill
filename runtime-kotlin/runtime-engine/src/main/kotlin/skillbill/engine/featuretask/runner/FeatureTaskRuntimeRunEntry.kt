@@ -29,8 +29,10 @@ import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionP
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairRunPreparation
 import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
+import skillbill.engine.featuretask.phaserun.WorkflowStatusLaunch
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.error.shellcontent.invalidInteractionScenarioCatalog
+import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
@@ -101,13 +103,12 @@ public class FeatureTaskRuntimeRunEntry(
     val goalContinuation = request.goalContinuation
     val scope = routeScope(goalContinuation != null)
     val workflowId = request.explicitWorkflowId ?: open(request, scope, onOpenFailure)
-    statusPublisherFactory.registerWorkflow(
-      repoRoot = request.repoRoot,
-      issueKey = request.issueKey,
-      workflowId = workflowId,
-      goalScoped = scope == FeatureTaskRouteScope.GOAL_CHILD || request.definition == SkeletonDefinition.PLAN,
-    )
     val specPath = Path.of(request.specPath)
+    identityRefusal(request, workflowId, scope)?.let { return it }
+    val acceptedRequest =
+      request.copy(
+        openCodeIdentity = statusPublisherFactory.retainedOpenCodeIdentity(workflowId),
+      )
     val effectiveInputs =
       executionPlans.resolveInputs(
         request.repoRoot,
@@ -145,7 +146,7 @@ public class FeatureTaskRuntimeRunEntry(
         val invariants = intakePassInvariants(request, specPath, admittedExecution)
         val intakeReport =
           runner.run(
-            runRequest(request, workflowId, admittedExecution, invariants).copy(stopAfterIntake = true),
+            runRequest(acceptedRequest, workflowId, admittedExecution, invariants).copy(stopAfterIntake = true),
             outputSink = outputSink,
             captureStreamOutput = captureStreamOutput,
             afterStepSettlement = afterStepSettlement,
@@ -153,13 +154,37 @@ public class FeatureTaskRuntimeRunEntry(
         if (!intakeCompleted(workflowId)) return@runOwned intakeReport
       }
       runWithRepairState(
-        request,
+        acceptedRequest,
         acquiredWorker,
         outputSink,
         captureStreamOutput,
         afterStepSettlement,
       )
     }
+  }
+
+  private fun identityRefusal(
+    request: FeatureTaskRuntimeRunInput,
+    workflowId: String,
+    scope: FeatureTaskRouteScope,
+  ): FeatureTaskRuntimeRunReport.Blocked? {
+    val launch =
+      WorkflowStatusLaunch(
+        goalScoped = scope == FeatureTaskRouteScope.GOAL_CHILD || request.definition == SkeletonDefinition.PLAN,
+        agentId = if (openCodeAssigned(request)) SupportedAgent.OPENCODE.wireValue else request.invokedAgentId,
+      )
+    val refusal =
+      statusPublisherFactory.registerWorkflow(request.repoRoot, request.issueKey, workflowId, launch)
+        ?: return null
+    return FeatureTaskRuntimeRunReport.Blocked(
+      issueKey = request.issueKey,
+      workflowId = workflowId,
+      featureSize = runInvariantsSource.read(Path.of(request.specPath)).requireInvariants().featureSize.name,
+      lastIncompletePhase = "resume_identity",
+      blockedReason = refusal,
+      completedPhaseIds = emptyList(),
+      resolvedBranch = request.goalContinuation?.goalBranch,
+    )
   }
 
   private fun admittedDefinition(
@@ -215,6 +240,11 @@ public class FeatureTaskRuntimeRunEntry(
     return input.copy(timeout = executionPlans.planningResumeTimeout(workflowId, input.timeout))
   }
 
+  private fun openCodeAssigned(input: FeatureTaskRuntimeRunInput): Boolean =
+    input.invokedAgentId == SupportedAgent.OPENCODE.wireValue ||
+      input.agentAssignment.override == SupportedAgent.OPENCODE.wireValue ||
+      SupportedAgent.OPENCODE.wireValue in input.agentAssignment.perPhaseAgentIds.values
+
   private fun changedQaSelectionRefusal(
     input: FeatureTaskRuntimeRunInput,
     worker: AcquiredFeatureTaskRuntimeWorker,
@@ -268,6 +298,7 @@ public class FeatureTaskRuntimeRunEntry(
       modelAssignment = input.modelAssignment,
       compactionSettings = input.compactionSettings,
       environment = input.environment,
+      openCodeIdentity = input.openCodeIdentity,
       repoRoot = input.repoRoot,
       timeout = input.timeout,
       requestedCodeReviewMode = input.requestedCodeReviewMode,
@@ -532,13 +563,14 @@ public class FeatureTaskRuntimeRunEntry(
         FeatureTaskRuntimeResumeLaunchAssignment.usedAssignments(
           admittedExecution.plan.stepLaunchAssignments,
           resolved,
-        ) { stepId ->
-          FeatureTaskRuntimeAgentResolver.resolve(
-            stepId,
-            input.agentAssignment,
-            input.invokedAgentId,
-          ).resolvedAgentId
-        },
+          { stepId ->
+            FeatureTaskRuntimeAgentResolver.resolve(
+              stepId,
+              input.agentAssignment,
+              input.invokedAgentId,
+            ).resolvedAgentId
+          },
+        ),
       )
     if (expected != current) {
       diagnostics.warning(

@@ -129,6 +129,7 @@ private fun qaStripCells(item: WorkItem, run: ExecutionInstance?, view: QaCheckl
           segments = if (progress.total > 0) listOf(
             BarSegment(progress.passed.toFloat(), SkillBillTheme.colors.stDone),
             BarSegment(progress.failed.toFloat(), SkillBillTheme.colors.stFailed),
+            BarSegment(progress.skipped.toFloat(), SkillBillTheme.colors.stPaused),
             BarSegment(progress.running.toFloat(), SkillBillTheme.colors.stActive, pulse = true),
             BarSegment(progress.remaining.toFloat(), SkillBillTheme.colors.borderSubtle),
           ) else emptyList(),

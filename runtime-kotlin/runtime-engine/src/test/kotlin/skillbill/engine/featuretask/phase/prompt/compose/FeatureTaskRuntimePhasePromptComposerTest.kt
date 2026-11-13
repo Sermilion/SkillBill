@@ -258,16 +258,16 @@ class FeatureTaskRuntimePhasePromptComposerTest {
   }
 
   @Test
-  fun `validate requires full project checks and returns their results`() {
+  fun `validate uses admitted saved checks and returns their results`() {
     val prompt =
       composePhasePrompt(
         PROMPT_COMPOSER_ISSUE_KEY,
         promptComposerBriefingFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE),
       )
 
-    assertContains(prompt, "admitted saved validation command")
+    assertContains(prompt, "admitted saved validation command list")
     assertContains(prompt, "do not rediscover checks from scripts, CI, or packs")
-    assertContains(prompt, "Do not recursively invoke `skill-bill phase validation`")
+    assertContains(prompt, "Do not recursively invoke `sona phase validation`")
     assertFalse(prompt.contains("Do not run pack validation_gate argv"))
     assertContains(prompt, "Keep repairing in this same session")
     assertContains(prompt, "Settle completed when every runnable saved check passes")
@@ -314,8 +314,8 @@ class FeatureTaskRuntimePhasePromptComposerTest {
       ) { copy(packBuildCommand = "./gradlew compileKotlin") }
     assertContains(prompt, "./gradlew compileKotlin")
     assertContains(prompt, "collect_all_full_gate_command")
-    assertContains(prompt, "skill-bill validate")
-    assertContains(prompt, "skill-bill phase validation")
+    assertContains(prompt, "sona validate")
+    assertContains(prompt, "sona phase validation")
     assertContains(prompt, "check --continue")
     assertContains(prompt, "report nothing but prose")
     assertFalse(prompt.contains("build_receipt"))

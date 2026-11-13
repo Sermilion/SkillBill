@@ -373,7 +373,7 @@ internal fun updateCheckRequester(
   }
 
 internal const val EXPECTED_INSTALL_COMMAND =
-  "skill-bill update"
+  "sona update"
 
 internal const val EXPECTED_UPDATE_COMMAND =
   "fetch https://raw.githubusercontent.com/Sermilion/skill-bill/main/install.sh " +

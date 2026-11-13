@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTe
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchResolver
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeResolvedPhaseAgent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
@@ -57,6 +58,8 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDe
 import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.nio.file.Path
 import java.time.Clock
 
@@ -319,13 +322,8 @@ public class FeatureTaskRuntimePhaseRunFactory(
     specSource: SpecSource,
     reentry: PendingReentry?,
   ): PhaseRun {
-    val resolvedAgent =
-      FeatureTaskRuntimeAgentResolver.resolve(
-        phaseId = phaseId,
-        assignment = request.agentAssignment,
-        invokedAgentId = request.invokedAgentId,
-      )
     val recorded = context.runState.stepLaunchAssignment(phaseId)
+    val resolvedAgent = resolveAgent(context, phaseId, request, recorded)
     val resolvedAgentId = resolvedAgent.resolvedAgentId
     val repairState =
       (request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.snapshot
@@ -384,6 +382,26 @@ public class FeatureTaskRuntimePhaseRunFactory(
           ?.failureContinuationOutput(context.state.outputs()),
     )
   }
+
+  private fun resolveAgent(
+    context: FeatureTaskRuntimeRunLoopContext,
+    phaseId: String,
+    request: FeatureTaskRuntimeRunFacts,
+    recorded: StepLaunchAssignment?,
+  ): FeatureTaskRuntimeResolvedPhaseAgent =
+    FeatureTaskRuntimeAgentResolver.resolve(
+      phaseId = phaseId,
+      assignment = request.agentAssignment,
+      invokedAgentId = request.invokedAgentId,
+    ).let { resolved ->
+      val priorPhase = context.state.phase(phaseId).record
+      val providerPaused =
+        priorPhase?.status == WorkflowStepStatus.PAUSED &&
+          FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(priorPhase.blockedReason.orEmpty())
+      recorded?.takeIf { providerPaused }?.let { assignment ->
+        resolved.copy(invokedAgentId = assignment.agentId, configuredAgentOverrideId = null)
+      } ?: resolved
+    }
 }
 
 public class FeatureTaskRuntimeRunLoop internal constructor(

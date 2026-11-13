@@ -61,6 +61,8 @@ import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.testing.workItem
 import java.io.File
 import javax.imageio.ImageIO
+import dev.skillbill.desktop.core.ui.input.LocalShellInput
+import dev.skillbill.desktop.core.ui.input.ShellInput
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -328,7 +330,9 @@ class VerifyDesignTest {
     setContent {
       SkillBillTheme(reducedMotion = true) {
         Column(Modifier.width(760.dp).fillMaxSize().background(SkillBillTheme.colors.bgPanel)) {
-          DetailScreen(state, DetailScreenHost(false, "Ctrl I", {}), actions::add)
+          CompositionLocalProvider(LocalShellInput provides remember { ShellInput() }) {
+            DetailScreen(state, DetailScreenHost(false, "Ctrl I", {}, {}), actions::add)
+          }
         }
       }
     }

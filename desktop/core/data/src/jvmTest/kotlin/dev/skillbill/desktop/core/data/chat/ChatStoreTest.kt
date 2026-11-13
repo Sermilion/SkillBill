@@ -11,6 +11,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.ChatRecoveryReason
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
@@ -22,12 +23,16 @@ import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Instant
 
 class ChatStoreTest {
   private val host = HostEnvironment(emptyMap(), createTempDirectory("chat-home").toString(), "")
+  private val fixedClock = object : Clock {
+    override fun now(): Instant = Instant.parse("2026-11-13T12:00:00Z")
+  }
 
   private fun entry(session: String, at: Long, execution: String = "wf-1", operator: Boolean = true) = ChatHistoryEntry(
     session, execution, ChatAgent("codex", "gpt-5", "high", "/home/operator/.codex-api"), Instant.fromEpochMilliseconds(at), "why blocked?",
@@ -46,7 +51,7 @@ class ChatStoreTest {
 
     val reader = ChatStore(host, RecordingDiagnostics(), Clock.System)
 
-    assertEquals(listOf(entry("new", 2), entry("old", 1)), reader.savedChats("wf-1"))
+    assertEquals(listOf(entry("new", 2), entry("old", 1)), reader.savedChats("wf-1").entries)
     assertEquals("thread-9", reader.agentSession("new"))
   }
 
@@ -65,6 +70,103 @@ class ChatStoreTest {
     assertEquals(null, reader.cursorSessionBinding("legacy-chat"))
   }
 
+  @Test
+  fun `resume-only records survive restart and listing without false recovery warnings or lost handles`() {
+    val writer = ChatStore(host, RecordingDiagnostics(), fixedClock)
+    assertTrue(writer.saveAgentSession("pending", "provider-thread"))
+    val binding = CursorSessionBinding("/profiles/cursor", "/work/project")
+    assertTrue(writer.saveCursorSession("cursor-pending", "cursor-thread", binding))
+    val files = listOf("pending", "cursor-pending").map { File(host.userHome, "$CHAT_STORE_PATH/$it.json") }
+    val originals = files.map { it.readText() }
+    files.forEach { assertTrue(it.setLastModified(1)) }
+
+    val reader = ChatStore(host, RecordingDiagnostics(), fixedClock)
+    assertTrue(reader.newTaskDrafts().recoveries.isEmpty())
+    val execution = reader.savedChats("wf-1")
+    assertTrue(execution.entries.isEmpty())
+    assertTrue(execution.recoveries.isEmpty())
+    assertEquals(originals, files.map { it.readText() })
+    assertEquals("provider-thread", reader.agentSession("pending"))
+    assertEquals("cursor-thread", reader.agentSession("cursor-pending"))
+    assertEquals(binding, reader.cursorSessionBinding("cursor-pending"))
+
+    assertTrue(reader.saveChat(entry("pending", 2)))
+    assertEquals(listOf(entry("pending", 2)), reader.savedChats("wf-1").entries)
+    assertEquals("provider-thread", reader.agentSession("pending"))
+  }
+
+  @Test
+  fun `unusable conversations and unbound OpenCode handles remain visible beside resume-only records`() {
+    val store = ChatStore(host, RecordingDiagnostics(), fixedClock)
+    assertTrue(store.saveAgentSession("pending", "provider-thread"))
+    val originals = mapOf(
+      "missing-agent" to """{"session_id":"missing-agent","agent_session":"thread","lines":[{"role":"Operator","text":"keep my question"}]}""",
+      "unbound" to """{"session_id":"unbound","agent_id":"opencode","agent_session":"oc-thread","lines":[]}""",
+      "unreadable" to "{",
+    )
+    originals.forEach { (id, raw) -> File(host.userHome, "$CHAT_STORE_PATH/$id.json").writeText(raw) }
+    val draft = entry("empty-draft", 3).copy(executionId = null, lines = emptyList(), newTask = ChatNewTaskContext("/work/app", "main"))
+    val execution = entry("empty-execution", 4).copy(lines = emptyList())
+    assertTrue(store.saveChat(draft))
+    assertTrue(store.saveChat(execution))
+    assertTrue(store.saveAgentSession(draft.sessionId, "draft-thread"))
+    assertTrue(store.saveAgentSession(execution.sessionId, "execution-thread"))
+
+    val reopened = ChatStore(host, RecordingDiagnostics(), fixedClock)
+    val common = mapOf(
+      "missing-agent" to ChatRecoveryReason.MissingResumeMetadata,
+      "unbound" to ChatRecoveryReason.OpenCodeHandleUnbound,
+      "unreadable" to ChatRecoveryReason.UnreadableFile,
+    )
+    assertEquals(common + (draft.sessionId to ChatRecoveryReason.MissingResumeMetadata),
+      reopened.newTaskDrafts().recoveries.associate { it.sessionId to it.reason })
+    assertEquals(common + (execution.sessionId to ChatRecoveryReason.MissingResumeMetadata),
+      reopened.savedChats("wf-1").recoveries.associate { it.sessionId to it.reason })
+    originals.forEach { (id, raw) -> assertEquals(raw, File(host.userHome, "$CHAT_STORE_PATH/$id.json").readText()) }
+  }
+
+  // A provider handle without its profile and cwd could silently resume a different OpenCode conversation after a restart.
+  @Test
+  fun `OpenCode acquisition saves its handle and binding without replacing conversation metadata`() {
+    val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    val saved = entry("opencode-chat", 8).copy(
+      agent = ChatAgent("opencode", "anthropic/claude-sonnet-4", "high", "/profiles/oc"),
+      lines = listOf(
+        ChatHistoryLine(ChatHistoryRole.Operator, "keep this"),
+        ChatHistoryLine(ChatHistoryRole.Agent, "saved answer"),
+      ),
+    )
+    store.saveChat(saved)
+    val binding = OpenCodeSessionBinding("/profiles/oc", "identity-fingerprint", "/data/oc", "/work/repo")
+
+    assertTrue(store.saveOpenCodeSession("opencode-chat", "provider-handle", binding))
+
+    val reopened = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    assertEquals("provider-handle", reopened.agentSession("opencode-chat"))
+    assertEquals(binding, reopened.openCodeBinding("opencode-chat"))
+    assertEquals(saved.lines, reopened.savedChats("wf-1").entries.single().lines)
+    assertEquals("opencode", reopened.savedChats("wf-1").entries.single().agent.agentId)
+  }
+
+  // A partial binding is recovery evidence; an incidental chat save must not normalize it away or replace the handle.
+  @Test
+  fun `a malformed OpenCode binding remains visible and blocks replacement writes`() {
+    val diagnostics = RecordingDiagnostics()
+    val store = ChatStore(host, diagnostics, Clock.System)
+    val file = File(host.userHome, "$CHAT_STORE_PATH/broken-opencode.json")
+    file.parentFile.mkdirs()
+    val original = """{"session_id":"broken-opencode","execution_id":"wf-1","agent_id":"opencode","updated_at_ms":1,"agent_session":"keep-handle","opencode_profile_identity":"/profile","lines":[{"role":"Operator","text":"saved question"}]}"""
+    file.writeText(original)
+
+    val projection = store.savedChats("wf-1")
+    assertTrue(projection.entries.isEmpty())
+    assertEquals("broken-opencode", projection.recoveries.single().sessionId)
+    assertEquals(ChatRecoveryReason.InvalidOpenCodeBinding, projection.recoveries.single().reason)
+    assertFalse(store.saveChat(entry("broken-opencode", 2)))
+    assertEquals(original, file.readText())
+    assertTrue(diagnostics.categories.contains("chat.opencode_binding_unreadable"))
+  }
+
   // Every chat open saves a file, so without a cap the directory grows for the life of the machine.
   @Test
   fun `saving keeps only the newest twenty chats of an execution`() {
@@ -72,7 +174,7 @@ class ChatStoreTest {
 
     (1L..22L).forEach { store.saveChat(entry("s$it", it)) }
 
-    assertEquals((22L downTo 3L).map { "s$it" }, store.savedChats("wf-1").map { it.sessionId })
+    assertEquals((22L downTo 3L).map { "s$it" }, store.savedChats("wf-1").entries.map { it.sessionId })
   }
 
   // Sweeping a draft as an orphan silently loses the operator's conversation after a week away.
@@ -85,9 +187,9 @@ class ChatStoreTest {
 
     store.savedChats("wf-1")
 
-    assertEquals(listOf(draft), store.newTaskDrafts())
+    assertEquals(listOf(draft), store.newTaskDrafts().entries)
     store.delete("draft")
-    assertEquals(emptyList(), store.newTaskDrafts())
+    assertEquals(emptyList(), store.newTaskDrafts().entries)
   }
 
   // Capping before dropping unreadable drafts would let an operator-less draft take a slot and hide a real one.
@@ -103,8 +205,8 @@ class ChatStoreTest {
     store.saveChat(draft("silent", 3, "/work/app", operator = false))
     store.saveChat(entry("execution", 4))
 
-    assertEquals(listOf(other, app), store.newTaskDrafts())
-    assertEquals(listOf(other), store.newTaskDrafts(limit = 1))
+    assertEquals(listOf(other, app), store.newTaskDrafts().entries)
+    assertEquals(listOf(other), store.newTaskDrafts(limit = 1).entries)
   }
 
   @Test
@@ -129,7 +231,7 @@ class ChatStoreTest {
 
     assertTrue(store.saveChat(saved))
 
-    val reopened = ChatStore(host, diagnostics, Clock.System).savedChats("wf-1").single()
+    val reopened = ChatStore(host, diagnostics, Clock.System).savedChats("wf-1").entries.single()
     assertEquals(saved.lines, reopened.lines)
     assertTrue(diagnostics.categories.isEmpty())
   }
@@ -153,7 +255,7 @@ class ChatStoreTest {
       ),
     )
     assertTrue(store.saveChat(saved))
-    val reopened = ChatStore(host, diagnostics, Clock.System).savedChats("wf-1").single()
+    val reopened = ChatStore(host, diagnostics, Clock.System).savedChats("wf-1").entries.single()
     assertEquals(listOf(action), reopened.lines.single { it.role == ChatHistoryRole.Agent }.actions)
     assertTrue(diagnostics.categories.isEmpty())
   }
@@ -166,7 +268,7 @@ class ChatStoreTest {
     file.writeText(
       """{"session_id":"legacy-no-target","execution_id":"wf-1","agent_id":"codex","updated_at_ms":1,"lines":[{"role":"Operator","text":"review this branch"},{"role":"Agent","text":"done","actions":[{"label":"Run phase:review","instruction":"Review branch.","mode":"ReadOnly","start":"review"}]}]}""",
     )
-    val entry = ChatStore(host, diagnostics, Clock.System).savedChats("wf-1").single()
+    val entry = ChatStore(host, diagnostics, Clock.System).savedChats("wf-1").entries.single()
     assertEquals(
       ChatSuggestedAction("Run phase:review", "Review branch.", ChatPermissionMode.ReadOnly, NewTaskActionKind.Review),
       entry.lines.single { it.role == ChatHistoryRole.Agent }.actions.single(),
@@ -183,7 +285,7 @@ class ChatStoreTest {
       """{"session_id":"legacy","execution_id":"wf-1","agent_id":"codex","updated_at_ms":1,"lines":[{"role":"Operator","text":"continue"},{"role":"Agent","text":"done","actions":[{"label":"unsafe","instruction":"run","mode":"unknown","start":"made-up"}]}]}""",
     )
 
-    val entry = ChatStore(host, diagnostics, Clock.System).savedChats("wf-1").single()
+    val entry = ChatStore(host, diagnostics, Clock.System).savedChats("wf-1").entries.single()
 
     assertEquals(ChatHistoryLine(ChatHistoryRole.Operator, "continue"), entry.lines[0])
     assertEquals(ChatHistoryLine(ChatHistoryRole.Agent, "done"), entry.lines[1])
@@ -198,7 +300,7 @@ class ChatStoreTest {
     store.saveChat(entry("attributed", 10).copy(executionId = null, newTask = ChatNewTaskContext("/work/app", "main", changesBaseline = baseline, changesAttributedPaths = setOf("b.kt", "a.kt"))))
     store.saveChat(entry("legacy", 11).copy(executionId = null, newTask = ChatNewTaskContext("/work/app", "main", changesBaseline = baseline)))
 
-    val restored = ChatStore(host, diagnostics, Clock.System).newTaskDrafts().associate { it.sessionId to it.newTask?.changesAttributedPaths }
+    val restored = ChatStore(host, diagnostics, Clock.System).newTaskDrafts().entries.associate { it.sessionId to it.newTask?.changesAttributedPaths }
 
     assertEquals(mapOf("legacy" to null, "attributed" to setOf("a.kt", "b.kt")), restored)
     assertEquals(emptyList(), diagnostics.categories)
@@ -212,14 +314,14 @@ class ChatStoreTest {
     val file = File(host.userHome, "$CHAT_STORE_PATH/previous.json")
     file.parentFile.mkdirs()
     file.writeText("""{"session_id":"previous","agent_id":"codex","updated_at_ms":10,"new_task_repository_root":"/work/app","new_task_session_established":true,"new_task_changes_capture_attempted":true,"new_task_changes_baseline":{"head_sha":"head","untracked_paths":["scratch.txt"],"stash_sha":"stash","taken_at":5},"new_task_changes_attributed_paths":["original.kt"],"lines":[{"role":"Operator","text":"keep this history"}]}""")
-    val previous = store.newTaskDrafts().single()
+    val previous = store.newTaskDrafts().entries.single()
     assertEquals(baseline, previous.newTask?.changesBaseline)
     assertEquals(setOf("original.kt"), previous.newTask?.changesAttributedPaths)
     val project = baseline.copy(projectId = "/work/app/.git", worktrees = mapOf("/work/app" to baseline, "/work/main" to baseline.copy(headSha = "main-head", stashSha = null)))
     val updated = previous.copy(newTask = previous.newTask!!.copy(changesBaseline = project, changesAttributedPaths = setOf("original.kt", "/work/main/changed.kt")))
     repeat(2) {
       assertTrue(store.saveChat(updated))
-      assertEquals(updated, ChatStore(host, diagnostics, Clock.System).newTaskDrafts().single())
+      assertEquals(updated, ChatStore(host, diagnostics, Clock.System).newTaskDrafts().entries.single())
     }
     assertEquals(emptyList(), diagnostics.categories)
   }
@@ -255,7 +357,7 @@ class ChatStoreTest {
     seed("absent", "")
     ChatStore(host, RecordingDiagnostics(), Clock.System).saveChat(entry("kept", 5).copy(summary = "ignored"))
 
-    val chats = ChatStore(host, RecordingDiagnostics(), Clock.System).savedChats("wf-1").associateBy { it.sessionId }
+    val chats = ChatStore(host, RecordingDiagnostics(), Clock.System).savedChats("wf-1").entries.associateBy { it.sessionId }
 
     assertEquals("Fix the flaky CI step", chats.getValue("kept").summary)
     assertEquals(Instant.fromEpochMilliseconds(5), chats.getValue("kept").updatedAt)
@@ -285,7 +387,7 @@ class ChatStoreTest {
 
     assertTrue(store.saveSummary("old", "Why CI blocked.", Instant.fromEpochMilliseconds(1)))
 
-    assertEquals(listOf("new" to 2L, "old" to 1L), store.savedChats("wf-1").map { it.sessionId to it.updatedAt.toEpochMilliseconds() })
+    assertEquals(listOf("new" to 2L, "old" to 1L), store.savedChats("wf-1").entries.map { it.sessionId to it.updatedAt.toEpochMilliseconds() })
     assertEquals(null, store.staleForSummary("old"))
     assertEquals(listOf("new"), store.staleSummaries(5).map { it.sessionId })
 

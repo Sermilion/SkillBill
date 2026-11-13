@@ -925,7 +925,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
         invalid(
           "This parent has ambiguous historical quality state. An operator must " +
             "decide whether to start a fresh quality execution " +
-            "(skill-bill goal fresh-quality <issue-key> --reason \"<why>\") or provide " +
+            "(sona goal fresh-quality <issue-key> --reason \"<why>\") or provide " +
             "authoritative original evidence.",
         )
       }

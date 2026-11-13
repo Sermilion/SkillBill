@@ -2440,8 +2440,10 @@ private val expectedMigrationDefinitions =
     124 to "record-goal-planning-git-worktree-identity",
     125 to "track-legacy-plan-bundle-transfer",
     126 to "fence-goal-planning-checkout-recovery",
-    127 to "add-project-check-config",
-    128 to "record-monitor-repair-validation-snapshots",
+    127 to "record-opencode-launch-identity",
+    128 to "record-verify-criterion-resolutions",
+    129 to "add-project-check-config",
+    130 to "record-monitor-repair-validation-snapshots",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

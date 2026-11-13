@@ -341,6 +341,6 @@ class ReleaseOperationTest {
 
   private companion object {
     const val CHANGELOG =
-      "## What's New in v1.3.0\n\n### New Features\n- Runtime operations: run `skill-bill operation release`.\n"
+      "## What's New in v1.3.0\n\n### New Features\n- Runtime operations: run `sona operation release`.\n"
   }
 }

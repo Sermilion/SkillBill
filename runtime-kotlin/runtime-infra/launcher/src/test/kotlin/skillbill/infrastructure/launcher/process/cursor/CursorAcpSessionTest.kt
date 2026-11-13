@@ -30,6 +30,164 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CursorAcpSessionTest {
+  private val runtimeMcp =
+    AcpStdioMcpServer(
+      "skill-bill",
+      "/opt/skill-bill/runtime-mcp",
+      emptyList(),
+      listOf(AcpEnvVariable("SKILL_BILL_REVIEW_DB", "/var/tmp/sona/runtime.db")),
+    )
+
+  @Test
+  fun `session new and load repeat the complete MCP list and additional roots in ACP shape`() {
+    listOf(null, "saved-1").forEach { saved ->
+      val harness =
+        Harness(saved = saved, provider = AcpProvider.Devin, mcpServers = listOf(runtimeMcp), roots = listOf("/state"))
+      harness.session.start()
+      harness.respond(
+        """{"protocolVersion":1,"agentCapabilities":{"loadSession":true,""" +
+          """"sessionCapabilities":{"additionalDirectories":{}}}}""",
+      )
+
+      val params = harness.frames.last()[CursorAcpKeys.PARAMS]
+      assertEquals(
+        Json.parseToJsonElement(
+          """{"cwd":"/checkout","mcpServers":[{"name":"skill-bill","command":"/opt/skill-bill/runtime-mcp",""" +
+            """"args":[],"env":[{"name":"SKILL_BILL_REVIEW_DB","value":"/var/tmp/sona/runtime.db"}]}],""" +
+            """"additionalDirectories":["/state"]""" + (saved?.let { ""","sessionId":"$it"""" } ?: "") + "}",
+        ),
+        params,
+      )
+      harness.session.close()
+    }
+  }
+
+  @Test
+  fun `required roots without the advertised capability stop setup before any session or prompt`() {
+    val harness = Harness(provider = AcpProvider.Devin, mcpServers = listOf(runtimeMcp), roots = listOf("/state"))
+    harness.session.start()
+    harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+
+    assertContains(requireNotNull(harness.session.outcome()?.failure), "additionalDirectories")
+    assertEquals(listOf("initialize"), harness.frames.map { it.text(CursorAcpKeys.METHOD) })
+  }
+
+  @Test
+  fun `devin selects only the exact advertised model and never aliases a variant`() {
+    val exact = Harness(model = "swe-2-high", provider = AcpProvider.Devin)
+    exact.session.start()
+    exact.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+    exact.respond("""{"sessionId":"s","models":{"currentModelId":"swe-2","availableModels":[{"modelId":"swe-2"}]}}""")
+    assertContains(requireNotNull(exact.session.outcome()?.failure), "swe-2-high")
+    assertTrue(exact.frames.none { it.text(CursorAcpKeys.METHOD) == "session/prompt" })
+
+    val unconfirmed = Harness(model = "swe-2-high", provider = AcpProvider.Devin)
+    unconfirmed.session.start()
+    unconfirmed.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+    unconfirmed.respond("""{"sessionId":"s"}""")
+    assertContains(requireNotNull(unconfirmed.session.outcome()?.failure), "swe-2-high")
+    assertTrue(unconfirmed.frames.none { it.text(CursorAcpKeys.METHOD) == "session/prompt" })
+
+    val absent = Harness(model = "swe-2-high", provider = AcpProvider.Devin, modelOnCommandLine = true)
+    absent.session.start()
+    absent.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+    absent.respond("""{"sessionId":"s"}""")
+    assertTrue(absent.session.ready)
+    absent.respond("""{"stopReason":"end_turn"}""")
+    assertNull(absent.session.outcome()?.model)
+    assertTrue(absent.reportedModels.isEmpty())
+  }
+
+  @Test
+  fun `devin legacy set model acknowledgement without an echoed model reports no identity`() {
+    val harness = legacyDevin()
+    val selection = harness.frames.last()
+    assertEquals("session/set_model", selection.text(CursorAcpKeys.METHOD))
+    assertEquals("swe-2-high", selection.obj(CursorAcpKeys.PARAMS)?.text(CursorAcpKeys.MODEL_ID))
+    harness.respond("{}")
+    assertTrue(harness.session.ready)
+    harness.respond("""{"stopReason":"end_turn"}""")
+    assertNull(harness.session.outcome()?.model)
+    assertTrue(harness.reportedModels.isEmpty())
+    assertTrue(harness.records.any { it.contains("outcome=model_selected_unconfirmed reported_identity=unavailable") })
+  }
+
+  @Test
+  fun `devin legacy set model reports the model the provider echoes back`() {
+    val harness = legacyDevin()
+    harness.respond("""{"modelId":"swe-2-high"}""")
+    assertTrue(harness.session.ready)
+    harness.respond("""{"stopReason":"end_turn"}""")
+    assertEquals("swe-2-high", harness.session.outcome()?.model)
+    assertEquals(listOf("swe-2-high"), harness.reportedModels)
+  }
+
+  @Test
+  fun `devin reports the model a later config option update names`() {
+    val harness = legacyDevin()
+    harness.respond("""{"modelId":"swe-2-high"}""")
+    harness.session.observe(
+      """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s",""" +
+        """"update":{"sessionUpdate":"config_option_update","configOptions":[""" +
+        """{"id":"model","category":"model","currentValue":"swe-2"}]}}}""",
+    )
+    harness.respond("""{"stopReason":"end_turn"}""")
+    assertEquals("swe-2", harness.session.outcome()?.model)
+    assertTrue(harness.records.any { it.contains("outcome=model_changed_by_provider") })
+  }
+
+  @Test
+  fun `cursor legacy set model still reports the selected model`() {
+    val harness = Harness(model = "gpt-5")
+    harness.session.start()
+    harness.respond("""{"protocolVersion":1,"agentCapabilities":{},"authMethods":[{"id":"cursor_login"}]}""")
+    harness.respond("{}")
+    harness.respond(
+      """{"sessionId":"s","modes":{"availableModes":[{"id":"agent"}]},""" +
+        """"models":{"currentModelId":"auto","availableModels":[{"modelId":"auto"},{"modelId":"gpt-5"}]}}""",
+    )
+    assertEquals("session/set_model", harness.frames.last().text(CursorAcpKeys.METHOD))
+    harness.respond("{}")
+    harness.respond("{}")
+    assertTrue(harness.session.ready)
+    harness.respond("""{"stopReason":"end_turn"}""")
+    assertEquals("gpt-5", harness.session.outcome()?.model)
+  }
+
+  private fun legacyDevin(): Harness {
+    val harness = Harness(model = "swe-2-high", provider = AcpProvider.Devin)
+    harness.session.start()
+    harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+    harness.respond(
+      """{"sessionId":"s","models":{"currentModelId":"swe-2",""" +
+        """"availableModels":[{"modelId":"swe-2"},{"modelId":"swe-2-high"}]}}""",
+    )
+    return harness
+  }
+
+  @Test
+  fun `an unparseable session path is refused before any session or prompt`() {
+    val harness = Harness(provider = AcpProvider.Devin, roots = listOf("/state\u0000bad"))
+    harness.session.start()
+    harness.respond(
+      """{"protocolVersion":1,"agentCapabilities":{"sessionCapabilities":{"additionalDirectories":{}}}}""",
+    )
+
+    assertContains(requireNotNull(harness.session.outcome()?.failure), "absolute paths")
+    assertEquals(listOf("initialize"), harness.frames.map { it.text(CursorAcpKeys.METHOD) })
+  }
+
+  @Test
+  fun `devin auth required names the CLI login recovery and sends no prompt`() {
+    val harness = Harness(provider = AcpProvider.Devin)
+    harness.session.start()
+    harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+    harness.reject(-32000)
+
+    assertContains(requireNotNull(harness.session.outcome()?.failure), "devin auth login")
+    assertFalse(harness.session.ready)
+  }
+
   @Test
   fun `team dashboard dependency refuses before any ACP request`() {
     val harness = Harness(dependency = CursorAcpMcpDependency.TeamDashboardRequired)
@@ -388,11 +546,15 @@ class CursorAcpSessionTest {
     provider: AcpProvider = AcpProvider.Cursor,
     checkout: String = "/checkout",
     bindOwner: Boolean = true,
+    mcpServers: List<AcpStdioMcpServer> = emptyList(),
+    roots: List<String> = emptyList(),
+    modelOnCommandLine: Boolean = false,
   ) {
     val frames = mutableListOf<JsonObject>()
     val events = mutableListOf<CursorAcpEvent>()
     val cards = mutableListOf<ApprovalRequestRecord>()
     val reportedModels = mutableListOf<String>()
+    val records = mutableListOf<String>()
     val owner = Owner()
     val session =
       CursorAcpSession(
@@ -404,6 +566,9 @@ class CursorAcpSessionTest {
           saved,
           mcpDependency = dependency,
           provider = provider,
+          mcpServers = mcpServers,
+          additionalDirectories = roots,
+          modelOnCommandLine = modelOnCommandLine,
         ),
         Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
         {
@@ -413,7 +578,7 @@ class CursorAcpSessionTest {
         { true },
         events::add,
         cards::add,
-        {},
+        records::add,
         onModel = { reportedModels += it },
       )
 
@@ -435,6 +600,11 @@ class CursorAcpSessionTest {
       respond("{}")
       assertNull(session.outcome())
       assertTrue(session.ready)
+    }
+
+    fun reject(code: Int) {
+      val id = frames.last()[CursorAcpKeys.ID]
+      session.observe("""{"jsonrpc":"2.0","id":$id,"error":{"code":$code,"message":"provider detail"}}""")
     }
 
     fun respond(result: String) {

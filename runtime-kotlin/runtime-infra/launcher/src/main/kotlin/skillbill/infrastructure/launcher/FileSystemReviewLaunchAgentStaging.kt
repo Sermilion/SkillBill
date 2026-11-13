@@ -113,6 +113,6 @@ class FileSystemReviewLaunchAgentStaging(
     )
 
   private companion object {
-    const val REPAIR_COMMAND = "skill-bill install apply"
+    const val REPAIR_COMMAND = "sona install apply"
   }
 }

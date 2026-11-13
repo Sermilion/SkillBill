@@ -12,7 +12,7 @@ internal object NativeAgentLinkInventoryLimits {
   const val MAX_SOURCE_ROOT_LENGTH = 4096
   val LOGICAL_NAME = Regex("[a-z0-9](?:[a-z0-9-]*[a-z0-9])?")
   val CACHE_GENERATION = Regex("(?:[a-z0-9](?:[a-z0-9-]{0,31})-)?[0-9a-f]{16}")
-  val PROVIDERS = SupportedAgent.entries.map(SupportedAgent::wireValue).toSet()
+  val PROVIDERS = NativeAgentProvider.entries.map { it.supportedAgent.wireValue }.toSet()
 }
 
 internal object NativeAgentLinkInventoryPaths {

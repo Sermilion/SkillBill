@@ -87,6 +87,14 @@ jobs:
             echo "jpackage error log: $error_log"
             cat "$error_log"
           done
+      - name: Upload phase card screenshot differences
+        if: failure() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-card-differences
+          path: desktop/feature/detail/build/reports/phase-cards/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Smoke packaged work data without CLI discovery
         run: (cd desktop && ./gradlew :app:packagedDataSmoke --no-build-cache)
       - name: Upload desktop snapshot

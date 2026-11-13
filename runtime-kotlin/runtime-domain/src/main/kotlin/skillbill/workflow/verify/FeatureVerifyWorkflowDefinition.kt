@@ -159,7 +159,7 @@ object FeatureVerifyWorkflowDefinition {
           "feature_flag_audit" to
             "Reuse criteria_summary, feature_flag_policy, and diff_projection; persist feature_flag_audit_receipt.",
           "code_review" to
-            "Run `skill-bill phase review` independently against criteria, its rubric, and diff_projection, then " +
+            "Run `sona phase review` independently against criteria, its rubric, and diff_projection, then " +
             "persist code_review_receipt.",
           "unit_test_value_check" to
             "Run operation:unit-test-value-check independently against criteria, its rubric, and diff_projection.",
@@ -214,7 +214,7 @@ object FeatureVerifyWorkflowDefinition {
             "then persist feature_flag_audit_receipt.",
           "code_review" to
             "Reuse criteria_summary, review_rubric, and diff_projection, pass orchestrated=true to " +
-            "`skill-bill phase review`, persist code_review_receipt, and keep telemetry in its dedicated store.",
+            "`sona phase review`, persist code_review_receipt, and keep telemetry in its dedicated store.",
           "unit_test_value_check" to
             "Run independently from sibling evaluators using criteria_summary, unit_test_value_rubric, and the " +
             "checkpoint-scoped diff_projection.",

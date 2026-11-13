@@ -12,7 +12,9 @@ internal val planningCapabilityClosureDirective: String by lazy {
 }
 
 internal const val PREPLAN_DIGEST_AUTHORITY: String =
-  "Use the preplan digest as the starting evidence; do not repeat completed discovery. " +
+  "Use the preplan digest as the starting evidence; do not repeat completed discovery. When the briefing " +
+    "names a preplan evidence file, read that file first: it holds the full digest and the checkout source " +
+    "it cites, verbatim with line numbers. Do not reopen a source range the file already holds. " +
     "When a missing or contradictory fact determines implementability, perform only the targeted " +
     "read-only source or authoritative contract lookup needed to resolve it and record the evidence. " +
     "Do not search unrelated files or other spec bundles. Never replace a missing external capability " +
@@ -21,7 +23,7 @@ internal const val PREPLAN_DIGEST_AUTHORITY: String =
 
 internal const val PLANNING_INSTALL_PROHIBITION: String =
   "Never include installer, uninstall, or install-sync commands in a spec or plan: do not plan to run " +
-    "`./install.sh`, `./uninstall.sh`, `skill-bill install`, `skill-bill install apply`, or any equivalent " +
+    "`./install.sh`, `./uninstall.sh`, `sona install`, `sona install apply`, or any equivalent " +
     "install refresh. Planning defines how future acceptance work will be implemented and validated; it " +
     "does not require that work to have already happened, and a later implementation or validation " +
     "action that is not yet complete never blocks planning."

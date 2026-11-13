@@ -54,7 +54,7 @@ fun legacyProseWorkflowError(
     WorkflowFailureCode.LEGACY_PROSE_WORKFLOW,
     "Workflow '$workflowId' is a legacy prose-mode row; the prose engine is retired and this row " +
       "cannot be resumed, continued, or updated. Re-run this work through the runtime engine instead: " +
-      "`skill-bill goal ${issueKey?.trim()?.ifEmpty { null } ?: "<ISSUE_KEY>"}`.",
+      "`sona goal ${issueKey?.trim()?.ifEmpty { null } ?: "<ISSUE_KEY>"}`.",
   )
 
 fun retiredStandaloneWorkflowError(
@@ -64,7 +64,7 @@ fun retiredStandaloneWorkflowError(
   SkillBillRuntimeException(
     WorkflowFailureCode.RETIRED_STANDALONE_WORKFLOW,
     "Workflow '$workflowId' uses the retired standalone feature-task skeleton and cannot be resumed. " +
-      "Abandon it if it is still open. Run `skill-bill ${issueKey?.trim()?.ifEmpty { null } ?: "<KEY>"}` " +
+      "Abandon it if it is still open. Run `sona ${issueKey?.trim()?.ifEmpty { null } ?: "<KEY>"}` " +
       "to plan and run this work.",
   )
 

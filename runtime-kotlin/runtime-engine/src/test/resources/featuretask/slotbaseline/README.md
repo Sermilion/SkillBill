@@ -13,9 +13,9 @@ Harness sources live in
 | --- | --- | --- |
 | `goal-child-build/` | `SlotBaselineFullRunCapture.goalChildBuild()` | Goal child for subtask 1 at the BUILD gate (`kotlinPackWithBuildGate`) |
 | `goal-child-validate/` | `SlotBaselineFullRunCapture.goalChildValidate()` | Goal child for subtask 2 at the VALIDATE gate (`kotlinPackWithValidationGate`) |
-| `code-review/` | `SlotBaselineCodeReviewCapture.encodedFiles()` | `PhaseRunEntry` over the review definition with the request `skill-bill code-review` builds (a scoped `HEAD^..HEAD` target, the pinned run and session ids), in INLINE and DELEGATED mode |
+| `code-review/` | `SlotBaselineCodeReviewCapture.encodedFiles()` | `PhaseRunEntry` over the review definition with the request `sona code-review` builds (a scoped `HEAD^..HEAD` target, the pinned run and session ids), in INLINE and DELEGATED mode |
 | `mcp-lifecycle/` | `SlotBaselineMcpLifecycleCapture.encodedFiles()` | `LifecycleTelemetryService`, the service the MCP tools call |
-| `phase/` | `SlotBaselinePhaseRunCapture.encodedFiles()` | `skill-bill phase review` in INLINE and DELEGATED mode with no target, `skill-bill phase validation` over a gate that fails once and then passes, and `skill-bill phase pr` over the fixture agent outputs |
+| `phase/` | `SlotBaselinePhaseRunCapture.encodedFiles()` | `sona phase review` in INLINE and DELEGATED mode with no target, `sona phase validation` over a gate that fails once and then passes, and `sona phase pr` over the fixture agent outputs |
 
 Full-run bundles run through `telemetryRunnerHarness` against real SQLite.
 The phase launcher is `satisfiedAuditLauncher()`. The review step runs
@@ -83,7 +83,7 @@ In any string, in this order:
 6. `__NORMALIZED_SHA40__` replaces 40-hex-digit hashes.
 7. `__NORMALIZED_REVIEW_RUN_ID__` replaces `rvw-<8 digits>-<6 digits>-<suffix>`.
 8. `__NORMALIZED_INVOCATION_ID__` replaces a phase-run invocation id, `phr-<uuid>`.
-9. `__NORMALIZED_REVIEW_SESSION_ID__` replaces a generated review session id, `rvs-<uuid>`. `skill-bill phase review`
+9. `__NORMALIZED_REVIEW_SESSION_ID__` replaces a generated review session id, `rvs-<uuid>`. `sona phase review`
    pins no session id, so the delegated phase capture carries a generated one.
 
 ## Canonicalisations
@@ -160,8 +160,8 @@ ledger expects must be regenerated in the subtask that the ledger names.
   (the phase prompt output-contract text, `code-review/` routed through `PhaseRunEntry`, and the
   new `phase/` bundle) is committed here. Subtask 12's own diff changes no captured behaviour.
 - SKILL-383 subtask 2 (retire listed skills): prompt, spec-writer and operation fixtures
-  carry the retired-skill name replacements (`skill-bill phase review`,
-  `skill-bill phase validation`, `operation:<name>`) and the skill text moved verbatim
+  carry the retired-skill name replacements (`sona phase review`,
+  `sona phase validation`, `operation:<name>`) and the skill text moved verbatim
   into directive resources. Goal-child plan and preplan prompts do not load the
   feature-spec directive and carry only the name replacements. Telemetry, lifecycle,
   ledger and workflow JSON files are unchanged.
@@ -175,7 +175,7 @@ ledger expects must be regenerated in the subtask that the ledger names.
   stuffed digest, and plan authors its bundle on disk. Phase records, handoff projections and
   workflow snapshots carry the prose value and summary. The `phase/plan/` capture runs in a repo
   without the seeded SKILL-380 spec, because plan blocks rather than overwrite an existing parent spec.
-- SKILL-410 (durable standalone plan): `skill-bill phase plan` runs the `plan` definition over durable
+- SKILL-410 (durable standalone plan): `sona phase plan` runs the `plan` definition over durable
   workflow state, and `PhaseRunEntry` drives only in-memory definitions, so `phase/plan/` and its capture
   are removed. Every other file is unchanged.
 - SKILL-425 (one planning skeleton): goal planning runs through the plan workflow instead of
@@ -194,3 +194,6 @@ ledger expects must be regenerated in the subtask that the ledger names.
   `workflow-snapshot.json` files record `contract_version` 0.4. Every other file is unchanged.
 - SONA-17 records each saved validation command with its working directory and quoted argv.
   Regeneration changes only `goal-child-validate/prompts/validate.txt`.
+- SONA-5 subtask 2 regenerates fixtures for the MCP namespace and selected worker command references.
+  Review launch-byte counts reflect the shorter `sona` command in the prompt producers.
+  The validation task retains its existing command until subtask 4 changes its producer.

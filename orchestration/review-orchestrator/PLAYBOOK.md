@@ -68,7 +68,7 @@ Do not reference this repo-relative path directly from installable skills — us
 
 ## Shared Execution Mode Contract
 
-- `skill-bill phase review` accepts exactly one canonical caller argument: `mode:auto`, `mode:inline`, or `mode:delegated`. Omission is `mode:inline`.
+- `sona phase review` accepts exactly one canonical caller argument: `mode:auto`, `mode:inline`, or `mode:delegated`. Omission is `mode:inline`.
 - It also accepts at most one governed caller context, `context:feature-remediation`. This context is valid only with `mode:inline` for a bounded feature-task re-review of the supplied remediation delta. Reject it with any other mode or scope.
 - Reject malformed, unknown, repeated, or conflicting `mode:` arguments before scope resolution or review launch. The requested mode is review-run metadata and is forwarded unchanged to parallel lanes and review re-runs.
 - `auto` resolves to `inline` everywhere: a first review pass, every follow-up or remediation pass, and a scope with no pass number. Preserve its named deciding rule in metadata; size, risk, and layering never change the resolution, and `auto` never reaches the delegated fan-out.
@@ -126,7 +126,7 @@ Accounting preserves direct and inclusive ownership. Direct usage belongs to one
 ## Shared Caller Integration Notes
 
 - If a review is invoked from a feature workflow, `operation:verify`, or another orchestration skill, do not pause for user selection. Return prioritized findings so the caller can auto-fix P0/P1 items and decide whether to carry Minor items forward.
-- A standalone `skill-bill phase review` returns findings without applying fixes or launching another command. A valid register with either verdict exits 0; invalid, incomplete, or failed output exits 1 with available findings.
+- A standalone `sona phase review` returns findings without applying fixes or launching another command. A valid register with either verdict exits 0; invalid, incomplete, or failed output exits 1 with available findings.
 
 ## Shared Report Structure
 

@@ -340,6 +340,7 @@ private fun StandaloneQaStepStatus.toDomain(): QaStepState = when (this) {
   StandaloneQaStepStatus.RUNNING -> QaStepState.Running
   StandaloneQaStepStatus.PASSED -> QaStepState.Passed
   StandaloneQaStepStatus.FAILED -> QaStepState.Failed
+  StandaloneQaStepStatus.SKIPPED -> QaStepState.Skipped
 }
 
 private fun StandaloneQaTargetState.toDomain(): QaTargetState = when (this) {
@@ -431,6 +432,11 @@ private fun GoalRunnerPhaseCardEdit.toDomain(): PhaseCardEdit = PhaseCardEdit(
 )
 
 private fun GoalRunnerPhaseCardOutput.toDomain(): PhaseCardOutput = PhaseCardOutput(
+  summary = summary,
+  text = text,
+  planRecord = planRecord?.let {
+    dev.skillbill.desktop.core.domain.model.PhaseCardPlanRecord(it.manifestOrder, it.specPath, it.specHash, it.payloadHash, it.repair)
+  },
   verdict = verdict,
   buildReceipt = buildReceipt?.toDomain(),
   validationReceipt = validationReceipt?.toDomain(),
@@ -544,7 +550,7 @@ private fun RuntimeAssessmentVerification.toDomain(): GoalAssessmentVerification
   RuntimeAssessmentVerification.NOT_REQUIRED -> GoalAssessmentVerification.NotRequired
 }
 
-private fun RuntimeReviewFindingStatus.toDomain(): ReviewFindingStatus = when (this) {
+internal fun RuntimeReviewFindingStatus.toDomain(): ReviewFindingStatus = when (this) {
   RuntimeReviewFindingStatus.OPEN -> ReviewFindingStatus.Open
   RuntimeReviewFindingStatus.FIXED -> ReviewFindingStatus.Fixed
   RuntimeReviewFindingStatus.ACCEPTED -> ReviewFindingStatus.Accepted

@@ -76,7 +76,7 @@ public class PhaseRunIntakeResolver(
             definition.id,
             "the intake must name an issue key such as SKILL-123, an issue URL, or a spec path under " +
               "${projectStore.resolve(request.repoRoot).specsRoot}/<KEY>-<name>/ " +
-              "(`skill-bill project path` prints the project store).",
+              "(`sona project path` prints the project store).",
           )
         val invariants =
           specInvariants(key, specPath, bareKey = tokens.size == 1, repoRoot = request.repoRoot)

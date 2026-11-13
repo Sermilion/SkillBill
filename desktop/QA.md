@@ -78,3 +78,48 @@ scratch home and stops the launch.
 ## Agents
 
 Agents launched from the QA app inherit the scratch home. They do not see your `~/.claude` login, so expect them to ask you to sign in or fail to authenticate.
+
+## Phase card screenshot checks
+
+`PhaseCardSnapshotTest` clicks each subtask and goal-finish pill, then opens every disclosure.
+It checks 88 images across 360 px and 760 px panel widths, including repair phases and
+`plan_subtasks`. The fixtures include long criteria, findings, plan provenance, validation
+overflow, fixed QA evidence, and both history files. Time, time zone, locale, density, fonts and motion are fixed.
+
+Run the checks on Linux with the bundled fonts:
+
+```sh
+cd desktop
+xvfb-run --auto-servernum ./gradlew :feature:detail:jvmTest --tests '*PhaseCardSnapshotTest'
+```
+
+The tests compare against `feature/detail/src/jvmTest/resources/phase-cards/`.
+They allow channel differences of 2 and at most 0.2% changed pixels. Size changes fail.
+Actual images and pink pixel diffs go to `feature/detail/build/reports/phase-cards/`.
+Other operating systems skip these pixel comparisons and keep running the interaction tests.
+Linux CI uploads the images when checks fail.
+
+After reviewing a deliberate design change, replace the baselines explicitly:
+
+```sh
+SONA_UPDATE_PHASE_SNAPSHOTS=1 xvfb-run --auto-servernum ./gradlew :feature:detail:jvmTest --tests '*PhaseCardSnapshotTest'
+```
+
+The HTML reference has a separate capture command:
+
+```sh
+cd design/linear-study
+npm ci
+npx playwright install chromium
+npm run screenshots
+```
+
+Open `build/phase-cards/index.html` to inspect each clicked pill, collapsed and expanded,
+at both widths. The script serves the prototype locally and uses the desktop's bundled fonts.
+It captures all ten subtask pills and seven goal-finish pills from the completed reference run.
+The manifest records the disclosures opened and the resulting text.
+
+Compare hierarchy, spacing, wrapping and available actions between the HTML references and
+Compose images. Each renderer draws text differently, so HTML pixels are not Compose baselines.
+Prototype sample counts, durations and evidence are not runtime facts. The app shows retained
+records and names missing historical evidence instead of copying sample data.

@@ -64,7 +64,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
       assertContains(prompt, "The initial user-facing goal invocation owns update checks and launch confirmation.")
       assertContains(
         prompt,
-        "Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher",
+        "Do not call `mcp__sona__update_check`, ask whether to update, or repeat dispatcher",
       )
       assertContains(prompt, "including on retries and continuation.")
     }
@@ -274,7 +274,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
 
     assertTrue(!prompt.contains("goal-continuation mode"))
     assertTrue(!prompt.contains("First execute this exact command"))
-    assertContains(prompt, "do not call `skill-bill workflow continue`")
+    assertContains(prompt, "do not call `sona workflow continue`")
   }
 
   @Test

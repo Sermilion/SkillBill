@@ -35,7 +35,7 @@ class DetailBuildStripTest {
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides input) {
-          DetailScreen(state.value, DetailScreenHost(open.value, "Ctrl I", { open.value = !open.value })) {}
+          DetailScreen(state.value, DetailScreenHost(open.value, "Ctrl I", { open.value = !open.value }, { open.value = true })) {}
         }
       }
     }

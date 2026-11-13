@@ -89,7 +89,7 @@ these seams:
   unreadable (`qa owned resource record unreadable`). They carry `kind`, `identity_digest` (a
   sha256 prefix) and a bounded `reason` only; the identity itself appears only in the report's
   retained-resource list, never in diagnostics or telemetry
-- QA progress: `skill-bill qa plan`, `skill-bill qa step`, `skill-bill qa target`, and the runtime's seed
+- QA progress: `sona qa plan`, `sona qa step`, `sona qa target`, and the runtime's seed
   record `seam=qa_progress` once for each `rejected` or `failed` write, with `kind=rejected`, `kind=failed`,
   `kind=plan_unreadable`, or `kind=plan_oversized`, and `kind=evidence_rejected` with a count when a step's
   evidence paths were dropped. A status read records `kind=unreadable` when the stored checklist is malformed or
@@ -202,12 +202,12 @@ The record lives on the failing row instead:
   spending budget. It is a transport verdict, not a receiver verdict, and `autoSync`
   fires often enough that charging it would block the whole queue permanently after
   a few offline minutes, with no way back once connectivity returned
-- `skill-bill telemetry status` reports `pending_events`, `latest_error`, and
+- `sona telemetry status` reports `pending_events`, `latest_error`, and
   `blocked_events`; a drain that ends with blocked rows reports `failed`, never
   `synced`, so budget exhaustion is never silent
 - a blocked row has no redelivery path. There is no retry command, so the failure
   message names what an operator can actually do — read the row through
-  `telemetry status`, or discard it with `skill-bill telemetry clear` — instead of
+  `telemetry status`, or discard it with `sona telemetry clear` — instead of
   promising an automatic retry that never arrives
 - a drain that claimed nothing because a concurrent drain holds every queued row
   reports `noop` with those rows still counted in `pending_events`, never `synced`

@@ -58,8 +58,10 @@ class VerifyWorkflowCommands(
   latest: VerifyWorkflowLatestCommand,
   resume: VerifyWorkflowResumeCommand,
   continueCommand: VerifyWorkflowContinueCommand,
+  resolveCriterion: VerifyWorkflowResolveCriterionCommand,
 ) {
-  val commands: List<CliktCommand> = listOf(open, update, show, get, list, latest, resume, continueCommand)
+  val commands: List<CliktCommand> =
+    listOf(open, update, show, get, list, latest, resume, continueCommand, resolveCriterion)
 }
 
 @Inject

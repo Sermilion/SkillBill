@@ -8,6 +8,7 @@ import skillbill.infrastructure.host.jvm.rollbackDeleteIfExists
 import skillbill.infrastructure.host.jvm.rollbackDeleteRegularFileOrSymlink
 import skillbill.infrastructure.host.jvm.rollbackRestoreBytes
 import skillbill.install.model.ExternalPlatformPackSource
+import skillbill.install.model.InstallApplyIssue
 import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceUnregisterRequest
 import skillbill.ports.repository.toFileLocation
 import java.io.IOException
@@ -18,6 +19,7 @@ import java.nio.file.Path
 internal fun rollback(
   txn: ScaffoldTransaction,
   adapters: ScaffoldAdapterSeams,
+  installIssues: List<InstallApplyIssue> = emptyList(),
 ) {
   val errors = mutableListOf<String>()
   rollbackRegisteredExternalPlatformPack(txn, errors)
@@ -27,8 +29,10 @@ internal fun rollback(
   rollbackFiles(txn, errors)
   rollbackDirs(txn, errors)
   if (errors.isNotEmpty()) {
+    val installFailure =
+      if (installIssues.isEmpty()) "" else "Skill installation failed: ${installIssues.joinToString { it.message }}. "
     throw scaffoldRollbackError(
-      "Rollback encountered errors while reverting scaffold: ${errors.joinToString("; ")}",
+      "${installFailure}Rollback encountered errors while reverting scaffold: ${errors.joinToString("; ")}",
     )
   }
 }

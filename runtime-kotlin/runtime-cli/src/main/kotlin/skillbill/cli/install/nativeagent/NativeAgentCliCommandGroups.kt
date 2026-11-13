@@ -34,3 +34,19 @@ class NativeAgentCursorCliCommands(
 ) {
   val commands: List<CliktCommand> = listOf(link, unlink)
 }
+
+@Inject
+class NativeAgentOpenCodeCliCommands(
+  link: InstallLinkOpenCodeAgentsCommand,
+  unlink: InstallUnlinkOpenCodeAgentsCommand,
+) {
+  val commands: List<CliktCommand> = listOf(link, unlink)
+}
+
+@Inject
+class NativeAgentDevinCliCommands(
+  link: InstallLinkDevinAgentsCommand,
+  unlink: InstallUnlinkDevinAgentsCommand,
+) {
+  val commands: List<CliktCommand> = listOf(link, unlink)
+}

@@ -27,6 +27,34 @@ class GoalAssessmentLoopTest {
   @TempDir lateinit var home: Path
 
   @Test
+  fun `obsolete test value output is diagnosed without entering the finding or repair flow`() {
+    val fixture =
+      GoalAssessmentGateFixture(home) { call ->
+        when (call) {
+          AssessmentCall.FIRST_SUBTASK ->
+            "Test value: src/FeatureTest.kt:12 guards src/Feature.kt:10 reason the test has no assertion\n" +
+              MAJOR_FINDING
+          AssessmentCall.VERIFIER -> REFUTE_FIRST
+          else -> NO_FINDING
+        }
+      }
+
+    val record = fixture.gate().runRecord(fixture.state(), fixture.request())
+
+    assertEquals(GoalAssessmentExitReason.CONVERGED, record.exitReason)
+    val finding = record.rounds.flatMap { it.findings }.single()
+    assertEquals(GoalAssessmentFindingKind.DEFECT, finding.kind)
+    assertEquals("src/Feature.kt", finding.path)
+    assertEquals(GoalAssessmentFindingState.REFUTED, finding.state)
+    assertTrue(record.openFindingRefs.isEmpty())
+    assertTrue(AssessmentCall.FIX !in fixture.calls)
+    assertTrue(fixture.diagnostics.warnings.any { "1 lines outside the grammar" in it })
+    val prompt = fixture.prompts.getValue(AssessmentCall.FIRST_SUBTASK)
+    assertTrue("Do not assess test value, test quality, or test coverage." in prompt)
+    assertTrue("Test value:" !in prompt)
+  }
+
+  @Test
   fun `each finding gets three attempts and independent verification without repeating discovery`() {
     var verifications = 0
     val fixture =

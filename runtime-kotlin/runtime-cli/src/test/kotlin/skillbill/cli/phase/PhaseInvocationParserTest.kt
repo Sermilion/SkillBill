@@ -81,7 +81,7 @@ class PhaseInvocationParserTest {
   fun `verify is a usage error naming the verify operation`() {
     val error = assertFailsWith<UsageError> { PhaseInvocationParser.parse("verify", emptyList()) }
 
-    assertContains(error.message.orEmpty(), "skill-bill operation verify")
+    assertContains(error.message.orEmpty(), "sona operation verify")
   }
 
   @Test

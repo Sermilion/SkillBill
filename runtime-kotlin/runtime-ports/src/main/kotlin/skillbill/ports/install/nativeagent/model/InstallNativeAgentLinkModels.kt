@@ -8,6 +8,7 @@ import java.nio.file.Path
 data class InstallNativeAgentLinkOperationRequest(
   val provider: NativeAgentLinkProvider,
   val linkRequest: NativeAgentLinkRequest,
+  val includeAllSourceRoots: Boolean = false,
 )
 
 data class InstallNativeAgentLinkOperationResult(
@@ -16,4 +17,15 @@ data class InstallNativeAgentLinkOperationResult(
 
 data class InstallNativeAgentUnlinkOperationResult(
   val unlinked: List<Path>,
+  val retainedPaths: List<Path> = emptyList(),
+)
+
+data class InstallNativeAgentPreservationRequest(
+  val stateRoot: Path,
+  val home: Path,
+  val environment: Map<String, String>,
+)
+
+data class InstallNativeAgentPreservationResult(
+  val retainedPaths: List<Path>,
 )

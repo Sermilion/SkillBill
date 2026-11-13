@@ -16,7 +16,7 @@ private val SHORTCUTS = listOf(
   ShortcutEntry("Go to New task", "G N"),
   ShortcutEntry("Go to Work", "G W"),
   ShortcutEntry("Go to History", "G H"),
-  ShortcutEntry("Toggle specs pane", "G S"),
+  ShortcutEntry("Toggle plans pane", "G S"),
   ShortcutEntry("Go to Settings", "G ,"),
   ShortcutEntry("Toggle terminal", "⌃ `"),
   ShortcutEntry("New terminal tab", "⌃ ⇧ `"),

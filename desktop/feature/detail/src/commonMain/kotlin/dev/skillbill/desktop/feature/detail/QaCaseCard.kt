@@ -95,6 +95,8 @@ private fun CaseStatusIcon(status: String) {
     "Passed" -> StatusDescription("Passed") { StatusIcon(StatusKind.Completed, null, modifier = Modifier.size(20.dp)) }
     "Stopped" -> StatusDescription("Stopped") { StatusIcon(StatusKind.Canceled, null, modifier = Modifier.size(20.dp)) }
     "Not run" -> StatusDescription("Not run") { StatusIcon(StatusKind.Skipped, null, modifier = Modifier.size(20.dp)) }
+    "Skipped" -> StatusDescription("Skipped") { StatusIcon(StatusKind.Skipped, null, modifier = Modifier.size(20.dp)) }
+    "Partly skipped" -> StatusDescription("Partly skipped") { StatusIcon(StatusKind.Completed, null, modifier = Modifier.size(20.dp)) }
     else -> StatusDescription("Pending") { StatusIcon(StatusKind.Pending, null, modifier = Modifier.size(20.dp)) }
   }
 }
@@ -110,7 +112,7 @@ private fun QaStepRow(step: QaStepView, invocationDirectory: String?, onOpenFind
       BasicText(step.number.toString(), Modifier.width(18.dp), style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint))
       Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         val textColor = when (step.display) {
-          QaStepDisplay.Pending, QaStepDisplay.NotRun -> colors.fgMuted
+          QaStepDisplay.Pending, QaStepDisplay.NotRun, QaStepDisplay.Skipped -> colors.fgMuted
           else -> colors.fg
         }
         BasicText(step.text, style = SkillBillTheme.type.tBase.copy(color = textColor, fontWeight = if (running) FontWeight.SemiBold else FontWeight.Normal))
@@ -144,6 +146,7 @@ private fun StepStatusIcon(display: QaStepDisplay) {
     QaStepDisplay.Pending -> StatusDescription("Pending") { StatusIcon(StatusKind.Pending, null, modifier = Modifier.size(16.dp)) }
     QaStepDisplay.Stopped -> StatusDescription("Stopped") { StatusIcon(StatusKind.Canceled, null, modifier = Modifier.size(16.dp)) }
     QaStepDisplay.NotRun -> StatusDescription("Not run") { StatusIcon(StatusKind.Skipped, null, modifier = Modifier.size(16.dp)) }
+    QaStepDisplay.Skipped -> StatusDescription("Skipped") { StatusIcon(StatusKind.Skipped, null, modifier = Modifier.size(16.dp)) }
   }
 }
 

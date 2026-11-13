@@ -22,6 +22,12 @@ class InvokingAgentContextResolverTest {
   }
 
   @Test
+  fun `OpenCode requires its provider-specific invocation marker`() {
+    assertEquals(SupportedAgent.OPENCODE, InvokingAgentContextResolver.detect(mapOf("OPENCODE" to "1")))
+    assertNull(InvokingAgentContextResolver.detect(mapOf("AGENT" to "opencode")))
+  }
+
+  @Test
   fun `cursor api key alone does not count as invoking context`() {
     assertNull(InvokingAgentContextResolver.detect(mapOf("CURSOR_API_KEY" to "not-a-session-marker")))
   }

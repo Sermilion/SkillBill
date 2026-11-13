@@ -26,17 +26,21 @@ internal fun addReviewFindingActions(connection: Connection) {
       "CREATE INDEX IF NOT EXISTS review_finding_actions_run ON review_finding_actions (review_run_id, id)",
     )
   }
-  installFindingChangeTriggers(connection)
+  installFindingChangeTriggers(connection) { row ->
+    "SELECT invocation_id AS k FROM standalone_phase_status WHERE review_run_id = $row.review_run_id"
+  }
 }
 
-private fun installFindingChangeTriggers(connection: Connection) {
+internal fun installFindingChangeTriggers(
+  connection: Connection,
+  keys: (String) -> String,
+) {
   connection.createStatement().use { statement ->
     listOf("review_finding_actions", "feedback_events").forEach { table ->
       listOf("INSERT", "UPDATE", "DELETE").forEach { operation ->
         statement.execute("DROP TRIGGER IF EXISTS desktop_change_${table}_${operation.lowercase()}")
         val row = if (operation == "DELETE") "OLD" else "NEW"
-        val keys = "SELECT invocation_id AS k FROM standalone_phase_status WHERE review_run_id = $row.review_run_id"
-        val body = changeStatements(DesktopReadSchema.PHASES_TOPIC, keys)
+        val body = changeStatements(DesktopReadSchema.PHASES_TOPIC, keys(row))
         statement.execute(
           "CREATE TRIGGER desktop_change_${table}_${operation.lowercase()} AFTER $operation ON $table BEGIN $body END",
         )

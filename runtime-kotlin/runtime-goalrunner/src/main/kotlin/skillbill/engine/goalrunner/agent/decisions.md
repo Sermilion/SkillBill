@@ -87,7 +87,7 @@ Reason: One detection surface keeps pause copy and classification aligned with c
 Alternatives considered: Local stderr parsing in GoalAssessmentRoundRun.
 
 ## [2026-11-03] Occupying lookup skips completed and abandoned parents
-Context: skill-bill goal and desktop preflight treated a completed or cancelled key as occupying, including when isActiveGoalRuntime stayed true for an abandoned manifest.
+Context: sona goal and desktop preflight treated a completed or cancelled key as occupying, including when isActiveGoalRuntime stayed true for an abandoned manifest.
 Decision: Occupancy is parent workflowStatus not completed or abandoned. Run admission and preflight use a dedicated occupying lookup. Shared discovery, loadDurableByIssueKey, purge listing, and status newest-fallback still return completed parents.
 Reason: Emptying the shared lookup would hide preserved history from status, reset, repair, and purge. FAILED stays occupying even when goal continuation is null so preflight cannot report NEW_WORK.
 Alternatives considered: Changing findDecomposedParentWorkflow or loadDurableByIssueKey globally.
@@ -413,7 +413,7 @@ Reason: A linked completed plan with untouched subtasks proves that no final qua
 
 Context: The quality gate blocks a parent marked `historical_ambiguity` and asks the operator to provide original evidence or choose a fresh quality execution. Nothing recorded that choice. Intake text never reaches the gate, `goal repair` and `goal resume` do not touch it, and `work recover` excludes operator decisions. 0AC-85 stayed blocked with no supported way forward.
 
-Decision: `skill-bill goal fresh-quality <issue-key> --reason <why>` moves the parent's quality record from `historical_ambiguity` to `clean_unstarted` in one transaction. It refuses while the parent execution lease is live and when the record holds no ambiguity. It is a separate command, not a `goal repair` wedge, because `goal resume` applies repair clears automatically and this choice discards history only an operator can judge.
+Decision: `sona goal fresh-quality <issue-key> --reason <why>` moves the parent's quality record from `historical_ambiguity` to `clean_unstarted` in one transaction. It refuses while the parent execution lease is live and when the record holds no ambiguity. It is a separate command, not a `goal repair` wedge, because `goal resume` applies repair clears automatically and this choice discards history only an operator can judge.
 
 Reason: The ambiguity guard exists so the runtime never guesses. The guess belongs to the operator, and the runtime needs a durable way to record it. A CLI test drives the recovered-database block, the choice, a refused repeat and a run that no longer blocks.
 
@@ -440,3 +440,8 @@ Context: Import readiness is decided once, when the parent is first created. Rel
 Decision: After a planning sweep prepared from a plan workflow, the goal runner calls `settleGoalQualityReadinessFromCompletedPlan`. It moves `historical_ambiguity` to `clean_unstarted` when the import rule now holds: a completed plan governs the manifest's `specs/...` parent spec and no manifest subtask has started. The check runs on every such sweep, so a runner that dies after the plan completes still settles on its next run. Repository-relative `.feature-specs/` manifests and manifests that record progress keep the block and still need `goal fresh-quality`.
 
 Reason: The order of plan and import does not change the proof. A parent imported after the same plan is already clean, so an operator should not have to judge state the runtime can prove. The project store is rewritten as a goal progresses, so an unstarted store manifest does not lag the way a checked-in one can. This narrows the 2026-10-28 refusal for project-store manifests in an empty or recovered database when the goal plans before any subtask starts. Parents already blocked before this change, or already past their first subtask, still use `goal fresh-quality`. Runtime-goalrunner tests cover a plan completing after import, a started subtask, a plan for another spec and a repository-relative manifest. A CLI test covers the full relaunch.
+
+## [2026-11-13] Recover released provider-paused planning workers on resume
+Context: SONA-19 retained paused plan_subtasks unit records and a running parent after its worker released the lease. Dead-worker reconciliation cannot inspect an ownership record that no longer exists.
+Decision: Plan discovery and explicit workflow selection repair this state under one database transaction. Recovery requires an admitted worker generation, no lease, no running phase records, and a provider-limit pause in a planning unit. Change only the parent status to pending and emit a diagnostic.
+Reason: Retain completed planning work and history without treating missing ownership alone as proof that takeover is safe.

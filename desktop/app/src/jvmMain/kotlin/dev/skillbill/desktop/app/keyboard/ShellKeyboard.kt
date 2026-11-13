@@ -32,7 +32,7 @@ class ShellKeyboard(
   /** Set by the window to its focus manager's clear. */
   var clearFocus: () -> Unit = {}
 
-  fun onKey(press: KeyPress): Boolean {
+  fun onKey(press: KeyPress, onEscapeAfterDetails: () -> Boolean = { false }): Boolean {
     val context = KeyContext(
       paletteOpen = menu.open,
       sheetOpen = panes.shortcutsOpen,
@@ -42,17 +42,17 @@ class ShellKeyboard(
       terminalFocused = input.terminalFocused,
       drawerMode = drawerMode,
     )
-    return run(keymap.resolve(press, context) ?: return false)
+    return run(keymap.resolve(press, context) ?: return false, onEscapeAfterDetails)
   }
 
-  private fun run(command: ShellCommand): Boolean {
+  private fun run(command: ShellCommand, onEscapeAfterDetails: () -> Boolean): Boolean {
     when (command) {
       ShellCommand.TogglePalette -> menu.toggle()
       ShellCommand.ToggleTerminal -> terminal.toggle()
       ShellCommand.NewTerminalTab -> terminal.newTab()
-      ShellCommand.Escape -> return escape()
+      ShellCommand.Escape -> return escape(onEscapeAfterDetails)
       ShellCommand.SaveEdit -> return input.saveTopEdit()
-      ShellCommand.ToggleDetailsPane -> panes.detailsPaneOpen = !panes.detailsPaneOpen
+      ShellCommand.ToggleDetailsPane -> if (!input.toggleDetails(navigator.top.contentKey)) panes.detailsPaneOpen = !panes.detailsPaneOpen
       ShellCommand.Consumed -> Unit
       ShellCommand.ShowShortcuts -> panes.shortcutsOpen = true
       ShellCommand.ToggleDrawer -> panes.drawerOpen = !panes.drawerOpen
@@ -64,11 +64,13 @@ class ShellKeyboard(
     return true
   }
 
-  /** Esc closes the top layer first, then cancels an open edit, then closes the drawer or leaves a focused field, then leaves detail or settings. */
-  fun escape(): Boolean = when {
+  /** Esc closes modal UI and edits before the details surface, then drawer, focus and navigation. */
+  fun escape(onEscapeAfterDetails: () -> Boolean = { false }): Boolean = when {
     panes.shortcutsOpen -> { panes.shortcutsOpen = false; true }
     input.dismissTopLayer() -> true
     input.cancelTopEdit() -> true
+    input.closeDetails(navigator.top.contentKey) -> true
+    onEscapeAfterDetails() -> true
     drawerMode && panes.drawerOpen -> { panes.drawerOpen = false; true }
     input.textInputFocused -> { clearFocus(); true }
     navigator.top.route is DetailRoute || navigator.top.route is SettingsRoute -> navigator.pop()

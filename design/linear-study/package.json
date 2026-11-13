@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "screenshots": "node scripts/capture-phase-cards.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.65.0"
+  }
+}

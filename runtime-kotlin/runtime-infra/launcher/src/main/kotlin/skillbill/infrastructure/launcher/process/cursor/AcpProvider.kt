@@ -8,8 +8,13 @@ data class AcpProvider(
   val acpArguments: List<String>,
   val authMethodId: String?,
   val lacksTeamDashboardMcp: Boolean,
+  val exactModels: Boolean = false,
+  val loginCommand: String? = null,
 ) {
   val seam: String get() = "${id}_acp"
+
+  fun launchArguments(model: String?): List<String> =
+    acpArguments + if (exactModels && model != null) listOf("--model", model) else emptyList()
 
   companion object {
     val Cursor =
@@ -28,6 +33,26 @@ data class AcpProvider(
         listOf("--acp"),
         authMethodId = null,
         lacksTeamDashboardMcp = false,
+      )
+
+    val OpenCode =
+      AcpProvider(
+        SupportedAgent.OPENCODE.wireValue,
+        "OpenCode",
+        listOf("acp"),
+        authMethodId = null,
+        lacksTeamDashboardMcp = false,
+      )
+
+    val Devin =
+      AcpProvider(
+        SupportedAgent.DEVIN.wireValue,
+        "Devin",
+        listOf("acp"),
+        authMethodId = null,
+        lacksTeamDashboardMcp = false,
+        exactModels = true,
+        loginCommand = "devin auth login",
       )
   }
 }

@@ -236,7 +236,7 @@ feature_addon_usage:
 # Pointer files (single-line markdown files containing only a relative path) are generated
 # from this block during render/install output. Targets are repo-rooted; the renderer computes
 # the correct ../-prefixed relative path. Never commit pointer files — add or modify entries here
-# and use `skill-bill render` or the install pipeline.
+# and use `sona render` or the install pipeline.
 pointers:
   feature-task:
     - name: android-compose-implementation.md

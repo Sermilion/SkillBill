@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositi
 import skillbill.engine.featuretask.phase.planning.PlanBundleTarget
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
+import skillbill.engine.featuretask.runner.testPreplanEvidenceStore
 import skillbill.featurespec.model.FeatureSpecPreparationDecision
 import skillbill.featurespec.model.FeatureSpecPreparationMode
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
@@ -41,6 +42,7 @@ class PlanBundleStagingPromotionTest {
       specPathResolver = FileSystemFeatureSpecPathResolver(store),
       projectStore = store,
       fileStore = TestDecompositionManifestStore,
+      preplanEvidenceStore = testPreplanEvidenceStore(),
     )
 
   @AfterTest

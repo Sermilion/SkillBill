@@ -487,7 +487,7 @@ Acceptance criteria: 7/7 implemented
 ## [2026-09-11] SKILL-233 — last-commit review phase, caller-scoped standalone
 Areas: runtime-engine/featuretask, runtime-cli/codereview, application/review, skills/bill-code-review
 - Feature-task and goal `review` always diffs `HEAD^..HEAD`. It no longer sends a worktree-from-base packet or a pre-baked diff blob.
-- Standalone `skill-bill code-review` / `/bill-code-review` still reviews the caller target: `pr`, a commit SHA, `last`/`HEAD`, or uncommitted work.
+- Standalone `sona code-review` / `/bill-code-review` still reviews the caller target: `pr`, a commit SHA, `last`/`HEAD`, or uncommitted work.
 - Pattern: phase scope is last commit; named standalone tokens map in the CLI so `pr` is never treated as a git revision. reusable
 Feature flag: N/A
 Acceptance criteria: N/A (hotfix)
@@ -524,7 +524,7 @@ Acceptance criteria: 2/2 implemented
 Areas: runtime-application/featuretask, runtime-application/featuretask/validation, runtime-application/goalrunner
 - Validate and build `blocked` + `failure_disposition: needs_user_action` settle once as terminal operator blocks: phase record + ledger before any parent-PID hold; no repair-turn increment or gate relaunch.
 - `terminalOutputAttempt` treats NEEDS_USER_ACTION as non-retryable; `gateOutputEarlyExit` keeps repair-segment completion from swallowing the operator path; `isRecoverableValidationBlock` excludes that disposition so disposition-less blocked validate still repairs.
-- Goal continuation / stop reports thread non-empty `blocked_reason` from summary and `blocking_reasons` so `skill-bill goal status` shows the operator block without chat.
+- Goal continuation / stop reports thread non-empty `blocked_reason` from summary and `blocking_reasons` so `sona goal status` shows the operator block without chat.
 - Pattern: explicit disposition owns terminal vs repair; omit disposition to keep the existing validate repair loop. reusable
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented
@@ -715,7 +715,7 @@ Acceptance criteria: 11/11 implemented
 
 ## [2026-08-20] Validate runs only the pack collect-all command
 Areas: runtime-application/featuretask (validate directives, prompt composer, run loop), AGENTS.md, skills/bill-feature-task-runtime
-- Validate briefing names the pack `collect_all_full_gate_command` and forbids `skill-bill validate`, `npx agnix`, `scripts/validate_agent_configs`, and `bill-code-check`.
+- Validate briefing names the pack `collect_all_full_gate_command` and forbids `sona validate`, `npx agnix`, `scripts/validate_agent_configs`, and `bill-code-check`.
 - The launch seam interpolates the declared argv into the Task line so the session sees the exact command.
 - Pattern: platform pack owns the validate command set; repo-root checklists stay maintainer-only. reusable
 Feature flag: N/A
@@ -884,8 +884,8 @@ Acceptance criteria: 7/7 implemented
 ## [2026-08-10] SKILL-178 subtask 3 — Human-resumable non-convergence pause
 Areas: runtime-application/featuretask, runtime-application/goalrunner, runtime-domain/workflow/taskruntime/model, runtime-cli/goal
 - Same unresolved advance-blocking set (Blocker or Major) across consecutive remediation passes with an unchanged reviewed-delta digest mints `PAUSED` via `pauseForNonConvergence` instead of re-entering `implement_fix`; an active retry grant suppresses that pause for one transition
-- Goal-facing pause reasons carry severity, count, and sanitized labels only — paths, line numbers, and hunks stay behind `skill-bill goal findings`
-- `skill-bill goal operator-decision` records `retry_fix` / `accept_and_advance` / `abandon_subtask` onto durable review state without editing `decomposition-manifest.yaml`; resume consumes the decision and reuses `review_base_sha`, baseline untracked inventory, and pass accounting
+- Goal-facing pause reasons carry severity, count, and sanitized labels only — paths, line numbers, and hunks stay behind `sona goal findings`
+- `sona goal operator-decision` records `retry_fix` / `accept_and_advance` / `abandon_subtask` onto durable review state without editing `decomposition-manifest.yaml`; resume consumes the decision and reuses `review_base_sha`, baseline untracked inventory, and pass accounting
 - `RETRY_FIX` still re-opens the consumed review pass so a hand-applied fix is genuinely re-reviewed; `operatorRetryRounds` stays unbounded — no count converts the pause into auto-advance or terminal failure
 - Reusable: `detectReviewRemediationNonProgress` (severity+label+text identities) mirrors audit-repair non-progress detection for the review remediation loop
 Feature flag: N/A
@@ -945,7 +945,7 @@ Acceptance criteria: 9/9 implemented
 
 ## [2026-08-05] Operator resume reopens blocked goal children
 Areas: runtime-application/goalrunner, runtime-ports/goalrunner
-- `skill-bill goal <key>` resume of a blocked subtask now reopens the child's durable blocked phase before launch (same child-side reopen as `feature-task retry-blocked`)
+- `sona goal <key>` resume of a blocked subtask now reopens the child's durable blocked phase before launch (same child-side reopen as `feature-task retry-blocked`)
 - Clears `needs_user_action` / blocked phase records so operator resume continues instead of immediately re-surfacing the prior block
 - Records an `operator_block_retry` artifact with reason `Operator resumed the goal after a blocked stop…`
 - `non_retryable_policy_conflict` remains a distinct disposition; reopen still applies because the operator explicitly resumed the goal

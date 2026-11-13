@@ -5,10 +5,11 @@ import skillbill.infrastructure.skills.nativeagent.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentCompositionContext
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentRegenerationRequest
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackDiscoveryContext
+import skillbill.install.model.ListedSkillNames
 import skillbill.ports.scaffold.model.ScaffoldSkillStatus
+import skillbill.review.model.CodeReviewComposition
 import skillbill.review.plan.ReviewLaunchPlanPolicy
 import skillbill.review.plan.model.ReviewLaunchLane
-import skillbill.scaffold.model.CodeReviewComposition
 import skillbill.scaffold.model.GovernedAddonSelection
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.policy.UNIVERSAL_CODE_REVIEW_AREAS
@@ -80,9 +81,9 @@ object AuthoringOperations {
         val resolvedRoot = repoRoot.toAbsolutePath().normalize()
         val target = resolveTarget(resolvedRoot, name, externalDiscovery)
         AuthoringExplainSkill(
-          skillName = target.skillName,
+          skillName = ListedSkillNames.publicName(target.skillName),
           contentFile = target.contentFile.toString(),
-          renderCommand = "skill-bill render ${target.skillName} --repo-root $resolvedRoot",
+          renderCommand = "sona render ${ListedSkillNames.publicName(target.skillName)} --repo-root $resolvedRoot",
           recommendedCommands =
             recommendedCommands(
               resolvedRoot,
@@ -99,10 +100,10 @@ object AuthoringOperations {
       governedSidecars = emptyList(),
       normalWorkflow =
         listOf(
-          "skill-bill new --payload <file>",
-          "skill-bill fill <skill-name>",
-          "skill-bill validate --skill-name <skill-name>",
-          "skill-bill render <skill-name>",
+          "sona new --payload <file>",
+          "sona fill <skill-name>",
+          "sona validate --skill-name <skill-name>",
+          "sona render <skill-name>",
         ),
       notes =
         listOf(
@@ -134,13 +135,13 @@ object AuthoringOperations {
         suggestedCommands = null,
       )
     }
+    val targets = selectedTargets(resolvedRoot, skillNames, externalDiscovery)
     val issues =
-      selectedTargets(resolvedRoot, skillNames, externalDiscovery).flatMap { target ->
+      targets.flatMap { target ->
         validateTarget(target, resolvedRoot)
       }
     val suggestedCommands =
-      skillNames.flatMap { skillName ->
-        val target = resolveTarget(resolvedRoot, skillName, externalDiscovery)
+      targets.flatMap { target ->
         recommendedCommands(
           resolvedRoot,
           target,
@@ -151,7 +152,7 @@ object AuthoringOperations {
     return AuthoringValidateResult(
       repoRoot = resolvedRoot.toString(),
       mode = "selected",
-      skillNames = skillNames,
+      skillNames = targets.map { target -> ListedSkillNames.publicName(target.skillName) },
       status = if (issues.isEmpty()) "pass" else "fail",
       issues = issues,
       suggestedCommands = suggestedCommands,
@@ -179,7 +180,7 @@ object AuthoringOperations {
           NativeAgentRegenerationRequest(
             repoRoot = resolvedRoot,
             compositionContext = nativeAgentCompositionContext,
-            skillNames = skillNames,
+            skillNames = targets.map(AuthoringTarget::skillName),
             originalBytes = originalBytes,
             createdPaths = createdPaths,
           ),

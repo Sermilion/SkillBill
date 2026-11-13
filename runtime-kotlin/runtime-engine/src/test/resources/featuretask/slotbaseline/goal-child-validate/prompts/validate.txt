@@ -1,10 +1,10 @@
-You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
+You are executing exactly one phase of the EXPERIMENTAL sona feature-task-runtime
 loop (preplan -> plan -> plan_subtasks -> implement -> simplify -> audit -> qa -> review -> verify_findings -> validate -> write_history -> commit_push -> pr -> monitor)
 for issue SKILL-65. The runtime owns the loop; do not run other phases, do not open
-or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+or continue any other sona workflow, and do not call `sona workflow continue`.
 Execute this supplied phase briefing with the current installed runtime.
 The initial user-facing goal invocation owns update checks and launch confirmation.
-Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher
+Do not call `mcp__sona__update_check`, ask whether to update, or repeat dispatcher
 intake, preflight, or confirmation, including on retries and continuation.
 Reading the installed skill-bill skill does not make this phase a new invocation.
 
@@ -14,7 +14,7 @@ Task: You are the validation agent for this step — do not spawn delegated suba
 command 1
 working directory: '.'
 argv: 'echo' 'validate'
-``` The runtime already resolved missing configuration; do not rediscover checks from scripts, CI, or packs. Do not run commands outside the admitted saved validation command list. Every runnable command in that list is allowed, regardless of executable. Run build tools with the machine's own settings and shared caches. Do not point a build tool at a private home or cache: for Gradle, never set GRADLE_USER_HOME, GRADLE_OPTS, or JAVA_TOOL_OPTIONS, and never pass --gradle-user-home or -g. Never reuse another worktree's mutable state; the machine's shared tool caches are not worktree state. Do not install packages automatically, stop a shared daemon, or change unrelated jobs. For each repair candidate, rerun every saved runnable validation command before publication and do not count a previous candidate's pass as current evidence. When preflight or command output confirms that a required tool, SDK, or host platform is unavailable, skip only the saved commands that depend on it and continue all independent saved commands. Report each skip as a warning naming the exact command or target, missing prerequisite, and confirming evidence. Never count a skipped check as passed. If a saved aggregate stops solely at unavailable tooling, report the aggregate coverage it did not reach rather than inventing a smaller command set. Do not edit project configuration, disable targets, or add test skips to work around missing tooling. Source, dependency, test, analysis, formatting, fixture, and configuration failures still require repair. When the admitted list is explicitly empty, print a warning that no validation commands were found, then settle completed and allow the workflow to advance. Do not invent commands or report checks as passed when none ran. Put every temporary copy, file, or directory this session creates under $TMPDIR. Do not recursively invoke `skill-bill phase validation`. Keep repairing in this same session until every runnable saved check passes. Settle completed when every runnable saved check passes, with warnings for unavailable tooling coverage. If no saved checks can run because their tooling is unavailable, complete with warnings and state that no checks ran. Settle blocked only for a concrete external obstacle other than confirmed unavailable tooling. The runtime does not rerun the checks itself. Never silence findings with annotations, baselines, disabled rules, weakened configuration, or skipped tests; fix root causes instead.
+``` The runtime already resolved missing configuration; do not rediscover checks from scripts, CI, or packs. Do not run commands outside the admitted saved validation command list. Every runnable command in that list is allowed, regardless of executable. Run build tools with the machine's own settings and shared caches. Do not point a build tool at a private home or cache: for Gradle, never set GRADLE_USER_HOME, GRADLE_OPTS, or JAVA_TOOL_OPTIONS, and never pass --gradle-user-home or -g. Never reuse another worktree's mutable state; the machine's shared tool caches are not worktree state. Do not install packages automatically, stop a shared daemon, or change unrelated jobs. For each repair candidate, rerun every saved runnable validation command before publication and do not count a previous candidate's pass as current evidence. When preflight or command output confirms that a required tool, SDK, or host platform is unavailable, skip only the saved commands that depend on it and continue all independent saved commands. Report each skip as a warning naming the exact command or target, missing prerequisite, and confirming evidence. Never count a skipped check as passed. If a saved aggregate stops solely at unavailable tooling, report the aggregate coverage it did not reach rather than inventing a smaller command set. Do not edit project configuration, disable targets, or add test skips to work around missing tooling. Source, dependency, test, analysis, formatting, fixture, and configuration failures still require repair. When the admitted list is explicitly empty, print a warning that no validation commands were found, then settle completed and allow the workflow to advance. Do not invent commands or report checks as passed when none ran. Put every temporary copy, file, or directory this session creates under $TMPDIR. Do not recursively invoke `sona phase validation`. Keep repairing in this same session until every runnable saved check passes. Settle completed when every runnable saved check passes, with warnings for unavailable tooling coverage. If no saved checks can run because their tooling is unavailable, complete with warnings and state that no checks ran. Settle blocked only for a concrete external obstacle other than confirmed unavailable tooling. The runtime does not rerun the checks itself. Never silence findings with annotations, baselines, disabled rules, weakened configuration, or skipped tests; fix root causes instead.
 
 ## Installed runtime owns phase output and settlement
 The installed Skill Bill runtime validates this phase's output and MCP settlement.
@@ -110,17 +110,17 @@ scoped_owned_paths:
 (none)
 
 ## Required final output (durable settlement)
-Finish this phase through the skill-bill MCP settlement tools, not by printing a JSON envelope.
+Finish this phase through the sona MCP settlement tools, not by printing a JSON envelope.
 The tools may be deferred in this session: load them first with ToolSearch
-`select:mcp__skill-bill__feature_task_phase_complete,mcp__skill-bill__feature_task_phase_block`.
-- Finished: call `mcp__skill-bill__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
+`select:mcp__sona__feature_task_phase_complete,mcp__sona__feature_task_phase_block`.
+- Finished: call `mcp__sona__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
   phase_id "validate", attempt 1, and value: one prose string carrying everything
   the next phase needs (what this phase produced, deviations from the briefing, what was
   deliberately left to later phases). When a value content section follows, it defines value and
   overrides this description: carry its content as prose or as JSON text, whichever is clearer, and
   emit any exact literal it names with nothing added. Otherwise the runtime does not validate the
   shape of value. Optional summary: one sentence.
-- Cannot finish because of a concrete obstacle: call `mcp__skill-bill__feature_task_phase_block` with the same
+- Cannot finish because of a concrete obstacle: call `mcp__sona__feature_task_phase_block` with the same
   workflow_id, phase_id, and attempt, a reason string naming the obstacle, and failure_disposition
   one of "retryable",
   "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".

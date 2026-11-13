@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.feature.chat
 
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.SavedChatProjection
 import java.io.File
 import java.io.IOException
 import java.time.ZoneId
@@ -20,6 +21,16 @@ internal fun resumableDrafts(saved: List<ChatHistoryEntry>, repositoryRoot: Stri
   fun resolved(root: String): String = canonicalRoots.getOrPut(root) { canonicalRepositoryRoot(root) }
   val selectedRoot = resolved(repositoryRoot)
   return saved.filter { entry -> entry.newTask?.repositoryRoot?.let { resolved(it) == selectedRoot } == true }
+}
+
+internal fun resumableDrafts(saved: SavedChatProjection, repositoryRoot: String?): SavedChatProjection {
+  val entries = resumableDrafts(saved.entries, repositoryRoot)
+  val recoveries = saved.recoveries.filter { recovery ->
+    val root = recovery.repositoryRoot
+    if (root == null || repositoryRoot == null) root == null
+    else canonicalRepositoryRoot(root) == canonicalRepositoryRoot(repositoryRoot)
+  }
+  return SavedChatProjection(entries, recoveries)
 }
 
 private fun canonicalRepositoryRoot(root: String): String = try {

@@ -18,6 +18,7 @@ internal object OperationAgentHomes {
       SupportedAgent.CLAUDE.wireValue to AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR,
       SupportedAgent.CODEX.wireValue to AgentHomeEnvironmentKeys.CODEX_HOME,
       SupportedAgent.CURSOR.wireValue to AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR,
+      SupportedAgent.OPENCODE.wireValue to AgentHomeEnvironmentKeys.OPENCODE_CONFIG_DIR,
     )
 
   fun effectiveProfile(

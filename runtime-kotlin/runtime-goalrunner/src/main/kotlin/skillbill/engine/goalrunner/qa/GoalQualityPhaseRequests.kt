@@ -43,6 +43,7 @@ public class GoalQualityPhaseRequests(
         repoRoot = Path.of(inputs.repoRoot),
         invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
         acceptedGoalQualityAgentId = qualityExecution?.governingInputs?.effectiveAgentId,
+        openCodeIdentity = inputs.openCodeIdentity,
         intake = inputs.issueKey,
         timeout = inputs.timeoutMillis?.milliseconds,
         agentAddonSelection =

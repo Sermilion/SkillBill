@@ -1,6 +1,6 @@
 package skillbill.scaffold.model.command
 
-import skillbill.scaffold.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewBaselineLayer
 
 sealed class ScaffoldCommandRequest {
   abstract val scaffoldPayloadVersion: String

@@ -9,6 +9,7 @@ import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.formatOption
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.model.CliRunInputs
+import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
 import skillbill.install.model.InstallAgentSelection
 import skillbill.install.model.InstallAgentSelectionMode
 import skillbill.install.model.InstallAgentTarget
@@ -171,7 +172,10 @@ abstract class InstallRequestCommand(
           message = windowsSymlinkMessage,
         ),
       replaceExistingSkillBillLinks = replaceExistingSkillBillLinks,
-      environment = inputs.environment,
+      environment =
+        inputs.databasePath?.let { databasePath ->
+          inputs.environment + (RuntimeDatabaseEnvironmentKeys.DATABASE_PATH to databasePath)
+        } ?: inputs.environment,
     )
   }
 

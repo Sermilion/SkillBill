@@ -21,6 +21,7 @@ internal data class ReviewDelegatedStageLaunch(
   val projectStoreRoot: Path,
   val timeout: Duration?,
   val modelOverride: String? = null,
+  val effortOverride: String? = null,
   val promptSuffix: String = "",
   val laneProgressIdleTimeout: Duration = READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes,
 )

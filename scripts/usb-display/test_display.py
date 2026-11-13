@@ -125,7 +125,7 @@ class DisplayTest(unittest.TestCase):
             ),
         ]
         with patch("board.subprocess.run", side_effect=responses) as command:
-            board = read_board("/bin/skill-bill")
+            board = read_board("/bin/sona")
         self.assertEqual((1, 1), (board.running, board.needs_you))
         self.assertEqual(["--cursor", "next"], command.call_args.args[0][-2:])
 
@@ -133,7 +133,7 @@ class DisplayTest(unittest.TestCase):
         import json
 
         old = parse_pages([page(item("A"))])
-        feed = Feed("/bin/skill-bill", None, 10)
+        feed = Feed("/bin/sona", None, 10)
         feed.board = old
         responses = [
             subprocess.CompletedProcess(
@@ -208,7 +208,7 @@ class DisplayTest(unittest.TestCase):
             unit.write_text("previous configuration")
             with (
                 patch("install.Path.home", return_value=home),
-                patch("install.shutil.which", return_value="/bin/skill-bill"),
+                patch("install.shutil.which", return_value="/bin/sona"),
                 patch("install.systemctl", side_effect=controller) as control,
                 patch("install.subprocess.run", side_effect=command),
                 self.assertRaises(subprocess.CalledProcessError),

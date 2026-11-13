@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.phaserun
 
+import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.engine.featuretask.incident.BlockIncidentCapture
@@ -56,6 +57,7 @@ public class StandalonePhaseStatusEventSink(
   private val outputScheduler: StandaloneOutputCaptureScheduler? = null,
   private val monitorSelector: String? = null,
   private val capturePlanOutput: Boolean = false,
+  public val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 ) : FeatureTaskRuntimeRunEventSink {
   private var reportedModel: String? = null
   private var registered: StandalonePhaseStatusRecord? = null

@@ -3,7 +3,6 @@ package skillbill.application.install
 import me.tatarka.inject.annotations.Inject
 import skillbill.install.model.BaselineManifest
 import skillbill.install.model.InstallApplyResult
-import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.InstallPlan
 import skillbill.install.model.InstallPlanRequest
 import skillbill.install.model.InstallPlatformPackDiscoverySnapshot
@@ -26,6 +25,7 @@ import skillbill.ports.install.baseline.model.ReadBaselineManifestRequest
 import skillbill.ports.install.baseline.model.WriteBaselineManifestRequest
 import skillbill.ports.install.link.InstallSkillLinkPort
 import skillbill.ports.install.link.model.InstallSkillLinkRequest
+import skillbill.ports.install.link.model.InstallSkillLinkResult
 import skillbill.ports.install.plan.InstallPlanningFactsPort
 import skillbill.ports.install.plan.InstallPlatformSkillMaterializationPort
 import skillbill.ports.install.plan.InstallStagingIntentPort
@@ -128,7 +128,7 @@ class InstallService(
       baselineManifestPersistencePort
         .readBaseline(ReadBaselineManifestRequest(installHome = home))
         .manifest
-    val updated = current.withEntries(plan.baselineOverlay).withoutEntries(plan.prunedPaths)
+    val updated = current.withEntries(plan.baselineOverlay).withoutEntries(plan.prunedBaselineKeys)
     if (updated != current) {
       baselineManifestPersistencePort.writeBaseline(
         WriteBaselineManifestRequest(installHome = home, manifest = updated),
@@ -170,7 +170,7 @@ class InstallService(
     agent: String,
     repoRoot: Path? = null,
     home: Path? = null,
-  ): List<Path> =
+  ): InstallSkillLinkResult =
     skillLinkPort.linkSkill(
       InstallSkillLinkRequest(
         source = source,
@@ -179,13 +179,13 @@ class InstallService(
         repoRoot = repoRoot,
         home = home,
       ),
-    ).linkedPaths
+    )
 
   private fun persistSuccessfulInstallSelection(
     plan: InstallPlan,
     result: InstallApplyResult,
   ) {
-    if (result.status == InstallApplyStatus.FAILURE) {
+    if (!result.canPersistSuccessfulSelection) {
       return
     }
     installSelectionPersistencePort.writeLatestSuccessfulSelection(

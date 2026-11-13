@@ -296,7 +296,7 @@ class SpecsPaneModelTest {
     val entries = specMenuActions(bundle, state).filterIsInstance<SpecMenuAction.Item>()
 
     assertEquals(
-      listOf("Open spec", "Reveal folder", "Copy key", "Remove favorite", "Export work", "Start", "Pause requested", "Choose agent", "Cancel goal…", "Purge run history…", DELETE_SPEC_FILES),
+      listOf("Open plan", "Reveal folder", "Copy key", "Remove favorite", "Export work", "Start", "Pause requested", "Choose agent", "Cancel goal…", "Purge run history…", DELETE_SPEC_FILES),
       entries.map { it.label },
     )
     assertFalse(entries.first { it.label == "Pause requested" }.enabled)
@@ -395,7 +395,7 @@ class SpecsPaneModelTest {
     model.onAction(SpecsAction.ConfirmDelete)
     advanceUntilIdle()
 
-    assertEquals(listOf("Couldn't delete spec files: The goal for this spec is running."), toasts.host.toasts.map { it.data.title })
+    assertEquals(listOf("Couldn't delete plan files: The goal for this spec is running."), toasts.host.toasts.map { it.data.title })
     assertEquals(listOf("SKILL-1"), model.state.value.rows.map { it.node.path })
     assertEquals(0, specs.refreshes)
   }

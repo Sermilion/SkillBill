@@ -40,7 +40,7 @@ class GitStandardWorkflowGitReleaseTagOperationsTest {
   @Test
   fun `the pushed annotated tag carries the exact multi-line message and becomes the last release tag`() {
     val operations = GitStandardWorkflowGitReleaseTagOperations
-    val message = "## What's New in v1.0.0\n\n### New Features\n- Operations: `skill-bill operation`\n\n"
+    val message = "## What's New in v1.0.0\n\n### New Features\n- Operations: `sona operation`\n\n"
 
     val created = operations.createAnnotatedTag(repo, "v1.0.0", message)
     val pushed = operations.pushTag(repo, "v1.0.0")

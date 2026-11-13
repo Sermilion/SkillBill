@@ -56,6 +56,26 @@ enum class SupportedAgent(
     honorsAdditionalWritableDirectories = false,
     loadsRuntimeMcpHeadless = false,
   ),
+  OPENCODE(
+    "opencode",
+    "opencode-agents",
+    "md",
+    ".opencode",
+    ".config/opencode/opencode.json",
+    false,
+    honorsAdditionalWritableDirectories = false,
+    loadsRuntimeMcpHeadless = false,
+  ),
+  DEVIN(
+    "devin",
+    "devin-agents",
+    "md",
+    null,
+    ".config/devin/mcp_config.json",
+    false,
+    honorsAdditionalWritableDirectories = true,
+    loadsRuntimeMcpHeadless = true,
+  ),
   ;
 
   val id: String get() = wireValue

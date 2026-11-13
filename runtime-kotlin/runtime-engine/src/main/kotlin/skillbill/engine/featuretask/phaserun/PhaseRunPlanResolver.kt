@@ -347,7 +347,7 @@ public class PhaseRunPlanResolver(
       "The outcome of goal-quality step '${record.phaseId}#${record.attemptCount}' is unknown. " +
         "Inspect authoritative process or phase evidence, or explicitly retire " +
         "this quality execution and accept new cycles: " +
-        "skill-bill goal fresh-quality <issue-key> --reason \"<why>\".",
+        "sona goal fresh-quality <issue-key> --reason \"<why>\".",
     )
 
   internal fun invalidQualityPlan(detail: String? = null): Nothing =

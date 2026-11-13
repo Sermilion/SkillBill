@@ -1,3 +1,88 @@
+## [2026-11-13] Keep recorded results out of Upcoming
+Context: The completed subtask wire token fell through to Pending, and Upcoming hid recorded audit, review or phase cards, so expandable rows vanished at 400 dp.
+Decision: Map completed to Completed. When SubtaskPhaseResults already has audit, review or phase cards, do not use Upcoming.
+Reason: SubtaskPhaseCard must keep rendering the audit and review sections so shared expandable rows stay composed at narrow widths.
+
+## [2026-11-13] Keep validation check disclosure scoped to the selected receipt
+Context: Validate cards fold after six recorded checks. Switching subtask, phase attempt or receipt must not inherit another subject's expanded list.
+Decision: Remember expansion with item id, subtask id, phase id, round, startedAt and the selected validationReceipt. A change of any of those keys starts folded.
+Reason: N is the remaining recorded-check count for this receipt. Gate facts stay below the list in both states, and a failed verdict stays failed while folded or expanded.
+
+## [2026-11-13] Open a recorded branch instead of the header branch
+Context: Commit cards can show a pushedBranch that differs from the selected item's current header branch. OpenBranch previously always opened the header branch.
+Decision: OpenBranch takes the branch to open. Receipt Open branch sends the recorded pushedBranch; header and Verify callers pass their own displayed branch.
+Reason: A historical commit card must not silently navigate to a different current branch.
+
+## [2026-11-13] Resolve history links only against the goal worktree
+Context: History receipts can record relative agent/history.md and agent/decisions.md paths after the goal checkout is Removed or absent. WorkItem.checkoutRoot falls back to the repository root.
+Decision: Keep absolute recorded targets. Resolve relative targets against Detail.goalWorktree, or the item's goalWorktree only when that field is absent, and only in Active or Retained state. An explicit Removed worktree disables the action without falling through to the header or checkoutRoot.
+Reason: A Removed historical checkout must not open the operator repository. Path facts stay visible when the action is unavailable.
+
+## [2026-11-13] Keep review lanes neutral without complete specialist attribution
+Context: Compact review findings can omit specialist, location or confidence, and a missing specialist must not paint a lane clean.
+Decision: Amber plus a count only for attributed findings. Green clean only when every finding has a specialist or the pass is empty and that lane has zero. Incomplete attribution stays a neutral chip.
+Reason: Clean from missing results would invent a recorded lane outcome the producer did not supply.
+
+## [2026-11-13] Keep recorded audit attempt order and missing-first criteria without UI sorts
+Context: Desktop policy forbids sorting recorded collections in feature code. Attempt numbers and current grades arrive already ordered.
+Decision: Walk attempts in producer order. Split current criteria with filterNot/filter so missing rows stay first with stable source order.
+Reason: A UI sort would rewrite recorded order and fail the policy gate. Missing-first grouping does not attach current grades to older attempts.
+
+## [2026-11-13] Keep expandable-row controls outside the disclosure toggle
+Context: Verify checkbox, Chat/Goal route and extra details must stay independent of expansion.
+Decision: ExpandableResultRow places leadingOutside and endOutside outside the clickable title row. Toggle exists only when a disclosure body is supplied.
+Reason: Sharing the toggle hit target would consume control clicks as expand/collapse. A short sparse row with no disclosure stays a static row.
+
+## [2026-11-13] Keep VerifyFindingRow's always-visible location and extra slots
+Context: VerifyFindingRow shows ref, location and extra or shared-code controls outside the description fold. ExpandableResultRow folds disclosure as a unit.
+Decision: Keep VerifyFindingRow's outer layout for ref, location, extra and route controls. Use ExpandableResultRow for the description fold and ResultRowFileChip for the location label.
+Reason: Moving extra behind the shared fold would hide always-available controls and mix independent hit targets with disclosure toggle.
+
+## [2026-11-13] Keep completed review passes while a later pass runs
+Context: SubtaskReviewSection hid completed pass verdicts, tallies and findings whenever a later pass was running.
+Decision: Render every completed pass block, then the running pass with lane-completion progress.
+Reason: A new pass must not replace recorded predecessor evidence. Running lane flags mean Finished or Not finished, not clean results.
+
+## [2026-11-13] Gate Goal-finish QA preview on the open QA phase
+Context: Preview observation followed pane visibility, so folding QA or switching to another Goal finish phase left the live preview collecting.
+Decision: A goal-finish-owned QA preview request is null unless the effective open Goal finish phase is qa. Folding or leaving QA drops it; reopening uses the existing observer lifecycle.
+Reason: A hidden QA card must not keep collecting frames. Standalone QA is not goal-finish-owned and stays on its existing visibility path.
+
+## [2026-11-13] Keep phase-area availability outside selected-card dispatch
+Context: SKILL-527 kept audit below Phases and a trailing review path when no review card existed. Folding or having no cards hid pending, loading and unreadable reads.
+Decision: Resolve pending, loading and unreadable notices before optional card dispatch. Put loaded audit and review bodies only in the selected owning card. Known results without a card keep an availability notice rather than a fabricated card or a no-phase claim.
+Reason: A null result does not prove emptiness. Notices must remain reachable with inert tabs or every card folded. A second trailing results block would duplicate the card body.
+
+## [2026-11-13] Auto-open from recorded card state, never Waiting appearance
+Context: Blocked and Paused both paint as Waiting, so visual tab state cannot decide automatic expansion.
+Decision: Prefer Running, then Blocked, then Failed from recorded PhaseCardState, using runtime then recorded order for ties. Done, Skipped and Paused never auto-open.
+Reason: Using Waiting would open paused work as if it were blocked. Competing eligible cards were unspecified in intake; this order is the local UI choice.
+
+## [2026-11-13] Store Folded as explicit disclosure, not a missing choice
+Context: An absent phase choice previously meant pick a default, so a refresh reopened a card the operator had just closed.
+Decision: Store Auto, Folded and Open in window-scoped SubtaskSelections. Missing means Auto. Activating the effective open card stores Folded; navigation always stores Open.
+Reason: Refresh, paging and subject switches must keep an explicit fold. Absence would restore last-done or running auto-expansion.
+
+## [2026-11-13] Own nonmodal subject controls in the detail screen
+Context: A details ShellLayer suppresses the panel's own Cmd/Ctrl+I and J/K. Opening the pane before evaluating navigation also makes the first arrow skip the remembered subject.
+Decision: DetailScreen evaluates actual visibility and owns open, movement and close routing. Entry-keyed ShellInput callbacks dispatch to that owner outside modal layers. The first hidden-panel arrow opens the effective subject unchanged; visible-panel arrows traverse the existing index. Close restores focus through an available list target or a composed detail fallback.
+Reason: The panel must remain nonmodal, preserve menu and edit dismissal priority, and support direct and standalone detail rendering without depending on optional JVM host setup. The 2026-11-08 phase-choice decision still governs paging and database-session ownership; its inline presentation belongs to the earlier design.
+
+## [2026-11-13] Give details precedence over Specs in drawer mode
+Context: SONA-16 subtask 2 integrates every subject opener with the shared shell. The operator explicitly replaced the earlier narrow-window Specs precedence.
+Decision: Below 760 dp, row and Goal finish selection, dependency chips, the view-header action, Cmd/Ctrl+I and the first hidden-panel navigation action open details and hide Specs. The operator can reopen Specs. Preserve coexistence in wide layouts, chat exclusion, modal precedence and bounds above the terminal.
+Reason: Drawer mode shares the pane slot. The operator requires selection to reveal its details and forbids keeping the narrow Specs drawer visible through another overlay. This replaces subtask 1 AC-003/task 5 and traceability precedence, and subtask 2's clauses requiring Specs to stay open, only in drawer mode.
+
+## [2026-11-13] Own pending details writes for the window lifetime
+Context: SONA-16 subtask 1 requires immediate resizing, debounced persistence, reset ordering and close flushing across pane dismissal and work-item navigation.
+Decision: Keep DetailsPaneWidth in WindowScope with explicit revisioned pending writes, including clear. Serialize saves, ignore settings emissions after local interaction, and bound the application-quit flush before shutdown.
+Reason: Pane-local state would lose pending work when the view leaves composition. A nullable pending value alone cannot distinguish reset from no write, and an older save must not restore the width after reset. Diagnostics report failed durability without undoing the visible choice.
+
+## [2026-11-13] Preserve requested details width across layout clamps
+Context: SONA-16 subtask 1 requires an independent saved width that returns after the body narrows, while goals and other runs have different defaults.
+Decision: Persist a nullable details request independently of chat. Apply the 70% cap only to an unset request, and apply current body constraints only while rendering. Reset removes only the details key.
+Reason: Saving a rendered clamp would discard the user's wider request. Keeping null distinct lets reset restore the current run-kind default and keeps populated older stores readable.
+
 ## [2026-11-11] Match Verify states without bypassing proposal confirmation
 Context: The linear-study Verify reference has framed summaries and outcomes, compact criterion disclosures, receipt summaries and state-specific run controls. The detail page showed unstyled text and generic run controls.
 Decision: Keep Verify presentation local to the detail feature. Use the existing parsed projection, run controls, fix actions and collapse state. Link parked runs to Chat for criteria review and intake adjustment, where the operator's proposal card owns confirmation.
@@ -12,6 +97,7 @@ Reason: Paging replaces the detail ViewModel, so local state would lose the choi
 Context: SKILL-527 moves review passes into the phase card while retaining review access for subtasks without a recorded review card.
 Decision: Suppress the separate Review block when a review card exists. Keep audit results below Phases and preserve the no-card review path.
 Reason: Drawing both review locations would duplicate the same evidence. The fallback preserves access for subtasks without recorded cards.
+Superseded by: Keep phase-area availability outside selected-card dispatch (2026-11-13)
 
 ## [2026-11-08] Fall back to the Linux URL handler for branch links
 Context: Java Desktop can report BROWSE unsupported on Linux with a configured default browser.
@@ -213,3 +299,13 @@ Reason: Recovery eligibility can forbid retry without indicating that an operato
 Context: Opening a branch page needs the origin URL, but the desktop process allowlist forbids launching git.
 Decision: Resolve the git directory and origin from configuration and open the resulting URL with the desktop browser API.
 Reason: This keeps branch navigation within the process allowlist. URL insteadOf rewrites are not supported.
+
+## [2026-11-13] Keep preplan digest categories independent of report headings
+Context: The preplan card rendered arbitrary report headings and long excerpts as its collapsed rows, unlike the linear-study reference.
+Decision: Use the Verify disclosure for four fixed digest categories and Goal spec. Fold unclassified report sections separately. Keep missing evidence explicit and label retained history entries as recorded, since text does not prove a selected-heading count. Render recognized add-ons as labels and resolve recorded history links through the existing worktree path policy.
+Reason: Historical reports must remain readable without inventing structured evidence or copying the prototype's sample facts.
+
+## [2026-11-13] Show unfinished historical CI observations without live indicators
+Context: A completed goal's unfinished retained monitor cycle showed Running, pending spinners and a poll-age label. Its running card also overrode the Goal finish header's completed state.
+Decision: Give a terminal goal's completion precedence in the header. Animate pending CI checks and show poll age only while monitoring runs. For a stopped card without a terminal cycle record, retain its checks and name the missing final outcome in the card and activity.
+Reason: Goal completion does not supply missing CI results. Historical checks must remain visible without claiming the monitor is still polling.

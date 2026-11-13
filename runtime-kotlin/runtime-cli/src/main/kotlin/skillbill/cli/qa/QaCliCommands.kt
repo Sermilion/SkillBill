@@ -44,7 +44,7 @@ class QaCommand(
   screenshot: QaScreenshotCommand,
 ) : DocumentedNoOpCliCommand(
     "qa",
-    "Device, environment and progress helpers for a running `skill-bill phase qa` agent.",
+    "Device, environment and progress helpers for a running `sona phase qa` agent.",
   ) {
   init {
     subcommands(lease, resource, plan, step, target, stage, screenshot)

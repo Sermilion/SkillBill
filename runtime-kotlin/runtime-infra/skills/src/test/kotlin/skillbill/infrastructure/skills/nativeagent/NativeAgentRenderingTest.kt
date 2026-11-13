@@ -6,6 +6,7 @@ import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSourceText
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
+import skillbill.install.model.SupportedAgent
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -134,6 +135,69 @@ class NativeAgentRenderingTest {
 
     val parsedFromClaude = parseFrontmatterValue(claude, "description")
     assertEquals(source.description, parsedFromClaude)
+  }
+
+  @Test
+  fun `opencode renders primary specialists with exact permission mappings`() {
+    val source =
+      NativeAgentSource(
+        name = "bill-test-worker",
+        description = "Review: the selected evidence.",
+        body = "# Worker\n\nUse the composed governed body.",
+        tools =
+          listOf(
+            "mcp__skill-bill-review-evidence__read_evidence",
+            "mcp__skill-bill-review-evidence__request_expansion",
+          ),
+      )
+
+    val rendered = NativeAgentProvider.forSupportedAgent(SupportedAgent.OPENCODE).render(source)
+
+    assertContains(rendered, "name: bill-test-worker")
+    assertContains(rendered, "description: \"Review: the selected evidence.\"")
+    assertContains(rendered, "mode: primary")
+    assertContains(
+      rendered,
+      "permission:\n  \"*\": deny\n  skill-bill-review-evidence_read_evidence: allow\n" +
+        "  skill-bill-review-evidence_request_expansion: allow",
+    )
+    assertContains(rendered, "# Worker\n\nUse the composed governed body.")
+    assertFalse("tools:" in rendered)
+    assertFalse("model:" in rendered)
+    assertFalse("variant:" in rendered)
+
+    val hostDefaults =
+      NativeAgentProvider.OpenCode.render(
+        NativeAgentSource("bill-default-tools", "Default tools.", "# Worker"),
+      )
+    assertFalse("permission:" in hostDefaults)
+  }
+
+  @Test
+  fun `opencode rejects an unmapped declared capability`() {
+    val source = NativeAgentSource("bill-test-worker", "Worker.", "# Worker", tools = listOf("Unknown"))
+
+    val error = assertFailsWith<SkillBillRuntimeException> { NativeAgentProvider.OpenCode.render(source) }
+
+    assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, error.code)
+  }
+
+  @Test
+  fun `opencode agent directories use the configured root before creation`() {
+    val home = Files.createTempDirectory("skillbill-opencode-agent-root")
+    val configured = home.resolve("custom-opencode")
+    val environment = mapOf("OPENCODE_CONFIG_DIR" to configured.toString())
+    val provider = NativeAgentProvider.OpenCode
+
+    assertEquals(listOf(configured.resolve("agents")), provider.homeAgentDirs(home, environment))
+    assertEquals(
+      listOf(configured.resolve("agents")),
+      provider.inventoryHomeAgentDirs(home, environment).map { it.path },
+    )
+    assertFalse(Files.exists(configured.resolve("agents")))
+
+    Files.createDirectories(configured.resolve("agents"))
+    assertEquals(listOf(configured.resolve("agents")), provider.activeHomeAgentDirs(home, environment))
   }
 
   @Test

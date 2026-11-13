@@ -148,7 +148,7 @@ Areas: runtime-application/featuretask, runtime-kotlin/agent, runtime-infra-fs/a
 Feature flag: N/A
 Acceptance criteria: 9/9 implemented
 
-## [2026-08-10] SKILL-176 subtask 5 — `skill-bill goal repair`
+## [2026-08-10] SKILL-176 subtask 5 — `sona goal repair`
 Areas: runtime-application/goalrunner, runtime-application/model, runtime-cli/goal, runtime-core/di, .feature-specs/SKILL-176
 - Operator escape hatch inspects goal children for known resume wedges (missing `validation_depth`, unreachable review/remediation base, stale blocked `goal_continuation_outcome`) and clears them only with `--apply`; default is report-only
 - Repair preserves completed subtask commit shas, review passes, and audit repair state; refuses live-lease children; healthy goals are a zero-exit no-op; non-wedged rows report which checks passed instead of a false success

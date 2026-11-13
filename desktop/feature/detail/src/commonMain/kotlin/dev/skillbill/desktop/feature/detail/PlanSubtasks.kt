@@ -87,7 +87,7 @@ internal fun PlanSubtaskRow(unit: StandalonePlanUnit, item: WorkItem, detail: De
   }
   Row(
     modifier.fillMaxWidth().background(background)
-      .then(if (saved) Modifier.clickable(role = Role.Button, onClickLabel = "Open saved spec", onClick = onOpen) else Modifier)
+      .then(if (saved) Modifier.clickable(role = Role.Button, onClickLabel = "Open saved plan", onClick = onOpen) else Modifier)
       .semantics { stateDescription = state }
       .padding(horizontal = 12.dp, vertical = 10.dp),
     horizontalArrangement = Arrangement.spacedBy(8.dp),

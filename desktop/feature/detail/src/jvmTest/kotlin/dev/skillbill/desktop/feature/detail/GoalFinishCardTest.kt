@@ -4,6 +4,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
@@ -14,6 +16,7 @@ import dev.skillbill.desktop.core.domain.model.GoalAssessmentState
 import dev.skillbill.desktop.core.domain.model.QaRunDetails
 import dev.skillbill.desktop.core.domain.model.QaRunOccurrence
 import dev.skillbill.desktop.core.domain.model.QaRunStage
+import dev.skillbill.desktop.core.domain.model.PhaseCardState
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
@@ -27,6 +30,30 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class GoalFinishCardTest {
+  @Test
+  fun `current PR opens automatically before its URL is available while explicit folding remains respected`() = runComposeUiTest {
+    val item = workItem("goal")
+    val detail = emptyDetail.copy(
+      currentPhase = "pr",
+      goalFinishCards = listOf(finishCard("validate"), finishCard("pr", PhaseCardState.Running)),
+    )
+    val state = mutableStateOf(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch))
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        GoalFinishPhases(item, detail, state.value, mutableStateOf(AssessmentOrder.Default)) {
+          if (it is DetailAction.SelectPhase) state.value = state.value.copy(
+            phaseChoice = mapOf(PhaseChoiceKey(item.id, SubtaskKey.GoalFinish) to PhaseDisclosure.Folded),
+          )
+        }
+      }
+    }
+    onNode(isSelectable() and hasText("pr")).assertIsSelected()
+    onNodeWithText("Pull request").assertExists()
+    onNodeWithText("Select a phase to see what it did.").assertDoesNotExist()
+    onNode(isSelectable() and hasText("pr")).performClick()
+    onNodeWithText("Select a phase to see what it did.").assertExists()
+  }
+
   @Test
   fun `changing QA rounds shows that rounds evidence and keeps stages folded until opened`() = runComposeUiTest {
     val history = QaRunDetails(historyAvailability = "recorded", occurrences = listOf(round("first"), round("retest")))
@@ -75,8 +102,8 @@ class GoalFinishCardTest {
   }
 
   @Test
-  fun `Goal finish uses one selected card inline in a narrow window and in the wide pane`() = runComposeUiTest {
-    val layout = mutableStateOf(ShellLayout(showDetailsPane = false, drawerMode = true))
+  fun `Goal finish keeps the details overlay available in drawer mode`() = runComposeUiTest {
+    val layout = mutableStateOf(ShellLayout(drawerMode = true))
     val input = ShellInput()
     val detail = emptyDetail.copy(
       subtasks = listOf(WorkSubtask(1, "Build", "completed", null, null, emptyList())),
@@ -85,22 +112,17 @@ class GoalFinishCardTest {
     val state = mutableStateOf(DetailUiState(
       workItem("goal"), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch,
       subtaskChoice = SubtaskChoice(SubtaskKey.GoalFinish),
-      phaseChoice = mapOf(PhaseChoiceKey("goal", SubtaskKey.GoalFinish) to "goal_assessment"),
+      phaseChoice = mapOf(PhaseChoiceKey("goal", SubtaskKey.GoalFinish) to PhaseDisclosure.Open("goal_assessment")),
     ))
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellLayout provides layout.value, LocalShellInput provides input) {
-          DetailScreen(state.value, DetailScreenHost(true, "Ctrl I", {})) {}
+          DetailScreen(state.value, DetailScreenHost(true, "Ctrl I", {}, {})) {}
         }
       }
     }
     onNodeWithText("No assessment result is available for this run.").assertExists()
-    onNodeWithText("Details").assertDoesNotExist()
-    runOnIdle { layout.value = ShellLayout(showDetailsPane = true, drawerMode = false) }
-    onNodeWithText("Details").assertExists()
-    onNodeWithText("No assessment result is available for this run.").assertExists()
-    runOnIdle { layout.value = ShellLayout(showDetailsPane = false, drawerMode = true) }
-    onNodeWithText("Details").assertDoesNotExist()
+    onNodeWithText("2/2").assertExists()
     onNodeWithText("No assessment result is available for this run.").assertExists()
   }
 

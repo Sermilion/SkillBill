@@ -27,9 +27,13 @@ import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.util.concurrent.TimeUnit
+import java.io.BufferedReader
 import java.io.File
+import java.io.FilterInputStream
 import java.io.IOException
 import java.io.InputStream
+import java.io.InputStreamReader
+import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 import java.util.LinkedHashSet
 import java.util.concurrent.ConcurrentHashMap
@@ -51,6 +55,7 @@ data class ChatCommand(
   val workingDirectory: String,
   val environment: Map<String, String>,
   val stdin: String,
+  val stdoutLimitBytes: Long? = null,
 )
 
 /** What a chat process produces: stdout [Line]s, a possible [StdoutEnded], then [Exited] or [StartFailed]. */
@@ -80,12 +85,20 @@ fun interface LiveChatProcessLauncher {
   fun openAcknowledged(command: ChatCommand, input: ReceiveChannel<ChatProcessInput>): Flow<ChatProcessOutput> = flow {
     throw IllegalStateException("This chat process launcher does not acknowledge completed stdin writes.")
   }
+
+  fun openAcknowledged(
+    command: ChatCommand,
+    input: ReceiveChannel<ChatProcessInput>,
+    cleanup: CompletableDeferred<ChatProcessCleanup>,
+  ): Flow<ChatProcessOutput> = flow {
+    cleanup.complete(ChatProcessCleanup("The launcher does not report process cleanup."))
+    openAcknowledged(command, input).collect { emit(it) }
+  }
 }
 
-class ChatProcessInput internal constructor(
-  val line: String,
-  private val writePermission: ((ChatProcessInput) -> Boolean)? = null,
-) {
+data class ChatProcessCleanup(val failure: String? = null)
+
+class ChatProcessInput internal constructor(val line: String, private val writePermission: ((ChatProcessInput) -> Boolean)? = null) {
   internal val written = CompletableDeferred<Boolean>()
   private val ownership = AtomicInteger(0)
 
@@ -189,7 +202,13 @@ class ProcessLiveChatLauncher(private val diagnostics: Diagnostics) : LiveChatPr
   override fun openAcknowledged(
     command: ChatCommand,
     input: ReceiveChannel<ChatProcessInput>,
-  ): Flow<ChatProcessOutput> = runProcess(command, diagnostics) { process ->
+  ): Flow<ChatProcessOutput> = openAcknowledged(command, input, CompletableDeferred())
+
+  override fun openAcknowledged(
+    command: ChatCommand,
+    input: ReceiveChannel<ChatProcessInput>,
+    cleanup: CompletableDeferred<ChatProcessCleanup>,
+  ): Flow<ChatProcessOutput> = runProcess(command, diagnostics, cleanup) { process ->
     try {
       process.outputStream.bufferedWriter(Charsets.UTF_8).use { writer ->
         for (message in input) {
@@ -225,11 +244,11 @@ class ProcessLiveChatLauncher(private val diagnostics: Diagnostics) : LiveChatPr
   }
 }
 
-private fun stdoutLines(process: Process): ReceiveChannel<String> {
+private fun stdoutLines(process: Process, limitBytes: Long?): Pair<ReceiveChannel<String>, Thread> {
   val lines = Channel<String>(Channel.BUFFERED)
-  thread(isDaemon = true, name = "chat-stdout") {
+  val reader = thread(isDaemon = true, name = "chat-stdout") {
     try {
-      process.inputStream.bufferedReader(Charsets.UTF_8).useLines { source ->
+      stdoutReader(process.inputStream, limitBytes).useLines { source ->
         for (line in source) if (lines.trySendBlocking(line).isFailure) break
       }
     } catch (failure: IOException) {
@@ -238,13 +257,42 @@ private fun stdoutLines(process: Process): ReceiveChannel<String> {
       lines.close()
     }
   }
-  return lines
+  return lines to reader
+}
+
+/** Unlimited stdout decodes leniently; a [limitBytes] budget also rejects invalid UTF-8 and fails once exceeded. */
+internal fun stdoutReader(stdout: InputStream, limitBytes: Long?): BufferedReader {
+  if (limitBytes == null) return stdout.bufferedReader(Charsets.UTF_8)
+  val decoder = Charsets.UTF_8.newDecoder()
+    .onMalformedInput(CodingErrorAction.REPORT)
+    .onUnmappableCharacter(CodingErrorAction.REPORT)
+  return InputStreamReader(LimitedStdout(stdout, limitBytes), decoder).buffered()
+}
+
+private class LimitedStdout(source: InputStream, private val limit: Long) : FilterInputStream(source) {
+  private var count = 0L
+
+  override fun read(): Int = super.read().also { if (it >= 0) counted(1) }
+
+  override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
+    super.read(buffer, offset, length).also { if (it > 0) counted(it) }
+
+  private fun counted(bytes: Int) {
+    count += bytes
+    if (count > limit) throw IOException("stdout exceeded $limit bytes")
+  }
 }
 
 // Starts [command], runs [feed] to supply stdin, and streams stdout until the process exits.
-private fun runProcess(command: ChatCommand, diagnostics: Diagnostics, feed: suspend (Process) -> Unit): Flow<ChatProcessOutput> =
+private fun runProcess(
+  command: ChatCommand,
+  diagnostics: Diagnostics,
+  cleanup: CompletableDeferred<ChatProcessCleanup>? = null,
+  feed: suspend (Process) -> Unit,
+): Flow<ChatProcessOutput> =
   flow {
     if (!File(command.workingDirectory).isDirectory) {
+      cleanup?.complete(ChatProcessCleanup("The process working directory does not exist."))
       emit(ChatProcessOutput.StartFailed("The working directory ${command.workingDirectory} does not exist."))
       return@flow
     }
@@ -254,11 +302,15 @@ private fun runProcess(command: ChatCommand, diagnostics: Diagnostics, feed: sus
     val process = try {
       builder.start()
     } catch (failure: IOException) {
+      cleanup?.complete(ChatProcessCleanup(failure.message ?: failure.toString()))
       emit(ChatProcessOutput.StartFailed(failure.message ?: failure.toString()))
       return@flow
     }
     ChatProcesses.live += process
     ChatProcesses.installShutdownHook()
+    val ownership = ChatProcesses.registerLive(process, diagnostics)
+    val readers = mutableListOf<Thread>()
+    val readerFailure = AtomicReference<String?>(null)
     try {
       coroutineScope {
         // A blocked waitFor ignores cancellation; destroying the process ends the wait.
@@ -266,25 +318,34 @@ private fun runProcess(command: ChatCommand, diagnostics: Diagnostics, feed: sus
           try {
             awaitCancellation()
           } finally {
-            ChatProcesses.destroyTree(process, diagnostics)
+            ownership.cleanup()?.let(ownership::retainFailure)
           }
         }
         val stderr = StringBuilder()
         val drain = thread(isDaemon = true, name = "chat-stderr") {
-          process.errorStream.bufferedReader(Charsets.UTF_8).use { reader ->
-            val buffer = CharArray(1024)
-            while (true) {
-              val read = reader.read(buffer)
-              if (read < 0) break
-              synchronized(stderr) {
-                stderr.append(buffer, 0, read)
-                if (stderr.length > ChatProcesses.STDERR_TAIL) stderr.delete(0, stderr.length - ChatProcesses.STDERR_TAIL)
+          try {
+            process.errorStream.bufferedReader(Charsets.UTF_8).use { reader ->
+              val buffer = CharArray(1024)
+              while (true) {
+                val read = reader.read(buffer)
+                if (read < 0) break
+                synchronized(stderr) {
+                  stderr.append(buffer, 0, read)
+                  if (stderr.length > ChatProcesses.STDERR_TAIL) stderr.delete(0, stderr.length - ChatProcesses.STDERR_TAIL)
+                }
               }
+            }
+          } catch (failure: IOException) {
+            if (!ownership.isCleaning) {
+              readerFailure.set(failure.message ?: "The owned process stderr reader failed.")
+              diagnostics.record("chat.stderr_read_failed")
             }
           }
         }
+        readers += drain
         val feeding = launch { feed(process) }
-        val lines = stdoutLines(process)
+        val (lines, stdoutReader) = stdoutLines(process, command.stdoutLimitBytes)
+        readers += stdoutReader
         var stdoutFailure: IOException? = null
         try {
           while (true) {
@@ -312,8 +373,32 @@ private fun runProcess(command: ChatCommand, diagnostics: Diagnostics, feed: sus
         killer.cancel()
       }
     } finally {
-      ChatProcesses.destroyTree(process, diagnostics)
-      ChatProcesses.live -= process
+      val failures = mutableListOf<String>()
+      try {
+        ownership.cleanup()?.let(failures::add)
+        listOf(process.outputStream, process.inputStream, process.errorStream).forEach { stream ->
+          try { stream.close() } catch (problem: Exception) {
+            diagnostics.record("chat.process_stream_close_failed")
+            failures += problem.message ?: "An owned process stream did not close."
+          }
+        }
+        readers.forEach { reader ->
+          try { reader.join(ChatProcesses.STDERR_DRAIN_MS) } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            failures += "An owned process reader was interrupted during cleanup."
+          }
+          if (reader.isAlive) failures += "An owned process reader remained active after bounded cleanup."
+        }
+        readerFailure.get()?.let(failures::add)
+        ownership.retainedFailure()?.let(failures::add)
+      } catch (problem: Exception) {
+        diagnostics.record("chat.process_cleanup_failure")
+        failures += problem.message ?: problem.toString()
+      } finally {
+        val failure = failures.distinct().takeIf { it.isNotEmpty() }?.joinToString("; ")
+        if (failure == null) ownership.release() else ownership.retainFailure(failure)
+        cleanup?.complete(ChatProcessCleanup(failure))
+      }
     }
   }.flowOn(Dispatchers.IO)
 
@@ -558,13 +643,16 @@ private object ChatProcesses {
   const val FORCE_WAIT_MS = 1000L
   val live: MutableSet<Process> = ConcurrentHashMap.newKeySet()
   private val boundedOwnership = ConcurrentHashMap<Process, BoundedProcessOwnership>()
+  private val liveOwnership = ConcurrentHashMap<Process, LiveProcessOwnership>()
   private val hookInstalled = AtomicBoolean(false)
 
   fun installShutdownHook() {
     if (hookInstalled.compareAndSet(false, true)) {
       Runtime.getRuntime().addShutdownHook(Thread({
         boundedOwnership.values.toList().forEach(::destroyOwnedTree)
-        live.filterNot(boundedOwnership::containsKey).forEach(::signalTree)
+        live.filterNot(boundedOwnership::containsKey).forEach { process ->
+          liveOwnership[process]?.cleanup() ?: signalTree(process)
+        }
       }, "chat-shutdown"))
     }
   }
@@ -581,6 +669,23 @@ private object ChatProcesses {
       )
     }
     installShutdownHook()
+  }
+
+  fun registerLive(process: Process, diagnostics: Diagnostics): LiveProcessOwnership {
+    val ownership = LiveProcessOwnership(process, diagnostics)
+    liveOwnership[process] = ownership
+    try {
+      ownership.startObserving()
+    } catch (_: Exception) {
+      diagnostics.record("chat.process_observation_failed")
+      ownership.recordObservationFailure()
+    }
+    return ownership
+  }
+
+  fun releaseLive(process: Process, ownership: LiveProcessOwnership) {
+    liveOwnership.remove(process, ownership)
+    live -= process
   }
 
   private fun observe(ownership: BoundedProcessOwnership) {
@@ -684,26 +789,133 @@ private object ChatProcesses {
 
   private fun isAlive(handle: ProcessHandle): Boolean = runCatching { handle.isAlive }.getOrDefault(true)
 
-  fun destroyTree(process: Process, diagnostics: Diagnostics) {
-    if (!process.isAlive || !live.remove(process)) return
-    val handle = process.toHandle()
-    val descendants = handle.descendants().toList()
-    descendants.forEach { it.destroy() }
-    process.destroy()
-    process.waitFor(STOP_GRACE_MS, TimeUnit.MILLISECONDS)
-    val survivors = (descendants + handle).filter { it.isAlive }
-    if (survivors.isEmpty()) return
-    survivors.forEach { it.destroyForcibly() }
-    diagnostics.record("chat.process_force_killed")
-    process.waitFor(FORCE_WAIT_MS, TimeUnit.MILLISECONDS)
-  }
-
   private fun signalTree(process: Process) {
     process.toHandle().descendants().forEach { it.destroy() }
     process.destroy()
   }
 
   private const val OBSERVATION_INTERVAL_MS = 100L
+}
+
+private class LiveProcessOwnership(
+  private val process: Process,
+  private val diagnostics: Diagnostics,
+) {
+  private val root = process.toHandle()
+  private val lock = Any()
+  private val descendants = LinkedHashSet<ProcessHandle>()
+  private val observationFailure = AtomicBoolean(false)
+  private val cleanupStarted = AtomicBoolean(false)
+  private val cleanupFinished = CompletableFuture<String?>()
+  private val retainedFailure = AtomicReference<String?>(null)
+  private var observer: BoundedProcessObservationHandle? = null
+  val isCleaning: Boolean get() = cleanupStarted.get()
+
+  fun startObserving() = synchronized(lock) {
+    observeLocked()
+    observer = BoundedProcessObservationScheduling.scheduler.schedule({ observe() }, 100L)
+  }
+
+  fun recordObservationFailure() {
+    observationFailure.set(true)
+  }
+
+  private fun observe() = synchronized(lock) {
+    if (!cleanupStarted.get()) observeLocked()
+  }
+
+  private fun observeLocked() {
+    val liveRoots = buildList {
+      if (isAlive(root)) add(root)
+      descendants.filterTo(this, ::isAlive)
+    }
+    liveRoots.forEach { handle ->
+      try {
+        handle.descendants().use { stream -> stream.forEach(descendants::add) }
+      } catch (_: Exception) {
+        if (observationFailure.compareAndSet(false, true)) diagnostics.record("chat.process_observation_failed")
+      }
+    }
+  }
+
+  fun cleanup(): String? {
+    if (cleanupStarted.compareAndSet(false, true)) {
+      val known = synchronized(lock) {
+        observer?.cancel()
+        observer = null
+        observeLocked()
+        (descendants + root).toList()
+      }
+      val failures = mutableListOf<String>()
+      if (observationFailure.get()) failures += "Owned process descendants could not all be inspected."
+      known.filter(::isAlive).forEach { handle ->
+        val stopped = runCatching { handle.destroy() }.getOrElse {
+          failures += "An owned process could not be stopped gracefully."
+          false
+        }
+        if (!stopped && isAlive(handle)) failures += "An owned process refused graceful shutdown."
+      }
+      awaitHandles(known, ChatProcesses.STOP_GRACE_MS, failures)
+      val survivors = known.filter(::isAlive)
+      if (survivors.isNotEmpty()) {
+        diagnostics.record("chat.process_force_killed")
+        survivors.forEach { handle ->
+          val stopped = runCatching { handle.destroyForcibly() }.getOrElse {
+            failures += "An owned process could not be force-stopped."
+            false
+          }
+          if (!stopped && isAlive(handle)) failures += "An owned process refused forced shutdown."
+        }
+      }
+      awaitHandles(known, ChatProcesses.FORCE_WAIT_MS, failures)
+      val remaining = known.count(::isAlive)
+      if (remaining > 0) failures += "$remaining owned process(es) remained after bounded shutdown."
+      val result = failures.distinct().takeIf { it.isNotEmpty() }?.joinToString("; ")
+      if (result != null) diagnostics.record("chat.process_cleanup_failure")
+      retainFailure(result)
+      cleanupFinished.complete(retainedFailure())
+    } else {
+      try {
+        cleanupFinished.get(ChatProcesses.STOP_GRACE_MS + ChatProcesses.FORCE_WAIT_MS + 500L, TimeUnit.MILLISECONDS)
+      } catch (_: Exception) {
+        retainFailure("Owned process cleanup did not settle within its bound.")
+      }
+    }
+    return retainedFailure()
+  }
+
+  fun retainFailure(failure: String?) {
+    if (failure != null) retainedFailure.updateAndGet { previous -> listOfNotNull(previous, failure).distinct().joinToString("; ") }
+  }
+
+  fun retainedFailure(): String? = retainedFailure.get()
+
+  fun release() {
+    ChatProcesses.releaseLive(process, this)
+  }
+
+  private fun awaitHandles(handles: List<ProcessHandle>, waitMillis: Long, failures: MutableList<String>) {
+    val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(waitMillis)
+    handles.filter(::isAlive).forEach { handle ->
+      try {
+        val remaining = deadline - System.nanoTime()
+        if (remaining > 0) handle.onExit().get(remaining, TimeUnit.NANOSECONDS)
+      } catch (_: InterruptedException) {
+        Thread.currentThread().interrupt()
+        failures += "Owned process cleanup was interrupted."
+      } catch (_: java.util.concurrent.TimeoutException) {
+      } catch (_: Exception) {
+        if (isAlive(handle)) failures += "Owned process exit could not be observed."
+      }
+    }
+  }
+
+  private fun isAlive(handle: ProcessHandle): Boolean = try {
+    handle.isAlive
+  } catch (_: Exception) {
+    if (observationFailure.compareAndSet(false, true)) diagnostics.record("chat.process_observation_failed")
+    true
+  }
 }
 
 private class BoundedProcessOwnership(

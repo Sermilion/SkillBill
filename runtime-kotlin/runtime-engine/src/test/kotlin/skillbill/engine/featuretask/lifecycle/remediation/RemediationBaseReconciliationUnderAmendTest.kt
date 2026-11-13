@@ -156,7 +156,7 @@ class RemediationBaseReconciliationUnderAmendTest {
     assertContains(blocked.operatorGuidance, workflowId)
     assertContains(blocked.operatorGuidance, goalBranch)
     assertContains(blocked.operatorGuidance, ref)
-    assertContains(blocked.operatorGuidance, "skill-bill goal repair $issueKey --subtask")
+    assertContains(blocked.operatorGuidance, "sona goal repair $issueKey --subtask $subtaskId --apply")
     assertFalse(blocked.operatorGuidance.contains("--issue-key"))
     assertEquals(fixture.preRemediationSha, recorder.reviewStateRecorder.reviewState(workflowId)?.remediationBaseSha)
     assertNotEquals(head, recorder.reviewStateRecorder.reviewState(workflowId)?.remediationBaseSha)

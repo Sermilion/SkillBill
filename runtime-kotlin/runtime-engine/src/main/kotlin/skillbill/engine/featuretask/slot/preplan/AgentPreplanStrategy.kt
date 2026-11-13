@@ -111,7 +111,11 @@ public class AgentPreplanStrategy : PhaseStrategy() {
         "decisions file is that section read. Do not read the body of a heading you judged irrelevant. " +
         "Leave open any decision this task's own code cannot answer, including dependency, " +
         "account, and environment questions, each with the facts that bear on it and the option you recommend. " +
-        "Name a cited heading by its heading_id exactly as the boundary catalog spells it. Do not forward " +
+        "Name a cited heading by its heading_id exactly as the boundary catalog spells it. End the digest " +
+        "with an EVIDENCE heading followed by one line per source range the plan needs verbatim: path:A-B for " +
+        "lines A to B, or path for a whole file, with literal paths relative to the checkout root. The runtime " +
+        "copies those ranges from the checkout into the evidence file the plan reads, so list every range " +
+        "this digest relies on and do not paste source code into the digest. Do not forward " +
         "progress diagnostics or a generic summary."
   }
 }

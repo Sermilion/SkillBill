@@ -135,8 +135,8 @@ Do not use the live workflow database as a test fixture.
 ## Validation and rollout
 
 1. Run the focused audit retry, prompt, composition, and durable-resume tests in
-   the base worktree. Run `skill-bill operation unit-test-value-check` over the fix.
-2. Run `skill-bill phase validation` from the workflow checkout and repair required
+   the base worktree. Run `sona operation unit-test-value-check` over the fix.
+2. Run `sona phase validation` from the workflow checkout and repair required
    project failures. Compilation alone does not finish validation. Review the
    scoped diff for architecture, wire vocabulary, and contract boundaries.
 3. If implementation adds a durable field or changes a governed payload shape,
@@ -179,14 +179,14 @@ Validation completed on 2026-09-29:
 
 - Full `./runtime-kotlin/gradlew -p runtime-kotlin check` passed, including runtime
   tests, architecture guards, formatting, static analysis, and prompt snapshots.
-- `skill-bill validate` and `scripts/validate_agent_configs` passed.
+- `sona validate` and `scripts/validate_agent_configs` passed.
 - `npx --yes agnix --strict .` reported zero errors and 28 warnings. Repository CI
   accepts the zero-error result even when strict mode returns a warning exit code.
 - The scoped `unit-test-value-check` returned Strong and requested no deletions
   or rewrites.
 - `git diff --check` passed.
 
-Stopped SKILL-384 through `skill-bill goal stop` and confirmed idle liveness.
+Stopped SKILL-384 through `sona goal stop` and confirmed idle liveness.
 Reinstalled from this worktree with `./install.sh --from-source --reuse-last-selection`.
 Doctor passed. The installed runtime jars match the tested build:
 

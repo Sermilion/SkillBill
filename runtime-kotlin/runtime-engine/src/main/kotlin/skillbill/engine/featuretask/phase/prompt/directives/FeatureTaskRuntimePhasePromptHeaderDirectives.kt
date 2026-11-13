@@ -51,13 +51,13 @@ internal fun phasePromptHeader(
 ): String {
   val label = FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepLabels[phaseId] ?: phaseId
   return buildString {
-    appendLine("You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime")
+    appendLine("You are executing exactly one phase of the EXPERIMENTAL sona feature-task-runtime")
     appendLine("loop ($forwardPhaseOrder)")
     appendLine("for issue $issueKey. The runtime owns the loop; do not run other phases, do not open")
-    appendLine("or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.")
+    appendLine("or continue any other sona workflow, and do not call `sona workflow continue`.")
     appendLine("Execute this supplied phase briefing with the current installed runtime.")
     appendLine("The initial user-facing goal invocation owns update checks and launch confirmation.")
-    appendLine("Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher")
+    appendLine("Do not call `mcp__sona__update_check`, ask whether to update, or repeat dispatcher")
     appendLine("intake, preflight, or confirmation, including on retries and continuation.")
     if (settlesThroughTools) {
       appendLine("Reading the installed skill-bill skill does not make this phase a new invocation.")

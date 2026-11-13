@@ -53,7 +53,7 @@ internal fun VerifyHeader(run: VerifyRunDetails, onAction: (DetailAction) -> Uni
     FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
       val root = run.repoRoot
       VerifyMeta(LucideIcons.folder, root?.trimEnd('/', '\\')?.substringAfterLast('/')?.substringAfterLast('\\') ?: "Unknown repository", root, { onAction(DetailAction.RevealFolder) })
-      run.target?.let { VerifyMeta(LucideIcons.branch, it, onClick = { onAction(DetailAction.OpenBranch) }) }
+      run.target?.let { VerifyMeta(LucideIcons.branch, it, onClick = { onAction(DetailAction.OpenBranch(it)) }) }
       VerifyMeta(LucideIcons.commit, "${run.baseRevision?.take(7) ?: "?"}..${run.headRevision?.take(7) ?: "?"}", "Compared range")
       val intake = run.intake
       val intakeText = if (intake != null && (intake.startsWith("https://") || intake.startsWith("http://"))) {

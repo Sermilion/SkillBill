@@ -2,7 +2,7 @@
 
 This file is the author-owned execution body for `bill-feature-verify`. It carries the workflow-state contract, continuation contract, stable step ids, stable artifact names, telemetry ownership rules, and the per-step orchestration prose.
 
-`bill-feature-verify` runs entirely in-session as an orchestrator (Skill-tool-driven code review, unit-test checks, completeness audit) with no foreground `skill-bill` runtime driver and no per-phase agent subprocess.
+`bill-feature-verify` runs entirely in-session as an orchestrator (Skill-tool-driven code review, unit-test checks, completeness audit) with no foreground `sona` runtime driver and no per-phase agent subprocess.
 
 ## Step 1: Collect Inputs
 
@@ -94,9 +94,9 @@ Step id: `code_review`
 
 Primary artifact: `code_review_receipt`
 
-Run `skill-bill phase review` against the PR diff. Follow the full skill instructions including any matching `.agents/skill-overrides.md` section.
+Run `sona phase review` against the PR diff. Follow the full skill instructions including any matching `.agents/skill-overrides.md` section.
 
-When this skill runs `skill-bill phase review`, this skill is itself a parent. Pass `orchestrated=true` to `import_review` and `triage_findings`. Store the returned `telemetry_payload` only in the dedicated telemetry store; persist a compact typed code-review receipt in workflow domain state.
+When this skill runs `sona phase review`, this skill is itself a parent. Pass `orchestrated=true` to `import_review` and `triage_findings`. Store the returned `telemetry_payload` only in the dedicated telemetry store; persist a compact typed code-review receipt in workflow domain state.
 
 Persist `code_review_receipt` after review finishes. Update workflow state so `code_review` is completed and `unit_test_value_check` is running.
 

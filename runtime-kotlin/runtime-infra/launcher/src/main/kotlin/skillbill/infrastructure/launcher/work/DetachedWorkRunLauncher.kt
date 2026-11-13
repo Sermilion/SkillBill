@@ -5,6 +5,9 @@ import skillbill.contracts.operationcard.OperationCardEnvironmentKeys
 import skillbill.contracts.operationcard.OperationCardExitCodes
 import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
+import skillbill.contracts.system.OpenCodeEnvironmentKeys
+import skillbill.contracts.system.OpenCodeEnvironmentSelection
+import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.system.HostAgentHomesPort
@@ -42,6 +45,7 @@ class DetachedWorkRunLauncher internal constructor(
   ) : this(environment, diagnostics, STARTUP_GRACE, agentHomes)
 
   override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
+    openCodeIdentityConflict(request)?.let { return refuse(it) }
     val launchEnvironment = launchEnvironment(request)
     val launch =
       when (val resolved = installedLaunch(request)) {
@@ -87,6 +91,46 @@ class DetachedWorkRunLauncher internal constructor(
 
   private fun ownership() = WorkHarnessOwnership(environment.userHome.resolve(".skill-bill/desktop/runs"), diagnostics)
 
+  private fun openCodeIdentityConflict(request: WorkRunLaunchRequest): String? {
+    val accepted = request.openCodeIdentity?.takeIf { request.validateOpenCodeIdentity } ?: return null
+    val currentEnvironment = environment.environment + agentHomes.current().filterValues(String::isNotBlank)
+    val cleared = agentHomes.current().filterValues(String::isBlank).keys
+    val pinnedProfile =
+      request.pinnedAgentHomes?.takeIf { AgentHomeEnvironmentKeys.OPENCODE_CONFIG_DIR in it }
+        ?.get(AgentHomeEnvironmentKeys.OPENCODE_CONFIG_DIR)
+    val current =
+      OpenCodeLaunchIdentity.capture(
+        currentEnvironment - cleared,
+        environment.userHome,
+        request.repositoryRoot,
+        pinnedProfile,
+      )
+    val conflict = accepted.conflictsWith(current)
+    val inline = request.inlineOpenCodeConfig ?: environment.environment[OpenCodeEnvironmentKeys.CONFIG_CONTENT]
+    val refusal =
+      when {
+        conflict != null ->
+          "The accepted OpenCode identity conflicts at $conflict. Restore the accepted setting and resume again."
+        accepted.inlineConfigPresent && inline == null ->
+          "The accepted OpenCode inline configuration is unavailable. " +
+            "Restore OPENCODE_CONFIG_CONTENT and resume again."
+        else -> null
+      }
+    if (refusal != null) return refusal
+    if (accepted.inlineConfigPresent && request.inlineOpenCodeConfig != null) {
+      val supplied =
+        OpenCodeLaunchIdentity.capture(
+          currentEnvironment + (OpenCodeEnvironmentKeys.CONFIG_CONTENT to requireNotNull(request.inlineOpenCodeConfig)),
+          environment.userHome,
+          request.repositoryRoot,
+        )
+      if (accepted.inlineConfigFingerprint != supplied.inlineConfigFingerprint) {
+        return "The accepted OpenCode inline configuration changed. Restore OPENCODE_CONFIG_CONTENT and resume again."
+      }
+    }
+    return null
+  }
+
   override fun agentHomes(): Map<String, String> =
     mergedEnvironment(emptyMap()).let { merged -> AgentHomeEnvironmentKeys.ALL.associateWith { merged[it].orEmpty() } }
 
@@ -98,7 +142,44 @@ class DetachedWorkRunLauncher internal constructor(
       } else {
         environment.environment + pinned.filterValues(String::isNotBlank) - pinned.filterValues(String::isBlank).keys
       }
-    return base + ("PATH" to searchDirectories().joinToString(pathSeparator().toString()))
+    val pinnedIdentity =
+      request.openCodeIdentity?.let { applyOpenCodeIdentity(base, it, request.inlineOpenCodeConfig) } ?: base
+    return pinnedIdentity + ("PATH" to searchDirectories().joinToString(pathSeparator().toString()))
+  }
+
+  private fun applyOpenCodeIdentity(
+    base: Map<String, String>,
+    identity: OpenCodeLaunchIdentity,
+    inlineContent: String?,
+  ): Map<String, String> =
+    buildMap {
+      putAll(base)
+      setSelection(OpenCodeEnvironmentKeys.HOME, identity.home)
+      setSelection(OpenCodeEnvironmentKeys.XDG_CONFIG_HOME, identity.configHome)
+      setSelection(OpenCodeEnvironmentKeys.XDG_DATA_HOME, identity.dataHome)
+      setSelection(OpenCodeEnvironmentKeys.XDG_CACHE_HOME, identity.cacheHome)
+      setSelection(OpenCodeEnvironmentKeys.XDG_STATE_HOME, identity.stateHome)
+      setSelection(
+        AgentHomeEnvironmentKeys.OPENCODE_CONFIG_DIR,
+        identity.configDirectory,
+      )
+      setSelection(OpenCodeEnvironmentKeys.CONFIG_FILE, identity.configFile)
+      setSelection(OpenCodeEnvironmentKeys.DISABLE_PROJECT_CONFIG, identity.disableProjectConfig)
+      if (identity.inlineConfigPresent) {
+        put(
+          OpenCodeEnvironmentKeys.CONFIG_CONTENT,
+          inlineContent ?: environment.environment[OpenCodeEnvironmentKeys.CONFIG_CONTENT]!!,
+        )
+      } else {
+        remove(OpenCodeEnvironmentKeys.CONFIG_CONTENT)
+      }
+    }
+
+  private fun MutableMap<String, String>.setSelection(
+    key: String,
+    selection: OpenCodeEnvironmentSelection,
+  ) {
+    if (selection.supplied) put(key, requireNotNull(selection.value)) else remove(key)
   }
 
   private fun mergedEnvironment(recorded: Map<String, String>): Map<String, String> {
@@ -230,7 +311,14 @@ class DetachedWorkRunLauncher internal constructor(
       .redirectErrorStream(true).redirectOutput(log.toFile())
       .apply {
         environment().putAll(launchEnvironment)
-        AgentHomeEnvironmentKeys.ALL.filterNot(launchEnvironment::containsKey).forEach(environment()::remove)
+        AgentHomeEnvironmentKeys.ALL
+          .filterNot(launchEnvironment::containsKey)
+          .forEach(environment()::remove)
+        if (request.openCodeIdentity != null) {
+          OpenCodeEnvironmentKeys.ALL
+            .filterNot(launchEnvironment::containsKey)
+            .forEach(environment()::remove)
+        }
         environment().putAll(built.environment)
         environment()[RuntimeDatabaseEnvironmentKeys.DATABASE_PATH] = request.databasePath.toString()
         environment().remove(OperationCardEnvironmentKeys.LAUNCH_ID)
@@ -266,7 +354,7 @@ class DetachedWorkRunLauncher internal constructor(
 
   private companion object {
     val STARTUP_GRACE: Duration = Duration.ofMillis(250)
-    const val RUNTIME_EXECUTABLE = "skill-bill"
+    const val RUNTIME_EXECUTABLE = "sona"
     val SUCCESSFUL_EXITS = setOf(0, OperationCardExitCodes.AWAITING_CONFIRMATION)
   }
 

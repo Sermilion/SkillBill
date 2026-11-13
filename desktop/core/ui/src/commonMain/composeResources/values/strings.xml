@@ -1,0 +1,4 @@
+<resources>
+    <string name="pane_resize_separator">%1$s panel resize separator</string>
+    <string name="pane_set_width">Set %1$s panel width</string>
+</resources>

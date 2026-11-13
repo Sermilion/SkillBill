@@ -43,6 +43,7 @@ data class CliRuntimeContext(
   val liveStdout: (String) -> Unit = {},
   val liveStderr: (String) -> Unit = {},
   val onEnvironmentResolved: (Map<String, String>) -> Unit = {},
+  val workingDirectory: Path? = null,
 ) {
   fun toRuntimeContext(
     dbPathOverride: String? = this.dbPathOverride,
@@ -56,6 +57,7 @@ data class CliRuntimeContext(
           environment = environment,
           userHome = userHome,
           repositoryRoot = repositoryRoot ?: EnvironmentContext.UnspecifiedRepositoryRoot,
+          workingDirectory = workingDirectory ?: EnvironmentContext.UnspecifiedWorkingDirectory,
         ),
       transport = TransportContext(requester),
       workflowOps = WorkflowOpsContext(workflowGitOperations),

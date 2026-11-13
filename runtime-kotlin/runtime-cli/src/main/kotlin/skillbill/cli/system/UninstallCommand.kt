@@ -33,7 +33,7 @@ class UninstallCommand(
   override fun run() {
     if (inputs.environment[GOAL_CONTINUATION_ENV] == "1") {
       val message =
-        "Refusing to run skill-bill uninstall during skill-bill goal-continuation.\n" +
+        "Refusing to run sona uninstall during skill-bill goal-continuation.\n" +
           "Goal workers must preserve the active workflow store; uninstall after the goal completes."
       state.completeText(
         message,
@@ -146,9 +146,10 @@ private fun UninstallPlan.toPayload(
       },
     "desktop" to
       mapOf(
-        "launcher" to desktop.launcher?.path?.toString(),
-        "files" to desktop.files.map { it.toString() },
-        "directories" to desktop.directories.map { it.toString() },
+        "launcher" to desktop.launchers.firstOrNull()?.path?.toString(),
+        "launchers" to desktop.launchers.map { it.path.toString() },
+        "files" to desktop.files.map { it.path.toString() },
+        "directories" to desktop.directories.map { it.path.toString() },
       ),
     "removed" to removed,
     "skipped" to skipped,

@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.runloop.planning.PlanUnit
 import skillbill.engine.featuretask.runloop.planning.PlanUnitRecords
+import skillbill.engine.featuretask.runner.testPreplanEvidenceStore
 import skillbill.engine.featuretask.runner.writePlanBundle
 import skillbill.featurespec.model.FeatureSpecWriteResult
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
@@ -48,6 +49,7 @@ class PlanBundleSnapshotsTest {
         specPathResolver = FileSystemFeatureSpecPathResolver(projectStore),
         projectStore = projectStore,
         fileStore = TestDecompositionManifestStore,
+        preplanEvidenceStore = testPreplanEvidenceStore(),
       ),
     )
 
