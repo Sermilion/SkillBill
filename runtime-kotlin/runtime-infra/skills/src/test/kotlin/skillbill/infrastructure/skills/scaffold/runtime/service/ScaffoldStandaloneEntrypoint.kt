@@ -5,7 +5,6 @@ import skillbill.infrastructure.skills.scaffold.adapters.FileSystemScaffoldSourc
 import skillbill.infrastructure.skills.scaffold.payload.toRawScaffoldPayload
 import skillbill.scaffold.model.ScaffoldResult
 import skillbill.scaffold.model.command.ScaffoldCommandRequest
-import java.nio.file.Path
 
 fun scaffold(
   payload: Map<String, Any?>,
@@ -18,7 +17,7 @@ fun scaffold(
       validateScaffold = { plan, repoRoot -> repoValidation.validateScaffold(plan, repoRoot) },
       optionalBaselineLayers = { p, r, np -> repoValidation.optionalBaselineLayers(p, r, np) },
       resolveAddonConsumerSkillDirs = { p, pr, pk -> sourceLoader.resolveAddonConsumerSkillDirs(p, pr, pk) },
-      performInstall = { _, _, _ -> emptyList<Path>() to emptyList() },
+      performInstall = { _, _, _ -> ScaffoldInstallOutcome(emptyList(), emptyList()) },
       rollbackInstallTargets = { _, _ -> },
     )
   return scaffoldWithAdapters(payload, dryRun, seams)

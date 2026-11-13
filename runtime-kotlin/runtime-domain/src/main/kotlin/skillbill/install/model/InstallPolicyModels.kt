@@ -1,7 +1,7 @@
 package skillbill.install.model
 
 import skillbill.model.FileLocation
-import skillbill.scaffold.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewBaselineLayer
 
 data class InstallAgentDefaultTarget(
   val agent: SupportedAgent,

@@ -70,7 +70,7 @@ class ChatSystemPromptTest {
 
     assertTrue("Route applicable work through Sona by default after preparation" in prompt)
     assertTrue("explicitly asks you to do it yourself" in prompt)
-    assertTrue("installed skill-bill skill's current command instructions" in prompt)
+    assertTrue("installed `/sona` skill's current command instructions" in prompt)
     assertTrue("including one called phase verify, to operation:verify" in prompt)
     assertTrue("unless the operator explicitly requests direct work" in prompt)
     assertTrue("This route excludes \"Verify findings\" and checks of existing review findings" in prompt)
@@ -103,7 +103,7 @@ class ChatSystemPromptTest {
     assertFalse("Withhold the goal card while known blockers or material questions remain unresolved" in prompt)
     assertTrue("It does not start a standalone planning run" in prompt)
     assertTrue("Only the operator clicking the inline UI start card may launch a goal" in prompt)
-    assertTrue("Never launch a goal through shell commands, the skill-bill CLI, MCP tools or another agent" in prompt)
+    assertTrue("Never launch a goal through shell commands, the sona CLI, MCP tools or another agent" in prompt)
     assertTrue("Do not allocate or reserve an issue key during preparation" in prompt)
     assertTrue("perform that direct work without starting a goal" in prompt)
     assertFalse("Suggested action buttons are optional conveniences" in prompt)

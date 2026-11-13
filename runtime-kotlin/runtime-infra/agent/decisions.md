@@ -1,3 +1,8 @@
+## [2026-11-13] Require sona at the desktop runtime process boundary
+Context: SONA-5 retires skill-bill as a notice-only command after caller conversion. That notice exits zero without executing work.
+Decision: DetachedWorkRunLauncher resolves only sona. A missing sona retains the existing launch failure even when skill-bill is discoverable.
+Reason: Falling back to the legacy command could report a successful process exit without starting runtime work. The replacement executable must own the existing arguments, database binding and process lifecycle.
+
 ## [2026-11-12] Builder launch refusal is a required member, not a defaulted hook
 Context: Devin must refuse a separate effort, or missing runtime MCP context, before any command is built or spawned.
 Decision: AgentRunCommandBuilder.launchRefusal has no default body. Every builder implements it, and the Claude, Codex, Cursor and Junie builders return null explicitly.
@@ -12,7 +17,6 @@ Reason: Requested, effective and provider-reported identities stay separate, so 
 Context: auth_required, model rejection and session-context rejection each need different recovery guidance.
 Decision: acpRejection reads the JSON-RPC code (-32000 means auth) and which operation is pending. It truncates provider detail to 500 characters and never parses the message text.
 Reason: Provider wording is unstable, while the code and the operation are protocol facts. An MCP or protocol setup failure is never reported as an authentication failure.
-
 ## [2026-11-10] Codex shell unwrap recognizes only single-quoted -c and -lc wrappers
 Context: Codex command approvals sometimes wrap the operator command in bash, zsh or sh.
 Decision: Unwrap when the outer form matches optional /bin or /usr/bin, shell name, -c or -lc, and a single-quoted inner segment with no embedded quote; otherwise return null when the first token is a shell.

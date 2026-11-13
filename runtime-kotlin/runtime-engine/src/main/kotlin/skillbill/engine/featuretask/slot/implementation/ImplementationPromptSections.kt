@@ -60,7 +60,7 @@ internal object ImplementationPromptSections {
     for this session. Work exclusively inside that boundary. Reading configuration and instructions that
     apply to owned paths is permitted narrow discovery. Forbidden: repository-wide search for
     simplification opportunities, edits outside listed paths, `./gradlew` build or check, test execution,
-    `skill-bill phase review`, review subagents, delegated review, or spawning other agents.
+    `sona phase review`, review subagents, delegated review, or spawning other agents.
     """.trimIndent()
 
   fun implement(

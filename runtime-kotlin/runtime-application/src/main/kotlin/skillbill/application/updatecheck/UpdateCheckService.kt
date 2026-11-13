@@ -23,7 +23,7 @@ class UpdateCheckService(
       installed == null -> unknown("local version is not semver", installedVersion = installedVersion)
       installed.isUnversionedBuild ->
         unknown(
-          "local build carries no version provenance; reinstall with `skill-bill update --release <tag>`",
+          "local build carries no version provenance; reinstall with `sona update --release <tag>`",
           installedVersion = installedVersion,
         )
       else -> checkReleases(installedVersion, installed, includePrereleases)

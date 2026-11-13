@@ -151,7 +151,7 @@ private fun diagnosticWithPrefix(
   diagnostic: String,
 ): String = if (prefix.isBlank()) diagnostic else prefix + diagnostic
 
-private class RootFlagProbeCommand : CliktCommand("skill-bill") {
+private class RootFlagProbeCommand : CliktCommand("sona") {
   val dbOverride by databasePathOption()
   val homeOverride by userHomeOverrideOption()
   val verbose by verboseOption()

@@ -18,7 +18,7 @@ and framework guidance. A legacy custom pack without a local owner uses the
 installed generic code-quality specialist when one is available. If neither
 owner is installed, review keeps its compatibility behavior and records the
 omission. Local pack specialists install as unlisted sidecars and native-agent
-inputs; `/skill-bill` remains the only listed skill. Replacing a bundled slug
+inputs; `/sona` remains the only listed skill. Replacing a bundled slug
 replaces the entire pack, so registration does not fill missing local quality
 files from the bundled version.
 
@@ -32,8 +32,8 @@ files from the bundled version.
 
 ```bash
 export SKILL_BILL_CONFIG_PATH="$HOME/tmp/skill-bill-external-pack.json"
-skill-bill config register-external-platform-pack --path ~/dev/company-packs/kotlin --repo-root /path/to/skill-bill
-skill-bill config resolve-external-platform-packs --repo-root /path/to/skill-bill
+sona config register-external-platform-pack --path ~/dev/company-packs/kotlin --repo-root /path/to/skill-bill
+sona config resolve-external-platform-packs --repo-root /path/to/skill-bill
 ```
 
 `--dry-run` validates the pack and prints the canonical path that would be
@@ -42,7 +42,7 @@ registered without writing config.
 ## Unregister
 
 ```bash
-skill-bill config unregister-external-platform-pack --path ~/dev/company-packs/kotlin
+sona config unregister-external-platform-pack --path ~/dev/company-packs/kotlin
 ```
 
 Unregister removes only the config entry; your source directory is untouched.
@@ -74,15 +74,15 @@ cat > "$HOME/tmp/my-team-pack.json" <<'EOF'
   "pack_registration": "create"
 }
 EOF
-skill-bill new --payload "$HOME/tmp/my-team-pack.json" --dry-run
-skill-bill new --payload "$HOME/tmp/my-team-pack.json"
+sona new --payload "$HOME/tmp/my-team-pack.json" --dry-run
+sona new --payload "$HOME/tmp/my-team-pack.json"
 ```
 
 ## Author, validate, install, update
 
 The scaffold writes `platform.yaml` and `content.md` under the external root.
-`skill-bill show`, `skill-bill fill`, `skill-bill edit`, and
-`skill-bill validate` resolve the skill name through the effective catalog, so
+`sona show`, `sona fill`, `sona edit`, and
+`sona validate` resolve the skill name through the effective catalog, so
 a registered override is the file they read and write. Install from a Skill
 Bill checkout. Planning reads the same catalog, and a later edit of the
 external `content.md` is picked up by the next install. A pack without
@@ -91,14 +91,14 @@ quality-check routing.
 
 ```bash
 export SKILL_BILL_CONFIG_PATH="$HOME/tmp/skill-bill-external-pack.json"
-skill-bill show bill-my-team-code-review --repo-root /path/to/skill-bill
-skill-bill fill bill-my-team-code-review --body-file "$HOME/tmp/my-team-content.md" --repo-root /path/to/skill-bill
-skill-bill validate --skill-name bill-my-team-code-review --repo-root /path/to/skill-bill
+sona show bill-my-team-code-review --repo-root /path/to/skill-bill
+sona fill bill-my-team-code-review --body-file "$HOME/tmp/my-team-content.md" --repo-root /path/to/skill-bill
+sona validate --skill-name bill-my-team-code-review --repo-root /path/to/skill-bill
 ```
 
 ```bash
-skill-bill install apply
-skill-bill config resolve-external-platform-packs --repo-root /path/to/skill-bill
+sona install apply
+sona config resolve-external-platform-packs --repo-root /path/to/skill-bill
 ```
 
 Resolve lines are `slug`, source kind `external` or `bundled`, the shadowed
@@ -107,8 +107,8 @@ bundled slug or `-`, and the canonical root. The command does not write config.
 ## Unregister
 
 ```bash
-skill-bill config unregister-external-platform-pack --path ~/dev/company-packs/my-team
-skill-bill install apply
+sona config unregister-external-platform-pack --path ~/dev/company-packs/my-team
+sona install apply
 ```
 
 Unregister removes only the config entry. Reinstall restores the bundled pack
@@ -137,14 +137,14 @@ cat > "$HOME/tmp/kotlin-pack.json" <<'EOF'
   "pack_registration": "register"
 }
 EOF
-skill-bill new --payload "$HOME/tmp/kotlin-pack.json" --dry-run
-skill-bill config register-external-platform-pack --path ~/dev/company-packs/kotlin
-skill-bill fill bill-kotlin-code-review --body-file "$HOME/tmp/kotlin-content.md" --repo-root /path/to/skill-bill
-skill-bill validate --skill-name bill-kotlin-code-review --repo-root /path/to/skill-bill
-skill-bill config resolve-external-platform-packs --repo-root /path/to/skill-bill
-skill-bill install apply
-skill-bill config unregister-external-platform-pack --path ~/dev/company-packs/kotlin
-skill-bill install apply
+sona new --payload "$HOME/tmp/kotlin-pack.json" --dry-run
+sona config register-external-platform-pack --path ~/dev/company-packs/kotlin
+sona fill bill-kotlin-code-review --body-file "$HOME/tmp/kotlin-content.md" --repo-root /path/to/skill-bill
+sona validate --skill-name bill-kotlin-code-review --repo-root /path/to/skill-bill
+sona config resolve-external-platform-packs --repo-root /path/to/skill-bill
+sona install apply
+sona config unregister-external-platform-pack --path ~/dev/company-packs/kotlin
+sona install apply
 ```
 
 The register payload expects an existing conforming tree and does not rewrite

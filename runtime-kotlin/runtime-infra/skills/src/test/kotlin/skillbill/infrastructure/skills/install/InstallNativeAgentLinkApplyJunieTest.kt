@@ -10,6 +10,7 @@ import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.install.model.AgentTarget
 import skillbill.install.model.InstallAgentLinkStatus
 import skillbill.install.model.InstallApplyStatus
+import skillbill.install.model.ListedSkillNames
 import skillbill.install.model.McpRegistrationApplyStatus
 import skillbill.install.model.NativeAgentApplyStatus
 import skillbill.install.model.NativeAgentProviderId
@@ -212,7 +213,7 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
       assertTrue(skill.links.all { link -> link.status == InstallAgentLinkStatus.CREATED })
       assertTrue(
         Files.isSymbolicLink(
-          fixture.home.resolve("agent-skill-targets/claude/${skill.skillName}"),
+          fixture.home.resolve("agent-skill-targets/claude/${ListedSkillNames.publicName(skill.skillName)}"),
         ),
         "Claude should receive the skill link surface",
       )

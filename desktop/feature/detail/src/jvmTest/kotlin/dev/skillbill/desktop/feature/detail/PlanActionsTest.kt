@@ -103,7 +103,7 @@ class PlanActionsTest {
       "Subtask 1 finished with no code changes and is waiting for your decision.",
       substring = true,
     ).assertExists()
-    onNodeWithText("skill-bill goal operator-decision OAC-86 --subtask 1", substring = true).assertExists()
+    onNodeWithText("sona goal operator-decision OAC-86 --subtask 1", substring = true).assertExists()
   }
 
   @Test

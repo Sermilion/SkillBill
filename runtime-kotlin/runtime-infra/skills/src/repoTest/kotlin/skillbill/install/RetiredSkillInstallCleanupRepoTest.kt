@@ -26,12 +26,11 @@ class RetiredSkillInstallCleanupRepoTest : InstallApplyTestSupport() {
     val targetDirs = agents.map { agent -> Files.createDirectories(home.resolve("agent-skill-targets/${agent.id}")) }
 
     val cachedCopies = retiredSkillNames.map { name -> seedCachedCopy(cacheRoot, name) }
-    val oldCloneSkills = home.resolve("old-clone/skills")
     val seededLinks =
       targetDirs.flatMap { targetDir ->
         retiredSkillNames.flatMap { name ->
           listOf(
-            targetDir.resolve(name).also { link -> createSymlinkOrSkip(link, oldCloneSkills.resolve(name)) },
+            targetDir.resolve(name).also { link -> createSymlinkOrSkip(link, cachedCopy(cacheRoot, name)) },
             seedManagedDir(targetDir.resolve("mdp-${name.removePrefix("bill-")}")),
           )
         }
@@ -48,8 +47,8 @@ class RetiredSkillInstallCleanupRepoTest : InstallApplyTestSupport() {
       assertFalse(Files.exists(path, LinkOption.NOFOLLOW_LINKS), "$path should be removed")
     }
     targetDirs.forEach { targetDir ->
-      val skillBillLink = targetDir.resolve("skill-bill")
-      assertTrue(Files.isSymbolicLink(skillBillLink), "$skillBillLink should link the skill-bill skill")
+      val skillBillLink = targetDir.resolve("sona")
+      assertTrue(Files.isSymbolicLink(skillBillLink), "$skillBillLink should link the public dispatcher")
       assertTrue(readSymlinkTarget(skillBillLink).startsWith(cacheRoot.toAbsolutePath().normalize()))
     }
   }

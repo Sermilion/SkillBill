@@ -18,7 +18,7 @@ internal fun WorkflowUpdateResult.toPayload(encoder: WorkflowArtifactWireEncoder
         val quotedWorkflowId = "'${acknowledgement.workflowId.replace("'", "'\"'\"'")}'"
         put(
           "read_only_full_state_command",
-          "skill-bill --db $quotedDbPath verify-workflow show $quotedWorkflowId --format json",
+          "sona --db $quotedDbPath verify-workflow show $quotedWorkflowId --format json",
         )
         put("db_path", dbPath)
       }

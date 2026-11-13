@@ -27,9 +27,9 @@ import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
 import skillbill.install.model.selectedPlatformSlugs
 import skillbill.model.FileLocation
-import skillbill.scaffold.model.CodeReviewBaselineLayer
-import skillbill.scaffold.model.CodeReviewCompositionMode
-import skillbill.scaffold.model.CodeReviewCompositionScope
+import skillbill.review.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewCompositionMode
+import skillbill.review.model.CodeReviewCompositionScope
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals

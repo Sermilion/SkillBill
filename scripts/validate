@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 cd "$repo_root"
-skill-bill validate --repo-root "$repo_root"
+sona validate --repo-root "$repo_root"
 
 cd "$repo_root/runtime-kotlin"
 ./gradlew check

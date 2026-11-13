@@ -1,3 +1,8 @@
+## [2026-11-13] Convert fresh runtime commands while preserving stored records
+Context: SONA-5 stages the public command rename across dependent subtasks. Runtime command producers convert after public executables, namespace and skill alias exist.
+Decision: Change newly constructed guidance and its prefix-dependent consumers together. Retain stored prose, identities, checkpoints and storage paths.
+Reason: Preserving saved records keeps existing runs and their completed work available during the rename. Prefix-dependent consumers such as archive export must change with the producers they parse.
+
 ## [2026-11-12] Reserve planning ownership before creating a Git worktree
 Context: SQLite and Git cannot share an atomic transaction, and a launch can stop between recording ownership and creating its checkout.
 Decision: Persist the reservation, selected workflow, intended path and initial revision before Git creation. Reconcile interruptions against recorded ownership and Git identity; transfer ownership and the execution path to goal control in one conditional SQLite transaction.
@@ -24,7 +29,6 @@ Reason: A gate-less run never executes gate commands, so their drift cannot chan
 Context: Blocked feasibility recovery ran only in the existing-manifest branch. An interrupted compatibility adoption could also leave a pending phase with a blocked feasibility cycle, which the adoption replay check treated as already recovered.
 Decision: The shared planning resume path reopens blocked feasibility when its launch has settled. A blocked cycle cannot satisfy the pending-adoption replay check. Reopening archives the rejected cycle and preserves accepted unit plans. Repeated resume of the recovered cycle remains idempotent.
 Reason: Resume must admit a fresh review against the current repository baseline without requiring the operator to reset the run or undo unrelated commits. Worker ownership and active-launch recovery still guard the transition.
-
 ## [2026-11-12] Operator retry opens a fresh feasibility cycle from a blocked one
 Context: A feasibility safety block (for example, repository paths changed outside the admitted authority because the operator edited the same checkout) settles the launch and sets feasibility mode to `blocked`. `retry-blocked --phase plan_subtasks` reopened only the phase record, so the next attempt read the blocked state and blocked again with the same reason. The workflow could not recover.
 Decision: `retry-blocked` passes a phase-owned artifact hook into the retry transaction. For `plan_subtasks` with a blocked feasibility state and no active launch, the engine archives the current cycle into `cycleHistory`, resets the launch counters, and opens cycle `<workflow>:plan_subtasks:retry-<ledger sequence>` in review mode with an `operator-blocked-retry` reopening. A blocked state that still has an active launch refuses the retry, because launch recovery must settle that launch first. Other phases and non-blocked states are unchanged.

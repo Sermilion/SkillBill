@@ -29,6 +29,13 @@ RELEASE_TAG="${SKILL_BILL_RELEASE_TAG:-}"
 REUSE_LAST_SELECTION=0
 CLEAN_INSTALL=0
 DESKTOP_APP_INSTALL_RESULT="not installed"
+RECOVERY_DESKTOP_APP_PATH=""
+RECOVERY_RUNTIME_ROOT=""
+CANDIDATE_RUNTIME_ACTIVE=0
+MIGRATION_MAY_HAVE_COMMITTED=0
+INSTALL_PUBLICATION_COMPLETE=0
+RECOVERY_DESKTOP_APP_REPORTED=0
+RECOVERY_RUNTIME_REPORTED=0
 RELEASE_REPO="${SKILL_BILL_RELEASE_REPO:-Sermilion/skill-bill}"
 # Memoized result of resolve_latest_runtime_release_tag. The tag is consumed once per
 # asset plus once per .sha256 sibling and by both list_release_asset_names callers, so
@@ -395,6 +402,32 @@ cleanup_install_exit() {
   if [[ -n "${STAGED_RUNTIME_ROOT:-}" && -d "$STAGED_RUNTIME_ROOT" ]]; then
     rm -rf "$STAGED_RUNTIME_ROOT"
   fi
+  if [[ -n "${RECOVERY_RUNTIME_ROOT:-}" && -d "$RECOVERY_RUNTIME_ROOT" ]]; then
+    if [[ "${MIGRATION_MAY_HAVE_COMMITTED:-0}" -eq 1 && "${INSTALL_PUBLICATION_COMPLETE:-0}" -eq 0 ]]; then
+      if [[ "${RECOVERY_RUNTIME_REPORTED:-0}" -eq 0 ]]; then
+        report_upgrade_recovery "Installation stopped after migration began."
+      fi
+    elif [[ "${INSTALL_PUBLICATION_COMPLETE:-0}" -eq 0 ]]; then
+      if ! rm -rf "$RECOVERY_RUNTIME_ROOT"; then
+        err "Could not remove the unused runtime recovery copy: $RECOVERY_RUNTIME_ROOT"
+      fi
+    fi
+  fi
+  if [[ -n "${RECOVERY_DESKTOP_APP_PATH:-}" && ( -e "$RECOVERY_DESKTOP_APP_PATH" || -L "$RECOVERY_DESKTOP_APP_PATH" ) ]]; then
+    if [[ "${MIGRATION_MAY_HAVE_COMMITTED:-0}" -eq 1 && "${INSTALL_PUBLICATION_COMPLETE:-0}" -eq 0 ]]; then
+      if [[ "${RECOVERY_DESKTOP_APP_REPORTED:-0}" -eq 0 ]]; then
+        if declare -f report_upgrade_recovery >/dev/null 2>&1; then
+          report_upgrade_recovery "Installation stopped after migration began."
+        else
+          err "Installation stopped after runtime activation. Desktop recovery copy: $RECOVERY_DESKTOP_APP_PATH"
+        fi
+      fi
+    elif [[ "${INSTALL_PUBLICATION_COMPLETE:-0}" -eq 0 ]]; then
+      if ! rm -rf "$RECOVERY_DESKTOP_APP_PATH"; then
+        err "Could not remove the unused desktop recovery copy: $RECOVERY_DESKTOP_APP_PATH"
+      fi
+    fi
+  fi
   # discard_authored_candidates is defined later in this file; on an early-exit before
   # its definition the candidate dirs do not exist yet, so guard the call.
   if declare -f discard_authored_candidates >/dev/null 2>&1; then
@@ -628,6 +661,10 @@ clean_install_state_if_requested() {
 }
 
 clean_install_state() {
+  if [[ "$CLEAN_INSTALL" -ne 1 ]]; then
+    err "Refusing to wipe prior skill state without the explicit --clean choice."
+    return 1
+  fi
   if [[ -z "$SKILL_BILL_STATE_DIR" ]]; then
     err "--clean: SKILL_BILL_STATE_DIR is empty; refusing to wipe."
     return 1
@@ -701,8 +738,8 @@ print_install_plan() {
   else
     info "Desktop app: download and install the matching release build."
   fi
-  info "Launchers: $RUNTIME_LAUNCHER_BIN_DIR/skill-bill, $RUNTIME_LAUNCHER_BIN_DIR/skill-bill-mcp"
-  info "MCP registration: registers the skill-bill MCP server with your selected agents."
+  info "Sona launchers: $RUNTIME_LAUNCHER_BIN_DIR/sona, $RUNTIME_LAUNCHER_BIN_DIR/sona-mcp, $RUNTIME_LAUNCHER_BIN_DIR/sona-app"
+  info "MCP registration: registers the Sona MCP server with your selected agents."
   echo ""
   info "Reverse everything with: $PLUGIN_DIR/uninstall.sh"
   echo ""
@@ -911,7 +948,7 @@ run_pre_install_uninstall() {
     warn "Skipping pre-install uninstall because SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1."
     return 0
   fi
-  if [[ ! -x "$RUNTIME_CLI_BIN" && ! -d "$SKILL_BILL_STATE_DIR" ]]; then
+  if [[ "${PRIOR_INSTALL_PRESENT:-unknown}" == no ]] || { [[ "${PRIOR_INSTALL_PRESENT:-unknown}" == unknown ]] && [[ ! -x "$RUNTIME_CLI_BIN" && ! -d "$SKILL_BILL_STATE_DIR" ]]; }; then
     info "No prior Skill Bill install detected; skipping pre-install cleanup."
     return 0
   fi
@@ -930,6 +967,7 @@ run_pre_install_uninstall() {
   # and backups.
   SKILL_BILL_PRESERVE_SOURCE_ON_WIPE=1 \
     SKILL_BILL_PRESERVE_DESKTOP_APP=1 \
+    SKILL_BILL_PRESERVE_LAUNCHERS=1 \
     SKILL_BILL_STAGED_RUNTIME_CLI="$1/runtime-cli.tmp/bin/runtime-cli" \
     bash "$uninstall_script"
 }
@@ -1119,7 +1157,9 @@ replace_live_runtime_tree() {
   retired="$(retire_live_runtime_tree "$live")" || return 1
   if ! mv "$staged" "$live"; then
     if [[ -n "$retired" ]]; then
-      mv "$retired" "$live" || true
+      if [[ -e "$live" || -L "$live" ]] || ! mv "$retired" "$live"; then
+        err "Could not restore the previous runtime tree at $live. Recovery copy: $retired"
+      fi
     fi
     return 1
   fi
@@ -1254,7 +1294,6 @@ adopt_non_skill_source_trees() {
 # Parse the line-oriented machine report (mirrors the SKILL-74 line protocol). FAIL-CLOSED:
 # if the `reconcile_summary:` line is absent or unparseable the caller MUST abort rather
 # than treat an empty report as a clean run.
-RECONCILE_FAILURE_KIND=""
 parse_reconcile_report() {
   local report="$1"
   local summary_line applied
@@ -1282,15 +1321,14 @@ parse_reconcile_report() {
 # - locally-authored: a user-owned agent-addons/ entry is NEVER written or deleted.
 #
 # The compute pass runs first purely as a pre-mutation failure detector: enumeration
-# errors in the upstream candidate (contract drift, malformed manifests) surface as
-# RECONCILE_FAILURE_KIND=compute BEFORE any live tree is touched. Stale contract
-# versions in the preserved local copy are tolerated because upstream always wins.
+# errors in the upstream candidate (contract drift, malformed manifests) surface before
+# any live tree is touched. Stale contract versions in the preserved local copy are
+# tolerated because upstream always wins.
 #
 # The shell performs NO whole-tree rm/mv swap of skills/ — the runtime per-skill apply
 # is the sole writer of the live skill dirs.
 reconcile_and_commit_authored_source() {
   local report status
-  RECONCILE_FAILURE_KIND=""
   info "Reconciling staged source against existing copy and baseline manifest..."
   # Compute the per-skill plan against UPSTREAM=candidate, LOCAL=existing copy. The
   # upstream repo root, skills, and platform-packs all come from the one staged
@@ -1303,8 +1341,7 @@ reconcile_and_commit_authored_source() {
     --upstream-skills "$SKILL_BILL_CANDIDATE_SKILLS" \
     --upstream-platform-packs "$SKILL_BILL_CANDIDATE_PLATFORM_PACKS")" || status=$?
   if [[ -n "${status:-}" ]]; then
-    RECONCILE_FAILURE_KIND="compute"
-    err "Reconciliation failed; leaving the existing install untouched."
+    err "Reconciliation failed; copied source and baseline were preserved. Runtime data may already have been migrated."
     discard_authored_candidates
     return 1
   fi
@@ -1312,8 +1349,7 @@ reconcile_and_commit_authored_source() {
   # FAIL-CLOSED: a missing/unparseable summary line aborts the install rather than
   # treating an empty report as a clean run.
   if ! parse_reconcile_report "$report"; then
-    RECONCILE_FAILURE_KIND="parse"
-    err "Could not parse the reconcile machine report; aborting the install. Nothing was changed."
+    err "Could not parse the reconcile machine report; copied source and baseline were preserved. Runtime data may already have been migrated."
     discard_authored_candidates
     return 1
   fi
@@ -1332,7 +1368,6 @@ reconcile_and_commit_authored_source() {
     --upstream-platform-packs "$SKILL_BILL_CANDIDATE_PLATFORM_PACKS"
   )
   if ! run_runtime_cli "${apply_args[@]}" >/dev/null; then
-    RECONCILE_FAILURE_KIND="apply"
     err "Runtime reconcile apply failed; some skills may not have been updated."
     discard_authored_candidates
     return 1
@@ -1343,20 +1378,6 @@ reconcile_and_commit_authored_source() {
   # set (uninstall.sh preserve-mode). The runtime apply already refreshed it.
   discard_authored_candidates
   ok "Authored source reconciled and committed into $SKILL_BILL_STATE_DIR"
-}
-
-reconcile_and_commit_authored_source_with_recovery() {
-  if reconcile_and_commit_authored_source; then
-    return 0
-  fi
-  if [[ "$RECONCILE_FAILURE_KIND" != "compute" ]]; then
-    return 1
-  fi
-  warn "Reconciliation failed against the preserved copied source; retrying once with a clean copied-source reset."
-  warn "Durable workflow and review state DBs are preserved."
-  clean_install_state
-  copy_in_authored_source
-  reconcile_and_commit_authored_source
 }
 
 install_packaged_runtime_distributions() {
@@ -1651,7 +1672,11 @@ install_runtime_launcher() {
 
   if [[ -e "$link_path" && ! -L "$link_path" ]]; then
     warn "  skipped $link_path (exists and is not a symlink)"
-    return 0
+    return 1
+  fi
+  if [[ -L "$link_path" && "$(readlink "$link_path")" != "$target" ]]; then
+    err "Refusing to replace an unrelated launcher: $link_path"
+    return 1
   fi
 
   ln -sfn "$target" "$link_path"
@@ -1659,18 +1684,31 @@ install_runtime_launcher() {
 }
 
 install_skill_bill_launcher() {
-  local launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/skill-bill"
+  local name="$1"
+  local launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/$name"
+  local launcher_temp="${2:-$launcher_path.stage.$$}"
   local marker="# skill-bill managed launcher"
 
-  if [[ -e "$launcher_path" && ! -L "$launcher_path" ]]; then
+  if [[ -z "${2:-}" && -e "$launcher_path" && ! -L "$launcher_path" ]]; then
     if ! grep -qF "$marker" "$launcher_path" 2>/dev/null; then
-      warn "  skipped $launcher_path (exists and is not a Skill Bill managed launcher)"
-      return 0
+      err "Refusing to replace an unrelated launcher: $launcher_path"
+      return 1
     fi
   fi
 
-  rm -f "$launcher_path"
-  cat > "$launcher_path" <<LAUNCHER
+  if [[ -z "${2:-}" && -L "$launcher_path" ]]; then
+    err "Refusing to replace an unclassified launcher link: $launcher_path"
+    return 1
+  fi
+  if [[ "$name" == "skill-bill" ]]; then
+    cat > "$launcher_temp" <<LAUNCHER
+#!/usr/bin/env bash
+$marker
+printf '%s\\n' 'skill-bill has been renamed to sona. Run sona instead.'
+exit 0
+LAUNCHER
+  else
+    cat > "$launcher_temp" <<LAUNCHER
 #!/usr/bin/env bash
 $marker
 set -euo pipefail
@@ -1746,15 +1784,29 @@ fi
 
 exec "\$runtime_cli" "\$@"
 LAUNCHER
-  chmod +x "$launcher_path"
-  ok "  installed skill-bill launcher → $RUNTIME_CLI_BIN"
+  fi
+  chmod +x "$launcher_temp" || { rm -f "$launcher_temp"; return 1; }
+  [[ -z "${2:-}" ]] || return 0
+  mv -f "$launcher_temp" "$launcher_path" || { rm -f "$launcher_temp"; return 1; }
+  if [[ "$name" == "skill-bill" ]]; then
+    ok "  installed $name notice launcher"
+  else
+    ok "  installed $name launcher → $RUNTIME_CLI_BIN"
+  fi
 }
 
 install_runtime_launchers() {
   mkdir -p "$RUNTIME_LAUNCHER_BIN_DIR"
   info "Installing runtime launchers to: $RUNTIME_LAUNCHER_BIN_DIR"
-  install_skill_bill_launcher
-  install_runtime_launcher "skill-bill-mcp" "$RUNTIME_MCP_BIN"
+  install_skill_bill_launcher "sona" || return 1
+  install_skill_bill_launcher "skill-bill" || return 1
+  install_runtime_launcher "sona-mcp" "$RUNTIME_MCP_BIN" || return 1
+  local obsolete_mcp="$RUNTIME_LAUNCHER_BIN_DIR/skill-bill-mcp"
+  if [[ -L "$obsolete_mcp" && "$(readlink "$obsolete_mcp")" == "$RUNTIME_MCP_BIN" ]]; then
+    rm -f "$obsolete_mcp" || { err "Could not remove owned legacy MCP launcher: $obsolete_mcp"; return 1; }
+  elif [[ -e "$obsolete_mcp" || -L "$obsolete_mcp" ]]; then
+    warn "Preserving unrelated launcher at $obsolete_mcp"
+  fi
 
   if path_contains_dir "$RUNTIME_LAUNCHER_BIN_DIR"; then
     ok "  launcher directory is on PATH"
@@ -1852,6 +1904,133 @@ desktop_app_executable_path() {
   esac
 }
 
+acquire_desktop_recovery_copy() {
+  local os="$1" install_root="$2" app_source="$3" candidate executable record attempt
+  mkdir -p "$install_root" || {
+    err "Could not create the desktop install directory for a recovery copy: $install_root"
+    return 1
+  }
+  for attempt in {1..20}; do
+    local suffix="$$.$RANDOM.$attempt"
+    candidate="$install_root/.Sona.recovery.$suffix"
+    [[ "$os" != "macos" ]] || candidate="$candidate.app"
+    if mkdir "$candidate" 2>/dev/null; then
+      RECOVERY_DESKTOP_APP_PATH="$candidate"
+      break
+    fi
+    if [[ -e "$candidate" || -L "$candidate" ]]; then
+      continue
+    fi
+  done
+  if [[ -z "$RECOVERY_DESKTOP_APP_PATH" ]]; then
+    err "Could not reserve a collision-free desktop recovery path under $install_root."
+    return 1
+  fi
+  if ! cp -R "$app_source/." "$RECOVERY_DESKTOP_APP_PATH/"; then
+    err "Could not create the desktop recovery copy: $RECOVERY_DESKTOP_APP_PATH"
+    return 1
+  fi
+  executable="$(desktop_app_executable_path "$os" "$RECOVERY_DESKTOP_APP_PATH")"
+  if [[ ! -f "$executable" || ( "$os" != windows && ! -x "$executable" ) ]]; then
+    err "Desktop recovery copy has no usable app executable: $executable"
+    return 1
+  fi
+  record="$(desktop_app_build_identity_path "$os" "$RECOVERY_DESKTOP_APP_PATH")"
+  if ! build_identities_match "$(staged_runtime_build_identity_record)" "$record"; then
+    err "Desktop recovery copy does not match the staged runtime: $RECOVERY_DESKTOP_APP_PATH"
+    return 1
+  fi
+}
+
+acquire_runtime_recovery_copy() {
+  local candidate cli_source mcp_source cli_bin mcp_bin cli_record mcp_record desktop_record
+  cli_source="$STAGED_RUNTIME_ROOT/runtime-cli.tmp"
+  mcp_source="$STAGED_RUNTIME_ROOT/runtime-mcp.tmp"
+  mkdir -p "$RUNTIME_INSTALL_ROOT" || {
+    err "Could not create the runtime install directory for a recovery copy: $RUNTIME_INSTALL_ROOT"
+    return 1
+  }
+  candidate="$RUNTIME_INSTALL_ROOT/.runtime-recovery.$$.${RANDOM}"
+  if [[ -e "$candidate" || -L "$candidate" ]] || ! mkdir "$candidate"; then
+    err "Could not reserve a runtime recovery path under $RUNTIME_INSTALL_ROOT."
+    return 1
+  fi
+  RECOVERY_RUNTIME_ROOT="$candidate"
+  if ! cp -R "$cli_source" "$candidate/runtime-cli" || ! cp -R "$mcp_source" "$candidate/runtime-mcp"; then
+    err "Could not create the matching runtime recovery copy: $candidate"
+    return 1
+  fi
+  cli_bin="$candidate/runtime-cli/bin/runtime-cli"
+  mcp_bin="$candidate/runtime-mcp/bin/runtime-mcp"
+  cli_record="$candidate/runtime-cli/$BUILD_IDENTITY_RECORD"
+  mcp_record="$candidate/runtime-mcp/$BUILD_IDENTITY_RECORD"
+  desktop_record="$(desktop_app_build_identity_path "$(host_os)" "$RECOVERY_DESKTOP_APP_PATH")"
+  if [[ ! -x "$cli_bin" || ! -x "$mcp_bin" ]] ||
+     ! build_identities_match "$cli_record" "$mcp_record" ||
+     ! build_identities_match "$cli_record" "$desktop_record"; then
+    err "Runtime recovery copy is unusable or does not match the desktop recovery copy: $candidate"
+    return 1
+  fi
+}
+
+report_upgrade_recovery() {
+  local reason="${1:-}" os desktop_executable cli_record desktop_record
+  RECOVERY_RUNTIME_REPORTED=1
+  RECOVERY_DESKTOP_APP_REPORTED=1
+  os="$(host_os)"
+  cli_record="${RECOVERY_RUNTIME_ROOT:-}/runtime-cli/$BUILD_IDENTITY_RECORD"
+  desktop_record="$(desktop_app_build_identity_path "$os" "${RECOVERY_DESKTOP_APP_PATH:-}")"
+  if [[ -z "${RECOVERY_RUNTIME_ROOT:-}" || ! -x "$RECOVERY_RUNTIME_ROOT/runtime-cli/bin/runtime-cli" ||
+        ! -x "$RECOVERY_RUNTIME_ROOT/runtime-mcp/bin/runtime-mcp" ||
+        ! -d "${RECOVERY_DESKTOP_APP_PATH:-}" ]] ||
+     ! build_identities_match "$cli_record" "$RECOVERY_RUNTIME_ROOT/runtime-mcp/$BUILD_IDENTITY_RECORD" ||
+     ! build_identities_match "$cli_record" "$desktop_record"; then
+    err "$reason Migration may have committed. Recovery artifacts could not be verified. Preserve the existing data under $SKILL_BILL_STATE_DIR and retry installation; runtime recovery path: ${RECOVERY_RUNTIME_ROOT:-unavailable}; desktop recovery path: ${RECOVERY_DESKTOP_APP_PATH:-unavailable}."
+    return 1
+  fi
+  desktop_executable="$(desktop_app_executable_path "$os" "$RECOVERY_DESKTOP_APP_PATH")"
+  err "$reason Migration may have committed. Do not start the old runtime against migrated data. Matching recovery runtime: $RECOVERY_RUNTIME_ROOT; matching desktop: $RECOVERY_DESKTOP_APP_PATH. Preserve data under $SKILL_BILL_STATE_DIR, then retry installation with: $PLUGIN_DIR/install.sh"
+  err "Recovery executables: $RECOVERY_RUNTIME_ROOT/runtime-cli/bin/runtime-cli and $RECOVERY_RUNTIME_ROOT/runtime-mcp/bin/runtime-mcp; desktop executable: $desktop_executable"
+}
+
+discard_upgrade_recovery_copies() {
+  if [[ -n "${RECOVERY_RUNTIME_ROOT:-}" && -d "$RECOVERY_RUNTIME_ROOT" ]]; then
+    if rm -rf "$RECOVERY_RUNTIME_ROOT"; then RECOVERY_RUNTIME_ROOT=""
+    else warn "Retained runtime recovery copy after successful publication: $RECOVERY_RUNTIME_ROOT"; fi
+  fi
+  if [[ -n "${RECOVERY_DESKTOP_APP_PATH:-}" && -d "$RECOVERY_DESKTOP_APP_PATH" ]]; then
+    if rm -rf "$RECOVERY_DESKTOP_APP_PATH"; then RECOVERY_DESKTOP_APP_PATH=""
+    else warn "Retained desktop recovery copy after successful publication: $RECOVERY_DESKTOP_APP_PATH"; fi
+  fi
+}
+
+report_desktop_recovery_path() {
+  local reason="${1:-}" os executable record
+  if [[ "${MIGRATION_MAY_HAVE_COMMITTED:-0}" -eq 1 ]]; then
+    report_upgrade_recovery "$reason"
+    return $?
+  fi
+  RECOVERY_DESKTOP_APP_REPORTED=1
+  os="$(host_os)"
+  if [[ -z "${RECOVERY_DESKTOP_APP_PATH:-}" || ! -d "$RECOVERY_DESKTOP_APP_PATH" ]]; then
+    err "$reason No retained desktop recovery copy exists; the migration remains committed and the active runtime is $RUNTIME_CLI_INSTALL_DIR."
+    return 1
+  fi
+  executable="$(desktop_app_executable_path "$os" "$RECOVERY_DESKTOP_APP_PATH")"
+  record="$(desktop_app_build_identity_path "$os" "$RECOVERY_DESKTOP_APP_PATH")"
+  if [[ ! -f "$executable" || ( "$os" != windows && ! -x "$executable" ) ]] ||
+     ! build_identities_match "$(staged_runtime_build_identity_record)" "$record"; then
+    err "$reason Retained desktop recovery copy could not be verified at $RECOVERY_DESKTOP_APP_PATH. Migration remains committed; active runtime: $RUNTIME_CLI_INSTALL_DIR."
+    return 1
+  fi
+  err "$reason Migration remains committed. The restored desktop app may not match the active runtime at $RUNTIME_CLI_INSTALL_DIR."
+  case "$os" in
+    macos) err "Open the matching recovery app bundle: $RECOVERY_DESKTOP_APP_PATH" ;;
+    windows) err "Launch the matching recovery app: start \"\" \"$executable\"" ;;
+    *) err "Launch the matching recovery app: \"$executable\"" ;;
+  esac
+}
+
 desktop_quoted_exec_path() {
   local value="$1"
   value="${value//\\/\\\\}"
@@ -1859,29 +2038,87 @@ desktop_quoted_exec_path() {
   printf '"%s"' "$value"
 }
 
-check_desktop_app_launcher_ownership() {
-  local os="$1" app_target="$2" executable="$3" launcher_path windows_executable
-  launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
-  if [[ "$os" == "windows" ]]; then
-    launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
-    if command -v cygpath >/dev/null 2>&1; then windows_executable="$(cygpath -w "$executable")"; else windows_executable="${executable//\//\\}"; fi
-    if [[ -e "$launcher_path" || -L "$launcher_path" ]] && { [[ ! -f "$launcher_path" || -L "$launcher_path" ]] || ! tr -d '\r' < "$launcher_path" | grep -Fxq "\"$windows_executable\" %*" || ! tr -d '\r' < "$launcher_path" | grep -Fxq 'REM Managed by Sona install.sh'; }; then
-      err "Refusing to overwrite an unrelated desktop launcher: $launcher_path"
-      return 1
-    fi
-    return 0
-  fi
-  if [[ -e "$launcher_path" || -L "$launcher_path" ]] && { [[ ! -L "$launcher_path" ]] || [[ "$(readlink "$launcher_path")" != "$executable" ]]; }; then
-    err "Refusing to overwrite an unrelated desktop launcher: $launcher_path"
+is_owned_windows_desktop_launcher() {
+  local path="$1" windows_executable="$2"
+  [[ -f "$path" && ! -L "$path" ]] || return 1
+  tr -d '\r' < "$path" | grep -Fxq 'REM Managed by Sona install.sh' &&
+    tr -d '\r' < "$path" | grep -Fxq "\"$windows_executable\" %*"
+}
+
+check_desktop_app_target_ownership() {
+  local os="$1" app_target="$2" executable="$3" windows_executable launcher
+  [[ -e "$app_target" || -L "$app_target" ]] || return 0
+  if [[ ! -d "$app_target" || -L "$app_target" || ! -f "$executable" || ( "$os" != windows && ! -x "$executable" ) ]]; then
+    err "Refusing to replace an unclassified desktop app target: $app_target. Choose a different install root."
     return 1
   fi
-  if [[ "$os" == "linux" ]]; then
-    local desktop_file="${XDG_DATA_HOME:-$HOME/.local/share}/applications/sona.desktop"
-    local quoted_launcher expected_icon
-    quoted_launcher="$(desktop_quoted_exec_path "$launcher_path")"
+  if [[ "$os" == windows ]]; then
+    if command -v cygpath >/dev/null 2>&1; then windows_executable="$(cygpath -w "$executable")"; else windows_executable="${executable//\//\\}"; fi
+    for launcher in "$RUNTIME_LAUNCHER_BIN_DIR/sona-app.cmd" "$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"; do
+      if is_owned_windows_desktop_launcher "$launcher" "$windows_executable"; then return 0; fi
+    done
+  else
+    for launcher in "$RUNTIME_LAUNCHER_BIN_DIR/sona-app" "$RUNTIME_LAUNCHER_BIN_DIR/sona"; do
+      if [[ -L "$launcher" && "$(readlink "$launcher")" == "$executable" ]]; then return 0; fi
+    done
+  fi
+  err "Refusing to replace an unclassified desktop app target: $app_target. No Sona desktop launcher points to its executable. Choose a different install root."
+  return 1
+}
+
+check_desktop_app_launcher_ownership() {
+  local os="$1" app_target="$2" executable="$3" cli_path gui_path windows_executable candidate name
+  local cli_kind=managed gui_kind=link menu_file="${XDG_DATA_HOME:-$HOME/.local/share}/applications/sona.desktop"
+  candidate="$RUNTIME_LAUNCHER_BIN_DIR/sona-mcp"
+  if [[ -e "$candidate" || -L "$candidate" ]] && { [[ ! -L "$candidate" ]] || [[ "$(readlink "$candidate")" != "$RUNTIME_MCP_BIN" ]]; }; then
+    err "Refusing to replace an unrelated launcher: $candidate"
+    return 1
+  fi
+  for name in skill-bill; do
+    candidate="$RUNTIME_LAUNCHER_BIN_DIR/$name"
+    if [[ -e "$candidate" || -L "$candidate" ]] && { [[ -L "$candidate" ]] || [[ ! -f "$candidate" ]] || ! grep -qF '# skill-bill managed launcher' "$candidate"; }; then
+      err "Refusing to replace an unrelated launcher: $candidate"
+      return 1
+    fi
+  done
+  cli_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
+  gui_path="$RUNTIME_LAUNCHER_BIN_DIR/sona-app"
+  if [[ "$os" == "windows" ]]; then
+    cli_path="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
+    gui_path="$RUNTIME_LAUNCHER_BIN_DIR/sona-app.cmd"
+    if command -v cygpath >/dev/null 2>&1; then windows_executable="$(cygpath -w "$executable")"; else windows_executable="${executable//\//\\}"; fi
+    cli_kind=windows-desktop
+    gui_kind=windows-desktop
+    candidate="$RUNTIME_LAUNCHER_BIN_DIR/sona"
+    if [[ -e "$candidate" || -L "$candidate" ]] && { [[ -L "$candidate" ]] || [[ ! -f "$candidate" ]] || ! grep -qF '# skill-bill managed launcher' "$candidate"; }; then
+      err "Refusing to replace an unrelated CLI launcher: $candidate"
+      return 1
+    fi
+  fi
+  for candidate in "$cli_path" "$gui_path"; do
+    local kind="$gui_kind" expected="$executable"
+    [[ "$candidate" != "$cli_path" ]] || kind="$cli_kind"
+    [[ "$kind" != windows-desktop ]] || expected="$windows_executable"
+    if [[ -e "$candidate" || -L "$candidate" ]]; then
+      local owned=0
+      if [[ "$kind" == windows-desktop ]]; then
+        is_owned_windows_desktop_launcher "$candidate" "$expected" && owned=1
+        [[ "$candidate" != "$cli_path" ]] || { [[ -f "$candidate" && ! -L "$candidate" ]] && grep -qF '# skill-bill managed launcher' "$candidate" && owned=1; }
+      elif [[ -L "$candidate" && "$(readlink "$candidate")" == "$expected" ]]; then
+        owned=1
+      elif [[ "$candidate" == "$cli_path" && -f "$candidate" && ! -L "$candidate" ]] && grep -qF '# skill-bill managed launcher' "$candidate"; then
+        owned=1
+      fi
+      if [[ "$owned" -eq 0 ]]; then err "Refusing to replace an unrelated desktop launcher: $candidate"; return 1; fi
+    fi
+  done
+  if [[ "$os" == linux ]]; then
+    local quoted_new quoted_old expected_icon
+    quoted_new="$(desktop_quoted_exec_path "$gui_path")"
+    quoted_old="$(desktop_quoted_exec_path "$cli_path")"
     expected_icon="$app_target/lib/Sona.png"
-    if [[ -e "$desktop_file" || -L "$desktop_file" ]] && { [[ ! -f "$desktop_file" || -L "$desktop_file" ]] || ! grep -Fxq "Exec=$quoted_launcher" "$desktop_file" || ! grep -Fxq "Icon=$expected_icon" "$desktop_file"; }; then
-      err "Refusing to overwrite an unrelated desktop entry: $desktop_file"
+    if [[ -e "$menu_file" || -L "$menu_file" ]] && { [[ ! -f "$menu_file" || -L "$menu_file" ]] || { ! grep -Fxq "Exec=$quoted_new" "$menu_file" && ! grep -Fxq "Exec=$quoted_old" "$menu_file"; } || ! grep -Fxq 'Name=Sona' "$menu_file" || ! grep -Fxq 'Type=Application' "$menu_file" || ! grep -Fxq "Icon=$expected_icon" "$menu_file" || ! grep -Fxq 'StartupWMClass=dev-skillbill-desktop-app-DesktopLauncherKt' "$menu_file"; }; then
+      err "Refusing to overwrite an unrelated desktop entry: $menu_file"
       return 1
     fi
   fi
@@ -1894,20 +2131,23 @@ prepare_desktop_app_launcher() {
   local expected_icon="$app_target/lib/Sona.png"
   mkdir -p "$RUNTIME_LAUNCHER_BIN_DIR" || return 1
   check_desktop_app_launcher_ownership "$os" "$app_target" "$executable" || return 1
-  launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
-  [[ "$os" != "windows" ]] || launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
+  launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona-app"
+  [[ "$os" != "windows" ]] || launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona-app.cmd"
   if [[ "$os" == "linux" ]]; then
     applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
     desktop_file="$applications_dir/sona.desktop"
     quoted_launcher="$(desktop_quoted_exec_path "$launcher_path")"
     if [[ -e "$desktop_file" || -L "$desktop_file" ]]; then
-      if [[ ! -f "$desktop_file" || -L "$desktop_file" ]] || ! grep -Fxq "Exec=$quoted_launcher" "$desktop_file" || ! grep -Fxq "Icon=$expected_icon" "$desktop_file"; then
+      local old_launcher="$RUNTIME_LAUNCHER_BIN_DIR/sona"
+      [[ "$os" != "windows" ]] || old_launcher="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
+      local old_quoted_launcher="$(desktop_quoted_exec_path "$old_launcher")"
+      if [[ ! -f "$desktop_file" || -L "$desktop_file" ]] || { ! grep -Fxq "Exec=$quoted_launcher" "$desktop_file" && ! grep -Fxq "Exec=$old_quoted_launcher" "$desktop_file"; } || ! grep -Fxq "Icon=$expected_icon" "$desktop_file"; then
         err "Refusing to overwrite an unrelated desktop entry: $desktop_file"
         return 1
       fi
     fi
     mkdir -p "$applications_dir" || return 1
-    staged_desktop="$desktop_file.stage.$$"
+    staged_desktop="$desktop_file.stage.${DESKTOP_TRANSACTION_ID:-$$}"
     if ! cat > "$staged_desktop" <<ENTRY
 [Desktop Entry]
 Name=Sona
@@ -1924,7 +2164,7 @@ ENTRY
     fi
   fi
 
-  launcher_temp="$launcher_path.stage.$$"
+  launcher_temp="$launcher_path.stage.${DESKTOP_TRANSACTION_ID:-$$}"
   if [[ "$os" == "windows" ]]; then
     if command -v cygpath >/dev/null 2>&1; then windows_executable="$(cygpath -w "$executable")"; else windows_executable="${executable//\//\\}"; fi
     { printf '@echo off\r\n'; printf 'REM Managed by Sona install.sh\r\n'; printf '"%s" %%*\r\n' "$windows_executable"; } > "$launcher_temp" || { rm -f "$staged_desktop"; return 1; }
@@ -1934,17 +2174,21 @@ ENTRY
 }
 
 discard_desktop_app_launcher_stage() {
-  local os="$1" launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
-  [[ "$os" != "windows" ]] || launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
-  rm -f "$launcher_path.stage.$$"
-  if [[ "$os" == "linux" ]]; then rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/applications/sona.desktop.stage.$$"; fi
+  local os="$1" launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona-app"
+  [[ "$os" != "windows" ]] || launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona-app.cmd"
+  local stage="$launcher_path.stage.${DESKTOP_TRANSACTION_ID:-$$}"
+  if [[ -e "$stage" || -L "$stage" ]] && ! rm -f "$stage"; then err "Could not remove desktop launcher stage: $stage"; fi
+  if [[ "$os" == "linux" ]]; then
+    stage="${XDG_DATA_HOME:-$HOME/.local/share}/applications/sona.desktop.stage.${DESKTOP_TRANSACTION_ID:-$$}"
+    if [[ -e "$stage" || -L "$stage" ]] && ! rm -f "$stage"; then err "Could not remove desktop menu stage: $stage"; fi
+  fi
 }
 
 install_desktop_app_launcher() {
   local os="$1" app_target="$2" executable="$3"
   local launcher_path launcher_temp desktop_file launcher_backup="" desktop_backup="" staged_desktop=""
-  launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
-  [[ "$os" != "windows" ]] || launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
+  launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona-app"
+  [[ "$os" != "windows" ]] || launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona-app.cmd"
   launcher_temp="$launcher_path.stage.$$"
   check_desktop_app_launcher_ownership "$os" "$app_target" "$executable" || { discard_desktop_app_launcher_stage "$os"; return 1; }
   if [[ "$os" == "linux" ]]; then
@@ -1970,6 +2214,17 @@ install_desktop_app_launcher() {
     rm -f "$desktop_backup"
   fi
   [[ -z "$launcher_backup" ]] || rm -f "$launcher_backup"
+  local old_launcher="$RUNTIME_LAUNCHER_BIN_DIR/sona"
+  [[ "$os" != "windows" ]] || old_launcher="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
+  if [[ "$os" == "windows" ]]; then
+    local windows_executable
+    if command -v cygpath >/dev/null 2>&1; then windows_executable="$(cygpath -w "$executable")"; else windows_executable="${executable//\//\\}"; fi
+    if [[ -f "$old_launcher" && ! -L "$old_launcher" ]] && grep -Fxq 'REM Managed by Sona install.sh' "$old_launcher" && tr -d '\r' < "$old_launcher" | grep -Fxq "\"$windows_executable\" %*"; then
+      rm -f "$old_launcher" || { err "Could not retire the old desktop launcher $old_launcher"; return 1; }
+    fi
+  elif [[ -L "$old_launcher" ]] && [[ "$(readlink "$old_launcher")" == "$executable" ]]; then
+    rm -f "$old_launcher" || { err "Could not retire the old desktop launcher $old_launcher"; return 1; }
+  fi
 }
 
 linux_legacy_desktop_is_owned() {
@@ -2297,17 +2552,28 @@ stage_selected_desktop_app() {
 # Replace the live desktop app with the one stage_selected_desktop_app staged.
 activate_staged_desktop_app() {
   local os app_source app_target executable install_root staged_app backup_app launcher_path
+  local previous_app_moved=0
+  local DESKTOP_TRANSACTION_ID="$$.$RANDOM"
   os="$(host_os)"
   app_source="$STAGED_DESKTOP_APP_SOURCE"
   install_root="$(desktop_app_install_root "$os")" || return 1
   app_target="$(desktop_app_target_path "$os" "$install_root")"
   executable="$(desktop_app_executable_path "$os" "$app_target")"
+  check_desktop_app_target_ownership "$os" "$app_target" "$executable" || { DESKTOP_APP_INSTALL_RESULT="app target refused"; return 1; }
+  local expected_gui_stage="$RUNTIME_LAUNCHER_BIN_DIR/sona-app.stage.$DESKTOP_TRANSACTION_ID"
+  [[ "$os" != windows ]] || expected_gui_stage="$RUNTIME_LAUNCHER_BIN_DIR/sona-app.cmd.stage.$DESKTOP_TRANSACTION_ID"
+  local expected_menu_stage="${XDG_DATA_HOME:-$HOME/.local/share}/applications/sona.desktop.stage.$DESKTOP_TRANSACTION_ID"
+  if [[ -e "$expected_gui_stage" || -L "$expected_gui_stage" || ( "$os" == linux && ( -e "$expected_menu_stage" || -L "$expected_menu_stage" ) ) ]]; then
+    err "Desktop launcher stage path already exists. Preserving it for recovery: $expected_gui_stage $expected_menu_stage"
+    DESKTOP_APP_INSTALL_RESULT="launcher refused"
+    return 1
+  fi
   if ! prepare_desktop_app_launcher "$os" "$app_target" "$executable"; then
     DESKTOP_APP_INSTALL_RESULT="launcher refused"
     return 1
   fi
-  launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
-  [[ "$os" != "windows" ]] || launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
+  launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona-app"
+  [[ "$os" != "windows" ]] || launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona-app.cmd"
   local -a running_pids=() running_paths=("$executable")
   if [[ "$os" == "linux" ]] && linux_legacy_desktop_is_owned "$install_root"; then
     running_paths+=("$install_root/Skill Bill/bin/Skill Bill" "$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop")
@@ -2315,6 +2581,11 @@ activate_staged_desktop_app() {
   local running_pid
   if [[ -e "$launcher_path" || -L "$launcher_path" ]]; then
     running_paths+=("$launcher_path")
+  fi
+  local old_launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
+  [[ "$os" != "windows" ]] || old_launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"
+  if [[ -L "$old_launcher_path" ]] && [[ "$(readlink "$old_launcher_path")" == "$executable" ]]; then
+    running_paths+=("$old_launcher_path")
   fi
   while IFS= read -r running_pid; do
     [[ -n "$running_pid" ]] && running_pids+=("$running_pid")
@@ -2324,10 +2595,18 @@ activate_staged_desktop_app() {
     discard_desktop_app_launcher_stage "$os"
     return 1
   fi
-  staged_app="$install_root/.Sona.installing.$$"
-  backup_app="$install_root/.Sona.previous.$$"
-  rm -rf "$staged_app" "$backup_app"
+  local transaction_id="$DESKTOP_TRANSACTION_ID"
+  staged_app="$install_root/.Sona.installing.$transaction_id"
+  backup_app="$install_root/.Sona.previous.$transaction_id"
+  if [[ -e "$staged_app" || -L "$staged_app" || -e "$backup_app" || -L "$backup_app" ]]; then
+    err "Desktop transaction paths already exist. Preserving them for recovery: $staged_app $backup_app"
+    discard_desktop_app_launcher_stage "$os"
+    return 1
+  fi
   if ! cp -R "$app_source" "$staged_app"; then
+    if [[ -e "$staged_app" || -L "$staged_app" ]] && ! rm -rf "$staged_app"; then
+      err "Could not remove the partial desktop app stage: $staged_app"
+    fi
     discard_desktop_app_launcher_stage "$os"
     err "Could not stage the desktop app under $install_root."
     DESKTOP_APP_INSTALL_RESULT="install failed"
@@ -2335,27 +2614,149 @@ activate_staged_desktop_app() {
   fi
   if [[ -e "$app_target" || -L "$app_target" ]]; then
     if ! mv "$app_target" "$backup_app"; then
-      rm -rf "$staged_app"
+      if ! rm -rf "$staged_app"; then err "Could not remove desktop app stage: $staged_app"; fi
       discard_desktop_app_launcher_stage "$os"
       err "Could not move the previous desktop app out of the way."
       DESKTOP_APP_INSTALL_RESULT="install failed"
       return 1
     fi
+    previous_app_moved=1
   fi
   if ! mv "$staged_app" "$app_target"; then
-    [[ ! -e "$backup_app" ]] || mv "$backup_app" "$app_target"
-    rm -rf "$staged_app"
+    if [[ "$previous_app_moved" -eq 1 && ( -e "$backup_app" || -L "$backup_app" ) ]]; then
+      if [[ -e "$app_target" || -L "$app_target" ]] || ! mv "$backup_app" "$app_target"; then
+        err "Could not restore the previous desktop app. Recovery copy: $backup_app"
+      fi
+    fi
+    if [[ -e "$staged_app" || -L "$staged_app" ]] && ! rm -rf "$staged_app"; then err "Could not remove desktop app stage: $staged_app"; fi
     discard_desktop_app_launcher_stage "$os"
     err "Could not install the desktop app under $app_target."
     DESKTOP_APP_INSTALL_RESULT="install failed"
     return 1
   fi
-  if ! install_desktop_app_launcher "$os" "$app_target" "$executable"; then
-    rm -rf "$app_target"
-    [[ ! -e "$backup_app" ]] || mv "$backup_app" "$app_target"
-    err "The desktop app files were installed, but its launcher could not be installed."
+  local cli_stage="$RUNTIME_LAUNCHER_BIN_DIR/sona.stage.$transaction_id"
+  local compat_stage="$RUNTIME_LAUNCHER_BIN_DIR/skill-bill.stage.$transaction_id"
+  local mcp_stage="$RUNTIME_LAUNCHER_BIN_DIR/sona-mcp.stage.$transaction_id"
+  local cli_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
+  local old_gui_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
+  local gui_path="$RUNTIME_LAUNCHER_BIN_DIR/sona-app"
+  [[ "$os" != windows ]] || { cli_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"; old_gui_path="$RUNTIME_LAUNCHER_BIN_DIR/sona.cmd"; gui_path="$RUNTIME_LAUNCHER_BIN_DIR/sona-app.cmd"; }
+  local menu_file="${XDG_DATA_HOME:-$HOME/.local/share}/applications/sona.desktop"
+  local menu_stage="$menu_file.stage.$transaction_id"
+  local expected_gui_executable="$executable"
+  if [[ "$os" == windows ]]; then
+    if command -v cygpath >/dev/null 2>&1; then expected_gui_executable="$(cygpath -w "$executable")"; else expected_gui_executable="${executable//\//\\}"; fi
+  fi
+  local -a tx_targets=() tx_stages=() tx_backups=() tx_kinds=() tx_expected=() tx_published=()
+  for tx_target in "$cli_stage" "$compat_stage" "$mcp_stage"; do
+    if [[ -e "$tx_target" || -L "$tx_target" ]]; then
+      err "A transaction stage path already exists. Preserving it for recovery: $tx_target"
+      discard_desktop_app_launcher_stage "$os"
+      DESKTOP_APP_INSTALL_RESULT="launcher failed"
+      return 1
+    fi
+  done
+  if ! install_skill_bill_launcher sona "$cli_stage" || ! install_skill_bill_launcher skill-bill "$compat_stage" ||
+     ! ln -s "$RUNTIME_MCP_BIN" "$mcp_stage"; then
+    err "Could not stage runtime launchers."
+    for tx_target in "$cli_stage" "$compat_stage" "$mcp_stage"; do
+      if [[ -e "$tx_target" || -L "$tx_target" ]] && ! rm -f "$tx_target"; then err "Could not remove launcher stage: $tx_target"; fi
+    done
+    discard_desktop_app_launcher_stage "$os"
+    if [[ "$previous_app_moved" -eq 1 && ( -e "$backup_app" || -L "$backup_app" ) ]]; then
+      if [[ -e "$app_target" || -L "$app_target" ]]; then
+        if [[ -f "$executable" ]] && build_identities_match "$(staged_runtime_build_identity_record)" "$(desktop_app_build_identity_path "$os" "$app_target")"; then
+          if ! rm -rf "$app_target"; then err "Could not remove the failed candidate desktop app: $app_target"; fi
+        else
+          err "Preserving an unclassified app entry at $app_target"
+        fi
+      fi
+      if [[ -e "$app_target" || -L "$app_target" ]] || ! mv "$backup_app" "$app_target"; then err "Could not restore the previous desktop app. Recovery copy: $backup_app"; fi
+      report_desktop_recovery_path "Launcher staging failed after runtime activation."
+    fi
     DESKTOP_APP_INSTALL_RESULT="launcher failed"
     return 1
+  fi
+  tx_targets+=("$gui_path"); tx_stages+=("$gui_path.stage.$transaction_id")
+  if [[ "$os" == windows ]]; then tx_kinds+=(windows-desktop); else tx_kinds+=(link); fi
+  tx_expected+=("$expected_gui_executable")
+  if [[ "$os" == linux ]]; then tx_targets+=("$menu_file"); tx_stages+=("$menu_stage"); tx_kinds+=(menu); tx_expected+=("$gui_path"); fi
+  if [[ "$os" == windows ]]; then tx_targets+=("$old_gui_path"); tx_stages+=(""); tx_kinds+=(windows-desktop); tx_expected+=(""); fi
+  tx_targets+=("$cli_path" "$RUNTIME_LAUNCHER_BIN_DIR/sona-mcp" "$RUNTIME_LAUNCHER_BIN_DIR/skill-bill")
+  tx_stages+=("$cli_stage" "$mcp_stage" "$compat_stage")
+  tx_kinds+=(managed link managed)
+  tx_expected+=("" "$RUNTIME_MCP_BIN" "")
+  local tx_count=${#tx_targets[@]} tx_index tx_rollback tx_target tx_stage tx_backup tx_owned
+  for ((tx_index=0; tx_index<tx_count; tx_index++)); do tx_backups+=(""); tx_published+=(0); done
+  local tx_failed=0
+  for ((tx_index=0; tx_index<tx_count; tx_index++)); do
+    if ! check_desktop_app_launcher_ownership "$os" "$app_target" "$executable"; then tx_failed=1; break; fi
+    tx_target="${tx_targets[$tx_index]}"
+    tx_stage="${tx_stages[$tx_index]}"
+    if [[ -e "$tx_target" || -L "$tx_target" ]]; then
+      tx_backup="$tx_target.backup.$transaction_id.$tx_index"
+      if [[ -e "$tx_backup" || -L "$tx_backup" ]] || ! mv "$tx_target" "$tx_backup"; then tx_failed=1; break; fi
+      tx_backups[$tx_index]="$tx_backup"
+    fi
+    if [[ -n "$tx_stage" ]]; then
+      if [[ -e "$tx_target" || -L "$tx_target" ]] || ! mv "$tx_stage" "$tx_target"; then tx_failed=1; break; fi
+      tx_published[$tx_index]=1
+    fi
+  done
+  if [[ "$tx_failed" -ne 0 ]]; then
+    err "Launcher publication failed; restoring entries changed by this install."
+    for ((tx_rollback=tx_index; tx_rollback>=0; tx_rollback--)); do
+      (( tx_rollback < tx_count )) || continue
+      tx_target="${tx_targets[$tx_rollback]}"
+      tx_stage="${tx_stages[$tx_rollback]}"
+      tx_owned=0
+      if [[ "${tx_published[$tx_rollback]}" -eq 1 && ( -e "$tx_target" || -L "$tx_target" ) ]]; then
+        case "${tx_kinds[$tx_rollback]}" in
+          link) [[ -L "$tx_target" && "$(readlink "$tx_target")" == "${tx_expected[$tx_rollback]}" ]] && tx_owned=1 ;;
+          managed) [[ -f "$tx_target" && ! -L "$tx_target" ]] && grep -qF '# skill-bill managed launcher' "$tx_target" && tx_owned=1 ;;
+          windows-desktop) is_owned_windows_desktop_launcher "$tx_target" "${tx_expected[$tx_rollback]}" && tx_owned=1 ;;
+          menu) grep -Fxq "Exec=$(desktop_quoted_exec_path "${tx_expected[$tx_rollback]}")" "$tx_target" 2>/dev/null && tx_owned=1 ;;
+        esac
+        if [[ "$tx_owned" -eq 1 ]]; then rm -f "$tx_target" || err "Could not remove this attempt's launcher at $tx_target"; fi
+      fi
+      tx_backup="${tx_backups[$tx_rollback]}"
+      if [[ -n "$tx_backup" && ( -e "$tx_backup" || -L "$tx_backup" ) ]]; then
+        if [[ -e "$tx_target" || -L "$tx_target" ]]; then
+          err "Could not restore $tx_target because another entry now occupies it. Recovery copy: $tx_backup"
+        elif ! mv "$tx_backup" "$tx_target"; then
+          err "Could not restore $tx_target. Recovery copy: $tx_backup"
+        fi
+      fi
+    done
+    if [[ -e "$app_target" || -L "$app_target" ]]; then
+      if [[ -f "$executable" ]] && build_identities_match "$(staged_runtime_build_identity_record)" "$(desktop_app_build_identity_path "$os" "$app_target")"; then
+        if ! rm -rf "$app_target"; then err "Could not remove the failed candidate desktop app: $app_target"; fi
+      else
+        err "Preserving an unclassified app entry at $app_target"
+      fi
+    fi
+    if [[ "$previous_app_moved" -eq 1 && ( -e "$backup_app" || -L "$backup_app" ) ]]; then
+      if [[ -e "$app_target" || -L "$app_target" ]] || ! mv "$backup_app" "$app_target"; then err "Could not restore the previous desktop app. Recovery copy: $backup_app"; fi
+    fi
+    for tx_target in "$cli_stage" "$compat_stage" "$mcp_stage"; do
+      if [[ -e "$tx_target" || -L "$tx_target" ]] && ! rm -f "$tx_target"; then err "Could not remove launcher stage: $tx_target"; fi
+    done
+    discard_desktop_app_launcher_stage "$os"
+    report_desktop_recovery_path "Launcher publication failed after runtime activation."
+    DESKTOP_APP_INSTALL_RESULT="launcher failed"
+    return 1
+  fi
+  for ((tx_index=0; tx_index<tx_count; tx_index++)); do
+    tx_backup="${tx_backups[$tx_index]}"
+    [[ -z "$tx_backup" ]] && continue
+    if [[ -d "$tx_backup" && ! -L "$tx_backup" ]]; then rm -rf "$tx_backup" || warn "Retained publication backup for recovery: $tx_backup"
+    else rm -f "$tx_backup" || warn "Retained publication backup for recovery: $tx_backup"; fi
+  done
+  local obsolete_mcp="$RUNTIME_LAUNCHER_BIN_DIR/skill-bill-mcp"
+  if [[ -L "$obsolete_mcp" && "$(readlink "$obsolete_mcp")" == "$RUNTIME_MCP_BIN" ]]; then
+    rm -f "$obsolete_mcp" || { err "Could not remove owned legacy MCP launcher: $obsolete_mcp"; DESKTOP_APP_INSTALL_RESULT="launcher failed"; return 1; }
+  elif [[ -e "$obsolete_mcp" || -L "$obsolete_mcp" ]]; then
+    warn "Preserving unrelated launcher at $obsolete_mcp"
   fi
   if [[ "$os" == "linux" ]]; then
     cleanup_linux_legacy_desktop "$install_root"
@@ -2363,12 +2764,10 @@ activate_staged_desktop_app() {
   ok "Desktop app installed at $app_target"
   DESKTOP_APP_INSTALL_RESULT="installed at $app_target"
   if [[ ${#running_pids[@]} -gt 0 ]] && desktop_app_hosts_installer "${running_pids[@]}"; then
-    rm -rf "$backup_app"
     schedule_desktop_app_restart "$os" "$app_target" "$executable" "${running_pids[@]}"
     ok "The desktop app runs this installer, so it restarts with the new build when the installer exits."
   elif [[ ${#running_pids[@]} -gt 0 ]]; then
     stop_desktop_app "${running_pids[@]}"
-    rm -rf "$backup_app"
     if launch_desktop_app "$os" "$app_target" "$executable"; then
       ok "Restarted the running desktop app."
     else
@@ -2376,8 +2775,12 @@ activate_staged_desktop_app() {
       DESKTOP_APP_INSTALL_RESULT="restart failed"
       return 1
     fi
-  else
-    rm -rf "$backup_app"
+  fi
+  if [[ "$previous_app_moved" -eq 1 && ( -e "$backup_app" || -L "$backup_app" ) ]]; then
+    if ! rm -rf "$backup_app"; then warn "Retained previous desktop app for recovery: $backup_app"; fi
+  fi
+  if [[ -n "$RECOVERY_DESKTOP_APP_PATH" ]]; then
+    discard_upgrade_recovery_copies
   fi
 }
 
@@ -2898,6 +3301,8 @@ selected_agent_label() {
 }
 
 run_full_install() {
+  PRIOR_INSTALL_PRESENT=no
+  if [[ -x "$RUNTIME_CLI_BIN" || -d "$SKILL_BILL_STATE_DIR" ]]; then PRIOR_INSTALL_PRESENT=yes; fi
   bundle_bootstrap_if_needed
   print_install_plan
   if [[ "$REUSE_LAST_SELECTION" -eq 1 ]]; then
@@ -2919,6 +3324,28 @@ run_full_install() {
     discard_staged_runtime
     return 1
   fi
+  local preflight_os preflight_root preflight_app preflight_executable
+  preflight_os="$(host_os)"
+  preflight_root="$(desktop_app_install_root "$preflight_os")" || { discard_staged_runtime; return 1; }
+  preflight_app="$(desktop_app_target_path "$preflight_os" "$preflight_root")"
+  preflight_executable="$(desktop_app_executable_path "$preflight_os" "$preflight_app")"
+  check_desktop_app_target_ownership "$preflight_os" "$preflight_app" "$preflight_executable" || {
+    discard_staged_runtime
+    return 1
+  }
+  check_desktop_app_launcher_ownership "$preflight_os" "$preflight_app" "$preflight_executable" || {
+    discard_staged_runtime
+    return 1
+  }
+  acquire_desktop_recovery_copy "$preflight_os" "$preflight_root" "$STAGED_DESKTOP_APP_SOURCE" || {
+    discard_staged_runtime
+    return 1
+  }
+  acquire_runtime_recovery_copy || {
+    discard_staged_runtime
+    return 1
+  }
+  MIGRATION_MAY_HAVE_COMMITTED=1
   migrate_legacy_config_to_durable_path || {
     discard_staged_runtime
     return 1
@@ -2928,14 +3355,23 @@ run_full_install() {
     return 1
   }
   if [[ -n "$STAGED_RUNTIME_ROOT" ]]; then
-    activate_staged_runtime_pair "$STAGED_RUNTIME_ROOT" || return 1
+    if ! activate_staged_runtime_pair "$STAGED_RUNTIME_ROOT"; then
+      local live_runtime_record="$RUNTIME_CLI_INSTALL_DIR/$BUILD_IDENTITY_RECORD"
+      local recovery_record="$(desktop_app_build_identity_path "$preflight_os" "$RECOVERY_DESKTOP_APP_PATH")"
+      if build_identities_match "$live_runtime_record" "$recovery_record"; then
+        STAGED_RUNTIME_ROOT=""
+        CANDIDATE_RUNTIME_ACTIVE=1
+      fi
+      return 1
+    fi
     STAGED_RUNTIME_ROOT=""
+    CANDIDATE_RUNTIME_ACTIVE=1
     locate_packaged_runtime_bin "$RUNTIME_CLI_BIN" "CLI" || return 1
     locate_packaged_runtime_bin "$RUNTIME_MCP_BIN" "MCP" || return 1
     ok "Kotlin runtime installed$STAGED_RUNTIME_ORIGIN"
   fi
   copy_in_authored_source
-  reconcile_and_commit_authored_source_with_recovery
+  reconcile_and_commit_authored_source
 
   echo ""
   printf "${CYAN}━━━ Skill Bill Installer ━━━${NC}\n"
@@ -2948,7 +3384,6 @@ run_full_install() {
     prompt_for_agent_selection
     prompt_for_telemetry_preference
   fi
-  install_runtime_launchers
   build_runtime_install_args
 
   echo ""
@@ -2970,11 +3405,12 @@ run_full_install() {
   fi
 
   printf "${GREEN}━━━ Installation complete ━━━${NC}\n"
+  INSTALL_PUBLICATION_COMPLETE=1
   echo ""
   info "Source of truth: $PLUGIN_DIR/skills/"
   info "Staging cache:   $SKILL_BILL_STATE_DIR/installed-skills"
   info "Platforms:       all"
-  info "Launchers:       $RUNTIME_LAUNCHER_BIN_DIR/skill-bill, $RUNTIME_LAUNCHER_BIN_DIR/skill-bill-mcp"
+  info "Sona (visible app name): CLI $RUNTIME_LAUNCHER_BIN_DIR/sona, MCP $RUNTIME_LAUNCHER_BIN_DIR/sona-mcp, desktop $RUNTIME_LAUNCHER_BIN_DIR/sona-app"
   info "Telemetry:       $TELEMETRY_LEVEL"
   info "MCP:             $MCP_REGISTRATION"
   info "Desktop app:     $DESKTOP_APP_INSTALL_RESULT"
@@ -3001,7 +3437,7 @@ run_full_install() {
     info "Telemetry uses the default Skill Bill relay automatically. Override it with SKILL_BILL_TELEMETRY_PROXY_URL or ~/.skill-bill/config.json."
   fi
   info "Run './install.sh' again to change agent, telemetry, or MCP choices."
-  info "Next step:       open your agent and run /skill-bill"
+  info "Next step:       open your agent and run /sona"
   echo ""
 }
 

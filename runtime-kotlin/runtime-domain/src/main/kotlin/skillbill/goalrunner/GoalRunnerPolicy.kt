@@ -313,7 +313,7 @@ object GoalRunnerOutcomeReconciler {
           storedOutcome.blockedReason.orEmpty().ifBlank {
             "Subtask $subtaskId paused with an unresolved Blocker or Major after remediation; " +
               "choose retry_fix, accept_and_advance, or abandon_subtask, then resume the goal. " +
-              "Location-bearing evidence: skill-bill goal findings --issue-key <KEY>."
+              "Location-bearing evidence: sona goal findings --issue-key <KEY>."
           },
         storedOutcome = storedOutcome,
         liveness = liveness,

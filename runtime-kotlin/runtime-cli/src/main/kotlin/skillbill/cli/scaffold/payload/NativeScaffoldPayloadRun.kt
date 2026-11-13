@@ -73,7 +73,7 @@ class NativeScaffoldPayloadRun(
         state.completeUnsupportedScaffold(
           retiredInteractiveModeMessage(
             "create-and-fill",
-            "skill-bill create-and-fill --payload <file> --body-file <file>",
+            "sona create-and-fill --payload <file> --body-file <file>",
           ),
           format,
         )
@@ -126,11 +126,19 @@ class NativeScaffoldPayloadRun(
         put("manifest_edits", result.manifestEdits.map { path -> path.toString() })
         put("manifest_edit_previews", result.manifestPreviews.mapKeys { (path, _) -> path.toString() })
         put("notes", result.notes)
+        if (result.installIssues.isNotEmpty()) {
+          put(NativeScaffoldPayloadKeys.INSTALL_ISSUES, result.installIssues.map { issue -> issue.message })
+          put(SharedPayloadKeys.STATUS, "error")
+        }
         outcome.registrationFailure?.let { failure ->
           put("registration_error", failure)
         }
       }
-    state.complete(presentation, options.format, if (outcome.registrationFailure == null) 0 else 1)
+    state.complete(
+      presentation,
+      options.format,
+      if (outcome.registrationFailure == null && result.installIssues.isEmpty()) 0 else 1,
+    )
   }
 }
 

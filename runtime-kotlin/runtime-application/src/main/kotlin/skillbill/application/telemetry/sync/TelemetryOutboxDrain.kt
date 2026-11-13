@@ -262,8 +262,8 @@ private fun blockedMessage(
   latestError: String?,
 ): String =
   "$blocked telemetry event(s) exceeded the $TELEMETRY_DELIVERY_ATTEMPT_BUDGET-attempt delivery budget and stay " +
-    "queued without further delivery attempts. There is no redelivery command: `skill-bill telemetry status` " +
-    "reports them as blocked_events and `skill-bill telemetry clear` discards them. Latest error: " +
+    "queued without further delivery attempts. There is no redelivery command: `sona telemetry status` " +
+    "reports them as blocked_events and `sona telemetry clear` discards them. Latest error: " +
     (latestError ?: "unknown")
 
 private fun undrainedMessage(pending: Int): String =

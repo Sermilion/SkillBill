@@ -31,7 +31,7 @@ class DevinAgentRunCommandBuilderTest {
     assertEquals(
       listOf(
         AcpStdioMcpServer(
-          name = "skill-bill",
+          name = "sona",
           command = runtimeMcp.toString(),
           args = emptyList(),
           env =

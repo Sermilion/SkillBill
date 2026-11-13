@@ -303,7 +303,7 @@ them honest.
   fixed only by deleting it. If the deletion does not compile, the finding records
   why. It is not moved to wherever it compiles.
 - **P4. Verify after landing.** After a goal completes, run
-  `skill-bill operation verify spec:<spec path>` against the merged result. The next
+  `sona operation verify spec:<spec path>` against the merged result. The next
   investigation of a module starts by re-checking the previous bundle's criteria and
   retention decisions, criterion by criterion.
 - **P5. Parallel bundles do not undo each other.**

@@ -2,16 +2,22 @@ package skillbill.infrastructure.skills.install
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.infrastructure.skills.install.reconcile.PublishedSourceReader
+import skillbill.infrastructure.skills.install.reconcile.ReconcileContext
+import skillbill.infrastructure.skills.install.reconcile.ReconcileInvocation
 import skillbill.infrastructure.skills.install.reconcile.ReconcileSourceRoots
 import skillbill.infrastructure.skills.install.reconcile.computeReconciliationPlan
+import skillbill.infrastructure.skills.install.reconcile.installedStagingSourceReader
 import skillbill.infrastructure.skills.install.reconcile.skillRelativePath
 import skillbill.infrastructure.skills.scaffold.platformpack.manifest.platformPackSchemaLog
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
 import skillbill.install.model.BaselineManifest
+import skillbill.install.model.BaselineManifest.Companion.sourceKeyFor
 import skillbill.install.model.ReconciliationPlan
 import skillbill.install.model.SkillReconciliationOutcome
 import skillbill.ports.install.baseline.model.ReadBaselineManifestRequest
 import skillbill.ports.install.baseline.model.WriteBaselineManifestRequest
+import skillbill.testing.seedConformingPlatformPack
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.logging.Handler
@@ -21,7 +27,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 private const val STALE_CONTRACT_VERSION: String = "0.9"
@@ -50,7 +55,14 @@ class InstallReconcileTest : InstallApplyTestSupport() {
     local: Path,
     home: Path,
     baseline: BaselineManifest,
-  ) = computeReconciliationPlan(roots(upstream), roots(local), home, baseline)
+    publishedStaging: Boolean = false,
+  ) = computeReconciliationPlan(
+    ReconcileInvocation(roots(upstream), roots(local), home),
+    ReconcileContext(
+      baseline,
+      publishedSource = if (publishedStaging) installedStagingSourceReader(home) else PublishedSourceReader.NONE,
+    ),
+  )
 
   private fun outcomeFor(
     plan: ReconciliationPlan,
@@ -68,7 +80,7 @@ class InstallReconcileTest : InstallApplyTestSupport() {
     )
 
   @Test
-  fun `upstream overwrites a local edit whether or not a baseline exists`() {
+  fun `reconciliation preserves local edits with and without a baseline`() {
     val upstream = seedRepo("reconcile-upstream")
     val local = seedRepo("reconcile-local")
     val home = home()
@@ -87,9 +99,8 @@ class InstallReconcileTest : InstallApplyTestSupport() {
 
     listOf(withBaseline, withoutBaseline).forEach { plan ->
       listOf("skills/bill-code-review", "skills/bill-code-check").forEach { path ->
-        val adopt = assertIs<SkillReconciliationOutcome.Adopt>(outcomeFor(plan, path))
-        assertTrue(adopt.localHash != adopt.upstreamHash)
-        assertEquals(adopt.upstreamHash, plan.baselineOverlay[path])
+        assertIs<SkillReconciliationOutcome.LocallyAuthored>(outcomeFor(plan, path))
+        assertFalse(path in plan.baselineOverlay)
       }
     }
   }
@@ -117,9 +128,12 @@ class InstallReconcileTest : InstallApplyTestSupport() {
     val upstream = seedRepo("reconcile-upstream")
     val local = seedRepo("reconcile-local")
     val home = home()
-    val baseline = baselineFromUpstream(upstream, local, home)
-
+    seedBaseSkill(upstream, "bill-local-only")
     seedBaseSkill(local, "bill-local-only")
+    val baseline = baselineFromUpstream(upstream, local, home)
+    Files.walk(upstream.resolve("skills/bill-local-only")).use { stream ->
+      stream.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
+    }
     seedAgentAddon(local, "local-helper", "LOCAL ONLY\n")
 
     val plan = planWith(upstream, local, home, baseline)
@@ -198,7 +212,7 @@ class InstallReconcileTest : InstallApplyTestSupport() {
   }
 
   @Test
-  fun `stale local platform pack contract version reconciles from upstream and records the tolerated version`() {
+  fun `stale local platform pack stays enumerable and preserves source edits`() {
     val upstream = seedRepo("reconcile-upstream-stale-local")
     val local = seedRepo("reconcile-local-stale")
     val home = home()
@@ -222,9 +236,9 @@ class InstallReconcileTest : InstallApplyTestSupport() {
     assertTrue(degradation.contains("expected=$SHELL_CONTRACT_VERSION"), degradation)
 
     val path = "platform-packs/generic/code-review/bill-generic-code-review"
-    val adopt = assertIs<SkillReconciliationOutcome.Adopt>(outcomeFor(plan, path))
-    assertNotNull(adopt.localHash, "the stale local pack must stay enumerable, not drop out of the plan")
-    assertEquals(adopt.upstreamHash, plan.baselineOverlay[path])
+    val authored = assertIs<SkillReconciliationOutcome.LocallyAuthored>(outcomeFor(plan, path))
+    assertTrue(authored.localHash.isNotBlank(), "the stale local pack must stay enumerable")
+    assertFalse(path in plan.baselineOverlay)
   }
 
   @Test
@@ -239,6 +253,39 @@ class InstallReconcileTest : InstallApplyTestSupport() {
     assertFailsWith<SkillBillRuntimeException> {
       planWith(upstream, local, home, BaselineManifest.empty())
     }.also { assertEquals(InstallFailureCode.CONTRACT_VERSION_MISMATCH, it.code) }
+  }
+
+  @Test
+  fun `edited pack specialists do not block dispatcher rename adoption on legacy baselines`() {
+    val upstream = seedRepo("reconcile-dispatcher-adopt-upstream")
+    val local = seedRepo("reconcile-dispatcher-adopt-local")
+    seedConformingPlatformPack(upstream, "generic", areaNames = listOf("architecture", "security"))
+    seedConformingPlatformPack(local, "generic", areaNames = listOf("architecture", "security"))
+    val home = home()
+    val legacyBaseline =
+      BaselineManifest.of(
+        BaselineManifest.CONTRACT_VERSION,
+        planWith(upstream, local, home, BaselineManifest.empty()).baselineOverlay.filterKeys {
+            key ->
+          !key.endsWith("#source")
+        },
+      )
+
+    val specialistPath = "platform-packs/generic/code-review/bill-generic-code-review-security"
+    Files.writeString(
+      local.resolve("$specialistPath/content.md"),
+      Files.readString(local.resolve("$specialistPath/content.md")) + "\nLOCAL SECURITY EDIT\n",
+    )
+    Files.writeString(upstream.resolve("skills/skill-bill/content.md"), content("sona"))
+
+    val dispatcherDir = local.resolve("skills/skill-bill")
+    seedPublishedSkillStaging(home, dispatcherDir, listOf(dispatcherDir.resolve("content.md")))
+
+    val plan = planWith(upstream, local, home, legacyBaseline, publishedStaging = true)
+
+    assertIs<SkillReconciliationOutcome.Adopt>(outcomeFor(plan, "skills/skill-bill"))
+    assertIs<SkillReconciliationOutcome.LocallyAuthored>(outcomeFor(plan, specialistPath))
+    assertTrue(plan.baselineOverlay.containsKey(sourceKeyFor("skills/skill-bill")))
   }
 
   @Test

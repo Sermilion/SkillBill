@@ -210,10 +210,18 @@ class CliRunInputsRuntimeTest {
 
     assertEquals(0, result.exitCode, result.stdout)
     val desktop = decodeJsonObject(result.stdout)["desktop"] as Map<*, *>
-    assertEquals(null, desktop["launcher"])
-    assertEquals(listOf(home.resolve(".local/bin/skillbill-desktop.cmd").toString()), desktop["files"])
+    assertEquals(home.resolve(".local/bin/sona.cmd").toString(), desktop["launcher"])
     assertEquals(
-      listOf(home.resolve("AppData/Local/SkillBill/Desktop/SkillBill").toString()),
+      listOf(
+        "sona.cmd",
+        "sona-app.cmd",
+        "skillbill-desktop.cmd",
+      ).map { home.resolve(".local/bin").resolve(it).toString() },
+      desktop["launchers"],
+    )
+    assertEquals(emptyList<String>(), desktop["files"])
+    assertEquals(
+      listOf("Sona", "SkillBill").map { home.resolve("AppData/Local/SkillBill/Desktop").resolve(it).toString() },
       desktop["directories"],
     )
   }

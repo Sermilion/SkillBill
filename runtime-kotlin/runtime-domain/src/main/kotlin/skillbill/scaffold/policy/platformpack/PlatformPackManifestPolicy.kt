@@ -1,6 +1,6 @@
 package skillbill.scaffold.policy.platformpack
 
-import skillbill.scaffold.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewBaselineLayer
 import skillbill.scaffold.policy.platformpack.model.PlatformPackManifestContentRenderRequest
 import skillbill.scaffold.policy.platformpack.model.PlatformPackManifestRenderRequest
 

@@ -133,7 +133,7 @@ public class GoalRunnerRunPreparation(
             blockedReason =
               "Goal '$issueKey' has a resume wedge the runtime will not clear on its own: " +
                 (repair.refusalReason ?: "operator action required.") +
-                " Inspect it with: skill-bill goal repair $issueKey",
+                " Inspect it with: sona goal repair $issueKey",
             workflowId = acceptedBlockReference?.sourceWorkflowId ?: state.manifest.workflowIdFor(subtaskId),
             acceptedBlockReference = acceptedBlockReference,
             historicalBlockReference = acceptedBlockReference,

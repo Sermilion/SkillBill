@@ -54,7 +54,7 @@ Before deleting anything:
 
 ### Step 4: Verify
 
-Run `skill-bill phase validation` to ensure nothing is broken.
+Run `sona phase validation` to ensure nothing is broken.
 
 ## Patterns
 
@@ -68,7 +68,7 @@ Code examples for each cleanup pattern (conditional, DI/factory, navigation/rout
 - [ ] All Legacy files deleted.
 - [ ] All Legacy tests deleted.
 - [ ] Flag definition removed from registry.
-- [ ] `skill-bill phase validation` passes.
+- [ ] `sona phase validation` passes.
 - [ ] No orphaned imports or dependencies.
 
 ## When to Ask User

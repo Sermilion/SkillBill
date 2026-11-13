@@ -31,6 +31,8 @@ import skillbill.ports.install.nativeagent.model.InstallNativeAgentUnlinkOperati
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.system.HostPlatformPort
 import skillbill.ports.system.UninstallPathsPort
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicInteger
@@ -122,7 +124,7 @@ class SkillBillUninstallCooperativeCancellationTest {
       nativeSourceRoots = emptyList(),
       mcpAgents = agents,
       launchers = emptyList(),
-      desktop = DesktopRemoval(launcher = null, files = emptyList(), directories = emptyList()),
+      desktop = DesktopRemoval(launchers = emptyList(), files = emptyList(), directories = emptyList()),
     )
 
   private companion object {
@@ -163,6 +165,12 @@ private object StubHostPlatformPort : HostPlatformPort {
 }
 
 private object AbsentUninstallPathsPort : UninstallPathsPort {
+  override fun isRegularFile(path: Path): Boolean = Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+
+  override fun isDirectory(path: Path): Boolean = Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
+
+  override fun readRegularFile(path: Path): String = Files.readString(path)
+
   override fun <T> withConfigTransaction(
     userHome: Path,
     environment: Map<String, String>,
