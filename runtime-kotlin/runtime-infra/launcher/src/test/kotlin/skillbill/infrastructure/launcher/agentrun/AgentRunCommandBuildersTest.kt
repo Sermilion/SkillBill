@@ -72,7 +72,6 @@ class AgentRunCommandBuildersTest {
       listOf(
         ClaudeAgentRunCommandBuilder(databasePath = database),
         CodexAgentRunCommandBuilder(databasePath = database),
-        JunieAgentRunCommandBuilder(databasePath = database),
         CursorAgentRunCommandBuilder(databasePath = database),
       )
 
@@ -245,7 +244,6 @@ class AgentRunCommandBuildersTest {
     val streaming = request().copy(streamOutputForLiveness = true)
 
     assertEquals(AgentRunIdlePolicy.HEARTBEAT_EXTENDED, CodexAgentRunCommandBuilder().build(streaming).idlePolicy)
-    assertEquals(AgentRunIdlePolicy.HEARTBEAT_EXTENDED, JunieAgentRunCommandBuilder().build(streaming).idlePolicy)
     assertEquals(AgentRunIdlePolicy.DB_PROGRESS_ONLY, CodexAgentRunCommandBuilder().build(request()).idlePolicy)
   }
 
@@ -422,23 +420,6 @@ class AgentRunCommandBuildersTest {
   }
 
   @Test
-  fun `junie rejects model and effort directives`() {
-    assertFailsWith<IllegalArgumentException> {
-      JunieAgentRunCommandBuilder().build(request(model = "model", effort = "high"))
-    }
-  }
-
-  @Test
-  fun `junie accepts a directive free request`() {
-    val command =
-      JunieAgentRunCommandBuilder().build(
-        request(),
-      ).command
-
-    assertEquals(SupportedAgent.JUNIE.id, command.first())
-  }
-
-  @Test
   fun `a governed claude launch is a fresh isolated process naming its worker`() {
     val isolated =
       request().copy(
@@ -488,7 +469,6 @@ class AgentRunCommandBuildersTest {
       ClaudeAgentRunCommandBuilder(),
       CodexAgentRunCommandBuilder(),
       CursorAgentRunCommandBuilder(),
-      JunieAgentRunCommandBuilder(),
     ).forEach { builder ->
       assertGovernedReviewLaunch(builder, governed)
     }
@@ -565,7 +545,6 @@ class AgentRunCommandBuildersTest {
 
     assertEquals(AgentRunIdlePolicy.HEARTBEAT_EXTENDED, ClaudeAgentRunCommandBuilder().build(readOnly).idlePolicy)
     assertEquals(AgentRunIdlePolicy.DB_PROGRESS_ONLY, CodexAgentRunCommandBuilder().build(readOnly).idlePolicy)
-    assertEquals(AgentRunIdlePolicy.HEARTBEAT_EXTENDED, JunieAgentRunCommandBuilder().build(readOnly).idlePolicy)
   }
 
   @Test
@@ -583,7 +562,6 @@ class AgentRunCommandBuildersTest {
   fun `non-read-only non-streaming phases keep db-progress-only idle policy`() {
     assertEquals(AgentRunIdlePolicy.DB_PROGRESS_ONLY, ClaudeAgentRunCommandBuilder().build(request()).idlePolicy)
     assertEquals(AgentRunIdlePolicy.DB_PROGRESS_ONLY, CodexAgentRunCommandBuilder().build(request()).idlePolicy)
-    assertEquals(AgentRunIdlePolicy.DB_PROGRESS_ONLY, JunieAgentRunCommandBuilder().build(request()).idlePolicy)
   }
 
   @Test

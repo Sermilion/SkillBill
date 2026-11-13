@@ -23,7 +23,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupport() {
+class InstallNativeAgentLinkApplyOwnershipTest : InstallNativeAgentLinkApplyTestSupport() {
   @Test
   fun `apply removes inventory-recorded dangling baseline orchestrator links`() {
     val fixture = setupApplyFixture()
@@ -73,7 +73,7 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
   @Test
   fun `missing inventory removes canonical dangling links across provider layouts`() {
     val fixture = setupApplyFixture()
-    listOf(".claude", ".codex", ".junie", ".cursor")
+    listOf(".claude", ".codex", ".cursor", ".config/devin")
       .forEach { Files.createDirectories(fixture.home.resolve(it)) }
     val cacheRoot =
       fixture.home.resolve(
@@ -180,7 +180,7 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
     val fixture = setupApplyFixture()
     Files.createDirectories(fixture.home.resolve(".claude"))
     Files.createDirectories(fixture.home.resolve(".codex"))
-    Files.createDirectories(fixture.home.resolve(".junie"))
+    Files.createDirectories(fixture.home.resolve(".config/devin"))
     Files.createDirectories(fixture.home.resolve(".cursor"))
     val sourceBefore = snapshotSource(fixture.repoRoot)
     val plan =
@@ -222,7 +222,7 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
         NativeAgentProviderId.CLAUDE,
         NativeAgentProviderId.CODEX,
         NativeAgentProviderId.CURSOR,
-        NativeAgentProviderId.JUNIE,
+        NativeAgentProviderId.DEVIN,
       ),
       result.nativeAgents
         .filter { native -> native.status == NativeAgentApplyStatus.LINKED }

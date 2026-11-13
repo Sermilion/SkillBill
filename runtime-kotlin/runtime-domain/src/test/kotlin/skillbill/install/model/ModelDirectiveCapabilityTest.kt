@@ -15,12 +15,12 @@ class ModelDirectiveCapabilityTest {
   }
 
   @Test
-  fun `supportsModelDirective accepts cursor and rejects junie`() {
+  fun `supportsModelDirective accepts cursor and rejects an unsupported id`() {
     assertTrue(supportsModelDirective("cursor"))
     assertTrue(supportsModelDirective("CURSOR"))
     assertTrue(supportsModelDirective("claude"))
     assertTrue(supportsModelDirective("codex"))
-    assertFalse(supportsModelDirective("junie"))
+    assertFalse(supportsModelDirective("retired-agent"))
     assertFalse(supportsModelDirective("copilot"))
     assertFalse(supportsModelDirective(null))
     assertFalse(supportsModelDirective(" "))

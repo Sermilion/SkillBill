@@ -245,13 +245,6 @@ private val nativeAgentInstallers: List<NativeAgentInstaller> =
           link = InstallNativeAgentOperations::linkCodexAgents,
           unlink = InstallNativeAgentOperations::unlinkCodexAgents,
         )
-      NativeAgentProvider.Junie ->
-        NativeAgentInstaller(
-          agent = SupportedAgent.JUNIE,
-          provider = NativeAgentProviderId.JUNIE,
-          link = InstallNativeAgentOperations::linkJunieAgents,
-          unlink = InstallNativeAgentOperations::unlinkJunieAgents,
-        )
       NativeAgentProvider.Cursor ->
         NativeAgentInstaller(
           agent = SupportedAgent.CURSOR,

@@ -28,7 +28,6 @@ class NativeBypassLaunchTest {
         SupportedAgent.CODEX to { command -> "--dangerously-bypass-approvals-and-sandbox" in command },
         SupportedAgent.CLAUDE to { command -> "--dangerously-skip-permissions" in command },
         SupportedAgent.CURSOR to { command -> "--force" in command && "--print" in command },
-        SupportedAgent.JUNIE to { command -> "--output-format" in command && "text" in command },
       )
     for ((agent, hasBypassMarker) in bypassMarkers) {
       val runner = RecordingAgentRunProcessRunner()
@@ -56,7 +55,6 @@ class NativeBypassLaunchTest {
       ClaudeAgentRunCommandBuilder(),
       CodexAgentRunCommandBuilder(),
       CursorAgentRunCommandBuilder(),
-      JunieAgentRunCommandBuilder(),
     )) {
       val command = builder.build(request().copy(approval = AgentRunApprovalRequirement.Owned("chat-run")))
       assertEquals(builder.approvalProtocol, command.approvalProtocol)

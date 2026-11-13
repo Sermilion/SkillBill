@@ -48,8 +48,6 @@ class InstallAgentService(
 
   fun claudeAgentsPath(home: Path? = null): Path = agentDirectory("claude", home)
 
-  fun junieAgentsPath(home: Path? = null): Path = agentDirectory("junie", home)
-
   fun cursorAgentsPath(home: Path? = null): Path = agentDirectory("cursor", home)
 
   fun cleanupAgentTarget(

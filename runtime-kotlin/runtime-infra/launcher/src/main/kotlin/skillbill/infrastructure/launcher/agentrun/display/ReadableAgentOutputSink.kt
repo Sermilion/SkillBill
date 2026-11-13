@@ -113,10 +113,6 @@ internal class ReadableAgentOutputSink(
     if (line.isBlank()) return
     activitySink?.raw(stream, line)
     val trimmed = line.take(MAX_LINE_CHARS)
-    if (agent == "junie") {
-      delegate.write(stream, "$trimmed\n")
-      return
-    }
     val event =
       try {
         mapper.readTree(line)

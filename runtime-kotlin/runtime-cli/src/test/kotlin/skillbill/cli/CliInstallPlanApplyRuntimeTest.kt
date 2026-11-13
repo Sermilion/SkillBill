@@ -70,7 +70,6 @@ class CliInstallPlanApplyRuntimeTest {
     assertTrue(payload.agents().all { agent -> agent["source"] == "manual" })
     assertEquals(fixture.home.resolve(".claude/skills").toString(), agentsByName.getValue("claude")["path"])
     assertEquals(fixture.home.resolve(".agents/skills").toString(), agentsByName.getValue("codex")["path"])
-    assertEquals(fixture.home.resolve(".junie/skills").toString(), agentsByName.getValue("junie")["path"])
     assertEquals(fixture.home.resolve(".cursor/skills").toString(), agentsByName.getValue("cursor")["path"])
     assertEquals(listOf("kotlin"), payload["selected_platforms"])
     val packsBySlug = payload.listOfMaps("platform_packs").associateBy { pack -> pack["slug"] as String }
@@ -542,8 +541,6 @@ class CliInstallPlanApplyRuntimeTest {
       "--agent",
       "codex",
       "--agent",
-      "junie",
-      "--agent",
       "cursor",
       "--platform",
       "kotlin",
@@ -737,7 +734,7 @@ class CliInstallPlanApplyRuntimeTest {
     )
 }
 
-private val supportedAgents = setOf("claude", "codex", "junie", "cursor")
+private val supportedAgents = setOf("claude", "codex", "cursor")
 
 private fun installPlanApplyFixture(): InstallPlanApplyFixture {
   val home = Files.createTempDirectory("skillbill-cli-install-plan-apply-home").toRealPath()
@@ -1037,7 +1034,6 @@ private fun cliNativeAgents(slug: String): String =
 private fun createDetectedAgentHomes(home: Path) {
   Files.createDirectories(home.resolve(".claude"))
   Files.createDirectories(home.resolve(".codex"))
-  Files.createDirectories(home.resolve(".junie"))
   Files.createDirectories(home.resolve(".cursor"))
 }
 

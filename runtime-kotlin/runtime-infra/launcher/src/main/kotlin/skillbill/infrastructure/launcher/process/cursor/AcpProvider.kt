@@ -26,15 +26,6 @@ data class AcpProvider(
         lacksTeamDashboardMcp = true,
       )
 
-    val Junie =
-      AcpProvider(
-        SupportedAgent.JUNIE.wireValue,
-        "Junie",
-        listOf("--acp"),
-        authMethodId = null,
-        lacksTeamDashboardMcp = false,
-      )
-
     val Devin =
       AcpProvider(
         SupportedAgent.DEVIN.wireValue,

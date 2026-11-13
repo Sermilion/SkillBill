@@ -275,7 +275,6 @@ class FileSystemInstallAgentTargets(
       when (request.agent) {
         SupportedAgent.CODEX.wireValue -> InstallOperations.codexAgentsPath(request.home, environment, hostPlatform)
         SupportedAgent.CLAUDE.wireValue -> InstallOperations.claudeAgentsPath(request.home, environment, hostPlatform)
-        SupportedAgent.JUNIE.wireValue -> InstallOperations.junieAgentsPath(request.home, hostPlatform)
         SupportedAgent.CURSOR.wireValue -> InstallOperations.cursorAgentsPath(request.home, hostPlatform)
         SupportedAgent.DEVIN.wireValue -> InstallOperations.devinAgentsPath(request.home, environment, hostPlatform)
         else -> InstallOperations.agentPath(request.agent, request.home, environment, hostPlatform)
@@ -310,7 +309,6 @@ class FileSystemInstallNativeAgentLinks(
       when (request.provider) {
         NativeAgentLinkProvider.CLAUDE -> InstallNativeAgentOperations.linkClaudeAgents(fsRequest)
         NativeAgentLinkProvider.CODEX -> InstallNativeAgentOperations.linkCodexAgents(fsRequest)
-        NativeAgentLinkProvider.JUNIE -> InstallNativeAgentOperations.linkJunieAgents(fsRequest)
         NativeAgentLinkProvider.CURSOR -> InstallNativeAgentOperations.linkCursorAgents(fsRequest)
         NativeAgentLinkProvider.DEVIN -> InstallNativeAgentOperations.linkDevinAgents(fsRequest)
       }
@@ -332,7 +330,6 @@ class FileSystemInstallNativeAgentLinks(
         when (request.provider) {
           NativeAgentLinkProvider.CLAUDE -> InstallNativeAgentOperations.unlinkClaudeAgents(fsRequest)
           NativeAgentLinkProvider.CODEX -> InstallNativeAgentOperations.unlinkCodexAgents(fsRequest)
-          NativeAgentLinkProvider.JUNIE -> InstallNativeAgentOperations.unlinkJunieAgents(fsRequest)
           NativeAgentLinkProvider.CURSOR -> InstallNativeAgentOperations.unlinkCursorAgents(fsRequest)
           NativeAgentLinkProvider.DEVIN -> InstallNativeAgentOperations.unlinkDevinAgents(fsRequest)
         },

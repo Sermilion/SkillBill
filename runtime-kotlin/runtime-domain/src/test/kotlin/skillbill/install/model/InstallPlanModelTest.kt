@@ -9,7 +9,7 @@ class InstallPlanModelTest {
   @Test
   fun `supported install agents are exactly the install contract set`() {
     assertEquals(
-      listOf("claude", "codex", "junie", "cursor", "devin"),
+      listOf("claude", "codex", "cursor", "devin"),
       SupportedAgent.supportedIds,
     )
   }
@@ -32,7 +32,7 @@ class InstallPlanModelTest {
   @Test
   fun `native agent provider ids mirror the install agent order`() {
     assertEquals(
-      listOf("claude", "codex", "junie", "cursor", "devin"),
+      listOf("claude", "codex", "cursor", "devin"),
       NativeAgentProviderId.entries.map(NativeAgentProviderId::id),
     )
   }

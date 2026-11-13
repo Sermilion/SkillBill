@@ -45,11 +45,6 @@ class NativeAgentValidationTest {
   }
 
   @Test
-  fun `body with junie handlebars conditional is rejected`() {
-    assertProviderConditionalRejected("# Worker\n\n{{#junie}}junie only{{/junie}}")
-  }
-
-  @Test
   fun `body with case-insensitive 'if provider ==' is rejected`() {
     assertProviderConditionalRejected("# Worker\n\nIF Provider == claude { ... }")
   }

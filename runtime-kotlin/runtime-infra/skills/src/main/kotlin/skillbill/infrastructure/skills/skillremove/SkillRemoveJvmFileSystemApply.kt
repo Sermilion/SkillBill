@@ -73,7 +73,6 @@ internal class SkillRemoveJvmFileSystemApply(
     when (provider) {
       SupportedAgent.CLAUDE -> InstallNativeAgentOperations::unlinkClaudeAgents
       SupportedAgent.CODEX -> InstallNativeAgentOperations::unlinkCodexAgents
-      SupportedAgent.JUNIE -> InstallNativeAgentOperations::unlinkJunieAgents
       SupportedAgent.CURSOR -> InstallNativeAgentOperations::unlinkCursorAgents
       SupportedAgent.DEVIN -> InstallNativeAgentOperations::unlinkDevinAgents
     }

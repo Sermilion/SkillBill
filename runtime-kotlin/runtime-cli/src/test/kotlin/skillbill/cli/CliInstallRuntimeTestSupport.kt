@@ -41,42 +41,38 @@ internal fun installFixture(): InstallFixture {
   val home = Files.createTempDirectory("skillbill-cli-install-native")
   Files.createDirectories(home.resolve(".claude"))
   Files.createDirectories(home.resolve(".codex"))
-  Files.createDirectories(home.resolve(".junie"))
   Files.createDirectories(home.resolve(".cursor"))
   val platformPacks = home.resolve("platform-packs")
   val skills = home.resolve("skills")
   val baseCodexAgents = skills.resolve("bill-code-review/codex-agents")
-  val baseJunieAgents = skills.resolve("bill-code-review/junie-agents")
+  val baseCursorAgents = skills.resolve("bill-code-review/cursor-agents")
   val baseNativeAgents = skills.resolve("bill-code-review/native-agents")
   val codexAgents = platformPacks.resolve("kotlin/code-review/bill-kotlin-code-review/codex-agents")
-  val junieAgents = platformPacks.resolve("kotlin/code-review/bill-kotlin-code-review/junie-agents")
   val nativeAgents = platformPacks.resolve("kotlin/code-review/bill-kotlin-code-review/native-agents")
   val kmpCodexAgents = platformPacks.resolve("kmp/code-review/bill-kmp-code-review/codex-agents")
-  val kmpJunieAgents = platformPacks.resolve("kmp/code-review/bill-kmp-code-review/junie-agents")
+  val kmpCursorAgents = platformPacks.resolve("kmp/code-review/bill-kmp-code-review/cursor-agents")
   val kmpNativeAgents = platformPacks.resolve("kmp/code-review/bill-kmp-code-review/native-agents")
   Files.createDirectories(baseNativeAgents)
   Files.createDirectories(nativeAgents)
   Files.createDirectories(kmpNativeAgents)
   val baseCodexToml = baseCodexAgents.resolve("bill-code-review-worker.toml")
-  val baseJunieMd = baseJunieAgents.resolve("bill-code-review-worker.md")
+  val baseCursorMd = baseCursorAgents.resolve("bill-code-review-worker.md")
   val codexToml = codexAgents.resolve("bill-kotlin-code-review-testing.toml")
-  val junieMd = junieAgents.resolve("bill-kotlin-code-review-testing.md")
   val cursorMd =
     platformPacks.resolve("kotlin/code-review/bill-kotlin-code-review/cursor-agents")
       .resolve("bill-kotlin-code-review-testing.md")
   val kmpCodexToml = kmpCodexAgents.resolve("bill-kmp-code-review-ui.toml")
-  val kmpJunieMd = kmpJunieAgents.resolve("bill-kmp-code-review-ui.md")
+  val kmpCursorMd = kmpCursorAgents.resolve("bill-kmp-code-review-ui.md")
   val fixture =
     InstallFixture(
       home,
       platformPacks,
       skills,
       baseCodexToml,
-      baseJunieMd,
+      baseCursorMd,
       codexToml,
-      junieMd,
       kmpCodexToml,
-      kmpJunieMd,
+      kmpCursorMd,
       cursorMd,
     )
   writeInstallFixtureFiles(fixture)
@@ -150,11 +146,10 @@ internal data class InstallFixture(
   val platformPacks: Path,
   val skills: Path,
   val baseCodexToml: Path,
-  val baseJunieMd: Path,
+  val baseCursorMd: Path,
   val codexToml: Path,
-  val junieMd: Path,
   val kmpCodexToml: Path,
-  val kmpJunieMd: Path,
+  val kmpCursorMd: Path,
   val cursorMd: Path,
 )
 
@@ -175,7 +170,7 @@ internal fun mcpCases(): List<McpCase> =
       expectedKey = "theme",
       expectedValue = "dark",
     ),
-    junieMcpCase(),
+    cursorMcpCase(),
     McpCase(
       agent = "codex",
       relativeConfigPath = ".codex/config.toml",
@@ -194,10 +189,10 @@ internal fun mcpCases(): List<McpCase> =
     ),
   )
 
-internal fun junieMcpCase(): McpCase =
+internal fun cursorMcpCase(): McpCase =
   mcpJsonCase(
-    agent = "junie",
-    relativeConfigPath = ".junie/mcp/mcp.json",
+    agent = "cursor",
+    relativeConfigPath = ".cursor/mcp.json",
     seed = "{\n  \"mcpServers\": {\"other\": {\"command\": \"other\"}}\n}\n",
     expectedKey = null,
     expectedValue = null,

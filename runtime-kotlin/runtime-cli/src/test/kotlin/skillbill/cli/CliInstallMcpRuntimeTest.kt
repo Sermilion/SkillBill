@@ -15,75 +15,75 @@ class CliInstallMcpRuntimeTest {
   fun `native subagent commands preserve existing regular target files`() {
     val fixture = installFixture()
     val codexTarget = fixture.home.resolve(".codex/agents/${fixture.codexToml.fileName}")
-    val junieTarget = fixture.home.resolve(".junie/agents/${fixture.junieMd.fileName}")
+    val cursorTarget = fixture.home.resolve(".cursor/agents/${fixture.cursorMd.fileName}")
     Files.createDirectories(codexTarget.parent)
-    Files.createDirectories(junieTarget.parent)
+    Files.createDirectories(cursorTarget.parent)
     Files.writeString(codexTarget, "user codex file\n")
-    Files.writeString(junieTarget, "user junie file\n")
+    Files.writeString(cursorTarget, "user cursor file\n")
 
     assertEquals(0, runInstall(fixture, "link-codex-agents").exitCode)
-    assertEquals(0, runInstall(fixture, "link-junie-agents").exitCode)
+    assertEquals(0, runInstall(fixture, "link-cursor-agents").exitCode)
 
     assertFalse(Files.isSymbolicLink(codexTarget))
-    assertFalse(Files.isSymbolicLink(junieTarget))
+    assertFalse(Files.isSymbolicLink(cursorTarget))
     assertEquals("user codex file\n", Files.readString(codexTarget))
-    assertEquals("user junie file\n", Files.readString(junieTarget))
+    assertEquals("user cursor file\n", Files.readString(cursorTarget))
   }
 
   @Test
   fun `native subagent commands replace legacy repository artifact symlinks`() {
     val fixture = installFixture()
     val codexTarget = fixture.home.resolve(".codex/agents/${fixture.codexToml.fileName}")
-    val junieTarget = fixture.home.resolve(".junie/agents/${fixture.junieMd.fileName}")
+    val cursorTarget = fixture.home.resolve(".cursor/agents/${fixture.cursorMd.fileName}")
     val legacyRoot = fixture.home.resolve("old-repo")
     val legacyCodex =
       legacyRoot.resolve("platform-packs/kotlin/code-review/bill-kotlin-code-review/codex-agents")
         .resolve(fixture.codexToml.fileName)
-    val legacyJunie =
-      legacyRoot.resolve("platform-packs/kotlin/code-review/bill-kotlin-code-review/junie-agents")
-        .resolve(fixture.junieMd.fileName)
-    listOf(legacyCodex, legacyJunie).forEach { legacy ->
+    val legacyCursor =
+      legacyRoot.resolve("platform-packs/kotlin/code-review/bill-kotlin-code-review/cursor-agents")
+        .resolve(fixture.cursorMd.fileName)
+    listOf(legacyCodex, legacyCursor).forEach { legacy ->
       Files.createDirectories(legacy.parent)
       Files.writeString(legacy, "legacy generated artifact\n")
     }
     Files.createDirectories(codexTarget.parent)
-    Files.createDirectories(junieTarget.parent)
+    Files.createDirectories(cursorTarget.parent)
     Files.createSymbolicLink(codexTarget, legacyCodex)
-    Files.createSymbolicLink(junieTarget, legacyJunie)
+    Files.createSymbolicLink(cursorTarget, legacyCursor)
 
     assertEquals(0, runInstall(fixture, "link-codex-agents").exitCode)
-    assertEquals(0, runInstall(fixture, "link-junie-agents").exitCode)
+    assertEquals(0, runInstall(fixture, "link-cursor-agents").exitCode)
 
     assertGeneratedAgentLinked(codexTarget, fixture.codexToml)
-    assertGeneratedAgentLinked(junieTarget, fixture.junieMd)
+    assertGeneratedAgentLinked(cursorTarget, fixture.cursorMd)
     assertFalse(Files.readString(codexTarget).contains("legacy generated artifact"))
-    assertFalse(Files.readString(junieTarget).contains("legacy generated artifact"))
+    assertFalse(Files.readString(cursorTarget).contains("legacy generated artifact"))
   }
 
   @Test
   fun `native subagent commands replace stale install cache symlinks`() {
     val fixture = installFixture()
     val codexTarget = fixture.home.resolve(".codex/agents/${fixture.codexToml.fileName}")
-    val junieTarget = fixture.home.resolve(".junie/agents/${fixture.junieMd.fileName}")
+    val cursorTarget = fixture.home.resolve(".cursor/agents/${fixture.cursorMd.fileName}")
     val oldCache = fixture.home.resolve(".skill-bill/native-agents/old-cache-key")
     val oldCodex = oldCache.resolve("codex-agents/${fixture.codexToml.fileName}")
-    val oldJunie = oldCache.resolve("junie-agents/${fixture.junieMd.fileName}")
-    listOf(oldCodex, oldJunie).forEach { stale ->
+    val oldCursor = oldCache.resolve("cursor-agents/${fixture.cursorMd.fileName}")
+    listOf(oldCodex, oldCursor).forEach { stale ->
       Files.createDirectories(stale.parent)
       Files.writeString(stale, "stale cache artifact\n")
     }
     Files.createDirectories(codexTarget.parent)
-    Files.createDirectories(junieTarget.parent)
+    Files.createDirectories(cursorTarget.parent)
     Files.createSymbolicLink(codexTarget, oldCodex)
-    Files.createSymbolicLink(junieTarget, oldJunie)
+    Files.createSymbolicLink(cursorTarget, oldCursor)
 
     assertEquals(0, runInstall(fixture, "link-codex-agents").exitCode)
-    assertEquals(0, runInstall(fixture, "link-junie-agents").exitCode)
+    assertEquals(0, runInstall(fixture, "link-cursor-agents").exitCode)
 
     assertGeneratedAgentLinked(codexTarget, fixture.codexToml)
-    assertGeneratedAgentLinked(junieTarget, fixture.junieMd)
+    assertGeneratedAgentLinked(cursorTarget, fixture.cursorMd)
     assertFalse(codexTarget.toRealPath().startsWith(oldCache))
-    assertFalse(junieTarget.toRealPath().startsWith(oldCache))
+    assertFalse(cursorTarget.toRealPath().startsWith(oldCache))
   }
 
   @Test
@@ -100,23 +100,23 @@ class CliInstallMcpRuntimeTest {
     Files.createSymbolicLink(sourceSymlink, outsideSource)
 
     assertEquals(0, runInstall(fixture, "link-codex-agents").exitCode)
-    assertEquals(0, runInstall(fixture, "link-junie-agents").exitCode)
+    assertEquals(0, runInstall(fixture, "link-cursor-agents").exitCode)
 
     assertFalse(Files.exists(fixture.home.resolve(".codex/agents/bill-symlinked.toml")))
-    assertFalse(Files.exists(fixture.home.resolve(".junie/agents/bill-symlinked.md")))
+    assertFalse(Files.exists(fixture.home.resolve(".cursor/agents/bill-symlinked.md")))
   }
 
   @Test
   fun `native subagent install renders from source without rewriting stale repository artifacts`() {
     val fixture = installFixture()
     val stale = "stale generated file\n"
-    Files.createDirectories(fixture.junieMd.parent)
-    Files.writeString(fixture.junieMd, stale)
+    Files.createDirectories(fixture.cursorMd.parent)
+    Files.writeString(fixture.cursorMd, stale)
 
-    assertEquals(0, runInstall(fixture, "link-junie-agents").exitCode)
+    assertEquals(0, runInstall(fixture, "link-cursor-agents").exitCode)
 
-    assertEquals(stale, Files.readString(fixture.junieMd))
-    val installed = fixture.home.resolve(".junie/agents/${fixture.junieMd.fileName}")
+    assertEquals(stale, Files.readString(fixture.cursorMd))
+    val installed = fixture.home.resolve(".cursor/agents/${fixture.cursorMd.fileName}")
     assertGeneratedAgentLinked(installed, expected = null)
     assertContains(Files.readString(installed), "# bill-kotlin-code-review-testing")
     assertFalse(Files.readString(installed).contains(stale))
@@ -157,7 +157,7 @@ class CliInstallMcpRuntimeTest {
     val before = snapshotInstallRepo(fixture)
 
     assertEquals(0, runInstall(fixture, "link-codex-agents").exitCode)
-    assertEquals(0, runInstall(fixture, "link-junie-agents").exitCode)
+    assertEquals(0, runInstall(fixture, "link-cursor-agents").exitCode)
 
     assertEquals(before, snapshotInstallRepo(fixture))
   }

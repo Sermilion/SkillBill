@@ -82,6 +82,55 @@ class DatabaseMigrationsTest {
   }
 
   @Test
+  fun `migration 128 preserves supported launch agents while retiring the previous provider`() {
+    val previousProvider = charArrayOf('j', 'u', 'n', 'i', 'e').concatToString()
+    val originalAgents =
+      mapOf(
+        "supported" to "devin",
+        "missing" to null,
+        "previous" to previousProvider,
+        "synthetic" to "retired-agent",
+        "sentinel" to "unavailable",
+      )
+    DriverManager.getConnection("jdbc:sqlite::memory:").use { connection ->
+      connection.createStatement().use { statement ->
+        statement.execute(
+          "CREATE TABLE standalone_phase_status " +
+            "(phase_id TEXT PRIMARY KEY, launch_agent_id TEXT, completed_work TEXT)",
+        )
+      }
+      connection.prepareStatement("INSERT INTO standalone_phase_status VALUES (?, ?, ?)").use { statement ->
+        originalAgents.forEach { (id, agent) ->
+          statement.setString(1, id)
+          statement.setString(2, agent)
+          statement.setString(3, "completed-$id")
+          statement.executeUpdate()
+        }
+      }
+      val migration = databaseMigrations.single { it.version == 128 }
+      migration.apply(connection, SqliteTestDiagnostics)
+      migration.apply(connection, SqliteTestDiagnostics)
+
+      val migratedAgents =
+        connection.createStatement().use { statement ->
+          statement.executeQuery("SELECT * FROM standalone_phase_status").use { result ->
+            buildMap {
+              while (result.next()) {
+                val id = result.getString("phase_id")
+                put(id, result.getString("launch_agent_id"))
+                assertEquals("completed-$id", result.getString("completed_work"))
+              }
+            }
+          }
+        }
+      assertEquals(
+        originalAgents + mapOf("previous" to "unavailable", "synthetic" to "unavailable"),
+        migratedAgents,
+      )
+    }
+  }
+
+  @Test
   fun `work board read model migration creates indexed tables in the incomplete state`() {
     val dbPath = Files.createTempDirectory("runtime-kotlin-work-board-read-model").resolve("runtime.db")
 
@@ -2483,6 +2532,7 @@ private val expectedMigrationDefinitions =
     125 to "track-legacy-plan-bundle-transfer",
     126 to "fence-goal-planning-checkout-recovery",
     127 to "retire-unsupported-agent-ids",
+    128 to "normalize-launch-agents-after-vocabulary-change",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

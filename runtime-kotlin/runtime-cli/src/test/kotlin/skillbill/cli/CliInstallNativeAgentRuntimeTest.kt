@@ -15,14 +15,10 @@ class CliInstallNativeAgentRuntimeTest {
     val fixture = installFixture()
 
     assertEquals(0, runInstall(fixture, "link-codex-agents").exitCode)
-    assertEquals(0, runInstall(fixture, "link-junie-agents").exitCode)
     assertGeneratedAgentLinked(fixture.home.resolve(".codex/agents/${fixture.codexToml.fileName}"), fixture.codexToml)
-    assertGeneratedAgentLinked(fixture.home.resolve(".junie/agents/${fixture.junieMd.fileName}"), fixture.junieMd)
 
     assertEquals(0, runInstall(fixture, "unlink-codex-agents").exitCode)
-    assertEquals(0, runInstall(fixture, "unlink-junie-agents").exitCode)
     assertFalse(Files.exists(fixture.home.resolve(".codex/agents/${fixture.codexToml.fileName}")))
-    assertFalse(Files.exists(fixture.home.resolve(".junie/agents/${fixture.junieMd.fileName}")))
   }
 
   @Test
@@ -117,45 +113,54 @@ class CliInstallNativeAgentRuntimeTest {
     val fixture = installFixture()
 
     assertEquals(0, runInstall(fixture, "link-codex-agents", "--platform", "kmp").exitCode)
-    assertEquals(0, runInstall(fixture, "link-junie-agents", "--platform", "kmp").exitCode)
+    assertEquals(0, runInstall(fixture, "link-cursor-agents", "--platform", "kmp").exitCode)
 
     assertGeneratedAgentLinked(
       fixture.home.resolve(".codex/agents/${fixture.baseCodexToml.fileName}"),
       fixture.baseCodexToml,
     )
     assertGeneratedAgentLinked(
-      fixture.home.resolve(".junie/agents/${fixture.baseJunieMd.fileName}"),
-      fixture.baseJunieMd,
+      fixture.home.resolve(".cursor/agents/${fixture.baseCursorMd.fileName}"),
+      fixture.baseCursorMd,
     )
     assertGeneratedAgentLinked(
       fixture.home.resolve(".codex/agents/${fixture.kmpCodexToml.fileName}"),
       fixture.kmpCodexToml,
     )
-    assertGeneratedAgentLinked(fixture.home.resolve(".junie/agents/${fixture.kmpJunieMd.fileName}"), fixture.kmpJunieMd)
+    assertGeneratedAgentLinked(
+      fixture.home.resolve(".cursor/agents/${fixture.kmpCursorMd.fileName}"),
+      fixture.kmpCursorMd,
+    )
     assertFalse(Files.exists(fixture.home.resolve(".codex/agents/${fixture.codexToml.fileName}")))
-    assertFalse(Files.exists(fixture.home.resolve(".junie/agents/${fixture.junieMd.fileName}")))
+    assertFalse(Files.exists(fixture.home.resolve(".cursor/agents/${fixture.cursorMd.fileName}")))
   }
 
   @Test
-  fun `native subagent cleanup can remove stale junie links from unselected platforms`() {
+  fun `native subagent cleanup can remove stale cursor links from unselected platforms`() {
     val fixture = installFixture()
 
-    assertEquals(0, runInstall(fixture, "link-junie-agents").exitCode)
+    assertEquals(0, runInstall(fixture, "link-cursor-agents").exitCode)
     assertGeneratedAgentLinked(
-      fixture.home.resolve(".junie/agents/${fixture.baseJunieMd.fileName}"),
-      fixture.baseJunieMd,
+      fixture.home.resolve(".cursor/agents/${fixture.baseCursorMd.fileName}"),
+      fixture.baseCursorMd,
     )
-    assertGeneratedAgentLinked(fixture.home.resolve(".junie/agents/${fixture.junieMd.fileName}"), fixture.junieMd)
-    assertGeneratedAgentLinked(fixture.home.resolve(".junie/agents/${fixture.kmpJunieMd.fileName}"), fixture.kmpJunieMd)
+    assertGeneratedAgentLinked(fixture.home.resolve(".cursor/agents/${fixture.cursorMd.fileName}"), fixture.cursorMd)
+    assertGeneratedAgentLinked(
+      fixture.home.resolve(".cursor/agents/${fixture.kmpCursorMd.fileName}"),
+      fixture.kmpCursorMd,
+    )
 
-    assertEquals(0, runInstall(fixture, "unlink-junie-agents").exitCode)
-    assertEquals(0, runInstall(fixture, "link-junie-agents", "--platform", "kmp").exitCode)
+    assertEquals(0, runInstall(fixture, "unlink-cursor-agents").exitCode)
+    assertEquals(0, runInstall(fixture, "link-cursor-agents", "--platform", "kmp").exitCode)
 
     assertGeneratedAgentLinked(
-      fixture.home.resolve(".junie/agents/${fixture.baseJunieMd.fileName}"),
-      fixture.baseJunieMd,
+      fixture.home.resolve(".cursor/agents/${fixture.baseCursorMd.fileName}"),
+      fixture.baseCursorMd,
     )
-    assertFalse(Files.exists(fixture.home.resolve(".junie/agents/${fixture.junieMd.fileName}")))
-    assertGeneratedAgentLinked(fixture.home.resolve(".junie/agents/${fixture.kmpJunieMd.fileName}"), fixture.kmpJunieMd)
+    assertFalse(Files.exists(fixture.home.resolve(".cursor/agents/${fixture.cursorMd.fileName}")))
+    assertGeneratedAgentLinked(
+      fixture.home.resolve(".cursor/agents/${fixture.kmpCursorMd.fileName}"),
+      fixture.kmpCursorMd,
+    )
   }
 }

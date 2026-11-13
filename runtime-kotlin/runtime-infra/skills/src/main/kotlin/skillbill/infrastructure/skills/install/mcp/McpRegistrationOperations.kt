@@ -51,10 +51,6 @@ object McpRegistrationOperations {
         codexFanOut(agent, resolvedHome, profileEnvironment) { perProfilePath ->
           McpTomlConfig.register(agent, perProfilePath, command)
         }
-      SupportedAgent.JUNIE ->
-        McpRegistrationOutcome.Applied(
-          McpJsonConfig.register(agent, configPathFor(installAgent, resolvedHome), command),
-        )
       SupportedAgent.CURSOR ->
         McpRegistrationOutcome.Applied(
           McpJsonConfig.register(agent, configPathFor(installAgent, resolvedHome), command),
@@ -93,8 +89,6 @@ object McpRegistrationOperations {
         codexFanOut(agent, resolvedHome, profileEnvironment) { perProfilePath ->
           McpTomlConfig.unregister(agent, perProfilePath)
         }
-      SupportedAgent.JUNIE ->
-        McpRegistrationOutcome.Applied(McpJsonConfig.unregister(agent, configPathFor(installAgent, resolvedHome)))
       SupportedAgent.CURSOR ->
         McpRegistrationOutcome.Applied(McpJsonConfig.unregister(agent, configPathFor(installAgent, resolvedHome)))
       SupportedAgent.DEVIN ->
@@ -120,7 +114,6 @@ object McpRegistrationOperations {
       SupportedAgent.DEVIN -> devinMcpConfigPath(devinConfigRoot(home, environment, hostPlatform))
       SupportedAgent.CLAUDE,
       SupportedAgent.CODEX,
-      SupportedAgent.JUNIE,
       SupportedAgent.CURSOR,
       -> home.resolve(agent.mcpConfigRelativePath)
     }

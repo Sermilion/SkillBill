@@ -76,27 +76,6 @@ class AgentRunLauncherProcessTest {
   }
 
   @Test
-  fun `a Junie bypass phase starts the native headless CLI without a host session`() {
-    val runner = RecordingAgentRunProcessRunner()
-    val request = skillRunRequest(goalContinuation = null).copy(promptOverride = AGENT_RUN_LAUNCHER_PHASE_PROMPT)
-
-    requireNotNull(
-      headlessAgentRunAdapters(
-        runner,
-        ALL_EXECUTABLES_AVAILABLE,
-        diagnostics = NoopRuntimeDiagnostics,
-        clock = LAUNCH_TEST_CLOCK,
-      )[SupportedAgent.JUNIE],
-    ).launch(request)
-
-    val session = runner.requests.single()
-    assertContains(session.launch.command, "--project")
-    assertContains(session.launch.command, AGENT_RUN_LAUNCHER_PHASE_PROMPT)
-    assertEquals(null, session.launch.session)
-    assertEquals(null, session.approval.channel)
-  }
-
-  @Test
   fun `unknown agent id fails before launch`() {
     val launcher =
       FileSystemAgentRunLauncher(

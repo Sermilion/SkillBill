@@ -490,7 +490,6 @@ class InstallPlanPolicyTest {
     listOf(
       InstallAgentDefaultTarget(SupportedAgent.CLAUDE, path("/home/.claude/skills")),
       InstallAgentDefaultTarget(SupportedAgent.CODEX, path("/home/.codex/skills")),
-      InstallAgentDefaultTarget(SupportedAgent.JUNIE, path("/home/.junie/skills")),
       InstallAgentDefaultTarget(SupportedAgent.CURSOR, path("/home/.cursor/skills")),
     )
 

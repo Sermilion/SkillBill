@@ -13,12 +13,10 @@ import skillbill.cli.install.nativeagent.InstallCodexAgentsPathCommand
 import skillbill.cli.install.nativeagent.InstallCodexRootsCommand
 import skillbill.cli.install.nativeagent.InstallCursorAgentsPathCommand
 import skillbill.cli.install.nativeagent.InstallDetectAgentsCommand
-import skillbill.cli.install.nativeagent.InstallJunieAgentsPathCommand
 import skillbill.cli.install.nativeagent.InstallLinkSkillCommand
 import skillbill.cli.install.nativeagent.NativeAgentClaudeCliCommands
 import skillbill.cli.install.nativeagent.NativeAgentCodexCliCommands
 import skillbill.cli.install.nativeagent.NativeAgentCursorCliCommands
-import skillbill.cli.install.nativeagent.NativeAgentJunieCliCommands
 
 @Inject
 class InstallPlanCliSubcommands(
@@ -59,7 +57,6 @@ class InstallAgentPathsCliSubcommands(
   linkSkill: InstallLinkSkillCommand,
   codexAgentsPath: InstallCodexAgentsPathCommand,
   claudeAgentsPath: InstallClaudeAgentsPathCommand,
-  junieAgentsPath: InstallJunieAgentsPathCommand,
   cursorAgentsPath: InstallCursorAgentsPathCommand,
   cleanupAgentTarget: InstallCleanupAgentTargetCommand,
 ) {
@@ -68,7 +65,6 @@ class InstallAgentPathsCliSubcommands(
       linkSkill,
       codexAgentsPath,
       claudeAgentsPath,
-      junieAgentsPath,
       cursorAgentsPath,
       cleanupAgentTarget,
     )
@@ -78,10 +74,9 @@ class InstallAgentPathsCliSubcommands(
 class InstallNativeAgentCliSubcommands(
   claude: NativeAgentClaudeCliCommands,
   codex: NativeAgentCodexCliCommands,
-  junie: NativeAgentJunieCliCommands,
   cursor: NativeAgentCursorCliCommands,
 ) {
-  val commands: List<CliktCommand> = claude.commands + codex.commands + junie.commands + cursor.commands
+  val commands: List<CliktCommand> = claude.commands + codex.commands + cursor.commands
 }
 
 @Inject

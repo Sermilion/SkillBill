@@ -1190,4 +1190,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 127,
       name = "retire-unsupported-agent-ids",
       operation = ::retireUnsupportedLaunchAgents,
+    ) +
+    DatabaseMigration(
+      version = 128,
+      name = "normalize-launch-agents-after-vocabulary-change",
+      operation = ::retireUnsupportedLaunchAgents,
     )

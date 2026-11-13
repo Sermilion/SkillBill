@@ -47,7 +47,6 @@ internal enum class AgentRunApprovalProtocol {
   CLAUDE_HOST,
   CODEX_APP_SERVER,
   CURSOR_ACP,
-  JUNIE_ACP,
   DEVIN_ACP,
 }
 
@@ -122,8 +121,6 @@ internal val CODEX_PROVIDER_PASSTHROUGH_KEYS: Set<String> =
     "OPENAI_BASE_URL",
     AgentHomeEnvironmentKeys.CODEX_HOME,
   ) + PROXY_PASSTHROUGH_KEYS
-
-internal val JUNIE_PROVIDER_PASSTHROUGH_KEYS: Set<String> = PROXY_PASSTHROUGH_KEYS
 
 internal val CURSOR_PROVIDER_PASSTHROUGH_KEYS: Set<String> =
   setOf(

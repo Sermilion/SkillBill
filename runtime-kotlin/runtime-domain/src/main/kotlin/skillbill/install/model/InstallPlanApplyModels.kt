@@ -213,7 +213,6 @@ enum class NativeAgentProviderId(
 ) {
   CLAUDE(SupportedAgent.CLAUDE),
   CODEX(SupportedAgent.CODEX),
-  JUNIE(SupportedAgent.JUNIE),
   CURSOR(SupportedAgent.CURSOR),
   DEVIN(SupportedAgent.DEVIN),
   ;

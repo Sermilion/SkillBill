@@ -42,7 +42,7 @@ class AgentRunServiceRuntimeComponentTest {
     val result =
       service.launch(
         AgentRunStartRequest(
-          invokedAgentId = "junie",
+          invokedAgentId = "codex",
           skillRunRequest =
             SkillRunRequest(
               issueKey = "SKILL-56",
@@ -54,10 +54,10 @@ class AgentRunServiceRuntimeComponentTest {
         ),
       )
 
-    assertEquals(SupportedAgent.JUNIE, result.resolution.effectiveAgent)
+    assertEquals(SupportedAgent.CODEX, result.resolution.effectiveAgent)
     val facts = assertIs<AgentRunLaunchFacts>(result.launchOutcome)
     assertEquals(AgentRunTermination.SpawnFailed, facts.termination)
-    assertContains(facts.stderr, "'junie' is not on PATH")
+    assertContains(facts.stderr, "'codex' is not on PATH")
   }
 
   @Test
@@ -65,18 +65,18 @@ class AgentRunServiceRuntimeComponentTest {
     val tempDir = Files.createTempDirectory("skillbill-agent-run-lookup-refusal")
     val binDir = Files.createTempDirectory("skillbill-agent-run-bin")
     val marker = binDir.resolve("ran.marker")
-    val junie = binDir.resolve("junie")
+    val fixtureExecutable = binDir.resolve("codex")
     Files.writeString(
-      junie,
+      fixtureExecutable,
       """
       #!/bin/sh
       touch "$marker"
       echo SKILL350_CONTROLLED_EXECUTABLE
       """.trimIndent() + "\n",
     )
-    junie.toFile().setExecutable(true)
+    fixtureExecutable.toFile().setExecutable(true)
     val fixturePathLookup = PathExecutableLookup { binDir.toAbsolutePath().normalize().toString() }
-    assertTrue(fixturePathLookup.onPath("junie"))
+    assertTrue(fixturePathLookup.onPath("codex"))
     val lookupRequests = mutableListOf<String>()
     val service =
       RuntimeComponent::class.create(
@@ -98,7 +98,7 @@ class AgentRunServiceRuntimeComponentTest {
     val result =
       service.launch(
         AgentRunStartRequest(
-          invokedAgentId = "junie",
+          invokedAgentId = "codex",
           skillRunRequest =
             SkillRunRequest(
               issueKey = "SKILL-350",
@@ -117,8 +117,8 @@ class AgentRunServiceRuntimeComponentTest {
 
     val facts = assertIs<AgentRunLaunchFacts>(result.launchOutcome)
     assertEquals(AgentRunTermination.SpawnFailed, facts.termination)
-    assertContains(facts.stderr, "'junie' is not on PATH")
+    assertContains(facts.stderr, "'codex' is not on PATH")
     assertFalse(Files.exists(marker))
-    assertEquals(listOf("junie"), lookupRequests)
+    assertEquals(listOf("codex"), lookupRequests)
   }
 }

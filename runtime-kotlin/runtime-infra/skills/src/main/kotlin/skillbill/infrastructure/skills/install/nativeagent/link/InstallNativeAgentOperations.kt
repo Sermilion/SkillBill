@@ -4,11 +4,9 @@ import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.install.nativeagent.uninstallCodexAgentTomls
 import skillbill.infrastructure.skills.install.nativeagent.uninstallCursorAgentMarkdown
-import skillbill.infrastructure.skills.install.nativeagent.uninstallJunieAgentMarkdown
 import skillbill.infrastructure.skills.install.plan.CLAUDE_AGENTS_KIND
 import skillbill.infrastructure.skills.install.plan.CURSOR_AGENTS_KIND
 import skillbill.infrastructure.skills.install.plan.DEVIN_AGENTS_KIND
-import skillbill.infrastructure.skills.install.plan.JUNIE_AGENTS_KIND
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.infrastructure.skills.nativeagent.support.agentPathExists
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
@@ -88,39 +86,6 @@ object InstallNativeAgentOperations {
       resolvedRequest.selectedPlatforms,
       agentDirs,
     ) + unlinkedFromCache
-  }
-
-  fun linkJunieAgents(request: NativeAgentLinkRequest): NativeAgentLinkOutcome {
-    val resolvedRequest = resolveNativeAgentLinkRequest(request)
-    return linkProviderAgents(
-      provider = NativeAgentProvider.Junie,
-      request = resolvedRequest,
-      detectTargets = { home ->
-        val targetPath = NativeAgentProvider.Junie.homeAgentDirs(home, resolvedRequest.environment).first()
-        val root = home.resolve(requireNotNull(NativeAgentProvider.Junie.supportedAgent.simpleHomeDirectory))
-        val present =
-          listOf(targetPath, root).map { path ->
-            agentPathExists(path, "inspect Junie native-agent directory")
-          }.any { exists -> exists }
-        if (present) {
-          listOf(AgentTarget(JUNIE_AGENTS_KIND, targetPath.toFileLocation()))
-        } else {
-          emptyList()
-        }
-      },
-    )
-  }
-
-  fun unlinkJunieAgents(request: NativeAgentLinkRequest): List<Path> {
-    val resolvedRequest = resolveNativeAgentLinkRequest(request)
-    val unlinkedFromCache = unlinkProviderAgents(provider = NativeAgentProvider.Junie, request = resolvedRequest)
-    return uninstallJunieAgentMarkdown(
-      resolvedRequest.platformPacksRoot,
-      resolvedRequest.home,
-      resolvedRequest.skillsRoot,
-      resolvedRequest.selectedPlatforms,
-    ) +
-      unlinkedFromCache
   }
 
   fun linkCursorAgents(request: NativeAgentLinkRequest): NativeAgentLinkOutcome {

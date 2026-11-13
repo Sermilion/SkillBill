@@ -63,14 +63,13 @@ class ScaffoldServiceParityTest {
 
       assertContains(rendered, "`foo-arch`")
 
-      listOf("**On Claude", "**On Codex.**", "**On Cursor.**", "**On Junie.**").forEach { marker ->
+      listOf("**On Claude", "**On Codex.**", "**On Cursor.**").forEach { marker ->
         assertContains(rendered, marker)
       }
       assertContains(rendered, "\"use the `foo-arch` subagent\" for that role in `bill-foo-orchestrator`")
       assertSourceBundle(skillDir.resolve("native-agents/agents.yaml"), "foo-arch", "foo-perf")
       assertFalse(Files.exists(skillDir.resolve("codex-agents")))
       assertFalse(Files.exists(skillDir.resolve("opencode-agents")))
-      assertFalse(Files.exists(skillDir.resolve("junie-agents")))
       assertNoGeneratedWrapperOrSupportingFiles(skillDir, "bill-foo-orchestrator")
       assertTrue(result.notes.any { note -> "Subagent bundle emitted: 2 entries." in note }, result.notes.toString())
     }
@@ -647,7 +646,6 @@ class ScaffoldAuthoringParityTest {
 
       assertFalse(Files.exists(skillDir.resolve("codex-agents")))
       assertFalse(Files.exists(skillDir.resolve("opencode-agents")))
-      assertFalse(Files.exists(skillDir.resolve("junie-agents")))
       assertFalse(Files.exists(skillDir.resolve("native-agents")))
       assertFalse("## Subagent Spawn Runtime Notes" in Files.readString(skillDir.resolve("content.md")))
     }

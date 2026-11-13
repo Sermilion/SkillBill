@@ -41,7 +41,6 @@ class SkillBillUninstallService(
       listOf(
         home.resolve(".copilot/skills"),
         home.resolve(".agents/skills"),
-        home.resolve(".junie/skills"),
         home.resolve(".cursor/skills"),
       ) + claudeTargets + codexTargets + devinTargets
     val stateRuntimeRoot = stateRoot.resolve("runtime")

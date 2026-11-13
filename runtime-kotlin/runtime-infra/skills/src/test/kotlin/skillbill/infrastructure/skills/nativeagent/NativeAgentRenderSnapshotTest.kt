@@ -59,25 +59,6 @@ class NativeAgentRenderSnapshotTest {
   }
 
   @Test
-  fun `junie render is byte-exact`() {
-    val expected =
-      """
-      ---
-      name: bill-snapshot-demo
-      description: Snapshot demo agent.
-      ---
-
-      # Snapshot Demo
-
-      First line.
-      Second: line with colon.
-
-      """.trimIndent()
-
-    assertEquals(expected, NativeAgentProvider.Junie.render(source))
-  }
-
-  @Test
   fun `claude render is byte-exact when description forces yaml quoting`() {
     val expected =
       """
@@ -111,24 +92,6 @@ class NativeAgentRenderSnapshotTest {
       """.trimIndent()
 
     assertEquals(expected, NativeAgentProvider.Codex.render(quotedSource))
-  }
-
-  @Test
-  fun `junie render is byte-exact when description forces yaml quoting`() {
-    val expected =
-      """
-      ---
-      name: bill-snapshot-quoted
-      description: "Edge: case\nwith back\\slash"
-      ---
-
-      # Snapshot Quoted
-
-      Body line.
-
-      """.trimIndent()
-
-    assertEquals(expected, NativeAgentProvider.Junie.render(quotedSource))
   }
 
   @Test

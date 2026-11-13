@@ -125,7 +125,6 @@ class InstallPlanContractCoverageTest {
     val fixture = setupPlanFixture()
     Files.createDirectories(fixture.home.resolve(".claude"))
     Files.createDirectories(fixture.home.resolve(".codex"))
-    Files.createDirectories(fixture.home.resolve(".junie"))
     Files.createDirectories(fixture.home.resolve(".cursor"))
     val before = snapshotTree(fixture.repoRoot)
 
@@ -141,7 +140,6 @@ class InstallPlanContractCoverageTest {
         SupportedAgent.CLAUDE,
         SupportedAgent.CODEX,
         SupportedAgent.CODEX,
-        SupportedAgent.JUNIE,
         SupportedAgent.CURSOR,
       ),
       plan.agents.map { target -> target.agent },
@@ -151,7 +149,6 @@ class InstallPlanContractCoverageTest {
         SupportedAgent.CLAUDE,
         SupportedAgent.CODEX,
         SupportedAgent.CODEX,
-        SupportedAgent.JUNIE,
         SupportedAgent.CURSOR,
       ),
       plan.mcpRegistrationIntent.agents,
@@ -161,7 +158,6 @@ class InstallPlanContractCoverageTest {
         fixture.home.resolve(".claude/skills"),
         fixture.home.resolve(".codex/skills"),
         fixture.home.resolve(".agents/skills"),
-        fixture.home.resolve(".junie/skills"),
         fixture.home.resolve(".cursor/skills"),
       ),
       plan.agents.map { target -> target.path.toPath() },

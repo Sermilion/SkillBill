@@ -55,14 +55,6 @@ internal object InstallOperationsPaths {
     return claudeConfigRoot(resolvedHome, environment).resolve("agents")
   }
 
-  fun junieAgentsPath(
-    home: Path?,
-    hostPlatform: HostPlatformPort,
-  ): Path {
-    val resolvedHome = resolveInstallHome(home, hostPlatform)
-    return resolvedHome.resolve(requireNotNull(SupportedAgent.JUNIE.simpleHomeDirectory)).resolve("agents")
-  }
-
   fun cursorAgentsPath(
     home: Path?,
     hostPlatform: HostPlatformPort,

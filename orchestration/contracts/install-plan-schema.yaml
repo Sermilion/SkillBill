@@ -54,7 +54,6 @@ $defs:
     enum:
       - claude
       - codex
-      - junie
       - cursor
       - devin
   # Shared enum: agent-target source. Mirrors `InstallAgentTargetSource`

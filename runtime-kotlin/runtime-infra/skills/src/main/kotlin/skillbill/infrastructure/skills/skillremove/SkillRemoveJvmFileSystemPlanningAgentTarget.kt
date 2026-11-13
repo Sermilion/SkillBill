@@ -55,8 +55,6 @@ internal fun SkillRemoveJvmFileSystemPlanning.agentHomeDirs(
   when (provider) {
     SupportedAgent.CLAUDE -> claudeConfigRoots(home, environment).map { it.resolve("agents") }
     SupportedAgent.CODEX -> codexAgentsTargets(home, environment)
-    SupportedAgent.JUNIE,
-    SupportedAgent.CURSOR,
-    -> listOf(home.resolve(requireNotNull(provider.simpleHomeDirectory)).resolve("agents"))
+    SupportedAgent.CURSOR -> listOf(home.resolve(requireNotNull(provider.simpleHomeDirectory)).resolve("agents"))
     SupportedAgent.DEVIN -> listOf(devinAgentsDirectory(devinConfigRoot(home, environment)))
   }

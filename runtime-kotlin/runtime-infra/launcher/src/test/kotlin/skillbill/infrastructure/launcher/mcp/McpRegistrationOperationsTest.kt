@@ -207,7 +207,6 @@ class McpRegistrationOperationsTest {
 
     val singleTargetAgents =
       mapOf(
-        "junie" to home.resolve(".junie/mcp/mcp.json"),
         "cursor" to home.resolve(".cursor/mcp.json"),
       )
 

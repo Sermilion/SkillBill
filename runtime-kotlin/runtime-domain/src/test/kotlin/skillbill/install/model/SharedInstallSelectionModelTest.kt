@@ -24,8 +24,7 @@ class SharedInstallSelectionModelTest {
           listOf(
             link(SupportedAgent.CODEX, InstallAgentLinkStatus.CREATED),
             link(SupportedAgent.CLAUDE, InstallAgentLinkStatus.SKIPPED),
-            link(SupportedAgent.CURSOR, InstallAgentLinkStatus.WARNING),
-            link(SupportedAgent.JUNIE, InstallAgentLinkStatus.FAILED),
+            link(SupportedAgent.CURSOR, InstallAgentLinkStatus.FAILED),
           ),
       )
     val warningResult =
@@ -35,7 +34,7 @@ class SharedInstallSelectionModelTest {
           listOf(
             link(SupportedAgent.CODEX, InstallAgentLinkStatus.CREATED),
             link(SupportedAgent.CLAUDE, InstallAgentLinkStatus.SKIPPED),
-            link(SupportedAgent.JUNIE, InstallAgentLinkStatus.FAILED),
+            link(SupportedAgent.CURSOR, InstallAgentLinkStatus.WARNING),
           ),
       )
     val failureResult =

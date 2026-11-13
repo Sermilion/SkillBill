@@ -34,7 +34,6 @@ internal val SUPPORTED_AGENTS: List<SupportedAgent> = SupportedAgent.entries
 
 internal val CODEX_AGENTS_KIND: String = SupportedAgent.CODEX.nativeAgentsKind
 internal val CLAUDE_AGENTS_KIND: String = SupportedAgent.CLAUDE.nativeAgentsKind
-internal val JUNIE_AGENTS_KIND: String = SupportedAgent.JUNIE.nativeAgentsKind
 internal val CURSOR_AGENTS_KIND: String = SupportedAgent.CURSOR.nativeAgentsKind
 internal val DEVIN_AGENTS_KIND: String = SupportedAgent.DEVIN.nativeAgentsKind
 
@@ -61,7 +60,6 @@ internal fun agentPaths(
 ): Map<SupportedAgent, Path> =
   mapOf(
     SupportedAgent.CLAUDE to configRoots.claude.resolve("skills"),
-    SupportedAgent.JUNIE to home.resolve(SupportedAgent.JUNIE.simpleHomeDirectory!!).resolve("skills"),
     SupportedAgent.CURSOR to home.resolve(SupportedAgent.CURSOR.simpleHomeDirectory!!).resolve("skills"),
     SupportedAgent.CODEX to configRoots.codex.resolve("skills"),
     SupportedAgent.DEVIN to devinSkillsDirectory(configRoots.devin),
@@ -97,9 +95,7 @@ internal fun detectAgents(
           targets.map { path -> AgentTarget(agent.wireValue, path.toFileLocation()) }
         }
       }
-      SupportedAgent.JUNIE,
-      SupportedAgent.CURSOR,
-      -> {
+      SupportedAgent.CURSOR -> {
         val root = home.resolve(requireNotNull(agent.simpleHomeDirectory))
         val installPath = root.resolve("skills")
         if (!anyAgentPathExists(listOf(installPath, root), "inspect ${agent.wireValue} installation")) {

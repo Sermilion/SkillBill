@@ -20,14 +20,6 @@ class NativeAgentCodexCliCommands(
 }
 
 @Inject
-class NativeAgentJunieCliCommands(
-  link: InstallLinkJunieAgentsCommand,
-  unlink: InstallUnlinkJunieAgentsCommand,
-) {
-  val commands: List<CliktCommand> = listOf(link, unlink)
-}
-
-@Inject
 class NativeAgentCursorCliCommands(
   link: InstallLinkCursorAgentsCommand,
   unlink: InstallUnlinkCursorAgentsCommand,

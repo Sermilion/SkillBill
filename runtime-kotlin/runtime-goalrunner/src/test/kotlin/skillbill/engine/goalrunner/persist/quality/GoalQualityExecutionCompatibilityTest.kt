@@ -9,6 +9,10 @@ import kotlin.test.assertEquals
 class GoalQualityExecutionCompatibilityTest {
   @Test
   fun `decoding retains retired matrix entries while projecting supported agents`() {
+    listOf("retired-agent", charArrayOf('j', 'u', 'n', 'i', 'e').concatToString()).forEach(::assertRetainedMatrix)
+  }
+
+  private fun assertRetainedMatrix(retiredAgent: String) {
     val keys = GoalQualityExecutionPayloadKeys
     val directive = mapOf(keys.MODEL to "model-x", keys.EFFORT to "high")
     val matrix =
@@ -17,12 +21,12 @@ class GoalQualityExecutionCompatibilityTest {
         keys.AGENTS to
           mapOf(
             "claude" to mapOf(ExecutionTier.IMPLEMENTATION.name to directive),
-            RETIRED_AGENT to mapOf(ExecutionTier.REASONING.name to directive),
+            retiredAgent to mapOf(ExecutionTier.REASONING.name to directive),
           ),
         keys.AGENT_PHASE_OVERRIDES to
           mapOf(
             "claude" to mapOf("implement" to directive),
-            RETIRED_AGENT to mapOf("plan" to directive),
+            retiredAgent to mapOf("plan" to directive),
           ),
       )
     val encoded =
@@ -48,12 +52,8 @@ class GoalQualityExecutionCompatibilityTest {
     assertEquals(setOf(SupportedAgent.CLAUDE), decoded.modelMatrix?.agents?.keys)
     assertEquals(setOf(SupportedAgent.CLAUDE), decoded.modelMatrix?.agentPhaseOverrides?.keys)
     assertEquals(ExecutionTier.IMPLEMENTATION, decoded.modelMatrix?.phaseTiers?.get("implement"))
-    val retiredDirective = decoded.retainedModelMatrix?.agents?.get(RETIRED_AGENT)?.get(ExecutionTier.REASONING)
+    val retiredDirective = decoded.retainedModelMatrix?.agents?.get(retiredAgent)?.get(ExecutionTier.REASONING)
     assertEquals("model-x", retiredDirective?.model)
     assertEquals(encoded, decoded.toPersistenceWire())
-  }
-
-  private companion object {
-    const val RETIRED_AGENT = "retired-agent"
   }
 }

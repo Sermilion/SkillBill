@@ -19,7 +19,7 @@ class InvokingAgentResolutionTest {
       }
 
     assertContains(error.message.orEmpty(), "Unknown agent 'claude-code'")
-    assertContains(error.message.orEmpty(), "claude, codex, junie, cursor")
+    assertContains(error.message.orEmpty(), "claude, codex, cursor")
     assertContains(error.message.orEmpty(), "--agent")
   }
 

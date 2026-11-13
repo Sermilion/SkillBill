@@ -37,7 +37,7 @@ internal fun assertGovernedReviewLaunch(
     assertTrue(
       message.contains("missing capability 'governed-only tooling'") ||
         message.contains("missing capability 'MCP isolation'"),
-      "Junie must name the missing capability, got '$message'",
+      "The builder must name the missing capability, got '$message'",
     )
     return
   }
