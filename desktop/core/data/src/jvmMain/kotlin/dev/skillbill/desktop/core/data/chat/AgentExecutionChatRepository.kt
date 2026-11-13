@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatHistoryRead
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
@@ -103,7 +104,10 @@ class AgentExecutionChatRepository(
   override suspend fun awaitEnd(sessionId: String) = transports.forEach { it.awaitEnd(sessionId) }
 
   override suspend fun savedChats(executionId: String, repositoryRoot: String, currentSessionId: String): List<ChatHistoryEntry> =
-    withContext(Dispatchers.IO) { catalog.list(executionId, repositoryRoot, currentSessionId, resolver::forAgent) }
+    savedChatsResult(executionId, repositoryRoot, currentSessionId).entries
+
+  override suspend fun savedChatsResult(executionId: String, repositoryRoot: String, currentSessionId: String): ChatHistoryRead =
+    withContext(Dispatchers.IO) { catalog.listResult(executionId, repositoryRoot, currentSessionId, resolver::forAgent) }
 
   override suspend fun openSavedChat(entry: ChatHistoryEntry): List<ChatHistoryLine> = withContext(Dispatchers.IO) { catalog.open(entry) }
 
@@ -117,7 +121,10 @@ class AgentExecutionChatRepository(
   override suspend fun saveNewTaskDraft(entry: ChatHistoryEntry): Boolean = withContext(Dispatchers.IO) { store.saveChat(entry) }
 
   override suspend fun savedNewTaskDrafts(limit: Int?): List<ChatHistoryEntry> =
-    withContext(Dispatchers.IO) { store.newTaskDrafts(limit) }
+    savedNewTaskDraftsResult(limit).entries
+
+  override suspend fun savedNewTaskDraftsResult(limit: Int?): ChatHistoryRead =
+    withContext(Dispatchers.IO) { store.newTaskDraftsRead(limit) }
 
   override suspend fun deleteSavedChat(sessionId: String) = withContext(Dispatchers.IO) { store.delete(sessionId) }
 

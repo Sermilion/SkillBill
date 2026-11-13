@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import dev.skillbill.desktop.core.domain.model.ChatStoreRead
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -53,7 +54,14 @@ class CursorChatTransport(
         "Cursor ACP requires an operator approval channel; the chat was not started."))
       return@flow
     }
-    val saved = store.agentSession(request.sessionId)
+    val savedRead = store.agentSessionRead(request.sessionId)
+    if (savedRead is ChatStoreRead.Failed) {
+      val failure = savedRead.failure
+      emit(ChatEvent.Failed(ChatFailure.ProcessFailed,
+        "The saved Cursor chat could not be read at ${failure.sourcePath}: ${failure.reason}. ${failure.recovery}"))
+      return@flow
+    }
+    val saved = (savedRead as? ChatStoreRead.Value)?.value
     if (saved?.isBlank() == true || (!request.firstTurn && saved == null)) {
       emit(ChatEvent.Failed(ChatFailure.ProcessFailed,
         "The saved Cursor session is unavailable. Start an explicit new chat; history was not replaced."))
@@ -66,7 +74,14 @@ class CursorChatTransport(
       Path.of(request.scope.repositoryRoot).toAbsolutePath().normalize().toString(),
 
     )
-    if (saved != null && store.cursorSessionBinding(request.sessionId) != binding) {
+    val bindingRead = store.cursorSessionBindingRead(request.sessionId)
+    if (bindingRead is ChatStoreRead.Failed) {
+      val failure = bindingRead.failure
+      emit(ChatEvent.Failed(ChatFailure.ProcessFailed,
+        "The saved Cursor binding could not be read at ${failure.sourcePath}: ${failure.reason}. ${failure.recovery}"))
+      return@flow
+    }
+    if (saved != null && (bindingRead as? ChatStoreRead.Value)?.value != binding) {
       emit(ChatEvent.Failed(ChatFailure.ProcessFailed,
         "The saved Cursor session belongs to a different or unknown profile or checkout. " +
           "Start an explicit new chat; history was not replaced."))

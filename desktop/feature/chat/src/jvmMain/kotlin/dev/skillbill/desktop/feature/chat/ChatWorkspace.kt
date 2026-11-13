@@ -733,7 +733,11 @@ class ChatWorkspace(
     scope.launch(session.job) {
       // A removed worktree's sessions move first, so the listing at the repository root includes them.
       if (session.turnJob == null) turns.followWorktree(session)
-      session.resumeChoicesState.value = chat.savedChats(session.item.id, session.item.workingRoot(), session.sessionId)
+      val result = chat.savedChatsResult(session.item.id, session.item.workingRoot(), session.sessionId)
+      session.resumeChoicesState.value = result.entries
+      result.failures.forEach { failure ->
+        session.append(ChatMessage.Error(null, "Saved chat ${failure.storageIdentity} could not be read at ${failure.sourcePath}: ${failure.reason}. ${failure.recovery}"))
+      }
     }
   }
 

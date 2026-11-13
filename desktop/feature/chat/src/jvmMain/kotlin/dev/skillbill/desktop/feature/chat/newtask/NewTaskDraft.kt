@@ -38,10 +38,16 @@ import dev.skillbill.desktop.feature.chat.chipText
 import dev.skillbill.desktop.feature.chat.restored
 import dev.skillbill.desktop.feature.chat.restoredDraft
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
@@ -78,6 +84,9 @@ class NewTaskDraft internal constructor(
   private val changesRepository: ChatChangesRepository = UnavailableChatChanges,
   private val diagnostics: Diagnostics,
   private val runs: RunOpener = UnavailableRunOpener,
+  private val userHome: String = "",
+  private val onResumePublished: (NewTaskDraft) -> Unit = {},
+  private val onResumeFailed: (NewTaskDraft) -> Unit = {},
 ) {
   private val scope = windowScope.scope
   private val cardOwners = IdentityHashMap<ChatThread, NewTaskChat>()
@@ -106,9 +115,18 @@ class NewTaskDraft internal constructor(
     synchronized(cardOwners) { cardOwners[thread] }?.persist()?.also { if (it) refreshSaved() } ?: false
   }, runs = runs)
   private val chatState = MutableStateFlow<NewTaskChat?>(null)
+  private val resumeSourceSessionsState = MutableStateFlow<Set<String>>(emptySet())
+  internal val resumeSourceSessions: StateFlow<Set<String>> = resumeSourceSessionsState.asStateFlow()
+  @Volatile private var resumeTransition: Job? = null
+  @Volatile private var resumeTransitionOwner: Any? = null
   private val offerState = MutableStateFlow(NewTaskOffer())
   private var previewTracker: Pair<String, NewTaskChatChanges>? = null
   private var closing = false
+  @Volatile private var contextTransitionOwner: Any? = null
+  @Volatile private var contextTransitionJob: Job? = null
+  internal var contextTransitioning: Boolean by mutableStateOf(false)
+    private set
+  internal var onContextCommitted: ((NewTaskDraft) -> Unit)? = null
   private var offerKeyEdit: NewTaskOfferKeyEdit? = null
   private var lastOfferFieldValue: String? = null
   internal var chatDispatcher = Dispatchers.IO
@@ -117,12 +135,15 @@ class NewTaskDraft internal constructor(
   internal var images: List<ChatImage> by mutableStateOf(emptyList())
     private set
   private var repositoryState: NewTaskRepository? by mutableStateOf(null)
+  internal var initialRepositoryDefaultPending: Boolean = true
+    private set
   private var acceptedKeyState: String? by mutableStateOf(null)
   internal var issueKeyProposals: List<String> by mutableStateOf(emptyList())
     private set
   var repository: NewTaskRepository?
     get() = repositoryState
     set(value) {
+      initialRepositoryDefaultPending = false
       if (repositoryState?.root != value?.root) {
         previewTracker?.second?.end()
         previewTracker = null
@@ -133,6 +154,10 @@ class NewTaskDraft internal constructor(
       }
       repositoryState = value
     }
+
+  internal fun copyInitialRepositoryDefaultEligibilityFrom(source: NewTaskDraft) {
+    initialRepositoryDefaultPending = source.initialRepositoryDefaultPending
+  }
   var addedRepositories: List<NewTaskRepository> by mutableStateOf(emptyList())
   internal var branchChoiceRequested: Boolean by mutableStateOf(false)
   var baseBranch: String by mutableStateOf("")
@@ -143,7 +168,10 @@ class NewTaskDraft internal constructor(
   internal var agentChosen = false
   var selectedAgent: ChatAgent? by mutableStateOf(null)
 
+  internal val workingDirectory: String get() = repository?.root ?: userHome
+
   internal val chat: StateFlow<NewTaskChat?> = chatState.asStateFlow()
+  internal val resuming: Boolean get() = resumeTransition != null
 
   /** The Confirm, Dismiss, Adjust and option callbacks of the operation cards in [current]'s transcript. */
   internal fun operationCardActions(current: NewTaskChat): ChatOperationCardActions = cards.actions(current.thread)
@@ -171,8 +199,10 @@ class NewTaskDraft internal constructor(
 
   private fun canAdmitTurn(message: String, attachments: List<ChatImage> = emptyList()): Boolean {
     val current = chatState.value
-    return !closing && (message.isNotBlank() || attachments.isNotEmpty()) && repository != null && selectedAgent != null && selectedAgent?.agentId == agentId &&
-      current?.repositoryMissing != true && !offerState.value.starting
+    val openSession = databaseSession.state.value as? DatabaseSessionState.Open
+    val databaseMatches = openSession != null && (current == null || current.databaseSessionId == openSession.sessionId)
+    return !closing && contextTransitionOwner == null && resumeTransition == null && databaseMatches && (message.isNotBlank() || attachments.isNotEmpty()) && workingDirectory.isNotBlank() && selectedAgent != null && selectedAgent?.agentId == agentId &&
+      current?.repositoryMissing != true && !offerState.value.starting && current?.transitionBlocked != true
   }
 
   /** Sends the text and images, opening the chat on the first message, and clears the draft. Requires [canSend]. */
@@ -208,7 +238,7 @@ class NewTaskDraft internal constructor(
     attachments: List<ChatImage> = emptyList(),
     cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly,
   ) {
-    val current = chatState.value ?: open(UUID.randomUUID().toString(), checkNotNull(repository).root, baseBranch.ifBlank { null }, checkNotNull(selectedAgent))
+    val current = chatState.value ?: open(UUID.randomUUID().toString(), workingDirectory, repository?.root, baseBranch.ifBlank { null }, checkNotNull(selectedAgent))
     offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, started = null, selectedKey = null)
     if (action == null && attachments.isEmpty() && cards.submitAdjustment(current.thread, submitted)) {
       if (text == submitted) text = ""
@@ -274,7 +304,7 @@ class NewTaskDraft internal constructor(
     offerFieldValue: String? = null,
   ) {
     val current = chatState.value
-    if (closing || offerState.value.starting || current?.thread?.busy?.value == true) return
+    if (closing || contextTransitionOwner != null || resumeTransition != null || offerState.value.starting || current?.thread?.busy?.value == true) return
     if (current == null && kind in RUN_KINDS) return
     if (kind in RUN_KINDS && offerState.value.started != null) return
     if (selectedAgent == null || repository == null) return
@@ -289,7 +319,7 @@ class NewTaskDraft internal constructor(
     val kind = pending.prefixKind ?: return
     if (newTaskStartArgumentIdentity(keyChoice)?.let(NEW_TASK_COMPLETE_KEY::matches) != true) return
     val current = chatState.value
-    if (kind !in GOAL_KINDS || closing || pending.starting || current?.thread?.busy?.value == true) return
+    if (kind !in GOAL_KINDS || closing || contextTransitionOwner != null || resumeTransition != null || pending.starting || current?.thread?.busy?.value == true) return
     if (current == null || pending.started != null) return
     if (selectedAgent == null || repository == null) return
     acceptedKeyState = keyChoice.trim().uppercase()
@@ -389,8 +419,9 @@ class NewTaskDraft internal constructor(
 
   /** Ends the chat and deletes its saved draft; the selections and any typed text stay. False when there was no chat to discard. */
   internal suspend fun discard(): Boolean {
-    if (closing) return false
+    if (closing || contextTransitionOwner != null || resumeTransition != null) return false
     val current = chatState.value ?: return false
+    if (current.transitionBlocked) return false
     val saveLock = saveLocks[current.sessionId]
     if (current.thread.deferDestructiveAction("discard this draft")) return false
     return leave(current, beforeLeave = {
@@ -405,7 +436,7 @@ class NewTaskDraft internal constructor(
 
   /** Discards [entry], allowing undo unless it is the open chat. */
   internal fun discardSaved(entry: ChatHistoryEntry) {
-    if (closing) return
+    if (closing || contextTransitionOwner != null || resumeTransition != null) return
     if (chatState.value?.sessionId == entry.sessionId) {
       scope.launch { discard() }
       return
@@ -415,8 +446,9 @@ class NewTaskDraft internal constructor(
 
   /** Writes any running reply, then ends the chat's agent process and keeps its saved draft, for "New chat" and a window close. */
   internal suspend fun close(): Boolean {
-    if (closing) return false
+    if (closing || contextTransitionOwner != null || resumeTransition != null) return false
     val current = chatState.value ?: return true
+    if (current.transitionBlocked) return false
     closing = true
     return try {
       if (!current.flush()) false else leave(current) {}
@@ -438,103 +470,263 @@ class NewTaskDraft internal constructor(
 
   internal suspend fun models(agent: ChatAgent, root: String) = chats.models(agent, root)
 
-  /** Opens a new agent session on the current repository, branch and agent, keeping the transcript. */
-  internal fun rebindChat() {
-    val current = chatState.value ?: return
-    scope.launch {
-      rebindChat(current)
+  /** Requests one committed context change. Existing chats keep their old projection until its save finishes. */
+  internal fun rebindChat(
+    requestedRepository: NewTaskRepository? = repository,
+    requestedBranch: String = baseBranch,
+    requestedAgent: ChatAgent? = selectedAgent,
+  ): Boolean {
+    val agent = requestedAgent ?: return false
+    val current = chatState.value
+    if (current == null) {
+      repository = requestedRepository
+      baseBranch = requestedBranch
+      agentId = agent.agentId
+      selectedAgent = agent
+      onContextCommitted?.invoke(this)
+      return true
     }
+    val owner = Any()
+    val requestedRoot = requestedRepository?.root
+    val directory = requestedRoot ?: userHome
+    val branch = requestedBranch.ifBlank { null }
+    val databaseId = current.databaseSessionId ?: return false
+    synchronized(current.transitionLock) {
+      if (contextTransitionOwner != null || closing || resumeTransition != null || current.repositoryMissing || current.thread.busy.value || current.thread.queued.value.isNotEmpty() || offerState.value.starting ||
+        current.thread.deferDestructiveAction("change the draft context") ||
+        (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId != databaseId
+      ) return false
+      if (current.selectedRepositoryRoot == requestedRoot && current.repositoryRoot == directory && current.baseBranch == branch && current.agent == agent) return true
+      contextTransitionOwner = owner
+      contextTransitioning = true
+    }
+    contextTransitionJob = scope.launch { rebindChat(current, owner, requestedRepository, requestedRoot, directory, branch, agent, databaseId) }
+    return true
   }
 
-  private suspend fun rebindChat(current: NewTaskChat) {
-    val rebind = synchronized(current.transitionLock) {
-      if (current.deferAcceptedSave { rebindChat() } || current.thread.deferDestructiveAction("change the draft context")) return
-      val agent = selectedAgent ?: return
-      val repo = repository ?: return
-      if (closing || current.repositoryMissing || current.thread.busy.value || offerState.value.starting) return
-      val branch = baseBranch.ifBlank { null }
-      if (current.repositoryRoot == repo.root && current.baseBranch == branch && current.agent.agentId == agent.agentId && current.agent.profile == agent.profile) {
-        current.changeModel(agent)
+  private suspend fun rebindChat(
+    current: NewTaskChat,
+    owner: Any,
+    requestedRepository: NewTaskRepository?,
+    selectedRoot: String?,
+    directory: String,
+    branch: String?,
+    agent: ChatAgent,
+    databaseId: Long,
+  ) {
+    var staged: NewTaskChat? = null
+    var oldEnded = false
+    try {
+      if (directory.isBlank()) return
+      current.awaitAcceptedSaves()
+      if (contextTransitionOwner !== owner || chatState.value !== current || current.sessionId.isBlank() || !ownsDatabase(databaseId)) return
+      val sameProviderContext = current.selectedRepositoryRoot == selectedRoot && current.repositoryRoot == directory &&
+        current.baseBranch == branch && current.agent.agentId == agent.agentId && current.agent.profile == agent.profile
+      if (sameProviderContext) {
+        if (!current.changeModel(agent)) {
+          contextProblem("This model choice could not be saved. The previous model is still selected.")
+          return
+        }
+        agentId = agent.agentId
+        selectedAgent = agent
+        onContextCommitted?.invoke(this)
+        refreshSaved()
         return
       }
-      val lines = current.thread.transcript.value
-      val previousId = current.sessionId
-      val replay = (current.pendingReplay?.takeIf { !current.started }
-        ?: NewTaskReplay(current.agent.agentId, current.repositoryRoot, current.baseBranch, lines))
-        .takeIf { newTaskReplayPreamble(it, repo.root, branch) != null }
-      Rebind(agent, repo, branch, lines, previousId, replay)
-    } ?: return
-    val (agent, repo, branch, lines, previousId, replay) = rebind
-    if (!current.end()) return
-    val sameRepository = current.repositoryRoot == repo.root
-    val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay,
-      changesBaseline = current.changesBaseline.takeIf { sameRepository },
-      resumedChanges = current.changesResumed && sameRepository,
-      changesCaptureAttempted = (current.changesCaptureAttempted || current.started || current.changesBaseline != null) && sameRepository,
-      changesAttributedPaths = current.changesAttributedPaths.takeIf { sameRepository })
-    val switched = "Switched to ${chipText(agent)} in ${repo.name}."
-    val notice = if (replay != null) "$switched It gets the earlier conversation with your next message." else switched
-    next.thread.showCapability(agent)
-    next.thread.replaceTranscript(lines + ChatMessage.Notice(notice))
-    scope.launch {
+      if (!current.end()) {
+        contextProblem("This draft context could not be changed. The previous conversation is still available.")
+        return
+      }
+      oldEnded = true
       current.job.join()
-      current.awaitAcceptedSaves()
+      chats.awaitEnd(current.sessionId)
+      val oldRoot = current.selectedRepositoryRoot
+      val sameRepository = oldRoot != null && oldRoot == selectedRoot
+      val lines = current.thread.transcript.value.toList()
+      val replay = (current.pendingReplay?.takeIf { !current.started }
+        ?: NewTaskReplay(current.agent.agentId, current.repositoryRoot, current.baseBranch, lines, oldRoot))
+        .takeIf { newTaskReplayPreamble(it, directory, branch, selectedRoot) != null }
+      staged = open(
+        UUID.randomUUID().toString(), directory, selectedRoot, branch, agent,
+        replay = replay,
+        changesBaseline = current.changesBaseline.takeIf { sameRepository },
+        resumedChanges = current.changesResumed && sameRepository,
+        changesCaptureAttempted = (current.changesCaptureAttempted || current.started || current.changesBaseline != null) && sameRepository,
+        changesAttributedPaths = current.changesAttributedPaths.takeIf { sameRepository },
+        publish = false, active = false, databaseSessionId = databaseId,
+      )
+      val switched = "Switched to ${chipText(agent)} in ${File(directory).name}."
+      val notice = if (replay != null) "$switched It gets the earlier conversation with your next message." else switched
+      staged!!.thread.showCapability(agent)
+      staged!!.thread.replaceTranscript(lines + ChatMessage.Notice(notice))
+      val saved = staged!!.persist(refresh = false)
+      if (!saved || contextTransitionOwner !== owner || chatState.value !== current || !ownsDatabase(databaseId)) {
+        contextProblem("This draft context could not be saved. The previous conversation is still available.")
+        return
+      }
+      repository = requestedRepository
+      baseBranch = branch.orEmpty()
+      agentId = agent.agentId
+      selectedAgent = agent
+      chatState.value = staged
+      clearChatFeedback()
+      synchronized(cardOwners) { cardOwners[staged!!.thread] = staged!! }
+      staged!!.activate()
+      staged = null
+      onContextCommitted?.invoke(this)
       if (!cards.hasOutstanding(current.thread) && !current.thread.hasDeliveryClaim()) {
-        val lock = saveLocks[previousId]
-        if (lock != null) {
-          lock.withLock {
-            chats.deleteSavedChat(previousId)
-            retainedThreads.remove(previousId, current.thread)
-            saveLocks.remove(previousId, lock)
+        saveLocks[current.sessionId]?.withLock {
+          if (contextTransitionOwner === owner && chatState.value !== current) {
+            chats.deleteSavedChat(current.sessionId)
+            retainedThreads.remove(current.sessionId, current.thread)
+            saveLocks.remove(current.sessionId)
             synchronized(cardOwners) { cardOwners.remove(current.thread) }
           }
-        } else chats.deleteSavedChat(previousId)
-      }
-      if (!next.persist() && chatState.value === next) {
-        next.thread.append(ChatMessage.Notice("This draft could not be saved. Keep it open and try again."))
+        }
       }
       refreshSaved()
+    } catch (cancelled: CancellationException) {
+      oldEnded = oldEnded || !current.job.isActive
+      throw cancelled
+    } catch (_: Exception) {
+      oldEnded = oldEnded || !current.job.isActive
+      contextProblem("This draft context could not be saved. The previous conversation is still available.")
+    } finally {
+      withContext(NonCancellable) {
+        try {
+          staged?.end()
+          if (oldEnded && chatState.value === current && contextTransitionOwner === owner) recoverEndedContext(current)
+        } finally {
+          if (contextTransitionOwner === owner) {
+            contextTransitionOwner = null
+            contextTransitioning = false
+          }
+          if (contextTransitionOwner == null) contextTransitionJob = null
+        }
+      }
     }
   }
 
-  private data class Rebind(
-    val agent: ChatAgent,
-    val repository: NewTaskRepository,
-    val branch: String?,
-    val lines: List<ChatMessage>,
-    val previousId: String,
-    val replay: NewTaskReplay?,
-  )
+  private fun ownsDatabase(databaseId: Long): Boolean =
+    (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId == databaseId
+
+  private fun contextProblem(message: String) {
+    toasts.show(ToastMessage(ToastTone.Problem, message))
+  }
+
+  private fun recoverEndedContext(current: NewTaskChat) {
+    val recovered = open(
+      current.sessionId, current.repositoryRoot, current.selectedRepositoryRoot, current.baseBranch, current.agent,
+      started = current.started, pendingTurnLineIndex = null, replay = current.pendingReplay,
+      changesBaseline = current.changesBaseline, resumedChanges = current.changesResumed,
+      changesCaptureAttempted = current.changesCaptureAttempted, changesAttributedPaths = current.changesAttributedPaths,
+      publish = false, active = current.databaseSessionId?.let(::ownsDatabase) == true, databaseSessionId = current.databaseSessionId,
+    )
+    recovered.thread.replaceTranscript(current.thread.transcript.value)
+    chatState.value = recovered
+    synchronized(cardOwners) { cardOwners[recovered.thread] = recovered }
+  }
 
   /** Opens [entry] in this empty draft on its agent session, or with only Discard offered when its repository no longer exists. */
   internal fun resume(entry: ChatHistoryEntry): Boolean {
     val context = entry.newTask ?: return false
-    if (entry.sessionId in invalidDrafts || chatState.value != null) return false
-    repository = NewTaskRepository(context.repositoryRoot, File(context.repositoryRoot).name)
+    if (entry.sessionId in invalidDrafts || chatState.value != null || contextTransitionOwner != null || resumeTransition != null) return false
+    val selectedRepositoryRoot = context.selectedRepositoryRoot
+    val workingDirectory = selectedRepositoryRoot ?: userHome
+    val homeChanged = selectedRepositoryRoot == null && context.workingDirectory != workingDirectory
+    val missing = selectedRepositoryRoot != null && !File(selectedRepositoryRoot).isDirectory
+    if (homeChanged) return stageChangedHomeResume(entry, context, workingDirectory)
+    repository = selectedRepositoryRoot?.let { NewTaskRepository(it, File(it).name) }
     baseBranch = context.baseBranch.orEmpty()
     agentId = entry.agent.agentId
     selectedAgent = entry.agent
-    val missing = !File(context.repositoryRoot).isDirectory
     val retained = retainedThreads[entry.sessionId]
+    val sessionId = entry.sessionId
+    val replay = if (!context.sessionEstablished) NewTaskReplay(entry.agent.agentId, context.workingDirectory, context.baseBranch, entry.lines.map(::restored), selectedRepositoryRoot) else null
     val resumed = open(
-      entry.sessionId,
-      context.repositoryRoot,
+      sessionId,
+      workingDirectory,
+      selectedRepositoryRoot,
       context.baseBranch,
       entry.agent,
       context.sessionEstablished,
       context.pendingTurnLineIndex,
       missing,
+      replay = replay,
       changesBaseline = context.changesBaseline,
       resumedChanges = context.changesBaseline != null,
       changesCaptureAttempted = context.changesCaptureAttempted || context.sessionEstablished || context.changesBaseline != null,
+      changesAttributedPaths = context.changesAttributedPaths,
     )
     val lines = if (retained == null) entry.lines.map(::restored) else emptyList()
-    val notice = ChatMessage.Notice("This draft's repository no longer exists: ${context.repositoryRoot}. Discard it to continue.")
+    val notice = ChatMessage.Notice("This draft's repository no longer exists: ${selectedRepositoryRoot ?: context.repositoryRoot}. Discard it to continue.")
     if (retained == null) resumed.thread.replaceTranscript(if (missing) lines + notice else lines)
     resumed.thread.showCapability(entry.agent)
     synchronized(cardOwners) { cardOwners[resumed.thread] = resumed }
     if (!missing) cards.revalidate(resumed.thread, resumed.thread.transcript.value.mapNotNull { (it as? ChatMessage.Notice)?.operationCard?.token })
     return true
+  }
+
+  private fun stageChangedHomeResume(
+    entry: ChatHistoryEntry,
+    context: dev.skillbill.desktop.core.domain.model.ChatNewTaskContext,
+    directory: String,
+  ): Boolean {
+    if (directory.isBlank()) return false
+    val owner = Any()
+    resumeTransitionOwner = owner
+    resumeSourceSessionsState.value = resumeSourceSessionsState.value + entry.sessionId
+    val databaseState = databaseSession.state.value
+    var staged: NewTaskChat? = null
+    var published = false
+    val transition = scope.launch(start = CoroutineStart.LAZY) {
+      try {
+        val lines = entry.lines.map(::restored)
+        val replay = NewTaskReplay(entry.agent.agentId, context.workingDirectory, context.baseBranch, lines, context.selectedRepositoryRoot)
+        staged = open(
+          UUID.randomUUID().toString(), directory, null, context.baseBranch, entry.agent,
+          started = false, pendingTurnLineIndex = null, replay = replay,
+          changesBaseline = null, resumedChanges = false, changesCaptureAttempted = false,
+          changesAttributedPaths = null, publish = false, active = false,
+        )
+        staged!!.thread.replaceTranscript(lines)
+        val saved = staged!!.persist(refresh = false)
+        val sameDatabase = databaseState == databaseSession.state.value
+        if (!saved || resumeTransitionOwner !== owner || !sameDatabase || chatState.value != null) {
+          toasts.show(ToastMessage(ToastTone.Problem, "This draft could not be resumed in the current home directory. The original saved conversation is still available."))
+          return@launch
+        }
+        repository = null
+        baseBranch = context.baseBranch.orEmpty()
+        agentId = entry.agent.agentId
+        selectedAgent = entry.agent
+        chatState.value = staged
+        synchronized(cardOwners) { cardOwners[staged!!.thread] = staged!! }
+        staged!!.activate()
+        published = true
+        refreshSaved()
+        cards.revalidate(staged!!.thread, staged!!.thread.transcript.value.mapNotNull { (it as? ChatMessage.Notice)?.operationCard?.token })
+        onResumePublished(this@NewTaskDraft)
+      } catch (cancelled: CancellationException) {
+        throw cancelled
+      } catch (_: Exception) {
+        if (resumeTransitionOwner === owner) toasts.show(ToastMessage(ToastTone.Problem, "This draft could not be resumed in the current home directory. The original saved conversation is still available."))
+      } finally {
+        if (chatState.value !== staged) staged?.end()
+        if (resumeTransitionOwner === owner) {
+          resumeTransitionOwner = null
+          resumeTransition = null
+          if (!published) onResumeFailed(this@NewTaskDraft)
+        }
+      }
+    }
+    resumeTransition = transition
+    transition.start()
+    return true
+  }
+
+  internal fun clearResumeSources() {
+    resumeSourceSessionsState.value = emptySet()
   }
 
   internal fun refreshSaved() {
@@ -546,6 +738,13 @@ class NewTaskDraft internal constructor(
   }
 
   internal suspend fun disposeAndAwait() {
+    contextTransitionOwner = null
+    contextTransitioning = false
+    contextTransitionJob?.cancelAndJoin()
+    contextTransitionJob = null
+    resumeTransition?.cancel()
+    resumeTransition = null
+    resumeTransitionOwner = null
     previewTracker?.second?.end()
     previewTracker = null
     val current = chatState.value
@@ -558,6 +757,7 @@ class NewTaskDraft internal constructor(
   private fun open(
     sessionId: String,
     root: String,
+    selectedRepositoryRoot: String?,
     branch: String?,
     agent: ChatAgent,
     started: Boolean = false,
@@ -568,10 +768,15 @@ class NewTaskDraft internal constructor(
     resumedChanges: Boolean = false,
     changesCaptureAttempted: Boolean = false,
     changesAttributedPaths: Set<String>? = null,
+    publish: Boolean = true,
+    active: Boolean = publish,
+    databaseSessionId: Long? = (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId,
   ): NewTaskChat {
-    val openedDatabaseSessionId = (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
+    if (publish) initialRepositoryDefaultPending = false
+    val openedDatabaseSessionId = databaseSessionId
     val thread = retainedThreads.getOrPut(sessionId) { ChatThread(clock) }
     val saveLock = saveLocks.getOrPut(sessionId) { Mutex() }
+    var ownedSessionId = sessionId
     return NewTaskChat(
       chats,
       scope,
@@ -590,19 +795,33 @@ class NewTaskDraft internal constructor(
       approvals,
       thread,
       saveLock,
-      { sessionId !in invalidDrafts && retainedThreads[sessionId] === thread },
+      { ownedSessionId !in invalidDrafts && retainedThreads[ownedSessionId] === thread },
       changesRepository,
       changesBaseline,
       resumedChanges,
       changesCaptureAttempted,
       changesAttributedPaths,
-      previewTracker?.takeIf { it.first == root && changesBaseline == null && !started }?.second?.also { previewTracker = null },
+      previewTracker?.takeIf { publish && selectedRepositoryRoot != null && it.first == root && changesBaseline == null && !started }?.second?.also { previewTracker = null },
       diagnostics,
       { openedDatabaseSessionId != null && (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId == openedDatabaseSessionId },
+      selectedRepositoryRoot,
+      active,
+      { contextTransitionOwner != null },
+      { oldId, newId ->
+        if (ownedSessionId == oldId && retainedThreads[oldId] === thread) {
+          retainedThreads.remove(oldId, thread)
+          saveLocks.remove(oldId, saveLock)
+          retainedThreads[newId] = thread
+          saveLocks[newId] = saveLock
+          ownedSessionId = newId
+        }
+      },
     ).also {
-      clearChatFeedback()
-      chatState.value = it
-      synchronized(cardOwners) { cardOwners[thread] = it }
+      if (publish) {
+        clearChatFeedback()
+        chatState.value = it
+        synchronized(cardOwners) { cardOwners[thread] = it }
+      }
     }
   }
 

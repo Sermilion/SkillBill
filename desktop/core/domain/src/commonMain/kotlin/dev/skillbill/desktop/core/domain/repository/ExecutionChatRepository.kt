@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.domain.model.ChatModelsRead
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatHistoryRead
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
@@ -68,10 +69,13 @@ interface ExecutionChatRepository {
 
   /**
    * What `/resume` offers, newest first: every agent CLI's own sessions in [repositoryRoot], and the app's saved chats of
-   * [executionId] for agents without a session store. The chat now open as [currentSessionId] is left out. A store that cannot
-   * be read gives no entries.
+   * [executionId] for agents without a session store. The chat now open as [currentSessionId] is left out. Use
+   * [savedChatsResult] when read failures must remain visible.
    */
   suspend fun savedChats(executionId: String, repositoryRoot: String, currentSessionId: String): List<ChatHistoryEntry>
+
+  suspend fun savedChatsResult(executionId: String, repositoryRoot: String, currentSessionId: String): ChatHistoryRead =
+    ChatHistoryRead(savedChats(executionId, repositoryRoot, currentSessionId), emptyList())
 
   /** The latest lines of [entry] to show again; it also records what the agent needs so the next turn continues that session. */
   suspend fun openSavedChat(entry: ChatHistoryEntry): List<ChatHistoryLine>
@@ -94,6 +98,10 @@ interface ExecutionChatRepository {
 
   /** Every repository's saved new-task drafts, newest first, at most [limit] when one is given. */
   suspend fun savedNewTaskDrafts(limit: Int? = null): List<ChatHistoryEntry>
+
+  /** The same drafts plus failures that could not be projected. */
+  suspend fun savedNewTaskDraftsResult(limit: Int? = null): ChatHistoryRead =
+    ChatHistoryRead(savedNewTaskDrafts(limit), emptyList())
 
   /** Deletes the saved chat of [sessionId] with its resume state. */
   suspend fun deleteSavedChat(sessionId: String)

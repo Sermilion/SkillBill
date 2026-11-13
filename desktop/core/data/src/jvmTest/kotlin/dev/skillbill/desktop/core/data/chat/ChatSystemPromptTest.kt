@@ -10,6 +10,19 @@ import kotlin.test.assertTrue
 class ChatSystemPromptTest {
   private val sharedStartWires = NewTaskActionKind.entries.map { it.wire }
 
+  @Test
+  fun `repository-free prompt allows ordinary work and requires selection before runs`() {
+    val prompt = scopeSystemPrompt(ChatScope.NewTask("/home/operator", null, null))
+
+    assertTrue("Home directory: /home/operator" in prompt)
+    assertTrue("Selected repository: none." in prompt)
+    assertTrue("file edits and saves are allowed" in prompt)
+    assertTrue("Before any goal, phase or operation" in prompt)
+    assertFalse("Base branch:" in prompt)
+    assertFalse("Default branch" in prompt)
+    assertFalse("skillbill-actions" in prompt)
+  }
+
   // An agent told to act on "this execution" hunts for one.
   @Test
   fun `goal key proposals require explicit acceptance and stay scoped to the selected project`() {

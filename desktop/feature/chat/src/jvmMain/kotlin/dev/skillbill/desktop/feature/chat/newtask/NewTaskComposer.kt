@@ -86,7 +86,10 @@ internal fun NewTaskComposer(
   val stoppable = chat?.let { key(it) { it.thread.stoppable.collectAsState().value } } ?: false
   val delivery = chat?.let { key(it) { it.thread.delivery.collectAsState().value } }
   val queued = chat?.let { key(it) { it.thread.queued.collectAsState().value } }.orEmpty()
-  val changesRoot = chat?.repositoryRoot ?: draft.repository?.root
+  val changesRoot = when (val current = chat) {
+    null -> draft.repository?.root
+    else -> current.selectedRepositoryRoot
+  }
   val preview = remember(draft, chat, changesRoot) { changesRoot?.takeIf { chat == null }?.let(draft::previewChanges) }
   LaunchedEffect(preview) { preview?.observe() }
   val changes = chat?.let { key(it) { it.changes.collectAsState().value } }
@@ -167,7 +170,7 @@ internal fun NewTaskComposer(
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         RepositoryPicker(state, draft, chat, busy || delivery != null, offer.starting || draft.branchSwitching, focus, now, Modifier.weight(1f, fill = false), onAction)
         AgentPicker(
-          state.agent, state.agents, draft.repository?.root, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy,
+          state.agent, state.agents, draft.workingDirectory, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy,
           loadModels = draft::models, onChooseModel = { onAction(NewTaskAction.ChooseModel(it)) },
         ) { onAction(NewTaskAction.ChooseAgent(it)) }
         if (state.agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {

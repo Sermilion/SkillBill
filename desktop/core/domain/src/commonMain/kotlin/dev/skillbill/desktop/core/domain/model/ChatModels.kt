@@ -19,8 +19,9 @@ enum class ChatPermissionMode { ReadOnly, Act }
 
 enum class CursorMcpDependency { ProjectUserOnly, TeamDashboardRequired }
 
-/** What a chat is about: one [Execution], or [NewTask] work with no execution yet. [repositoryRoot] is where the agent runs. */
+/** What a chat is about. [repositoryRoot] is the non-null provider and approval directory; New task selection is separate. */
 sealed interface ChatScope {
+  /** The effective non-null directory for provider commands and approval ownership. */
   val repositoryRoot: String
 
   data class Execution(
@@ -31,7 +32,15 @@ sealed interface ChatScope {
     override val repositoryRoot: String,
   ) : ChatScope
 
-  data class NewTask(override val repositoryRoot: String, val baseBranch: String?) : ChatScope
+  data class NewTask(
+    val workingDirectory: String,
+    val selectedRepositoryRoot: String?,
+    val baseBranch: String?,
+  ) : ChatScope {
+    override val repositoryRoot: String get() = workingDirectory
+
+    constructor(repositoryRoot: String, baseBranch: String?) : this(repositoryRoot, repositoryRoot, baseBranch)
+  }
 }
 
 /**
@@ -177,14 +186,38 @@ data class ChatHistoryLine(
 
 /** Where a saved new-task draft runs; it marks the save as a draft, which references no execution. */
 data class ChatNewTaskContext(
-  val repositoryRoot: String,
+  val workingDirectory: String,
+  val selectedRepositoryRoot: String?,
   val baseBranch: String?,
   val sessionEstablished: Boolean = true,
   val pendingTurnLineIndex: Int? = null,
   val changesBaseline: ChatChangesBaseline? = null,
   val changesCaptureAttempted: Boolean = false,
   val changesAttributedPaths: Set<String>? = null,
-)
+) {
+  /** Compatibility directory accessor used by provider and approval consumers. */
+  val repositoryRoot: String get() = workingDirectory
+
+  constructor(
+    repositoryRoot: String,
+    baseBranch: String?,
+    sessionEstablished: Boolean = true,
+    pendingTurnLineIndex: Int? = null,
+    changesBaseline: ChatChangesBaseline? = null,
+    changesCaptureAttempted: Boolean = false,
+    changesAttributedPaths: Set<String>? = null,
+    selectedRepositoryRoot: String? = repositoryRoot,
+  ) : this(
+    repositoryRoot,
+    selectedRepositoryRoot,
+    baseBranch,
+    sessionEstablished,
+    pendingTurnLineIndex,
+    changesBaseline,
+    changesCaptureAttempted,
+    changesAttributedPaths,
+  )
+}
 
 data class ChatChangesBaseline(
   val headSha: String,

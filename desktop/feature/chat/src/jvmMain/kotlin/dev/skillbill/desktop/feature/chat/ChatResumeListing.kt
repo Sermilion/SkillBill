@@ -19,7 +19,7 @@ internal fun resumableDrafts(saved: List<ChatHistoryEntry>, repositoryRoot: Stri
   val canonicalRoots = mutableMapOf<String, String>()
   fun resolved(root: String): String = canonicalRoots.getOrPut(root) { canonicalRepositoryRoot(root) }
   val selectedRoot = resolved(repositoryRoot)
-  return saved.filter { entry -> entry.newTask?.repositoryRoot?.let { resolved(it) == selectedRoot } == true }
+  return saved.filter { entry -> entry.newTask?.selectedRepositoryRoot?.let { resolved(it) == selectedRoot } == true }
 }
 
 private fun canonicalRepositoryRoot(root: String): String = try {

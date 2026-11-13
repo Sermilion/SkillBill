@@ -85,20 +85,27 @@ internal class NewTaskChat(
   retainedChanges: NewTaskChatChanges? = null,
   private val diagnostics: Diagnostics,
   private val canRecover: () -> Boolean = { true },
+  val selectedRepositoryRoot: String? = repositoryRoot,
+  initiallyActive: Boolean = true,
+  private val transitionReserved: () -> Boolean = { false },
+  private val onSessionRotated: (String, String) -> Unit = { _, _ -> },
 ) {
   @Volatile
   var agent: ChatAgent = agent
     private set
 
-  internal fun changeModel(next: ChatAgent) {
-    if (thread.busy.value || closing || next == agent) return
+  internal suspend fun changeModel(next: ChatAgent): Boolean {
     chat.end(sessionId)
-    thread.clearBackgroundCommands()
+    chat.awaitEnd(sessionId)
+    val saved = saveLock.withLock {
+      if (!canPersist() || !canRecover()) return@withLock false
+      chat.saveNewTaskDraft(historyEntry(sessionId).copy(agent = next))
+    }
+    if (!saved) return false
     agent = next
     thread.agentState.value = next
-    scope.launch(job + dispatcher) {
-      if (!save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
-    }
+    thread.clearBackgroundCommands()
+    return true
   }
 
   internal val transitionLock = Any()
@@ -111,12 +118,13 @@ internal class NewTaskChat(
   private val sessionIdState = MutableStateFlow(initialSessionId)
   val sessionIdFlow: StateFlow<String> = sessionIdState.asStateFlow()
   val sessionId: String get() = sessionIdState.value
+  internal val transitionBlocked: Boolean get() = rotationInProgress || transitionReserved()
 
   val thread = retainedThread
   val job: Job = SupervisorJob(scope.coroutineContext[Job])
   private val approvalFlow = ChatApprovals(approvals)
   private val changesTracker = retainedChanges ?: NewTaskChatChanges(
-    changesRepository, scope, dispatcher, repositoryRoot, initialChangesBaseline, resumedChanges, repositoryMissing,
+    changesRepository, scope, dispatcher, repositoryRoot, initialChangesBaseline, resumedChanges, repositoryMissing || selectedRepositoryRoot == null,
     changesCaptureAttempted || initiallyStarted || initialChangesBaseline != null, changesAttributedPaths,
   )
   val changes: StateFlow<ChatChangesState> = changesTracker.state
@@ -138,6 +146,7 @@ internal class NewTaskChat(
   @Volatile
   private var closing = false
   private var recoveryOnly = false
+  @Volatile private var rotationInProgress = false
   private val steering = ChatSteeringDelivery(chat, diagnostics, thread,
     CoroutineScope(scope.coroutineContext + job + transitionDispatcher), transitionLock,
     { captured -> job.isActive && !closing && sessionId == captured && canPersist() }, ::scheduleDrain, ::persistAccepted)
@@ -157,18 +166,26 @@ internal class NewTaskChat(
   private var pendingAcceptance: (() -> Unit)? = null
   @Volatile
   private var stoppedTurn: Job? = null
+  @Volatile
+  private var active = false
 
   init {
     thread.agentState.value = agent
     thread.agentSupportedState.value = chat.supports(agent.agentId)
     thread.showCapability(agent)
+    if (initiallyActive) activate()
+  }
+
+  internal fun activate() {
+    if (active || closing) return
+    active = true
     observeUnprompted()
     followApprovals()
   }
 
   // Collecting the feed is what makes this window the repository's operator consumer; it ends with the draft's job.
   private fun followApprovals() {
-    if (repositoryMissing) return
+    if (repositoryMissing || !active) return
     scope.launch(job + transitionDispatcher) {
       approvalFlow.follow(thread, approvalLiveState, { repositoryRoot }, { it.key.runId == sessionId }) {
         if (!closing && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
@@ -195,14 +212,17 @@ internal class NewTaskChat(
     cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly,
     onRejected: (() -> Unit)? = null,
   ) = synchronized(transitionLock) {
-    if ((text.isBlank() && images.isEmpty()) || repositoryMissing || closing) return@synchronized
+    if ((text.isBlank() && images.isEmpty()) || repositoryMissing || closing || !active || rotationInProgress || transitionReserved()) {
+      onRejected?.invoke()
+      return@synchronized
+    }
     thread.enqueue(QueuedChatMessage(text, action, pauseAndAct = false, images = images, cursorMcpDependency = cursorMcpDependency, onRejected = onRejected))
     onAccepted()
     drainQueue()
   }
 
   fun stop(): List<QueuedChatMessage> {
-    if (!thread.stoppable.value || closing) return emptyList()
+    if (!thread.stoppable.value || closing || rotationInProgress || transitionReserved()) return emptyList()
     val removed = synchronized(transitionLock) {
       steering.settle()
       thread.takeOrdinaryQueuedEntries()
@@ -212,7 +232,7 @@ internal class NewTaskChat(
   }
 
   fun sendNow() = synchronized(transitionLock) {
-    if (recoveryOnly || !thread.stoppable.value || thread.queued.value.isEmpty() || closing) return@synchronized
+    if (recoveryOnly || !thread.stoppable.value || thread.queued.value.isEmpty() || closing || rotationInProgress || transitionReserved()) return@synchronized
     if (chat.steeringPolicy(agent.agentId) == ChatSteeringPolicy.LegacySendNow) {
       interrupt()
     } else {
@@ -225,7 +245,7 @@ internal class NewTaskChat(
   }
 
   private fun drainQueue() = synchronized(transitionLock) {
-    if (recoveryOnly || closing || repositoryMissing || thread.busyState.value || turnJob != null || turnRunning) return
+    if (recoveryOnly || closing || rotationInProgress || transitionReserved() || repositoryMissing || thread.busyState.value || turnJob != null || turnRunning) return
     val next = thread.takeQueuedMessage() ?: return
     startTurn(next.text, next.action, next.images, next.cursorMcpDependency, next.onRejected)
   }
@@ -295,17 +315,31 @@ internal class NewTaskChat(
   }
 
   private suspend fun rotateSession() {
-    if (thread.hasDeliveryClaim() || recoveryOnly) return
-    awaitAcceptedSaves()
-    val old = sessionId
-    saveLock.withLock {
-      sessionIdState.value = UUID.randomUUID().toString()
-      chat.deleteSavedChat(old)
+    synchronized(transitionLock) {
+      if (thread.hasDeliveryClaim() || recoveryOnly || rotationInProgress) return
+      rotationInProgress = true
     }
-    unpromptedJob?.cancel()
-    unpromptedReplyActive = false
-    thread.clearBackgroundCommands()
-    if (!closing) observeUnprompted()
+    try {
+      awaitAcceptedSaves()
+      val old = sessionId
+      val next = UUID.randomUUID().toString()
+      val entry = historyEntry(next)
+      saveLock.withLock {
+        if (!canPersist() || !chat.saveNewTaskDraft(entry)) {
+          thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+          return
+        }
+        sessionIdState.value = next
+        onSessionRotated(old, next)
+        chat.deleteSavedChat(old)
+      }
+      unpromptedJob?.cancel()
+      unpromptedReplyActive = false
+      thread.clearBackgroundCommands()
+      if (!closing) observeUnprompted()
+    } finally {
+      rotationInProgress = false
+    }
   }
 
   private fun interrupt() {
@@ -443,9 +477,10 @@ internal class NewTaskChat(
     }
   }
 
-  internal suspend fun persist(): Boolean = save()
+  internal suspend fun persist(refresh: Boolean = true): Boolean = save(refresh)
 
   private fun observeUnprompted() {
+    if (!active) return
     val observedSession = sessionId
     if (unpromptedJob?.isActive == true) return
     val observer = scope.launch(job + transitionDispatcher, start = CoroutineStart.LAZY) {
@@ -475,10 +510,10 @@ internal class NewTaskChat(
     withContext(scope.coroutineContext.minusKey(Job)) { acceptPendingMessage() }
     var opened = false
     var seenEvent = false
-    val preamble = pendingReplay?.takeIf { !started }?.let { newTaskReplayPreamble(it, repositoryRoot, baseBranch) }
+    val preamble = pendingReplay?.takeIf { !started }?.let { newTaskReplayPreamble(it, repositoryRoot, baseBranch, selectedRepositoryRoot) }
     val prompt = if (preamble == null) text else "$preamble\n\n$text"
     try {
-      chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, prompt, images, cursorMcpDependency)).collect { event ->
+      chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, selectedRepositoryRoot, baseBranch), ChatPermissionMode.Act, prompt, images, cursorMcpDependency)).collect { event ->
         coroutineContext.ensureActive()
         if (!seenEvent) {
           seenEvent = true
@@ -560,7 +595,7 @@ internal class NewTaskChat(
     val acceptedSessionId = sessionId
     val lines = snapshotLines()
     val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
-    val context = ChatNewTaskContext(repositoryRoot, baseBranch, started, pendingTurnLineIndex, changesTracker.baseline, changesTracker.captureAttempted)
+    val context = ChatNewTaskContext(repositoryRoot, baseBranch, started, pendingTurnLineIndex, changesTracker.baseline, changesTracker.captureAttempted, changesAttributedPaths = changesTracker.attributedPaths, selectedRepositoryRoot = selectedRepositoryRoot)
     val entry = ChatHistoryEntry(acceptedSessionId, null, agent, clock.now(), title, lines, context)
     val save = scope.launch(transitionDispatcher, start = CoroutineStart.LAZY) {
       val saved = saveLock.withLock {
@@ -593,24 +628,21 @@ internal class NewTaskChat(
     return true
   }
 
-  private suspend fun save(): Boolean {
+  private suspend fun save(refresh: Boolean = true): Boolean = saveAs(sessionId, refresh)
+
+  private fun historyEntry(identity: String): ChatHistoryEntry {
+    val lines = snapshotLines()
+    val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
+    val context = ChatNewTaskContext(repositoryRoot, baseBranch, started, pendingTurnLineIndex, changesTracker.baseline, changesTracker.captureAttempted, changesAttributedPaths = changesTracker.attributedPaths, selectedRepositoryRoot = selectedRepositoryRoot)
+    return ChatHistoryEntry(identity, null, agent, clock.now(), title, lines, context)
+  }
+
+  private suspend fun saveAs(identity: String, refresh: Boolean = true): Boolean {
     val saved = saveLock.withLock {
       if (!canPersist()) return@withLock false
-      val lines = snapshotLines()
-      val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
-      chat.saveNewTaskDraft(
-        ChatHistoryEntry(
-          sessionId,
-          null,
-          agent,
-          clock.now(),
-          title,
-          lines,
-          ChatNewTaskContext(repositoryRoot, baseBranch, started, pendingTurnLineIndex, changesTracker.baseline, changesTracker.captureAttempted),
-        ),
-      )
+      chat.saveNewTaskDraft(historyEntry(identity))
     }
-    if (saved) onSaved()
+    if (saved && refresh) onSaved()
     return saved
   }
 }

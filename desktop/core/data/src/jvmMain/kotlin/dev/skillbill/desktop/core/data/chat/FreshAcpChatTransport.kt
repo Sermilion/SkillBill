@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatScope
+import dev.skillbill.desktop.core.domain.model.ChatStoreRead
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -44,9 +45,16 @@ abstract class FreshAcpChatTransport(
         "${provider.name} ACP requires an operator approval channel; the chat was not started."))
       return@flow
     }
-    val history = if (request.scope is ChatScope.NewTask) {
-      store.newTaskHistory(request.sessionId)
-    } else if (request.firstTurn) emptyList() else store.exchanges(request.sessionId)
+    val historyRead = if (request.scope is ChatScope.NewTask) {
+      store.newTaskHistoryRead(request.sessionId)
+    } else if (request.firstTurn) ChatStoreRead.Value(emptyList()) else store.exchangesRead(request.sessionId)
+    if (historyRead is ChatStoreRead.Failed) {
+      val failure = historyRead.failure
+      emit(ChatEvent.Failed(ChatFailure.ProcessFailed,
+        "The saved chat history could not be read at ${failure.sourcePath}: ${failure.reason}. ${failure.recovery}"))
+      return@flow
+    }
+    val history = (historyRead as? ChatStoreRead.Value)?.value.orEmpty()
     val prompt = replayPrompt(scopeSystemPrompt(request.scope), history, request.prompt)
     val environment = host.variables + mapOf("HOME" to (host.variables["HOME"] ?: host.userHome))
     val reply = StringBuilder()

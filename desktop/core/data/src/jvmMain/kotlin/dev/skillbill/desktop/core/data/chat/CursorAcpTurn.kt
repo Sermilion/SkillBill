@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.data.approval.SessionApprovalGenerations
 import dev.skillbill.desktop.core.data.approval.toCard
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatStoreRead
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
@@ -197,7 +198,8 @@ internal fun cursorAcpTurn(
       } else if (saved == null) {
         store.saveCursorSession(request.sessionId, it, binding)
       } else {
-        store.agentSession(request.sessionId) == it && store.cursorSessionBinding(request.sessionId) == binding
+        (store.agentSessionRead(request.sessionId) as? ChatStoreRead.Value)?.value == it &&
+          (store.cursorSessionBindingRead(request.sessionId) as? ChatStoreRead.Value)?.value == binding
       }
     },
     onEvent = { event ->

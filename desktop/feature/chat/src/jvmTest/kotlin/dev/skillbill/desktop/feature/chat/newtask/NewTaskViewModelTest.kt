@@ -284,6 +284,7 @@ class NewTaskViewModelTest {
     assertEquals(false, draft.branchChoiceRequested)
     model.start(NewTaskKind.Verify, "Check sharing", null)
     model.onAction(NewTaskAction.UseCurrentBranchAsBase)
+    runCurrent()
     model.start(NewTaskKind.Verify, "Check sharing", null)
     runCurrent()
     assertEquals("feature/current", controls.newTaskRequests.single().baseBranch)
@@ -767,6 +768,7 @@ class NewTaskViewModelTest {
     val otherRepository = NewTaskRepository(createTempDirectory("other-new-task-repo").toString(), "other")
 
     model.onAction(NewTaskAction.ChooseRepository(otherRepository))
+    runCurrent()
     model.onAction(NewTaskAction.ChooseBaseBranch("origin/release"))
     runCurrent()
 
@@ -783,7 +785,8 @@ class NewTaskViewModelTest {
     assertEquals(rebound.sessionId, next.sessionId)
     assertEquals(dev.skillbill.desktop.core.domain.model.ChatScope.NewTask(otherRepository.root, "origin/release"), next.scope)
     assertTrue(next.prompt.contains("Earlier in this chat"))
-    assertTrue(next.prompt.contains("The repository changed from ${repository.root} to ${otherRepository.root}"))
+    assertTrue(next.prompt.contains("The effective working directory changed from ${repository.root} to ${otherRepository.root}"))
+    assertTrue(next.prompt.contains("The selected repository changed from ${repository.root} to ${otherRepository.root}"))
     assertTrue(next.prompt.contains("The base branch changed"))
     model.viewModelScope.cancel()
     draft.close()

@@ -116,6 +116,10 @@ class NewTaskViewModel(
 
   private var pathCheck: Job? = null
   private val agentReads = mutableMapOf<NewTaskDraft, Job>()
+  private class AgentReadOwner(val requestedAgentId: String?)
+
+  private val agentReadOwners = mutableMapOf<NewTaskDraft, AgentReadOwner>()
+  private val pendingRepositorySelection = mutableMapOf<NewTaskDraft, Pair<String, RepositoryBranches?>>()
   private var branchReadJob: Job? = null
   private var readinessRequested = false
 
@@ -133,9 +137,10 @@ class NewTaskViewModel(
       .catch { diagnostics.record("desktop_default_agent_unavailable") }
       .launchIn(viewModelScope)
     val first = draft
+    observeContextCommit(first)
     readBranches(first)
     viewModelScope.launch { observeBoard(loadRepositories()) }
-    readAgent(first) { resolveAgent(first, first.agentId ?: defaultAgentId()) }
+    readAgent(first) { owner -> resolveAgent(first, first.agentId ?: defaultAgentId(), owner) }
     viewModelScope.launch { chats.selected.drop(1).collect(::showSelected) }
     viewModelScope.launch { chats.resumed.collect { if (isSelected(it)) showResumed(it) } }
   }
@@ -155,9 +160,7 @@ class NewTaskViewModel(
         if (!canChangeContext(target)) return
         val loaded = mutableState.value.branchRead as? BranchReadState.Loaded ?: return
         if (loaded.root != target.repository?.root) return
-        target.baseBranch = loaded.branches.currentBranch.orEmpty()
-        target.rebindChat()
-        mutableState.update { it.copy(repositoryError = null) }
+        if (target.rebindChat(requestedBranch = loaded.branches.currentBranch.orEmpty())) mutableState.update { it.copy(repositoryError = null) }
       }
       NewTaskAction.RetryBranches -> target.repository?.root?.let { readBranches(target, it) }
       is NewTaskAction.ChooseRepository -> {
@@ -169,19 +172,17 @@ class NewTaskViewModel(
         if (!canChangeContext(target)) return
         val agent = target.selectedAgent ?: return
         if (agent.agentId != target.agentId) return
+        if (agentReadOwners[target]?.requestedAgentId?.let { it != agent.agentId } == true) return
         agentReads.remove(target)?.cancel()
         target.agentChosen = true
         val selected = agent.copy(model = action.model?.id, effort = null)
-        target.selectedAgent = selected
-        mutableState.update { it.copy(agent = selected) }
-        target.rebindChat()
+        target.rebindChat(requestedAgent = selected)
       }
       is NewTaskAction.ChooseAgent -> {
         if (!canChangeContext(target)) return
         target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
         target.agentChosen = true
-        target.agentId = action.agentId
-        readAgent(target) { resolveAgent(target, action.agentId) }
+        readAgent(target, action.agentId) { owner -> resolveAgent(target, action.agentId, owner) }
       }
       NewTaskAction.OpenRepositoryPicker -> {
         if (!canChangeContext(target)) return
@@ -207,7 +208,12 @@ class NewTaskViewModel(
         val loadsIntoTarget = target.chat.value == null
         if (!chats.resume(action.entry)) return
         // A read still running for the draft that took the load would rebind its chat to the old agent; other drafts keep theirs.
-        if (loadsIntoTarget && target.chat.value != null) agentReads.remove(target)?.cancel()
+        if (loadsIntoTarget || chats.selected.value !== target) {
+          val resumedTarget = chats.open.value.firstOrNull {
+            it.chat.value?.sessionId == action.entry.sessionId || action.entry.sessionId in it.resumeSourceSessions.value
+          }
+          agentReads.remove(resumedTarget ?: target)?.cancel()
+        }
         mutableState.update { it.copy(resumePickerOpen = false) }
       }
       is NewTaskAction.RunSuggestedAction -> {
@@ -241,22 +247,23 @@ class NewTaskViewModel(
   }
 
   private fun showSelected(selected: NewTaskDraft) {
+    observeContextCommit(selected)
     pathCheck?.cancel()
     mutableState.update {
       it.copy(agent = selected.selectedAgent, repositoryPickerOpen = false, resumePickerOpen = false, repositoryError = null)
     }
     readBranches(selected)
     val resolved = selected.selectedAgent != null && selected.selectedAgent?.agentId == selected.agentId
-    if (!resolved && selected !in agentReads) readAgent(selected) { resolveAgent(selected, selected.agentId ?: defaultAgentId()) }
+    if (!resolved && selected !in agentReads) readAgent(selected) { owner -> resolveAgent(selected, selected.agentId ?: defaultAgentId(), owner) }
     else if (resolved) followDefaultAgent(selected)
   }
 
   /** Moves a draft that has no conversation and no operator pick onto the current default agent. */
   private fun followDefaultAgent(target: NewTaskDraft) {
-    if (target.agentChosen || target.chat.value != null) return
-    readAgent(target) {
+    if (target.resuming || target.agentChosen || target.chat.value != null) return
+    readAgent(target) { owner ->
       val next = defaultAgentId() ?: return@readAgent
-      if (next != target.agentId && !target.agentChosen && target.chat.value == null) resolveAgent(target, next)
+      if (next != target.agentId && !target.agentChosen && target.chat.value == null) resolveAgent(target, next, owner)
     }
   }
 
@@ -281,10 +288,13 @@ class NewTaskViewModel(
   private suspend fun observeBoard(listed: List<NewTaskRepository>) {
     board.observe(ShellBoard.query).collect { read ->
       val target = draft
-      if (read !is BoardState.Loading && target.repository == null) {
+      if (read !is BoardState.Loading && !target.resuming && target.initialRepositoryDefaultPending && target.repository == null && target.chat.value == null) {
         val row = (read as? BoardState.Loaded)?.items?.firstOrNull()
-        target.repository = row?.let { NewTaskRepository(it.repositoryRoot, it.repositoryName) } ?: listed.firstOrNull()
-        readBranches(target)
+        val repository = row?.let { NewTaskRepository(it.repositoryRoot, it.repositoryName) } ?: listed.firstOrNull()
+        if (repository != null) {
+          target.repository = repository
+          readBranches(target)
+        }
       }
       val home = newTaskHome(read)
       mutableState.update { it.copy(home = home) }
@@ -317,21 +327,24 @@ class NewTaskViewModel(
   }
 
   /** Runs [read] as [target]'s only agent read, so a newer choice in one chat never cancels another chat's read. */
-  private fun readAgent(target: NewTaskDraft, read: suspend () -> Unit) {
+  private fun readAgent(target: NewTaskDraft, requestedAgentId: String? = null, read: suspend (AgentReadOwner) -> Unit) {
+    if (target.resuming) return
     agentReads.remove(target)?.cancel()
-    val job = viewModelScope.launch { read() }
+    val owner = AgentReadOwner(requestedAgentId)
+    agentReadOwners[target] = owner
+    val job = viewModelScope.launch { read(owner) }
     agentReads[target] = job
-    job.invokeOnCompletion { if (agentReads[target] === job) agentReads.remove(target) }
+    job.invokeOnCompletion {
+      if (agentReads[target] === job) agentReads.remove(target)
+      if (agentReadOwners[target] === owner) agentReadOwners.remove(target)
+    }
   }
 
-  private suspend fun resolveAgent(target: NewTaskDraft, agentId: String?) {
-    if (agentId == null) return
-    target.agentId = agentId
+  private suspend fun resolveAgent(target: NewTaskDraft, agentId: String?, owner: AgentReadOwner) {
+    if (agentId == null || target.resuming) return
     val agent = chat.agentFor(agentId)
-    if (target.agentId != agentId) return
-    target.selectedAgent = agent
-    if (isSelected(target)) mutableState.update { it.copy(agent = agent) }
-    target.rebindChat()
+    if (target.resuming || agentReadOwners[target] !== owner) return
+    target.rebindChat(requestedAgent = agent)
   }
 
   private fun readBranches(target: NewTaskDraft, rootOverride: String? = null) {
@@ -360,16 +373,10 @@ class NewTaskViewModel(
     if (!canChangeContext(target)) return
     pathCheck?.cancel()
     target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
-    if (repository.root != target.repository?.root) target.baseBranch = ""
-    target.repository = repository
-    target.rebindChat()
-    if (!isSelected(target)) return
-    mutableState.update { it.copy(repositoryError = null, repositoryPicks = it.repositoryPicks + 1) }
-    if (listed != null) {
-      branchReadJob?.cancel()
-      mutableState.update { it.copy(branchRead = BranchReadState.Loaded(repository.root, listed)) }
-    } else if ((mutableState.value.branchRead as? BranchReadState.Loaded)?.root != repository.root) {
-      readBranches(target)
+    val branch = if (repository.root != target.repository?.root) "" else target.baseBranch
+    pendingRepositorySelection[target] = repository.root to listed
+    if (!target.rebindChat(requestedRepository = repository, requestedBranch = branch)) {
+      pendingRepositorySelection.remove(target)
     }
   }
 
@@ -400,7 +407,9 @@ class NewTaskViewModel(
 
   private suspend fun checkPath(target: NewTaskDraft, path: String) {
     if (!canChangeContext(target)) return
-    when (val read = branches.branches(path)) {
+    val read = branches.branches(path)
+    if (!isSelected(target) || !canChangeContext(target)) return
+    when (read) {
       is RepositoryBranchesRead.NotARepository -> showRepositoryError(target, "$path is not a git repository.")
       is RepositoryBranchesRead.Unavailable -> showRepositoryError(target, "Could not read $path: ${readProblemText(read.problem)}")
       is RepositoryBranchesRead.Listed -> addListedRepository(target, read.branches)
@@ -435,8 +444,7 @@ class NewTaskViewModel(
     val checkout = branch.ifBlank { loaded?.defaultBranch.orEmpty() }
     if (loaded == null || checkout.isBlank() || checkout == loaded.currentBranch) {
       target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
-      target.baseBranch = branch
-      target.rebindChat()
+      target.rebindChat(requestedBranch = branch)
       return
     }
     val remote = loaded.remote.any { it.name == checkout }
@@ -460,14 +468,13 @@ class NewTaskViewModel(
         when (val result = branches.switchToBranch(root, branch, expectedCurrentBranch)) {
           is Outcome.Failure -> showRepositoryError(target, readProblemText(result.error))
           is Outcome.Success -> {
-            target.baseBranch = baseBranch
-            target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
+            if (!isSelected(target) || !canChangeContext(target) || target.repository?.root != root) return@launch
             val repository = NewTaskRepository(result.value, checkNotNull(target.repository).name)
             if ((mutableState.value.repositories + target.addedRepositories).none { it.root == repository.root }) {
               target.addedRepositories += repository
             }
-            target.repository = repository
-            target.rebindChat()
+            target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
+            target.rebindChat(requestedRepository = repository, requestedBranch = baseBranch)
             if (isSelected(target)) mutableState.update { it.copy(repositoryError = null) }
           }
         }
@@ -479,8 +486,36 @@ class NewTaskViewModel(
   }
 
   private fun canChangeContext(target: NewTaskDraft): Boolean {
+    if (target.resuming || target.contextTransitioning) return false
     if (target.chat.value?.thread?.deferDestructiveAction("change the draft context") == true) return false
     val current = target.chat.value
     return current?.repositoryMissing != true && current?.thread?.busy?.value != true && !target.offer.value.starting
+  }
+
+  private fun observeContextCommit(target: NewTaskDraft) {
+    target.onContextCommitted = { committed ->
+      if (isSelected(committed)) {
+        val selectedRoot = committed.repository?.root
+        val pending = pendingRepositorySelection.remove(committed)
+        val requestedRoot = pending?.first
+        mutableState.update { state ->
+          state.copy(agent = committed.selectedAgent, repositoryError = null,
+            repositoryPicks = state.repositoryPicks + if (requestedRoot != null && requestedRoot == selectedRoot) 1 else 0)
+        }
+        val listed = pending?.second
+        if (listed != null && listed.repositoryRoot == selectedRoot) {
+          branchReadJob?.cancel()
+          mutableState.update { it.copy(branchRead = BranchReadState.Loaded(listed.repositoryRoot, listed)) }
+        } else {
+          val branchRoot = when (val read = mutableState.value.branchRead) {
+            is BranchReadState.Reading -> read.root
+            is BranchReadState.Loaded -> read.root
+            is BranchReadState.Failed -> read.root
+            BranchReadState.Idle -> null
+          }
+          if (pending != null || branchRoot != selectedRoot) readBranches(committed)
+        }
+      }
+    }
   }
 }

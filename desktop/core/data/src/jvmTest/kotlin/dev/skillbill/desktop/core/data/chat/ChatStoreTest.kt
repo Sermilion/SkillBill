@@ -22,6 +22,7 @@ import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -88,6 +89,105 @@ class ChatStoreTest {
     assertEquals(listOf(draft), store.newTaskDrafts())
     store.delete("draft")
     assertEquals(emptyList(), store.newTaskDrafts())
+  }
+
+  @Test
+  fun `repository-free drafts persist explicit absence and their effective directory`() {
+    val writer = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    val draft = entry("home-chat", 4).copy(
+      executionId = null,
+      newTask = ChatNewTaskContext("/home/operator", null, selectedRepositoryRoot = null),
+    )
+    assertTrue(writer.saveChat(draft))
+
+    val restored = ChatStore(host, RecordingDiagnostics(), Clock.System).newTaskDrafts().single()
+
+    assertEquals("/home/operator", restored.newTask?.workingDirectory)
+    assertEquals(null, restored.newTask?.selectedRepositoryRoot)
+    val stored = Json.parseToJsonElement(File(host.userHome, "$CHAT_STORE_PATH/home-chat.json").readText()).jsonObject
+    assertEquals("/home/operator", stored.getValue("new_task_working_directory").jsonPrimitive.content)
+    assertEquals("null", stored.getValue("new_task_selected_repository_root").toString())
+    assertTrue("new_task_repository_root" !in stored)
+  }
+
+  @Test
+  fun `completing a pending turn clears its stored boundary without dropping unknown fields`() {
+    val writer = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    val lines = listOf(
+      ChatHistoryLine(ChatHistoryRole.Operator, "first"),
+      ChatHistoryLine(ChatHistoryRole.Agent, "first reply"),
+      ChatHistoryLine(ChatHistoryRole.Operator, "second"),
+      ChatHistoryLine(ChatHistoryRole.Agent, "second reply"),
+    )
+    val pending = entry("pending-chat", 4).copy(
+      executionId = null,
+      lines = lines,
+      newTask = ChatNewTaskContext("/work/app", "main", pendingTurnLineIndex = 2),
+    )
+    assertTrue(writer.saveChat(pending))
+    val file = File(host.userHome, "$CHAT_STORE_PATH/pending-chat.json")
+    file.writeText(file.readText().dropLast(1) + ",\"custom_source\":\"kept\"}")
+    val completed = pending.copy(newTask = checkNotNull(pending.newTask).copy(baseBranch = null, pendingTurnLineIndex = null))
+
+    assertTrue(writer.saveChat(completed))
+
+    val reader = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    assertEquals(completed.newTask, reader.newTaskDrafts().single().newTask)
+    assertEquals(listOf(ChatExchange("first", "first reply"), ChatExchange("second", "second reply")), reader.newTaskHistory("pending-chat"))
+    assertEquals("kept", Json.parseToJsonElement(file.readText()).jsonObject.getValue("custom_source").jsonPrimitive.content)
+  }
+
+  @Test
+  fun `legacy repository drafts migrate before listing and retain unknown fields`() {
+    val file = File(host.userHome, "$CHAT_STORE_PATH/legacy-draft.json").apply {
+      parentFile.mkdirs()
+      writeText("""{"session_id":"legacy-draft","agent_id":"codex","new_task_repository_root":"/work/old","lines":[{"role":"Operator","text":"continue"}],"custom_source":"kept"}""")
+    }
+
+    val restored = ChatStore(host, RecordingDiagnostics(), Clock.System).newTaskDrafts().single()
+    val stored = Json.parseToJsonElement(file.readText()).jsonObject
+
+    assertEquals("legacy-draft", restored.sessionId)
+    assertEquals("/work/old", restored.newTask?.workingDirectory)
+    assertEquals("/work/old", restored.newTask?.selectedRepositoryRoot)
+    assertEquals("kept", stored.getValue("custom_source").jsonPrimitive.content)
+    assertEquals("1", stored.getValue("new_task_context_version").jsonPrimitive.content)
+  }
+
+  @Test
+  fun `unsupported draft context is retained and cannot be overwritten or swept`() {
+    val diagnostics = RecordingDiagnostics()
+    val file = File(host.userHome, "$CHAT_STORE_PATH/unsupported.json").apply {
+      parentFile.mkdirs()
+      writeText("""{"session_id":"unsupported","agent_id":"codex","new_task_context_version":9,"new_task_working_directory":"/home/operator","new_task_selected_repository_root":null,"lines":[{"role":"Operator","text":"keep me"}]}""")
+      setLastModified(1)
+    }
+    val store = ChatStore(host, diagnostics, Clock.System)
+
+    store.savedChats("wf-1")
+
+    assertFalse(store.saveAgentSession("unsupported", "replacement"))
+    assertTrue(file.isFile)
+    assertTrue("keep me" in file.readText())
+    assertTrue("chat.store_context_invalid" in diagnostics.categories)
+  }
+
+  @Test
+  fun `malformed chat diagnostics exclude conversation text and preserve the source`() {
+    val original = """{"lines":[{"role":"Operator","text":"private account details"}]"""
+    val file = File(host.userHome, "$CHAT_STORE_PATH/private-draft.json").apply {
+      parentFile.mkdirs()
+      writeText(original)
+    }
+
+    val result = ChatStore(host, RecordingDiagnostics(), Clock.System).newTaskDraftsRead()
+
+    assertTrue(result.entries.isEmpty())
+    val failure = result.failures.single()
+    assertEquals(file.absolutePath, failure.sourcePath)
+    assertTrue(failure.reason.startsWith("unreadable JSON:"))
+    assertFalse("private account details" in failure.reason)
+    assertEquals(original, file.readText())
   }
 
   // Capping before dropping unreadable drafts would let an operator-less draft take a slot and hide a real one.

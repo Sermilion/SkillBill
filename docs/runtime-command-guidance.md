@@ -69,6 +69,11 @@ and access, and resolves blockers before it offers a goal start card. It infers 
 it can from available evidence and batches questions that affect the outcome. This
 preparation stays in chat. A standalone planning run is a separate explicit request.
 
+When no repository is selected, the chat runs ordinary questions, tools, file edits
+and saves in the user's home directory. It does not prepare repository branches or
+start goals, phases or operations. Ask the operator to select a repository first,
+including when they request a direct CLI or MCP launch.
+
 Only the operator clicking the inline start card launches a goal from new-task chat.
 Chat replies, issue keys and requests to implement do not authorize a CLI or MCP
 launch. The app owns the start action and issue-key entry. An explicit request for

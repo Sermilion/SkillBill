@@ -24,13 +24,21 @@ private fun executionSystemPrompt(scope: ChatScope.Execution): String = buildStr
 
 private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString {
   appendLine("You are chatting with the operator about new work. No skill-bill execution exists yet.")
-  appendLine("Repository: ${scope.repositoryRoot}")
-  scope.baseBranch?.let { appendLine("Base branch: $it") }
+  if (scope.selectedRepositoryRoot == null) {
+    appendLine("Home directory: ${scope.workingDirectory}")
+    appendLine("Selected repository: none.")
+    appendLine("Ordinary questions, tool use, file edits and saves are allowed in the home directory.")
+    appendLine("Before any goal, phase or operation, including direct CLI or MCP requests, ask the operator to select a repository.")
+  } else {
+    appendLine("Working directory: ${scope.workingDirectory}")
+    appendLine("Repository: ${scope.selectedRepositoryRoot}")
+    scope.baseBranch?.let { appendLine("Base branch: $it") }
+    appendLine(NEW_TASK_BRANCH_GUIDANCE.trim())
+    appendLine(NEW_TASK_PREPARATION_GUIDANCE.trim())
+    appendLine(NEW_TASK_ROUTING_GUIDANCE.trim())
+    append(NEW_TASK_ACTION_GUIDANCE.trimEnd())
+  }
   appendLine(CHAT_ACCESS_GUIDANCE)
-  appendLine(NEW_TASK_BRANCH_GUIDANCE.trim())
-  appendLine(NEW_TASK_PREPARATION_GUIDANCE.trim())
-  appendLine(NEW_TASK_ROUTING_GUIDANCE.trim())
-  append(NEW_TASK_ACTION_GUIDANCE.trimEnd())
 }
 
 private const val CHAT_ACCESS_GUIDANCE =

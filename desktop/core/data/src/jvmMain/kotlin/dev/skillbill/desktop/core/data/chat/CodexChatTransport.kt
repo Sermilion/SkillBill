@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.data.usage.codexEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatStoreRead
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
 import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
@@ -190,7 +191,14 @@ class CodexChatTransport(
     val collection = currentCoroutineContext()[Job]
     if (collection != null) activeTurns[request.sessionId] = collection
     try {
-      val savedThread = store.agentSession(request.sessionId)
+      val savedThreadRead = store.agentSessionRead(request.sessionId)
+      if (savedThreadRead is ChatStoreRead.Failed) {
+        val failure = savedThreadRead.failure
+        emit(ChatEvent.Failed(ChatFailure.ProcessFailed,
+          "The saved Codex chat could not be read at ${failure.sourcePath}: ${failure.reason}. ${failure.recovery}"))
+        return@flow
+      }
+      val savedThread = (savedThreadRead as? ChatStoreRead.Value)?.value
       if (savedThread != null && savedThread.isBlank()) {
         diagnostics.record("chat.codex_thread_invalid")
         emit(

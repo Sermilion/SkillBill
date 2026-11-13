@@ -365,7 +365,7 @@ class NewTaskComposerTest {
     seedDraft.send()
     val saved = checkNotNull(missingChat.saved.values.single())
     val entry = saved.copy(
-      newTask = checkNotNull(saved.newTask).copy(repositoryRoot = "$missingRoot/removed"),
+      newTask = checkNotNull(saved.newTask).copy(workingDirectory = "$missingRoot/removed", selectedRepositoryRoot = "$missingRoot/removed"),
     )
     seedDraft.close()
     val missingDraft = NewTaskDraft(
