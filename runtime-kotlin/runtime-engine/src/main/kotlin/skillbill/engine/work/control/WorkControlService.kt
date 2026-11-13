@@ -82,6 +82,7 @@ public class WorkControlService(
     when (action) {
       WorkControlAction.CANCEL -> cancellation.cancel(target)
       WorkControlAction.LAUNCH -> runs.launch(target, agentId, qaDevice)
+      WorkControlAction.FINALIZE -> runs.finalize(target)
       WorkControlAction.PAUSE, WorkControlAction.STOP, WorkControlAction.RECOVER ->
         WorkControlResult.Rejected(
           WorkControlRejection.INELIGIBLE_TARGET,

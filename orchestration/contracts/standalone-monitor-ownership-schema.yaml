@@ -21,7 +21,7 @@ required:
   - updated_at
 properties:
   contract_version:
-    const: "1.0"
+    const: "1.1"
   target:
     oneOf:
       - type: object
@@ -133,6 +133,7 @@ properties:
           - publication_unknown
           - unowned_resource
           - cleanup_failed
+          - awaiting_finalize
       detail:
         type: string
         minLength: 1

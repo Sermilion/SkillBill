@@ -52,6 +52,7 @@ internal fun RunActions(
         ActionButton(button, LucideIcons.play, variant = if (button.enabled) SbButtonVariant.Primary else SbButtonVariant.Secondary) { onAction(ControlsAction.ImplementPlan) }
         AgentPicker(view, agentChoices, menuOpen, onAction)
       }
+      view.finalize?.let { ActionButton(it, LucideIcons.checkCircle) { onAction(ControlsAction.Finalize) } }
       view.cancel?.let { ActionButton(it, LucideIcons.x, variant = SbButtonVariant.Danger) { onAction(ControlsAction.Cancel) } }
       view.recover?.let { ActionButton(it, LucideIcons.refresh, modifier = Modifier.focusRequester(recoverFocus)) { onAction(ControlsAction.Recover) } }
     }

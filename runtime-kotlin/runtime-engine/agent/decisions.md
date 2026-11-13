@@ -1,3 +1,19 @@
+## [2026-11-13] Defer monitor repair trees until Finalize
+Context: Complete settled monitor resources, and inactive-owner recovery could force-clean a retained repair tree. Ordinary settle requires the original in-process fence.
+Decision: Persist AWAITING_FINALIZE on completed repair trees, skip Complete settlement and inactive reclamation, and use disk-backed non-force removal from Finalize.
+Reason: Skipping settlement alone would still allow later force-cleanup to delete unpublished repair work. A later process cannot reuse the original held fence.
+Alternatives considered: Reusing ordinary settle on Finalize loses the fence; forcing sibling release would violate last-holder removal rules.
+
+## [2026-11-13] Write standalone monitor ownership 1.1 and keep reading 1.0
+Context: Deferred repair-tree cleanup needs an awaiting_finalize reason that contract 1.0 did not declare. Persisted 1.0 tombstones remain live admission state.
+Decision: Write ownership contract 1.1 with awaiting_finalize and keep the codec reading 1.0 records.
+Reason: Reclamation must distinguish trees awaiting operator Finalize without rejecting existing pull-request and branch ownership records on upgrade.
+
+## [2026-11-13] Preserve unsettled board rows across later attempts
+Context: Supersession could clear liveSection and requiresAttention on a failed or blocked standalone row when a newer attempt existed in its phase group.
+Decision: Do not supersede projected failed, blocked or terminal unfinalized rows. Keep their runtime board policy authoritative for desktop placement.
+Reason: A later attempt does not resolve the earlier row's operator work. Desktop inference would conceal the projection defect and duplicate membership policy.
+
 ## [2026-11-13] Targeted crash recovery inspects process liveness without waiting for lease expiry
 Context: A provider-limit pause left a standalone plan RUNNING with a day-long worker lease after the process had already exited. Resume classified it as AlreadyRunning because targeted crash recovery skipped unexpired leases.
 Decision: FeatureTaskRuntimeCrashReconciler.reconcile(workflowId) admits a running or blocked worker with a matching active or takeover-reserved lease regardless of expiresAt. Reconciliation still requires inspect() to confirm the process is dead. The global startup scan stays expiry-gated so live workers are not inspected at boot.
@@ -60,6 +76,7 @@ Reason: Different named targets must not block each other for the life of a watc
 Context: Branch targets needed a persisted identity beside pull requests. A version bump would loud-fail every previously monitored pull request, because released tombstones persist and requireVersion is strict equality.
 Decision: Keep contract_version at 1.0 and widen target to a oneOf of the existing pull-request shape and a branch shape (host, repository, ref, url). Pull-request records stay byte-identical. Admission still hashes targetKey, so branch and pull-request directories cannot collide.
 Reason: An older runtime never opens a branch directory because the hash differs, and it can still decode its own 1.0 pull-request tombstones. Those tombstones are live admission state, not discarded artifacts.
+Superseded by: Write standalone monitor ownership 1.1 and keep reading 1.0 (2026-11-13)
 Alternatives considered: Bumping the schema per AGENTS.md's loud-fail convention, rejected because it would block every previously monitored pull request on the next run.
 Revisit when: a later change needs ownership fields the 1.0 oneOf cannot carry without a bump.
 ## [2026-11-02] Read run failure logs in the launcher, not the engine

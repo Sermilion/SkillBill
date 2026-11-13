@@ -63,7 +63,9 @@ internal class OperationConfirmationRecovery(
 
   fun finishCleanup(card: OperationCardProjection) {
     val pending = cards.pendingCleanup(card.token) ?: return
-    cards.findLaunchContext(pending.launchId)?.let(::releaseHolder)
+    if (card.status != OperationCardStatus.COMPLETED) {
+      cards.findLaunchContext(pending.launchId)?.let(::releaseHolder)
+    }
     cards.completeCleanup(pending.executionId)
   }
 

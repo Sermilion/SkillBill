@@ -292,6 +292,7 @@ internal object WorkBoardReadModelPayloadValidation {
 
     fun invalidFieldGroup1(fields: Map<String, Any?>): Boolean =
       !optionalInstant(fields, WorkBoardReadModelPayloadKeys.FINISHED_AT) ||
+        !optionalInstant(fields, WorkBoardReadModelPayloadKeys.OPERATOR_FINALIZED_AT) ||
         !optionalEnum(
           fields,
           WorkBoardReadModelPayloadKeys.FINISHED_AT_SOURCE,

@@ -9,7 +9,7 @@ internal const val VERIFY_CRITERION_RESOLUTIONS_TABLE: String = "verify_criterio
 
 internal fun verifyCriterionResolutionsMigration(): DatabaseMigration =
   DatabaseMigration(
-    version = 128,
+    version = 131,
     name = "record-verify-criterion-resolutions",
     operation = ::recordVerifyCriterionResolutions,
   )

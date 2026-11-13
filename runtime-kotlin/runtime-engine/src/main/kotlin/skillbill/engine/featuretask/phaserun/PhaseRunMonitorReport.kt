@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phaserun
 
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
+import skillbill.engine.featuretask.phaserun.monitor.MonitorCleanupOwnership
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorRunFailureCode
 import skillbill.engine.featuretask.phaserun.monitor.monitorOutcomeDetail
 import skillbill.error.core.SkillBillRuntimeException
@@ -25,6 +26,18 @@ internal fun earlySetupReport(
   identity: MonitorTargetIdentity?,
   settlement: MonitorSettlement?,
 ): List<String> = earlyReport(selector, identity) + listOfNotNull(settlement?.let { "Cleanup: ${cleanupLine(it)}" })
+
+internal fun settleMonitorCleanup(
+  cleanup: MonitorCleanupOwnership,
+  outcome: Result<PhaseRunResult>,
+): MonitorSettlement {
+  val primary = primaryOutcomeOf(outcome)
+  return if (outcome.getOrNull() is PhaseRunResult.Completed) {
+    cleanup.deferUntilFinalize(primary)
+  } else {
+    cleanup.settle(primary)
+  }
+}
 
 public fun primaryOutcomeOf(outcome: Result<PhaseRunResult>): MonitorPrimaryOutcome =
   outcome.fold(

@@ -44,6 +44,7 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.idestatus.model.WorkDetailRequest
+import skillbill.ports.monitor.NoopStandaloneMonitorResources
 import skillbill.ports.operation.EmptyOperationCardRepository
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.system.CheckedOutBranchSource
@@ -305,6 +306,7 @@ private class GoalControlsFixture(
       goalPreflightServiceForTests(database),
       EnvironmentContext(),
       TestRepositoryEnclosingRoot,
+      WorkRunFinalizer(RecordingBranchWorktreeResources(), NoopStandaloneMonitorResources),
     )
   private val recovery =
     BlockIncidentRecoveryService(

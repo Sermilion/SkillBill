@@ -7,6 +7,7 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.core.schema.OPERATOR_FINALIZED_AT_COLUMN
 import skillbill.infrastructure.sqlite.workflow.artifact.FeatureTaskWorkflowArtifactsCodec
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -15,27 +16,42 @@ import java.sql.ResultSet
 
 internal object WorkflowStateSqlReads
 
+private const val FEATURE_VERIFY_WORKFLOWS_TABLE: String = "feature_verify_workflows"
+
+private fun workflowStateSelectColumns(tableName: String): String {
+  val operatorFinalized =
+    if (tableName == FEATURE_VERIFY_WORKFLOWS_TABLE) {
+      ",\n      $OPERATOR_FINALIZED_AT_COLUMN"
+    } else {
+      ""
+    }
+  return """
+    workflow_id,
+    session_id,
+    workflow_name,
+    contract_version,
+    workflow_status,
+    current_step_id,
+    steps_json,
+    artifacts_json,
+    issue_key,
+    started_at,
+    updated_at,
+    state_entered_at,
+    state_entered_at_estimated,
+    finished_at$operatorFinalized
+    """.trimIndent()
+}
+
 internal fun Connection.getWorkflowRow(
   tableName: String,
   workflowId: String,
-): WorkflowStateRecord? =
-  prepareStatement(
+): WorkflowStateRecord? {
+  val columns = workflowStateSelectColumns(tableName)
+  return prepareStatement(
     """
     SELECT
-      workflow_id,
-      session_id,
-      workflow_name,
-      contract_version,
-      workflow_status,
-      current_step_id,
-      steps_json,
-      artifacts_json,
-      issue_key,
-      started_at,
-      updated_at,
-      state_entered_at,
-      state_entered_at_estimated,
-      finished_at
+      $columns
     FROM $tableName
     WHERE workflow_id = ?
     """.trimIndent(),
@@ -45,9 +61,10 @@ internal fun Connection.getWorkflowRow(
       if (!resultSet.next()) {
         return null
       }
-      resultSet.toWorkflowStateRecord()
+      resultSet.toWorkflowStateRecord(tableName == FEATURE_VERIFY_WORKFLOWS_TABLE)
     }
   }
+}
 
 internal fun Connection.getFeatureTaskWorkflowRow(workflowId: String): WorkflowStateRecord? =
   prepareStatement(
@@ -89,23 +106,11 @@ internal fun Connection.getWorkflowRows(
   if (workflowIds.isEmpty()) {
     return emptyMap()
   }
+  val columns = workflowStateSelectColumns(tableName)
   return prepareStatement(
     """
     SELECT
-      workflow_id,
-      session_id,
-      workflow_name,
-      contract_version,
-      workflow_status,
-      current_step_id,
-      steps_json,
-      artifacts_json,
-      issue_key,
-      started_at,
-      updated_at,
-      state_entered_at,
-      state_entered_at_estimated,
-      finished_at
+      $columns
     FROM $tableName
     WHERE workflow_id IN (${workflowIds.workflowSqlPlaceholders()})
     """.trimIndent(),
@@ -114,7 +119,7 @@ internal fun Connection.getWorkflowRows(
     statement.executeQuery().use { resultSet ->
       buildMap {
         while (resultSet.next()) {
-          val row = resultSet.toWorkflowStateRecord()
+          val row = resultSet.toWorkflowStateRecord(tableName == FEATURE_VERIFY_WORKFLOWS_TABLE)
           put(row.workflowId, row)
         }
       }
@@ -187,23 +192,11 @@ internal fun Connection.listWorkflowRows(
   limit: Int,
 ): List<WorkflowStateRecord> {
   val normalizedLimit = limit.coerceAtLeast(0)
+  val columns = workflowStateSelectColumns(tableName)
   return prepareStatement(
     """
     SELECT
-      workflow_id,
-      session_id,
-      workflow_name,
-      contract_version,
-      workflow_status,
-      current_step_id,
-      steps_json,
-      artifacts_json,
-      issue_key,
-      started_at,
-      updated_at,
-      state_entered_at,
-      state_entered_at_estimated,
-      finished_at
+      $columns
     FROM $tableName
     ORDER BY updated_at DESC, rowid DESC
     LIMIT ?
@@ -213,7 +206,7 @@ internal fun Connection.listWorkflowRows(
     statement.executeQuery().use { resultSet ->
       buildList {
         while (resultSet.next()) {
-          add(resultSet.toWorkflowStateRecord())
+          add(resultSet.toWorkflowStateRecord(tableName == FEATURE_VERIFY_WORKFLOWS_TABLE))
         }
       }
     }
@@ -304,7 +297,7 @@ internal fun Connection.listFeatureTaskWorkflowRows(
   }
 }
 
-internal fun ResultSet.toWorkflowStateRecord(): WorkflowStateRecord =
+internal fun ResultSet.toWorkflowStateRecord(readOperatorFinalized: Boolean = false): WorkflowStateRecord =
   WorkflowStateRecord(
     workflowId = getString(SharedPayloadKeys.WORKFLOW_ID),
     sessionId = getString("session_id"),
@@ -320,6 +313,7 @@ internal fun ResultSet.toWorkflowStateRecord(): WorkflowStateRecord =
     stateEnteredAt = getString("state_entered_at"),
     stateEnteredAtEstimated = getInt("state_entered_at_estimated") != 0,
     finishedAt = getString("finished_at"),
+    operatorFinalizedAt = if (readOperatorFinalized) getString(OPERATOR_FINALIZED_AT_COLUMN) else null,
   )
 
 internal fun ResultSet.toFeatureTaskWorkflowStateRecord(): WorkflowStateRecord {

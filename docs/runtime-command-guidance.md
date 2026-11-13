@@ -653,9 +653,9 @@ CI verdict, deadline, or repair attempt count.
 
 Each goal runs in `<state>/goals/<repo>/<goal>/checkout`. Standalone phases use the
 caller's checkout. A desktop start that names a branch runs in the checkout holding
-that branch, or in a sibling worktree the runtime creates; the runtime removes that
-worktree with plain `git worktree remove` once the last run holding it completes, and
-keeps it, noting why, when removal fails. After recording completion, the runtime removes a clean worktree
+that branch, or in a sibling worktree the runtime creates; the last run holding it
+removes that worktree after Finalize with plain `git worktree remove`, and keeps it,
+noting why, when removal fails. After recording completion, the runtime removes a clean worktree
 and keeps the goal branch. It retains worktrees with `dirty_worktree`,
 `untracked_files`, `unpublished_commits`, `publication_unknown`, `unowned_resource`,
 or `cleanup_failed`. `goal status` shows the path, reason, detail, and the exact

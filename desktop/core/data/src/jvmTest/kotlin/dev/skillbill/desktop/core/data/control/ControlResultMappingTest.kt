@@ -16,6 +16,7 @@ class ControlResultMappingTest {
       Triple(WorkControlResult.Accepted, ControlKind.PAUSE_NOW, ControlOutcome.NoProcessNeeded),
       Triple(WorkControlResult.IntentRecorded, ControlKind.PAUSE_AFTER_SUBTASK, ControlOutcome.IntentRecorded),
       Triple(WorkControlResult.Accepted, ControlKind.LAUNCH, ControlOutcome.RequestAccepted),
+      Triple(WorkControlResult.Accepted, ControlKind.FINALIZE, ControlOutcome.RequestAccepted),
     )
     val diagnostics = RecordingDiagnostics()
     cases.forEach { (result, kind, expected) -> assertEquals(expected, result.toControlOutcome(kind, diagnostics), "$result as $kind") }

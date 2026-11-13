@@ -22,4 +22,5 @@ public data class WorkRunOptions(
   val agentChoices: List<String>,
   val unavailableReason: String? = null,
   val goalStarted: Boolean = false,
+  val canFinalize: Boolean = false,
 )

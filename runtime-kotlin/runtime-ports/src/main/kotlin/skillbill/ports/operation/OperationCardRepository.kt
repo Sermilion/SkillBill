@@ -28,6 +28,8 @@ interface OperationCardRepository : OperationConfirmationLedger {
 
   fun findByLaunch(launchId: String): OperationCardProjection?
 
+  fun findLaunchContextByInvocation(invocationId: String): OperationLaunchContext?
+
   /**
    * In one transaction, supersedes the authoritative proposal for [token] and marks an awaiting card cancelled, so a
    * dismissed card cannot reuse its token. Returns false when the card is not awaiting confirmation.

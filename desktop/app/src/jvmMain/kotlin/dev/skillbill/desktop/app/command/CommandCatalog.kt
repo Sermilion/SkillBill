@@ -111,6 +111,9 @@ class CommandCatalog(
       if (runOptions?.canLaunch == true && !reserved) {
         add(control("launch", runOptions.launchLabel, LucideIcons.play, "R", ControlAction.Launch, subject) { controls.launch(item, runOptions.agentId) })
       }
+      if (runOptions?.canFinalize == true && !reserved) {
+        add(control("finalize", "Finalize", LucideIcons.checkCircle, null, ControlAction.Finalize, subject) { controls.finalize(item) })
+      }
       if (runOptions?.canCancel == true && !reserved) {
         add(control("cancel", "Cancel", LucideIcons.x, null, ControlAction.Cancel, subject) { controls.cancel(item) })
       }

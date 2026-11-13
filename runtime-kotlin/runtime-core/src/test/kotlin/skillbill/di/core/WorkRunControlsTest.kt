@@ -22,6 +22,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.idestatus.model.WorkDetailRequest
+import skillbill.ports.idestatus.model.WorkLiveSection
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
@@ -140,7 +141,7 @@ class WorkRunControlsTest {
   }
 
   @Test
-  fun `keyless phase retries keep only the latest attempt in live work and retain older blocked attempts`() {
+  fun `keyless phase retries retain older blocked attempts in needs you and execution history`() {
     establishTemporarySchemaReadiness("phase-retry-group").use { fixture ->
       val component = component(fixture.tempDir, fixture.dbPath)
       component.databaseSession.transaction { unit ->
@@ -168,18 +169,18 @@ class WorkRunControlsTest {
           WorkBoardRequest(),
         )
       val old = board.items.single { it.snapshot.execution?.invocationId == "interrupted" }
-      assertNull(old.liveSection)
-      assertFalse(old.requiresAttention)
-      assertNotNull(old.finishedAt)
+      assertEquals(WorkLiveSection.NEEDS_YOU, old.liveSection)
+      assertTrue(old.requiresAttention)
+      assertNull(old.finishedAt)
       assertEquals(IdeStatusLifecycleState.BLOCKED, old.snapshot.lifecycleState)
-      assertEquals(2, board.items.count { it.liveSection != null })
+      assertEquals(3, board.items.count { it.liveSection != null })
       val history = assertNotNull(component.ideStatusService.detail(WorkDetailRequest("newest")).item)
       assertEquals(setOf("newest", "interrupted"), history.executionHistory.map { it.invocationId }.toSet())
     }
   }
 
   @Test
-  fun `the QA details a phase run settled with reach its execution history`() {
+  fun `completed QA retains details and finalization after a newer attempt starts`() {
     establishTemporarySchemaReadiness("phase-qa-details").use { fixture ->
       val component = component(fixture.tempDir, fixture.dbPath)
       val details = QaRunDetails(reportPath = "/qa/report.md", skipReason = "empty_scope")
@@ -190,6 +191,8 @@ class WorkRunControlsTest {
               phaseId = "qa",
               lifecycleState = "active",
               leaseExpiresAt = Instant.now().plusSeconds(3600),
+              launchAgentId = "codex",
+              launchArguments = listOf("phase", "qa", "--agent", "codex"),
             ),
           )
         it.standalonePhaseStatuses.update(
@@ -207,11 +210,27 @@ class WorkRunControlsTest {
             qaDetails = details,
           ),
         )
+        it.standalonePhaseStatuses.register(
+          registration(fixture.tempDir).copy(
+            invocationId = "newer-qa",
+            executionId = "newer-qa-execution",
+            phaseId = "qa",
+            lifecycleState = "active",
+            startedAt = registered.startedAt.plusSeconds(1),
+            leaseExpiresAt = Instant.now().plusSeconds(3600),
+          ),
+        )
       }
 
       val item = assertNotNull(component.ideStatusService.detail(WorkDetailRequest("interrupted")).item)
 
       assertEquals(details, item.executionHistory.single { it.invocationId == "interrupted" }.qaDetails)
+      assertEquals(WorkLiveSection.NEEDS_YOU, item.liveSection)
+      assertTrue(item.requiresAttention)
+      assertNotNull(item.finishedAt)
+      val options = assertNotNull(component.workControlService.options(target(component)))
+      assertTrue(options.canFinalize)
+      assertTrue(options.canLaunch)
     }
   }
 

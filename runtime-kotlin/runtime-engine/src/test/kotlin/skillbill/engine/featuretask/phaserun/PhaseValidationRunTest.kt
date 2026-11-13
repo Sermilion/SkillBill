@@ -17,10 +17,6 @@ import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
-import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
-import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
-import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolderKind
-import skillbill.ports.workflow.branchworktree.model.BranchWorktreeRelease
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.workflow.model.WorkflowStepStatus
@@ -53,7 +49,6 @@ class PhaseValidationRunTest {
       it.gitOperations.trackedPathsValue = listOf("src/Foo.kt")
     }
   private val headBefore = branchSetup.gitOperations.headCommitShaValue
-  private val branchWorktrees = RecordingBranchWorktreeResources()
 
   @AfterTest
   fun cleanUp() {
@@ -146,18 +141,13 @@ class PhaseValidationRunTest {
   }
 
   @Test
-  fun `a completed standalone invocation releases its branch worktree and reports one it had to keep`() {
-    branchWorktrees.releaseResult = BranchWorktreeRelease.Kept(repoRoot, "git worktree remove failed: dirty")
+  fun `a completed standalone invocation keeps its branch worktree until finalize`() {
     val entry =
       entry(launcher { validJsonOutput(PHASE_VALIDATE) }, mutableListOf(), emptyList(), manifests = emptyList())
 
     val result = assertIs<PhaseRunResult.Completed>(entry.runInvocation(validationRequest()))
 
-    assertEquals(
-      listOf(repoRoot to BranchWorktreeHolder(BranchWorktreeHolderKind.PHASE, SkeletonDefinition.VALIDATION.id)),
-      branchWorktrees.released,
-    )
-    assertTrue(result.targetReport.any { repoRoot.toString() in it && "dirty" in it }, result.targetReport.toString())
+    assertTrue(result.targetReport.none { repoRoot.toString() in it && "dirty" in it }, result.targetReport.toString())
   }
 
   @Test
@@ -328,7 +318,6 @@ class PhaseValidationRunTest {
       database,
       clock,
       harness.runLoopEntry.delegateTo(runLoopEntry),
-      branchWorktrees = branchWorktrees,
     )
   }
 }

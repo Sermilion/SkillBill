@@ -134,6 +134,7 @@ data class StandalonePhaseStatusUpdate(
   val currentActivity: String?,
   val updatedAt: Instant,
   val finishedAt: Instant? = null,
+  val operatorFinalizedAt: Instant? = null,
   val activeDurationMs: Long? = null,
   val activeDurationAsOf: Instant? = null,
   val terminalResult: String? = null,
@@ -158,6 +159,22 @@ enum class StandalonePhaseStatusUpdateResult {
   MISSING,
 }
 
+data class StandalonePhaseFinalizeRequest(
+  val executionId: String,
+  val operatorFinalizedAt: Instant,
+  val branchWorktreeRetainedPath: String? = null,
+  val branchWorktreeRetainedDetail: String? = null,
+  val monitorCleanup: StandaloneMonitorCleanup? = null,
+  val terminalResultAppendix: String? = null,
+)
+
+enum class StandalonePhaseFinalizeResult {
+  ACCEPTED,
+  INELIGIBLE,
+  ALREADY_FINALIZED,
+  MISSING,
+}
+
 data class StandalonePhaseStatusRecord(
   val repositoryIdentity: String,
   val branchCorrelation: String,
@@ -175,6 +192,7 @@ data class StandalonePhaseStatusRecord(
   val startedAt: Instant,
   val updatedAt: Instant,
   val finishedAt: Instant?,
+  val operatorFinalizedAt: Instant? = null,
   val activeDurationMs: Long?,
   val activeDurationAsOf: Instant?,
   val leaseOwner: String,
@@ -199,6 +217,8 @@ data class StandalonePhaseStatusRecord(
   val validationOutcome: StandaloneValidationOutcome? = null,
   val reportedModel: String? = null,
   val primaryRepositoryRoot: String? = null,
+  val branchWorktreeRetainedPath: String? = null,
+  val branchWorktreeRetainedDetail: String? = null,
   val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 )
 

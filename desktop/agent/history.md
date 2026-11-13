@@ -1,3 +1,14 @@
+## [2026-11-13] SONA-20 desktop Finalize controls
+Areas: desktop/feature/detail and work; desktop/core/data, domain and ui; desktop/app/command; design/linear-study; docs/runtime-command-guidance.md
+- MEDIUM feature. Detail actions, the Work row menu and CommandCatalog offer Finalize from runtime canFinalize and retain Resume or Run again from canLaunch, including completed unfinalized rows.
+- RunOptions maps canFinalize with a false default. WorkAction.Finalize forwards WorkControlAction.FINALIZE through ControlKind.FINALIZE, retains changed-target handling and reports Finalize recorded. Desktop performs no worktree removal.
+- Final section mapping preserves runtime liveSection. Only null liveSection with recentlyFinishedPhase or doneWithinDay maps to Finished today; execution finishedAt and null liveSection alone do not qualify. Canceled or hidden rows stay available in loaded items for history paths.
+- reusable: workRowMenuEntries derives launch and Finalize entries from runtime options without Compose.
+- Design screens, menu/library data, HANDOFF sections 9.1 and 9.2 item 4, and sibling-worktree guidance describe Finalize and last-holder release.
+- Limits: no Finalize shortcut; R remains Resume. Supplied QA-1 remains open, the screenshot inventory rejected 10 entries, and QA did not rerun after validate changed code.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across SONA-20; QA-1 remains open.
+
 ## [2026-11-11] SKILL-538 rename desktop app to Sona
 Areas: desktop/app copy, tray and packaging; desktop/core/data and designsystem; desktop/feature/chat, config, settings, specs and tray; desktop/build-logic; docs/assets; root installer/uninstaller; scripts smoke and USB display; runtime-cli installer fixtures
 - MEDIUM feature. Desktop windows, menus, tray labels, settings, chat guidance, data messages and readable build diagnostics now call the app Sona.

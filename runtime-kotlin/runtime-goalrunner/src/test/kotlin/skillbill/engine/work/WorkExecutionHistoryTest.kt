@@ -109,6 +109,25 @@ class WorkExecutionHistoryTest {
   }
 
   @Test
+  fun `a later active attempt supersedes failed or blocked executions for cancellation ownership`() {
+    val running = planRecord("7", "active")
+    val failed = planRecord("8", "failed")
+    val blocked = planRecord("9", "blocked")
+    val database =
+      TrackingDatabase(
+        work = emptyList(),
+        workflows = IdeStatusWorkflowStates(),
+        statusRepository =
+          object : StandalonePhaseStatusRepository by unexercised() {
+            override fun readPhaseExecutions(query: StandalonePhaseExecutionQuery) = listOf(blocked, failed, running)
+          },
+      )
+
+    assertEquals(true, supersededPhaseForTest(failed, database.unitOfWork(), Instant.EPOCH))
+    assertEquals(true, supersededPhaseForTest(blocked, database.unitOfWork(), Instant.EPOCH))
+  }
+
+  @Test
   fun `monitors of different pull requests sharing issue and branch keep separate latest executions`() {
     val seven = monitorRecord(7, runSequence = "1")
     val eight = monitorRecord(8, runSequence = "2")

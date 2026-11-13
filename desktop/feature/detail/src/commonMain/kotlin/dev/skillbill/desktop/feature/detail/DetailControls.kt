@@ -58,6 +58,7 @@ internal class DetailControls(
       }
       ControlsAction.PauseNow -> runControl(ui, view, view.pauseNow, InFlightControl.PauseNow, ControlAction.PauseNow) { controls.pauseNow(item) }
       ControlsAction.Cancel -> runControl(ui, view, view.cancel, InFlightControl.Cancel, ControlAction.Cancel) { controls.cancel(item) }
+      ControlsAction.Finalize -> runControl(ui, view, view.finalize, InFlightControl.Finalize, ControlAction.Finalize) { controls.finalize(item) }
       ControlsAction.ImplementPlan -> implementPlan(ui)
       ControlsAction.Launch -> {
         val agentId = view.agentId
