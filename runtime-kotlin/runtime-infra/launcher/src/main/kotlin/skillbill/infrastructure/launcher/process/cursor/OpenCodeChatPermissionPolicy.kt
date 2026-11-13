@@ -106,7 +106,10 @@ object OpenCodeChatPermissionPolicy {
   private fun permitsMutation(rules: List<Triple<String, String, String>>): Boolean =
     rules.withIndex().any { (index, rule) ->
       val (permissionName, pattern, action) = rule
-      if (action != "allow" || permissionName in safePermissions || permissionName in safeControlPermissions) {
+      val nonMutating =
+        permissionName in safePermissions || permissionName in safeControlPermissions ||
+          permissionName == OpenCodeChatPermissionKeys.EXTERNAL_DIRECTORY
+      if (action != "allow" || nonMutating) {
         false
       } else {
         rules.drop(index + 1).none { later ->
@@ -255,6 +258,11 @@ object OpenCodeChatPermissionPolicy {
         result.set<ObjectNode>(permissionName, mapper.createObjectNode().put(pattern, action))
       }
     }
+    result.fields().forEachRemaining { (permissionName, patterns) ->
+      if (patterns.size() == 1 && patterns.has(WILDCARD)) {
+        result.set<JsonNode>(permissionName, patterns.get(WILDCARD))
+      }
+    }
     return result
   }
 
@@ -283,6 +291,7 @@ private object OpenCodeChatPermissionKeys {
   const val ACTION = "action"
   const val AGENT = "agent"
   const val DISABLE = "disable"
+  const val EXTERNAL_DIRECTORY = "external_directory"
   const val MODE = "mode"
   const val PATTERN = "pattern"
   const val PERMISSION = "permission"
